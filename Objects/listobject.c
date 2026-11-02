@@ -1804,7 +1804,7 @@ gallop_left(MergeState *ms, PyValue key, PyValue *a, Py_ssize_t n, Py_ssize_t hi
     Py_ssize_t lastofs;
     Py_ssize_t k;
 
-    assert(key && a && n > 0 && hint >= 0 && hint < n);
+    assert(!PyValue_IsNull(key) && a && n > 0 && hint >= 0 && hint < n);
 
     a += hint;
     lastofs = 0;
@@ -1893,7 +1893,7 @@ gallop_right(MergeState *ms, PyValue key, PyValue *a, Py_ssize_t n, Py_ssize_t h
     Py_ssize_t lastofs;
     Py_ssize_t k;
 
-    assert(key && a && n > 0 && hint >= 0 && hint < n);
+    assert(!PyValue_IsNull(key) && a && n > 0 && hint >= 0 && hint < n);
 
     a += hint;
     lastofs = 0;

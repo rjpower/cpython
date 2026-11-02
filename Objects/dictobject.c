@@ -2033,6 +2033,100 @@ dict_unhashable_type(PyObject *op, PyObject *key)
     Py_DECREF(exc);
 }
 
+int
+PyDict_GetValue(PyObject *op, PyValue key, PyValue *result)
+{
+    *result = PyValue_NULL;
+    if (PyErr_Occurred()) {
+        return -1;
+    }
+    if (!PyAnyDict_Check(op) || !PyValue_IsLanguageValue(key)) {
+        PyErr_BadInternalCall();
+        return -1;
+    }
+    PyObject *dict_owner = Py_NewRef(op);
+    PyValue query = PyValue_MakeHeapSafe(PyValue_Borrow(key));
+    PyValue value = PyValue_NULL;
+    Py_hash_t hash = _PyValue_Hash(query);
+    int status = -1;
+    if (hash != -1 && !PyErr_Occurred()) {
+        status = _PyDict_GetValue_KnownHash(op, query, hash, &value);
+    }
+    else if (hash == -1 && PyValue_IsObject(query)) {
+        dict_unhashable_type(op, PyValue_AsPyObjectBorrow(query));
+    }
+    /* Hashing and cleanup can remove the inputs' last external owners. Keep
+     * the selected snapshot independent until every local owner is retired. */
+    dict_close_value(query);
+    dict_xdecref_object(dict_owner);
+    if (status < 0 || PyErr_Occurred()) {
+        dict_close_value(value);
+        return -1;
+    }
+    *result = value;
+    return status;
+}
+
+int
+PyDict_GetValueString(PyObject *op, const char *key, PyValue *result)
+{
+    *result = PyValue_NULL;
+    if (PyErr_Occurred()) {
+        return -1;
+    }
+    if (!PyAnyDict_Check(op)) {
+        PyErr_BadInternalCall();
+        return -1;
+    }
+    PyObject *dict_owner = Py_NewRef(op);
+    PyObject *name = PyUnicode_FromString(key);
+    PyValue value = PyValue_NULL;
+    int status = -1;
+    if (name != NULL) {
+        status = PyDict_GetValue(op, PyValue_FromObjectBorrow(name), &value);
+    }
+    dict_xdecref_object(name);
+    dict_xdecref_object(dict_owner);
+    if (status < 0 || PyErr_Occurred()) {
+        dict_close_value(value);
+        return -1;
+    }
+    *result = value;
+    return status;
+}
+
+int
+PyDict_ContainsValue(PyObject *op, PyValue key)
+{
+    if (PyErr_Occurred()) {
+        return -1;
+    }
+    PyValue value = PyValue_NULL;
+    int status = PyDict_GetValue(op, key, &value);
+    dict_close_value(value);
+    return PyErr_Occurred() ? -1 : status;
+}
+
+int
+PyDict_NextValue(PyObject *op, Py_ssize_t *position,
+                 PyValue *key, PyValue *value)
+{
+    if (key != NULL) {
+        *key = PyValue_NULL;
+    }
+    if (value != NULL) {
+        *value = PyValue_NULL;
+    }
+    if (PyErr_Occurred()) {
+        return -1;
+    }
+    if (key != NULL && key == value) {
+        PyErr_SetString(PyExc_ValueError, "dictionary outputs must be distinct");
+        return -1;
+    }
+    return _PyDict_NextValue(op, position, key, value, NULL);
+}
+
 Py_ssize_t
 _PyDict_LookupIndexAndOwnedValue(PyDictObject *mp, PyObject *name, PyValue *out)
 {

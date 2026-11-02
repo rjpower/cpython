@@ -19,7 +19,13 @@ PyAPI_DATA(PyTypeObject) PyDict_Type;
 #define PyDict_CheckExact(op) Py_IS_TYPE((op), &PyDict_Type)
 
 PyAPI_FUNC(PyObject *) PyDict_New(void);
-/* Owned outputs, PyValue_NULL on absence/error; return 1/0/-1. */
+/* Canonical reads: inputs borrow; outputs own independent snapshots.
+ * Return 1/hit, 0/miss or end, -1/error. Initialize outputs to PyValue_NULL;
+ * preserve an exception pending on entry without running lookup callbacks.
+ * GetValue/GetValueString require valid result storage; key is a language
+ * value, or a NUL-terminated UTF-8 string, respectively. Close owned results.
+ * NextValue requires valid cursor storage and distinct optional key/value
+ * outputs. Error/end leave the cursor unchanged; success advances it once. */
 PyAPI_FUNC(int) PyDict_GetValue(PyObject *, PyValue, PyValue *);
 PyAPI_FUNC(int) PyDict_GetValueString(PyObject *, const char *, PyValue *);
 PyAPI_FUNC(int) PyDict_NextValue(PyObject *, Py_ssize_t *, PyValue *, PyValue *);

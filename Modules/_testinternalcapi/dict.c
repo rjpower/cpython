@@ -1286,7 +1286,287 @@ done:
     return report;
 }
 
+static void
+dict_public_close_value(PyValue value)
+{
+    PyObject *saved = PyErr_GetRaisedException();
+    PyValue_XCLOSE(value);
+    _PyValue_RestoreException(saved);
+}
+
+static const char *
+dict_public_value_kind(PyValue value)
+{
+    if (PyValue_IsNull(value)) {
+        return "absent";
+    }
+    if (PyValue_IsInlineInt(value)) {
+        return "int";
+    }
+    if (PyValue_IsInlineFloat(value)) {
+        return "float";
+    }
+    return PyValue_IsNone(value) ? "none" : "object";
+}
+
+static PyObject *
+dict_public_value_read(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+{
+    if (nargs != 3) {
+        PyErr_SetString(PyExc_TypeError, "expected dictionary, key, operation");
+        return NULL;
+    }
+    PyObject *dict = Py_NewRef(args[0]), *key = Py_NewRef(args[1]);
+    PyObject *object = NULL, *report = NULL;
+    PyValue value = PyValue_NULL;
+    long mode = PyLong_AsLong(args[2]);
+    if (mode == -1 && PyErr_Occurred()) {
+        goto done;
+    }
+    int status;
+    if (mode == 0) {
+        status = PyDict_GetValue(dict, PyValue_FromObjectBorrow(key), &value);
+    }
+    else if (mode == 1) {
+        const char *name = PyUnicode_AsUTF8(key);
+        if (name == NULL) {
+            goto done;
+        }
+        status = PyDict_GetValueString(dict, name, &value);
+    }
+    else if (mode == 2) {
+        status = PyDict_ContainsValue(dict, PyValue_FromObjectBorrow(key));
+    }
+    else {
+        PyErr_SetString(PyExc_ValueError, "unknown dictionary read operation");
+        goto done;
+    }
+    if (status < 0 || PyErr_Occurred()) {
+        goto done;
+    }
+    if (!PyValue_IsNull(value)) {
+        object = PyValue_AsObject(value);
+        if (object == NULL || PyErr_Occurred()) {
+            goto done;
+        }
+    }
+    report = Py_BuildValue("iOs", status, object != NULL ? object : Py_None,
+                           dict_public_value_kind(value));
+done:
+    dict_public_close_value(value);
+    dict_fixture_close(object);
+    dict_fixture_close(key);
+    dict_fixture_close(dict);
+    if (PyErr_Occurred()) {
+        dict_fixture_close(report);
+        return NULL;
+    }
+    return report;
+}
+
+static PyObject *
+dict_public_value_next(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+{
+    if (nargs != 3) {
+        PyErr_SetString(PyExc_TypeError, "expected dictionary, position, output mask");
+        return NULL;
+    }
+    PyObject *dict = Py_NewRef(args[0]);
+    PyObject *key_object = NULL, *value_object = NULL, *report = NULL;
+    PyValue key = PyValue_NULL, value = PyValue_NULL;
+    Py_ssize_t position = PyLong_AsSsize_t(args[1]);
+    if (position == -1 && PyErr_Occurred()) {
+        goto done;
+    }
+    long mask = PyLong_AsLong(args[2]);
+    if (mask == -1 && PyErr_Occurred()) {
+        goto done;
+    }
+    if (mask < 0 || mask > 4) {
+        PyErr_SetString(PyExc_ValueError, "invalid dictionary output mask");
+        goto done;
+    }
+    int status = PyDict_NextValue(dict, &position,
+        (mask & 1) || mask == 4 ? &key : NULL,
+        mask == 4 ? &key : (mask & 2) ? &value : NULL);
+    if (status < 0 || PyErr_Occurred()) {
+        goto done;
+    }
+    if (!PyValue_IsNull(key)) {
+        key_object = PyValue_AsObject(key);
+        if (key_object == NULL || PyErr_Occurred()) {
+            goto done;
+        }
+    }
+    if (!PyValue_IsNull(value)) {
+        value_object = PyValue_AsObject(value);
+        if (value_object == NULL || PyErr_Occurred()) {
+            goto done;
+        }
+    }
+    report = Py_BuildValue("inOOss", status, position,
+        key_object != NULL ? key_object : Py_None,
+        value_object != NULL ? value_object : Py_None,
+        dict_public_value_kind(key), dict_public_value_kind(value));
+done:
+    dict_public_close_value(value);
+    dict_public_close_value(key);
+    dict_fixture_close(value_object);
+    dict_fixture_close(key_object);
+    dict_fixture_close(dict);
+    if (PyErr_Occurred()) {
+        dict_fixture_close(report);
+        return NULL;
+    }
+    return report;
+}
+
+static PyObject *
+dict_public_value_entry_error(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+{
+    if (nargs != 4 || !PyExceptionInstance_Check(args[2])) {
+        PyErr_SetString(PyExc_TypeError, "expected dictionary, key, exception, operation");
+        return NULL;
+    }
+    long mode = PyLong_AsLong(args[3]);
+    if ((mode == -1 && PyErr_Occurred()) || mode < 0 || mode > 4) {
+        if (!PyErr_Occurred()) {
+            PyErr_SetString(PyExc_ValueError, "invalid dictionary operation");
+        }
+        return NULL;
+    }
+    PyObject *primary = Py_NewRef(args[2]);
+    PyValue key = PyValue_FromObjectBorrow(args[1]);
+    /* Immortal non-owning sentinels check that outputs are initialized. */
+    PyValue first = PyValue_None, second = PyValue_None;
+    Py_ssize_t position = 0;
+    PyErr_SetRaisedException(Py_NewRef(primary));
+    int status;
+    switch (mode) {
+        case 0:
+            status = PyDict_GetValue(args[0], key, &first);
+            break;
+        case 1:
+            status = PyDict_GetValueString(args[0], "key", &first);
+            break;
+        case 2:
+            status = PyDict_ContainsValue(args[0], key);
+            break;
+        default:
+            status = PyDict_NextValue(args[0], &position, &first,
+                                      mode == 4 ? &first : &second);
+            break;
+    }
+    PyObject *observed = PyErr_GetRaisedException();
+    int valid = status == -1 && observed == primary && position == 0 &&
+        (mode == 2 || PyValue_IsNull(first)) &&
+        (mode != 3 || PyValue_IsNull(second));
+    dict_public_close_value(first);
+    dict_public_close_value(second);
+    dict_fixture_close(observed);
+    dict_fixture_close(primary);
+    if (!valid || PyErr_Occurred()) {
+        if (!PyErr_Occurred()) {
+            PyErr_SetString(PyExc_AssertionError, "public dictionary entry error was changed");
+        }
+        return NULL;
+    }
+    Py_RETURN_NONE;
+}
+
+static PyObject *
+dict_public_value_retirement(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+{
+    if (nargs != 2) {
+        PyErr_SetString(PyExc_TypeError, "expected [dictionary, query], operation");
+        return NULL;
+    }
+    long mode = PyLong_AsLong(args[1]);
+    if ((mode == -1 && PyErr_Occurred()) || (mode != 0 && mode != 2)) {
+        if (!PyErr_Occurred()) {
+            PyErr_SetString(PyExc_ValueError, "expected GetValue or ContainsValue");
+        }
+        return NULL;
+    }
+    if (!PyList_CheckExact(args[0]) || PyList_GET_SIZE(args[0]) != 2) {
+        PyErr_SetString(PyExc_TypeError, "expected [dictionary, query]");
+        return NULL;
+    }
+    /* Read both borrows without callbacks. Only the provider pins their owners;
+     * hashing deliberately clears the holder and removes its last references. */
+    PyValue source = PyList_GET_VALUE(args[0], 0);
+    PyValue query = PyList_GET_VALUE(args[0], 1);
+    if (!PyValue_IsObject(source)) {
+        PyErr_SetString(PyExc_TypeError, "expected dictionary object");
+        return NULL;
+    }
+    PyObject *dict = PyValue_AsPyObjectBorrow(source);
+    PyValue value = PyValue_NULL;
+    int status = mode == 0 ? PyDict_GetValue(dict, query, &value)
+                           : PyDict_ContainsValue(dict, query);
+    /* No access to dict, query or list element addresses after the provider. */
+    PyObject *object = NULL, *report = NULL;
+    if (status >= 0 && !PyErr_Occurred()) {
+        if (!PyValue_IsNull(value)) {
+            object = PyValue_AsObject(value);
+            if (object == NULL || PyErr_Occurred()) {
+                goto done;
+            }
+        }
+        report = Py_BuildValue("iO", status, object != NULL ? object : Py_None);
+    }
+done:
+    dict_public_close_value(value);
+    dict_fixture_close(object);
+    if (PyErr_Occurred()) {
+        dict_fixture_close(report);
+        return NULL;
+    }
+    return report;
+}
+
+static PyObject *
+dict_public_value_string_oom(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+{
+    if (nargs != 0) {
+        PyErr_SetString(PyExc_TypeError, "expected no arguments");
+        return NULL;
+    }
+    PyObject *dict = PyDict_New();
+    if (dict == NULL) {
+        return NULL;
+    }
+    DictBoxFailure failure = {0};
+    PyMem_GetAllocator(PYMEM_DOMAIN_OBJ, &failure.saved);
+    PyMemAllocatorEx allocator = {.ctx = &failure, .malloc = dict_fail_malloc,
+        .calloc = dict_fail_calloc, .realloc = dict_fail_realloc,
+        .free = dict_fail_free};
+    PyValue output = PyValue_None;
+    PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &allocator);
+    int status = PyDict_GetValueString(dict, "public-read-uncached-key-2147483647", &output);
+    PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &failure.saved);
+    int valid = failure.called == 1 && status == -1 && PyValue_IsNull(output) &&
+                PyErr_ExceptionMatches(PyExc_MemoryError);
+    if (valid) {
+        PyErr_Clear();
+    }
+    dict_public_close_value(output);
+    dict_fixture_close(dict);
+    if (!valid || PyErr_Occurred()) {
+        if (!PyErr_Occurred()) {
+            PyErr_SetString(PyExc_AssertionError, "public string read OOM contract failed");
+        }
+        return NULL;
+    }
+    Py_RETURN_NONE;
+}
+
 static PyMethodDef methods[] = {
+    {"dict_public_value_read", _PyCFunction_CAST(dict_public_value_read), METH_FASTCALL},
+    {"dict_public_value_next", _PyCFunction_CAST(dict_public_value_next), METH_FASTCALL},
+    {"dict_public_value_entry_error", _PyCFunction_CAST(dict_public_value_entry_error), METH_FASTCALL},
+    {"dict_public_value_retirement", _PyCFunction_CAST(dict_public_value_retirement), METH_FASTCALL},
+    {"dict_public_value_string_oom", _PyCFunction_CAST(dict_public_value_string_oom), METH_FASTCALL},
     {"dict_owned_migration", dict_owned_migration, METH_O},
     {"dict_owned_entry", dict_owned_entry, METH_O},
     {"dict_owned_entry_boxing_oom", dict_owned_entry_boxing_oom, METH_NOARGS},

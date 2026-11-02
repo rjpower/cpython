@@ -36,6 +36,48 @@ Dictionary objects
    Return a new empty dictionary, or ``NULL`` on failure.
 
 
+Canonical value reads
+^^^^^^^^^^^^^^^^^^^^^
+
+These rebuild APIs accept :class:`dict` and :class:`frozendict` inputs and
+return owning canonical values without boxing inline scalars. Inputs borrow;
+the caller closes each returned value with ``PyValue_Close``. A returned owner
+remains valid after the dictionary changes or is destroyed.
+
+All four functions preserve an exception already pending on entry and return
+``-1`` without hashing, comparing or allocating. Output locations are initialized
+to ``PyValue_NULL`` before work. With no pending exception, ``1`` means a hit or
+entry, ``0`` means absence or iteration end, and ``-1`` means an exception.
+Cleanup errors also cause failure; no successful result has a pending exception.
+
+.. c:function:: int PyDict_GetValue(PyObject *p, PyValue key, PyValue *result)
+
+   Look up the language value *key*. Supply valid non-NULL *result* storage.
+   On a hit, return an independent owning snapshot in ``*result``; on absence
+   or error, leave it ``PyValue_NULL``. Hashing and equality have normal Python
+   dictionary semantics. The dictionary and query remain alive across callbacks.
+
+.. c:function:: int PyDict_GetValueString(PyObject *p, const char *key, PyValue *result)
+
+   As above, with a NUL-terminated UTF-8 key. Creating the Unicode query can fail.
+
+.. c:function:: int PyDict_ContainsValue(PyObject *p, PyValue key)
+
+   Report whether the language value *key* was found. Retire the selected owner
+   internally; do not return or box it. The result describes the completed
+   lookup, even if subsequent cleanup changes the dictionary.
+
+.. c:function:: int PyDict_NextValue(PyObject *p, Py_ssize_t *position, PyValue *key, PyValue *value)
+
+   Start with ``*position = 0`` and valid cursor storage. Either output may be
+   NULL; non-NULL output locations must be distinct. A successful capture
+   advances the cursor once and returns independent owners for the requested
+   key and value. Error or end leaves the cursor unchanged and requested
+   outputs absent. This capture does not hash, compare or box values. Changing
+   the dictionary during iteration follows the existing dictionary cursor
+   rules; the cursor is not a snapshot of the whole mapping.
+
+
 .. c:function:: PyObject* PyDictProxy_New(PyObject *mapping)
 
    Return a :class:`types.MappingProxyType` object for a mapping which

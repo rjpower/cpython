@@ -11,7 +11,8 @@ from libclinic.function import (
 from libclinic.converter import CConverter
 from libclinic.converters import (
     bool_converter, defining_class_converter, int_converter, object_converter,
-    Py_ssize_t_converter, self_converter, str_converter, unicode_converter)
+    Py_ssize_t_converter, self_converter, str_converter,
+    unicode_converter, varpos_tuple_converter)
 if TYPE_CHECKING:
     from libclinic.clanguage import CLanguage
     from libclinic.codegen import CodeGen
@@ -386,11 +387,18 @@ class ParseArgsCodeGen:
                     self.min_pos = i
 
     def use_scoped_tuple_keywords(self) -> bool:
-        """Resource-free fixed tuple keyword constructors."""
+        """Eligible tuple keyword constructors with at most one tuple owner."""
         return (self.is_new_or_init()
                 and not self.limited_capi and not self.fastcall
                 and not self.func.vectorcall
-                and not self.varpos and not self.var_keyword
+                and (self.varpos is None
+                     or (type(self.varpos.converter) is varpos_tuple_converter
+                         and self.varpos.converter.alias_of is None
+                         and self.varpos.deprecated_until is None
+                         and not self.varpos.deprecated_positional
+                         and not self.varpos.deprecated_keyword
+                         and not self.varpos.converter.post_parsing()))
+                and not self.var_keyword
                 and not self.requires_defining_class
                 and not self.has_option_groups()
                 and bool(self.parameters)
@@ -518,22 +526,47 @@ class ParseArgsCodeGen:
         finale = PARSER_FINALE_SKELETON
         if self.scoped_tuple_keyword_selected or self.scoped_tuple_positional:
             self.codegen.add_include('pycore_value.h', '_PyValue_RestoreException()')
+            tuple_vararg_selected = (
+                self.scoped_tuple_keyword_selected
+                and self.varpos is not None
+                and type(self.varpos.converter) is varpos_tuple_converter)
             if self.func.kind is METHOD_INIT:
-                cleanup = """
+                end_cleanup = """
                     if (_PyArg_OwnerScope_End(&_args_scope) < 0) {{
                         {parser_retval} = -1;
                     }}
                 """
             else:
-                cleanup = """
+                end_cleanup = """
                     if (_PyArg_OwnerScope_End(&_args_scope) < 0) {{
                         PyObject *_saved = PyErr_GetRaisedException();
                         Py_CLEAR({parser_retval});
                         _PyValue_RestoreException(_saved);
                     }}
                 """
-            finale = finale.replace('{cleanup}', '{cleanup}\n' +
-                libclinic.normalize_snippet(cleanup, indent=4))
+            if tuple_vararg_selected:
+                owner = self.varpos.converter.parser_name
+                saved_exception = 'saved_exception'
+                owner_to_close = 'owner_to_close'
+                if saved_exception == owner:
+                    saved_exception += '_1'
+                if owner_to_close == owner:
+                    owner_to_close += '_1'
+                owner_cleanup = libclinic.normalize_snippet(f"""
+                    {{{{
+                        PyObject *{saved_exception} = PyErr_GetRaisedException();
+                        PyObject *{owner_to_close} = {owner};
+                        {owner} = NULL;
+                        Py_XDECREF({owner_to_close});
+                        _PyValue_RestoreException({saved_exception});
+                    }}}}
+                """, indent=4)
+                finale = finale.replace(
+                    '    {cleanup}', owner_cleanup + '\n' +
+                    libclinic.normalize_snippet(end_cleanup, indent=4), 1)
+            else:
+                finale = finale.replace('{cleanup}', '{cleanup}\n' +
+                    libclinic.normalize_snippet(end_cleanup, indent=4))
         for field in preamble, *fields, finale:
             lines.append(field)
         code = libclinic.linear_format(
@@ -1386,7 +1419,7 @@ class ParseArgsCodeGen:
                         goto exit;
                     }}}}
                     {argsname} = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
-                            /*minpos*/ {self.min_pos}, /*maxpos*/ {self.max_pos}, /*minkw*/ {self.min_kw_only}, /*varpos*/ 0, argsbuf);
+                            /*minpos*/ {self.min_pos}, /*maxpos*/ {self.max_pos}, /*minkw*/ {self.min_kw_only}, /*varpos*/ {1 if self.varpos else 0}, argsbuf);
                     if (!{argsname}) {{{{
                         goto exit;
                     }}}}
@@ -1520,6 +1553,12 @@ class ParseArgsCodeGen:
                 parser_code.append("%s:" % add_label)
             if self.varpos:
                 parser_code.append(libclinic.normalize_snippet(self._parse_vararg(), indent=4))
+                if self.scoped_tuple_keyword_selected:
+                    parser_code.append(libclinic.normalize_snippet("""
+                        if (PyErr_Occurred()) {{
+                            goto exit;
+                        }}
+                        """, indent=4))
         else:
             self.use_converters()
 

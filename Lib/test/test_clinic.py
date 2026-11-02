@@ -95,6 +95,102 @@ def save_restore_converters(testcase):
 class ClinicWholeFileTest(TestCase):
     maxDiff = None
 
+    def test_owned_tuple_vararg_constructor_cleanup_order(self):
+        for kind in ('__new__', '__init__'):
+            for owner in ('owner_to_close', 'saved_exception'):
+                decorator = '@classmethod\n' if kind == '__new__' else ''
+                source = (
+                    '/*[clinic input]\noutput everything block\n'
+                    'class Owner "OwnerObject *" "&Owner_Type"\n'
+                    f'{decorator}Owner.{kind}\n'
+                    '    name: object\n'
+                    f'    *{owner}: tuple\n'
+                    '    bound: object = None\n'
+                    '    covariant: bool = False\n'
+                    '[clinic start generated code]*/\n')
+                generated = _make_clinic(filename='owner.c').parse(source)
+                with self.subTest(kind=kind, owner=owner):
+                    saved = ('saved_exception_1' if owner == 'saved_exception'
+                             else 'saved_exception')
+                    to_close = ('owner_to_close_1' if owner == 'owner_to_close'
+                                else 'owner_to_close')
+                    begin = generated.index('_PyArg_OwnerScope_BeginTuple(')
+                    unpack = generated.index('_PyArg_UnpackKeywordsOwned(')
+                    count = generated.index(
+                        'noptargs = Py_MIN(_args_scope.nargs, 1)')
+                    fixed = generated.index('name = fastargs[0];', unpack)
+                    sliced = generated.index(
+                        f'{owner} = PyTuple_GetSlice(args, 1, PY_SSIZE_T_MAX);')
+                    slice_error = generated.index('if (PyErr_Occurred())', sliced)
+                    invoke = generated.index('_impl(', slice_error)
+                    close = generated.index(
+                        f'PyObject *{to_close} = {owner};', invoke)
+                    end = generated.index('_PyArg_OwnerScope_End(', close)
+                    self.assertLess(begin, unpack)
+                    self.assertLess(unpack, count)
+                    self.assertLess(count, fixed)
+                    self.assertLess(fixed, sliced)
+                    self.assertLess(sliced, slice_error)
+                    self.assertLess(slice_error, invoke)
+                    self.assertLess(invoke, close)
+                    self.assertLess(close, end)
+                    self.assertIn('/*varpos*/ 1', generated[unpack:fixed])
+                    self.assertEqual(generated.count('_PyArg_OwnerScope_End('), 1)
+                    self.assertEqual(generated.count(
+                        f'Py_XDECREF({to_close});'), 1)
+                    self.assertIn(f'{owner} = NULL;', generated[close:end])
+                    self.assertIn(
+                        f'_PyValue_RestoreException({saved});', generated[close:end])
+                    self.assertNotIn('Py_XDECREF(constraints);', generated)
+                    self.assertNotIn('PyDict_GET_SIZE(kwargs)', generated)
+                    self.assertIn(
+                        f'\n    {{\n        PyObject *{saved} =',
+                        generated[invoke:close])
+                    if kind == '__new__':
+                        self.assertIn('Py_CLEAR(return_value);', generated[end:])
+                    else:
+                        self.assertIn('return_value = -1;', generated[end:])
+
+    def test_owned_tuple_vararg_decline_uses_original_cleanup(self):
+        from unittest.mock import patch
+
+        for kind in ('__new__', '__init__'):
+            decorator = '@classmethod\n' if kind == '__new__' else ''
+            source = (
+                '/*[clinic input]\noutput everything block\n'
+                'class Owner "OwnerObject *" "&Owner_Type"\n'
+                f'{decorator}Owner.{kind}\n'
+                '    name: object\n'
+                '    *constraints: tuple\n'
+                '    limit: int = 0\n'
+                '[clinic start generated code]*/\n')
+            calls = []
+
+            def decline(converter, *args, **kwargs):
+                calls.append(args[0])
+                return None
+
+            with patch.object(int_converter, 'parse_arg', decline):
+                generated = _make_clinic(filename='owner.c').parse(source)
+            with self.subTest(kind=kind):
+                self.assertEqual(calls, ['fastargs[1]'])
+                self.assertNotIn('_PyArg_OwnerScope_', generated)
+                self.assertNotIn('_PyArg_UnpackKeywordsOwned(', generated)
+                self.assertIn('_PyArg_ParseTupleAndKeywordsFast(', generated)
+                self.assertEqual(generated.count('Py_XDECREF(constraints);'), 1)
+
+    def test_owned_tuple_vararg_excludes_other_varargs(self):
+        source = (
+            '/*[clinic input]\noutput everything block\n'
+            'class Owner "OwnerObject *" "&Owner_Type"\n'
+            '@classmethod\nOwner.__new__\n'
+            '    name: object\n'
+            '    *items: array\n'
+            '[clinic start generated code]*/\n')
+        generated = _make_clinic(filename='owner.c').parse(source)
+        self.assertNotIn('_PyArg_OwnerScope_', generated)
+        self.assertIn('_PyArg_UnpackKeywords(', generated)
+
     def test_owned_tuple_constructor_cleanup_order(self):
         for kind in ('__new__', '__init__'):
             decorator = '@classmethod\n' if kind == '__new__' else ''
@@ -260,7 +356,7 @@ class ClinicWholeFileTest(TestCase):
             ('value: object\n    /', '', True),
             ('value: object(converter="PyUnicode_FSConverter")\n    /', '', False),
             ('value: str\n    /', '', False),
-            ('value: object\n    *values: tuple', '', False),
+            ('value: object\n    *values: array', '', False),
             ('value: object\n    [\n    tail: object\n    ]\n    /', '', False),
             ('value: object\n    *\n    other as value: object = None', '', False),
         )

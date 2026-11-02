@@ -1,14 +1,69 @@
 import datetime
 import io
 import itertools
+import typing
 import unittest
 
 import _tokenize
 
 from test.test_clinic import _make_clinic
+from typing import TypeVar
 
 
 class PyValueClinicKeywordTests(unittest.TestCase):
+    def test_typevar_names_constraints_bound_and_default(self):
+        name_only = TypeVar('NameOnly')
+        keyword_name = TypeVar(name='KeywordName')
+        self.assertEqual(name_only.__constraints__, ())
+        self.assertEqual(keyword_name.__constraints__, ())
+
+        constraints = TypeVar('Constraints', int, str)
+        self.assertEqual(constraints.__constraints__, (int, str))
+        self.assertIsNone(constraints.__bound__)
+
+        bounded = TypeVar('Bounded', bound=int)
+        self.assertIs(bounded.__bound__, int)
+        self.assertIs(bounded.__default__, typing.NoDefault)
+        defaulted = TypeVar('Defaulted', bound=int, default=int)
+        self.assertIs(defaulted.__bound__, int)
+        self.assertIs(defaulted.__default__, int)
+
+        with self.assertRaisesRegex(
+                TypeError, 'Constraints cannot be combined with bound'):
+            TypeVar('Invalid', int, str, bound=int)
+
+    def test_typevar_covariant_callback_runs_once(self):
+        calls = []
+
+        class Truth:
+            def __bool__(self):
+                calls.append('covariant')
+                return True
+
+        variable = TypeVar('Covariant', int, str, covariant=Truth())
+        self.assertTrue(variable.__covariant__)
+        self.assertEqual(calls, ['covariant'])
+
+    def test_typevar_boolean_error_stops_later_converter(self):
+        calls = []
+        error = LookupError('covariant truth conversion')
+
+        class BrokenTruth:
+            def __bool__(self):
+                calls.append('covariant')
+                raise error
+
+        class LaterTruth:
+            def __bool__(self):
+                calls.append('contravariant')
+                return True
+
+        with self.assertRaises(LookupError) as caught:
+            TypeVar('Broken', covariant=BrokenTruth(),
+                    contravariant=LaterTruth())
+        self.assertIs(caught.exception, error)
+        self.assertEqual(calls, ['covariant'])
+
     def test_fixed_optional_constructor_uses_selected_owner_count(self):
         source = (
             '/*[clinic input]\noutput everything block\n'

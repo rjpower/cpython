@@ -11,6 +11,7 @@
 #include "pycore_object_deferred.h" // _PyObject_SetDeferredRefcount()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_value.h"         // _PyValue_RestoreException()
 
 
 /*[clinic input]
@@ -503,15 +504,54 @@ classmethoddescr_call(PyObject *_descr, PyObject *args,
                      PyDescr_TYPE(descr)->tp_name);
         return NULL;
     }
-    PyObject *self = PyTuple_GET_ITEM(args, 0);
-    PyObject *bound = classmethod_get((PyObject *)descr, NULL, self);
-    if (bound == NULL) {
+    PyObject *self = NULL;
+    PyObject *bound = NULL;
+    PyObject *result = NULL;
+    _PyArg_OwnerScope call_scope = {0};
+
+    self = PyTuple_GetItemRef(args, 0);
+    if (self == NULL || PyErr_Occurred()) goto cleanup;
+    bound = classmethod_get((PyObject *)descr, NULL, self);
+    if (bound == NULL || PyErr_Occurred()) goto cleanup;
+
+    if (_PyArg_OwnerScope_BeginTuple(&call_scope, args, 0) < 0 ||
+        PyErr_Occurred()) {
+        goto cleanup;
+    }
+    PyObject *const *call_args = _PyArg_UnpackPositionalOwned(
+        &call_scope, NULL, argc, argc);
+    if (call_args == NULL || PyErr_Occurred()) goto cleanup;
+
+    result = PyObject_VectorcallDict(bound, call_args + 1, argc - 1, kwds);
+    if (result == NULL || PyErr_Occurred()) goto cleanup;
+
+cleanup:
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = bound;
+        bound = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = self;
+        self = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    int scope_status = _PyArg_OwnerScope_End(&call_scope);
+    if (scope_status < 0 || PyErr_Occurred()) {
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = result;
+            result = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
+        }
         return NULL;
     }
-    PyObject *res = PyObject_VectorcallDict(bound, _PyTuple_ITEMS(args)+1,
-                                           argc-1, kwds);
-    Py_DECREF(bound);
-    return res;
+    return result;
 }
 
 Py_LOCAL_INLINE(PyObject *)
@@ -539,7 +579,7 @@ wrapperdescr_call(PyObject *_descr, PyObject *args, PyObject *kwds)
 {
     PyWrapperDescrObject *descr = (PyWrapperDescrObject *)_descr;
     Py_ssize_t argc;
-    PyObject *self, *result;
+    PyObject *self = NULL, *tail_args = NULL, *result = NULL;
 
     /* Make sure that the first argument is acceptable as 'self' */
     assert(PyTuple_Check(args));
@@ -552,9 +592,12 @@ wrapperdescr_call(PyObject *_descr, PyObject *args, PyObject *kwds)
                      PyDescr_TYPE(descr)->tp_name);
         return NULL;
     }
-    self = PyTuple_GET_ITEM(args, 0);
-    if (!_PyObject_RealIsSubclass((PyObject *)Py_TYPE(self),
-                                  (PyObject *)PyDescr_TYPE(descr))) {
+    self = PyTuple_GetItemRef(args, 0);
+    if (self == NULL || PyErr_Occurred()) goto cleanup;
+    int is_subclass = _PyObject_RealIsSubclass((PyObject *)Py_TYPE(self),
+                                              (PyObject *)PyDescr_TYPE(descr));
+    if (PyErr_Occurred()) goto cleanup;
+    if (!is_subclass) {
         PyErr_Format(PyExc_TypeError,
                      "descriptor '%V' "
                      "requires a '%.100s' object "
@@ -562,15 +605,39 @@ wrapperdescr_call(PyObject *_descr, PyObject *args, PyObject *kwds)
                      descr_name((PyDescrObject *)descr), "?",
                      PyDescr_TYPE(descr)->tp_name,
                      Py_TYPE(self)->tp_name);
-        return NULL;
+        goto cleanup;
     }
 
-    args = PyTuple_GetSlice(args, 1, argc);
-    if (args == NULL) {
+    tail_args = PyTuple_GetSlice(args, 1, argc);
+    if (tail_args == NULL || PyErr_Occurred()) goto cleanup;
+    result = wrapperdescr_raw_call(descr, self, tail_args, kwds);
+    if (result == NULL || PyErr_Occurred()) goto cleanup;
+
+cleanup:
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = tail_args;
+        tail_args = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = self;
+        self = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = result;
+            result = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
+        }
         return NULL;
     }
-    result = wrapperdescr_raw_call(descr, self, args, kwds);
-    Py_DECREF(args);
     return result;
 }
 

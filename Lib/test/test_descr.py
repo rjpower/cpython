@@ -1739,6 +1739,70 @@ class ClassPropertiesAndMethods(unittest.TestCase):
         del cm.x
         self.assertNotHasAttr(cm, "x")
 
+    def test_classmethod_descriptor_vectorcall_values(self):
+        fromkeys = dict.__dict__["fromkeys"]
+        for value in (1, 1.5, None):
+            with self.subTest(value=value):
+                result = fromkeys(dict, ("a", "b"), value)
+                self.assertEqual(result, {"a": value, "b": value})
+
+        class DictSubclass(dict):
+            pass
+
+        self.assertIsInstance(fromkeys(DictSubclass, ("key",), 2.5), DictSubclass)
+        with self.assertRaises(TypeError):
+            fromkeys()
+        with self.assertRaises(TypeError):
+            fromkeys([], ("key",))
+        with self.assertRaises(TypeError):
+            fromkeys(int, ("key",))
+
+        self.assertEqual(
+            int.__dict__["from_bytes"](
+                int, b"\x01", byteorder="big", signed=False
+            ),
+            1,
+        )
+
+    def test_wrapper_descriptor_calls_inline_values(self):
+        self.assertEqual(int.__dict__["__add__"](4, 5), 9)
+        self.assertEqual(float.__dict__["__add__"](1.5, 2.5), 4.0)
+
+        mapping = {}
+        result = dict.__dict__["__setitem__"](mapping, "key", None)
+        self.assertIsNone(result)
+        self.assertEqual(mapping, {"key": None})
+
+        with self.assertRaises(TypeError):
+            int.__dict__["__add__"]()
+        with self.assertRaises(TypeError):
+            int.__dict__["__add__"]("not an int", 1)
+
+    def test_wrapper_descriptor_keyword_callback_once(self):
+        descriptor_call = type.__dict__["__call__"]
+        calls = []
+
+        class Target:
+            def __init__(self, *, payload):
+                calls.append(payload)
+
+        instance = descriptor_call(Target, payload=1.5)
+        self.assertIsInstance(instance, Target)
+        self.assertEqual(calls, [1.5])
+
+        sentinel = RuntimeError("initializer sentinel")
+        calls.clear()
+
+        class FailingTarget:
+            def __init__(self, *, payload):
+                calls.append(payload)
+                raise sentinel
+
+        with self.assertRaises(RuntimeError) as caught:
+            descriptor_call(FailingTarget, payload=None)
+        self.assertIs(caught.exception, sentinel)
+        self.assertEqual(calls, [None])
+
     def test_classmethod_staticmethod_annotations(self):
         for deco in (classmethod, staticmethod):
             @deco

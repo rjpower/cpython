@@ -72,3 +72,12 @@ with actual call.c/fixture TUs and objects passing. The
 as checkpoint38, followed by ten construction readers and caller pins in39.
 General keyword/nested/resource format-parser ownership and its consumer ports
 remain design/implementation work.
+
+Shared FORMAT engine design is frozen for independent review, not implementation:
+[finite A/B/C packets](../../../../build/pyvalue-format-engine-design-20261102-v1/README.md).
+A is a shared stable lease/resource foundation; B/C adapt the actual backends.
+Public scope, raw-wrapper retirement and mechanical consumer closure remain
+mandatory before claiming parser closure. No source or host pass follows from
+this design. Root recorded a precise same-scope Finish/End reentry question for
+the peer gate. Four remaining Clinic producers have a separate finite design
+stream and do not require widening the flat parser whitelist.

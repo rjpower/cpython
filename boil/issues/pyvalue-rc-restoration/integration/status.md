@@ -43,14 +43,17 @@ Remaining actual parser, container/
 startup and bundled consumer ports still block a baseline executable.
 
 The latest [merged diagnostic build](../merged-build/status.md) binds the
-41-checkpoint chain at `aa7a4335ddf` plus held typeobject composition `80615584`.
-It exited 2, with 166 objects present and no executable. All 7,347 source paths
-stayed unchanged; 332 repeated/cascading errors remain. Focused component checks
+43-checkpoint chain at `df30266b3b4` plus held typeobject composition `62471a80`.
+It exited 2, with 166 objects present and no executable. All 7,349 source paths
+stayed unchanged; 324 repeated/cascading errors remain. Focused component checks
 do not make this a passing merged build. The counter foundation and thirteen
 slot wrappers are committed. Construction readers and
 the earlier constructor boundary, operator/LRU batch and first flat-format parser
-stage are committed. Luna corrects the six-reader packet and implements four
-reviewed MRO-adjacent readers in isolated copies; Sol designs parser backend closure.
+stage are committed, followed by six type readers and four MRO-adjacent readers.
+Sol designs bootstrap readers and Clinic producer rules; shared parser engine
+design awaits peer review. Luna inventories remaining itertools reader patterns.
+The latest family census maps all eight remaining Clinic errors to four producers.
+Root gates their reusable producer rule before bulk regeneration.
 The full MRO transaction remains in revision. The board owns live assignments.
 
 Prioritize a coherent register interpreter with the unified format and JIT off.

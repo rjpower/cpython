@@ -1,8 +1,8 @@
 # Current work
 
 Current milestone: complete universal PyValues under RC, then measure the
-register interpreter with JIT disabled. Restoration HEAD is `aa7a4335ddf` on
-`boil/pyvalue-rc-universal`: forty-one reviewed source commits; typeobject.c is the
+register interpreter with JIT disabled. Restoration HEAD is `df30266b3b4` on
+`boil/pyvalue-rc-universal`: forty-three reviewed source commits; typeobject.c is the
 remaining original held file. The latest merged diagnostic build has 166
 objects present and failed to link. No restored runtime, qualification or performance pass is claimed.
 [State](pyvalue-rc-restoration/status.md), [process](../PROCESS.md) and
@@ -11,12 +11,12 @@ objects present and failed to link. No restored runtime, qualification or perfor
 ## Now and next
 
 1. The first safe universal-value register-interpreter baseline remains the goal.
-   Merged v12 failed before linking: 332 compiler-error observations, 166 objects
-   present, all 7,347 inputs unchanged. Focused component passes are not a runtime pass.
-2. Operator/LRU and the flat-format kernel/five callers are committed. Luna
-   corrects the six-reader type packet and implements four reviewed MRO-adjacent
-   readers in isolated copies; Sol designs shared parser backend closure. Root
-   reviews actual code/results, composes accepted changes and runs the shared build.
+   Merged v13 failed before linking: 324 compiler-error observations, 166 objects
+   present, all 7,349 inputs unchanged. Focused component passes are not a runtime pass.
+2. Both type-reader packets are committed. Sol designs seven bootstrap type
+   readers and four remaining Clinic producers; the shared parser engine design
+   awaits peer review. Luna inventories remaining itertools reader patterns. Root
+   gates the rules, fans out accepted batches, integrates and validates them.
 3. The counter foundation and thirteen slot wrappers are committed. Full MRO
    publication needs graph/slot rollback, repeated-receiver and dependency proof;
    the separate spec-constructor envelope awaits a root/peer design gate.
@@ -28,9 +28,9 @@ objects present and failed to link. No restored runtime, qualification or perfor
 
 | Experiment | Stage | Owner | Next step |
 | --- | --- | --- | --- |
-| [Native callers and scoped parsers](pyvalue-rc-restoration/native-parsers/status.md) | Flat kernel/five callers committed; shared backend design | Sol 6.1 design; root gate | Review keyword/nested/resource engine; then public scope and mechanical caller closure |
+| [Native callers and scoped parsers](pyvalue-rc-restoration/native-parsers/status.md) | Flat kernel/five callers committed; shared backend design frozen | Sol 6.1 peer review queued; root gate | Gate finite engine foundation, then backend/public/caller closure |
 | [Core and extension consumers](pyvalue-rc-restoration/core-consumers/status.md) | Call bridges committed; type_new/graph reviewed pending | Coordinator; Sol design/review | C3/MRO, remaining parser/startup/container ports |
-| [Porting batches](pyvalue-rc-restoration/porting/status.md) | Operator/LRU committed; six-reader correction and four MRO readers in isolated implementation | Two Luna bulk streams; Sol review; root integration | Independent actual-code/native gates, compose and rebuild |
+| [Porting batches](pyvalue-rc-restoration/porting/status.md) | Six type/four MRO readers committed; next rules in design | Sol bootstrap/Clinic design; Luna itertools inventory; root gate | Independent rule review, bounded bulk edits, compose and rebuild |
 | [Canonical type cache](pyvalue-rc-restoration/typecache/status.md) | Recording-only counter foundation committed; full MRO transaction needs revision | Root gate; Sol design/review when assigned | Review spec envelope; resolve graph/slot/reentry proof |
 | [Value-native VM iteration](pyvalue-rc-restoration/iterator-vm/status.md) | Tuning after safe baseline | Unassigned | Remove boxing from correct iterator bridges and measure |
 | [Integration and interpreter checkpoint](pyvalue-rc-restoration/integration/status.md) | Build diagnostics → ports | Coordinator | Close concrete compile/link blockers, rebuild, qualify and measure |
@@ -84,6 +84,9 @@ linked restored runtime. Primary-worktree documentation is separate.
 | [Operator/LRU readers](pyvalue-rc-restoration/porting/status.md) | `d1a9a80d25b`, fifteen bodies/three paths | Full operator object passes; selected LRU clean, other functools errors remain; seven host controls; candidate unexecuted |
 | [Flat-format parser Stage1](pyvalue-rc-restoration/native-parsers/status.md) | `aa7a4335ddf`, kernel/five consumers/three fixtures/six paths | No new native diagnostics; fixture object passes; remaining raw parser closure mandatory; candidate unexecuted |
 | [Merged diagnostic v12](pyvalue-rc-restoration/merged-build/status.md) | Probe at checkpoint41 plus held typeobject | All 7,347 inputs unchanged; 332 errors/166 objects; no executable |
+| [Six type readers](pyvalue-rc-restoration/porting/status.md) | `0fd003e9c4b`, six bodies/two paths | Selected 6 errors/4 warnings→0; full TU 12→7 errors/23→19 warnings with one first-use relocation; candidate unexecuted |
+| [Four MRO-adjacent readers](pyvalue-rc-restoration/porting/status.md) | `df30266b3b4`, four bodies/two paths | Selected 5 errors/3 warnings→0; full TU 7→4/19→16 with two first-use relocations; five carried host controls; candidate unexecuted |
+| [Merged diagnostic v13](pyvalue-rc-restoration/merged-build/status.md) | Probe at checkpoint43 plus held typeobject | All 7,349 inputs unchanged; 324 errors/166 objects; no executable |
 | [MRO counter foundation](pyvalue-rc-restoration/typecache/status.md) | `5a9d4841a67`, three paths/recording only | Corresponding-layout native comparison has no new diagnostics; counter/runtime and transaction authority pending |
 | [Type slot wrappers](pyvalue-rc-restoration/porting/status.md) | `ef48e73fb24`, thirteen bodies/two paths | Selected errors 15→0/full TU 38→23, warnings unchanged; six host controls; candidate unexecuted |
 | [Merged diagnostic v10](pyvalue-rc-restoration/merged-build/status.md) | Probe at checkpoint37 plus held typeobject | All 7,344 sources unchanged; 361 errors/164 objects present; no executable |

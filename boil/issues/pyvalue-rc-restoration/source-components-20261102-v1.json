@@ -606,6 +606,71 @@
       "changed_paths": 6,
       "runnable": false,
       "evidence": "build/pyvalue-flat-format-scoped-bulk-20261102-v3/commit.json"
+    },
+    "type_reader_tail": {
+      "base": "aa7a4335ddfcf1557bd9757f013e1f997d8ca6b4",
+      "commit": "0fd003e9c4b3824fb674d13ed2ba76414d4879b9",
+      "paths_sha256": {
+        "Objects/typeobject.c": "d501dbeb3b9dec50479692af09e453075ee5c301144c770b4ca592e9632343a7",
+        "Lib/test/test_pyvalue_type_reader_tail.py": "7a3bbc490ecfb2a9588a61de26500dc7db53f65b46665694d60aa27cbe9a1ce9"
+      },
+      "functions": 6,
+      "errors_before": 12,
+      "errors_after": 7,
+      "warnings_before": 23,
+      "warnings_after": 19,
+      "selected_errors_before": 6,
+      "selected_errors_after": 0,
+      "selected_warnings_before": 4,
+      "selected_warnings_after": 0,
+      "first_use_relocation": "_PyType_InitSlotDefs PyDict_Next",
+      "staged_patch_sha256": "3647f43a08a32aedfcd50741a7458f55fec6726b8b1415a96112ef163d222341",
+      "native_receipt_sha256": "4b6924640a5c6228a6b1eb0ea1a24f0a3b76aa51e13073385884980ed21b249e",
+      "independent_review_sha256": "35a502daaec13f368f5660c64919c9ff171d776713c26c5dfe19666ceb3e6f79",
+      "coordinator_review_sha256": "d2076d12b60296e470b4ebfdb079fddd79c2167679884c788525c920b7c2bfc8",
+      "host_tests_run": 6,
+      "host_tests_pass": 5,
+      "host_tests_skip": 1,
+      "adjusted_reference_tests_pass": 4,
+      "candidate_executed": false,
+      "full_TU_pass": false,
+      "changed_paths": 2,
+      "runnable": false,
+      "evidence": "build/pyvalue-type-reader-tail-bulk-20261102-v2/commit.json"
+    },
+    "mro_adjacent_readers": {
+      "base": "0fd003e9c4b3824fb674d13ed2ba76414d4879b9",
+      "commit": "df30266b3b4fb2274f91965d0ca3b8cd52d34e9a",
+      "paths_sha256": {
+        "Objects/typeobject.c": "62471a80c84764ce08383483c85fefbd93439bfca2f1fa58d55c0d6b722e2cf1",
+        "Lib/test/test_pyvalue_mro_adjacent_readers.py": "fbaf2a1f7ddafc4fa5734e05b46c21c692792ad7a59c36d7bf996c70f3193d58"
+      },
+      "functions": 4,
+      "errors_before": 7,
+      "errors_after": 4,
+      "warnings_before": 19,
+      "warnings_after": 16,
+      "selected_errors_before": 5,
+      "selected_errors_after": 0,
+      "selected_warnings_before": 3,
+      "selected_warnings_after": 0,
+      "first_use_relocations": [
+        "type_call PyTuple_GET_ITEM",
+        "object_getstate_default PyList_GET_ITEM"
+      ],
+      "staged_patch_sha256": "9755ac73bc2ccb7d82c95a3371f8dad3e7b12c9f261f95902c6b02e9acf6f22f",
+      "native_receipt_sha256": "fd708aaae68dbdd2cc37ae9ace6d9d5b9ee7a42b582029b09a45f761d3424f64",
+      "independent_review_sha256": "d718adb279a2a7a24b177ed1873ab5647788df8e8d80660b3550f5e8302886c6",
+      "coordinator_review_sha256": "e2099ae17a4643605ed14bb00bc1ed2019bcfa95cc38c1ca2138af4fe779cd80",
+      "host_tests_run": 5,
+      "host_tests_pass": 5,
+      "host_tests_skip": 0,
+      "host_tests_carried_forward": true,
+      "candidate_executed": false,
+      "full_TU_pass": false,
+      "changed_paths": 2,
+      "runnable": false,
+      "evidence": "build/pyvalue-mro-adjacent-readers-bulk-20261102-v2/commit.json"
     }
   },
   "first_diagnostic_build": {
@@ -615,15 +680,15 @@
     "candidate_linked": false
   },
   "latest_diagnostic_build": {
-    "head": "aa7a4335ddfcf1557bd9757f013e1f997d8ca6b4",
+    "head": "df30266b3b4fb2274f91965d0ca3b8cd52d34e9a",
     "objects_present": 166,
-    "error_diagnostics": 332,
+    "error_diagnostics": 324,
     "source_unchanged": true,
     "candidate_linked": false,
     "includes_held_source_files": true,
     "make_exit": 2,
-    "source_manifest_paths": 7347,
-    "evidence": "build/pyvalue-merged-build-20261102-v12"
+    "source_manifest_paths": 7349,
+    "evidence": "build/pyvalue-merged-build-20261102-v13"
   },
   "mro_provider_reviewed_delta": {
     "typeobject_sha256": "d07219973716cab2749c7f9992ee268dd014815d28fd574c6d6c2d84b74dcf1d",

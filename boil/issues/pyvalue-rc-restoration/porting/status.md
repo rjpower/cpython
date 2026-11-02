@@ -207,8 +207,8 @@ of that failed build, not independent defects or a current edit count. It also
 reported 171 warnings, counted separately. Repeated headers, cascades, generated
 expansions and already fixed calls inflate these figures.
 
-The latest v12 merged probe reports 332 errors/166 objects present and no
-executable; all 7,347 source paths stayed unchanged at checkpoint41 plus held
+The latest v13 merged probe reports 324 errors/166 objects present and no
+executable; all 7,349 source paths stayed unchanged at checkpoint43 plus held
 typeobject. Counts remain repeated/cascading compiler
 observations, not independent defects or a percentage complete.
 
@@ -279,9 +279,10 @@ build/pyvalue-itertools-readers-bulk-20261102-v2/native-attribution.json.
 Design: build/pyvalue-itertools-readers-design-20261102-v1/coordinator-accept.md.
 Admission: build/pyvalue-itertools-readers-bulk-20261102-v2/commit.json.
 
-Current parallel work: Luna corrects one leaked canonical child owner in the
-six-reader type packet and implements four reviewed MRO-adjacent readers, in
-isolated copies. Sol designs the shared parser backend closure.
+Current parallel work: Sol designs seven bootstrap type readers and the four
+remaining Clinic producers. The shared parser engine design is frozen for peer
+review. Luna inventories remaining itertools reader patterns; both type-reader
+packets are committed.
 Root owns code/result review, composition and merged validation. The v9 family
 census records 376 errors/320 sites/59 paths and 57 separate warnings; it does not
 count independent ports. Evidence: build/pyvalue-v9-error-families-20261102-v1.
@@ -330,9 +331,13 @@ remaining raw parsers: backend, public opaque scope,
 producer and mechanical caller closure remain mandatory. Evidence:
 build/pyvalue-flat-format-scoped-design-20261102-v1/coordinator-grant.md.
 
-The six-reader type packet is in correction after independent code review found
-a leaked owning child value in set_flags_recursive. Five other bodies have no
-identified blocker; none is committed yet. A frozen design-control log originally
+The six-reader type packet is checkpoint42, `0fd003e9c4b`, after correcting
+a leaked canonical child owner in set_flags_recursive and independent actual
+code/native review. Configured TU errors12→7/warnings23→19, selected six errors
+and four warnings→0; one PyDict_Next first-use message moves to unchanged
+_PyType_InitSlotDefs. Five host tests pass/one skips, four adjusted controls pass.
+Final-body index projection also subsumes two earlier held foundation migrations;
+all other index bytes stay exact. Candidate/fault gates remain unexecuted. A frozen design-control log originally
 claimed four passes but contains three passes/one error. Original evidence and
 author/peer corrigenda are retained beside the corrected four-pass control.
 Hash identity is not evidence of test success. Evidence:
@@ -340,6 +345,19 @@ build/pyvalue-type-reader-tail-bulk-20261102-v1/evidence/independent-code-review
 
 Four MRO-adjacent readers passed amended v2 design review and root grant, with
 actual receiver and both diagnostic-name leases. Luna implements only those
-four bodies and their dedicated test. This dependent source port leaves the
-full graph/caller-error transaction held. Evidence:
+four bodies and their dedicated test. Actual code review requires one local
+check after final subclasses-list retirement so a new cleanup error produces-1;
+v1 is preserved and corrected v2 is checkpoint43, `df30266b3b4`. Independent
+code/native review accepts the exact composition with checkpoint42: selected
+five errors/three warnings→0, full TU 7→4/19→16, with two first-use relocations
+to unchanged type_call/object_getstate_default. Five unchanged host controls are
+carried forward, not rerun. Candidate execution remains pending. This dependent
+source port leaves the full graph/caller-error transaction held. Evidence:
 build/pyvalue-mro-adjacent-readers-design-20261102-v2/coordinator-grant.md.
+
+The v12 family census records 332 errors/278 sites/58 paths and 77 separate
+warnings. All eight generated Clinic observations map to four producers:
+reversed_new, float_new, tuple_new and atexit_register; none matches the earlier
+fixed tuple-keyword rule. Fifty-five direct tuple/list accessor sites remain
+lifetime/callback/address-taking categories, not fifty-five independent edits.
+Evidence: build/pyvalue-v12-error-families-20261102-v1/README.md.

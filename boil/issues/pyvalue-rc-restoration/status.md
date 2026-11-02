@@ -29,9 +29,10 @@ Clinic helper constructors are checkpoint34, iterator constructors checkpoint35,
 the recording-only counter foundation checkpoint36 and slot wrappers checkpoint37.
 The earlier type_new argument boundary is checkpoint38 and construction readers
 with explicit caller pins checkpoint39. Operator/LRU readers are checkpoint40
-and the flat-format kernel/five callers checkpoint41. Luna corrects one leaked
-owner in the six-reader type packet and implements four reviewed MRO-adjacent
-readers in isolated copies. Sol designs the shared parser backend closure.
+and the flat-format kernel/five callers checkpoint41. The corrected six-reader
+type packet is checkpoint42 and the corrected four-reader MRO packet43. Sol
+designs bootstrap type readers and remaining Clinic producers; shared parser
+engine design awaits peer review. Luna inventories remaining itertools patterns.
 Root integrates reviewed code and validates the composition.
 The MRO providers plus one immediate wrapper passed independent
 code/native attribution review; their syntax comparison has 61 diagnostics,
@@ -51,11 +52,13 @@ and [native caller](native-callers/status.md) receipts describe their frozen
 checkpoints. The later [caller transaction](native-parsers/caller-transaction/status.md)
 repairs and checkpoints their composition; its candidate runtime tests remain
 unexecuted. The [merged diagnostic build](merged-build/status.md) still fails to
-link. Its latest v12 snapshot at checkpoint41 plus held typeobject has 166 objects
-present and 332 repeated/cascading error diagnostics. All 7,347 source paths
+link. Its latest v13 snapshot at checkpoint43 plus held typeobject has 166 objects
+present and 324 repeated/cascading error diagnostics. All 7,349 source paths
 remained unchanged; no candidate was executed. Iterator, slot-wrapper and
 construction-reader selected contexts are native-clean; the current typeobject
-TU has twelve remaining errors and 23 warnings. The counter comparison uses corresponding
+TU after checkpoint43 has four remaining errors and sixteen warnings.
+Both reader packets have zero selected diagnostics. Their three missing-API
+first-use relocations are explicitly attributed in the native receipts. The counter comparison uses corresponding
 old/new public layouts and adds no diagnostics, without admitting a transaction.
 The full MRO transaction remains in revision.
 

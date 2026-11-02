@@ -4,6 +4,8 @@
 #include "pycore_interpolation.h" // _PyInterpolation_CheckExact()
 #include "pycore_runtime.h"       // _Py_STR()
 #include "pycore_template.h"
+#include "pycore_tuple.h"         // _PyTuple_GET_OBJECT()
+#include "pycore_value.h"         // PyValue_TYPE(), _PyValue_RestoreException()
 
 typedef struct {
     PyObject_HEAD
@@ -103,14 +105,15 @@ template_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     int last_was_str = 0;
 
     for (Py_ssize_t i = 0; i < argslen; i++) {
-        PyObject *item = PyTuple_GET_ITEM(args, i);
-        if (PyUnicode_Check(item)) {
+        PyValue item_value = PyTuple_GET_VALUE(args, i);
+        PyTypeObject *itemtype = PyValue_TYPE(item_value);
+        if (PyType_FastSubclass(itemtype, Py_TPFLAGS_UNICODE_SUBCLASS)) {
             if (!last_was_str) {
                 stringslen++;
             }
             last_was_str = 1;
         }
-        else if (_PyInterpolation_CheckExact(item)) {
+        else if (itemtype == &_PyInterpolation_Type) {
             if (!last_was_str) {
                 stringslen++;
             }
@@ -118,10 +121,18 @@ template_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
             last_was_str = 0;
         }
         else {
+            PyObject *invalid_type = Py_NewRef((PyObject *)itemtype);
             PyErr_Format(
                 PyExc_TypeError,
-                "Template.__new__ *args need to be of type 'str' or 'Interpolation', got %T",
-                item);
+                "Template.__new__ *args need to be of type 'str' or 'Interpolation', got %N",
+                invalid_type);
+            {
+                PyObject *saved = PyErr_GetRaisedException();
+                PyObject *tmp = invalid_type;
+                invalid_type = NULL;
+                Py_XDECREF(tmp);
+                _PyValue_RestoreException(saved);
+            }
             return NULL;
         }
     }
@@ -130,32 +141,25 @@ template_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     }
 
     PyObject *strings = PyTuple_New(stringslen);
-    if (!strings) {
-        return NULL;
-    }
-
-    PyObject *interpolations = PyTuple_New(interpolationslen);
-    if (!interpolations) {
-        Py_DECREF(strings);
-        return NULL;
-    }
+    PyObject *interpolations = NULL;
+    PyObject *concat = NULL;
+    PyObject *template = NULL;
+    if (strings == NULL || PyErr_Occurred()) goto error;
+    interpolations = PyTuple_New(interpolationslen);
+    if (interpolations == NULL || PyErr_Occurred()) goto error;
 
     last_was_str = 0;
     Py_ssize_t stringsidx = 0, interpolationsidx = 0;
     for (Py_ssize_t i = 0; i < argslen; i++) {
-        PyObject *item = PyTuple_GET_ITEM(args, i);
+        PyObject *item = _PyTuple_GET_OBJECT(args, i);
         if (PyUnicode_Check(item)) {
             if (last_was_str) {
-                PyObject *laststring = PyTuple_GET_ITEM(strings, stringsidx - 1);
-                PyObject *concat = PyUnicode_Concat(laststring, item);
-                if (!concat) {
-                    Py_DECREF(strings);
-                    Py_DECREF(interpolations);
-                    return NULL;
-                }
-                /* Replace laststring with concat */
-                PyTuple_SET_ITEM(strings, stringsidx - 1, concat);
-                Py_DECREF(laststring);
+                PyObject *laststring = _PyTuple_GET_OBJECT(strings, stringsidx - 1);
+                concat = PyUnicode_Concat(laststring, item);
+                if (concat == NULL || PyErr_Occurred()) goto error;
+                int status = PyTuple_SetItem(strings, stringsidx - 1, concat);
+                concat = NULL;
+                if (status < 0 || PyErr_Occurred()) goto error;
             }
             else {
                 PyTuple_SET_ITEM(strings, stringsidx++, Py_NewRef(item));
@@ -176,10 +180,55 @@ template_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         PyTuple_SET_ITEM(strings, stringsidx++, &_Py_STR(empty));
     }
 
-    PyObject *template = _PyTemplate_Build(strings, interpolations);
-    Py_DECREF(strings);
-    Py_DECREF(interpolations);
+    template = _PyTemplate_Build(strings, interpolations);
+    if (template == NULL || PyErr_Occurred()) goto error;
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = strings;
+        strings = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) goto error;
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = interpolations;
+        interpolations = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) goto error;
     return template;
+error:
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = concat;
+        concat = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = strings;
+        strings = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = interpolations;
+        interpolations = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = template;
+        template = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    return NULL;
 }
 
 static void
@@ -253,31 +302,83 @@ static PyObject *
 template_strings_concat(PyObject *left, PyObject *right)
 {
     Py_ssize_t left_stringslen = PyTuple_GET_SIZE(left);
-    PyObject *left_laststring = PyTuple_GET_ITEM(left, left_stringslen - 1);
     Py_ssize_t right_stringslen = PyTuple_GET_SIZE(right);
-    PyObject *right_firststring = PyTuple_GET_ITEM(right, 0);
+    PyObject *left_laststring = NULL;
+    PyObject *right_firststring = NULL;
+    PyObject *concat = NULL;
+    PyObject *newstrings = NULL;
 
-    PyObject *concat = PyUnicode_Concat(left_laststring, right_firststring);
-    if (concat == NULL) {
-        return NULL;
-    }
+    left_laststring = PyTuple_GetItemRef(left, left_stringslen - 1);
+    if (left_laststring == NULL || PyErr_Occurred()) goto error;
+    right_firststring = PyTuple_GetItemRef(right, 0);
+    if (right_firststring == NULL || PyErr_Occurred()) goto error;
 
-    PyObject *newstrings = PyTuple_New(left_stringslen + right_stringslen - 1);
-    if (newstrings == NULL) {
-        Py_DECREF(concat);
-        return NULL;
+    concat = PyUnicode_Concat(left_laststring, right_firststring);
+    if (concat == NULL || PyErr_Occurred()) goto error;
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = left_laststring;
+        left_laststring = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
     }
+    if (PyErr_Occurred()) goto error;
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = right_firststring;
+        right_firststring = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) goto error;
+
+    newstrings = PyTuple_New(left_stringslen + right_stringslen - 1);
+    if (newstrings == NULL || PyErr_Occurred()) goto error;
 
     Py_ssize_t index = 0;
     for (Py_ssize_t i = 0; i < left_stringslen - 1; i++) {
-        PyTuple_SET_ITEM(newstrings, index++, Py_NewRef(PyTuple_GET_ITEM(left, i)));
+        PyTuple_SET_VALUE(newstrings, index++, PyTuple_GET_VALUE(left, i));
+        if (PyErr_Occurred()) goto error;
     }
     PyTuple_SET_ITEM(newstrings, index++, concat);
+    concat = NULL;
+    if (PyErr_Occurred()) goto error;
     for (Py_ssize_t i = 1; i < right_stringslen; i++) {
-        PyTuple_SET_ITEM(newstrings, index++, Py_NewRef(PyTuple_GET_ITEM(right, i)));
+        PyTuple_SET_VALUE(newstrings, index++, PyTuple_GET_VALUE(right, i));
+        if (PyErr_Occurred()) goto error;
     }
 
     return newstrings;
+error:
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = left_laststring;
+        left_laststring = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = right_firststring;
+        right_firststring = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = concat;
+        concat = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = newstrings;
+        newstrings = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    return NULL;
 }
 
 static PyObject *
@@ -320,16 +421,35 @@ template_values_get(PyObject *op, void *Py_UNUSED(data))
 
     Py_ssize_t len = PyTuple_GET_SIZE(self->interpolations);
     PyObject *values = PyTuple_New(PyTuple_GET_SIZE(self->interpolations));
-    if (values == NULL) {
-        return NULL;
-    }
+    PyObject *value = NULL;
+    if (values == NULL || PyErr_Occurred()) goto error;
 
     for (Py_ssize_t i = 0; i < len; i++) {
-        PyObject *item = PyTuple_GET_ITEM(self->interpolations, i);
-        PyTuple_SET_ITEM(values, i, _PyInterpolation_GetValueRef(item));
+        PyObject *item = _PyTuple_GET_OBJECT(self->interpolations, i);
+        value = _PyInterpolation_GetValueRef(item);
+        if (value == NULL || PyErr_Occurred()) goto error;
+        PyTuple_SET_ITEM(values, i, value);
+        value = NULL;
+        if (PyErr_Occurred()) goto error;
     }
 
     return values;
+error:
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = value;
+        value = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = values;
+        values = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    return NULL;
 }
 
 static PyMemberDef template_members[] = {

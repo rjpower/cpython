@@ -1,3 +1,4 @@
+import ast
 import pickle
 import unittest
 from collections.abc import Iterator, Iterable
@@ -100,6 +101,56 @@ world"""
         age = 0
         t = t'Hello, {name}, {age} from {country}'
         self.assertEqual(t.values, ("Lys", 0, "GR"))
+
+    def test_template_scalar_values_and_str_subclasses(self):
+        for value in (0, 1.5, None):
+            with self.subTest(value=value):
+                with self.assertRaises(TypeError):
+                    Template(value)
+
+                interpolation = Interpolation(value, "value")
+                template = Template(interpolation)
+                self.assertEqual(template.values, (value,))
+                combined = Template(interpolation, "left") + Template(
+                    "right", Interpolation(value, "value")
+                )
+                self.assertEqual(combined.values, (value, value))
+                self.assertEqual(combined.strings, ("", "leftright", ""))
+
+        class StringSubclass(str):
+            pass
+
+        template = Template(StringSubclass("left"), StringSubclass("right"))
+        self.assertEqual(template.strings, ("leftright",))
+        self.assertIs(type(template.strings[0]), str)
+
+    def test_template_invalid_type_uses_fully_qualified_name(self):
+        Invalid = type("Invalid", (), {})
+        Invalid.__module__ = "template_test_module"
+        Invalid.__qualname__ = "nested.Invalid"
+        with self.assertRaisesRegex(
+            TypeError,
+            r"Template\.__new__.*template_test_module\.nested\.Invalid",
+        ):
+            Template(Invalid())
+
+    def test_template_scalar_ast_string_boundaries(self):
+        def compile_template(values):
+            node = ast.TemplateStr(values=values)
+            expression = ast.Expression(node)
+            ast.fix_missing_locations(expression)
+            return eval(compile(expression, "<template-test>", "eval"))
+
+        template = compile_template([
+            ast.Constant("left"), ast.Constant(42), ast.Constant("right")
+        ])
+        self.assertEqual(template.strings, ("left", 42, "right"))
+        combined = template + Template("tail")
+        self.assertEqual(combined.strings, ("left", 42, "righttail"))
+
+        scalar_boundary = compile_template([ast.Constant("left"), ast.Constant(42)])
+        with self.assertRaises(TypeError):
+            scalar_boundary + Template("right")
 
     def test_pickle_template(self):
         user = 'test'

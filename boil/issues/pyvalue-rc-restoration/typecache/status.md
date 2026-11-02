@@ -78,3 +78,11 @@ separate cache lifetime/mutation proof above.
 [graph code/results acceptance](../../../../build/pyvalue-typecache-graph1-20261102-v1/coordinator-code-review.md),
 [graph native attribution](../../../../build/pyvalue-typecache-graph1-20261102-v1/native-classification.md),
 [next finite MRO proposal](../../../../build/pyvalue-typecache-mro-scope-20261102-v1/design.md).
+
+The full MRO publication/caller proposal is in independent peer review and has
+no source grant. Initial review requires revision: existing graph repair can
+fail partway and restoring old subclass edges can allocate, so a field undo log
+alone cannot prove graph rollback. Sol separates the saturating publication
+counter foundation while resolving graph resources and construction setup.
+Existing typeobject source remains d0721997. The proposal is retained in
+build/pyvalue-sol-port-rules-20261102-v1/mro-publication-vertical-design.md.

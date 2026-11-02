@@ -420,6 +420,19 @@
       "candidate_executed": false,
       "runnable": false,
       "evidence": "build/pyvalue-bytes-join-bulk-20261102-v1/commit.json"
+    },
+    "abc_selected_pairs": {
+      "commit": "de422d7fbb315981f45fff46b4ef674eea66b275",
+      "changed_paths": 2,
+      "functions": 1,
+      "native_errors_before": 7,
+      "native_errors_after": 1,
+      "selected_errors_before": 6,
+      "selected_errors_after": 0,
+      "host_reference_controls": 9,
+      "candidate_executed": false,
+      "runnable": false,
+      "evidence": "build/pyvalue-abc-pairs-bulk-20261102-v2/commit.json"
     }
   },
   "first_diagnostic_build": {

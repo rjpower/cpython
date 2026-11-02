@@ -7,10 +7,11 @@ without diagnostics. The unified Clinic48 batch is reviewed and committed as
 are committed as 69a2750540e; corrected core14 is committed as e789685426a.
 Template is committed as e0dfcd4d7ff and corrected TypeVar as bef49ec8fc9.
 Descriptor calls are committed as ca594319d0b. The shared bytes/bytearray join
-rule is committed as checkpoint32; Sol advances the held
-typeobject/MRO dependency while Luna applies the reviewed ABC selected-pair port.
-A second Sol 6.1 worker designs the shared Clinic helper constructors, starting
-with bytes, bytearray and enumerate. This design has no source grant yet.
+rule is committed as checkpoint32; ABC pair readers are checkpoint33.
+Sol advances the held typeobject/MRO dependency with an independent peer review.
+The Clinic helper generator kernel for bytes, bytearray and enumerate plus four
+existing fixtures passed independent review. Luna regenerates and validates
+bulk products under that frozen kernel.
 The coordinator integrates and validates the merged result.
 MRO providers and the public wrapper
 passed code/native attribution review; their delta remains held. The next
@@ -227,3 +228,17 @@ plus a value include and focused new tests. Root independently gated Sol's
 existing selected-pair draft; it was not an already accepted blanket rule.
 Luna applies it while Sol designs the MRO caller transaction. Exact grant:
 build/pyvalue-sol-port-rules-20261102-v1/coordinator-abc-grant.md.
+
+ABC selected pairs are checkpoint33 de422d7fbb3. V1 changed inherited-value
+finalizer/hash order and was revised. V2 restores that order, passes nine host
+controls and has native selected errors6→0/full TU7→1; the remaining registry
+traversal error is unchanged. Both rejected v1 source files were recovered
+byte-exact against original hashes. Evidence: build/pyvalue-abc-pairs-bulk-20261102-v2.
+
+The first Luna helper assignment froze inputs but did not implement the
+generator. Sol implemented the two-file kernel; root reviewed its actual diff
+and 697-function in-memory audit (seven selected, 690 excluded exact). Producer
+checks: 314 pass/116 unavailable-fixture skips. Luna now performs product
+regeneration, scope/idempotence proofs and durable host controls. No helper
+source checkpoint or native/runtime pass is claimed. Evidence:
+build/pyvalue-clinic-helper-kernel-20261102-v1/coordinator-review.md.

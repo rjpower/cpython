@@ -25,10 +25,12 @@ passed code/native attribution review; publication, slots and lifecycle still
 need closure. No merged executable exists. Luna grouped v4's compiler errors;
 the reviewed unified Clinic rule now covers 48 production wrappers. The latest
 v8 compiler probe has 392 repeated/cascading errors and no executable; all 7,342
-source inputs stayed unchanged. Thirty-two reviewed source checkpoints now include
+source inputs stayed unchanged. Thirty-three reviewed source checkpoints now include
 fourteen core readers, three pure predicates, Template readers, the TypeVar
-parser, descriptor calls and shared bytes/bytearray join. Luna is porting ABC abstract-method discovery under a reviewed owning-pair
-rule; Sol advances the held typeobject/MRO publication dependency.
+parser, descriptor calls, shared bytes/bytearray join and ABC pair readers.
+The Clinic helper generator kernel passed review; Luna now regenerates and
+validates its bulk products. Two Sol workers revise and independently review
+the held typeobject/MRO publication design.
 Sol 6.1 designs/reviews reusable fixes; approved rules go to mechanical or Luna batches.
 The coordinator integrates reviewed results, rebuilds and repeats.
 See [porting rules and remaining work](issues/pyvalue-rc-restoration/porting/status.md)

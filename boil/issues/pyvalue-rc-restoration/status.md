@@ -23,7 +23,8 @@ The [first bulk AST port](porting/status.md) is committed: one producer covers
 TU/object pass without diagnostics. The unified Clinic rule covers 48 production
 wrappers and is committed, as are three pure predicates and fourteen core
 readers, Template readers, the TypeVar parser and descriptor calls. Shared
-bytes/bytearray join is committed as checkpoint32; MRO publication design is active.
+bytes/bytearray join is checkpoint32 and ABC pair readers are checkpoint33;
+MRO publication design/review and Clinic bulk regeneration are active.
 The MRO providers plus one immediate wrapper passed independent
 code/native attribution review; their syntax comparison has 61 diagnostics,
 versus 86 before, including
@@ -44,8 +45,10 @@ repairs and checkpoints their composition; its candidate runtime tests remain
 unexecuted. The [merged diagnostic build](merged-build/status.md) still fails to
 link. Its latest v8 snapshot at checkpoint32 plus held typeobject has 164 objects
 present and 392 repeated/cascading error diagnostics. All 7,342 source paths
-remained unchanged; no candidate was executed. Luna applies the reviewed ABC selected-pair port while Sol designs the held
-MRO publication and caller transaction.
+remained unchanged; no candidate was executed. The later ABC source checkpoint
+has selected native errors 6→0 (full TU 7→1), nine host controls and no runtime
+pass. The Clinic helper kernel passed review; Luna regenerates its products.
+Two Sol workers revise/review the held MRO transaction before a source grant.
 
 ## Remaining increments
 

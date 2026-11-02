@@ -300,3 +300,74 @@ reviewf3b04a69 binding7e2340ae. It leaves accepted cache/interner source exact.
 The full actual Python/compile.c TU now passes syntax under real headers. Both
 windows closed early. Old native dictionary bridges and wider compiler/runtime
 execution remain unqualified; syntax closure is not runtime qualification.
+
+## Variable native engine and current review,2026-11-02 02:37 UTC
+
+Partial engine review3f0c4a38 accepts final5c218de9, closing its source window
+early. Variable storage extends the same scope and remains drainable after
+partial capture/boxing. Typed dispatch checks the actual current vectorcall
+target before and after allocation; pre-body NOT_INVOKED decline is distinct
+from an executed native failure. Fixed O retains its0/-1 contract. Header
+6270ec5d is frozen; three actual syntax TUs and Clinic idempotence pass,22
+methods are AST-only. Generic VM adoption must still close the real route;
+recursive parsers and typed registration remain separate required work.
+
+Attribute checkpoint56341731 at02:29:09 met its02:32 gate; additive d4fe1085
+only strengthens fixtures. Review corrected getter-entered failure retirement
+and stale post-cleanup method stores before acceptance. Production and generated
+bytes remain frozen while legal managed-store handler/observer witnesses are
+reviewed. Seven generators/45 host checks/three actual syntax TUs pass; no
+attribute source/runtime acceptance yet.
+
+Root codeobject checkpoint1da89ffd at02:30:51 meets its02:33 gate. Final300b559c
+has canonical interning, raw name preflight with constructor/replace error
+distinctions, actual inline handler eligibility and seven AST-only tests. Tests
+force distinct interned anchors and valid external inline-handler words rather
+than assuming warming proves the path. Exact unchanged source projection with
+the actual localsplus helper passes syntax; full codeobject still fails old
+generated Clinic tuple access. Source is held for independent review.
+
+## Attribute/code-object acceptance and next cuts,2026-11-02 03:17 UTC
+
+Final attribute292c9f3d passes reviewb4a0e4e6 and closes its window early.
+The final readiness pin correction is source-bound; three actual TUs pass,
+while the additional typeobject TU preserves41 old errors and their line-map
+proof. Twenty-one methods remain AST-only, with prior16 unchanged.
+
+Codeobject final0aadc5b2 passes independent C reviewa864f8e6 plus D's additive
+fixture correctionca1fc0a9, closing its window early. Prior production review
+c80058b4 remains valid, but its v2 encoding-witness claim is withdrawn: the
+actual encode_words helper rejects specialized string names. Final tests use
+numeric IDs203/204 from actual metadata; source-derived peer host controls
+reject the old path and preserve numeric operands. Seven methods are AST-only.
+Canonical shared/hash tuple ownership and the accepted typed-key producer
+remain unchanged. Whole Clinic/free-threaded/native/runtime remains unqualified.
+
+Generic native caller handoff093ea6f9 plus addendumf63863ed passes design
+reviewc11d2231. Its new60-minute source grant includes selected cold feedback
+noallocation, safe kind checks and bounded inline TypeError, plus actual
+ordinary/KW caller publication/cleanup/refresh. Other callable/instrumented
+admissions remain mandatory later work. A completed attribute turn was explicitly
+resumed using followup_task after queued messages alone did not restart it;
+no implementation budget ran during that idle interval.
+
+C's dictionary reader checkpointce4bd36d arrived02:58:08, before03:03:40,
+with actual first edit02:48:11. Final187744d6 is now held for independent review:
+34 fragments, seven new methods/29 AST-only total. Only six legacy borrowed
+boundaries remain in actual Dict diagnostics; fixture syntax passes. Source
+completion is not accepted until the final exact review is sealed.
+
+Root's type-cache design is held before source grant. The existing pointer
+cache cannot store inline values and resize can retain a table across allocation.
+Further source audit found pre-notify watchers can repopulate a class cache
+after invalidation but before commit. Initial invalidation alone is not a valid
+lifetime/version proof. A mutation/admission barrier must cover all supported
+type/base/MRO/clear paths and already-installed guards before implementation.
+
+Dictionary final187744d6 subsequently passed independent reviewe9a446cc,
+closing its source window early. Independent function census verifies exactly
+34 fragments and all other existing Dict bodies/names unchanged; prior22
+fixture ASTs remain exact,29 total. Repr Writer_Discard now preserves the
+primary exception. The actual fixture passes syntax; full Dict still fails
+six retained borrowed bodies. Value-native iterator VM adoption and the explicit
+legacy API/core-caller migration remain required. No candidate execution.

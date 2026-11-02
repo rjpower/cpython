@@ -1939,3 +1939,16 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   Add opaque-extension design entry to the starting README.
   No restored candidate execution or timing.
   [Progress](issues/pyvalue-rc-restoration/implementation-progress-20261101.md).
+- 2026-11-02 03:26 UTC: Accept partial variable native engine5c218de9/3f0c4a38,
+  attributes292c9f3d/b4a0e4e6, code-object consumers0aadc5b2/a864f8e6
+  and dictionary readers187744d6/e9a446cc; close their source windows.
+  Retract the earlier code-object fixture encoding claim; numeric
+  specialized IDs now pass source-derived controls. Full Dict still
+  fails six retained borrowed API bodies; full typeobject and Clinic
+  remain incomplete. Generic native VM caller has a separate active
+  source grant and independent review. Explicitly resume its completed
+  agent; queued messages alone had not restarted it, with no budget
+  running during that idle interval. Hold type-cache source pending
+  mutation and existing-guard proof. Publish/read back Loom61 exactly,
+  50,221 characters/five diagrams. No coherent restored runtime/timing.
+  [Component evidence](issues/pyvalue-rc-restoration/source-components-20261102-v1.json).

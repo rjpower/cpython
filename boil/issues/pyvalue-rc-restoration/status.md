@@ -53,7 +53,9 @@ universal-value worktree. Dependent storage and native cuts continue.
   checkpoint and are now independently accepted as source.
   The reader/feedback source cut is independently accepted, including owned
   specialization lookups and cold/warmed dictionary reads. Its next attribute
-  nomination/store design is under review; the previous window is closed.
+  nomination/store source is independently accepted and frozen. The next
+  generic native VM caller source grant includes its actual cold feedback
+  entry and inline non-callable error paths.
 - value_api_consumer_map independently reviews source and maintains the exact
   native consumer inventory (660 paths in its sealed first version).
 - coroutine_design_review implements list/structseq storage and iteration;
@@ -61,8 +63,11 @@ universal-value worktree. Dependent storage and native cuts continue.
   engine, bounded dictionary clear/release and owning-read components are
   source-accepted; mutation/growth and the value-native constructor are now
   independently source-accepted. Copy/merge, conditional insertion and managed
-  storage now also pass independent source review. The next native vector-call
-  engine and generic VM caller are designed, awaiting separate grants. The coordinator
+  storage now also pass independent source review. The variable native-scope
+  engine is independently source-accepted; its generic VM caller follows the
+  attribute freeze. Dictionary read/view/iteration consumers are now independently
+  source-accepted; six legacy borrowed compile boundaries and actual value
+  iterator VM adoption remain. The coordinator
   implements tuple/cell/member/iteration and set storage; partial tuple/member
   cell/iteration, set, instance-slot and common-constant components are
   independently accepted as source only. Compiler constant indexing/compaction
@@ -70,7 +75,9 @@ universal-value worktree. Dependent storage and native cuts continue.
   canonical typed constant-key production and managed initialization before
   CREATE are independently source-accepted. Recursive cache/interning and seven
   proven object metadata reads are now source-accepted; actual full compile.c
-  syntax passes. Code-object interning/validation is the next design. The
+  syntax passes. Code-object interning/validation and corrected route fixtures
+  are independently source-accepted. Type-cache canonicalization remains in
+  design until its mutation/admission barrier is proved. The
   canonical repr guard is independently source-accepted with
   actual Object/fixture syntax checks passing and four unexecuted methods.
 - The coordinator maintains the log and monitoring loop, prepares qualification

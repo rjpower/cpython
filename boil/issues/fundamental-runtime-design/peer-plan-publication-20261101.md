@@ -496,3 +496,9 @@ candidate runtime or timing has executed.
   48,225characters/five diagrams; snapshot SHA256 `dac5518100d7b32cc176aab93bc35746a65c9a678887c03cce90551cce4af0ef`.
   Compiler cache/metadata source accepted and full compile.c syntax
   passes; active attribute/native source still awaits review.
+
+- 2026-11-02 03:26 UTC: Published/read back revision61 exactly,
+  50,221 characters/five diagrams; snapshot SHA256 `52f3d3061dc2252aafa452cbe1dff650e5810e405fb09cf4b01617fea694a8e1`.
+  Source acceptance and fixture correction are distinct from runtime
+  qualification. Dictionary readers passed final review after this
+  publication; the linked issue records that subsequent acceptance.

@@ -44,3 +44,11 @@ result/error; the paired VM caller drains partial scope under original input
 liveness, refreshes, then uses existing callable semantics. Never replay an
 invoked body. Fixed O retains its existing0/-1 contract. This directly coupled
 dispatch amendment does not extend the03:03 ceiling or authorize parser work.
+
+Source window closed early. Concrete checkpointe3adf36f at02:18:13 UTC met
+the20-minute checkpoint; final author5c218de9 and independent review3f0c4a38
+accept the partial engine component. Three unique actual syntax TUs pass,
+Clinic regeneration is idempotent,22 methods are AST-only (eight new). Final
+fixture correction only balances an owned FromInt32 value for excluded configs;
+production engine/header/gateway remain exact. Header6270ec5d is frozen for
+the paired generic VM caller. No actual route/parser/backend/runtime acceptance.

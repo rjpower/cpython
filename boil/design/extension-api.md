@@ -61,6 +61,16 @@ cleanup fixtures are now source-bound and still need candidate execution. Generi
 other calling conventions, the HPy backend and rebuilt-extension conformance
 remain required later work. No candidate native execution is claimed.
 
+Variable-engine update,2026-11-02: author5c218de9 passes independent partial
+component review3f0c4a38. The same scope now has drainable variable storage,
+typed C-function dispatch, actual current-vectorcall eligibility/recheck, and
+generated flat Clinic fixtures. Header6270ec5d is frozen. Three actual syntax
+TUs pass;22 methods remain AST-only. Generic VM caller adoption follows the
+attribute source freeze and must preserve caller publication and original
+retirement order. Recursive/kwargs-dictionary parser contexts and typed scoped
+registration remain unimplemented; engine source acceptance is not real-route,
+HPy-backend or runtime conformance.
+
 The detailed source cut, wrapper-family classification, official-source limitations, and retained dictionary rejection/supersession evidence are in [the design proposal](../../build/pyvalue-opaque-extension-api-design-20261101-v1/proposal.md). The existing 660-path consumer census remains the migration inventory; this design does not replace it or authorize broad API removals.
 
 Exception-contract correction,2026-11-02: deallocators preserve the entry

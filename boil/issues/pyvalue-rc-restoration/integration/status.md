@@ -1,7 +1,7 @@
 # Restoration integration and interpreter checkpoint
 
-- Stage: queued; dependency source is reviewed in parts, not yet committed
-- Owner: coordinator; fresh independent integration/result reviewer required
+- Stage: five source checkpoints committed; shared composition and consumers pending
+- Owner: coordinator; fresh wiki_audit reviews checkpoint boundaries
 - Goal: produce one coherent universal-value RC runtime, validate composition,
   then measure the register interpreter before further JIT performance work.
 
@@ -28,5 +28,22 @@ raw vectors and report workload/aggregate elapsed and memory, separating startup
 lowering and warm execution. No restored timing exists yet; earlier RC/GC/JIT
 results cannot supply it. Use results to improve specific mechanisms.
 
-Next: after the wiki reset, checkpoint reviewed source and publish the exact
-integration/dependency plan with a fresh owner/reviewer assignment.
+## Current checkpoint
+
+Foundation `359ea4732de` commits the frozen reviewed patch without rewriting
+later working changes. Exactly three Windows files use their declared Git
+clean filters; all 152 working source paths are unchanged. It remains a
+non-runnable source checkpoint. [Foundation record](../foundation/status.md).
+
+Canonical storage/provider checkpoint `edab780a715` commits exactly 38 reviewed
+files, preserving all later working changes. [Storage record](../container-storage/status.md).
+
+Dictionary composition `9b4ff426d1a` includes the corrected scalar-builtins
+bridge; symtable `23cec84d282` includes its reviewed getter correction; private
+ABI `359d10f4d4d` separates universal-value artifacts. All three passed independent
+source review. No candidate has been configured or built. Six legacy Dict
+functions and core consumer ports still block a coherent build.
+
+Next: review and commit shared interpreter/native/compiler composition, implement
+sys.flags and codegen ports, then close remaining concrete build failures. The [commit plan](../../../../build/pyvalue-source-integration-20261102-v1/commit-plan.md)
+records exact exclusions; no blanket shared-file staging is permitted.

@@ -1,9 +1,9 @@
 # Restore universal PyValue under RC
 
-- Stage: implementation composed in a worktree; fresh source assignments pending
-  after the wiki reset. This is not committed integration or a qualified runtime.
-- Owner: coordinator. Previous source/review agents are stopped; new ownership
-  is assigned through the [current board](../README.md).
+- Stage: foundation, containers, dictionary, ABI and symtable committed; shared implementation remains in the worktree.
+  No integrated or qualified restored runtime yet.
+- Owner: coordinator; fresh state_audit designs sys.flags and wiki_audit
+  reviews shared composition. Previous agents remain stopped.
 - Goal: one canonical PyValue across frames, containers, attributes and core
   operations, retaining RC with cyclic collection.
 
@@ -11,10 +11,14 @@
 
 The qualified interim images are `eba351fee7d`, private `boilrc1`, with boxed
 heap fields. Restoration source is in `build/worktrees/pyvalue-rc-universal`,
-branch `boil/pyvalue-rc-universal`, base `95be1d28a12`. At the wiki audit it has
-127 tracked changes and 25 untracked source/test paths, with no restoration
-source commits, linked candidate, runtime qualification or measured result.
-Primary HEAD at audit was `204acca6939`; its newer changes were documentation.
+branch `boil/pyvalue-rc-universal`, base `95be1d28a12`. The
+[foundation checkpoint](foundation/status.md) is committed as `359ea4732de`;
+[Canonical container storage](container-storage/status.md) is committed as
+`edab780a715`; dictionary composition is `9b4ff426d1a`, private ABI is
+`359d10f4d4d`, and symtable is `23cec84d282`. Current restoration HEAD is
+`23cec84d282`. These are explicitly non-runnable pending dependencies. Other
+reviewed source remains uncommitted. No linked restored candidate, runtime qualification or
+measured result exists. The wiki audit's original counts remain historical.
 
 Foundation, containers, attributes, constants, compiler and selected VM/native
 components have independent source reviews in the

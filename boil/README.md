@@ -10,13 +10,17 @@ ported; hard source or binary compatibility with upstream is not required.
 The qualified interim interpreter is built from `eba351fee7d`: register IR and
 NaN-boxed frame values, with boxed heap fields. Universal PyValues are being
 restored across containers, attributes and core operations in a separate source
-worktree. Many components have passed source review, but that composed source
-is still uncommitted and has no qualified build or performance result.
+worktree. The foundation (`359ea4732de`) and canonical container/providers
+(`edab780a715`), dictionary (`9b4ff426d1a`), private ABI (`359d10f4d4d`)
+and symtable (`23cec84d282`) have reviewed source commits. Shared consumers remain in progress.
+There is no qualified restored build or performance result.
 
 **Current step:** the coordinator checkpoints reviewed source in coherent
 commits, then finishes remaining consumers and validates the integrated runtime.
 The wiki/assignment reset passed fresh independent review; previous agents are
-stopped. No new runtime implementation owner is assigned yet. The
+stopped. The scalar-builtins and symtable review findings are fixed and committed.
+Fresh agents now design the sys.flags port and review shared VM/compiler/native
+composition. The coordinator prepares the codegen consumer port. The
 [work board](issues/README.md) names the next steps.
 
 Next milestone: measure the unified-value register interpreter with JIT

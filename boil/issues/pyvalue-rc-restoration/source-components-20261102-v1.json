@@ -218,5 +218,32 @@
     "runtime_ast_methods": 27,
     "whole_call_family_accepted": false,
     "runtime_accepted": false
+  },
+  "source_checkpoints": {
+    "foundation": {
+      "commit": "359ea4732de4681c6f93396ca0c8531c3a59d77b",
+      "changed_paths": 78,
+      "runnable": false
+    },
+    "canonical_container_storage": {
+      "commit": "edab780a715b2ac57a01f7dfe692355a3c230f12",
+      "changed_paths": 38,
+      "runnable": false
+    },
+    "private_abi_namespace": {
+      "commit": "359d10f4d4d704aa24aedbda598107724b707813",
+      "changed_paths": 5,
+      "runnable": false
+    },
+    "dictionary_composition": {
+      "commit": "9b4ff426d1abdc6582c978f4fb8e3649b17a2861",
+      "changed_paths": 13,
+      "runnable": false
+    },
+    "symtable_consumers": {
+      "commit": "23cec84d2823b73d65aec8a7cc6344adbec27ecd",
+      "changed_paths": 2,
+      "runnable": false
+    }
   }
 }

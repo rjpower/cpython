@@ -38,6 +38,8 @@ typedef struct {
     void *storage;
     PyObject *callable;
     PyObject *kwnames;
+    PyObject *callargs;
+    PyObject *kwargs;
     PyTypeObject *defining_class;
     Py_ssize_t nargs;
     Py_ssize_t positional_count;
@@ -65,6 +67,17 @@ PyAPI_FUNC(int) _PyNativeScope_BeginVector(
     _PyNativeScope *scope, PyThreadState *tstate, PyObject *callable,
     const PyValue *effective_args, Py_ssize_t positional_count,
     Py_ssize_t total_count, PyObject *kwnames);
+/* Generic adapters retain the actual invocation inputs through Publish/Abort
+ * and End. The object vector has no writable prefix/OFFSET flag.
+ * InvokeObjectVector also accepts a BeginVector scope after NOT_INVOKED,
+ * retaining its captured owners rather than draining and replaying capture. */
+PyAPI_FUNC(int) _PyNativeScope_BeginObjectVector(
+    _PyNativeScope *, PyThreadState *, PyObject *, const PyValue *,
+    Py_ssize_t, Py_ssize_t, PyObject *);
+PyAPI_FUNC(int) _PyNativeScope_BeginTupleCall(
+    _PyNativeScope *, PyThreadState *, PyObject *, PyObject *, PyObject *);
+PyAPI_FUNC(int) _PyNativeScope_InvokeObjectVector(_PyNativeScope *);
+PyAPI_FUNC(int) _PyNativeScope_InvokeTupleCall(_PyNativeScope *);
 PyAPI_FUNC(int) _PyNativeScope_Objects(
     _PyNativeScope *scope, PyObject *const **args);
 /* Consumes owned_result, including when an error is already pending. */
@@ -88,8 +101,8 @@ PyAPI_FUNC(PyObject *) _PyNativeScope_TakeRetiredResult(_PyNativeScope *scope);
 PyAPI_FUNC(int) _PyCFunction_CanCallScoped(PyObject *callable);
 /* out must be &scope->result. 0 = staged success, -1 = failure. A vector
  * scope alone may return +1 = NOT_INVOKED, with EMPTY result and no error.
- * The caller drains that preparation, refreshes and uses generic semantics;
- * it must never replay a completed body. Fixed Begin keeps its 0/-1 ABI. */
+ * The caller can use InvokeObjectVector in the same scope; it must never
+ * replay a completed body. Fixed Begin keeps its 0/-1 ABI. */
 PyAPI_FUNC(int) _PyCFunction_CallScoped(
     _PyNativeScope *scope, PyObject *callable, _PyNativeResult *out);
 

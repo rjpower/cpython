@@ -86,18 +86,19 @@ _PyNativeScope_Begin(_PyNativeScope *scope, PyThreadState *tstate,
     return 0;
 }
 
-int
-_PyNativeScope_BeginVector(_PyNativeScope *scope, PyThreadState *tstate,
-                           PyObject *callable, const PyValue *effective_args,
-                           Py_ssize_t positional_count, Py_ssize_t total_count,
-                           PyObject *kwnames)
+static int
+begin_vector(_PyNativeScope *scope, PyThreadState *tstate,
+             PyObject *callable, const PyValue *effective_args,
+             Py_ssize_t positional_count, Py_ssize_t total_count,
+             PyObject *kwnames, int cfunction)
 {
     initialize_scope(scope, tstate);
-    scope->vector = 1;
+    scope->vector = cfunction ? 1 : 2;
     if (PyErr_Occurred()) {
         return -1;
     }
-    if (tstate == NULL || callable == NULL || !PyCFunction_Check(callable) ||
+    if (tstate == NULL || callable == NULL ||
+        (cfunction && !PyCFunction_Check(callable)) ||
         positional_count < 0 || total_count < positional_count ||
         (total_count != 0 && effective_args == NULL) ||
         (kwnames != NULL && !PyTuple_Check(kwnames)))
@@ -138,9 +139,11 @@ _PyNativeScope_BeginVector(_PyNativeScope *scope, PyThreadState *tstate,
      * window remain rooted during the first allocation and snapshot. */
     scope->callable = Py_NewRef(callable);
     scope->kwnames = Py_XNewRef(kwnames);
-    scope->receiver_object = Py_XNewRef(PyCFunction_GET_SELF(callable));
-    scope->defining_class = (PyTypeObject *)Py_XNewRef(
-        (PyObject *)PyCFunction_GET_CLASS(callable));
+    if (cfunction) {
+        scope->receiver_object = Py_XNewRef(PyCFunction_GET_SELF(callable));
+        scope->defining_class = (PyTypeObject *)Py_XNewRef(
+            (PyObject *)PyCFunction_GET_CLASS(callable));
+    }
     if (total_count > 1) {
         size_t values_size = (size_t)total_count * sizeof(PyValue);
         size_t bytes = values_size + (size_t)total_count * sizeof(PyObject *);
@@ -163,7 +166,71 @@ _PyNativeScope_BeginVector(_PyNativeScope *scope, PyThreadState *tstate,
         scope->arguments[i] = PyValue_MakeHeapSafe(
             PyValue_Borrow(effective_args[i]));
     }
+    return PyErr_Occurred() ? -1 : 0;
+}
+
+int
+_PyNativeScope_BeginVector(_PyNativeScope *scope, PyThreadState *tstate,
+                           PyObject *callable, const PyValue *args,
+                           Py_ssize_t positional, Py_ssize_t total,
+                           PyObject *kwnames)
+{
+    return begin_vector(scope, tstate, callable, args, positional, total, kwnames, 1);
+}
+
+int
+_PyNativeScope_BeginObjectVector(_PyNativeScope *scope, PyThreadState *tstate,
+                                PyObject *callable, const PyValue *args,
+                                Py_ssize_t positional, Py_ssize_t total,
+                                PyObject *kwnames)
+{
+    return begin_vector(scope, tstate, callable, args, positional, total, kwnames, 0);
+}
+
+int
+_PyNativeScope_BeginTupleCall(_PyNativeScope *scope, PyThreadState *tstate,
+                            PyObject *callable, PyObject *args, PyObject *kwargs)
+{
+    initialize_scope(scope, tstate);
+    scope->vector = 3;
+    if (PyErr_Occurred()) {
+        return -1;
+    }
+    if (tstate == NULL || callable == NULL || args == NULL || !PyTuple_Check(args) ||
+        (kwargs != NULL && !PyDict_Check(kwargs))) {
+        PyErr_SetString(PyExc_SystemError, "invalid native tuple-call arguments");
+        return -1;
+    }
+    scope->callable = Py_NewRef(callable);
+    scope->callargs = Py_NewRef(args);
+    scope->kwargs = Py_XNewRef(kwargs);
     return 0;
+}
+
+int
+_PyNativeScope_InvokeObjectVector(_PyNativeScope *scope)
+{
+    assert((scope->vector == 1 || scope->vector == 2) && !scope->ended);
+    assert(scope->result.state == _Py_NATIVE_RESULT_EMPTY);
+    PyObject *const *args;
+    if (_PyNativeScope_Objects(scope, &args) < 0) {
+        return -1;
+    }
+    PyObject *result = PyObject_Vectorcall(scope->callable, args,
+                                         scope->positional_count, scope->kwnames);
+    return _PyNativeScope_StageResult(scope, result, &scope->result);
+}
+
+int
+_PyNativeScope_InvokeTupleCall(_PyNativeScope *scope)
+{
+    assert(scope->vector == 3 && !scope->ended);
+    assert(scope->result.state == _Py_NATIVE_RESULT_EMPTY);
+    if (PyErr_Occurred()) {
+        return -1;
+    }
+    PyObject *result = PyObject_Call(scope->callable, scope->callargs, scope->kwargs);
+    return _PyNativeScope_StageResult(scope, result, &scope->result);
 }
 
 int
@@ -282,6 +349,8 @@ _PyNativeScope_End(_PyNativeScope *scope)
     scope->defining_class = NULL;
     close_object(&defining_class, &saved);
     close_object(&scope->kwnames, &saved);
+    close_object(&scope->kwargs, &saved);
+    close_object(&scope->callargs, &saved);
     close_object(&scope->callable, &saved);
     /* No callback can reuse a partially drained array. Keep its storage
      * alive through every owner release, then detach before freeing it. */

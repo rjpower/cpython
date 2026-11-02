@@ -2185,5 +2185,132 @@ class FrozenDictTests(unittest.TestCase):
             d.get(key2)
 
 
+class UniversalValueDictTest(unittest.TestCase):
+    def test_numeric_keys_keep_original_key(self):
+        for first, equal in ((True, 1), (1, 1.0), (-0.0, 0), (0, 0.0)):
+            with self.subTest(first=first, equal=equal):
+                d = {first: 'old'}
+                d[equal] = 'new'
+                self.assertEqual(len(d), 1)
+                self.assertIs(next(iter(d)), first)
+                self.assertEqual(d[first], 'new')
+        nan = float('nan')
+        d = {nan: 'nan'}
+        self.assertEqual(d[nan], 'nan')
+        self.assertNotIn(float('nan'), d)
+
+    def test_replacement_publishes_before_finalizer(self):
+        events = []
+        d = {}
+
+        class Released:
+            def __del__(self):
+                events.append(d['value'])
+                d['from_finalizer'] = 17
+
+        d['value'] = Released()
+        d['value'] = 1.25
+        self.assertEqual(events, [1.25])
+        self.assertEqual(d, {'value': 1.25, 'from_finalizer': 17})
+
+    def test_copy_merge_pop_and_cycles_own_values(self):
+        class Payload:
+            pass
+
+        d = {'scalar': -(1 << 31), 'object': Payload()}
+        reference = weakref.ref(d['object'])
+        copy = d.copy()
+        merged = {} | d
+        item = d.pop('object')
+        d.clear()
+        del item
+        self.assertIsNotNone(reference())
+        copy.clear()
+        self.assertIsNotNone(reference())
+        merged.clear()
+        self.assertIsNone(reference())
+        payload = Payload()
+        reference = weakref.ref(payload)
+        cycle = {1.25: payload, 'scalar': (1 << 31) - 1}
+        payload.mapping = cycle
+        del payload, cycle
+        gc.collect()
+        self.assertIsNone(reference())
+
+
+class DictClearValueStorageTests(unittest.TestCase):
+    @support.requires_refcounting
+    def test_combined_clear_detaches_before_key_and_value_finalizers(self):
+        events = []
+        mapping = {}
+        inserted = {f"new-{i}": i + 0.25 for i in range(40)}
+
+        class Key:
+            def __hash__(self):
+                return 101
+
+            def __del__(self):
+                events.append(("key", len(mapping)))
+                mapping.update(inserted)
+
+        class Value:
+            def __del__(self):
+                events.append(("value", len(mapping)))
+                mapping[1.5] = -(1 << 31)
+
+        mapping[Key()] = Value()
+        mapping[2.5] = (1 << 31) - 1
+        mapping.clear()
+        self.assertEqual(events, [("key", 0), ("value", len(inserted))])
+        self.assertEqual(mapping, inserted | {1.5: -(1 << 31)})
+
+    @support.requires_refcounting
+    def test_embedded_clear_owns_all_values_before_reentrant_conversion(self):
+        events = []
+
+        class Instance:
+            pass
+
+        class Value:
+            def __init__(self, name):
+                self.name = name
+
+            def __del__(self):
+                events.append((self.name, dict(mapping)))
+                mapping[1.5] = self.name
+
+        instance = Instance()
+        instance.first = Value("first")
+        instance.integer = (1 << 31) - 1
+        instance.last = Value("last")
+        instance.floating = 2.25
+        mapping = instance.__dict__
+        mapping.clear()
+        self.assertEqual(events, [("first", {}), ("last", {1.5: "first"})])
+        self.assertEqual(mapping, {1.5: "last"})
+
+    @support.requires_refcounting
+    def test_detached_split_clear_retains_scalar_and_object_owners(self):
+        events = []
+
+        class Instance:
+            pass
+
+        class Value:
+            def __del__(self):
+                events.append(dict(mapping))
+                mapping[2.5] = (1 << 31) - 1
+
+        instance = Instance()
+        instance.value = Value()
+        instance.scalar = -(1 << 31)
+        mapping = instance.__dict__
+        instance.__dict__ = {"replacement": 1.25}
+        mapping.clear()
+        self.assertEqual(events, [{}])
+        self.assertEqual(mapping, {2.5: (1 << 31) - 1})
+        self.assertEqual(instance.__dict__, {"replacement": 1.25})
+
+
 if __name__ == "__main__":
     unittest.main()

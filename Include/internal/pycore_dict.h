@@ -10,7 +10,7 @@ extern "C" {
 
 #include "pycore_object.h"               // PyManagedDictPointer
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_LOAD_SSIZE_ACQUIRE
-#include "pycore_stackref.h"             // _PyStackRef
+#include "pycore_value.h"             // PyValue
 #include "pycore_stats.h"
 
 // Unsafe flavor of PyDict_GetItemWithError(): no error checking
@@ -80,18 +80,48 @@ typedef struct {
 extern PyObject* _PyDictView_New(PyObject *, PyTypeObject *);
 extern PyObject* _PyDictView_Intersect(PyObject* self, PyObject *other);
 
+/* Borrowed live dict/key inputs; hash must match the canonical language key.
+ * Return 1 with an independently owned value, 0 if absent, -1 on error.
+ * The output is NULL1 on absence/error; caller owns any prior output contents.
+ * These error-reporting providers require no pending exception on entry. */
+PyAPI_FUNC(int) _PyDict_GetValue_KnownHash(PyObject *, PyValue, Py_hash_t, PyValue *);
+/* Return 1 with independent owners for requested key/value outputs, 0 at end,
+ * or -1 on error. Optional output slots must be distinct; non-success sets
+ * them to NULL1. Capture is allocation-free; only success advances the cursor.
+ * As with dict iteration, owners do not make key mutation during iteration
+ * safe. The borrowed dict must remain live throughout each call. */
+PyAPI_FUNC(int) _PyDict_NextValue(PyObject *, Py_ssize_t *, PyValue *, PyValue *, Py_hash_t *);
+/* Same owned-entry contract, with a snapshot of the cached source key hash. */
+PyAPI_FUNC(int) _PyDict_NextEntryRefKnownHash(
+    PyObject *, Py_ssize_t *, PyObject **, PyObject **, Py_hash_t *);
+/* KnownHash borrows canonical key/value; Take2 variants consume two independent
+ * strong owners on EVERY exit, including validation/hash/allocation failures.
+ * Return 0/-1. An error after publication does not roll back the mutation. */
+/* 0 inserted and 1 existing are BOTH successful; requested output is owned.
+ * Only -1 is an error and guarantees NULL1 output. Inputs are borrowed. */
+PyAPI_FUNC(int) _PyDict_SetDefaultValue(PyObject *, PyValue, PyValue, PyValue *);
+
+PyAPI_FUNC(int) _PyDict_SetValue_KnownHash(PyObject *, PyValue, PyValue, Py_hash_t);
+PyAPI_FUNC(int) _PyDict_SetValue_Take2(PyDictObject *, PyValue, PyValue);
+PyAPI_FUNC(int) _PyDict_SetValue_Take2_KnownHash(PyDictObject *, PyValue, PyValue, Py_hash_t);
+/* Borrow independently owning snapshots with stable address/contents through
+ * every callback. Strides are nonnegative PyValue element counts (zero is
+ * allowed). Return a new dict or NULL with an error; never consume the arrays. */
+PyAPI_FUNC(PyObject *) _PyDict_FromValueItems(const PyValue *, Py_ssize_t,
+                                            const PyValue *, Py_ssize_t, Py_ssize_t);
+
 /* other API */
 
 typedef struct {
     /* Cached hash code of me_key. */
     Py_hash_t me_hash;
-    PyObject *me_key;
-    PyObject *me_value; /* This field is only meaningful for combined tables */
+    PyValue me_key;
+    PyValue me_value; /* This field is only meaningful for combined tables */
 } PyDictKeyEntry;
 
 typedef struct {
     PyObject *me_key;   /* The key must be Unicode and have hash. */
-    PyObject *me_value; /* This field is only meaningful for combined tables */
+    PyValue me_value; /* This field is only meaningful for combined tables */
 } PyDictUnicodeEntry;
 
 extern PyDictKeysObject *_PyDict_NewKeysForClass(PyHeapTypeObject *);
@@ -130,15 +160,23 @@ extern void _PyDictKeys_DecRef(PyDictKeysObject *keys);
  * -1 when no entry found, -3 when compare raises error.
  * Exported for external JIT support
  */
-PyAPI_FUNC(Py_ssize_t) _Py_dict_lookup(PyDictObject *mp, PyObject *key, Py_hash_t hash, PyObject **value_addr);
-extern Py_ssize_t _Py_dict_lookup_threadsafe(PyDictObject *mp, PyObject *key, Py_hash_t hash, PyObject **value_addr);
-extern Py_ssize_t _Py_dict_lookup_threadsafe_stackref(PyDictObject *mp, PyObject *key, Py_hash_t hash, _PyStackRef *value_addr);
+PyAPI_FUNC(Py_ssize_t) _Py_dict_lookup(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue *value_addr);
+extern Py_ssize_t _Py_dict_lookup_threadsafe_value(PyDictObject *mp, PyObject *key, Py_hash_t hash, PyValue *value_addr);
 
-extern int _PyDict_GetMethodStackRef(PyDictObject *dict, PyObject *name, _PyStackRef *method);
+extern int _PyDict_GetMethodValue(PyDictObject *dict, PyObject *name, PyValue *method);
 
 // Exported for external JIT support
+/* Exact Unicode metadata name; owned output/NULL1, DKIX index/error codes.
+ * Caller roots both inputs and validates current keys/layout before using ix. */
+PyAPI_FUNC(Py_ssize_t) _PyDict_LookupIndexAndOwnedValue(PyDictObject *, PyObject *, PyValue *);
 PyAPI_FUNC(Py_ssize_t) _PyDict_LookupIndexAndValue(PyDictObject *, PyObject *, PyObject **);
 PyAPI_FUNC(Py_ssize_t) _PyDict_LookupIndex(PyDictObject *, PyObject *);
+/* Owns the returned canonical key/value/item tuple; NULL1 means exhaustion
+ * or error (PyErr distinguishes them). Supports the six builtin forward/
+ * reverse dict iterator types. Cursor is reserved before any allocation;
+ * failed boxing/pair allocation rolls back only untouched reservations.
+ * Object tp_iternext remains a separate fallible outward bridge. */
+PyAPI_FUNC(PyValue) _PyDictIter_NextValue(PyObject *iterator);
 PyAPI_FUNC(Py_ssize_t) _PyDictKeys_StringLookup(PyDictKeysObject* dictkeys, PyObject *key);
 
 /* Look up a string key in an all unicode dict keys, assign the keys object a version, and
@@ -154,7 +192,7 @@ PyAPI_FUNC(Py_ssize_t) _PyDictKeys_StringLookup(PyDictKeysObject* dictkeys, PyOb
 PyAPI_FUNC(Py_ssize_t) _PyDictKeys_StringLookupAndVersion(PyDictKeysObject* dictkeys, PyObject *key, uint32_t *version);
 PyAPI_FUNC(Py_ssize_t) _PyDictKeys_StringLookupSplit(PyDictKeysObject* dictkeys, PyObject *key);
 // Return the borrowed source dictionary, or NULL if absent or on error.
-PyAPI_FUNC(PyObject *) _PyDict_LoadGlobalStackRef(PyDictObject *, PyDictObject *, PyObject *, _PyStackRef *);
+PyAPI_FUNC(PyObject *) _PyDict_LoadGlobalValue(PyDictObject *, PyDictObject *, PyObject *, PyValue *);
 
 // Loads the __builtins__ object from the globals dict. Returns a new reference.
 extern PyObject *_PyDict_LoadBuiltinsFromGlobals(PyObject *globals);
@@ -301,7 +339,7 @@ static inline struct _instancekeysobject *_PyDictKeys_AsSharedKeys(struct _dictk
 
 /* Layout of dict values:
  *
- * The PyObject *values are preceded by an array of bytes holding
+ * The owning PyValue entries are preceded by an array of bytes holding
  * the insertion order and size.
  * [-1] = prefix size. [-2] = used size. size[-2-n...] = insertion order.
  */
@@ -313,7 +351,7 @@ struct _dictvalues {
 #ifdef Py_SHAPES
     uint8_t shape;      // index into the type's shapes, or _Py_SHAPE_NONE
 #endif
-    PyObject *values[1];
+    PyValue values[1];
 };
 
 #define DK_LOG_SIZE(dk)  _Py_RVALUE((dk)->dk_log2_size)
@@ -359,14 +397,14 @@ PyAPI_FUNC(void)
 _PyDict_SendEvent(int watcher_bits,
                   PyDict_WatchEvent event,
                   PyDictObject *mp,
-                  PyObject *key,
-                  PyObject *value);
+                  PyValue key,
+                  PyValue value);
 
 static inline void
 _PyDict_NotifyEvent(PyDict_WatchEvent event,
                     PyDictObject *mp,
-                    PyObject *key,
-                    PyObject *value)
+                    PyValue key,
+                    PyValue value)
 {
     assert(Py_REFCNT((PyObject*)mp) > 0);
     int watcher_bits = FT_ATOMIC_LOAD_UINT64_ACQUIRE(mp->_ma_watcher_tag) & DICT_WATCHER_MASK;
@@ -446,6 +484,32 @@ _PyShape_HasSlot(PyTypeObject *tp, uint8_t shape, Py_ssize_t slot)
 // per-type limit.  Never sets an exception.  Exported for the test cases of
 // _testinternalcapi.
 PyAPI_FUNC(uint8_t) _PyShape_Add(PyTypeObject *tp, uint8_t from, Py_ssize_t slot);
+
+/* Nomination and an already committed VM store must not grow metadata. */
+static inline uint8_t
+_PyShape_FindTransition(PyTypeObject *tp, uint8_t from, Py_ssize_t slot)
+{
+    if (!(tp->tp_flags & Py_TPFLAGS_HEAPTYPE) ||
+        !(tp->tp_flags & Py_TPFLAGS_INLINE_VALUES)) {
+        return _Py_SHAPE_NONE;
+    }
+    PyDictKeysObject *keys = ((PyHeapTypeObject *)tp)->ht_cached_keys;
+    if (keys == NULL || keys->dk_kind != DICT_KEYS_SPLIT) {
+        return _Py_SHAPE_NONE;
+    }
+    _PyTypeShapes *shapes = _PyDictKeys_AsSharedKeys(keys)->dsk_shapes;
+    if (shapes == NULL || from >= shapes->nshapes) {
+        return _Py_SHAPE_NONE;
+    }
+    for (int i = from + 1; i < shapes->nshapes; i++) {
+        _PyShape *shape = &shapes->shapes[i];
+        if (shape->parent == from && shape->slot == slot &&
+            shape->kind == _Py_SLOT_BOXED) {
+            return (uint8_t)i;
+        }
+    }
+    return _Py_SHAPE_NONE;
+}
 #endif
 
 // Follow the addition of slot IX to the inline VALUES of an instance of TP.
@@ -464,8 +528,9 @@ _PyDictValues_ShapeAfterAdd(PyTypeObject *tp, PyDictValues *values, Py_ssize_t i
 }
 
 // Exported for external JIT support
-PyAPI_FUNC(void)
-_PyDict_InsertSplitValue(PyDictObject *mp, PyObject *key, PyObject *value, Py_ssize_t ix);
+/* Borrowed canonical inputs; return 0/-1 after fresh checked lookup. */
+PyAPI_FUNC(int)
+_PyDict_InsertSplitValue(PyDictObject *mp, PyValue key, PyValue value, Py_ssize_t ix);
 
 static inline size_t
 shared_keys_usable_size(PyDictKeysObject *keys)
@@ -488,9 +553,9 @@ _PyInlineValuesSize(PyTypeObject *tp)
     PyDictKeysObject *keys = ((PyHeapTypeObject*)tp)->ht_cached_keys;
     assert(keys != NULL);
     size_t size = shared_keys_usable_size(keys);
-    size_t prefix_size = _Py_SIZE_ROUND_UP(size, sizeof(PyObject *));
+    size_t prefix_size = _Py_SIZE_ROUND_UP(size, sizeof(PyValue));
     assert(prefix_size < 256);
-    return prefix_size + offsetof(PyDictValues, values) + size * sizeof(PyObject *);
+    return prefix_size + offsetof(PyDictValues, values) + size * sizeof(PyValue);
 }
 
 int

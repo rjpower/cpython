@@ -202,14 +202,14 @@ new_module_notrack(PyTypeObject *mt)
  */
 static int
 module_dict_watcher(PyDict_WatchEvent event, PyObject *dict,
-                    PyObject *key, PyObject *new_value)
+                    PyValue key, PyValue new_value)
 {
     assert(PyDict_Check(dict));
     // Only if a new lazy object shows up do we need to clear the dictionary. If
     // this is adding a new key then the version will be reset anyway.
     if (event == PyDict_EVENT_MODIFIED &&
-        new_value != NULL &&
-        PyLazyImport_CheckExact(new_value)) {
+        !PyValue_IsNull(new_value) && PyValue_IsObject(new_value) &&
+        PyLazyImport_CheckExact(PyValue_AsPyObjectBorrow(new_value))) {
         _PyDict_ClearKeysVersionLockHeld(dict);
     }
     return 0;

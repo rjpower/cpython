@@ -29,6 +29,47 @@ except ImportError:
     xxsubtype = None
 
 
+class UniversalValueManagedDictTest(unittest.TestCase):
+    def test_inline_materialization_and_replacement_lifetimes(self):
+        class Instance:
+            pass
+
+        owner = Instance()
+        events = []
+
+        class Released:
+            def __del__(self):
+                events.append(owner.value)
+                owner.from_finalizer = 19
+
+        owner.value = Released()
+        owner.scalar = (1 << 31) - 1
+        owner.value = -0.0
+        self.assertEqual(events, [-0.0])
+        self.assertEqual(owner.from_finalizer, 19)
+        materialized = owner.__dict__
+        for i in range(40):
+            setattr(owner, f'field_{i}', i + 0.25)
+        self.assertIs(owner.__dict__, materialized)
+        self.assertEqual(owner.scalar, (1 << 31) - 1)
+        self.assertEqual(owner.field_39, 39.25)
+        del owner.field_0
+        owner.field_0 = -3.5
+        self.assertEqual(materialized['field_0'], -3.5)
+
+    def test_inline_value_cycle_is_traversed(self):
+        class Instance:
+            pass
+
+        owner = Instance()
+        owner.scalar = 1.25
+        owner.self = owner
+        reference = weakref.ref(owner)
+        del owner
+        gc.collect()
+        self.assertIsNone(reference())
+
+
 class OperatorsTest(unittest.TestCase):
 
     def __init__(self, *args, **kwargs):

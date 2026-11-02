@@ -19,6 +19,15 @@ PyAPI_DATA(PyTypeObject) PyDict_Type;
 #define PyDict_CheckExact(op) Py_IS_TYPE((op), &PyDict_Type)
 
 PyAPI_FUNC(PyObject *) PyDict_New(void);
+/* Owned outputs, PyValue_NULL on absence/error; return 1/0/-1. */
+PyAPI_FUNC(int) PyDict_GetValue(PyObject *, PyValue, PyValue *);
+PyAPI_FUNC(int) PyDict_GetValueString(PyObject *, const char *, PyValue *);
+PyAPI_FUNC(int) PyDict_NextValue(PyObject *, Py_ssize_t *, PyValue *, PyValue *);
+/* Inputs borrow; setters promote before retaining. */
+PyAPI_FUNC(int) PyDict_SetValue(PyObject *, PyValue, PyValue);
+PyAPI_FUNC(int) PyDict_DelValue(PyObject *, PyValue);
+PyAPI_FUNC(int) PyDict_ContainsValue(PyObject *, PyValue);
+PyAPI_FUNC(int) PyDict_PopValue(PyObject *, PyValue, PyValue *);
 PyAPI_FUNC(PyObject *) PyDict_GetItem(PyObject *mp, PyObject *key);
 PyAPI_FUNC(PyObject *) PyDict_GetItemWithError(PyObject *mp, PyObject *key);
 PyAPI_FUNC(int) PyDict_SetItem(PyObject *mp, PyObject *key, PyObject *item);
@@ -65,6 +74,10 @@ PyAPI_FUNC(int) PyDict_DelItemString(PyObject *dp, const char *key);
 // - If the key is missing, set *result to NULL and return 0 .
 // - On error, raise an exception and return -1.
 PyAPI_FUNC(int) PyDict_GetItemRef(PyObject *mp, PyObject *key, PyObject **result);
+/* Owned entry snapshots: clear-entry, -1/error, 0/end, 1/entry.
+ * Distinct optional output locations; NULL on error/end. Close owned outputs.
+ * Cursor reserves before boxing; callback progress is never overwritten. */
+PyAPI_FUNC(int) PyDict_NextEntryRef(PyObject *, Py_ssize_t *, PyObject **, PyObject **);
 PyAPI_FUNC(int) PyDict_GetItemStringRef(PyObject *mp, const char *key, PyObject **result);
 #endif
 

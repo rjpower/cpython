@@ -6,7 +6,7 @@ typedef struct _dictkeysobject PyDictKeysObject;
 typedef struct _dictvalues PyDictValues;
 
 /* The ma_values pointer is NULL for a combined table
- * or points to an array of PyObject* for a split table
+ * or points to an array of owning canonical PyValue entries for a split table
  */
 typedef struct {
     PyObject_HEAD
@@ -94,7 +94,11 @@ typedef enum {
 // Callback to be invoked when a watched dict is cleared, dealloced, or modified.
 // In clear/dealloc case, key and new_value will be NULL. Otherwise, new_value will be the
 // new value for key, NULL if key is being deleted.
-typedef int(*PyDict_WatchCallback)(PyDict_WatchEvent event, PyObject* dict, PyObject* key, PyObject* new_value);
+/* key/new_value borrow strong snapshots for the callback duration.
+ * PyValue_NULL marks an absent event field. CLONED passes the source dict
+ * as key. The dict metadata argument retains its existing lifetime rules. */
+typedef int(*PyDict_WatchCallback)(PyDict_WatchEvent event, PyObject* dict,
+                                 PyValue key, PyValue new_value);
 
 // Register/unregister a dict-watcher callback
 PyAPI_FUNC(int) PyDict_AddWatcher(PyDict_WatchCallback callback);

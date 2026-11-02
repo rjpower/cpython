@@ -9,6 +9,7 @@
 #include "pycore_function.h"      // FUNC_MAX_WATCHERS
 #include "pycore_interp_structs.h" // CODE_MAX_WATCHERS
 #include "pycore_context.h"       // CONTEXT_MAX_WATCHERS
+#include "pycore_value.h"
 #include "pycore_lock.h"          // _PyOnceFlag
 
 /*[clinic input]
@@ -29,12 +30,11 @@ _init_dict_watch_events(void *arg)
 }
 
 static int
-dict_watch_callback(PyDict_WatchEvent event,
-                    PyObject *dict,
-                    PyObject *key,
-                    PyObject *new_value)
+dict_watch_callback(PyDict_WatchEvent event, PyObject *dict,
+                    PyValue key, PyValue new_value)
 {
-    PyObject *msg;
+    PyObject *msg = NULL;
+    PyObject *key_object = NULL, *value_object = NULL;
     switch (event) {
         case PyDict_EVENT_CLEARED:
             msg = PyUnicode_FromString("clear");
@@ -46,34 +46,47 @@ dict_watch_callback(PyDict_WatchEvent event,
             msg = PyUnicode_FromString("clone");
             break;
         case PyDict_EVENT_ADDED:
-            msg = PyUnicode_FromFormat("new:%S:%S", key, new_value);
-            break;
         case PyDict_EVENT_MODIFIED:
-            msg = PyUnicode_FromFormat("mod:%S:%S", key, new_value);
+            key_object = PyValue_AsObject(key);
+            if (key_object != NULL) {
+                value_object = PyValue_AsObject(new_value);
+            }
+            if (value_object != NULL) {
+                msg = PyUnicode_FromFormat(event == PyDict_EVENT_ADDED ?
+                    "new:%S:%S" : "mod:%S:%S", key_object, value_object);
+            }
             break;
         case PyDict_EVENT_DELETED:
-            msg = PyUnicode_FromFormat("del:%S", key);
+            key_object = PyValue_AsObject(key);
+            if (key_object != NULL) {
+                msg = PyUnicode_FromFormat("del:%S", key_object);
+            }
             break;
         default:
             msg = PyUnicode_FromString("unknown");
     }
-    if (msg == NULL) {
-        return -1;
+    PyObject *saved = PyErr_GetRaisedException();
+    Py_XDECREF(value_object);
+    _PyValue_RestoreException(saved);
+    saved = PyErr_GetRaisedException();
+    Py_XDECREF(key_object);
+    _PyValue_RestoreException(saved);
+    int status = -1;
+    if (msg != NULL && !PyErr_Occurred()) {
+        assert(PyList_Check(g_dict_watch_events));
+        status = PyList_Append(g_dict_watch_events, msg);
     }
-    assert(PyList_Check(g_dict_watch_events));
-    if (PyList_Append(g_dict_watch_events, msg) < 0) {
-        Py_DECREF(msg);
-        return -1;
-    }
-    Py_DECREF(msg);
-    return 0;
+    saved = PyErr_GetRaisedException();
+    Py_XDECREF(msg);
+    _PyValue_RestoreException(saved);
+    return PyErr_Occurred() ? -1 : status;
 }
 
 static int
 dict_watch_callback_second(PyDict_WatchEvent event,
                            PyObject *dict,
-                           PyObject *key,
-                           PyObject *new_value)
+                           PyValue key,
+                           PyValue new_value)
 {
     PyObject *msg = PyUnicode_FromString("second");
     if (msg == NULL) {
@@ -90,8 +103,8 @@ dict_watch_callback_second(PyDict_WatchEvent event,
 static int
 dict_watch_callback_error(PyDict_WatchEvent event,
                           PyObject *dict,
-                          PyObject *key,
-                          PyObject *new_value)
+                          PyValue key,
+                          PyValue new_value)
 {
     PyErr_SetString(PyExc_RuntimeError, "boom!");
     return -1;

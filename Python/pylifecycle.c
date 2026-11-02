@@ -28,7 +28,7 @@
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_runtime_init.h"  // _PyRuntimeState_INIT
 #include "pycore_setobject.h"     // _PySet_NextEntry()
-#include "pycore_stackref.h"      // PyStackRef_FromPyObjectBorrow()
+#include "pycore_value.h"      // PyValue_FromPyObjectBorrow()
 #include "pycore_stats.h"         // _PyStats_InterpInit()
 #include "pycore_sysmodule.h"     // _PySys_ClearAttrString()
 #include "pycore_traceback.h"     // PyUnstable_TracebackThreads()
@@ -654,7 +654,7 @@ init_interp_create_gil(PyThreadState *tstate, int gil)
 }
 
 static int
-builtins_dict_watcher(PyDict_WatchEvent event, PyObject *dict, PyObject *key, PyObject *new_value)
+builtins_dict_watcher(PyDict_WatchEvent event, PyObject *dict, PyValue key, PyValue new_value)
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
     RARE_EVENT_INTERP_INC(interp, builtin_dict);
@@ -896,7 +896,7 @@ pycore_init_builtins(PyThreadState *tstate)
     for (int i = 0; i < NUM_COMMON_CONSTANTS; i++) {
         assert(common_objs[i] != NULL);
         _Py_SetImmortal(common_objs[i]);
-        interp->common_consts[i] = PyStackRef_FromPyObjectBorrow(common_objs[i]);
+        interp->common_consts[i] = PyValue_FromObjectBorrow(common_objs[i]);
     }
 
     PyObject *list_append = _PyType_Lookup(&PyList_Type, &_Py_ID(append));

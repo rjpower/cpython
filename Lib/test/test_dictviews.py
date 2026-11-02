@@ -355,5 +355,32 @@ class DictSetTest(unittest.TestCase):
         self.assertIsInstance(d.items(), collections.abc.Container)
 
 
+class UniversalValueDictViewsTest(unittest.TestCase):
+    def test_item_result_keeps_owner_after_clear(self):
+        import weakref
+
+        class Item:
+            pass
+
+        d = {1.25: Item()}
+        reference = weakref.ref(d[1.25])
+        result = next(iter(d.items()))
+        d.clear()
+        self.assertEqual(result[0], 1.25)
+        self.assertIs(reference(), result[1])
+        del result
+        self.assertIsNone(reference())
+
+    def test_scalar_views_and_mutation(self):
+        d = {1: -0.0, 2.5: (1 << 31) - 1}
+        self.assertEqual(set(d.keys()), {1, 2.5})
+        self.assertEqual(list(d.values()), [-0.0, (1 << 31) - 1])
+        iterator = iter(d.items())
+        self.assertEqual(next(iterator), (1, -0.0))
+        d[3] = 4.5
+        with self.assertRaises(RuntimeError):
+            next(iterator)
+
+
 if __name__ == "__main__":
     unittest.main()

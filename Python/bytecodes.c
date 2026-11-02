@@ -4162,7 +4162,9 @@ dummy_func(
                 _PyFbHeader *feedback = FB_COUNTER();
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
+                    IR_BEGIN_CALL_EFFECTS();
                     _Py_Specialize_Call(callable, self_or_null, next_instr, oparg + !PyValue_IsNull(self_or_null));
+                    IR_REFRESH_CALL();
                     DISPATCH_SAME_OPARG();
                 }
                 OPCODE_DEFERRED_INC(CALL);
@@ -4172,136 +4174,28 @@ dummy_func(
         }
 
         inline_ok op(_MAYBE_EXPAND_METHOD, (callable, self_or_null, unused[oparg] -- callable, self_or_null, unused[oparg])) {
-            if (PyValue_TYPE(callable) == &PyMethod_Type && PyValue_IsNull(self_or_null)) {
-                PyObject *callable_o = PyValue_AsPyObjectBorrow(callable);
-                PyObject *self = ((PyMethodObject *)callable_o)->im_self;
-                self_or_null = PyValue_FromPyObjectNew(self);
-                PyObject *method = ((PyMethodObject *)callable_o)->im_func;
-                PyValue temp = callable;
-                callable = PyValue_FromPyObjectNew(method);
-                PyValue_CLOSE(temp);
-            }
+            IR_PREPARE_CALL_METHOD();
+            callable = window[0];
+            self_or_null = window[1];
         }
 
         // When calling Python, inline the call using DISPATCH_INLINED().
         inline_ok op(_DO_CALL, (callable, self_or_null, args[oparg] -- res)) {
-            if (PyValue_IsInline(callable)) {
-                (void)args;
-                int argument_offset = PyValue_IsNull(self_or_null) ? 2 : 1;
-                _PyNativeVectorCall native = native_vector_capture(
-                    tstate, frame, next_instr, IR_BASE, argument_offset,
-                    oparg + 2 - argument_offset, -1);
-                _PyValueOperation operation = native.operation;
-                PyValue c = PyValue_NULL, names_owner = PyValue_NULL;
-                if (native_vector_take(&native, &c, &names_owner) < 0) {
-                    IR_ABORT_VALUE_READER(operation);
-                }
-                INPUTS_DEAD();
-                IR_WINDOW_TAKEN();
-                PyErr_Format(PyExc_TypeError, "'%.200s' object is not callable",
-                             PyValue_TYPE(c)->tp_name);
-                native_vector_retire(&native, NULL, &c, &names_owner, NULL);
-                IR_ABORT_VALUE_READER(operation);
-            }
-            PyObject *callable_o = PyValue_AsPyObjectBorrow(callable);
-
-            // oparg counts all of the args, but *not* self:
-            int total_args = oparg;
-            PyValue *arguments = args;
-            if (!PyValue_IsNull(self_or_null)) {
-                arguments--;
-                total_args++;
-            }
-            // Check if the call can be inlined or not
-            if (Py_TYPE(callable_o) == &PyFunction_Type &&
-                !IS_PEP523_HOOKED(tstate) &&
-                ((PyFunctionObject *)callable_o)->vectorcall == _PyFunction_Vectorcall)
-            {
-                int code_flags = ((PyCodeObject*)PyFunction_GET_CODE(callable_o))->co_flags;
-                PyObject *locals = code_flags & CO_OPTIMIZED ? NULL : Py_NewRef(PyFunction_GET_GLOBALS(callable_o));
-                _PyInterpreterFrame *new_frame = _PyEvalFramePushAndInit(
-                    tstate, callable, locals,
-                    arguments, total_args, NULL, frame
-                );
-                DEAD(args);
-                DEAD(self_or_null);
-                DEAD(callable);
-                // Manipulate stack directly since we leave using DISPATCH_INLINED().
-                SYNC_SP();
-                // The frame has stolen all the arguments from the stack,
-                // so there is no need to clean them up.
-                if (new_frame == NULL) {
-                    ERROR_NO_POP();
-                }
-                frame->return_slot = (uint16_t)IR_DST_SLOT;
-                DISPATCH_INLINED(new_frame);
-            }
-            PyObject* res_o = _Py_VectorCallInstrumentation_ValueSteal(
-                callable,
-                arguments,
-                total_args,
-                PyValue_NULL,
-                opcode == INSTRUMENTED_CALL,
-                frame,
-                this_instr,
-                tstate);
-            DEAD(args);
-            DEAD(self_or_null);
-            DEAD(callable);
-            ERROR_IF(res_o == NULL);
-            res = PyValue_FromPyObjectSteal(res_o);
+            IR_INVOKE_CALL();
         }
 
-        op(_MONITOR_CALL, (func, maybe_self, args[oparg] -- func, maybe_self, args[oparg])) {
-            int is_meth = !PyValue_IsNull(maybe_self);
-            PyObject *function = PyValue_AsPyObjectBorrow(func);
-            PyObject *arg0;
-            if (is_meth) {
-                arg0 = _PyValueTemps_Object(value_temps, maybe_self);
-            }
-            else if (oparg) {
-                arg0 = _PyValueTemps_Object(value_temps, args[0]);
-            }
-            else {
-                arg0 = &_PyInstrumentation_MISSING;
-            }
-            if (arg0 == NULL) {
-                ERROR_NO_POP();
-            }
-            SYNC_SP();
-            int err = _Py_call_instrumentation_2args(
-                tstate, PY_MONITORING_EVENT_CALL,
-                frame, this_instr, function, arg0
-            );
-            ERROR_IF(err);
+        inline_ok op(_MONITOR_CALL, (func, maybe_self, args[oparg] -- func, maybe_self, args[oparg])) {
+            IR_MONITOR_CALL();
+            func = window[0];
+            maybe_self = window[1];
+            args = window + 2;
         }
 
         macro(CALL) = unused/1 + _SPECIALIZE_CALL + unused/2 + _MAYBE_EXPAND_METHOD + _DO_CALL + _CHECK_PERIODIC_AT_END;
         macro(INSTRUMENTED_CALL) = unused/3 + _MAYBE_EXPAND_METHOD + _MONITOR_CALL + _DO_CALL + _CHECK_PERIODIC_AT_END;
 
-        op(_PY_FRAME_GENERAL, (callable, self_or_null, args[oparg] -- new_frame)) {
-            PyObject *callable_o = PyValue_AsPyObjectBorrow(callable);
-
-            // oparg counts all of the args, but *not* self:
-            int total_args = oparg;
-            if (!PyValue_IsNull(self_or_null)) {
-                args--;
-                total_args++;
-            }
-            assert(Py_TYPE(callable_o) == &PyFunction_Type);
-            int code_flags = ((PyCodeObject*)PyFunction_GET_CODE(callable_o))->co_flags;
-            PyObject *locals = code_flags & CO_OPTIMIZED ? NULL : Py_NewRef(PyFunction_GET_GLOBALS(callable_o));
-            _PyInterpreterFrame *temp = _PyEvalFramePushAndInit(
-                tstate, callable, locals,
-                args, total_args, NULL, frame
-            );
-            // The frame has stolen all the arguments from the stack.
-            INPUTS_DEAD();
-            SYNC_SP();
-            if (temp == NULL) {
-                ERROR_NO_POP();
-            }
-            new_frame = PyValue_Wrap(temp);
+        inline_ok op(_PY_FRAME_GENERAL, (callable, self_or_null, args[oparg] -- new_frame)) {
+            IR_INVOKE_CALL();
         }
 
         op(_CHECK_FUNCTION_VERSION, (func_version/2, callable, unused, unused[oparg] -- callable, unused, unused[oparg])) {
@@ -4330,15 +4224,10 @@ dummy_func(
             EXIT_IF(!PyValue_IsNull(null));
         }
 
-        op(_EXPAND_METHOD, (callable, self_or_null, unused[oparg] -- callable, self_or_null, unused[oparg])) {
-            PyObject *callable_o = PyValue_AsPyObjectBorrow(callable);
-            assert(PyValue_IsNull(self_or_null));
-            assert(Py_TYPE(callable_o) == &PyMethod_Type);
-            self_or_null = PyValue_FromPyObjectNew(((PyMethodObject *)callable_o)->im_self);
-            PyValue temp = callable;
-            callable = PyValue_FromPyObjectNew(((PyMethodObject *)callable_o)->im_func);
-            assert(PyValue_FunctionCheck(callable));
-            PyValue_CLOSE(temp);
+        inline_ok op(_EXPAND_METHOD, (callable, self_or_null, unused[oparg] -- callable, self_or_null, unused[oparg])) {
+            IR_PREPARE_CALL_METHOD();
+            callable = window[0];
+            self_or_null = window[1];
         }
 
         macro(CALL_BOUND_METHOD_GENERAL) =
@@ -4361,65 +4250,7 @@ dummy_func(
         }
 
         inline_ok op(_CALL_NON_PY_GENERAL, (callable, self_or_null, args[oparg] -- res)) {
-            int argument_offset = PyValue_IsNull(self_or_null) ? 2 : 1;
-            int total_args = oparg + 2 - argument_offset;
-            _PyNativeVectorCall native = native_vector_capture(
-                tstate, frame, next_instr, IR_BASE, argument_offset, total_args, -1);
-            _PyValueOperation operation = native.operation;
-            _PyNativeScope scope;
-            (void)args;
-            int status = native_vector_prepare(&native, &scope, callable, PyValue_NULL, &next_instr);
-            if (status == 1) {
-                next_instr = frame->instr_ptr;
-                DISPATCH_SAME_OPARG();
-            }
-            PyValue c = PyValue_NULL, names_owner = PyValue_NULL;
-            PyValue pending = PyValue_NULL;
-            PyObject *retired = NULL;
-            if (status == 2) {
-                /* Unsupported objects retain the old object-callable bridge.
-                 * A strict NOT_INVOKED decline reaches it with original inputs. */
-                if (native_vector_take(&native, &c, &names_owner) < 0) {
-                    IR_ABORT_VALUE_READER(operation);
-                }
-                PyValue *live = _PyFrame_Slots(frame) + native.base;
-                PyObject *result = _Py_VectorCall_ValueSteal(
-                    c, live + native.argument_offset, native.count, names_owner);
-                c = names_owner = PyValue_NULL;
-                if (result != NULL) {
-                    pending = PyValue_FromPyObjectSteal(result);
-                }
-                native.inputs_consumed = 1;
-            }
-            else {
-                if (native_vector_take(&native, &c, &names_owner) < 0) {
-                    if (native.scope_started) {
-                        _PyNativeResult_Abort(&scope.result, native_vector_publish_pc, &native);
-                        (void)_PyNativeScope_End(&scope);
-                    }
-                    IR_ABORT_VALUE_READER(operation);
-                }
-                native.result = &pending;
-                if (status == 0) {
-                    retired = _PyNativeScope_TakeRetiredResult(&scope);
-                    _PyNativeResult_Publish(&scope.result, &pending,
-                                            native_vector_publish_result, &native);
-                }
-                else if (native.scope_started) {
-                    _PyNativeResult_Abort(&scope.result, native_vector_publish_pc, &native);
-                }
-            }
-            res = pending;
-            INPUTS_DEAD();
-            /* End aliases before explicit reverse retirement of the still
-             * owning private argument tail. No later producer may vacate it. */
-            IR_WINDOW_TAKEN();
-            SYNC_SP();
-            native_vector_retire(&native, &scope, &c, &names_owner, retired);
-            IR_FINISH_VALUE_OPERATION(operation);
-            int periodic_failed = check_periodics_at_end(tstate, frame);
-            IR_FINISH_VALUE_OPERATION(operation);
-            ERROR_IF(periodic_failed != 0);
+            IR_INVOKE_CALL();
         }
 
         macro(CALL_NON_PY_GENERAL) =
@@ -5213,141 +5044,25 @@ dummy_func(
             CALL_KW_NON_PY,
         };
 
-        op(_MONITOR_CALL_KW, (callable, self_or_null, args[oparg], unused -- callable, self_or_null, args[oparg], unused)) {
-            int is_meth = !PyValue_IsNull(self_or_null);
-            PyObject *arg;
-            if (is_meth) {
-                arg = _PyValueTemps_Object(value_temps, self_or_null);
-            }
-            else if (args) {
-                arg = _PyValueTemps_Object(value_temps, args[0]);
-            }
-            else {
-                arg = &_PyInstrumentation_MISSING;
-            }
-            if (arg == NULL) {
-                ERROR_NO_POP();
-            }
-            PyObject *function = PyValue_AsPyObjectBorrow(callable);
-            int err = _Py_call_instrumentation_2args(
-                    tstate, PY_MONITORING_EVENT_CALL,
-                    frame, this_instr, function, arg);
-            ERROR_IF(err);
+        inline_ok op(_MONITOR_CALL_KW, (callable, self_or_null, args[oparg], unused -- callable, self_or_null, args[oparg], unused)) {
+            IR_MONITOR_CALL();
+            callable = window[0];
+            self_or_null = window[1];
+            args = window + 2;
         }
 
         inline_ok op(_MAYBE_EXPAND_METHOD_KW, (callable, self_or_null, unused[oparg], unused -- callable, self_or_null, unused[oparg], unused)) {
-            if (PyValue_TYPE(callable) == &PyMethod_Type && PyValue_IsNull(self_or_null)) {
-                PyObject *callable_o = PyValue_AsPyObjectBorrow(callable);
-                PyObject *self = ((PyMethodObject *)callable_o)->im_self;
-                self_or_null = PyValue_FromPyObjectNew(self);
-                PyObject *method = ((PyMethodObject *)callable_o)->im_func;
-                PyValue temp = callable;
-                callable = PyValue_FromPyObjectNew(method);
-                PyValue_CLOSE(temp);
-            }
+            IR_PREPARE_CALL_METHOD();
+            callable = window[0];
+            self_or_null = window[1];
         }
 
         inline_ok op(_DO_CALL_KW, (callable, self_or_null, args[oparg], kwnames -- res)) {
-            if (PyValue_IsInline(callable)) {
-                (void)args;
-                int argument_offset = PyValue_IsNull(self_or_null) ? 2 : 1;
-                _PyNativeVectorCall native = native_vector_capture(
-                    tstate, frame, next_instr, IR_BASE, argument_offset,
-                    oparg + 2 - argument_offset, oparg + 2);
-                _PyValueOperation operation = native.operation;
-                PyValue c = PyValue_NULL, names_owner = PyValue_NULL;
-                if (native_vector_take(&native, &c, &names_owner) < 0) {
-                    IR_ABORT_VALUE_READER(operation);
-                }
-                INPUTS_DEAD();
-                IR_WINDOW_TAKEN();
-                PyErr_Format(PyExc_TypeError, "'%.200s' object is not callable",
-                             PyValue_TYPE(c)->tp_name);
-                native_vector_retire(&native, NULL, &c, &names_owner, NULL);
-                IR_ABORT_VALUE_READER(operation);
-            }
-            PyObject *callable_o = PyValue_AsPyObjectBorrow(callable);
-            PyObject *kwnames_o = PyValue_AsPyObjectBorrow(kwnames);
-
-            // oparg counts all of the args, but *not* self:
-            int total_args = oparg;
-            PyValue *arguments = args;
-            if (!PyValue_IsNull(self_or_null)) {
-                arguments--;
-                total_args++;
-            }
-            int positional_args = total_args - (int)PyTuple_GET_SIZE(kwnames_o);
-            // Check if the call can be inlined or not
-            if (Py_TYPE(callable_o) == &PyFunction_Type &&
-                !IS_PEP523_HOOKED(tstate) &&
-                ((PyFunctionObject *)callable_o)->vectorcall == _PyFunction_Vectorcall)
-            {
-                int code_flags = ((PyCodeObject*)PyFunction_GET_CODE(callable_o))->co_flags;
-                PyObject *locals = code_flags & CO_OPTIMIZED ? NULL : Py_NewRef(PyFunction_GET_GLOBALS(callable_o));
-                _PyInterpreterFrame *new_frame = _PyEvalFramePushAndInit(
-                    tstate, callable, locals,
-                    arguments, positional_args, kwnames_o, frame
-                );
-                DEAD(args);
-                DEAD(self_or_null);
-                DEAD(callable);
-                PyValue_CLOSE(kwnames);
-                // Sync stack explicitly since we leave using DISPATCH_INLINED().
-                SYNC_SP();
-                // The frame has stolen all the arguments from the stack,
-                // so there is no need to clean them up.
-                if (new_frame == NULL) {
-                    ERROR_NO_POP();
-                }
-                assert(INSTRUCTION_SIZE == INSTRUCTION_SIZE_OF(CALL_KW));
-                frame->return_slot = (uint16_t)IR_DST_SLOT;
-                DISPATCH_INLINED(new_frame);
-            }
-            PyObject* res_o = _Py_VectorCallInstrumentation_ValueSteal(
-                callable,
-                arguments,
-                total_args,
-                kwnames,
-                opcode == INSTRUMENTED_CALL_KW,
-                frame,
-                this_instr,
-                tstate);
-            DEAD(kwnames);
-            DEAD(args);
-            DEAD(self_or_null);
-            DEAD(callable);
-            ERROR_IF(res_o == NULL);
-            res = PyValue_FromPyObjectSteal(res_o);
+            IR_INVOKE_CALL();
         }
 
-        op(_PY_FRAME_KW, (callable, self_or_null, args[oparg], kwnames -- new_frame)) {
-            PyObject *callable_o = PyValue_AsPyObjectBorrow(callable);
-
-            // oparg counts all of the args, but *not* self:
-            int total_args = oparg;
-            PyValue *arguments = args;
-            if (!PyValue_IsNull(self_or_null)) {
-                arguments--;
-                total_args++;
-            }
-            PyObject *kwnames_o = PyValue_AsPyObjectBorrow(kwnames);
-            int positional_args = total_args - (int)PyTuple_GET_SIZE(kwnames_o);
-            assert(Py_TYPE(callable_o) == &PyFunction_Type);
-            int code_flags = ((PyCodeObject*)PyFunction_GET_CODE(callable_o))->co_flags;
-            PyObject *locals = code_flags & CO_OPTIMIZED ? NULL : Py_NewRef(PyFunction_GET_GLOBALS(callable_o));
-            _PyInterpreterFrame *temp = _PyEvalFramePushAndInit(
-                tstate, callable, locals,
-                arguments, positional_args, kwnames_o, frame
-            );
-            PyValue_CLOSE(kwnames);
-            // The frame has stolen all the arguments from the stack,
-            // so there is no need to clean them up.
-            DEAD(args);
-            DEAD(self_or_null);
-            DEAD(callable);
-            SYNC_SP();
-            ERROR_IF(temp == NULL);
-            new_frame = PyValue_Wrap(temp);
+        inline_ok op(_PY_FRAME_KW, (callable, self_or_null, args[oparg], kwnames -- new_frame)) {
+            IR_INVOKE_CALL();
         }
 
         op(_CHECK_FUNCTION_VERSION_KW, (func_version/2, callable, unused, unused[oparg], unused -- callable, unused, unused[oparg], unused)) {
@@ -5376,15 +5091,10 @@ dummy_func(
             EXIT_IF(!PyValue_IsNull(null));
         }
 
-        op(_EXPAND_METHOD_KW, (callable, self_or_null, unused[oparg], unused -- callable, self_or_null, unused[oparg], unused)) {
-            assert(PyValue_IsNull(self_or_null));
-            PyValue callable_s = callable;
-            PyObject *callable_o = PyValue_AsPyObjectBorrow(callable);
-            assert(Py_TYPE(callable_o) == &PyMethod_Type);
-            self_or_null = PyValue_FromPyObjectNew(((PyMethodObject *)callable_o)->im_self);
-            callable = PyValue_FromPyObjectNew(((PyMethodObject *)callable_o)->im_func);
-            assert(PyValue_FunctionCheck(callable));
-            PyValue_CLOSE(callable_s);
+        inline_ok op(_EXPAND_METHOD_KW, (callable, self_or_null, unused[oparg], unused -- callable, self_or_null, unused[oparg], unused)) {
+            IR_PREPARE_CALL_METHOD();
+            callable = window[0];
+            self_or_null = window[1];
         }
 
         macro(CALL_KW_BOUND_METHOD) =
@@ -5402,7 +5112,9 @@ dummy_func(
             _PyFbHeader *feedback = FB_COUNTER();
             if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
+                IR_BEGIN_CALL_EFFECTS();
                 _Py_Specialize_CallKw(callable, next_instr, oparg + !PyValue_IsNull(self_or_null));
+                IR_REFRESH_CALL();
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(CALL_KW);
@@ -5433,65 +5145,7 @@ dummy_func(
 
 
         inline_ok op(_CALL_KW_NON_PY, (callable, self_or_null, args[oparg], kwnames -- res)) {
-            int argument_offset = PyValue_IsNull(self_or_null) ? 2 : 1;
-            int total_args = oparg + 2 - argument_offset;
-            _PyNativeVectorCall native = native_vector_capture(
-                tstate, frame, next_instr, IR_BASE, argument_offset, total_args, oparg + 2);
-            _PyValueOperation operation = native.operation;
-            _PyNativeScope scope;
-            (void)args;
-            int status = native_vector_prepare(&native, &scope, callable, kwnames, &next_instr);
-            if (status == 1) {
-                next_instr = frame->instr_ptr;
-                DISPATCH_SAME_OPARG();
-            }
-            PyValue c = PyValue_NULL, names_owner = PyValue_NULL;
-            PyValue pending = PyValue_NULL;
-            PyObject *retired = NULL;
-            if (status == 2) {
-                /* Unsupported objects retain the old object-callable bridge.
-                 * A strict NOT_INVOKED decline reaches it with original inputs. */
-                if (native_vector_take(&native, &c, &names_owner) < 0) {
-                    IR_ABORT_VALUE_READER(operation);
-                }
-                PyValue *live = _PyFrame_Slots(frame) + native.base;
-                PyObject *result = _Py_VectorCall_ValueSteal(
-                    c, live + native.argument_offset, native.count, names_owner);
-                c = names_owner = PyValue_NULL;
-                if (result != NULL) {
-                    pending = PyValue_FromPyObjectSteal(result);
-                }
-                native.inputs_consumed = 1;
-            }
-            else {
-                if (native_vector_take(&native, &c, &names_owner) < 0) {
-                    if (native.scope_started) {
-                        _PyNativeResult_Abort(&scope.result, native_vector_publish_pc, &native);
-                        (void)_PyNativeScope_End(&scope);
-                    }
-                    IR_ABORT_VALUE_READER(operation);
-                }
-                native.result = &pending;
-                if (status == 0) {
-                    retired = _PyNativeScope_TakeRetiredResult(&scope);
-                    _PyNativeResult_Publish(&scope.result, &pending,
-                                            native_vector_publish_result, &native);
-                }
-                else if (native.scope_started) {
-                    _PyNativeResult_Abort(&scope.result, native_vector_publish_pc, &native);
-                }
-            }
-            res = pending;
-            INPUTS_DEAD();
-            /* End aliases before explicit reverse retirement of the still
-             * owning private argument tail. No later producer may vacate it. */
-            IR_WINDOW_TAKEN();
-            SYNC_SP();
-            native_vector_retire(&native, &scope, &c, &names_owner, retired);
-            IR_FINISH_VALUE_OPERATION(operation);
-            int periodic_failed = check_periodics_at_end(tstate, frame);
-            IR_FINISH_VALUE_OPERATION(operation);
-            ERROR_IF(periodic_failed != 0);
+            IR_INVOKE_CALL();
         }
 
         macro(CALL_KW_NON_PY) =
@@ -5506,109 +5160,14 @@ dummy_func(
         };
 
         inline_ok op(_MAKE_CALLARGS_A_TUPLE, (func, unused, callargs, kwargs -- func, unused, callargs, kwargs)) {
-            PyObject *callargs_o = _PyValueTemps_Object(value_temps, callargs);
-            if (callargs_o == NULL) {
-                ERROR_NO_POP();
-            }
-            if (!PyTuple_CheckExact(callargs_o)) {
-                PyObject *func_o = _PyValueTemps_Object(value_temps, func);
-                if (func_o == NULL) {
-                    ERROR_NO_POP();
-                }
-                int err = _Py_Check_ArgsIterable(tstate, func_o, callargs_o);
-                if (err < 0) {
-                    ERROR_NO_POP();
-                }
-                PyObject *tuple_o = PySequence_Tuple(callargs_o);
-                if (tuple_o == NULL) {
-                    ERROR_NO_POP();
-                }
-                PyValue temp = callargs;
-                callargs = PyValue_FromPyObjectSteal(tuple_o);
-                PyValue_CLOSE(temp);
-            }
+            IR_PREPARE_CALL_TUPLE();
+            func = window[0];
+            callargs = window[2];
+            kwargs = window[3];
         }
 
-        op(_DO_CALL_FUNCTION_EX, (func_st, null, callargs_st, kwargs_st -- result)) {
-            (void)null;
-            PyObject *func = PyValue_AsPyObjectBorrow(func_st);
-
-            // DICT_MERGE is called before this opcode if there are kwargs.
-            // It converts all dict subtypes in kwargs into regular dicts.
-            EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_FUNCTION_EX, func);
-            PyObject *result_o;
-            assert(!_PyErr_Occurred(tstate));
-            if (opcode == INSTRUMENTED_CALL_FUNCTION_EX) {
-                PyObject *callargs = PyValue_AsPyObjectBorrow(callargs_st);
-                PyObject *kwargs = PyValue_AsPyObjectBorrow(kwargs_st);
-                assert(kwargs == NULL || PyDict_CheckExact(kwargs));
-                assert(PyTuple_CheckExact(callargs));
-                PyObject *arg = PyTuple_GET_SIZE(callargs) > 0 ?
-                    _PyValueTemps_Object(value_temps, PyTuple_GET_VALUE(callargs, 0)) : &_PyInstrumentation_MISSING;
-                if (arg == NULL) {
-                    ERROR_NO_POP();
-                }
-                int err = _Py_call_instrumentation_2args(
-                    tstate, PY_MONITORING_EVENT_CALL,
-                    frame, this_instr, func, arg);
-                if (err) {
-                    ERROR_NO_POP();
-                }
-                result_o = PyObject_Call(func, callargs, kwargs);
-
-                if (!PyFunction_Check(func) && !PyMethod_Check(func)) {
-                    if (result_o == NULL) {
-                        _Py_call_instrumentation_exc2(
-                            tstate, PY_MONITORING_EVENT_C_RAISE,
-                            frame, this_instr, func, arg);
-                    }
-                    else {
-                        int err = _Py_call_instrumentation_2args(
-                            tstate, PY_MONITORING_EVENT_C_RETURN,
-                            frame, this_instr, func, arg);
-                        if (err < 0) {
-                            Py_CLEAR(result_o);
-                        }
-                    }
-                }
-            }
-            else {
-                if (Py_TYPE(func) == &PyFunction_Type &&
-                    !IS_PEP523_HOOKED(tstate) &&
-                    ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall) {
-                    PyObject *callargs = PyValue_AsPyObjectSteal(callargs_st);
-                    assert(PyTuple_CheckExact(callargs));
-                    PyObject *kwargs = PyValue_IsNull(kwargs_st) ? NULL : PyValue_AsPyObjectSteal(kwargs_st);
-                    assert(kwargs == NULL || PyDict_CheckExact(kwargs));
-                    Py_ssize_t nargs = PyTuple_GET_SIZE(callargs);
-                    int code_flags = ((PyCodeObject *)PyFunction_GET_CODE(func))->co_flags;
-                    PyObject *locals = code_flags & CO_OPTIMIZED ? NULL : Py_NewRef(PyFunction_GET_GLOBALS(func));
-
-                    _PyInterpreterFrame *new_frame = _PyEvalFramePushAndInit_Ex(
-                        tstate, func_st, locals,
-                        nargs, callargs, kwargs, frame);
-                    // Need to sync the stack since we exit with DISPATCH_INLINED.
-                    INPUTS_DEAD();
-                    SYNC_SP();
-                    if (new_frame == NULL) {
-                        ERROR_NO_POP();
-                    }
-                    assert(INSTRUCTION_SIZE == INSTRUCTION_SIZE_OF(CALL_FUNCTION_EX));
-                    frame->return_slot = (uint16_t)IR_DST_SLOT;
-                    DISPATCH_INLINED(new_frame);
-                }
-                PyObject *callargs = PyValue_AsPyObjectBorrow(callargs_st);
-                assert(PyTuple_CheckExact(callargs));
-                PyObject *kwargs = PyValue_AsPyObjectBorrow(kwargs_st);
-                assert(kwargs == NULL || PyDict_CheckExact(kwargs));
-                result_o = PyObject_Call(func, callargs, kwargs);
-            }
-            PyValue_XCLOSE(kwargs_st);
-            PyValue_CLOSE(callargs_st);
-            DEAD(null);
-            PyValue_CLOSE(func_st);
-            ERROR_IF(result_o == NULL);
-            result = PyValue_FromPyObjectSteal(result_o);
+        inline_ok op(_DO_CALL_FUNCTION_EX, (func_st, null, callargs_st, kwargs_st -- result)) {
+            IR_INVOKE_CALL();
         }
 
         specializing op(_SPECIALIZE_CALL_FUNCTION_EX, (func, unused, unused, unused -- func, unused, unused, unused)) {
@@ -5616,7 +5175,9 @@ dummy_func(
             _PyFbHeader *feedback = FB_COUNTER();
             if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                 next_instr = this_instr;
+                IR_BEGIN_CALL_EFFECTS();
                 _Py_Specialize_CallFunctionEx(func, next_instr);
+                IR_REFRESH_CALL();
                 DISPATCH_SAME_OPARG();
             }
             OPCODE_DEFERRED_INC(CALL_FUNCTION_EX);
@@ -5636,27 +5197,8 @@ dummy_func(
             EXIT_IF(((PyFunctionObject *)func)->vectorcall != _PyFunction_Vectorcall);
         }
 
-        op(_PY_FRAME_EX, (func_st, null, callargs_st, kwargs_st -- ex_frame)) {
-            PyObject *func = PyValue_AsPyObjectBorrow(func_st);
-            PyObject *callargs = PyValue_AsPyObjectSteal(callargs_st);
-            assert(PyTuple_CheckExact(callargs));
-            assert(Py_TYPE(func) == &PyFunction_Type);
-            assert(((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall);
-            PyObject *kwargs = PyValue_IsNull(kwargs_st) ? NULL : PyValue_AsPyObjectSteal(kwargs_st);
-            assert(kwargs == NULL || PyDict_CheckExact(kwargs));
-            Py_ssize_t nargs = PyTuple_GET_SIZE(callargs);
-            int code_flags = ((PyCodeObject *)PyFunction_GET_CODE(func))->co_flags;
-            PyObject *locals = code_flags & CO_OPTIMIZED ? NULL : Py_NewRef(PyFunction_GET_GLOBALS(func));
-
-            _PyInterpreterFrame *new_frame = _PyEvalFramePushAndInit_Ex(
-                tstate, func_st, locals,
-                nargs, callargs, kwargs, frame);
-            INPUTS_DEAD();
-            SYNC_SP();
-            if (new_frame == NULL) {
-                ERROR_NO_POP();
-            }
-            ex_frame = PyValue_Wrap(new_frame);
+        inline_ok op(_PY_FRAME_EX, (func_st, null, callargs_st, kwargs_st -- ex_frame)) {
+            IR_INVOKE_CALL();
         }
 
         macro(CALL_EX_PY) =
@@ -5674,20 +5216,8 @@ dummy_func(
             EXIT_IF(Py_TYPE(func) == &PyFunction_Type && ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall);
         }
 
-        op(_CALL_FUNCTION_EX_NON_PY_GENERAL, (func_st, null, callargs_st, kwargs_st -- result)) {
-            PyObject *func = PyValue_AsPyObjectBorrow(func_st);
-            PyObject *callargs = PyValue_AsPyObjectBorrow(callargs_st);
-            (void)null;
-            assert(PyTuple_CheckExact(callargs));
-            PyObject *kwargs = PyValue_AsPyObjectBorrow(kwargs_st);
-            assert(kwargs == NULL || PyDict_CheckExact(kwargs));
-            PyObject *result_o = PyObject_Call(func, callargs, kwargs);
-            PyValue_XCLOSE(kwargs_st);
-            PyValue_CLOSE(callargs_st);
-            DEAD(null);
-            PyValue_CLOSE(func_st);
-            ERROR_IF(result_o == NULL);
-            result = PyValue_FromPyObjectSteal(result_o);
+        inline_ok op(_CALL_FUNCTION_EX_NON_PY_GENERAL, (func_st, null, callargs_st, kwargs_st -- result)) {
+            IR_INVOKE_CALL();
         }
 
         macro(CALL_EX_NON_PY_GENERAL) =

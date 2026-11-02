@@ -1063,7 +1063,8 @@ class TestJitHelpers(unittest.TestCase):
             self.assertIn("jit_helper_" + name + "(", generated)
         keyword = generated.split("jit_helper_CALL_KW(", 1)[1].split("static _PyJitAction", 1)[0]
         self.assertLess(keyword.index("JIT_PREPARE_CALL"), keyword.index("_DO_CALL_KW"))
-        self.assertIn("_PyValue_OwnArray", keyword)
+        self.assertLess(keyword.index("call_transaction_begin("), keyword.index("JIT_PREPARE_CALL"))
+        self.assertIn("call_transaction_invoke(", keyword)
 
     def test_every_valid_handler_classified(self):
         names = set(ir_generator.compute_formats(self.analysis))
@@ -1139,10 +1140,10 @@ class TestJitHelpers(unittest.TestCase):
 
     def test_real_call_return_and_error_order(self):
         call = self.body("CALL")
-        self.assertIn("_PyEvalFramePushAndInit(", call)
-        self.assertIn("frame->return_slot =", call)
-        self.assertIn("DISPATCH_INLINED(new_frame)", call)
-        self.assertIn("_Py_VectorCallInstrumentation_ValueSteal", call)
+        self.assertLess(call.index("call_transaction_begin("), call.index("call_transaction_invoke("))
+        self.assertIn("ctx->phase = _PyJIT_ENTER_PREPARED", call)
+        self.assertIn("return _PyJIT_ENTER_FRAME", call)
+        self.assertNotIn("_Py_VectorCallInstrumentation_ValueSteal", call)
         returned = self.body("RETURN_VALUE")
         self.assertLess(returned.index("tstate->current_frame = dying->previous"),
                         returned.index("_PyEval_FrameClearAndPop"))
@@ -1248,19 +1249,23 @@ class TestJitHelpers(unittest.TestCase):
             body = generated.split(f"TARGET({name})", 1)[1].split("TARGET(", 1)[0]
             with self.subTest(name=name):
                 self.assertLess(body.index("PyValue_IsObject(callable)"), body.index("PyValue_AsPyObjectBorrow(callable)"))
-                self.assertLess(body.index("native_vector_capture("), body.index("native_vector_prepare("))
-                self.assertLess(body.index("native_vector_take("), body.index("_Py_VectorCall_ValueSteal("))
-                self.assertIn("c = names_owner = PyValue_NULL", body)
-                publish = body.index("_PyNativeResult_Publish(")
-                retire = body.index("native_vector_retire(", publish)
-                self.assertLess(publish, retire)
-                self.assertNotIn("IR_CLEAR_SLOTS", body[publish:retire])
-                self.assertNotIn("_PyValueTemps_Publish(value_temps, &res)", body[retire:])
-                self.assertLess(body.index("operation_failed < 0", retire), body.index("ir_word =", retire))
-                self.assertEqual(body.count("check_periodics_at_end(tstate, frame)"), 1)
-                poll = body.index("check_periodics_at_end(tstate, frame)")
-                self.assertLess(body.index("ir_word =", retire), poll)
-                self.assertLess(poll, body.index("ir_word =", poll))
+                self.assertLess(body.index("call_transaction_begin("),
+                                body.index("call_transaction_invoke("))
+                self.assertNotIn("_Py_VectorCall_ValueSteal", body)
+                terminal = body[body.index("call_transaction_invoke("):]
+                self.assertNotIn("IR_CLEAR_SLOTS", terminal)
+                self.assertNotIn("IR_MOVE_TO_DST", terminal)
+        runtime = (root / "Python/ceval.c").read_text()
+        native = runtime.split("call_transaction_native(", 1)[1].split("\n}\n", 1)[0]
+        publish = native.index("_PyNativeResult_Publish(")
+        finish = native.index("_PyNativeScope_End(", publish)
+        retire = native.index("call_transaction_retire(", finish)
+        self.assertLess(native.index("call_transaction_detach("), publish)
+        self.assertIn("+ call->destination", native[publish:finish])
+        self.assertLess(finish, retire)
+        self.assertLess(retire, native.index("call_transaction_refresh(", retire))
+        self.assertIn("if (failed == 0 && call->periodic)", native)
+        self.assertIn("check_periodics_at_end(", native)
         source = (root / "Python/specialize.c").read_text()
         for name in ("_Py_Specialize_Call", "_Py_Specialize_CallKw"):
             body = source.split(name + "(", 1)[1].split("\n}\n", 1)[0]
@@ -1297,10 +1302,13 @@ class TestJitHelpers(unittest.TestCase):
                                 body.index("_PyValueTemps value_owners"))
         for name in ("CALL", "CALL_KW", "INSTRUMENTED_CALL", "INSTRUMENTED_CALL_KW"):
             body = generated.split(f"TARGET({name})", 1)[1].split("TARGET(", 1)[0]
-            self.assertIn("_PyValue_OwnArray(window,", body)
+            self.assertIn("call_transaction_begin(", body)
             first_box = body.find("PyValue_Box(")
             if first_box >= 0:
-                self.assertLess(body.index("_PyValue_OwnArray("), first_box)
+                self.assertLess(body.index("call_transaction_begin("), first_box)
+        runtime = (root / "Python/ceval.c").read_text()
+        entry = runtime.split("call_transaction_begin(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("_PyValue_OwnArray(_PyFrame_Slots(frame) + base, count)", entry)
         constant = generated.split("TARGET(LOAD_CONST)", 1)[1].split("TARGET(", 1)[0]
         self.assertIn("PyTuple_GET_VALUE", constant)
         self.assertNotIn("PyValue_Box(", constant)
@@ -1331,9 +1339,10 @@ class TestJitHelpers(unittest.TestCase):
         ex = generated.split("TARGET(CALL_EX_PY)", 1)[1].split("TARGET(", 1)[0]
         self.assertEqual(ex.count("// _CHECK_IS_PY_CALLABLE_EX"), 2)
         self.assertLess(ex.index("// _CHECK_IS_PY_CALLABLE_EX"),
-                        ex.index("_PyValueTemps_Object"))
+                        ex.index("call_transaction_prepare_tuple("))
         self.assertLess(ex.index("// _MAKE_CALLARGS_A_TUPLE"),
                         ex.rindex("// _CHECK_IS_PY_CALLABLE_EX"))
+        self.assertIn("if (call.effects) { goto call_transaction_fallback_CALL_EX_PY; }", ex)
         super_attr = generated.split("TARGET(LOAD_SUPER_ATTR_ATTR)", 1)[1].split("TARGET(", 1)[0]
         self.assertLess(super_attr.rindex("JUMP_TO_PREDICTED"),
                         super_attr.index("_PyValueTemps_Object"))
@@ -1437,6 +1446,85 @@ class TestJitHelpers(unittest.TestCase):
         self.assertNotIn("JUMP_TO_PREDICTED", self.output)
         self.assertNotIn("goto *", self.output)
         self.assertNotRegex(self.output, r"\bTARGET\(")
+
+
+class TestCallTransactionMarkers(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        source = str(ir_generator.DEFAULT_INPUT)
+        cls.analysis = analyzer.analyze_files([source])
+        output = io.StringIO()
+        ir_generator.generate_ir([source], cls.analysis, output, False)
+        cls.interpreter = output.getvalue()
+        output = io.StringIO()
+        jit_helpers_generator.generate([source], output)
+        cls.helpers = output.getvalue()
+
+    def test_real_callout_and_transfer_properties(self):
+        for name in ("_MAYBE_EXPAND_METHOD", "_MONITOR_CALL",
+                     "_MAKE_CALLARGS_A_TUPLE", "_DO_CALL", "_PY_FRAME_GENERAL",
+                     "_DO_CALL_KW", "_PY_FRAME_KW", "_DO_CALL_FUNCTION_EX"):
+            with self.subTest(name=name):
+                uop = self.analysis.uops[name]
+                self.assertTrue(uop.properties.escapes)
+                self.assertTrue(uop.properties.error_without_pop)
+                self.assertFalse(uop.properties.error_with_pop)
+                self.assertTrue(uop.properties.sync_sp)
+                self.assertTrue(uop.properties.needs_this)
+                self.assertFalse(uop.is_viable())
+        invoke = self.analysis.uops["_DO_CALL"].properties
+        self.assertTrue(invoke.always_exits)
+        self.assertTrue(invoke.switches_frame)
+        self.assertFalse(self.analysis.uops["_MONITOR_CALL"].properties.always_exits)
+
+    def test_pure_latch_and_unrelated_uppercase_macro(self):
+        for marker in ("IR_BEGIN_CALL_EFFECTS", "UNRELATED_MACRO"):
+            node, = parse_src(f"op(_OP, (--)) {{ {marker}(); }}")
+            properties = analyzer.compute_properties(node)
+            self.assertFalse(properties.escapes)
+            self.assertFalse(properties.error_without_pop)
+            self.assertFalse(properties.always_exits)
+            self.assertFalse(properties.switches_frame)
+            self.assertFalse(properties.sync_sp)
+
+    def test_prelude_and_actual_destination_terminal_paths(self):
+        for name in ("CALL", "CALL_JIT_WARM", "CALL_NON_PY_GENERAL",
+                     "CALL_PY_GENERAL", "CALL_BOUND_METHOD_GENERAL",
+                     "CALL_KW", "CALL_KW_NON_PY", "CALL_KW_PY",
+                     "CALL_FUNCTION_EX", "CALL_EX_NON_PY_GENERAL", "CALL_EX_PY",
+                     "INSTRUMENTED_CALL", "INSTRUMENTED_CALL_KW",
+                     "INSTRUMENTED_CALL_FUNCTION_EX"):
+            with self.subTest(name=name):
+                body = self.interpreter.split(f"TARGET({name}) {{", 1)[1].split("TARGET(", 1)[0]
+                capture = body.index("call_transaction_begin(")
+                invoke = body.index("call_transaction_invoke(")
+                self.assertLess(capture, invoke)
+                for preparation in ("JIT_PREPARE_CALL(", "_Py_Specialize_Call",
+                                    "call_transaction_expand_method(",
+                                    "call_transaction_prepare_tuple(",
+                                    "call_transaction_monitor("):
+                    if preparation in body:
+                        self.assertLess(capture, body.index(preparation))
+                self.assertNotIn("IR_MOVE_TO_DST", body[invoke:])
+                self.assertNotIn("IR_CLEAR_SLOTS", body[invoke:])
+                self.assertNotIn("_PyValueTemps_Publish", body[invoke:])
+                self.assertNotIn("_Py_VectorCall", body)
+                self.assertIn("DISPATCH_INLINED(call_child)", body)
+        labels = re.findall(r"^\s*(call_transaction_fallback_\w+):", self.interpreter, re.M)
+        self.assertEqual(len(labels), len(set(labels)))
+        warm = self.interpreter.split("TARGET(CALL_JIT_WARM) {", 1)[1].split("TARGET(", 1)[0]
+        self.assertNotRegex(warm, r"\bfb\s*=")
+
+    def test_helpers_publish_explicit_action_and_error_phase(self):
+        for name in ("CALL", "CALL_KW"):
+            body = self.helpers.split(f"jit_helper_{name}(", 1)[1].split("static _PyJitAction", 1)[0]
+            terminal = body[body.index("call_transaction_invoke("):]
+            self.assertIn("ctx->phase = _PyJIT_ERROR_LOG_PENDING", terminal)
+            self.assertIn("return _PyJIT_RAISE", terminal)
+            self.assertIn("ctx->phase = _PyJIT_ENTER_PREPARED", terminal)
+            self.assertIn("return _PyJIT_ENTER_FRAME", terminal)
+            self.assertNotIn("JIT_FINISH(", terminal)
+            self.assertNotIn("IR_MOVE_TO_DST", terminal)
 
 
 if __name__ == "__main__":

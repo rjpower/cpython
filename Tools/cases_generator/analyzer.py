@@ -514,6 +514,25 @@ def tier_variable(node: parser.CodeDef) -> int | None:
     return None
 
 
+# These register-IR markers own their publication/reload protocol. Analysis
+# must still expose their real callout/control-flow properties to consumers;
+# ordinary uppercase macros keep their existing non-call interpretation.
+CALL_TRANSACTION_MARKERS = {
+    "IR_BEGIN_CALL_EFFECTS": frozenset(),
+    **dict.fromkeys(("IR_PREPARE_CALL_METHOD", "IR_PREPARE_CALL_TUPLE",
+                     "IR_MONITOR_CALL", "IR_REFRESH_CALL"),
+                    frozenset(("escapes", "error", "sync", "pc"))),
+    "IR_INVOKE_CALL": frozenset(("escapes", "error", "sync", "pc",
+                                 "terminal", "frame")),
+}
+
+
+def call_transaction_properties(op: parser.CodeDef) -> set[str]:
+    return set().union(*(properties for marker, properties in
+                         CALL_TRANSACTION_MARKERS.items()
+                         if variable_used(op, marker)))
+
+
 def has_error_with_pop(op: parser.CodeDef) -> bool:
     return (
         variable_used(op, "ERROR_IF")
@@ -531,6 +550,7 @@ def has_error_without_pop(op: parser.CodeDef) -> bool:
         or variable_used(op, "IR_COMPLETE_VALUE_READER")
         or variable_used(op, "IR_COMPLETE_ATTR_READER")
         or variable_used(op, "exception_unwind")
+        or "error" in call_transaction_properties(op)
     )
 
 
@@ -768,6 +788,10 @@ def escaping_call_in_simple_stmt(stmt: SimpleStmt, result: dict[SimpleStmt, Esca
             break
         if next_tkn.kind != lexer.LPAREN:
             continue
+        if tkn.text in CALL_TRANSACTION_MARKERS:
+            if "escapes" in CALL_TRANSACTION_MARKERS[tkn.text]:
+                result[stmt] = EscapingCall(stmt, tkn, None)
+            continue
         if tkn.kind == lexer.IDENTIFIER:
             if tkn.text.upper() == tkn.text:
                 # simple macro
@@ -837,6 +861,8 @@ def always_exits(op: parser.CodeDef) -> bool:
             if tkn.text in EXITS:
                 return True
         elif tkn.kind == "IDENTIFIER":
+            if "terminal" in CALL_TRANSACTION_MARKERS.get(tkn.text, ()):
+                return True
             if tkn.text in EXITS:
                 return True
             if tkn.text == "DEOPT_IF" or tkn.text == "ERROR_IF":
@@ -935,6 +961,8 @@ def switches_frame(op: parser.CodeDef) -> bool:
             continue
         if tkn.text == "DISPATCH_INLINED":
             return True
+        if "frame" in CALL_TRANSACTION_MARKERS.get(tkn.text, ()):
+            return True
         if (tkn.text == "frame" and i + 1 < len(tokens)
                 and tokens[i + 1].kind == "EQUALS"
                 and tokens[i - 1].kind in ("SEMI", "LBRACE", "RBRACE", "EQUALS")):
@@ -943,6 +971,7 @@ def switches_frame(op: parser.CodeDef) -> bool:
 
 
 def compute_properties(op: parser.CodeDef) -> Properties:
+    call_properties = call_transaction_properties(op)
     escaping_calls = find_escaping_api_calls(op)
     has_free = (
         variable_used(op, "PyCell_New")
@@ -983,9 +1012,11 @@ def compute_properties(op: parser.CodeDef) -> Properties:
         eval_breaker="CHECK_PERIODIC" in op.name,
         needs_this=(variable_used(op, "this_instr")
                     or variable_used(op, "FB_COUNTER")
-                    or variable_used(op, "FB_BRANCH")),
+                    or variable_used(op, "FB_BRANCH")
+                    or "pc" in call_properties),
         always_exits=always_exits(op),
-        sync_sp=variable_used(op, "SYNC_SP") or variable_used(op, "SAVE_STACK") or variable_used(op, "RELOAD_STACK"),
+        sync_sp=(variable_used(op, "SYNC_SP") or variable_used(op, "SAVE_STACK")
+                 or variable_used(op, "RELOAD_STACK") or "sync" in call_properties),
         uses_co_consts=variable_used(op, "FRAME_CO_CONSTS"),
         uses_co_names=variable_used(op, "FRAME_CO_NAMES"),
         uses_locals=variable_used(op, "GETLOCAL") and not has_free,

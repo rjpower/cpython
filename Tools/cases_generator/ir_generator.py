@@ -75,6 +75,7 @@ from dataclasses import dataclass, replace
 
 from analyzer import (
     Analysis,
+    CALL_TRANSACTION_MARKERS,
     CodeSection,
     Instruction,
     Uop,
@@ -251,6 +252,8 @@ def declare_variables(inst: Instruction, out: CWriter) -> None:
             if var.used and var.name not in seen:
                 seen.add(var.name)
                 declare_variable(var, out)
+        if any(token.text == "IR_INVOKE_CALL" for token in part.body.tokens()):
+            break
 
 
 def stack_read_later(inst: Instruction, uop: Uop) -> bool:
@@ -341,6 +344,11 @@ def external_io(inst: Instruction) -> tuple[list[StackItem], list[Entry]]:
                 stack.append(popped[i])
             else:
                 stack.append(Entry(-1, item, item.name in part.aliased_outputs))
+        if any(token.text == "IR_INVOKE_CALL" for token in part.body.tokens()):
+            # A terminal transaction owns both immediate result publication
+            # and the child's eventual return. Trailing legacy frame/poll
+            # uops do not execute and cannot erase that logical output.
+            break
     n = len(external)
     inputs = list(reversed(external))
     outputs = [
@@ -712,6 +720,10 @@ def store_mode(inst: Instruction, outputs: list[Entry]) -> str | None:
     names dst as its return slot needs nothing more; one that may also
     produce the result itself moves it.  A member whose frames return
     elsewhere leaves to the head."""
+    # The terminal adapter publishes the native result itself, or the Python
+    # child's eventual return. Its unused DSL C output still has a real dst.
+    if uses_call_transaction(inst):
+        return STORE_RESULT
     if inst.properties.switches_frame:
         if not names_return_slot(inst):
             return STORE_LEAVE
@@ -1185,6 +1197,16 @@ class IREmitter(Emitter):
         self._replacers["IR_ABORT_VALUE_READER"] = self.abort_value_reader
         self._replacers["IR_RESTORE_ATTR_INPUT"] = self.restore_attr_input
         self._replacers["IR_COMPLETE_ATTR_READER"] = self.complete_attr_reader
+        self._replacers["IR_PREPARE_CALL_METHOD"] = self.prepare_call
+        self._replacers["IR_PREPARE_CALL_TUPLE"] = self.prepare_call
+        self._replacers["IR_MONITOR_CALL"] = self.prepare_call
+        self._replacers["IR_INVOKE_CALL"] = self.invoke_call
+        self._replacers["IR_BEGIN_CALL_EFFECTS"] = self.call_effects
+        self._replacers["IR_REFRESH_CALL"] = self.refresh_call
+        self.call_finished = False
+        self.call_fallback_used = False
+        self.call_fallback = ""
+        self.call_has_feedback = False
         # The storage at a deopt or exit being emitted
         self.deopt_storage: Storage | None = None
         # The format of the handler being emitted, which for a NOFB form
@@ -1346,6 +1368,82 @@ class IREmitter(Emitter):
             self.emit("ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);\n")
         self.emit("slots = _PyFrame_Slots(frame);\n")
 
+    def call_reload(self, inst):
+        self.reader_reload()
+        self.emit("window = slots + call.base;\n")
+        if self.call_has_feedback:
+            self.emit(f"fb = ({feedback_type(self.format_of(inst))} *)"
+                      "(frame->ir_feedback + call_feedback * FB_STRIDE);\n")
+
+    def prepare_call(self, tkn, tkn_iter, uop, storage, inst):
+        assert inst is not None
+        assert next(tkn_iter).kind == "LPAREN"
+        assert next(tkn_iter).kind == "RPAREN"
+        assert next(tkn_iter).kind == "SEMI"
+        helper = {
+            "IR_PREPARE_CALL_METHOD": "call_transaction_expand_method",
+            "IR_PREPARE_CALL_TUPLE": "call_transaction_prepare_tuple",
+            "IR_MONITOR_CALL": "call_transaction_monitor",
+        }[tkn.text]
+        storage.flush(self.out)
+        self.out.start_line()
+        self.emit(f"if ({helper}(&call, &next_instr) < 0) {{\n")
+        self.reader_error()
+        self.emit("}\n")
+        self.call_reload(inst)
+        return True
+
+    def call_effects(self, tkn, tkn_iter, uop, storage, inst):
+        assert next(tkn_iter).kind == "LPAREN"
+        assert next(tkn_iter).kind == "RPAREN"
+        assert next(tkn_iter).kind == "SEMI"
+        self.out.start_line()
+        self.emit("call.effects = 1;\n")
+        return True
+
+    def refresh_call(self, tkn, tkn_iter, uop, storage, inst):
+        assert next(tkn_iter).kind == "LPAREN"
+        assert next(tkn_iter).kind == "RPAREN"
+        assert next(tkn_iter).kind == "SEMI"
+        self.out.start_line()
+        self.emit("if (call_transaction_refresh(&call, &next_instr) < 0) {\n")
+        self.reader_error()
+        self.emit("}\n")
+        self.call_reload(inst)
+        return True
+
+    def call_completion(self):
+        self.emit("assert(value_temps->count == 0);\n")
+        self.emit("_PyInterpreterFrame *call_child;\n")
+        self.emit("if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {\n")
+        self.reader_error()
+        self.emit("}\n")
+        self.emit("if (call_child != NULL) {\n")
+        if self.helper:
+            self.emit("ctx->frame = call_child; ctx->next_instr = call_child->instr_ptr;\n")
+            self.emit("ctx->phase = _PyJIT_ENTER_PREPARED;\n")
+            self.emit("return _PyJIT_ENTER_FRAME;\n")
+        else:
+            self.emit("DISPATCH_INLINED(call_child);\n")
+        self.emit("}\n")
+        # Both result and callback-current destination are already published.
+        # No stack flush, delayed move from window[0], or helper JIT_FINISH
+        # may consume stale C inputs after this point.
+        if self.helper:
+            self.emit("ctx->frame = frame; ctx->next_instr = next_instr;\n")
+            self.emit("ctx->phase = jit_phase; return jit_action;\n")
+        else:
+            self.emit("slots = _PyFrame_Slots(frame);\n")
+            self.emit("DISPATCH();\n")
+
+    def invoke_call(self, tkn, tkn_iter, uop, storage, inst):
+        assert next(tkn_iter).kind == "LPAREN"
+        assert next(tkn_iter).kind == "RPAREN"
+        assert next(tkn_iter).kind == "SEMI"
+        self.call_completion()
+        self.call_finished = True
+        return False
+
     def complete_value_reader(self, tkn, tkn_iter, uop, storage, inst):
         assert next(tkn_iter).kind == "LPAREN"
         names = []
@@ -1463,7 +1561,22 @@ class IREmitter(Emitter):
                         ) -> tuple[bool, Token | None, Storage]:
         """A statement that kills an input, as DEAD(), a close or a steal,
         gives up its slot"""
-        reachable, tkn, storage = super().emit_SimpleStmt(stmt, uop, storage, inst)
+        transaction_marker = any(t.text in CALL_TRANSACTION_MARKERS
+                                 for t in stmt.contents)
+        if inst is not None and uses_call_transaction(inst):
+            transaction_marker |= any(t.text in {
+                "_Py_Specialize_Call", "_Py_Specialize_CallKw",
+                "_Py_Specialize_CallFunctionEx"} for t in stmt.contents)
+        previous = self.cannot_escape
+        if transaction_marker:
+            # Their handlers explicitly publish/refresh captured homes and
+            # terminal state. Automatic post-call spill/reload would instead
+            # republish stale C inputs after actual destination publication.
+            self.cannot_escape = True
+        try:
+            reachable, tkn, storage = super().emit_SimpleStmt(stmt, uop, storage, inst)
+        finally:
+            self.cannot_escape = previous
         if reachable:
             self.consume_killed(storage)
         return reachable, tkn, storage
@@ -1614,12 +1727,18 @@ class IREmitter(Emitter):
     ) -> bool:
         "The handler runs again on the same word, and reads its inputs again"
         assert inst is not None
+        if uses_call_transaction(inst):
+            self.emit(f"if (call.effects) {{ goto {self.call_fallback}; }}\n")
+            self.call_fallback_used = True
         self.emit_borrow_drops(inst, storage)
         self.emit(tkn)
         return True
 
     def emit_jump_to_predicted(self, inst: Instruction | None) -> None:
         assert inst is not None
+        if uses_call_transaction(inst):
+            self.emit(f"if (call.effects) {{ goto {self.call_fallback}; }}\n")
+            self.call_fallback_used = True
         self.emit_borrow_drops(inst)
         fmt = self.format_of(inst)
         binary_op = inst.family is not None and inst.family.name == BINARY_OP_FAMILY
@@ -1794,6 +1913,12 @@ def slot_layout(inst: Instruction, fmt: IRFormat, mode: str | None) -> SlotLayou
                       store_dst=mode == STORE_RESULT)
 
 
+def uses_call_transaction(inst: Instruction) -> bool:
+    return any(isinstance(part, Uop) and
+               any(token.text == "IR_INVOKE_CALL" for token in part.body.tokens())
+               for part in inst.parts)
+
+
 def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
                      emitter: IREmitter, out: CWriter) -> None:
     """The handler name, which runs inst: inst itself, or for a handler of a
@@ -1803,6 +1928,10 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     if name != inst.name and not nofb and name not in EXEC_ONLY:
         operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
     helper = emitter.helper
+    transaction = uses_call_transaction(inst)
+    emitter.call_finished = False
+    emitter.call_fallback_used = False
+    emitter.call_fallback = f"call_transaction_fallback_{name}"
     is_target = inst.is_target and name == inst.name and not helper
     out.emit("\n")
     if helper:
@@ -1838,7 +1967,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     if inst.properties.needs_prev:
         out.emit(f"_PyIRWord* const prev_instr = frame->instr_ptr;\n")
     if not is_target:
-        qualifier = "" if inst.name == "BINARY_OP" or name in ("CALL", "CALL_JIT_WARM", "CALL_KW", "INSTRUMENTED_CALL", "INSTRUMENTED_CALL_KW", "CALL_NON_PY_GENERAL", "CALL_KW_NON_PY", "CALL_BUILTIN_O", "LOAD_ATTR_SLOT", "STORE_ATTR_SLOT",
+        qualifier = "" if transaction or inst.name == "BINARY_OP" or name in ("CALL", "CALL_JIT_WARM", "CALL_KW", "INSTRUMENTED_CALL", "INSTRUMENTED_CALL_KW", "CALL_NON_PY_GENERAL", "CALL_KW_NON_PY", "CALL_BUILTIN_O", "LOAD_ATTR_SLOT", "STORE_ATTR_SLOT",
                                    "BUILD_MAP", "STORE_SUBSCR", "STORE_SUBSCR_DICT",
                                    "STORE_ATTR_WITH_HINT", "BINARY_OP_SUBSCR_DICT", "LOAD_GLOBAL", "LOAD_GLOBAL_NOFB",
                                    "LOAD_ATTR", "LOAD_ATTR_NOFB", "STORE_ATTR", "STORE_ATTR_NOFB",
@@ -1853,7 +1982,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     out.emit(f"INSTRUCTION_STATS({inst.name});\n")
     if is_target:
         out.emit(f"IR_PREDICTED({name});\n")
-        qualifier = "" if inst.name == "BINARY_OP" or name in ("CALL", "CALL_JIT_WARM", "CALL_KW", "STORE_SUBSCR", "LOAD_GLOBAL", "LOAD_GLOBAL_NOFB", "LOAD_ATTR", "LOAD_ATTR_NOFB", "STORE_ATTR", "STORE_ATTR_NOFB") else "const "
+        qualifier = "" if transaction or inst.name == "BINARY_OP" or name in ("CALL", "CALL_JIT_WARM", "CALL_KW", "STORE_SUBSCR", "LOAD_GLOBAL", "LOAD_GLOBAL_NOFB", "LOAD_ATTR", "LOAD_ATTR_NOFB", "STORE_ATTR", "STORE_ATTR_NOFB") else "const "
         out.emit(f"_PyIRWord* {qualifier}this_instr = next_instr - 1;\n")
         out.emit("(void)this_instr;\n")
     out.emit(f"PyObject *value_boxes[{bridge_bound}];\n")
@@ -1861,6 +1990,8 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     out.emit("_PyValueTemps *value_temps = &value_owners;\n")
     use_fb = fmt.fb != LOC_NONE and (
         uses_feedback(inst) or reads_fb_arg(inst, fmt, operation))
+    emitter.call_has_feedback = (use_fb and name != "CALL_JIT_WARM"
+                                 or nofb and uses_feedback(inst))
     if use_fb and name != "CALL_JIT_WARM":
         out.emit(f"{feedback_type(fmt)} *fb = ({feedback_type(fmt)} *)"
                  f"IR_FB({field_expr(fmt.fb)});\n")
@@ -1886,15 +2017,38 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         call_family = "CALL"
     elif call_family == "INSTRUMENTED_CALL_KW":
         call_family = "CALL_KW"
-    if fmt.window and call_family in ("CALL", "CALL_KW"):
+    if transaction:
+        assert fmt.window
+        inputs, _ = external_io(inst)
+        count = " + ".join(f"({item.size or '1'})" for item in inputs)
+        kind = ("CALL_TRANSACTION_EX" if call_family in
+                ("CALL_FUNCTION_EX", "INSTRUMENTED_CALL_FUNCTION_EX") else
+                "CALL_TRANSACTION_KEYWORDS" if call_family == "CALL_KW" else
+                "CALL_TRANSACTION_VECTOR")
+        base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
+        dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
+        argc = "oparg" if inst.properties.oparg else "0"
+        periodic = int(any(isinstance(p, Uop) and p.name == "_CHECK_PERIODIC_AT_END"
+                           for p in inst.parts) or name == "CALL_KW_NON_PY")
+        out.emit(f"_PyCallTransaction call = call_transaction_begin(tstate, frame, next_instr, "
+                 f"{base}, {count}, {dst}, {argc}, {kind}, "
+                 f"{int(name.startswith('INSTRUMENTED_'))}, {periodic});\n")
+        if emitter.call_has_feedback:
+            out.emit(f"uint32_t call_feedback = {field_expr(fmt.fb)};\n")
+    elif fmt.window and call_family in ("CALL", "CALL_KW"):
         inputs, _ = external_io(inst)
         count = " + ".join(f"({item.size or '1'})" for item in inputs)
         out.emit(f"_PyValue_OwnArray(window, {count});\n")
     if name in ("CALL", "CALL_JIT_WARM", "CALL_KW"):
         out.emit("if (JIT_CALL_NEEDS_PREPARE(this_instr)) {\n")
+        out.emit("call.effects = 1;\n")
         out.emit("int jit_prepare = JIT_PREPARE_CALL(this_instr, window[0]);\n")
-        out.emit("if (jit_prepare < 0) { JUMP_TO_LABEL(error); }\n")
-        out.emit("if (jit_prepare > 0) { next_instr = this_instr; JIT_CALL_RETRY(); }\n")
+        out.emit("if (call_transaction_refresh(&call, &next_instr) < 0 || jit_prepare < 0) {\n")
+        emitter.reader_error()
+        out.emit("}\n")
+        emitter.call_reload(inst)
+        # JIT preparation may allocate/observe. A decline continues this
+        # same logical call; retrying the handler would replay those effects.
         out.emit("}\n")
     if inst.properties.uses_opcode:
         out.emit(f"opcode = {name};\n")
@@ -1922,6 +2076,8 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         except SyntaxError as ex:
             ex.msg = f"{name}: {ex.msg}"
             raise
+        if emitter.call_finished:
+            break
     out.start_line()
     if reachable:
         assert isinstance(stack, IRStack)
@@ -1938,6 +2094,9 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         if name in ("RESUME_JIT", "JUMP_BACKWARD_JIT_WARM") and not helper:
             out.emit("JIT_SITE_ENTRY(this_instr);\n")
         out.emit("DISPATCH();\n")
+    if transaction and emitter.call_fallback_used:
+        out.emit(f"{emitter.call_fallback}:;\n")
+        emitter.call_completion()
     out.start_line()
     out.emit("}")
     out.emit("\n")

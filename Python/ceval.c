@@ -788,6 +788,29 @@ typedef struct {
     int result_slot;
 } _PyValueOperation;
 
+typedef enum {
+    CALL_TRANSACTION_VECTOR,
+    CALL_TRANSACTION_KEYWORDS,
+    CALL_TRANSACTION_EX,
+} _PyCallTransactionKind;
+
+/* Numeric homes survive instrumentation changes. This record owns no
+ * preparation resource: each preparation helper drains its locals before
+ * returning, including before an inlined Python frame can escape. */
+typedef struct {
+    _PyValueOperation operation;
+    int base;
+    int count;
+    int destination;
+    int argument_count;
+    _PyCallTransactionKind kind;
+    int instrumented;
+    int effects;
+    int monitored;
+    int periodic;
+    int prepared;
+} _PyCallTransaction;
+
 static inline _PyValueOperation
 value_operation_begin(PyThreadState *tstate, _PyInterpreterFrame *frame,
                       _PyInstr *next)
@@ -1642,6 +1665,357 @@ value_operation_finish(_PyValueOperation *operation, _PyInstr **next,
     return value_operation_refresh(operation, next, NULL);
 }
 
+static _PyCallTransaction
+call_transaction_begin(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                       _PyInstr *next, int base, int count, int destination,
+                       int argument_count, _PyCallTransactionKind kind,
+                       int instrumented, int periodic)
+{
+    _PyValueOperation operation = value_operation_begin(tstate, frame, next);
+    assert(base >= operation.code->co_nlocalsplus);
+    assert(count >= 0 && base <= _PyFrame_NumSlots(frame) - count);
+    assert(destination >= 0 && destination < _PyFrame_NumSlots(frame));
+    /* Every call input is an evaluated temporary, including snapshots of
+     * locals. Callback-current LOCAL homes are never consumed by this record. */
+    _PyValue_OwnArray(_PyFrame_Slots(frame) + base, count);
+    return (_PyCallTransaction){
+        .operation = operation, .base = base, .count = count,
+        .destination = destination, .argument_count = argument_count,
+        .kind = kind, .instrumented = instrumented, .periodic = periodic,
+    };
+}
+
+static int
+call_transaction_refresh(_PyCallTransaction *call, _PyInstr **next)
+{
+    _PyValueOperation *op = &call->operation;
+    int status;
+    do {
+        status = value_operation_refresh(op, next, NULL);
+        if (op->tstate->current_frame != op->frame ||
+            _PyFrame_GetCode(op->frame) != op->code) {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyErr_SetString(PyExc_SystemError,
+                            "call preparation changed the active frame");
+            _PyValue_RestoreException(saved);
+            return -1;
+        }
+        /* Restoring a pending error can retire another exception. Its
+         * callbacks also precede the final decode, so validate after restore. */
+    } while (op->code->_co_exec != NULL &&
+             (op->frame->ir_words != op->code->_co_exec->words ||
+              (status == 0 && op->code->_co_instrumentation_version !=
+              (_Py_atomic_load_uintptr_relaxed(&op->tstate->eval_breaker) &
+               ~_PY_EVAL_EVENTS_MASK))));
+    return status;
+}
+
+static void
+call_transaction_close_value(PyValue *slot)
+{
+    PyObject *saved = PyErr_GetRaisedException();
+    PyValue value = *slot;
+    *slot = PyValue_NULL;
+    PyValue_XCLOSE(value);
+    _PyValue_RestoreException(saved);
+}
+
+static void
+call_transaction_close_object(PyObject **slot)
+{
+    PyObject *saved = PyErr_GetRaisedException();
+    PyObject *value = *slot;
+    *slot = NULL;
+    Py_XDECREF(value);
+    _PyValue_RestoreException(saved);
+}
+
+static int
+call_transaction_expand_method(_PyCallTransaction *call, _PyInstr **next)
+{
+    call->prepared = 1;
+    PyValue *homes = _PyFrame_Slots(call->operation.frame) + call->base;
+    if (PyValue_TYPE(homes[0]) != &PyMethod_Type ||
+        !PyValue_IsNull(homes[1])) {
+        return 0;
+    }
+    PyMethodObject *method = (PyMethodObject *)PyValue_AsPyObjectBorrow(homes[0]);
+    PyValue self = PyValue_FromPyObjectNew(method->im_self);
+    PyValue function = PyValue_FromPyObjectNew(method->im_func);
+    PyValue obsolete = homes[0];
+    /* Publish both final input homes before the obsolete wrapper can run
+     * a destructor. No pointer into the old window crosses that release. */
+    homes[0] = function;
+    homes[1] = self;
+    call->effects = 1;
+    call_transaction_close_value(&obsolete);
+    return call_transaction_refresh(call, next);
+}
+
+static int
+call_transaction_prepare_tuple(_PyCallTransaction *call, _PyInstr **next)
+{
+    assert(call->kind == CALL_TRANSACTION_EX);
+    call->prepared = 1;
+    PyValue *homes = _PyFrame_Slots(call->operation.frame) + call->base;
+    PyValue args = PyValue_MakeHeapSafe(PyValue_Borrow(homes[2]));
+    PyValue func = PyValue_MakeHeapSafe(PyValue_Borrow(homes[0]));
+    PyValue obsolete = PyValue_NULL;
+    PyObject *args_object = NULL, *func_object = NULL, *tuple = NULL;
+    call->effects = 1;
+    args_object = PyValue_AsObject(args);
+    if (args_object == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    if (PyTuple_CheckExact(args_object)) {
+        goto done;
+    }
+    func_object = PyValue_AsObject(func);
+    if (func_object == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    if (_Py_Check_ArgsIterable(call->operation.tstate, func_object,
+                              args_object) < 0) {
+        goto done;
+    }
+    tuple = PySequence_Tuple(args_object);
+    if (tuple == NULL || call_transaction_refresh(call, next) < 0) {
+        goto done;
+    }
+    homes = _PyFrame_Slots(call->operation.frame) + call->base;
+    obsolete = homes[2];
+    /* A tuple is a heap object, so this pure owner transfer cannot retire a
+     * scalar box. Only the final tuple home is visible during local cleanup. */
+    homes[2] = PyValue_FromPyObjectSteal(tuple);
+    tuple = NULL;
+done:
+    call_transaction_close_object(&tuple);
+    call_transaction_close_object(&func_object);
+    call_transaction_close_object(&args_object);
+    call_transaction_close_value(&func);
+    call_transaction_close_value(&args);
+    call_transaction_close_value(&obsolete);
+    return call_transaction_refresh(call, next);
+}
+
+static int
+call_transaction_monitor(_PyCallTransaction *call, _PyInstr **next)
+{
+    assert(!call->monitored);
+    PyValue *homes = _PyFrame_Slots(call->operation.frame) + call->base;
+    PyValue function = PyValue_MakeHeapSafe(PyValue_Borrow(homes[0]));
+    PyValue first = PyValue_NULL;
+    if (call->kind == CALL_TRANSACTION_EX) {
+        PyObject *tuple = PyValue_AsPyObjectBorrow(homes[2]);
+        if (PyTuple_GET_SIZE(tuple)) {
+            first = PyValue_MakeHeapSafe(PyTuple_GET_VALUE(tuple, 0));
+        }
+    }
+    else if (!PyValue_IsNull(homes[1])) {
+        first = PyValue_MakeHeapSafe(PyValue_Borrow(homes[1]));
+    }
+    else if (call->argument_count) {
+        first = PyValue_MakeHeapSafe(PyValue_Borrow(homes[2]));
+    }
+    PyObject *function_object = NULL, *argument = NULL;
+    call->effects = 1;
+    call->monitored = 1;
+    function_object = PyValue_AsObject(function);
+    if (function_object == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    argument = PyValue_IsNull(first) ? Py_NewRef(&_PyInstrumentation_MISSING)
+                                   : PyValue_AsObject(first);
+    if (argument == NULL || call_transaction_refresh(call, next) < 0) {
+        goto done;
+    }
+    (void)_Py_call_instrumentation_2args(
+        call->operation.tstate, PY_MONITORING_EVENT_CALL, call->operation.frame,
+        call->operation.frame->instr_ptr, function_object, argument);
+done:
+    call_transaction_close_object(&argument);
+    call_transaction_close_object(&function_object);
+    call_transaction_close_value(&first);
+    call_transaction_close_value(&function);
+    return call_transaction_refresh(call, next);
+}
+
+static void
+call_transaction_publish_pc(void *opaque)
+{
+    _PyCallTransaction *call = opaque;
+    _PyValueOperation *op = &call->operation;
+    assert(op->tstate->current_frame == op->frame);
+    assert(_PyFrame_GetCode(op->frame) == op->code);
+    _PyCodeExec *exec = op->code->_co_exec;
+    assert(exec != NULL && op->current_word >= 0 &&
+           op->current_word < exec->nwords);
+    op->frame->ir_words = exec->words;
+    op->frame->ir_feedback = exec->entries;
+    op->frame->instr_ptr = exec->words + op->current_word;
+}
+
+static void
+call_transaction_detach(_PyCallTransaction *call, PyValue *retired)
+{
+    PyValue *homes = _PyFrame_Slots(call->operation.frame) + call->base;
+    for (int i = 0; i < call->count; i++) {
+        retired[i] = homes[i];
+        homes[i] = PyValue_NULL;
+    }
+}
+
+static void
+call_transaction_retire(PyValue *retired, int count, PyValue *small)
+{
+    for (int i = count; i-- > 0;) {
+        call_transaction_close_value(&retired[i]);
+    }
+    if (retired != small && retired != NULL) {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyMem_Free(retired);
+        _PyValue_RestoreException(saved);
+    }
+}
+
+/* Result publication targets the captured destination itself, including a
+ * folded LOCAL or an input overlap. The producer must not move window[0]
+ * afterward, even on an error edge after cleanup. */
+static int
+call_transaction_native(_PyCallTransaction *call, _PyInstr **next)
+{
+    PyValue small[8];
+    PyValue *retired = small;
+    int retired_count = 0, scope_started = 0;
+    PyObject *callable = NULL, *monitor_argument = NULL;
+    _PyNativeScope scope;
+    call->effects = 1;
+    if (call->instrumented && !call->monitored &&
+        call_transaction_monitor(call, next) < 0) {
+        return -1;
+    }
+    if (call->count > (int)Py_ARRAY_LENGTH(small)) {
+        retired = PyMem_Malloc((size_t)call->count * sizeof(PyValue));
+        if (retired == NULL && !PyErr_Occurred()) {
+            PyErr_NoMemory();
+        }
+        if (retired == NULL || call_transaction_refresh(call, next) < 0) {
+            goto done;
+        }
+    }
+    PyValue *homes = _PyFrame_Slots(call->operation.frame) + call->base;
+    callable = PyValue_AsObject(homes[0]);
+    if (callable == NULL || call_transaction_refresh(call, next) < 0) {
+        goto done;
+    }
+    homes = _PyFrame_Slots(call->operation.frame) + call->base;
+    scope_started = 1;
+    int status;
+    if (call->kind == CALL_TRANSACTION_EX) {
+        PyObject *tuple = PyValue_AsPyObjectBorrow(homes[2]);
+        PyObject *kwargs = PyValue_AsPyObjectBorrow(homes[3]);
+        status = _PyNativeScope_BeginTupleCall(
+            &scope, call->operation.tstate, callable, tuple, kwargs);
+    }
+    else {
+        int offset = PyValue_IsNull(homes[1]) ? 2 : 1;
+        int total = call->argument_count + 2 - offset;
+        PyObject *names = call->kind == CALL_TRANSACTION_KEYWORDS
+            ? PyValue_AsPyObjectBorrow(homes[call->count - 1]) : NULL;
+        Py_ssize_t positional = total - (names == NULL ? 0 : PyTuple_GET_SIZE(names));
+        if (_PyCFunction_CanCallScoped(callable)) {
+            status = _PyNativeScope_BeginVector(
+                &scope, call->operation.tstate, callable, homes + offset,
+                positional, total, names);
+        }
+        else {
+            status = _PyNativeScope_BeginObjectVector(
+                &scope, call->operation.tstate, callable, homes + offset,
+                positional, total, names);
+        }
+    }
+    if (status < 0 || call_transaction_refresh(call, next) < 0) {
+        goto abort;
+    }
+    if (call->kind != CALL_TRANSACTION_EX) {
+        PyObject *const *objects;
+        if (_PyNativeScope_Objects(&scope, &objects) < 0) {
+            goto abort;
+        }
+        if (call->instrumented) {
+            monitor_argument = Py_NewRef(scope.nargs ? objects[0]
+                                                    : &_PyInstrumentation_MISSING);
+        }
+    }
+    else if (call->instrumented) {
+        PyValue first = PyTuple_GET_SIZE(scope.callargs)
+            ? PyTuple_GET_VALUE(scope.callargs, 0) : PyValue_NULL;
+        monitor_argument = PyValue_IsNull(first)
+            ? Py_NewRef(&_PyInstrumentation_MISSING) : PyValue_AsObject(first);
+        if (monitor_argument == NULL || PyErr_Occurred()) {
+            goto abort;
+        }
+    }
+    if (call_transaction_refresh(call, next) < 0) {
+        goto abort;
+    }
+    if (call->kind == CALL_TRANSACTION_EX) {
+        status = _PyNativeScope_InvokeTupleCall(&scope);
+    }
+    else {
+        status = scope.vector == 1
+            ? _PyCFunction_CallScoped(&scope, scope.callable, &scope.result) : 1;
+        if (status == 1) {
+            /* NOT_INVOKED may change adapters, never replay preparation. */
+            status = _PyNativeScope_InvokeObjectVector(&scope);
+        }
+    }
+    (void)call_transaction_refresh(call, next);
+    if (call->instrumented &&
+        !(call->kind == CALL_TRANSACTION_EX &&
+          (PyFunction_Check(callable) || PyMethod_Check(callable)))) {
+        if (status < 0 || PyErr_Occurred()) {
+            _Py_call_instrumentation_exc2(
+                call->operation.tstate, PY_MONITORING_EVENT_C_RAISE,
+                call->operation.frame, call->operation.frame->instr_ptr,
+                callable, monitor_argument);
+        }
+        else {
+            (void)_Py_call_instrumentation_2args(
+                call->operation.tstate, PY_MONITORING_EVENT_C_RETURN,
+                call->operation.frame, call->operation.frame->instr_ptr,
+                callable, monitor_argument);
+        }
+    }
+    if (status < 0 || call_transaction_refresh(call, next) < 0) {
+        goto abort;
+    }
+    call_transaction_detach(call, retired);
+    retired_count = call->count;
+    _PyNativeResult_Publish(&scope.result,
+        _PyFrame_Slots(call->operation.frame) + call->destination,
+        call_transaction_publish_pc, call);
+    goto end_scope;
+abort:
+    _PyNativeResult_Abort(&scope.result, call_transaction_publish_pc, call);
+end_scope:
+    (void)_PyNativeScope_End(&scope);
+done:
+    assert(scope_started || retired_count == 0);
+    call_transaction_close_object(&monitor_argument);
+    call_transaction_close_object(&callable);
+    call_transaction_retire(retired, retired_count, small);
+    int failed = call_transaction_refresh(call, next);
+    if (failed == 0 && call->periodic) {
+        (void)check_periodics_at_end(call->operation.tstate, call->operation.frame);
+        failed = call_transaction_refresh(call, next);
+    }
+    return failed;
+}
+
+static int call_transaction_invoke(_PyCallTransaction *, _PyInstr **,
+                                    _PyInterpreterFrame **);
+
 static int
 value_reader_complete(_PyValueOperation *operation, _PyInstr **next,
                       _PyValueTemps *temps, PyValue *result,
@@ -1846,191 +2220,6 @@ native_call_finish(_PyNativeCallPublication *state, _PyNativeScope *scope,
     *next = exec->words + state->next_word;
     _PyValue_RestoreException(saved);
     return PyErr_Occurred() ? -1 : 0;
-}
-
-typedef struct {
-    _PyValueOperation operation;
-    int base;
-    int argument_offset;
-    int count;
-    int keyword_slot;
-    int handler;
-    uintptr_t epoch;
-    int scope_started;
-    int inputs_consumed;
-    PyValue *result;
-} _PyNativeVectorCall;
-
-static _PyNativeVectorCall
-native_vector_capture(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                      _PyInstr *next, int base, int argument_offset,
-                      int count, int keyword_slot)
-{
-    return (_PyNativeVectorCall){
-        .operation = value_operation_begin(tstate, frame, next),
-        .base = base, .argument_offset = argument_offset, .count = count,
-        .keyword_slot = keyword_slot,
-        .handler = IR_HANDLER(*frame->instr_ptr),
-        .epoch = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) &
-                 ~_PY_EVAL_EVENTS_MASK,
-    };
-}
-
-static void
-native_vector_publish_pc(void *opaque)
-{
-    _PyNativeVectorCall *state = opaque;
-    _PyValueOperation *op = &state->operation;
-    if (op->tstate->current_frame == op->frame &&
-        _PyFrame_GetCode(op->frame) == op->code) {
-        _PyCodeExec *exec = op->code->_co_exec;
-        if (exec != NULL && op->current_word >= 0 && op->current_word < exec->nwords) {
-            op->frame->ir_words = exec->words;
-            op->frame->ir_feedback = exec->entries;
-            op->frame->instr_ptr = exec->words + op->current_word;
-        }
-    }
-}
-
-static void
-native_vector_publish_result(void *opaque)
-{
-    _PyNativeVectorCall *state = opaque;
-    native_vector_publish_pc(state);
-    _PyFrame_Slots(state->operation.frame)[state->base] = *state->result;
-}
-
-static int
-native_vector_take(_PyNativeVectorCall *state, PyValue *callable, PyValue *names)
-{
-    _PyValueOperation *op = &state->operation;
-    if (op->tstate->current_frame != op->frame ||
-        _PyFrame_GetCode(op->frame) != op->code) {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyErr_SetString(PyExc_SystemError, "native call changed the active frame");
-        _PyValue_RestoreException(saved);
-        return -1;
-    }
-    PyValue *window = _PyFrame_Slots(op->frame) + state->base;
-    *callable = window[0];
-    window[0] = PyValue_NULL;
-    *names = state->keyword_slot < 0 ? PyValue_NULL : window[state->keyword_slot];
-    if (state->keyword_slot >= 0) {
-        window[state->keyword_slot] = PyValue_NULL;
-    }
-    return 0;
-}
-
-/* 0 = staged success, -1 = real error, 1 = BEFORE redispatch,
- * 2 = generic fallback with original evaluated owners unchanged. */
-static int
-native_vector_prepare(_PyNativeVectorCall *state, _PyNativeScope *scope,
-                      PyValue callable, PyValue names, _PyInstr **next)
-{
-    _PyValueOperation *op = &state->operation;
-    if (PyValue_IsInline(callable)) {
-        PyErr_Format(PyExc_TypeError, "'%.200s' object is not callable",
-                     PyValue_TYPE(callable)->tp_name);
-        return -1;
-    }
-    assert(PyValue_IsObject(callable));
-    PyObject *function = PyValue_AsPyObjectBorrow(callable);
-    if (!_PyCFunction_CanCallScoped(function)) {
-        return 2;
-    }
-    PyObject *kwnames = PyValue_IsNull(names) ? NULL : PyValue_AsPyObjectBorrow(names);
-    int positional = state->count - (kwnames == NULL ? 0 : (int)PyTuple_GET_SIZE(kwnames));
-    PyValue *arguments = _PyFrame_Slots(op->frame) + state->base + state->argument_offset;
-    state->scope_started = 1;
-    int status = _PyNativeScope_BeginVector(scope, op->tstate, function,
-                                           arguments, positional, state->count, kwnames);
-    PyObject *const *objects;
-    if (status == 0) {
-        status = _PyNativeScope_Objects(scope, &objects);
-    }
-    if (status < 0) {
-        return -1;
-    }
-    if (value_operation_refresh(op, next, NULL) < 0) {
-        return -1;
-    }
-    uintptr_t epoch = _Py_atomic_load_uintptr_relaxed(&op->tstate->eval_breaker) &
-                      ~_PY_EVAL_EVENTS_MASK;
-    if (epoch != state->epoch || IR_HANDLER(*op->frame->instr_ptr) != state->handler) {
-        status = 1;
-    }
-    else {
-        status = _PyCFunction_CallScoped(scope, function, &scope->result);
-        if (status == 1) {
-            status = 2;
-        }
-    }
-    if (status > 0) {
-        /* No body ran. Alias cleanup can reenter too; originals stay live. */
-        _PyNativeResult_Abort(&scope->result, native_vector_publish_pc, state);
-        (void)_PyNativeScope_End(scope);
-        state->scope_started = 0;
-        if (value_operation_refresh(op, next, NULL) < 0) {
-            return -1;
-        }
-        epoch = _Py_atomic_load_uintptr_relaxed(&op->tstate->eval_breaker) &
-                ~_PY_EVAL_EVENTS_MASK;
-        if (epoch != state->epoch || IR_HANDLER(*op->frame->instr_ptr) != state->handler) {
-            status = 1;
-        }
-    }
-    return status;
-}
-
-static void
-native_vector_retire(_PyNativeVectorCall *state, _PyNativeScope *scope,
-                     PyValue *callable, PyValue *names, PyObject *retired)
-{
-    if (state->scope_started) {
-        (void)_PyNativeScope_End(scope);
-    }
-    PyObject *saved = PyErr_GetRaisedException();
-    PyValue owner = *names;
-    *names = PyValue_NULL;
-    PyValue_XCLOSE(owner);
-    _PyValue_RestoreException(saved);
-    _PyValueOperation *op = &state->operation;
-    if (state->inputs_consumed) {
-        /* The old object-callable fallback already retired this window. */
-    }
-    else if (op->tstate->current_frame == op->frame &&
-        _PyFrame_GetCode(op->frame) == op->code) {
-        /* Private argument homes stay strong through End. Reacquire their
-         * address from captured scalar bounds, never old decoded fields. */
-        for (int i = state->count; i-- > 0;) {
-            if (op->tstate->current_frame != op->frame ||
-                _PyFrame_GetCode(op->frame) != op->code) {
-                saved = PyErr_GetRaisedException();
-                PyErr_SetString(PyExc_SystemError, "native retirement changed the active frame");
-                _PyValue_RestoreException(saved);
-                break;
-            }
-            PyValue *home = _PyFrame_Slots(op->frame) + state->base + state->argument_offset + i;
-            owner = *home;
-            *home = PyValue_NULL;
-            saved = PyErr_GetRaisedException();
-            PyValue_XCLOSE(owner);
-            _PyValue_RestoreException(saved);
-        }
-    }
-    else {
-        saved = PyErr_GetRaisedException();
-        PyErr_SetString(PyExc_SystemError, "native call changed the active frame");
-        _PyValue_RestoreException(saved);
-    }
-    saved = PyErr_GetRaisedException();
-    owner = *callable;
-    *callable = PyValue_NULL;
-    PyValue_XCLOSE(owner);
-    _PyValue_RestoreException(saved);
-    saved = PyErr_GetRaisedException();
-    Py_XDECREF(retired);
-    _PyValue_RestoreException(saved);
 }
 
 #include "generated_jit_helpers.c.h"
@@ -2573,11 +2762,10 @@ fail:
 }
 
 static int
-initialize_locals(PyThreadState *tstate, PyFunctionObject *func,
+initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *co,
     PyValue *localsplus, PyValue const *args,
     Py_ssize_t argcount, PyObject *kwnames)
 {
-    PyCodeObject *co = (PyCodeObject*)func->func_code;
     const Py_ssize_t total_args = co->co_argcount + co->co_kwonlyargcount;
     /* Create a dictionary for keyword parameters (**kwags) */
     PyObject *kwdict;
@@ -2910,17 +3098,18 @@ _PyEval_FrameClearAndPop(PyThreadState *tstate, _PyInterpreterFrame * frame)
     }
 }
 
-/* Consumes references to func, locals and all the args */
-_PyInterpreterFrame *
-_PyEvalFramePushAndInit(PyThreadState *tstate, PyValue func,
+/* code is independently pinned through preparation and binding. Consumes
+ * func, locals and args, but never reselects the function's mutable code. */
+static _PyInterpreterFrame *
+eval_frame_push_and_init_code(PyThreadState *tstate, PyValue func,
                         PyObject *locals, PyValue *args,
-                        size_t argcount, PyObject *kwnames, _PyInterpreterFrame *previous)
+                        size_t argcount, PyObject *kwnames,
+                        _PyInterpreterFrame *previous, PyCodeObject *code)
 {
     func = PyValue_MakeHeapSafe(func);
     size_t total = argcount + (kwnames == NULL ? 0 : PyTuple_GET_SIZE(kwnames));
     _PyValue_OwnArray(args, total);
     PyFunctionObject *func_obj = (PyFunctionObject *)PyValue_AsPyObjectBorrow(func);
-    PyCodeObject * code = (PyCodeObject *)func_obj->func_code;
     CALL_STAT_INC(frames_pushed);
     if (_PyCode_GetExec(code) == NULL) {
         goto fail;
@@ -2930,7 +3119,7 @@ _PyEvalFramePushAndInit(PyThreadState *tstate, PyValue func,
         goto fail;
     }
     _PyFrame_Initialize(tstate, frame, func, locals, code, frame->base, 0, previous);
-    if (initialize_locals(tstate, func_obj, frame->base, args, argcount, kwnames)) {
+    if (initialize_locals(tstate, func_obj, code, frame->base, args, argcount, kwnames)) {
         assert(frame->owner == FRAME_OWNED_BY_THREAD);
         PyObject *saved = PyErr_GetRaisedException();
         _PyThreadState_UpdateLastProfiledFrame(tstate, frame, tstate->current_frame);
@@ -2969,12 +3158,31 @@ fail:
     return NULL;
 }
 
-/* Same as _PyEvalFramePushAndInit but takes an args tuple and kwargs dict.
+/* Consumes references to func, locals and all the args. Explicit locals is
+ * an input of this public provider; inferred policy belongs to its caller. */
+_PyInterpreterFrame *
+_PyEvalFramePushAndInit(PyThreadState *tstate, PyValue func,
+                      PyObject *locals, PyValue *args, size_t argcount,
+                      PyObject *kwnames, _PyInterpreterFrame *previous)
+{
+    func = PyValue_MakeHeapSafe(func);
+    PyFunctionObject *function = (PyFunctionObject *)PyValue_AsPyObjectBorrow(func);
+    PyCodeObject *code = (PyCodeObject *)Py_NewRef(function->func_code);
+    _PyInterpreterFrame *frame = eval_frame_push_and_init_code(
+        tstate, func, locals, args, argcount, kwnames, previous, code);
+    PyObject *saved = PyErr_GetRaisedException();
+    Py_DECREF(code);
+    _PyValue_RestoreException(saved);
+    return frame;
+}
+
+/* Same as eval_frame_push_and_init_code but takes an args tuple and kwargs dict.
    Steals references to func, callargs and kwargs.
 */
-_PyInterpreterFrame *
-_PyEvalFramePushAndInit_Ex(PyThreadState *tstate, PyValue func,
-    PyObject *locals, Py_ssize_t nargs, PyObject *callargs, PyObject *kwargs, _PyInterpreterFrame *previous)
+static _PyInterpreterFrame *
+eval_frame_push_and_init_ex_code(PyThreadState *tstate, PyValue func,
+    PyObject *locals, Py_ssize_t nargs, PyObject *callargs, PyObject *kwargs,
+    _PyInterpreterFrame *previous, PyCodeObject *code)
 {
     bool has_dict = (kwargs != NULL && PyDict_GET_SIZE(kwargs) > 0);
     PyObject *kwnames = NULL;
@@ -3016,9 +3224,9 @@ _PyEvalFramePushAndInit_Ex(PyThreadState *tstate, PyValue func,
                                     : PyTuple_GET_VALUE(callargs, i);
         newargs[i] = PyValue_NewRef(borrowed);
     }
-    new_frame = _PyEvalFramePushAndInit(
+    new_frame = eval_frame_push_and_init_code(
         tstate, func, locals,
-        newargs, nargs, kwnames, previous
+        newargs, nargs, kwnames, previous, code
     );
     goto done;
 fail_func:
@@ -3058,6 +3266,194 @@ done:
         return NULL;
     }
     return new_frame;
+}
+
+_PyInterpreterFrame *
+_PyEvalFramePushAndInit_Ex(PyThreadState *tstate, PyValue func,
+    PyObject *locals, Py_ssize_t nargs, PyObject *callargs, PyObject *kwargs,
+    _PyInterpreterFrame *previous)
+{
+    func = PyValue_MakeHeapSafe(func);
+    PyFunctionObject *function = (PyFunctionObject *)PyValue_AsPyObjectBorrow(func);
+    PyCodeObject *code = (PyCodeObject *)Py_NewRef(function->func_code);
+    _PyInterpreterFrame *frame = eval_frame_push_and_init_ex_code(
+        tstate, func, locals, nargs, callargs, kwargs, previous, code);
+    PyObject *saved = PyErr_GetRaisedException();
+    Py_DECREF(code);
+    _PyValue_RestoreException(saved);
+    return frame;
+}
+
+/* Parent inputs are never offered to a consuming binder. Copies can fail
+ * and retire while the parent's actual IN_CALL homes remain owning. */
+static int
+call_transaction_push_python(_PyCallTransaction *call, _PyInstr **next,
+                             _PyInterpreterFrame **out)
+{
+    PyValue small[16];
+    PyValue *storage = small;
+    int copied = 0, retired_count = 0;
+    int invoked = 0;
+    PyValue function = PyValue_NULL;
+    PyObject *locals = NULL, *names = NULL, *tuple = NULL, *kwargs = NULL;
+    PyCodeObject *code = NULL;
+    _PyInterpreterFrame *child = NULL;
+    _PyValueOperation *op = &call->operation;
+    call->effects = 1;
+    if (call->count > (int)Py_ARRAY_LENGTH(small) / 2) {
+        storage = PyMem_Malloc((size_t)call->count * 2 * sizeof(PyValue));
+        if (storage == NULL && !PyErr_Occurred()) {
+            PyErr_NoMemory();
+        }
+        if (storage == NULL || call_transaction_refresh(call, next) < 0) {
+            goto done;
+        }
+    }
+    PyValue *homes = _PyFrame_Slots(op->frame) + call->base;
+    PyObject *callable = PyValue_AsPyObjectBorrow(homes[0]);
+    /* Allocation above may have changed vectorcall. Choose a new adapter
+     * inside the same record; never replay method/monitor/EX preparation. */
+    if (Py_TYPE(callable) != &PyFunction_Type || IS_PEP523_HOOKED(op->tstate) ||
+        ((PyFunctionObject *)callable)->vectorcall != _PyFunction_Vectorcall) {
+        goto done;
+    }
+    function = PyValue_NewRef(homes[0]);
+    code = (PyCodeObject *)Py_NewRef(PyFunction_GET_CODE(callable));
+    locals = code->co_flags & CO_OPTIMIZED ? NULL
+        : Py_NewRef(PyFunction_GET_GLOBALS(callable));
+    PyValue consumed_function = function;
+    function = PyValue_NULL;
+    PyObject *consumed_locals = locals;
+    locals = NULL;
+    invoked = 1;
+    if (call->kind == CALL_TRANSACTION_EX) {
+        tuple = Py_NewRef(PyValue_AsPyObjectBorrow(homes[2]));
+        kwargs = Py_XNewRef(PyValue_AsPyObjectBorrow(homes[3]));
+        PyObject *consumed_tuple = tuple, *consumed_kwargs = kwargs;
+        tuple = kwargs = NULL;
+        child = eval_frame_push_and_init_ex_code(
+            op->tstate, consumed_function, consumed_locals,
+            PyTuple_GET_SIZE(consumed_tuple), consumed_tuple, consumed_kwargs,
+            op->frame, code);
+    }
+    else {
+        int offset = PyValue_IsNull(homes[1]) ? 2 : 1;
+        int total = call->argument_count + 2 - offset;
+        if (call->kind == CALL_TRANSACTION_KEYWORDS) {
+            names = Py_NewRef(PyValue_AsPyObjectBorrow(homes[call->count - 1]));
+        }
+        for (int i = 0; i < total; i++) {
+            storage[i] = PyValue_NewRef(homes[offset + i]);
+            copied++;
+        }
+        int positional = total - (names == NULL ? 0 : (int)PyTuple_GET_SIZE(names));
+        /* Even on failure all these bits are consumed by the provider. */
+        copied = 0;
+        child = eval_frame_push_and_init_code(
+            op->tstate, consumed_function, consumed_locals, storage,
+            positional, names, op->frame, code);
+    }
+    if (call_transaction_refresh(call, next) < 0 || child == NULL) {
+        goto done;
+    }
+    /* The code-specific provider initializes at numeric PC 0. Binding may
+     * already have reinstrumented its code: never subtract the returned
+     * child's old instruction pointer from a current executable. */
+    _PyCodeExec *exec = code->_co_exec;
+    if (exec == NULL || exec->nwords == 0) {
+        PyErr_SetString(PyExc_SystemError, "Python call lost its executable");
+        goto done;
+    }
+    child->ir_words = exec->words;
+    child->ir_feedback = exec->entries;
+    child->instr_ptr = exec->words;
+    PyValue *retired = storage + call->count;
+    call_transaction_detach(call, retired);
+    retired_count = call->count;
+    op->frame->return_slot = (uint16_t)call->destination;
+    assert(child->previous == op->frame);
+    op->tstate->current_frame = child;
+done:
+    call_transaction_close_value(&function);
+    call_transaction_close_object(&locals);
+    call_transaction_close_object(&names);
+    call_transaction_close_object(&tuple);
+    call_transaction_close_object(&kwargs);
+    PyObject *code_owner = (PyObject *)code;
+    code = NULL;
+    call_transaction_close_object(&code_owner);
+    for (int i = copied; i-- > 0;) {
+        call_transaction_close_value(&storage[i]);
+    }
+    for (int i = retired_count; i-- > 0;) {
+        call_transaction_close_value(&storage[call->count + i]);
+    }
+    if (storage != small && storage != NULL) {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyMem_Free(storage);
+        _PyValue_RestoreException(saved);
+    }
+    if (child != NULL && retired_count != 0 && !PyErr_Occurred()) {
+        _PyCallTransaction child_call = {.operation = {
+            op->tstate, child, _PyFrame_GetCode(child), 0, 0, {-1, -1}, -1}};
+        _PyInstr *entry;
+        (void)call_transaction_refresh(&child_call, &entry);
+    }
+    if (child != NULL && (retired_count == 0 || PyErr_Occurred())) {
+        /* The child has not entered its recursion/monitor protocol. Restore
+         * the actual parent before clearing it; do not unwind it as executed. */
+        PyObject *saved = PyErr_GetRaisedException();
+        op->tstate->current_frame = op->frame;
+        call_transaction_publish_pc(call);
+        _PyEval_FrameClearAndPop(op->tstate, child);
+        child = NULL;
+        _PyValue_RestoreException(saved);
+    }
+    if (child == NULL) {
+        if (invoked && !PyErr_Occurred()) {
+            PyErr_SetString(PyExc_SystemError,
+                            "Python frame initialization failed without an error");
+        }
+        int failed = call_transaction_refresh(call, next);
+        if (failed < 0) {
+            return -1;
+        }
+    }
+    *out = child;
+    return child != NULL ? 0 : 1;
+}
+
+static int
+call_transaction_invoke(_PyCallTransaction *call, _PyInstr **next,
+                        _PyInterpreterFrame **child)
+{
+    *child = NULL;
+    if (!call->prepared) {
+        int prepared = call->kind == CALL_TRANSACTION_EX
+            ? call_transaction_prepare_tuple(call, next)
+            : call_transaction_expand_method(call, next);
+        if (prepared < 0) {
+            return -1;
+        }
+    }
+    if (call->instrumented && !call->monitored &&
+        call_transaction_monitor(call, next) < 0) {
+        return -1;
+    }
+    PyValue callable = _PyFrame_Slots(call->operation.frame)[call->base];
+    if (PyValue_IsObject(callable)) {
+        PyObject *object = PyValue_AsPyObjectBorrow(callable);
+        if (Py_TYPE(object) == &PyFunction_Type &&
+            !IS_PEP523_HOOKED(call->operation.tstate) &&
+            ((PyFunctionObject *)object)->vectorcall == _PyFunction_Vectorcall &&
+            !(call->kind == CALL_TRANSACTION_EX && call->instrumented)) {
+            int status = call_transaction_push_python(call, next, child);
+            if (status <= 0) {
+                return status;
+            }
+        }
+    }
+    return call_transaction_native(call, next);
 }
 
 PyObject *

@@ -1219,7 +1219,108 @@ native_scope_vm_prepare(PyObject *Py_UNUSED(module), PyObject *const *args,
                          probe.target_calls, probe.callback_calls);
 }
 
+/* Snapshot actual frame homes before allocating the report. This does not
+ * consult a caller-maintained publication flag and never repairs a home. */
+static PyObject *
+native_scope_call_state(PyObject *Py_UNUSED(module), PyObject *code_object)
+{
+    if (!PyCode_Check(code_object)) {
+        PyErr_SetString(PyExc_TypeError, "expected a code object");
+        return NULL;
+    }
+    _PyInterpreterFrame *frame = PyThreadState_Get()->current_frame;
+    while (frame != NULL &&
+           (frame->owner == FRAME_OWNED_BY_INTERPRETER ||
+            (PyObject *)_PyFrame_GetCode(frame) != code_object)) {
+        frame = frame->previous;
+    }
+    if (frame == NULL) {
+        PyErr_SetString(PyExc_ValueError, "code has no active frame");
+        return NULL;
+    }
+    PyCodeObject *code = (PyCodeObject *)code_object;
+    _PyCodeExec *exec = code->_co_exec;
+    if (exec == NULL || frame->ir_words != exec->words ||
+        frame->instr_ptr < exec->words ||
+        frame->instr_ptr >= exec->words + exec->nwords) {
+        PyErr_SetString(PyExc_AssertionError, "frame has stale executing words");
+        return NULL;
+    }
+    Py_ssize_t word_index = frame->instr_ptr - exec->words;
+    _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(*frame->instr_ptr);
+    int handler = IR_HANDLER(word);
+    int argc = (int)IR_C(word), count;
+    switch (handler) {
+        case CALL_FUNCTION_EX: case INSTRUMENTED_CALL_FUNCTION_EX:
+        case CALL_EX_PY: case CALL_EX_NON_PY_GENERAL:
+            count = 4;
+            break;
+        case CALL_KW: case INSTRUMENTED_CALL_KW: case CALL_KW_PY:
+        case CALL_KW_BOUND_METHOD: case CALL_KW_NON_PY:
+            count = argc + 3;
+            break;
+        case CALL: case CALL_JIT_WARM: case INSTRUMENTED_CALL:
+        case CALL_PY_GENERAL: case CALL_BOUND_METHOD_GENERAL:
+        case CALL_NON_PY_GENERAL:
+            count = argc + 2;
+            break;
+        default:
+            PyErr_SetString(PyExc_AssertionError, "frame is outside the selected call routes");
+            return NULL;
+    }
+    int base = (int)IR_B(word), destination = (int)IR_A(word);
+    int nslots = _PyFrame_NumSlots(frame);
+    PyValue snapshots[64];
+    if (nslots > (int)Py_ARRAY_LENGTH(snapshots) ||
+        base < code->co_nlocalsplus || base > nslots - count ||
+        destination >= nslots) {
+        PyErr_SetString(PyExc_AssertionError, "observer frame exceeds bounded call shape");
+        return NULL;
+    }
+    uint64_t present = 0, strong = 0;
+    for (int i = 0; i < nslots; i++) {
+        PyValue value = _PyFrame_Slots(frame)[i];
+        if (!PyValue_IsNull(value)) {
+            present |= UINT64_C(1) << i;
+            if (PyValue_IsHeapSafe(value)) {
+                strong |= UINT64_C(1) << i;
+            }
+        }
+        snapshots[i] = PyValue_MakeHeapSafe(PyValue_Borrow(value));
+    }
+    int nlocals = code->co_nlocalsplus;
+    PyObject *values = PyTuple_New(nslots);
+    PyObject *report = NULL;
+    if (values != NULL && !PyErr_Occurred()) {
+        for (int i = 0; i < nslots; i++) {
+            PyTuple_SET_VALUE(values, i, PyValue_IsNull(snapshots[i])
+                ? PyValue_FromPyObjectNew(Py_None) : PyValue_NewRef(snapshots[i]));
+        }
+        report = Py_BuildValue("(iniiiiOKK)", handler, word_index, nlocals,
+            base, count, destination, values,
+            (unsigned long long)present, (unsigned long long)strong);
+    }
+    PyObject *saved = PyErr_GetRaisedException();
+    Py_XDECREF(values);
+    _PyValue_RestoreException(saved);
+    for (int i = nslots; i-- > 0;) {
+        saved = PyErr_GetRaisedException();
+        PyValue owner = snapshots[i];
+        snapshots[i] = PyValue_NULL;
+        PyValue_XCLOSE(owner);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        saved = PyErr_GetRaisedException();
+        Py_XDECREF(report);
+        _PyValue_RestoreException(saved);
+        return NULL;
+    }
+    return report;
+}
+
 static PyMethodDef methods[] = {
+    {"native_scope_call_state", native_scope_call_state, METH_O},
     {"native_scope_vm_prepare", _PyCFunction_CAST(native_scope_vm_prepare), METH_FASTCALL | METH_KEYWORDS},
     _TESTINTERNALCAPI_NATIVE_SCOPE_FLAT_METHODDEF
     _TESTINTERNALCAPI_NATIVE_SCOPE_FLAT_NOARGS_METHODDEF

@@ -54,3 +54,18 @@ The rejected API-removal script/equivalent remains outside scope. Cheap gates:
 exact transaction/consumer source review, lexer/AST, focused tests drafted and
 at most three actual changed syntax-only TUs30seconds each when meaningful.
 No object output, link, candidate execution or timing in this source cut.
+
+Additive handoffs authorized during this window: C owns
+_PyDict_FromValueItems and its internal declaration, borrowing stable owning
+strided canonical arrays and returning a new dictionary. A owns the actual
+BUILD_MAP private-window proof and caller. Legacy FromItems remains unchanged.
+One new _testinternalcapi/dict.c adapter, Init_Dict/Setup/parts registration and
+test_pyvalue_dict.py additions exercise one-shot boxing OOM, real allocation
+address reuse, and once-only equality; at most one third unique syntax TU.
+This records the earlier coordinator handoff, without extending the ceiling.
+
+Final source window closed early after independent review56bbc658 accepts
+author receiptdb99c46e. Forty-three fragments/ten contexts include33 core
+functions, five callbacks and five typed-notification argument bridges only.
+Fourteen methods remain AST-only. Watcher/fixture syntax passes; Module Clinic
+and whole-dictionary consumers remain open. No candidate execution claimed.

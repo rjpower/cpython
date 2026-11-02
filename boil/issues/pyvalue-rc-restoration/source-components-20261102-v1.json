@@ -32,6 +32,16 @@
     "syntax_units_pass": 2,
     "runtime_ast_methods": 5
   },
+  "dictionary_mutation_growth": {
+    "author_sha256": "db99c46ebaee6b588f86b07b72b5158a85038550b21f26031ab1c37420bd9dcc",
+    "review_sha256": "56bbc6583863e4461d697bdad8acf85bfe8cd11ead072483f8755edb94462d5a",
+    "source_window_closed_early": true,
+    "fragments": 43,
+    "context_files": 10,
+    "runtime_ast_methods": 14,
+    "whole_dictionary_accepted": false,
+    "legacy_api_removed": false
+  },
   "candidate_build": false,
   "runtime_tests_executed": false,
   "performance_measured": false,

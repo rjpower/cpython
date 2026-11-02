@@ -1878,3 +1878,14 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   Generic hinted-store retirement and old Clinic array parsing remain
   actual closure gaps. Publish/read back Loom54,45,183characters/five diagrams.
   [Progress](issues/pyvalue-rc-restoration/implementation-progress-20261101.md).
+- 2026-11-02 00:53 UTC: Independently accept scoped dictionary mutation,
+  immediate growth, typed watchers and value-native construction; close
+  source window early. Review56bbc658 binds43 fragments/14 AST-only tests.
+  Preserve once-only equality and pre-removal boxing OOM semantics.
+  VM dictionary and compiler constants have timely concrete checkpoints;
+  VM error-unwind order and final compiler review remain open. Compiler
+  review rejects pointer hashing of inline keys; full-word mix has a
+  bounded host distribution witness. Whole dictionary/list/Clinic still
+  incomplete; no restored candidate/runtime/timing. Publish/read back
+  Loom55 exactly,46,511characters/five diagrams.
+  [Progress](issues/pyvalue-rc-restoration/implementation-progress-20261101.md).

@@ -10,9 +10,9 @@ Python behavior remains required.
 
 | Owner | Current result and remaining work |
 | --- | --- |
-| restart_audit | Foundation, specialized O-call and shared local/slot retirement source accepted: 41 host tests, seven generators/eight products and four selected syntax checks pass for the latter. Common-constant generated closure accepted. Designing exact dictionary VM consumer/publication/retirement closure. |
-| coordinator | Tuple/member/cell/iteration, set storage, canonical Python instance slots and common-constant source components accepted. Slot component has ten AST-only tests; common constants have five. Legal set fixture correction accepted. Coherent source integration and wider consumers remain required. |
-| coroutine_design_review | List/structseq, native-scope engine, bounded dictionary clear/release and two additive owning-read providers accepted as source. Legal native fixture correction accepted. Implementing coherent dictionary mutations, immediate resize and watcher handoffs. |
+| restart_audit | Foundation, specialized O-call, local/slot retirement and common-constant source accepted. VM dictionary construction/store cut has a timely checkpoint, 42 host checks and seven generators passing; final error-path owner-order review remains open. |
+| coordinator | Tuple/member/cell/iteration, set, Python instance slots and common constants source accepted. Compiler constant indexing/compaction and checked list replacement have a timely checkpoint and two passing syntax TUs; independent review is pending. |
+| coroutine_design_review | List/structseq, native scope, dictionary clear/release and owning reads source accepted. Mutation/growth/typed watchers and the value-native constructor are now independently source-accepted; the window closed early. Designing remaining dictionary/managed consumers. |
 | value_api_consumer_map | Independent source review, callback/failure-path findings and the sealed 660-path native consumer inventory. Source component decisions do not constitute runtime acceptance. |
 
 Component evidence is retained under `build/pyvalue-root-container-checkpoint-20261101-v1`,
@@ -96,7 +96,9 @@ Then build and qualify one coherent runtime. Provisional checks use the old debu
 pyconfig only for diagnostics; they are not candidate builds. Foundation, O-call,
 set storage, instance-slot and additive dictionary-provider windows closed early.
 Shared retirement and canonical common-constant windows also closed early.
-The active dictionary mutation/growth cut has a01:34:24 UTC ceiling on2026-11-02.
+The dictionary mutation/growth window closed early after independent review.
+Active VM dictionary and compiler-constant cuts retain their separate01:47:08
+and01:23:35 UTC ceilings on2026-11-02. Both have timely source checkpoints.
 Each has its own source grant; no original source budget was extended.
 
 Measure the unified-value register interpreter with verified JIT-off execution
@@ -174,3 +176,30 @@ use DUP, shutdown guards scalar values, and compiler object getters return owned
 references. Two selected syntax checks and41 host generator checks pass; five
 runtime tests are AST-only. [Component dispositions](source-components-20261102-v1.json)
 retain exact acceptance and retraction limits.
+
+## Dictionary mutation acceptance and consumer checkpoints,2026-11-02
+
+Mutation review `56bbc658` binds author receipt `db99c46e`:43 fragments across
+ten context files, comprising33 core functions, five callbacks and five
+notification-argument conversions only. It accepts canonical mutation/growth,
+raw post-boxing selection revalidation and `_PyDict_FromValueItems`.
+Object pop boxes before removal, so boxing OOM consumes nothing. The new C
+fixture models actual table-address reuse and once-only equality;14 methods
+remain AST-only. Watcher/fixture syntax passes; Module Clinic and the whole
+dictionary translation unit remain unqualified. Copy, managed storage,
+setdefault/popitem algorithms and legacy native consumers remain required.
+
+VM checkpoint `bc738ea9` covers BUILD_MAP, generic/specialized dictionary
+assignment and hinted stores with pre-callback PC capture and forced reload.
+It has42 passing host checks/seven generators and nine AST-only runtime methods.
+Review is correcting the hinted-store failure release order before final
+acceptance. Stable IDs/formats are distinguished from required derived effect
+metadata changes; no candidate execution is claimed.
+
+Compiler checkpoint v2 `71666fa3` uses normalized canonical identity words and a
+full-word hash, pure tuple complexity traversal and owned value compaction.
+Seven AST-only tests cover actual CFG folding/compaction and checked setter
+ownership/publication. Flowgraph/fixture syntax passes; the list TU retains old
+Clinic and two sort truthiness errors. The exact-operation host hash model has
+1279 occupied buckets and maximum chain6 for2048 integral float keys; this is
+source evidence, not a performance measurement. Independent review remains open.

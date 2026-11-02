@@ -25,8 +25,9 @@ publication/rollback remains in revision.
 The fifteen-function operator/LRU batch and flat-format parser kernel with five
 callers are committed after independent code/native review, followed by six
 type readers, four MRO-adjacent readers and seven bootstrap type readers.
-The four-wrapper Clinic implementation is frozen in code/native review. Sol
-designs pickle/state reader closure and revises the shared FORMAT foundation.
+The four-wrapper Clinic implementation is in a bounded correction pass after
+code review. The shared FORMAT foundation has passed design review and Luna
+implements its kernel. Sol reviews per-function pickle/state porting recipes.
 The itertools inventory is complete; its tuple-result design is paused.
 The coordinator reviews actual code/results, integrates
 accepted deltas, rebuilds and repeats. Luna completed the latest error-family

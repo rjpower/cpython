@@ -16,16 +16,17 @@ and reviews rules; Luna analyzes errors and applies approved mechanical batches.
 | Packet | Current stage | Next gate |
 | --- | --- | --- |
 | Seven bootstrap type readers | Committed after independent code/native review | Merged runtime/startup and fault qualification |
-| Four remaining Clinic wrappers | Bulk implementation frozen for code/native review | Scope/ownership/output review, formatting correction, final native gate |
-| Shared FORMAT engine | Foundation v1 requires three bounded amendments; v2 in preparation | Peer recheck; backend/public/caller closure follows |
+| Four remaining Clinic wrappers | v2 requires revision; Luna applies complete v3 correction recipe | Independent actual-code/results review and fresh native gate |
+| Shared FORMAT engine | Foundation A v2 design accepted; Luna implements isolated two-file kernel | Compose fixtures, review and native gate; backend/public/caller closure follows |
 | Remaining itertools readers | Inventory complete; four tuple-result draft paused | Review reusable canonical copy/update rule; pairwise and zip-longest have separate call boundaries |
-| Pickle arguments/state | Sol design | Three-body ownership envelope and independent review |
+| Pickle arguments/state | Smaller per-function recipes in peer review after incomplete bulk attempt | One function per worker, code review, composition and native gate |
 | Full type mutation transaction | In revision | Distinguish introduced defects from inherited behavior; use concrete evidence to choose necessary fixes |
 
 Exact designs and inventories:
 
 - [Clinic four-site design](../../../../build/pyvalue-clinic-final-constructors-design-20261102-v1/README.md)
-- [FORMAT engine design](../../../../build/pyvalue-format-engine-design-20261102-v1/README.md)
+- [FORMAT engine design](../../../../build/pyvalue-format-engine-design-20261102-v2/README.md)
+- [Pickle per-function recipes](../../../../build/pyvalue-type-pickle-readers-design-20261102-v2/README.md)
 - [Six-function itertools inventory](../../../../build/pyvalue-itertools-tail-inventory-20261102-v1/README.md)
 - [Latest family census](../../../../build/pyvalue-v12-error-families-20261102-v1/README.md)
 
@@ -78,6 +79,8 @@ Decoder names have different domains:
 | `PyValue_AsPyObjectNew` | Heap-object value only; adds a reference, never boxes inline values |
 | `PyValue_AsObject` / `PyValue_AsPyObjectNewBoxed` | Fallible owned object view including inline values; check NULL and pending error |
 | `PyTuple_GET_VALUE` | Borrowed canonical value; retain tuple or duplicate ownership before callouts |
+| `PyValue_DUP` | Duplicates an already owning value; does not promote a mortal borrow |
+| `PyValue_NewRef` / `PyValue_MakeHeapSafe` | Promote borrowed heap values to independent owners; the latter consumes its input |
 | `_PyTuple_GET_OBJECT` | Proven heap metadata only; no generic scalar fallback |
 
 Escaped parser outputs, recursive/resource conversion, descriptor lookup and type
@@ -100,8 +103,10 @@ Recent accepted packets include operator/LRU (`d1a9a80d25b`), flat FORMAT Stage1
 (`b76f2182354`) follows those packets: selected 2 errors/13 warnings→0, full type
 TU 4→3 errors/16→3 warnings, with exactly one first-use relocation. Six host
 controls pass; startup/fault/candidate behavior remains unexecuted. The Clinic
-packet has 284 producer and 5 host-reference passes, two idempotent generation
-passes and 2,996 excluded templates exact; actual code/native gate is still pending. These are dependent source checkpoints, not runtime admission.
+v2 packet has 284 producer and 5 host-reference passes, but actual code review
+found receiver-selection, formatting and evidence gaps. Those results do not
+admit v2 or its pending v3 correction. These are dependent source checkpoints,
+not runtime admission.
 
 Preserve failed attempts and corrections. The type-reader design-control log
 originally claimed four passes but contains three passes/one error. The failed

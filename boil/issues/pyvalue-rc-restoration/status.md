@@ -31,9 +31,12 @@ The earlier type_new argument boundary is checkpoint38 and construction readers
 with explicit caller pins checkpoint39. Operator/LRU readers are checkpoint40
 and the flat-format kernel/five callers checkpoint41. The corrected six-reader
 type packet is checkpoint42, corrected four-reader MRO packet43 and seven
-bootstrap readers44. The Clinic four-wrapper implementation is frozen for
-code/native review. Sol designs pickle/state readers and revises the FORMAT
-foundation; the itertools tuple-result draft is paused.
+bootstrap readers44. Clinic's four-wrapper v2 requires correction; Luna prepares
+v3 under the sealed review recipe. FORMAT foundation A v2 has passed independent
+design review and Luna implements its two-file kernel in isolation. Pickle's
+first three-function assignment produced no C changes; Sol reviews smaller
+per-function recipes that reuse an existing cleanup helper. The itertools
+tuple-result draft is paused.
 Root integrates reviewed code and validates the composition.
 The MRO providers plus one immediate wrapper passed independent
 code/native attribution review; their syntax comparison has 61 diagnostics,

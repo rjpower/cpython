@@ -14,8 +14,10 @@ objects present and failed to link. No restored runtime, qualification or perfor
    Merged v13 at checkpoint43 failed before linking: 324 compiler-error observations, 166 objects
    present, all 7,349 inputs unchanged. Focused component passes are not a runtime pass.
 2. Seven bootstrap readers are committed after code/native review. The Clinic
-   four-wrapper bulk packet is frozen for review; float/tuple syntax TUs pass.
-   Sol designs pickle/state readers and revises the shared FORMAT foundation.
+   four-wrapper packet is being corrected after review; its earlier float/tuple
+   syntax passes describe v2 only. FORMAT foundation design is accepted and its
+   kernel is assigned to Luna. Sol reviews smaller pickle/state recipes after
+   the first bulk assignment proved too broad and produced no C changes.
    Root gates each rule, integrates accepted deltas and validates the composition.
 3. The counter foundation and thirteen slot wrappers are committed. Full MRO
    transaction remains in revision. Causal triage must distinguish introduced
@@ -28,9 +30,9 @@ objects present and failed to link. No restored runtime, qualification or perfor
 
 | Experiment | Stage | Owner | Next step |
 | --- | --- | --- | --- |
-| [Native callers and scoped parsers](pyvalue-rc-restoration/native-parsers/status.md) | Flat kernel/five callers committed; FORMAT foundation in design revision | Sol 6.1 author/reviewer; root gate | Recheck lazy resource/cleanup contracts, then foundation implementation |
-| [Core and extension consumers](pyvalue-rc-restoration/core-consumers/status.md) | Type_new and reader batches committed; pickle/state design | Coordinator; Sol design/review | Finish type source consumers and remaining core/bundled ports |
-| [Porting batches](pyvalue-rc-restoration/porting/status.md) | Bootstrap7 committed; Clinic4 frozen for code/native review | Luna bulk handoff; Sol review; root integration | Review actual producer/products/results, correct and integrate |
+| [Native callers and scoped parsers](pyvalue-rc-restoration/native-parsers/status.md) | Flat kernel/five callers committed; FORMAT foundation design accepted | Luna kernel; Sol review; root gate | Compose kernel/fixtures, review and probe; backend/public/caller closure follows |
+| [Core and extension consumers](pyvalue-rc-restoration/core-consumers/status.md) | Type_new and reader batches committed; smaller pickle/state recipes in peer review | Coordinator; Sol design/review | Assign one function per worker, then review and compose |
+| [Porting batches](pyvalue-rc-restoration/porting/status.md) | Bootstrap7 committed; Clinic4 v3 corrections | Luna bulk; Sol review; root integration | Review corrected producer/products/results and run fresh native gate |
 | [Canonical type cache](pyvalue-rc-restoration/typecache/status.md) | Recording-only counter foundation committed; full MRO transaction needs revision | Root gate; Sol causal review queued | Separate introduced defects, inherited behavior and profile qualification |
 | [Value-native VM iteration](pyvalue-rc-restoration/iterator-vm/status.md) | Tuning after safe baseline | Unassigned | Remove boxing from correct iterator bridges and measure |
 | [Integration and interpreter checkpoint](pyvalue-rc-restoration/integration/status.md) | Build diagnostics → ports | Coordinator | Close concrete compile/link blockers, rebuild, qualify and measure |

@@ -73,15 +73,15 @@ as checkpoint38, followed by ten construction readers and caller pins in39.
 General keyword/nested/resource format-parser ownership and its consumer ports
 remain design/implementation work.
 
-Shared FORMAT engine v1 requires three bounded amendments before implementation:
-[finite A/B/C packets](../../../../build/pyvalue-format-engine-design-20261102-v1/README.md).
+Shared FORMAT foundation A v2 has passed independent design review:
+[finite A/B/C packets](../../../../build/pyvalue-format-engine-design-20261102-v2/README.md).
 A is a shared stable lease/resource foundation; B/C adapt the actual backends.
 Public scope, raw-wrapper retirement and mechanical consumer closure remain
 mandatory before claiming parser closure. No source or host pass follows from
-this design. Peer review requires an explicit same-scope Finish/End contract,
-chunk-only resource records to reduce shared scope growth from 176 to 40 bytes,
-and one typed fixture destructor. The author prepares immutable v2. B also
+this design. The accepted revision specifies the same-scope Finish/End contract,
+chunk-only resource records and one typed fixture destructor. Luna implements
+the isolated two-file kernel; fixtures and actual code/native review follow. B also
 needs an actual per-export buffer lifetime contract; owning view.obj alone
 does not retain released export storage. Four remaining Clinic wrappers are
-implemented in isolation and under code/native review; they do not widen the
+in a bounded v3 correction pass after actual v2 code review; they do not widen the
 flat parser whitelist or depend on the new foundation.

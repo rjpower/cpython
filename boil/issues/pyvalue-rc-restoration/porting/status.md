@@ -1,9 +1,11 @@
 # Porting batches and remaining work
 
 Stage: census complete; first generated-AST batch reviewed and committed as
-e645682dab5. Coordinator owns rules, code review and integration. Luna designs
-the remaining AST constructor port. State_audit reviews wiki_audit's frozen
-MRO providers and one immediate public wrapper; that delta is not committed.
+e645682dab5. Coordinator owns rules, code review and integration. Luna corrects
+the remaining AST constructor design after independent review. The MRO providers
+and one immediate public wrapper passed code/native attribution review; that
+delta is held with the remaining typeobject work. State_audit plans the next
+publication transaction.
 
 ## Required baseline versus later tuning
 

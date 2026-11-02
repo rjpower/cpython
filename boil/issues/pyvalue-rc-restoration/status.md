@@ -1,7 +1,7 @@
 # Restore universal PyValue under RC
 
 - Stage: reviewed source checkpoints; merged diagnostic build still has no executable.
-- Owner: state_audit reviews wiki_audit's MRO providers; Luna AST constructor design;
+- Owner: state_audit MRO transaction plan; Luna AST constructor design corrections;
   coordinator rules, source review and integration.
   Previous agents stay stopped.
 - Goal: canonical PyValues across frames, containers, attributes and operations,
@@ -20,8 +20,9 @@ gates and are committed. Type_new and graph repairs are applied/reviewed pending
 typeobject composition. They do not yet form an executable candidate.
 The [first bulk AST port](porting/status.md) is committed: one producer covers
 74 sequence reads. Its full TU still fails at seven unchanged constructor
-diagnostics. The MRO providers plus one immediate wrapper are frozen for code
-review; their syntax comparison has 61 diagnostics, versus 86 before, including
+diagnostics. The MRO providers plus one immediate wrapper passed independent
+code/native attribution review; their syntax comparison has 61 diagnostics,
+versus 86 before, including
 two missing-API first-use messages relocated to unchanged functions.
 
 The [first build](first-build/status.md) configured with the new `boilvalrc1`
@@ -37,8 +38,9 @@ and [native caller](native-callers/status.md) receipts describe their frozen
 checkpoints. The later [caller transaction](native-parsers/caller-transaction/status.md)
 repairs and checkpoints their composition; its candidate runtime tests remain
 unexecuted. The [merged diagnostic build](merged-build/status.md) still fails to
-link. Its latest v3 snapshot at 21 checkpoints has 152 objects present and
-540 repeated/cascading diagnostics; later graph/call checks remain separate.
+link. Its latest v4 snapshot at 23 checkpoints plus reviewed held typeobject
+deltas has 154 objects present and 519 repeated/cascading error diagnostics.
+All 7,339 source paths remained unchanged; no candidate was executed.
 
 ## Remaining increments
 

@@ -34,17 +34,18 @@ The [board](../../README.md) owns the current restoration HEAD and checkpoint
 list. Object composition and small tokenizer/bytes consumers are committed;
 typeobject.c is the remaining original held file. Clinic covers 20 further
 positional wrappers; classobject/codeobject compile. Core mutation dependencies and object calls are checkpointed; graph/type_new
-deltas remain held. C3/MRO providers plus one wrapper are frozen for independent
-code review. The first generated AST sequence batch is committed and removes
+deltas remain held. C3/MRO providers plus one wrapper passed independent
+code/native attribution review. The first generated AST sequence batch is committed and removes
 74 compiler diagnostics from its TU; seven unchanged constructor errors remain.
 Remaining actual parser, container/
 startup and bundled consumer ports still block a baseline executable.
 
-The latest [merged diagnostic build](../merged-build/status.md) binds the earlier
-21-checkpoint chain at `7b923d2b935` plus held typeobject/type_new. It exited 2,
-with 152 objects present and no executable. All 7,337 source paths stayed unchanged;
-540 repeated/cascading diagnostics remain raw evidence. Later focused graph and
-call checks are separate and do not turn that merged build into a pass.
+The latest [merged diagnostic build](../merged-build/status.md) binds the
+23-checkpoint chain at e645682dab5 plus reviewed held typeobject deltas through
+the corrected MRO providers. It exited 2, with 154 objects present and no
+executable. All 7,339 source paths stayed unchanged; 519 repeated/cascading error
+diagnostics remain raw evidence. Focused component checks do not make this a
+passing merged build.
 
 Prioritize a coherent register interpreter with the unified format and JIT off.
 Use concrete failed compiler/linker/startup routes to select finite ports, preserving

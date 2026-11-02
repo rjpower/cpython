@@ -41,6 +41,13 @@ concluded experiment in the log; detailed evidence belongs to that experiment.
 Preserve failures, source identities and unrelated user work. Do not turn
 component source review, AST checks or a host control into a runtime pass.
 
+The coordinator proactively reports status about every two hours during active
+work, and at material milestones or blockers. Check completed agents promptly,
+review their outputs and assign the next bounded work; completed assignments
+must not remain recorded as running. Keep the last report and next due time in
+the machine monitor. A due-time record is not a durable scheduler; do not claim
+unattended notifications unless a real scheduling mechanism is configured.
+
 ## Recover after restart or compaction
 
 1. Read [README](README.md), [PROCESS](PROCESS.md),

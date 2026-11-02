@@ -347,13 +347,22 @@
     "candidate_linked": false
   },
   "latest_diagnostic_build": {
-    "head": "7b923d2b935552fbe940ef4a6521e92f72502ae2",
+    "head": "e645682dab527c3ba552e49de673d6c65ceebd2f",
+    "objects_present": 154,
+    "error_diagnostics": 519,
+    "source_unchanged": true,
+    "candidate_linked": false,
     "includes_held_source_files": true,
     "make_exit": 2,
-    "objects_present": 152,
-    "error_diagnostics": 540,
-    "source_manifest_paths": 7337,
-    "source_unchanged": true,
-    "candidate_linked": false
+    "source_manifest_paths": 7339,
+    "evidence": "build/pyvalue-merged-build-20261102-v4"
+  },
+  "mro_provider_reviewed_delta": {
+    "typeobject_sha256": "d07219973716cab2749c7f9992ee268dd014815d28fd574c6d6c2d84b74dcf1d",
+    "changed_bodies": 15,
+    "review": "build/pyvalue-typecache-mro1-20261102-v1/independent-code-review-v2.md",
+    "native": "build/pyvalue-typecache-mro1-20261102-v1/native-v2/coordinator-native.json",
+    "candidate_executed": false,
+    "source_delta_committed": false
   }
 }

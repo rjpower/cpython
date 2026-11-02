@@ -18,11 +18,11 @@ There is no linked or qualified restored interpreter or timing result.
 **Current step:** close the concrete blockers from the merged diagnostic build.
 The latest merged build still failed before linking. The C API call bridges now
 compile, and their focused checks and independent reviews pass. Typeobject has
-reviewed provider, mutation, constructor and graph deltas; its remaining C3/MRO,
-slot and publication consumers still need closure. The MRO provider repair is
-frozen for independent code review. A cheaper Luna agent completed the first AST
-batch and designs the remaining AST constructor port. The coordinator reviews
-and integrates their results.
+reviewed provider, mutation, constructor and graph deltas. MRO providers have
+passed code/native attribution review; publication, slots and lifecycle still
+need closure. The merged v4 build has no executable. The AST constructor design
+is being corrected after review, and the next MRO publication slice is being
+prepared. The coordinator integrates reviewed results and assigns further ports.
 See [porting rules and remaining work](issues/pyvalue-rc-restoration/porting/status.md)
 for mandatory ownership ports versus later performance tuning.
 See the [work board](issues/README.md) for assignments and next gates.

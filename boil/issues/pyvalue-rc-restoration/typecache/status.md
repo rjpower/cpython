@@ -1,7 +1,7 @@
 # Canonical type cache and mutation admission
 
-- Stage: provider/core dependencies checkpointed; graph delta reviewed; MRO14 plus wrapper frozen for code review
-- Owner: state_audit reviews wiki_audit's finite source delta; coordinator integrates
+- Stage: provider/core dependencies checkpointed; graph and MRO provider deltas reviewed
+- Owner: state_audit prepares the next transaction plan; coordinator reviews/integrates
 - Hypothesis: canonical borrowed cache entries can remain fast and safe if
   version invalidation precedes observable mutation and admission stays closed
   through callback-capable mutation/retirement.
@@ -53,8 +53,10 @@ functions/lines. C3/MRO provider design is accepted with fourteen bodies granted
 the approved immediate public wrapper is included in its frozen source delta.
 Twelve host controls pass; 41 candidate file methods remain unexecuted. The
 same-header full TU has 61 diagnostics versus 86 before; both compilations fail.
-Two missing-API first-use messages move to unchanged functions; independent code
-review remains pending. Construction,
+Two missing-API first-use messages move to unchanged functions. Independent
+code/native attribution review accepts corrected endpoint d0721997; the
+[provider record](mro-providers/status.md) binds the two corrected findings and
+remaining limits. Construction,
 guards/terminal/static/bundled and scalar providers remain required.
 [Core proposal](../../../../build/pyvalue-typecache-core-scope-20261102-v1/design.md),
 [bounded coordinator grant](../../../../build/pyvalue-typecache-core-scope-20261102-v1/coordinator-review.md).

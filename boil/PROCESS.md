@@ -64,7 +64,13 @@ composition with shared builds. Full qualification belongs to coherent merged
 candidates, not every repeated call-site edit. See the
 [porting rules and census](issues/pyvalue-rc-restoration/porting/status.md).
 
-Update the board at meaningful transitions and keep the user informed. Keep
-about one line per concluded experiment in [WORKLOG](WORKLOG.md); designs,
+Update the board at meaningful transitions and keep the user informed. Give
+proactive status reports about two hours apart during active work, covering
+completed changes, actual running assignments, blockers and the next executable
+milestone. Record last/next report times and inspect completion notices before
+waiting again. Never describe a completed agent or a timer record as running
+background work. Durable scheduled delivery needs an actual scheduler.
+
+Keep about one line per concluded experiment in [WORKLOG](WORKLOG.md); designs,
 review iterations, commands and raw results belong to that experiment. Follow
 the [documentation rules](DOCUMENTATION.md).

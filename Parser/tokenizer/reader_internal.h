@@ -82,6 +82,6 @@ _PyTok_EncodingResult _PyTok_DetectEncoding(
 int _PyTok_PrepareString(struct tok_state *, const char *, int, int, int);
 int _PyTok_StartDecoder(struct tok_state *, const char *);
 int _PyTok_DecodeChunk(struct tok_state *, _PyTok_Chunk *, int);
-int _PyTok_DecoderHasBufferedInput(struct tok_state *);
+PyAPI_FUNC(int) _PyTok_DecoderHasBufferedInput(struct tok_state *);
 
 #endif

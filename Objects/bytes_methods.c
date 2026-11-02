@@ -1,6 +1,7 @@
 #include "Python.h"
 #include "pycore_abstract.h"   // _PyIndex_Check()
 #include "pycore_bytes_methods.h"
+#include "pycore_value.h"
 
 PyDoc_STRVAR_shared(_Py_isspace__doc__,
 "B.isspace() -> bool\n\
@@ -679,22 +680,37 @@ _Py_bytes_tailmatch(const char *str, Py_ssize_t len,
                     int direction)
 {
     if (PyTuple_Check(subobj)) {
-        Py_ssize_t i;
-        for (i = 0; i < PyTuple_GET_SIZE(subobj); i++) {
-            PyObject *item = PyTuple_GET_ITEM(subobj, i);
-            int result = tailmatch(str, len, item, start, end, direction);
-            if (result < 0) {
+        Py_ssize_t count = PyTuple_GET_SIZE(subobj);
+        for (Py_ssize_t i = 0; i < count; i++) {
+            PyValue item = PyValue_NewRef(PyTuple_GET_VALUE(subobj, i));
+            int result;
+            if (!PyValue_IsObject(item)) {
+                /* Reject inline numbers without allocating a box before a
+                 * comparison using the caller's raw receiver buffer. */
+                PyErr_Format(PyExc_TypeError,
+                             "a bytes-like object is required, not '%.100s'",
+                             PyValue_TYPE(item)->tp_name);
+                result = -1;
+            }
+            else {
+                result = tailmatch(str, len, PyValue_AsPyObjectBorrow(item),
+                                   start, end, direction);
+            }
+            PyObject *saved = PyErr_GetRaisedException();
+            PyValue_CLOSE(item);
+            _PyValue_RestoreException(saved);
+            if (result < 0 || PyErr_Occurred()) {
                 return NULL;
             }
-            else if (result) {
+            if (result) {
                 Py_RETURN_TRUE;
             }
         }
         Py_RETURN_FALSE;
     }
     int result = tailmatch(str, len, subobj, start, end, direction);
-    if (result == -1) {
-        if (PyErr_ExceptionMatches(PyExc_TypeError)) {
+    if (result < 0 || PyErr_Occurred()) {
+        if (result < 0 && PyErr_ExceptionMatches(PyExc_TypeError)) {
             PyErr_Format(PyExc_TypeError,
                          "%s first arg must be bytes or a tuple of bytes, "
                          "not %s",

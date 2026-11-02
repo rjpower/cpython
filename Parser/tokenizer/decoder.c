@@ -2,6 +2,7 @@
 #include "pycore_codecs.h"
 #include "pycore_global_strings.h"
 #include "pycore_runtime.h"
+#include "pycore_value.h"
 #include "errcode.h"
 
 #include "reader_internal.h"
@@ -487,23 +488,38 @@ _PyTok_DecoderHasBufferedInput(struct tok_state *tok)
     if (tok->reader->decoder == NULL) {
         return 0;
     }
+    int pending = -1;
     PyObject *state = PyObject_CallMethodNoArgs(
         tok->reader->decoder, &_Py_ID(getstate));
-    if (state == NULL) {
+    if (state == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    if (!PyTuple_Check(state) || PyTuple_GET_SIZE(state) != 2) {
+        goto bad_state;
+    }
+    /* The owned immutable tuple roots both words through this pure check. */
+    PyValue buffered = PyTuple_GET_VALUE(state, 0);
+    PyValue flag = PyTuple_GET_VALUE(state, 1);
+    if (!PyValue_IsObject(buffered) ||
+            !PyBytes_Check(PyValue_AsPyObjectBorrow(buffered)) ||
+            !PyValue_LongCheck(flag)) {
+        goto bad_state;
+    }
+    pending = PyBytes_GET_SIZE(PyValue_AsPyObjectBorrow(buffered)) != 0;
+    goto done;
+
+bad_state:
+    PyErr_SetString(PyExc_TypeError,
+                    "incremental decoder getstate() must return (bytes, int)");
+done:
+    ;
+    PyObject *saved = PyErr_GetRaisedException();
+    Py_XDECREF(state);
+    _PyValue_RestoreException(saved);
+    if (PyErr_Occurred()) {
         tok->done = PyErr_ExceptionMatches(PyExc_MemoryError)
             ? E_NOMEM : E_DECODE;
         return -1;
     }
-    if (!PyTuple_Check(state) || PyTuple_GET_SIZE(state) != 2 ||
-            !PyBytes_Check(PyTuple_GET_ITEM(state, 0)) ||
-            !PyLong_Check(PyTuple_GET_ITEM(state, 1))) {
-        Py_DECREF(state);
-        PyErr_SetString(PyExc_TypeError,
-                        "incremental decoder getstate() must return (bytes, int)");
-        tok->done = E_DECODE;
-        return -1;
-    }
-    int pending = PyBytes_GET_SIZE(PyTuple_GET_ITEM(state, 0)) != 0;
-    Py_DECREF(state);
     return pending;
 }

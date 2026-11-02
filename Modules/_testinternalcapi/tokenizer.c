@@ -1,6 +1,9 @@
 #include "parts.h"
 
 #include "../../Parser/tokenizer/source.h"
+#include "../../Parser/tokenizer/reader_internal.h"
+#include "../../Parser/lexer/state.h"
+#include "pycore_value.h"
 
 static int
 check(int condition, const char *message)
@@ -207,7 +210,25 @@ error:
     return NULL;
 }
 
+static PyObject *
+_tokenizer_decoder_buffered_input(PyObject *Py_UNUSED(module), PyObject *decoder)
+{
+    _PyTok_Reader reader = {0};
+    struct tok_state tok = {0};
+    reader.decoder = Py_NewRef(decoder);
+    tok.reader = &reader;
+    int pending = _PyTok_DecoderHasBufferedInput(&tok);
+    PyObject *saved = PyErr_GetRaisedException();
+    Py_CLEAR(reader.decoder);
+    _PyValue_RestoreException(saved);
+    if (pending < 0 || PyErr_Occurred()) {
+        return NULL;
+    }
+    return PyLong_FromLong(pending);
+}
+
 static PyMethodDef test_methods[] = {
+    {"tokenizer_decoder_buffered_input", _tokenizer_decoder_buffered_input, METH_O},
     {"test_tokenizer_source", test_tokenizer_source, METH_NOARGS},
     {"test_tokenizer_source_discard", test_tokenizer_source_discard, METH_NOARGS},
     {NULL},

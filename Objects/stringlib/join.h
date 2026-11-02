@@ -11,75 +11,121 @@ STRINGLIB(bytes_join_lock_held)(PyObject *sep, PyObject *seq)
     Py_ssize_t seplen = STRINGLIB_LEN(sep);
     PyObject *res = NULL;
     char *p;
-    Py_ssize_t seqlen = 0;
+    Py_ssize_t seqlen = PySequence_Fast_GET_SIZE(seq);
     Py_ssize_t sz = 0;
-    Py_ssize_t i, nbufs;
-    PyObject *item;
+    Py_ssize_t i, nbufs = 0;
+    PyObject *item = NULL;
     Py_buffer *buffers = NULL;
+    Py_ssize_t next_release = 0;
 #define NB_STATIC_BUFFERS 10
     Py_buffer static_buffers[NB_STATIC_BUFFERS];
 #define GIL_THRESHOLD 1048576
     int drop_gil = 1;
     PyThreadState *save = NULL;
 
-    seqlen = PySequence_Fast_GET_SIZE(seq);
     if (seqlen == 0) {
-        return STRINGLIB_NEW(NULL, 0);
+        res = STRINGLIB_NEW(NULL, 0);
+        goto error;
     }
 #if !STRINGLIB_MUTABLE
     if (seqlen == 1) {
-        item = PySequence_Fast_GET_ITEM(seq, 0);
+        item = PyList_CheckExact(seq) ? PyList_GetItemRef(seq, 0) :
+                                       PyTuple_GetItemRef(seq, 0);
+        if (item == NULL || PyErr_Occurred()) goto error;
         if (STRINGLIB_CHECK_EXACT(item)) {
-            return Py_NewRef(item);
+            res = item;
+            item = NULL;
+            return res;
         }
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = item;
+            item = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
+        }
+        if (PyErr_Occurred()) goto error;
     }
 #endif
     if (seqlen > NB_STATIC_BUFFERS) {
         buffers = PyMem_NEW(Py_buffer, seqlen);
         if (buffers == NULL) {
             PyErr_NoMemory();
-            return NULL;
+            goto error;
         }
     }
     else {
         buffers = static_buffers;
     }
 
-    /* Here is the general case.  Do a pre-pass to figure out the total
-     * amount of space we'll need (sz), and see whether all arguments are
-     * bytes-like.
-     */
-    for (i = 0, nbufs = 0; i < seqlen; i++) {
+    for (i = 0; i < seqlen; i++) {
         Py_ssize_t itemlen;
-        item = PySequence_Fast_GET_ITEM(seq, i);
+        if (seqlen != PySequence_Fast_GET_SIZE(seq)) {
+            PyErr_SetString(PyExc_RuntimeError,
+                            "sequence changed size during iteration");
+            goto error;
+        }
+        item = PyList_CheckExact(seq) ? PyList_GetItemRef(seq, i) :
+                                       PyTuple_GetItemRef(seq, i);
+        if (item == NULL || PyErr_Occurred()) goto error;
         if (PyBytes_CheckExact(item)) {
-            /* Fast path. */
-            buffers[i].obj = Py_NewRef(item);
-            buffers[i].buf = PyBytes_AS_STRING(item);
-            buffers[i].len = PyBytes_GET_SIZE(item);
+            buffers[i].obj = item;
+            item = NULL;
+            buffers[i].buf = PyBytes_AS_STRING(buffers[i].obj);
+            buffers[i].len = PyBytes_GET_SIZE(buffers[i].obj);
+            nbufs = i + 1;
         }
         else {
-            /* item is only borrowed; its __buffer__() may run Python that
-               drops the sequence's last reference to it. */
-            Py_INCREF(item);
-            if (PyObject_GetBuffer(item, &buffers[i], PyBUF_SIMPLE) != 0) {
+            buffers[i].obj = NULL;
+            int status = PyObject_GetBuffer(item, &buffers[i], PyBUF_SIMPLE);
+            if (status == 0) {
+                nbufs = i + 1;
+                PyObject *saved = PyErr_GetRaisedException();
+                PyObject *tmp = item;
+                item = NULL;
+                Py_XDECREF(tmp);
+                _PyValue_RestoreException(saved);
+                if (PyErr_Occurred()) goto error;
+                drop_gil = 0;
+            }
+            else {
+                PyObject *error_type = Py_NewRef((PyObject *)Py_TYPE(item));
+                PyObject *error_name = NULL;
+                if (PyType_HasFeature((PyTypeObject *)error_type,
+                                     Py_TPFLAGS_HEAPTYPE)) {
+                    error_name = Py_XNewRef(
+                        ((PyHeapTypeObject *)error_type)->ht_name);
+                }
+                const char *type_name = ((PyTypeObject *)error_type)->tp_name;
                 PyErr_Format(PyExc_TypeError,
                              "sequence item %zd: expected a bytes-like object, "
                              "%.80s found",
-                             i, Py_TYPE(item)->tp_name);
-                Py_DECREF(item);
+                             i, type_name);
+                {
+                    PyObject *saved = PyErr_GetRaisedException();
+                    PyObject *tmp = error_name;
+                    error_name = NULL;
+                    Py_XDECREF(tmp);
+                    _PyValue_RestoreException(saved);
+                }
+                {
+                    PyObject *saved = PyErr_GetRaisedException();
+                    PyObject *tmp = error_type;
+                    error_type = NULL;
+                    Py_XDECREF(tmp);
+                    _PyValue_RestoreException(saved);
+                }
+                {
+                    PyObject *saved = PyErr_GetRaisedException();
+                    PyObject *tmp = item;
+                    item = NULL;
+                    Py_XDECREF(tmp);
+                    _PyValue_RestoreException(saved);
+                }
                 goto error;
             }
-            Py_DECREF(item);
-            /* If the backing objects are mutable, then dropping the GIL
-             * opens up race conditions where another thread tries to modify
-             * the object which we hold a buffer on it. Such code has data
-             * races anyway, but this is a conservative approach that avoids
-             * changing the behaviour of that data race.
-             */
-            drop_gil = 0;
         }
-        nbufs = i + 1;  /* for error cleanup */
+        if (PyErr_Occurred()) goto error;
         itemlen = buffers[i].len;
         if (itemlen > PY_SSIZE_T_MAX - sz) {
             PyErr_SetString(PyExc_OverflowError,
@@ -102,21 +148,17 @@ STRINGLIB(bytes_join_lock_held)(PyObject *sep, PyObject *seq)
         }
     }
 
-    /* Allocate result space. */
     res = STRINGLIB_NEW(NULL, sz);
-    if (res == NULL)
-        goto error;
+    if (res == NULL || PyErr_Occurred()) goto error;
 
-    /* Catenate everything. */
     p = STRINGLIB_STR(res);
     if (sz < GIL_THRESHOLD) {
-        drop_gil = 0;   /* Benefits are likely outweighed by the overheads */
+        drop_gil = 0;
     }
     if (drop_gil) {
         save = PyEval_SaveThread();
     }
     if (!seplen) {
-        /* fast path */
         for (i = 0; i < nbufs; i++) {
             Py_ssize_t n = buffers[i].len;
             char *q = buffers[i].buf;
@@ -129,11 +171,9 @@ STRINGLIB(bytes_join_lock_held)(PyObject *sep, PyObject *seq)
         char *q = buffers[0].buf;
         memcpy(p, q, n);
         p += n;
-
         for (i = 1; i < nbufs; i++) {
             memcpy(p, sepstr, seplen);
             p += seplen;
-
             n = buffers[i].len;
             q = buffers[i].buf;
             memcpy(p, q, n);
@@ -143,33 +183,69 @@ STRINGLIB(bytes_join_lock_held)(PyObject *sep, PyObject *seq)
     if (drop_gil) {
         PyEval_RestoreThread(save);
     }
-    goto done;
 
 error:
-    res = NULL;
-done:
-    for (i = 0; i < nbufs; i++)
-        PyBuffer_Release(&buffers[i]);
-    if (buffers != static_buffers)
-        PyMem_Free(buffers);
+    if (item != NULL) {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = item;
+        item = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    while (next_release < nbufs) {
+        /* Mark progress before invoking the release callback. */
+        Py_ssize_t closing = next_release++;
+        PyObject *saved = PyErr_GetRaisedException();
+        PyBuffer_Release(&buffers[closing]);
+        _PyValue_RestoreException(saved);
+    }
+    if (buffers != NULL && buffers != static_buffers) {
+        Py_buffer *tmp = buffers;
+        buffers = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        PyMem_Free(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = res;
+        res = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+        return NULL;
+    }
     return res;
 }
 
 Py_LOCAL_INLINE(PyObject *)
 STRINGLIB(bytes_join)(PyObject *sep, PyObject *iterable)
 {
-    PyObject *seq, *res;
+    PyObject *seq = NULL;
+    PyObject *res = NULL;
 
     seq = PySequence_Fast(iterable, "can only join an iterable");
-    if (seq == NULL) {
-        return NULL;
-    }
+    if (seq == NULL || PyErr_Occurred()) goto cleanup;
 
     Py_BEGIN_CRITICAL_SECTION_SEQUENCE_FAST(iterable);
     res = STRINGLIB(bytes_join_lock_held)(sep, seq);
     Py_END_CRITICAL_SECTION_SEQUENCE_FAST();
 
-    Py_DECREF(seq);
+cleanup:
+    if (seq != NULL) {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = seq;
+        seq = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = res;
+        res = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+        return NULL;
+    }
     return res;
 }
 

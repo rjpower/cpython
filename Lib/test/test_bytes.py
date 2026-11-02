@@ -692,6 +692,51 @@ class BaseBytesTest:
                 seq = make_seq(replace)
                 self.assertEqual(sep.join(seq), sep.join([b'a', b'x', b'c']))
 
+    def test_join_inline_value_rejection_and_singleton_identity(self):
+        separator = self.type2test(b",")
+        for value in (1, 1.5, None):
+            with self.subTest(value=value):
+                with self.assertRaises(TypeError):
+                    separator.join([value])
+
+        item = self.type2test(b"only")
+        result = separator.join([item])
+        self.assertEqual(result, item)
+        if self.type2test is bytes:
+            self.assertIs(result, item)
+        else:
+            self.assertIsNot(result, item)
+
+    def test_join_buffer_acquisition_and_release_order(self):
+        events = []
+
+        class Exporter:
+            def __init__(self, label, data):
+                self.label = label
+                self.data = data
+
+            def __buffer__(self, flags):
+                events.append(("get", self.label))
+                return memoryview(self.data)
+
+            def __release_buffer__(self, view):
+                events.append(("release", self.label))
+
+        first = Exporter("first", b"a")
+        second = Exporter("second", b"b")
+        separator = self.type2test(b",")
+        self.assertEqual(separator.join([first, second]), b"a,b")
+        self.assertEqual(events, [
+            ("get", "first"), ("get", "second"),
+            ("release", "first"), ("release", "second"),
+        ])
+
+        events.clear()
+        first = Exporter("first", b"a")
+        with self.assertRaisesRegex(TypeError, "expected a bytes-like object, str found"):
+            separator.join([first, "not bytes"])
+        self.assertEqual(events, [("get", "first"), ("release", "first")])
+
     def test_count(self):
         b = self.type2test(b'mississippi')
         i = 105

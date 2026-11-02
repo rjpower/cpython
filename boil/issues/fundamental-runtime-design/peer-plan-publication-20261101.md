@@ -471,3 +471,13 @@ candidate runtime or timing has executed.
   five Mermaid blocks, exact snapshot SHA256 `04775415b8f8affcd74c4d111deb18b2c3cb8cee7637de6d81902a6225537cc3`.
   Dictionary mutation source accepted; VM error-order correction and
   compiler constant source review remain open. No restored runtime.
+
+- 2026-11-02 01:17 UTC: Record exact published/read-back revision56,
+  46,485characters/five Mermaid blocks; snapshot SHA256 `0ac9239d4d729a07932036ef4edb20cb6cac2d3194955409d4a0128570f1ca8a`.
+  Canonical component acceptance is source-only; active storage/readers
+  and wider native/Clinic/constructor closure precede candidate execution.
+
+- 2026-11-02 01:17 UTC: Record exact published/read-back revision57,
+  48,093characters/five Mermaid blocks; snapshot SHA256 `0fc0da095c26e31e4213abe79727609591f935706c72714b5e666afebc886fd4`.
+  Canonical component acceptance is source-only; active storage/readers
+  and wider native/Clinic/constructor closure precede candidate execution.

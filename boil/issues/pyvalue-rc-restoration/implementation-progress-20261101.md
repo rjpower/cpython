@@ -10,9 +10,9 @@ Python behavior remains required.
 
 | Owner | Current result and remaining work |
 | --- | --- |
-| restart_audit | Foundation, specialized O-call, local/slot retirement and common-constant source accepted. VM dictionary construction/store cut has a timely checkpoint, 42 host checks and seven generators passing; final error-path owner-order review remains open. |
-| coordinator | Tuple/member/cell/iteration, set, Python instance slots and common constants source accepted. Compiler constant indexing/compaction and checked list replacement have a timely checkpoint and two passing syntax TUs; independent review is pending. |
-| coroutine_design_review | List/structseq, native scope, dictionary clear/release and owning reads source accepted. Mutation/growth/typed watchers and the value-native constructor are now independently source-accepted; the window closed early. Designing remaining dictionary/managed consumers. |
+| restart_audit | Foundation, specialized O-call, local/slot retirement, common constants and VM dictionary construction/stores source accepted. The latter has42 passing host checks/seven generators and nine AST-only methods. Implements the next separately reviewed specializer/cold-and-warm reader cut. |
+| coordinator | Tuple/member/cell/iteration, set, Python slots, common constants, compiler constant consumers and canonical typed constant-key production source accepted. Six new key tests are AST-only; real fixture and exact producer-body syntax pass. Recursive cache/interning remains in design. |
+| coroutine_design_review | List/structseq, native scope, dictionary clear/release, owning reads, mutation/growth/typed watchers and the value-native constructor source accepted. Implements the separate copy/conditional-insertion/managed-storage cut under corrected zero-refcount rules. |
 | value_api_consumer_map | Independent source review, callback/failure-path findings and the sealed 660-path native consumer inventory. Source component decisions do not constitute runtime acceptance. |
 
 Component evidence is retained under `build/pyvalue-root-container-checkpoint-20261101-v1`,
@@ -97,8 +97,18 @@ pyconfig only for diagnostics; they are not candidate builds. Foundation, O-call
 set storage, instance-slot and additive dictionary-provider windows closed early.
 Shared retirement and canonical common-constant windows also closed early.
 The dictionary mutation/growth window closed early after independent review.
-Active VM dictionary and compiler-constant cuts retain their separate01:47:08
-and01:23:35 UTC ceilings on2026-11-02. Both have timely source checkpoints.
+The compiler-constant and VM dictionary windows also closed early. The active
+dictionary-storage cut runs from00:59:45 to02:29:45 UTC on2026-11-02, with
+concrete copy-versus-detach checkpoint01:19:45. No INCREF0 is permitted on
+deallocator-owned detach/clear; live-instance and metadata retention are separate.
+Its concrete early checkpointb4323811 is independently reviewed at099f0095;
+that accepts only eight early fragments, not the final storage component.
+A's separate reader/feedback cut runs01:14:50 to02:44:50 UTC, checkpoint01:44:50.
+Its cold generic/warmed dictionary paths must be coherent; error output flush
+must not overwrite restored aliased input homes. Two exact C provider handoffs
+retain C's original02:29:45 ceiling. Root's key-producer window closed early;
+cache/interner followup remains design only until its real provider contracts
+and shared-tuple semantic-equality/hash invariants are settled.
 Each has its own source grant; no original source budget was extended.
 
 Measure the unified-value register interpreter with verified JIT-off execution
@@ -192,9 +202,11 @@ setdefault/popitem algorithms and legacy native consumers remain required.
 VM checkpoint `bc738ea9` covers BUILD_MAP, generic/specialized dictionary
 assignment and hinted stores with pre-callback PC capture and forced reload.
 It has42 passing host checks/seven generators and nine AST-only runtime methods.
-Review is correcting the hinted-store failure release order before final
-acceptance. Stable IDs/formats are distinguished from required derived effect
-metadata changes; no candidate execution is claimed.
+Final receipt `d1606aba` corrects hinted failure order by restoring selected
+temporary owners to their original homes before dict-pin close and real unwind.
+Independent review `57d1a09c` accepts the selected source and closes its window.
+Stable IDs/formats are distinguished from required derived effect metadata
+changes; no candidate execution is claimed.
 
 Compiler checkpoint v2 `71666fa3` uses normalized canonical identity words and a
 full-word hash, pure tuple complexity traversal and owned value compaction.
@@ -202,4 +214,22 @@ Seven AST-only tests cover actual CFG folding/compaction and checked setter
 ownership/publication. Flowgraph/fixture syntax passes; the list TU retains old
 Clinic and two sort truthiness errors. The exact-operation host hash model has
 1279 occupied buckets and maximum chain6 for2048 integral float keys; this is
-source evidence, not a performance measurement. Independent review remains open.
+source evidence, not a performance measurement. Independent reviewfc3237a4
+accepts this dependent component; its window closed early. Recursive compiler
+cache/final interning and wider codeobject consumers remain actual dependencies.
+
+The independent typed-key producer now also passed review97607e27, binding
+corrected receipt6f64aa7c. Recursive tuple/frozenset keys use canonical values;
+the old object entry is an owned, fallible adapter. Review replaced ordinary
+frozenset iteration with fresh New(NULL)/AddValue to avoid hidden scalar boxing.
+Six new tests are AST-only, including a one-shot allocation failure/recovery
+fixture at a real32-slot tuple allocation. The actual fixture and exact unchanged
+producer-body projection pass syntax; full codeobject retains older Clinic,
+interning and reader failures. Its window closed early. Compiler cache/final
+interning and wider codeobject closure remain required.
+
+Managed construction still has a publication gap: inline headers/NULL1 initialize
+after `_PyObject_Init` can invoke reference CREATE. The next exact allocator
+handoff must initialize valid managed state before that observer, retaining the
+type/header prerequisites. This is a required qualification fix, not covered by
+the already accepted slot or copy/detach source component.

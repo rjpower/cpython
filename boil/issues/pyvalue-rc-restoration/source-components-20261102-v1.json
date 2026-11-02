@@ -42,6 +42,30 @@
     "whole_dictionary_accepted": false,
     "legacy_api_removed": false
   },
+  "compiler_constant_consumers": {
+    "author_sha256": "71666fa30859a700edc1110f76a8b86fbe5930f42ccc852ec0b62aef39f9406c",
+    "review_sha256": "fc3237a49289e20ae079b6feacf3445beb4b10e1d74b712be78e172d966fa17d",
+    "source_window_closed_early": true,
+    "syntax_units_pass": 2,
+    "runtime_ast_methods": 7,
+    "whole_compiler_accepted": false
+  },
+  "vm_dictionary_consumers": {
+    "author_sha256": "d1606aba51afdb85087104351cf109ea99b1ea560fcaa0327bcf19b58ee2aaaf",
+    "review_sha256": "57d1a09c1131993304e7e90dce37651f7391085a52cbd3c32bde3a48444eac58",
+    "source_window_closed_early": true,
+    "host_checks_pass": 42,
+    "generators_pass": 7,
+    "runtime_ast_methods": 9,
+    "whole_vm_accepted": false
+  },
+  "canonical_constant_keys": {
+    "author_sha256": "6f64aa7cc12a9389b795dbc99b0e377a014fa56d3948c0b62236b221e216c567",
+    "review_sha256": "97607e278348179f90eb5b8a16aa6a3878e50331e3720cc7739d788dec85bb59",
+    "source_window_closed_early": true,
+    "new_runtime_ast_methods": 6,
+    "whole_codeobject_accepted": false
+  },
   "candidate_build": false,
   "runtime_tests_executed": false,
   "performance_measured": false,

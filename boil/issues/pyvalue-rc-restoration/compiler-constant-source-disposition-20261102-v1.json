@@ -1,0 +1,17 @@
+{
+  "status": "ACCEPT_DEPENDENT_COMPILER_CONSTANT_SOURCE_NOT_RUNTIME",
+  "author_receipt": "build/pyvalue-compiler-constants-checkpoint-20261102-v2/receipt.json",
+  "author_sha256": "71666fa30859a700edc1110f76a8b86fbe5930f42ccc852ec0b62aef39f9406c",
+  "review_receipt": "build/pyvalue-rc-native-consumer-map-20261101-v1/compiler-constant-component-review-receipt.json",
+  "review_sha256": "fc3237a49289e20ae079b6feacf3445beb4b10e1d74b712be78e172d966fa17d",
+  "source_window_closed_early": true,
+  "context_files": 5,
+  "runtime_ast_methods": 7,
+  "syntax_units_pass": 2,
+  "list_translation_unit": "Existing generated Clinic getter and two sort truthiness errors remain; whole-list compilation not accepted",
+  "retained_corrections": "Own initial missing includes/API names corrected; pointer hash replaced after review; direct CFG tests corrected before acceptance",
+  "still_required": "Recursive constant cache/final interning and code key producer, wider compiler/native/Clinic closure, coherent build and runtime qualification",
+  "candidate_build": false,
+  "runtime_tests_executed": false,
+  "performance_measured": false
+}

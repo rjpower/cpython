@@ -50,18 +50,22 @@ universal-value worktree. Dependent storage and native cuts continue.
 
 - restart_audit has frozen the foundation, specialized O-call and shared
   local/slot retirement source; dictionary VM consumers have a timely source
-  checkpoint and remain under final independent review.
+  checkpoint and are now independently accepted as source.
+  A separate reader/feedback source cut now covers owned specialization lookups
+  and coherent cold/warmed dictionary reads.
 - value_api_consumer_map independently reviews source and maintains the exact
   native consumer inventory (660 paths in its sealed first version).
 - coroutine_design_review implements list/structseq storage and iteration;
   that partial source component is independently accepted. Its native-scope
   engine, bounded dictionary clear/release and owning-read components are
   source-accepted; mutation/growth and the value-native constructor are now
-  independently source-accepted, with remaining managed consumers in design. The coordinator
+  independently source-accepted, with remaining copy/managed storage in a
+  separate active source cut. The coordinator
   implements tuple/cell/member/iteration and set storage; partial tuple/member
   cell/iteration, set, instance-slot and common-constant components are
   independently accepted as source only. Compiler constant indexing/compaction
-  and checked value-list replacement have a timely source checkpoint under review.
+  and checked value-list replacement are independently source-accepted;
+  recursive cache/interning and code-key production remain in design.
 - The coordinator maintains the log and monitoring loop, prepares qualification
   and the interpreter performance checkpoint, and integrates reviewed changes.
 

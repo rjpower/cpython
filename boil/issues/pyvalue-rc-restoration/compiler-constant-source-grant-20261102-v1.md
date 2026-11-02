@@ -49,3 +49,7 @@ are corrected and retained. Actual flowgraph/fixture syntax passes; list syntax
 retains unrelated Clinic and two preexisting sort truthiness errors. Seven
 runtime methods are drafted; review corrected compaction tests to use constants
 that survive LOAD_SMALL_INT/LOAD_COMMON_CONSTANT selection. No runtime run.
+
+Independent final reviewfc3237a4 accepts corrected v2 receipt71666fa3.
+The source window closes early; all C/header sources match v1, only test
+expectations/direct-CFG witnesses changed. No whole-list/compiler acceptance.

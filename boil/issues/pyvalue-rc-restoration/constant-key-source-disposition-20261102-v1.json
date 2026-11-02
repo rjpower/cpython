@@ -1,0 +1,16 @@
+{
+  "status": "ACCEPT_DEPENDENT_CANONICAL_CONSTANT_KEY_SOURCE_NOT_RUNTIME",
+  "author_receipt": "build/pyvalue-constant-key-source-20261102-v2/receipt.json",
+  "author_sha256": "6f64aa7cc12a9389b795dbc99b0e377a014fa56d3948c0b62236b221e216c567",
+  "review_sha256": "97607e278348179f90eb5b8a16aa6a3878e50331e3720cc7739d788dec85bb59",
+  "source_window_closed_early": true,
+  "context_files": 4,
+  "new_runtime_ast_methods": 6,
+  "total_runtime_ast_methods": 13,
+  "syntax": "Real fixture TU and exact unchanged producer/adapter body projection pass; full codeobject TU retains existing Clinic/intern/read errors",
+  "closed": "Canonical typed constant-key production and owned fallible legacy object adapter, without scalar boxing in tuple/frozenset key recursion",
+  "still_required": "Recursive compiler cache/final interning and wider codeobject/native/Clinic closure",
+  "candidate_build": false,
+  "runtime_tests_executed": false,
+  "performance_measured": false
+}

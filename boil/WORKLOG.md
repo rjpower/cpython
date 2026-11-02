@@ -1889,3 +1889,16 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   incomplete; no restored candidate/runtime/timing. Publish/read back
   Loom55 exactly,46,511characters/five diagrams.
   [Progress](issues/pyvalue-rc-restoration/implementation-progress-20261101.md).
+- 2026-11-02 01:17 UTC: Independently accept compiler constant consumers,
+  actual VM dictionary construction/stores and canonical typed key
+  production; close all three source windows early. VM failure restores
+  original temp homes before real unwind; key review removes hidden
+  frozenset iterator boxing. Retain unexecuted tests and broader
+  Clinic/list/codeobject failures as unqualified dependencies.
+  Launch distinct copy/managed storage and cold/warm reader cuts;
+  early copy-DUP/detach-MOVE checkpoint passes independent source review.
+  Zero-RC, prior-error, cached-hash and merge-mode findings stay explicit.
+  Managed constructor-before-CREATE gap remains required. Loom56/57
+  read back exactly; latest48,093characters/five diagrams. No restored
+  candidate/runtime/timing.
+  [Progress](issues/pyvalue-rc-restoration/implementation-progress-20261101.md).

@@ -70,3 +70,11 @@ selection. Serialize required generation; affected host tests and at most three
 actual changed syntax-only TUs30seconds each. Coordinate C's provider diagnostics
 to avoid duplicate checks. No object/link/candidate execution or performance
 measurement. Final source acceptance remains separate from runtime qualification.
+
+Actual first edit00:35:47 UTC. Timely checkpointbc738ea9 precedes00:57:08.
+Final source d1606aba is independently accepted at review57d1a09c; close this
+window early. The corrected failure path restores selected owners to distinct
+original NULL temporary homes before dict-pin release, then uses real frame
+unwind; callback-current locals remain untouched. Temporary linearity proof
+80f92004 covers ordinary compiler input construction, with the raw-IR caveat
+retained.42 host checks/seven generators pass; nine methods remain AST-only.

@@ -1,7 +1,7 @@
 # Porting rules and remaining work
 
 We are closing compiler and ownership gaps before the first universal-value
-register-interpreter measurement. Source checkpoint43 is `df30266b3b4`.
+register-interpreter measurement. Source checkpoint44 is `b76f2182354`.
 The [latest merged build](../merged-build/status.md) has 324 repeated/cascading
 errors, 166 objects and no executable; all 7,349 inputs stayed unchanged.
 There is no restored runtime or performance result.
@@ -15,11 +15,11 @@ and reviews rules; Luna analyzes errors and applies approved mechanical batches.
 
 | Packet | Current stage | Next gate |
 | --- | --- | --- |
-| Seven bootstrap type readers | Sol design | Independent design review, then bounded Luna implementation |
-| Four remaining Clinic wrappers | Design frozen; baseline producer harness passes | Independent design review before producer edits/regeneration |
-| Shared FORMAT engine | Design frozen | Peer gate for stable lease/resource foundation; backend/public/caller closure follows |
-| Remaining itertools readers | Inventory complete; four tuple-result consumers in design | Review reusable canonical copy/update rule; pairwise and zip-longest have separate call boundaries |
-| Pickle arguments/state | Queued | Finite outer ownership envelope after bootstrap readers |
+| Seven bootstrap type readers | Committed after independent code/native review | Merged runtime/startup and fault qualification |
+| Four remaining Clinic wrappers | Bulk implementation frozen for code/native review | Scope/ownership/output review, formatting correction, final native gate |
+| Shared FORMAT engine | Foundation v1 requires three bounded amendments; v2 in preparation | Peer recheck; backend/public/caller closure follows |
+| Remaining itertools readers | Inventory complete; four tuple-result draft paused | Review reusable canonical copy/update rule; pairwise and zip-longest have separate call boundaries |
+| Pickle arguments/state | Sol design | Three-body ownership envelope and independent review |
 | Full type mutation transaction | In revision | Distinguish introduced defects from inherited behavior; use concrete evidence to choose necessary fixes |
 
 Exact designs and inventories:
@@ -96,10 +96,12 @@ timing wait for a linked candidate.
 
 Recent accepted packets include operator/LRU (`d1a9a80d25b`), flat FORMAT Stage1
 (`aa7a4335ddf`), six type readers (`0fd003e9c4b`) and four MRO readers
-(`df30266b3b4`). The operator object and parser fixture object build. The current
-type TU still has four errors/sixteen warnings. Both type packets have zero
-selected diagnostics, with three explicitly attributed missing-API first-use
-relocations. These are dependent source checkpoints, not runtime admission.
+(`df30266b3b4`). The operator object and parser fixture object build. Bootstrap7
+(`b76f2182354`) follows those packets: selected 2 errors/13 warnings→0, full type
+TU 4→3 errors/16→3 warnings, with exactly one first-use relocation. Six host
+controls pass; startup/fault/candidate behavior remains unexecuted. The Clinic
+packet has 284 producer and 5 host-reference passes, two idempotent generation
+passes and 2,996 excluded templates exact; actual code/native gate is still pending. These are dependent source checkpoints, not runtime admission.
 
 Preserve failed attempts and corrections. The type-reader design-control log
 originally claimed four passes but contains three passes/one error. The failed

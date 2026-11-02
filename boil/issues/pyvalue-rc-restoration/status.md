@@ -30,9 +30,10 @@ the recording-only counter foundation checkpoint36 and slot wrappers checkpoint3
 The earlier type_new argument boundary is checkpoint38 and construction readers
 with explicit caller pins checkpoint39. Operator/LRU readers are checkpoint40
 and the flat-format kernel/five callers checkpoint41. The corrected six-reader
-type packet is checkpoint42 and the corrected four-reader MRO packet43. Sol
-designs bootstrap type readers and remaining Clinic producers; shared parser
-engine design awaits peer review. Luna inventories remaining itertools patterns.
+type packet is checkpoint42, corrected four-reader MRO packet43 and seven
+bootstrap readers44. The Clinic four-wrapper implementation is frozen for
+code/native review. Sol designs pickle/state readers and revises the FORMAT
+foundation; the itertools tuple-result draft is paused.
 Root integrates reviewed code and validates the composition.
 The MRO providers plus one immediate wrapper passed independent
 code/native attribution review; their syntax comparison has 61 diagnostics,
@@ -56,9 +57,10 @@ link. Its latest v13 snapshot at checkpoint43 plus held typeobject has 166 objec
 present and 324 repeated/cascading error diagnostics. All 7,349 source paths
 remained unchanged; no candidate was executed. Iterator, slot-wrapper and
 construction-reader selected contexts are native-clean; the current typeobject
-TU after checkpoint43 has four remaining errors and sixteen warnings.
-Both reader packets have zero selected diagnostics. Their three missing-API
-first-use relocations are explicitly attributed in the native receipts. The counter comparison uses corresponding
+TU after checkpoint44 has three remaining errors and three warnings, in the
+remaining pickle/state consumers. The bootstrap packet has zero selected
+diagnostics; its one missing-API first-use relocation is explicitly attributed.
+The latest merged probe predates checkpoint44; it is not a source44 build pass. The counter comparison uses corresponding
 old/new public layouts and adds no diagnostics, without admitting a transaction.
 The full MRO transaction remains in revision.
 

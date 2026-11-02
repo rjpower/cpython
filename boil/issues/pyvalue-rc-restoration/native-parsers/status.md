@@ -73,11 +73,15 @@ as checkpoint38, followed by ten construction readers and caller pins in39.
 General keyword/nested/resource format-parser ownership and its consumer ports
 remain design/implementation work.
 
-Shared FORMAT engine design is frozen for independent review, not implementation:
+Shared FORMAT engine v1 requires three bounded amendments before implementation:
 [finite A/B/C packets](../../../../build/pyvalue-format-engine-design-20261102-v1/README.md).
 A is a shared stable lease/resource foundation; B/C adapt the actual backends.
 Public scope, raw-wrapper retirement and mechanical consumer closure remain
 mandatory before claiming parser closure. No source or host pass follows from
-this design. Root recorded a precise same-scope Finish/End reentry question for
-the peer gate. Four remaining Clinic producers have a separate finite design
-stream and do not require widening the flat parser whitelist.
+this design. Peer review requires an explicit same-scope Finish/End contract,
+chunk-only resource records to reduce shared scope growth from 176 to 40 bytes,
+and one typed fixture destructor. The author prepares immutable v2. B also
+needs an actual per-export buffer lifetime contract; owning view.obj alone
+does not retain released export storage. Four remaining Clinic wrappers are
+implemented in isolation and under code/native review; they do not widen the
+flat parser whitelist or depend on the new foundation.

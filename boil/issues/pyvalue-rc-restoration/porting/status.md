@@ -5,12 +5,14 @@ reviewed/committed as e645682dab5 and b1dce616174. The full AST TU/object now pa
 without diagnostics. The unified Clinic48 batch is reviewed and committed as
 180b4b6d9af; list assertions are committed as 4bf934bb4ec. Three pure predicates
 are committed as 69a2750540e; corrected core14 is committed as e789685426a.
-TypeVar's tuple-vararg parser needs finite review corrections; Luna is applying
-the next three-body Template rule.
+Template is committed as e0dfcd4d7ff and corrected TypeVar as bef49ec8fc9.
+Descriptor calls are committed as ca594319d0b. The shared bytes/bytearray join
+rule is committed as checkpoint32; Sol advances the held
+typeobject/MRO dependency while Luna groups the fresh v8 diagnostics.
 The coordinator integrates and validates the merged result.
 MRO providers and the public wrapper
 passed code/native attribution review; their delta remains held. The next
-publication transaction has a read-only handoff, queued for design.
+publication transaction and immediate bases/readiness callers are in design.
 
 ## Required baseline versus later tuning
 
@@ -141,6 +143,43 @@ interior copies can stay canonical. Evidence and finite grants live in
 build/pyvalue-v6-error-families-20261102-v1 and
 build/pyvalue-sol-port-rules-20261102-v1.
 
+Template passed independent review and is checkpoint29 e0dfcd4d7ff. Three
+functions now compile as a full TU/object without diagnostics (previously seven
+errors/two warnings). Three retained host 3.15 controls pass; candidate execution
+and the type-pin reentrancy witness remain pending. Evidence:
+build/pyvalue-template-readers-bulk-20261102-v1/commit.json.
+
+TypeVar passed after collision-safe temporary names, durable controls and raw
+reproducible receipts. It is checkpoint30 bef49ec8fc9: one additional scoped
+tuple-vararg wrapper under the same predicate, prior51 keyword/twenty positional
+bodies exact. Producer suite: 427 run, 311 pass, 116 unavailable fixture skips.
+Combined producer/keyword suite: 437 run, 321 pass, 116 skips; these overlap.
+Configured TU errors go 10→8, with zero selected-wrapper diagnostics. The whole
+TU still fails. Evidence: build/pyvalue-clinic-typevar-bulk-20261102-v2/commit.json.
+
+The completed descriptor grant covers two bodies in descrobject.c plus focused
+test_descr controls. It reuses the immutable tuple OwnerScope after classmethod
+binding, and ordinary owned receiver/slice on the wrapper path; no new adapter
+API or raw value-array cast. Exact grant:
+build/pyvalue-sol-port-rules-20261102-v1/coordinator-descriptor-grant.md.
+It is checkpoint31 ca594319d0b: full TU/object pass without diagnostics (four
+errors before), three retained host controls, candidate execution pending.
+Evidence: build/pyvalue-descriptor-calls-bulk-20261102-v1/commit.json.
+
+The completed shared join grant covers two stringlib bodies instantiated for bytes
+and bytearray. It uses checked owning current items, existing buffer leases,
+ascending once-only release at original buffer addresses and protected output
+retirement. The existing normalized TypeError retains type/name backing owners
+through formatting. No separator policy or buffer API changes. Exact grant:
+build/pyvalue-sol-port-rules-20261102-v1/coordinator-bytes-join-grant.md.
+
+The held typeobject v7 inventory attributes all 38 observations to unadmitted
+functions. Its initial report accidentally used the future transaction input
+list as accepted MRO15; that receipt is preserved and corrected. The accepted
+fifteen-body provider scope still has zero changed-function diagnostics. Source
+d0721997 is unchanged. Corrected evidence:
+build/pyvalue-typeobject-error-patterns-20261102-v1.
+
 ## Census and evidence
 
 The historical v3 build predates the separately checked graph and
@@ -150,9 +189,9 @@ of that failed build, not independent defects or a current edit count. It also
 reported 171 warnings, counted separately. Repeated headers, cascades, generated
 expansions and already fixed calls inflate these figures.
 
-The latest v6 merged probe reports 430 errors/161 objects present and no
-executable; all 7,341 source paths stayed unchanged. Its Clinic v2 bytes were
-subsequently reviewed and committed. Counts remain repeated/cascading compiler
+The latest v8 merged probe reports 392 errors/164 objects present and no
+executable; all 7,342 source paths stayed unchanged at checkpoint32 plus held
+typeobject. Counts remain repeated/cascading compiler
 observations, not independent defects or a percentage complete.
 
 The production scan finds 363 PyTuple_GET_ITEM, 84 PyList_GET_ITEM and
@@ -169,3 +208,13 @@ error-only census and classified occurrence scan. The v1 directory retains the
 initial warning-inclusive scan and AST pilot design/review. The
 [board](../../README.md) owns live assignments and source checkpoints. There is
 still no linked restored candidate or restored-runtime timing.
+
+Shared join passed the coordinator's independent actual code/results review
+and is committed as `87ec5704d6c`, three paths/two bodies instantiated for bytes
+and bytearray. Configured native errors fell 8→4 and 5→2; selected functions
+are clean, both full TUs still fail. Eight extracted host controls pass on
+Python 3.15.1, including existing large joins and callback shrink/replacement.
+Candidate execution and C-level cleanup fault injection remain pending.
+Evidence: build/pyvalue-bytes-join-bulk-20261102-v1/{coordinator-review.md,commit.json}.
+Merged v8 has 392 errors/164 objects and no executable on 7,342 unchanged inputs;
+Luna groups fresh diagnostics before Sol designs the next reusable packet.

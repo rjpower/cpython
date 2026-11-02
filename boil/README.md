@@ -13,8 +13,8 @@ is on `boil/pyvalue-rc-universal`. Reviewed ports
 now include the object/attribute bridge, positional constructors, small
 tokenizer/bytes readers, object C call bridges, an AST sequence producer batch
 and the AST constructor. The AST translation unit and object now build.
-The unified fixed-keyword Clinic batch and list-sort value assertions are also
-committed. The remaining original held file is typeobject.c.
+The unified keyword Clinic batch, list-sort value assertions, core readers and
+Template readers are also committed. The remaining original held file is typeobject.c.
 There is no linked or qualified restored interpreter or timing result.
 
 **Current step:** close the concrete blockers from the merged diagnostic build.
@@ -24,10 +24,12 @@ reviewed provider, mutation, constructor and graph deltas. MRO providers have
 passed code/native attribution review; publication, slots and lifecycle still
 need closure. No merged executable exists. Luna grouped v4's compiler errors;
 the reviewed unified Clinic rule now covers 48 production wrappers. The latest
-v6 compiler probe has 430 repeated/cascading errors and no executable. Fourteen
-core reader functions and three pure predicates are now reviewed and committed.
-The TypeVar parser is in review with finite temporary-name/test corrections;
-Luna is porting three Template reader bodies under the next reviewed rule.
+v8 compiler probe has 392 repeated/cascading errors and no executable; all 7,342
+source inputs stayed unchanged. Thirty-two reviewed source checkpoints now include
+fourteen core readers, three pure predicates, Template readers, the TypeVar
+parser, descriptor calls and shared bytes/bytearray join. Luna is grouping the
+fresh compiler diagnostics; Sol advances the held typeobject/MRO publication
+dependency.
 Sol 6.1 designs/reviews reusable fixes; approved rules go to mechanical or Luna batches.
 The coordinator integrates reviewed results, rebuilds and repeats.
 See [porting rules and remaining work](issues/pyvalue-rc-restoration/porting/status.md)

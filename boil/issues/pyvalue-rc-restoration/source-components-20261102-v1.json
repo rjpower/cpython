@@ -384,6 +384,42 @@
       "host_controls": 8,
       "candidate_executed": false,
       "runnable": false
+    },
+    "template_readers": {
+      "commit": "e0dfcd4d7ffe16464976548f006e9e9ba5c910a1",
+      "changed_paths": 2,
+      "functions": 3,
+      "host_reference_controls": 3,
+      "candidate_executed": false,
+      "runnable": false,
+      "evidence": "build/pyvalue-template-readers-bulk-20261102-v1/commit.json"
+    },
+    "clinic_typevar_tuple_vararg": {
+      "commit": "bef49ec8fc92583869126e3f43d8a7d7d82da11e",
+      "changed_paths": 4,
+      "functions": 1,
+      "host_reference_controls": null,
+      "candidate_executed": false,
+      "runnable": false,
+      "evidence": "build/pyvalue-clinic-typevar-bulk-20261102-v2/commit.json"
+    },
+    "descriptor_calls": {
+      "commit": "ca594319d0b46c32047878cd95259cd1dd8b25f5",
+      "changed_paths": 2,
+      "functions": 2,
+      "host_reference_controls": 3,
+      "candidate_executed": false,
+      "runnable": false,
+      "evidence": "build/pyvalue-descriptor-calls-bulk-20261102-v1/commit.json"
+    },
+    "bytes_join": {
+      "commit": "87ec5704d6c793dbda3c631a3d29ea16bc4274ed",
+      "changed_paths": 3,
+      "functions": 2,
+      "host_reference_controls": 8,
+      "candidate_executed": false,
+      "runnable": false,
+      "evidence": "build/pyvalue-bytes-join-bulk-20261102-v1/commit.json"
     }
   },
   "first_diagnostic_build": {
@@ -393,17 +429,15 @@
     "candidate_linked": false
   },
   "latest_diagnostic_build": {
-    "head": "4bf934bb4ec8a7d2ebe31caa5e9d7ac6c209a73a",
-    "objects_present": 161,
-    "error_diagnostics": 430,
+    "head": "87ec5704d6c793dbda3c631a3d29ea16bc4274ed",
+    "objects_present": 164,
+    "error_diagnostics": 392,
     "source_unchanged": true,
     "candidate_linked": false,
     "includes_held_source_files": true,
-    "clinic_v2_unaccepted_at_build": true,
-    "clinic_v2_subsequently_committed": "180b4b6d9af3ba1b9fa1b0f80ea5e6e55b87832f",
     "make_exit": 2,
-    "source_manifest_paths": 7341,
-    "evidence": "build/pyvalue-merged-build-20261102-v6"
+    "source_manifest_paths": 7342,
+    "evidence": "build/pyvalue-merged-build-20261102-v8"
   },
   "mro_provider_reviewed_delta": {
     "typeobject_sha256": "d07219973716cab2749c7f9992ee268dd014815d28fd574c6d6c2d84b74dcf1d",

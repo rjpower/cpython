@@ -41,16 +41,18 @@ covers 48 production wrappers and is committed, as are the list-sort assertions.
 Remaining actual parser, container/
 startup and bundled consumer ports still block a baseline executable.
 
-The latest [merged diagnostic build](../merged-build/status.md) binds the
-25-checkpoint chain at 4bf934bb4ec plus then-unaccepted frozen Clinic v2 and
+The previous [merged diagnostic build](../merged-build/status.md) binds the
+29-checkpoint chain at e0dfcd4d7ff plus then-unaccepted frozen TypeVar v2 and
 reviewed held typeobject through the corrected MRO providers. It exited 2, with
-161 objects present and no executable. All 7,341 source paths stayed unchanged;
-430 repeated/cascading error
+163 objects present and no executable. All 7,342 source paths stayed unchanged;
+403 repeated/cascading error
 diagnostics remain raw evidence. Focused component checks do not make this a
-passing merged build. Clinic v2 subsequently passed review and was committed
-as checkpoint26. Three pure predicates are checkpoint27; corrected core14 is
-checkpoint28. TypeVar review and the Template reader implementation are next;
-repeat the merged build once these disjoint source grants are frozen.
+passing merged build. TypeVar v2 subsequently passed review and was committed
+as checkpoint30. Descriptor calls are checkpoint31 with full TU/object pass.
+Shared bytes/bytearray join is checkpoint32 after independent review. Merged
+v8 at `87ec5704d6c` exited 2: 392 errors/164 objects, no executable and all
+7,342 source inputs unchanged. Fresh diagnostic grouping selects the next
+bulk port; held typeobject/MRO publication is the active design dependency.
 
 Prioritize a coherent register interpreter with the unified format and JIT off.
 Use concrete failed compiler/linker/startup routes to select finite ports, preserving

@@ -4,7 +4,33 @@
 - Owner: coordinator
 - Purpose: expose actual baseline compiler/linker dependencies on frozen merged source
 
-Latest attempt: [v6 record](../../../../build/pyvalue-merged-build-20261102-v6/results.json),
+Latest attempt: [v8 record](../../../../build/pyvalue-merged-build-20261102-v8/results.json),
+at checkpoint32 `87ec5704d6c` plus the held reviewed typeobject state.
+Make exited 2 in 2.99 seconds, with 164 objects present, 392 repeated/cascading
+errors and no executable. All 7,342 source inputs stayed unchanged.
+
+[v8 identity](../../../../build/pyvalue-merged-build-20261102-v8/identity.json),
+[raw log](../../../../build/pyvalue-merged-build-20261102-v8/make.log),
+[source before](../../../../build/pyvalue-merged-build-20261102-v8/source-before.json),
+[source after](../../../../build/pyvalue-merged-build-20261102-v8/source-after.json).
+Counts include cascades and shared-header expansions, not independent edits.
+
+Previous attempt: [v7 record](../../../../build/pyvalue-merged-build-20261102-v7/results.json),
+at e0dfcd4d7ff plus then-unaccepted frozen TypeVar v2 and held reviewed typeobject.
+Make exited 2 in 2.93 seconds, with 163 objects present, 403 repeated/cascading
+errors and no executable. All 7,342 source inputs stayed unchanged. TypeVar v2
+subsequently passed independent review and was committed as bef49ec8fc9.
+
+[v7 identity](../../../../build/pyvalue-merged-build-20261102-v7/identity.json),
+[raw log](../../../../build/pyvalue-merged-build-20261102-v7/make.log),
+[source before](../../../../build/pyvalue-merged-build-20261102-v7/source-before.json),
+[source after](../../../../build/pyvalue-merged-build-20261102-v7/source-after.json),
+[mechanical summary](../../../../build/pyvalue-merged-build-20261102-v7/summary.json).
+There are 337 distinct diagnostic locations in 63 source/header paths. The
+largest file is held typeobject.c (38 observations), followed by itertools (29).
+Counts include cascades and shared-header expansions, not independent edits.
+
+Previous attempt: [v6 record](../../../../build/pyvalue-merged-build-20261102-v6/results.json),
 an early probe at 4bf934bb4ec plus then-unaccepted frozen unified Clinic48-v2
 and held reviewed typeobject. Make exited 2 in 4.97 seconds, with 161 objects
 present, 430 repeated/cascading errors and no executable. All 7,341 source paths

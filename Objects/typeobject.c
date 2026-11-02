@@ -5089,29 +5089,80 @@ type_new(PyTypeObject *metatype, PyObject *args, PyObject *kwds)
     assert(args != NULL && PyTuple_Check(args));
     assert(kwds == NULL || PyDict_Check(kwds));
 
-    /* Parse arguments: (name, bases, dict) */
-    PyObject *name, *bases, *orig_dict;
-    if (!PyArg_ParseTuple(args, "UO!O:type.__new__",
-                          &name,
-                          &PyTuple_Type, &bases,
-                          &orig_dict))
-    {
-        return NULL;
+    _PyArg_OwnerScope scope = {0};
+    PyObject *keywords = NULL;
+    PyObject *owned_bases = NULL;
+    PyObject *type = NULL;
+    PyTypeObject *error_type = NULL;
+    if (PyErr_Occurred() ||
+            _PyArg_OwnerScope_BeginTuple(&scope, args, 0) < 0) {
+        goto done;
     }
-    if (!PyAnyDict_Check(orig_dict)) {
+    keywords = Py_XNewRef(kwds);
+    Py_ssize_t nargs = scope.nargs;
+    if (nargs != 3) {
         PyErr_Format(PyExc_TypeError,
-                     "type.__new__() argument 3 must be dict or frozendict, not %T",
-                     orig_dict);
-        return NULL;
+                     "type.__new__() takes exactly 3 arguments (%zd given)",
+                     nargs);
+        goto done;
     }
 
+    /* Validate the fixed heap-only fields before creating their views.
+     * Invalid inline arguments need a type diagnostic, not a scalar box. */
+    PyValue name_value = PyTuple_GET_VALUE(scope.tuple, 0);
+    PyValue bases_value = PyTuple_GET_VALUE(scope.tuple, 1);
+    PyValue dict_value = PyTuple_GET_VALUE(scope.tuple, 2);
+    PyValue invalid = PyValue_NULL;
+    int invalid_arg = 0;
+    if (!PyValue_IsObject(name_value) ||
+            !PyUnicode_Check(PyValue_AsPyObjectBorrow(name_value))) {
+        invalid = name_value;
+        invalid_arg = 1;
+    }
+    else if (!PyValue_IsObject(bases_value) ||
+            !PyTuple_Check(PyValue_AsPyObjectBorrow(bases_value))) {
+        invalid = bases_value;
+        invalid_arg = 2;
+    }
+    else if (!PyValue_IsObject(dict_value) ||
+            !PyAnyDict_Check(PyValue_AsPyObjectBorrow(dict_value))) {
+        invalid = dict_value;
+        invalid_arg = 3;
+    }
+    if (invalid_arg != 0) {
+        error_type = (PyTypeObject *)Py_NewRef(PyValue_TYPE(invalid));
+        if (invalid_arg == 3) {
+            PyErr_Format(PyExc_TypeError,
+                         "type.__new__() argument 3 must be dict or frozendict, not %N",
+                         (PyObject *)error_type);
+        }
+        else {
+            const char *actual = PyValue_IsObject(invalid) &&
+                PyValue_AsPyObjectBorrow(invalid) == Py_None
+                ? "None" : error_type->tp_name;
+            char message[256];
+            PyOS_snprintf(message, sizeof(message),
+                          "type.__new__() argument %d must be %s, not %.50s",
+                          invalid_arg, invalid_arg == 1 ? "str" : "tuple",
+                          actual);
+            PyErr_SetString(PyExc_TypeError, message);
+        }
+        goto done;
+    }
+
+    /* All three proven object inputs fit the scope's inline storage. */
+    PyObject *const *views = _PyArg_UnpackPositionalOwned(
+        &scope, "type.__new__", 3, 3);
+    if (views == NULL || PyErr_Occurred()) {
+        goto done;
+    }
     type_new_ctx ctx = {
         .metatype = metatype,
-        .args = args,
-        .kwds = kwds,
-        .orig_dict = orig_dict,
-        .name = name,
-        .bases = bases,
+        .args = scope.tuple,
+        .kwds = keywords,
+        .orig_dict = views[2],
+        .name = views[0],
+        .bases = views[1],
         .base = NULL,
         .slots = NULL,
         .nslot = 0,
@@ -5119,21 +5170,39 @@ type_new(PyTypeObject *metatype, PyObject *args, PyObject *kwds)
         .add_weak = 0,
         .may_add_dict = 0,
         .may_add_weak = 0};
-    PyObject *type = NULL;
     int res = type_new_get_bases(&ctx, &type);
-    if (res < 0) {
-        assert(PyErr_Occurred());
-        return NULL;
+    /* Only status 0 transfers a bases owner; failure and delegation leave
+     * the initial borrowed tuple in ctx.bases. */
+    if (res == 0) {
+        owned_bases = ctx.bases;
+    }
+    if (res < 0 || PyErr_Occurred()) {
+        goto done;
     }
     if (res == 1) {
         assert(type != NULL);
-        return type;
+        goto done;
     }
     assert(ctx.base != NULL);
     assert(ctx.bases != NULL);
-
     type = type_new_impl(&ctx);
-    Py_DECREF(ctx.bases);
+
+done:
+    ;
+    PyObject *saved = PyErr_GetRaisedException();
+    Py_CLEAR(error_type);
+    _PyValue_RestoreException(saved);
+    saved = PyErr_GetRaisedException();
+    Py_CLEAR(owned_bases);
+    _PyValue_RestoreException(saved);
+    saved = PyErr_GetRaisedException();
+    Py_CLEAR(keywords);
+    _PyValue_RestoreException(saved);
+    if (_PyArg_OwnerScope_End(&scope) < 0) {
+        saved = PyErr_GetRaisedException();
+        Py_CLEAR(type);
+        _PyValue_RestoreException(saved);
+    }
     return type;
 }
 

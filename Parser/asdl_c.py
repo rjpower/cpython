@@ -500,9 +500,18 @@ class Obj2ModVisitor(PickleVisitor):
         "end_col_offset": "col_offset",
     }
 
+    def emit_owned_item_cleanup(self, item, level):
+        self.emit("PyObject *saved_error = PyErr_GetRaisedException();", level)
+        self.emit("Py_DECREF(%s);" % item, level)
+        self.emit("if (saved_error != NULL) {", level)
+        self.emit("PyErr_SetRaisedException(saved_error);", level + 1)
+        self.emit("}", level)
+
     @contextmanager
-    def recursive_call(self, node, level):
+    def recursive_call(self, node, level, failed_item=None):
         self.emit('if (_Py_EnterRecursiveCall(" while traversing \'%s\' node")) {' % node, level, reflow=False)
+        if failed_item is not None:
+            self.emit_owned_item_cleanup(failed_item, level + 1)
         self.emit('goto failed;', level + 1)
         self.emit('}', level)
         yield
@@ -705,12 +714,17 @@ class Obj2ModVisitor(PickleVisitor):
             self.emit("if (%s == NULL) goto failed;" % field.name, depth+1)
             self.emit("for (i = 0; i < len; i++) {", depth+1)
             self.emit("%s val;" % ctype, depth+2)
-            self.emit("PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));", depth+2)
-            with self.recursive_call(name, depth+2):
+            self.emit("PyObject *tmp2 = PyList_GetItemRef(tmp, i);", depth+2)
+            self.emit("if (tmp2 == NULL) goto failed;", depth+2)
+            self.emit("if (PyErr_Occurred()) {", depth+2)
+            self.emit_owned_item_cleanup("tmp2", depth+3)
+            self.emit("goto failed;", depth+3)
+            self.emit("}", depth+2)
+            with self.recursive_call(name, depth+2, failed_item="tmp2"):
                 self.emit("res = obj2ast_%s(state, tmp2, &val, \"%s\", arena);" %
                           (field.type, field.name), depth+2, reflow=False)
-            self.emit("Py_DECREF(tmp2);", depth+2)
-            self.emit("if (res != 0) goto failed;", depth+2)
+            self.emit_owned_item_cleanup("tmp2", depth+2)
+            self.emit("if (res != 0 || PyErr_Occurred()) goto failed;", depth+2)
             self.emit("if (len != PyList_GET_SIZE(tmp)) {", depth+2)
             self.emit("PyErr_SetString(PyExc_RuntimeError, \"%s field \\\"%s\\\" "
                       "changed size during iteration\");" %

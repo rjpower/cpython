@@ -7168,14 +7168,32 @@ obj2ast_mod(struct ast_state *state, PyObject* obj, mod_ty* out, const char*
             if (body == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 stmt_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'Module' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_stmt(state, tmp2, &val, "body", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "Module field \"body\" changed size during iteration");
                     goto failed;
@@ -7206,14 +7224,32 @@ obj2ast_mod(struct ast_state *state, PyObject* obj, mod_ty* out, const char*
             if (type_ignores == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 type_ignore_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'Module' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_type_ignore(state, tmp2, &val, "type_ignores", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "Module field \"type_ignores\" changed size during iteration");
                     goto failed;
@@ -7256,14 +7292,32 @@ obj2ast_mod(struct ast_state *state, PyObject* obj, mod_ty* out, const char*
             if (body == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 stmt_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'Interactive' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_stmt(state, tmp2, &val, "body", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "Interactive field \"body\" changed size during iteration");
                     goto failed;
@@ -7336,14 +7390,32 @@ obj2ast_mod(struct ast_state *state, PyObject* obj, mod_ty* out, const char*
             if (argtypes == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 expr_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'FunctionType' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_expr(state, tmp2, &val, "argtypes", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "FunctionType field \"argtypes\" changed size during iteration");
                     goto failed;
@@ -7544,14 +7616,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (body == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 stmt_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'FunctionDef' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_stmt(state, tmp2, &val, "body", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "FunctionDef field \"body\" changed size during iteration");
                     goto failed;
@@ -7582,14 +7672,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (decorator_list == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 expr_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'FunctionDef' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_expr(state, tmp2, &val, "decorator_list", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "FunctionDef field \"decorator_list\" changed size during iteration");
                     goto failed;
@@ -7655,14 +7763,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (type_params == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 type_param_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'FunctionDef' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_type_param(state, tmp2, &val, "type_params", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "FunctionDef field \"type_params\" changed size during iteration");
                     goto failed;
@@ -7748,14 +7874,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (body == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 stmt_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'AsyncFunctionDef' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_stmt(state, tmp2, &val, "body", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "AsyncFunctionDef field \"body\" changed size during iteration");
                     goto failed;
@@ -7786,14 +7930,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (decorator_list == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 expr_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'AsyncFunctionDef' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_expr(state, tmp2, &val, "decorator_list", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "AsyncFunctionDef field \"decorator_list\" changed size during iteration");
                     goto failed;
@@ -7859,14 +8021,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (type_params == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 type_param_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'AsyncFunctionDef' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_type_param(state, tmp2, &val, "type_params", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "AsyncFunctionDef field \"type_params\" changed size during iteration");
                     goto failed;
@@ -7934,14 +8114,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (bases == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 expr_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'ClassDef' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_expr(state, tmp2, &val, "bases", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "ClassDef field \"bases\" changed size during iteration");
                     goto failed;
@@ -7972,14 +8170,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (keywords == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 keyword_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'ClassDef' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_keyword(state, tmp2, &val, "keywords", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "ClassDef field \"keywords\" changed size during iteration");
                     goto failed;
@@ -8010,14 +8226,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (body == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 stmt_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'ClassDef' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_stmt(state, tmp2, &val, "body", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "ClassDef field \"body\" changed size during iteration");
                     goto failed;
@@ -8048,14 +8282,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (decorator_list == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 expr_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'ClassDef' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_expr(state, tmp2, &val, "decorator_list", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "ClassDef field \"decorator_list\" changed size during iteration");
                     goto failed;
@@ -8086,14 +8338,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (type_params == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 type_param_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'ClassDef' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_type_param(state, tmp2, &val, "type_params", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "ClassDef field \"type_params\" changed size during iteration");
                     goto failed;
@@ -8168,14 +8438,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (targets == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 expr_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'Delete' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_expr(state, tmp2, &val, "targets", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "Delete field \"targets\" changed size during iteration");
                     goto failed;
@@ -8221,14 +8509,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (targets == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 expr_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'Assign' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_expr(state, tmp2, &val, "targets", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "Assign field \"targets\" changed size during iteration");
                     goto failed;
@@ -8326,14 +8632,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (type_params == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 type_param_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'TypeAlias' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_type_param(state, tmp2, &val, "type_params", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "TypeAlias field \"type_params\" changed size during iteration");
                     goto failed;
@@ -8582,14 +8906,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (body == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 stmt_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'For' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_stmt(state, tmp2, &val, "body", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "For field \"body\" changed size during iteration");
                     goto failed;
@@ -8620,14 +8962,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (orelse == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 stmt_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'For' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_stmt(state, tmp2, &val, "orelse", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "For field \"orelse\" changed size during iteration");
                     goto failed;
@@ -8727,14 +9087,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (body == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 stmt_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'AsyncFor' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_stmt(state, tmp2, &val, "body", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "AsyncFor field \"body\" changed size during iteration");
                     goto failed;
@@ -8765,14 +9143,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (orelse == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 stmt_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'AsyncFor' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_stmt(state, tmp2, &val, "orelse", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "AsyncFor field \"orelse\" changed size during iteration");
                     goto failed;
@@ -8854,14 +9250,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (body == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 stmt_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'While' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_stmt(state, tmp2, &val, "body", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "While field \"body\" changed size during iteration");
                     goto failed;
@@ -8892,14 +9306,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (orelse == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 stmt_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'While' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_stmt(state, tmp2, &val, "orelse", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "While field \"orelse\" changed size during iteration");
                     goto failed;
@@ -8962,14 +9394,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (body == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 stmt_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'If' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_stmt(state, tmp2, &val, "body", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "If field \"body\" changed size during iteration");
                     goto failed;
@@ -9000,14 +9450,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (orelse == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 stmt_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'If' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_stmt(state, tmp2, &val, "orelse", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "If field \"orelse\" changed size during iteration");
                     goto failed;
@@ -9053,14 +9521,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (items == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 withitem_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'With' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_withitem(state, tmp2, &val, "items", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "With field \"items\" changed size during iteration");
                     goto failed;
@@ -9091,14 +9577,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (body == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 stmt_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'With' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_stmt(state, tmp2, &val, "body", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "With field \"body\" changed size during iteration");
                     goto failed;
@@ -9162,14 +9666,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (items == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 withitem_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'AsyncWith' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_withitem(state, tmp2, &val, "items", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "AsyncWith field \"items\" changed size during iteration");
                     goto failed;
@@ -9200,14 +9722,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (body == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 stmt_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'AsyncWith' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_stmt(state, tmp2, &val, "body", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "AsyncWith field \"body\" changed size during iteration");
                     goto failed;
@@ -9287,14 +9827,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (cases == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 match_case_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'Match' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_match_case(state, tmp2, &val, "cases", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "Match field \"cases\" changed size during iteration");
                     goto failed;
@@ -9389,14 +9947,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (body == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 stmt_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'Try' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_stmt(state, tmp2, &val, "body", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "Try field \"body\" changed size during iteration");
                     goto failed;
@@ -9427,14 +10003,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (handlers == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 excepthandler_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'Try' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_excepthandler(state, tmp2, &val, "handlers", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "Try field \"handlers\" changed size during iteration");
                     goto failed;
@@ -9465,14 +10059,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (orelse == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 stmt_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'Try' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_stmt(state, tmp2, &val, "orelse", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "Try field \"orelse\" changed size during iteration");
                     goto failed;
@@ -9503,14 +10115,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (finalbody == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 stmt_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'Try' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_stmt(state, tmp2, &val, "finalbody", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "Try field \"finalbody\" changed size during iteration");
                     goto failed;
@@ -9557,14 +10187,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (body == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 stmt_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'TryStar' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_stmt(state, tmp2, &val, "body", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "TryStar field \"body\" changed size during iteration");
                     goto failed;
@@ -9595,14 +10243,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (handlers == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 excepthandler_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'TryStar' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_excepthandler(state, tmp2, &val, "handlers", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "TryStar field \"handlers\" changed size during iteration");
                     goto failed;
@@ -9633,14 +10299,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (orelse == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 stmt_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'TryStar' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_stmt(state, tmp2, &val, "orelse", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "TryStar field \"orelse\" changed size during iteration");
                     goto failed;
@@ -9671,14 +10355,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (finalbody == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 stmt_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'TryStar' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_stmt(state, tmp2, &val, "finalbody", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "TryStar field \"finalbody\" changed size during iteration");
                     goto failed;
@@ -9771,14 +10473,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (names == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 alias_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'Import' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_alias(state, tmp2, &val, "names", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "Import field \"names\" changed size during iteration");
                     goto failed;
@@ -9859,14 +10579,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (names == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 alias_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'ImportFrom' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_alias(state, tmp2, &val, "names", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "ImportFrom field \"names\" changed size during iteration");
                     goto failed;
@@ -9944,14 +10682,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (names == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 identifier val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'Global' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_identifier(state, tmp2, &val, "names", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "Global field \"names\" changed size during iteration");
                     goto failed;
@@ -9995,14 +10751,32 @@ obj2ast_stmt(struct ast_state *state, PyObject* obj, stmt_ty* out, const char*
             if (names == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 identifier val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'Nonlocal' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_identifier(state, tmp2, &val, "names", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "Nonlocal field \"names\" changed size during iteration");
                     goto failed;
@@ -10231,14 +11005,32 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, const char*
             if (values == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 expr_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'BoolOp' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_expr(state, tmp2, &val, "values", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "BoolOp field \"values\" changed size during iteration");
                     goto failed;
@@ -10559,14 +11351,32 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, const char*
             if (keys == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 expr_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'Dict' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_expr(state, tmp2, &val, "keys", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "Dict field \"keys\" changed size during iteration");
                     goto failed;
@@ -10597,14 +11407,32 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, const char*
             if (values == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 expr_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'Dict' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_expr(state, tmp2, &val, "values", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "Dict field \"values\" changed size during iteration");
                     goto failed;
@@ -10648,14 +11476,32 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, const char*
             if (elts == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 expr_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'Set' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_expr(state, tmp2, &val, "elts", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "Set field \"elts\" changed size during iteration");
                     goto failed;
@@ -10717,14 +11563,32 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, const char*
             if (generators == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 comprehension_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'ListComp' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_comprehension(state, tmp2, &val, "generators", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "ListComp field \"generators\" changed size during iteration");
                     goto failed;
@@ -10786,14 +11650,32 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, const char*
             if (generators == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 comprehension_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'SetComp' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_comprehension(state, tmp2, &val, "generators", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "SetComp field \"generators\" changed size during iteration");
                     goto failed;
@@ -10873,14 +11755,32 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, const char*
             if (generators == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 comprehension_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'DictComp' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_comprehension(state, tmp2, &val, "generators", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "DictComp field \"generators\" changed size during iteration");
                     goto failed;
@@ -10942,14 +11842,32 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, const char*
             if (generators == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 comprehension_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'GeneratorExp' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_comprehension(state, tmp2, &val, "generators", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "GeneratorExp field \"generators\" changed size during iteration");
                     goto failed;
@@ -11102,14 +12020,32 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, const char*
             if (ops == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 cmpop_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'Compare' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_cmpop(state, tmp2, &val, "ops", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "Compare field \"ops\" changed size during iteration");
                     goto failed;
@@ -11140,14 +12076,32 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, const char*
             if (comparators == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 expr_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'Compare' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_expr(state, tmp2, &val, "comparators", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "Compare field \"comparators\" changed size during iteration");
                     goto failed;
@@ -11210,14 +12164,32 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, const char*
             if (args == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 expr_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'Call' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_expr(state, tmp2, &val, "args", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "Call field \"args\" changed size during iteration");
                     goto failed;
@@ -11248,14 +12220,32 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, const char*
             if (keywords == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 keyword_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'Call' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_keyword(state, tmp2, &val, "keywords", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "Call field \"keywords\" changed size during iteration");
                     goto failed;
@@ -11451,14 +12441,32 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, const char*
             if (values == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 expr_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'JoinedStr' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_expr(state, tmp2, &val, "values", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "JoinedStr field \"values\" changed size during iteration");
                     goto failed;
@@ -11502,14 +12510,32 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, const char*
             if (values == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 expr_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'TemplateStr' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_expr(state, tmp2, &val, "values", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "TemplateStr field \"values\" changed size during iteration");
                     goto failed;
@@ -11830,14 +12856,32 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, const char*
             if (elts == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 expr_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'List' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_expr(state, tmp2, &val, "elts", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "List field \"elts\" changed size during iteration");
                     goto failed;
@@ -11899,14 +12943,32 @@ obj2ast_expr(struct ast_state *state, PyObject* obj, expr_ty* out, const char*
             if (elts == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 expr_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'Tuple' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_expr(state, tmp2, &val, "elts", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "Tuple field \"elts\" changed size during iteration");
                     goto failed;
@@ -12387,14 +13449,32 @@ obj2ast_comprehension(struct ast_state *state, PyObject* obj, comprehension_ty*
         if (ifs == NULL) goto failed;
         for (i = 0; i < len; i++) {
             expr_ty val;
-            PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+            PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+            if (tmp2 == NULL) goto failed;
+            if (PyErr_Occurred()) {
+                PyObject *saved_error = PyErr_GetRaisedException();
+                Py_DECREF(tmp2);
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                goto failed;
+            }
             if (_Py_EnterRecursiveCall(" while traversing 'comprehension' node")) {
+                PyObject *saved_error = PyErr_GetRaisedException();
+                Py_DECREF(tmp2);
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
                 goto failed;
             }
             res = obj2ast_expr(state, tmp2, &val, "ifs", arena);
             _Py_LeaveRecursiveCall();
+            PyObject *saved_error = PyErr_GetRaisedException();
             Py_DECREF(tmp2);
-            if (res != 0) goto failed;
+            if (saved_error != NULL) {
+                PyErr_SetRaisedException(saved_error);
+            }
+            if (res != 0 || PyErr_Occurred()) goto failed;
             if (len != PyList_GET_SIZE(tmp)) {
                 PyErr_SetString(PyExc_RuntimeError, "comprehension field \"ifs\" changed size during iteration");
                 goto failed;
@@ -12588,14 +13668,32 @@ obj2ast_excepthandler(struct ast_state *state, PyObject* obj, excepthandler_ty*
             if (body == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 stmt_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'ExceptHandler' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_stmt(state, tmp2, &val, "body", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "ExceptHandler field \"body\" changed size during iteration");
                     goto failed;
@@ -12651,14 +13749,32 @@ obj2ast_arguments(struct ast_state *state, PyObject* obj, arguments_ty* out,
         if (posonlyargs == NULL) goto failed;
         for (i = 0; i < len; i++) {
             arg_ty val;
-            PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+            PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+            if (tmp2 == NULL) goto failed;
+            if (PyErr_Occurred()) {
+                PyObject *saved_error = PyErr_GetRaisedException();
+                Py_DECREF(tmp2);
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                goto failed;
+            }
             if (_Py_EnterRecursiveCall(" while traversing 'arguments' node")) {
+                PyObject *saved_error = PyErr_GetRaisedException();
+                Py_DECREF(tmp2);
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
                 goto failed;
             }
             res = obj2ast_arg(state, tmp2, &val, "posonlyargs", arena);
             _Py_LeaveRecursiveCall();
+            PyObject *saved_error = PyErr_GetRaisedException();
             Py_DECREF(tmp2);
-            if (res != 0) goto failed;
+            if (saved_error != NULL) {
+                PyErr_SetRaisedException(saved_error);
+            }
+            if (res != 0 || PyErr_Occurred()) goto failed;
             if (len != PyList_GET_SIZE(tmp)) {
                 PyErr_SetString(PyExc_RuntimeError, "arguments field \"posonlyargs\" changed size during iteration");
                 goto failed;
@@ -12689,14 +13805,32 @@ obj2ast_arguments(struct ast_state *state, PyObject* obj, arguments_ty* out,
         if (args == NULL) goto failed;
         for (i = 0; i < len; i++) {
             arg_ty val;
-            PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+            PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+            if (tmp2 == NULL) goto failed;
+            if (PyErr_Occurred()) {
+                PyObject *saved_error = PyErr_GetRaisedException();
+                Py_DECREF(tmp2);
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                goto failed;
+            }
             if (_Py_EnterRecursiveCall(" while traversing 'arguments' node")) {
+                PyObject *saved_error = PyErr_GetRaisedException();
+                Py_DECREF(tmp2);
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
                 goto failed;
             }
             res = obj2ast_arg(state, tmp2, &val, "args", arena);
             _Py_LeaveRecursiveCall();
+            PyObject *saved_error = PyErr_GetRaisedException();
             Py_DECREF(tmp2);
-            if (res != 0) goto failed;
+            if (saved_error != NULL) {
+                PyErr_SetRaisedException(saved_error);
+            }
+            if (res != 0 || PyErr_Occurred()) goto failed;
             if (len != PyList_GET_SIZE(tmp)) {
                 PyErr_SetString(PyExc_RuntimeError, "arguments field \"args\" changed size during iteration");
                 goto failed;
@@ -12744,14 +13878,32 @@ obj2ast_arguments(struct ast_state *state, PyObject* obj, arguments_ty* out,
         if (kwonlyargs == NULL) goto failed;
         for (i = 0; i < len; i++) {
             arg_ty val;
-            PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+            PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+            if (tmp2 == NULL) goto failed;
+            if (PyErr_Occurred()) {
+                PyObject *saved_error = PyErr_GetRaisedException();
+                Py_DECREF(tmp2);
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                goto failed;
+            }
             if (_Py_EnterRecursiveCall(" while traversing 'arguments' node")) {
+                PyObject *saved_error = PyErr_GetRaisedException();
+                Py_DECREF(tmp2);
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
                 goto failed;
             }
             res = obj2ast_arg(state, tmp2, &val, "kwonlyargs", arena);
             _Py_LeaveRecursiveCall();
+            PyObject *saved_error = PyErr_GetRaisedException();
             Py_DECREF(tmp2);
-            if (res != 0) goto failed;
+            if (saved_error != NULL) {
+                PyErr_SetRaisedException(saved_error);
+            }
+            if (res != 0 || PyErr_Occurred()) goto failed;
             if (len != PyList_GET_SIZE(tmp)) {
                 PyErr_SetString(PyExc_RuntimeError, "arguments field \"kwonlyargs\" changed size during iteration");
                 goto failed;
@@ -12782,14 +13934,32 @@ obj2ast_arguments(struct ast_state *state, PyObject* obj, arguments_ty* out,
         if (kw_defaults == NULL) goto failed;
         for (i = 0; i < len; i++) {
             expr_ty val;
-            PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+            PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+            if (tmp2 == NULL) goto failed;
+            if (PyErr_Occurred()) {
+                PyObject *saved_error = PyErr_GetRaisedException();
+                Py_DECREF(tmp2);
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                goto failed;
+            }
             if (_Py_EnterRecursiveCall(" while traversing 'arguments' node")) {
+                PyObject *saved_error = PyErr_GetRaisedException();
+                Py_DECREF(tmp2);
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
                 goto failed;
             }
             res = obj2ast_expr(state, tmp2, &val, "kw_defaults", arena);
             _Py_LeaveRecursiveCall();
+            PyObject *saved_error = PyErr_GetRaisedException();
             Py_DECREF(tmp2);
-            if (res != 0) goto failed;
+            if (saved_error != NULL) {
+                PyErr_SetRaisedException(saved_error);
+            }
+            if (res != 0 || PyErr_Occurred()) goto failed;
             if (len != PyList_GET_SIZE(tmp)) {
                 PyErr_SetString(PyExc_RuntimeError, "arguments field \"kw_defaults\" changed size during iteration");
                 goto failed;
@@ -12837,14 +14007,32 @@ obj2ast_arguments(struct ast_state *state, PyObject* obj, arguments_ty* out,
         if (defaults == NULL) goto failed;
         for (i = 0; i < len; i++) {
             expr_ty val;
-            PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+            PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+            if (tmp2 == NULL) goto failed;
+            if (PyErr_Occurred()) {
+                PyObject *saved_error = PyErr_GetRaisedException();
+                Py_DECREF(tmp2);
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                goto failed;
+            }
             if (_Py_EnterRecursiveCall(" while traversing 'arguments' node")) {
+                PyObject *saved_error = PyErr_GetRaisedException();
+                Py_DECREF(tmp2);
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
                 goto failed;
             }
             res = obj2ast_expr(state, tmp2, &val, "defaults", arena);
             _Py_LeaveRecursiveCall();
+            PyObject *saved_error = PyErr_GetRaisedException();
             Py_DECREF(tmp2);
-            if (res != 0) goto failed;
+            if (saved_error != NULL) {
+                PyErr_SetRaisedException(saved_error);
+            }
+            if (res != 0 || PyErr_Occurred()) goto failed;
             if (len != PyList_GET_SIZE(tmp)) {
                 PyErr_SetString(PyExc_RuntimeError, "arguments field \"defaults\" changed size during iteration");
                 goto failed;
@@ -13364,14 +14552,32 @@ obj2ast_match_case(struct ast_state *state, PyObject* obj, match_case_ty* out,
         if (body == NULL) goto failed;
         for (i = 0; i < len; i++) {
             stmt_ty val;
-            PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+            PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+            if (tmp2 == NULL) goto failed;
+            if (PyErr_Occurred()) {
+                PyObject *saved_error = PyErr_GetRaisedException();
+                Py_DECREF(tmp2);
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                goto failed;
+            }
             if (_Py_EnterRecursiveCall(" while traversing 'match_case' node")) {
+                PyObject *saved_error = PyErr_GetRaisedException();
+                Py_DECREF(tmp2);
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
                 goto failed;
             }
             res = obj2ast_stmt(state, tmp2, &val, "body", arena);
             _Py_LeaveRecursiveCall();
+            PyObject *saved_error = PyErr_GetRaisedException();
             Py_DECREF(tmp2);
-            if (res != 0) goto failed;
+            if (saved_error != NULL) {
+                PyErr_SetRaisedException(saved_error);
+            }
+            if (res != 0 || PyErr_Occurred()) goto failed;
             if (len != PyList_GET_SIZE(tmp)) {
                 PyErr_SetString(PyExc_RuntimeError, "match_case field \"body\" changed size during iteration");
                 goto failed;
@@ -13572,14 +14778,32 @@ obj2ast_pattern(struct ast_state *state, PyObject* obj, pattern_ty* out, const
             if (patterns == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 pattern_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'MatchSequence' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_pattern(state, tmp2, &val, "patterns", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "MatchSequence field \"patterns\" changed size during iteration");
                     goto failed;
@@ -13625,14 +14849,32 @@ obj2ast_pattern(struct ast_state *state, PyObject* obj, pattern_ty* out, const
             if (keys == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 expr_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'MatchMapping' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_expr(state, tmp2, &val, "keys", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "MatchMapping field \"keys\" changed size during iteration");
                     goto failed;
@@ -13663,14 +14905,32 @@ obj2ast_pattern(struct ast_state *state, PyObject* obj, pattern_ty* out, const
             if (patterns == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 pattern_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'MatchMapping' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_pattern(state, tmp2, &val, "patterns", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "MatchMapping field \"patterns\" changed size during iteration");
                     goto failed;
@@ -13751,14 +15011,32 @@ obj2ast_pattern(struct ast_state *state, PyObject* obj, pattern_ty* out, const
             if (patterns == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 pattern_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'MatchClass' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_pattern(state, tmp2, &val, "patterns", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "MatchClass field \"patterns\" changed size during iteration");
                     goto failed;
@@ -13789,14 +15067,32 @@ obj2ast_pattern(struct ast_state *state, PyObject* obj, pattern_ty* out, const
             if (kwd_attrs == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 identifier val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'MatchClass' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_identifier(state, tmp2, &val, "kwd_attrs", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "MatchClass field \"kwd_attrs\" changed size during iteration");
                     goto failed;
@@ -13827,14 +15123,32 @@ obj2ast_pattern(struct ast_state *state, PyObject* obj, pattern_ty* out, const
             if (kwd_patterns == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 pattern_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'MatchClass' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_pattern(state, tmp2, &val, "kwd_patterns", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "MatchClass field \"kwd_patterns\" changed size during iteration");
                     goto failed;
@@ -13957,14 +15271,32 @@ obj2ast_pattern(struct ast_state *state, PyObject* obj, pattern_ty* out, const
             if (patterns == NULL) goto failed;
             for (i = 0; i < len; i++) {
                 pattern_ty val;
-                PyObject *tmp2 = Py_NewRef(PyList_GET_ITEM(tmp, i));
+                PyObject *tmp2 = PyList_GetItemRef(tmp, i);
+                if (tmp2 == NULL) goto failed;
+                if (PyErr_Occurred()) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
+                    goto failed;
+                }
                 if (_Py_EnterRecursiveCall(" while traversing 'MatchOr' node")) {
+                    PyObject *saved_error = PyErr_GetRaisedException();
+                    Py_DECREF(tmp2);
+                    if (saved_error != NULL) {
+                        PyErr_SetRaisedException(saved_error);
+                    }
                     goto failed;
                 }
                 res = obj2ast_pattern(state, tmp2, &val, "patterns", arena);
                 _Py_LeaveRecursiveCall();
+                PyObject *saved_error = PyErr_GetRaisedException();
                 Py_DECREF(tmp2);
-                if (res != 0) goto failed;
+                if (saved_error != NULL) {
+                    PyErr_SetRaisedException(saved_error);
+                }
+                if (res != 0 || PyErr_Occurred()) goto failed;
                 if (len != PyList_GET_SIZE(tmp)) {
                     PyErr_SetString(PyExc_RuntimeError, "MatchOr field \"patterns\" changed size during iteration");
                     goto failed;

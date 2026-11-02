@@ -184,6 +184,21 @@ build/pyvalue-typeobject-error-patterns-20261102-v1.
 
 ## Census and evidence
 
+For mechanical ports, distinguish decoding from materialization. Similar names
+do not imply the same value domain:
+
+| Operation | Required proof and result |
+| --- | --- |
+| `PyValue_AsPyObjectBorrow` | Heap-object value only; pure borrowed decode, rooted through use |
+| `PyValue_AsPyObjectNew` | Heap-object value only; adds a reference, does not box inline values |
+| `PyValue_AsObject` / `PyValue_AsPyObjectNewBoxed` | Fallible owned object view, including inline values; check NULL and pending error |
+| `PyTuple_GET_VALUE` | Borrowed canonical value; retain its tuple or duplicate ownership before callouts |
+| `_PyTuple_GET_OBJECT` | Borrowed heap metadata only, with a concrete validated-element proof |
+
+The operator/LRU review caught an inline-int branch using the heap-only NewRef
+macro. Its correction belongs to that experiment; no unsafe convenience decode
+or second stored representation is an acceptable substitute.
+
 The historical v3 build predates the separately checked graph and
 call bridges: 540 error diagnostics at 425 distinct source locations in 90
 source/header paths. These are observations

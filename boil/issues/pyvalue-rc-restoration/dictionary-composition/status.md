@@ -10,10 +10,12 @@ object conversion finding was fixed in its own bounded implementation and
 reviewed before inclusion. The final file/hash allowlist was checked before
 staging. No unrelated working files were staged.
 
-Six retained legacy borrowed functions still fail compilation. Five public value
-API declarations still lack definitions. Neither is a compatibility approval
-gate; owning source ports and concrete provider closure remain necessary. This
-checkpoint is non-runnable, not runtime-qualified or measured.
+At this checkpoint, six retained legacy borrowed functions failed compilation
+and five public value declarations lacked definitions. The later
+[API cut](../dict-boundary-closure/status.md) removed the incomplete borrowed
+paths. [Four read providers](../value-readers/status.md) are now reviewed and committed;
+PopValue remains a separate required mutation provider. Owning source ports
+remain necessary. This checkpoint is non-runnable, not runtime-qualified or measured.
 
 [Composition review](../../../../build/pyvalue-source-integration-20261102-v1/dictionary-composition-review.md),
 [file hashes](../../../../build/pyvalue-source-integration-20261102-v1/dictionary-files.json),

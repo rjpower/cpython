@@ -1,57 +1,43 @@
-# Native parsers, registration and opaque API
+# Native callers, scoped parsers and registration
 
-- Stage: revise cohesive lifetime design; no implementation authorized yet
-- Owner: fresh wiki_audit designs; coordinator reviews
-- Goal: make real extension routes use the accepted native owner scope, then
-  support gradual opaque API adoption without exposing PyValue bits.
+- Stage: design accepted; two disjoint implementation lanes active
+- Owners: state_audit caller/engine; wiki_audit parser/Clinic; coordinator integrates
+- Goal: repair real call preparation/publication and port a production constructor family
 
-Fixed/variable engine and selected callers are source-reviewed. Recursive and
-kwargs parser contexts, typed Clinic registration, remaining call families,
-converter/buffer cleanup and the HPy-compatible backend remain unfinished.
+The [accepted design](design.md), [active grants](implementation-grants.md) and
+[extension contract](../../../design/extension-api.md) define one lifetime model.
+Publish coherent IN_CALL before preparation can call out. Publish final callable/
+self or tuple homes before retiring obsolete preparation inputs; refresh afterward.
+Final invocation inputs, displaced output and staged scalar result boxes survive
+until actual result/error publication. Parser/converter locals may retire after
+last use while IN_CALL remains coherent. No callback, conversion or call replays.
 
-Start with one actual Python→gateway→typed worker→caller publication route.
-Scope producers, registration and generated wrappers together; a synthetic C
-worker call or parser-local arena does not prove the route. Keep owned argument
-views through implementation and cleanup; stack-local converter resources end
-at their actual wrapper lifetime. Never cast a function pointer to a new ABI.
+Lane A extends the existing NativeScope and repairs cold/warm/KW/EX/instrumented
+preludes, publication, error paths and Python frame transfer through the actual
+VM producer. Lane B adds a tuple-only parser lease and shared scoped unpack,
+checks counts/shape before boxing, retains keyword results and regenerates the
+nine reviewed constructor/init wrappers in seven production products. Struct's
+handwritten new and paired init are included. Registered constructor fixtures
+exercise real routes and kwargs aliasing; no static-worker shortcut supplies proof.
 
-The [extension design](../../../design/extension-api.md) owns the public direction.
-HPy ecosystem conformance does not gate the first internal interpreter checkpoint.
-Next: review one cohesive parser/registration increment with real-route tests.
+Both lanes start at source `99012f782ea`. Their files are disjoint; root owns the
+shared index, native build freezes, independent reviews and merged validation.
+The contract amendment was independently checked against the accepted design.
+Further parser families, varpos/recursive converters, other call gateways and
+the opaque extension backend remain unfinished. The three object/type files
+stay held for their separate findings. Hard compatibility is not a gate.
 
-## Current design review
+## Review and evidence
 
-The first full build found repeated Clinic tuple-to-object-vector mismatches
-and remaining getargs container assumptions. Inspection also found keyword
-GetItemRef results stored in parser output and decremented before callee use.
-An owning lease must keep positional and selected keyword views alive through
-their last use; a parser-local temporary cannot provide that lifetime.
+[Independent v3 review](../../../../build/pyvalue-clinic-parser-design-20261102-v1/independent-review-v3.md),
+[coordinator review](../../../../build/pyvalue-clinic-parser-design-20261102-v1/coordinator-review-v3.md),
+[frozen inputs](../../../../build/pyvalue-clinic-parser-design-20261102-v1/inputs-v3.json).
+V1 was rejected as a test-only policy we already intended to replace. V2 required
+real early-prelude and witness-route closure. V3 resolves both plus the parser
+preflight/materialization sequencing; its original proposal is preserved in the
+[design workspace](../../../../build/pyvalue-clinic-parser-design-20261102-v1).
 
-Coordinator review requested an end-to-end lifetime decision before code.
-Distinguish invocation input/result retirement from ordinary callee-local parser
-resources. Prove the caller frame and argument window remain valid through
-callee/cleanup reentry; revise the blanket deferred-parser-resource rule if the
-proof supports it. Otherwise specify real typed caller-owned storage and
-registration through publication before implementation. Choose one lifetime
-model. Do not first build a wrapper-exit policy already intended for replacement.
-
-The first useful slice should include a structural production wrapper family
-contributing to the real build failures, with test siblings as witnesses. Real
-ordinary/EX dispatch, publication and cleanup dependencies must be explicit.
-No PyValue-to-object-vector casts, hidden TLS scope, fake publication or second
-boxed tuple format. Existing native scope/input/result contracts remain in force
-until a reviewed amendment replaces them.
-
-[Design workspace](../../../../build/pyvalue-clinic-parser-design-20261102-v1),
-[coordinator review](../../../../build/pyvalue-clinic-parser-design-20261102-v1/coordinator-review-v1.md).
-Next: review the revised cohesive model and first production slice, then authorize
-bounded implementation and independent code/result review.
-
-V2 proposes two ownership roles under one invocation transaction: callee-local
-parser owners may retire during coherent IN_CALL; invocation inputs/results
-retire only after result/error publication. Peers support this model but require explicit early
-monitor/EX-conversion preparation and refresh, plus a correctly routed same-kwargs
-witness. The production structural family is nine constructor/init wrappers in
-seven products, including Struct's handwritten entry. V3 must close those route
-gaps before source edits. [V2](../../../../build/pyvalue-clinic-parser-design-20261102-v1/design-v2.md),
-[peer review](../../../../build/pyvalue-clinic-parser-design-20261102-v1/independent-review-v2.md).
+Next: implement, regenerate twice, run host producer checks, freeze actual inputs
+for configured-header diagnostics, independently review code/results and commit
+useful dependencies. Then validate the merged candidate. No new native-call or
+parser runtime pass exists; candidate tests await a linked restored interpreter.

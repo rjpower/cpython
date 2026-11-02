@@ -30,14 +30,61 @@ The public handle is an opaque context-resolved reference, not PyValue bits or a
 | HPyField | Owned extension payload, initialized and traversed; publish new owner before releasing old |
 | HPyGlobal | Registered per-interpreter identity, retained until replacement/clear or interpreter teardown |
 | Buffer lease | Exporter plus export record; pointer validity ends at release |
-| Legacy object-array slot | Owns each boxed argument through parser, implementation and deferred cleanup |
-| Retired scalar box | Held through actual caller-state publication, then released with cleanup status |
+| Invocation object-array slot | Owns each boxed argument through caller result/error publication |
+| Parser-local owner or buffer | Retain through last callee use and converter cleanup; may retire during coherent IN_CALL |
+| Retired scalar result box | Held through actual caller-state publication, then released with cleanup status |
 
 The backend must implement Field traversal/clear and Global isolation in the existing reference-counted runtime. There is no permanent scalar box cache, boxed core mode, or arbitrary lifetime extension. Extension-owned payload may be exposed through declared shapes; builtin container layouts remain private. [Fields](https://docs.hpyproject.org/en/latest/api-reference/hpy-field.html), [globals](https://docs.hpyproject.org/en/latest/api-reference/hpy-global.html), [type definitions](https://docs.hpyproject.org/en/latest/api-reference/hpy-type.html).
 
-Every native invocation has an explicit caller-owned scope. Before allocation, the producer supplies a stable owning evaluated window, using the existing pure `_PyValue_OwnArray` promotion. Scope capture duplicates its roots into independent storage and stops depending on the source window. NOARGS/O uses bounded caller storage; variable arrays may allocate only while the original owning window remains stable. A mutable container's raw array does not satisfy that contract. No unbounded alloca or implicit TLS owner engine is required.
+A call transaction publishes coherent IN_CALL state before any preparation can
+allocate or call out: the call-site PC, numeric operand/destination offsets and
+owning evaluated homes are valid. Method expansion, monitoring and expanded-call
+iteration belong to this transaction. Refresh frame, execution words, feedback
+and window after every preparation callback on success and error. Once an effect
+can have occurred, never replay conversion, monitoring or the native body.
 
-The call sequence is capture → box/parse → invoke → stage → publish → cleanup. Stage consumes the owned object result using pure PrepareOwned and retains its retired scalar box. Publish is nonallocating and nonreentrant: retain the displaced destination owner, move the new value, then publish the caller's actual frame, PC and live-home/window state. Only afterward may cleanup release input boxes, parser resources, displaced owners and retired boxes. Returning from a callee cannot end its scope early. Cleanup failure leaves the transferred result in the caller's published home for normal error handling; it does not close it twice. Abort instead leaves the destination unchanged, publishes the error state and drains the staged owner once. An absent C self/metadata uses an explicit absence sentinel, never a language argument.
+Preparation may replace a bound method with function/self homes or an iterable
+with a tuple. Pin the original inputs before callbacks. Publish the final owning
+homes nonallocatingly while retaining displaced originals; only then may obsolete
+preparation locals retire. Refresh after that cleanup. A cleanup error prevents
+invocation and follows real error publication. Drain preparation locals before
+Python frame transfer; no pointer to a C-local record escapes inlined dispatch.
+
+Every native invocation uses the same explicit caller-owned scope. The producer
+supplies a stable owning final input window using pure `_PyValue_OwnArray`
+promotion. Scope capture duplicates roots and stops depending on that window.
+NOARGS/O uses bounded storage; variable arrays may allocate only while original
+owning homes stay stable. A mutable container's raw array does not satisfy this
+contract. There is no unbounded alloca or implicit TLS owner engine.
+
+Two ownership roles share this transaction. Final invocation inputs and their
+boxed views, the displaced destination and any staged scalar result box remain
+owned through actual caller result/error publication. Callee-local parser boxes,
+selected keyword owners, buffers and native locals remain owned through last use
+and converter cleanup; they may retire while IN_CALL stays coherent. Ordinary
+native bodies already release their local objects and reenter before returning.
+This local rule does not permit early retirement of caller invocation inputs.
+
+The native sequence is capture → box/parse → invoke → stage → publish → cleanup.
+Stage consumes the owned object result with pure PrepareOwned and retains its
+retired scalar box. Publish cannot allocate, release owners or fail: retain the
+displaced destination, move the new canonical value, then publish actual frame,
+PC and live-home state. Only afterward drain invocation inputs, displaced owner
+and retired result box. Cleanup failure leaves the transferred result in its
+published home for normal error handling. Abort leaves the destination unchanged,
+publishes the error state and drains a staged owner once. Callee-local cleanup
+must retain any implementation result until it finishes, preserve the primary
+or first new error, and never return an object with an exception pending. An
+absent C self/metadata uses an absence sentinel, never a language argument.
+
+Parser scopes first pin an immutable canonical tuple and record its count.
+Shared parser initialization/count/shape/error selection precedes allocating or
+boxing accepted positional values. Reserve keyword owner slots before lookup;
+retain selected owning GetItemRef results before exposing parser borrows. A
+materialized object view remains stable through implementation/converter cleanup
+and ends with its explicit callee-local scope. No canonical-array pointer cast
+implements an object-array API. The first production constructor slice and exact
+producer/caller boundaries are in the [reviewed design](../issues/pyvalue-rc-restoration/native-parsers/design.md).
 
 This bridge can preserve many ordinary parser-based method bodies: generate one stable owned PyObject argument array and let parser outputs borrow from it through implementation and cleanup. Current getargs already has array parser entry points. Nested converters and keyword lookup results need the same owner context; raw value-array casts are invalid. Native-handle wrappers can parse handles directly and avoid boxing. Change Clinic producers and regenerate their products together. [HPy argument parsing](https://docs.hpyproject.org/en/latest/api-reference/argument-parsing.html).
 

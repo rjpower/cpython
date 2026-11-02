@@ -9,18 +9,19 @@ ported; hard source or binary compatibility with upstream is not required.
 
 The qualified interim interpreter is built from `eba351fee7d`: register IR and
 NaN-boxed frame values, with boxed heap fields. Universal PyValue restoration now
-has ten independently reviewed source commits on `boil/pyvalue-rc-universal`,
-HEAD `d1c8041c78c`. Three object/type files remain held for explicit correctness
+has eleven independently reviewed source commits on `boil/pyvalue-rc-universal`,
+HEAD `99012f782ea`. Three object/type files remain held for explicit correctness
 findings. There is no linked or qualified restored interpreter or timing result.
 
 **Current step:** use the first build's concrete diagnostics to close shared
 dictionary and native parser/Clinic boundaries. Configure passed and compilation
 produced 141 objects, including the new symtable, codegen and sys.flags ports;
 the interpreter did not link. The dictionary API cut and exception port are
-committed and compile as real objects. The canonical read-provider design passed
-review; the coordinator implements it while state_audit adds public-API fixtures.
-Fresh wiki_audit revises the integrated Clinic/parser model. The
-coordinator reviews designs, integrates commits and validates the merged result.
+committed and compile as real objects. Four canonical read APIs are now also
+reviewed and committed, supplying active compiler link dependencies. The
+reviewed native-call/parser design is in implementation: state_audit owns caller
+transactions; wiki_audit owns scoped parsers and the first constructor family.
+The coordinator reviews and integrates increments, then validates the merged result.
 See the [work board](issues/README.md) for assignments and next gates.
 
 Next milestone: measure the unified-value register interpreter with JIT

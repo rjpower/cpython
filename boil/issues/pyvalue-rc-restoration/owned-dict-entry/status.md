@@ -13,8 +13,9 @@ All preexisting Dict/header contracts remain exact in this additive increment.
 [Author receipt](../../../../build/pyvalue-dict-owned-entry-source-20261102-v1/final-v1/receipt.json)
 `0ef3ace1`; [independent review](../../../../build/pyvalue-rc-native-consumer-map-20261101-v1/dict-owned-entry-component-review-receipt.json)
 `c43dd512`. Fixture syntax passes; 32 behavioral methods remain unexecuted.
-Full Dict still fails six retained borrowed bodies. That boundary and all
-affected core/bundled consumers remain [separate work](../core-consumers/status.md).
+The later [dictionary API cut](../dict-boundary-closure/status.md) removed the
+six incomplete borrowed paths; the full Dict TU and object now compile.
+Affected core/bundled consumers remain [separate work](../core-consumers/status.md).
 
 Next: port concrete consumers and test snapshot/OOM/
 reentry behavior on the integrated candidate. Compatibility approval is not

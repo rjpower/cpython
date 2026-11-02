@@ -1,6 +1,6 @@
 # Restoration integration and interpreter checkpoint
 
-- Stage: ten source checkpoints; first real diagnostic build failed
+- Stage: eleven source checkpoints; first real diagnostic build failed
 - Owner: coordinator; fresh wiki_audit reviews checkpoint boundaries
 - Goal: produce one coherent universal-value RC runtime, validate composition,
   then measure the register interpreter before further JIT performance work.
@@ -30,7 +30,7 @@ results cannot supply it. Use results to improve specific mechanisms.
 
 ## Current checkpoint
 
-Ten reviewed source commits end at `d1c8041c78c`; their exact receipts are
+Eleven reviewed source commits end at `99012f782ea`; their exact receipts are
 linked from the [board](../../README.md). The shared composition commit
 `c21d0a374ee` excludes three object/type files with concrete scalar/cache holds.
 Codegen `ebc9740c4d5` and sys.flags `015eb226fb3` passed independent reviews and
@@ -46,8 +46,12 @@ actual Dict and fixture TUs pass and dictobject.o compiles. Exception consumers
 `d1c8041c78c` pass full syntax and errors.o compilation. Runtime cases remain
 unexecuted, and their header/caller changes have not yielded a new linked build.
 
-Next: implement the missing canonical read providers and the cohesive
-Clinic/parser invocation model. Resolve held object/type bridges and cache
+Canonical read providers `99012f782ea` compile and define four strong symbols;
+existing compile.o and flowgraph.o reference GetValue. Thirteen candidate methods
+remain unexecuted. PopValue is still a separate missing mutation provider.
+
+Next: implement the accepted cohesive Clinic/parser invocation model in its two
+disjoint lanes, independently review and integrate their useful increments. Resolve held object/type bridges and cache
 proof separately; port remaining concrete consumers. Reuse the configured build
 for affected rebuilds, then link and run focused tests. Broad qualification and
 quiet timing wait for a coherent candidate.

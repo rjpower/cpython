@@ -1,8 +1,8 @@
 # Restore universal PyValue under RC
 
-- Stage: ten reviewed source checkpoints; first diagnostic build failed.
-- Owner: coordinator and fresh state_audit implement canonical readers/fixtures;
-  wiki_audit revises the cohesive Clinic/parser model. Previous agents stay stopped.
+- Stage: eleven reviewed source checkpoints; first diagnostic build failed.
+- Owner: state_audit caller transactions; wiki_audit scoped parser/Clinic; coordinator integrates.
+  Previous agents stay stopped.
 - Goal: canonical PyValues across frames, containers, attributes and operations,
   retaining RC with cyclic collection.
 
@@ -10,8 +10,8 @@
 
 Qualified interim images remain `eba351fee7d`, private `boilrc1`, boxed heap
 fields. Restoration is `build/worktrees/pyvalue-rc-universal`, branch
-`boil/pyvalue-rc-universal`, base `95be1d28a12`, current HEAD `d1c8041c78c`.
-The [board](../README.md) lists all ten reviewed commits. The only remaining
+`boil/pyvalue-rc-universal`, base `95be1d28a12`, current HEAD `99012f782ea`.
+The [board](../README.md) lists all eleven reviewed commits. The only remaining
 original uncommitted paths are Objects/abstract.c, object.c and typeobject.c,
 held for named scalar-return/call and type-cache correctness findings.
 
@@ -24,8 +24,9 @@ Foundation, containers, attributes, constants, compiler and selected VM/native
 components have independent source reviews in the
 [component index](source-components-20261102-v1.json). The latest
 [compiler](compiler-metadata/status.md), [dictionary entry](owned-dict-entry/status.md)
-and [native caller](native-callers/status.md) receipts match current source.
-These are component reviews, not whole-system acceptance.
+and [native caller](native-callers/status.md) receipts describe their frozen
+checkpoints. Active caller/parser work changes those sources under new review;
+no prior component receipt proves the new composition.
 
 ## Remaining increments
 

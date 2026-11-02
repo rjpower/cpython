@@ -1,21 +1,21 @@
 # Remaining core and extension consumers
 
-- Stage: symtable, codegen and sys.flags committed; further consumer ports queued
-- Owner: coordinator; fresh state_audit implements and wiki_audit reviews
+- Stage: symtable, codegen, sys.flags and errors committed; further ports queued
+- Owner: coordinator assigns scoped ports and independent review
 - Goal: remove accidental boxed/borrowed assumptions while making extension
   ports possible and incremental.
 
 Use the existing 660-path native consumer inventory and exact dictionary caller
 ledger; do not repeat a broad census instead of porting concrete consumers.
 Completed compiler ports cover symtable and codegen metadata. Remaining runtime
-scopes include exceptions, frame-local proxies, module clearing and structseq metadata.
+scopes include frame-local proxies, module clearing and structseq metadata.
 Marshal, generated AST, lifecycle/type and bundled module consumers also remain.
 
-Six retained dictionary bodies still need the selected boundary semantics;
-temporary scalar borrows cannot implement them under RC. Owned GetItemRef,
-NextEntryRef and SetDefaultRef support rebuilt source ports. Unchecked old calls
-need explicit edits; source/binary compatibility is not a gate. Earlier prepared
-scripts did not execute and must not be mistaken for the current diff.
+The [dictionary API cut](../dict-boundary-closure/status.md) removed borrowed
+entrypoints. Owning GetItemRef, NextEntryRef and SetDefaultRef support rebuilt
+source ports; remaining old calls need explicit edits. Source/binary compatibility
+is not a gate. Earlier prepared scripts did not execute and must not be mistaken
+for the current diff.
 
 Split independently owned increments with exact files, ownership/error handling,
 focused tests and review. Change generated AST/Clinic products through their
@@ -31,7 +31,9 @@ the coordinator committed `23cec84d282`. Candidate execution remains pending.
 
 [Codegen](codegen/status.md) and [sys.flags](sysflags/status.md) are source committed
 after independent review; both compiled in the new debug build. Candidate
-execution remains pending. Further compiler/runtime/bundled increments remain queued.
+execution remains pending. The [errors port](errors/status.md) is also committed
+and compiles as a real object; its candidate tests await a linked interpreter.
+Further compiler/runtime/bundled increments remain queued.
 
 A five-TU [diagnostic probe](../../../../build/pyvalue-core-build-diagnostics-20261102-v1/syntax-diagnostics.json)
 found concrete removed container reads in codegen, marshal and errors; frameobject

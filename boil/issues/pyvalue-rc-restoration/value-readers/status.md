@@ -1,17 +1,30 @@
-# Canonical dictionary read-provider closure
+# Canonical dictionary read providers
 
-- Stage: design accepted; implementation and focused checks
-- Owner: coordinator providers/contracts; state_audit append-only fixtures
-- Scope: four declared read providers, contracts and narrow FASTCALL fixtures
+- Stage: independently reviewed and committed as `99012f782ea49b7ec1f37eeafd7171cbedf02767`
+- Owners: coordinator providers/contracts; state_audit fixtures; separate cross-reviews
+- Scope: four read APIs, public contracts and five narrow FASTCALL fixtures
 
-GetValue has active interpreter/compiler/object callers but no definition.
-GetValueString, ContainsValue and NextValue are also declared-only. Implement
-this read family through existing canonical providers, with owning output
-snapshots through hash/callback/cleanup and no scalar boxing. PopValue mutation
-closure remains a separate required task; no complete public value API claim.
+GetValue, GetValueString, ContainsValue and NextValue now have real definitions.
+They reuse the existing canonical hash/known-hash lookup and cursor primitives;
+no scalar boxes or alternate selection engine are added. Outputs are independent
+owning snapshots. Pending errors return before callbacks; results remain owned
+through query/dictionary retirement. Dict/frozendict errors retain their diagnostics.
+
+The actual full Dict and fixture TUs pass with the new debug configuration.
+The configured dictobject.o compiles with three preexisting unused-function
+warnings. nm verifies four strong definitions and existing compiler/flowgraph
+objects reference GetValue. All preexisting dictionary and fixture text is exact.
+Two ordinary host controls pass; **13 candidate methods remain unexecuted**.
+There is no merged executable, runtime qualification or performance result.
 
 [Design](../../../../build/pyvalue-dict-value-readers-20261102-v1/design.md),
-[accepted independent review](../../../../build/pyvalue-dict-value-readers-20261102-v1/independent-review.md).
-Next: implementation, actual TUs/object compilation,
-symbol-definition checks, focused controls, independent review and commit.
-The missing definitions are link dependencies; syntax alone cannot close them.
+[design review](../../../../build/pyvalue-dict-value-readers-20261102-v1/independent-review.md),
+[production review](../../../../build/pyvalue-dict-value-readers-20261102-v1/production-code-review.md),
+[fixture review](../../../../build/pyvalue-dict-value-readers-20261102-v1/fixture-independent-review.md),
+[composition review](../../../../build/pyvalue-dict-value-readers-20261102-v1/composition-independent-review.md),
+[production checks](../../../../build/pyvalue-dict-value-readers-20261102-v1/production-checks.json),
+[fixture checks](../../../../build/pyvalue-dict-value-readers-20261102-v1/fixture-results.json),
+[commit receipt](../../../../build/pyvalue-dict-value-readers-20261102-v1/commit.json).
+
+Next: execute the real fixtures after the candidate links. PopValue is still a
+separate required mutation provider; this checkpoint closes only the read family.

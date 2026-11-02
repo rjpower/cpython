@@ -191,8 +191,8 @@ of that failed build, not independent defects or a current edit count. It also
 reported 171 warnings, counted separately. Repeated headers, cascades, generated
 expansions and already fixed calls inflate these figures.
 
-The latest v9 merged probe reports 376 errors/164 objects present and no
-executable; all 7,343 source paths stayed unchanged at checkpoint35 plus held
+The latest v10 merged probe reports 361 errors/164 objects present and no
+executable; all 7,344 source paths stayed unchanged at checkpoint37 plus held
 typeobject. Counts remain repeated/cascading compiler
 observations, not independent defects or a percentage complete.
 
@@ -263,9 +263,22 @@ build/pyvalue-itertools-readers-bulk-20261102-v2/native-attribution.json.
 Design: build/pyvalue-itertools-readers-design-20261102-v1/coordinator-accept.md.
 Admission: build/pyvalue-itertools-readers-bulk-20261102-v2/commit.json.
 
-Current parallel work: Luna groups v9 diagnostics; Sol independently reviews
-thirteen slot wrappers and the ten-reader construction design with explicit
-type_new caller ownership. The isolated counter foundation passed independent
-code preflight; root must apply and run controlled native checks. The native
-activation/parser lease assessment is ready for a separate design gate, with
-no source grant or reversal of existing owning ports.
+Current parallel work: Luna implements the reviewed ten-reader construction
+packet plus explicit type_new owner amendment, in isolated copies. Sol designs
+the next reusable consumer rule and shared explicit caller-owned format parser.
+Root owns code/result review, composition and merged validation. The v9 family
+census records 376 errors/320 sites/59 paths and 57 separate warnings; it does not
+count independent ports. Evidence: build/pyvalue-v9-error-families-20261102-v1.
+
+The recording-only MRO counter foundation is checkpoint 36, `5a9d4841a67`. Actual
+old/new public-layout native probes add no diagnostics; typeobject remains at
+38 errors/23 warnings and the test helper at 1 error/2 warnings. Counter observations,
+near-limit execution and full publication/rollback authority remain pending.
+Evidence: build/pyvalue-mro-counter-bulk-20261102-v1/commit.json.
+
+Thirteen slot wrappers are checkpoint 37, `ef48e73fb24`. The isolated Luna batch
+passed independent Sol and coordinator actual-code review and composes exactly
+with the counter foundation. Native selected 15→0/full TU 38→23 errors, 23 warnings
+unchanged; six host controls pass, candidate/fault paths unexecuted. The copy
+command receipt was corrected with its original retained. Evidence:
+build/pyvalue-type-slot-wrappers-bulk-20261102-v1/commit.json.

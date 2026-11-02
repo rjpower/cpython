@@ -9,34 +9,24 @@ ported; hard source or binary compatibility with upstream is not required.
 
 The qualified interim interpreter is built from `eba351fee7d`: register IR and
 NaN-boxed frame values, with boxed heap fields. Universal PyValue restoration
-is on `boil/pyvalue-rc-universal`. Reviewed ports
-now include the object/attribute bridge, positional constructors, small
-tokenizer/bytes readers, object C call bridges, an AST sequence producer batch
-and the AST constructor. The AST translation unit and object now build.
-The unified keyword Clinic batch, list-sort value assertions, core readers and
-Template readers are also committed. The remaining original held file is typeobject.c.
+is on `boil/pyvalue-rc-universal` at `ef48e73fb24`: thirty-seven reviewed
+dependent source checkpoints. The remaining original held file is typeobject.c.
 There is no linked or qualified restored interpreter or timing result.
 
-**Current step:** close the concrete blockers from the merged diagnostic build.
-The latest merged build still failed before linking. The C API call bridges now
-compile, and their focused checks and independent reviews pass. Typeobject has
-reviewed provider, mutation, constructor and graph deltas. MRO providers have
-passed code/native attribution review; publication, slots and lifecycle still
-need closure. No merged executable exists. Luna grouped v4's compiler errors;
-the reviewed unified Clinic rule now covers 48 production wrappers. The latest
-v9 compiler probe has 376 repeated/cascading errors and no executable; all 7,343
-source inputs stayed unchanged. Thirty-five reviewed source checkpoints now include
-fourteen core readers, three pure predicates, Template readers, the TypeVar
-parser, descriptor calls, shared bytes/bytearray join and ABC pair readers.
-The shared Clinic helper rule and three iterator constructors are committed.
-Luna groups the v9 errors; Sol independently reviews the slot-wrapper code and
-type-construction design. Root integrates the isolated MRO counter foundation
-and reviewed wrappers. The full MRO transaction needs revision.
-Sol 6.1 designs/reviews reusable fixes; approved rules go to mechanical or Luna batches.
-The coordinator integrates reviewed results, rebuilds and repeats.
+**Current step:** close compiler/linker blockers under reviewed ownership rules.
+Merged v10 has 361 repeated/cascading errors, 164 objects present and no executable;
+all 7,344 source inputs stayed unchanged. Clinic producer rules now cover fixed
+positional/keyword wrappers and seven constructor helpers. Three iterator
+constructors, the recording-only MRO counter foundation and thirteen native
+slot wrappers are committed. Full MRO publication/rollback remains in revision.
+
+Luna implements ten type-construction readers under the approved Sol design.
+Sol designs the next multi-file consumer rule and a shared explicit scoped
+format-parser backend. The coordinator reviews actual code/results, integrates
+accepted deltas, rebuilds and repeats. Luna completed the latest error-family
+census; counts are compiler observations, not independent edits or percent done.
 See [porting rules and remaining work](issues/pyvalue-rc-restoration/porting/status.md)
-for mandatory ownership ports versus later performance tuning.
-See the [work board](issues/README.md) for assignments and next gates.
+and the [work board](issues/README.md) for scope, assignments and next gates.
 
 Next milestone: measure the unified-value register interpreter with JIT
 explicitly disabled against matched interim RC and upstream controls. Then

@@ -24,10 +24,11 @@ TU/object pass without diagnostics. The unified Clinic rule covers 48 production
 wrappers and is committed, as are three pure predicates and fourteen core
 readers, Template readers, the TypeVar parser and descriptor calls. Shared
 bytes/bytearray join is checkpoint32 and ABC pair readers are checkpoint33;
-Clinic helper constructors are checkpoint34 and iterator constructors are
-checkpoint35. Luna groups v9 errors; Sol reviews actual slot-wrapper code and
-the type-construction design. Root integrates the counter foundation after
-independent code preflight and controlled native checks.
+Clinic helper constructors are checkpoint34, iterator constructors checkpoint35,
+the recording-only counter foundation checkpoint36 and slot wrappers checkpoint37.
+Luna implements ten construction readers plus explicit caller ownership in
+isolated copies. Sol designs a reusable consumer packet and scoped parser backend.
+Root integrates reviewed code and validates the composition.
 The MRO providers plus one immediate wrapper passed independent
 code/native attribution review; their syntax comparison has 61 diagnostics,
 versus 86 before, including
@@ -46,14 +47,12 @@ and [native caller](native-callers/status.md) receipts describe their frozen
 checkpoints. The later [caller transaction](native-parsers/caller-transaction/status.md)
 repairs and checkpoints their composition; its candidate runtime tests remain
 unexecuted. The [merged diagnostic build](merged-build/status.md) still fails to
-link. Its latest v9 snapshot at checkpoint35 plus held typeobject has 164 objects
-present and 376 repeated/cascading error diagnostics. All 7,343 source paths
-remained unchanged; no candidate was executed. The later ABC source checkpoint
-has selected native errors 6→0 (full TU 7→1), nine host controls and no runtime
-pass. Clinic helper constructors subsequently passed review and were committed;
-Iterator constructors subsequently passed review and were committed; their
-selected native errors are zero. Type wrappers and construction readers are
-in independent review; the counter foundation awaits root native integration. The full MRO transaction remains in revision.
+link. Its latest v10 snapshot at checkpoint37 plus held typeobject has 164 objects
+present and 361 repeated/cascading error diagnostics. All 7,344 source paths
+remained unchanged; no candidate was executed. Iterator and slot-wrapper
+selected contexts are native-clean. The counter comparison uses corresponding
+old/new public layouts and adds no diagnostics, without admitting a transaction.
+The full MRO transaction remains in revision.
 
 ## Remaining increments
 

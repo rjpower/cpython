@@ -473,6 +473,48 @@
       "changed_paths": 2,
       "runnable": false,
       "evidence": "build/pyvalue-itertools-readers-bulk-20261102-v2/commit.json"
+    },
+    "mro_counter_foundation": {
+      "base": "aa46fc4fd01472e8f16f17ba7c5657703ca481c3",
+      "commit": "5a9d4841a675064e255e6a4b04bbe189f00009ce",
+      "paths_sha256": {
+        "Include/cpython/object.h": "a6f697dcab43845859ac71b8ea29f4980cf159591c3a4ff4a2fe85f9d8dc1679",
+        "Objects/typeobject.c": "72b9fc79c517694069dc98827a852e6ee8872c2f4c9dae6bb0807efb1e78d70d",
+        "Modules/_testcapi/heaptype.c": "5515616c33c8126d9672ed4b15127dfa3007c3e587d77a3fbc3b0c105c38c6a7"
+      },
+      "staged_patch_sha256": "af58ae84d6de6856af7768f2e9630281dc5d61c43260c5a9ba7149aebc183840",
+      "review_sha256": "9f89b29d22c03cfd6e24cee8ac8de8188cfd13703bdcd0f1f54d91fe9d52fec4",
+      "native_receipt_sha256": "3d4f6fa47189ac3504d6f1f5ac65dbff1a56f4fb62552d5933e8c4d8367dc25b",
+      "native_new_diagnostics": 0,
+      "candidate_executed": false,
+      "publication_transaction_accepted": false,
+      "changed_paths": 3,
+      "runnable": false,
+      "evidence": "build/pyvalue-mro-counter-bulk-20261102-v1/commit.json"
+    },
+    "type_slot_wrappers": {
+      "base": "5a9d4841a675064e255e6a4b04bbe189f00009ce",
+      "commit": "ef48e73fb24cccab72bca1a53c9e90e722f1a95c",
+      "paths_sha256": {
+        "Objects/typeobject.c": "6b42e1b22abd051663c0a849ebe4b07601cef307ffe0d7f02bbdd557ad6614aa",
+        "Lib/test/test_pyvalue_type_slots.py": "175ef884be020ab4531f17dc2b4a90436997de91f82a5537b04cf0dc6a9bbd63"
+      },
+      "functions": 13,
+      "native_errors_before": 38,
+      "native_errors_after": 23,
+      "warnings_before": 23,
+      "warnings_after": 23,
+      "selected_errors_before": 15,
+      "selected_errors_after": 0,
+      "host_reference_controls": 6,
+      "review_sha256": "15986ab223ee429cd1af2388faebab41f8791754366dffd395b4dc0451f150b2",
+      "native_receipt_sha256": "4df3a98a0b40b115eee87605a27af44d8528f5b2266223f58a859c0d394b6657",
+      "candidate_executed": false,
+      "full_TU_pass": false,
+      "staged_patch_sha256": "e88149810b61564d75e16808bde958993bf0ab219702e2e96a46f474bdd1211f",
+      "changed_paths": 2,
+      "runnable": false,
+      "evidence": "build/pyvalue-type-slot-wrappers-bulk-20261102-v1/commit.json"
     }
   },
   "first_diagnostic_build": {
@@ -482,15 +524,15 @@
     "candidate_linked": false
   },
   "latest_diagnostic_build": {
-    "head": "aa46fc4fd01472e8f16f17ba7c5657703ca481c3",
+    "head": "ef48e73fb24cccab72bca1a53c9e90e722f1a95c",
     "objects_present": 164,
-    "error_diagnostics": 376,
+    "error_diagnostics": 361,
     "source_unchanged": true,
     "candidate_linked": false,
     "includes_held_source_files": true,
     "make_exit": 2,
-    "source_manifest_paths": 7343,
-    "evidence": "build/pyvalue-merged-build-20261102-v9"
+    "source_manifest_paths": 7344,
+    "evidence": "build/pyvalue-merged-build-20261102-v10"
   },
   "mro_provider_reviewed_delta": {
     "typeobject_sha256": "d07219973716cab2749c7f9992ee268dd014815d28fd574c6d6c2d84b74dcf1d",

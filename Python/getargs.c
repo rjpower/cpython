@@ -46,7 +46,8 @@ typedef struct {
 
 /* Forward */
 static int vgetargs1_impl(PyObject *args, PyObject *const *stack, Py_ssize_t nargs,
-                          const char *format, va_list *p_va, int flags);
+                          const char *format, va_list *p_va, int flags,
+                          _PyArg_OwnerScope *tuple_scope);
 static int vgetargs1(PyObject *, const char *, va_list *, int);
 static void seterror(Py_ssize_t, const char *, int *, const char *, const char *);
 static const char *convertitem(PyObject *, const char **, va_list *, int, int *,
@@ -130,7 +131,7 @@ PyArg_ParseArray(PyObject *const *args, Py_ssize_t nargs, const char *format, ..
 {
     va_list va;
     va_start(va, format);
-    int retval = vgetargs1_impl(NULL, args, nargs, format, &va, 0);
+    int retval = vgetargs1_impl(NULL, args, nargs, format, &va, 0, NULL);
     va_end(va);
     return retval;
 }
@@ -243,7 +244,7 @@ cleanreturn(int retval, freelist_t *freelist)
 
 static int
 vgetargs1_impl(PyObject *compat_args, PyObject *const *stack, Py_ssize_t nargs, const char *format,
-               va_list *p_va, int flags)
+               va_list *p_va, int flags, _PyArg_OwnerScope *tuple_scope)
 {
     char msgbuf[256];
     int levels[32];
@@ -260,7 +261,7 @@ vgetargs1_impl(PyObject *compat_args, PyObject *const *stack, Py_ssize_t nargs, 
     freelistentry_t static_entries[STATIC_FREELIST_ENTRIES];
     freelist_t freelist;
 
-    assert(nargs == 0 || stack != NULL);
+    assert(nargs == 0 || stack != NULL || tuple_scope != NULL);
 
     freelist.entries = static_entries;
     freelist.first_available = 0;
@@ -375,14 +376,25 @@ vgetargs1_impl(PyObject *compat_args, PyObject *const *stack, Py_ssize_t nargs, 
         return cleanreturn(0, &freelist);
     }
 
+    if (tuple_scope != NULL) {
+        assert(!compat);
+        stack = _PyArg_UnpackPositionalOwned(tuple_scope, fname, min, max);
+        if (stack == NULL || PyErr_Occurred()) {
+            return cleanreturn(0, &freelist);
+        }
+    }
+    assert(nargs == 0 || stack != NULL);
+
     for (i = 0; i < nargs; i++) {
         if (*format == '|')
             format++;
         msg = convertitem(stack[i], &format, p_va,
                           flags, levels, msgbuf,
                           sizeof(msgbuf), &freelist);
-        if (msg) {
-            seterror(i+1, msg, levels, fname, message);
+        if (msg || (tuple_scope != NULL && PyErr_Occurred())) {
+            if (msg != NULL) {
+                seterror(i+1, msg, levels, fname, message);
+            }
             return cleanreturn(0, &freelist);
         }
     }
@@ -421,7 +433,70 @@ vgetargs1(PyObject *args, const char *format, va_list *p_va, int flags)
         nargs = 0;
     }
 
-    return vgetargs1_impl(args, stack, nargs, format, p_va, flags);
+    return vgetargs1_impl(args, stack, nargs, format, p_va, flags, NULL);
+}
+
+static int
+flat_format_supported(const char *format)
+{
+    int optional = 0;
+    if (format == NULL) {
+        return 0;
+    }
+    for (const unsigned char *p = (const unsigned char *)format; *p; p++) {
+        unsigned char c = *p;
+        if (c == ':' || c == ';') {
+            return 1;
+        }
+        if (c == '|') {
+            if (optional) return 0;
+            optional = 1;
+            continue;
+        }
+        if (c == 'O' && p[1] == '!') {
+            p++;
+            continue;
+        }
+        if (strchr("bBhHiInlkLKfdDcCpSYUOsz", c) == NULL) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+int
+_PyArg_ParseTupleOwned(_PyArg_OwnerScope *scope, PyObject *args,
+                       const char *format, ...)
+{
+    if (PyErr_Occurred()) {
+        return 0;
+    }
+    if (scope == NULL) {
+        PyErr_BadInternalCall();
+        return 0;
+    }
+    if (!flat_format_supported(format)) {
+        PyErr_SetString(PyExc_SystemError,
+                        "unsupported scoped argument format");
+        return 0;
+    }
+    if (args == NULL || !PyTuple_Check(args)) {
+        PyErr_SetString(PyExc_SystemError,
+            "new style getargs format but argument is not a tuple");
+        return 0;
+    }
+    if (_PyArg_OwnerScope_BeginTuple(scope, args, 0) < 0) {
+        return 0;
+    }
+    va_list va;
+    va_start(va, format);
+    int retval = vgetargs1_impl(NULL, NULL, scope->nargs, format, &va, 0,
+                                scope);
+    va_end(va);
+    if (PyErr_Occurred()) {
+        retval = 0;
+    }
+    return retval;
 }
 
 

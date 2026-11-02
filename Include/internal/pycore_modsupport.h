@@ -112,6 +112,8 @@ PyAPI_FUNC(PyObject *const *) _PyArg_UnpackPositionalOwned(
 /* Safe after a partial Begin/unpack. Retains the primary or first cleanup error.
  * Run after converter cleanup; 0 has no pending error, -1 reports an error. */
 PyAPI_FUNC(int) _PyArg_OwnerScope_End(_PyArg_OwnerScope *);
+PyAPI_FUNC(int) _PyArg_ParseTupleOwned(
+    _PyArg_OwnerScope *scope, PyObject *args, const char *format, ...);
 
 // Export for 'math' shared extension
 PyAPI_FUNC(PyObject * const *) _PyArg_UnpackKeywords(

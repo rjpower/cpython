@@ -4,6 +4,7 @@
 #include "pycore_tuple.h"
 #include "pycore_interpframe.h"
 #include "pycore_ir.h"
+#include "pycore_modsupport.h"
 
 #include "clinic/native_scope.c.h"
 
@@ -1319,7 +1320,371 @@ native_scope_call_state(PyObject *Py_UNUSED(module), PyObject *code_object)
     return report;
 }
 
+static PyObject *
+flat_format_views(PyObject *Py_UNUSED(module), PyObject *arg)
+{
+    PyObject *outer = NULL, *args = NULL, *callback = NULL;
+    PyObject *callback_result = NULL, *copied_text = NULL, *count_obj = NULL;
+    PyObject *result = NULL, *result_value = NULL, *result_text = NULL;
+    PyObject *result_count = NULL, *value = NULL;
+    const char *text = NULL;
+    Py_ssize_t count = -7;
+    _PyArg_OwnerScope scope = {0};
+
+    if (PyErr_Occurred()) return NULL;
+    if (!PyTuple_CheckExact(arg) || PyTuple_GET_SIZE(arg) != 2) {
+        PyErr_SetString(PyExc_TypeError, "expected (parse_args, callback)");
+        goto done;
+    }
+    outer = Py_NewRef(arg);
+    if (outer == NULL || PyErr_Occurred()) goto done;
+    args = PyTuple_GetItemRef(outer, 0);
+    if (args == NULL || PyErr_Occurred()) goto done;
+    callback = PyTuple_GetItemRef(outer, 1);
+    if (callback == NULL || PyErr_Occurred()) goto done;
+    if (!PyTuple_Check(args) || !PyCallable_Check(callback)) {
+        PyErr_SetString(PyExc_TypeError, "expected a tuple and callable");
+        goto done;
+    }
+    int parsed = _PyArg_ParseTupleOwned(&scope, args, "Os|n:flat_format_views",
+                                        &value, &text, &count);
+    if (!parsed || PyErr_Occurred()) goto done;
+    callback_result = PyObject_CallNoArgs(callback);
+    if (callback_result == NULL || PyErr_Occurred()) goto done;
+    {
+        PyObject *detached = callback_result;
+        callback_result = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(detached);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) goto done;
+    copied_text = PyUnicode_FromString(text);
+    if (copied_text == NULL || PyErr_Occurred()) goto done;
+    count_obj = PyLong_FromSsize_t(count);
+    if (count_obj == NULL || PyErr_Occurred()) goto done;
+    result = PyTuple_New(3);
+    if (result == NULL || PyErr_Occurred()) goto done;
+    result_value = Py_NewRef(value);
+    if (result_value == NULL || PyErr_Occurred()) goto done;
+    PyTuple_SET_ITEM(result, 0, result_value);
+    result_value = NULL;
+    if (PyErr_Occurred()) goto done;
+    result_text = Py_NewRef(copied_text);
+    if (result_text == NULL || PyErr_Occurred()) goto done;
+    PyTuple_SET_ITEM(result, 1, result_text);
+    result_text = NULL;
+    if (PyErr_Occurred()) goto done;
+    result_count = Py_NewRef(count_obj);
+    if (result_count == NULL || PyErr_Occurred()) goto done;
+    PyTuple_SET_ITEM(result, 2, result_count);
+    result_count = NULL;
+    if (PyErr_Occurred()) goto done;
+done:
+    {
+        PyObject *detached = callback_result;
+        callback_result = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(detached);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *detached = copied_text;
+        copied_text = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(detached);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *detached = count_obj;
+        count_obj = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(detached);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *detached = result_value;
+        result_value = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(detached);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *detached = result_text;
+        result_text = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(detached);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *detached = result_count;
+        result_count = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(detached);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *detached = outer;
+        outer = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(detached);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *detached = args;
+        args = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(detached);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *detached = callback;
+        callback = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(detached);
+        _PyValue_RestoreException(saved);
+    }
+    if (_PyArg_OwnerScope_End(&scope) < 0 || PyErr_Occurred()) {
+        PyObject *detached = result;
+        result = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(detached);
+        _PyValue_RestoreException(saved);
+        return NULL;
+    }
+    return result;
+}
+
+static PyObject *
+flat_format_rejects_unsupported(PyObject *Py_UNUSED(module),
+                                PyObject *Py_UNUSED(unused))
+{
+    static const char *formats[] = {"(O)", "O&", "s*", "s#", "y", "e",
+                                    "O||O", "q", NULL};
+    PyObject *empty = NULL, *result = NULL;
+    PyObject *exception = NULL, *message = NULL;
+    _PyArg_OwnerScope scope = {0};
+    int scope_ended = 1;
+
+    if (PyErr_Occurred()) return NULL;
+    empty = PyTuple_New(0);
+    if (empty == NULL || PyErr_Occurred()) goto error;
+    result = PyTuple_New(8);
+    if (result == NULL || PyErr_Occurred()) goto error;
+    for (Py_ssize_t i = 0; formats[i] != NULL; i++) {
+        scope = (_PyArg_OwnerScope){0};
+        scope_ended = 0;
+        int ok = _PyArg_ParseTupleOwned(&scope, empty, formats[i]);
+        if (ok) {
+            if (PyErr_Occurred()) goto iteration_error;
+            PyErr_SetString(PyExc_AssertionError,
+                            "unsupported format was not rejected");
+            goto iteration_error;
+        }
+        if (!PyErr_Occurred()) {
+            PyErr_SetString(PyExc_AssertionError,
+                            "unsupported format was not rejected");
+            goto iteration_error;
+        }
+        exception = PyErr_GetRaisedException();
+        if (exception == NULL || PyErr_Occurred()) goto iteration_error;
+        message = PyObject_Str(exception);
+        if (message == NULL || PyErr_Occurred()) goto iteration_error;
+        {
+            PyObject *detached = exception;
+            exception = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(detached);
+            _PyValue_RestoreException(saved);
+        }
+        if (PyErr_Occurred()) goto iteration_error;
+        PyTuple_SET_ITEM(result, i, message);
+        message = NULL;
+        if (PyErr_Occurred()) goto iteration_error;
+        if (_PyArg_OwnerScope_End(&scope) < 0 || PyErr_Occurred()) {
+            scope_ended = 1;
+            goto error;
+        }
+        scope_ended = 1;
+        continue;
+iteration_error:
+        if (!scope_ended) {
+            _PyArg_OwnerScope_End(&scope);
+            scope_ended = 1;
+        }
+        {
+            PyObject *detached = message;
+            message = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(detached);
+            _PyValue_RestoreException(saved);
+        }
+        {
+            PyObject *detached = exception;
+            exception = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(detached);
+            _PyValue_RestoreException(saved);
+        }
+        goto error;
+    }
+    {
+        PyObject *detached = empty;
+        empty = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(detached);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) goto error;
+    return result;
+error:
+    {
+        PyObject *detached = message;
+        message = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(detached);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *detached = exception;
+        exception = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(detached);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *detached = empty;
+        empty = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(detached);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *detached = result;
+        result = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(detached);
+        _PyValue_RestoreException(saved);
+    }
+    return NULL;
+}
+
+static PyObject *
+flat_format_typed_nullable(PyObject *Py_UNUSED(module), PyObject *arg)
+{
+    PyObject *outer = NULL, *args = NULL, *callback = NULL;
+    PyObject *callback_result = NULL, *text_copy = NULL, *result = NULL;
+    PyObject *result_value = NULL, *result_text = NULL, *value = NULL;
+    const char *text = NULL;
+    _PyArg_OwnerScope scope = {0};
+
+    if (PyErr_Occurred()) return NULL;
+    if (!PyTuple_CheckExact(arg) || PyTuple_GET_SIZE(arg) != 2) {
+        PyErr_SetString(PyExc_TypeError, "expected (parse_args, callback)");
+        goto done;
+    }
+    outer = Py_NewRef(arg);
+    if (outer == NULL || PyErr_Occurred()) goto done;
+    args = PyTuple_GetItemRef(outer, 0);
+    if (args == NULL || PyErr_Occurred()) goto done;
+    callback = PyTuple_GetItemRef(outer, 1);
+    if (callback == NULL || PyErr_Occurred()) goto done;
+    if (!PyTuple_Check(args) || !PyCallable_Check(callback)) {
+        PyErr_SetString(PyExc_TypeError, "expected a tuple and callable");
+        goto done;
+    }
+    int parsed = _PyArg_ParseTupleOwned(&scope, args,
+        "O!z:flat_format_typed_nullable", &PyLong_Type, &value, &text);
+    if (!parsed || PyErr_Occurred()) goto done;
+    callback_result = PyObject_CallNoArgs(callback);
+    if (callback_result == NULL || PyErr_Occurred()) goto done;
+    {
+        PyObject *detached = callback_result;
+        callback_result = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(detached);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) goto done;
+    text_copy = text == NULL ? Py_NewRef(Py_None) : PyUnicode_FromString(text);
+    if (text_copy == NULL || PyErr_Occurred()) goto done;
+    result = PyTuple_New(2);
+    if (result == NULL || PyErr_Occurred()) goto done;
+    result_value = Py_NewRef(value);
+    if (result_value == NULL || PyErr_Occurred()) goto done;
+    PyTuple_SET_ITEM(result, 0, result_value);
+    result_value = NULL;
+    if (PyErr_Occurred()) goto done;
+    result_text = Py_NewRef(text_copy);
+    if (result_text == NULL || PyErr_Occurred()) goto done;
+    PyTuple_SET_ITEM(result, 1, result_text);
+    result_text = NULL;
+    if (PyErr_Occurred()) goto done;
+done:
+    {
+        PyObject *detached = callback_result;
+        callback_result = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(detached);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *detached = text_copy;
+        text_copy = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(detached);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *detached = result_value;
+        result_value = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(detached);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *detached = result_text;
+        result_text = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(detached);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *detached = outer;
+        outer = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(detached);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *detached = args;
+        args = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(detached);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *detached = callback;
+        callback = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(detached);
+        _PyValue_RestoreException(saved);
+    }
+    if (_PyArg_OwnerScope_End(&scope) < 0 || PyErr_Occurred()) {
+        PyObject *detached = result;
+        result = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(detached);
+        _PyValue_RestoreException(saved);
+        return NULL;
+    }
+    return result;
+}
+
 static PyMethodDef methods[] = {
+    {"flat_format_views", flat_format_views, METH_O},
+    {"flat_format_rejects_unsupported", flat_format_rejects_unsupported, METH_NOARGS},
+    {"flat_format_typed_nullable", flat_format_typed_nullable, METH_O},
     {"native_scope_call_state", native_scope_call_state, METH_O},
     {"native_scope_vm_prepare", _PyCFunction_CAST(native_scope_vm_prepare), METH_FASTCALL | METH_KEYWORDS},
     _TESTINTERNALCAPI_NATIVE_SCOPE_FLAT_METHODDEF

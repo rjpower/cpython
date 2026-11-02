@@ -33,8 +33,9 @@ results cannot supply it. Use results to improve specific mechanisms.
 The [board](../../README.md) owns the current restoration HEAD and checkpoint
 list. Object composition and small tokenizer/bytes consumers are committed;
 typeobject.c is the remaining original held file. Clinic covers 20 further
-positional wrappers; classobject/codeobject compile. Core mutation dependencies and object calls are checkpointed; graph/type_new
-deltas remain held. C3/MRO providers plus one wrapper passed independent
+positional wrappers; classobject/codeobject compile. Core mutation dependencies and object calls are checkpointed; graph/provider
+deltas remain held; the type_new argument boundary and construction readers
+are committed. C3/MRO providers plus one wrapper passed independent
 code/native attribution review. The generated AST sequence and constructor
 batches are committed; their full TU/object pass. The unified Clinic rule now
 covers 48 production wrappers and is committed, as are the list-sort assertions.
@@ -42,12 +43,13 @@ Remaining actual parser, container/
 startup and bundled consumer ports still block a baseline executable.
 
 The latest [merged diagnostic build](../merged-build/status.md) binds the
-37-checkpoint chain at `ef48e73fb24` plus held typeobject composition `6b42e1b2`.
-It exited 2, with 164 objects present and no executable. All 7,344 source paths
-stayed unchanged; 361 repeated/cascading errors remain. Focused component checks
+39-checkpoint chain at `913c15ce15b` plus held typeobject composition `80615584`.
+It exited 2, with 164 objects present and no executable. All 7,345 source paths
+stayed unchanged; 350 repeated/cascading errors remain. Focused component checks
 do not make this a passing merged build. The counter foundation and thirteen
-slot wrappers are committed. Luna implements the reviewed construction readers
-in isolated copies; Sol designs a shared consumer batch and parser backend.
+slot wrappers are committed. Construction readers and
+the earlier constructor boundary are committed. Sol reviews the next shared
+consumer batch and parser kernel before Luna bulk implementation.
 The full MRO transaction remains in revision. The board owns live assignments.
 
 Prioritize a coherent register interpreter with the unified format and JIT off.

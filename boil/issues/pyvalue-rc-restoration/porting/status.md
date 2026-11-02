@@ -191,8 +191,8 @@ of that failed build, not independent defects or a current edit count. It also
 reported 171 warnings, counted separately. Repeated headers, cascades, generated
 expansions and already fixed calls inflate these figures.
 
-The latest v10 merged probe reports 361 errors/164 objects present and no
-executable; all 7,344 source paths stayed unchanged at checkpoint37 plus held
+The latest v11 merged probe reports 350 errors/164 objects present and no
+executable; all 7,345 source paths stayed unchanged at checkpoint39 plus held
 typeobject. Counts remain repeated/cascading compiler
 observations, not independent defects or a percentage complete.
 
@@ -263,9 +263,9 @@ build/pyvalue-itertools-readers-bulk-20261102-v2/native-attribution.json.
 Design: build/pyvalue-itertools-readers-design-20261102-v1/coordinator-accept.md.
 Admission: build/pyvalue-itertools-readers-bulk-20261102-v2/commit.json.
 
-Current parallel work: Luna implements the reviewed ten-reader construction
-packet plus explicit type_new owner amendment, in isolated copies. Sol designs
-the next reusable consumer rule and shared explicit caller-owned format parser.
+Current parallel work: Sol reviews the next fifteen-function operator/LRU
+consumer rule and shared explicit caller-owned format parser. Luna applies the
+next bulk packet after its design gate.
 Root owns code/result review, composition and merged validation. The v9 family
 census records 376 errors/320 sites/59 paths and 57 separate warnings; it does not
 count independent ports. Evidence: build/pyvalue-v9-error-families-20261102-v1.
@@ -282,3 +282,18 @@ with the counter foundation. Native selected 15→0/full TU 38→23 errors, 23 w
 unchanged; six host controls pass, candidate/fault paths unexecuted. The copy
 command receipt was corrected with its original retained. Evidence:
 build/pyvalue-type-slot-wrappers-bulk-20261102-v1/commit.json.
+
+The previously reviewed type_new argument boundary and exact test are now
+checkpoint38, `d2f39118c93`. Root projected only that function into the index;
+all live source bytes stayed unchanged. Its twelve host controls and three
+unexecuted candidate methods retain the original independent review. Evidence:
+build/pyvalue-startup-type-new-checkpoint-20261102-v1/commit.json.
+
+Construction readers are checkpoint39, `913c15ce15b`: ten bodies plus the
+explicit caller base/metaclass pins and a new test. Independent Sol/root actual
+code review and composed native checks pass: selected 11→0/full TU 23→12 errors,
+23 warnings unchanged. Six host controls pass, candidate/fault cases unexecuted.
+The isolated compiler receipt initially counted only seven C-file warnings;
+sixteen header warnings bring both TU totals to 23. Original receipts and the
+correction are retained. Evidence:
+build/pyvalue-type-construction-readers-bulk-20261102-v1/commit.json.

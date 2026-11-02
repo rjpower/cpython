@@ -16,8 +16,9 @@ the current HEAD and reviewed checkpoint list. Object composition is committed; 
 original held file. The reviewed typeobject provider delta stays distinguishable
 from unfinished scalar/slot work. Positional Clinic, object/attribute/repr and
 small tokenizer/bytes and object call consumers have passed their finite source
-gates and are committed. Type_new and graph repairs are applied/reviewed pending
-typeobject composition. They do not yet form an executable candidate.
+gates and are committed. The type_new boundary and construction readers are
+committed; reviewed graph and other provider deltas still await typeobject
+composition. They do not yet form an executable candidate.
 The [first bulk AST port](porting/status.md) is committed: one producer covers
 74 sequence reads. The subsequent constructor port is committed and its full
 TU/object pass without diagnostics. The unified Clinic rule covers 48 production
@@ -26,8 +27,9 @@ readers, Template readers, the TypeVar parser and descriptor calls. Shared
 bytes/bytearray join is checkpoint32 and ABC pair readers are checkpoint33;
 Clinic helper constructors are checkpoint34, iterator constructors checkpoint35,
 the recording-only counter foundation checkpoint36 and slot wrappers checkpoint37.
-Luna implements ten construction readers plus explicit caller ownership in
-isolated copies. Sol designs a reusable consumer packet and scoped parser backend.
+The earlier type_new argument boundary is checkpoint38 and construction readers
+with explicit caller pins checkpoint39. Sol reviews the next operator/LRU batch
+and scoped format-parser kernel; Luna applies approved bulk rules.
 Root integrates reviewed code and validates the composition.
 The MRO providers plus one immediate wrapper passed independent
 code/native attribution review; their syntax comparison has 61 diagnostics,
@@ -47,10 +49,11 @@ and [native caller](native-callers/status.md) receipts describe their frozen
 checkpoints. The later [caller transaction](native-parsers/caller-transaction/status.md)
 repairs and checkpoints their composition; its candidate runtime tests remain
 unexecuted. The [merged diagnostic build](merged-build/status.md) still fails to
-link. Its latest v10 snapshot at checkpoint37 plus held typeobject has 164 objects
-present and 361 repeated/cascading error diagnostics. All 7,344 source paths
-remained unchanged; no candidate was executed. Iterator and slot-wrapper
-selected contexts are native-clean. The counter comparison uses corresponding
+link. Its latest v11 snapshot at checkpoint39 plus held typeobject has 164 objects
+present and 350 repeated/cascading error diagnostics. All 7,345 source paths
+remained unchanged; no candidate was executed. Iterator, slot-wrapper and
+construction-reader selected contexts are native-clean; the current typeobject
+TU has twelve remaining errors and 23 warnings. The counter comparison uses corresponding
 old/new public layouts and adds no diagnostics, without admitting a transaction.
 The full MRO transaction remains in revision.
 

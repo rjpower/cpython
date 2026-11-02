@@ -9,20 +9,23 @@ ported; hard source or binary compatibility with upstream is not required.
 
 The qualified interim interpreter is built from `eba351fee7d`: register IR and
 NaN-boxed frame values, with boxed heap fields. Universal PyValue restoration
-is on `boil/pyvalue-rc-universal` at `ef48e73fb24`: thirty-seven reviewed
+is on `boil/pyvalue-rc-universal` at `913c15ce15b`: thirty-nine reviewed
 dependent source checkpoints. The remaining original held file is typeobject.c.
 There is no linked or qualified restored interpreter or timing result.
 
 **Current step:** close compiler/linker blockers under reviewed ownership rules.
-Merged v10 has 361 repeated/cascading errors, 164 objects present and no executable;
-all 7,344 source inputs stayed unchanged. Clinic producer rules now cover fixed
+Merged v11 has 350 repeated/cascading errors, 164 objects present and no executable;
+all 7,345 source inputs stayed unchanged. Clinic producer rules now cover fixed
 positional/keyword wrappers and seven constructor helpers. Three iterator
 constructors, the recording-only MRO counter foundation and thirteen native
-slot wrappers are committed. Full MRO publication/rollback remains in revision.
+slot wrappers are committed. The earlier type_new boundary and ten construction
+readers with selected base/metaclass pins are now committed. Full MRO
+publication/rollback remains in revision.
 
-Luna implements ten type-construction readers under the approved Sol design.
-Sol designs the next multi-file consumer rule and a shared explicit scoped
-format-parser backend. The coordinator reviews actual code/results, integrates
+Sol is reviewing the next fifteen-function operator/LRU consumer rule and the
+shared explicit scoped format-parser kernel. Approved rules go to Luna for bulk
+implementation. The construction batch passed independent code/native review.
+The coordinator reviews actual code/results, integrates
 accepted deltas, rebuilds and repeats. Luna completed the latest error-family
 census; counts are compiler observations, not independent edits or percent done.
 See [porting rules and remaining work](issues/pyvalue-rc-restoration/porting/status.md)

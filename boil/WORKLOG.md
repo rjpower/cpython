@@ -58,3 +58,7 @@ verbatim; new checkpoint transcripts do not belong here.
 - 2026-11-02 — [MRO counter foundation](issues/pyvalue-rc-restoration/typecache/status.md): recording-only three-path source committed as `5a9d4841a67`; corresponding-layout native probes add no diagnostics, runtime/transaction pending.
 - 2026-11-02 — [Type slot wrappers](issues/pyvalue-rc-restoration/porting/status.md): thirteen-body reviewed batch committed as `ef48e73fb24`; selected errors 15→0/full TU 38→23, warnings unchanged, six host controls, candidate unexecuted.
 - 2026-11-02 — [Merged diagnostic v10](issues/pyvalue-rc-restoration/merged-build/status.md): checkpoint37 plus held typeobject, make exit 2/361 errors/164 objects, all 7,344 inputs unchanged, no executable.
+
+- 2026-11-02 — [Constructor boundary checkpoint](issues/pyvalue-rc-restoration/porting/status.md): exact previously reviewed body/test committed as `d2f39118c93`; live source unchanged, twelve host controls, candidate execution pending.
+- 2026-11-02 — [Construction readers](issues/pyvalue-rc-restoration/porting/status.md): reviewed ten-reader/caller-pin batch committed as `913c15ce15b`; selected errors 11→0/full TU 23→12, warnings unchanged, six host controls, candidate unexecuted.
+- 2026-11-02 — [Merged diagnostic v11](issues/pyvalue-rc-restoration/merged-build/status.md): checkpoint39 plus held typeobject, make exit 2/350 errors/164 objects, all 7,345 inputs unchanged, no executable.

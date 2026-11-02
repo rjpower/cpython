@@ -515,6 +515,55 @@
       "changed_paths": 2,
       "runnable": false,
       "evidence": "build/pyvalue-type-slot-wrappers-bulk-20261102-v1/commit.json"
+    },
+    "type_new_argument_boundary": {
+      "base": "ef48e73fb24cccab72bca1a53c9e90e722f1a95c",
+      "commit": "d2f39118c932d99646758c6cbeb9151fdefe733d",
+      "changed_paths": 2,
+      "functions": 1,
+      "prior_actual_review": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/pyvalue-startup-type-new-design-20261102-v1/independent-code-review.md",
+      "prior_actual_review_sha256": "a7a91f2f4c39f0c077eccff9bd286031be53c80df905d6aa36fd1f571b493508",
+      "source_review_sha256": "4eafcb81c6447a6f3851cc30610f16ec873bef3bdc00753410e735e5a043729f",
+      "staged_patch_sha256": "ad1af095e2768b8806f89bca737a2973007f7ce287e5dd77b8ca2f7296a3d46c",
+      "old_function_sha256": "93f2df563d1302291bc47604e9f9f81009d340f43d83bd77b042289db0dad4d7",
+      "new_function_sha256": "edc5e8756b78874877cb590683b671b1ce5b0e92bf6c72b987e23d49d3aa3d53",
+      "live_source_unchanged": true,
+      "live_paths_sha256": {
+        "Objects/typeobject.c": "6b42e1b22abd051663c0a849ebe4b07601cef307ffe0d7f02bbdd557ad6614aa",
+        "Lib/test/test_pyvalue_type_new.py": "31b046282bdf9bc107f065c619f1d99745e1d4bebf6ccc7704982b8b4aef8b99",
+        "Lib/test/test_pyvalue_typecache.py": "ae5d0a5e89587f3369e7d6d01c3926424d57dc19d89b77535d926705108876b4"
+      },
+      "host_reference_controls": 12,
+      "candidate_methods_unexecuted": 3,
+      "candidate_executed": false,
+      "runnable": false,
+      "evidence": "build/pyvalue-startup-type-new-checkpoint-20261102-v1/commit.json"
+    },
+    "type_construction_readers": {
+      "base": "d2f39118c932d99646758c6cbeb9151fdefe733d",
+      "commit": "913c15ce15b2a2ec1cc3948c88e3130edbb81d17",
+      "paths_sha256": {
+        "Objects/typeobject.c": "806155840d8a41344ee2e2b409176465026b18c6834ab7587b8ae9c5a4522ad4",
+        "Lib/test/test_pyvalue_type_construction.py": "d7c966da26443fc3057adf4bce30e1532f7bd407cb527f5706ceb7103bb2bc32"
+      },
+      "reader_functions": 10,
+      "caller_amendments": 1,
+      "native_errors_before": 23,
+      "native_errors_after": 12,
+      "warnings_before": 23,
+      "warnings_after": 23,
+      "selected_errors_before": 11,
+      "selected_errors_after": 0,
+      "host_reference_controls": 6,
+      "candidate_executed": false,
+      "full_TU_pass": false,
+      "staged_patch_sha256": "8a550c38782231c03f00cc3918ca0b6f40adff18e9877a3e2198aa5b006bb999",
+      "review_sha256": "660b9d8e193c08aeaca3328a59a611a736d997358deb8123495e258fc368e5ef",
+      "independent_review_sha256": "16bad6e167866329eec4b36dc7eb2966342be75aaec169da14179e9758013f8a",
+      "native_receipt_sha256": "9d95b8f3010217290a2ca8d81989b681418b49d2ac84217ddf836da25395e288",
+      "changed_paths": 2,
+      "runnable": false,
+      "evidence": "build/pyvalue-type-construction-readers-bulk-20261102-v1/commit.json"
     }
   },
   "first_diagnostic_build": {
@@ -524,15 +573,15 @@
     "candidate_linked": false
   },
   "latest_diagnostic_build": {
-    "head": "ef48e73fb24cccab72bca1a53c9e90e722f1a95c",
+    "head": "913c15ce15b2a2ec1cc3948c88e3130edbb81d17",
     "objects_present": 164,
-    "error_diagnostics": 361,
+    "error_diagnostics": 350,
     "source_unchanged": true,
     "candidate_linked": false,
     "includes_held_source_files": true,
     "make_exit": 2,
-    "source_manifest_paths": 7344,
-    "evidence": "build/pyvalue-merged-build-20261102-v10"
+    "source_manifest_paths": 7345,
+    "evidence": "build/pyvalue-merged-build-20261102-v11"
   },
   "mro_provider_reviewed_delta": {
     "typeobject_sha256": "d07219973716cab2749c7f9992ee268dd014815d28fd574c6d6c2d84b74dcf1d",

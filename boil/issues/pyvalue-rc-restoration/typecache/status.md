@@ -93,7 +93,10 @@ typeobject remains at 38 errors/23 warnings and the test helper at one error/two
 warnings. Runtime counter/near-limit observations and transaction authority are
 pending. The thirteen slot wrappers subsequently landed as `ef48e73fb24`, with
 selected errors 15→0/full TU 38→23, warnings unchanged. Current held typeobject
-composition is `6b42e1b2`, preserving the prior provider/core/graph work.
-Construction readers are in isolated Luna implementation under a reviewed rule.
+composition is `80615584`, preserving the prior provider/core/graph work.
+The earlier constructor boundary and ten construction readers are committed
+as checkpoints38/39. Their composed TU has twelve errors/23 warnings left in
+other functions, with eleven selected errors removed. Candidate lifetime and
+fault execution remain pending.
 The separate spec ownership envelope is frozen for a root/peer gate; it has no
 implementation grant. The [board](../../README.md) owns current assignments.

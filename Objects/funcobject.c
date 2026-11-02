@@ -11,6 +11,7 @@
 #include "pycore_pyerrors.h"      // _PyErr_Occurred()
 #include "pycore_setobject.h"     // _PySet_NextEntry()
 #include "pycore_stats.h"
+#include "pycore_value.h"         // PyValue_TYPE()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
 static const char *
@@ -170,10 +171,10 @@ PyFunction_NewWithQualName(PyObject *code, PyObject *globals, PyObject *qualname
     PyObject *doc;
     if (code_obj->co_flags & CO_HAS_DOCSTRING) {
         assert(PyTuple_Size(consts) >= 1);
-        doc = PyTuple_GetItem(consts, 0);
-        if (!PyUnicode_Check(doc)) {
-            doc = Py_None;
-        }
+        PyValue value = PyTuple_GET_VALUE(consts, 0);
+        doc = PyValue_IsObject(value)
+            && PyUnicode_Check(PyValue_AsPyObjectBorrow(value))
+            ? PyValue_AsPyObjectBorrow(value) : Py_None;
     }
     else {
         doc = Py_None;
@@ -1134,11 +1135,12 @@ func_new_impl(PyTypeObject *type, PyCodeObject *code, PyObject *globals,
     if (nclosure) {
         Py_ssize_t i;
         for (i = 0; i < nclosure; i++) {
-            PyObject *o = PyTuple_GET_ITEM(closure, i);
-            if (!PyCell_Check(o)) {
+            PyValue value = PyTuple_GET_VALUE(closure, i);
+            if (!PyValue_IsObject(value)
+                || !PyCell_Check(PyValue_AsPyObjectBorrow(value))) {
                 return PyErr_Format(PyExc_TypeError,
                     "arg 5 (closure) expected cell, found %s",
-                                    Py_TYPE(o)->tp_name);
+                                    PyValue_TYPE(value)->tp_name);
             }
         }
     }

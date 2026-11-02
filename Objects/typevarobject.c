@@ -6,6 +6,7 @@
 #include "pycore_typevarobject.h"
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString()
 #include "pycore_unionobject.h"   // _Py_union_type_or, _Py_union_from_tuple
+#include "pycore_value.h"         // PyValue_TYPE()
 #include "structmember.h"
 
 /*[clinic input]
@@ -429,8 +430,8 @@ contains_typevartuple(PyTupleObject *params)
     Py_ssize_t n = PyTuple_GET_SIZE(params);
     PyTypeObject *tp = _PyInterpreterState_GET()->cached_objects.typevartuple_type;
     for (Py_ssize_t i = 0; i < n; i++) {
-        PyObject *param = PyTuple_GET_ITEM(params, i);
-        if (Py_IS_TYPE(param, tp)) {
+        PyValue param = PyTuple_GET_VALUE((PyObject *)params, i);
+        if (PyValue_TYPE(param) == tp) {
             return 1;
         }
     }

@@ -587,12 +587,6 @@
     added = '3.2'
 [function.PyDict_DelItemString]
     added = '3.2'
-[function.PyDict_GetItem]
-    added = '3.2'
-[function.PyDict_GetItemString]
-    added = '3.2'
-[function.PyDict_GetItemWithError]
-    added = '3.2'
 [function.PyDict_Items]
     added = '3.2'
 [function.PyDict_Keys]
@@ -602,8 +596,6 @@
 [function.PyDict_MergeFromSeq2]
     added = '3.2'
 [function.PyDict_New]
-    added = '3.2'
-[function.PyDict_Next]
     added = '3.2'
 [function.PyDict_SetItem]
     added = '3.2'

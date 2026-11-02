@@ -28,13 +28,9 @@ PyAPI_FUNC(int) PyDict_SetValue(PyObject *, PyValue, PyValue);
 PyAPI_FUNC(int) PyDict_DelValue(PyObject *, PyValue);
 PyAPI_FUNC(int) PyDict_ContainsValue(PyObject *, PyValue);
 PyAPI_FUNC(int) PyDict_PopValue(PyObject *, PyValue, PyValue *);
-PyAPI_FUNC(PyObject *) PyDict_GetItem(PyObject *mp, PyObject *key);
-PyAPI_FUNC(PyObject *) PyDict_GetItemWithError(PyObject *mp, PyObject *key);
 PyAPI_FUNC(int) PyDict_SetItem(PyObject *mp, PyObject *key, PyObject *item);
 PyAPI_FUNC(int) PyDict_DelItem(PyObject *mp, PyObject *key);
 PyAPI_FUNC(void) PyDict_Clear(PyObject *mp);
-PyAPI_FUNC(int) PyDict_Next(
-    PyObject *mp, Py_ssize_t *pos, PyObject **key, PyObject **value);
 PyAPI_FUNC(PyObject *) PyDict_Keys(PyObject *mp);
 PyAPI_FUNC(PyObject *) PyDict_Values(PyObject *mp);
 PyAPI_FUNC(PyObject *) PyDict_Items(PyObject *mp);
@@ -63,7 +59,6 @@ PyAPI_FUNC(int) PyDict_MergeFromSeq2(PyObject *d,
                                      PyObject *seq2,
                                      int override);
 
-PyAPI_FUNC(PyObject *) PyDict_GetItemString(PyObject *dp, const char *key);
 PyAPI_FUNC(int) PyDict_SetItemString(PyObject *dp, const char *key, PyObject *item);
 PyAPI_FUNC(int) PyDict_DelItemString(PyObject *dp, const char *key);
 

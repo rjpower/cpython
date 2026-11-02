@@ -13,9 +13,6 @@ extern "C" {
 #include "pycore_value.h"             // PyValue
 #include "pycore_stats.h"
 
-// Unsafe flavor of PyDict_GetItemWithError(): no error checking
-extern PyObject* _PyDict_GetItemWithError(PyObject *dp, PyObject *key);
-
 // Delete an item from a dict if a predicate is true
 // Returns -1 on error, 1 if the item was deleted, 0 otherwise
 // Export for '_asyncio' shared extension
@@ -43,9 +40,6 @@ PyAPI_FUNC(int) _PyDict_DelItem_KnownHash_LockHeld(PyObject *mp, PyObject *key,
 extern int _PyDict_Contains_KnownHash(PyObject *, PyObject *, Py_hash_t);
 
 extern void _PyDict_ClearKeysVersionLockHeld(PyObject *mp);
-
-extern int _PyDict_Next(
-    PyObject *mp, Py_ssize_t *pos, PyObject **key, PyObject **value, Py_hash_t *hash);
 
 extern int _PyDict_HasOnlyStringKeys(PyObject *mp);
 
@@ -169,7 +163,6 @@ extern int _PyDict_GetMethodValue(PyDictObject *dict, PyObject *name, PyValue *m
 /* Exact Unicode metadata name; owned output/NULL1, DKIX index/error codes.
  * Caller roots both inputs and validates current keys/layout before using ix. */
 PyAPI_FUNC(Py_ssize_t) _PyDict_LookupIndexAndOwnedValue(PyDictObject *, PyObject *, PyValue *);
-PyAPI_FUNC(Py_ssize_t) _PyDict_LookupIndexAndValue(PyDictObject *, PyObject *, PyObject **);
 PyAPI_FUNC(Py_ssize_t) _PyDict_LookupIndex(PyDictObject *, PyObject *);
 /* Owns the returned canonical key/value/item tuple; NULL1 means exhaustion
  * or error (PyErr distinguishes them). Supports the six builtin forward/

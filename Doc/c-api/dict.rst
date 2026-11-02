@@ -168,76 +168,12 @@ Dictionary objects
    See also the :c:func:`PyObject_GetItem` function.
 
 
-.. c:function:: PyObject* PyDict_GetItem(PyObject *p, PyObject *key)
-
-   Return a :term:`borrowed reference` to the object from dictionary *p* which
-   has a key *key*.  Return ``NULL`` if the key *key* is missing *without*
-   setting an exception.
-
-   The first argument can be a :class:`dict` or a :class:`frozendict`.
-
-   .. note::
-
-      Exceptions that occur while this calls :meth:`~object.__hash__` and
-      :meth:`~object.__eq__` methods are silently ignored.
-      Prefer the :c:func:`PyDict_GetItemWithError` function instead.
-
-   .. note::
-
-      In the :term:`free-threaded build`, the returned
-      :term:`borrowed reference` may become invalid if another thread modifies
-      the dictionary concurrently. Prefer :c:func:`PyDict_GetItemRef`, which
-      returns a :term:`strong reference`.
-
-   .. versionchanged:: 3.10
-      Calling this API without an :term:`attached thread state` had been allowed for historical
-      reason. It is no longer allowed.
-
-   .. versionchanged:: 3.15
-      Also accept :class:`frozendict`.
-
-
-.. c:function:: PyObject* PyDict_GetItemWithError(PyObject *p, PyObject *key)
-
-   Variant of :c:func:`PyDict_GetItem` that does not suppress
-   exceptions. Return ``NULL`` **with** an exception set if an exception
-   occurred.  Return ``NULL`` **without** an exception set if the key
-   wasn't present.
-
-   .. note::
-
-      In the :term:`free-threaded build`, the returned
-      :term:`borrowed reference` may become invalid if another thread modifies
-      the dictionary concurrently. Prefer :c:func:`PyDict_GetItemRef`, which
-      returns a :term:`strong reference`.
-
-   .. versionchanged:: 3.15
-      Also accept :class:`frozendict`.
-
-
-.. c:function:: PyObject* PyDict_GetItemString(PyObject *p, const char *key)
-
-   This is the same as :c:func:`PyDict_GetItem`, but *key* is specified as a
-   :c:expr:`const char*` UTF-8 encoded bytes string, rather than a
-   :c:expr:`PyObject*`.
-
-   .. note::
-
-      Exceptions that occur while this calls :meth:`~object.__hash__` and
-      :meth:`~object.__eq__` methods or while creating the temporary :class:`str`
-      object are silently ignored.
-      Prefer using the :c:func:`PyDict_GetItemWithError` function with your own
-      :c:func:`PyUnicode_FromString` *key* instead.
-
-   .. note::
-
-      In the :term:`free-threaded build`, the returned
-      :term:`borrowed reference` may become invalid if another thread modifies
-      the dictionary concurrently. Prefer :c:func:`PyDict_GetItemStringRef`,
-      which returns a :term:`strong reference`.
-
-   .. versionchanged:: 3.15
-      Also accept :class:`frozendict`.
+The borrowed getters ``PyDict_GetItem``, ``PyDict_GetItemWithError`` and
+``PyDict_GetItemString`` and their private borrowed variants are removed in
+this rebuilt runtime. Port callers to :c:func:`PyDict_GetItemRef` or
+:c:func:`PyDict_GetItemStringRef`, check the status, and release each owned
+result. Inline scalar values may require fallible object materialization;
+lookup errors propagate rather than being suppressed.
 
 
 .. c:function:: int PyDict_GetItemStringRef(PyObject *p, const char *key, PyObject **result)
@@ -252,23 +188,9 @@ Dictionary objects
       Also accept :class:`frozendict`.
 
 
-.. c:function:: PyObject* PyDict_SetDefault(PyObject *p, PyObject *key, PyObject *defaultobj)
-
-   This is the same as the Python-level :meth:`dict.setdefault`.  If present, it
-   returns the value corresponding to *key* from the dictionary *p*.  If the key
-   is not in the dict, it is inserted with value *defaultobj* and *defaultobj*
-   is returned.  This function evaluates the hash function of *key* only once,
-   instead of evaluating it independently for the lookup and the insertion.
-
-   .. versionadded:: 3.4
-
-   .. note::
-
-      In the :term:`free-threaded build`, the returned
-      :term:`borrowed reference` may become invalid if another thread modifies
-      the dictionary concurrently. Prefer :c:func:`PyDict_SetDefaultRef`,
-      which returns a :term:`strong reference`.
-
+The borrowed ``PyDict_SetDefault`` entrypoint is removed. Use
+:c:func:`PyDict_SetDefaultRef` and release its owned result, or pass ``NULL``
+for the result when only insertion is needed.
 
 
 .. c:function:: int PyDict_SetDefaultRef(PyObject *p, PyObject *key, PyObject *default_value, PyObject **result)
@@ -380,78 +302,48 @@ Dictionary objects
       Also accept :class:`frozendict`.
 
 
-.. c:function:: int PyDict_Next(PyObject *p, Py_ssize_t *ppos, PyObject **pkey, PyObject **pvalue)
+.. c:function:: int PyDict_NextEntryRef(PyObject *p, Py_ssize_t *ppos, PyObject **pkey, PyObject **pvalue)
 
-   Iterate over all key-value pairs in the dictionary *p*.  The
-   :c:type:`Py_ssize_t` referred to by *ppos* must be initialized to ``0``
-   prior to the first call to this function to start the iteration; the
-   function returns true for each pair in the dictionary, and false once all
-   pairs have been reported.  The parameters *pkey* and *pvalue* should either
-   point to :c:expr:`PyObject*` variables that will be filled in with each key
-   and value, respectively, or may be ``NULL``.  Any references returned through
-   them are borrowed.  *ppos* should not be altered during iteration. Its
-   value represents offsets within the internal dictionary structure, and
-   since the structure is sparse, the offsets are not consecutive.
+   Return an independently owned snapshot of the next key-value pair in a
+   :class:`dict` or :class:`frozendict`. Initialize *\*ppos* to ``0`` before
+   the first call. Return ``1`` for an entry, ``0`` for exhaustion, or ``-1``
+   with an exception set on failure. Always check the status explicitly;
+   ``-1`` must not be treated as a true loop condition.
 
-   The first argument can be a :class:`dict` or a :class:`frozendict`.
+   Each non-``NULL`` output location receives a new :term:`strong reference`
+   on success and ``NULL`` on error or exhaustion. The two output locations
+   must be distinct, but either may be omitted. Release both returned owners
+   before proceeding to the next entry. Inline scalar materialization can
+   fail, and a pending exception at entry is preserved and reported as an error.
 
-   For example::
+   The caller must retain *p* throughout iteration and must not change its
+   key set between calls. Cursor offsets are sparse and must not be interpreted
+   as entry counts. The cursor is reserved before object materialization;
+   failure rolls back only an unchanged reservation, preserving any nested
+   callback's cursor progress. Already returned objects remain valid after
+   dictionary mutation, but they do not stabilize subsequent iteration.
 
-      PyObject *key, *value;
-      Py_ssize_t pos = 0;
-
-      while (PyDict_Next(self->dict, &pos, &key, &value)) {
-          /* do something interesting with the values... */
-          ...
-      }
-
-   The dictionary *p* should not be mutated during iteration.  It is safe to
-   modify the values of the keys as you iterate over the dictionary, but only
-   so long as the set of keys does not change.  For example::
+   For example, in a function returning ``0`` or ``-1``::
 
       PyObject *key, *value;
       Py_ssize_t pos = 0;
+      int status;
 
-      while (PyDict_Next(self->dict, &pos, &key, &value)) {
-          long i = PyLong_AsLong(value);
-          if (i == -1 && PyErr_Occurred()) {
-              return -1;
-          }
-          PyObject *o = PyLong_FromLong(i + 1);
-          if (o == NULL)
-              return -1;
-          if (PyDict_SetItem(self->dict, key, o) < 0) {
-              Py_DECREF(o);
-              return -1;
-          }
-          Py_DECREF(o);
+      while ((status = PyDict_NextEntryRef(self->dict, &pos, &key, &value)) > 0) {
+          /* Use the owned key and value here. */
+          Py_DECREF(key);
+          Py_DECREF(value);
       }
+      return status < 0 ? -1 : 0;
 
-   The function is not thread-safe in the :term:`free-threaded <free threading>`
-   build without external synchronization for a mutable :class:`dict`. You can use
-   :c:macro:`Py_BEGIN_CRITICAL_SECTION` to lock the dictionary while iterating
-   over it::
+   If entry processing can fail or exit early, release both owners on that
+   branch as well, preserving the processing exception during cleanup.
 
-      Py_BEGIN_CRITICAL_SECTION(self->dict);
-      while (PyDict_Next(self->dict, &pos, &key, &value)) {
-          ...
-      }
-      Py_END_CRITICAL_SECTION();
+   The borrowed ``PyDict_Next`` and ``_PyDict_Next`` APIs are removed. Rebuilt
+   callers must use this owning API or an internal canonical value iterator.
+   This runtime requires the GIL; this contract does not admit a free-threaded
+   build.
 
-   The function is thread-safe on a :class:`frozendict`.
-
-   .. note::
-
-      On the free-threaded build, this function can be used safely inside a
-      critical section. However, the references returned for *pkey* and *pvalue*
-      are :term:`borrowed <borrowed reference>` and are only valid while the
-      critical section is held. If you need to use these objects outside the
-      critical section or when the critical section can be suspended, create a
-      :term:`strong reference <strong reference>` (for example, using
-      :c:func:`Py_NewRef`).
-
-   .. versionchanged:: 3.15
-      Also accept :class:`frozendict`.
 
 .. c:function:: int PyDict_Merge(PyObject *a, PyObject *b, int override)
 
@@ -786,12 +678,6 @@ These are :term:`soft deprecated` aliases to ``PyDict`` APIs:
 
    * * ``PyODict``
      * ``PyDict``
-   * * .. c:macro:: PyODict_GetItem(od, key)
-     * :c:func:`PyDict_GetItem`
-   * * .. c:macro:: PyODict_GetItemWithError(od, key)
-     * :c:func:`PyDict_GetItemWithError`
-   * * .. c:macro:: PyODict_GetItemString(od, key)
-     * :c:func:`PyDict_GetItemString`
    * * .. c:macro:: PyODict_Contains(od, key)
      * :c:func:`PyDict_Contains`
    * * .. c:macro:: PyODict_Size(od)

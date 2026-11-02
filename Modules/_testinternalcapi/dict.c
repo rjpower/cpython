@@ -1206,7 +1206,88 @@ dict_owned_entry_contract(PyObject *module, PyObject *Py_UNUSED(ignored))
     Py_RETURN_NONE;
 }
 
+static PyObject *
+dict_owned_migration(PyObject *module, PyObject *args)
+{
+    if (!PyTuple_Check(args) || PyTuple_GET_SIZE(args) != 4) {
+        PyErr_SetString(PyExc_TypeError, "expected (operation, dictionary, key, default)");
+        return NULL;
+    }
+    PyObject *operation = NULL, *dict = NULL, *key = NULL, *fallback = NULL;
+    PyObject *value = NULL, *report = NULL;
+    operation = PyTuple_GetItemRef(args, 0);
+    if (operation == NULL) {
+        goto done;
+    }
+    dict = PyTuple_GetItemRef(args, 1);
+    if (dict == NULL) {
+        goto done;
+    }
+    key = PyTuple_GetItemRef(args, 2);
+    if (key == NULL) {
+        goto done;
+    }
+    fallback = PyTuple_GetItemRef(args, 3);
+    if (fallback == NULL) {
+        goto done;
+    }
+    long mode = PyLong_AsLong(operation);
+    if (mode == -1 && PyErr_Occurred()) {
+        goto done;
+    }
+    if (!PyAnyDict_Check(dict)) {
+        PyErr_SetString(PyExc_TypeError, "expected a dictionary");
+        goto done;
+    }
+    int status;
+    switch (mode) {
+        case 0:
+            status = PyDict_GetItemRef(dict, key, &value);
+            break;
+        case 1: {
+            const char *name = PyUnicode_AsUTF8(key);
+            if (name == NULL) {
+                goto done;
+            }
+            status = PyDict_GetItemStringRef(dict, name, &value);
+            break;
+        }
+        case 2: {
+            Py_hash_t hash = PyObject_Hash(key);
+            if (hash == -1) {
+                goto done;
+            }
+            status = _PyDict_GetItemRef_KnownHash((PyDictObject *)dict,
+                                                key, hash, &value);
+            break;
+        }
+        case 3:
+        case 4:
+            status = PyDict_SetDefaultRef(dict, key, fallback,
+                                         mode == 3 ? &value : NULL);
+            break;
+        default:
+            PyErr_SetString(PyExc_ValueError, "unknown dictionary operation");
+            goto done;
+    }
+    if (status >= 0) {
+        report = Py_BuildValue("iO", status, value != NULL ? value : Py_None);
+    }
+done:
+    dict_fixture_close(value);
+    dict_fixture_close(fallback);
+    dict_fixture_close(key);
+    dict_fixture_close(dict);
+    dict_fixture_close(operation);
+    if (PyErr_Occurred()) {
+        dict_fixture_close(report);
+        return NULL;
+    }
+    return report;
+}
+
 static PyMethodDef methods[] = {
+    {"dict_owned_migration", dict_owned_migration, METH_O},
     {"dict_owned_entry", dict_owned_entry, METH_O},
     {"dict_owned_entry_boxing_oom", dict_owned_entry_boxing_oom, METH_NOARGS},
     {"dict_owned_entry_boxing_reentry", dict_owned_entry_boxing_reentry, METH_NOARGS},

@@ -398,10 +398,6 @@ typedef struct {
 static int dict_setdefault_value_lock_held(PyDictObject *, PyValue, PyValue,
                                          Py_hash_t, PyValue *, DictDefaultSelection *);
 
-static int
-dict_setdefault_ref_lock_held(PyObject *d, PyObject *key, PyObject *default_value,
-                    PyObject **result, int incref_result);
-
 #ifndef NDEBUG
 static int _PyObject_InlineValuesConsistencyCheck(PyObject *obj);
 #endif
@@ -1442,15 +1438,22 @@ _PyDict_GetMethodValue(PyDictObject *mp, PyObject *key, PyValue *method)
 int
 _PyDict_HasOnlyStringKeys(PyObject *dict)
 {
-    Py_ssize_t pos = 0;
-    PyObject *key, *value;
     assert(PyDict_Check(dict));
-    /* Shortcut */
-    if (((PyDictObject *)dict)->ma_keys->dk_kind != DICT_KEYS_GENERAL)
+    PyDictKeysObject *keys = ((PyDictObject *)dict)->ma_keys;
+    if (keys->dk_kind != DICT_KEYS_GENERAL) {
         return 1;
-    while (PyDict_Next(dict, &pos, &key, &value))
-        if (!PyUnicode_Check(key))
+    }
+    /* No callbacks or owner cleanup may invalidate this local table scan. */
+    PyDictKeyEntry *entries = DK_ENTRIES(keys);
+    for (Py_ssize_t i = 0; i < keys->dk_nentries; i++) {
+        if (PyValue_IsNull(entries[i].me_value)) {
+            continue;
+        }
+        PyValue key = entries[i].me_key;
+        if (!PyValue_IsObject(key) || !PyUnicode_Check(PyValue_AsPyObjectBorrow(key))) {
             return 0;
+        }
+    }
     return 1;
 }
 
@@ -2008,62 +2011,6 @@ _PyDict_FromItems(PyObject *const *keys, Py_ssize_t keys_offset,
     return dict;
 }
 
-/* Note that, for historical reasons, PyDict_GetItem() suppresses all errors
- * that may occur (originally dicts supported only string keys, and exceptions
- * weren't possible).  So, while the original intent was that a NULL return
- * meant the key wasn't present, in reality it can mean that, or that an error
- * (suppressed) occurred while computing the key's hash, or that some error
- * (suppressed) occurred when comparing keys in the dict's internal probe
- * sequence.  A nasty example of the latter is when a Python-coded comparison
- * function hits a stack-depth error, which can cause this to return NULL
- * even if the key is present.
- */
-static PyObject *
-dict_getitem(PyObject *op, PyObject *key, const char *warnmsg)
-{
-    if (!PyAnyDict_Check(op)) {
-        return NULL;
-    }
-    PyDictObject *mp = (PyDictObject *)op;
-
-    Py_hash_t hash = _PyObject_HashDictKey(key);
-    if (hash == -1) {
-        PyErr_FormatUnraisable(warnmsg);
-        return NULL;
-    }
-
-    PyThreadState *tstate = _PyThreadState_GET();
-#ifdef Py_DEBUG
-    // bpo-40839: Before Python 3.10, it was possible to call PyDict_GetItem()
-    // with the GIL released.
-    _Py_EnsureTstateNotNULL(tstate);
-#endif
-
-    /* Preserve the existing exception */
-    PyObject *value;
-    Py_ssize_t ix; (void)ix;
-
-    PyObject *exc = _PyErr_GetRaisedException(tstate);
-    ix = _Py_dict_lookup(mp, key, hash, &value);
-
-    /* Ignore any exception raised by the lookup */
-    PyObject *exc2 = _PyErr_Occurred(tstate);
-    if (exc2 && !PyErr_GivenExceptionMatches(exc2, PyExc_KeyError)) {
-        PyErr_FormatUnraisable(warnmsg);
-    }
-    _PyErr_SetRaisedException(tstate, exc);
-
-    assert(ix >= 0 || value == NULL);
-    return value;  // borrowed reference
-}
-
-PyObject *
-PyDict_GetItem(PyObject *op, PyObject *key)
-{
-    return dict_getitem(op, key,
-            "Exception ignored in PyDict_GetItem(); consider using "
-            "PyDict_GetItemRef() or PyDict_GetItemWithError()");
-}
 
 static void
 dict_unhashable_type(PyObject *op, PyObject *key)
@@ -2113,21 +2060,6 @@ _PyDict_LookupIndexAndOwnedValue(PyDictObject *mp, PyObject *name, PyValue *out)
     return index;
 }
 
-Py_ssize_t
-_PyDict_LookupIndexAndValue(PyDictObject *mp, PyObject *key, PyObject **value)
-{
-    // TODO: Thread safety
-    assert(PyDict_CheckExact((PyObject*)mp));
-    assert(PyUnicode_CheckExact(key));
-
-    Py_hash_t hash = _PyObject_HashDictKey(key);
-    if (hash == -1) {
-        dict_unhashable_type((PyObject*)mp, key);
-        return -1;
-    }
-
-    return _Py_dict_lookup(mp, key, hash, value);
-}
 
 Py_ssize_t
 _PyDict_LookupIndex(PyDictObject *mp, PyObject *key)
@@ -2144,26 +2076,6 @@ _PyDict_LookupIndex(PyDictObject *mp, PyObject *key)
     return _Py_dict_lookup(mp, PyValue_FromObjectBorrow(key), hash, &value);
 }
 
-/* Same as PyDict_GetItemWithError() but with hash supplied by caller.
-   This returns NULL *with* an exception set if an exception occurred.
-   It returns NULL *without* an exception set if the key wasn't present.
-*/
-PyObject *
-_PyDict_GetItem_KnownHash(PyObject *op, PyObject *key, Py_hash_t hash)
-{
-    Py_ssize_t ix; (void)ix;
-    PyDictObject *mp = (PyDictObject *)op;
-    PyObject *value;
-
-    if (!PyAnyDict_Check(op)) {
-        PyErr_BadInternalCall();
-        return NULL;
-    }
-
-    ix = _Py_dict_lookup(mp, key, hash, &value);
-    assert(ix >= 0 || value == NULL);
-    return value;  // borrowed reference
-}
 
 static int
 dict_getitemref_owned(PyObject *op, PyObject *key, Py_hash_t hash,
@@ -2250,56 +2162,6 @@ _PyDict_GetItemRef_Unicode_LockHeld(PyDictObject *op, PyObject *key,
     return dict_getitemref_owned((PyObject *)op, key, -1, result);
 }
 
-/* Variant of PyDict_GetItem() that doesn't suppress exceptions.
-   This returns NULL *with* an exception set if an exception occurred.
-   It returns NULL *without* an exception set if the key wasn't present.
-*/
-PyObject *
-PyDict_GetItemWithError(PyObject *op, PyObject *key)
-{
-    Py_ssize_t ix; (void)ix;
-    Py_hash_t hash;
-    PyDictObject*mp = (PyDictObject *)op;
-    PyObject *value;
-
-    if (!PyAnyDict_Check(op)) {
-        PyErr_BadInternalCall();
-        return NULL;
-    }
-    hash = _PyObject_HashDictKey(key);
-    if (hash == -1) {
-        dict_unhashable_type(op, key);
-        return NULL;
-    }
-
-    ix = _Py_dict_lookup(mp, key, hash, &value);
-    assert(ix >= 0 || value == NULL);
-    return value;  // borrowed reference
-}
-
-PyObject *
-_PyDict_GetItemWithError(PyObject *dp, PyObject *kv)
-{
-    assert(PyUnicode_CheckExact(kv));
-    Py_hash_t hash = Py_TYPE(kv)->tp_hash(kv);
-    if (hash == -1) {
-        return NULL;
-    }
-    return _PyDict_GetItem_KnownHash(dp, kv, hash);  // borrowed reference
-}
-
-PyObject *
-_PyDict_GetItemStringWithError(PyObject *v, const char *key)
-{
-    PyObject *kv, *rv;
-    kv = PyUnicode_FromString(key);
-    if (kv == NULL) {
-        return NULL;
-    }
-    rv = PyDict_GetItemWithError(v, kv);
-    Py_DECREF(kv);
-    return rv;
-}
 
 PyObject *
 _PyDict_LoadGlobalValue(PyDictObject *globals, PyDictObject *builtins, PyObject *key, PyValue *res)
@@ -2508,7 +2370,7 @@ _PyDict_SetItem_Take2_KnownHash(PyDictObject *mp, PyObject *key,
 
 /* CAUTION: PyDict_SetItem() must guarantee that it won't resize the
  * dictionary if it's merely replacing the value for an existing key.
- * This means that it's safe to loop over a dictionary with PyDict_Next()
+ * This means that it's safe to loop over a dictionary with PyDict_NextEntryRef()
  * and occasionally replace a value -- but you can't insert new keys or
  * remove them.
  */
@@ -3078,8 +2940,7 @@ _PyDict_NextValue(PyObject *op, Py_ssize_t *ppos, PyValue *pkey,
     return 1;
 }
 
-/* Owned object snapshots for rebuilt-source callers. Existing Boolean
- * borrowed iteration remains a separate, unchanged compatibility boundary. */
+/* Owned object snapshots for rebuilt-source callers. */
 int
 _PyDict_NextEntryRefKnownHash(PyObject *op, Py_ssize_t *position,
                             PyObject **out_key, PyObject **out_value,
@@ -3159,98 +3020,6 @@ PyDict_NextEntryRef(PyObject *op, Py_ssize_t *position,
                     PyObject **key, PyObject **value)
 {
     return _PyDict_NextEntryRefKnownHash(op, position, key, value, NULL);
-}
-
-/* Internal version of PyDict_Next that returns a hash value in addition
- * to the key and value.
- * Return 1 on success, return 0 when the reached the end of the dictionary
- * (or if op is not a dictionary)
- */
-int
-_PyDict_Next(PyObject *op, Py_ssize_t *ppos, PyObject **pkey,
-             PyObject **pvalue, Py_hash_t *phash)
-{
-    Py_ssize_t i;
-    PyDictObject *mp;
-    PyObject *key, *value;
-    Py_hash_t hash;
-
-    if (!PyAnyDict_Check(op))
-        return 0;
-
-    mp = (PyDictObject *)op;
-    i = *ppos;
-    if (_PyDict_HasSplitTable(mp)) {
-        assert(mp->ma_used <= SHARED_KEYS_MAX_SIZE);
-        if (i < 0 || i >= mp->ma_used)
-            return 0;
-        int index = get_index_from_order(mp, i);
-        value = mp->ma_values->values[index];
-        key = LOAD_SHARED_KEY(DK_UNICODE_ENTRIES(mp->ma_keys)[index].me_key);
-        hash = unicode_get_hash(key);
-        assert(value != NULL);
-    }
-    else {
-        Py_ssize_t n = mp->ma_keys->dk_nentries;
-        if (i < 0 || i >= n)
-            return 0;
-        if (DK_IS_UNICODE(mp->ma_keys)) {
-            PyDictUnicodeEntry *entry_ptr = &DK_UNICODE_ENTRIES(mp->ma_keys)[i];
-            while (i < n && entry_ptr->me_value == NULL) {
-                entry_ptr++;
-                i++;
-            }
-            if (i >= n)
-                return 0;
-            key = entry_ptr->me_key;
-            hash = unicode_get_hash(entry_ptr->me_key);
-            value = entry_ptr->me_value;
-        }
-        else {
-            PyDictKeyEntry *entry_ptr = &DK_ENTRIES(mp->ma_keys)[i];
-            while (i < n && entry_ptr->me_value == NULL) {
-                entry_ptr++;
-                i++;
-            }
-            if (i >= n)
-                return 0;
-            key = entry_ptr->me_key;
-            hash = entry_ptr->me_hash;
-            value = entry_ptr->me_value;
-        }
-    }
-    *ppos = i+1;
-    if (pkey)
-        *pkey = key;
-    if (pvalue)
-        *pvalue = value;
-    if (phash)
-        *phash = hash;
-    return 1;
-}
-
-/*
- * Iterate over a dict.  Use like so:
- *
- *     Py_ssize_t i;
- *     PyObject *key, *value;
- *     i = 0;   # important!  i should not otherwise be changed by you
- *     while (PyDict_Next(yourdict, &i, &key, &value)) {
- *         Refer to borrowed references in key and value.
- *     }
- *
- * Return 1 on success, return 0 when the reached the end of the dictionary
- * (or if op is not a dictionary)
- *
- * CAUTION:  In general, it isn't safe to use PyDict_Next in a loop that
- * mutates the dict.  One exception:  it is safe if the loop merely changes
- * the values associated with the keys (but doesn't insert new keys or
- * delete keys), via PyDict_SetItem().
- */
-int
-PyDict_Next(PyObject *op, Py_ssize_t *ppos, PyObject **pkey, PyObject **pvalue)
-{
-    return _PyDict_Next(op, ppos, pkey, pvalue, NULL);
 }
 
 
@@ -4926,112 +4695,6 @@ dict_setdefault_object_owned(PyObject *op, PyObject *key, PyObject *default_valu
     return status;
 }
 
-static int
-dict_setdefault_ref_lock_held(PyObject *d, PyObject *key, PyObject *default_value,
-                    PyObject **result, int incref_result)
-{
-    if (incref_result || result == NULL) {
-        return dict_setdefault_object_owned(d, key, default_value, result);
-    }
-    /* The borrowed object-returning legacy branch remains a scoped-bridge
-     * dependency. Its API and ownership contract are not changed here. */
-    if (!PyDict_Check(d)) {
-        if (PyFrozenDict_Check(d)) {
-            frozendict_does_not_support("assignment");
-        }
-        else {
-            PyErr_BadInternalCall();
-        }
-        if (result) {
-            *result = NULL;
-        }
-        return -1;
-    }
-    assert(can_modify_dict((PyDictObject*)d));
-
-    PyDictObject *mp = (PyDictObject *)d;
-    PyObject *value;
-    Py_hash_t hash;
-    Py_ssize_t ix;
-
-    hash = _PyObject_HashDictKey(key);
-    if (hash == -1) {
-        dict_unhashable_type(d, key);
-        if (result) {
-            *result = NULL;
-        }
-        return -1;
-    }
-
-    if (mp->ma_keys == Py_EMPTY_KEYS) {
-        if (insert_to_emptydict(mp, Py_NewRef(key), hash,
-                                Py_NewRef(default_value)) < 0) {
-            if (result) {
-                *result = NULL;
-            }
-            return -1;
-        }
-        if (result) {
-            *result = incref_result ? Py_NewRef(default_value) : default_value;
-        }
-        return 0;
-    }
-
-    if (_PyDict_HasSplitTable(mp) && PyUnicode_CheckExact(key)) {
-        ix = insert_split_key(mp->ma_keys, key, hash);
-        if (ix != DKIX_EMPTY) {
-            PyObject *value = mp->ma_values->values[ix];
-            int already_present = value != NULL;
-            if (!already_present) {
-                _PyDict_InsertSplitValue(mp, key, default_value, ix);
-                value = default_value;
-            }
-            if (result) {
-                *result = incref_result ? Py_NewRef(value) : value;
-            }
-            return already_present;
-        }
-        // No space in shared keys. Go to insert_combined_dict() below.
-    }
-    else {
-        ix = _Py_dict_lookup(mp, key, hash, &value);
-        if (ix == DKIX_ERROR) {
-            if (result) {
-                *result = NULL;
-            }
-            return -1;
-        }
-    }
-
-    if (ix == DKIX_EMPTY) {
-        value = default_value;
-
-        // See comment to this function in insertdict.
-        if (insert_combined_dict(mp, hash, Py_NewRef(key), Py_NewRef(value)) < 0) {
-            Py_DECREF(key);
-            Py_DECREF(value);
-            if (result) {
-                *result = NULL;
-            }
-            return -1;
-        }
-
-        STORE_USED(mp, mp->ma_used + 1);
-        assert(mp->ma_keys->dk_usable >= 0);
-        ASSERT_CONSISTENT(mp);
-        if (result) {
-            *result = incref_result ? Py_NewRef(value) : value;
-        }
-        return 0;
-    }
-
-    assert(value != NULL);
-    ASSERT_CONSISTENT(mp);
-    if (result) {
-        *result = incref_result ? Py_NewRef(value) : value;
-    }
-    return 1;
-}
 
 int
 PyDict_SetDefaultRef(PyObject *d, PyObject *key, PyObject *default_value,
@@ -5039,20 +4702,11 @@ PyDict_SetDefaultRef(PyObject *d, PyObject *key, PyObject *default_value,
 {
     int res;
     Py_BEGIN_CRITICAL_SECTION(d);
-    res = dict_setdefault_ref_lock_held(d, key, default_value, result, 1);
+    res = dict_setdefault_object_owned(d, key, default_value, result);
     Py_END_CRITICAL_SECTION();
     return res;
 }
 
-PyObject *
-PyDict_SetDefault(PyObject *d, PyObject *key, PyObject *defaultobj)
-{
-    PyObject *result;
-    Py_BEGIN_CRITICAL_SECTION(d);
-    dict_setdefault_ref_lock_held(d, key, defaultobj, &result, 0);
-    Py_END_CRITICAL_SECTION();
-    return result;
-}
 
 /*[clinic input]
 @critical_section
@@ -5073,7 +4727,9 @@ dict_setdefault_impl(PyDictObject *self, PyObject *key,
 /*[clinic end generated code: output=f8c1101ebf69e220 input=9237af9a0a224302]*/
 {
     PyObject *val;
-    dict_setdefault_ref_lock_held((PyObject *)self, key, default_value, &val, 1);
+    if (dict_setdefault_object_owned((PyObject *)self, key, default_value, &val) < 0) {
+        return NULL;
+    }
     return val;
 }
 
@@ -5679,26 +5335,6 @@ PyTypeObject PyDict_Type = {
     .tp_version_tag = _Py_TYPE_VERSION_DICT,
 };
 
-
-/* For backward compatibility with old dictionary interface */
-
-PyObject *
-PyDict_GetItemString(PyObject *v, const char *key)
-{
-    PyObject *kv, *rv;
-    kv = PyUnicode_FromString(key);
-    if (kv == NULL) {
-        PyErr_FormatUnraisable(
-            "Exception ignored in PyDict_GetItemString(); consider using "
-            "PyDict_GetItemStringRef()");
-        return NULL;
-    }
-    rv = dict_getitem(v, kv,
-            "Exception ignored in PyDict_GetItemString(); consider using "
-            "PyDict_GetItemStringRef()");
-    Py_DECREF(kv);
-    return rv;  // borrowed reference
-}
 
 int
 PyDict_GetItemStringRef(PyObject *v, const char *key, PyObject **result)

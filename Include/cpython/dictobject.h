@@ -42,13 +42,6 @@ PyAPI_DATA(PyTypeObject) PyFrozenDict_Type;
 #define PyAnyDict_Check(ob) \
     (PyDict_Check(ob) || PyFrozenDict_Check(ob))
 
-PyAPI_FUNC(PyObject *) _PyDict_GetItem_KnownHash(PyObject *mp, PyObject *key,
-                                                 Py_hash_t hash);
-// PyDict_GetItemStringRef() can be used instead
-Py_DEPRECATED(3.14) PyAPI_FUNC(PyObject *) _PyDict_GetItemStringWithError(PyObject *, const char *);
-PyAPI_FUNC(PyObject *) PyDict_SetDefault(
-    PyObject *mp, PyObject *key, PyObject *defaultobj);
-
 /* Get the number of items of a dictionary. */
 static inline Py_ssize_t PyDict_GET_SIZE(PyObject *op) {
     PyDictObject *mp;

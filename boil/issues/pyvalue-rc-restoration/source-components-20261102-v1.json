@@ -448,6 +448,31 @@
       "candidate_executed": false,
       "runnable": false,
       "evidence": "build/pyvalue-clinic-helper-bulk-20261102-v2/commit.json"
+    },
+    "itertools_constructors": {
+      "base": "fa398d21618dc020f96a47d0e0e2bc920b7b808b",
+      "commit": "aa46fc4fd01472e8f16f17ba7c5657703ca481c3",
+      "paths_sha256": {
+        "Modules/itertoolsmodule.c": "2ff111581e1755675aff3f7de4a96a367c11939701d524a07d81be8638abe67d",
+        "Lib/test/test_itertools.py": "e76cda06f8960f49450acba55ebd702c31a2c7f258da954245f9186c7b2fa88c"
+      },
+      "functions": 3,
+      "review_sha256": "fba12d5174719fb62e6098a602ca39614f582132b3162bc831f0580cbbf83828",
+      "native_receipt_sha256": "50f1548f558425720457c1626e6710b6e38da98174db2448175a3769fce0d253",
+      "native_errors_before": 34,
+      "native_errors_after": 27,
+      "warnings_before": 0,
+      "warnings_after": 0,
+      "selected_errors_before": 7,
+      "selected_errors_after": 0,
+      "full_TU_pass": false,
+      "host_run": 8,
+      "host_pass": 7,
+      "host_skip": 1,
+      "candidate_executed": false,
+      "changed_paths": 2,
+      "runnable": false,
+      "evidence": "build/pyvalue-itertools-readers-bulk-20261102-v2/commit.json"
     }
   },
   "first_diagnostic_build": {
@@ -457,15 +482,15 @@
     "candidate_linked": false
   },
   "latest_diagnostic_build": {
-    "head": "87ec5704d6c793dbda3c631a3d29ea16bc4274ed",
+    "head": "aa46fc4fd01472e8f16f17ba7c5657703ca481c3",
     "objects_present": 164,
-    "error_diagnostics": 392,
+    "error_diagnostics": 376,
     "source_unchanged": true,
     "candidate_linked": false,
     "includes_held_source_files": true,
     "make_exit": 2,
-    "source_manifest_paths": 7342,
-    "evidence": "build/pyvalue-merged-build-20261102-v8"
+    "source_manifest_paths": 7343,
+    "evidence": "build/pyvalue-merged-build-20261102-v9"
   },
   "mro_provider_reviewed_delta": {
     "typeobject_sha256": "d07219973716cab2749c7f9992ee268dd014815d28fd574c6d6c2d84b74dcf1d",

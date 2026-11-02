@@ -51,3 +51,6 @@ verbatim; new checkpoint transcripts do not belong here.
 - 2026-11-02 — [Merged diagnostic v8](issues/pyvalue-rc-restoration/merged-build/status.md): checkpoint32 plus held typeobject; make exit2, 392 errors/164 objects, 7,342 source inputs unchanged, no executable.
 - 2026-11-02 — [ABC selected pairs](issues/pyvalue-rc-restoration/porting/status.md): corrected/reviewed one-body/two-path port committed as de422d7fbb3; selected native errors 6→0/full TU 7→1, nine host controls; candidate execution pending.
 - 2026-11-02 — [Clinic helper constructors](issues/pyvalue-rc-restoration/porting/status.md): reviewed producer/seven-constructor port committed as fa398d21618; 21 generated bodies, 690 excluded templates exact, 316 producer passes/116 fixture skips, two host controls, seven native errors removed; runtime pending.
+
+- 2026-11-02 — [Iterator constructors](issues/pyvalue-rc-restoration/porting/status.md): reviewed v2 committed as aa46fc4fd01; selected native errors7→0/full TU34→27, zero warnings; seven host controls/one skip, candidate unexecuted.
+- 2026-11-02 — [Merged diagnostic v9](issues/pyvalue-rc-restoration/merged-build/status.md): checkpoint35 plus held typeobject, make exit2/376 errors/164 objects, all7,343 inputs unchanged, no executable.

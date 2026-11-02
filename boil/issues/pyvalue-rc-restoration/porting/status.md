@@ -191,8 +191,8 @@ of that failed build, not independent defects or a current edit count. It also
 reported 171 warnings, counted separately. Repeated headers, cascades, generated
 expansions and already fixed calls inflate these figures.
 
-The latest v8 merged probe reports 392 errors/164 objects present and no
-executable; all 7,342 source paths stayed unchanged at checkpoint32 plus held
+The latest v9 merged probe reports 376 errors/164 objects present and no
+executable; all 7,343 source paths stayed unchanged at checkpoint35 plus held
 typeobject. Counts remain repeated/cascading compiler
 observations, not independent defects or a percentage complete.
 
@@ -251,9 +251,21 @@ all selected contexts clean, all four full TUs still fail. Weak/incorrect
 negative/arity/state assertions were corrected with preserved before-images.
 Evidence: build/pyvalue-clinic-helper-bulk-20261102-v2/commit.json.
 
-The next reviewed bulk packet covers product_new,zip_longest_new and
-itertools_teedataobject_impl only. It uses owned tuple selection and bounded
-canonical tee capture before boxing; recycled occupied-tuple paths remain
-excluded. Root independently gated the design and captured configured baseline
-evidence (29errors/fivewarnings, seven selected errors). Luna implements it.
+The iterator constructor packet is checkpoint35 aa46fc4fd01: product_new,
+zip_longest_new and itertools_teedataobject_impl only. Owned tuple selection
+and bounded canonical tee capture replace seven selected errors. V1 failed
+early product cleanup review; v2 fixes that owner/exception path. Native full
+TU errors are 34→27, with zero warnings; seven host controls pass and one
+large-address-space control skips. Candidate execution remains pending.
+The earlier report of 29 errors/five warnings was wrong: five shared-header
+errors were misclassified. Raw receipts and the correction are preserved in
+build/pyvalue-itertools-readers-bulk-20261102-v2/native-attribution.json.
 Design: build/pyvalue-itertools-readers-design-20261102-v1/coordinator-accept.md.
+Admission: build/pyvalue-itertools-readers-bulk-20261102-v2/commit.json.
+
+Current parallel work: Luna groups v9 diagnostics; Sol independently reviews
+thirteen slot wrappers and the ten-reader construction design with explicit
+type_new caller ownership. The isolated counter foundation passed independent
+code preflight; root must apply and run controlled native checks. The native
+activation/parser lease assessment is ready for a separate design gate, with
+no source grant or reversal of existing owning ports.

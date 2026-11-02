@@ -24,13 +24,14 @@ reviewed provider, mutation, constructor and graph deltas. MRO providers have
 passed code/native attribution review; publication, slots and lifecycle still
 need closure. No merged executable exists. Luna grouped v4's compiler errors;
 the reviewed unified Clinic rule now covers 48 production wrappers. The latest
-v8 compiler probe has 392 repeated/cascading errors and no executable; all 7,342
-source inputs stayed unchanged. Thirty-four reviewed source checkpoints now include
+v9 compiler probe has 376 repeated/cascading errors and no executable; all 7,343
+source inputs stayed unchanged. Thirty-five reviewed source checkpoints now include
 fourteen core readers, three pure predicates, Template readers, the TypeVar
 parser, descriptor calls, shared bytes/bytearray join and ABC pair readers.
-The shared Clinic helper rule is committed across seven constructors. Luna now
-ports three iterator constructors; Sol designs type slot-wrapper ports and
-reviews the isolated MRO counter patch. The full MRO transaction needs revision.
+The shared Clinic helper rule and three iterator constructors are committed.
+Luna groups the v9 errors; Sol independently reviews the slot-wrapper code and
+type-construction design. Root integrates the isolated MRO counter foundation
+and reviewed wrappers. The full MRO transaction needs revision.
 Sol 6.1 designs/reviews reusable fixes; approved rules go to mechanical or Luna batches.
 The coordinator integrates reviewed results, rebuilds and repeats.
 See [porting rules and remaining work](issues/pyvalue-rc-restoration/porting/status.md)

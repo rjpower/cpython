@@ -24,8 +24,10 @@ TU/object pass without diagnostics. The unified Clinic rule covers 48 production
 wrappers and is committed, as are three pure predicates and fourteen core
 readers, Template readers, the TypeVar parser and descriptor calls. Shared
 bytes/bytearray join is checkpoint32 and ABC pair readers are checkpoint33;
-Clinic helper constructors are checkpoint34. Iterator constructor ports, type
-slot-wrapper design and isolated counter-patch review are active.
+Clinic helper constructors are checkpoint34 and iterator constructors are
+checkpoint35. Luna groups v9 errors; Sol reviews actual slot-wrapper code and
+the type-construction design. Root integrates the counter foundation after
+independent code preflight and controlled native checks.
 The MRO providers plus one immediate wrapper passed independent
 code/native attribution review; their syntax comparison has 61 diagnostics,
 versus 86 before, including
@@ -44,13 +46,14 @@ and [native caller](native-callers/status.md) receipts describe their frozen
 checkpoints. The later [caller transaction](native-parsers/caller-transaction/status.md)
 repairs and checkpoints their composition; its candidate runtime tests remain
 unexecuted. The [merged diagnostic build](merged-build/status.md) still fails to
-link. Its latest v8 snapshot at checkpoint32 plus held typeobject has 164 objects
-present and 392 repeated/cascading error diagnostics. All 7,342 source paths
+link. Its latest v9 snapshot at checkpoint35 plus held typeobject has 164 objects
+present and 376 repeated/cascading error diagnostics. All 7,343 source paths
 remained unchanged; no candidate was executed. The later ABC source checkpoint
 has selected native errors 6→0 (full TU 7→1), nine host controls and no runtime
 pass. Clinic helper constructors subsequently passed review and were committed;
-Luna ports iterator constructors while Sol designs type wrappers and reviews
-the counter patch. The full MRO transaction remains in revision.
+Iterator constructors subsequently passed review and were committed; their
+selected native errors are zero. Type wrappers and construction readers are
+in independent review; the counter foundation awaits root native integration. The full MRO transaction remains in revision.
 
 ## Remaining increments
 

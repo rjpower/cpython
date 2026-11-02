@@ -22,3 +22,10 @@ References: [v2 design](../../../../build/pyvalue-rc-restoration-design-20261101
 [review](../../../../build/pyvalue-rc-native-consumer-map-20261101-v1/typecache-v2-design-review.md).
 Next: close the finite proof or revise the design, then implement and test real
 warm guards, mutation callbacks and cache growth in a scoped increment.
+
+The fresh [composition review](../../../../build/pyvalue-source-integration-20261102-v1/shared-composition-review.md)
+also identifies object-only scalar conversions in lookup_method_ex, descriptor/new
+slots, type lookup/getattr, generic object getattr and abstract special-method
+calling. Three full source files remain held. Their object/call bridges need
+fallible conversion and owned cleanup; that work does not substitute for the
+separate cache lifetime/mutation proof above.

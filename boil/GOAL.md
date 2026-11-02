@@ -48,12 +48,10 @@ component source review, AST checks or a host control into a runtime pass.
 3. Reconcile the board and any machine monitor with that evidence. Assign new
    bounded work and an independent reviewer, then continue the selected milestone.
 
-At the November 2 wiki reset, previous subagents were stopped and fresh agents
-audited documentation and state. Universal-value source is uncommitted in
-`build/worktrees/pyvalue-rc-universal` at base `95be1d28`; the qualified interim
-images remain `eba351fee7d`. There is no restored candidate build, runtime
-qualification or timing. See the board for current assignments rather than
-treating this dated recovery snapshot as a live task list.
+At the November 2 coordination reset, previous subagents were stopped and fresh
+agents audited documentation and state. Current source identities, actual build
+results and assignments live on the board and its experiment pages; do not
+recover a live task list from a dated snapshot or old artifact revision.
 
 Loom is a local service and writes are authorized. Keep `goal` aligned with
 this page and publish concise linked status; retain prior artifact revisions.

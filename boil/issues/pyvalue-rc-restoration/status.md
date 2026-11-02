@@ -1,24 +1,24 @@
 # Restore universal PyValue under RC
 
-- Stage: foundation, containers, dictionary, ABI and symtable committed; shared implementation remains in the worktree.
-  No integrated or qualified restored runtime yet.
-- Owner: coordinator; fresh state_audit designs sys.flags and wiki_audit
-  reviews shared composition. Previous agents remain stopped.
-- Goal: one canonical PyValue across frames, containers, attributes and core
-  operations, retaining RC with cyclic collection.
+- Stage: eight reviewed source checkpoints; first diagnostic build failed.
+- Owner: coordinator; fresh state_audit designs dictionary boundary closure and
+  wiki_audit designs the first scoped Clinic/parser family. Previous agents stay stopped.
+- Goal: canonical PyValues across frames, containers, attributes and operations,
+  retaining RC with cyclic collection.
 
 ## Actual state
 
-The qualified interim images are `eba351fee7d`, private `boilrc1`, with boxed
-heap fields. Restoration source is in `build/worktrees/pyvalue-rc-universal`,
-branch `boil/pyvalue-rc-universal`, base `95be1d28a12`. The
-[foundation checkpoint](foundation/status.md) is committed as `359ea4732de`;
-[Canonical container storage](container-storage/status.md) is committed as
-`edab780a715`; dictionary composition is `9b4ff426d1a`, private ABI is
-`359d10f4d4d`, and symtable is `23cec84d282`. Current restoration HEAD is
-`23cec84d282`. These are explicitly non-runnable pending dependencies. Other
-reviewed source remains uncommitted. No linked restored candidate, runtime qualification or
-measured result exists. The wiki audit's original counts remain historical.
+Qualified interim images remain `eba351fee7d`, private `boilrc1`, boxed heap
+fields. Restoration is `build/worktrees/pyvalue-rc-universal`, branch
+`boil/pyvalue-rc-universal`, base `95be1d28a12`, current HEAD `015eb226fb3`.
+The [board](../README.md) lists all eight reviewed commits. The only remaining
+original uncommitted paths are Objects/abstract.c, object.c and typeobject.c,
+held for named scalar-return/call and type-cache correctness findings.
+
+The [first build](first-build/status.md) configured with the new `boilvalrc1`
+namespace and produced 141 objects, including symtable, codegen and sysmodule.
+It did not link; 616 repeated/cascading diagnostics span 96 source/header paths.
+There is no restored runtime execution, qualification or timing result.
 
 Foundation, containers, attributes, constants, compiler and selected VM/native
 components have independent source reviews in the

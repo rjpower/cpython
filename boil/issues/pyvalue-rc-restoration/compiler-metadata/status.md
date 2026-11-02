@@ -1,6 +1,6 @@
 # Canonical compiler metadata dictionaries
 
-- Stage: source reviewed; commit/integration and candidate execution pending
+- Stage: source committed within `c21d0a374ee`; integration/candidate execution pending
 - Owner: coordinator; previous implementation/review assignments are closed
 - Hypothesis: compiler flags and indices can use canonical values directly
   without borrowed scalar boxes or changed scope/index behavior.
@@ -15,5 +15,5 @@ post-allocation bounds. All other source matches the preserved baseline.
 the four candidate methods remain unexecuted. Symtable/codegen/marshal are not
 closed by this increment.
 
-Next: commit the reviewed delta with dependencies, then run its focused cases
-on the coordinator's coherent candidate. See [integration](../integration/status.md).
+Next: run its focused cases on the coordinator's coherent candidate. The
+shared composition checkpoint includes this reviewed delta and its dependencies. See [integration](../integration/status.md).

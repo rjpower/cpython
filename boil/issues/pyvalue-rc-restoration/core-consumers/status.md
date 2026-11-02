@@ -1,14 +1,14 @@
 # Remaining core and extension consumers
 
-- Stage: symtable committed; sys.flags and codegen design; later consumers queued
+- Stage: symtable, codegen and sys.flags committed; further consumer ports queued
 - Owner: coordinator; fresh state_audit implements and wiki_audit reviews
 - Goal: remove accidental boxed/borrowed assumptions while making extension
   ports possible and incremental.
 
 Use the existing 660-path native consumer inventory and exact dictionary caller
 ledger; do not repeat a broad census instead of porting concrete consumers.
-Next compiler scope includes symtable/codegen metadata; runtime scopes include
-exceptions, frame-local proxies, module clearing and structseq metadata.
+Completed compiler ports cover symtable and codegen metadata. Remaining runtime
+scopes include exceptions, frame-local proxies, module clearing and structseq metadata.
 Marshal, generated AST, lifecycle/type and bundled module consumers also remain.
 
 Six retained dictionary bodies still need the selected boundary semantics;
@@ -29,13 +29,13 @@ syntax passed and seven semantic cases passed on host 3.13/3.14 as reference
 controls. Independent review accepted the corrected private KnownHash lookup;
 the coordinator committed `23cec84d282`. Candidate execution remains pending.
 
-Next small consumer increment: two preexisting `PyStructSequence_GET_ITEM`
-reads in `Python/sysmodule.c`, exposed by the private ABI syntax check. This is
-a separate ownership conversion, not part of the namespace string change. Other
-compiler/runtime/bundled increments remain separately queued.
+[Codegen](codegen/status.md) and [sys.flags](sysflags/status.md) are source committed
+after independent review; both compiled in the new debug build. Candidate
+execution remains pending. Further compiler/runtime/bundled increments remain queued.
 
 A five-TU [diagnostic probe](../../../../build/pyvalue-core-build-diagnostics-20261102-v1/syntax-diagnostics.json)
 found concrete removed container reads in codegen, marshal and errors; frameobject
 and namespaceobject passed provisional syntax. These are compile diagnostics,
 not a linked build. [Codegen design](../../../../build/pyvalue-codegen-consumers-20261102-v1/design.md)
-is under independent review; sys.flags design is assigned to state_audit.
+was implemented, reviewed and committed. The subsequent [full build](../first-build/status.md)
+now supplies concrete grouped diagnostics; use it instead of repeating the inventory.

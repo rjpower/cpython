@@ -51,8 +51,10 @@ silently discard effects or confuse a stored value kind with receiver behavior.
 
 The qualified interim images at `eba351fee7d` use register IR, NaN-boxed frame
 values and boxed heap/shape fields under RC. Universal PyValue restoration is
-partially implemented and source-reviewed in a separate uncommitted worktree;
-there is no restored runtime or measured speed claim. JIT experiments contain
+being completed through reviewed source checkpoints in a separate worktree.
+The first diagnostic build has not linked; there is no restored runtime or
+measured speed claim. The [work board](../issues/README.md) owns current source
+identities, build results and assignments. JIT experiments contain
 partial implementation, but the interim images contain no new native tier.
 
 The target has one canonical core representation and one selected collector.

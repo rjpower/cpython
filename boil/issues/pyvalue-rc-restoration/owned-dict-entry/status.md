@@ -1,6 +1,6 @@
 # Owned dictionary entry bridge
 
-- Stage: source reviewed; commit/integration and candidate execution pending
+- Stage: source committed within `9b4ff426d1a`; integration/candidate execution pending
 - Owner: coordinator; previous implementation/review assignments are closed
 - Hypothesis: rebuilt consumers can iterate inline-capable dictionaries through
   fallible, owned snapshots instead of temporary borrowed boxes.
@@ -16,6 +16,6 @@ All preexisting Dict/header contracts remain exact in this additive increment.
 Full Dict still fails six retained borrowed bodies. That boundary and all
 affected core/bundled consumers remain [separate work](../core-consumers/status.md).
 
-Next: commit the providers, port concrete consumers, and test snapshot/OOM/
+Next: port concrete consumers and test snapshot/OOM/
 reentry behavior on the integrated candidate. Compatibility approval is not
 a dependency.

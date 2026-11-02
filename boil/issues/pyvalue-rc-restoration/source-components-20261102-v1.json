@@ -244,6 +244,27 @@
       "commit": "23cec84d2823b73d65aec8a7cc6344adbec27ecd",
       "changed_paths": 2,
       "runnable": false
+    },
+    "shared_composition": {
+      "commit": "c21d0a374ee36c68e9049a3e3164801896bc77ba",
+      "changed_paths": 44,
+      "runnable": false
+    },
+    "codegen_consumers": {
+      "commit": "ebc9740c4d5f311cdd54d2c113566fe914422a5d",
+      "changed_paths": 2,
+      "runnable": false
+    },
+    "sysflags_consumers": {
+      "commit": "015eb226fb39fbe4fb3940a1d9037053a9b41d6c",
+      "changed_paths": 2,
+      "runnable": false
     }
+  },
+  "first_diagnostic_build": {
+    "configure_pass": true,
+    "make_exit": 2,
+    "compiled_object_count": 141,
+    "candidate_linked": false
   }
 }

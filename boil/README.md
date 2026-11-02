@@ -8,20 +8,17 @@ ported; hard source or binary compatibility with upstream is not required.
 ## Where we are
 
 The qualified interim interpreter is built from `eba351fee7d`: register IR and
-NaN-boxed frame values, with boxed heap fields. Universal PyValues are being
-restored across containers, attributes and core operations in a separate source
-worktree. The foundation (`359ea4732de`) and canonical container/providers
-(`edab780a715`), dictionary (`9b4ff426d1a`), private ABI (`359d10f4d4d`)
-and symtable (`23cec84d282`) have reviewed source commits. Shared consumers remain in progress.
-There is no qualified restored build or performance result.
+NaN-boxed frame values, with boxed heap fields. Universal PyValue restoration now
+has eight independently reviewed source commits on `boil/pyvalue-rc-universal`,
+HEAD `015eb226fb3`. Three object/type files remain held for explicit correctness
+findings. There is no linked or qualified restored interpreter or timing result.
 
-**Current step:** the coordinator checkpoints reviewed source in coherent
-commits, then finishes remaining consumers and validates the integrated runtime.
-The wiki/assignment reset passed fresh independent review; previous agents are
-stopped. The scalar-builtins and symtable review findings are fixed and committed.
-Fresh agents now design the sys.flags port and review shared VM/compiler/native
-composition. The coordinator prepares the codegen consumer port. The
-[work board](issues/README.md) names the next steps.
+**Current step:** use the first build's concrete diagnostics to close shared
+dictionary and native parser/Clinic boundaries. Configure passed and compilation
+produced 141 objects, including the new symtable, codegen and sys.flags ports;
+the interpreter did not link. Fresh agents own the two boundary designs. The
+coordinator reviews designs, integrates commits and validates the merged result.
+See the [work board](issues/README.md) for assignments and next gates.
 
 Next milestone: measure the unified-value register interpreter with JIT
 explicitly disabled against matched interim RC and upstream controls. Then

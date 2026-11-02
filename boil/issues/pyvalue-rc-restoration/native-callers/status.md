@@ -1,6 +1,6 @@
 # Selected generic native VM callers
 
-- Stage: source reviewed; commit/integration and candidate execution pending
+- Stage: source committed within `c21d0a374ee`; integration/candidate execution pending
 - Owner: coordinator; previous implementation/review assignments are closed
 - Hypothesis: the ordinary/KW C-function routes can share the scoped engine
   while preserving actual caller publication, cleanup order and observer state.
@@ -16,5 +16,5 @@ replay a body. Real-route fixtures assert both outer/inner generic KW handlers.
 TUs pass. The 27 behavioral methods remain unexecuted; this is not whole-CALL,
 parser/Clinic, instrumented, EX or opaque-backend closure.
 
-Next: commit the exact increment and execute focused routes in the coherent
-candidate. Broader families need their own minimum useful scoped increments.
+Next: execute focused routes in the coherent candidate. The shared composition
+checkpoint includes the exact reviewed increment. Broader families need their own minimum useful scoped increments.

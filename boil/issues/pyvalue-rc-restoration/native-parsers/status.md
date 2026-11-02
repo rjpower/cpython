@@ -1,6 +1,6 @@
 # Native parsers, registration and opaque API
 
-- Stage: active design; no implementation authorized yet
+- Stage: revise cohesive lifetime design; no implementation authorized yet
 - Owner: fresh wiki_audit designs; coordinator reviews
 - Goal: make real extension routes use the accepted native owner scope, then
   support gradual opaque API adoption without exposing PyValue bits.
@@ -19,17 +19,30 @@ The [extension design](../../../design/extension-api.md) owns the public directi
 HPy ecosystem conformance does not gate the first internal interpreter checkpoint.
 Next: review one cohesive parser/registration increment with real-route tests.
 
-## Current finite design
+## Current design review
 
 The first full build found repeated Clinic tuple-to-object-vector mismatches
 and remaining getargs container assumptions. Inspection also found keyword
 GetItemRef results stored in parser output and decremented before callee use.
-An explicit wrapper-owned argument lease must retain positional and selected
-keyword object views through implementation and converter cleanup. A parser-local
-temporary cannot supply that lifetime.
+An owning lease must keep positional and selected keyword views alive through
+their last use; a parser-local temporary cannot provide that lifetime.
 
-Design the first no-FASTCALL tuple/kwargs Clinic family with its producer,
-generated wrappers and actual _testclinic route. Preserve old object-vector
-contracts explicitly; no PyValue-to-PyObject-pointer casts or second boxed tuple
-format. [Design workspace](../../../../build/pyvalue-clinic-parser-design-20261102-v1).
-Next: coordinator reviews concrete scope and ownership before implementation.
+Coordinator review requested an end-to-end lifetime decision before code.
+Distinguish invocation input/result retirement from ordinary callee-local parser
+resources. Prove the caller frame and argument window remain valid through
+callee/cleanup reentry; revise the blanket deferred-parser-resource rule if the
+proof supports it. Otherwise specify real typed caller-owned storage and
+registration through publication before implementation. Choose one lifetime
+model. Do not first build a wrapper-exit policy already intended for replacement.
+
+The first useful slice should include a structural production wrapper family
+contributing to the real build failures, with test siblings as witnesses. Real
+ordinary/EX dispatch, publication and cleanup dependencies must be explicit.
+No PyValue-to-object-vector casts, hidden TLS scope, fake publication or second
+boxed tuple format. Existing native scope/input/result contracts remain in force
+until a reviewed amendment replaces them.
+
+[Design workspace](../../../../build/pyvalue-clinic-parser-design-20261102-v1),
+[coordinator review](../../../../build/pyvalue-clinic-parser-design-20261102-v1/coordinator-review-v1.md).
+Next: review the revised cohesive model and first production slice, then authorize
+bounded implementation and independent code/result review.

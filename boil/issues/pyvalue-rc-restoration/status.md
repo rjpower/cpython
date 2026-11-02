@@ -1,7 +1,7 @@
 # Restore universal PyValue under RC
 
 - Stage: eight reviewed source checkpoints; first diagnostic build failed.
-- Owner: coordinator; fresh state_audit designs dictionary boundary closure and
+- Owner: coordinator; fresh state_audit implements dictionary boundary closure and
   wiki_audit designs the first scoped Clinic/parser family. Previous agents stay stopped.
 - Goal: canonical PyValues across frames, containers, attributes and operations,
   retaining RC with cyclic collection.

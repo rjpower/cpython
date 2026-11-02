@@ -10,9 +10,9 @@ to link. No restored runtime, qualification or performance pass is claimed.
 
 ## Now and next
 
-1. Fresh state_audit designs closure of the six legacy dictionary boundaries.
-   Fresh wiki_audit designs an owning argument lease for the first real
-   Clinic/parser wrapper family. Both are design-only until coordinator review.
+1. Fresh state_audit implements the reviewed dictionary API cut, keeping existing
+   owning/value migration APIs. Fresh wiki_audit revises the cohesive end-to-end
+   Clinic/parser lifetime model and first production slice before code.
 2. The coordinator prioritizes shared blockers from the first actual build,
    reviews each design, assigns independent code review and commits useful ports.
    Old agents remain stopped; compatibility approvals are not a gate.
@@ -26,8 +26,8 @@ to link. No restored runtime, qualification or performance pass is claimed.
 
 | Experiment | Stage | Owner | Next step |
 | --- | --- | --- | --- |
-| [Dictionary boundary closure](pyvalue-rc-restoration/dict-boundary-closure/status.md) | Design | state_audit; coordinator reviews | Remove unsupported borrowed families; preserve owning/value migration APIs and port callers |
-| [Native parsers and registration](pyvalue-rc-restoration/native-parsers/status.md) | Design | wiki_audit; coordinator reviews | Scope owning positional/keyword views through a real Clinic wrapper call and cleanup |
+| [Dictionary boundary closure](pyvalue-rc-restoration/dict-boundary-closure/status.md) | Implementation; design accepted | state_audit; coordinator reviews | Remove unsupported borrowed families; preserve owning/value migration APIs and port callers |
+| [Native parsers and registration](pyvalue-rc-restoration/native-parsers/status.md) | Revise design | wiki_audit; coordinator reviews | Decide cohesive invocation/parser lifetimes and first production wrapper slice |
 | [Core and extension consumers](pyvalue-rc-restoration/core-consumers/status.md) | Queued scoped ports | Coordinator | Use compile diagnostics; marshal/errors, AST and bundled consumers remain |
 | [Canonical type cache](pyvalue-rc-restoration/typecache/status.md) | Revise design | Coordinator | Mutation/static-lifetime proof plus scalar object/call boundaries; no mechanical field-only port |
 | [Value-native VM iteration](pyvalue-rc-restoration/iterator-vm/status.md) | Next design | Unassigned | Connect real generic iteration to canonical providers and review observer/reentry behavior |

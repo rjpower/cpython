@@ -16,7 +16,8 @@ findings. There is no linked or qualified restored interpreter or timing result.
 **Current step:** use the first build's concrete diagnostics to close shared
 dictionary and native parser/Clinic boundaries. Configure passed and compilation
 produced 141 objects, including the new symtable, codegen and sys.flags ports;
-the interpreter did not link. Fresh agents own the two boundary designs. The
+the interpreter did not link. One fresh agent implements the reviewed dictionary
+API cut; another designs the integrated Clinic/parser lifetime model. The
 coordinator reviews designs, integrates commits and validates the merged result.
 See the [work board](issues/README.md) for assignments and next gates.
 

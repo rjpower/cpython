@@ -8,6 +8,7 @@
 #include "pycore_object.h"        // _PyType_GetSubclasses()
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_setobject.h"     // _PySet_NextEntry()
+#include "pycore_value.h"        // _PyValue_RestoreException()
 #include "pycore_weakref.h"       // _PyWeakref_GET_REF()
 #include "clinic/_abc.c.h"
 
@@ -362,122 +363,292 @@ static int
 compute_abstract_methods(PyObject *self)
 {
     int ret = -1;
-    PyObject *abstracts = PyFrozenSet_New(NULL);
-    if (abstracts == NULL) {
-        return -1;
-    }
+    PyObject *abstracts = NULL;
+    PyObject *ns = NULL;
+    PyObject *items = NULL;
+    PyObject *bases = NULL;
 
-    PyObject *ns = NULL, *items = NULL, *bases = NULL;  // Py_XDECREF()ed on error.
+    abstracts = PyFrozenSet_New(NULL);
+    if (abstracts == NULL || PyErr_Occurred()) goto error;
 
     /* Stage 1: direct abstract methods. */
     ns = PyObject_GetAttr(self, &_Py_ID(__dict__));
-    if (!ns) {
-        goto error;
-    }
-
-    // We can't use PyDict_Next(ns) even when ns is dict because
-    // _PyObject_IsAbstract() can mutate ns.
+    if (ns == NULL || PyErr_Occurred()) goto error;
     items = PyMapping_Items(ns);
-    if (!items) {
-        goto error;
-    }
+    if (items == NULL || PyErr_Occurred()) goto error;
     assert(PyList_Check(items));
+
     for (Py_ssize_t pos = 0; pos < PyList_GET_SIZE(items); pos++) {
-        PyObject *it = PySequence_Fast(
-                PyList_GET_ITEM(items, pos),
-                "items() returned non-iterable");
-        if (!it) {
-            goto error;
+        PyObject *pair = NULL;
+        PyObject *it = NULL;
+        PyObject *key = NULL;
+        PyObject *value = NULL;
+        int failed = 0;
+
+        pair = PyList_GetItemRef(items, pos);
+        if (pair == NULL || PyErr_Occurred()) {
+            failed = 1;
+            goto stage1_cleanup;
+        }
+        it = PySequence_Fast(pair, "items() returned non-iterable");
+        if (it == NULL || PyErr_Occurred()) {
+            failed = 1;
+            goto stage1_cleanup;
         }
         if (PySequence_Fast_GET_SIZE(it) != 2) {
             PyErr_SetString(PyExc_TypeError,
                             "items() returned item which size is not 2");
-            Py_DECREF(it);
-            goto error;
+            failed = 1;
+            goto stage1_cleanup;
         }
 
-        // borrowed
-        PyObject *key = PySequence_Fast_GET_ITEM(it, 0);
-        PyObject *value = PySequence_Fast_GET_ITEM(it, 1);
-        // items or it may be cleared while accessing __abstractmethod__
-        // So we need to keep strong reference for key
-        Py_INCREF(key);
-        int is_abstract = _PyObject_IsAbstract(value);
-        if (is_abstract < 0 ||
-                (is_abstract && PySet_Add(abstracts, key) < 0)) {
-            Py_DECREF(it);
-            Py_DECREF(key);
-            goto error;
+        if (PyList_CheckExact(it)) {
+            key = PyList_GetItemRef(it, 0);
         }
-        Py_DECREF(key);
-        Py_DECREF(it);
+        else {
+            key = PyTuple_GetItemRef(it, 0);
+        }
+        if (key == NULL || PyErr_Occurred()) {
+            failed = 1;
+            goto stage1_cleanup;
+        }
+        if (PyList_CheckExact(it)) {
+            value = PyList_GetItemRef(it, 1);
+        }
+        else {
+            value = PyTuple_GetItemRef(it, 1);
+        }
+        if (value == NULL || PyErr_Occurred()) {
+            failed = 1;
+            goto stage1_cleanup;
+        }
+
+        /* These selections can be mutated by the abstractness/hash callbacks. */
+        int is_abstract = _PyObject_IsAbstract(value);
+        if (is_abstract < 0 || PyErr_Occurred()) {
+            failed = 1;
+            goto stage1_cleanup;
+        }
+        if (is_abstract) {
+            int status = PySet_Add(abstracts, key);
+            if (status < 0 || PyErr_Occurred()) {
+                failed = 1;
+                goto stage1_cleanup;
+            }
+        }
+
+stage1_cleanup:
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = value;
+            value = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
+        }
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = key;
+            key = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
+        }
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = it;
+            it = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
+        }
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = pair;
+            pair = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
+        }
+        if (failed || PyErr_Occurred()) goto error;
     }
 
     /* Stage 2: inherited abstract methods. */
     bases = PyObject_GetAttr(self, &_Py_ID(__bases__));
-    if (!bases) {
-        goto error;
-    }
+    if (bases == NULL || PyErr_Occurred()) goto error;
     if (!PyTuple_Check(bases)) {
         PyErr_SetString(PyExc_TypeError, "__bases__ is not tuple");
         goto error;
     }
 
     for (Py_ssize_t pos = 0; pos < PyTuple_GET_SIZE(bases); pos++) {
-        PyObject *item = PyTuple_GET_ITEM(bases, pos);  // borrowed
-        PyObject *base_abstracts, *iter;
+        PyObject *base = NULL;
+        PyObject *base_abstracts = NULL;
+        PyObject *iter = NULL;
+        PyObject *key = NULL;
+        PyObject *value = NULL;
+        int failed = 0;
 
-        if (PyObject_GetOptionalAttr(item, &_Py_ID(__abstractmethods__),
-                                 &base_abstracts) < 0) {
-            goto error;
+        base = PyTuple_GetItemRef(bases, pos);
+        if (base == NULL || PyErr_Occurred()) {
+            failed = 1;
+            goto stage2_cleanup;
         }
-        if (base_abstracts == NULL) {
-            continue;
+        int status = PyObject_GetOptionalAttr(base, &_Py_ID(__abstractmethods__),
+                                              &base_abstracts);
+        if (status < 0 || PyErr_Occurred()) {
+            failed = 1;
+            goto stage2_cleanup;
         }
-        if (!(iter = PyObject_GetIter(base_abstracts))) {
-            Py_DECREF(base_abstracts);
-            goto error;
-        }
-        Py_DECREF(base_abstracts);
-        PyObject *key, *value;
-        while ((key = PyIter_Next(iter))) {
-            if (PyObject_GetOptionalAttr(self, key, &value) < 0) {
-                Py_DECREF(key);
-                Py_DECREF(iter);
-                goto error;
+        if (base_abstracts != NULL) {
+            iter = PyObject_GetIter(base_abstracts);
+            if (iter == NULL || PyErr_Occurred()) {
+                failed = 1;
+                goto stage2_cleanup;
             }
-            if (value == NULL) {
-                Py_DECREF(key);
-                continue;
-            }
-
-            int is_abstract = _PyObject_IsAbstract(value);
-            Py_DECREF(value);
-            if (is_abstract < 0 ||
-                    (is_abstract && PySet_Add(abstracts, key) < 0))
             {
-                Py_DECREF(key);
-                Py_DECREF(iter);
-                goto error;
+                PyObject *saved = PyErr_GetRaisedException();
+                PyObject *tmp = base_abstracts;
+                base_abstracts = NULL;
+                Py_XDECREF(tmp);
+                _PyValue_RestoreException(saved);
             }
-            Py_DECREF(key);
+            if (PyErr_Occurred()) {
+                failed = 1;
+                goto stage2_cleanup;
+            }
+
+            while (1) {
+                key = PyIter_Next(iter);
+                if (key == NULL) {
+                    if (PyErr_Occurred()) failed = 1;
+                    break;
+                }
+                if (PyErr_Occurred()) {
+                    failed = 1;
+                    goto stage2_key_cleanup;
+                }
+
+                status = PyObject_GetOptionalAttr(self, key, &value);
+                if (status < 0 || PyErr_Occurred()) {
+                    failed = 1;
+                    goto stage2_key_cleanup;
+                }
+                if (value != NULL) {
+                    int is_abstract = _PyObject_IsAbstract(value);
+                    {
+                        PyObject *saved = PyErr_GetRaisedException();
+                        PyObject *tmp = value;
+                        value = NULL;
+                        Py_XDECREF(tmp);
+                        _PyValue_RestoreException(saved);
+                    }
+                    if (is_abstract < 0 || PyErr_Occurred()) {
+                        failed = 1;
+                        goto stage2_key_cleanup;
+                    }
+                    if (is_abstract) {
+                        status = PySet_Add(abstracts, key);
+                        if (status < 0 || PyErr_Occurred()) {
+                            failed = 1;
+                            goto stage2_key_cleanup;
+                        }
+                    }
+                }
+
+stage2_key_cleanup:
+                {
+                    PyObject *saved = PyErr_GetRaisedException();
+                    PyObject *tmp = value;
+                    value = NULL;
+                    Py_XDECREF(tmp);
+                    _PyValue_RestoreException(saved);
+                }
+                {
+                    PyObject *saved = PyErr_GetRaisedException();
+                    PyObject *tmp = key;
+                    key = NULL;
+                    Py_XDECREF(tmp);
+                    _PyValue_RestoreException(saved);
+                }
+                if (failed || PyErr_Occurred()) {
+                    failed = 1;
+                    break;
+                }
+            }
         }
-        Py_DECREF(iter);
-        if (PyErr_Occurred()) {
-            goto error;
+
+stage2_cleanup:
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = value;
+            value = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
         }
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = key;
+            key = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
+        }
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = iter;
+            iter = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
+        }
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = base_abstracts;
+            base_abstracts = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
+        }
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *tmp = base;
+            base = NULL;
+            Py_XDECREF(tmp);
+            _PyValue_RestoreException(saved);
+        }
+        if (failed || PyErr_Occurred()) goto error;
     }
 
-    if (PyObject_SetAttr(self, &_Py_ID(__abstractmethods__), abstracts) < 0) {
-        goto error;
-    }
-
+    if (PyErr_Occurred()) goto error;
+    int status = PyObject_SetAttr(self, &_Py_ID(__abstractmethods__), abstracts);
+    if (status < 0 || PyErr_Occurred()) goto error;
     ret = 0;
+
 error:
-    Py_DECREF(abstracts);
-    Py_XDECREF(ns);
-    Py_XDECREF(items);
-    Py_XDECREF(bases);
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = bases;
+        bases = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = items;
+        items = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = ns;
+        ns = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) ret = -1;
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *tmp = abstracts;
+        abstracts = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) ret = -1;
     return ret;
 }
 

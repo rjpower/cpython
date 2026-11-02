@@ -8,6 +8,7 @@ preserve
 #endif
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(_asyncio_Future___init____doc__,
 "Future(*, loop=None)\n"
@@ -62,23 +63,41 @@ _asyncio_Future___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[1];
     PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
+    Py_ssize_t noptargs;
+    _PyArg_OwnerScope _args_scope = {0};
     PyObject *loop = Py_None;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 1) < 0) {
+        goto exit;
+    }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    noptargs = Py_MIN(_args_scope.nargs, 0)
+        + (_args_scope.nobjects - _args_scope.nargs)
+        - (0 + 0);
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
     loop = fastargs[0];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
 skip_optional_kwonly:
     return_value = _asyncio_Future___init___impl((FutureObj *)self, loop);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        return_value = -1;
+    }
     return return_value;
 }
 
@@ -787,37 +806,61 @@ _asyncio_Task___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[5];
     PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
+    Py_ssize_t noptargs;
+    _PyArg_OwnerScope _args_scope = {0};
     PyObject *coro;
     PyObject *loop = Py_None;
     PyObject *name = Py_None;
     PyObject *context = Py_None;
     int eager_start = 0;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 5) < 0) {
+        goto exit;
+    }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    noptargs = Py_MIN(_args_scope.nargs, 1)
+        + (_args_scope.nobjects - _args_scope.nargs)
+        - (1 + 0);
     coro = fastargs[0];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
     if (fastargs[1]) {
         loop = fastargs[1];
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
     if (fastargs[2]) {
         name = fastargs[2];
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
     if (fastargs[3]) {
         context = fastargs[3];
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
@@ -826,10 +869,16 @@ _asyncio_Task___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     if (eager_start < 0) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
 skip_optional_kwonly:
     return_value = _asyncio_Task___init___impl((TaskObj *)self, coro, loop, name, context, eager_start);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        return_value = -1;
+    }
     return return_value;
 }
 
@@ -2104,4 +2153,4 @@ exit:
 
 #define _ASYNCIO_TASK__FUT_WAITER_GETSETDEF {"_fut_waiter", (getter)_asyncio_Task__fut_waiter_get, (setter)NULL, NULL},
 
-/*[clinic end generated code: output=419f6d2b73047616 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=87c9f760067dd252 input=a9049054013a1b77]*/

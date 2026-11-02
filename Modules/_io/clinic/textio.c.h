@@ -10,6 +10,7 @@ preserve
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(_io__TextIOBase_detach__doc__,
 "detach($self, /)\n"
@@ -257,30 +258,54 @@ _io_IncrementalNewlineDecoder___init__(PyObject *self, PyObject *args, PyObject 
     #undef KWTUPLE
     PyObject *argsbuf[3];
     PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 2;
+    Py_ssize_t noptargs;
+    _PyArg_OwnerScope _args_scope = {0};
     PyObject *decoder;
     int translate;
     PyObject *errors = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 3) < 0) {
+        goto exit;
+    }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    noptargs = Py_MIN(_args_scope.nargs, 3)
+        + (_args_scope.nobjects - _args_scope.nargs)
+        - (2 + 0);
     decoder = fastargs[0];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     translate = PyObject_IsTrue(fastargs[1]);
     if (translate < 0) {
+        goto exit;
+    }
+    if (PyErr_Occurred()) {
         goto exit;
     }
     if (!noptargs) {
         goto skip_optional_pos;
     }
     errors = fastargs[2];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
 skip_optional_pos:
     return_value = _io_IncrementalNewlineDecoder___init___impl((nldecoder_object *)self, decoder, translate, errors);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        return_value = -1;
+    }
     return return_value;
 }
 
@@ -506,8 +531,8 @@ _io_TextIOWrapper___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[6];
     PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
+    Py_ssize_t noptargs;
+    _PyArg_OwnerScope _args_scope = {0};
     PyObject *buffer;
     const char *encoding = NULL;
     PyObject *errors = Py_None;
@@ -515,12 +540,27 @@ _io_TextIOWrapper___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     int line_buffering = 0;
     int write_through = 0;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 6) < 0) {
+        goto exit;
+    }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 1, /*maxpos*/ 6, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    noptargs = Py_MIN(_args_scope.nargs, 6)
+        + (_args_scope.nobjects - _args_scope.nargs)
+        - (1 + 0);
     buffer = fastargs[0];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
@@ -538,12 +578,18 @@ _io_TextIOWrapper___init__(PyObject *self, PyObject *args, PyObject *kwargs)
             _PyArg_BadArgument("TextIOWrapper", "argument 'encoding'", "str or None", fastargs[1]);
             goto exit;
         }
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     if (fastargs[2]) {
         errors = fastargs[2];
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -562,6 +608,9 @@ _io_TextIOWrapper___init__(PyObject *self, PyObject *args, PyObject *kwargs)
             _PyArg_BadArgument("TextIOWrapper", "argument 'newline'", "str or None", fastargs[3]);
             goto exit;
         }
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -569,6 +618,9 @@ _io_TextIOWrapper___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     if (fastargs[4]) {
         line_buffering = PyObject_IsTrue(fastargs[4]);
         if (line_buffering < 0) {
+            goto exit;
+        }
+        if (PyErr_Occurred()) {
             goto exit;
         }
         if (!--noptargs) {
@@ -579,12 +631,18 @@ _io_TextIOWrapper___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     if (write_through < 0) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
 skip_optional_pos:
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = _io_TextIOWrapper___init___impl((textio *)self, buffer, encoding, errors, newline, line_buffering, write_through);
     Py_END_CRITICAL_SECTION();
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        return_value = -1;
+    }
     return return_value;
 }
 
@@ -1261,4 +1319,4 @@ _io_TextIOWrapper_buffer_get(PyObject *self, void *Py_UNUSED(context))
 
 #define _IO_TEXTIOWRAPPER_BUFFER_GETSETDEF {"buffer", (getter)_io_TextIOWrapper_buffer_get, (setter)NULL, NULL},
 
-/*[clinic end generated code: output=f3dd3fff36cd2142 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=773431ca2ad80d20 input=a9049054013a1b77]*/

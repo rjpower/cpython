@@ -9,6 +9,7 @@ preserve
 #include "pycore_abstract.h"      // _Py_convert_optional_to_ssize_t()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(_io_FileIO__dealloc_warn__doc__,
 "_dealloc_warn($self, source, /)\n"
@@ -114,19 +115,34 @@ _io_FileIO___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[4];
     PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
+    Py_ssize_t noptargs;
+    _PyArg_OwnerScope _args_scope = {0};
     PyObject *nameobj;
     const char *mode = "r";
     int closefd = 1;
     PyObject *opener = Py_None;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 4) < 0) {
+        goto exit;
+    }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 1, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    noptargs = Py_MIN(_args_scope.nargs, 4)
+        + (_args_scope.nobjects - _args_scope.nargs)
+        - (1 + 0);
     nameobj = fastargs[0];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
@@ -139,6 +155,9 @@ _io_FileIO___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         if (mode == NULL) {
             goto exit;
         }
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -148,15 +167,24 @@ _io_FileIO___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         if (closefd < 0) {
             goto exit;
         }
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     opener = fastargs[3];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
 skip_optional_pos:
     return_value = _io_FileIO___init___impl((fileio *)self, nameobj, mode, closefd, opener);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        return_value = -1;
+    }
     return return_value;
 }
 
@@ -621,4 +649,4 @@ exit:
 
 #define _IO_FILEIO__BLKSIZE_GETSETDEF {"_blksize", (getter)_io_FileIO__blksize_get, (setter)NULL, _io_FileIO__blksize__doc__},
 
-/*[clinic end generated code: output=b8d6d338bfd0a58f input=a9049054013a1b77]*/
+/*[clinic end generated code: output=04a2d575b8f114e2 input=a9049054013a1b77]*/

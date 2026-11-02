@@ -57,12 +57,21 @@ mappingproxy_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 1) < 0) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     mapping = fastargs[0];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     return_value = mappingproxy_new_impl(type, mapping);
 
 exit:
@@ -179,44 +188,71 @@ property_init(PyObject *self, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[4];
     PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
+    Py_ssize_t noptargs;
+    _PyArg_OwnerScope _args_scope = {0};
     PyObject *fget = NULL;
     PyObject *fset = NULL;
     PyObject *fdel = NULL;
     PyObject *doc = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 4) < 0) {
+        goto exit;
+    }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 0, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    noptargs = Py_MIN(_args_scope.nargs, 4)
+        + (_args_scope.nobjects - _args_scope.nargs)
+        - (0 + 0);
     if (!noptargs) {
         goto skip_optional_pos;
     }
     if (fastargs[0]) {
         fget = fastargs[0];
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     if (fastargs[1]) {
         fset = fastargs[1];
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     if (fastargs[2]) {
         fdel = fastargs[2];
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     doc = fastargs[3];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
 skip_optional_pos:
     return_value = property_init_impl((propertyobject *)self, fget, fset, fdel, doc);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        return_value = -1;
+    }
     return return_value;
 }
-/*[clinic end generated code: output=5d48aa89eed1da61 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=1f0867ff94d83e6a input=a9049054013a1b77]*/

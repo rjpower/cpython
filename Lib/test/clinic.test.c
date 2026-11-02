@@ -5320,12 +5320,21 @@ Test___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 1) < 0) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     a = fastargs[0];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     return_value = Test___init___impl((TestObj *)self, a);
 
 exit:
@@ -5337,7 +5346,7 @@ exit:
 
 static int
 Test___init___impl(TestObj *self, PyObject *a)
-/*[clinic end generated code: output=856b2daa69a1f312 input=a8f9222a6ab35c59]*/
+/*[clinic end generated code: output=dfb3fb9ccc541ae9 input=a8f9222a6ab35c59]*/
 
 
 /*[clinic input]

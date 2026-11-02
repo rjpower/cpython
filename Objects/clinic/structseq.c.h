@@ -7,6 +7,7 @@ preserve
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_value.h"         // _PyValue_RestoreException()
 
 static PyObject *
 structseq_new_impl(PyTypeObject *type, PyObject *arg, PyObject *dict);
@@ -44,25 +45,48 @@ structseq_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[2];
     PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
+    Py_ssize_t noptargs;
+    _PyArg_OwnerScope _args_scope = {0};
     PyObject *arg;
     PyObject *dict = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 2) < 0) {
+        goto exit;
+    }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    noptargs = Py_MIN(_args_scope.nargs, 2)
+        + (_args_scope.nobjects - _args_scope.nargs)
+        - (1 + 0);
     arg = fastargs[0];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
     dict = fastargs[1];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
 skip_optional_pos:
     return_value = structseq_new_impl(type, arg, dict);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        PyObject *_saved = PyErr_GetRaisedException();
+        Py_CLEAR(return_value);
+        _PyValue_RestoreException(_saved);
+    }
     return return_value;
 }
 
@@ -104,4 +128,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=18fcf88e5df26774 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=0ddbdf1fe17c92d3 input=a9049054013a1b77]*/

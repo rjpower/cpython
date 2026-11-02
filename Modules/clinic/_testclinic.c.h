@@ -5359,12 +5359,21 @@ owner_echo(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 1) < 0) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     value = fastargs[0];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     return_value = owner_echo_impl(type, value);
 
 exit:
@@ -5424,12 +5433,21 @@ owner_probe(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 1) < 0) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     value = fastargs[0];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     return_value = owner_probe_impl(type, value);
 
 exit:
@@ -5489,12 +5507,21 @@ owner_alias(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 1) < 0) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     context = fastargs[0];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     return_value = owner_alias_impl(type, context);
 
 exit:
@@ -5615,4 +5642,4 @@ exit:
     }
     return return_value;
 }
-/*[clinic end generated code: output=340f5bc5f415aa3b input=a9049054013a1b77]*/
+/*[clinic end generated code: output=f91c8e2cfee16667 input=a9049054013a1b77]*/

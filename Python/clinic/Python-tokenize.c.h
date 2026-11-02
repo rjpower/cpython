@@ -9,6 +9,7 @@ preserve
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value.h"         // _PyValue_RestoreException()
 
 static PyObject *
 tokenizeriter_new_impl(PyTypeObject *type, PyObject *readline,
@@ -47,20 +48,38 @@ tokenizeriter_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[3];
     PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 2;
+    Py_ssize_t noptargs;
+    _PyArg_OwnerScope _args_scope = {0};
     PyObject *readline;
     int extra_tokens;
     const char *encoding = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 3) < 0) {
+        goto exit;
+    }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 1, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    noptargs = Py_MIN(_args_scope.nargs, 1)
+        + (_args_scope.nobjects - _args_scope.nargs)
+        - (1 + 1);
     readline = fastargs[0];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     extra_tokens = PyObject_IsTrue(fastargs[1]);
     if (extra_tokens < 0) {
+        goto exit;
+    }
+    if (PyErr_Occurred()) {
         goto exit;
     }
     if (!noptargs) {
@@ -74,10 +93,18 @@ tokenizeriter_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (encoding == NULL) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
 skip_optional_kwonly:
     return_value = tokenizeriter_new_impl(type, readline, extra_tokens, encoding);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        PyObject *_saved = PyErr_GetRaisedException();
+        Py_CLEAR(return_value);
+        _PyValue_RestoreException(_saved);
+    }
     return return_value;
 }
 
@@ -95,4 +122,4 @@ tokenizeriter_next(PyObject *self)
 
     return return_value;
 }
-/*[clinic end generated code: output=67cc510ef85272ba input=a9049054013a1b77]*/
+/*[clinic end generated code: output=5ee34892f6c2dd78 input=a9049054013a1b77]*/

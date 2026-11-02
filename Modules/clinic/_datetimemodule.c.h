@@ -8,6 +8,7 @@ preserve
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(delta_new__doc__,
 "timedelta(days=0, seconds=0, microseconds=0, milliseconds=0, minutes=0,\n"
@@ -57,8 +58,8 @@ delta_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[7];
     PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
+    Py_ssize_t noptargs;
+    _PyArg_OwnerScope _args_scope = {0};
     PyObject *days = NULL;
     PyObject *seconds = NULL;
     PyObject *microseconds = NULL;
@@ -67,55 +68,93 @@ delta_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     PyObject *hours = NULL;
     PyObject *weeks = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 7) < 0) {
+        goto exit;
+    }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 0, /*maxpos*/ 7, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    noptargs = Py_MIN(_args_scope.nargs, 7)
+        + (_args_scope.nobjects - _args_scope.nargs)
+        - (0 + 0);
     if (!noptargs) {
         goto skip_optional_pos;
     }
     if (fastargs[0]) {
         days = fastargs[0];
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     if (fastargs[1]) {
         seconds = fastargs[1];
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     if (fastargs[2]) {
         microseconds = fastargs[2];
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     if (fastargs[3]) {
         milliseconds = fastargs[3];
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     if (fastargs[4]) {
         minutes = fastargs[4];
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     if (fastargs[5]) {
         hours = fastargs[5];
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     weeks = fastargs[6];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
 skip_optional_pos:
     return_value = delta_new_impl(type, days, seconds, microseconds, milliseconds, minutes, hours, weeks);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        PyObject *_saved = PyErr_GetRaisedException();
+        Py_CLEAR(return_value);
+        _PyValue_RestoreException(_saved);
+    }
     return return_value;
 }
 
@@ -161,31 +200,54 @@ datetime_date(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[3];
     PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    _PyArg_OwnerScope _args_scope = {0};
     int year;
     int month;
     int day;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 3) < 0) {
+        goto exit;
+    }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
+        goto exit;
+    }
+    if (PyErr_Occurred()) {
         goto exit;
     }
     year = PyLong_AsInt(fastargs[0]);
     if (year == -1 && PyErr_Occurred()) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     month = PyLong_AsInt(fastargs[1]);
     if (month == -1 && PyErr_Occurred()) {
+        goto exit;
+    }
+    if (PyErr_Occurred()) {
         goto exit;
     }
     day = PyLong_AsInt(fastargs[2]);
     if (day == -1 && PyErr_Occurred()) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     return_value = datetime_date_impl(type, year, month, day);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        PyObject *_saved = PyErr_GetRaisedException();
+        Py_CLEAR(return_value);
+        _PyValue_RestoreException(_saved);
+    }
     return return_value;
 }
 
@@ -543,31 +605,54 @@ iso_calendar_date_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[3];
     PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    _PyArg_OwnerScope _args_scope = {0};
     int year;
     int week;
     int weekday;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 3) < 0) {
+        goto exit;
+    }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
+        goto exit;
+    }
+    if (PyErr_Occurred()) {
         goto exit;
     }
     year = PyLong_AsInt(fastargs[0]);
     if (year == -1 && PyErr_Occurred()) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     week = PyLong_AsInt(fastargs[1]);
     if (week == -1 && PyErr_Occurred()) {
+        goto exit;
+    }
+    if (PyErr_Occurred()) {
         goto exit;
     }
     weekday = PyLong_AsInt(fastargs[2]);
     if (weekday == -1 && PyErr_Occurred()) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     return_value = iso_calendar_date_new_impl(type, year, week, weekday);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        PyObject *_saved = PyErr_GetRaisedException();
+        Py_CLEAR(return_value);
+        _PyValue_RestoreException(_saved);
+    }
     return return_value;
 }
 
@@ -700,21 +785,36 @@ timezone_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[2];
     PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
+    Py_ssize_t noptargs;
+    _PyArg_OwnerScope _args_scope = {0};
     PyObject *offset;
     PyObject *name = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 2) < 0) {
+        goto exit;
+    }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    noptargs = Py_MIN(_args_scope.nargs, 2)
+        + (_args_scope.nobjects - _args_scope.nargs)
+        - (1 + 0);
     if (!PyObject_TypeCheck(fastargs[0], DELTA_TYPE(NO_STATE))) {
         _PyArg_BadArgument("timezone", "argument 'offset'", (DELTA_TYPE(NO_STATE))->tp_name, fastargs[0]);
         goto exit;
     }
     offset = fastargs[0];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
@@ -723,10 +823,18 @@ timezone_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         goto exit;
     }
     name = fastargs[1];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
 skip_optional_pos:
     return_value = timezone_new_impl(type, offset, name);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        PyObject *_saved = PyErr_GetRaisedException();
+        Py_CLEAR(return_value);
+        _PyValue_RestoreException(_saved);
+    }
     return return_value;
 }
 
@@ -776,8 +884,8 @@ datetime_time(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[6];
     PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
+    Py_ssize_t noptargs;
+    _PyArg_OwnerScope _args_scope = {0};
     int hour = 0;
     int minute = 0;
     int second = 0;
@@ -785,17 +893,32 @@ datetime_time(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     PyObject *tzinfo = Py_None;
     int fold = 0;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 6) < 0) {
+        goto exit;
+    }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 0, /*maxpos*/ 5, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    noptargs = Py_MIN(_args_scope.nargs, 5)
+        + (_args_scope.nobjects - _args_scope.nargs)
+        - (0 + 0);
     if (!noptargs) {
         goto skip_optional_pos;
     }
     if (fastargs[0]) {
         hour = PyLong_AsInt(fastargs[0]);
         if (hour == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
+        if (PyErr_Occurred()) {
             goto exit;
         }
         if (!--noptargs) {
@@ -807,6 +930,9 @@ datetime_time(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         if (minute == -1 && PyErr_Occurred()) {
             goto exit;
         }
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -814,6 +940,9 @@ datetime_time(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (fastargs[2]) {
         second = PyLong_AsInt(fastargs[2]);
         if (second == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
+        if (PyErr_Occurred()) {
             goto exit;
         }
         if (!--noptargs) {
@@ -825,12 +954,18 @@ datetime_time(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         if (microsecond == -1 && PyErr_Occurred()) {
             goto exit;
         }
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     if (fastargs[4]) {
         tzinfo = fastargs[4];
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -843,10 +978,18 @@ skip_optional_pos:
     if (fold == -1 && PyErr_Occurred()) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
 skip_optional_kwonly:
     return_value = datetime_time_impl(type, hour, minute, second, microsecond, tzinfo, fold);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        PyObject *_saved = PyErr_GetRaisedException();
+        Py_CLEAR(return_value);
+        _PyValue_RestoreException(_saved);
+    }
     return return_value;
 }
 
@@ -1307,8 +1450,8 @@ datetime_datetime(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[9];
     PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 3;
+    Py_ssize_t noptargs;
+    _PyArg_OwnerScope _args_scope = {0};
     int year;
     int month;
     int day;
@@ -1319,21 +1462,42 @@ datetime_datetime(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     PyObject *tzinfo = Py_None;
     int fold = 0;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 9) < 0) {
+        goto exit;
+    }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 3, /*maxpos*/ 8, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    noptargs = Py_MIN(_args_scope.nargs, 8)
+        + (_args_scope.nobjects - _args_scope.nargs)
+        - (3 + 0);
     year = PyLong_AsInt(fastargs[0]);
     if (year == -1 && PyErr_Occurred()) {
+        goto exit;
+    }
+    if (PyErr_Occurred()) {
         goto exit;
     }
     month = PyLong_AsInt(fastargs[1]);
     if (month == -1 && PyErr_Occurred()) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     day = PyLong_AsInt(fastargs[2]);
     if (day == -1 && PyErr_Occurred()) {
+        goto exit;
+    }
+    if (PyErr_Occurred()) {
         goto exit;
     }
     if (!noptargs) {
@@ -1342,6 +1506,9 @@ datetime_datetime(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (fastargs[3]) {
         hour = PyLong_AsInt(fastargs[3]);
         if (hour == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
+        if (PyErr_Occurred()) {
             goto exit;
         }
         if (!--noptargs) {
@@ -1353,6 +1520,9 @@ datetime_datetime(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         if (minute == -1 && PyErr_Occurred()) {
             goto exit;
         }
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -1360,6 +1530,9 @@ datetime_datetime(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (fastargs[5]) {
         second = PyLong_AsInt(fastargs[5]);
         if (second == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
+        if (PyErr_Occurred()) {
             goto exit;
         }
         if (!--noptargs) {
@@ -1371,12 +1544,18 @@ datetime_datetime(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         if (microsecond == -1 && PyErr_Occurred()) {
             goto exit;
         }
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     if (fastargs[7]) {
         tzinfo = fastargs[7];
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -1389,10 +1568,18 @@ skip_optional_pos:
     if (fold == -1 && PyErr_Occurred()) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
 skip_optional_kwonly:
     return_value = datetime_datetime_impl(type, year, month, day, hour, minute, second, microsecond, tzinfo, fold);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        PyObject *_saved = PyErr_GetRaisedException();
+        Py_CLEAR(return_value);
+        _PyValue_RestoreException(_saved);
+    }
     return return_value;
 }
 
@@ -2082,4 +2269,4 @@ datetime_datetime___reduce__(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     return datetime_datetime___reduce___impl((PyDateTime_DateTime *)self);
 }
-/*[clinic end generated code: output=7bdfdfbd568c63ed input=a9049054013a1b77]*/
+/*[clinic end generated code: output=e6765f55a12fa990 input=a9049054013a1b77]*/

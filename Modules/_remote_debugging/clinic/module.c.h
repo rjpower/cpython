@@ -1209,12 +1209,21 @@ _remote_debugging_BinaryReader___init__(PyObject *self, PyObject *args, PyObject
     if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 1) < 0) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     filename = fastargs[0];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     return_value = _remote_debugging_BinaryReader___init___impl((BinaryReaderObject *)self, filename);
 
 exit:
@@ -1718,4 +1727,4 @@ skip_optional_kwonly:
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=21c6de70b9b1021f input=a9049054013a1b77]*/
+/*[clinic end generated code: output=66e30dc8ab658e73 input=a9049054013a1b77]*/

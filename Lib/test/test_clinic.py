@@ -113,6 +113,8 @@ class ClinicWholeFileTest(TestCase):
                 self.assertLess(unpack, invoke)
                 self.assertLess(invoke, end)
                 self.assertNotIn('_PyTuple_CAST(args)->ob_item', generated)
+                self.assertNotIn('Py_ssize_t nargs = PyTuple_GET_SIZE(args);',
+                                 generated)
                 if kind == '__new__':
                     self.assertIn('Py_CLEAR(return_value);', generated[end:])
                     self.assertIn('_PyValue_RestoreException(_saved);', generated[end:])
@@ -120,8 +122,7 @@ class ClinicWholeFileTest(TestCase):
                     self.assertIn('return_value = -1;', generated[end:])
 
     def test_owned_tuple_family_does_not_capture_other_converters(self):
-        for parameter in ('value: object = None', 'value: int',
-                          'value: object(converter="PyUnicode_FSConverter")\n    /'):
+        for parameter in ('value: object(converter="PyUnicode_FSConverter")\n    /',):
             source = (
                 '/*[clinic input]\noutput everything block\n'
                 'class Owner "OwnerObject *" "&Owner_Type"\n'
@@ -130,6 +131,56 @@ class ClinicWholeFileTest(TestCase):
             generated = _make_clinic(filename='owner.c').parse(source)
             with self.subTest(parameter=parameter):
                 self.assertNotIn('_PyArg_OwnerScope_', generated)
+
+    def test_owned_tuple_keyword_fixed_family(self):
+        source = (
+            '/*[clinic input]\noutput everything block\n'
+            'class Owner "OwnerObject *" "&Owner_Type"\n'
+            '@classmethod\nOwner.__new__\n'
+            '    first: object\n    index: int = 7\n'
+            '    /\n    text: str = "x"\n'
+            '    *\n    flag: bool = False\n'
+            '[clinic start generated code]*/\n')
+        generated = _make_clinic(filename='owner.c').parse(source)
+        declaration = generated.index('_PyArg_OwnerScope _args_scope = {0};')
+        begin = generated.index('_PyArg_OwnerScope_BeginTuple(')
+        unpack = generated.index('_PyArg_UnpackKeywordsOwned(')
+        count = generated.index('noptargs = Py_MIN(_args_scope.nargs, 3)')
+        invoke = generated.index('_impl(', count)
+        end = generated.index('_PyArg_OwnerScope_End(', invoke)
+        self.assertLess(declaration, begin)
+        self.assertLess(begin, unpack)
+        self.assertLess(unpack, count)
+        self.assertLess(count, invoke)
+        self.assertLess(invoke, end)
+        self.assertIn('if (PyErr_Occurred())', generated[unpack:count])
+        conversion = generated.index('index = PyLong_AsInt(fastargs[1]);')
+        conversion_error = generated.index('if (PyErr_Occurred())', conversion)
+        later_converter = generated.index('PyUnicode_Check(fastargs[2])')
+        self.assertLess(conversion, conversion_error)
+        self.assertLess(conversion_error, later_converter)
+        self.assertEqual(generated.count('_PyArg_OwnerScope_End('), 1)
+        self.assertNotIn('_PyTuple_CAST(args)->ob_item', generated)
+
+    def test_owned_tuple_keyword_fallback_is_not_selected(self):
+        from unittest.mock import patch
+
+        source = (
+            '/*[clinic input]\noutput everything block\n'
+            'class Owner "OwnerObject *" "&Owner_Type"\n'
+            '@classmethod\nOwner.__new__\n'
+            '    value: int\n[clinic start generated code]*/\n')
+        calls = []
+
+        def unsupported(converter, *args, **kwargs):
+            calls.append(args[0])
+            return None
+
+        with patch.object(int_converter, 'parse_arg', unsupported):
+            generated = _make_clinic(filename='owner.c').parse(source)
+        self.assertEqual(calls, ['fastargs[0]'])
+        self.assertIn('_PyArg_ParseTupleAndKeywordsFast(', generated)
+        self.assertNotIn('_PyArg_OwnerScope_', generated)
 
     def test_owned_positional_constructor_order_and_defaults(self):
         for kind in ('__new__', '__init__'):

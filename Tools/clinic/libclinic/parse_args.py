@@ -10,8 +10,8 @@ from libclinic.function import (
     ACCESSORS, SETTERS)
 from libclinic.converter import CConverter
 from libclinic.converters import (
-    defining_class_converter, int_converter, object_converter,
-    Py_ssize_t_converter, self_converter, unicode_converter)
+    bool_converter, defining_class_converter, int_converter, object_converter,
+    Py_ssize_t_converter, self_converter, str_converter, unicode_converter)
 if TYPE_CHECKING:
     from libclinic.clanguage import CLanguage
     from libclinic.codegen import CodeGen
@@ -386,19 +386,29 @@ class ParseArgsCodeGen:
                     self.min_pos = i
 
     def use_scoped_tuple_keywords(self) -> bool:
-        """The first owned tuple-parser family: one required object input."""
+        """Resource-free fixed tuple keyword constructors."""
         return (self.is_new_or_init()
                 and not self.limited_capi and not self.fastcall
                 and not self.func.vectorcall
                 and not self.varpos and not self.var_keyword
+                and not self.requires_defining_class
                 and not self.has_option_groups()
-                and len(self.parameters) == 1
-                and self.pos_only == 0
-                and self.min_pos == self.max_pos == 1
-                and self.min_kw_only == 0
-                and type(self.converters[0]) is object_converter
-                and self.converters[0].format_unit == 'O'
-                and self.converters[0].alias_of is None)
+                and bool(self.parameters)
+                and all(p.deprecated_until is None
+                        and not p.deprecated_positional
+                        and not p.deprecated_keyword
+                        and type(c) in (object_converter, int_converter,
+                                        Py_ssize_t_converter, bool_converter,
+                                        str_converter, unicode_converter)
+                        and c.alias_of is None and not c.cleanup()
+                        and not c.post_parsing()
+                        and (type(c) is not object_converter
+                             or c.format_unit in ('O', 'O!', 'O&'))
+                        and (type(c) is not str_converter
+                             or c.format_unit in ('s', 'z'))
+                        and (c.format_unit != 'O&'
+                             or c.converter == '_conversion_converter')
+                        for p, c in zip(self.parameters, self.converters)))
 
     def use_scoped_tuple_positional(self) -> bool:
         """Bounded positional constructor views without converter resources."""
@@ -506,7 +516,7 @@ class ParseArgsCodeGen:
                 {initializers}
         """) + "\n"
         finale = PARSER_FINALE_SKELETON
-        if self.use_scoped_tuple_keywords() or self.scoped_tuple_positional:
+        if self.scoped_tuple_keyword_selected or self.scoped_tuple_positional:
             self.codegen.add_include('pycore_value.h', '_PyValue_RestoreException()')
             if self.func.kind is METHOD_INIT:
                 cleanup = """
@@ -1355,22 +1365,32 @@ class ParseArgsCodeGen:
                 self.declarations = declare_parser(self.func, codegen=self.codegen)
                 self.declarations += "\nPyObject *argsbuf[%s];" % (len(self.converters) or 1)
                 self.declarations += "\nPyObject * const *fastargs;"
-                if not self.use_scoped_tuple_keywords():
+                optional_pos_only = any(
+                    i < self.pos_only and p.is_optional()
+                    for i, p in enumerate(self.parameters))
+                if (not self.use_scoped_tuple_keywords()
+                        or optional_pos_only):
                     self.declarations += "\nPy_ssize_t nargs = PyTuple_GET_SIZE(args);"
                 if has_optional_kw:
-                    self.declarations += "\nPy_ssize_t noptargs = %s + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - %d;" % (nargs, self.min_pos + self.min_kw_only)
+                    if self.use_scoped_tuple_keywords():
+                        self.declarations += "\nPy_ssize_t noptargs;"
+                    else:
+                        self.declarations += "\nPy_ssize_t noptargs = %s + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - %d;" % (nargs, self.min_pos + self.min_kw_only)
                 unpack_args = '_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL'
             if self.use_scoped_tuple_keywords():
-                self.declarations += "\n_PyArg_OwnerScope _args_scope = {{0}};"
-                self.codegen.add_include('pycore_modsupport.h',
-                                         '_PyArg_UnpackKeywordsOwned()')
                 parser_code = [libclinic.normalize_snippet(f"""
                     if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, {len(self.converters)}) < 0) {{{{
+                        goto exit;
+                    }}}}
+                    if (PyErr_Occurred()) {{{{
                         goto exit;
                     }}}}
                     {argsname} = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
                             /*minpos*/ {self.min_pos}, /*maxpos*/ {self.max_pos}, /*minkw*/ {self.min_kw_only}, /*varpos*/ 0, argsbuf);
                     if (!{argsname}) {{{{
+                        goto exit;
+                    }}}}
+                    if (PyErr_Occurred()) {{{{
                         goto exit;
                     }}}}
                     """, indent=4)]
@@ -1413,11 +1433,18 @@ class ParseArgsCodeGen:
                     parser_code = []
                     use_parser_code = False
                     break
+                scoped_keyword_candidate = self.use_scoped_tuple_keywords()
                 if add_label and (i == self.pos_only or i == self.max_pos):
                     parser_code.append("%s:" % add_label)
                     add_label = None
                 if not p.is_optional():
                     parser_code.append(libclinic.normalize_snippet(parsearg, indent=4))
+                    if scoped_keyword_candidate:
+                        parser_code.append(libclinic.normalize_snippet("""
+                            if (PyErr_Occurred()) {{
+                                goto exit;
+                            }}
+                            """, indent=4))
                 elif i < self.pos_only:
                     add_label = 'skip_optional_posonly'
                     parser_code.append(libclinic.normalize_snippet("""
@@ -1430,6 +1457,12 @@ class ParseArgsCodeGen:
                             noptargs--;
                             """, indent=4))
                     parser_code.append(libclinic.normalize_snippet(parsearg, indent=4))
+                    if scoped_keyword_candidate:
+                        parser_code.append(libclinic.normalize_snippet("""
+                            if (PyErr_Occurred()) {{
+                                goto exit;
+                            }}
+                            """, indent=4))
                 else:
                     if i < self.max_pos:
                         label = 'skip_optional_pos'
@@ -1446,12 +1479,24 @@ class ParseArgsCodeGen:
                             """ % add_label, indent=4))
                     if i + 1 == len(self.parameters):
                         parser_code.append(libclinic.normalize_snippet(parsearg, indent=4))
+                        if scoped_keyword_candidate:
+                            parser_code.append(libclinic.normalize_snippet("""
+                                if (PyErr_Occurred()) {{
+                                    goto exit;
+                                }}
+                                """, indent=4))
                     else:
                         add_label = label
                         parser_code.append(libclinic.normalize_snippet("""
                             if (%s) {{
                             """ % (argname_fmt % i), indent=4))
                         parser_code.append(libclinic.normalize_snippet(parsearg, indent=8))
+                        if scoped_keyword_candidate:
+                            parser_code.append(libclinic.normalize_snippet("""
+                                if (PyErr_Occurred()) {{
+                                    goto exit;
+                                }}
+                                """, indent=8))
                         parser_code.append(libclinic.normalize_snippet("""
                                 if (!--noptargs) {{
                                     goto %s;
@@ -1460,6 +1505,17 @@ class ParseArgsCodeGen:
                             """ % add_label, indent=4))
 
         if use_parser_code:
+            self.scoped_tuple_keyword_selected = self.use_scoped_tuple_keywords()
+            if self.scoped_tuple_keyword_selected:
+                self.declarations += "\n_PyArg_OwnerScope _args_scope = {{0}};"
+                self.codegen.add_include('pycore_modsupport.h',
+                                         '_PyArg_UnpackKeywordsOwned()')
+            if self.scoped_tuple_keyword_selected and has_optional_kw:
+                parser_code.insert(1, libclinic.normalize_snippet(f"""
+                    noptargs = Py_MIN(_args_scope.nargs, {self.max_pos})
+                        + (_args_scope.nobjects - _args_scope.nargs)
+                        - ({self.min_pos} + {self.min_kw_only});
+                    """, indent=4))
             if add_label:
                 parser_code.append("%s:" % add_label)
             if self.varpos:
@@ -1878,6 +1934,7 @@ class ParseArgsCodeGen:
         self.flags = ""
         self.declarations = ""
         self.scoped_tuple_positional = False
+        self.scoped_tuple_keyword_selected = False
         self.parser_prototype = ""
         self.parser_definition = ""
         self.parser_helper = ""

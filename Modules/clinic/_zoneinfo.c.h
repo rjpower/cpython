@@ -58,12 +58,21 @@ zoneinfo_ZoneInfo(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 1) < 0) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     key = fastargs[0];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     Py_BEGIN_CRITICAL_SECTION(type);
     return_value = zoneinfo_ZoneInfo_impl(type, key);
     Py_END_CRITICAL_SECTION();
@@ -451,4 +460,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=63574c9c89118fb0 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=b0783b65e6cfd9e6 input=a9049054013a1b77]*/

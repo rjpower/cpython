@@ -59,12 +59,21 @@ memoryview(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 1) < 0) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     object = fastargs[0];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     return_value = memoryview_impl(type, object);
 
 exit:
@@ -565,4 +574,4 @@ skip_optional:
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=75c471ce4c48e674 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=cadee1cc1d1a31c5 input=a9049054013a1b77]*/

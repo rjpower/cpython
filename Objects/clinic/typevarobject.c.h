@@ -258,12 +258,21 @@ paramspecargs_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 1) < 0) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     origin = fastargs[0];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     return_value = paramspecargs_new_impl(type, origin);
 
 exit:
@@ -323,12 +332,21 @@ paramspeckwargs_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 1) < 0) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     origin = fastargs[0];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     return_value = paramspeckwargs_new_impl(type, origin);
 
 exit:
@@ -385,8 +403,8 @@ paramspec_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[6];
     PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
+    Py_ssize_t noptargs;
+    _PyArg_OwnerScope _args_scope = {0};
     PyObject *name;
     PyObject *bound = Py_None;
     PyObject *default_value = &_Py_NoDefaultStruct;
@@ -394,27 +412,48 @@ paramspec_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     int contravariant = 0;
     int infer_variance = 0;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 6) < 0) {
+        goto exit;
+    }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    noptargs = Py_MIN(_args_scope.nargs, 1)
+        + (_args_scope.nobjects - _args_scope.nargs)
+        - (1 + 0);
     if (!PyUnicode_Check(fastargs[0])) {
         _PyArg_BadArgument("paramspec", "argument 'name'", "str", fastargs[0]);
         goto exit;
     }
     name = fastargs[0];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
     if (fastargs[1]) {
         bound = fastargs[1];
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
     if (fastargs[2]) {
         default_value = fastargs[2];
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
@@ -422,6 +461,9 @@ paramspec_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (fastargs[3]) {
         covariant = PyObject_IsTrue(fastargs[3]);
         if (covariant < 0) {
+            goto exit;
+        }
+        if (PyErr_Occurred()) {
             goto exit;
         }
         if (!--noptargs) {
@@ -433,6 +475,9 @@ paramspec_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         if (contravariant < 0) {
             goto exit;
         }
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
@@ -441,10 +486,18 @@ paramspec_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (infer_variance < 0) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
 skip_optional_kwonly:
     return_value = paramspec_new_impl(type, name, bound, default_value, covariant, contravariant, infer_variance);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        PyObject *_saved = PyErr_GetRaisedException();
+        Py_CLEAR(return_value);
+        _PyValue_RestoreException(_saved);
+    }
     return return_value;
 }
 
@@ -578,8 +631,8 @@ typevartuple(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[6];
     PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
+    Py_ssize_t noptargs;
+    _PyArg_OwnerScope _args_scope = {0};
     PyObject *name;
     PyObject *bound = Py_None;
     int covariant = 0;
@@ -587,21 +640,39 @@ typevartuple(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     int infer_variance = 0;
     PyObject *default_value = &_Py_NoDefaultStruct;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 6) < 0) {
+        goto exit;
+    }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    noptargs = Py_MIN(_args_scope.nargs, 1)
+        + (_args_scope.nobjects - _args_scope.nargs)
+        - (1 + 0);
     if (!PyUnicode_Check(fastargs[0])) {
         _PyArg_BadArgument("typevartuple", "argument 'name'", "str", fastargs[0]);
         goto exit;
     }
     name = fastargs[0];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
     if (fastargs[1]) {
         bound = fastargs[1];
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
@@ -609,6 +680,9 @@ typevartuple(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (fastargs[2]) {
         covariant = PyObject_IsTrue(fastargs[2]);
         if (covariant < 0) {
+            goto exit;
+        }
+        if (PyErr_Occurred()) {
             goto exit;
         }
         if (!--noptargs) {
@@ -620,6 +694,9 @@ typevartuple(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         if (contravariant < 0) {
             goto exit;
         }
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
@@ -629,15 +706,26 @@ typevartuple(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         if (infer_variance < 0) {
             goto exit;
         }
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
     default_value = fastargs[5];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
 skip_optional_kwonly:
     return_value = typevartuple_impl(type, name, bound, covariant, contravariant, infer_variance, default_value);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        PyObject *_saved = PyErr_GetRaisedException();
+        Py_CLEAR(return_value);
+        _PyValue_RestoreException(_saved);
+    }
     return return_value;
 }
 
@@ -786,38 +874,67 @@ typealias_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[4];
     PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 2;
+    Py_ssize_t noptargs;
+    _PyArg_OwnerScope _args_scope = {0};
     PyObject *name;
     PyObject *value;
     PyObject *type_params = NULL;
     PyObject *qualname = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 4) < 0) {
+        goto exit;
+    }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    noptargs = Py_MIN(_args_scope.nargs, 2)
+        + (_args_scope.nobjects - _args_scope.nargs)
+        - (2 + 0);
     if (!PyUnicode_Check(fastargs[0])) {
         _PyArg_BadArgument("typealias", "argument 'name'", "str", fastargs[0]);
         goto exit;
     }
     name = fastargs[0];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     value = fastargs[1];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
     if (fastargs[2]) {
         type_params = fastargs[2];
+        if (PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
     qualname = fastargs[3];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
 skip_optional_kwonly:
     return_value = typealias_new_impl(type, name, value, type_params, qualname);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        PyObject *_saved = PyErr_GetRaisedException();
+        Py_CLEAR(return_value);
+        _PyValue_RestoreException(_saved);
+    }
     return return_value;
 }
-/*[clinic end generated code: output=b86fb3af4ff71998 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=1d4f2aaca55936f4 input=a9049054013a1b77]*/

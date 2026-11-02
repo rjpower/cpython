@@ -4694,12 +4694,21 @@ os_sched_param(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 1) < 0) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     sched_priority = fastargs[0];
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
     return_value = os_sched_param_impl(type, sched_priority);
 
 exit:
@@ -13772,4 +13781,4 @@ exit:
 #ifndef OS__EMSCRIPTEN_LOG_METHODDEF
     #define OS__EMSCRIPTEN_LOG_METHODDEF
 #endif /* !defined(OS__EMSCRIPTEN_LOG_METHODDEF) */
-/*[clinic end generated code: output=4da6697a140cc31c input=a9049054013a1b77]*/
+/*[clinic end generated code: output=fdd617e4724c4196 input=a9049054013a1b77]*/

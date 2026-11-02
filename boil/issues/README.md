@@ -1,20 +1,20 @@
 # Current work
 
 Current milestone: complete universal PyValues under RC, then measure the
-register interpreter with JIT disabled. Restoration HEAD is `639891a2e81` on
-`boil/pyvalue-rc-universal`: twenty reviewed source commits; typeobject.c is the
-remaining original held file. The latest merged diagnostic build produced 145
-objects and failed to link. No restored runtime, qualification or performance pass is claimed.
+register interpreter with JIT disabled. Restoration HEAD is `a5563d833a7` on
+`boil/pyvalue-rc-universal`: twenty-two reviewed source commits; typeobject.c is the
+remaining original held file. The latest merged diagnostic build has 152
+objects present and failed to link. No restored runtime, qualification or performance pass is claimed.
 [State](pyvalue-rc-restoration/status.md), [process](../PROCESS.md) and
 [gates](../design/validation.md) own details.
 
 ## Now and next
 
-1. The 20-wrapper Clinic increment, object composition and small tokenizer/bytes
-   readers are reviewed and committed.
-   State_audit designs the next startup/parser port. Wiki_audit implements the
-   reviewed first type-cache mutation increment. The coordinator integrates and checks.
-   The reviewed typeobject provider delta remains held.
+1. Object, positional Clinic, tokenizer/bytes and C API call bridges are committed.
+   Core mutation dependencies have six more files checkpointed; reviewed typeobject
+   provider/core/constructor/graph deltas remain held. Wiki_audit prepares the next
+   finite C3/MRO slice; state_audit independently reviews its design. The coordinator
+   integrates and checks against the actual merged build failures.
 2. The coordinator prioritizes shared blockers from the latest actual build,
    reviews each design, assigns independent code review and commits useful ports.
    Old agents remain stopped; compatibility approvals are not a gate.
@@ -28,9 +28,9 @@ objects and failed to link. No restored runtime, qualification or performance pa
 
 | Experiment | Stage | Owner | Next step |
 | --- | --- | --- | --- |
-| [Native callers and scoped parsers](pyvalue-rc-restoration/native-parsers/status.md) | Four reviewed dependencies committed | Coordinator | Remaining gateways/parser families and merged runtime witnesses |
-| [Core and extension consumers](pyvalue-rc-restoration/core-consumers/status.md) | Object and small readers committed; next startup/parser design | state_audit, wiki_audit and coordinator | Concrete startup/call/container ports |
-| [Canonical type cache](pyvalue-rc-restoration/typecache/status.md) | Six provider files committed; first core checkpoint design accepted | wiki_audit implements; coordinator reviews | Scoped invalidation and simple writers; later graph/guards/lifecycle closure |
+| [Native callers and scoped parsers](pyvalue-rc-restoration/native-parsers/status.md) | Call and parser dependencies committed | Coordinator | Remaining gateways/parser families and merged runtime witnesses |
+| [Core and extension consumers](pyvalue-rc-restoration/core-consumers/status.md) | Call bridges committed; type_new/graph reviewed pending | state_audit, wiki_audit and coordinator | C3/MRO, remaining parser/startup/container ports |
+| [Canonical type cache](pyvalue-rc-restoration/typecache/status.md) | Provider/core dependencies checkpointed; graph delta reviewed | wiki_audit designs; state_audit reviews | C3/MRO providers, then transaction/guards/static/lifecycle closure |
 | [Value-native VM iteration](pyvalue-rc-restoration/iterator-vm/status.md) | Next design | Unassigned | Connect real generic iteration to canonical providers and review observer/reentry behavior |
 | [Integration and interpreter checkpoint](pyvalue-rc-restoration/integration/status.md) | Build diagnostics → ports | Coordinator | Close concrete compile/link blockers, rebuild, qualify and measure |
 | [Method and tracing JIT](jit-e2e-system/status.md) | Deferred to interpreter checkpoint | Coordinator | Reconcile source/runtime with universal values before further native validation |
@@ -63,7 +63,9 @@ linked restored runtime. Primary-worktree documentation is separate.
 | [Positional Clinic](pyvalue-rc-restoration/native-parsers/positional-owners/status.md) | `be15f9856b5`, 19 paths, 20 production wrappers | 270 producer/eight host controls; class/code TUs and objects pass; six candidate methods pending |
 | [Object composition](pyvalue-rc-restoration/core-consumers/object-attributes/status.md) | `e52539e7f68`, four paths; full pending file reviewed | Full TU/object and 20 host controls pass; 20 candidate methods pending |
 | [Tokenizer and bytes readers](pyvalue-rc-restoration/core-consumers/small-readers/status.md) | `639891a2e81`, five paths | Three full TUs/objects and four host controls pass; nine candidate methods pending |
-| [Merged diagnostic build](pyvalue-rc-restoration/merged-build/status.md) | Make failed at `6780ba211ac`; 145 objects, no executable | 612 repeated/cascading diagnostics; required consumer ports remain |
+| [Core mutation component](pyvalue-rc-restoration/typecache/core-mutation/status.md) | `7b923d2b935`, six files; reviewed typeobject delta pending | Dict/cache/fixture TUs and objects pass; remaining typeobject diagnostics and runtime holds |
+| [Object C call bridges](pyvalue-rc-restoration/native-parsers/object-call-bridges/status.md) | `a5563d833a7`, three files | Two full TUs/objects pass without diagnostics; nine host controls; 17 candidate methods pending |
+| [Merged diagnostic build](pyvalue-rc-restoration/merged-build/status.md) | Make failed at `7b923d2b935` plus held typeobject/type_new; 152 objects present | 540 repeated/cascading diagnostics, no executable; later graph/call ports checked separately |
 | [First diagnostic build](pyvalue-rc-restoration/first-build/status.md) | Configure passed; build failed; 141 objects | 616 repeated/cascading diagnostics across 96 source/header paths to resolve |
 
 Earlier component reviews, including compiler metadata, owned dictionary entries

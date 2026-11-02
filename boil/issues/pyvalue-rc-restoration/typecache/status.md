@@ -1,7 +1,7 @@
 # Canonical type cache and mutation admission
 
-- Stage: first provider reviewed; six independent files committed, typeobject delta held
-- Owner: wiki_audit designs core mutation/guards; coordinator reviews and integrates
+- Stage: provider/core dependencies checkpointed; graph delta reviewed; C3/MRO design under review
+- Owner: wiki_audit designs/implements finite typeobject slices; state_audit and coordinator review
 - Hypothesis: canonical borrowed cache entries can remain fast and safe if
   version invalidation precedes observable mutation and admission stays closed
   through callback-capable mutation/retirement.
@@ -44,10 +44,13 @@ reviewed but cannot yet be committed with unrelated unresolved scalar bridges.
 [Code/results review](../../../../build/pyvalue-typecache-provider-20261102-v1/coordinator-code-review.md),
 [native checks](../../../../build/pyvalue-typecache-provider-20261102-v1/native-v1.json),
 [commit and pending-delta receipt](../../../../build/pyvalue-typecache-provider-20261102-v1/commit.json).
-The finite core mutation/guard/lifecycle design is frozen and independently
-reviewed. Wiki_audit has a first-checkpoint source grant:
-shared scopes, detach/retire, restarted invalidation and simple actual writers.
-Graph/MRO/construction and guards/terminal remain later checkpoints.
+The [core mutation component](core-mutation/status.md) is independently reviewed,
+with six dependencies committed and its typeobject delta held. Graph repair is
+also independently reviewed as a pending exact delta: eleven functions, 405 other
+bodies and masked text exact, seven host controls passing, 29 candidate methods
+unexecuted. Its full typeobject TU still has 47 errors/39 warnings, all in unchanged
+functions/lines. C3/MRO provider design is now under independent review; construction,
+guards/terminal/static/bundled and scalar providers remain required.
 [Core proposal](../../../../build/pyvalue-typecache-core-scope-20261102-v1/design.md),
 [bounded coordinator grant](../../../../build/pyvalue-typecache-core-scope-20261102-v1/coordinator-review.md).
 
@@ -63,3 +66,8 @@ slots, type lookup/getattr, generic object getattr and abstract special-method
 calling. The abstract and full object repairs are now committed; typeobject.c remains held. Their object/call bridges need
 fallible conversion and owned cleanup; that work does not substitute for the
 separate cache lifetime/mutation proof above.
+
+[Graph design/review](../../../../build/pyvalue-typecache-graph-scope-20261102-v1/independent-design-review.md),
+[graph code/results acceptance](../../../../build/pyvalue-typecache-graph1-20261102-v1/coordinator-code-review.md),
+[graph native attribution](../../../../build/pyvalue-typecache-graph1-20261102-v1/native-classification.md),
+[next finite MRO proposal](../../../../build/pyvalue-typecache-mro-scope-20261102-v1/design.md).

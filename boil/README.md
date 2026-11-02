@@ -11,19 +11,16 @@ The qualified interim interpreter is built from `eba351fee7d`: register IR and
 NaN-boxed frame values, with boxed heap fields. Universal PyValue restoration
 is on `boil/pyvalue-rc-universal`. Reviewed ports
 now include the object/attribute bridge, positional constructors and small
-tokenizer/bytes readers. The remaining original held file is typeobject.c.
+tokenizer/bytes readers and object C call bridges. The remaining original held file is typeobject.c.
 There is no linked or qualified restored interpreter or timing result.
 
 **Current step:** close the concrete blockers from the merged diagnostic build.
-The latest attempt at the fifteen-checkpoint chain produced 145 objects but no
-interpreter. Canonical dictionary readers, scoped constructors, marshal and the
-caller transaction are reviewed and committed; the evaluator compiles.
-The instance/subclass port also compiles. The type-cache provider has six
-independent files committed; its reviewed typeobject delta remains held.
-The 20-wrapper positional Clinic port is committed. State_audit designs the
-next startup/parser port; wiki_audit implements the reviewed first type-cache
-mutation increment. The coordinator checks frozen inputs, reviews and commits
-accepted changes, and validates the merged result.
+The latest merged build still failed before linking. The C API call bridges now
+compile, and their focused checks and independent reviews pass. Typeobject has
+reviewed provider, mutation, constructor and graph deltas; its remaining C3/MRO,
+slot and publication consumers still need closure. Wiki_audit prepares the next
+finite MRO slice; state_audit reviews it. The coordinator integrates reviewed
+changes and validates the merged result.
 See the [work board](issues/README.md) for assignments and next gates.
 
 Next milestone: measure the unified-value register interpreter with JIT

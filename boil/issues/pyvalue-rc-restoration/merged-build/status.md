@@ -1,29 +1,35 @@
-# Merged universal-value diagnostic build
+# Merged restored-runtime diagnostic builds
 
-- Outcome: make exit 2; 145 objects present, no executable
+- Stage: latest make failed before linking; no restored execution or timing
 - Owner: coordinator
-- Source: fifteen reviewed commits through `6780ba211ac`, plus the three held object/type files
-- Purpose: expose concrete remaining ports; no runtime admission
+- Purpose: expose actual baseline compiler/linker dependencies on frozen merged source
 
-The existing debug configuration and build directory were reused. Bounded
-`make -k -j4 python` finished in 14.8 seconds without timeout. All 7,332 source
-manifest paths remained unchanged. The restored private ABI is still boilvalrc1.
-No candidate was linked or executed.
+Latest attempt: [v3 record](../../../../build/pyvalue-merged-build-20261102-v3/results.json),
+source HEAD `7b923d2b935` plus the held typeobject provider/core1 and applied
+single-function type_new repair. `make -k -j4 python` exited 2 in 33.7 seconds.
+There are 152 objects present, including earlier focused builds; this is not a
+count of newly compiled objects. There is no interpreter executable. All 7,337
+source paths remained unchanged.
 
-The log has 612 error diagnostics across source/header paths, including repeated
-and cascading errors; this is not a count of independent defects or a performance
-metric. Canonical Dict, marshal and evaluator boundaries compile. Remaining
-failures include tuple/list object views, parser/Clinic families, type/object
-semantics and bundled consumers. The design/review cycle now targets those actual
-sites. Keep generated changes with their producers and avoid a second boxed
-container mode to force compilation.
+The log contains 540 repeated/cascading error diagnostics. Their count is neither
+a count of independent defects nor a performance/progress metric. Concrete
+remaining consumers include core tuple/list/dict reads, generated AST, format
+parsers, type/MRO/slots, lifecycle/import and bundled modules. Select finite
+provider/caller ports from these actual contexts rather than repeating inventories.
 
-[Identity](../../../../build/pyvalue-merged-build-20261102-v2/identity.json),
-[results/grouped errors](../../../../build/pyvalue-merged-build-20261102-v2/results.json),
-[raw log](../../../../build/pyvalue-merged-build-20261102-v2/make.log),
-[source manifest](../../../../build/pyvalue-merged-build-20261102-v2/source-before.json).
-The [first attempt](../first-build/status.md) remains historical evidence.
+[Identity](../../../../build/pyvalue-merged-build-20261102-v3/identity.json),
+[raw log](../../../../build/pyvalue-merged-build-20261102-v3/make.log),
+[source before](../../../../build/pyvalue-merged-build-20261102-v3/source-before.json),
+[source after](../../../../build/pyvalue-merged-build-20261102-v3/source-after.json).
 
-Next: review and port concrete consumers, repeat affected checks, then link the
-composed candidate. Runtime/ABI qualification and matched JIT-disabled timing
-require that real executable and rebuilt extensions.
+Later graph and object-call ports are outside that frozen build. Their focused
+checks are linked from the board; they do not turn v3 into a passing merged build.
+Repeat merged validation at the next coherent integration point, then execute
+startup/focused runtime cases once linking succeeds. Timing requires a working,
+qualified register interpreter with unified values and JIT explicitly disabled.
+
+Earlier preserved attempt [v2](../../../../build/pyvalue-merged-build-20261102-v2/results.json)
+bound fifteen checkpoints at `6780ba211ac` plus three then-held object files;
+make exited 2, 145 objects were present, all 7,332 source paths stayed unchanged,
+and no executable linked. Its 612 repeated/cascading diagnostics remain raw evidence.
+The [first diagnostic build](../first-build/status.md) is preserved separately.

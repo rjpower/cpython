@@ -33,15 +33,15 @@ results cannot supply it. Use results to improve specific mechanisms.
 The [board](../../README.md) owns the current restoration HEAD and checkpoint
 list. Object composition and small tokenizer/bytes consumers are committed;
 typeobject.c is the remaining original held file. Clinic covers 20 further
-positional wrappers; classobject/codeobject compile. The first type-cache mutation
-checkpoint is active. Remaining actual parser, call, container/startup and bundled
-consumer ports still block a baseline executable.
+positional wrappers; classobject/codeobject compile. Core mutation dependencies and object calls are checkpointed; graph/type_new
+deltas remain held. C3/MRO design is next. Remaining actual parser, container/
+startup and bundled consumer ports still block a baseline executable.
 
 The latest [merged diagnostic build](../merged-build/status.md) binds the earlier
-fifteen-checkpoint chain at `6780ba211ac` plus held files. It produced 145 objects,
-exited 2 and never linked. All 7,332 source paths stayed unchanged. Later focused
-component compilations are recorded separately; they do not turn that build into
-a pass. No restored candidate execution or timing exists.
+21-checkpoint chain at `7b923d2b935` plus held typeobject/type_new. It exited 2,
+with 152 objects present and no executable. All 7,337 source paths stayed unchanged;
+540 repeated/cascading diagnostics remain raw evidence. Later focused graph and
+call checks are separate and do not turn that merged build into a pass.
 
 Prioritize a coherent register interpreter with the unified format and JIT off.
 Use concrete failed compiler/linker/startup routes to select finite ports, preserving

@@ -14,8 +14,9 @@ fields. Restoration is `build/worktrees/pyvalue-rc-universal`, branch
 the current HEAD and reviewed checkpoint list. Object composition is committed; typeobject.c is the remaining
 original held file. The reviewed typeobject provider delta stays distinguishable
 from unfinished scalar/slot work. Positional Clinic, object/attribute/repr and
-small tokenizer/bytes consumers have passed their finite source gates and are
-committed. They do not yet form an executable candidate.
+small tokenizer/bytes and object call consumers have passed their finite source
+gates and are committed. Type_new and graph repairs are applied/reviewed pending
+typeobject composition. They do not yet form an executable candidate.
 
 The [first build](first-build/status.md) configured with the new `boilvalrc1`
 namespace and produced 141 objects, including symtable, codegen and sysmodule.
@@ -30,7 +31,8 @@ and [native caller](native-callers/status.md) receipts describe their frozen
 checkpoints. The later [caller transaction](native-parsers/caller-transaction/status.md)
 repairs and checkpoints their composition; its candidate runtime tests remain
 unexecuted. The [merged diagnostic build](merged-build/status.md) still fails to
-link at fifteen checkpoints with 145 objects.
+link. Its latest v3 snapshot at 21 checkpoints has 152 objects present and
+540 repeated/cascading diagnostics; later graph/call checks remain separate.
 
 ## Remaining increments
 

@@ -1,6 +1,6 @@
 # Native callers, scoped parsers and registration
 
-- Stage: generic adapters, scoped constructors and caller transaction committed
+- Stage: generic adapters, scoped constructors, caller transaction and object call bridges committed
 - Owner: coordinator assigns remaining scopes and validates composition
 - Goal: repair real call preparation/publication and port production constructor families
 
@@ -53,3 +53,9 @@ V1 was rejected as a test-only policy we intended to replace. V2 required real
 early-prelude and witness-route closure. V3 resolves both and the parser
 preflight/materialization sequencing. Earlier proposals remain in the
 [design workspace](../../../../build/pyvalue-clinic-parser-design-20261102-v1).
+
+[Object C call bridges](object-call-bridges/status.md) are now reviewed and committed,
+with actual call.c/fixture TUs and objects passing. The
+[startup type constructor](../core-consumers/type-new/status.md) is applied/reviewed
+as a pending typeobject delta. General flat/keyword/nested format-parser caller
+leases and their production consumers remain design/implementation work.

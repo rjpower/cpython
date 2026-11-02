@@ -52,6 +52,8 @@ and 23 host controls pass. Candidate tests remain unexecuted.
 The [positional Clinic increment](../native-parsers/positional-owners/status.md),
 [object composition](object-attributes/status.md) and
 [small tokenizer/bytes readers](small-readers/status.md) are reviewed and committed.
-State_audit designs the next startup/parser port; wiki_audit implements the first
-core type-cache mutation checkpoint. The coordinator closes concrete call/startup
-blockers and owns merged validation.
+The [startup type constructor](type-new/status.md) is applied/reviewed pending
+typeobject composition, and [object call bridges](../native-parsers/object-call-bridges/status.md)
+are committed. The next actual C3/MRO slice is under review; remaining generated
+AST, format-parser/startup/container and bundled ports still block the baseline.
+The coordinator owns merged validation.

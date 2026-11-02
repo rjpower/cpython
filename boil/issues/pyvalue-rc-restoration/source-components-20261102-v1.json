@@ -320,6 +320,17 @@
       "commit": "639891a2e81e4a360a3e346cfa33991bd869d14c",
       "changed_paths": 5,
       "runnable": false
+    },
+    "core_type_mutation": {
+      "commit": "7b923d2b935552fbe940ef4a6521e92f72502ae2",
+      "changed_paths": 6,
+      "reviewed_typeobject_delta_pending": true,
+      "runnable": false
+    },
+    "object_call_bridges": {
+      "commit": "a5563d833a73a8384c50c54dd8e1108974b401e2",
+      "changed_paths": 3,
+      "runnable": false
     }
   },
   "first_diagnostic_build": {
@@ -329,12 +340,12 @@
     "candidate_linked": false
   },
   "latest_diagnostic_build": {
-    "head": "6780ba211ac9a242dee156e18572be2c246cfa03",
+    "head": "7b923d2b935552fbe940ef4a6521e92f72502ae2",
     "includes_held_source_files": true,
     "make_exit": 2,
-    "objects_present": 145,
-    "error_diagnostics": 612,
-    "source_manifest_paths": 7332,
+    "objects_present": 152,
+    "error_diagnostics": 540,
+    "source_manifest_paths": 7337,
     "source_unchanged": true,
     "candidate_linked": false
   }

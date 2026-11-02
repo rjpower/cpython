@@ -294,6 +294,7 @@ typedef struct _heaptypeobject {
 #ifdef Py_GIL_DISABLED
     Py_ssize_t unique_id;  // ID used for per-thread refcounting
 #endif
+    uint64_t ht_mro_epoch;
     /* here are optional user slots, followed by the members. */
 } PyHeapTypeObject;
 

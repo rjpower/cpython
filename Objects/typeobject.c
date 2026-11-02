@@ -600,6 +600,17 @@ _PyType_GetBases(PyTypeObject *self)
 }
 
 static inline void
+mro_epoch_advance(PyTypeObject *type)
+{
+    if (type->tp_flags & Py_TPFLAGS_HEAPTYPE) {
+        PyHeapTypeObject *heap = (PyHeapTypeObject *)type;
+        if (heap->ht_mro_epoch != UINT64_MAX) {
+            heap->ht_mro_epoch++;
+        }
+    }
+}
+
+static inline void
 set_tp_bases(PyTypeObject *self, PyObject *bases, int initial)
 {
     assert(PyTuple_Check(bases));
@@ -621,6 +632,9 @@ set_tp_bases(PyTypeObject *self, PyObject *bases, int initial)
         }
         _Py_SetImmortal(bases);
     }
+    if (self->tp_bases != bases) {
+        mro_epoch_advance(self);
+    }
     self->tp_bases = bases;
 }
 
@@ -640,6 +654,9 @@ clear_tp_bases(PyTypeObject *self, int final)
             }
         }
         return;
+    }
+    if (self->tp_bases != NULL) {
+        mro_epoch_advance(self);
     }
     Py_CLEAR(self->tp_bases);
 }
@@ -673,6 +690,9 @@ set_tp_mro(PyTypeObject *self, PyObject *mro, int initial)
         type_lock_prevent_release(&pinned);
         types_stop_world();
     }
+    if (self->tp_mro != mro) {
+        mro_epoch_advance(self);
+    }
     self->tp_mro = mro;
     if (!initial) {
         types_start_world();
@@ -696,6 +716,9 @@ clear_tp_mro(PyTypeObject *self, int final)
             }
         }
         return;
+    }
+    if (self->tp_mro != NULL) {
+        mro_epoch_advance(self);
     }
     Py_CLEAR(self->tp_mro);
 }
@@ -1909,6 +1932,9 @@ type_set_bases_unlocked(PyTypeObject *type, PyObject *new_bases, PyTypeObject *b
     type_lock_prevent_release(&pinned);
     types_stop_world();
     set_tp_bases(type, Py_NewRef(new_bases), 0);
+    if (type->tp_base != best_base) {
+        mro_epoch_advance(type);
+    }
     type->tp_base = (PyTypeObject *)Py_NewRef(best_base);
     types_start_world();
     type_lock_allow_release(&pinned);
@@ -1975,6 +2001,9 @@ type_set_bases_unlocked(PyTypeObject *type, PyObject *new_bases, PyTypeObject *b
         type_lock_prevent_release(&pinned);
         types_stop_world();
         set_tp_bases(type, old_bases, 0);
+        if (type->tp_base != old_base) {
+            mro_epoch_advance(type);
+        }
         type->tp_base = old_base;
         types_start_world();
         type_lock_allow_release(&pinned);
@@ -4417,6 +4446,7 @@ type_new_alloc(type_new_ctx *ctx)
     // an instance on one of its parents.
     type_set_flags(type, Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HEAPTYPE |
                    Py_TPFLAGS_BASETYPE | Py_TPFLAGS_HAVE_GC);
+    et->ht_mro_epoch = 0;
 
     // Initialize essential fields
     type->tp_as_async = &et->as_async;
@@ -4426,6 +4456,9 @@ type_new_alloc(type_new_ctx *ctx)
     type->tp_as_buffer = &et->as_buffer;
 
     set_tp_bases(type, Py_NewRef(ctx->bases), 1);
+    if (type->tp_base != ctx->base) {
+        mro_epoch_advance(type);
+    }
     type->tp_base = (PyTypeObject *)Py_NewRef(ctx->base);
 
     type->tp_dealloc = subtype_dealloc;
@@ -5617,6 +5650,7 @@ type_from_slots_or_spec(
     type = &res->ht_type;
     /* The flags must be initialized early, before the GC traverses us */
     type_set_flags(type, flags | Py_TPFLAGS_HEAPTYPE);
+    res->ht_mro_epoch = 0;
 
     res->ht_module = Py_XNewRef(module);
 
@@ -5630,6 +5664,9 @@ type_from_slots_or_spec(
 
     /* Set slots we have prepared */
 
+    if (type->tp_base != base) {
+        mro_epoch_advance(type);
+    }
     type->tp_base = (PyTypeObject *)Py_NewRef(base);
     set_tp_bases(type, bases, 1);
     bases = NULL;  // We give our reference to bases to the type
@@ -7200,6 +7237,9 @@ type_clear(PyObject *self)
     }
     Py_CLEAR(((PyHeapTypeObject *)type)->ht_module);
 
+    if (type->tp_mro != NULL) {
+        mro_epoch_advance(type);
+    }
     Py_CLEAR(type->tp_mro);
 
     return 0;
@@ -8990,6 +9030,9 @@ type_ready_set_base(PyTypeObject *type)
     if (base == NULL && type != &PyBaseObject_Type) {
         base = &PyBaseObject_Type;
         if (type->tp_flags & Py_TPFLAGS_HEAPTYPE) {
+            if (type->tp_base != base) {
+                mro_epoch_advance(type);
+            }
             type->tp_base = (PyTypeObject*)Py_NewRef((PyObject*)base);
         }
         else {

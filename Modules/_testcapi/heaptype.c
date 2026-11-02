@@ -2,6 +2,17 @@
 #include <stddef.h>               // offsetof()
 
 
+static inline void
+mro_epoch_advance(PyTypeObject *type)
+{
+    if (type->tp_flags & Py_TPFLAGS_HEAPTYPE) {
+        PyHeapTypeObject *heap = (PyHeapTypeObject *)type;
+        if (heap->ht_mro_epoch != UINT64_MAX) {
+            heap->ht_mro_epoch++;
+        }
+    }
+}
+
 static struct PyModuleDef *_testcapimodule = NULL;  // set at initialization
 
 /* Tests for heap types (PyType_From*) */
@@ -484,6 +495,9 @@ pytype_getbasebytoken(PyObject *self, PyObject *args)
         // if tp_mro=NULL we fall back to tp_bases.
         assert(PyType_Check(type));
         mro_save = type->tp_mro;
+        if (type->tp_mro != NULL) {
+            mro_epoch_advance(type);
+        }
         type->tp_mro = NULL;
     }
     void *token = PyLong_AsVoidPtr(py_token);
@@ -509,6 +523,9 @@ pytype_getbasebytoken(PyObject *self, PyObject *args)
     assert(ret == ret_duringgc);
 
     if (use_mro != Py_True) {
+        if (type->tp_mro != mro_save) {
+            mro_epoch_advance(type);
+        }
         type->tp_mro = mro_save;
     }
     if (ret < 0) {

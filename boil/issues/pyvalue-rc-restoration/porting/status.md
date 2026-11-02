@@ -3,9 +3,10 @@
 Stage: v4 family analysis complete; AST sequence and constructor batches
 reviewed/committed as e645682dab5 and b1dce616174. The full AST TU/object now pass
 without diagnostics. The unified Clinic48 batch is reviewed and committed as
-180b4b6d9af; list assertions are committed as 4bf934bb4ec. Luna is implementing
-fourteen core reader functions; root is applying three pure predicates under
-Sol's reviewed rule. The coordinator integrates and validates the merged result.
+180b4b6d9af; list assertions are committed as 4bf934bb4ec. Three pure predicates
+are committed as 69a2750540e. The first core14 draft requires correction after
+early review; Sol is specifying finite examples for Luna's next bulk pass.
+The coordinator integrates and validates the merged result.
 MRO providers and the public wrapper
 passed code/native attribution review; their delta remains held. The next
 publication transaction has a read-only handoff, queued for design.
@@ -102,12 +103,27 @@ Two canonical non-NULL list-sort assertions replace C pointer-truth checks;
 all other source bytes match and the actual list object builds. Evidence:
 build/pyvalue-list-sort-validity-20261102-v1/commit.json.
 
-Active reader grants are finite: six files/fourteen functions for Luna in
+Reader grants are finite: six files/fourteen functions for Luna in
 build/pyvalue-sol-port-rules-20261102-v1/coordinator-core-readers-grant.md;
-three pure functions in funcobject/typevarobject for root. Owning generic
+three pure functions in funcobject/typevarobject, now committed. Owning generic
 getters retain operands through callbacks and preserve first errors during
 cleanup; pure kind checks do not box. TypeVar's tuple-vararg parser resource
 is a separate queued producer amendment. Native checks serialize at freeze.
+
+The three pure functions passed independent actual code/native review and were
+committed as 69a2750540e. All other bytes remain exact except explicit value
+includes. Full-TU error counts go 6→3 and 11→10; both TUs still fail, with zero
+selected-function diagnostics after. Evidence:
+build/pyvalue-pure-predicates-20261102-v1/commit.json.
+
+Core14 v1 is rejected before integration: an outside-grant brace edit breaks
+codec syntax, and grouped/unprotected owner closes violate the per-owner
+first-error rule. Six host tests do not execute that C. The original snapshot,
+false scope claim and compiler failure are retained in
+build/pyvalue-core-readers-bulk-20261102-v1/coordinator-early-review.json.
+Sol is preparing explicit correction templates and witness fixes before another
+Luna pass; no runtime acceptance is claimed. A separate Luna analysis is grouping
+the frozen v6 errors for subsequent bounded designs, excluding this active packet.
 
 ## Census and evidence
 

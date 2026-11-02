@@ -1,8 +1,8 @@
 # Current work
 
 Current milestone: complete universal PyValues under RC, then measure the
-register interpreter with JIT disabled. Restoration HEAD is `180b4b6d9af` on
-`boil/pyvalue-rc-universal`: twenty-six reviewed source commits; typeobject.c is the
+register interpreter with JIT disabled. Restoration HEAD is `69a2750540e` on
+`boil/pyvalue-rc-universal`: twenty-seven reviewed source commits; typeobject.c is the
 remaining original held file. The latest merged diagnostic build has 161
 objects present and failed to link. No restored runtime, qualification or performance pass is claimed.
 [State](pyvalue-rc-restoration/status.md), [process](../PROCESS.md) and
@@ -21,8 +21,9 @@ objects present and failed to link. No restored runtime, qualification or perfor
    The unified Clinic batch is committed: 48 production wrappers, three fixtures,
    285 host checks and no selected-wrapper diagnostics in 27 configured TU probes.
    The early merged v6 build failed before linking with 430 repeated/cascading
-   errors; all 7,341 sources stayed unchanged. Luna is porting fourteen core
-   reader functions; root is applying three pure predicates under reviewed rules.
+   errors; all 7,341 sources stayed unchanged. Three pure predicates are committed.
+   Core14's first draft failed early scope/cleanup review and a native syntax
+   check; Sol is specifying finite corrections before Luna's next bulk pass.
 2. The coordinator prioritizes shared blockers from the latest actual build,
    reviews each design, assigns independent code review and commits useful ports.
    Old agents remain stopped; compatibility approvals are not a gate.
@@ -40,7 +41,7 @@ objects present and failed to link. No restored runtime, qualification or perfor
 | --- | --- | --- | --- |
 | [Native callers and scoped parsers](pyvalue-rc-restoration/native-parsers/status.md) | Call and parser dependencies committed | Coordinator | Remaining gateways/parser families and merged runtime witnesses |
 | [Core and extension consumers](pyvalue-rc-restoration/core-consumers/status.md) | Call bridges committed; type_new/graph reviewed pending | Coordinator; Sol design/review | C3/MRO, remaining parser/startup/container ports |
-| [Porting batches](pyvalue-rc-restoration/porting/status.md) | Clinic48 and list assertions committed; core14 implementation | Luna core14; root pure3; Sol review/design | Freeze/review reader batches, TypeVar resource amendment, merged rebuild |
+| [Porting batches](pyvalue-rc-restoration/porting/status.md) | Clinic48/list/pure3 committed; core14 REVISE | Sol correction rules; Luna v6 error analysis; root integration | Correct/review core14, TypeVar resource amendment, merged rebuild |
 | [Canonical type cache](pyvalue-rc-restoration/typecache/status.md) | MRO providers reviewed; transaction handoff ready | Queued for Sol 6.1 design; coordinator schedules | Owned MRO inputs through publication/rollback, then guards/static/lifecycle |
 | [Value-native VM iteration](pyvalue-rc-restoration/iterator-vm/status.md) | Tuning after safe baseline | Unassigned | Remove boxing from correct iterator bridges and measure |
 | [Integration and interpreter checkpoint](pyvalue-rc-restoration/integration/status.md) | Build diagnostics → ports | Coordinator | Close concrete compile/link blockers, rebuild, qualify and measure |
@@ -80,6 +81,7 @@ linked restored runtime. Primary-worktree documentation is separate.
 | [AST constructor](pyvalue-rc-restoration/porting/status.md) | `b1dce616174`, three paths | Full TU/object pass with no diagnostics; four host controls/three older-host skips; all seven candidate tests unexecuted |
 | [List sort assertions](pyvalue-rc-restoration/porting/status.md) | `4bf934bb4ec`, exact two canonical presence checks | Actual list object builds; runtime qualification pending |
 | [Unified keyword Clinic](pyvalue-rc-restoration/porting/status.md) | `180b4b6d9af`, 31 paths; 48 production/three fixture wrappers | 285 host checks, 27 configured TU probes/six whole TUs pass; selected wrappers have no diagnostics; candidate execution pending |
+| [Pure predicates](pyvalue-rc-restoration/porting/status.md) | `69a2750540e`, three functions/two files | Exact other bytes; native errors 6→3 and 11→10, zero selected diagnostics; both full TUs still fail, runtime pending |
 | [Merged diagnostic v6](pyvalue-rc-restoration/merged-build/status.md) | Early probe at 4bf934bb4ec plus then-unaccepted frozen Clinic v2 and held typeobject | All 7,341 sources unchanged; 430 errors/161 objects present; no executable; Clinic subsequently reviewed/committed |
 | [Merged diagnostic v5](pyvalue-rc-restoration/merged-build/status.md) | Early compiler probe of b1dce616174 plus unaccepted Clinic39-v1 and held typeobject | All 7,341 sources unchanged; 434 errors; no executable; Clinic source still needs review corrections |
 | [MRO providers](pyvalue-rc-restoration/typecache/mro-providers/status.md) | Fifteen bodies accepted at d0721997; exact delta held | Twelve host controls; full TU still fails with 38 errors/23 warnings in unchanged functions; 41 candidate methods pending |

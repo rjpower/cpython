@@ -363,6 +363,14 @@
       "whole_TU_passes": 6,
       "selected_context_diagnostics": [],
       "runnable": false
+    },
+    "pure_function_type_predicates": {
+      "commit": "69a2750540e5ba754f1f4227d46285f9cb95af15",
+      "changed_paths": 2,
+      "functions": 3,
+      "selected_context_diagnostics": [],
+      "whole_TUs_still_fail": true,
+      "runnable": false
     }
   },
   "first_diagnostic_build": {

@@ -48,8 +48,8 @@ reviewed held typeobject through the corrected MRO providers. It exited 2, with
 430 repeated/cascading error
 diagnostics remain raw evidence. Focused component checks do not make this a
 passing merged build. Clinic v2 subsequently passed review and was committed
-as checkpoint26. Luna's fourteen core-reader functions and root's three pure
-predicates are the active implementation batches.
+as checkpoint26. Three pure predicates are checkpoint27; core14's first draft
+needs finite corrections after early scope/cleanup/syntax review.
 
 Prioritize a coherent register interpreter with the unified format and JIT off.
 Use concrete failed compiler/linker/startup routes to select finite ports, preserving

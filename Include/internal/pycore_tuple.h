@@ -9,7 +9,8 @@ extern "C" {
 #endif
 
 #include "pycore_object.h"        // _PyObject_GC_IS_TRACKED
-#include "pycore_structs.h"       // _PyStackRef
+#include "pycore_structs.h"       // PyValue
+#include "pycore_value_ops.h"     // _PyValueIndexPair
 
 extern void _PyTuple_MaybeUntrack(PyObject *);
 extern void _PyTuple_DebugMallocStats(FILE *out);
@@ -25,7 +26,9 @@ PyAPI_FUNC(void) _PyStolenTuple_Free(PyObject *self);
 
 #define _PyTuple_ITEMS(op) _Py_RVALUE(_PyTuple_CAST(op)->ob_item)
 
-PyAPI_FUNC(PyObject *)_PyTuple_FromStackRefStealOnSuccess(const union _PyStackRef *, Py_ssize_t);
+PyAPI_FUNC(PyObject *)_PyTuple_FromValueStealOnSuccess(const PyValue *, Py_ssize_t);
+/* Source storage must remain stable across allocation. Values are borrowed. */
+PyAPI_FUNC(PyObject *) _PyTuple_FromValueArray(const PyValue *, Py_ssize_t);
 PyAPI_FUNC(PyObject *)_PyTuple_FromArraySteal(PyObject *const *, Py_ssize_t);
 PyAPI_FUNC(PyObject *) _PyTuple_BinarySlice(PyObject *, PyObject *, PyObject *);
 PyAPI_FUNC(PyObject *) _PyTuple_Concat(PyObject *, PyObject *);
@@ -33,6 +36,19 @@ PyAPI_FUNC(PyObject *) _PyTuple_Repeat(PyObject *self, Py_ssize_t n);
 
 PyAPI_FUNC(PyObject *) _PyTuple_FromPair(PyObject *, PyObject *);
 PyAPI_FUNC(PyObject *) _PyTuple_FromPairSteal(PyObject *, PyObject *);
+
+extern _PyValueIndexPair _PyTuple_IterValue(PyObject *, Py_ssize_t);
+extern PyValue _PyTupleIter_NextValue(PyObject *);
+
+/* Proven object-only metadata, such as a code object's tuple of names. This
+   cannot be used for an arbitrary constant, argument or container element. */
+static inline PyObject *
+_PyTuple_GET_OBJECT(PyObject *tuple, Py_ssize_t index)
+{
+    PyValue value = PyTuple_GET_VALUE(tuple, index);
+    assert(PyValue_IsObject(value));
+    return PyValue_AsPyObjectBorrow(value);
+}
 
 typedef struct {
     PyObject_HEAD

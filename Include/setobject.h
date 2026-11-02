@@ -20,6 +20,12 @@ PyAPI_FUNC(int) PySet_Discard(PyObject *set, PyObject *key);
 PyAPI_FUNC(PyObject *) PySet_Pop(PyObject *set);
 PyAPI_FUNC(Py_ssize_t) PySet_Size(PyObject *anyset);
 
+/* Borrowed input values; PopValue transfers the removed table owner. */
+PyAPI_FUNC(int) PySet_AddValue(PyObject *set, PyValue key);
+PyAPI_FUNC(int) PySet_ContainsValue(PyObject *anyset, PyValue key);
+PyAPI_FUNC(int) PySet_DiscardValue(PyObject *set, PyValue key);
+PyAPI_FUNC(PyValue) PySet_PopValue(PyObject *set);
+
 #define PyFrozenSet_CheckExact(ob) Py_IS_TYPE((ob), &PyFrozenSet_Type)
 #define PyFrozenSet_Check(ob) \
     (Py_IS_TYPE((ob), &PyFrozenSet_Type) || \

@@ -23,6 +23,64 @@ class DelAppend:
 
 
 class CAPITest(unittest.TestCase):
+    def test_value_storage_and_owned_getter(self):
+        import struct
+        import weakref
+
+        self.assertTrue(_testcapi.list_unpublished_nulls())
+        for value in (-(1 << 31), -1, 0, (1 << 31) - 1):
+            with self.subTest(value=value):
+                items = [value]
+                self.assertEqual(_testcapi.list_value_bits(items, 0),
+                                 (0xfffe << 48) | (value & 0xffffffff))
+                self.assertEqual(_testcapi.list_get_value(items, 0), value)
+        for value in (0.0, -0.0, 1.25, float('inf'), -float('inf')):
+            with self.subTest(value=value):
+                bits = struct.unpack('=Q', struct.pack('=d', value))[0]
+                self.assertEqual(_testcapi.list_value_bits([value], 0),
+                                 (bits + (1 << 49)) & ((1 << 64) - 1))
+
+        class IntSubclass(int):
+            pass
+
+        for value in (True, 1 << 80, float('nan'), IntSubclass(3)):
+            items = [value]
+            self.assertLess(_testcapi.list_value_bits(items, 0), 1 << 48)
+            self.assertIs(_testcapi.list_get_value(items, 0), value)
+
+        class Item:
+            pass
+
+        items = [Item()]
+        reference = weakref.ref(items[0])
+        result = _testcapi.list_get_value_and_clear(items, 0)
+        self.assertEqual(items, [])
+        self.assertIs(reference(), result)
+        del result
+        self.assertIsNone(reference())
+
+        self.assertRaises(IndexError, _testcapi.list_get_value, [], 0)
+        self.assertRaises(SystemError, _testcapi.list_get_value, (), 0)
+
+    def test_value_boxing_failure_preserves_error_and_progress(self):
+        # This int32 needs two PyLong digits, so boxing cannot use the
+        # single-digit freelist or immortal small-int cache.
+        value = (1 << 31) - 1
+        items = [value, value - 1]
+        with self.assertRaises(MemoryError):
+            _testcapi.list_get_item_oom(items, 0)
+        self.assertEqual(items, [value, value - 1])
+        forward = iter(items)
+        with self.assertRaises(MemoryError):
+            _testcapi.list_next_oom(forward)
+        self.assertEqual(next(forward), value)
+        self.assertEqual(next(forward), value - 1)
+        backward = reversed(items)
+        with self.assertRaises(MemoryError):
+            _testcapi.list_next_oom(backward)
+        self.assertEqual(next(backward), value - 1)
+        self.assertEqual(next(backward), value)
+
     def test_check(self):
         # Test PyList_Check()
         check = _testlimitedcapi.list_check
@@ -85,7 +143,7 @@ class CAPITest(unittest.TestCase):
         # CRASHES size(NULL)
 
     def check_list_get_item(self, getitem, exctype):
-        # Common test cases for PyList_GetItem() and PyList_GetItemRef()
+        # Common cases for checked value and owning object-form reads.
         lst = [1, 2, 3]
         self.assertEqual(getitem(lst, 0), 1)
         self.assertEqual(getitem(lst, 2), 3)
@@ -99,7 +157,7 @@ class CAPITest(unittest.TestCase):
         # CRASHES getitem(NULL, 1)
 
     def test_list_getitem(self):
-        # Test PyList_GetItem()
+        # Test PyList_GetValue() through an owning object bridge.
         self.check_list_get_item(_testlimitedcapi.list_getitem, SystemError)
 
     def test_list_get_item_ref(self):
@@ -107,7 +165,7 @@ class CAPITest(unittest.TestCase):
         self.check_list_get_item(_testlimitedcapi.list_get_item_ref, TypeError)
 
     def test_list_get_item(self):
-        # Test PyList_GET_ITEM()
+        # Test PyList_GET_VALUE() through an owning object bridge.
         get_item = _testcapi.list_get_item
         lst = [1, 2, [1, 2, 3]]
         self.assertEqual(get_item(lst, 0), 1)

@@ -408,5 +408,51 @@ class TestOptimizedCompares(unittest.TestCase):
 
 #==============================================================================
 
+class UniversalValueSortTest(unittest.TestCase):
+    def test_scalar_and_tuple_keys(self):
+        values = [3, -2, 1.5, -0.0, 0.0, (1 << 31) - 1, -(1 << 31)]
+        self.assertEqual(sorted(values),
+                         [-(1 << 31), -2, -0.0, 0.0, 1.5, 3, (1 << 31) - 1])
+        pairs = [(2, 'two'), (0.0, 'a'), (-0.0, 'b'), (1.5, 'one')]
+        pairs.sort(key=lambda pair: pair[0])
+        self.assertEqual([pair[1] for pair in pairs], ['a', 'b', 'one', 'two'])
+        pairs.sort(reverse=True)
+        self.assertEqual(pairs[0], (2, 'two'))
+
+    def test_key_error_and_mutation_restore_owners(self):
+        import weakref
+
+        references = []
+
+        class Key:
+            def __init__(self, value):
+                self.value = value
+                references.append(weakref.ref(self))
+
+            def __lt__(self, other):
+                return self.value < other.value
+
+        values = [3, 1, 2]
+
+        def failing_key(value):
+            if value == 2:
+                raise LookupError('key failed')
+            return Key(value)
+
+        with self.assertRaisesRegex(LookupError, 'key failed'):
+            values.sort(key=failing_key)
+        self.assertEqual(values, [3, 1, 2])
+        self.assertTrue(all(reference() is None for reference in references))
+
+        def mutating_key(value):
+            values.append(99)
+            return Key(value)
+
+        with self.assertRaisesRegex(ValueError, 'modified during sort'):
+            values.sort(key=mutating_key)
+        self.assertEqual(values, [1, 2, 3])
+        self.assertTrue(all(reference() is None for reference in references))
+
+
 if __name__ == "__main__":
     unittest.main()

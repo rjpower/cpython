@@ -4,9 +4,9 @@
 
 /* There are three kinds of entries in the table:
 
-1. Unused:  key == NULL and hash == 0
-2. Dummy:   key == dummy and hash == -1
-3. Active:  key != NULL and key != dummy and hash != -1
+1. Unused:  PyValue_NULL key and hash == 0
+2. Dummy:   immortal dummy value and hash == -1
+3. Active:  strong canonical language value and hash != -1
 
 The hash field of Unused slots is always zero.
 
@@ -18,7 +18,7 @@ either entry->key==dummy or by entry->hash==-1.
 #define PySet_MINSIZE 8
 
 typedef struct {
-    PyObject *key;
+    PyValue key;
     Py_hash_t hash;             /* Cached hash code of the key */
 } setentry;
 

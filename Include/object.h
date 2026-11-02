@@ -313,10 +313,10 @@ typedef PyObject *(*richcmpfunc) (PyObject *, PyObject *, int);
 typedef PyObject *(*getiterfunc) (PyObject *);
 typedef PyObject *(*iternextfunc) (PyObject *);
 typedef struct {
-    PyObject *object;
-    Py_ssize_t index;
-} _PyObjectIndexPair;
-typedef _PyObjectIndexPair (*_Py_iteritemfunc) (PyObject *, Py_ssize_t index);
+    PyValue value;  /* Owned; NULL denotes exhaustion or an error. */
+    Py_ssize_t index;  /* Negative only on error. */
+} _PyValueIndexPair;
+typedef _PyValueIndexPair (*_Py_iteritemfunc) (PyObject *, Py_ssize_t index);
 typedef PyObject *(*descrgetfunc) (PyObject *, PyObject *, PyObject *);
 typedef int (*descrsetfunc) (PyObject *, PyObject *, PyObject *);
 typedef int (*initproc)(PyObject *, PyObject *, PyObject *);

@@ -7,6 +7,7 @@
 #include "pycore_long.h"          // _PyLong_IsNegative()
 #include "pycore_object.h"        // _Py_TryIncrefCompare(), FT_ATOMIC_*()
 #include "pycore_critical_section.h"
+#include "pycore_value.h"
 
 
 static inline PyObject *
@@ -32,6 +33,55 @@ _PyMember_GetOffset(PyObject *obj, PyMemberDef *mp)
     return addr;
 }
 
+PyValue
+_PyMember_GetValue(PyObject *obj, PyMemberDef *member)
+{
+    assert(member->type == _Py_T_VALUE || member->type == _Py_T_VALUE_EX);
+    if (member->flags & Py_RELATIVE_OFFSET) {
+        PyErr_SetString(PyExc_SystemError, "unresolved relative value member");
+        return PyValue_NULL;
+    }
+    PyValue value = *(PyValue *)_PyMember_GetOffset(obj, member);
+    assert(PyValue_IsHeapSafe(value));
+    if (PyValue_IsNull(value)) {
+        if (member->type == _Py_T_VALUE) {
+            return PyValue_None;
+        }
+        PyErr_Format(PyExc_AttributeError, "'%T' object has no attribute '%s'",
+                     obj, member->name);
+        return PyValue_NULL;
+    }
+    assert(PyValue_IsLanguageValue(value));
+    return PyValue_DUP(value);
+}
+
+int
+_PyMember_SetValue(PyObject *obj, PyMemberDef *member, PyValue value)
+{
+    assert(member->type == _Py_T_VALUE || member->type == _Py_T_VALUE_EX);
+    assert(PyValue_IsLanguageValue(value) || PyValue_IsNull(value));
+    if (member->flags & Py_RELATIVE_OFFSET) {
+        PyErr_SetString(PyExc_SystemError, "unresolved relative value member");
+        return -1;
+    }
+    if (member->flags & Py_READONLY) {
+        PyErr_SetString(PyExc_AttributeError, "readonly attribute");
+        return -1;
+    }
+    PyValue *slot = _PyMember_GetOffset(obj, member);
+    PyValue previous = *slot;
+    if (PyValue_IsNull(value) && PyValue_IsNull(previous) &&
+        member->type == _Py_T_VALUE_EX) {
+        PyErr_SetString(PyExc_AttributeError, member->name);
+        return -1;
+    }
+    *slot = PyValue_MakeHeapSafe(PyValue_Borrow(value));
+    PyObject *saved = PyErr_GetRaisedException();
+    PyValue_XCLOSE(previous);
+    _PyValue_RestoreException(saved);
+    return PyErr_Occurred() ? -1 : 0;
+}
+
 PyObject *
 PyMember_GetOne(const char *obj_addr, PyMemberDef *l)
 {
@@ -45,6 +95,16 @@ PyMember_GetOne(const char *obj_addr, PyMemberDef *l)
 
     const void *addr = _PyMember_GetOffset((PyObject *)obj_addr, l);
     switch (l->type) {
+    case _Py_T_VALUE:
+    case _Py_T_VALUE_EX: {
+        PyValue value = _PyMember_GetValue((PyObject *)obj_addr, l);
+        if (PyValue_IsNull(value)) {
+            return NULL;
+        }
+        v = PyValue_AsObject(value);
+        PyValue_CLOSE(value);
+        break;
+    }
     case Py_T_BOOL:
         v = PyBool_FromLong(FT_ATOMIC_LOAD_CHAR_RELAXED(*(char*)addr));
         break;
@@ -171,12 +231,17 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
         PyErr_SetString(PyExc_AttributeError, "readonly attribute");
         return -1;
     }
-    if (v == NULL && l->type != Py_T_OBJECT_EX && l->type != _Py_T_OBJECT) {
+    if (v == NULL && l->type != Py_T_OBJECT_EX && l->type != _Py_T_OBJECT &&
+        l->type != _Py_T_VALUE && l->type != _Py_T_VALUE_EX) {
         PyErr_SetString(PyExc_TypeError,
                         "can't delete numeric/char attribute");
         return -1;
     }
     switch (l->type) {
+    case _Py_T_VALUE:
+    case _Py_T_VALUE_EX:
+        return _PyMember_SetValue(obj, l, v == NULL ? PyValue_NULL :
+                                  PyValue_FromObjectBorrow(v));
     case Py_T_BOOL:{
         if (!PyBool_Check(v)) {
             PyErr_SetString(PyExc_TypeError,

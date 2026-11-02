@@ -8,9 +8,7 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
-#ifdef Py_GIL_DISABLED
-#include "pycore_stackref.h"
-#endif
+#include "pycore_value_ops.h"
 
 PyAPI_FUNC(PyObject*) _PyList_Extend(PyListObject *, PyObject *);
 PyAPI_FUNC(PyObject) *_PyList_SliceSubscript(PyObject*, PyObject*);
@@ -25,36 +23,19 @@ extern void _PyList_DebugMallocStats(FILE *out);
 PyAPI_FUNC(PyObject *) _PyList_GetItemRef(PyListObject *, Py_ssize_t i);
 
 
-#ifdef Py_GIL_DISABLED
-// Returns -1 in case of races with other threads.
-PyAPI_FUNC(int) _PyList_GetItemRefNoLock(PyListObject *, Py_ssize_t, _PyStackRef *);
-#endif
-
 #define _PyList_ITEMS(op) _Py_RVALUE(_PyList_CAST(op)->ob_item)
 
 PyAPI_FUNC(int)
 _PyList_AppendTakeRefListResize(PyListObject *self, PyObject *newitem);
 
-// In free-threaded build: self should be locked by the caller, if it should be thread-safe.
-static inline int
-_PyList_AppendTakeRef(PyListObject *self, PyObject *newitem)
-{
-    assert(self != NULL && newitem != NULL);
-    assert(PyList_Check(self));
-    Py_ssize_t len = Py_SIZE(self);
-    Py_ssize_t allocated = self->allocated;
-    assert((size_t)len + 1 < PY_SSIZE_T_MAX);
-    if (allocated > len) {
-#ifdef Py_GIL_DISABLED
-        _Py_atomic_store_ptr_release(&self->ob_item[len], newitem);
-#else
-        PyList_SET_ITEM(self, len, newitem);
-#endif
-        Py_SET_SIZE(self, len + 1);
-        return 0;
-    }
-    return _PyList_AppendTakeRefListResize(self, newitem);
-}
+/* These consume their input on success and failure. */
+PyAPI_FUNC(int) _PyList_AppendTakeRef(PyListObject *self, PyObject *newitem);
+PyAPI_FUNC(int) _PyList_AppendTakeValue(PyListObject *self, PyValue value);
+PyAPI_FUNC(PyValue) _PyList_GetValue(PyListObject *self, Py_ssize_t index);
+/* Consumes a strong HeapSafe value on success and failure. NULL is permitted
+   only for internal construction/clearing, not as a Python list element. */
+PyAPI_FUNC(int) _PyList_SetItemTakeValue(PyListObject *self, Py_ssize_t index,
+                                       PyValue value);
 
 // Repeat the bytes of a buffer in place
 static inline void
@@ -75,10 +56,13 @@ typedef struct {
     PyListObject *it_seq; /* Set to NULL when iterator is exhausted */
 } _PyListIterObject;
 
-union _PyStackRef;
-
-PyAPI_FUNC(PyObject *)_PyList_FromStackRefStealOnSuccess(const union _PyStackRef *src, Py_ssize_t n);
+PyAPI_FUNC(PyObject *)_PyList_FromValueStealOnSuccess(const PyValue *src, Py_ssize_t n);
 PyAPI_FUNC(PyObject *)_PyList_AsTupleAndClear(PyListObject *v);
+
+/* Owned value, NULL on exhaustion; these do not box at the object ABI. */
+PyAPI_FUNC(_PyValueIndexPair) _PyList_IterValue(PyObject *, Py_ssize_t);
+PyAPI_FUNC(PyValue) _PyListIter_NextValue(PyObject *iterator);
+PyAPI_FUNC(PyValue) _PyListRevIter_NextValue(PyObject *iterator);
 
 #ifdef __cplusplus
 }

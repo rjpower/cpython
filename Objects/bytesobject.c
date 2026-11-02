@@ -17,6 +17,7 @@
 #include "pycore_pymem.h"         // PYMEM_CLEANBYTE
 #include "pycore_strhex.h"        // _Py_strhex_with_sep()
 #include "pycore_unicodeobject.h" // _PyUnicode_FormatLong()
+#include "pycore_value.h"
 
 #include <stddef.h>
 
@@ -3241,15 +3242,15 @@ Construct an immutable array of bytes from:\n\
 static PyObject *bytes_iter(PyObject *seq);
 
 
-static _PyObjectIndexPair
+static _PyValueIndexPair
 bytes_iteritem(PyObject *obj, Py_ssize_t index)
 {
     PyBytesObject *a = _PyBytes_CAST(obj);
     if (index >= Py_SIZE(a)) {
-        return (_PyObjectIndexPair) { .object = NULL, .index = index };
+        return (_PyValueIndexPair) { .value = PyValue_NULL, .index = index };
     }
-    PyObject *l = _PyLong_FromUnsignedChar((unsigned char)a->ob_sval[index]);
-    return (_PyObjectIndexPair) { .object = l, .index = index + 1 };
+    PyValue value = PyValue_FromInt32((unsigned char)a->ob_sval[index]);
+    return (_PyValueIndexPair) { .value = value, .index = index + 1 };
 }
 
 #ifdef Py_DEBUG

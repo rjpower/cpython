@@ -4,8 +4,8 @@
 
 typedef struct {
     PyObject_VAR_HEAD
-    /* Vector of pointers to list elements.  list[0] is ob_item[0], etc. */
-    PyObject **ob_item;
+    /* Canonical owning values. list[0] is ob_item[0]. */
+    PyValue *ob_item;
 
     /* ob_item contains space for 'allocated' elements.  The number
      * currently in use is ob_size.
@@ -37,15 +37,16 @@ static inline Py_ssize_t PyList_GET_SIZE(PyObject *op) {
 }
 #define PyList_GET_SIZE(op) PyList_GET_SIZE(_PyObject_CAST(op))
 
-#define PyList_GET_ITEM(op, index) (_PyList_CAST(op)->ob_item[(index)])
+/* Borrow rooted by the list. Promote before retaining it across mutation. */
+PyAPI_FUNC(PyValue) PyList_GET_VALUE(PyObject *op, Py_ssize_t index);
+#define PyList_GET_VALUE(op, index) \
+    PyList_GET_VALUE(_PyObject_CAST(op), (index))
 
-static inline void
-PyList_SET_ITEM(PyObject *op, Py_ssize_t index, PyObject *value) {
-    PyListObject *list = _PyList_CAST(op);
-    assert(0 <= index);
-    assert(index < list->allocated);
-    list->ob_item[index] = value;
-}
+/* Construction-only setters consume their input and publish before release. */
+PyAPI_FUNC(void) PyList_SET_VALUE(PyObject *op, Py_ssize_t index, PyValue value);
+#define PyList_SET_VALUE(op, index, value) \
+    PyList_SET_VALUE(_PyObject_CAST(op), (index), (value))
+PyAPI_FUNC(void) PyList_SET_ITEM(PyObject *op, Py_ssize_t index, PyObject *value);
 #define PyList_SET_ITEM(op, index, value) \
     PyList_SET_ITEM(_PyObject_CAST(op), (index), _PyObject_CAST(value))
 

@@ -24,6 +24,11 @@ extern PyTypeObject _PyMethodWrapper_Type;
 
 extern void *_PyMember_GetOffset(PyObject *, PyMemberDef *);
 
+/* Value-field descriptors only. Get returns an independent owner; Set borrows
+   its input and publishes a strong field before releasing the prior owner. */
+extern PyValue _PyMember_GetValue(PyObject *, PyMemberDef *);
+extern int _PyMember_SetValue(PyObject *, PyMemberDef *, PyValue);
+
 #ifdef __cplusplus
 }
 #endif

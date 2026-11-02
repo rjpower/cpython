@@ -12,6 +12,7 @@
 #include "pycore_modsupport.h"    // _PyArg_NoPositional()
 #include "pycore_object.h"        // _PyObject_GC_TRACK()
 #include "pycore_structseq.h"     // PyStructSequence_InitType()
+#include "pycore_value_ops.h"
 #include "pycore_tuple.h"         // _PyTuple_RESET_HASH_CACHE()
 #include "pycore_typeobject.h"    // _PyStaticType_FiniBuiltin()
 
@@ -58,7 +59,7 @@ get_real_size(PyObject *op)
     // Compute the real size from the visible size (i.e., Py_SIZE()) and the
     // number of non-sequence fields accounted for in tp_basicsize.
     Py_ssize_t hidden = Py_TYPE(op)->tp_basicsize - offsetof(PyStructSequence, ob_item);
-    return Py_SIZE(op) + hidden / sizeof(PyObject *);
+    return Py_SIZE(op) + hidden / sizeof(PyValue);
 }
 
 PyObject *
@@ -82,7 +83,7 @@ PyStructSequence_New(PyTypeObject *type)
      to Python code. */
     Py_SET_SIZE(obj, vsize);
     for (i = 0; i < size; i++)
-        obj->ob_item[i] = NULL;
+        obj->ob_item[i] = PyValue_NULL;
 
     return (PyObject*)obj;
 }
@@ -97,19 +98,36 @@ PyStructSequence_SetItem(PyObject *op, Py_ssize_t index, PyObject *value)
     assert(n_fields >= 0);
     assert(index < n_fields);
 #endif
-    tuple->ob_item[index] = value;
+    PyObject *retired = NULL;
+    PyValue prepared = value == NULL ? PyValue_NULL : PyValue_PrepareOwned(value, &retired);
+    assert(PyValue_IsNull(prepared) || PyValue_IsLanguageValue(prepared));
+    assert(PyValue_IsHeapSafe(prepared));
+    tuple->ob_item[index] = prepared;
+    Py_XDECREF(retired);
 }
 
-PyObject*
-PyStructSequence_GetItem(PyObject *op, Py_ssize_t index)
+PyValue
+PyStructSequence_GET_VALUE(PyObject *op, Py_ssize_t index)
 {
-    assert(0 <= index);
-#ifndef NDEBUG
-    Py_ssize_t n_fields = REAL_SIZE(op);
-    assert(n_fields >= 0);
-    assert(index < n_fields);
-#endif
-    return PyTuple_GET_ITEM(op, index);
+    assert(index >= 0 && index < REAL_SIZE(op));
+    return PyValue_Borrow(((PyStructSequence *)op)->ob_item[index]);
+}
+
+void
+PyStructSequence_SET_VALUE(PyObject *op, Py_ssize_t index, PyValue value)
+{
+    assert(index >= 0 && index < REAL_SIZE(op));
+    assert(PyValue_IsNull(value) || PyValue_IsLanguageValue(value));
+    assert(PyValue_IsHeapSafe(value));
+    ((PyStructSequence *)op)->ob_item[index] = value;
+}
+
+PyObject *
+PyStructSequence_GetItemRef(PyObject *op, Py_ssize_t index)
+{
+    assert(index >= 0 && index < REAL_SIZE(op));
+    PyValue value = ((PyStructSequence *)op)->ob_item[index];
+    return PyValue_IsNull(value) ? NULL : PyValue_AsObject(value);
 }
 
 
@@ -123,7 +141,7 @@ structseq_traverse(PyObject *op, visitproc visit, void *arg)
     Py_ssize_t i, size;
     size = REAL_SIZE(obj);
     for (i = 0; i < size; ++i) {
-        Py_VISIT(obj->ob_item[i]);
+        _Py_VISIT_VALUE(obj->ob_item[i]);
     }
     return 0;
 }
@@ -141,7 +159,9 @@ structseq_dealloc(PyObject *op)
     // cleared by the garbage collector.
     size = REAL_SIZE(obj);
     for (i = 0; i < size; ++i) {
-        Py_XDECREF(obj->ob_item[i]);
+        PyValue value = obj->ob_item[i];
+        obj->ob_item[i] = PyValue_NULL;
+        PyValue_XCLOSE(value);
     }
     PyObject_GC_Del(obj);
     if (_PyType_HasFeature(tp, Py_TPFLAGS_HEAPTYPE)) {
@@ -183,7 +203,7 @@ structseq_new_impl(PyTypeObject *type, PyObject *arg, PyObject *dict)
         return NULL;
     }
 
-    arg = PySequence_Fast(arg, "constructor requires a sequence");
+    arg = PySequence_Tuple(arg);
 
     if (!arg) {
         return NULL;
@@ -231,8 +251,8 @@ structseq_new_impl(PyTypeObject *type, PyObject *arg, PyObject *dict)
         return NULL;
     }
     for (i = 0; i < len; ++i) {
-        PyObject *v = PySequence_Fast_GET_ITEM(arg, i);
-        res->ob_item[i] = Py_NewRef(v);
+        PyValue value = PyList_Check(arg) ? PyList_GET_VALUE(arg, i) : PyTuple_GET_VALUE(arg, i);
+        res->ob_item[i] = PyValue_MakeHeapSafe(value);
     }
     Py_DECREF(arg);
     if (dict != NULL && PyDict_GET_SIZE(dict) > 0) {
@@ -250,7 +270,7 @@ structseq_new_impl(PyTypeObject *type, PyObject *arg, PyObject *dict)
             else {
                 ++n_found_keys;
             }
-            res->ob_item[i] = ob;
+            PyStructSequence_SetItem((PyObject *)res, i, ob);
         }
         if (PyDict_GET_SIZE(dict) > n_found_keys) {
             PyErr_Format(PyExc_TypeError,
@@ -261,7 +281,7 @@ structseq_new_impl(PyTypeObject *type, PyObject *arg, PyObject *dict)
         }
     } else {
         for (i = len; i < max_len; ++i) {
-            res->ob_item[i] = Py_NewRef(Py_None);
+            res->ob_item[i] = PyValue_None;
         }
     }
 
@@ -320,9 +340,10 @@ structseq_repr(PyObject *op)
         if (PyUnicodeWriter_WriteChar(writer, '=') < 0) {
             goto error;
         }
-        PyObject *value = PyStructSequence_GetItem((PyObject*)obj, i);
-        assert(value != NULL);
-        if (PyUnicodeWriter_WriteRepr(writer, value) < 0) {
+        PyValue value = PyValue_DUP(obj->ob_item[i]);
+        int wrote = _PyValue_WriteRepr(writer, value);
+        PyValue_CLOSE(value);
+        if (wrote < 0) {
             goto error;
         }
     }
@@ -357,7 +378,7 @@ structseq_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
     if (n_unnamed_fields < 0) {
         return NULL;
     }
-    tup = PyTuple_FromArray(self->ob_item, n_visible_fields);
+    tup = _PyTuple_FromValueArray(self->ob_item, n_visible_fields);
     if (!tup)
         goto error;
 
@@ -367,8 +388,11 @@ structseq_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
 
     for (i = n_visible_fields; i < n_fields; i++) {
         const char *n = Py_TYPE(self)->tp_members[i-n_unnamed_fields].name;
-        if (PyDict_SetItemString(dict, n, self->ob_item[i]) < 0)
-            goto error;
+        PyObject *value = PyValue_AsObject(self->ob_item[i]);
+        if (value == NULL) goto error;
+        int stored = PyDict_SetItemString(dict, n, value);
+        Py_DECREF(value);
+        if (stored < 0) goto error;
     }
 
     result = Py_BuildValue("(O(OO))", Py_TYPE(self), tup, dict);
@@ -430,9 +454,11 @@ structseq___replace___impl(PyStructSequence *self, PyObject *changes)
             goto error;
         }
         if (ob == NULL) {
-            ob = Py_NewRef(self->ob_item[i]);
+            result->ob_item[i] = PyValue_DUP(self->ob_item[i]);
         }
-        result->ob_item[i] = ob;
+        else {
+            PyStructSequence_SetItem((PyObject *)result, i, ob);
+        }
     }
     // Check if there are any unexpected fields.
     if (PyDict_GET_SIZE(changes) > 0) {
@@ -550,9 +576,9 @@ initialize_members(PyStructSequence_Desc *desc,
         /* The names and docstrings in these MemberDefs are statically */
         /* allocated so it is expected that they'll outlive the MemberDef */
         members[k].name = desc->fields[i].name;
-        members[k].type = _Py_T_OBJECT;
+        members[k].type = _Py_T_VALUE;
         members[k].offset = offsetof(PyStructSequence, ob_item)
-          + i * sizeof(PyObject*);
+          + i * sizeof(PyValue);
         members[k].flags = Py_READONLY;
         members[k].doc = desc->fields[i].doc;
         k++;
@@ -572,8 +598,8 @@ initialize_static_fields(PyTypeObject *type, PyStructSequence_Desc *desc,
     // Account for hidden members in tp_basicsize because they are not
     // included in the variable size.
     Py_ssize_t n_hidden = n_members - desc->n_in_sequence;
-    type->tp_basicsize = sizeof(PyStructSequence) + (n_hidden - 1) * sizeof(PyObject *);
-    type->tp_itemsize = sizeof(PyObject *);
+    type->tp_basicsize = sizeof(PyStructSequence) + (n_hidden - 1) * sizeof(PyValue);
+    type->tp_itemsize = sizeof(PyValue);
     type->tp_dealloc = structseq_dealloc;
     type->tp_repr = structseq_repr;
     type->tp_doc = desc->doc;
@@ -765,8 +791,8 @@ _PyStructSequence_NewType(PyStructSequence_Desc *desc, unsigned long tp_flags)
     /* expected that it'll outlive the PyType_Spec */
     spec.name = desc->name;
     Py_ssize_t hidden = n_members - desc->n_in_sequence;
-    spec.basicsize = (int)(sizeof(PyStructSequence) + (hidden - 1) * sizeof(PyObject *));
-    spec.itemsize = sizeof(PyObject *);
+    spec.basicsize = (int)(sizeof(PyStructSequence) + (hidden - 1) * sizeof(PyValue));
+    spec.itemsize = sizeof(PyValue);
     spec.flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC | tp_flags;
     spec.slots = slots;
 

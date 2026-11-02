@@ -58,7 +58,7 @@ tuple_getitem(PyObject *Py_UNUSED(module), PyObject *args)
         return NULL;
     }
     NULLABLE(obj);
-    return Py_XNewRef(PyTuple_GetItem(obj, i));
+    return PyTuple_GetItemRef(obj, i);
 }
 
 static PyObject *
@@ -89,8 +89,8 @@ tuple_setitem(PyObject *Py_UNUSED(module), PyObject *args)
             return NULL;
         }
         for (Py_ssize_t n = 0; n < size; n++) {
-            if (PyTuple_SetItem(newtuple, n,
-                                Py_XNewRef(PyTuple_GetItem(obj, n))) == -1) {
+            PyValue item = PyTuple_GetValue(obj, n);
+            if (PyErr_Occurred() || PyTuple_SetValue(newtuple, n, item) == -1) {
                 Py_DECREF(newtuple);
                 return NULL;
             }

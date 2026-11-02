@@ -1,14 +1,13 @@
 /* List object interface
 
-   Another generally useful object type is a list of object pointers.
+   Another generally useful object type is a list of canonical PyValues.
    This is a mutable type: the list items can be changed, and items can be
-   added or removed. Out-of-range indices or non-list objects are ignored.
+   added or removed. Checked accessors report invalid types and indices.
 
    WARNING: PyList_SetItem does not increment the new item's reference count,
    but does decrement the reference count of the item it replaces, if not nil.
    It does *decrement* the reference count if it is *not* inserted in the list.
-   Similarly, PyList_GetItem does not increment the returned item's reference
-   count.
+   PyList_GetItemRef returns an owning, fallible object-form reference.
 */
 
 #ifndef Py_LISTOBJECT_H
@@ -28,7 +27,8 @@ PyAPI_DATA(PyTypeObject) PyListRevIter_Type;
 PyAPI_FUNC(PyObject *) PyList_New(Py_ssize_t size);
 PyAPI_FUNC(Py_ssize_t) PyList_Size(PyObject *);
 
-PyAPI_FUNC(PyObject *) PyList_GetItem(PyObject *, Py_ssize_t);
+/* Owned value, or PyValue_NULL with an exception on invalid input. */
+PyAPI_FUNC(PyValue) PyList_GetValue(PyObject *, Py_ssize_t);
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 >= 0x030d0000
 PyAPI_FUNC(PyObject *) PyList_GetItemRef(PyObject *, Py_ssize_t);
 #endif

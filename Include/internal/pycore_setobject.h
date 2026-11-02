@@ -8,11 +8,11 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
-// Export for '_abc' shared extension
-PyAPI_FUNC(int) _PySet_NextEntry(
+// Owns the returned key; no scalar boxing.
+PyAPI_FUNC(int) _PySet_NextValue(
     PyObject *set,
     Py_ssize_t *pos,
-    PyObject **key,
+    PyValue *key,
     Py_hash_t *hash);
 
 // Export for '_pickle' shared extension
@@ -34,6 +34,8 @@ PyAPI_FUNC(int) _PySet_Contains(PySetObject *so, PyObject *key);
 extern void _PySet_ClearInternal(PySetObject *so);
 
 PyAPI_FUNC(int) _PySet_AddTakeRef(PySetObject *so, PyObject *key);
+PyAPI_FUNC(int) _PySet_AddValueTakeRef(PySetObject *so, PyValue key);
+extern PyValue _PySetIter_NextValue(PyObject *iterator);
 
 PyObject *
 _PySet_Freeze(PyObject *set);

@@ -430,5 +430,58 @@ class ListTest(list_tests.CommonTest):
         self.assertEqual(foo(list(range(10))), 45)
 
 
+class UniversalValueListTest(unittest.TestCase):
+    def test_copy_repeat_slice_and_alias_owners(self):
+        import weakref
+
+        class Item:
+            pass
+
+        value = Item()
+        reference = weakref.ref(value)
+        items = [value, 3, -0.0, 1 << 80]
+        repeated = items * 3
+        copied = items.copy()
+        repeated[1::4] = [4, 5, 6]
+        self.assertEqual(repeated[1::4], [4, 5, 6])
+        self.assertIs(repeated[0], value)
+        self.assertIs(repeated[4], value)
+        items += items
+        items[::2] = items[1::2]
+        del value, items, copied
+        self.assertIsNotNone(reference())
+        repeated.clear()
+        self.assertIsNone(reference())
+
+    def test_publish_before_reentrant_release(self):
+        seen = []
+        items = []
+
+        class Watch:
+            def __del__(self):
+                seen.append(items[:])
+                items.append('released')
+
+        items.append(Watch())
+        items[0] = 7
+        self.assertEqual(seen, [[7]])
+        self.assertEqual(items, [7, 'released'])
+        items[:] = [Watch()]
+        items[:] = [1.5, 9]
+        self.assertEqual(seen[-1], [1.5, 9])
+        self.assertEqual(items, [1.5, 9, 'released'])
+
+    def test_iterator_mutation_and_self_extension(self):
+        items = [1, 2.5, 3]
+        iterator = iter(items)
+        self.assertEqual(next(iterator), 1)
+        items[1] = 4.5
+        items.append(5)
+        self.assertEqual(list(iterator), [4.5, 3, 5])
+        items.extend(items)
+        self.assertEqual(items, [1, 4.5, 3, 5] * 2)
+        self.assertEqual(list(reversed(items)), [5, 3, 4.5, 1] * 2)
+
+
 if __name__ == "__main__":
     unittest.main()

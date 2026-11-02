@@ -43,6 +43,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "pycore_bytes_methods.h" // _Py_bytes_lower()
 #include "pycore_bytesobject.h"   // _PyBytes_RepeatBuffer()
 #include "pycore_ceval.h"         // _PyEval_GetBuiltin()
+#include "pycore_value.h"
 #include "pycore_codecs.h"        // _PyCodec_Lookup()
 #include "pycore_critical_section.h" // Py_*_CRITICAL_SECTION_SEQUENCE_FAST
 #include "pycore_format.h"        // F_LJUST
@@ -14455,18 +14456,20 @@ onError:
     return NULL;
 }
 
-static _PyObjectIndexPair
+static _PyValueIndexPair
 unicode_iteritem(PyObject *obj, Py_ssize_t index)
 {
     if (index >= PyUnicode_GET_LENGTH(obj)) {
-        return (_PyObjectIndexPair) { .object = NULL, .index = index };
+        return (_PyValueIndexPair) { .value = PyValue_NULL, .index = index };
     }
     const void *data = PyUnicode_DATA(obj);
     int kind = PyUnicode_KIND(obj);
     Py_UCS4 ch = PyUnicode_READ(kind, data, index);
     PyObject *result = unicode_char(ch);
     index = (result == NULL) ? -1 : index + 1;
-    return (_PyObjectIndexPair) { .object = result, .index = index };
+    PyValue value = result == NULL ? PyValue_NULL :
+                    PyValue_FromPyObjectSteal(result);
+    return (_PyValueIndexPair) { .value = value, .index = index };
 }
 
 void

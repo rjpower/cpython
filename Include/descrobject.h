@@ -79,6 +79,11 @@ struct PyMemberDef {
 #define Py_T_PYSSIZET  19      /* Py_ssize_t */
 #define _Py_T_NONE     20 // Deprecated. Value is always None.
 
+/* Private ABI: strong canonical value fields. EX raises for an absent field;
+   the other form exposes an unfilled struct-sequence field as None. */
+#define _Py_T_VALUE    21
+#define _Py_T_VALUE_EX 22
+
 /* Flags */
 #define Py_READONLY            (1 << 0)
 #define Py_AUDIT_READ          (1 << 1) // Added in 3.10, harmless no-op before that

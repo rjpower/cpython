@@ -26,7 +26,10 @@ PyAPI_FUNC(PyTypeObject*) PyStructSequence_NewType(PyStructSequence_Desc *desc);
 PyAPI_FUNC(PyObject *) PyStructSequence_New(PyTypeObject* type);
 
 PyAPI_FUNC(void) PyStructSequence_SetItem(PyObject*, Py_ssize_t, PyObject*);
-PyAPI_FUNC(PyObject*) PyStructSequence_GetItem(PyObject*, Py_ssize_t);
+/* Unchecked value reads borrow from the struct sequence; object reads own. */
+PyAPI_FUNC(PyValue) PyStructSequence_GET_VALUE(PyObject *, Py_ssize_t);
+PyAPI_FUNC(void) PyStructSequence_SET_VALUE(PyObject *, Py_ssize_t, PyValue);
+PyAPI_FUNC(PyObject *) PyStructSequence_GetItemRef(PyObject *, Py_ssize_t);
 
 #ifndef Py_LIMITED_API
 #  define _Py_CPYTHON_STRUCTSEQ_H

@@ -45,7 +45,11 @@ list_getitem(PyObject *Py_UNUSED(module), PyObject *args)
         return NULL;
     }
     NULLABLE(obj);
-    return Py_XNewRef(PyList_GetItem(obj, i));
+    PyValue value = PyList_GetValue(obj, i);
+    if (!PyValue_IsLanguageValue(value)) return NULL;
+    PyObject *result = PyValue_AsObject(value);
+    PyValue_Close(value);
+    return result;
 }
 
 static PyObject *
@@ -84,7 +88,7 @@ list_insert(PyObject *Py_UNUSED(module), PyObject *args)
     }
     NULLABLE(obj);
     NULLABLE(value);
-    RETURN_INT(PyList_Insert(obj, where, Py_XNewRef(value)));
+    RETURN_INT(PyList_Insert(obj, where, value));
 
 }
 

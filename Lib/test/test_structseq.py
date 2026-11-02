@@ -369,5 +369,38 @@ class StructSeqTest(unittest.TestCase):
     def test_struct_time_type_immutable(self):
         support.check_immutable_type(self, type(time.gmtime()))
 
+    def test_value_fields_and_hidden_cycle(self):
+        import weakref
+
+        class Payload:
+            pass
+
+        payload = Payload()
+        reference = weakref.ref(payload)
+        result = time.struct_time(tuple(range(9)), {'tm_zone': payload,
+                                                  'tm_gmtoff': -0.0})
+        self.assertEqual(tuple(result), tuple(range(9)))
+        self.assertIs(result.tm_zone, payload)
+        self.assertEqual(result.tm_gmtoff, -0.0)
+        payload.result = result
+        del payload, result
+        gc.collect()
+        self.assertIsNone(reference())
+
+    def test_partial_value_constructor_cleanup(self):
+        import weakref
+
+        class Payload:
+            pass
+
+        payload = Payload()
+        reference = weakref.ref(payload)
+        fields = {'tm_zone': payload, 'unexpected': 3}
+        with self.assertRaisesRegex(TypeError, 'unexpected field'):
+            time.struct_time(tuple(range(9)), fields)
+        del fields, payload
+        gc.collect()
+        self.assertIsNone(reference())
+
 if __name__ == "__main__":
     unittest.main()

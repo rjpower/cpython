@@ -9,4 +9,3 @@ PyAPI_FUNC(int) PyStructSequence_InitType2(PyTypeObject *type,
 
 typedef PyTupleObject PyStructSequence;
 #define PyStructSequence_SET_ITEM PyStructSequence_SetItem
-#define PyStructSequence_GET_ITEM PyStructSequence_GetItem

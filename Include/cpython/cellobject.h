@@ -9,8 +9,8 @@ extern "C" {
 
 typedef struct {
     PyObject_HEAD
-    /* Content of the cell or NULL when empty */
-    PyObject *ob_ref;
+    /* Strong canonical content, or PyValue_NULL when empty. */
+    PyValue ob_ref;
 } PyCellObject;
 
 PyAPI_DATA(PyTypeObject) PyCell_Type;
@@ -20,28 +20,18 @@ PyAPI_DATA(PyTypeObject) PyCell_Type;
 PyAPI_FUNC(PyObject *) PyCell_New(PyObject *);
 PyAPI_FUNC(PyObject *) PyCell_Get(PyObject *);
 PyAPI_FUNC(int) PyCell_Set(PyObject *, PyObject *);
+/* NewValue and SetValue borrow their input. GetValue returns an owner. */
+PyAPI_FUNC(PyObject *) PyCell_NewValue(PyValue);
+PyAPI_FUNC(PyValue) PyCell_GetValue(PyObject *);
+PyAPI_FUNC(int) PyCell_SetValue(PyObject *, PyValue);
 
-static inline PyObject* PyCell_GET(PyObject *op) {
-    PyObject *res;
-    PyCellObject *cell;
+static inline PyValue
+PyCell_GET_VALUE(PyObject *op)
+{
     assert(PyCell_Check(op));
-    cell = _Py_CAST(PyCellObject*, op);
-    Py_BEGIN_CRITICAL_SECTION(cell);
-    res = cell->ob_ref;
-    Py_END_CRITICAL_SECTION();
-    return res;
+    return PyValue_Borrow(_Py_CAST(PyCellObject *, op)->ob_ref);
 }
-#define PyCell_GET(op) PyCell_GET(_PyObject_CAST(op))
-
-static inline void PyCell_SET(PyObject *op, PyObject *value) {
-    PyCellObject *cell;
-    assert(PyCell_Check(op));
-    cell = _Py_CAST(PyCellObject*, op);
-    Py_BEGIN_CRITICAL_SECTION(cell);
-    cell->ob_ref = value;
-    Py_END_CRITICAL_SECTION();
-}
-#define PyCell_SET(op, value) PyCell_SET(_PyObject_CAST(op), (value))
+#define PyCell_GET_VALUE(op) PyCell_GET_VALUE(_PyObject_CAST(op))
 
 #ifdef __cplusplus
 }

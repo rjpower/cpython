@@ -8,6 +8,7 @@
 #endif
 
 #include "Python.h"
+#include "pycore_value.h"         // _PyValue_RestoreException()
 #include "pycore_bytesobject.h"   // _PyBytesWriter
 #include "pycore_lock.h"          // _PyOnceFlag_CallOnce()
 #include "pycore_long.h"          // _PyLong_AsByteArray()
@@ -1903,12 +1904,21 @@ s_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 
     PyObject *format = NULL;
     if (PyTuple_GET_SIZE(args) == 1 && (kwds == NULL || PyDict_GET_SIZE(kwds) == 0)) {
-        format = Py_NewRef(PyTuple_GET_ITEM(args, 0));
+        format = PyTuple_GetItemRef(args, 0);
+        if (format == NULL) {
+            return NULL;
+        }
     }
     else if (PyTuple_GET_SIZE(args) == 0 && kwds != NULL && PyDict_GET_SIZE(kwds) == 1) {
         if (PyDict_GetItemStringRef(kwds, "format", &format) < 0) {
             return NULL;
         }
+    }
+    if (PyErr_Occurred()) {
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(format);
+        _PyValue_RestoreException(saved);
+        return NULL;
     }
     if (format == NULL && type->tp_init != s_init) {
         Py_ssize_t nargs = PyTuple_GET_SIZE(args) + (kwds ? PyDict_GET_SIZE(kwds) : 0);
@@ -1932,6 +1942,9 @@ s_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 
     PyStructObject *self = (PyStructObject *)type->tp_alloc(type, 0);
     if (self == NULL) {
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(format);
+        _PyValue_RestoreException(saved);
         return NULL;
     }
     self->s_format = NULL;
@@ -1939,28 +1952,54 @@ s_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     self->s_size = -1;
     self->s_len = -1;
     self->init_called = false;
+    if (PyErr_Occurred()) {
+        goto error;
+    }
     if (format && set_format(self, format) < 0) {
         if (type->tp_init == s_init) {
             /* No custom __init__() method, so __new__() should do
              * all the work. */
-            Py_DECREF(format);
-            Py_DECREF(self);
-            return NULL;
+            goto error;
         }
         PyObject *exc = PyErr_GetRaisedException();
         Py_CLEAR(self->s_format);
+        if (PyErr_Occurred()) {
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_DECREF(exc);
+            _PyValue_RestoreException(saved);
+            goto error;
+        }
         if (PyErr_WarnFormat(PyExc_DeprecationWarning, 1,
             "Invalid 'format' argument for Struct.__new__(): %S", exc))
         {
+            PyObject *saved = PyErr_GetRaisedException();
             Py_DECREF(exc);
-            Py_DECREF(format);
-            Py_DECREF(self);
-            return NULL;
+            _PyValue_RestoreException(saved);
+            goto error;
         }
+        PyObject *saved = PyErr_GetRaisedException();
         Py_DECREF(exc);
+        _PyValue_RestoreException(saved);
+        if (PyErr_Occurred()) {
+            goto error;
+        }
     }
-    Py_XDECREF(format);
+    PyObject *saved_error = PyErr_GetRaisedException();
+    Py_CLEAR(format);
+    _PyValue_RestoreException(saved_error);
+    if (PyErr_Occurred()) {
+        goto error;
+    }
     return (PyObject *)self;
+
+error:;
+    saved_error = PyErr_GetRaisedException();
+    Py_XDECREF(format);
+    _PyValue_RestoreException(saved_error);
+    saved_error = PyErr_GetRaisedException();
+    Py_DECREF(self);
+    _PyValue_RestoreException(saved_error);
+    return NULL;
 }
 
 static bool

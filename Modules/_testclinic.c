@@ -23,6 +23,9 @@ custom_converter(PyObject *obj, custom_t *val)
 
 /* Forward declarations for vectorcall types, needed because
  * clinic/_testclinic.c.h is included before the type definitions. */
+static PyTypeObject OwnerEcho_Type;
+static PyTypeObject OwnerProbe_Type;
+static PyTypeObject OwnerAlias_Type;
 static PyTypeObject VcNew_Type;
 static PyTypeObject VcNewBase_Type;
 static PyTypeObject VcKwOnly_Type;
@@ -2843,6 +2846,136 @@ static PyMethodDef tester_methods[] = {
     {NULL, NULL}
 };
 
+/* These registered constructors use the same one-object Clinic family as
+ * production tp_new wrappers. Native bodies stay under the caller's IN_CALL
+ * transaction, including the nested registered constructor in OwnerAlias. */
+
+/*[clinic input]
+class _testclinic.OwnerEcho "PyObject *" "&OwnerEcho_Type"
+class _testclinic.OwnerProbe "PyObject *" "&OwnerProbe_Type"
+class _testclinic.OwnerAlias "PyObject *" "&OwnerAlias_Type"
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=961a5814206c8275]*/
+
+/*[clinic input]
+@classmethod
+_testclinic.OwnerEcho.__new__ as owner_echo
+
+    value: object
+
+Return an independent owner through the real constructor wrapper.
+[clinic start generated code]*/
+
+static PyObject *
+owner_echo_impl(PyTypeObject *type, PyObject *value)
+/*[clinic end generated code: output=8cb940b2a3149d73 input=3edc358c608bf719]*/
+{
+    return Py_NewRef(value);
+}
+
+static void
+owner_fixture_close(PyObject *object)
+{
+    PyObject *saved = PyErr_GetRaisedException();
+    Py_XDECREF(object);
+    _PyValue_RestoreException(saved);
+}
+
+/*[clinic input]
+@classmethod
+_testclinic.OwnerProbe.__new__ as owner_probe
+
+    value: object
+
+Call value.visit, then use the retained parser output again.
+[clinic start generated code]*/
+
+static PyObject *
+owner_probe_impl(PyTypeObject *type, PyObject *value)
+/*[clinic end generated code: output=6fe7931a9db8e00a input=c21c5ddab8ea85c6]*/
+{
+    PyObject *callback = PyObject_GetAttrString(value, "visit");
+    if (callback == NULL) {
+        return NULL;
+    }
+    if (PyErr_Occurred()) {
+        owner_fixture_close(callback);
+        return NULL;
+    }
+    PyObject *called = PyObject_CallNoArgs(callback);
+    owner_fixture_close(callback);
+    owner_fixture_close(called);
+    if (PyErr_Occurred()) {
+        return NULL;
+    }
+    return PyObject_Repr(value);
+}
+
+/*[clinic input]
+@classmethod
+_testclinic.OwnerAlias.__new__ as owner_alias
+
+    context: object
+
+Invoke a registered constructor with the same mutable keyword dict.
+[clinic start generated code]*/
+
+static PyObject *
+owner_alias_impl(PyTypeObject *type, PyObject *context)
+/*[clinic end generated code: output=a64467489b075733 input=1d37d566d95eb010]*/
+{
+    if (!PyTuple_CheckExact(context) || PyTuple_GET_SIZE(context) != 2) {
+        PyErr_SetString(PyExc_TypeError, "expected (target, keyword dictionary)");
+        return NULL;
+    }
+    PyObject *target = PyTuple_GetItemRef(context, 0);
+    PyObject *kwargs = NULL, *result = NULL;
+    if (target == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    kwargs = PyTuple_GetItemRef(context, 1);
+    if (kwargs == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    if (!PyDict_Check(kwargs)) {
+        PyErr_SetString(PyExc_TypeError, "expected a keyword dictionary");
+        goto done;
+    }
+    result = PyObject_VectorcallDict(target, NULL, 0, kwargs);
+done:
+    owner_fixture_close(kwargs);
+    owner_fixture_close(target);
+    if (PyErr_Occurred()) {
+        owner_fixture_close(result);
+        return NULL;
+    }
+    return result;
+}
+
+static PyTypeObject OwnerEcho_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testclinic.OwnerEcho",
+    .tp_basicsize = sizeof(PyObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_new = owner_echo,
+};
+
+static PyTypeObject OwnerProbe_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testclinic.OwnerProbe",
+    .tp_basicsize = sizeof(PyObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_new = owner_probe,
+};
+
+static PyTypeObject OwnerAlias_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testclinic.OwnerAlias",
+    .tp_basicsize = sizeof(PyObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_new = owner_alias,
+};
+
 static struct PyModuleDef _testclinic_module = {
     PyModuleDef_HEAD_INIT,
     .m_name = "_testclinic",
@@ -2892,6 +3025,11 @@ PyInit__testclinic(void)
         goto error;
     }
     if (PyModule_AddType(m, &VcKwOnly_Type) < 0) {
+        goto error;
+    }
+    if (PyModule_AddType(m, &OwnerEcho_Type) < 0 ||
+        PyModule_AddType(m, &OwnerProbe_Type) < 0 ||
+        PyModule_AddType(m, &OwnerAlias_Type) < 0) {
         goto error;
     }
     return m;

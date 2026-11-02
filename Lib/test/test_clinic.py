@@ -95,6 +95,42 @@ def save_restore_converters(testcase):
 class ClinicWholeFileTest(TestCase):
     maxDiff = None
 
+    def test_owned_tuple_constructor_cleanup_order(self):
+        for kind in ('__new__', '__init__'):
+            decorator = '@classmethod\n' if kind == '__new__' else ''
+            source = (
+                '/*[clinic input]\noutput everything block\n'
+                'class Owner "OwnerObject *" "&Owner_Type"\n'
+                f'{decorator}Owner.{kind}\n    value: object\n'
+                '[clinic start generated code]*/\n')
+            generated = _make_clinic(filename='owner.c').parse(source)
+            with self.subTest(kind=kind):
+                begin = generated.index('_PyArg_OwnerScope_BeginTuple(')
+                unpack = generated.index('_PyArg_UnpackKeywordsOwned(')
+                invoke = generated.index('_impl(', unpack)
+                end = generated.index('_PyArg_OwnerScope_End(', invoke)
+                self.assertLess(begin, unpack)
+                self.assertLess(unpack, invoke)
+                self.assertLess(invoke, end)
+                self.assertNotIn('_PyTuple_CAST(args)->ob_item', generated)
+                if kind == '__new__':
+                    self.assertIn('Py_CLEAR(return_value);', generated[end:])
+                    self.assertIn('_PyValue_RestoreException(_saved);', generated[end:])
+                else:
+                    self.assertIn('return_value = -1;', generated[end:])
+
+    def test_owned_tuple_family_does_not_capture_other_converters(self):
+        for parameter in ('value: object = None', 'value: int',
+                          'value: object\n    /'):
+            source = (
+                '/*[clinic input]\noutput everything block\n'
+                'class Owner "OwnerObject *" "&Owner_Type"\n'
+                '@classmethod\nOwner.__new__\n'
+                f'    {parameter}\n[clinic start generated code]*/\n')
+            generated = _make_clinic(filename='owner.c').parse(source)
+            with self.subTest(parameter=parameter):
+                self.assertNotIn('_PyArg_OwnerScope_', generated)
+
     def expect_failure(self, raw, errmsg, *, filename=None, lineno=None):
         _expect_failure(self, self.clinic.parse, raw, errmsg,
                         filename=filename, lineno=lineno)

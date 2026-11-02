@@ -74,6 +74,40 @@ PyAPI_FUNC(int) _PyArg_ParseStackAndKeywords(
     struct _PyArg_Parser *,
     ...);
 
+/* A callee-local view of an immutable canonical tuple. Begin only pins/counts;
+ * the shared unpack preflight precedes storage allocation and object boxing.
+ * Args, kwargs and parser keyword metadata stay pinned through implementation
+ * and converter cleanup; object outputs borrow the scope's independent owners.
+ * The caller must already have published coherent IN_CALL state. */
+typedef struct {
+    PyObject *tuple;
+    PyObject *kwargs;
+    PyObject *kwtuple;
+    PyValue *values;
+    PyObject **objects;
+    void *storage;
+    Py_ssize_t nargs;
+    Py_ssize_t keyword_budget;
+    Py_ssize_t capacity;
+    Py_ssize_t nvalues;
+    Py_ssize_t nobjects;
+    int materialized;
+    int ended;
+    PyValue inline_values[4];
+    PyObject *inline_objects[4];
+} _PyArg_OwnerScope;
+
+PyAPI_FUNC(int) _PyArg_OwnerScope_BeginTuple(
+    _PyArg_OwnerScope *, PyObject *, Py_ssize_t keyword_owner_budget);
+/* Valid only after successful scoped unpack; borrows stable scope storage. */
+PyAPI_FUNC(PyObject *const *) _PyArg_OwnerScope_Objects(const _PyArg_OwnerScope *);
+PyAPI_FUNC(PyObject *const *) _PyArg_UnpackKeywordsOwned(
+    _PyArg_OwnerScope *, PyObject *kwargs, struct _PyArg_Parser *,
+    int minpos, int maxpos, int minkw, int varpos, PyObject **buf);
+/* Safe after a partial Begin/unpack. Retains the primary or first cleanup error.
+ * Run after converter cleanup; 0 has no pending error, -1 reports an error. */
+PyAPI_FUNC(int) _PyArg_OwnerScope_End(_PyArg_OwnerScope *);
+
 // Export for 'math' shared extension
 PyAPI_FUNC(PyObject * const *) _PyArg_UnpackKeywords(
     PyObject *const *args,
@@ -97,4 +131,3 @@ PyAPI_FUNC(PyObject * const *) _PyArg_UnpackKeywords(
 }
 #endif
 #endif  // !Py_INTERNAL_MODSUPPORT_H
-

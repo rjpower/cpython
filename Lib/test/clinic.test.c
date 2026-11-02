@@ -5314,10 +5314,13 @@ Test___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[1];
     PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    _PyArg_OwnerScope _args_scope = {0};
     PyObject *a;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 1) < 0) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -5326,12 +5329,15 @@ Test___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     return_value = Test___init___impl((TestObj *)self, a);
 
 exit:
+    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
+        return_value = -1;
+    }
     return return_value;
 }
 
 static int
 Test___init___impl(TestObj *self, PyObject *a)
-/*[clinic end generated code: output=5c1e743f6a2a0b8b input=a8f9222a6ab35c59]*/
+/*[clinic end generated code: output=856b2daa69a1f312 input=a8f9222a6ab35c59]*/
 
 
 /*[clinic input]

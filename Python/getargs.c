@@ -9,6 +9,7 @@
 #include "pycore_pylifecycle.h"   // _PyArg_Fini
 #include "pycore_pystate.h"       // _Py_IsMainInterpreter()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_value.h"         // canonical argument snapshots
 #include "pycore_pyerrors.h"      // _Py_CalculateSuggestions()
 #include "pycore_unicodeobject.h" // _PyUnicode_InternImmortal
 
@@ -1561,67 +1562,88 @@ _PyArg_ParseStackAndKeywords_SizeT(PyObject *const *args, Py_ssize_t nargs, PyOb
 
 
 static void
-error_unexpected_keyword_arg(PyObject *kwargs, PyObject *kwnames, PyObject *kwtuple, const char *fname)
+error_unexpected_keyword_arg(PyObject *kwargs, PyObject *kwnames,
+                             PyObject *kwtuple, const char *fname)
 {
-    /* make sure there are no extraneous keyword arguments */
-    Py_ssize_t j = 0;
-    while (1) {
-        PyObject *keyword;
-        if (kwargs != NULL) {
-            if (!PyDict_Next(kwargs, &j, &keyword, NULL))
-                break;
-        }
-        else {
-            if (j >= PyTuple_GET_SIZE(kwnames))
-                break;
-            keyword = PyTuple_GET_ITEM(kwnames, j);
-            j++;
+    /* Freeze names before comparisons/formatting can mutate the source dict. */
+    PyObject *names = kwargs != NULL ? PyDict_Keys(kwargs) : PySequence_List(kwnames);
+    if (names == NULL) {
+        return;
+    }
+    PyObject *keyword = NULL;
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    for (Py_ssize_t j = 0; j < PyList_GET_SIZE(names); j++) {
+        keyword = PyList_GetItemRef(names, j);
+        if (keyword == NULL || PyErr_Occurred()) {
+            goto done;
         }
         if (!PyUnicode_Check(keyword)) {
-            PyErr_SetString(PyExc_TypeError,
-                            "keywords must be strings");
-            return;
+            PyErr_SetString(PyExc_TypeError, "keywords must be strings");
+            goto done;
         }
-
         int match = PySequence_Contains(kwtuple, keyword);
+        if (PyErr_Occurred()) {
+            goto done;
+        }
         if (match <= 0) {
             if (!match) {
                 PyObject *kwlist = PySequence_List(kwtuple);
-                if (!kwlist) {
-                    return;
+                if (kwlist == NULL) {
+                    goto done;
                 }
-                PyObject *suggestion_keyword = _Py_CalculateSuggestions(kwlist, keyword);
+                if (PyErr_Occurred()) {
+                    PyObject *saved = PyErr_GetRaisedException();
+                    Py_DECREF(kwlist);
+                    _PyValue_RestoreException(saved);
+                    goto done;
+                }
+                PyObject *suggestion = _Py_CalculateSuggestions(kwlist, keyword);
+                PyObject *saved = PyErr_GetRaisedException();
                 Py_DECREF(kwlist);
-
-                if (suggestion_keyword) {
-                    PyErr_Format(PyExc_TypeError,
-                                "%.200s%s got an unexpected keyword argument '%S'."
-                                " Did you mean '%S'?",
-                                (fname == NULL) ? "this function" : fname,
-                                (fname == NULL) ? "" : "()",
-                                keyword,
-                                suggestion_keyword);
-                    Py_DECREF(suggestion_keyword);
+                _PyValue_RestoreException(saved);
+                if (PyErr_Occurred()) {
+                    saved = PyErr_GetRaisedException();
+                    Py_XDECREF(suggestion);
+                    _PyValue_RestoreException(saved);
+                    goto done;
                 }
-                else {
+                if (suggestion != NULL) {
                     PyErr_Format(PyExc_TypeError,
-                                "%.200s%s got an unexpected keyword argument '%S'",
-                                (fname == NULL) ? "this function" : fname,
-                                (fname == NULL) ? "" : "()",
-                                keyword);
+                                 "%.200s%s got an unexpected keyword argument '%S'."
+                                 " Did you mean '%S'?",
+                                 fname == NULL ? "this function" : fname,
+                                 fname == NULL ? "" : "()", keyword, suggestion);
+                    PyObject *saved = PyErr_GetRaisedException();
+                    Py_DECREF(suggestion);
+                    _PyValue_RestoreException(saved);
                 }
-
+                else if (!PyErr_Occurred()) {
+                    PyErr_Format(PyExc_TypeError,
+                                 "%.200s%s got an unexpected keyword argument '%S'",
+                                 fname == NULL ? "this function" : fname,
+                                 fname == NULL ? "" : "()", keyword);
+                }
             }
-            return;
+            goto done;
+        }
+        Py_CLEAR(keyword);
+        if (PyErr_Occurred()) {
+            goto done;
         }
     }
-    /* Something wrong happened. There are extraneous keyword arguments,
-     * but we don't know what. And we don't bother. */
-    PyErr_Format(PyExc_TypeError,
-                 "invalid keyword argument for %.200s%s",
-                 (fname == NULL) ? "this function" : fname,
-                 (fname == NULL) ? "" : "()");
+    PyErr_Format(PyExc_TypeError, "invalid keyword argument for %.200s%s",
+                 fname == NULL ? "this function" : fname, fname == NULL ? "" : "()");
+done:;
+    PyObject *saved = PyErr_GetRaisedException();
+    Py_XDECREF(keyword);
+    _PyValue_RestoreException(saved);
+    saved = PyErr_GetRaisedException();
+    Py_DECREF(names);
+    _PyValue_RestoreException(saved);
 }
+
 
 int
 PyArg_ValidateKeywordArguments(PyObject *kwargs)
@@ -2245,7 +2267,13 @@ find_keyword(PyObject *kwnames, PyObject *const *kwstack, PyObject *key)
 
     nkwargs = PyTuple_GET_SIZE(kwnames);
     for (i = 0; i < nkwargs; i++) {
-        PyObject *kwname = PyTuple_GET_ITEM(kwnames, i);
+        PyValue name = PyTuple_GET_VALUE(kwnames, i);
+        if (!PyValue_IsObject(name) ||
+            !PyUnicode_Check(PyValue_AsPyObjectBorrow(name))) {
+            PyErr_SetString(PyExc_TypeError, "keywords must be strings");
+            return NULL;
+        }
+        PyObject *kwname = PyValue_AsPyObjectBorrow(name);
 
         /* kwname == key will normally find a match in since keyword keys
            should be interned strings; if not retry below in a new loop. */
@@ -2255,7 +2283,13 @@ find_keyword(PyObject *kwnames, PyObject *const *kwstack, PyObject *key)
     }
 
     for (i = 0; i < nkwargs; i++) {
-        PyObject *kwname = PyTuple_GET_ITEM(kwnames, i);
+        PyValue name = PyTuple_GET_VALUE(kwnames, i);
+        if (!PyValue_IsObject(name) ||
+            !PyUnicode_Check(PyValue_AsPyObjectBorrow(name))) {
+            PyErr_SetString(PyExc_TypeError, "keywords must be strings");
+            return NULL;
+        }
+        PyObject *kwname = PyValue_AsPyObjectBorrow(name);
         assert(PyUnicode_Check(kwname));
         if (_PyUnicode_Equal(kwname, key)) {
             return Py_NewRef(kwstack[i]);
@@ -2501,14 +2535,155 @@ vgetargskeywordsfast(PyObject *args, PyObject *keywords,
 }
 
 
+int
+_PyArg_OwnerScope_BeginTuple(_PyArg_OwnerScope *scope, PyObject *args,
+                             Py_ssize_t keyword_owner_budget)
+{
+    *scope = (_PyArg_OwnerScope){0};
+    scope->values = scope->inline_values;
+    scope->objects = scope->inline_objects;
+    scope->capacity = Py_ARRAY_LENGTH(scope->inline_objects);
+    if (PyErr_Occurred()) {
+        return -1;
+    }
+    if (!PyTuple_Check(args) || keyword_owner_budget < 0) {
+        PyErr_BadInternalCall();
+        return -1;
+    }
+    scope->tuple = Py_NewRef(args);
+    scope->nargs = PyTuple_GET_SIZE(args);
+    scope->keyword_budget = keyword_owner_budget;
+    return 0;
+}
+
+static int
+arg_scope_materialize(_PyArg_OwnerScope *scope)
+{
+    assert(!scope->ended && !scope->materialized);
+    Py_ssize_t nargs = scope->nargs;
+    Py_ssize_t budget = scope->keyword_budget;
+    if (nargs > PY_SSIZE_T_MAX - budget) {
+        PyErr_NoMemory();
+        return -1;
+    }
+    Py_ssize_t count = nargs + budget;
+    if (count > scope->capacity) {
+        if ((size_t)nargs > SIZE_MAX / sizeof(PyValue) ||
+            (size_t)count > (SIZE_MAX - (size_t)nargs * sizeof(PyValue)) /
+                            sizeof(PyObject *)) {
+            PyErr_NoMemory();
+            return -1;
+        }
+        size_t values_size = (size_t)nargs * sizeof(PyValue);
+        scope->storage = PyMem_Malloc(values_size + (size_t)count * sizeof(PyObject *));
+        if (scope->storage == NULL) {
+            PyErr_NoMemory();
+            return -1;
+        }
+        if (PyErr_Occurred()) {
+            return -1;
+        }
+        scope->values = scope->storage;
+        scope->objects = (PyObject **)((char *)scope->storage + values_size);
+        scope->capacity = count;
+    }
+    for (Py_ssize_t i = 0; i < nargs; i++) {
+        scope->values[i] = PyValue_NULL;
+    }
+    for (Py_ssize_t i = 0; i < count; i++) {
+        scope->objects[i] = NULL;
+    }
+    scope->nvalues = nargs;
+    scope->nobjects = nargs;
+    /* No callback occurs while capturing/promoting the immutable source. */
+    for (Py_ssize_t i = 0; i < nargs; i++) {
+        scope->values[i] = PyValue_MakeHeapSafe(PyTuple_GET_VALUE(scope->tuple, i));
+    }
+    for (Py_ssize_t i = 0; i < nargs; i++) {
+        scope->objects[i] = PyValue_AsObject(scope->values[i]);
+        if (scope->objects[i] == NULL || PyErr_Occurred()) {
+            return -1;
+        }
+    }
+    scope->materialized = 1;
+    return 0;
+}
+
+PyObject *const *
+_PyArg_OwnerScope_Objects(const _PyArg_OwnerScope *scope)
+{
+    assert(scope->materialized && !scope->ended);
+    return scope->objects;
+}
+
+static void
+arg_scope_save_error(PyObject **saved)
+{
+    _PyValue_RestoreException(*saved);
+    *saved = PyErr_GetRaisedException();
+}
+
+int
+_PyArg_OwnerScope_End(_PyArg_OwnerScope *scope)
+{
+    if (scope->ended) {
+        return PyErr_Occurred() ? -1 : 0;
+    }
+    scope->ended = 1;
+    PyObject *saved = PyErr_GetRaisedException();
+    for (Py_ssize_t i = scope->nobjects; i > 0; i--) {
+        PyObject *object = scope->objects[i - 1];
+        scope->objects[i - 1] = NULL;
+        Py_XDECREF(object);
+        arg_scope_save_error(&saved);
+    }
+    for (Py_ssize_t i = scope->nvalues; i > 0; i--) {
+        PyValue value = scope->values[i - 1];
+        scope->values[i - 1] = PyValue_NULL;
+        PyValue_XCLOSE(value);
+        arg_scope_save_error(&saved);
+    }
+    Py_CLEAR(scope->kwargs);
+    arg_scope_save_error(&saved);
+    Py_CLEAR(scope->kwtuple);
+    arg_scope_save_error(&saved);
+    Py_CLEAR(scope->tuple);
+    arg_scope_save_error(&saved);
+    void *storage = scope->storage;
+    scope->storage = NULL;
+    scope->objects = NULL;
+    scope->values = NULL;
+    if (storage != NULL) {
+        PyMem_Free(storage);
+        arg_scope_save_error(&saved);
+    }
+    _PyValue_RestoreException(saved);
+    return PyErr_Occurred() ? -1 : 0;
+}
+
+static int
+arg_scope_keep_keyword(_PyArg_OwnerScope *scope, PyObject *owned)
+{
+    assert(scope->materialized);
+    if (scope->nobjects >= scope->nargs + scope->keyword_budget) {
+        PyErr_SetString(PyExc_SystemError, "argument keyword owner budget exhausted");
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_DECREF(owned);
+        _PyValue_RestoreException(saved);
+        return -1;
+    }
+    scope->objects[scope->nobjects++] = owned;
+    return 0;
+}
+
 #undef _PyArg_UnpackKeywords
 
-PyObject * const *
-_PyArg_UnpackKeywords(PyObject *const *args, Py_ssize_t nargs,
+static PyObject *const *
+unpack_keywords(PyObject *const *args, Py_ssize_t nargs,
                       PyObject *kwargs, PyObject *kwnames,
                       struct _PyArg_Parser *parser,
                       int minpos, int maxpos, int minkw, int varpos,
-                      PyObject **buf)
+                      PyObject **buf, _PyArg_OwnerScope *scope)
 {
     PyObject *kwtuple;
     PyObject *keyword;
@@ -2534,11 +2709,14 @@ _PyArg_UnpackKeywords(PyObject *const *args, Py_ssize_t nargs,
         args = buf;
     }
 
-    if (parser_init(parser) < 0) {
+    if (parser_init(parser) < 0 || PyErr_Occurred()) {
         return NULL;
     }
 
     kwtuple = parser->kwtuple;
+    if (scope != NULL) {
+        scope->kwtuple = Py_NewRef(kwtuple);
+    }
     posonly = parser->pos;
     minposonly = Py_MIN(posonly, minpos);
     maxargs = posonly + (int)PyTuple_GET_SIZE(kwtuple);
@@ -2554,7 +2732,13 @@ _PyArg_UnpackKeywords(PyObject *const *args, Py_ssize_t nargs,
         nkwargs = 0;
     }
     if (nkwargs == 0 && minkw == 0 && minpos <= nargs && (varpos || nargs <= maxpos)) {
-        /* Fast path. */
+        /* Shape is valid before the scoped tuple view is materialized. */
+        if (scope != NULL) {
+            if (arg_scope_materialize(scope) < 0) {
+                return NULL;
+            }
+            return _PyArg_OwnerScope_Objects(scope);
+        }
         return args;
     }
     if (!varpos && nargs + nkwargs > maxargs) {
@@ -2602,6 +2786,15 @@ _PyArg_UnpackKeywords(PyObject *const *args, Py_ssize_t nargs,
         return NULL;
     }
 
+    if (scope != NULL) {
+        if (scope->keyword_budget < maxargs || arg_scope_materialize(scope) < 0) {
+            if (!PyErr_Occurred()) {
+                PyErr_SetString(PyExc_SystemError, "argument keyword owner budget too small");
+            }
+            return NULL;
+        }
+        args = _PyArg_OwnerScope_Objects(scope);
+    }
     if (varpos) {
         nargs = Py_MIN(maxpos, nargs);
     }
@@ -2614,7 +2807,7 @@ _PyArg_UnpackKeywords(PyObject *const *args, Py_ssize_t nargs,
     for (i = Py_MAX((int)nargs, posonly); i < maxargs; i++) {
         PyObject *current_arg;
         if (nkwargs) {
-            keyword = PyTuple_GET_ITEM(kwtuple, i - posonly);
+            keyword = _PyTuple_GET_OBJECT(kwtuple, i - posonly);
             if (kwargs != NULL) {
                 if (PyDict_GetItemRef(kwargs, keyword, &current_arg) < 0) {
                     return NULL;
@@ -2622,6 +2815,9 @@ _PyArg_UnpackKeywords(PyObject *const *args, Py_ssize_t nargs,
             }
             else {
                 current_arg = find_keyword(kwnames, kwstack, keyword);
+                if (current_arg == NULL && PyErr_Occurred()) {
+                    return NULL;
+                }
             }
         }
         else if (i >= reqlimit) {
@@ -2631,15 +2827,22 @@ _PyArg_UnpackKeywords(PyObject *const *args, Py_ssize_t nargs,
             current_arg = NULL;
         }
 
-        buf[i] = current_arg;
-
-        if (current_arg) {
-            Py_DECREF(current_arg);
+        if (current_arg != NULL) {
+            if (scope != NULL) {
+                if (arg_scope_keep_keyword(scope, current_arg) < 0) {
+                    return NULL;
+                }
+            }
+            else {
+                /* Old object-vector callers still require their own port. */
+                Py_DECREF(current_arg);
+            }
             --nkwargs;
         }
-        else if (i < minpos || (maxpos <= i && i < reqlimit)) {
+        buf[i] = current_arg;
+        if (current_arg == NULL && (i < minpos || (maxpos <= i && i < reqlimit))) {
             /* Less arguments than required */
-            keyword = PyTuple_GET_ITEM(kwtuple, i - posonly);
+            keyword = _PyTuple_GET_OBJECT(kwtuple, i - posonly);
             PyErr_Format(PyExc_TypeError,  "%.200s%s missing required "
                          "argument '%U' (pos %d)",
                          (parser->fname == NULL) ? "function" : parser->fname,
@@ -2653,7 +2856,7 @@ _PyArg_UnpackKeywords(PyObject *const *args, Py_ssize_t nargs,
         /* make sure there are no arguments given by name and position */
         for (i = posonly; i < nargs; i++) {
             PyObject *current_arg;
-            keyword = PyTuple_GET_ITEM(kwtuple, i - posonly);
+            keyword = _PyTuple_GET_OBJECT(kwtuple, i - posonly);
             if (kwargs != NULL) {
                 if (PyDict_GetItemRef(kwargs, keyword, &current_arg) < 0) {
                     return NULL;
@@ -2661,9 +2864,15 @@ _PyArg_UnpackKeywords(PyObject *const *args, Py_ssize_t nargs,
             }
             else {
                 current_arg = find_keyword(kwnames, kwstack, keyword);
+                if (current_arg == NULL && PyErr_Occurred()) {
+                    return NULL;
+                }
             }
             if (current_arg) {
                 Py_DECREF(current_arg);
+                if (PyErr_Occurred()) {
+                    return NULL;
+                }
                 /* arg present in tuple and in dict */
                 PyErr_Format(PyExc_TypeError,
                              "argument for %.200s%s given by name ('%U') "
@@ -2680,6 +2889,44 @@ _PyArg_UnpackKeywords(PyObject *const *args, Py_ssize_t nargs,
     }
 
     return buf;
+}
+
+PyObject *const *
+_PyArg_UnpackKeywords(PyObject *const *args, Py_ssize_t nargs,
+                      PyObject *kwargs, PyObject *kwnames,
+                      struct _PyArg_Parser *parser,
+                      int minpos, int maxpos, int minkw, int varpos,
+                      PyObject **buf)
+{
+    return unpack_keywords(args, nargs, kwargs, kwnames, parser,
+                           minpos, maxpos, minkw, varpos, buf, NULL);
+}
+
+PyObject *const *
+_PyArg_UnpackKeywordsOwned(_PyArg_OwnerScope *scope, PyObject *kwargs,
+                           struct _PyArg_Parser *parser,
+                           int minpos, int maxpos, int minkw, int varpos,
+                           PyObject **buf)
+{
+    assert(!scope->ended && !scope->materialized && scope->tuple != NULL);
+    if (PyErr_Occurred()) {
+        return NULL;
+    }
+    if (kwargs != NULL && !PyDict_Check(kwargs)) {
+        PyErr_BadInternalCall();
+        return NULL;
+    }
+    scope->kwargs = Py_XNewRef(kwargs);
+    /* Preserve the old macro's pre-parser-init no-keyword fast path. */
+    if (minkw == 0 && kwargs == NULL && minpos <= scope->nargs &&
+        (varpos || scope->nargs <= maxpos)) {
+        if (arg_scope_materialize(scope) < 0) {
+            return NULL;
+        }
+        return _PyArg_OwnerScope_Objects(scope);
+    }
+    return unpack_keywords(NULL, scope->nargs, kwargs, NULL, parser,
+                           minpos, maxpos, minkw, varpos, buf, scope);
 }
 
 static const char *

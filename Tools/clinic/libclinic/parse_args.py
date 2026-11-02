@@ -384,6 +384,21 @@ class ParseArgsCodeGen:
                 if not p.is_optional():
                     self.min_pos = i
 
+    def use_scoped_tuple_keywords(self) -> bool:
+        """The first owned tuple-parser family: one required object input."""
+        return (self.is_new_or_init()
+                and not self.limited_capi and not self.fastcall
+                and not self.func.vectorcall
+                and not self.varpos and not self.var_keyword
+                and not self.has_option_groups()
+                and len(self.parameters) == 1
+                and self.pos_only == 0
+                and self.min_pos == self.max_pos == 1
+                and self.min_kw_only == 0
+                and type(self.converters[0]) is object_converter
+                and self.converters[0].format_unit == 'O'
+                and self.converters[0].alias_of is None)
+
     def is_new_or_init(self) -> bool:
         return self.func.kind.new_or_init
 
@@ -473,6 +488,24 @@ class ParseArgsCodeGen:
                 {initializers}
         """) + "\n"
         finale = PARSER_FINALE_SKELETON
+        if self.use_scoped_tuple_keywords():
+            self.codegen.add_include('pycore_value.h', '_PyValue_RestoreException()')
+            if self.func.kind is METHOD_INIT:
+                cleanup = """
+                    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {{
+                        {parser_retval} = -1;
+                    }}
+                """
+            else:
+                cleanup = """
+                    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {{
+                        PyObject *_saved = PyErr_GetRaisedException();
+                        Py_CLEAR({parser_retval});
+                        _PyValue_RestoreException(_saved);
+                    }}
+                """
+            finale = finale.replace('{cleanup}', '{cleanup}\n' +
+                libclinic.normalize_snippet(cleanup, indent=4))
         for field in preamble, *fields, finale:
             lines.append(field)
         code = libclinic.linear_format(
@@ -1284,17 +1317,33 @@ class ParseArgsCodeGen:
                 self.declarations = declare_parser(self.func, codegen=self.codegen)
                 self.declarations += "\nPyObject *argsbuf[%s];" % (len(self.converters) or 1)
                 self.declarations += "\nPyObject * const *fastargs;"
-                self.declarations += "\nPy_ssize_t nargs = PyTuple_GET_SIZE(args);"
+                if not self.use_scoped_tuple_keywords():
+                    self.declarations += "\nPy_ssize_t nargs = PyTuple_GET_SIZE(args);"
                 if has_optional_kw:
                     self.declarations += "\nPy_ssize_t noptargs = %s + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - %d;" % (nargs, self.min_pos + self.min_kw_only)
                 unpack_args = '_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL'
-            parser_code = [libclinic.normalize_snippet(f"""
-                {argsname} = _PyArg_UnpackKeywords({unpack_args}, &_parser,
-                        /*minpos*/ {self.min_pos}, /*maxpos*/ {self.max_pos}, /*minkw*/ {self.min_kw_only}, /*varpos*/ {1 if self.varpos else 0}, argsbuf);
-                if (!{argsname}) {{{{
-                    goto exit;
-                }}}}
-                """, indent=4)]
+            if self.use_scoped_tuple_keywords():
+                self.declarations += "\n_PyArg_OwnerScope _args_scope = {{0}};"
+                self.codegen.add_include('pycore_modsupport.h',
+                                         '_PyArg_UnpackKeywordsOwned()')
+                parser_code = [libclinic.normalize_snippet(f"""
+                    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, {len(self.converters)}) < 0) {{{{
+                        goto exit;
+                    }}}}
+                    {argsname} = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+                            /*minpos*/ {self.min_pos}, /*maxpos*/ {self.max_pos}, /*minkw*/ {self.min_kw_only}, /*varpos*/ 0, argsbuf);
+                    if (!{argsname}) {{{{
+                        goto exit;
+                    }}}}
+                    """, indent=4)]
+            else:
+                parser_code = [libclinic.normalize_snippet(f"""
+                    {argsname} = _PyArg_UnpackKeywords({unpack_args}, &_parser,
+                            /*minpos*/ {self.min_pos}, /*maxpos*/ {self.max_pos}, /*minkw*/ {self.min_kw_only}, /*varpos*/ {1 if self.varpos else 0}, argsbuf);
+                    if (!{argsname}) {{{{
+                        goto exit;
+                    }}}}
+                    """, indent=4)]
 
         if self.requires_defining_class:
             self.flags = 'METH_METHOD|' + self.flags

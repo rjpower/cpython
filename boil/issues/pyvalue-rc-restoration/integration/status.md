@@ -1,6 +1,6 @@
 # Restoration integration and interpreter checkpoint
 
-- Stage: eighteen source checkpoints; merged diagnostic build failed
+- Stage: dependent source checkpoints; merged diagnostic build failed
 - Owner: coordinator; independent peer reviews precede each source checkpoint
 - Goal: produce one coherent universal-value RC runtime, validate composition,
   then measure the register interpreter before further JIT performance work.
@@ -30,12 +30,12 @@ results cannot supply it. Use results to improve specific mechanisms.
 
 ## Current checkpoint
 
-Eighteen reviewed dependent source commits end at `be15f9856b5` on the restoration
-branch. The [board](../../README.md) and linked receipts own each outcome. Two
-original held object/type files still need composition closure. Clinic now covers
-20 further positional wrappers; classobject/codeobject compile. Object corrections
-and the first type-cache mutation checkpoint are active; remaining actual parser,
-container/startup and bundled consumer ports still block a baseline executable.
+The [board](../../README.md) owns the current restoration HEAD and checkpoint
+list. Object composition and small tokenizer/bytes consumers are committed;
+typeobject.c is the remaining original held file. Clinic covers 20 further
+positional wrappers; classobject/codeobject compile. The first type-cache mutation
+checkpoint is active. Remaining actual parser, call, container/startup and bundled
+consumer ports still block a baseline executable.
 
 The latest [merged diagnostic build](../merged-build/status.md) binds the earlier
 fifteen-checkpoint chain at `6780ba211ac` plus held files. It produced 145 objects,

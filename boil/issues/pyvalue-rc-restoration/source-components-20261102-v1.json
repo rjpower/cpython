@@ -310,6 +310,16 @@
       "commit": "be15f9856b54439f280b35f58d0813372349d5b3",
       "changed_paths": 19,
       "runnable": false
+    },
+    "object_composition": {
+      "commit": "e52539e7f68a5f08db888c7eaa2da0cfee0afbee",
+      "changed_paths": 4,
+      "runnable": false
+    },
+    "small_tokenizer_bytes_readers": {
+      "commit": "639891a2e81e4a360a3e346cfa33991bd869d14c",
+      "changed_paths": 5,
+      "runnable": false
     }
   },
   "first_diagnostic_build": {

@@ -45,7 +45,7 @@ reviewed but cannot yet be committed with unrelated unresolved scalar bridges.
 [native checks](../../../../build/pyvalue-typecache-provider-20261102-v1/native-v1.json),
 [commit and pending-delta receipt](../../../../build/pyvalue-typecache-provider-20261102-v1/commit.json).
 The finite core mutation/guard/lifecycle design is frozen and independently
-reviewed. Wiki_audit has a first-checkpoint source grant after its object endpoint:
+reviewed. Wiki_audit has a first-checkpoint source grant:
 shared scopes, detach/retire, restarted invalidation and simple actual writers.
 Graph/MRO/construction and guards/terminal remain later checkpoints.
 [Core proposal](../../../../build/pyvalue-typecache-core-scope-20261102-v1/design.md),
@@ -60,6 +60,6 @@ Earlier proposals/freezes/reviews remain historical evidence.
 The fresh [composition review](../../../../build/pyvalue-source-integration-20261102-v1/shared-composition-review.md)
 also identifies object-only scalar conversions in lookup_method_ex, descriptor/new
 slots, type lookup/getattr, generic object getattr and abstract special-method
-calling. The abstract repair is now committed; two full source files remain held. Their object/call bridges need
+calling. The abstract and full object repairs are now committed; typeobject.c remains held. Their object/call bridges need
 fallible conversion and owned cleanup; that work does not substitute for the
 separate cache lifetime/mutation proof above.

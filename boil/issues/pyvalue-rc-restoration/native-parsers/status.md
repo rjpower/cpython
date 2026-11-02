@@ -38,8 +38,7 @@ the caller nor parser runtime routes are admitted by these source checkpoints.
 
 Further parser families, varpos/recursive converters, exact-argument preparation,
 the constructor-init shim, broader binder cleanup, other gateways and the opaque
-extension backend remain unfinished. Objects/object.c and typeobject.c remain
-held; the abstract.c consumer repair is committed. Hard
+extension backend remain unfinished. Object and abstract consumer repairs are committed; typeobject.c remains held. Hard
 compatibility is not a gate. All native/parser source grants above are closed.
 The [positional Clinic increment](positional-owners/status.md) is reviewed and
 committed as `be15f9856b5`. State_audit designs the next startup/parser port.

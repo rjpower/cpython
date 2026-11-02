@@ -1,7 +1,7 @@
 # Restore universal PyValue under RC
 
-- Stage: eighteen reviewed source checkpoints; merged diagnostic build failed.
-- Owner: state_audit startup/parser design and object review; wiki_audit object corrections then type-cache core; coordinator integrates.
+- Stage: reviewed source checkpoints; merged diagnostic build still has no executable.
+- Owner: state_audit startup/parser design; wiki_audit type-cache core; coordinator integrates.
   Previous agents stay stopped.
 - Goal: canonical PyValues across frames, containers, attributes and operations,
   retaining RC with cyclic collection.
@@ -10,16 +10,12 @@
 
 Qualified interim images remain `eba351fee7d`, private `boilrc1`, boxed heap
 fields. Restoration is `build/worktrees/pyvalue-rc-universal`, branch
-`boil/pyvalue-rc-universal`, base `95be1d28a12`, current HEAD `be15f9856b5`.
-The [board](../README.md) lists all eighteen reviewed commits. The remaining
-original held paths are Objects/object.c and typeobject.c.
-Abstract consumers and six cache-provider dependencies are committed. The
-reviewed typeobject provider delta remains held alongside scalar-return/call
-work. The initial object bridge passes focused native checks, but independent
-whole-file review requires finite setter/repr cleanup and unused helper removal.
-Those corrections are in progress. The twenty-wrapper positional Clinic port
-is committed; its full codeobject/classobject TUs and objects pass, while other
-old parser paths still fail.
+`boil/pyvalue-rc-universal`, base `95be1d28a12`. The [board](../README.md) owns
+the current HEAD and reviewed checkpoint list. Object composition is committed; typeobject.c is the remaining
+original held file. The reviewed typeobject provider delta stays distinguishable
+from unfinished scalar/slot work. Positional Clinic, object/attribute/repr and
+small tokenizer/bytes consumers have passed their finite source gates and are
+committed. They do not yet form an executable candidate.
 
 The [first build](first-build/status.md) configured with the new `boilvalrc1`
 namespace and produced 141 objects, including symtable, codegen and sysmodule.

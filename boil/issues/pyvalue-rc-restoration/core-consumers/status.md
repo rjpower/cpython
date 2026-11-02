@@ -49,10 +49,9 @@ actual full TU/object and nine host controls pass. Candidate tests await linking
 reviewed two-file source checkpoint committed as `3296af9ba58`; actual TU/object
 and 23 host controls pass. Candidate tests remain unexecuted.
 
-Active [positional Clinic increment](../native-parsers/positional-owners/status.md):
-20 generated wrappers reviewed and committed as `be15f9856b5`; producer checks
-pass, native diagnostics remain recorded. The
-[object attribute bridge](object-attributes/status.md) needs the finite cleanup
-corrections identified by independent whole-file review. State_audit designs the
-next startup/parser port; wiki_audit implements object corrections before core
-type-cache work.
+The [positional Clinic increment](../native-parsers/positional-owners/status.md),
+[object composition](object-attributes/status.md) and
+[small tokenizer/bytes readers](small-readers/status.md) are reviewed and committed.
+State_audit designs the next startup/parser port; wiki_audit implements the first
+core type-cache mutation checkpoint. The coordinator closes concrete call/startup
+blockers and owns merged validation.

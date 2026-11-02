@@ -1521,73 +1521,133 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
     }
 
     int contains = PySet_Contains(state->abstract_types, (PyObject *)Py_TYPE(self));
-    if (contains == -1) {
+    if (contains == -1 || PyErr_Occurred()) {
         return -1;
     }
     else if (contains == 1) {
         if (PyErr_WarnFormat(
                 PyExc_DeprecationWarning, 1,
                 "Instantiating abstract AST node class %T is deprecated. "
-                "This will become an error in Python 3.20", self) < 0) {
+                "This will become an error in Python 3.20", self) < 0 ||
+            PyErr_Occurred()) {
             return -1;
         }
     }
 
-    Py_ssize_t i, numfields = 0;
+    Py_ssize_t i, numfields = 0, size = -1, num_keywords = 0;
     int res = -1;
-    PyObject *key, *value, *fields, *attributes = NULL, *remaining_fields = NULL;
+    _PyArg_OwnerScope args_scope = {0};
+    PyObject *keywords = Py_XNewRef(kw);
+    PyObject *positional_keys = NULL, *key = NULL, *value = NULL;
+    PyObject *fields = NULL, *attributes = NULL, *remaining_fields = NULL;
+    PyObject *field_types = NULL, *remaining_list = NULL, *missing_names = NULL;
+    PyObject *name = NULL, *type = NULL, *empty = NULL, *name_str = NULL;
+    PyObject *const *positional = NULL;
+
+    if (PyErr_Occurred()) {
+        goto cleanup;
+    }
+    if (_PyArg_OwnerScope_BeginTuple(&args_scope, args, 0) < 0 ||
+        PyErr_Occurred()) {
+        goto cleanup;
+    }
 
     fields = PyObject_GetAttr((PyObject*)Py_TYPE(self), state->_fields);
-    if (fields == NULL) {
+    if (fields == NULL || PyErr_Occurred()) {
         goto cleanup;
     }
 
     numfields = PySequence_Size(fields);
-    if (numfields == -1) {
+    if (numfields < 0 || PyErr_Occurred()) {
         goto cleanup;
     }
     remaining_fields = PySet_New(fields);
-    if (remaining_fields == NULL) {
+    if (remaining_fields == NULL || PyErr_Occurred()) {
         goto cleanup;
     }
 
     res = 0; /* if no error occurs, this stays 0 to the end */
-    if (numfields < PyTuple_GET_SIZE(args)) {
+    if (numfields < args_scope.nargs) {
         PyErr_Format(PyExc_TypeError, "%T constructor takes at most "
                      "%zd positional argument%s",
                      self, numfields, numfields == 1 ? "" : "s");
         res = -1;
         goto cleanup;
     }
-    for (i = 0; i < PyTuple_GET_SIZE(args); i++) {
-        /* cannot be reached when fields is NULL */
-        PyObject *name = PySequence_GetItem(fields, i);
-        if (!name) {
+    positional = _PyArg_UnpackPositionalOwned(
+        &args_scope, "AST", 0, PY_SSIZE_T_MAX);
+    if (positional == NULL || PyErr_Occurred()) {
+        res = -1;
+        goto cleanup;
+    }
+    for (i = 0; i < args_scope.nargs; i++) {
+        name = PySequence_GetItem(fields, i);
+        if (name == NULL || PyErr_Occurred()) {
             res = -1;
             goto cleanup;
         }
-        res = PyObject_SetAttr(self, name, PyTuple_GET_ITEM(args, i));
-        if (PySet_Discard(remaining_fields, name) < 0) {
+        res = PyObject_SetAttr(self, name, positional[i]);
+        if (res < 0 || PyErr_Occurred()) {
             res = -1;
-            Py_DECREF(name);
             goto cleanup;
         }
-        Py_DECREF(name);
-        if (res < 0) {
+        int p = PySet_Discard(remaining_fields, name);
+        if (p < 0 || PyErr_Occurred()) {
+            res = -1;
+            goto cleanup;
+        }
+        PyObject *saved_error = PyErr_GetRaisedException();
+        PyObject *tmp = name;
+        name = NULL;
+        Py_DECREF(tmp);
+        _PyValue_RestoreException(saved_error);
+        if (PyErr_Occurred()) {
+            res = -1;
             goto cleanup;
         }
     }
-    if (kw) {
-        i = 0;  /* needed by PyDict_Next */
-        while (PyDict_Next(kw, &i, &key, &value)) {
+    if (keywords != NULL) {
+        positional_keys = PyDict_Keys(keywords);
+        if (positional_keys == NULL || PyErr_Occurred()) {
+            res = -1;
+            goto cleanup;
+        }
+        num_keywords = PyList_Size(positional_keys);
+        if (num_keywords < 0 || PyErr_Occurred()) {
+            res = -1;
+            goto cleanup;
+        }
+        for (i = 0; i < num_keywords; i++) {
+            key = PyList_GetItemRef(positional_keys, i);
+            if (key == NULL || PyErr_Occurred()) {
+                res = -1;
+                goto cleanup;
+            }
+            int found = PyDict_GetItemRef(keywords, key, &value);
+            if (found < 0 || PyErr_Occurred()) {
+                res = -1;
+                goto cleanup;
+            }
+            if (found == 0) {
+                PyObject *saved_error = PyErr_GetRaisedException();
+                PyObject *tmp = key;
+                key = NULL;
+                Py_DECREF(tmp);
+                _PyValue_RestoreException(saved_error);
+                if (PyErr_Occurred()) {
+                    res = -1;
+                    goto cleanup;
+                }
+                continue;
+            }
             int contains = PySequence_Contains(fields, key);
-            if (contains == -1) {
+            if (contains < 0 || PyErr_Occurred()) {
                 res = -1;
                 goto cleanup;
             }
             else if (contains == 1) {
                 int p = PySet_Discard(remaining_fields, key);
-                if (p == -1) {
+                if (p < 0 || PyErr_Occurred()) {
                     res = -1;
                     goto cleanup;
                 }
@@ -1603,13 +1663,13 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
                 // Lazily initialize "attributes"
                 if (attributes == NULL) {
                     attributes = PyObject_GetAttr((PyObject*)Py_TYPE(self), state->_attributes);
-                    if (attributes == NULL) {
+                    if (attributes == NULL || PyErr_Occurred()) {
                         res = -1;
                         goto cleanup;
                     }
                 }
-                int contains = PySequence_Contains(attributes, key);
-                if (contains == -1) {
+                contains = PySequence_Contains(attributes, key);
+                if (contains < 0 || PyErr_Occurred()) {
                     res = -1;
                     goto cleanup;
                 }
@@ -1622,16 +1682,34 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
                 }
             }
             res = PyObject_SetAttr(self, key, value);
-            if (res < 0) {
+            if (res < 0 || PyErr_Occurred()) {
+                res = -1;
+                goto cleanup;
+            }
+            PyObject *saved_error = PyErr_GetRaisedException();
+            PyObject *tmp = value;
+            value = NULL;
+            Py_DECREF(tmp);
+            _PyValue_RestoreException(saved_error);
+            saved_error = PyErr_GetRaisedException();
+            tmp = key;
+            key = NULL;
+            Py_DECREF(tmp);
+            _PyValue_RestoreException(saved_error);
+            if (PyErr_Occurred()) {
+                res = -1;
                 goto cleanup;
             }
         }
     }
-    Py_ssize_t size = PySet_Size(remaining_fields);
-    PyObject *field_types = NULL, *remaining_list = NULL, *missing_names = NULL;
+    size = PySet_Size(remaining_fields);
+    if (size < 0 || PyErr_Occurred()) {
+        res = -1;
+        goto cleanup;
+    }
     if (size > 0) {
         if (PyObject_GetOptionalAttr((PyObject*)Py_TYPE(self), &_Py_ID(_field_types),
-                                     &field_types) < 0) {
+                                     &field_types) < 0 || PyErr_Occurred()) {
             res = -1;
             goto cleanup;
         }
@@ -1642,85 +1720,214 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
             goto cleanup;
         }
         remaining_list = PySequence_List(remaining_fields);
-        if (!remaining_list) {
-            goto set_remaining_cleanup;
+        if (remaining_list == NULL || PyErr_Occurred()) {
+            res = -1;
+            goto cleanup;
         }
         missing_names = PySet_New(NULL);
-        if (!missing_names) {
-            goto set_remaining_cleanup;
+        if (missing_names == NULL || PyErr_Occurred()) {
+            res = -1;
+            goto cleanup;
         }
-        for (Py_ssize_t i = 0; i < size; i++) {
-            PyObject *name = PyList_GET_ITEM(remaining_list, i);
-            PyObject *type = PyDict_GetItemWithError(field_types, name);
-            if (!type) {
-                if (PyErr_Occurred()) {
-                    goto set_remaining_cleanup;
-                }
-                else {
-                    PyErr_Format(PyExc_TypeError,
-                        "Field %R is missing from %T._field_types",
-                        name, self);
-                    goto set_remaining_cleanup;
-                }
+        for (i = 0; i < size; i++) {
+            name = PyList_GetItemRef(remaining_list, i);
+            if (name == NULL || PyErr_Occurred()) {
+                res = -1;
+                goto cleanup;
             }
-            else if (_PyUnion_Check(type)) {
+            int found = PyDict_GetItemRef(field_types, name, &type);
+            if (found < 0 || PyErr_Occurred()) {
+                res = -1;
+                goto cleanup;
+            }
+            if (found == 0) {
+                PyErr_Format(PyExc_TypeError,
+                    "Field %R is missing from %T._field_types",
+                    name, self);
+                res = -1;
+                goto cleanup;
+            }
+            if (_PyUnion_Check(type)) {
                 // optional field
                 // do nothing, we'll have set a None default on the class
             }
             else if (Py_IS_TYPE(type, &Py_GenericAliasType)) {
                 // list field
-                PyObject *empty = PyList_New(0);
-                if (!empty) {
-                    goto set_remaining_cleanup;
+                empty = PyList_New(0);
+                if (empty == NULL || PyErr_Occurred()) {
+                    res = -1;
+                    goto cleanup;
                 }
                 res = PyObject_SetAttr(self, name, empty);
-                Py_DECREF(empty);
-                if (res < 0) {
-                    goto set_remaining_cleanup;
+                if (res < 0 || PyErr_Occurred()) {
+                    res = -1;
+                    goto cleanup;
+                }
+                PyObject *saved_error = PyErr_GetRaisedException();
+                PyObject *tmp = empty;
+                empty = NULL;
+                Py_DECREF(tmp);
+                _PyValue_RestoreException(saved_error);
+                if (PyErr_Occurred()) {
+                    res = -1;
+                    goto cleanup;
                 }
             }
             else if (type == state->expr_context_type) {
                 // special case for expr_context: default to Load()
                 res = PyObject_SetAttr(self, name, state->Load_singleton);
-                if (res < 0) {
-                    goto set_remaining_cleanup;
+                if (res < 0 || PyErr_Occurred()) {
+                    res = -1;
+                    goto cleanup;
                 }
             }
             else {
                 // simple field (e.g., identifier)
                 res = PySet_Add(missing_names, name);
-                if (res < 0) {
-                    goto set_remaining_cleanup;
+                if (res < 0 || PyErr_Occurred()) {
+                    res = -1;
+                    goto cleanup;
                 }
+            }
+            PyObject *saved_error = PyErr_GetRaisedException();
+            PyObject *tmp = type;
+            type = NULL;
+            Py_DECREF(tmp);
+            _PyValue_RestoreException(saved_error);
+            saved_error = PyErr_GetRaisedException();
+            tmp = name;
+            name = NULL;
+            Py_DECREF(tmp);
+            _PyValue_RestoreException(saved_error);
+            if (PyErr_Occurred()) {
+                res = -1;
+                goto cleanup;
             }
         }
         Py_ssize_t num_missing = PySet_GET_SIZE(missing_names);
+        if (PyErr_Occurred()) {
+            res = -1;
+            goto cleanup;
+        }
         if (num_missing > 0) {
-            PyObject *name_str = format_missing(missing_names, fields);
-            if (!name_str) {
-                goto set_remaining_cleanup;
+            name_str = format_missing(missing_names, fields);
+            if (name_str == NULL || PyErr_Occurred()) {
+                res = -1;
+                goto cleanup;
             }
             PyErr_Format(PyExc_TypeError,
                 "%T.__init__ missing %d required positional argument%s: %U",
                 self, num_missing, num_missing == 1 ? "" : "s", name_str);
-            Py_DECREF(name_str);
-            goto set_remaining_cleanup;
+            res = -1;
+            goto cleanup;
         }
-        Py_DECREF(missing_names);
-        Py_DECREF(remaining_list);
-        Py_DECREF(field_types);
     }
   cleanup:
-    Py_XDECREF(attributes);
-    Py_XDECREF(fields);
-    Py_XDECREF(remaining_fields);
+    {
+        PyObject *saved_error = PyErr_GetRaisedException();
+        PyObject *tmp = name_str;
+        name_str = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved_error);
+    }
+    {
+        PyObject *saved_error = PyErr_GetRaisedException();
+        PyObject *tmp = type;
+        type = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved_error);
+    }
+    {
+        PyObject *saved_error = PyErr_GetRaisedException();
+        PyObject *tmp = name;
+        name = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved_error);
+    }
+    {
+        PyObject *saved_error = PyErr_GetRaisedException();
+        PyObject *tmp = value;
+        value = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved_error);
+    }
+    {
+        PyObject *saved_error = PyErr_GetRaisedException();
+        PyObject *tmp = key;
+        key = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved_error);
+    }
+    {
+        PyObject *saved_error = PyErr_GetRaisedException();
+        PyObject *tmp = empty;
+        empty = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved_error);
+    }
+    {
+        PyObject *saved_error = PyErr_GetRaisedException();
+        PyObject *tmp = missing_names;
+        missing_names = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved_error);
+    }
+    {
+        PyObject *saved_error = PyErr_GetRaisedException();
+        PyObject *tmp = remaining_list;
+        remaining_list = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved_error);
+    }
+    {
+        PyObject *saved_error = PyErr_GetRaisedException();
+        PyObject *tmp = field_types;
+        field_types = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved_error);
+    }
+    {
+        PyObject *saved_error = PyErr_GetRaisedException();
+        PyObject *tmp = positional_keys;
+        positional_keys = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved_error);
+    }
+    {
+        PyObject *saved_error = PyErr_GetRaisedException();
+        PyObject *tmp = attributes;
+        attributes = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved_error);
+    }
+    {
+        PyObject *saved_error = PyErr_GetRaisedException();
+        PyObject *tmp = fields;
+        fields = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved_error);
+    }
+    {
+        PyObject *saved_error = PyErr_GetRaisedException();
+        PyObject *tmp = remaining_fields;
+        remaining_fields = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved_error);
+    }
+    {
+        PyObject *saved_error = PyErr_GetRaisedException();
+        PyObject *tmp = keywords;
+        keywords = NULL;
+        Py_XDECREF(tmp);
+        _PyValue_RestoreException(saved_error);
+    }
+    if (_PyArg_OwnerScope_End(&args_scope) < 0 || PyErr_Occurred()) {
+        res = -1;
+    }
+    if (PyErr_Occurred()) {
+        res = -1;
+    }
     return res;
-  set_remaining_cleanup:
-    Py_XDECREF(missing_names);
-    Py_XDECREF(remaining_list);
-    Py_XDECREF(field_types);
-    res = -1;
-    goto cleanup;
 }
 
 /* Pickling support */

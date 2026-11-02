@@ -3446,10 +3446,13 @@ static void
 sys_set_flag(PyObject *flags, Py_ssize_t pos, PyObject *value)
 {
     assert(pos >= 0 && pos < (Py_ssize_t)(Py_ARRAY_LENGTH(flags_fields) - 1));
-
-    PyObject *old_value = PyStructSequence_GET_ITEM(flags, pos);
-    PyStructSequence_SET_ITEM(flags, pos, Py_NewRef(value));
-    Py_XDECREF(old_value);
+    /* Both callers construct a fresh flags object, filling each slot once. */
+    assert(PyValue_IsNull(PyStructSequence_GET_VALUE(flags, pos)));
+    PyObject *retired = NULL;
+    PyValue prepared = PyValue_PrepareOwned(Py_NewRef(value), &retired);
+    PyStructSequence_SET_VALUE(flags, pos, prepared);
+    /* The caller retains value, so this release cannot be final. */
+    Py_XDECREF(retired);
 }
 
 
@@ -3471,9 +3474,10 @@ _PySys_SetFlagObj(Py_ssize_t pos, PyObject *value)
 
     for (Py_ssize_t i = 0; i < (Py_ssize_t)(Py_ARRAY_LENGTH(flags_fields) - 1); i++) {
         if (i != pos) {
-            PyObject *old_value;
-            old_value = PyStructSequence_GET_ITEM(old_flags, i);  // borrowed ref
-            sys_set_flag(new_flags, i, old_value);
+            PyValue old_value = PyStructSequence_GET_VALUE(old_flags, i);
+            PyValue owned = PyValue_MakeHeapSafe(old_value);
+            assert(PyValue_IsNull(PyStructSequence_GET_VALUE(new_flags, i)));
+            PyStructSequence_SET_VALUE(new_flags, i, owned);
         }
         else {
             sys_set_flag(new_flags, pos, value);
@@ -3481,13 +3485,17 @@ _PySys_SetFlagObj(Py_ssize_t pos, PyObject *value)
     }
 
     int res = _PySys_SetAttr(flags_str, new_flags);
+    PyObject *saved = PyErr_GetRaisedException();
     Py_DECREF(old_flags);
     Py_DECREF(new_flags);
-    return res;
+    _PyValue_RestoreException(saved);
+    return res < 0 || PyErr_Occurred() ? -1 : 0;
 
-error:
+error:;
+    PyObject *saved_error = PyErr_GetRaisedException();
     Py_XDECREF(old_flags);
     Py_XDECREF(new_flags);
+    _PyValue_RestoreException(saved_error);
     return -1;
 }
 

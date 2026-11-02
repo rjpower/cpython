@@ -5,6 +5,7 @@
 #include "pycore_call.h"          // _Py_CheckFunctionResult()
 #include "pycore_ceval.h"         // _Py_EnterRecursiveCallTstate()
 #include "pycore_freelist.h"
+#include "pycore_native_scope.h"
 #include "pycore_object.h"
 #include "pycore_pyerrors.h"
 #include "pycore_pystate.h"       // _PyThreadState_GET()
@@ -428,6 +429,178 @@ cfunction_enter_call(PyThreadState *tstate, PyObject *func)
         return NULL;
     }
     return (funcptr)PyCFunction_GET_FUNCTION(func);
+}
+
+int
+_PyCFunction_CanCallScoped(PyObject *callable)
+{
+    if (callable == NULL || !PyCFunction_Check(callable)) {
+        return 0;
+    }
+    vectorcallfunc expected;
+    switch (PyCFunction_GET_FLAGS(callable) & _Py_METH_CALL_FLAGS) {
+        case METH_NOARGS:
+            expected = cfunction_vectorcall_NOARGS;
+            break;
+        case METH_O:
+            expected = cfunction_vectorcall_O;
+            break;
+        case METH_FASTCALL:
+            expected = cfunction_vectorcall_FASTCALL;
+            break;
+        case METH_FASTCALL | METH_KEYWORDS:
+            expected = cfunction_vectorcall_FASTCALL_KEYWORDS;
+            break;
+        case METH_METHOD | METH_FASTCALL | METH_KEYWORDS:
+            expected = cfunction_vectorcall_FASTCALL_KEYWORDS_METHOD;
+            break;
+        default:
+            return 0;
+    }
+    return _PyCFunctionObject_CAST(callable)->vectorcall == expected;
+}
+
+int
+_PyCFunction_CallScoped(_PyNativeScope *scope, PyObject *callable,
+                       _PyNativeResult *out)
+{
+    assert(!scope->ended);
+    assert(out == &scope->result);
+    assert(out->state == _Py_NATIVE_RESULT_EMPTY);
+    if (PyErr_Occurred()) {
+        return -1;
+    }
+    if (scope->vector && !_PyCFunction_CanCallScoped(callable)) {
+        return 1;
+    }
+    if (!PyCFunction_Check(callable)) {
+        PyErr_SetString(PyExc_SystemError, "scoped call requires a C function");
+        return -1;
+    }
+    if (scope->callable == NULL) {
+        scope->callable = Py_NewRef(callable);
+    }
+    else if (scope->callable != callable) {
+        PyErr_SetString(PyExc_SystemError, "native scope callable changed");
+        return -1;
+    }
+    int flags = PyCFunction_GET_FLAGS(callable) & _Py_METH_CALL_FLAGS;
+    if (!scope->vector && flags != METH_NOARGS && flags != METH_O) {
+        PyErr_SetString(PyExc_SystemError,
+                        "variable C calls require a vector native scope");
+        return -1;
+    }
+    if (flags != METH_NOARGS && flags != METH_O && flags != METH_FASTCALL &&
+        flags != (METH_FASTCALL | METH_KEYWORDS) &&
+        flags != (METH_METHOD | METH_FASTCALL | METH_KEYWORDS))
+    {
+        PyErr_SetString(PyExc_SystemError,
+                        "unsupported scoped C function convention");
+        return -1;
+    }
+    if (!(flags & METH_KEYWORDS) &&
+        cfunction_check_kwargs(scope->tstate, callable, scope->kwnames))
+    {
+        return -1;
+    }
+    Py_ssize_t expected = flags == METH_NOARGS ? 0 : 1;
+    if ((flags == METH_NOARGS || flags == METH_O) &&
+        scope->positional_count != expected)
+    {
+        PyObject *funcstr = _PyObject_FunctionStr(callable);
+        if (funcstr != NULL) {
+            if (flags == METH_NOARGS) {
+                _PyErr_Format(scope->tstate, PyExc_TypeError,
+                              "%U takes no arguments (%zd given)",
+                              funcstr, scope->nargs);
+            }
+            else {
+                _PyErr_Format(scope->tstate, PyExc_TypeError,
+                              "%U takes exactly one argument (%zd given)",
+                              funcstr, scope->nargs);
+            }
+            Py_DECREF(funcstr);
+        }
+        return -1;
+    }
+    /* VM self_or_null belongs to the argument window. This receiver is the
+     * C function's independently pinned bound self, which may be absent. */
+    PyObject *self = PyCFunction_GET_SELF(callable);
+    if (!PyValue_IsNull(scope->receiver)) {
+        PyErr_SetString(PyExc_SystemError,
+                        "scoped C receiver must be captured by the gateway");
+        return -1;
+    }
+    if (!scope->vector && self != NULL) {
+        scope->receiver = PyValue_MakeHeapSafe(
+            PyValue_FromObjectBorrow(self));
+    }
+    if (_Py_EnterRecursiveCallTstate(scope->tstate, " while calling a Python object")) {
+        return -1;
+    }
+    PyObject *const *args;
+    if (_PyNativeScope_Objects(scope, &args) < 0) {
+        _Py_LeaveRecursiveCallTstate(scope->tstate);
+        return -1;
+    }
+    /* Boxing can reenter. Read the target only after it completes, and do
+     * not invoke it with receiver/class metadata from a different callable. */
+    if (scope->vector && !_PyCFunction_CanCallScoped(callable)) {
+        _Py_LeaveRecursiveCallTstate(scope->tstate);
+        return 1;
+    }
+    if ((PyCFunction_GET_FLAGS(callable) & _Py_METH_CALL_FLAGS) != flags ||
+        (scope->vector &&
+         (PyCFunction_GET_SELF(callable) != scope->receiver_object ||
+          PyCFunction_GET_CLASS(callable) != scope->defining_class)))
+    {
+        _Py_LeaveRecursiveCallTstate(scope->tstate);
+        PyErr_SetString(PyExc_SystemError,
+                        "native function metadata changed during preparation");
+        return -1;
+    }
+    PyCFunction method = PyCFunction_GET_FUNCTION(callable);
+    PyObject *result;
+    if (flags == METH_NOARGS || flags == METH_O) {
+        result = _PyCFunction_TrampolineCall(
+            method, scope->receiver_object, flags == METH_O ? args[0] : NULL);
+    }
+    else if (flags == METH_FASTCALL) {
+        result = _PyCFunctionFast_CAST(method)(scope->receiver_object, args,
+                                              scope->positional_count);
+    }
+    else if (flags == (METH_FASTCALL | METH_KEYWORDS)) {
+        result = _PyCFunctionFastWithKeywords_CAST(method)(
+            scope->receiver_object, args, scope->positional_count,
+            scope->kwnames);
+    }
+    else {
+        PyCMethod meth = (PyCMethod)(void(*)(void))method;
+        result = meth(scope->receiver_object, scope->defining_class, args,
+                      scope->positional_count, scope->kwnames);
+    }
+    _Py_LeaveRecursiveCallTstate(scope->tstate);
+    if (result == NULL && !_PyErr_Occurred(scope->tstate)) {
+        _PyErr_Format(scope->tstate, PyExc_SystemError,
+                      "%R returned NULL without setting an exception",
+                      callable);
+#ifdef Py_DEBUG
+        Py_FatalError("a function returned NULL without setting an exception");
+#endif
+        return -1;
+    }
+    int status = _PyNativeScope_StageResult(scope, result, out);
+    if (result != NULL && status < 0) {
+        /* Preserve the standard bad-C-return diagnostic while deferring the
+         * owned result's release to the caller's abort/publication boundary. */
+        _PyErr_FormatFromCauseTstate(
+            scope->tstate, PyExc_SystemError,
+            "%R returned a result with an exception set", callable);
+#ifdef Py_DEBUG
+        Py_FatalError("a function returned a result with an exception set");
+#endif
+    }
+    return status;
 }
 
 /* Now the actual vectorcall functions */

@@ -3,9 +3,11 @@
 #include "pycore_c_array.h"       // _Py_CArray_EnsureCapacity
 #include "pycore_flowgraph.h"
 #include "pycore_compile.h"
+#include "pycore_dict.h"          // _PyDict_NextValue()
 #include "pycore_intrinsics.h"
 #include "pycore_pymem.h"         // _PyMem_IsPtrFreed()
 #include "pycore_long.h"          // _PY_IS_SMALL_INT()
+#include "pycore_list.h"          // _PyList_SetItemTakeValue()
 #include "pycore_hashtable.h"     // _Py_hashtable_t
 
 #include "pycore_opcode_utils.h"
@@ -1336,14 +1338,14 @@ get_const_value(int opcode, int oparg, PyObject *co_consts)
                          oparg, n);
             return NULL;
         }
-        constant = PyList_GET_ITEM(co_consts, oparg);
+        return PyList_GetItemRef(co_consts, oparg);
     }
     if (opcode == LOAD_SMALL_INT) {
         return PyLong_FromLong(oparg);
     }
     if (opcode == LOAD_COMMON_CONSTANT) {
         assert(oparg < NUM_COMMON_CONSTANTS);
-        return PyValue_AsPyObjectBorrow(
+        return PyValue_AsObject(
             _PyInterpreterState_GET()->common_consts[oparg]);
     }
 
@@ -1353,6 +1355,29 @@ get_const_value(int opcode, int oparg, PyObject *co_consts)
         return NULL;
     }
     return Py_NewRef(constant);
+}
+
+static void *
+const_index_key(PyValue value)
+{
+    /* The table hashes/compares opaque words without dereferencing them.
+       consts roots object identities until this index is destroyed. */
+    PyValue borrowed = PyValue_Borrow(value);
+    return (void *)(uintptr_t)borrowed.bits;
+}
+
+static Py_uhash_t
+const_index_hash(const void *key)
+{
+    /* Inline float mantissas may have many zero low bits. Mix the full
+       identity word before indexing power-of-two buckets. */
+    uint64_t bits = (uintptr_t)key;
+    bits ^= bits >> 30;
+    bits *= UINT64_C(0xbf58476d1ce4e5b9);
+    bits ^= bits >> 27;
+    bits *= UINT64_C(0x94d049bb133111eb);
+    bits ^= bits >> 31;
+    return (Py_uhash_t)bits;
 }
 
 // Steals a reference to newconst.
@@ -1365,7 +1390,8 @@ add_const(PyObject *newconst, PyObject *consts, PyObject *const_cache,
         return -1;
     }
 
-    _Py_hashtable_entry_t *entry = _Py_hashtable_get_entry(consts_index, (void *)newconst);
+    void *key = const_index_key(PyValue_FromObjectBorrow(newconst));
+    _Py_hashtable_entry_t *entry = _Py_hashtable_get_entry(consts_index, key);
     if (entry != NULL) {
         Py_DECREF(newconst);
         return (int)(uintptr_t)entry->value;
@@ -1382,7 +1408,7 @@ add_const(PyObject *newconst, PyObject *consts, PyObject *const_cache,
         return -1;
     }
 
-    if (_Py_hashtable_set(consts_index, (void *)newconst, (void *)(uintptr_t)index) < 0) {
+    if (_Py_hashtable_set(consts_index, key, (void *)(uintptr_t)index) < 0) {
         PyList_SetSlice(consts, index, index + 1, NULL);
         Py_DECREF(newconst);
         PyErr_NoMemory();
@@ -1785,13 +1811,15 @@ optimize_lists_and_sets(basicblock *bb, int i, int nextop,
  * Used to avoid creating constants which are slow to hash.
  */
 static Py_ssize_t
-const_folding_check_complexity(PyObject *obj, Py_ssize_t limit)
+const_folding_check_complexity(PyValue value, Py_ssize_t limit)
 {
-    if (PyTuple_Check(obj)) {
+    if (PyValue_IsObject(value) &&
+        PyTuple_Check(PyValue_AsPyObjectBorrow(value))) {
+        PyObject *obj = PyValue_AsPyObjectBorrow(value);
         Py_ssize_t i;
         limit -= PyTuple_GET_SIZE(obj);
         for (i = 0; limit >= 0 && i < PyTuple_GET_SIZE(obj); i++) {
-            limit = const_folding_check_complexity(PyTuple_GET_ITEM(obj, i), limit);
+            limit = const_folding_check_complexity(PyTuple_GET_VALUE(obj, i), limit);
             if (limit < 0) {
                 return limit;
             }
@@ -1826,7 +1854,8 @@ const_folding_safe_multiply(PyObject *v, PyObject *w)
             if (n < 0 || n > MAX_COLLECTION_SIZE / size) {
                 return NULL;
             }
-            if (n && const_folding_check_complexity(w, MAX_TOTAL_ITEMS / n) < 0) {
+            if (n && const_folding_check_complexity(
+                    PyValue_FromObjectBorrow(w), MAX_TOTAL_ITEMS / n) < 0) {
                 return NULL;
             }
         }
@@ -3351,9 +3380,11 @@ remove_unused_consts(basicblock *entryblock, PyObject *consts)
         Py_ssize_t old_index = index_map[i];
         assert(i <= old_index && old_index < nconsts);
         if (i != old_index) {
-            PyObject *value = PyList_GET_ITEM(consts, index_map[i]);
-            assert(value != NULL);
-            PyList_SetItem(consts, i, Py_NewRef(value));
+            PyValue value = PyList_GetValue(consts, index_map[i]);
+            if (PyValue_IsNull(value) ||
+                _PyList_SetItemTakeValue((PyListObject *)consts, i, value) < 0) {
+                goto end;
+            }
         }
     }
 
@@ -3889,18 +3920,18 @@ _PyCfg_OptimizeCodeUnit(cfg_builder *g, PyObject *consts, PyObject *const_cache,
     /** Optimization **/
 
     _Py_hashtable_t *consts_index = _Py_hashtable_new(
-        _Py_hashtable_hash_ptr, _Py_hashtable_compare_direct);
+        const_index_hash, _Py_hashtable_compare_direct);
     if (consts_index == NULL) {
         PyErr_NoMemory();
         return ERROR;
     }
 
     for (Py_ssize_t i = 0; i < PyList_GET_SIZE(consts); i++) {
-        PyObject *item = PyList_GET_ITEM(consts, i);
-        if (_Py_hashtable_get_entry(consts_index, (void *)item) != NULL) {
+        void *key = const_index_key(PyList_GET_VALUE(consts, i));
+        if (_Py_hashtable_get_entry(consts_index, key) != NULL) {
             continue;
         }
-        if (_Py_hashtable_set(consts_index, (void *)item,
+        if (_Py_hashtable_set(consts_index, key,
                               (void *)(uintptr_t)i) < 0) {
             _Py_hashtable_destroy(consts_index);
             PyErr_NoMemory();
@@ -3938,37 +3969,70 @@ build_cellfixedoffsets(_PyCompile_CodeUnitMetadata *umd)
         PyErr_NoMemory();
         return NULL;
     }
+    PyValue key = PyValue_NULL, cellindex = PyValue_NULL, varindex = PyValue_NULL;
+    if (PyDict_GET_SIZE(umd->u_varnames) != nlocals ||
+        PyDict_GET_SIZE(umd->u_cellvars) != ncellvars ||
+        PyDict_GET_SIZE(umd->u_freevars) != nfreevars)
+    {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "compiler variables changed during offsets allocation");
+        goto error;
+    }
     for (int i = 0; i < noffsets; i++) {
         fixed[i] = nlocals + i;
     }
 
-    PyObject *varname, *cellindex;
     Py_ssize_t pos = 0;
-    while (PyDict_Next(umd->u_cellvars, &pos, &varname, &cellindex)) {
-        PyObject *varindex;
-        if (PyDict_GetItemRef(umd->u_varnames, varname, &varindex) < 0) {
+    int status;
+    while ((status = _PyDict_NextValue(umd->u_cellvars, &pos,
+                                      &key, &cellindex, NULL)) > 0) {
+        assert(PyValue_IsObject(key));
+        assert(PyUnicode_CheckExact(PyValue_AsPyObjectBorrow(key)));
+        if (PyDict_GetValue(umd->u_varnames, key, &varindex) < 0) {
             goto error;
         }
-        if (varindex == NULL) {
+        if (PyValue_IsNull(varindex)) {
+            PyValue_CLEAR(key);
+            PyValue_CLEAR(cellindex);
             continue;
         }
 
-        int argoffset = PyLong_AsInt(varindex);
-        Py_DECREF(varindex);
+        assert(PyValue_LongCheckExact(varindex));
+        int argoffset = PyValue_IsInlineInt(varindex) ? PyValue_InlineInt(varindex) :
+                        PyLong_AsInt(PyValue_AsPyObjectBorrow(varindex));
         if (argoffset == -1 && PyErr_Occurred()) {
             goto error;
         }
 
-        int oldindex = PyLong_AsInt(cellindex);
+        assert(PyValue_LongCheckExact(cellindex));
+        int oldindex = PyValue_IsInlineInt(cellindex) ? PyValue_InlineInt(cellindex) :
+                       PyLong_AsInt(PyValue_AsPyObjectBorrow(cellindex));
         if (oldindex == -1 && PyErr_Occurred()) {
             goto error;
         }
+        if (argoffset < 0 || argoffset >= nlocals ||
+            oldindex < 0 || oldindex >= ncellvars)
+        {
+            PyErr_SetString(PyExc_SystemError, "invalid compiler cell offset");
+            goto error;
+        }
         fixed[oldindex] = argoffset;
+        PyValue_CLEAR(key);
+        PyValue_CLEAR(cellindex);
+        PyValue_CLEAR(varindex);
+    }
+    if (status < 0) {
+        goto error;
     }
     return fixed;
 
-error:
+error:;
+    PyObject *saved = PyErr_GetRaisedException();
+    PyValue_XCLOSE(key);
+    PyValue_XCLOSE(cellindex);
+    PyValue_XCLOSE(varindex);
     PyMem_Free(fixed);
+    _PyValue_RestoreException(saved);
     return NULL;
 }
 

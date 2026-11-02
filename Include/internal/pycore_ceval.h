@@ -15,6 +15,7 @@ extern "C" {
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_stats.h"         // EVAL_CALL_STAT_INC()
 #include "pycore_typedefs.h"      // _PyInterpreterFrame
+#include "pycore_value.h"         // _PyValueTemps
 
 
 /* Forward declarations */
@@ -306,7 +307,8 @@ PyAPI_FUNC(PyObject **) _PyObjectArray_FromValueArray(PyValue *input, Py_ssize_t
 PyAPI_FUNC(void) _PyObjectArray_Free(PyObject **array, PyObject **scratch, Py_ssize_t nargs);
 
 PyAPI_FUNC(PyObject *) _PyEval_GetANext(PyObject *aiter);
-PyAPI_FUNC(void) _PyEval_LoadGlobalValue(PyObject *globals, PyObject *builtins, PyObject *name, PyValue *writeto);
+PyAPI_FUNC(void) _PyEval_LoadGlobalValue(PyObject *globals, PyObject *builtins,
+    PyObject *name, PyValue *writeto, _PyValueTemps *temps);
 PyAPI_FUNC(PyObject *) _PyEval_GetAwaitable(PyObject *iterable, int oparg);
 PyAPI_FUNC(PyObject *) _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *name);
 PyAPI_FUNC(int)
@@ -457,10 +459,6 @@ _Py_BuildMap_ValueSteal(
     PyValue *arguments,
     int half_args);
 
-PyAPI_FUNC(PyValue)
-_Py_LoadAttr_ValueSteal(
-    PyThreadState *tstate, PyValue owner,
-    PyObject *name, PyValue *self_or_null);
 
 // Like PyMapping_GetOptionalItem, but returns the PyObject* instead of taking
 // it as an out parameter. This helps MSVC's escape analysis when used with

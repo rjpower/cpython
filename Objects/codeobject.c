@@ -12,10 +12,11 @@
 #include "pycore_opcode_utils.h"  // RESUME_AT_FUNC_START
 #include "pycore_pymem.h"         // _PyMem_FreeDelayed()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
-#include "pycore_setobject.h"     // _PySet_NextEntry()
+#include "pycore_setobject.h"     // _PySet_NextValue()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_InternImmortal()
 #include "pycore_uniqueid.h"      // _PyObject_AssignUniqueId()
+#include "pycore_value.h"         // _PyCode_ConstantValueKey()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
 #include "clinic/codeobject.c.h"
@@ -177,6 +178,30 @@ should_immortalize_constant(PyObject *v)
 }
 #endif
 
+/* Interning changes representatives, never typed equality or hash, including
+ * for tuples already shared with callers or used as dictionary keys. */
+static void
+replace_equivalent_constant(PyObject *tuple, Py_ssize_t index, PyValue value)
+{
+    PyValue old = ((PyTupleObject *)tuple)->ob_item[index];
+    ((PyTupleObject *)tuple)->ob_item[index] = value;
+    PyValue_CLOSE(old);
+}
+
+static int
+validate_code_name_tuple(PyObject *tuple)
+{
+    for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(tuple); i++) {
+        PyValue value = PyTuple_GET_VALUE(tuple, i);
+        if (!PyValue_IsObject(value) ||
+            !PyUnicode_CheckExact(PyValue_AsPyObjectBorrow(value))) {
+            PyErr_SetString(PyExc_SystemError, "non-string found in code slot");
+            return -1;
+        }
+    }
+    return 0;
+}
+
 static int
 intern_strings(PyObject *tuple)
 {
@@ -184,13 +209,17 @@ intern_strings(PyObject *tuple)
     Py_ssize_t i;
 
     for (i = PyTuple_GET_SIZE(tuple); --i >= 0; ) {
-        PyObject *v = PyTuple_GET_ITEM(tuple, i);
-        if (v == NULL || !PyUnicode_CheckExact(v)) {
+        PyValue value = PyTuple_GetValue(tuple, i);
+        if (!PyValue_IsObject(value) ||
+            !PyUnicode_CheckExact(PyValue_AsPyObjectBorrow(value))) {
+            PyValue_XCLOSE(value);
             PyErr_SetString(PyExc_SystemError,
                             "non-string found in code slot");
             return -1;
         }
-        _PyUnicode_InternImmortal(interp, &_PyTuple_ITEMS(tuple)[i]);
+        PyObject *v = PyValue_AsPyObjectSteal(value);
+        _PyUnicode_InternImmortal(interp, &v);
+        replace_equivalent_constant(tuple, i, PyValue_FromPyObjectSteal(v));
     }
     return 0;
 }
@@ -203,44 +232,84 @@ intern_constants(PyObject *tuple, int *modified)
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
     for (Py_ssize_t i = PyTuple_GET_SIZE(tuple); --i >= 0; ) {
-        PyObject *v = PyTuple_GET_ITEM(tuple, i);
+        PyValue held = PyTuple_GetValue(tuple, i);
+        if (PyValue_IsNull(held)) {
+            PyErr_SetString(PyExc_SystemError, "absent value in code constants");
+            return -1;
+        }
+        if (!PyValue_IsObject(held)) {
+            PyValue_CLOSE(held);
+            continue;
+        }
+        PyObject *v = PyValue_AsPyObjectBorrow(held);
         if (PyUnicode_CheckExact(v)) {
             if (_PyCode_ShouldInternString(v)) {
-                PyObject *w = v;
+                PyObject *w = Py_NewRef(v);
+                v = w;
                 _PyUnicode_InternMortal(interp, &v);
                 if (w != v) {
-                    PyTuple_SET_ITEM(tuple, i, v);
+                    replace_equivalent_constant(tuple, i,
+                                                PyValue_FromPyObjectSteal(v));
                     if (modified) {
                         *modified = 1;
                     }
+                }
+                else {
+                    Py_DECREF(v);
                 }
             }
         }
         else if (PyTuple_CheckExact(v)) {
             if (intern_constants(v, NULL) < 0) {
+                PyValue_CLOSE(held);
                 return -1;
             }
         }
         else if (PyFrozenSet_CheckExact(v)) {
-            PyObject *w = v;
-            PyObject *tmp = PySequence_Tuple(v);
+            PyObject *tmp = PyTuple_New(PySet_GET_SIZE(v));
             if (tmp == NULL) {
+                PyValue_CLOSE(held);
+                return -1;
+            }
+            Py_ssize_t pos = 0, index = 0;
+            PyValue item;
+            Py_hash_t hash;
+            int next;
+            while ((next = _PySet_NextValue(v, &pos, &item, &hash)) > 0) {
+                PyTuple_SET_VALUE(tmp, index++, item);
+            }
+            if (next < 0) {
+                Py_DECREF(tmp);
+                PyValue_CLOSE(held);
                 return -1;
             }
             int tmp_modified = 0;
             if (intern_constants(tmp, &tmp_modified) < 0) {
                 Py_DECREF(tmp);
+                PyValue_CLOSE(held);
                 return -1;
             }
             if (tmp_modified) {
-                v = PyFrozenSet_New(tmp);
+                v = PyFrozenSet_New(NULL);
+                if (v != NULL) {
+                    for (Py_ssize_t j = 0; j < PyTuple_GET_SIZE(tmp); j++) {
+                        PyValue item = PyTuple_GetValue(tmp, j);
+                        int status = PySet_AddValue(v, item);
+                        PyValue_CLOSE(item);
+                        if (status < 0) {
+                            Py_CLEAR(v);
+                            break;
+                        }
+                    }
+                }
                 if (v == NULL) {
                     Py_DECREF(tmp);
+                    PyValue_CLOSE(held);
                     return -1;
                 }
 
-                PyTuple_SET_ITEM(tuple, i, v);
-                Py_DECREF(w);
+                replace_equivalent_constant(tuple, i,
+                                            PyValue_FromPyObjectSteal(v));
                 if (modified) {
                     *modified = 1;
                 }
@@ -298,6 +367,7 @@ intern_constants(PyObject *tuple, int *modified)
             }
         }
 #endif
+        PyValue_CLOSE(held);
     }
     return 0;
 }
@@ -318,21 +388,24 @@ validate_and_copy_tuple(PyObject *tup)
         return NULL;
 
     for (i = 0; i < len; i++) {
-        item = PyTuple_GET_ITEM(tup, i);
-        if (PyUnicode_CheckExact(item)) {
-            Py_INCREF(item);
-        }
-        else if (!PyUnicode_Check(item)) {
+        PyValue value = PyTuple_GetValue(tup, i);
+        item = PyValue_IsObject(value) ? PyValue_AsPyObjectBorrow(value) : NULL;
+        if (item == NULL || !PyUnicode_Check(item)) {
             PyErr_Format(
                 PyExc_TypeError,
                 "name tuples must contain only "
                 "strings, not '%.500s'",
-                Py_TYPE(item)->tp_name);
+                PyValue_TYPE(value)->tp_name);
+            PyValue_CLOSE(value);
             Py_DECREF(newtuple);
             return NULL;
         }
+        if (PyUnicode_CheckExact(item)) {
+            item = PyValue_AsPyObjectSteal(value);
+        }
         else {
             item = _PyUnicode_Copy(item);
+            PyValue_CLOSE(value);
             if (item == NULL) {
                 Py_DECREF(newtuple);
                 return NULL;
@@ -433,7 +506,7 @@ get_localsplus_names(PyCodeObject *co, _PyLocals_Kind kind, int num)
             continue;
         }
         assert(index < num);
-        PyObject *name = PyTuple_GET_ITEM(co->co_localsplusnames, offset);
+        PyObject *name = _PyTuple_GET_OBJECT(co->co_localsplusnames, offset);
         PyTuple_SET_ITEM(names, index, Py_NewRef(name));
         index += 1;
     }
@@ -792,11 +865,11 @@ inline_const_fits(_PyIRWord word, PyObject *consts)
     if (index >= PyTuple_GET_SIZE(consts)) {
         return 0;
     }
-    PyObject *value = PyTuple_GET_ITEM(consts, index);
+    PyValue value = PyTuple_GET_VALUE(consts, index);
     if (IR_HANDLER(word) == LOAD_CONST_INLINE_INT) {
-        return _PyLong_CheckExactAndCompact(value);
+        return PyValue_IsInlineInt(value);
     }
-    return PyFloat_CheckExact(value) && !isnan(PyFloat_AS_DOUBLE(value));
+    return PyValue_IsInlineFloat(value);
 }
 
 /* Check the fields of words from outside the compiler and marshal that the
@@ -899,6 +972,12 @@ code_new_with_fbinit(
         return NULL;
     }
 
+    if (validate_code_name_tuple(varnames) < 0 ||
+        validate_code_name_tuple(cellvars) < 0 ||
+        validate_code_name_tuple(freevars) < 0) {
+        return NULL;
+    }
+
     // Extensions built for 2-byte code units, such as Cython's, pass zeroed
     // code that never runs and only spans the line table.  Pad it to whole
     // words, which are CACHE.
@@ -932,15 +1011,15 @@ code_new_with_fbinit(
     }
     int  offset = 0;
     for (int i = 0; i < nvarnames; i++, offset++) {
-        PyObject *name = PyTuple_GET_ITEM(varnames, i);
+        PyObject *name = _PyTuple_GET_OBJECT(varnames, i);
         _Py_set_localsplus_info(offset, name, CO_FAST_LOCAL,
                                localsplusnames, localspluskinds);
     }
     for (int i = 0; i < ncellvars; i++, offset++) {
-        PyObject *name = PyTuple_GET_ITEM(cellvars, i);
+        PyObject *name = _PyTuple_GET_OBJECT(cellvars, i);
         int argoffset = -1;
         for (int j = 0; j < nvarnames; j++) {
-            int cmp = PyUnicode_Compare(PyTuple_GET_ITEM(varnames, j),
+            int cmp = PyUnicode_Compare(_PyTuple_GET_OBJECT(varnames, j),
                                         name);
             assert(!PyErr_Occurred());
             if (cmp == 0) {
@@ -960,7 +1039,7 @@ code_new_with_fbinit(
                                localsplusnames, localspluskinds);
     }
     for (int i = 0; i < nfreevars; i++, offset++) {
-        PyObject *name = PyTuple_GET_ITEM(freevars, i);
+        PyObject *name = _PyTuple_GET_OBJECT(freevars, i);
         _Py_set_localsplus_info(offset, name, CO_FAST_FREE,
                                localsplusnames, localspluskinds);
     }
@@ -1894,7 +1973,7 @@ PyCode_GetFreevars(PyCodeObject *code)
 #define LOAD_ATTR_NAME_INDEX(oparg) ((oparg)>>1)
 
 #ifndef Py_DEBUG
-#define GETITEM(v, i) PyTuple_GET_ITEM((v), (i))
+#define GETITEM(v, i) _PyTuple_GET_OBJECT((v), (i))
 #else
 static inline PyObject *
 GETITEM(PyObject *v, Py_ssize_t i)
@@ -1902,8 +1981,7 @@ GETITEM(PyObject *v, Py_ssize_t i)
     assert(PyTuple_Check(v));
     assert(i >= 0);
     assert(i < PyTuple_GET_SIZE(v));
-    assert(PyTuple_GET_ITEM(v, i) != NULL);
-    return PyTuple_GET_ITEM(v, i);
+    return _PyTuple_GET_OBJECT(v, i);
 }
 #endif
 
@@ -2295,7 +2373,7 @@ code_returns_only_none(PyCodeObject *co)
     Py_ssize_t nconsts = PyTuple_Size(co->co_consts);
     int none_index = 0;
     for (; none_index < nconsts; none_index++) {
-        if (PyTuple_GET_ITEM(co->co_consts, none_index) == Py_None) {
+        if (PyValue_IsNone(PyTuple_GET_VALUE(co->co_consts, none_index))) {
             break;
         }
     }
@@ -3031,11 +3109,7 @@ static PyObject *
 code__varname_from_oparg_impl(PyCodeObject *self, int oparg)
 /*[clinic end generated code: output=1fd1130413184206 input=6ba7d6df0d566463]*/
 {
-    PyObject *name = PyTuple_GetItem(self->co_localsplusnames, oparg);
-    if (name == NULL) {
-        return NULL;
-    }
-    return Py_NewRef(name);
+    return PyTuple_GetItemRef(self->co_localsplusnames, oparg);
 }
 
 /* XXX code objects need to participate in GC? */
@@ -3103,167 +3177,163 @@ PyTypeObject PyCode_Type = {
  * other API
  ******************/
 
-PyObject*
-_PyCode_ConstantKey(PyObject *op)
+static PyValue
+constant_key_tuple(PyValue first, PyValue second, PyValue tag)
 {
-    PyObject *key;
+    /* The private array owns every element across tuple allocation. NULL1
+       selects a pair; a language None is the distinct negative-zero tag. */
+    PyValue items[3] = {PyValue_DUP(first), PyValue_DUP(second),
+                        PyValue_IsNull(tag) ? tag : PyValue_DUP(tag)};
+    Py_ssize_t count = PyValue_IsNull(tag) ? 2 : 3;
+    PyObject *tuple = _PyTuple_FromValueArray(items, count);
+    for (Py_ssize_t i = 0; i < count; i++) {
+        PyValue_CLOSE(items[i]);
+    }
+    return tuple == NULL ? PyValue_NULL : PyValue_FromPyObjectSteal(tuple);
+}
 
-    /* Py_None and Py_Ellipsis are singletons. */
-    if (op == Py_None || op == Py_Ellipsis
-       || PyLong_CheckExact(op)
-       || PyUnicode_CheckExact(op)
-          /* code_richcompare() uses _PyCode_ConstantKey() internally */
-       || PyCode_Check(op))
-    {
-        /* Objects of these types are always different from object of other
-         * type and from tuples. */
-        key = Py_NewRef(op);
+PyValue
+_PyCode_ConstantValueKey(PyValue constant)
+{
+    assert(PyValue_IsLanguageValue(constant));
+    PyValue value = PyValue_DUP(constant);
+    PyValue key = PyValue_NULL;
+    PyObject *op = PyValue_IsObject(value) ? PyValue_AsPyObjectBorrow(value) : NULL;
+
+    if (PyValue_IsInlineInt(value) ||
+        (op != NULL && (op == Py_None || op == Py_Ellipsis ||
+                        PyLong_CheckExact(op) || PyUnicode_CheckExact(op) ||
+                        PyCode_Check(op)))) {
+        return value;
     }
-    else if (PyBool_Check(op) || PyBytes_CheckExact(op)) {
-        /* Make booleans different from integers 0 and 1.
-         * Avoid BytesWarning from comparing bytes with strings. */
-        key = _PyTuple_FromPair((PyObject *)Py_TYPE(op), op);
+    if (op != NULL && (PyBool_Check(op) || PyBytes_CheckExact(op))) {
+        key = constant_key_tuple(PyValue_FromObjectBorrow((PyObject *)Py_TYPE(op)),
+                                 value, PyValue_NULL);
     }
-    else if (PyFloat_CheckExact(op)) {
-        double d = PyFloat_AS_DOUBLE(op);
-        /* all we need is to make the tuple different in either the 0.0
-         * or -0.0 case from all others, just to avoid the "coercion".
-         */
-        if (d == 0.0 && copysign(1.0, d) < 0.0)
-            key = PyTuple_Pack(3, Py_TYPE(op), op, Py_None);
-        else
-            key = _PyTuple_FromPair((PyObject *)Py_TYPE(op), op);
+    else if (PyValue_FloatCheckExact(value)) {
+        double d = PyValue_FloatValue(value);
+        PyValue tag = d == 0.0 && copysign(1.0, d) < 0.0
+                      ? PyValue_FromObjectBorrow(Py_None) : PyValue_NULL;
+        key = constant_key_tuple(
+            PyValue_FromObjectBorrow((PyObject *)&PyFloat_Type), value, tag);
     }
     else if (PyComplex_CheckExact(op)) {
-        Py_complex z;
-        int real_negzero, imag_negzero;
-        /* For the complex case we must make complex(x, 0.)
-           different from complex(x, -0.) and complex(0., y)
-           different from complex(-0., y), for any x and y.
-           All four complex zeros must be distinguished.*/
-        z = PyComplex_AsCComplex(op);
-        real_negzero = z.real == 0.0 && copysign(1.0, z.real) < 0.0;
-        imag_negzero = z.imag == 0.0 && copysign(1.0, z.imag) < 0.0;
-        /* use True, False and None singleton as tags for the real and imag
-         * sign, to make tuples different */
-        if (real_negzero && imag_negzero) {
-            key = PyTuple_Pack(3, Py_TYPE(op), op, Py_True);
+        Py_complex z = PyComplex_AsCComplex(op);
+        bool real_negative = z.real == 0.0 && copysign(1.0, z.real) < 0.0;
+        bool imag_negative = z.imag == 0.0 && copysign(1.0, z.imag) < 0.0;
+        PyValue tag = PyValue_NULL;
+        if (real_negative && imag_negative) {
+            tag = PyValue_FromObjectBorrow(Py_True);
         }
-        else if (imag_negzero) {
-            key = PyTuple_Pack(3, Py_TYPE(op), op, Py_False);
+        else if (imag_negative) {
+            tag = PyValue_FromObjectBorrow(Py_False);
         }
-        else if (real_negzero) {
-            key = PyTuple_Pack(3, Py_TYPE(op), op, Py_None);
+        else if (real_negative) {
+            tag = PyValue_FromObjectBorrow(Py_None);
         }
-        else {
-            key = _PyTuple_FromPair((PyObject *)Py_TYPE(op), op);
-        }
+        key = constant_key_tuple(PyValue_FromObjectBorrow((PyObject *)Py_TYPE(op)),
+                                 value, tag);
     }
     else if (PyTuple_CheckExact(op)) {
-        Py_ssize_t i, len;
-        PyObject *tuple;
-
-        len = PyTuple_GET_SIZE(op);
-        tuple = PyTuple_New(len);
-        if (tuple == NULL)
-            return NULL;
-
-        for (i=0; i < len; i++) {
-            PyObject *item, *item_key;
-
-            item = PyTuple_GET_ITEM(op, i);
-            item_key = _PyCode_ConstantKey(item);
-            if (item_key == NULL) {
-                Py_DECREF(tuple);
-                return NULL;
-            }
-
-            PyTuple_SET_ITEM(tuple, i, item_key);
+        Py_ssize_t len = PyTuple_GET_SIZE(op);
+        PyObject *tuple = PyTuple_New(len);
+        if (tuple == NULL) {
+            goto done;
         }
-
-        key = _PyTuple_FromPair(tuple, op);
+        for (Py_ssize_t i = 0; i < len; i++) {
+            PyValue item = PyTuple_GetValue(op, i);
+            PyValue item_key = _PyCode_ConstantValueKey(item);
+            PyValue_CLOSE(item);
+            if (PyValue_IsNull(item_key)) {
+                Py_DECREF(tuple);
+                goto done;
+            }
+            PyTuple_SET_VALUE(tuple, i, item_key);
+        }
+        key = constant_key_tuple(PyValue_FromObjectBorrow(tuple), value,
+                                 PyValue_NULL);
         Py_DECREF(tuple);
     }
     else if (PyFrozenSet_CheckExact(op)) {
-        Py_ssize_t pos = 0;
-        PyObject *item;
-        Py_hash_t hash;
-        Py_ssize_t i, len;
-        PyObject *tuple, *set;
-
-        len = PySet_GET_SIZE(op);
-        tuple = PyTuple_New(len);
-        if (tuple == NULL)
-            return NULL;
-
-        i = 0;
-        while (_PySet_NextEntry(op, &pos, &item, &hash)) {
-            PyObject *item_key;
-
-            item_key = _PyCode_ConstantKey(item);
-            if (item_key == NULL) {
-                Py_DECREF(tuple);
-                return NULL;
-            }
-
-            assert(i < len);
-            PyTuple_SET_ITEM(tuple, i, item_key);
-            i++;
+        PyObject *set = PyFrozenSet_New(NULL);
+        if (set == NULL) {
+            goto done;
         }
-        set = PyFrozenSet_New(tuple);
-        Py_DECREF(tuple);
-        if (set == NULL)
-            return NULL;
-
-        key = _PyTuple_FromPair(set, op);
+        Py_ssize_t pos = 0;
+        PyValue item;
+        int status;
+        while ((status = _PySet_NextValue(op, &pos, &item, NULL)) > 0) {
+            PyValue item_key = _PyCode_ConstantValueKey(item);
+            PyValue_CLOSE(item);
+            if (PyValue_IsNull(item_key)) {
+                Py_DECREF(set);
+                goto done;
+            }
+            int added = PySet_AddValue(set, item_key);
+            PyValue_CLOSE(item_key);
+            if (added < 0) {
+                Py_DECREF(set);
+                goto done;
+            }
+        }
+        if (status < 0) {
+            Py_DECREF(set);
+            goto done;
+        }
+        key = constant_key_tuple(PyValue_FromObjectBorrow(set), value,
+                                 PyValue_NULL);
         Py_DECREF(set);
-        return key;
     }
     else if (PySlice_Check(op)) {
         PySliceObject *slice = (PySliceObject *)op;
-        PyObject *start_key = NULL;
-        PyObject *stop_key = NULL;
-        PyObject *step_key = NULL;
-        key = NULL;
-
-        start_key = _PyCode_ConstantKey(slice->start);
-        if (start_key == NULL) {
-            goto slice_exit;
+        PyValue keys[3] = {PyValue_NULL, PyValue_NULL, PyValue_NULL};
+        PyObject *items[3] = {NULL, NULL, NULL};
+        PyObject *fields[3] = {slice->start, slice->stop, slice->step};
+        for (int i = 0; i < 3; i++) {
+            keys[i] = _PyCode_ConstantValueKey(PyValue_FromObjectBorrow(fields[i]));
+            if (PyValue_IsNull(keys[i])) {
+                goto slice_done;
+            }
+            items[i] = PyValue_AsObject(keys[i]);
+            if (items[i] == NULL) {
+                goto slice_done;
+            }
         }
-
-        stop_key = _PyCode_ConstantKey(slice->stop);
-        if (stop_key == NULL) {
-            goto slice_exit;
+        PyObject *slice_key = PySlice_New(items[0], items[1], items[2]);
+        if (slice_key != NULL) {
+            key = constant_key_tuple(PyValue_FromObjectBorrow(slice_key), value,
+                                     PyValue_NULL);
+            Py_DECREF(slice_key);
         }
-
-        step_key = _PyCode_ConstantKey(slice->step);
-        if (step_key == NULL) {
-            goto slice_exit;
+slice_done:
+        for (int i = 0; i < 3; i++) {
+            Py_XDECREF(items[i]);
+            PyValue_XCLOSE(keys[i]);
         }
-
-        PyObject *slice_key = PySlice_New(start_key, stop_key, step_key);
-        if (slice_key == NULL) {
-            goto slice_exit;
-        }
-
-        key = _PyTuple_FromPair(slice_key, op);
-        Py_DECREF(slice_key);
-    slice_exit:
-        Py_XDECREF(start_key);
-        Py_XDECREF(stop_key);
-        Py_XDECREF(step_key);
     }
     else {
-        /* for other types, use the object identifier as a unique identifier
-         * to ensure that they are seen as unequal. */
         PyObject *obj_id = PyLong_FromVoidPtr(op);
-        if (obj_id == NULL)
-            return NULL;
-
-        key = _PyTuple_FromPair(obj_id, op);
-        Py_DECREF(obj_id);
+        if (obj_id != NULL) {
+            key = constant_key_tuple(PyValue_FromObjectBorrow(obj_id), value,
+                                     PyValue_NULL);
+            Py_DECREF(obj_id);
+        }
     }
+done:
+    PyValue_CLOSE(value);
     return key;
+}
+
+PyObject *
+_PyCode_ConstantKey(PyObject *op)
+{
+    PyValue key = _PyCode_ConstantValueKey(PyValue_FromObjectBorrow(op));
+    if (PyValue_IsNull(key)) {
+        return NULL;
+    }
+    PyObject *result = PyValue_AsObject(key);
+    PyValue_CLOSE(key);
+    return result;
 }
 
 #ifdef Py_GIL_DISABLED

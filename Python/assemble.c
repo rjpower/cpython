@@ -1,6 +1,7 @@
 #include "Python.h"
 #include "pycore_code.h"            // write_location_entry_start()
 #include "pycore_compile.h"
+#include "pycore_dict.h"          // _PyDict_NextValue()
 #include "pycore_flowgraph.h"
 #include "pycore_ir.h"                // IR_WORD()
 #include "pycore_long.h"              // _PyLong_CheckExactAndCompact()
@@ -374,23 +375,56 @@ assemble_emit(struct assembler *a, _PyRegCfg *cfg, int first_lineno,
 static PyObject *
 dict_keys_inorder(PyObject *dict, Py_ssize_t offset)
 {
-    PyObject *tuple, *k, *v;
+    PyObject *tuple;
+    PyValue key = PyValue_NULL, value = PyValue_NULL;
     Py_ssize_t pos = 0, size = PyDict_GET_SIZE(dict);
 
     tuple = PyTuple_New(size);
     if (tuple == NULL)
         return NULL;
-    while (PyDict_Next(dict, &pos, &k, &v)) {
-        Py_ssize_t i = PyLong_AsSsize_t(v);
+    if (PyDict_GET_SIZE(dict) != size) {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "compiler names changed during tuple allocation");
+        goto error;
+    }
+    Py_ssize_t count = 0;
+    int status;
+    while ((status = _PyDict_NextValue(dict, &pos, &key, &value, NULL)) > 0) {
+        assert(PyValue_IsObject(key));
+        assert(PyUnicode_CheckExact(PyValue_AsPyObjectBorrow(key)));
+        assert(PyValue_LongCheckExact(value));
+        Py_ssize_t i = PyValue_IsInlineInt(value) ? PyValue_InlineInt(value) :
+                       PyLong_AsSsize_t(PyValue_AsPyObjectBorrow(value));
         if (i == -1 && PyErr_Occurred()) {
-            Py_DECREF(tuple);
-            return NULL;
+            goto error;
         }
-        assert((i - offset) < size);
-        assert((i - offset) >= 0);
-        PyTuple_SET_ITEM(tuple, i - offset, Py_NewRef(k));
+        if (i < offset || i - offset >= size ||
+            !PyValue_IsNull(PyTuple_GET_VALUE(tuple, i - offset)))
+        {
+            PyErr_SetString(PyExc_SystemError, "invalid compiler name index");
+            goto error;
+        }
+        PyTuple_SET_VALUE(tuple, i - offset, key);
+        key = PyValue_NULL;
+        PyValue_CLEAR(value);
+        count++;
+    }
+    if (status < 0) {
+        goto error;
+    }
+    if (count != size) {
+        PyErr_SetString(PyExc_RuntimeError, "compiler names changed during iteration");
+        goto error;
     }
     return tuple;
+
+error:;
+    PyObject *saved = PyErr_GetRaisedException();
+    PyValue_XCLOSE(key);
+    PyValue_XCLOSE(value);
+    Py_DECREF(tuple);
+    _PyValue_RestoreException(saved);
+    return NULL;
 }
 
 // This is in codeobject.c.
@@ -401,7 +435,8 @@ static int
 compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
                         int flags, PyObject *names, PyObject *kinds)
 {
-    PyObject *k, *v;
+    PyValue key = PyValue_NULL, value = PyValue_NULL;
+    int status = 0;
     Py_ssize_t pos = 0;
 
     // Set the locals kinds.  Arg vars fill the first portion of the list.
@@ -421,31 +456,49 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
         max = argvarkinds[i].count < 0
             ? INT_MAX
             : max + argvarkinds[i].count;
-        while (pos < max && PyDict_Next(umd->u_varnames, &pos, &k, &v)) {
-            int offset = PyLong_AsInt(v);
+        while (pos < max &&
+               (status = _PyDict_NextValue(umd->u_varnames, &pos,
+                                            &key, &value, NULL)) > 0) {
+            assert(PyValue_IsObject(key));
+            assert(PyUnicode_CheckExact(PyValue_AsPyObjectBorrow(key)));
+            assert(PyValue_LongCheckExact(value));
+            PyObject *k = PyValue_AsPyObjectBorrow(key);
+            int offset = PyValue_IsInlineInt(value) ? PyValue_InlineInt(value) :
+                         PyLong_AsInt(PyValue_AsPyObjectBorrow(value));
             if (offset == -1 && PyErr_Occurred()) {
-                return ERROR;
+                goto error;
             }
-            assert(offset >= 0);
-            assert(offset < nlocalsplus);
+            if (offset < 0 || offset >= nlocalsplus) {
+                PyErr_SetString(PyExc_SystemError, "invalid local variable index");
+                goto error;
+            }
 
             _PyLocals_Kind kind = CO_FAST_LOCAL | argvarkinds[i].kind;
 
             if (umd->u_fasthidden != NULL) {
                 int hidden = PySet_Contains(umd->u_fasthidden, k);
-                RETURN_IF_ERROR(hidden);
+                if (hidden < 0) {
+                    goto error;
+                }
                 if (hidden) {
                     kind |= CO_FAST_HIDDEN;
                 }
             }
 
             int has_key = PyDict_Contains(umd->u_cellvars, k);
-            RETURN_IF_ERROR(has_key);
+            if (has_key < 0) {
+                goto error;
+            }
             if (has_key) {
                 kind |= CO_FAST_CELL;
             }
 
             _Py_set_localsplus_info(offset, k, kind, names, kinds);
+            PyValue_CLEAR(key);
+            PyValue_CLEAR(value);
+        }
+        if (status < 0) {
+            goto error;
         }
     }
     int nlocals = (int)PyDict_GET_SIZE(umd->u_varnames);
@@ -453,32 +506,59 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
     // This counter mirrors the fix done in fix_cell_offsets().
     int numdropped = 0, cellvar_offset = -1;
     pos = 0;
-    while (PyDict_Next(umd->u_cellvars, &pos, &k, &v)) {
+    while ((status = _PyDict_NextValue(umd->u_cellvars, &pos,
+                                      &key, &value, NULL)) > 0) {
+        assert(PyValue_IsObject(key));
+        assert(PyUnicode_CheckExact(PyValue_AsPyObjectBorrow(key)));
+        assert(PyValue_LongCheckExact(value));
+        PyObject *k = PyValue_AsPyObjectBorrow(key);
         int has_name = PyDict_Contains(umd->u_varnames, k);
-        RETURN_IF_ERROR(has_name);
+        if (has_name < 0) {
+            goto error;
+        }
         if (has_name) {
             // Skip cells that are already covered by locals.
             numdropped += 1;
+            PyValue_CLEAR(key);
+            PyValue_CLEAR(value);
             continue;
         }
 
-        cellvar_offset = PyLong_AsInt(v);
+        cellvar_offset = PyValue_IsInlineInt(value) ? PyValue_InlineInt(value) :
+                         PyLong_AsInt(PyValue_AsPyObjectBorrow(value));
         if (cellvar_offset == -1 && PyErr_Occurred()) {
-            return ERROR;
+            goto error;
         }
-        assert(cellvar_offset >= 0);
+        if (cellvar_offset < 0 || cellvar_offset >= nlocalsplus - nlocals + numdropped) {
+            PyErr_SetString(PyExc_SystemError, "invalid cell variable index");
+            goto error;
+        }
         cellvar_offset += nlocals - numdropped;
         assert(cellvar_offset < nlocalsplus);
         _Py_set_localsplus_info(cellvar_offset, k, CO_FAST_CELL, names, kinds);
+        PyValue_CLEAR(key);
+        PyValue_CLEAR(value);
+    }
+    if (status < 0) {
+        goto error;
     }
 
     pos = 0;
-    while (PyDict_Next(umd->u_freevars, &pos, &k, &v)) {
-        int offset = PyLong_AsInt(v);
+    while ((status = _PyDict_NextValue(umd->u_freevars, &pos,
+                                      &key, &value, NULL)) > 0) {
+        assert(PyValue_IsObject(key));
+        assert(PyUnicode_CheckExact(PyValue_AsPyObjectBorrow(key)));
+        assert(PyValue_LongCheckExact(value));
+        PyObject *k = PyValue_AsPyObjectBorrow(key);
+        int offset = PyValue_IsInlineInt(value) ? PyValue_InlineInt(value) :
+                     PyLong_AsInt(PyValue_AsPyObjectBorrow(value));
         if (offset == -1 && PyErr_Occurred()) {
-            return ERROR;
+            goto error;
         }
-        assert(offset >= 0);
+        if (offset < 0 || offset >= nlocalsplus - nlocals + numdropped) {
+            PyErr_SetString(PyExc_SystemError, "invalid free variable index");
+            goto error;
+        }
         offset += nlocals - numdropped;
         assert(offset < nlocalsplus);
         /* XXX If the assertion below fails it is most likely because a freevar
@@ -486,8 +566,17 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
            account cellvars already present, see gh-128632. */
         assert(offset > cellvar_offset);
         _Py_set_localsplus_info(offset, k, CO_FAST_FREE, names, kinds);
+        PyValue_CLEAR(key);
+        PyValue_CLEAR(value);
     }
-    return SUCCESS;
+    return status < 0 ? ERROR : SUCCESS;
+
+error:;
+    PyObject *saved = PyErr_GetRaisedException();
+    PyValue_XCLOSE(key);
+    PyValue_XCLOSE(value);
+    _PyValue_RestoreException(saved);
+    return ERROR;
 }
 
 static PyCodeObject *

@@ -21,13 +21,46 @@ PyAPI_FUNC(PyValue) _PyValue_Prepare(PyValue source, PyObject **retired);
 
 /* A handler's private scalar object bridges. The generated bound counts its
  * fixed scalar input/output occurrences; variable windows use owned object
- * arrays or publish each transferred element directly. No arbitrary object
- * lifetime is extended by this record. */
-typedef struct {
+ * arrays or publish each transferred element directly. One displaced local
+ * owner may wait only through final pure publication, then is appended last
+ * so LIFO cleanup retires it before the private scalar bridges. */
+typedef struct _PyValueTemps {
     PyObject **objects;
     Py_ssize_t count;
     Py_ssize_t capacity;
+    PyObject *pending_local;
 } _PyValueTemps;
+
+static inline int
+_PyValue_MayDealloc(PyValue owner)
+{
+    if (PyValue_IsObject(owner) && (owner.bits & 1) == 0) {
+        return Py_REFCNT((PyObject *)owner.bits) == 1;
+    }
+    return 0;
+}
+
+static inline void
+_PyValueTemps_RetireLocal(_PyValueTemps *temps, PyValue owner)
+{
+    if (_PyValue_MayDealloc(owner)) {
+        assert(temps != NULL && temps->pending_local == NULL);
+        temps->pending_local = (PyObject *)owner.bits;
+        return;
+    }
+    /* Scalars, borrows, immortals and non-last owners cannot deallocate. */
+    PyValue_Close(owner);
+}
+
+static inline void
+_PyValueTemps_CommitLocal(_PyValueTemps *temps)
+{
+    if (temps->pending_local != NULL) {
+        assert(temps->count < temps->capacity);
+        temps->objects[temps->count++] = temps->pending_local;
+        temps->pending_local = NULL;
+    }
+}
 
 PyAPI_FUNC(PyValue) _PyValueTemps_PublishObject(
     _PyValueTemps *temps, PyValue *source);
@@ -47,6 +80,7 @@ _PyValueTemps_Object(_PyValueTemps *temps, PyValue value)
 static inline int
 _PyValueTemps_Close(_PyValueTemps *temps)
 {
+    assert(temps == NULL || temps->pending_local == NULL);
     return temps != NULL && temps->count != 0
         ? _PyValueTemps_CloseNonempty(temps) : 0;
 }

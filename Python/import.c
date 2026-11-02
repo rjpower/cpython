@@ -4159,6 +4159,11 @@ lazy_modules_add(PyThreadState *tstate, PyObject *name,
             PyObject *initializing = NULL;
             if ((Py_TYPE(spec)->tp_flags & Py_TPFLAGS_INLINE_VALUES) &&
                 _PyObject_TryGetInstanceAttribute(spec, &_Py_ID(_initializing), &initializing)) {
+                if (initializing == NULL && PyErr_Occurred()) {
+                    Py_DECREF(spec);
+                    Py_DECREF(mod);
+                    return -1;
+                }
                 loaded = initializing == NULL || initializing == Py_False;
             }
             Py_XDECREF(initializing);

@@ -524,11 +524,19 @@ def has_error_with_pop(op: parser.CodeDef) -> bool:
 def has_error_without_pop(op: parser.CodeDef) -> bool:
     return (
         variable_used(op, "ERROR_NO_POP")
+        or variable_used(op, "IR_RETIRE_PUBLISHED")
+        or variable_used(op, "IR_RETIRE_PUBLISHED_PAIR")
+        or variable_used(op, "IR_FINISH_VALUE_OPERATION")
+        or variable_used(op, "IR_ABORT_VALUE_READER")
+        or variable_used(op, "IR_COMPLETE_VALUE_READER")
+        or variable_used(op, "IR_COMPLETE_ATTR_READER")
         or variable_used(op, "exception_unwind")
     )
 
 
 NON_ESCAPING_FUNCTIONS = (
+    "native_vector_capture",
+    "_PyShape_FindTransition",
     "PyCFunction_GET_FLAGS",
     "PyCFunction_GET_FUNCTION",
     "PyCFunction_GET_SELF",

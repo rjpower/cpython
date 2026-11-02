@@ -522,6 +522,7 @@ PYTHON_OBJS=	\
 		Python/slots.o \
 		Python/slots_generated.o \
 		Python/pyvalue.o \
+		Python/native_scope.o \
 		Python/structmember.o \
 		Python/symtable.o \
 		Python/sysmodule.o \
@@ -2205,6 +2206,7 @@ Python/compile.o Python/codegen.o Python/assemble.o Python/flowgraph.o Python/in
                 $(srcdir)/Include/internal/pycore_regcfg.h
 
 Python/ceval.o: \
+		$(srcdir)/Include/internal/pycore_native_scope.h \
 		$(srcdir)/Python/generated_jit_helpers.c.h \
 		$(srcdir)/Include/internal/pycore_jit.h \
 		$(srcdir)/Python/ceval_macros.h \
@@ -2215,6 +2217,7 @@ Python/ceval.o: \
 		$(srcdir)/Include/internal/pycore_ir_metadata.h
 
 Python/jit_runtime.o Python/jit_baseline.o Python/jit_backend_x86.o: $(srcdir)/Include/internal/pycore_jit.h
+Python/native_scope.o Objects/methodobject.o Modules/_testinternalcapi/native_scope.o: $(srcdir)/Include/internal/pycore_native_scope.h
 Python/jit_backend_x86.o: $(srcdir)/Python/jit_x86.h
 Python/jit_runtime.o Python/jit_baseline.o Python/jit_backend_x86.o Python/jit_record.o Python/jit_ir.o Python/jit_regalloc.o: $(srcdir)/Include/internal/pycore_jit_ir.h
 

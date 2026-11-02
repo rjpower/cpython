@@ -92,6 +92,12 @@ _PyType_GetModuleState(PyTypeObject *type)
 // Export for 'math' shared extension, used via _PyType_IsReady() static inline
 // function
 PyAPI_FUNC(PyObject *) _PyType_GetDict(PyTypeObject *);
+/* Owned canonical MRO lookup without inserting into the object-only cache.
+ * Requires clear entry PyErr; an existing error is preserved and returns -1. */
+PyAPI_FUNC(int) _PyType_LookupValueUncached(PyTypeObject *, PyObject *, PyValue *);
+/* 1: eligible native lookup (NULL value means absent); 0: decline; -1: error. */
+PyAPI_FUNC(int) _PyType_TryLookupValueNoAlloc(
+    PyTypeObject *, PyObject *, PyValue *, unsigned int *);
 // Visit what a static type refers to; for the tracing verifier.
 extern int _PyType_TraverseStatic(PyTypeObject *, visitproc, void *);
 

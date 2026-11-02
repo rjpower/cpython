@@ -686,7 +686,7 @@ _PyValue_Truth(PyValue ref)
         if (IR_IS_LOCAL(F)) { \
             PyValue ir_old = IR_SLOT(F); \
             IR_SLOT(F) = _PyValueTemps_Publish(value_temps, &(V)); \
-            PyValue_XCLOSE(ir_old); \
+            _PyValueTemps_RetireLocal(value_temps, ir_old); \
         } \
         else { \
             assert(PyValue_IsNull(IR_SLOT(F)) \
@@ -714,7 +714,7 @@ _PyValue_Truth(PyValue ref)
             PyValue ir_old = IR_SLOT(F); \
             IR_SLOT(F) = _PyValueTemps_Publish(value_temps, &(SLOT)); \
             (SLOT) = PyValue_NULL; \
-            PyValue_XCLOSE(ir_old); \
+            _PyValueTemps_RetireLocal(value_temps, ir_old); \
         } \
     } while (0)
 

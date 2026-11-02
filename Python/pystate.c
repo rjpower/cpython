@@ -710,11 +710,16 @@ common_constants_clear(PyInterpreterState *interp)
         if (!common_const_is_initialized(ref)) {
             continue;
         }
-        PyObject *obj = PyValue_AsPyObjectBorrow(ref);
-        PyValue_XCLOSE(ref);
         interp->common_consts[i] = PyValue_NULL;
+        if (PyValue_IsInline(ref)) {
+            continue;
+        }
+        PyObject *obj = PyValue_AsPyObjectBorrow(ref);
+        assert(_Py_IsImmortal(obj));
+        int clear_immortal = !_Py_IsStaticImmortal(obj);
+        PyValue_XCLOSE(ref);
         // Refcount reclamation skips heap immortals; release manually.
-        if (_Py_IsImmortal(obj) && !_Py_IsStaticImmortal(obj)) {
+        if (clear_immortal) {
             _Py_ClearImmortal(obj);
         }
     }

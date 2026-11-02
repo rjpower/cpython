@@ -110,6 +110,7 @@ _PyValueTemps_Box(_PyValueTemps *temps, PyValue value)
 int
 _PyValueTemps_CloseNonempty(_PyValueTemps *temps)
 {
+    assert(temps == NULL || temps->pending_local == NULL);
     if (temps == NULL || temps->count == 0) {
         return PyErr_Occurred() ? -1 : 0;
     }

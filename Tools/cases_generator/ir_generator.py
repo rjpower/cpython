@@ -900,6 +900,9 @@ class IRStack(Stack):
         # Set by IR_WINDOW_TAKEN(): the handler disposed of its window, so
         # that the slots of the dead inputs stay as it left them.
         self.window_taken = False
+        # The selected generic attribute helper published temporary outputs
+        # before receiver retirement. Only a folded local remains to write.
+        self.published_temporary_result = False
 
     def copy(self) -> "IRStack":
         other = super().copy()
@@ -1018,7 +1021,11 @@ class IRStack(Stack):
         slot = self.out_slot(memory_offset)
         if lay.store_dst and p == lay.dst_offset:
             if self.final:
+                if self.published_temporary_result:
+                    out.emit(f"if (IR_IS_LOCAL({FIELD_VARS[lay.dst]})) {{\n")
                 out.emit(f"IR_STORE_DST({FIELD_VARS[lay.dst]}, {var.name});\n")
+                if self.published_temporary_result:
+                    out.emit("}\n")
                 return True
             # Before the end, dst gets the result only if it is a
             # temporary; a local gets it at the end, releasing its value.
@@ -1168,6 +1175,16 @@ class IREmitter(Emitter):
         self._replacers["IR_DST_SLOT"] = self.ir_dst_slot
         self._replacers["IR_BASE"] = self.ir_base
         self._replacers["IR_WINDOW_TAKEN"] = self.ir_window_taken
+        self._replacers["IR_RETIRE_PUBLISHED"] = self.retire_published
+        self._replacers["IR_RETIRE_PUBLISHED_PAIR"] = self.retire_published
+        self._replacers["IR_FINISH_VALUE_OPERATION"] = self.finish_value_operation
+        self._replacers["IR_CAPTURE_VALUE_INPUTS"] = self.capture_value_inputs
+        self._replacers["IR_RESTORE_VALUE_INPUTS"] = self.restore_value_inputs
+        self._replacers["IR_CAPTURE_VALUE_RESULT"] = self.capture_value_result
+        self._replacers["IR_COMPLETE_VALUE_READER"] = self.complete_value_reader
+        self._replacers["IR_ABORT_VALUE_READER"] = self.abort_value_reader
+        self._replacers["IR_RESTORE_ATTR_INPUT"] = self.restore_attr_input
+        self._replacers["IR_COMPLETE_ATTR_READER"] = self.complete_attr_reader
         # The storage at a deopt or exit being emitted
         self.deopt_storage: Storage | None = None
         # The format of the handler being emitted, which for a NOFB form
@@ -1178,6 +1195,220 @@ class IREmitter(Emitter):
         if self.handler_format is not None:
             return self.handler_format
         return self.formats[inst.name]
+
+    def sync_sp(self, tkn, tkn_iter, uop, storage, inst):
+        if inst is None or inst.name not in (
+                "LOAD_ATTR_SLOT", "LOAD_ATTR_INSTANCE_VALUE", "LOAD_ATTR_SHAPE",
+                "LOAD_ATTR_MODULE", "LOAD_ATTR_WITH_HINT"):
+            return super().sync_sp(tkn, tkn_iter, uop, storage, inst)
+        next(tkn_iter)
+        next(tkn_iter)
+        next(tkn_iter)
+        storage.clear_inputs("before published receiver retirement")
+        storage.flush(self.out)
+        # A folded local must keep its computed owning result in C until
+        # receiver retirement. Its old destination is still observable.
+        return True
+
+    def retire_published(self, tkn, tkn_iter, uop, storage, inst):
+        assert inst is not None
+        assert next(tkn_iter).kind == "LPAREN"
+        first = next(tkn_iter)
+        assert first.kind == "IDENTIFIER"
+        second = None
+        end = next(tkn_iter)
+        if end.kind == "COMMA":
+            second = next(tkn_iter)
+            assert second.kind == "IDENTIFIER"
+            end = next(tkn_iter)
+        assert end.kind == "RPAREN"
+        assert next(tkn_iter).kind == "SEMI"
+        storage.flush(self.out)
+        failure_result = "NULL"
+        if inst.name in ("LOAD_ATTR_SLOT", "LOAD_ATTR_INSTANCE_VALUE", "LOAD_ATTR_SHAPE",
+                         "LOAD_ATTR_MODULE", "LOAD_ATTR_WITH_HINT"):
+            fmt = self.format_of(inst)
+            dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
+            failure_result = f"(IR_IS_LOCAL({dst}) ? &attr : NULL)"
+        self.emit("{\n")
+        self.emit(f"int retire_needed = _PyValue_MayDealloc({first.text}) || value_temps->count != 0;\n")
+        self.emit("if (!retire_needed) {\n")
+        self.emit(f"PyValue_XCLOSE({first.text}); {first.text} = PyValue_NULL;\n")
+        if second is not None:
+            self.emit(f"retire_needed = _PyValue_MayDealloc({second.text});\n")
+        self.emit("}\n")
+        self.emit("if (retire_needed) {\n")
+        second_ptr = "NULL" if second is None else "&" + second.text
+        self.emit(f"int retire_failed = retire_published_values(tstate, frame, &next_instr, value_temps, &{first.text}, {second_ptr}, {failure_result});\n")
+        self.emit("if (retire_failed < 0) { JUMP_TO_LABEL(error); }\n")
+        self.emit("this_instr = frame->instr_ptr;\n")
+        if not self.helper:
+            self.emit("ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);\n")
+        self.emit("slots = _PyFrame_Slots(frame);\n")
+        if self.format_of(inst).window:
+            base = FIELD_VARS[self.format_of(inst).field_of(ROLE_BASE)]
+            self.emit(f"window = &IR_SLOT({base});\n")
+        self.emit("}\n")
+        if second is not None:
+            self.emit("else {\n")
+            self.emit(f"PyValue_XCLOSE({second.text}); {second.text} = PyValue_NULL;\n")
+            self.emit("}\n")
+        self.emit("}\n")
+        return True
+
+    def capture_value_inputs(self, tkn, tkn_iter, uop, storage, inst):
+        assert inst is not None
+        assert next(tkn_iter).kind == "LPAREN"
+        state = next(tkn_iter)
+        assert state.kind == "IDENTIFIER"
+        assert next(tkn_iter).kind == "RPAREN"
+        assert next(tkn_iter).kind == "SEMI"
+        fmt = self.format_of(inst)
+        assert fmt.n_inputs in (1, 2)
+        for index in range(fmt.n_inputs):
+            field = FIELD_VARS[fmt.input_field(index)]
+            self.emit(f"{state.text}.input_slots[{index}] = {field};\n")
+        return True
+
+    def restore_attr_input(self, tkn, tkn_iter, uop, storage, inst):
+        assert next(tkn_iter).kind == "LPAREN"
+        state = next(tkn_iter)
+        assert next(tkn_iter).kind == "COMMA"
+        owner = next(tkn_iter)
+        assert next(tkn_iter).kind == "RPAREN"
+        assert next(tkn_iter).kind == "SEMI"
+        self.out.start_line()
+        self.emit(f"(void)value_operation_restore1(&{state.text}, &{owner.text});\n")
+        return True
+
+    def complete_attr_reader(self, tkn, tkn_iter, uop, storage, inst):
+        assert next(tkn_iter).kind == "LPAREN"
+        names = []
+        for index in range(5):
+            name = next(tkn_iter)
+            assert name.kind == "IDENTIFIER"
+            names.append(name.text)
+            if index < 4:
+                assert next(tkn_iter).kind == "COMMA"
+        assert next(tkn_iter).kind == "RPAREN"
+        assert next(tkn_iter).kind == "SEMI"
+        state, result, self_value, receiver, method = names
+        self.out.start_line()
+        self.emit(f"if (value_attribute_complete(&{state}, &next_instr, value_temps, &{result}, &{self_value}, &{receiver}, {method}) < 0) {{\n")
+        self.reader_error()
+        self.emit("}\n")
+        self.reader_reload()
+        assert isinstance(storage.stack, IRStack)
+        storage.stack.published_temporary_result = True
+        return True
+
+    def restore_value_inputs(self, tkn, tkn_iter, uop, storage, inst):
+        assert inst is not None
+        assert next(tkn_iter).kind == "LPAREN"
+        names = []
+        for index in range(3):
+            name = next(tkn_iter)
+            assert name.kind == "IDENTIFIER"
+            names.append(name.text)
+            if index < 2:
+                assert next(tkn_iter).kind == "COMMA"
+        assert next(tkn_iter).kind == "RPAREN"
+        assert next(tkn_iter).kind == "SEMI"
+        self.out.start_line()
+        self.emit(f"(void)value_operation_restore2(&{names[0]}, &{names[1]}, &{names[2]});\n")
+        # Cleanup and forced finish follow even if restoration rejects the
+        # frame; it must not strand any of the still-owning C variables.
+        return True
+
+    def capture_value_result(self, tkn, tkn_iter, uop, storage, inst):
+        assert inst is not None
+        assert next(tkn_iter).kind == "LPAREN"
+        state = next(tkn_iter)
+        assert state.kind == "IDENTIFIER"
+        assert next(tkn_iter).kind == "RPAREN"
+        assert next(tkn_iter).kind == "SEMI"
+        field = FIELD_VARS[self.format_of(inst).field_of(ROLE_DST)]
+        self.emit(f"{state.text}.result_slot = {field};\n")
+        return True
+
+    def reader_error(self):
+        if self.helper:
+            self.emit("ctx->frame = frame; ctx->next_instr = next_instr;\n")
+            self.emit("ctx->raising_instr = frame->instr_ptr;\n")
+            self.emit("ctx->phase = _PyJIT_ERROR_LOG_PENDING;\n")
+            self.emit("return _PyJIT_RAISE;\n")
+        else:
+            self.emit("JUMP_TO_LABEL(error);\n")
+
+    def reader_reload(self):
+        self.emit("this_instr = frame->instr_ptr;\n")
+        if not self.helper:
+            self.emit("ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);\n")
+        self.emit("slots = _PyFrame_Slots(frame);\n")
+
+    def complete_value_reader(self, tkn, tkn_iter, uop, storage, inst):
+        assert next(tkn_iter).kind == "LPAREN"
+        names = []
+        for index in range(4):
+            name = next(tkn_iter)
+            assert name.kind == "IDENTIFIER"
+            names.append(name.text)
+            if index < 3:
+                assert next(tkn_iter).kind == "COMMA"
+        assert next(tkn_iter).kind == "RPAREN"
+        assert next(tkn_iter).kind == "SEMI"
+        state, result, first, second = names
+        # The DSL output is deliberately undefined here. Failed providers
+        # restored their inputs; no NULL result may overwrite those homes.
+        self.out.start_line()
+        self.emit(f"if (value_reader_complete(&{state}, &next_instr, value_temps, &{result}, &{first}, &{second}) < 0) {{\n")
+        self.reader_error()
+        self.emit("}\n")
+        self.reader_reload()
+        return True
+
+    def abort_value_reader(self, tkn, tkn_iter, uop, storage, inst):
+        assert next(tkn_iter).kind == "LPAREN"
+        state = next(tkn_iter)
+        assert state.kind == "IDENTIFIER"
+        assert next(tkn_iter).kind == "RPAREN"
+        assert next(tkn_iter).kind == "SEMI"
+        # Never flush the undefined result on this edge: its destination
+        # may be one of the just-restored input temporary homes.
+        self.emit(f"(void)value_operation_finish(&{state.text}, &next_instr, value_temps);\n")
+        self.reader_error()
+        return False
+
+    def finish_value_operation(self, tkn, tkn_iter, uop, storage, inst):
+        assert inst is not None
+        assert next(tkn_iter).kind == "LPAREN"
+        state = next(tkn_iter)
+        assert state.kind == "IDENTIFIER"
+        assert next(tkn_iter).kind == "RPAREN"
+        assert next(tkn_iter).kind == "SEMI"
+        storage.flush(self.out)
+        self.emit("{\n")
+        self.emit(f"int operation_failed = value_operation_finish(&{state.text}, &next_instr, value_temps);\n")
+        self.emit("if (operation_failed < 0) {\n")
+        if self.helper:
+            # The current word was refreshed without decoding an old pointer.
+            # Avoid JIT_FINISH's subtraction from its pre-operation this_instr.
+            self.emit("ctx->frame = frame; ctx->next_instr = next_instr;\n")
+            self.emit("ctx->raising_instr = frame->instr_ptr;\n")
+            self.emit("ctx->phase = _PyJIT_ERROR_LOG_PENDING;\n")
+            self.emit("return _PyJIT_RAISE;\n")
+        else:
+            self.emit("JUMP_TO_LABEL(error);\n")
+        self.emit("}\n")
+        self.emit("this_instr = frame->instr_ptr;\n")
+        if not self.helper:
+            self.emit("ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);\n")
+        self.emit("slots = _PyFrame_Slots(frame);\n")
+        if self.format_of(inst).window:
+            base = FIELD_VARS[self.format_of(inst).field_of(ROLE_BASE)]
+            self.emit(f"window = &IR_SLOT({base});\n")
+        self.emit("}\n")
+        return True
 
     def deopt_if(
         self,
@@ -1306,7 +1537,11 @@ class IREmitter(Emitter):
     ) -> bool:
         assert isinstance(storage.stack, IRStack)
         storage.stack.final = True
-        return super().dispatch(tkn, tkn_iter, uop, storage, inst)
+        storage.stack.flush(self.out)
+        if inst is not None and self.format_of(inst).store_dst:
+            self.emit("_PyValueTemps_CommitLocal(value_temps);\n")
+        self.emit(tkn)
+        return False
 
     def expand_instruction_macro(self, tkn: Token, args: list[list[Token]],
                                  inst: Instruction | None) -> str:
@@ -1408,8 +1643,9 @@ class IREmitter(Emitter):
         inst: Instruction | None,
     ) -> bool:
         """IR_WINDOW_TAKEN(): a window-style handler has cleared the slots of
-        its dead inputs or handed them to the frame it pushes, whose slots
-        overlap them; nothing clears them after it."""
+        its dead inputs, handed them to a pushed frame, or taken explicit
+        responsibility for draining private argument homes before any exit.
+        The producer must not auto-vacate those homes."""
         next(tkn_iter)
         next(tkn_iter)
         next(tkn_iter)
@@ -1590,7 +1826,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     # Each fixed scalar input can be boxed once per uop, and each output can
     # create one owned result per uop. Publishing the same C variable again
     # uses its borrowed view. Window loops use their own object arrays.
-    bridge_bound = 1 + sum(
+    bridge_bound = 2 + (2 if name in ("STORE_ATTR_SLOT", "STORE_ATTR_INSTANCE_VALUE", "STORE_ATTR_SHAPE") else 0) + sum(
         len(part.stack.inputs) + len(part.stack.outputs)
         for part in inst.parts if isinstance(part, Uop)
     )
@@ -1602,7 +1838,14 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     if inst.properties.needs_prev:
         out.emit(f"_PyIRWord* const prev_instr = frame->instr_ptr;\n")
     if not is_target:
-        out.emit(f"_PyIRWord* const this_instr = next_instr;\n")
+        qualifier = "" if inst.name == "BINARY_OP" or name in ("CALL", "CALL_JIT_WARM", "CALL_KW", "INSTRUMENTED_CALL", "INSTRUMENTED_CALL_KW", "CALL_NON_PY_GENERAL", "CALL_KW_NON_PY", "CALL_BUILTIN_O", "LOAD_ATTR_SLOT", "STORE_ATTR_SLOT",
+                                   "BUILD_MAP", "STORE_SUBSCR", "STORE_SUBSCR_DICT",
+                                   "STORE_ATTR_WITH_HINT", "BINARY_OP_SUBSCR_DICT", "LOAD_GLOBAL", "LOAD_GLOBAL_NOFB",
+                                   "LOAD_ATTR", "LOAD_ATTR_NOFB", "STORE_ATTR", "STORE_ATTR_NOFB",
+                                   "STORE_ATTR_INSTANCE_VALUE", "STORE_ATTR_SHAPE", "STORE_ATTR_SHAPE_ADD",
+                                   "LOAD_ATTR_INSTANCE_VALUE", "LOAD_ATTR_SHAPE",
+                                   "LOAD_ATTR_MODULE", "LOAD_ATTR_WITH_HINT") else "const "
+        out.emit(f"_PyIRWord* {qualifier}this_instr = next_instr;\n")
         out.emit("(void)this_instr;\n")
     if not inst.properties.no_save_ip:
         out.emit(f"frame->instr_ptr = next_instr;\n")
@@ -1610,10 +1853,11 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     out.emit(f"INSTRUCTION_STATS({inst.name});\n")
     if is_target:
         out.emit(f"IR_PREDICTED({name});\n")
-        out.emit(f"_PyIRWord* const this_instr = next_instr - 1;\n")
+        qualifier = "" if inst.name == "BINARY_OP" or name in ("CALL", "CALL_JIT_WARM", "CALL_KW", "STORE_SUBSCR", "LOAD_GLOBAL", "LOAD_GLOBAL_NOFB", "LOAD_ATTR", "LOAD_ATTR_NOFB", "STORE_ATTR", "STORE_ATTR_NOFB") else "const "
+        out.emit(f"_PyIRWord* {qualifier}this_instr = next_instr - 1;\n")
         out.emit("(void)this_instr;\n")
     out.emit(f"PyObject *value_boxes[{bridge_bound}];\n")
-    out.emit("_PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};\n")
+    out.emit("_PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};\n")
     out.emit("_PyValueTemps *value_temps = &value_owners;\n")
     use_fb = fmt.fb != LOC_NONE and (
         uses_feedback(inst) or reads_fb_arg(inst, fmt, operation))
@@ -1687,6 +1931,8 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
             # The result is in its slot of the window; a local takes it
             dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
             out.emit(f"IR_MOVE_TO_DST({dst}, window[{fmt.dst_offset}]);\n")
+        if fmt.store_dst:
+            out.emit("_PyValueTemps_CommitLocal(value_temps);\n")
         if name in ("RETURN_VALUE", "RETURN_GENERATOR") and not helper:
             out.emit("JIT_MAYBE_RESUME(1);\n")
         if name in ("RESUME_JIT", "JUMP_BACKWARD_JIT_WARM") and not helper:

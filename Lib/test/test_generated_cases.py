@@ -284,8 +284,8 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
-            PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            PyObject *value_boxes[5];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue left;
             PyValue right;
@@ -327,6 +327,7 @@ class TestIRCases(unittest.TestCase):
             }
             res = PyValue_FromPyObjectSteal(o);
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
+            _PyValueTemps_CommitLocal(value_temps);
             DISPATCH();
         }
     """
@@ -483,8 +484,8 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
-            PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            PyObject *value_boxes[5];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -499,6 +500,7 @@ class TestIRCases(unittest.TestCase):
             IR_CLEAR_SLOTS(&window[1], oparg);
             window[0] = _PyValueTemps_Publish(value_temps, &res);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
+            _PyValueTemps_CommitLocal(value_temps);
             DISPATCH();
         }
     """
@@ -595,8 +597,8 @@ class TestIRCases(unittest.TestCase):
             IR_PREDICTED(OP);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            PyObject *value_boxes[6];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
@@ -630,6 +632,7 @@ class TestIRCases(unittest.TestCase):
                 _PyValue_CLOSE_POINTER(owner);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
+            _PyValueTemps_CommitLocal(value_temps);
             DISPATCH();
         }
 
@@ -644,8 +647,8 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
-            PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            PyObject *value_boxes[6];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -679,6 +682,7 @@ class TestIRCases(unittest.TestCase):
                 _PyValue_CLOSE_POINTER(owner);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
+            _PyValueTemps_CommitLocal(value_temps);
             DISPATCH();
         }
 
@@ -693,8 +697,8 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP_SPECIALIZED);
-            PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            PyObject *value_boxes[6];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
@@ -726,6 +730,7 @@ class TestIRCases(unittest.TestCase):
                 _PyValue_CLOSE_POINTER(owner);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
+            _PyValueTemps_CommitLocal(value_temps);
             DISPATCH();
         }
     """
@@ -758,8 +763,8 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
-            PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            PyObject *value_boxes[5];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_D(this_instr));
@@ -777,6 +782,7 @@ class TestIRCases(unittest.TestCase):
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
+            _PyValueTemps_CommitLocal(value_temps);
             DISPATCH();
         }
 
@@ -791,8 +797,8 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
-            PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            PyObject *value_boxes[5];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(0);
             int oparg = (int)IR_FIELD_D(this_instr);
@@ -810,6 +816,7 @@ class TestIRCases(unittest.TestCase):
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
+            _PyValueTemps_CommitLocal(value_temps);
             DISPATCH();
         }
     """
@@ -872,8 +879,8 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(IR_PASS);
-            PyObject *value_boxes[1];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
+            PyObject *value_boxes[2];
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
             _PyValueTemps *value_temps = &value_owners;
             PRE_DISPATCH_GOTO();
             DISPATCH_GOTO();
@@ -1082,13 +1089,53 @@ class TestJitHelpers(unittest.TestCase):
                 self.assertIn(f".flags = {int(fmt.window) * 2 | int(fmt.store_dst) * 64}", row)
 
     def test_common_constant_and_raise_window_order(self):
-        self.assertIn("PyValue_DupImmortal(tstate->interp->common_consts[oparg])", self.body("LOAD_COMMON_CONSTANT"))
+        self.assertIn("PyValue_DUP(tstate->interp->common_consts[oparg])", self.body("LOAD_COMMON_CONSTANT"))
         raised = self.body("RAISE_VARARGS")
         self.assertLess(raised.index("IR_CLEAR_SLOTS"), raised.index("do_raise("))
         self.assertIn("exception_unwind", raised)
         self.assertIn("JUMP_TO_LABEL(error)", raised)
         self.assertIn("#define JIT_PHASE_exception_unwind _PyJIT_UNWIND_PENDING", self.output)
         self.assertIn("_PyJIT_ERROR_LOG_PENDING", self.output)
+
+    def test_dictionary_operation_publication(self):
+        root = Path(__file__).resolve().parents[2]
+        generated = (root / "Python/generated_ir_cases.c.h").read_text()
+        for name, provider in (("STORE_SUBSCR", "value_store_subscript("),
+                               ("STORE_SUBSCR_DICT", "_PyDict_SetValue_Take2(")):
+            body = generated.split(f"TARGET({name})", 1)[1].split("TARGET(", 1)[0]
+            with self.subTest(name=name):
+                call = body.index(provider)
+                self.assertLess(body.index("value_operation_begin("), call)
+                self.assertLess(body.rindex("IR_CONSUME_INPUT", 0, call), call)
+                finish = body.index("value_operation_finish(", call)
+                self.assertNotIn("IR_FIELD_", body[call:finish])
+                failure = body.index("if (operation_failed < 0)", finish)
+                self.assertLess(failure, body.index("ir_word =", failure))
+                self.assertNotIn("// _POP_TOP", body)
+        generic = generated.split("TARGET(STORE_SUBSCR)", 1)[1].split("TARGET(", 1)[0]
+        self.assertIn("value_operation_close3(&held_sub, &held_container, &held_value)", generic)
+        hint = generated.split("TARGET(STORE_ATTR_WITH_HINT)", 1)[1].split("TARGET(", 1)[0]
+        self.assertIn("value_operation_close3(&release_value, &watched_dict, &receiver)", hint)
+        capture = hint.index("operation.input_slots[0] =")
+        call = hint.index("int err = PyDict_SetValue(")
+        self.assertLess(capture, hint.index("IR_CONSUME_INPUT", capture))
+        self.assertLess(hint.index("operation.input_slots[1] =", capture), call)
+        restore = hint.index("value_operation_restore2(", call)
+        failed_close = hint.index("value_operation_close3(&watched_dict, &release_value, &receiver)", restore)
+        self.assertLess(restore, failed_close)
+        self.assertNotIn("IR_FIELD_", hint[call:failed_close])
+        self.assertIn("&old_value, &receiver, NULL", hint)
+        self.assertNotIn("// _POP_TOP", hint)
+        for name in ("BUILD_MAP", "STORE_SUBSCR"):
+            body = self.body(name)
+            self.assertIn("value_operation_finish(", body)
+            self.assertIn("ctx->raising_instr = frame->instr_ptr", body)
+            self.assertIn("return _PyJIT_RAISE", body)
+        ceval = (root / "Python/ceval.c").read_text()
+        construction = ceval.split("_Py_BuildMap_ValueSteal(", 1)[1].split("\nPyValue\n", 1)[0]
+        self.assertLess(construction.index("_PyValue_OwnArray("),
+                        construction.index("_PyDict_FromValueItems("))
+        self.assertNotIn("VALUES_TO_PYOBJECTS", construction)
 
     def test_real_call_return_and_error_order(self):
         call = self.body("CALL")
@@ -1102,9 +1149,124 @@ class TestJitHelpers(unittest.TestCase):
         self.assertLess(returned.index("IR_STORE_RETURN(res)"), returned.index("DISPATCH();"))
         self.assertIn("_PyJIT_RETURN_COMPLETED", returned)
         binary = self.body("BINARY_OP_ADD")
-        self.assertIn("_PyEval_BinaryOps[oparg](lhs_o, rhs_o)", binary)
-        self.assertIn("IR_DROP_BORROW(lhs", binary)
-        self.assertIn("JUMP_TO_LABEL(error)", binary)
+        self.assertIn("value_binary_operation(oparg, held_left, held_right, value_temps)", binary)
+        failed = binary.split("if (PyValue_IsNull(pending))", 1)[1].split("value_reader_complete(", 1)[0]
+        self.assertIn("value_operation_restore2(", failed)
+        self.assertIn("return _PyJIT_RAISE;", failed)
+        self.assertNotIn("IR_STORE_", failed)
+        self.assertNotIn("res =", failed)
+        self.assertLess(binary.index("value_reader_complete("), binary.index("res = pending;"))
+
+    def test_reader_publication_and_refresh(self):
+        root = Path(__file__).resolve().parents[2]
+        generated = (root / "Python/generated_ir_cases.c.h").read_text()
+        for name in ("BINARY_OP_ADD", "BINARY_OP_SUBSCR", "BINARY_OP_SUBSCR_DICT"):
+            body = generated.split(f"TARGET({name})", 1)[1].split("TARGET(", 1)[0]
+            with self.subTest(name=name):
+                call = body.index("value_binary_operation(")
+                self.assertLess(body.index("operation.result_slot ="), call)
+                self.assertLess(body.rindex("IR_CONSUME_INPUT", 0, call), call)
+                failed = body.split("if (PyValue_IsNull(pending))", 1)[1].split("value_reader_complete(", 1)[0]
+                self.assertIn("JUMP_TO_LABEL(error)", failed)
+                self.assertNotIn("IR_STORE_", failed)
+                self.assertNotIn("res =", failed)
+                self.assertLess(body.index("value_reader_complete("), body.index("ir_word ="))
+                self.assertNotIn("// _POP_TOP", body)
+        for name in ("LOAD_ATTR_INSTANCE_VALUE", "LOAD_ATTR_SHAPE", "LOAD_ATTR_MODULE", "LOAD_ATTR_WITH_HINT"):
+            body = generated.split(f"TARGET({name})", 1)[1].split("TARGET(", 1)[0]
+            with self.subTest(name=name):
+                retire = body.index("retire_published_values(")
+                self.assertIn("IR_IS_LOCAL(IR_FIELD_A(this_instr)) ? &attr : NULL", body)
+                self.assertLess(body.index("IR_CONSUME_INPUT"), retire)
+                self.assertLess(body.index("if (retire_failed < 0)"), body.index("ir_word =", retire))
+                self.assertNotIn("// _POP_TOP", body)
+        global_body = self.body("LOAD_GLOBAL")
+        call = global_body.index("_PyEval_LoadGlobalValue(")
+        self.assertLess(global_body.index("value_operation_begin("), call)
+        self.assertLess(global_body.index("value_operation_finish(", call), global_body.index("// _PUSH_NULL_CONDITIONAL", call))
+        ceval = (root / "Python/ceval.c").read_text()
+        complete = ceval.split("value_reader_complete(", 1)[1].split("\nstatic int\n", 1)[0]
+        self.assertLess(complete.index("_PyFrame_Slots(frame)[slot] = *result"),
+                        complete.index("value_operation_close3(first, second, NULL)", complete.index("*result = _PyValueTemps_Publish")))
+
+    def test_binary_nomination_does_not_escape(self):
+        root = Path(__file__).resolve().parents[2]
+        source = (root / "Python/specialize.c").read_text()
+        wrapper = source.split("_Py_Specialize_BinaryOp(", 1)[1].split("\n}\n", 1)[0]
+        nominate = source.split("\nspecialize_binary_op(", 1)[1].split("\n}\n", 1)[0]
+        statistics = source.split("binary_op_fail_kind(", 1)[1].split("\n}\n", 1)[0]
+        for body in (wrapper, nominate, statistics):
+            self.assertNotIn("NewBoxed", body)
+            self.assertNotIn("_PyType_Lookup", body)
+            self.assertNotIn("Py_DECREF", body)
+            self.assertNotIn("PyErr_Clear", body)
+        self.assertIn("fb_begin_binary_ex(instr, lhs_type, rhs_type, false)", nominate)
+        self.assertIn("lhs != NULL && rhs != NULL", nominate)
+        table = source.split("binaryop_extend_descrs[] = {", 1)[1].split("\n};", 1)[0]
+        rows = re.findall(r"^\s*\{(NB_\w+),\s*([^,]+),", table, re.M)
+        self.assertGreater(len(rows), 0)
+        self.assertTrue(all(guard == "NULL" for _, guard in rows))
+        save = source.split("fb_save_mono(", 1)[1].split("\n}\n", 1)[0]
+        self.assertLess(save.index("if (!may_allocate)"), save.index("_PyMem_NoScanRealloc"))
+
+    def test_attribute_publication_and_failure_phases(self):
+        root = Path(__file__).resolve().parents[2]
+        generated = (root / "Python/generated_ir_cases.c.h").read_text()
+        for name in ("LOAD_ATTR", "LOAD_ATTR_NOFB"):
+            body = generated.split(f"TARGET({name})", 1)[1].split("TARGET(", 1)[0]
+            with self.subTest(name=name):
+                call = body.index("value_load_attribute(")
+                self.assertLess(body.index("operation.result_slot ="), call)
+                failed = body.split("if (failed < 0)", 1)[1].split("value_attribute_complete(", 1)[0]
+                self.assertLess(failed.index("if (!invoked)"), failed.index("value_operation_restore1("))
+                self.assertNotIn("IR_STORE_", failed)
+                self.assertNotIn("self_or_null", body)
+                complete = body.index("value_attribute_complete(")
+                self.assertLess(complete, body.index("ir_word =", complete))
+                tail = body[body.index("attr = pending;", complete):]
+                self.assertIn("if (IR_IS_LOCAL(IR_FIELD_A(this_instr)))", tail)
+        store = generated.split("TARGET(STORE_ATTR)", 1)[1].split("TARGET(", 1)[0]
+        call = store.index("value_store_attribute(")
+        self.assertLess(store.index("IR_CONSUME_INPUT"), call)
+        self.assertIn("if (!invoked)", store[call:])
+        self.assertIn("value_operation_close3(&receiver, &held_value, NULL)", store)
+        for name in ("STORE_ATTR_INSTANCE_VALUE", "STORE_ATTR_SHAPE", "STORE_ATTR_SHAPE_ADD"):
+            body = generated.split(f"TARGET({name})", 1)[1].split("TARGET(", 1)[0]
+            self.assertNotIn("// _POP_TOP", body)
+            self.assertNotIn("_PyShape_Add(", body)
+            self.assertIn("retire_published_values(", body)
+        source = (root / "Python/specialize.c").read_text()
+        for name in ("_Py_Specialize_LoadAttr", "_Py_Specialize_StoreAttr"):
+            body = source.split(name + "(", 1)[1].split("\n}\n", 1)[0]
+            self.assertLess(body.index("_PyType_TryLookupValueNoAlloc"), body.index("fb_begin_ex(instr, false)"))
+        self.assertNotIn("_Py_LoadAttr_ValueSteal", generated)
+
+    def test_native_vector_taken_window_publication(self):
+        root = Path(__file__).resolve().parents[2]
+        generated = (root / "Python/generated_ir_cases.c.h").read_text()
+        for name in ("CALL_NON_PY_GENERAL", "CALL_KW_NON_PY"):
+            body = generated.split(f"TARGET({name})", 1)[1].split("TARGET(", 1)[0]
+            with self.subTest(name=name):
+                self.assertLess(body.index("PyValue_IsObject(callable)"), body.index("PyValue_AsPyObjectBorrow(callable)"))
+                self.assertLess(body.index("native_vector_capture("), body.index("native_vector_prepare("))
+                self.assertLess(body.index("native_vector_take("), body.index("_Py_VectorCall_ValueSteal("))
+                self.assertIn("c = names_owner = PyValue_NULL", body)
+                publish = body.index("_PyNativeResult_Publish(")
+                retire = body.index("native_vector_retire(", publish)
+                self.assertLess(publish, retire)
+                self.assertNotIn("IR_CLEAR_SLOTS", body[publish:retire])
+                self.assertNotIn("_PyValueTemps_Publish(value_temps, &res)", body[retire:])
+                self.assertLess(body.index("operation_failed < 0", retire), body.index("ir_word =", retire))
+                self.assertEqual(body.count("check_periodics_at_end(tstate, frame)"), 1)
+                poll = body.index("check_periodics_at_end(tstate, frame)")
+                self.assertLess(body.index("ir_word =", retire), poll)
+                self.assertLess(poll, body.index("ir_word =", poll))
+        source = (root / "Python/specialize.c").read_text()
+        for name in ("_Py_Specialize_Call", "_Py_Specialize_CallKw"):
+            body = source.split(name + "(", 1)[1].split("\n}\n", 1)[0]
+            self.assertIn("fb_begin_call_ex(instr, PyValue_TYPE(callable_st), !native_or_inline)", body)
+        ex = source.split("_Py_Specialize_CallFunctionEx(", 1)[1].split("\n}\n", 1)[0]
+        self.assertIn("fb_begin_call(instr, PyValue_TYPE(func_st))", ex)
 
     def test_cold_specialization_continues_generic_once(self):
         for name in ("CALL", "BINARY_OP_ADD", "LOAD_GLOBAL", "COMPARE_OP"):
@@ -1186,6 +1348,86 @@ class TestJitHelpers(unittest.TestCase):
         dispatch = macros.split("#define DISPATCH()", 1)[1].split("#define DISPATCH_SAME_OPARG", 1)[0]
         self.assertLess(dispatch.index("finish_value_bridges"), dispatch.index("NEXTOPARG"))
         self.assertIn("finish_value_bridges", self.output.split("#define JIT_FINISH", 1)[1])
+
+    def test_native_o_publishes_before_cleanup_and_reloads(self):
+        root = Path(__file__).resolve().parents[2]
+        output = io.StringIO()
+        ir_generator.generate_ir([str(root / "Python/bytecodes.c")], self.analysis, output, False)
+        body = output.getvalue().split("TARGET(CALL_BUILTIN_O)", 1)[1].split("TARGET(", 1)[0]
+        consume = body.index("IR_CLEAR_SLOTS(&window[0], 2 + oparg)")
+        publish = body.index("_PyNativeResult_Publish(")
+        store = body.index("window[0] = _PyValueTemps_Publish")
+        finish = body.index("int failed = native_call_finish(")
+        self.assertLess(consume, publish)
+        self.assertLess(publish, store)
+        self.assertLess(store, finish)
+        self.assertNotIn("window[0] =", body[finish:])
+        self.assertNotIn("// _POP_TOP", body)
+        reload = body.index("this_instr = frame->instr_ptr;", finish)
+        failed = body.index("if (failed < 0)", finish)
+        failed_jump = body.index("JUMP_TO_LABEL(error)", failed)
+        self.assertLess(failed_jump, reload)
+        word = body.index("ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr)", reload)
+        slots = body.index("slots = _PyFrame_Slots(frame)", word)
+        window = body.index("window = &slots[", slots)
+        move = body.index("IR_MOVE_TO_DST", window)
+        self.assertLess(finish, reload)
+        self.assertLess(window, move)
+        self.assertNotIn("jit_helper_CALL_BUILTIN_O(", self.output)
+        runtime = (root / "Python/ceval.c").read_text()
+        cleanup = runtime.split("native_call_finish(", 1)[1].split('#include "generated_jit_helpers.c.h"', 1)[0]
+        self.assertLess(cleanup.index("_PyNativeScope_End"), cleanup.index("*argument = PyValue_NULL"))
+        self.assertLess(cleanup.index("*argument = PyValue_NULL"), cleanup.index("*callable = PyValue_NULL"))
+        self.assertLess(cleanup.index("*callable = PyValue_NULL"), cleanup.index("_Py_Instrument"))
+
+    def test_final_local_retirement_follows_all_publications(self):
+        root = Path(__file__).resolve().parents[2]
+        output = io.StringIO()
+        ir_generator.generate_ir([str(root / "Python/bytecodes.c")], self.analysis, output, False)
+        generated = output.getvalue()
+        for name in ("BINARY_OP_ADD", "CALL_BUILTIN_O"):
+            body = generated.split(f"TARGET({name})", 1)[1].split("TARGET(", 1)[0]
+            publication = max(body.rfind("IR_STORE_DST("), body.rfind("IR_MOVE_TO_DST("))
+            commit = body.rfind("_PyValueTemps_CommitLocal(value_temps)")
+            self.assertGreaterEqual(publication, 0)
+            self.assertLess(publication, commit)
+            self.assertLess(commit, body.rfind("DISPATCH();"))
+        helper = self.body("BINARY_OP_ADD")
+        self.assertLess(helper.rfind("IR_STORE_DST("), helper.rfind("_PyValueTemps_CommitLocal("))
+        self.assertLess(helper.rfind("_PyValueTemps_CommitLocal("), helper.rfind("DISPATCH();"))
+        nop = generated.split("TARGET(NOP)", 1)[1].split("TARGET(", 1)[0]
+        self.assertNotIn("_PyValueTemps_CommitLocal", nop)
+        for fmt in ir_generator.compute_formats(self.analysis).values():
+            self.assertLessEqual(fmt.roles.count(ir_generator.ROLE_DST), 1)
+        formats = ir_generator.compute_formats(self.analysis)
+        for name in ("RETURN_VALUE", "RETURN_GENERATOR", "RESUME_JIT", "JUMP_BACKWARD_JIT_WARM"):
+            self.assertFalse(formats[name].store_dst)
+        instructions = ir_generator.handler_instructions(self.analysis)
+        bodies = dict(re.findall(r"TARGET\((\w+)\)(.*?)(?=\bTARGET\(|\Z)", generated, re.S))
+        for name, body in bodies.items():
+            with self.subTest(capacity=name):
+                private_bound = 1 + sum(len(part.stack.inputs) + len(part.stack.outputs)
+                                        for part in instructions[name].parts
+                                        if isinstance(part, ir_generator.Uop))
+                capacity = int(re.search(r"PyObject \*value_boxes\[(\d+)\]", body)[1])
+                self.assertGreaterEqual(capacity, private_bound + 1 + (2 if name == "STORE_ATTR_SLOT" else 0))
+                last_publication = max(body.rfind("IR_STORE_DST("), body.rfind("IR_MOVE_TO_DST("))
+                if last_publication >= 0:
+                    self.assertGreater(body.rfind("_PyValueTemps_CommitLocal("), last_publication)
+        load = generated.split("TARGET(LOAD_ATTR_SLOT)", 1)[1].split("TARGET(", 1)[0]
+        retire = load.index("retire_published_values(")
+        self.assertLess(load.index("IR_STORE_TEMP_DST("), retire)
+        self.assertIn("? &attr : NULL", load)
+        self.assertLess(retire, load.rindex("IR_STORE_DST("))
+        self.assertLess(load.index("if (retire_failed < 0)"), load.index("this_instr = frame->instr_ptr"))
+        store = generated.split("TARGET(STORE_ATTR_SLOT)", 1)[1].split("TARGET(", 1)[0]
+        self.assertIn("&old_value, &receiver, NULL", store)
+        self.assertTrue(self.analysis.instructions["LOAD_ATTR_SLOT"].properties.error_without_pop)
+        self.assertTrue(self.analysis.instructions["STORE_ATTR_SLOT"].properties.error_without_pop)
+        self.assertLess(store.index("PyValue_XCLOSE(old_value)"),
+                        store.index("retire_needed = _PyValue_MayDealloc(receiver)"))
+        self.assertLess(store.index("IR_CONSUME_INPUT(IR_FIELD_A(this_instr))"),
+                        store.index("retire_published_values("))
 
     def test_descriptor_and_no_evaluator_dispatch(self):
         self.assertIn("const _PyJitDecodedOp *op", self.body("CALL"))

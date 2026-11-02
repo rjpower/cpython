@@ -32,14 +32,17 @@
 #include "pycore_jit.h"
 #include "pycore_jit_ir.h"
 #include "pycore_lock.h"          // PyEvent_WaitTimed()
+#include "pycore_list.h"          // _PyList_SetItemTakeValue()
 #include "pycore_object.h"        // _PyObject_IsFreed()
 #include "pycore_opcode_metadata.h" // _PyOpcode_OpName
+#include "pycore_opcode_utils.h"  // NUM_COMMON_CONSTANTS
 #include "pycore_pathconfig.h"    // _PyPathConfig_ClearGlobal()
 #include "pycore_pyerrors.h"      // _PyErr_ChainExceptions1()
 #include "pycore_pylifecycle.h"   // _PyInterpreterConfig_InitFromDict()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_runtime_structs.h" // _PY_NSMALLPOSINTS
 #include "pycore_unicodeobject.h" // _PyUnicode_TransformDecimalAndSpaceToASCII()
+#include "pycore_value.h"         // PyValue_IsHeapSafe()
 #include "pycore_tuple.h"       // _PyTuple_GET_OBJECT()
 
 #include "clinic/_testinternalcapi.c.h"
@@ -3735,7 +3738,319 @@ jit_method_record_index(PyObject *module, PyObject *unused)
     return _PyJit_TestRecordIndex();
 }
 
+static PyObject *
+common_constant_storage(PyObject *module, PyObject *Py_UNUSED(args))
+{
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    int inline_count = 0;
+    for (int i = 0; i < NUM_COMMON_CONSTANTS; i++) {
+        PyValue value = interp->common_consts[i];
+        assert(PyValue_IsLanguageValue(value));
+        assert(PyValue_IsHeapSafe(value));
+        inline_count += PyValue_IsInline(value);
+        if (PyValue_IsObject(value)) {
+            assert(_Py_IsImmortal(PyValue_AsPyObjectBorrow(value)));
+        }
+    }
+    PyValue minus_one = interp->common_consts[CONSTANT_MINUS_ONE];
+    return Py_BuildValue("(iiii)", NUM_COMMON_CONSTANTS, inline_count,
+                         PyValue_IsInlineInt(minus_one),
+                         PyValue_IsInlineInt(minus_one) &&
+                         PyValue_InlineInt(minus_one) == -1);
+}
+
+static PyObject *
+dict_vm_storage(PyObject *module, PyObject *arg)
+{
+    if (!PyDict_CheckExact(arg)) {
+        PyErr_SetString(PyExc_TypeError, "expected an exact dict");
+        return NULL;
+    }
+    Py_ssize_t pos = 0, count = 0, inline_keys = 0, inline_values = 0;
+    PyValue key, value;
+    int status;
+    while ((status = _PyDict_NextValue(arg, &pos, &key, &value, NULL)) > 0) {
+        assert(PyValue_IsLanguageValue(key) && PyValue_IsHeapSafe(key));
+        assert(PyValue_IsLanguageValue(value) && PyValue_IsHeapSafe(value));
+        count++;
+        inline_keys += PyValue_IsInline(key);
+        inline_values += PyValue_IsInline(value);
+        /* The dict still owns both: these independent iterator owners
+         * cannot release the last reference during storage inspection. */
+        PyValue_CLOSE(value);
+        PyValue_CLOSE(key);
+    }
+    if (status < 0) {
+        return NULL;
+    }
+    return Py_BuildValue("(nnn)", count, inline_keys, inline_values);
+}
+
+typedef struct {
+    int closed;
+    int saw_publication;
+    PyObject *list;
+} list_value_owner_probe;
+
+static void
+list_value_owner_closed(PyObject *capsule)
+{
+    list_value_owner_probe *probe = PyCapsule_GetPointer(
+        capsule, "list-value-owner");
+    assert(probe != NULL);
+    probe->closed++;
+    if (probe->list != NULL) {
+        PyValue value = PyList_GET_VALUE(probe->list, 0);
+        probe->saw_publication = PyValue_IsInlineInt(value) &&
+                                 PyValue_InlineInt(value) == 37;
+    }
+}
+
+static PyObject *
+test_list_setitem_take_value(PyObject *module, PyObject *Py_UNUSED(args))
+{
+    list_value_owner_probe probe = {0};
+    PyObject *list = PyList_New(0);
+    if (list == NULL) {
+        return NULL;
+    }
+    PyObject *owner = PyCapsule_New(&probe, "list-value-owner",
+                                    list_value_owner_closed);
+    if (owner == NULL) {
+        Py_DECREF(list);
+        return NULL;
+    }
+    int result = _PyList_SetItemTakeValue((PyListObject *)list, 1,
+                                         PyValue_FromPyObjectSteal(owner));
+    if (result != -1 || !PyErr_ExceptionMatches(PyExc_IndexError) ||
+        probe.closed != 1) {
+        Py_DECREF(list);
+        PyErr_SetString(PyExc_AssertionError, "invalid index did not consume owner");
+        return NULL;
+    }
+    PyErr_Clear();
+    Py_DECREF(list);
+
+    list = PyList_New(1);
+    if (list == NULL) {
+        return NULL;
+    }
+    owner = PyCapsule_New(&probe, "list-value-owner", list_value_owner_closed);
+    if (owner == NULL) {
+        Py_DECREF(list);
+        return NULL;
+    }
+    result = _PyList_SetItemTakeValue((PyListObject *)list, 0,
+                                      PyValue_FromPyObjectSteal(owner));
+    assert(result == 0);
+    PyValue alias = PyList_GetValue(list, 0);
+    assert(!PyValue_IsNull(alias));
+    result = _PyList_SetItemTakeValue((PyListObject *)list, 0, alias);
+    assert(result == 0);
+    if (probe.closed != 1) {
+        Py_DECREF(list);
+        PyErr_SetString(PyExc_AssertionError, "aliased replacement lost owner");
+        return NULL;
+    }
+    probe.list = list;
+    result = _PyList_SetItemTakeValue((PyListObject *)list, 0,
+                                      PyValue_FromInt32(37));
+    assert(result == 0);
+    probe.list = NULL;
+    Py_DECREF(list);
+    if (probe.closed != 2 || !probe.saw_publication) {
+        PyErr_SetString(PyExc_AssertionError, "old owner closed before publication");
+        return NULL;
+    }
+    Py_RETURN_NONE;
+}
+
+typedef struct {
+    PyMemAllocatorEx saved;
+    int called;
+} constant_key_allocation_probe;
+
+static void *
+constant_key_fail_malloc(void *context, size_t size)
+{
+    constant_key_allocation_probe *probe = context;
+    probe->called++;
+    PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &probe->saved);
+    return NULL;
+}
+
+static void *
+constant_key_fail_calloc(void *context, size_t count, size_t size)
+{
+    return constant_key_fail_malloc(context, 0);
+}
+
+static void *
+constant_key_fail_realloc(void *context, void *pointer, size_t size)
+{
+    return constant_key_fail_malloc(context, 0);
+}
+
+static void
+constant_key_fail_free(void *context, void *pointer)
+{
+    constant_key_allocation_probe *probe = context;
+    probe->saved.free(probe->saved.ctx, pointer);
+}
+
+static PyObject *
+constant_value_key(PyObject *module, PyObject *args)
+{
+    Py_ssize_t count = PyTuple_GET_SIZE(args);
+    if (count < 1 || count > 2) {
+        PyErr_SetString(PyExc_TypeError, "expected a constant and optional bool");
+        return NULL;
+    }
+    int fail = 0;
+    if (count == 2) {
+        PyValue flag = PyTuple_GET_VALUE(args, 1);
+        if (!PyValue_BoolCheck(flag)) {
+            PyErr_SetString(PyExc_TypeError, "failure flag must be bool");
+            return NULL;
+        }
+        fail = PyValue_AsPyObjectBorrow(flag) == Py_True;
+    }
+    PyValue input = PyTuple_GetValue(args, 0);
+    assert(!PyValue_IsNull(input));
+    if (fail) {
+        constant_key_allocation_probe probe = {0};
+        PyMem_GetAllocator(PYMEM_DOMAIN_OBJ, &probe.saved);
+        PyMemAllocatorEx failing = {
+            .ctx = &probe, .malloc = constant_key_fail_malloc,
+            .calloc = constant_key_fail_calloc, .realloc = constant_key_fail_realloc,
+            .free = constant_key_fail_free,
+        };
+        PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &failing);
+        PyValue failed = _PyCode_ConstantValueKey(input);
+        PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &probe.saved);
+        int valid = probe.called == 1 && PyValue_IsNull(failed) &&
+                    PyErr_ExceptionMatches(PyExc_MemoryError);
+        PyValue_XCLOSE(failed);
+        if (!valid) {
+            PyValue_CLOSE(input);
+            PyErr_SetString(PyExc_AssertionError, "constant-key OOM was not observed");
+            return NULL;
+        }
+        PyErr_Clear();
+    }
+    PyValue key = _PyCode_ConstantValueKey(input);
+    if (PyValue_IsNull(key)) {
+        PyValue_CLOSE(input);
+        return NULL;
+    }
+    PyObject *object = PyValue_AsObject(input);
+    PyValue_CLOSE(input);
+    if (object == NULL) {
+        PyValue_CLOSE(key);
+        return NULL;
+    }
+    PyObject *legacy = _PyCode_ConstantKey(object);
+    Py_DECREF(object);
+    if (legacy == NULL) {
+        PyValue_CLOSE(key);
+        return NULL;
+    }
+    PyObject *result = PyTuple_New(3);
+    if (result == NULL) {
+        Py_DECREF(legacy);
+        PyValue_CLOSE(key);
+        return NULL;
+    }
+    PyTuple_SET_VALUE(result, 0, PyValue_FromInt32(PyValue_IsInlineInt(key)));
+    PyTuple_SET_VALUE(result, 1, key);
+    PyTuple_SET_ITEM(result, 2, legacy);
+    return result;
+}
+
+static PyObject *
+repr_guard_probe(PyObject *module, PyObject *args)
+{
+    if (!PyTuple_Check(args) || PyTuple_GET_SIZE(args) != 2) {
+        PyErr_SetString(PyExc_TypeError, "expected two repr-guard operands");
+        return NULL;
+    }
+    PyObject *left = PyTuple_GetItemRef(args, 0);
+    if (left == NULL) {
+        return NULL;
+    }
+    PyObject *right = PyTuple_GetItemRef(args, 1);
+    if (right == NULL) {
+        Py_DECREF(left);
+        return NULL;
+    }
+    int left_entered = 0, right_entered = 0;
+    PyObject *result = NULL;
+    int first = Py_ReprEnter(left);
+    if (first < 0) {
+        goto done;
+    }
+    if (first != 0) {
+        PyErr_SetString(PyExc_AssertionError, "operand already guarded at entry");
+        goto done;
+    }
+    left_entered = 1;
+    int repeated = Py_ReprEnter(left);
+    if (repeated < 0) {
+        goto done;
+    }
+    if (repeated == 0) {
+        Py_ReprLeave(left);
+        PyErr_SetString(PyExc_AssertionError, "duplicate operand registered twice");
+        goto done;
+    }
+    int other = Py_ReprEnter(right);
+    if (other < 0) {
+        goto done;
+    }
+    right_entered = other == 0;
+    if (right_entered) {
+        Py_ReprLeave(right);
+        right_entered = 0;
+    }
+    PyObject *primary = PyObject_CallNoArgs(PyExc_RuntimeError);
+    if (primary == NULL) {
+        goto done;
+    }
+    PyErr_SetRaisedException(Py_NewRef(primary));
+    Py_ReprLeave(left);
+    left_entered = 0;
+    PyObject *actual = PyErr_GetRaisedException();
+    int preserved = actual == primary;
+    Py_XDECREF(actual);
+    Py_DECREF(primary);
+    int again = Py_ReprEnter(left);
+    if (again < 0) {
+        goto done;
+    }
+    left_entered = again == 0;
+    result = Py_BuildValue("(iiiii)", first, repeated, other, again, preserved);
+done:
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        if (right_entered) {
+            Py_ReprLeave(right);
+        }
+        if (left_entered) {
+            Py_ReprLeave(left);
+        }
+        Py_DECREF(right);
+        Py_DECREF(left);
+        _PyValue_RestoreException(saved);
+    }
+    return result;
+}
+
 static PyMethodDef module_functions[] = {
+    {"repr_guard_probe", repr_guard_probe, METH_O},
+    {"constant_value_key", constant_value_key, METH_VARARGS},
+    {"test_list_setitem_take_value", test_list_setitem_take_value, METH_NOARGS},
+    {"dict_vm_storage", dict_vm_storage, METH_O},
+    {"common_constant_storage", common_constant_storage, METH_NOARGS},
 #ifdef Py_VALUE_INLINE_VALUES
     {"pyvalue_contract", pyvalue_contract, METH_O, NULL},
     {"pyvalue_internal_contract", pyvalue_internal_contract, METH_NOARGS, NULL},
@@ -3897,6 +4212,9 @@ module_exec(PyObject *module)
     if (_PyTestInternalCapi_Init_Set(module) < 0) {
         return 1;
     }
+    if (_PyTestInternalCapi_Init_Slots(module) < 0) {
+        return 1;
+    }
     if (_PyTestInternalCapi_Init_Complex(module) < 0) {
         return 1;
     }
@@ -3910,6 +4228,12 @@ module_exec(PyObject *module)
         return 1;
     }
     if (_PyTestInternalCapi_Init_TypeCache(module) < 0) {
+        return 1;
+    }
+    if (_PyTestInternalCapi_Init_NativeScope(module) < 0) {
+        return 1;
+    }
+    if (_PyTestInternalCapi_Init_Dict(module) < 0) {
         return 1;
     }
 

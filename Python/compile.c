@@ -19,14 +19,17 @@
 #include "pycore_capsule.h"       // _PyCapsule_SetTraverse()
 #include "pycore_code.h"
 #include "pycore_compile.h"
+#include "pycore_dict.h"
 #include "pycore_flowgraph.h"     // _PyCfg_FromInstructionSequence()
+#include "pycore_list.h"
 #include "pycore_regcfg.h"        // _PyRegCfg_Free()
 #include "pycore_pystate.h"       // _Py_GetConfig()
 #include "pycore_runtime.h"       // _Py_ID()
-#include "pycore_setobject.h"     // _PySet_NextEntry()
+#include "pycore_setobject.h"     // _PySet_NextValue()
 #include "pycore_stats.h"
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString()
+#include "pycore_value.h"
 
 #include "cpython/code.h"
 
@@ -247,6 +250,15 @@ compiler_unit_capsule_clear(PyObject *capsule)
     return 0;
 }
 
+/* Compiler stack, name and symbol-entry lists contain object metadata only. */
+static PyObject *
+compiler_metadata_item(PyObject *list, Py_ssize_t index)
+{
+    PyValue value = PyList_GET_VALUE(list, index);
+    assert(PyValue_IsObject(value));
+    return PyValue_AsPyObjectBorrow(value);
+}
+
 int
 _PyCompile_MaybeAddStaticAttributeToClass(compiler *c, expr_ty e)
 {
@@ -260,7 +272,7 @@ _PyCompile_MaybeAddStaticAttributeToClass(compiler *c, expr_ty e)
     }
     Py_ssize_t stack_size = PyList_GET_SIZE(c->c_stack);
     for (Py_ssize_t i = stack_size - 1; i >= 0; i--) {
-        PyObject *capsule = PyList_GET_ITEM(c->c_stack, i);
+        PyObject *capsule = compiler_metadata_item(c->c_stack, i);
         struct compiler_unit *u = (struct compiler_unit *)PyCapsule_GetPointer(
                                                               capsule, CAPSULE_NAME);
         assert(u);
@@ -292,7 +304,7 @@ _PyCompile_SetQualname(compiler *c)
         struct compiler_unit *parent;
         PyObject *mangled, *capsule;
 
-        capsule = PyList_GET_ITEM(c->c_stack, stack_size - 1);
+        capsule = compiler_metadata_item(c->c_stack, stack_size - 1);
         parent = (struct compiler_unit *)PyCapsule_GetPointer(capsule, CAPSULE_NAME);
         assert(parent);
         if (parent->u_scope_type == COMPILE_SCOPE_ANNOTATIONS) {
@@ -304,7 +316,7 @@ _PyCompile_SetQualname(compiler *c)
                 u->u_metadata.u_qualname = Py_NewRef(u->u_metadata.u_name);
                 return SUCCESS;
             }
-            capsule = PyList_GET_ITEM(c->c_stack, stack_size - 2);
+            capsule = compiler_metadata_item(c->c_stack, stack_size - 2);
             parent = (struct compiler_unit *)PyCapsule_GetPointer(capsule, CAPSULE_NAME);
             assert(parent);
         }
@@ -384,163 +396,170 @@ _PyCompile_SetQualname(compiler *c)
     return SUCCESS;
 }
 
-/* Merge const *o* and return constant key object.
+/* Shared constants, including hashed cache keys, may change representative
+ * only when typed equality and hash remain unchanged. Both recursive merging
+ * and string interning below satisfy that contract. Consume replacement. */
+static void
+replace_equivalent_constant(PyObject *tuple, Py_ssize_t index, PyValue replacement)
+{
+    PyValue old = ((PyTupleObject *)tuple)->ob_item[index];
+    ((PyTupleObject *)tuple)->ob_item[index] = replacement;
+    PyValue_CLOSE(old);
+}
+
+static PyValue
+constant_from_key(PyValue key)
+{
+    if (PyValue_IsObject(key) &&
+        PyTuple_CheckExact(PyValue_AsPyObjectBorrow(key))) {
+        return PyTuple_GetValue(PyValue_AsPyObjectBorrow(key), 1);
+    }
+    return PyValue_DUP(key);
+}
+
+/* Merge constant and return an owned canonical key.
  * If recursive, insert all elements if o is a tuple or frozen set.
  */
-static PyObject*
-const_cache_insert(PyObject *const_cache, PyObject *o, bool recursive)
+static PyValue
+const_cache_insert(PyObject *const_cache, PyValue constant, bool recursive)
 {
     assert(PyDict_CheckExact(const_cache));
-    // None and Ellipsis are immortal objects, and key is the singleton.
-    // No need to merge object and key.
+    PyValue input = PyValue_DUP(constant);
+    PyObject *o = PyValue_IsObject(input) ? PyValue_AsPyObjectBorrow(input) : NULL;
     if (o == Py_None || o == Py_Ellipsis) {
-        return o;
+        return input;
     }
 
-    PyObject *key = _PyCode_ConstantKey(o);
-    if (key == NULL) {
-        return NULL;
+    PyValue key = _PyCode_ConstantValueKey(input);
+    if (PyValue_IsNull(key)) {
+        PyValue_CLOSE(input);
+        return PyValue_NULL;
     }
 
-    PyObject *t;
-    int res = PyDict_SetDefaultRef(const_cache, key, key, &t);
+    PyValue selected = PyValue_NULL;
+    int res = _PyDict_SetDefaultValue(const_cache, key, key, &selected);
     if (res != 0) {
-        // o was not inserted into const_cache. t is either the existing value
-        // or NULL (on error).
-        Py_DECREF(key);
-        return t;
+        PyValue_CLOSE(key);
+        PyValue_CLOSE(input);
+        return selected;
     }
-    Py_DECREF(t);
+    PyValue_CLOSE(selected);
 
     if (!recursive) {
+        PyValue_CLOSE(input);
         return key;
     }
 
-    // We registered o in const_cache.
-    // When o is a tuple or frozenset, we want to merge its
-    // items too.
-    if (PyTuple_CheckExact(o)) {
+    if (o != NULL && PyTuple_CheckExact(o)) {
         Py_ssize_t len = PyTuple_GET_SIZE(o);
         for (Py_ssize_t i = 0; i < len; i++) {
-            PyObject *item = PyTuple_GET_ITEM(o, i);
-            PyObject *u = const_cache_insert(const_cache, item, recursive);
-            if (u == NULL) {
-                Py_DECREF(key);
-                return NULL;
+            PyValue item = PyTuple_GetValue(o, i);
+            PyValue child_key = const_cache_insert(const_cache, item, true);
+            PyValue_CLOSE(item);
+            if (PyValue_IsNull(child_key)) {
+                goto error;
             }
-
-            // See _PyCode_ConstantKey()
-            PyObject *v;  // borrowed
-            if (PyTuple_CheckExact(u)) {
-                v = PyTuple_GET_ITEM(u, 1);
+            PyValue replacement = constant_from_key(child_key);
+            PyValue_CLOSE(child_key);
+            if (PyValue_IsNull(replacement)) {
+                goto error;
             }
-            else {
-                v = u;
-            }
-            if (v != item) {
-                PyTuple_SET_ITEM(o, i, Py_NewRef(v));
-                Py_DECREF(item);
-            }
-
-            Py_DECREF(u);
+            replace_equivalent_constant(o, i, replacement);
         }
     }
-    else if (PyFrozenSet_CheckExact(o)) {
-        // *key* is tuple. And its first item is frozenset of
-        // constant keys.
-        // See _PyCode_ConstantKey() for detail.
-        assert(PyTuple_CheckExact(key));
-        assert(PyTuple_GET_SIZE(key) == 2);
-
+    else if (o != NULL && PyFrozenSet_CheckExact(o)) {
         Py_ssize_t len = PySet_GET_SIZE(o);
-        if (len == 0) {  // empty frozenset should not be re-created.
-            return key;
-        }
-        PyObject *tuple = PyTuple_New(len);
-        if (tuple == NULL) {
-            Py_DECREF(key);
-            return NULL;
-        }
-        Py_ssize_t i = 0, pos = 0;
-        PyObject *item;
-        Py_hash_t hash;
-        while (_PySet_NextEntry(o, &pos, &item, &hash)) {
-            PyObject *k = const_cache_insert(const_cache, item, recursive);
-            if (k == NULL) {
-                Py_DECREF(tuple);
-                Py_DECREF(key);
-                return NULL;
+        if (len != 0) {
+            PyObject *merged = PyFrozenSet_New(NULL);
+            if (merged == NULL) {
+                goto error;
             }
-            PyObject *u;
-            if (PyTuple_CheckExact(k)) {
-                u = Py_NewRef(PyTuple_GET_ITEM(k, 1));
-                Py_DECREF(k);
+            Py_ssize_t pos = 0;
+            PyValue item;
+            Py_hash_t hash;
+            int next;
+            while ((next = _PySet_NextValue(o, &pos, &item, &hash)) > 0) {
+                PyValue child_key = const_cache_insert(const_cache, item, true);
+                PyValue_CLOSE(item);
+                if (PyValue_IsNull(child_key)) {
+                    Py_DECREF(merged);
+                    goto error;
+                }
+                PyValue replacement = constant_from_key(child_key);
+                PyValue_CLOSE(child_key);
+                if (PyValue_IsNull(replacement)) {
+                    Py_DECREF(merged);
+                    goto error;
+                }
+                int status = PySet_AddValue(merged, replacement);
+                PyValue_CLOSE(replacement);
+                if (status < 0) {
+                    Py_DECREF(merged);
+                    goto error;
+                }
             }
-            else {
-                u = k;
+            if (next < 0) {
+                Py_DECREF(merged);
+                goto error;
             }
-            PyTuple_SET_ITEM(tuple, i, u);  // Steals reference of u.
-            i++;
+            replace_equivalent_constant(PyValue_AsPyObjectBorrow(key), 1,
+                                        PyValue_FromPyObjectSteal(merged));
         }
-
-        // Instead of rewriting o, we create new frozenset and embed in the
-        // key tuple.  Caller should get merged frozenset from the key tuple.
-        PyObject *new = PyFrozenSet_New(tuple);
-        Py_DECREF(tuple);
-        if (new == NULL) {
-            Py_DECREF(key);
-            return NULL;
-        }
-        assert(PyTuple_GET_ITEM(key, 1) == o);
-        Py_DECREF(o);
-        PyTuple_SET_ITEM(key, 1, new);
     }
 
+    PyValue_CLOSE(input);
     return key;
+error:
+    PyValue_CLOSE(key);
+    PyValue_CLOSE(input);
+    return PyValue_NULL;
 }
 
-static PyObject*
-merge_consts_recursive(PyObject *const_cache, PyObject *o)
+static Py_ssize_t
+dict_add_value(PyObject *dict, PyValue key)
 {
-    return const_cache_insert(const_cache, o, true);
+    Py_ssize_t index = PyDict_GET_SIZE(dict);
+    PyValue proposed;
+    if (index <= INT32_MAX) {
+        proposed = PyValue_FromInt32((int32_t)index);
+    }
+    else {
+        PyObject *number = PyLong_FromSsize_t(index);
+        if (number == NULL) {
+            return ERROR;
+        }
+        proposed = PyValue_FromPyObjectSteal(number);
+    }
+    PyValue selected = PyValue_NULL;
+    int status = _PyDict_SetDefaultValue(dict, key, proposed, &selected);
+    PyValue_CLOSE(proposed);
+    if (status < 0) {
+        return ERROR;
+    }
+    Py_ssize_t result = PyValue_IsInlineInt(selected)
+                        ? PyValue_InlineInt(selected)
+                        : PyLong_AsSsize_t(PyValue_AsPyObjectBorrow(selected));
+    PyValue_CLOSE(selected);
+    return result;
 }
 
 Py_ssize_t
 _PyCompile_DictAddObj(PyObject *dict, PyObject *o)
 {
-    PyObject *v;
-    Py_ssize_t arg;
-
-    if (PyDict_GetItemRef(dict, o, &v) < 0) {
-        return ERROR;
-    }
-    if (!v) {
-        arg = PyDict_GET_SIZE(dict);
-        v = PyLong_FromSsize_t(arg);
-        if (!v) {
-            return ERROR;
-        }
-        if (PyDict_SetItem(dict, o, v) < 0) {
-            Py_DECREF(v);
-            return ERROR;
-        }
-    }
-    else
-        arg = PyLong_AsLong(v);
-    Py_DECREF(v);
-    return arg;
+    return dict_add_value(dict, PyValue_FromObjectBorrow(o));
 }
 
 Py_ssize_t
 _PyCompile_AddConst(compiler *c, PyObject *o)
 {
-    PyObject *key = merge_consts_recursive(c->c_const_cache, o);
-    if (key == NULL) {
+    PyValue key = const_cache_insert(c->c_const_cache,
+                                   PyValue_FromObjectBorrow(o), true);
+    if (PyValue_IsNull(key)) {
         return ERROR;
     }
 
-    Py_ssize_t arg = _PyCompile_DictAddObj(c->u->u_metadata.u_consts, key);
-    Py_DECREF(key);
+    Py_ssize_t arg = dict_add_value(c->u->u_metadata.u_consts, key);
+    PyValue_CLOSE(key);
     return arg;
 }
 
@@ -559,7 +578,7 @@ list2dict(PyObject *list)
             Py_DECREF(dict);
             return NULL;
         }
-        k = PyList_GET_ITEM(list, i);
+        k = compiler_metadata_item(list, i);
         if (PyDict_SetItem(dict, k, v) < 0) {
             Py_DECREF(v);
             Py_DECREF(dict);
@@ -582,7 +601,8 @@ static PyObject *
 dictbytype(PyObject *src, int scope_type, int flag, Py_ssize_t offset)
 {
     Py_ssize_t i = offset, num_keys, key_i;
-    PyObject *k, *v, *dest = PyDict_New();
+    PyObject *k = NULL, *dest = PyDict_New();
+    PyValue value = PyValue_NULL;
     PyObject *sorted_keys;
 
     assert(offset >= 0);
@@ -607,60 +627,81 @@ dictbytype(PyObject *src, int scope_type, int flag, Py_ssize_t offset)
     num_keys = PyList_GET_SIZE(sorted_keys);
 
     for (key_i = 0; key_i < num_keys; key_i++) {
-        k = PyList_GET_ITEM(sorted_keys, key_i);
-        v = PyDict_GetItemWithError(src, k);
-        if (!v) {
-            if (!PyErr_Occurred()) {
+        k = Py_NewRef(compiler_metadata_item(sorted_keys, key_i));
+        int found = PyDict_GetValue(src, PyValue_FromObjectBorrow(k), &value);
+        if (found <= 0) {
+            if (found == 0) {
                 PyErr_SetObject(PyExc_KeyError, k);
             }
-            Py_DECREF(sorted_keys);
-            Py_DECREF(dest);
-            return NULL;
+            goto error;
         }
-        long vi = PyLong_AsLong(v);
+        assert(PyValue_LongCheckExact(value));
+        long vi = PyValue_IsInlineInt(value) ? PyValue_InlineInt(value) :
+                  PyLong_AsLong(PyValue_AsPyObjectBorrow(value));
         if (vi == -1 && PyErr_Occurred()) {
-            Py_DECREF(sorted_keys);
-            Py_DECREF(dest);
-            return NULL;
+            goto error;
         }
+        PyValue_CLEAR(value);
         if (SYMBOL_TO_SCOPE(vi) == scope_type || vi & flag) {
             PyObject *item = PyLong_FromSsize_t(i);
             if (item == NULL) {
-                Py_DECREF(sorted_keys);
-                Py_DECREF(dest);
-                return NULL;
+                goto error;
             }
             i++;
             if (PyDict_SetItem(dest, k, item) < 0) {
-                Py_DECREF(sorted_keys);
+                PyObject *saved = PyErr_GetRaisedException();
                 Py_DECREF(item);
-                Py_DECREF(dest);
-                return NULL;
+                _PyValue_RestoreException(saved);
+                goto error;
             }
             Py_DECREF(item);
         }
+        Py_CLEAR(k);
     }
     Py_DECREF(sorted_keys);
     return dest;
+
+error:;
+    PyObject *saved = PyErr_GetRaisedException();
+    PyValue_XCLOSE(value);
+    Py_XDECREF(k);
+    Py_DECREF(sorted_keys);
+    Py_DECREF(dest);
+    _PyValue_RestoreException(saved);
+    return NULL;
 }
 
 static int
 add_cell_names_from_symbols(PyObject *symbols, PyObject *names)
 {
     Py_ssize_t pos = 0;
-    PyObject *k, *v;
-    while (PyDict_Next(symbols, &pos, &k, &v)) {
-        long flags = PyLong_AsLong(v);
+    PyValue key = PyValue_NULL, value = PyValue_NULL;
+    int status;
+    while ((status = _PyDict_NextValue(symbols, &pos, &key, &value, NULL)) > 0) {
+        assert(PyValue_IsObject(key));
+        assert(PyUnicode_CheckExact(PyValue_AsPyObjectBorrow(key)));
+        assert(PyValue_LongCheckExact(value));
+        long flags = PyValue_IsInlineInt(value) ? PyValue_InlineInt(value) :
+                     PyLong_AsLong(PyValue_AsPyObjectBorrow(value));
         if (flags == -1 && PyErr_Occurred()) {
-            return ERROR;
+            goto error;
         }
         if (SYMBOL_TO_SCOPE(flags) == CELL) {
-            if (PySet_Add(names, k) < 0) {
-                return ERROR;
+            if (PySet_Add(names, PyValue_AsPyObjectBorrow(key)) < 0) {
+                goto error;
             }
         }
+        PyValue_CLEAR(key);
+        PyValue_CLEAR(value);
     }
-    return SUCCESS;
+    return status < 0 ? ERROR : SUCCESS;
+
+error:;
+    PyObject *saved = PyErr_GetRaisedException();
+    PyValue_XCLOSE(key);
+    PyValue_XCLOSE(value);
+    _PyValue_RestoreException(saved);
+    return ERROR;
 }
 
 static int
@@ -668,7 +709,7 @@ add_inlined_comprehension_cell_names(PySTEntryObject *ste, PyObject *names)
 {
     for (Py_ssize_t i = 0; i < PyList_GET_SIZE(ste->ste_children); i++) {
         PySTEntryObject *child =
-            (PySTEntryObject *)PyList_GET_ITEM(ste->ste_children, i);
+            (PySTEntryObject *)compiler_metadata_item(ste->ste_children, i);
         if (child->ste_type != InlinedComprehensionBlock) {
             continue;
         }
@@ -871,7 +912,7 @@ _PyCompile_ExitScope(compiler *c)
     /* Restore c->u to the parent unit. */
     Py_ssize_t n = PyList_GET_SIZE(c->c_stack) - 1;
     if (n >= 0) {
-        PyObject *capsule = PyList_GET_ITEM(c->c_stack, n);
+        PyObject *capsule = compiler_metadata_item(c->c_stack, n);
         c->u = (struct compiler_unit *)PyCapsule_GetPointer(capsule, CAPSULE_NAME);
         assert(c->u);
         // The capsule can outlive the unit, which its traverse must then
@@ -1093,11 +1134,17 @@ _PyCompile_GetRefType(compiler *c, PyObject *name)
 static int
 dict_lookup_arg(PyObject *dict, PyObject *name)
 {
-    PyObject *v = PyDict_GetItemWithError(dict, name);
-    if (v == NULL) {
+    PyValue value;
+    if (PyDict_GetValue(dict, PyValue_FromObjectBorrow(name), &value) <= 0) {
         return ERROR;
     }
-    return PyLong_AsLong(v);
+    assert(PyValue_LongCheckExact(value));
+    long result = PyValue_IsInlineInt(value) ? PyValue_InlineInt(value) :
+                  PyLong_AsLong(PyValue_AsPyObjectBorrow(value));
+    PyObject *saved = PyErr_GetRaisedException();
+    PyValue_CLOSE(value);
+    _PyValue_RestoreException(saved);
+    return result;
 }
 
 int
@@ -1446,42 +1493,59 @@ _PyCompile_Metadata(compiler *c)
 int
 _PyCompile_ConstCacheMergeOne(PyObject *const_cache, PyObject **obj)
 {
-    PyObject *key = const_cache_insert(const_cache, *obj, false);
-    if (key == NULL) {
+    PyValue key = const_cache_insert(const_cache,
+                                   PyValue_FromObjectBorrow(*obj), false);
+    if (PyValue_IsNull(key)) {
         return ERROR;
     }
-    if (PyTuple_CheckExact(key)) {
-        PyObject *item = PyTuple_GET_ITEM(key, 1);
-        Py_SETREF(*obj, Py_NewRef(item));
-        Py_DECREF(key);
+    PyValue value = constant_from_key(key);
+    PyValue_CLOSE(key);
+    if (PyValue_IsNull(value)) {
+        return ERROR;
     }
-    else {
-        Py_SETREF(*obj, key);
+    PyObject *replacement = PyValue_AsObject(value);
+    PyValue_CLOSE(value);
+    if (replacement == NULL) {
+        return ERROR;
     }
+    Py_SETREF(*obj, replacement);
     return SUCCESS;
 }
 
 static PyObject *
 consts_dict_keys_inorder(PyObject *dict)
 {
-    PyObject *consts, *k, *v;
-    Py_ssize_t i, pos = 0, size = PyDict_GET_SIZE(dict);
+    Py_ssize_t pos = 0, size = PyDict_GET_SIZE(dict);
 
-    consts = PyList_New(size);   /* PyCode_Optimize() requires a list */
+    PyObject *consts = PyList_New(size);
     if (consts == NULL)
         return NULL;
-    while (PyDict_Next(dict, &pos, &k, &v)) {
-        assert(PyLong_CheckExact(v));
-        i = PyLong_AsLong(v);
-        /* The keys of the dictionary can be tuples wrapping a constant.
-         * (see _PyCompile_DictAddObj and _PyCode_ConstantKey). In that case
-         * the object we want is always second. */
-        if (PyTuple_CheckExact(k)) {
-            k = PyTuple_GET_ITEM(k, 1);
+    PyValue key, index;
+    int next;
+    while ((next = _PyDict_NextValue(dict, &pos, &key, &index, NULL)) > 0) {
+        Py_ssize_t i = PyValue_IsInlineInt(index)
+                       ? PyValue_InlineInt(index)
+                       : PyLong_AsSsize_t(PyValue_AsPyObjectBorrow(index));
+        PyValue_CLOSE(index);
+        if (i < 0 || i >= size) {
+            PyValue_CLOSE(key);
+            Py_DECREF(consts);
+            if (!PyErr_Occurred()) {
+                PyErr_SetString(PyExc_SystemError, "invalid compiler constant index");
+            }
+            return NULL;
         }
-        assert(i < size);
-        assert(i >= 0);
-        PyList_SET_ITEM(consts, i, Py_NewRef(k));
+        PyValue constant = constant_from_key(key);
+        PyValue_CLOSE(key);
+        if (PyValue_IsNull(constant)) {
+            Py_DECREF(consts);
+            return NULL;
+        }
+        PyList_SET_VALUE(consts, i, constant);
+    }
+    if (next < 0) {
+        Py_DECREF(consts);
+        return NULL;
     }
     return consts;
 }
@@ -1499,102 +1563,144 @@ consts_dict_keys_inorder(PyObject *dict)
  * to replace cannot be modified: a new object is created and stored in its
  * entry of *const_cache*, which is where the other users of *o* find it.
  */
-static PyObject *
-intern_constant(PyObject *const_cache, PyObject *o)
+static PyValue
+intern_constant(PyObject *const_cache, PyValue constant)
 {
+    PyValue input = PyValue_DUP(constant);
+    if (!PyValue_IsObject(input)) {
+        return input;
+    }
+    PyObject *o = PyValue_AsPyObjectBorrow(input);
     if (PyUnicode_CheckExact(o)) {
-        Py_INCREF(o);
+        o = PyValue_AsPyObjectSteal(input);
         if (_PyCode_ShouldInternString(o)) {
             _PyUnicode_InternMortal(_PyInterpreterState_GET(), &o);
         }
-        return o;
+        return PyValue_FromPyObjectSteal(o);
     }
     if (PyTuple_CheckExact(o)) {
         Py_ssize_t len = PyTuple_GET_SIZE(o);
         for (Py_ssize_t i = 0; i < len; i++) {
-            PyObject *item = PyTuple_GET_ITEM(o, i);
-            PyObject *v = intern_constant(const_cache, item);
-            if (v == NULL) {
-                return NULL;
+            PyValue item = PyTuple_GetValue(o, i);
+            PyValue replacement = intern_constant(const_cache, item);
+            PyValue_CLOSE(item);
+            if (PyValue_IsNull(replacement)) {
+                PyValue_CLOSE(input);
+                return PyValue_NULL;
             }
-            if (v != item) {
-                // intern_constants() makes the same replacement in the
-                // tuple if it is not made here.
-                PyTuple_SET_ITEM(o, i, v);
-                Py_DECREF(item);
-            }
-            else {
-                Py_DECREF(v);
-            }
+            replace_equivalent_constant(o, i, replacement);
         }
-        return Py_NewRef(o);
+        return input;
     }
     if (!PyFrozenSet_CheckExact(o) && !PySlice_Check(o)) {
-        return Py_NewRef(o);
+        return input;
     }
 
     // The key of a frozenset or of a slice is a pair whose second item is
     // the object which stands for all the equal constants.
     // See _PyCode_ConstantKey().
-    PyObject *key = const_cache_insert(const_cache, o, false);
-    if (key == NULL) {
-        return NULL;
+    PyValue key = const_cache_insert(const_cache, input, false);
+    PyValue_CLOSE(input);
+    if (PyValue_IsNull(key)) {
+        return PyValue_NULL;
     }
-    assert(PyTuple_CheckExact(key));
-    assert(PyTuple_GET_SIZE(key) == 2);
-    o = PyTuple_GET_ITEM(key, 1);
+    PyValue selected = constant_from_key(key);
+    if (PyValue_IsNull(selected)) {
+        PyValue_CLOSE(key);
+        return PyValue_NULL;
+    }
+    o = PyValue_AsPyObjectBorrow(selected);
 
     PyObject *items;
     if (PyFrozenSet_CheckExact(o)) {
-        items = PySequence_Tuple(o);
+        items = PyTuple_New(PySet_GET_SIZE(o));
+        if (items != NULL) {
+            Py_ssize_t pos = 0, i = 0;
+            PyValue item;
+            Py_hash_t hash;
+            int next;
+            while ((next = _PySet_NextValue(o, &pos, &item, &hash)) > 0) {
+                PyTuple_SET_VALUE(items, i++, item);
+            }
+            if (next < 0) {
+                Py_CLEAR(items);
+            }
+        }
     }
     else {
         PySliceObject *slice = (PySliceObject *)o;
         items = PyTuple_Pack(3, slice->start, slice->stop, slice->step);
     }
     if (items == NULL) {
-        Py_DECREF(key);
-        return NULL;
+        PyValue_CLOSE(selected);
+        PyValue_CLOSE(key);
+        return PyValue_NULL;
     }
     bool modified = false;
     Py_ssize_t len = PyTuple_GET_SIZE(items);
     for (Py_ssize_t i = 0; i < len; i++) {
-        PyObject *item = PyTuple_GET_ITEM(items, i);
-        PyObject *v = intern_constant(const_cache, item);
-        if (v == NULL) {
+        PyValue item = PyTuple_GetValue(items, i);
+        PyValue replacement = intern_constant(const_cache, item);
+        if (PyValue_IsNull(replacement)) {
+            PyValue_CLOSE(item);
             Py_DECREF(items);
-            Py_DECREF(key);
-            return NULL;
+            PyValue_CLOSE(selected);
+            PyValue_CLOSE(key);
+            return PyValue_NULL;
         }
-        if (v != item) {
+        if (!PyValue_Is(item, replacement)) {
             modified = true;
         }
-        PyTuple_SET_ITEM(items, i, v);
-        Py_DECREF(item);
+        PyValue_CLOSE(item);
+        replace_equivalent_constant(items, i, replacement);
     }
     if (modified) {
         PyObject *new;
         if (PyFrozenSet_CheckExact(o)) {
-            new = PyFrozenSet_New(items);
+            new = PyFrozenSet_New(NULL);
+            if (new != NULL) {
+                for (Py_ssize_t i = 0; i < len; i++) {
+                    PyValue item = PyTuple_GetValue(items, i);
+                    int status = PySet_AddValue(new, item);
+                    PyValue_CLOSE(item);
+                    if (status < 0) {
+                        Py_CLEAR(new);
+                        break;
+                    }
+                }
+            }
         }
         else {
-            new = PySlice_New(PyTuple_GET_ITEM(items, 0),
-                              PyTuple_GET_ITEM(items, 1),
-                              PyTuple_GET_ITEM(items, 2));
+            PyObject *fields[3] = {NULL, NULL, NULL};
+            int i;
+            for (i = 0; i < 3; i++) {
+                PyValue item = PyTuple_GetValue(items, i);
+                fields[i] = PyValue_AsObject(item);
+                PyValue_CLOSE(item);
+                if (fields[i] == NULL) {
+                    break;
+                }
+            }
+            new = i == 3 ? PySlice_New(fields[0], fields[1], fields[2]) : NULL;
+            for (i = 0; i < 3; i++) {
+                Py_XDECREF(fields[i]);
+            }
         }
         if (new == NULL) {
             Py_DECREF(items);
-            Py_DECREF(key);
-            return NULL;
+            PyValue_CLOSE(selected);
+            PyValue_CLOSE(key);
+            return PyValue_NULL;
         }
-        PyTuple_SET_ITEM(key, 1, new);
-        Py_DECREF(o);
-        o = new;
+        PyValue replacement = PyValue_FromPyObjectSteal(new);
+        replace_equivalent_constant(PyValue_AsPyObjectBorrow(key), 1,
+                                    PyValue_DUP(replacement));
+        PyValue_CLOSE(selected);
+        selected = replacement;
     }
     Py_DECREF(items);
-    Py_INCREF(o);
-    Py_DECREF(key);
-    return o;
+    PyValue_CLOSE(key);
+    return selected;
 }
 
 /* Intern the strings of the constants of a code unit, once the optimizer
@@ -1616,13 +1722,15 @@ intern_final_constants(PyObject *const_cache, PyObject *consts)
     assert(PyList_CheckExact(consts));
     Py_ssize_t len = PyList_GET_SIZE(consts);
     for (Py_ssize_t i = 0; i < len; i++) {
-        PyObject *item = PyList_GET_ITEM(consts, i);
-        PyObject *v = intern_constant(const_cache, item);
-        if (v == NULL) {
+        PyValue item = PyList_GetValue(consts, i);
+        PyValue replacement = intern_constant(const_cache, item);
+        PyValue_CLOSE(item);
+        if (PyValue_IsNull(replacement)) {
             return ERROR;
         }
-        PyList_SET_ITEM(consts, i, v);
-        Py_DECREF(item);
+        if (_PyList_SetItemTakeValue((PyListObject *)consts, i, replacement) < 0) {
+            return ERROR;
+        }
     }
     return SUCCESS;
 }

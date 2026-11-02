@@ -17,7 +17,7 @@
 #include "pycore_pyerrors.h"      // _PyErr_NoMemory()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_pythonrun.h"     // _Py_SourceAsString()
-#include "pycore_stackref.h"      // _PyObject_ValueIdentity()
+#include "pycore_value.h"      // _PyObject_ValueIdentity()
 #include "pycore_tuple.h"         // _PyTuple_Recycle()
 
 #include "clinic/bltinmodule.c.h"
@@ -215,7 +215,11 @@ builtin___build_class__(PyObject *self, PyObject *const *args, Py_ssize_t nargs,
         PyObject *margs[3] = {name, bases, ns};
         cls = PyObject_VectorcallDict(meta, margs, 3, mkw);
         if (cls != NULL && PyType_Check(cls) && PyCell_Check(cell)) {
-            PyObject *cell_cls = PyCell_GetRef((PyCellObject *)cell);
+            PyObject *cell_cls = PyCell_Get(cell);
+            if (cell_cls == NULL && PyErr_Occurred()) {
+                Py_CLEAR(cls);
+                goto error;
+            }
             if (cell_cls != cls) {
                 if (cell_cls == NULL) {
                     const char *msg =

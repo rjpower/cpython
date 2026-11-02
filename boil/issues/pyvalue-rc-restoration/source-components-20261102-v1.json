@@ -338,6 +338,31 @@
       "producer_rules": 1,
       "generated_expansions": 74,
       "runnable": false
+    },
+    "ast_constructor_owners": {
+      "commit": "b1dce616174c5b67a14583d25d95ff063307f1dc",
+      "changed_paths": 3,
+      "runnable": false,
+      "syntax_TU_pass": true,
+      "object_pass": true
+    },
+    "list_sort_validity": {
+      "commit": "4bf934bb4ec8a7d2ebe31caa5e9d7ac6c209a73a",
+      "changed_paths": 1,
+      "assertions": 2,
+      "object_pass": true,
+      "runnable": false
+    },
+    "clinic_unified_fixed_keywords": {
+      "commit": "180b4b6d9af3ba1b9fa1b0f80ea5e6e55b87832f",
+      "changed_paths": 31,
+      "production_wrappers": 48,
+      "fixture_wrappers": 3,
+      "host_checks": 285,
+      "configured_syntax_TUs": 27,
+      "whole_TU_passes": 6,
+      "selected_context_diagnostics": [],
+      "runnable": false
     }
   },
   "first_diagnostic_build": {
@@ -347,15 +372,17 @@
     "candidate_linked": false
   },
   "latest_diagnostic_build": {
-    "head": "e645682dab527c3ba552e49de673d6c65ceebd2f",
-    "objects_present": 154,
-    "error_diagnostics": 519,
+    "head": "4bf934bb4ec8a7d2ebe31caa5e9d7ac6c209a73a",
+    "objects_present": 161,
+    "error_diagnostics": 430,
     "source_unchanged": true,
     "candidate_linked": false,
     "includes_held_source_files": true,
+    "clinic_v2_unaccepted_at_build": true,
+    "clinic_v2_subsequently_committed": "180b4b6d9af3ba1b9fa1b0f80ea5e6e55b87832f",
     "make_exit": 2,
-    "source_manifest_paths": 7339,
-    "evidence": "build/pyvalue-merged-build-20261102-v4"
+    "source_manifest_paths": 7341,
+    "evidence": "build/pyvalue-merged-build-20261102-v6"
   },
   "mro_provider_reviewed_delta": {
     "typeobject_sha256": "d07219973716cab2749c7f9992ee268dd014815d28fd574c6d6c2d84b74dcf1d",

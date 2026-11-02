@@ -11,8 +11,10 @@ The qualified interim interpreter is built from `eba351fee7d`: register IR and
 NaN-boxed frame values, with boxed heap fields. Universal PyValue restoration
 is on `boil/pyvalue-rc-universal`. Reviewed ports
 now include the object/attribute bridge, positional constructors, small
-tokenizer/bytes readers, object C call bridges and an AST sequence producer batch.
-The remaining original held file is typeobject.c.
+tokenizer/bytes readers, object C call bridges, an AST sequence producer batch
+and the AST constructor. The AST translation unit and object now build.
+The unified fixed-keyword Clinic batch and list-sort value assertions are also
+committed. The remaining original held file is typeobject.c.
 There is no linked or qualified restored interpreter or timing result.
 
 **Current step:** close the concrete blockers from the merged diagnostic build.
@@ -20,9 +22,12 @@ The latest merged build still failed before linking. The C API call bridges now
 compile, and their focused checks and independent reviews pass. Typeobject has
 reviewed provider, mutation, constructor and graph deltas. MRO providers have
 passed code/native attribution review; publication, slots and lifecycle still
-need closure. The merged v4 build has no executable. Luna groups its compiler
-errors into common causes; Sol 6.1 reviews the AST constructor port and designs
-the repeated Clinic fixes. Approved rules go to mechanical or Luna batches.
+need closure. No merged executable exists. Luna grouped v4's compiler errors;
+the reviewed unified Clinic rule now covers 48 production wrappers. The latest
+v6 compiler probe has 430 repeated/cascading errors and no executable. Luna is
+porting fourteen core reader functions; the coordinator is applying three pure
+function/type predicates under Sol's reviewed rule.
+Sol 6.1 designs/reviews reusable fixes; approved rules go to mechanical or Luna batches.
 The coordinator integrates reviewed results, rebuilds and repeats.
 See [porting rules and remaining work](issues/pyvalue-rc-restoration/porting/status.md)
 for mandatory ownership ports versus later performance tuning.

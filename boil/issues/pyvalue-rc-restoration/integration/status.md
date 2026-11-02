@@ -35,17 +35,21 @@ list. Object composition and small tokenizer/bytes consumers are committed;
 typeobject.c is the remaining original held file. Clinic covers 20 further
 positional wrappers; classobject/codeobject compile. Core mutation dependencies and object calls are checkpointed; graph/type_new
 deltas remain held. C3/MRO providers plus one wrapper passed independent
-code/native attribution review. The first generated AST sequence batch is committed and removes
-74 compiler diagnostics from its TU; seven unchanged constructor errors remain.
+code/native attribution review. The generated AST sequence and constructor
+batches are committed; their full TU/object pass. The unified Clinic rule now
+covers 48 production wrappers and is committed, as are the list-sort assertions.
 Remaining actual parser, container/
 startup and bundled consumer ports still block a baseline executable.
 
 The latest [merged diagnostic build](../merged-build/status.md) binds the
-23-checkpoint chain at e645682dab5 plus reviewed held typeobject deltas through
-the corrected MRO providers. It exited 2, with 154 objects present and no
-executable. All 7,339 source paths stayed unchanged; 519 repeated/cascading error
+25-checkpoint chain at 4bf934bb4ec plus then-unaccepted frozen Clinic v2 and
+reviewed held typeobject through the corrected MRO providers. It exited 2, with
+161 objects present and no executable. All 7,341 source paths stayed unchanged;
+430 repeated/cascading error
 diagnostics remain raw evidence. Focused component checks do not make this a
-passing merged build.
+passing merged build. Clinic v2 subsequently passed review and was committed
+as checkpoint26. Luna's fourteen core-reader functions and root's three pure
+predicates are the active implementation batches.
 
 Prioritize a coherent register interpreter with the unified format and JIT off.
 Use concrete failed compiler/linker/startup routes to select finite ports, preserving

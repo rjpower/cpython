@@ -19,8 +19,10 @@ small tokenizer/bytes and object call consumers have passed their finite source
 gates and are committed. Type_new and graph repairs are applied/reviewed pending
 typeobject composition. They do not yet form an executable candidate.
 The [first bulk AST port](porting/status.md) is committed: one producer covers
-74 sequence reads. Its full TU still fails at seven unchanged constructor
-diagnostics. The MRO providers plus one immediate wrapper passed independent
+74 sequence reads. The subsequent constructor port is committed and its full
+TU/object pass without diagnostics. The unified Clinic rule covers 48 production
+wrappers and is committed; fourteen core readers and three pure predicates are
+being ported under reviewed rules. The MRO providers plus one immediate wrapper passed independent
 code/native attribution review; their syntax comparison has 61 diagnostics,
 versus 86 before, including
 two missing-API first-use messages relocated to unchanged functions.
@@ -38,9 +40,10 @@ and [native caller](native-callers/status.md) receipts describe their frozen
 checkpoints. The later [caller transaction](native-parsers/caller-transaction/status.md)
 repairs and checkpoints their composition; its candidate runtime tests remain
 unexecuted. The [merged diagnostic build](merged-build/status.md) still fails to
-link. Its latest v4 snapshot at 23 checkpoints plus reviewed held typeobject
-deltas has 154 objects present and 519 repeated/cascading error diagnostics.
-All 7,339 source paths remained unchanged; no candidate was executed.
+link. Its latest v6 snapshot at checkpoint25 plus then-unaccepted Clinic v2 and
+reviewed held typeobject has 161 objects present and 430 repeated/cascading
+error diagnostics. All 7,341 source paths remained unchanged; no candidate was
+executed. Clinic v2 subsequently passed review and became checkpoint26.
 
 ## Remaining increments
 

@@ -1,10 +1,12 @@
 # Porting batches and remaining work
 
-Stage: census complete; first generated-AST batch reviewed and committed as
-e645682dab5. Luna analyzes the v4 compiler log and applies approved bulk rules;
-Sol 6.1 reviews the AST constructor and designs high-yield common fixes, starting
-with repeated keyword Clinic callers. The coordinator assigns, integrates and
-validates the merged result. The MRO providers and immediate public wrapper
+Stage: v4 family analysis complete; AST sequence and constructor batches
+reviewed/committed as e645682dab5 and b1dce616174. The full AST TU/object now pass
+without diagnostics. The unified Clinic48 batch is reviewed and committed as
+180b4b6d9af; list assertions are committed as 4bf934bb4ec. Luna is implementing
+fourteen core reader functions; root is applying three pure predicates under
+Sol's reviewed rule. The coordinator integrates and validates the merged result.
+MRO providers and the public wrapper
 passed code/native attribution review; their delta remains held. The next
 publication transaction has a read-only handoff, queued for design.
 
@@ -78,17 +80,48 @@ text outside the 74 reviewed blocks exact. Regeneration is idempotent and both
 AST headers unchanged. Three host 3.13.15 controls pass. A stable same-header
 full-TU syntax comparison reports 81 diagnostics before and seven afterward,
 with no new diagnostic messages/contexts. All seven remain in unchanged
-ast_type_init; both compilations fail. There is no AST object pass or candidate
-execution. The next constructor packet is design-only.
+ast_type_init at that historical endpoint; both compilations failed.
+
+The following constructor packet is now committed as b1dce616174. Stable native
+checks go from seven diagnostics to zero and the actual object builds. Output
+outside ast_type_init, including all 74 sequence sites, remains exact. Independent
+Sol 6.1 code/result review accepts it. Seven host tests ran on 3.14: four pass
+and three skip older AST error semantics. All seven candidate tests remain
+unexecuted. Evidence: build/pyvalue-ast-constructor-design-20261102-v1/commit.json.
+
+The Clinic fixed-keyword rule now has one path for 48 production constructors
+and three Owner fixtures. Independent review proves 769 unselected function
+bodies, 27 handwritten inputs and all twenty earlier positional wrappers exact.
+Two generation passes are idempotent; 285 host checks pass with explicit
+unavailable runtime/fixture omissions. Root checked 27 configured translation
+units: six pass completely, and no selected-wrapper error/warning contexts
+remain. No candidate C was executed. Evidence:
+build/pyvalue-clinic-keyword-bulk-20261102-v2/commit.json.
+
+Two canonical non-NULL list-sort assertions replace C pointer-truth checks;
+all other source bytes match and the actual list object builds. Evidence:
+build/pyvalue-list-sort-validity-20261102-v1/commit.json.
+
+Active reader grants are finite: six files/fourteen functions for Luna in
+build/pyvalue-sol-port-rules-20261102-v1/coordinator-core-readers-grant.md;
+three pure functions in funcobject/typevarobject for root. Owning generic
+getters retain operands through callbacks and preserve first errors during
+cleanup; pure kind checks do not box. TypeVar's tuple-vararg parser resource
+is a separate queued producer amendment. Native checks serialize at freeze.
 
 ## Census and evidence
 
-The latest completed merged build predates the separately checked graph and
+The historical v3 build predates the separately checked graph and
 call bridges: 540 error diagnostics at 425 distinct source locations in 90
 source/header paths. These are observations
 of that failed build, not independent defects or a current edit count. It also
 reported 171 warnings, counted separately. Repeated headers, cascades, generated
 expansions and already fixed calls inflate these figures.
+
+The latest v6 merged probe reports 430 errors/161 objects present and no
+executable; all 7,341 source paths stayed unchanged. Its Clinic v2 bytes were
+subsequently reviewed and committed. Counts remain repeated/cascading compiler
+observations, not independent defects or a percentage complete.
 
 The production scan finds 363 PyTuple_GET_ITEM, 84 PyList_GET_ITEM and
 40 PyDict_Next occurrences, excluding recognized generated products and test sources.

@@ -4,7 +4,32 @@
 - Owner: coordinator
 - Purpose: expose actual baseline compiler/linker dependencies on frozen merged source
 
-Latest attempt: [v4 record](../../../../build/pyvalue-merged-build-20261102-v4/results.json),
+Latest attempt: [v6 record](../../../../build/pyvalue-merged-build-20261102-v6/results.json),
+an early probe at 4bf934bb4ec plus then-unaccepted frozen unified Clinic48-v2
+and held reviewed typeobject. Make exited 2 in 4.97 seconds, with 161 objects
+present, 430 repeated/cascading errors and no executable. All 7,341 source paths
+stayed unchanged. Clinic v2 subsequently passed independent code/results review
+and was committed as 180b4b6d9af; the build itself is not runtime admission.
+
+[v6 identity](../../../../build/pyvalue-merged-build-20261102-v6/identity.json),
+[raw log](../../../../build/pyvalue-merged-build-20261102-v6/make.log),
+[source before](../../../../build/pyvalue-merged-build-20261102-v6/source-before.json),
+[source after](../../../../build/pyvalue-merged-build-20261102-v6/source-after.json).
+
+Previous attempt: [v5 record](../../../../build/pyvalue-merged-build-20261102-v5/results.json),
+an early compiler probe at b1dce616174 plus the unaccepted frozen Clinic39-v1
+and held reviewed typeobject endpoint. Make exited 2 in 4.00 seconds, with 160
+objects present, 434 repeated/cascading errors and no executable. All 7,341
+source paths stayed unchanged. The Clinic batch still needs finite code-review
+corrections and production controls; this build neither accepts it nor executes
+the candidate. Its new unused-nargs warnings are part of the correction packet.
+
+[v5 identity](../../../../build/pyvalue-merged-build-20261102-v5/identity.json),
+[raw log](../../../../build/pyvalue-merged-build-20261102-v5/make.log),
+[source before](../../../../build/pyvalue-merged-build-20261102-v5/source-before.json),
+[source after](../../../../build/pyvalue-merged-build-20261102-v5/source-after.json).
+
+Previous attempt: [v4 record](../../../../build/pyvalue-merged-build-20261102-v4/results.json),
 source HEAD e645682dab5 plus held provider/core/type_new/graph and the corrected
 MRO15 endpoint d0721997. Make exited 2 in 3.34 seconds, with 154 objects present,
 519 repeated/cascading error diagnostics and no executable. All 7,339 source

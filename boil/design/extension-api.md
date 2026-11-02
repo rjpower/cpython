@@ -56,8 +56,8 @@ passed independent component source review. A separate
 [specialized O-call successor](../issues/pyvalue-rc-restoration/o-caller-source-grant-20261101-v1.md)
 now supplies actual generated publication and post-cleanup reload; its corrected
 checkpoint has 40 host tests and four selected syntax checks passing. Independent
-review accepts the actual specialized O-call production route; real cleanup
-fixtures still need exact composition and candidate execution. Generic dispatch/NOARGS adoption,
+review accepts the actual specialized O-call production route; corrected legal
+cleanup fixtures are now source-bound and still need candidate execution. Generic dispatch/NOARGS adoption,
 other calling conventions, the HPy backend and rebuilt-extension conformance
 remain required later work. No candidate native execution is claimed.
 

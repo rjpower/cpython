@@ -481,3 +481,8 @@ candidate runtime or timing has executed.
   48,093characters/five Mermaid blocks; snapshot SHA256 `0fc0da095c26e31e4213abe79727609591f935706c72714b5e666afebc886fd4`.
   Canonical component acceptance is source-only; active storage/readers
   and wider native/Clinic/constructor closure precede candidate execution.
+
+- 2026-11-02 01:27 UTC: Published/read back revision58 exactly,
+  48,398characters/five diagrams; snapshot SHA256 `608b2f988d0c3104aee6b3f3dfcee2e5a8ecca77947db0236ff34f7462dfc212`.
+  Managed constructor source accepted; remaining storage/readers and
+  wider native/Clinic work still precede candidate execution.

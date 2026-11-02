@@ -11,7 +11,7 @@ Python behavior remains required.
 | Owner | Current result and remaining work |
 | --- | --- |
 | restart_audit | Foundation, specialized O-call, local/slot retirement, common constants and VM dictionary construction/stores source accepted. The latter has42 passing host checks/seven generators and nine AST-only methods. Implements the next separately reviewed specializer/cold-and-warm reader cut. |
-| coordinator | Tuple/member/cell/iteration, set, Python slots, common constants, compiler constant consumers and canonical typed constant-key production source accepted. Six new key tests are AST-only; real fixture and exact producer-body syntax pass. Recursive cache/interning remains in design. |
+| coordinator | Tuple/member/cell/iteration, set, Python slots, managed initialization before CREATE, common constants and compiler constant/key components source accepted. Runtime remains unqualified. Coordinates remaining compiler cache/interning design and coherent integration. |
 | coroutine_design_review | List/structseq, native scope, dictionary clear/release, owning reads, mutation/growth/typed watchers and the value-native constructor source accepted. Implements the separate copy/conditional-insertion/managed-storage cut under corrected zero-refcount rules. |
 | value_api_consumer_map | Independent source review, callback/failure-path findings and the sealed 660-path native consumer inventory. Source component decisions do not constitute runtime acceptance. |
 
@@ -228,8 +228,11 @@ producer-body projection pass syntax; full codeobject retains older Clinic,
 interning and reader failures. Its window closed early. Compiler cache/final
 interning and wider codeobject closure remain required.
 
-Managed construction still has a publication gap: inline headers/NULL1 initialize
-after `_PyObject_Init` can invoke reference CREATE. The next exact allocator
-handoff must initialize valid managed state before that observer, retaining the
-type/header prerequisites. This is a required qualification fix, not covered by
-the already accepted slot or copy/detach source component.
+Managed constructor source now closes the CREATE publication gap: reviewb11eaaad
+binds receiptc8047215. The allocator installs the type pointer, initializes
+declared and managed fields, then calls `_PyObject_Init[Var]` for the sole type
+INCREF and reference publication. The existing observer checks full managed
+capacity/header/root shape/absent dictionary and every NULL1 slot without
+allocation or exception changes. Two new tests are AST-only; actual fixture
+syntax passes, full type/native/runtime qualification remains open. The separate
+15-minute source window closed early. This changes no C-owned initializer body.

@@ -1902,3 +1902,15 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   read back exactly; latest48,093characters/five diagrams. No restored
   candidate/runtime/timing.
   [Progress](issues/pyvalue-rc-restoration/implementation-progress-20261101.md).
+- 2026-11-02 01:27 UTC: Close managed-before-CREATE constructor source
+  gap after independent reviewb11eaaad; separate15-minute window closes
+  early. Type and declared/managed NULL1 state precede publication;
+  sole type INCREF and variable-size prewrite remain. Actual fixture
+  syntax passes; two new tests remain unexecuted, whole type/native
+  qualification remains open. Accept two exact C reader providers
+  for A handoff, without accepting actual VM composition. Storage
+  draft and reader work continue under original ceilings; adaptive
+  binary prelude callback dependency is explicitly under assessment.
+  Publish/read back Loom58 exactly,48,398characters/five diagrams.
+  No restored candidate/runtime/timing.
+  [Disposition](issues/pyvalue-rc-restoration/managed-constructor-source-disposition-20261102-v1.json).

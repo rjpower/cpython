@@ -66,6 +66,20 @@
     "new_runtime_ast_methods": 6,
     "whole_codeobject_accepted": false
   },
+  "managed_constructor_before_create": {
+    "author_sha256": "c80472150ffea2869f40f1de7e3bf440ba1638219180a9046719e2a20f9bd453",
+    "review_sha256": "b11eaaadd4879ba62dd03c8a4a3cae570dea805dd0da168d396c53bf2f3bb4a2",
+    "source_window_closed_early": true,
+    "new_runtime_ast_methods": 2,
+    "whole_typeobject_accepted": false
+  },
+  "dictionary_reader_provider_handoff": {
+    "author_sha256": "fddc8b4f9a30437c03bedd5c9143f976af5b9cacec5ce16799db1791ef53d41d",
+    "review_sha256": "589b030d098d889472c8c90f390b12af6a1742903774f2f29e7a840aff9bc3f0",
+    "functions": ["_PyDict_LookupIndexAndOwnedValue", "_PyDict_Subscript"],
+    "actual_vm_composition_accepted": false,
+    "dictionary_storage_window_still_active": true
+  },
   "candidate_build": false,
   "runtime_tests_executed": false,
   "performance_measured": false,

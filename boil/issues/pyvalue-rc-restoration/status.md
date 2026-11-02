@@ -24,7 +24,8 @@ TU/object pass without diagnostics. The unified Clinic rule covers 48 production
 wrappers and is committed, as are three pure predicates and fourteen core
 readers, Template readers, the TypeVar parser and descriptor calls. Shared
 bytes/bytearray join is checkpoint32 and ABC pair readers are checkpoint33;
-MRO publication design/review and Clinic bulk regeneration are active.
+Clinic helper constructors are checkpoint34. Iterator constructor ports, type
+slot-wrapper design and isolated counter-patch review are active.
 The MRO providers plus one immediate wrapper passed independent
 code/native attribution review; their syntax comparison has 61 diagnostics,
 versus 86 before, including
@@ -47,8 +48,9 @@ link. Its latest v8 snapshot at checkpoint32 plus held typeobject has 164 object
 present and 392 repeated/cascading error diagnostics. All 7,342 source paths
 remained unchanged; no candidate was executed. The later ABC source checkpoint
 has selected native errors 6→0 (full TU 7→1), nine host controls and no runtime
-pass. The Clinic helper kernel passed review; Luna regenerates its products.
-Two Sol workers revise/review the held MRO transaction before a source grant.
+pass. Clinic helper constructors subsequently passed review and were committed;
+Luna ports iterator constructors while Sol designs type wrappers and reviews
+the counter patch. The full MRO transaction remains in revision.
 
 ## Remaining increments
 

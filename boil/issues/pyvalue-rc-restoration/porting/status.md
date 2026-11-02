@@ -8,10 +8,9 @@ are committed as 69a2750540e; corrected core14 is committed as e789685426a.
 Template is committed as e0dfcd4d7ff and corrected TypeVar as bef49ec8fc9.
 Descriptor calls are committed as ca594319d0b. The shared bytes/bytearray join
 rule is committed as checkpoint32; ABC pair readers are checkpoint33.
-Sol advances the held typeobject/MRO dependency with an independent peer review.
-The Clinic helper generator kernel for bytes, bytearray and enumerate plus four
-existing fixtures passed independent review. Luna regenerates and validates
-bulk products under that frozen kernel.
+The Clinic helper rule for bytes, bytearray and enumerate plus four existing
+fixtures is checkpoint34 after independent review. Luna ports three iterator
+constructors; Sol designs type wrappers and reviews the isolated counter patch.
 The coordinator integrates and validates the merged result.
 MRO providers and the public wrapper
 passed code/native attribution review; their delta remains held. The next
@@ -242,3 +241,19 @@ checks: 314 pass/116 unavailable-fixture skips. Luna now performs product
 regeneration, scope/idempotence proofs and durable host controls. No helper
 source checkpoint or native/runtime pass is claimed. Evidence:
 build/pyvalue-clinic-helper-kernel-20261102-v1/coordinator-review.md.
+
+Clinic helpers are checkpoint34 fa398d21618 after kernel and final actual
+code/results review. The seven-path batch changes seven constructors/21
+generated bodies; 690 other templates and the previous51 keyword/twenty
+positional wrappers remain exact. Producer:432run/316pass/116missingfixture
+skips; two expanded host controls pass. Native errors4→3,2→1,7→6,35→31;
+all selected contexts clean, all four full TUs still fail. Weak/incorrect
+negative/arity/state assertions were corrected with preserved before-images.
+Evidence: build/pyvalue-clinic-helper-bulk-20261102-v2/commit.json.
+
+The next reviewed bulk packet covers product_new,zip_longest_new and
+itertools_teedataobject_impl only. It uses owned tuple selection and bounded
+canonical tee capture before boxing; recycled occupied-tuple paths remain
+excluded. Root independently gated the design and captured configured baseline
+evidence (29errors/fivewarnings, seven selected errors). Luna implements it.
+Design: build/pyvalue-itertools-readers-design-20261102-v1/coordinator-accept.md.

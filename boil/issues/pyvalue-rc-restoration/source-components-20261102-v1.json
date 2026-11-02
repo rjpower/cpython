@@ -433,6 +433,21 @@
       "candidate_executed": false,
       "runnable": false,
       "evidence": "build/pyvalue-abc-pairs-bulk-20261102-v2/commit.json"
+    },
+    "clinic_vectorcall_constructor_helpers": {
+      "commit": "fa398d21618dc020f96a47d0e0e2bc920b7b808b",
+      "changed_paths": 7,
+      "constructors": 7,
+      "production_constructors": 3,
+      "generated_functions": 21,
+      "producer_pass": 316,
+      "producer_skips": 116,
+      "host_reference_controls": 2,
+      "full_TU_passes": 0,
+      "selected_diagnostics": [],
+      "candidate_executed": false,
+      "runnable": false,
+      "evidence": "build/pyvalue-clinic-helper-bulk-20261102-v2/commit.json"
     }
   },
   "first_diagnostic_build": {

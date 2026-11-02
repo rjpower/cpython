@@ -27,9 +27,8 @@ the reviewed unified Clinic rule now covers 48 production wrappers. The latest
 v8 compiler probe has 392 repeated/cascading errors and no executable; all 7,342
 source inputs stayed unchanged. Thirty-two reviewed source checkpoints now include
 fourteen core readers, three pure predicates, Template readers, the TypeVar
-parser, descriptor calls and shared bytes/bytearray join. Luna is grouping the
-fresh compiler diagnostics; Sol advances the held typeobject/MRO publication
-dependency.
+parser, descriptor calls and shared bytes/bytearray join. Luna is porting ABC abstract-method discovery under a reviewed owning-pair
+rule; Sol advances the held typeobject/MRO publication dependency.
 Sol 6.1 designs/reviews reusable fixes; approved rules go to mechanical or Luna batches.
 The coordinator integrates reviewed results, rebuilds and repeats.
 See [porting rules and remaining work](issues/pyvalue-rc-restoration/porting/status.md)

@@ -8,7 +8,7 @@ are committed as 69a2750540e; corrected core14 is committed as e789685426a.
 Template is committed as e0dfcd4d7ff and corrected TypeVar as bef49ec8fc9.
 Descriptor calls are committed as ca594319d0b. The shared bytes/bytearray join
 rule is committed as checkpoint32; Sol advances the held
-typeobject/MRO dependency while Luna groups the fresh v8 diagnostics.
+typeobject/MRO dependency while Luna applies the reviewed ABC selected-pair port.
 The coordinator integrates and validates the merged result.
 MRO providers and the public wrapper
 passed code/native attribution review; their delta remains held. The next
@@ -217,4 +217,11 @@ Python 3.15.1, including existing large joins and callback shrink/replacement.
 Candidate execution and C-level cleanup fault injection remain pending.
 Evidence: build/pyvalue-bytes-join-bulk-20261102-v1/{coordinator-review.md,commit.json}.
 Merged v8 has 392 errors/164 objects and no executable on 7,342 unchanged inputs;
-Luna groups fresh diagnostics before Sol designs the next reusable packet.
+The completed v8 shortlist records 392 observations, 332 unique sites and
+61 paths in build/pyvalue-v8-error-families-20261102-v1. Its automatic lexical
+census attempt failed and is disclosed; examples were checked in source.
+The next finite source grant covers compute_abstract_methods in Modules/_abc.c
+plus a value include and focused new tests. Root independently gated Sol's
+existing selected-pair draft; it was not an already accepted blanket rule.
+Luna applies it while Sol designs the MRO caller transaction. Exact grant:
+build/pyvalue-sol-port-rules-20261102-v1/coordinator-abc-grant.md.

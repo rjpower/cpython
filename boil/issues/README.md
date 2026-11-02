@@ -28,8 +28,8 @@ objects present and failed to link. No restored runtime, qualification or perfor
    pass and are committed. Shared bytes/bytearray join is checkpoint32; eight
    host controls pass and selected native functions are clean. The merged v8
    build has 392 errors/164 objects and no executable, with 7,342 source inputs
-   unchanged. Luna groups fresh diagnostics; Sol advances held typeobject/MRO
-   publication work.
+   unchanged. Luna applies the reviewed ABC selected-pair port; Sol advances held
+   typeobject/MRO publication work.
 2. The coordinator prioritizes shared blockers from the latest actual build,
    reviews each design, assigns independent code review and commits useful ports.
    Old agents remain stopped; compatibility approvals are not a gate.
@@ -47,7 +47,7 @@ objects present and failed to link. No restored runtime, qualification or perfor
 | --- | --- | --- | --- |
 | [Native callers and scoped parsers](pyvalue-rc-restoration/native-parsers/status.md) | Call and parser dependencies committed | Coordinator | Remaining gateways/parser families and merged runtime witnesses |
 | [Core and extension consumers](pyvalue-rc-restoration/core-consumers/status.md) | Call bridges committed; type_new/graph reviewed pending | Coordinator; Sol design/review | C3/MRO, remaining parser/startup/container ports |
-| [Porting batches](pyvalue-rc-restoration/porting/status.md) | Shared join committed; merged v8 failed | Luna error analysis; Sol design; root integration | Select reusable families from fresh diagnostics and repeat reviewed bulk ports |
+| [Porting batches](pyvalue-rc-restoration/porting/status.md) | Shared join committed; merged v8 failed | Luna ABC bulk port; Sol MRO design; root integration | Freeze/review ABC selected pairs, then next reusable caller family |
 | [Canonical type cache](pyvalue-rc-restoration/typecache/status.md) | MRO providers reviewed; publication transaction design active | Sol 6.1 design; coordinator review/integration | Retained MRO inputs through publication/conditional rollback, then callers/guards/static/lifecycle |
 | [Value-native VM iteration](pyvalue-rc-restoration/iterator-vm/status.md) | Tuning after safe baseline | Unassigned | Remove boxing from correct iterator bridges and measure |
 | [Integration and interpreter checkpoint](pyvalue-rc-restoration/integration/status.md) | Build diagnostics → ports | Coordinator | Close concrete compile/link blockers, rebuild, qualify and measure |

@@ -44,8 +44,8 @@ repairs and checkpoints their composition; its candidate runtime tests remain
 unexecuted. The [merged diagnostic build](merged-build/status.md) still fails to
 link. Its latest v8 snapshot at checkpoint32 plus held typeobject has 164 objects
 present and 392 repeated/cascading error diagnostics. All 7,342 source paths
-remained unchanged; no candidate was executed. Luna groups fresh diagnostics
-while Sol designs the held MRO publication and caller transaction.
+remained unchanged; no candidate was executed. Luna applies the reviewed ABC selected-pair port while Sol designs the held
+MRO publication and caller transaction.
 
 ## Remaining increments
 

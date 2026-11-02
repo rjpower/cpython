@@ -1,7 +1,7 @@
 # Canonical type cache and mutation admission
 
 - Stage: provider/core dependencies checkpointed; graph and MRO provider deltas reviewed
-- Owner: Sol 6.1 designs the publication/caller transaction; coordinator reviews/integrates
+- Owner: coordinator; further Sol publication design/review is queued
 - Hypothesis: canonical borrowed cache entries can remain fast and safe if
   version invalidation precedes observable mutation and admission stays closed
   through callback-capable mutation/retirement.
@@ -79,10 +79,21 @@ separate cache lifetime/mutation proof above.
 [graph native attribution](../../../../build/pyvalue-typecache-graph1-20261102-v1/native-classification.md),
 [next finite MRO proposal](../../../../build/pyvalue-typecache-mro-scope-20261102-v1/design.md).
 
-The full MRO publication/caller proposal is in independent peer review and has
-no source grant. Initial review requires revision: existing graph repair can
-fail partway and restoring old subclass edges can allocate, so a field undo log
-alone cannot prove graph rollback. Sol separates the saturating publication
-counter foundation while resolving graph resources and construction setup.
-Existing typeobject source remains d0721997. The proposal is retained in
-build/pyvalue-sol-port-rules-20261102-v1/mro-publication-vertical-design.md.
+The full MRO publication/caller proposal completed independent review with
+REVISE and has no source grant. Existing graph repair can fail partway and
+restoring old subclass edges can allocate, so a field undo log alone cannot
+prove graph rollback. Repeated diamond receivers and cross-receiver dependencies
+also need explicit selection rules. The proposal is retained in
+build/pyvalue-sol-port-rules-20261102-v1/mro-publication-vertical-design.md;
+the peer findings are in build/pyvalue-mro-publication-peer-review-20261102-v1.
+
+The separate recording-only counter foundation is committed as `5a9d4841a67`.
+Old/new C with corresponding public-layout headers adds no native diagnostics;
+typeobject remains at 38 errors/23 warnings and the test helper at one error/two
+warnings. Runtime counter/near-limit observations and transaction authority are
+pending. The thirteen slot wrappers subsequently landed as `ef48e73fb24`, with
+selected errors 15→0/full TU 38→23, warnings unchanged. Current held typeobject
+composition is `6b42e1b2`, preserving the prior provider/core/graph work.
+Construction readers are in isolated Luna implementation under a reviewed rule.
+The separate spec ownership envelope is frozen for a root/peer gate; it has no
+implementation grant. The [board](../../README.md) owns current assignments.

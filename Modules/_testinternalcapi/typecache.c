@@ -2,12 +2,14 @@
 //
 // Insertion is exercised indirectly through normal attribute access (which
 // calls _PyType_Lookup); only Lookup and Invalidate need direct wrappers.
+// The existing PyArg_ParseTuple input route remains a separate unported
+// dependency; compiling these wrappers does not execute that parser route.
 
 #include "parts.h"
 
 #include "pycore_critical_section.h"
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
-#include "pycore_value.h"      // PyValue_AsPyObjectSteal()
+#include "pycore_value.h"      // PyValue_AsObject()
 #include "pycore_typecache.h"     // _PyTypeCache_Lookup()
 
 
@@ -30,6 +32,12 @@ intern_name(PyObject *name)
     }
     Py_INCREF(name);
     PyUnicode_InternInPlace(&name);
+    if (PyErr_Occurred()) {
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(name);
+        _PyValue_RestoreException(saved);
+        return NULL;
+    }
     return name;
 }
 
@@ -50,17 +58,32 @@ type_cache_lookup(PyObject *Py_UNUSED(self), PyObject *args)
     }
     struct _PyTypeCacheLookupResult r =
         _PyTypeCache_Lookup((PyTypeObject *)type_obj, name);
+    PyObject *value = PyValue_IsNull(r.value)
+        ? Py_NewRef(Py_None) : PyValue_AsObject(r.value);
+    PyObject *saved = PyErr_GetRaisedException();
+    PyValue_XCLOSE(r.value);
+    _PyValue_RestoreException(saved);
+    saved = PyErr_GetRaisedException();
     Py_DECREF(name);
-    PyObject *value;
-    if (PyValue_IsNull(r.value)) {
-        value = Py_NewRef(Py_None);
+    _PyValue_RestoreException(saved);
+    if (value == NULL || PyErr_Occurred()) {
+        saved = PyErr_GetRaisedException();
+        Py_XDECREF(value);
+        _PyValue_RestoreException(saved);
+        return NULL;
     }
-    else {
-        value = PyValue_AsPyObjectSteal(r.value);
+    PyObject *report = Py_BuildValue("(iOk)", r.cache_hit, value,
+                                   (unsigned long)r.version_tag);
+    saved = PyErr_GetRaisedException();
+    Py_DECREF(value);
+    _PyValue_RestoreException(saved);
+    if (PyErr_Occurred()) {
+        saved = PyErr_GetRaisedException();
+        Py_XDECREF(report);
+        _PyValue_RestoreException(saved);
+        return NULL;
     }
-    return Py_BuildValue("(iNk)",
-                         r.cache_hit, value,
-                         (unsigned long)r.version_tag);
+    return report;
 }
 
 static PyObject *

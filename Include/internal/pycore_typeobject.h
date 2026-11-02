@@ -36,6 +36,18 @@ extern "C" {
 #define _Py_MAX_GLOBAL_TYPE_VERSION_TAG (_Py_TYPE_BASE_VERSION_TAG - 1)
 
 
+/* _PyType_LookupRef[AndVersion] are owning, fallible object bridges: NULL can
+   mean absence or a lookup/boxing/cleanup exception. Canonical lookup avoids
+   boxing; advertised nonzero versions are revalidated after owner cleanup. */
+/* One nonallocating admission rule for caches, guards and version producers.
+   Zero is never an admitted expected version. Static admission also requires
+   this interpreter's complete publication, independently of shared tags. */
+extern unsigned int _PyType_GetVersionForCurrentState(
+    PyInterpreterState *interp, PyTypeObject *type);
+extern int _PyType_MatchesVersion(PyInterpreterState *interp,
+                                  PyTypeObject *type, unsigned int expected);
+extern void _Py_NO_RETURN _PyType_AbortClosedLookup(void);
+
 /* runtime lifecycle */
 
 extern PyStatus _PyTypes_InitTypes(PyInterpreterState *);
@@ -92,7 +104,7 @@ _PyType_GetModuleState(PyTypeObject *type)
 // Export for 'math' shared extension, used via _PyType_IsReady() static inline
 // function
 PyAPI_FUNC(PyObject *) _PyType_GetDict(PyTypeObject *);
-/* Owned canonical MRO lookup without inserting into the object-only cache.
+/* Owned canonical MRO lookup without inserting into the canonical cache.
  * Requires clear entry PyErr; an existing error is preserved and returns -1. */
 PyAPI_FUNC(int) _PyType_LookupValueUncached(PyTypeObject *, PyObject *, PyValue *);
 /* 1: eligible native lookup (NULL value means absent); 0: decline; -1: error. */

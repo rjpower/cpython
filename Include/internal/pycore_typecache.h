@@ -16,7 +16,7 @@ extern "C" {
 
 struct type_cache_entry {
     PyObject *name;     // name of the attribute or method, interned string, NULL if the entry is empty
-    PyObject *value;    // borrowed reference or NULL
+    PyValue value;     // non-owning canonical value, PyValue_NULL for a miss
 };
 
 // Per-type attribute lookup cache: speed up attribute and method lookups,
@@ -30,14 +30,18 @@ struct type_cache {
 };
 
 struct _PyTypeCacheLookupResult {
-    PyValue value;      // value is a stack reference to the cached attribute or method, or NULL if not found
+    PyValue value;      // owned hit result; PyValue_NULL for a negative hit or miss
     int cache_hit;          // 1 if the cache entry is valid and matches the type's version tag, 0 otherwise
     unsigned int version_tag;   // version tag of the type when the value was cached
 };
 
 
 extern void _PyTypeCache_InitType(PyTypeObject *type);
-extern void _PyTypeCache_Insert(PyTypeObject *type, PyObject *name, PyObject *value);
+/* type, name and the canonical semantic result stay independently owned by
+   the caller through allocation and cleanup. Insertion never steals them and
+   checks the same expected nonzero version again after maintenance callouts. */
+extern void _PyTypeCache_Insert(PyTypeObject *type, PyObject *name,
+                                PyValue value, unsigned int expected_version);
 PyAPI_FUNC(struct _PyTypeCacheLookupResult) _PyTypeCache_Lookup(PyTypeObject *type, PyObject *name);
 PyAPI_FUNC(void) _PyTypeCache_Invalidate(PyTypeObject *type);
 

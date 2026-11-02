@@ -50,7 +50,9 @@ reviewed two-file source checkpoint committed as `3296af9ba58`; actual TU/object
 and 23 host controls pass. Candidate tests remain unexecuted.
 
 Active [positional Clinic increment](../native-parsers/positional-owners/status.md):
-20 generated wrappers frozen, producer checks pass, native diagnostics recorded;
-coordinator reviews code/results. The coordinator’s
-[object attribute bridge](object-attributes/status.md) passes native checks and
-awaits independent code/composition review by state_audit.
+20 generated wrappers reviewed and committed as `be15f9856b5`; producer checks
+pass, native diagnostics remain recorded. The
+[object attribute bridge](object-attributes/status.md) needs the finite cleanup
+corrections identified by independent whole-file review. State_audit designs the
+next startup/parser port; wiki_audit implements object corrections before core
+type-cache work.

@@ -9,8 +9,8 @@ ported; hard source or binary compatibility with upstream is not required.
 
 The qualified interim interpreter is built from `eba351fee7d`: register IR and
 NaN-boxed frame values, with boxed heap fields. Universal PyValue restoration now
-has seventeen independently reviewed source commits on `boil/pyvalue-rc-universal`,
-HEAD `8d5a3d6af1b`. Two object/type files remain held for explicit correctness
+has eighteen independently reviewed source commits on `boil/pyvalue-rc-universal`,
+HEAD `be15f9856b5`. Two object/type files remain held for explicit correctness
 findings. There is no linked or qualified restored interpreter or timing result.
 
 **Current step:** close the concrete blockers from the merged diagnostic build.
@@ -19,9 +19,9 @@ interpreter. Canonical dictionary readers, scoped constructors, marshal and the
 caller transaction are reviewed and committed; the evaluator compiles.
 The instance/subclass port also compiles. The type-cache provider has six
 independent files committed; its reviewed typeobject delta remains held.
-State_audit has frozen 20 positional Clinic wrappers and independently reviews
-the coordinator’s attribute bridge. Wiki_audit designs the next type-cache
-mutation/guard increment. The coordinator checks frozen inputs, reviews designs
+The 20-wrapper positional Clinic port is committed. State_audit designs the
+next startup/parser port; wiki_audit corrects the held object composition before
+implementing the reviewed first type-cache mutation increment. The coordinator checks frozen inputs, reviews designs
 and code, commits reviewed increments and validates the merged result.
 See the [work board](issues/README.md) for assignments and next gates.
 

@@ -6,7 +6,7 @@
   version invalidation precedes observable mutation and admission stays closed
   through callback-capable mutation/retirement.
 
-The current object cache cannot store inline class values; resize retains a
+The pre-port object cache could not store inline class values; resize retains a
 table across allocation. A late version check after duplicating a stale borrow
 is unsafe. Existing installed guards also require invalidation before changed
 state becomes observable.
@@ -44,8 +44,12 @@ reviewed but cannot yet be committed with unrelated unresolved scalar bridges.
 [Code/results review](../../../../build/pyvalue-typecache-provider-20261102-v1/coordinator-code-review.md),
 [native checks](../../../../build/pyvalue-typecache-provider-20261102-v1/native-v1.json),
 [commit and pending-delta receipt](../../../../build/pyvalue-typecache-provider-20261102-v1/commit.json).
-Wiki_audit now defines the finite core mutation/guard/lifecycle increment; no
-source grant exists for that next design yet.
+The finite core mutation/guard/lifecycle design is frozen and independently
+reviewed. Wiki_audit has a first-checkpoint source grant after its object endpoint:
+shared scopes, detach/retire, restarted invalidation and simple actual writers.
+Graph/MRO/construction and guards/terminal remain later checkpoints.
+[Core proposal](../../../../build/pyvalue-typecache-core-scope-20261102-v1/design.md),
+[bounded coordinator grant](../../../../build/pyvalue-typecache-core-scope-20261102-v1/coordinator-review.md).
 
 [V3 design](../../../../build/pyvalue-typecache-design-20261102-v3/design.md),
 [finite ledger](../../../../build/pyvalue-typecache-design-20261102-v3/finite-ledger.md),

@@ -13,6 +13,7 @@
 #include "pycore_structseq.h"     // _PyStructSequence_FiniBuiltin()
 #include "pycore_traceback.h"     // _PyTraceBack_FromFrame()
 #include "pycore_unicodeobject.h" // _PyUnicode_Equal()
+#include "pycore_value.h"         // PyValue_Is()
 
 #include "../Parser/tokenizer/tokenizer.h"
 
@@ -352,8 +353,13 @@ PyErr_GivenExceptionMatches(PyObject *err, PyObject *exc)
         int res = 0;
         Py_ssize_t n = PyTuple_GET_SIZE(exc);
         for (Py_ssize_t i = 0; i < n; i++) {
-            /* Test recursively */
-            if (PyErr_GivenExceptionMatches(err, PyTuple_GET_ITEM(exc, i))) {
+            PyValue candidate = PyTuple_GET_VALUE(exc, i);
+            /* Inline scalars have no exception hierarchy or object pointer.
+             * Keep identity comparison pure while an error may be pending. */
+            int matches = PyValue_IsObject(candidate) ?
+                PyErr_GivenExceptionMatches(err, PyValue_AsPyObjectBorrow(candidate)) :
+                PyValue_Is(candidate, PyValue_FromObjectBorrow(err));
+            if (matches) {
                 res = 1;
                 break;
             }
@@ -1644,14 +1650,35 @@ _PyErr_WriteUnraisableDefaultHook(PyObject *args)
         return NULL;
     }
 
-    /* Borrowed references */
-    PyObject *exc_type = PyStructSequence_GET_ITEM(args, 0);
-    PyObject *exc_value = PyStructSequence_GET_ITEM(args, 1);
-    PyObject *exc_tb = PyStructSequence_GET_ITEM(args, 2);
-    PyObject *err_msg = PyStructSequence_GET_ITEM(args, 3);
-    PyObject *obj = PyStructSequence_GET_ITEM(args, 4);
+    /* Arbitrary object fields may be inline. Keep every converted owner live
+     * through the stderr and repr callbacks in write_unraisable_exc(). */
+    PyObject *fields[5] = {NULL};
+    PyObject *saved;
+    int res = -1;
+    for (Py_ssize_t i = 0; i < (Py_ssize_t)Py_ARRAY_LENGTH(fields); i++) {
+        fields[i] = PyStructSequence_GetItemRef(args, i);
+        if (fields[i] == NULL) {
+            if (!PyErr_Occurred()) {
+                PyErr_SetString(PyExc_SystemError, "empty unraisable hook field");
+            }
+            goto done;
+        }
+    }
+    res = write_unraisable_exc(tstate, fields[0], fields[1], fields[2],
+                               fields[3], fields[4]);
 
-    if (write_unraisable_exc(tstate, exc_type, exc_value, exc_tb, err_msg, obj) < 0) {
+done:
+    saved = PyErr_GetRaisedException();
+    for (Py_ssize_t i = Py_ARRAY_LENGTH(fields); i > 0; i--) {
+        Py_XDECREF(fields[i - 1]);
+        if (saved == NULL) {
+            saved = PyErr_GetRaisedException();
+        }
+    }
+    if (saved != NULL) {
+        _PyValue_RestoreException(saved);
+    }
+    if (res < 0 || PyErr_Occurred()) {
         return NULL;
     }
     Py_RETURN_NONE;

@@ -8374,14 +8374,37 @@ _PyType_GetSlotNames(PyTypeObject *cls)
 static PyObject *
 object_getstate_default(PyObject *obj, int required)
 {
-    PyObject *state;
-    PyObject *slotnames;
+    PyObject *obj_owner = NULL;
+    PyObject *state = NULL;
+    PyObject *state2 = NULL;
+    PyObject *slotnames = NULL;
+    PyObject *slots = NULL;
+    PyObject *name = NULL;
+    PyObject *value = NULL;
+    PyObject *selected_type = NULL;
+    PyObject *diagnostic_type = NULL;
+    PyObject *diagnostic_name = NULL;
+    PyValue name_value = PyValue_NULL;
+    int rc = -1;
+
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    obj_owner = Py_NewRef(obj);
 
     if (required && Py_TYPE(obj)->tp_itemsize) {
+        diagnostic_type = Py_NewRef((PyObject *)Py_TYPE(obj));
+        if (PyType_HasFeature((PyTypeObject *)diagnostic_type,
+                              Py_TPFLAGS_HEAPTYPE)) {
+            diagnostic_name = Py_NewRef(((PyHeapTypeObject *)diagnostic_type)->ht_name);
+        }
+        const char *type_name = ((PyTypeObject *)diagnostic_type)->tp_name;
         PyErr_Format(PyExc_TypeError,
                      "cannot pickle %.200s objects",
-                     Py_TYPE(obj)->tp_name);
-        return NULL;
+                     type_name);
+        type_mutation_close(&diagnostic_name);
+        type_mutation_close(&diagnostic_type);
+        goto done;
     }
 
     if (_PyObject_IsInstanceDictEmpty(obj)) {
@@ -8389,15 +8412,16 @@ object_getstate_default(PyObject *obj, int required)
     }
     else {
         state = PyObject_GenericGetDict(obj, NULL);
-        if (state == NULL) {
-            return NULL;
-        }
+    }
+    if (state == NULL || PyErr_Occurred()) {
+        goto done;
     }
 
-    slotnames = _PyType_GetSlotNames(Py_TYPE(obj));
-    if (slotnames == NULL) {
-        Py_DECREF(state);
-        return NULL;
+    selected_type = Py_NewRef((PyObject *)Py_TYPE(obj));
+    slotnames = _PyType_GetSlotNames((PyTypeObject *)selected_type);
+    type_mutation_close(&selected_type);
+    if (slotnames == NULL || PyErr_Occurred()) {
+        goto done;
     }
 
     assert(slotnames == Py_None || PyList_Check(slotnames));
@@ -8415,84 +8439,129 @@ object_getstate_default(PyObject *obj, int required)
             basicsize += sizeof(PyObject *) * PyList_GET_SIZE(slotnames);
         }
         if (Py_TYPE(obj)->tp_basicsize > basicsize) {
-            Py_DECREF(slotnames);
-            Py_DECREF(state);
+            type_mutation_close(&slotnames);
+            type_mutation_close(&state);
+            if (PyErr_Occurred()) {
+                goto done;
+            }
+            diagnostic_type = Py_NewRef((PyObject *)Py_TYPE(obj));
+            if (PyType_HasFeature((PyTypeObject *)diagnostic_type,
+                                  Py_TPFLAGS_HEAPTYPE)) {
+                diagnostic_name = Py_NewRef(((PyHeapTypeObject *)diagnostic_type)->ht_name);
+            }
+            const char *type_name = ((PyTypeObject *)diagnostic_type)->tp_name;
             PyErr_Format(PyExc_TypeError,
                          "cannot pickle '%.200s' object",
-                         Py_TYPE(obj)->tp_name);
-            return NULL;
+                         type_name);
+            type_mutation_close(&diagnostic_name);
+            type_mutation_close(&diagnostic_type);
+            goto done;
         }
     }
 
-    if (slotnames != Py_None && PyList_GET_SIZE(slotnames) > 0) {
-        PyObject *slots;
-        Py_ssize_t slotnames_size, i;
-
-        slots = PyDict_New();
-        if (slots == NULL) {
-            Py_DECREF(slotnames);
-            Py_DECREF(state);
-            return NULL;
-        }
-
-        slotnames_size = PyList_GET_SIZE(slotnames);
-        for (i = 0; i < slotnames_size; i++) {
-            PyObject *name, *value;
-
-            name = Py_NewRef(PyList_GET_ITEM(slotnames, i));
-            if (PyObject_GetOptionalAttr(obj, name, &value) < 0) {
-                Py_DECREF(name);
-                goto error;
-            }
-            if (value == NULL) {
-                Py_DECREF(name);
-                /* It is not an error if the attribute is not present. */
-            }
-            else {
-                int err = PyDict_SetItem(slots, name, value);
-                Py_DECREF(name);
-                Py_DECREF(value);
-                if (err) {
-                    goto error;
-                }
-            }
-
-            /* The list is stored on the class so it may mutate while we
-               iterate over it */
-            if (slotnames_size != PyList_GET_SIZE(slotnames)) {
-                PyErr_Format(PyExc_RuntimeError,
-                             "__slotnames__ changed size during iteration");
-                goto error;
-            }
-
-            /* We handle errors within the loop here. */
-            if (0) {
-              error:
-                Py_DECREF(slotnames);
-                Py_DECREF(slots);
-                Py_DECREF(state);
-                return NULL;
-            }
-        }
-
-        /* If we found some slot attributes, pack them in a tuple along
-           the original attribute dictionary. */
-        if (PyDict_GET_SIZE(slots) > 0) {
-            PyObject *state2;
-
-            state2 = _PyTuple_FromPair(state, slots);
-            Py_DECREF(state);
-            if (state2 == NULL) {
-                Py_DECREF(slotnames);
-                Py_DECREF(slots);
-                return NULL;
-            }
-            state = state2;
-        }
-        Py_DECREF(slots);
+    if (slotnames == Py_None || PyList_GET_SIZE(slotnames) == 0) {
+        rc = 0;
+        goto done;
     }
-    Py_DECREF(slotnames);
 
+    slots = PyDict_New();
+    if (slots == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+
+    Py_ssize_t slotnames_size = PyList_GET_SIZE(slotnames);
+    for (Py_ssize_t i = 0; i < slotnames_size; i++) {
+        name_value = PyList_GetValue(slotnames, i);
+        if (PyValue_IsNull(name_value) || PyErr_Occurred()) {
+            goto done;
+        }
+        if (!PyValue_IsObject(name_value) ||
+                !PyUnicode_Check(PyValue_AsPyObjectBorrow(name_value))) {
+            diagnostic_type = Py_NewRef((PyObject *)PyValue_TYPE(name_value));
+            if (PyType_HasFeature((PyTypeObject *)diagnostic_type,
+                                  Py_TPFLAGS_HEAPTYPE)) {
+                diagnostic_name = Py_NewRef(((PyHeapTypeObject *)diagnostic_type)->ht_name);
+            }
+            const char *type_name = ((PyTypeObject *)diagnostic_type)->tp_name;
+            PyErr_Format(PyExc_TypeError,
+                         "attribute name must be string, not '%.200s'",
+                         type_name);
+            type_mutation_close(&diagnostic_name);
+            type_mutation_close(&diagnostic_type);
+            goto done;
+        }
+        name = PyValue_AsPyObjectSteal(name_value);
+        name_value = PyValue_NULL;
+
+        int status = PyObject_GetOptionalAttr(obj, name, &value);
+        if (status < 0 || PyErr_Occurred()) {
+            type_mutation_close(&name);
+            type_mutation_close(&value);
+            goto done;
+        }
+        if (status == 0) {
+            type_mutation_close(&name);
+        }
+        else {
+            int err = PyDict_SetItem(slots, name, value);
+            type_mutation_close(&name);
+            type_mutation_close(&value);
+            if (err < 0 || PyErr_Occurred()) {
+                goto done;
+            }
+        }
+        if (PyErr_Occurred()) {
+            goto done;
+        }
+        if (slotnames_size != PyList_GET_SIZE(slotnames)) {
+            PyErr_Format(PyExc_RuntimeError,
+                         "__slotnames__ changed size during iteration");
+            goto done;
+        }
+    }
+
+    if (PyDict_GET_SIZE(slots) > 0) {
+        state2 = _PyTuple_FromPair(state, slots);
+        type_mutation_close(&state);
+        if (state2 == NULL || PyErr_Occurred()) {
+            goto done;
+        }
+        state = state2;
+        state2 = NULL;
+    }
+
+    type_mutation_close(&slots);
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    type_mutation_close(&slotnames);
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    rc = 0;
+    goto done;
+
+done:
+    {
+        PyValue retired = name_value;
+        name_value = PyValue_NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+    }
+    type_mutation_close(&name);
+    type_mutation_close(&value);
+    type_mutation_close(&selected_type);
+    type_mutation_close(&diagnostic_name);
+    type_mutation_close(&diagnostic_type);
+    type_mutation_close(&slotnames);
+    type_mutation_close(&slots);
+    type_mutation_close(&state2);
+    type_mutation_close(&obj_owner);
+    if (rc < 0 || PyErr_Occurred()) {
+        type_mutation_close(&state);
+        return NULL;
+    }
     return state;
 }
 
@@ -8541,92 +8610,188 @@ object___getstate___impl(PyObject *self)
 static int
 _PyObject_GetNewArguments(PyObject *obj, PyObject **args, PyObject **kwargs)
 {
-    PyObject *getnewargs, *getnewargs_ex;
+    PyObject *obj_owner = NULL;
+    PyObject *method = NULL;
+    PyObject *outer = NULL;
+    PyObject *local_args = NULL;
+    PyObject *local_kwargs = NULL;
+    PyObject *diagnostic_type = NULL;
+    PyObject *diagnostic_name = NULL;
+    PyValue args_value = PyValue_NULL;
+    PyValue kwargs_value = PyValue_NULL;
+    int rc = -1;
 
     if (args == NULL || kwargs == NULL) {
-        PyErr_BadInternalCall();
+        if (!PyErr_Occurred()) {
+            PyErr_BadInternalCall();
+        }
         return -1;
     }
+    *args = NULL;
+    *kwargs = NULL;
+    if (PyErr_Occurred()) {
+        return -1;
+    }
+    obj_owner = Py_NewRef(obj);
 
     /* We first attempt to fetch the arguments for __new__ by calling
        __getnewargs_ex__ on the object. */
-    getnewargs_ex = _PyObject_LookupSpecial(obj, &_Py_ID(__getnewargs_ex__));
-    if (getnewargs_ex != NULL) {
-        PyObject *newargs = _PyObject_CallNoArgs(getnewargs_ex);
-        Py_DECREF(getnewargs_ex);
-        if (newargs == NULL) {
-            return -1;
+    method = _PyObject_LookupSpecial(obj, &_Py_ID(__getnewargs_ex__));
+    if (method == NULL) {
+        if (PyErr_Occurred()) {
+            goto done;
         }
-        if (!PyTuple_Check(newargs)) {
-            PyErr_Format(PyExc_TypeError,
-                         "__getnewargs_ex__ should return a tuple, "
-                         "not '%.200s'", Py_TYPE(newargs)->tp_name);
-            Py_DECREF(newargs);
-            return -1;
-        }
-        if (PyTuple_GET_SIZE(newargs) != 2) {
-            PyErr_Format(PyExc_ValueError,
-                         "__getnewargs_ex__ should return a tuple of "
-                         "length 2, not %zd", PyTuple_GET_SIZE(newargs));
-            Py_DECREF(newargs);
-            return -1;
-        }
-        *args = Py_NewRef(PyTuple_GET_ITEM(newargs, 0));
-        *kwargs = Py_NewRef(PyTuple_GET_ITEM(newargs, 1));
-        Py_DECREF(newargs);
-
-        /* XXX We should perhaps allow None to be passed here. */
-        if (!PyTuple_Check(*args)) {
-            PyErr_Format(PyExc_TypeError,
-                         "first item of the tuple returned by "
-                         "__getnewargs_ex__ must be a tuple, not '%.200s'",
-                         Py_TYPE(*args)->tp_name);
-            Py_CLEAR(*args);
-            Py_CLEAR(*kwargs);
-            return -1;
-        }
-        if (!PyDict_Check(*kwargs)) {
-            PyErr_Format(PyExc_TypeError,
-                         "second item of the tuple returned by "
-                         "__getnewargs_ex__ must be a dict, not '%.200s'",
-                         Py_TYPE(*kwargs)->tp_name);
-            Py_CLEAR(*args);
-            Py_CLEAR(*kwargs);
-            return -1;
-        }
-        return 0;
-    } else if (PyErr_Occurred()) {
-        return -1;
+        goto fallback;
+    }
+    if (PyErr_Occurred()) {
+        goto done;
     }
 
-    /* The object does not have __getnewargs_ex__ so we fallback on using
-       __getnewargs__ instead. */
-    getnewargs = _PyObject_LookupSpecial(obj, &_Py_ID(__getnewargs__));
-    if (getnewargs != NULL) {
-        *args = _PyObject_CallNoArgs(getnewargs);
-        Py_DECREF(getnewargs);
-        if (*args == NULL) {
-            return -1;
+    outer = _PyObject_CallNoArgs(method);
+    type_mutation_close(&method);
+    if (outer == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    if (!PyTuple_Check(outer)) {
+        diagnostic_type = Py_NewRef((PyObject *)Py_TYPE(outer));
+        if (PyType_HasFeature((PyTypeObject *)diagnostic_type,
+                              Py_TPFLAGS_HEAPTYPE)) {
+            diagnostic_name = Py_NewRef(
+                ((PyHeapTypeObject *)diagnostic_type)->ht_name);
         }
-        if (!PyTuple_Check(*args)) {
-            PyErr_Format(PyExc_TypeError,
-                         "__getnewargs__ should return a tuple, "
-                         "not '%.200s'", Py_TYPE(*args)->tp_name);
-            Py_CLEAR(*args);
-            return -1;
-        }
-        *kwargs = NULL;
-        return 0;
-    } else if (PyErr_Occurred()) {
-        return -1;
+        const char *tp_name = ((PyTypeObject *)diagnostic_type)->tp_name;
+        PyErr_Format(PyExc_TypeError,
+                     "__getnewargs_ex__ should return a tuple, "
+                     "not '%.200s'", tp_name);
+        type_mutation_close(&diagnostic_name);
+        type_mutation_close(&diagnostic_type);
+        goto done;
+    }
+    if (PyTuple_GET_SIZE(outer) != 2) {
+        PyErr_Format(PyExc_ValueError,
+                     "__getnewargs_ex__ should return a tuple of "
+                     "length 2, not %zd", PyTuple_GET_SIZE(outer));
+        goto done;
+    }
+    args_value = PyTuple_GetValue(outer, 0);
+    if (PyValue_IsNull(args_value) || PyErr_Occurred()) {
+        goto done;
+    }
+    kwargs_value = PyTuple_GetValue(outer, 1);
+    if (PyValue_IsNull(kwargs_value) || PyErr_Occurred()) {
+        goto done;
+    }
+    type_mutation_close(&outer);
+    if (PyErr_Occurred()) {
+        goto done;
     }
 
-    /* The object does not have __getnewargs_ex__ and __getnewargs__. This may
-       mean __new__ does not takes any arguments on this object, or that the
-       object does not implement the reduce protocol for pickling or
-       copying. */
-    *args = NULL;
-    *kwargs = NULL;
+    /* XXX We should perhaps allow None to be passed here. */
+    if (!PyValue_IsObject(args_value) ||
+            !PyTuple_Check(PyValue_AsPyObjectBorrow(args_value))) {
+        diagnostic_type = Py_NewRef((PyObject *)PyValue_TYPE(args_value));
+        if (PyType_HasFeature((PyTypeObject *)diagnostic_type,
+                              Py_TPFLAGS_HEAPTYPE)) {
+            diagnostic_name = Py_NewRef(
+                ((PyHeapTypeObject *)diagnostic_type)->ht_name);
+        }
+        const char *tp_name = ((PyTypeObject *)diagnostic_type)->tp_name;
+        PyErr_Format(PyExc_TypeError,
+                     "first item of the tuple returned by "
+                     "__getnewargs_ex__ must be a tuple, not '%.200s'",
+                     tp_name);
+        type_mutation_close(&diagnostic_name);
+        type_mutation_close(&diagnostic_type);
+        goto done;
+    }
+    if (!PyValue_IsObject(kwargs_value) ||
+            !PyDict_Check(PyValue_AsPyObjectBorrow(kwargs_value))) {
+        diagnostic_type = Py_NewRef((PyObject *)PyValue_TYPE(kwargs_value));
+        if (PyType_HasFeature((PyTypeObject *)diagnostic_type,
+                              Py_TPFLAGS_HEAPTYPE)) {
+            diagnostic_name = Py_NewRef(
+                ((PyHeapTypeObject *)diagnostic_type)->ht_name);
+        }
+        const char *tp_name = ((PyTypeObject *)diagnostic_type)->tp_name;
+        PyErr_Format(PyExc_TypeError,
+                     "second item of the tuple returned by "
+                     "__getnewargs_ex__ must be a dict, not '%.200s'",
+                     tp_name);
+        type_mutation_close(&diagnostic_name);
+        type_mutation_close(&diagnostic_type);
+        goto done;
+    }
+    local_args = PyValue_AsPyObjectSteal(args_value);
+    args_value = PyValue_NULL;
+    local_kwargs = PyValue_AsPyObjectSteal(kwargs_value);
+    kwargs_value = PyValue_NULL;
+    rc = 0;
+    goto done;
+
+fallback:
+    method = _PyObject_LookupSpecial(obj, &_Py_ID(__getnewargs__));
+    if (method == NULL) {
+        if (PyErr_Occurred()) {
+            goto done;
+        }
+        rc = 0;
+        goto done;
+    }
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    local_args = _PyObject_CallNoArgs(method);
+    type_mutation_close(&method);
+    if (local_args == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    if (!PyTuple_Check(local_args)) {
+        diagnostic_type = Py_NewRef((PyObject *)Py_TYPE(local_args));
+        if (PyType_HasFeature((PyTypeObject *)diagnostic_type,
+                              Py_TPFLAGS_HEAPTYPE)) {
+            diagnostic_name = Py_NewRef(
+                ((PyHeapTypeObject *)diagnostic_type)->ht_name);
+        }
+        const char *tp_name = ((PyTypeObject *)diagnostic_type)->tp_name;
+        PyErr_Format(PyExc_TypeError,
+                     "__getnewargs__ should return a tuple, "
+                     "not '%.200s'", tp_name);
+        type_mutation_close(&diagnostic_name);
+        type_mutation_close(&diagnostic_type);
+        goto done;
+    }
+    rc = 0;
+
+done:
+    type_mutation_close(&method);
+    type_mutation_close(&outer);
+    {
+        PyValue retired = args_value;
+        args_value = PyValue_NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyValue retired = kwargs_value;
+        kwargs_value = PyValue_NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+    }
+    type_mutation_close(&diagnostic_name);
+    type_mutation_close(&diagnostic_type);
+    type_mutation_close(&obj_owner);
+
+    if (rc < 0 || PyErr_Occurred()) {
+        type_mutation_close(&local_args);
+        type_mutation_close(&local_kwargs);
+        return -1;
+    }
+    *args = local_args;
+    local_args = NULL;
+    *kwargs = local_kwargs;
+    local_kwargs = NULL;
     return 0;
 }
 
@@ -8673,97 +8838,151 @@ _PyObject_GetItemsIter(PyObject *obj, PyObject **listitems,
 static PyObject *
 reduce_newobj(PyObject *obj)
 {
-    PyObject *args = NULL, *kwargs = NULL;
-    PyObject *copyreg;
-    PyObject *newobj, *newargs, *state, *listitems, *dictitems;
-    PyObject *result;
-    int hasargs;
+    PyObject *obj_owner = NULL;
+    PyObject *args = NULL;
+    PyObject *kwargs = NULL;
+    PyObject *copyreg = NULL;
+    PyObject *newobj = NULL;
+    PyObject *newargs = NULL;
+    PyObject *state = NULL;
+    PyObject *listitems = NULL;
+    PyObject *dictitems = NULL;
+    PyObject *result = NULL;
+    PyObject *class_owner = NULL;
+    PyObject *diagnostic_type = NULL;
+    PyObject *diagnostic_name = NULL;
+    PyValue item_value = PyValue_NULL;
+    int hasargs = 0;
+    int rc = -1;
 
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    obj_owner = Py_NewRef(obj);
     if (Py_TYPE(obj)->tp_new == NULL) {
+        diagnostic_type = Py_NewRef((PyObject *)Py_TYPE(obj));
+        if (PyType_HasFeature((PyTypeObject *)diagnostic_type,
+                              Py_TPFLAGS_HEAPTYPE)) {
+            diagnostic_name = Py_NewRef(
+                ((PyHeapTypeObject *)diagnostic_type)->ht_name);
+        }
+        const char *tp_name = ((PyTypeObject *)diagnostic_type)->tp_name;
         PyErr_Format(PyExc_TypeError,
                      "cannot pickle '%.200s' object",
-                     Py_TYPE(obj)->tp_name);
-        return NULL;
+                     tp_name);
+        type_mutation_close(&diagnostic_name);
+        type_mutation_close(&diagnostic_type);
+        goto done;
     }
-    if (_PyObject_GetNewArguments(obj, &args, &kwargs) < 0)
-        return NULL;
+    if (_PyObject_GetNewArguments(obj, &args, &kwargs) < 0 ||
+        PyErr_Occurred()) {
+        goto done;
+    }
 
     copyreg = import_copyreg();
-    if (copyreg == NULL) {
-        Py_XDECREF(args);
-        Py_XDECREF(kwargs);
-        return NULL;
+    if (copyreg == NULL || PyErr_Occurred()) {
+        goto done;
     }
     hasargs = (args != NULL);
     if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
-        PyObject *cls;
         Py_ssize_t i, n;
 
-        Py_XDECREF(kwargs);
+        type_mutation_close(&kwargs);
+        if (PyErr_Occurred()) {
+            goto done;
+        }
         newobj = PyObject_GetAttr(copyreg, &_Py_ID(__newobj__));
-        Py_DECREF(copyreg);
-        if (newobj == NULL) {
-            Py_XDECREF(args);
-            return NULL;
+        type_mutation_close(&copyreg);
+        if (newobj == NULL || PyErr_Occurred()) {
+            goto done;
         }
         n = args ? PyTuple_GET_SIZE(args) : 0;
-        newargs = PyTuple_New(n+1);
-        if (newargs == NULL) {
-            Py_XDECREF(args);
-            Py_DECREF(newobj);
-            return NULL;
+        newargs = PyTuple_New(n + 1);
+        if (newargs == NULL || PyErr_Occurred()) {
+            goto done;
         }
-        cls = (PyObject *) Py_TYPE(obj);
-        PyTuple_SET_ITEM(newargs, 0, Py_NewRef(cls));
+        PyTuple_SET_VALUE(newargs, 0,
+                          PyValue_FromPyObjectNew((PyObject *)Py_TYPE(obj)));
         for (i = 0; i < n; i++) {
-            PyObject *v = PyTuple_GET_ITEM(args, i);
-            PyTuple_SET_ITEM(newargs, i+1, Py_NewRef(v));
+            item_value = PyTuple_GetValue(args, i);
+            if (PyValue_IsNull(item_value) || PyErr_Occurred()) {
+                goto done;
+            }
+            PyTuple_SET_VALUE(newargs, i + 1, item_value);
+            item_value = PyValue_NULL;
         }
-        Py_XDECREF(args);
+        type_mutation_close(&args);
+        if (PyErr_Occurred()) {
+            goto done;
+        }
+        goto state_phase;
     }
     else if (args != NULL) {
         newobj = PyObject_GetAttr(copyreg, &_Py_ID(__newobj_ex__));
-        Py_DECREF(copyreg);
-        if (newobj == NULL) {
-            Py_DECREF(args);
-            Py_DECREF(kwargs);
-            return NULL;
+        type_mutation_close(&copyreg);
+        if (newobj == NULL || PyErr_Occurred()) {
+            goto done;
         }
-        newargs = PyTuple_Pack(3, Py_TYPE(obj), args, kwargs);
-        Py_DECREF(args);
-        Py_DECREF(kwargs);
-        if (newargs == NULL) {
-            Py_DECREF(newobj);
-            return NULL;
+        class_owner = Py_NewRef((PyObject *)Py_TYPE(obj));
+        newargs = PyTuple_Pack(3, class_owner, args, kwargs);
+        type_mutation_close(&args);
+        type_mutation_close(&kwargs);
+        type_mutation_close(&class_owner);
+        if (newargs == NULL || PyErr_Occurred()) {
+            goto done;
         }
+        goto state_phase;
     }
     else {
-        /* args == NULL */
-        Py_DECREF(copyreg);
-        Py_DECREF(kwargs);
+        type_mutation_close(&copyreg);
+        type_mutation_close(&kwargs);
+        if (PyErr_Occurred()) {
+            goto done;
+        }
         PyErr_BadInternalCall();
-        return NULL;
+        goto done;
     }
 
-    state = object_getstate(obj, !(hasargs || PyList_Check(obj) || PyDict_Check(obj)));
-    if (state == NULL) {
-        Py_DECREF(newobj);
-        Py_DECREF(newargs);
-        return NULL;
+state_phase:
+    state = object_getstate(obj,
+                            !(hasargs || PyList_Check(obj) || PyDict_Check(obj)));
+    if (state == NULL || PyErr_Occurred()) {
+        goto done;
     }
-    if (_PyObject_GetItemsIter(obj, &listitems, &dictitems) < 0) {
-        Py_DECREF(newobj);
-        Py_DECREF(newargs);
-        Py_DECREF(state);
-        return NULL;
+    if (_PyObject_GetItemsIter(obj, &listitems, &dictitems) < 0 ||
+        PyErr_Occurred()) {
+        goto done;
     }
-
     result = PyTuple_Pack(5, newobj, newargs, state, listitems, dictitems);
-    Py_DECREF(newobj);
-    Py_DECREF(newargs);
-    Py_DECREF(state);
-    Py_DECREF(listitems);
-    Py_DECREF(dictitems);
+    if (result != NULL && !PyErr_Occurred()) {
+        rc = 0;
+    }
+    goto done;
+
+done:
+    {
+        PyValue retired = item_value;
+        item_value = PyValue_NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+    }
+    type_mutation_close(&args);
+    type_mutation_close(&kwargs);
+    type_mutation_close(&copyreg);
+    type_mutation_close(&class_owner);
+    type_mutation_close(&diagnostic_name);
+    type_mutation_close(&diagnostic_type);
+    type_mutation_close(&newobj);
+    type_mutation_close(&newargs);
+    type_mutation_close(&state);
+    type_mutation_close(&listitems);
+    type_mutation_close(&dictitems);
+    type_mutation_close(&obj_owner);
+    if (rc < 0 || PyErr_Occurred()) {
+        type_mutation_close(&result);
+        return NULL;
+    }
     return result;
 }
 

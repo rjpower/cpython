@@ -9,13 +9,13 @@ ported; hard source or binary compatibility with upstream is not required.
 
 The qualified interim interpreter is built from `eba351fee7d`: register IR and
 NaN-boxed frame values, with boxed heap fields. Universal PyValue restoration
-is on `boil/pyvalue-rc-universal` at `b76f2182354`: forty-four reviewed
+is on `boil/pyvalue-rc-universal` at `5ece1b27fd0`: forty-five reviewed
 dependent source checkpoints. The remaining original held file is typeobject.c.
 There is no linked or qualified restored interpreter or timing result.
 
 **Current step:** close compiler/linker blockers under reviewed ownership rules.
-Merged v13 at checkpoint43 has 324 repeated/cascading errors, 166 objects present and no executable;
-all 7,349 source inputs stayed unchanged. Clinic producer rules now cover fixed
+Merged v14 at checkpoint45 has 317 repeated/cascading errors, 168 objects present and no executable;
+all 7,351 source inputs stayed unchanged. Clinic producer rules now cover fixed
 positional/keyword wrappers and seven constructor helpers. Three iterator
 constructors, the recording-only MRO counter foundation and thirteen native
 slot wrappers are committed. The earlier type_new boundary and ten construction
@@ -25,9 +25,10 @@ publication/rollback remains in revision.
 The fifteen-function operator/LRU batch and flat-format parser kernel with five
 callers are committed after independent code/native review, followed by six
 type readers, four MRO-adjacent readers and seven bootstrap type readers.
-The four-wrapper Clinic implementation is in a bounded correction pass after
-code review. The shared FORMAT foundation has passed design review and Luna
-implements its kernel. Sol reviews per-function pickle/state porting recipes.
+The four-wrapper Clinic batch is committed after corrected v3 code/native
+review. The shared FORMAT kernel has passed code review; its fixtures require
+correction before composition. Pickle/state implementations are split across
+Luna workers under reviewed per-function recipes.
 The itertools inventory is complete; its tuple-result design is paused.
 The coordinator reviews actual code/results, integrates
 accepted deltas, rebuilds and repeats. Luna completed the latest error-family

@@ -701,6 +701,45 @@
       "changed_paths": 2,
       "runnable": false,
       "evidence": "build/pyvalue-type-bootstrap-readers-bulk-20261102-v1/commit.json"
+    },
+    "clinic_final_tuple_wrappers": {
+      "base": "b76f2182354f528975824049ab178ae5e2a754a5",
+      "commit": "5ece1b27fd0a7f0f286ca60e7d69fc66ad80f14d",
+      "paths_sha256": {
+        "Tools/clinic/libclinic/parse_args.py": "dae4ccbc4f816df606b61ac371e97c6c1e7bfc37300e7de6c1b05c213e20eedf",
+        "Lib/test/test_clinic.py": "4b71ebfd78ac18439c74f3743892a49e4ef84e06d37878f90906a859958712ae",
+        "Objects/clinic/enumobject.c.h": "0e6528bb8c727083f5056556b13955dce57e756ce0c785adbcd2462ea22a01b3",
+        "Objects/clinic/floatobject.c.h": "16924a09e9a4a7f82d03b41d995d678c2a17102bf7a86574c1e120ca59ec6de3",
+        "Objects/clinic/tupleobject.c.h": "2d3cfc60432c6a4a334700bb95190efc330776afc97bb1bd54774735c28612d8",
+        "Modules/clinic/atexitmodule.c.h": "19dae641ad9eb4b230d56e7a44e926b3b84f496a2ebbee7e68ffc3c7cc87c70f",
+        "Lib/test/test_pyvalue_clinic_final_constructors.py": "2572c45993864210a869117ac4fde595e7c51a48c4bb47f8487311fdcb1c65ee"
+      },
+      "changed_paths": 7,
+      "production_wrappers": 4,
+      "producer_pass": 287,
+      "producer_skip": 0,
+      "host_reference_pass": 5,
+      "rendered_functions": 3000,
+      "excluded_exact": 2996,
+      "selected_errors_before": 8,
+      "selected_errors_after": 0,
+      "full_TU_and_object_passes": 2,
+      "full_TU_remaining_errors": {
+        "enum": 5,
+        "atexit": 7
+      },
+      "first_use_relocations": [
+        "enum_next_long PyTuple_GET_ITEM",
+        "atexit_callfuncs PyTuple_GET_ITEM"
+      ],
+      "independent_review_sha256": "33e9f88689ed39ec4bd241a9ad74a982933099093b9c0da479ef0f10d22fde6f",
+      "coordinator_review_sha256": "3acd04738e7be520158737f5dc6c33b11d68aa97c7e246dd124148a5fc163cc3",
+      "native_receipt_sha256": "7a238fd3704506e610e4c00212e2b38e59723ad9cc66063f5255cc5029c5179a",
+      "object_receipt_sha256": "df94f5ba70c4c0cac5f72a2a636c5a8876504b917deb101b32be5e7e108e731f",
+      "staged_patch_sha256": "b0c78b8cdbd23eae4a8e8bce71482ac8131c8d9f47fbdf85be4ee5d9f9372360",
+      "candidate_executed": false,
+      "runnable": false,
+      "evidence": "build/pyvalue-clinic-final-constructors-bulk-20261102-v3/commit.json"
     }
   },
   "first_diagnostic_build": {
@@ -710,15 +749,15 @@
     "candidate_linked": false
   },
   "latest_diagnostic_build": {
-    "head": "df30266b3b4fb2274f91965d0ca3b8cd52d34e9a",
-    "objects_present": 166,
-    "error_diagnostics": 324,
+    "head": "5ece1b27fd0a7f0f286ca60e7d69fc66ad80f14d",
+    "objects_present": 168,
+    "error_diagnostics": 317,
     "source_unchanged": true,
     "candidate_linked": false,
     "includes_held_source_files": true,
     "make_exit": 2,
-    "source_manifest_paths": 7349,
-    "evidence": "build/pyvalue-merged-build-20261102-v13"
+    "source_manifest_paths": 7351,
+    "evidence": "build/pyvalue-merged-build-20261102-v14"
   },
   "mro_provider_reviewed_delta": {
     "typeobject_sha256": "d07219973716cab2749c7f9992ee268dd014815d28fd574c6d6c2d84b74dcf1d",

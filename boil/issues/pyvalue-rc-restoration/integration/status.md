@@ -43,20 +43,20 @@ Remaining actual parser, container/
 startup and bundled consumer ports still block a baseline executable.
 
 The latest [merged diagnostic build](../merged-build/status.md) binds the
-43-checkpoint chain at `df30266b3b4` plus held typeobject composition `62471a80`.
-It exited 2, with 166 objects present and no executable. All 7,349 source paths
-stayed unchanged; 324 repeated/cascading errors remain. Focused component checks
+45-checkpoint chain at `5ece1b27fd0` plus held typeobject composition `e5602e19`.
+It exited 2, with 168 objects present and no executable. All 7,351 source paths
+stayed unchanged; 317 repeated/cascading errors remain. Focused component checks
 do not make this a passing merged build. The counter foundation and thirteen
 slot wrappers are committed. Construction readers and
 the earlier constructor boundary, operator/LRU batch and first flat-format parser
 stage are committed, followed by six type readers and four MRO-adjacent readers.
 Seven bootstrap readers are the subsequent checkpoint44 `b76f2182354`; its
 selected errors/warnings are gone, with the full type TU still at 3 errors/3 warnings.
-Clinic4 is frozen in code/native review; Sol designs pickle/state readers and
-revises the shared FORMAT foundation. Itertools tuple-result design is paused.
-The next merged build follows the independent Clinic integration.
-The latest family census maps all eight remaining Clinic errors to four producers.
-Root gates their reusable producer rule before bulk regeneration.
+Clinic4 is checkpoint45 after independent v3 code/native review. The merged
+build includes it. Pickle/state implementations are separate one-function Luna
+packets; FORMAT kernel code is accepted and its fixtures require correction.
+Itertools tuple-result design is paused. The earlier census mapped eight Clinic
+errors to four producers; all eight selected errors are now gone.
 The full MRO transaction remains in revision. The board owns live assignments.
 
 Prioritize a coherent register interpreter with the unified format and JIT off.

@@ -162,8 +162,14 @@ reversed_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = &PyReversed_Type;
+    PyObject *_clinic_receiver_owner = NULL;
+    PyObject *_clinic_item_owner = NULL;
     PyObject *seq;
 
+    if (PyErr_Occurred()) {
+        goto exit;
+    }
+    _clinic_receiver_owner = Py_NewRef((PyObject *)type);
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
         !_PyArg_NoKeywords("reversed", kwargs)) {
         goto exit;
@@ -171,10 +177,36 @@ reversed_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (!_PyArg_CheckPositional("reversed", PyTuple_GET_SIZE(args), 1, 1)) {
         goto exit;
     }
-    seq = PyTuple_GET_ITEM(args, 0);
+    _clinic_item_owner = PyTuple_GetItemRef(args, 0);
+    if (_clinic_item_owner == NULL || PyErr_Occurred()) {
+        goto exit;
+    }
+    seq = _clinic_item_owner;
     return_value = reversed_new_impl(type, seq);
 
 exit:
+    {
+        PyObject *_clinic_detached_owner = _clinic_item_owner;
+        _clinic_item_owner = NULL;
+        PyObject *_clinic_saved_exception = PyErr_GetRaisedException();
+        Py_XDECREF(_clinic_detached_owner);
+        _PyValue_RestoreException(_clinic_saved_exception);
+    }
+    {
+        PyObject *_clinic_detached_owner = _clinic_receiver_owner;
+        _clinic_receiver_owner = NULL;
+        PyObject *_clinic_saved_exception = PyErr_GetRaisedException();
+        Py_XDECREF(_clinic_detached_owner);
+        _PyValue_RestoreException(_clinic_saved_exception);
+    }
+    if (PyErr_Occurred()) {
+        PyObject *_clinic_output = return_value;
+        return_value = NULL;
+        PyObject *_clinic_saved_exception = PyErr_GetRaisedException();
+        Py_XDECREF(_clinic_output);
+        _PyValue_RestoreException(_clinic_saved_exception);
+        return NULL;
+    }
     return return_value;
 }
 
@@ -202,4 +234,4 @@ reversed_vectorcall(PyObject *type, PyObject *const *args,
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=c6782cdf80e4d845 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=56a090f065948c3b input=a9049054013a1b77]*/

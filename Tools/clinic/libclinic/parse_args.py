@@ -7,12 +7,12 @@ from libclinic.function import (
     Function, Parameter, ParamTuple,
     count_required, group_to_variable_name, permute_optional_groups,
     GETTER, SETTER, SETTER_AND_DELETER, METHOD_INIT, METHOD_NEW, SLOT,
-    ACCESSORS, SETTERS)
+    ACCESSORS, SETTERS, CALLABLE)
 from libclinic.converter import CConverter
 from libclinic.converters import (
     bool_converter, defining_class_converter, int_converter, object_converter,
     Py_ssize_t_converter, self_converter, str_converter,
-    unicode_converter, varpos_tuple_converter)
+    unicode_converter, var_keyword_dict_converter, varpos_tuple_converter)
 if TYPE_CHECKING:
     from libclinic.clanguage import CLanguage
     from libclinic.codegen import CodeGen
@@ -458,6 +458,82 @@ class ParseArgsCodeGen:
                              or c.format_unit in ('O', 'O!'))
                         for c in self.converters))
 
+    def use_owned_tuple_single_constructor(self) -> bool:
+        """Select one exact O tuple argument for a vectorcall constructor."""
+        return (self.func.kind is METHOD_NEW
+                and self.func.vectorcall
+                and not self.limited_capi and not self.fastcall
+                and not self.func.critical_section
+                and not self.varpos and not self.var_keyword
+                and not self.requires_defining_class
+                and not self.has_option_groups()
+                and len(self.parameters) == 1 and self.pos_only == 1
+                and self.min_pos in (0, 1) and self.max_pos == 1
+                and type(self.converters[0]) is object_converter
+                and self.converters[0].format_unit == 'O'
+                and self.converters[0].alias_of is None
+                and not self.converters[0].cleanup()
+                and not self.converters[0].post_parsing()
+                and all(p.deprecated_until is None
+                        and not p.deprecated_positional
+                        and not p.deprecated_keyword
+                        for p in self.parameters)
+                and self.func.return_converter.type == 'PyObject *')
+
+    def use_owned_tuple_varargs_varkw(self) -> bool:
+        """Select one exact O argument with tuple and dict collectors."""
+        return (self.func.kind is CALLABLE
+                and not self.limited_capi and not self.fastcall
+                and not self.func.vectorcall
+                and not self.func.critical_section
+                and self.func.return_converter.type == 'PyObject *'
+                and len(self.parameters) == 1 and self.pos_only == 1
+                and self.min_pos == self.max_pos == 1
+                and type(self.converters[0]) is object_converter
+                and self.converters[0].format_unit == 'O'
+                and self.converters[0].alias_of is None
+                and not self.converters[0].cleanup()
+                and not self.converters[0].post_parsing()
+                and self.parameters[0].deprecated_until is None
+                and not self.parameters[0].deprecated_positional
+                and not self.parameters[0].deprecated_keyword
+                and self.varpos is not None
+                and type(self.varpos.converter) is varpos_tuple_converter
+                and self.varpos.converter.alias_of is None
+                and self.varpos.deprecated_until is None
+                and not self.varpos.deprecated_positional
+                and not self.varpos.deprecated_keyword
+                and not self.varpos.converter.post_parsing()
+                and self.var_keyword is not None
+                and type(self.var_keyword.converter) is var_keyword_dict_converter
+                and self.var_keyword.converter.alias_of is None
+                and self.var_keyword.deprecated_until is None
+                and not self.var_keyword.deprecated_positional
+                and not self.var_keyword.deprecated_keyword
+                and not self.var_keyword.converter.post_parsing()
+                and not self.requires_defining_class
+                and not self.has_option_groups())
+
+    def owned_tuple_local_names(self) -> tuple[str, str, str, str, str]:
+        """Reserve all owned tuple locals against every generated C name."""
+        used = {'args', 'nargs', 'kwargs', 'kwnames', 'type', 'self', 'module',
+                'base_tp', 'return_value', 'fastargs', 'argsbuf', 'noptargs'}
+        for parameter in self.func.parameters.values():
+            used.update((parameter.converter.name,
+                         parameter.converter.parser_name))
+        names = []
+        for stem in ('_clinic_receiver_owner', '_clinic_item_owner',
+                     '_clinic_saved_exception', '_clinic_detached_owner',
+                     '_clinic_output'):
+            name = stem
+            suffix = 0
+            while name in used:
+                suffix += 1
+                name = f'{stem}_{suffix}'
+            used.add(name)
+            names.append(name)
+        return tuple(names)
+
     def is_new_or_init(self) -> bool:
         return self.func.kind.new_or_init
 
@@ -547,6 +623,41 @@ class ParseArgsCodeGen:
                 {initializers}
         """) + "\n"
         finale = PARSER_FINALE_SKELETON
+        owned_tuple_selected = (self.owned_tuple_single_constructor_selected
+                                or self.owned_tuple_varargs_varkw_selected)
+        if owned_tuple_selected:
+            self.codegen.add_include('pycore_value.h',
+                                     '_PyValue_RestoreException()')
+            receiver, item, saved, detached, output = self.owned_tuple_names
+            owners = ([item, receiver]
+                      if self.owned_tuple_single_constructor_selected
+                      else [self.varpos.converter.parser_name,
+                            self.var_keyword.converter.parser_name,
+                            item, receiver])
+            cleanup = []
+            for owner in owners:
+                cleanup.append(libclinic.normalize_snippet(f"""
+                    {{{{
+                        PyObject *{detached} = {owner};
+                        {owner} = NULL;
+                        PyObject *{saved} = PyErr_GetRaisedException();
+                        Py_XDECREF({detached});
+                        _PyValue_RestoreException({saved});
+                    }}}}
+                """, indent=4))
+            result_cleanup = libclinic.normalize_snippet(f"""
+                if (PyErr_Occurred()) {{{{
+                    PyObject *{output} = {{parser_retval}};
+                    {{parser_retval}} = NULL;
+                    PyObject *{saved} = PyErr_GetRaisedException();
+                    Py_XDECREF({output});
+                    _PyValue_RestoreException({saved});
+                    return NULL;
+                }}}}
+            """, indent=4)
+            finale = finale.replace('    {cleanup}', '\n'.join(cleanup), 1)
+            finale = finale.replace('    return {parser_retval};',
+                                    result_cleanup + '\n    return {parser_retval};', 1)
         if self.scoped_tuple_helper_selected:
             tuple_args, scope, saved, output = self.scoped_tuple_helper_names
             self.codegen.add_include('pycore_value.h', '_PyValue_RestoreException()')
@@ -613,11 +724,12 @@ class ParseArgsCodeGen:
                     libclinic.normalize_snippet(end_cleanup, indent=4))
         for field in preamble, *fields, finale:
             lines.append(field)
+        impl_call = "{return_value} = {c_basename}_impl({impl_arguments});"
         code = libclinic.linear_format(
             "\n".join(lines),
             parser_declarations=self.declarations,
             self_alloc="",
-            impl_call="{return_value} = {c_basename}_impl({impl_arguments});",
+            impl_call=impl_call,
             init_result_check="")
         self.parser_definition = code
 
@@ -1226,6 +1338,43 @@ class ParseArgsCodeGen:
         else:
             parser_code.extend(self._check_positional(nargs))
 
+        owned_constructor = self.use_owned_tuple_single_constructor()
+        if owned_constructor:
+            self.owned_tuple_single_constructor_selected = True
+            (self.owned_tuple_receiver_name,
+             self.owned_tuple_item_name,
+             self.owned_tuple_saved_name,
+             self.owned_tuple_detached_name,
+             self.owned_tuple_output_name) = self.owned_tuple_names
+            receiver, item = (self.owned_tuple_receiver_name,
+                              self.owned_tuple_item_name)
+            self.declarations += libclinic.normalize_snippet(f"""
+                PyObject *{receiver} = NULL;
+                PyObject *{item} = NULL;
+            """)
+            if self.min_pos == 0:
+                parser_code.append(libclinic.normalize_snippet(f"""
+                    if ({nargs} < 1) {{{{
+                        goto skip_optional;
+                    }}}}
+                """, indent=4))
+            parser_code.append(libclinic.normalize_snippet(f"""
+                {item} = PyTuple_GetItemRef(args, 0);
+                if ({item} == NULL || PyErr_Occurred()) {{{{
+                    goto exit;
+                }}}}
+            """, indent=4))
+            parameter = self.parameters[0]
+            parsearg = parameter.converter.parse_arg(
+                item, parameter.get_displayname(1),
+                limited_capi=self.limited_capi)
+            assert parsearg is not None
+            parser_code.append(libclinic.normalize_snippet(parsearg, indent=4))
+            if self.min_pos == 0:
+                parser_code.append('skip_optional:')
+            self.parser_body(*parser_code)
+            return
+
         scoped = self.use_scoped_tuple_positional()
         pos_code = self._parse_positional_args(
             argname_fmt='fastargs[%s]' if scoped else argname_fmt,
@@ -1275,6 +1424,30 @@ class ParseArgsCodeGen:
         nargs = 'PyTuple_GET_SIZE(args)'
 
         parser_code = []
+        owned_varargs = self.use_owned_tuple_varargs_varkw()
+        if owned_varargs:
+            self.owned_tuple_varargs_varkw_selected = True
+            (self.owned_tuple_receiver_name,
+             self.owned_tuple_item_name,
+             self.owned_tuple_saved_name,
+             self.owned_tuple_detached_name,
+             self.owned_tuple_output_name) = self.owned_tuple_names
+            receiver, item = (self.owned_tuple_receiver_name,
+                              self.owned_tuple_item_name)
+            self.declarations += libclinic.normalize_snippet(f"""
+                PyObject *{receiver} = NULL;
+                PyObject *{item} = NULL;
+            """)
+            parser_code.extend([
+                libclinic.normalize_snippet("""
+                    if (PyErr_Occurred()) {{
+                        goto exit;
+                    }}
+                """, indent=4),
+                libclinic.normalize_snippet(f"""
+                    {receiver} = Py_NewRef((PyObject *){{self_name}});
+                """, indent=4),
+            ])
         if self.varpos is None and self.min_pos == self.max_pos == 0:
             self.codegen.add_include('pycore_modsupport.h',
                                      '_PyArg_NoPositional()')
@@ -1288,8 +1461,15 @@ class ParseArgsCodeGen:
 
         has_optional = False
         for i, p in enumerate(self.parameters):
+            if owned_varargs:
+                parser_code.append(libclinic.normalize_snippet(f"""
+                    {item} = PyTuple_GetItemRef(args, 0);
+                    if ({item} == NULL || PyErr_Occurred()) {{{{
+                        goto exit;
+                    }}}}
+                """, indent=4))
             parse_arg = p.converter.parse_arg(
-                f'PyTuple_GET_ITEM(args, {i})',
+                item if owned_varargs else f'PyTuple_GET_ITEM(args, {i})',
                 p.get_displayname(i+1),
                 limited_capi=self.limited_capi,
             )
@@ -1307,8 +1487,20 @@ class ParseArgsCodeGen:
 
         if self.varpos:
             parser_code.append(libclinic.normalize_snippet(self._parse_vararg(), indent=4))
+            if owned_varargs:
+                parser_code.append(libclinic.normalize_snippet("""
+                    if (PyErr_Occurred()) {{
+                        goto exit;
+                    }}
+                """, indent=4))
         if self.var_keyword:
             parser_code.append(libclinic.normalize_snippet(self._parse_kwarg(), indent=4))
+            if owned_varargs:
+                parser_code.append(libclinic.normalize_snippet("""
+                    if (PyErr_Occurred()) {{
+                        goto exit;
+                    }}
+                """, indent=4))
         self.parser_body(*parser_code)
 
     def use_converters(self) -> None:
@@ -1778,7 +1970,8 @@ class ParseArgsCodeGen:
             raise ValueError("Slot methods cannot access their defining class.")
 
         if not parses_keywords:
-            if self.scoped_tuple_positional:
+            if (self.scoped_tuple_positional
+                    or self.owned_tuple_single_constructor_selected):
                 # The slot reconstruction must retain its initialized owners,
                 # including on the keyword guard's early exit.
                 self.declarations = '{base_type_ptr}\n' + self.declarations
@@ -1799,6 +1992,17 @@ class ParseArgsCodeGen:
                         goto exit;
                     }}
                     """, indent=4))
+
+        if self.owned_tuple_single_constructor_selected:
+            receiver = self.owned_tuple_receiver_name
+            fields.insert(0, libclinic.normalize_snippet(f"""
+                {receiver} = Py_NewRef((PyObject *){{self_name}});
+            """, indent=4))
+            fields.insert(0, libclinic.normalize_snippet("""
+                if (PyErr_Occurred()) {{
+                    goto exit;
+                }}
+            """, indent=4))
 
         self.parser_body(*fields)
 
@@ -2086,6 +2290,9 @@ class ParseArgsCodeGen:
         self.scoped_tuple_positional = False
         self.scoped_tuple_keyword_selected = False
         self.scoped_tuple_helper_selected = False
+        self.owned_tuple_single_constructor_selected = False
+        self.owned_tuple_varargs_varkw_selected = False
+        self.owned_tuple_names = self.owned_tuple_local_names()
         self.parser_prototype = ""
         self.parser_definition = ""
         self.parser_helper = ""

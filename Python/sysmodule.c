@@ -3655,7 +3655,7 @@ const char *_PySys_ImplName = _PY_IMPL_NAME;
 #ifndef _PY_IMPL_CACHE_TAG
 #define MAJOR Py_STRINGIFY(PY_MAJOR_VERSION)
 #define MINOR Py_STRINGIFY(PY_MINOR_VERSION)
-#define _PY_IMPL_CACHE_TAG _PY_IMPL_NAME "-rc1-" MAJOR MINOR
+#define _PY_IMPL_CACHE_TAG _PY_IMPL_NAME "-valrc1-" MAJOR MINOR
 #endif
 const char *_PySys_ImplCacheTag = _PY_IMPL_CACHE_TAG;
 #ifdef MAJOR

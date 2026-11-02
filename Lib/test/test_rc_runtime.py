@@ -52,15 +52,15 @@ class ReferenceCountingRuntimeTests(unittest.TestCase):
         self.assertEqual(sys.getrefcount(value), before)
 
     def test_cache_and_extension_names_exclude_other_runtime_abis(self):
-        self.assertIn('-rc1-', sys.implementation.cache_tag)
+        self.assertIn('-valrc1-', sys.implementation.cache_tag)
         self.assertNotIn(importlib.util.MAGIC_NUMBER[:2],
                          (int(3716).to_bytes(2, 'little'),
                           int(3729).to_bytes(2, 'little')))
         if sys.platform.startswith('linux'):
-            self.assertTrue(sysconfig.get_config_var('SOABI').startswith('boilrc1-'))
+            self.assertTrue(sysconfig.get_config_var('SOABI').startswith('boilvalrc1-'))
             suffixes = importlib.machinery.EXTENSION_SUFFIXES
             self.assertTrue(suffixes)
-            self.assertTrue(all(suffix.startswith('.boilrc1-') for suffix in suffixes),
+            self.assertTrue(all(suffix.startswith('.boilvalrc1-') for suffix in suffixes),
                             suffixes)
 
 

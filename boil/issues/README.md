@@ -1,20 +1,19 @@
 # Current work
 
 Current milestone: complete universal PyValues under RC, then measure the
-register interpreter with JIT disabled. Restoration HEAD is `69a1b3ea533` on
-`boil/pyvalue-rc-universal`: fourteen reviewed source commits, three held object/type
-files. The first diagnostic build configured and compiled 141 objects but failed
+register interpreter with JIT disabled. Restoration HEAD is `6780ba211ac` on
+`boil/pyvalue-rc-universal`: fifteen reviewed source commits, three held object/type
+files. The latest merged diagnostic build has 145 objects but failed
 to link. No restored runtime, qualification or performance pass is claimed.
 [State](pyvalue-rc-restoration/status.md), [process](../PROCESS.md) and
 [gates](../design/validation.md) own details.
 
 ## Now and next
 
-1. State_audit implements caller preparation/publication and the reviewed Python
-   transfer amendment. Parser/constructor views and generic NativeScope adapters
-   are committed dependencies. Exact boundaries are in the
-   [active grants](pyvalue-rc-restoration/native-parsers/implementation-grants.md).
-   Wiki_audit independently closes the held type-cache design proof.
+1. State_audit implements the reviewed instance/subclass consumer design.
+   The caller transaction and its NativeScope/parser dependencies are committed.
+   Wiki_audit revises two finite type-cache design details after coordinator
+   review; type-cache source remains held.
 2. The coordinator prioritizes shared blockers from the first actual build,
    reviews each design, assigns independent code review and commits useful ports.
    Old agents remain stopped; compatibility approvals are not a gate.
@@ -28,9 +27,9 @@ to link. No restored runtime, qualification or performance pass is claimed.
 
 | Experiment | Stage | Owner | Next step |
 | --- | --- | --- | --- |
-| [Native callers and scoped parsers](pyvalue-rc-restoration/native-parsers/status.md) | Caller implementation; parser dependency committed | state_audit; coordinator reviews | Freeze caller/producer/observer endpoint; merge and validate |
-| [Core and extension consumers](pyvalue-rc-restoration/core-consumers/status.md) | Marshal committed; further ports queued | Coordinator | Remaining getargs, AST and bundled consumers |
-| [Canonical type cache](pyvalue-rc-restoration/typecache/status.md) | Close finite design proof | wiki_audit; coordinator reviews | Mutation/static-lifetime proof; scalar object/call boundaries remain separate |
+| [Native callers and scoped parsers](pyvalue-rc-restoration/native-parsers/status.md) | Three reviewed dependencies committed | Coordinator | Remaining gateways/parser families and merged runtime witnesses |
+| [Core and extension consumers](pyvalue-rc-restoration/core-consumers/status.md) | Instance/subclass implementation; marshal committed | state_audit; coordinator reviews | Four tuple reads and scalar special-method call boundary; remaining getargs/AST/bundled ports |
+| [Canonical type cache](pyvalue-rc-restoration/typecache/status.md) | Revise reviewed v3 details | wiki_audit; coordinator reviews | Raw terminal rejection and removal of forced tag setter; then bounded source grant |
 | [Value-native VM iteration](pyvalue-rc-restoration/iterator-vm/status.md) | Next design | Unassigned | Connect real generic iteration to canonical providers and review observer/reentry behavior |
 | [Integration and interpreter checkpoint](pyvalue-rc-restoration/integration/status.md) | Build diagnostics → ports | Coordinator | Close concrete compile/link blockers, rebuild, qualify and measure |
 | [Method and tracing JIT](jit-e2e-system/status.md) | Deferred to interpreter checkpoint | Coordinator | Reconcile source/runtime with universal values before further native validation |
@@ -56,7 +55,9 @@ linked restored runtime. Primary-worktree documentation is separate.
 | [Canonical dictionary readers](pyvalue-rc-restoration/value-readers/status.md) | `99012f782ea`, five files | Four real symbols and Dict/fixture TUs pass; 13 candidate methods unexecuted |
 | [Generic NativeScope adapters](pyvalue-rc-restoration/native-parsers/generic-adapters/status.md) | `1a2adf3da57`, two files | Actual TU/object pass; caller integration/runtime pending |
 | [Scoped parser/constructors](pyvalue-rc-restoration/native-parsers/parser-owners/status.md) | `55d410ca39f`, 18 paths | 267 producer checks; Struct object pass; other old parser errors retained |
+| [Caller transaction](pyvalue-rc-restoration/native-parsers/caller-transaction/status.md) | `6780ba211ac`, ten paths | Actual evaluator object; 50 host producer checks; eight candidate methods pending |
 | [Marshal consumers](pyvalue-rc-restoration/core-consumers/marshal/status.md) | `69a1b3ea533`, two files | Actual TU/object and nine host controls pass; 13 candidate methods pending |
+| [Merged diagnostic build](pyvalue-rc-restoration/merged-build/status.md) | Make failed at `6780ba211ac`; 145 objects, no executable | 612 repeated/cascading diagnostics; required consumer ports remain |
 | [First diagnostic build](pyvalue-rc-restoration/first-build/status.md) | Configure passed; build failed; 141 objects | 616 repeated/cascading diagnostics across 96 source/header paths to resolve |
 
 Earlier component reviews, including compiler metadata, owned dictionary entries

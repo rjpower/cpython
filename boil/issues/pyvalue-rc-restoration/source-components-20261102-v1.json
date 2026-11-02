@@ -289,12 +289,27 @@
       "commit": "69a1b3ea5330a6381a6caf374112b5b1b5a43450",
       "changed_paths": 2,
       "runnable": false
+    },
+    "caller_transaction": {
+      "commit": "6780ba211ac9a242dee156e18572be2c246cfa03",
+      "changed_paths": 10,
+      "runnable": false
     }
   },
   "first_diagnostic_build": {
     "configure_pass": true,
     "make_exit": 2,
     "compiled_object_count": 141,
+    "candidate_linked": false
+  },
+  "latest_diagnostic_build": {
+    "head": "6780ba211ac9a242dee156e18572be2c246cfa03",
+    "includes_held_source_files": true,
+    "make_exit": 2,
+    "objects_present": 145,
+    "error_diagnostics": 612,
+    "source_manifest_paths": 7332,
+    "source_unchanged": true,
     "candidate_linked": false
   }
 }

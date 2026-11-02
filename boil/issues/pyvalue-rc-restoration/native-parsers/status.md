@@ -1,10 +1,10 @@
 # Native callers, scoped parsers and registration
 
-- Stage: generic adapters and scoped constructors committed; caller transaction in implementation
-- Owner: state_audit caller/producer; coordinator reviews and integrates
+- Stage: generic adapters, scoped constructors and caller transaction committed
+- Owner: coordinator assigns remaining scopes and validates composition
 - Goal: repair real call preparation/publication and port production constructor families
 
-The [accepted design](design.md), [remaining grant](implementation-grants.md),
+The [accepted design](design.md), [completed grants](implementation-grants.md),
 [Python transfer amendment](python-transfer.md) and
 [extension contract](../../../design/extension-api.md) define one lifetime model.
 Publish coherent IN_CALL before preparation can call out. Publish final callable/
@@ -25,26 +25,24 @@ last use while IN_CALL remains coherent. No callback, conversion or call replays
   fourteen candidate methods remain unexecuted. Host producer/reference checks
   and their limits are recorded with the checkpoint.
 
-## Active increment
+- [Caller transaction](caller-transaction/status.md), `6780ba211ac`:
+  cold/warm/KW/EX/instrumented preparation, native publication and selected-code
+  Python frame transfer. Actual evaluator/fixture TUs and evaluator object pass.
+  Fifty host generator checks pass; eight candidate methods remain unexecuted.
 
-State_audit implements cold/warm/KW/EX/instrumented call preparation, invocation,
-publication and Python transfer through the actual VM producer. One selected code
-snapshot must determine binding and frame layout through allocation. Consumed
-copies protect parent homes before handoff; the child becomes current before
-parent duplicates retire. Analyzer metadata must expose the transaction markers'
-real callouts, errors and frame transfers. Its bounded amendment and focused
-tests are part of the grant; generated products must come from their producers.
+## Remaining work
 
 Root owns the shared index, coordinated native checks, independent reviews and
-merged validation. Freeze useful endpoints for code/results review and commit
-reviewed dependencies. No new native-call or parser runtime pass exists; all
-candidate witnesses await a linked restored interpreter.
+merged validation. The merged diagnostic build still has no executable. Neither
+the caller nor parser runtime routes are admitted by these source checkpoints.
 
-Further parser families, varpos/recursive converters, the constructor-init shim,
-broader binder cleanup, other gateways and the opaque extension backend remain
-unfinished. Three object/type files stay held for separate findings.
-Hard compatibility is not a gate. The completed parser lane has no active source
-grant; wiki_audit now works on the type-cache design proof.
+Further parser families, varpos/recursive converters, exact-argument preparation,
+the constructor-init shim, broader binder cleanup, other gateways and the opaque
+extension backend remain unfinished. Objects/object.c and typeobject.c remain
+held; the abstract.c consumer repair now has its own reviewed scope. Hard
+compatibility is not a gate. All native/parser source grants above are closed.
+State_audit now implements the abstract consumer port; wiki_audit revises the
+type-cache design after review.
 
 ## Design evidence
 

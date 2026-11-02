@@ -9,7 +9,7 @@ Use the existing 660-path native consumer inventory and exact dictionary caller
 ledger; do not repeat a broad census instead of porting concrete consumers.
 Completed compiler ports cover symtable and codegen metadata. Remaining runtime
 scopes include frame-local proxies, module clearing and structseq metadata.
-Marshal, generated AST, lifecycle/type and bundled module consumers also remain.
+Generated AST, lifecycle/type and bundled module consumers also remain.
 
 The [dictionary API cut](../dict-boundary-closure/status.md) removed borrowed
 entrypoints. Owning GetItemRef, NextEntryRef and SetDefaultRef support rebuilt
@@ -44,3 +44,6 @@ now supplies concrete grouped diagnostics; use it instead of repeating the inven
 
 [Marshal port](marshal/status.md): reviewed two-file checkpoint committed as `69a1b3ea533`;
 actual full TU/object and nine host controls pass. Candidate tests await linking.
+
+[Instance/subclass consumer port](abstract/status.md): design independently accepted;
+state_audit implements the scoped tuple reads and scalar special-method bridge.

@@ -1,7 +1,7 @@
 # Canonical type cache and mutation admission
 
-- Stage: fresh finite design-proof review; no source grant
-- Owner: wiki_audit closes proof; coordinator independently reviews before source
+- Stage: v3 reviewed; revise two finite details before source grant
+- Owner: wiki_audit revises design; coordinator reviews before source
 - Hypothesis: canonical borrowed cache entries can remain fast and safe if
   version invalidation precedes observable mutation and admission stays closed
   through callback-capable mutation/retirement.
@@ -11,20 +11,24 @@ table across allocation. A late version check after duplicating a stale borrow
 is unsafe. Existing installed guards also require invalidation before changed
 state becomes observable.
 
-The v2 proposal runs original Modified before writes under nested mutation
-admission. Fresh review found that its borrowed subclass cursor can skip an
-installed sibling guard after reentrant dictionary mutation. The original walk
-cannot be preserved unchanged. A replacement walk is in design; no implementation
-has been admitted. Remaining proof covers direct annotation getters/setters, custom-MRO
-failure/reentry, bases rollback, descendant guards, direct version setters and
-static initialization/teardown with shared nonzero tags. This is a correctness
-dependency, not a compatibility permission gate.
+V3 replaces the cursor walk with restarted owning child selection and gates
+installed guards, cache lookup and version publication with per-interpreter
+admission. Live mutations block admission through rollback/retirement. Static
+teardown permanently closes lookup and Python entry for that interpreter;
+shared static tags remain usable by other interpreters.
 
-References: [v2 design](../../../../build/pyvalue-rc-restoration-design-20261101-v1/typecache-canonical-cut-v2.md),
-[mutation ledger](../../../../build/pyvalue-rc-restoration-design-20261101-v1/typecache-live-mutation-ledger-v1.md),
-[review](../../../../build/pyvalue-rc-native-consumer-map-20261101-v1/typecache-v2-design-review.md).
-Next: close the finite proof or revise the design, then implement and test real
-warm guards, mutation callbacks and cache growth in a scoped increment.
+The coordinator accepted that direction and terminal policy subject to two
+corrections: the rejection must use a dedicated raw write/abort primitive
+(ordinary Py_FatalError may call Python), and the general forced-version setter
+must be removed completely. Internal zero-tag sites must preserve descendant
+invalidation or be terminal/refcount-zero teardown. Wiki_audit revises those
+finite details and proposes the first bounded implementation scope. No source
+grant, completed mutation proof or runtime pass exists.
+
+[V3 design](../../../../build/pyvalue-typecache-design-20261102-v3/design.md),
+[finite ledger](../../../../build/pyvalue-typecache-design-20261102-v3/finite-ledger.md),
+[coordinator review](../../../../build/pyvalue-typecache-design-20261102-v3/coordinator-review.md).
+V2 and its reviews remain historical evidence in their original directories.
 
 The fresh [composition review](../../../../build/pyvalue-source-integration-20261102-v1/shared-composition-review.md)
 also identifies object-only scalar conversions in lookup_method_ex, descriptor/new

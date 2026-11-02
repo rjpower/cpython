@@ -1,6 +1,6 @@
 # Restoration integration and interpreter checkpoint
 
-- Stage: fourteen source checkpoints; first real diagnostic build failed
+- Stage: fifteen source checkpoints; merged diagnostic build failed
 - Owner: coordinator; independent peer reviews precede each source checkpoint
 - Goal: produce one coherent universal-value RC runtime, validate composition,
   then measure the register interpreter before further JIT performance work.
@@ -30,7 +30,7 @@ results cannot supply it. Use results to improve specific mechanisms.
 
 ## Current checkpoint
 
-Fourteen reviewed source commits end at `69a1b3ea533`; their exact receipts are
+Fifteen reviewed source commits end at `6780ba211ac`; their exact receipts are
 linked from the [board](../../README.md). The shared composition commit
 `c21d0a374ee` excludes three object/type files with concrete scalar/cache holds.
 Codegen `ebc9740c4d5` and sys.flags `015eb226fb3` passed independent reviews and
@@ -58,8 +58,15 @@ passes. Candidate tests remain unexecuted. See
 [native/parser status](../native-parsers/status.md) and
 [marshal status](../core-consumers/marshal/status.md).
 
-Next: complete and independently review the caller transaction and its producer
-metadata, then integrate its useful increment. Resolve held object/type bridges
-and the type-cache proof separately; port remaining concrete consumers. Reuse
-the configured build for affected rebuilds, then link and run focused tests.
-Broad qualification and quiet timing wait for a coherent candidate.
+The [caller transaction](../native-parsers/caller-transaction/status.md)
+`6780ba211ac` is committed; actual evaluator and observer TUs and ceval.o pass.
+Eight candidate methods remain unexecuted. The subsequent
+[merged diagnostic build](../merged-build/status.md) has 145 objects, exits 2
+with no executable and preserves all 7,332 source inputs. It includes the three
+held object/type files for diagnostics; it does not admit them.
+
+Next: complete the reviewed instance/subclass consumer port, close the type-cache
+design corrections and assign bounded implementation. Remaining parser/Clinic
+and bundled consumers need owning views. Reuse affected checks, then link and
+run focused tests. Broad qualification and quiet timing wait for a coherent
+candidate.

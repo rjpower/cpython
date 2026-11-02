@@ -1,12 +1,12 @@
 # Native call and parser implementation boundaries
 
-The coordinator and independent peer accepted the frozen v3 design. The caller
-grant is active; the parser grant is closed after commit. These
+The coordinator and independent peer accepted the frozen v3 design. Both source
+grants are closed after reviewed commits. These
 disjoint boundaries apply on `build/worktrees/pyvalue-rc-universal`, starting
 from source commit `99012f782ea`. Neither agent may stage or commit. Root owns
 integration, shared builds and admission. Hard compatibility is not a gate.
 
-## A — state_audit: caller transaction and NativeScope
+## A — completed: caller transaction and NativeScope
 
 Own only these source boundaries:
 
@@ -27,7 +27,10 @@ Own only these source boundaries:
   helpers checking analyzed properties and generated control flow. Narrowly
   update TestJitHelpers.test_real_call_return_and_error_order and
   test_object_iteration_and_keyword_adapters for the actual replacement
-  transaction boundaries; preserve unrelated assertions and test coverage.
+  transaction boundaries; preserve unrelated assertions and test coverage. The
+  final approved sections also include test_native_vector_taken_window_publication,
+  the CALL loop of test_canonical_publication_and_bridge_entry and the EX
+  preparation assertions of test_object_specializations_restart_before_creating_bridges.
 - Modules/_testinternalcapi/native_scope.c and its Clinic product: bounded real
   suspended-frame/window observer; preserve existing fixtures.
 - Lib/test/test_pyvalue_native_call_transaction.py: focused real call witnesses.
@@ -103,4 +106,5 @@ PC 0 before first dispatch; rollback never adjusts unentered recursion accountin
 The constructor-init-shim and broader binder cleanup remain separate holds.
 
 B closed at 55d410ca39f; A’s two engine files are committed as 1a2adf3da57.
-Only the remaining caller/producer/observer scope is still an active source grant.
+A's remaining ten caller/producer/observer paths closed at 6780ba211ac.
+These boundaries are historical scope records, not current source grants.

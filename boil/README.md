@@ -9,20 +9,18 @@ ported; hard source or binary compatibility with upstream is not required.
 
 The qualified interim interpreter is built from `eba351fee7d`: register IR and
 NaN-boxed frame values, with boxed heap fields. Universal PyValue restoration now
-has fourteen independently reviewed source commits on `boil/pyvalue-rc-universal`,
-HEAD `69a1b3ea533`. Three object/type files remain held for explicit correctness
+has fifteen independently reviewed source commits on `boil/pyvalue-rc-universal`,
+HEAD `6780ba211ac`. Three object/type files remain held for explicit correctness
 findings. There is no linked or qualified restored interpreter or timing result.
 
-**Current step:** use the first build's concrete diagnostics to close shared
-dictionary and native parser/Clinic boundaries. Configure passed and compilation
-produced 141 objects, including the new symtable, codegen and sys.flags ports;
-the interpreter did not link. The dictionary API cut and exception port are
-committed and compile as real objects. Four canonical read APIs are now also
-reviewed and committed, supplying active compiler link dependencies. The
-reviewed parser/constructor increment and generic NativeScope adapters are now
-committed. Marshal also compiles and is committed. State_audit implements the
-remaining caller transaction; wiki_audit closes the type-cache design proof.
-The coordinator reviews and integrates increments, then validates the merged result.
+**Current step:** close the concrete blockers from the merged diagnostic build.
+The latest attempt at the fifteen-checkpoint chain produced 145 objects but no
+interpreter. Canonical dictionary readers, scoped constructors, marshal and the
+caller transaction are reviewed and committed; the evaluator compiles.
+State_audit implements the reviewed instance/subclass consumer port. Wiki_audit
+revises two finite type-cache design details after coordinator review. The
+coordinator reviews designs, integrates useful increments and validates the
+merged result.
 See the [work board](issues/README.md) for assignments and next gates.
 
 Next milestone: measure the unified-value register interpreter with JIT

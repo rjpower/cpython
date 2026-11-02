@@ -263,11 +263,23 @@ _PyTypeCache_Lookup(PyTypeObject *type, PyObject *name)
     }
 }
 
-void
-_PyTypeCache_Invalidate(PyTypeObject *type)
+struct type_cache *
+_PyTypeCache_Detach(PyTypeObject *type)
 {
     OBJECT_STAT_INC(type_cache_invalidations);
     struct type_cache *cache = cache_get(type);
     cache_set(type, &empty_cache);
+    return cache;
+}
+
+void
+_PyTypeCache_Retire(struct type_cache *cache)
+{
     cache_free_delayed(cache);
+}
+
+void
+_PyTypeCache_Invalidate(PyTypeObject *type)
+{
+    _PyTypeCache_Retire(_PyTypeCache_Detach(type));
 }

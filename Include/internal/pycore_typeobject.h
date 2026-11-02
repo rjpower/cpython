@@ -48,6 +48,18 @@ extern int _PyType_MatchesVersion(PyInterpreterState *interp,
                                   PyTypeObject *type, unsigned int expected);
 extern void _Py_NO_RETURN _PyType_AbortClosedLookup(void);
 
+/* Positive-refcount mutation receiver. Keep this C-local scope active through
+   writes, rollback and all displaced-owner cleanup. Begin only closes admission;
+   the actual writer invalidates before publishing live metadata. */
+typedef struct {
+    PyInterpreterState *interp;
+    PyTypeObject *type;
+    int active;
+} _PyTypeMutation;
+
+PyAPI_FUNC(int) _PyTypeMutation_Begin(_PyTypeMutation *, PyTypeObject *);
+PyAPI_FUNC(int) _PyTypeMutation_End(_PyTypeMutation *);
+
 /* runtime lifecycle */
 
 extern PyStatus _PyTypes_InitTypes(PyInterpreterState *);

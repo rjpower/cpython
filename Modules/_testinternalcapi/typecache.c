@@ -10,6 +10,7 @@
 #include "pycore_critical_section.h"
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_value.h"      // PyValue_AsObject()
+#include "pycore_typeobject.h"    // _PyTypeMutation
 #include "pycore_typecache.h"     // _PyTypeCache_Lookup()
 
 
@@ -99,7 +100,58 @@ type_cache_invalidate(PyObject *Py_UNUSED(self), PyObject *type_obj)
 }
 
 
+
+// Invoke through the repaired expanded-call route in witnesses. No fabricated
+// type versions or depth state: this uses the actual mutation interfaces.
+static PyObject *
+typecache_run_mutation(PyObject *Py_UNUSED(self), PyObject *const *args,
+                       Py_ssize_t nargs)
+{
+    if (PyErr_Occurred()) {
+        return NULL;
+    }
+    if (nargs != 2) {
+        PyErr_SetString(PyExc_TypeError, "expected a type and a callback");
+        return NULL;
+    }
+    if (!PyType_Check(args[0]) || !PyCallable_Check(args[1])) {
+        PyErr_SetString(PyExc_TypeError, "expected a type and a callback");
+        return NULL;
+    }
+    PyTypeObject *type = (PyTypeObject *)Py_NewRef(args[0]);
+    PyObject *callback = Py_NewRef(args[1]);
+    PyObject *result = NULL;
+    _PyTypeMutation scope = {0};
+    if (_PyTypeMutation_Begin(&scope, type) < 0) {
+        goto done;
+    }
+    if (type->tp_flags & Py_TPFLAGS_IMMUTABLETYPE) {
+        PyErr_SetString(PyExc_TypeError, "expected a mutable type");
+        goto done;
+    }
+    PyType_Modified(type);
+    if (!PyErr_Occurred()) {
+        result = PyObject_CallNoArgs(callback);
+    }
+done:
+    PyObject *saved = PyErr_GetRaisedException();
+    Py_DECREF(callback);
+    _PyValue_RestoreException(saved);
+    saved = PyErr_GetRaisedException();
+    Py_DECREF(type);
+    _PyValue_RestoreException(saved);
+    _PyTypeMutation_End(&scope);
+    if (PyErr_Occurred()) {
+        saved = PyErr_GetRaisedException();
+        Py_XDECREF(result);
+        _PyValue_RestoreException(saved);
+        return NULL;
+    }
+    return result;
+}
+
 static PyMethodDef test_methods[] = {
+    {"typecache_run_mutation", _PyCFunction_CAST(typecache_run_mutation), METH_FASTCALL},
     {"type_cache_lookup", type_cache_lookup, METH_VARARGS},
     {"type_cache_invalidate", type_cache_invalidate, METH_O},
     {NULL},

@@ -43,6 +43,10 @@ extern void _PyTypeCache_InitType(PyTypeObject *type);
 extern void _PyTypeCache_Insert(PyTypeObject *type, PyObject *name,
                                 PyValue value, unsigned int expected_version);
 PyAPI_FUNC(struct _PyTypeCacheLookupResult) _PyTypeCache_Lookup(PyTypeObject *type, PyObject *name);
+/* Detach publishes an empty table and transfers a private retirement owner.
+   Retire consumes it after watcher notification; both are legal during teardown. */
+extern struct type_cache *_PyTypeCache_Detach(PyTypeObject *type);
+extern void _PyTypeCache_Retire(struct type_cache *cache);
 PyAPI_FUNC(void) _PyTypeCache_Invalidate(PyTypeObject *type);
 
 #ifdef __cplusplus

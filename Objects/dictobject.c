@@ -1533,11 +1533,12 @@ insert_split_key(PyDictKeysObject *keys, PyObject *key, Py_hash_t hash)
     dictkeys_incref(keys);
     Py_ssize_t ix = unicodekeys_lookup_unicode(keys, key, hash);
     PyTypeObject *type = NULL;
+    _PyTypeMutation scope = {0};
     if (ix == DKIX_EMPTY && keys->dk_usable > 0) {
         struct _instancekeysobject *shared = _PyDictKeys_AsSharedKeys(keys);
         type = shared->dsk_owning_type;
         Py_XINCREF(type);
-        if (type != NULL) {
+        if (type != NULL && _PyTypeMutation_Begin(&scope, type) == 0) {
             _PyType_Modified_Unlocked(type);
         }
         /* Type invalidation and its watchers can reenter. The pinned keys
@@ -1556,7 +1557,7 @@ insert_split_key(PyDictKeysObject *keys, PyObject *key, Py_hash_t hash)
     }
     dict_xdecref_object((PyObject *)type);
     dictkeys_decref(keys, false);
-    return PyErr_Occurred() ? DKIX_ERROR : ix;
+    return _PyTypeMutation_End(&scope) < 0 ? DKIX_ERROR : ix;
 }
 
 int

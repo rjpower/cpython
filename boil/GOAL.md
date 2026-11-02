@@ -25,6 +25,9 @@ direction; Loom's `goal` artifact mirrors it.
 - Mechanize repetitive ports and use cheaper agents for bounded batches under
   reviewed ownership rules. Prioritize a safe runnable baseline; converting
   correct owning object bridges into direct-value operations is later tuning.
+- Use Luna for compiler-error analysis, pattern inventories and bulk changes
+  under approved rules. Use Sol 6.1 for design and design review. The coordinator
+  owns assignments, integration, merged validation and status reporting.
 
 ## How to work
 
@@ -47,6 +50,10 @@ review their outputs and assign the next bounded work; completed assignments
 must not remain recorded as running. Keep the last report and next due time in
 the machine monitor. A due-time record is not a durable scheduler; do not claim
 unattended notifications unless a real scheduling mechanism is configured.
+Drive the porting loop continuously: cluster actual build errors into causes,
+design reusable solutions with Sol 6.1, fan out approved batches mechanically or
+to Luna, review and integrate, then rebuild and repeat. A completed agent task
+is a handoff to process, not the end of the overall run.
 
 ## Recover after restart or compaction
 

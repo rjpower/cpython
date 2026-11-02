@@ -1,11 +1,12 @@
 # Porting batches and remaining work
 
 Stage: census complete; first generated-AST batch reviewed and committed as
-e645682dab5. Coordinator owns rules, code review and integration. Luna corrects
-the remaining AST constructor design after independent review. The MRO providers
-and one immediate public wrapper passed code/native attribution review; that
-delta is held with the remaining typeobject work. State_audit plans the next
-publication transaction.
+e645682dab5. Luna analyzes the v4 compiler log and applies approved bulk rules;
+Sol 6.1 reviews the AST constructor and designs high-yield common fixes, starting
+with repeated keyword Clinic callers. The coordinator assigns, integrates and
+validates the merged result. The MRO providers and immediate public wrapper
+passed code/native attribution review; their delta remains held. The next
+publication transaction has a read-only handoff, queued for design.
 
 ## Required baseline versus later tuning
 
@@ -52,6 +53,15 @@ worker and acceptance checks. Use disjoint file ownership. A rewriter should
 match only the proven pattern, report unmatched/ambiguous sites, and produce a
 reviewable patch. Cheap workers can perform the edits and flag exceptions; root
 owns the index, commit and merged build.
+
+Luna identifies build-error patterns and implements approved solutions; Sol 6.1
+designs and reviews the solutions. Keep root-cause counts distinct from cascades.
+The v4 analysis starts with 519 error observations at 406 source locations in
+89 paths. The keyword Clinic family includes 40 call mismatches and 40 repeated
+shared-header conditional mismatches; getter failures also cause many later
+pointer-from-integer errors. Exact classification and packets live in
+build/pyvalue-v4-error-families-20261102-v1. These are early grouped observations,
+not independent defect counts or a claim that any of these fixes has passed.
 
 Run scope/diff checks, producer checks and affected translation-unit checks
 early. Independent review checks the actual patch and results. Group compatible

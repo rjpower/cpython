@@ -1,7 +1,7 @@
 # Restore universal PyValue under RC
 
 - Stage: reviewed source checkpoints; merged diagnostic build still has no executable.
-- Owner: state_audit MRO transaction plan; Luna AST constructor design corrections;
+- Owner: Luna compiler-error analysis/bulk ports; Sol 6.1 designs/reviews fixes;
   coordinator rules, source review and integration.
   Previous agents stay stopped.
 - Goal: canonical PyValues across frames, containers, attributes and operations,

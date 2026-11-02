@@ -1,7 +1,7 @@
 # Canonical type cache and mutation admission
 
 - Stage: provider/core dependencies checkpointed; graph and MRO provider deltas reviewed
-- Owner: state_audit prepares the next transaction plan; coordinator reviews/integrates
+- Owner: transaction handoff queued for Sol 6.1; coordinator schedules/integrates
 - Hypothesis: canonical borrowed cache entries can remain fast and safe if
   version invalidation precedes observable mutation and admission stays closed
   through callback-capable mutation/retirement.

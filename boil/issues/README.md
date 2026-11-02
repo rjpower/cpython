@@ -15,8 +15,8 @@ objects present and failed to link. No restored runtime, qualification or perfor
    provider/core/constructor/graph deltas remain held. The MRO providers and one
    immediate public wrapper have passed state_audit's code/native review. A cheaper
    Luna agent completed the first AST batch: one producer rule covers 74 reads;
-   root reviewed and committed it. Luna corrects the remaining AST constructor
-   design after review; state_audit prepares the next MRO transaction plan.
+   root reviewed and committed it. Luna groups the actual failed build into
+   common causes; Sol 6.1 reviews/designs reusable fixes and bounded batches.
    The coordinator's merged v4 build failed before linking with 519 repeated
    error diagnostics; all 7,339 source paths remained unchanged.
 2. The coordinator prioritizes shared blockers from the latest actual build,
@@ -36,8 +36,8 @@ objects present and failed to link. No restored runtime, qualification or perfor
 | --- | --- | --- | --- |
 | [Native callers and scoped parsers](pyvalue-rc-restoration/native-parsers/status.md) | Call and parser dependencies committed | Coordinator | Remaining gateways/parser families and merged runtime witnesses |
 | [Core and extension consumers](pyvalue-rc-restoration/core-consumers/status.md) | Call bridges committed; type_new/graph reviewed pending | wiki_audit and coordinator | C3/MRO, remaining parser/startup/container ports |
-| [Porting batches](pyvalue-rc-restoration/porting/status.md) | AST sequence batch committed; constructor design corrections | Luna revises wiki_audit's design findings; coordinator grants | Implement constructor after finite rule corrections |
-| [Canonical type cache](pyvalue-rc-restoration/typecache/status.md) | MRO providers reviewed; next transaction design | state_audit plans; coordinator reviews/integrates | Owned MRO inputs through publication/rollback, then guards/static/lifecycle |
+| [Porting batches](pyvalue-rc-restoration/porting/status.md) | v4 root-cause grouping; AST/Clinic rules | Luna analyzes/applies; Sol 6.1 designs; coordinator integrates | Approved generated and handwritten batches, then merged rebuild |
+| [Canonical type cache](pyvalue-rc-restoration/typecache/status.md) | MRO providers reviewed; transaction handoff ready | Queued for Sol 6.1 design; coordinator schedules | Owned MRO inputs through publication/rollback, then guards/static/lifecycle |
 | [Value-native VM iteration](pyvalue-rc-restoration/iterator-vm/status.md) | Tuning after safe baseline | Unassigned | Remove boxing from correct iterator bridges and measure |
 | [Integration and interpreter checkpoint](pyvalue-rc-restoration/integration/status.md) | Build diagnostics → ports | Coordinator | Close concrete compile/link blockers, rebuild, qualify and measure |
 | [Method and tracing JIT](jit-e2e-system/status.md) | Deferred to interpreter checkpoint | Coordinator | Reconcile source/runtime with universal values before further native validation |

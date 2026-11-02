@@ -64,6 +64,15 @@ composition with shared builds. Full qualification belongs to coherent merged
 candidates, not every repeated call-site edit. See the
 [porting rules and census](issues/pyvalue-rc-restoration/porting/status.md).
 
+Use Luna for compiler-log analysis, identifying repeated patterns and applying
+approved bulk edits. Use Sol 6.1 for solutions and design review. Cluster the
+actual failed merged build into root causes, including shared headers and
+generators; distinguish cascades from independent sites. Each design produces
+bounded implementation packets with file ownership, rule, dependencies and
+acceptance checks. The coordinator schedules them, integrates reviewed results,
+rebuilds, and repeats until the selected runtime builds and runs. Do not give
+Luna open design work or stop when a worker finishes its current packet.
+
 Update the board at meaningful transitions and keep the user informed. Give
 proactive status reports about two hours apart during active work, covering
 completed changes, actual running assignments, blockers and the next executable

@@ -11,6 +11,150 @@ from typing import TypeVar
 
 
 class PyValueClinicKeywordTests(unittest.TestCase):
+    def test_constructor_tuple_slot_host_controls(self):
+        class BytesSubclass(bytes):
+            pass
+
+        source = (65, 66)
+        self.assertEqual(bytes.__new__(bytes, source), b'AB')
+        self.assertEqual(bytes(source), b'AB')
+        self.assertIsInstance(bytes.__new__(BytesSubclass, source), BytesSubclass)
+        self.assertEqual(bytes.__new__(bytes, 'café', 'utf-8'), 'café'.encode())
+        self.assertEqual(bytes('café', 'utf-8'), 'café'.encode())
+        self.assertEqual(bytes.__new__(bytes, source='café', encoding='utf-8',
+                                      errors='strict'), 'café'.encode())
+        self.assertEqual(bytes(source='café', encoding='utf-8', errors='strict'),
+                         'café'.encode())
+        self.assertEqual(bytes.__new__(bytes, 3), b'\0\0\0')
+        self.assertEqual(bytes(3), b'\0\0\0')
+        self.assertEqual(bytes.__new__(bytes), b'')
+        target = bytearray()
+        self.assertIsNone(bytearray.__init__(target, 'café', 'utf-8'))
+        self.assertEqual(target, bytearray('café', 'utf-8'))
+        self.assertIsNone(bytearray.__init__(target, source='café',
+                                             encoding='ascii', errors='ignore'))
+        self.assertEqual(target, b'caf')
+        self.assertEqual(bytearray(source='café', encoding='ascii',
+                                   errors='ignore'), target)
+        self.assertIsNone(bytearray.__init__(target, source))
+        self.assertEqual(target, bytearray(source))
+        self.assertIsNone(bytearray.__init__(target, 3))
+        self.assertEqual(target, b'\0\0\0')
+        self.assertEqual(bytearray(3), b'\0\0\0')
+        class BytearraySubclass(bytearray):
+            pass
+        subclass = BytearraySubclass()
+        self.assertIsNone(bytearray.__init__(subclass, source))
+        self.assertEqual(subclass, bytearray(source))
+        class Index:
+            def __init__(self, calls):
+                self.calls = calls
+
+            def __index__(self):
+                self.calls.append('start')
+                return 4
+
+        calls = []
+        explicit = enumerate.__new__(enumerate, ['x', 'y'], Index(calls))
+        self.assertEqual(list(explicit), [(4, 'x'), (5, 'y')])
+        self.assertEqual(calls, ['start'])
+        self.assertEqual(list(enumerate(['x', 'y'], start=4)),
+                         [(4, 'x'), (5, 'y')])
+        class EnumerateSubclass(enumerate):
+            pass
+        sub_explicit = enumerate.__new__(EnumerateSubclass, ['x'], start=9)
+        self.assertEqual(list(sub_explicit), [(9, 'x')])
+        self.assertEqual(list(EnumerateSubclass(['x'], start=9)), [(9, 'x')])
+        with self.assertRaises(TypeError):
+            enumerate.__new__(enumerate)
+        with self.assertRaises(TypeError):
+            enumerate.__new__(enumerate, ['x'], 0, 1)
+        with self.assertRaises(TypeError):
+            enumerate.__new__(enumerate, ['x'], iterable=['y'])
+
+    def test_constructor_tuple_slot_host_controls_errors(self):
+        sentinel = LookupError('source callback')
+        calls = []
+
+        class BrokenIterable:
+            def __iter__(self):
+                calls.append('iter')
+                raise sentinel
+
+        for make in (lambda: bytes.__new__(bytes, BrokenIterable()),
+                     lambda: bytes(BrokenIterable()),
+                     lambda: bytearray.__init__(bytearray(), BrokenIterable()),
+                     lambda: bytearray(BrokenIterable())):
+            with self.assertRaises(LookupError) as caught:
+                make()
+            self.assertIs(caught.exception, sentinel)
+        self.assertEqual(calls, ['iter', 'iter', 'iter', 'iter'])
+
+        # Invalid arity, unknown names and duplicate source arguments must be
+        # rejected before the tuple-slot path invokes user iteration hooks.
+        calls.clear()
+        rejected = (
+            lambda: bytes.__new__(bytes, BrokenIterable(), 'utf-8', 'strict', 'extra'),
+            lambda: bytes(BrokenIterable(), 'utf-8', 'strict', 'extra'),
+            lambda: bytearray.__init__(bytearray(), BrokenIterable(), 'utf-8', 'strict', 'extra'),
+            lambda: bytearray(BrokenIterable(), 'utf-8', 'strict', 'extra'),
+            lambda: bytes.__new__(bytes, source=BrokenIterable(), unknown=True),
+            lambda: bytes(source=BrokenIterable(), unknown=True),
+            lambda: bytearray.__init__(bytearray(), source=BrokenIterable(), unknown=True),
+            lambda: bytearray(source=BrokenIterable(), unknown=True),
+            lambda: bytes.__new__(bytes, BrokenIterable(), source=BrokenIterable()),
+            lambda: bytes(BrokenIterable(), source=BrokenIterable()),
+            lambda: bytearray.__init__(bytearray(), BrokenIterable(), source=BrokenIterable()),
+            lambda: bytearray(BrokenIterable(), source=BrokenIterable()),
+        )
+        for call in rejected:
+            with self.assertRaises(TypeError):
+                call()
+        self.assertEqual(calls, [])
+
+        class Index:
+            def __init__(self, value):
+                self.value = value
+
+            def __index__(self):
+                calls.append(self.value)
+                return self.value
+
+        calls.clear()
+        self.assertEqual(bytes.__new__(bytes, [Index(65), Index(66)]), b'AB')
+        self.assertEqual(calls, [65, 66])
+
+        calls.clear()
+        for make in (lambda: enumerate.__new__(enumerate, BrokenIterable(), 0, 1),
+                     lambda: enumerate(BrokenIterable(), 0, 1)):
+            with self.assertRaises(TypeError):
+                make()
+        self.assertEqual(calls, [])
+
+        calls.clear()
+        invalid_enumerate = (
+            lambda: enumerate.__new__(enumerate, [1], Index(2), 3),
+            lambda: enumerate([1], Index(2), 3),
+            lambda: enumerate.__new__(enumerate, iterable=[1], start=Index(2), unknown=True),
+            lambda: enumerate(iterable=[1], start=Index(2), unknown=True),
+            lambda: enumerate.__new__(enumerate, [1], Index(2), start=Index(3)),
+            lambda: enumerate([1], Index(2), start=Index(3)),
+        )
+        for call in invalid_enumerate:
+            with self.assertRaises(TypeError):
+                call()
+        self.assertEqual(calls, [])
+
+        index_error = ArithmeticError('start conversion')
+
+        class BrokenIndex:
+            def __index__(self):
+                raise index_error
+
+        with self.assertRaises(ArithmeticError) as caught:
+            enumerate.__new__(enumerate, [1], BrokenIndex())
+        self.assertIs(caught.exception, index_error)
+
     def test_typevar_names_constraints_bound_and_default(self):
         name_only = TypeVar('NameOnly')
         keyword_name = TypeVar(name='KeywordName')

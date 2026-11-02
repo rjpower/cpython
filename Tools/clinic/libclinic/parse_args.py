@@ -386,11 +386,12 @@ class ParseArgsCodeGen:
                 if not p.is_optional():
                     self.min_pos = i
 
-    def use_scoped_tuple_keywords(self) -> bool:
+    def use_scoped_tuple_keywords(self, *, helper: bool = False) -> bool:
         """Eligible tuple keyword constructors with at most one tuple owner."""
         return (self.is_new_or_init()
                 and not self.limited_capi and not self.fastcall
-                and not self.func.vectorcall
+                and self.func.vectorcall == helper
+                and (not helper or self.varpos is None)
                 and (self.varpos is None
                      or (type(self.varpos.converter) is varpos_tuple_converter
                          and self.varpos.converter.alias_of is None
@@ -417,6 +418,28 @@ class ParseArgsCodeGen:
                         and (c.format_unit != 'O&'
                              or c.converter == '_conversion_converter')
                         for p, c in zip(self.parameters, self.converters)))
+
+    def use_scoped_tuple_helper(self) -> bool:
+        return self.use_scoped_tuple_keywords(helper=True)
+
+    def helper_owner_names(self) -> tuple[str, str, str, str]:
+        """Reserve helper locals without shadowing converter or receiver names."""
+        used = {'args', 'nargs', 'nkw', 'kwargs', 'kwnames', 'argsbuf',
+                'fastargs', 'noptargs', 'return_value'}
+        for parameter in self.func.parameters.values():
+            used.update((parameter.converter.name,
+                         parameter.converter.parser_name))
+        names = []
+        for stem in ('_clinic_tuple_args', '_clinic_args_scope',
+                     '_clinic_saved_exception', '_clinic_output'):
+            name = stem
+            suffix = 0
+            while name in used:
+                suffix += 1
+                name = f'{stem}_{suffix}'
+            used.add(name)
+            names.append(name)
+        return names[0], names[1], names[2], names[3]
 
     def use_scoped_tuple_positional(self) -> bool:
         """Bounded positional constructor views without converter resources."""
@@ -524,6 +547,27 @@ class ParseArgsCodeGen:
                 {initializers}
         """) + "\n"
         finale = PARSER_FINALE_SKELETON
+        if self.scoped_tuple_helper_selected:
+            tuple_args, scope, saved, output = self.scoped_tuple_helper_names
+            self.codegen.add_include('pycore_value.h', '_PyValue_RestoreException()')
+            if self.func.kind is METHOD_INIT:
+                reject = '{parser_retval} = -1;'
+            else:
+                reject = f"""
+                    PyObject *{output} = {{parser_retval}};
+                    {{parser_retval}} = NULL;
+                    PyObject *{saved} = PyErr_GetRaisedException();
+                    Py_XDECREF({output});
+                    _PyValue_RestoreException({saved});
+                """
+            close = libclinic.normalize_snippet(f"""
+                if ({tuple_args} != NULL && _PyArg_OwnerScope_End(&{scope}) < 0) {{{{
+                {{reject}}
+                }}}}
+            """, indent=4)
+            close = libclinic.linear_format(
+                close, reject=libclinic.normalize_snippet(reject, indent=4))
+            finale = finale.replace('{cleanup}', '{cleanup}\n' + close)
         if self.scoped_tuple_keyword_selected or self.scoped_tuple_positional:
             self.codegen.add_include('pycore_value.h', '_PyValue_RestoreException()')
             tuple_vararg_selected = (
@@ -1333,6 +1377,9 @@ class ParseArgsCodeGen:
         return '\n'.join(code)
 
     def parse_general(self, clang: CLanguage) -> None:
+        helper_candidate = self.use_scoped_tuple_helper()
+        if helper_candidate:
+            self.scoped_tuple_helper_names = self.helper_owner_names()
         deprecated_positionals: dict[int, Parameter] = {}
         deprecated_keywords: dict[int, Parameter] = {}
         for i, p in enumerate(self.parameters):
@@ -1466,7 +1513,8 @@ class ParseArgsCodeGen:
                     parser_code = []
                     use_parser_code = False
                     break
-                scoped_keyword_candidate = self.use_scoped_tuple_keywords()
+                scoped_keyword_candidate = (self.use_scoped_tuple_keywords()
+                                            or helper_candidate)
                 if add_label and (i == self.pos_only or i == self.max_pos):
                     parser_code.append("%s:" % add_label)
                     add_label = None
@@ -1538,6 +1586,55 @@ class ParseArgsCodeGen:
                             """ % add_label, indent=4))
 
         if use_parser_code:
+            # Commit the selection only after every converter emitted inline code.
+            self.scoped_tuple_helper_selected = helper_candidate
+            if helper_candidate:
+                tuple_args, scope, _, _ = self.scoped_tuple_helper_names
+                pending_checks = {
+                    libclinic.normalize_snippet("""
+                        if (PyErr_Occurred()) {{
+                            goto exit;
+                        }}
+                    """, indent=indent)
+                    for indent in (4, 8)
+                }
+                parser_code[1:] = [code.replace(
+                    'if (PyErr_Occurred())',
+                    f'if ({tuple_args} != NULL && PyErr_Occurred())')
+                    if code in pending_checks else code
+                    for code in parser_code[1:]]
+                self.parser_prototype = PARSER_PROTOTYPE_KEYWORD_HELPER.replace(
+                    'PyObject *kwnames)', f'PyObject *kwnames, PyObject *{tuple_args})')
+                self.declarations += f'\n_PyArg_OwnerScope {scope} = {{{{0}}}};'
+                if has_optional_kw:
+                    self.declarations = self.declarations.replace(
+                        'Py_ssize_t noptargs = %s + nkw - %d;' %
+                        (nargs, self.min_pos + self.min_kw_only),
+                        'Py_ssize_t noptargs;')
+                count = self.min_pos + self.min_kw_only
+                tuple_count = (f'\n                        noptargs = {scope}.nobjects - {count};'
+                               if has_optional_kw else '')
+                native_count = (f'\n                        noptargs = {nargs} + nkw - {count};'
+                                if has_optional_kw else '')
+                parser_code[0] = libclinic.normalize_snippet(f"""
+                    if ({tuple_args} != NULL) {{{{
+                        if (_PyArg_OwnerScope_BeginTuple(&{scope}, {tuple_args}, {len(self.converters)}) < 0 || PyErr_Occurred()) {{{{
+                            goto exit;
+                        }}}}
+                        fastargs = _PyArg_UnpackKeywordsOwned(&{scope}, kwargs, &_parser,
+                                /*minpos*/ {self.min_pos}, /*maxpos*/ {self.max_pos}, /*minkw*/ {self.min_kw_only}, /*varpos*/ 0, argsbuf);
+                        if (!fastargs || PyErr_Occurred()) {{{{
+                            goto exit;
+                        }}}}{tuple_count}
+                    }}}}
+                    else {{{{
+                        fastargs = _PyArg_UnpackKeywords(args, nargs, kwargs, kwnames, &_parser,
+                                /*minpos*/ {self.min_pos}, /*maxpos*/ {self.max_pos}, /*minkw*/ {self.min_kw_only}, /*varpos*/ 0, argsbuf);
+                        if (!fastargs) {{{{
+                            goto exit;
+                        }}}}{native_count}
+                    }}}}
+                """, indent=4)
             self.scoped_tuple_keyword_selected = self.use_scoped_tuple_keywords()
             if self.scoped_tuple_keyword_selected:
                 self.declarations += "\n_PyArg_OwnerScope _args_scope = {{0}};"
@@ -1645,6 +1742,17 @@ class ParseArgsCodeGen:
         """
         self.parser_helper = self.parser_definition
         self.parser_prototype = PARSER_PROTOTYPE_KEYWORD
+        if self.scoped_tuple_helper_selected:
+            self.parser_definition = '\n'.join([
+                self.parser_prototype,
+                '{{',
+                '    return {c_basename}_helper({self_name}, NULL,',
+                '        PyTuple_GET_SIZE(args),',
+                '        kwargs ? PyDict_GET_SIZE(kwargs) : 0,',
+                '        kwargs, NULL, args);',
+                '}}',
+            ])
+            return
         self.parser_definition = '\n'.join([
             self.parser_prototype,
             '{{',
@@ -1899,6 +2007,9 @@ class ParseArgsCodeGen:
                 {nkw},
                 NULL, kwnames);
         """, indent=4)
+        if self.scoped_tuple_helper_selected:
+            helper_call = helper_call.replace('NULL, kwnames);',
+                                              'NULL, kwnames, NULL);')
         parts = [prologue, helper_call, epilogue]
         return "\n".join(part for part in parts if part)
 
@@ -1974,6 +2085,7 @@ class ParseArgsCodeGen:
         self.declarations = ""
         self.scoped_tuple_positional = False
         self.scoped_tuple_keyword_selected = False
+        self.scoped_tuple_helper_selected = False
         self.parser_prototype = ""
         self.parser_definition = ""
         self.parser_helper = ""

@@ -4923,7 +4923,7 @@ vc_plain_new_impl(PyTypeObject *type, PyObject *a);
 
 static PyObject *
 vc_plain_new_helper(PyTypeObject *type, PyObject *const *args,
-    Py_ssize_t nargs, Py_ssize_t nkw, PyObject *kwargs, PyObject *kwnames)
+    Py_ssize_t nargs, Py_ssize_t nkw, PyObject *kwargs, PyObject *kwnames, PyObject *_clinic_tuple_args)
 {
     PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
@@ -4955,32 +4955,57 @@ vc_plain_new_helper(PyTypeObject *type, PyObject *const *args,
     #undef KWTUPLE
     PyObject *argsbuf[1];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs = nargs + nkw - 0;
+    Py_ssize_t noptargs;
+    _PyArg_OwnerScope _clinic_args_scope = {0};
     PyObject *a = Py_None;
 
-    fastargs = _PyArg_UnpackKeywords(args, nargs, kwargs, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
+    if (_clinic_tuple_args != NULL) {
+        if (_PyArg_OwnerScope_BeginTuple(&_clinic_args_scope, _clinic_tuple_args, 1) < 0 || PyErr_Occurred()) {
+            goto exit;
+        }
+        fastargs = _PyArg_UnpackKeywordsOwned(&_clinic_args_scope, kwargs, &_parser,
+                /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
+        if (!fastargs || PyErr_Occurred()) {
+            goto exit;
+        }
+        noptargs = _clinic_args_scope.nobjects - 0;
+    }
+    else {
+        fastargs = _PyArg_UnpackKeywords(args, nargs, kwargs, kwnames, &_parser,
+                /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
+        if (!fastargs) {
+            goto exit;
+        }
+        noptargs = nargs + nkw - 0;
     }
     if (!noptargs) {
         goto skip_optional_pos;
     }
     a = fastargs[0];
+    if (_clinic_tuple_args != NULL && PyErr_Occurred()) {
+        goto exit;
+    }
 skip_optional_pos:
     return_value = vc_plain_new_impl(type, a);
 
 exit:
+    if (_clinic_tuple_args != NULL && _PyArg_OwnerScope_End(&_clinic_args_scope) < 0) {
+        PyObject *_clinic_output = return_value;
+        return_value = NULL;
+        PyObject *_clinic_saved_exception = PyErr_GetRaisedException();
+        Py_XDECREF(_clinic_output);
+        _PyValue_RestoreException(_clinic_saved_exception);
+    }
     return return_value;
 }
 
 static PyObject *
 vc_plain_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
-    return vc_plain_new_helper(type, _PyTuple_CAST(args)->ob_item,
+    return vc_plain_new_helper(type, NULL,
         PyTuple_GET_SIZE(args),
         kwargs ? PyDict_GET_SIZE(kwargs) : 0,
-        kwargs, NULL);
+        kwargs, NULL, args);
 }
 
 static PyObject *
@@ -4998,7 +5023,7 @@ vc_plain_vectorcall(PyObject *type, PyObject *const *args,
     if (kwnames != NULL || nargs > 1) {
         return vc_plain_new_helper(_PyType_CAST(type), args, nargs,
             kwnames ? PyTuple_GET_SIZE(kwnames) : 0,
-            NULL, kwnames);
+            NULL, kwnames, NULL);
     }
     if (nargs < 1) {
         goto skip_optional;
@@ -5015,7 +5040,7 @@ vc_posorkw_init_impl(PyObject *self, PyObject *a, PyObject *b);
 
 static int
 vc_posorkw_init_helper(PyObject *self, PyObject *const *args,
-    Py_ssize_t nargs, Py_ssize_t nkw, PyObject *kwargs, PyObject *kwnames)
+    Py_ssize_t nargs, Py_ssize_t nkw, PyObject *kwargs, PyObject *kwnames, PyObject *_clinic_tuple_args)
 {
     int return_value = -1;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
@@ -5047,36 +5072,60 @@ vc_posorkw_init_helper(PyObject *self, PyObject *const *args,
     #undef KWTUPLE
     PyObject *argsbuf[2];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs = nargs + nkw - 1;
+    Py_ssize_t noptargs;
+    _PyArg_OwnerScope _clinic_args_scope = {0};
     PyObject *a;
     PyObject *b = Py_None;
 
-    fastargs = _PyArg_UnpackKeywords(args, nargs, kwargs, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
+    if (_clinic_tuple_args != NULL) {
+        if (_PyArg_OwnerScope_BeginTuple(&_clinic_args_scope, _clinic_tuple_args, 2) < 0 || PyErr_Occurred()) {
+            goto exit;
+        }
+        fastargs = _PyArg_UnpackKeywordsOwned(&_clinic_args_scope, kwargs, &_parser,
+                /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
+        if (!fastargs || PyErr_Occurred()) {
+            goto exit;
+        }
+        noptargs = _clinic_args_scope.nobjects - 1;
+    }
+    else {
+        fastargs = _PyArg_UnpackKeywords(args, nargs, kwargs, kwnames, &_parser,
+                /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
+        if (!fastargs) {
+            goto exit;
+        }
+        noptargs = nargs + nkw - 1;
     }
     a = fastargs[0];
+    if (_clinic_tuple_args != NULL && PyErr_Occurred()) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
     b = fastargs[1];
+    if (_clinic_tuple_args != NULL && PyErr_Occurred()) {
+        goto exit;
+    }
 skip_optional_pos:
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = vc_posorkw_init_impl(self, a, b);
     Py_END_CRITICAL_SECTION();
 
 exit:
+    if (_clinic_tuple_args != NULL && _PyArg_OwnerScope_End(&_clinic_args_scope) < 0) {
+        return_value = -1;
+    }
     return return_value;
 }
 
 static int
 vc_posorkw_init(PyObject *self, PyObject *args, PyObject *kwargs)
 {
-    return vc_posorkw_init_helper(self, _PyTuple_CAST(args)->ob_item,
+    return vc_posorkw_init_helper(self, NULL,
         PyTuple_GET_SIZE(args),
         kwargs ? PyDict_GET_SIZE(kwargs) : 0,
-        kwargs, NULL);
+        kwargs, NULL, args);
 }
 
 static PyObject *
@@ -5102,7 +5151,7 @@ vc_posorkw_vectorcall(PyObject *type, PyObject *const *args,
         }
         _result = vc_posorkw_init_helper(self, args, nargs,
             kwnames ? PyTuple_GET_SIZE(kwnames) : 0,
-            NULL, kwnames);
+            NULL, kwnames, NULL);
         if (_result != 0) {
             Py_DECREF(self);
             return NULL;
@@ -5138,7 +5187,7 @@ vc_base_new_impl(PyTypeObject *type, PyObject *a, PyObject *b);
 
 static PyObject *
 vc_base_new_helper(PyTypeObject *type, PyObject *const *args,
-    Py_ssize_t nargs, Py_ssize_t nkw, PyObject *kwargs, PyObject *kwnames)
+    Py_ssize_t nargs, Py_ssize_t nkw, PyObject *kwargs, PyObject *kwnames, PyObject *_clinic_tuple_args)
 {
     PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
@@ -5170,34 +5219,62 @@ vc_base_new_helper(PyTypeObject *type, PyObject *const *args,
     #undef KWTUPLE
     PyObject *argsbuf[2];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs = nargs + nkw - 1;
+    Py_ssize_t noptargs;
+    _PyArg_OwnerScope _clinic_args_scope = {0};
     PyObject *a;
     PyObject *b = Py_None;
 
-    fastargs = _PyArg_UnpackKeywords(args, nargs, kwargs, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
+    if (_clinic_tuple_args != NULL) {
+        if (_PyArg_OwnerScope_BeginTuple(&_clinic_args_scope, _clinic_tuple_args, 2) < 0 || PyErr_Occurred()) {
+            goto exit;
+        }
+        fastargs = _PyArg_UnpackKeywordsOwned(&_clinic_args_scope, kwargs, &_parser,
+                /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
+        if (!fastargs || PyErr_Occurred()) {
+            goto exit;
+        }
+        noptargs = _clinic_args_scope.nobjects - 1;
+    }
+    else {
+        fastargs = _PyArg_UnpackKeywords(args, nargs, kwargs, kwnames, &_parser,
+                /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
+        if (!fastargs) {
+            goto exit;
+        }
+        noptargs = nargs + nkw - 1;
     }
     a = fastargs[0];
+    if (_clinic_tuple_args != NULL && PyErr_Occurred()) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
     b = fastargs[1];
+    if (_clinic_tuple_args != NULL && PyErr_Occurred()) {
+        goto exit;
+    }
 skip_optional_pos:
     return_value = vc_base_new_impl(type, a, b);
 
 exit:
+    if (_clinic_tuple_args != NULL && _PyArg_OwnerScope_End(&_clinic_args_scope) < 0) {
+        PyObject *_clinic_output = return_value;
+        return_value = NULL;
+        PyObject *_clinic_saved_exception = PyErr_GetRaisedException();
+        Py_XDECREF(_clinic_output);
+        _PyValue_RestoreException(_clinic_saved_exception);
+    }
     return return_value;
 }
 
 static PyObject *
 vc_base_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
-    return vc_base_new_helper(type, _PyTuple_CAST(args)->ob_item,
+    return vc_base_new_helper(type, NULL,
         PyTuple_GET_SIZE(args),
         kwargs ? PyDict_GET_SIZE(kwargs) : 0,
-        kwargs, NULL);
+        kwargs, NULL, args);
 }
 
 static PyObject *
@@ -5216,7 +5293,7 @@ vc_base_vectorcall(PyObject *type, PyObject *const *args,
     if (kwnames != NULL || nargs < 1 || nargs > 2) {
         return vc_base_new_helper(_PyType_CAST(type), args, nargs,
             kwnames ? PyTuple_GET_SIZE(kwnames) : 0,
-            NULL, kwnames);
+            NULL, kwnames, NULL);
     }
     a = args[0];
     if (nargs < 2) {
@@ -5234,7 +5311,7 @@ vc_kwonly_new_impl(PyTypeObject *type, PyObject *a, PyObject *b);
 
 static PyObject *
 vc_kwonly_new_helper(PyTypeObject *type, PyObject *const *args,
-    Py_ssize_t nargs, Py_ssize_t nkw, PyObject *kwargs, PyObject *kwnames)
+    Py_ssize_t nargs, Py_ssize_t nkw, PyObject *kwargs, PyObject *kwnames, PyObject *_clinic_tuple_args)
 {
     PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
@@ -5266,34 +5343,62 @@ vc_kwonly_new_helper(PyTypeObject *type, PyObject *const *args,
     #undef KWTUPLE
     PyObject *argsbuf[2];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs = nargs + nkw - 1;
+    Py_ssize_t noptargs;
+    _PyArg_OwnerScope _clinic_args_scope = {0};
     PyObject *a;
     PyObject *b = Py_None;
 
-    fastargs = _PyArg_UnpackKeywords(args, nargs, kwargs, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
+    if (_clinic_tuple_args != NULL) {
+        if (_PyArg_OwnerScope_BeginTuple(&_clinic_args_scope, _clinic_tuple_args, 2) < 0 || PyErr_Occurred()) {
+            goto exit;
+        }
+        fastargs = _PyArg_UnpackKeywordsOwned(&_clinic_args_scope, kwargs, &_parser,
+                /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
+        if (!fastargs || PyErr_Occurred()) {
+            goto exit;
+        }
+        noptargs = _clinic_args_scope.nobjects - 1;
+    }
+    else {
+        fastargs = _PyArg_UnpackKeywords(args, nargs, kwargs, kwnames, &_parser,
+                /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
+        if (!fastargs) {
+            goto exit;
+        }
+        noptargs = nargs + nkw - 1;
     }
     a = fastargs[0];
+    if (_clinic_tuple_args != NULL && PyErr_Occurred()) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
     b = fastargs[1];
+    if (_clinic_tuple_args != NULL && PyErr_Occurred()) {
+        goto exit;
+    }
 skip_optional_kwonly:
     return_value = vc_kwonly_new_impl(type, a, b);
 
 exit:
+    if (_clinic_tuple_args != NULL && _PyArg_OwnerScope_End(&_clinic_args_scope) < 0) {
+        PyObject *_clinic_output = return_value;
+        return_value = NULL;
+        PyObject *_clinic_saved_exception = PyErr_GetRaisedException();
+        Py_XDECREF(_clinic_output);
+        _PyValue_RestoreException(_clinic_saved_exception);
+    }
     return return_value;
 }
 
 static PyObject *
 vc_kwonly_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
-    return vc_kwonly_new_helper(type, _PyTuple_CAST(args)->ob_item,
+    return vc_kwonly_new_helper(type, NULL,
         PyTuple_GET_SIZE(args),
         kwargs ? PyDict_GET_SIZE(kwargs) : 0,
-        kwargs, NULL);
+        kwargs, NULL, args);
 }
 
 static PyObject *
@@ -5308,7 +5413,7 @@ vc_kwonly_vectorcall(PyObject *type, PyObject *const *args,
     assert(PyType_HasFeature(_PyType_CAST(type), Py_TPFLAGS_IMMUTABLETYPE));
     return vc_kwonly_new_helper(_PyType_CAST(type), args, nargs,
         kwnames ? PyTuple_GET_SIZE(kwnames) : 0,
-        NULL, kwnames);
+        NULL, kwnames, NULL);
 }
 
 PyDoc_STRVAR(owner_echo__doc__,
@@ -5642,4 +5747,4 @@ exit:
     }
     return return_value;
 }
-/*[clinic end generated code: output=f91c8e2cfee16667 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=4fd50b5a489e97b3 input=a9049054013a1b77]*/

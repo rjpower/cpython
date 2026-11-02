@@ -9,6 +9,7 @@ preserve
 #include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(bytes___bytes____doc__,
 "__bytes__($self, /)\n"
@@ -1358,7 +1359,7 @@ bytes_new_impl(PyTypeObject *type, PyObject *x, const char *encoding,
 
 static PyObject *
 bytes_new_helper(PyTypeObject *type, PyObject *const *args,
-    Py_ssize_t nargs, Py_ssize_t nkw, PyObject *kwargs, PyObject *kwnames)
+    Py_ssize_t nargs, Py_ssize_t nkw, PyObject *kwargs, PyObject *kwnames, PyObject *_clinic_tuple_args)
 {
     PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
@@ -1390,21 +1391,39 @@ bytes_new_helper(PyTypeObject *type, PyObject *const *args,
     #undef KWTUPLE
     PyObject *argsbuf[3];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs = nargs + nkw - 0;
+    Py_ssize_t noptargs;
+    _PyArg_OwnerScope _clinic_args_scope = {0};
     PyObject *x = NULL;
     const char *encoding = NULL;
     const char *errors = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(args, nargs, kwargs, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
+    if (_clinic_tuple_args != NULL) {
+        if (_PyArg_OwnerScope_BeginTuple(&_clinic_args_scope, _clinic_tuple_args, 3) < 0 || PyErr_Occurred()) {
+            goto exit;
+        }
+        fastargs = _PyArg_UnpackKeywordsOwned(&_clinic_args_scope, kwargs, &_parser,
+                /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
+        if (!fastargs || PyErr_Occurred()) {
+            goto exit;
+        }
+        noptargs = _clinic_args_scope.nobjects - 0;
+    }
+    else {
+        fastargs = _PyArg_UnpackKeywords(args, nargs, kwargs, kwnames, &_parser,
+                /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
+        if (!fastargs) {
+            goto exit;
+        }
+        noptargs = nargs + nkw - 0;
     }
     if (!noptargs) {
         goto skip_optional_pos;
     }
     if (fastargs[0]) {
         x = fastargs[0];
+        if (_clinic_tuple_args != NULL && PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -1416,6 +1435,9 @@ bytes_new_helper(PyTypeObject *type, PyObject *const *args,
         }
         encoding = _PyUnicode_AsUTF8NoNUL(fastargs[1]);
         if (encoding == NULL) {
+            goto exit;
+        }
+        if (_clinic_tuple_args != NULL && PyErr_Occurred()) {
             goto exit;
         }
         if (!--noptargs) {
@@ -1430,20 +1452,30 @@ bytes_new_helper(PyTypeObject *type, PyObject *const *args,
     if (errors == NULL) {
         goto exit;
     }
+    if (_clinic_tuple_args != NULL && PyErr_Occurred()) {
+        goto exit;
+    }
 skip_optional_pos:
     return_value = bytes_new_impl(type, x, encoding, errors);
 
 exit:
+    if (_clinic_tuple_args != NULL && _PyArg_OwnerScope_End(&_clinic_args_scope) < 0) {
+        PyObject *_clinic_output = return_value;
+        return_value = NULL;
+        PyObject *_clinic_saved_exception = PyErr_GetRaisedException();
+        Py_XDECREF(_clinic_output);
+        _PyValue_RestoreException(_clinic_saved_exception);
+    }
     return return_value;
 }
 
 static PyObject *
 bytes_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
-    return bytes_new_helper(type, _PyTuple_CAST(args)->ob_item,
+    return bytes_new_helper(type, NULL,
         PyTuple_GET_SIZE(args),
         kwargs ? PyDict_GET_SIZE(kwargs) : 0,
-        kwargs, NULL);
+        kwargs, NULL, args);
 }
 
 static PyObject *
@@ -1463,7 +1495,7 @@ bytes_vectorcall(PyObject *type, PyObject *const *args,
     if (kwnames != NULL || nargs > 3) {
         return bytes_new_helper(_PyType_CAST(type), args, nargs,
             kwnames ? PyTuple_GET_SIZE(kwnames) : 0,
-            NULL, kwnames);
+            NULL, kwnames, NULL);
     }
     if (nargs < 1) {
         goto skip_optional;
@@ -1497,4 +1529,4 @@ skip_optional:
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=0d49a97b9e2eef5b input=a9049054013a1b77]*/
+/*[clinic end generated code: output=00d424bf501a7101 input=a9049054013a1b77]*/

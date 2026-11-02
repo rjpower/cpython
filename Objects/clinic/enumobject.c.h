@@ -7,6 +7,7 @@ preserve
 #  include "pycore_runtime.h"     // _Py_ID()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(enum_new__doc__,
 "enumerate(iterable, start=0)\n"
@@ -28,7 +29,7 @@ enum_new_impl(PyTypeObject *type, PyObject *iterable, PyObject *start);
 
 static PyObject *
 enum_new_helper(PyTypeObject *type, PyObject *const *args,
-    Py_ssize_t nargs, Py_ssize_t nkw, PyObject *kwargs, PyObject *kwnames)
+    Py_ssize_t nargs, Py_ssize_t nkw, PyObject *kwargs, PyObject *kwnames, PyObject *_clinic_tuple_args)
 {
     PyObject *return_value = NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
@@ -60,34 +61,62 @@ enum_new_helper(PyTypeObject *type, PyObject *const *args,
     #undef KWTUPLE
     PyObject *argsbuf[2];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs = nargs + nkw - 1;
+    Py_ssize_t noptargs;
+    _PyArg_OwnerScope _clinic_args_scope = {0};
     PyObject *iterable;
     PyObject *start = 0;
 
-    fastargs = _PyArg_UnpackKeywords(args, nargs, kwargs, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
+    if (_clinic_tuple_args != NULL) {
+        if (_PyArg_OwnerScope_BeginTuple(&_clinic_args_scope, _clinic_tuple_args, 2) < 0 || PyErr_Occurred()) {
+            goto exit;
+        }
+        fastargs = _PyArg_UnpackKeywordsOwned(&_clinic_args_scope, kwargs, &_parser,
+                /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
+        if (!fastargs || PyErr_Occurred()) {
+            goto exit;
+        }
+        noptargs = _clinic_args_scope.nobjects - 1;
+    }
+    else {
+        fastargs = _PyArg_UnpackKeywords(args, nargs, kwargs, kwnames, &_parser,
+                /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
+        if (!fastargs) {
+            goto exit;
+        }
+        noptargs = nargs + nkw - 1;
     }
     iterable = fastargs[0];
+    if (_clinic_tuple_args != NULL && PyErr_Occurred()) {
+        goto exit;
+    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
     start = fastargs[1];
+    if (_clinic_tuple_args != NULL && PyErr_Occurred()) {
+        goto exit;
+    }
 skip_optional_pos:
     return_value = enum_new_impl(type, iterable, start);
 
 exit:
+    if (_clinic_tuple_args != NULL && _PyArg_OwnerScope_End(&_clinic_args_scope) < 0) {
+        PyObject *_clinic_output = return_value;
+        return_value = NULL;
+        PyObject *_clinic_saved_exception = PyErr_GetRaisedException();
+        Py_XDECREF(_clinic_output);
+        _PyValue_RestoreException(_clinic_saved_exception);
+    }
     return return_value;
 }
 
 static PyObject *
 enum_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
-    return enum_new_helper(type, _PyTuple_CAST(args)->ob_item,
+    return enum_new_helper(type, NULL,
         PyTuple_GET_SIZE(args),
         kwargs ? PyDict_GET_SIZE(kwargs) : 0,
-        kwargs, NULL);
+        kwargs, NULL, args);
 }
 
 static PyObject *
@@ -106,7 +135,7 @@ enum_vectorcall(PyObject *type, PyObject *const *args,
     if (kwnames != NULL || nargs < 1 || nargs > 2) {
         return enum_new_helper(_PyType_CAST(type), args, nargs,
             kwnames ? PyTuple_GET_SIZE(kwnames) : 0,
-            NULL, kwnames);
+            NULL, kwnames, NULL);
     }
     iterable = args[0];
     if (nargs < 2) {
@@ -173,4 +202,4 @@ reversed_vectorcall(PyObject *type, PyObject *const *args,
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=b97e8b89ca97ba64 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=c6782cdf80e4d845 input=a9049054013a1b77]*/

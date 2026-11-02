@@ -10,6 +10,7 @@ preserve
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 #include "pycore_runtime.h"       // _Py_SINGLETON()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value.h"         // _PyValue_RestoreException()
 
 static PyObject *
 bytearray_iconcat_impl(PyByteArrayObject *self, PyObject *other);
@@ -93,7 +94,7 @@ bytearray___init___impl(PyByteArrayObject *self, PyObject *arg,
 
 static int
 bytearray___init___helper(PyObject *self, PyObject *const *args,
-    Py_ssize_t nargs, Py_ssize_t nkw, PyObject *kwargs, PyObject *kwnames)
+    Py_ssize_t nargs, Py_ssize_t nkw, PyObject *kwargs, PyObject *kwnames, PyObject *_clinic_tuple_args)
 {
     int return_value = -1;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
@@ -125,21 +126,39 @@ bytearray___init___helper(PyObject *self, PyObject *const *args,
     #undef KWTUPLE
     PyObject *argsbuf[3];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs = nargs + nkw - 0;
+    Py_ssize_t noptargs;
+    _PyArg_OwnerScope _clinic_args_scope = {0};
     PyObject *arg = NULL;
     const char *encoding = NULL;
     const char *errors = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(args, nargs, kwargs, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
+    if (_clinic_tuple_args != NULL) {
+        if (_PyArg_OwnerScope_BeginTuple(&_clinic_args_scope, _clinic_tuple_args, 3) < 0 || PyErr_Occurred()) {
+            goto exit;
+        }
+        fastargs = _PyArg_UnpackKeywordsOwned(&_clinic_args_scope, kwargs, &_parser,
+                /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
+        if (!fastargs || PyErr_Occurred()) {
+            goto exit;
+        }
+        noptargs = _clinic_args_scope.nobjects - 0;
+    }
+    else {
+        fastargs = _PyArg_UnpackKeywords(args, nargs, kwargs, kwnames, &_parser,
+                /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
+        if (!fastargs) {
+            goto exit;
+        }
+        noptargs = nargs + nkw - 0;
     }
     if (!noptargs) {
         goto skip_optional_pos;
     }
     if (fastargs[0]) {
         arg = fastargs[0];
+        if (_clinic_tuple_args != NULL && PyErr_Occurred()) {
+            goto exit;
+        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -151,6 +170,9 @@ bytearray___init___helper(PyObject *self, PyObject *const *args,
         }
         encoding = _PyUnicode_AsUTF8NoNUL(fastargs[1]);
         if (encoding == NULL) {
+            goto exit;
+        }
+        if (_clinic_tuple_args != NULL && PyErr_Occurred()) {
             goto exit;
         }
         if (!--noptargs) {
@@ -165,20 +187,26 @@ bytearray___init___helper(PyObject *self, PyObject *const *args,
     if (errors == NULL) {
         goto exit;
     }
+    if (_clinic_tuple_args != NULL && PyErr_Occurred()) {
+        goto exit;
+    }
 skip_optional_pos:
     return_value = bytearray___init___impl((PyByteArrayObject *)self, arg, encoding, errors);
 
 exit:
+    if (_clinic_tuple_args != NULL && _PyArg_OwnerScope_End(&_clinic_args_scope) < 0) {
+        return_value = -1;
+    }
     return return_value;
 }
 
 static int
 bytearray___init__(PyObject *self, PyObject *args, PyObject *kwargs)
 {
-    return bytearray___init___helper(self, _PyTuple_CAST(args)->ob_item,
+    return bytearray___init___helper(self, NULL,
         PyTuple_GET_SIZE(args),
         kwargs ? PyDict_GET_SIZE(kwargs) : 0,
-        kwargs, NULL);
+        kwargs, NULL, args);
 }
 
 static PyObject *
@@ -205,7 +233,7 @@ bytearray_vectorcall(PyObject *type, PyObject *const *args,
         }
         _result = bytearray___init___helper(self, args, nargs,
             kwnames ? PyTuple_GET_SIZE(kwnames) : 0,
-            NULL, kwnames);
+            NULL, kwnames, NULL);
         if (_result != 0) {
             Py_DECREF(self);
             return NULL;
@@ -2037,4 +2065,4 @@ bytearray_sizeof(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     return bytearray_sizeof_impl((PyByteArrayObject *)self);
 }
-/*[clinic end generated code: output=b8e659fe4b2f770e input=a9049054013a1b77]*/
+/*[clinic end generated code: output=476bea2c3e8efc09 input=a9049054013a1b77]*/

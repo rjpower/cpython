@@ -95,6 +95,79 @@ def save_restore_converters(testcase):
 class ClinicWholeFileTest(TestCase):
     maxDiff = None
 
+    def test_owned_constructor_helper_dispatch(self):
+        for kind in ('__new__', '__init__'):
+            for keyword_only in (False, True):
+                with self.subTest(kind=kind, keyword_only=keyword_only):
+                    decorator = '@classmethod\n' if kind == '__new__' else ''
+                    star = '    *\n' if keyword_only else ''
+                    source = (
+                        '/*[clinic input]\noutput everything block\n'
+                        'class Owner "OwnerObject *" "&Owner_Type"\n'
+                        f'{decorator}@vectorcall\n@critical_section\nOwner.{kind} as owner\n'
+                        f'    value: object\n{star}    optional: object = None\n'
+                        '[clinic start generated code]*/\n')
+                    generated = _make_clinic(filename='owner.c').parse(source)
+                    helper = generated[generated.index('owner_helper('):]
+                    helper = helper[:helper.index('\nstatic ')]
+                    self.assertIn('PyObject *_clinic_tuple_args)', helper)
+                    self.assertEqual(helper.count('_PyArg_UnpackKeywordsOwned('), 1)
+                    self.assertEqual(helper.count('_PyArg_UnpackKeywords('), 1)
+                    self.assertNotIn('_PyArg_OwnerScope_Objects(', generated)
+                    self.assertNotIn('_PyTuple_CAST(args)->ob_item', generated)
+                    self.assertIn('kwargs, NULL, args);', generated)
+                    self.assertIn('NULL, kwnames, NULL);', generated)
+                    self.assertIn('noptargs = _clinic_args_scope.nobjects - 1;', helper)
+                    self.assertIn('noptargs = nargs + nkw - 1;', helper)
+                    self.assertIn('if (_clinic_tuple_args != NULL && PyErr_Occurred())', helper)
+                    invoke = helper.index('owner_impl(')
+                    unlock = helper.index('Py_END_CRITICAL_SECTION', invoke)
+                    close = helper.index('_PyArg_OwnerScope_End(', unlock)
+                    self.assertLess(invoke, unlock)
+                    self.assertLess(unlock, close)
+                    self.assertIn('if (_clinic_tuple_args != NULL && _PyArg_OwnerScope_End(', helper)
+                    if kind == '__new__':
+                        tail = helper[close:]
+                        detach = tail.index('return_value = NULL;')
+                        retire = tail.index('Py_XDECREF(_clinic_output);')
+                        restore = tail.index('_PyValue_RestoreException(')
+                        self.assertLess(detach, retire)
+                        self.assertLess(retire, restore)
+                    else:
+                        self.assertIn('return_value = -1;', helper[close:])
+
+    def test_owned_constructor_helper_names(self):
+        stems = ('_clinic_tuple_args', '_clinic_args_scope',
+                 '_clinic_saved_exception', '_clinic_output')
+        parameters = ''.join(f'    {stem}{suffix}: object = None\n'
+                             for stem in stems for suffix in ('', '_1'))
+        source = (
+            '/*[clinic input]\noutput everything block\n'
+            'class Owner "OwnerObject *" "&Owner_Type"\n'
+            '@classmethod\n@vectorcall\nOwner.__new__\n' + parameters +
+            '[clinic start generated code]*/\n')
+        generated = _make_clinic(filename='owner.c').parse(source)
+        self.assertIn('PyObject *_clinic_tuple_args_2)', generated)
+        self.assertIn('_PyArg_OwnerScope _clinic_args_scope_2 = {0};', generated)
+        self.assertIn('PyObject *_clinic_output_2 = return_value;', generated)
+        self.assertIn('PyObject *_clinic_saved_exception_2 = PyErr_GetRaisedException();', generated)
+        self.assertIn('_PyValue_RestoreException(_clinic_saved_exception_2);', generated)
+        for stem in stems:
+            self.assertIn(f'PyObject *{stem} = Py_None;', generated)
+            self.assertIn(f'PyObject *{stem}_1 = Py_None;', generated)
+
+    def test_owned_constructor_helper_excludes_positional_and_limited(self):
+        for limited, slash in ((True, ''), (False, '    /\n')):
+            source = (
+                '/*[clinic input]\noutput everything block\n'
+                'class Owner "OwnerObject *" "&Owner_Type"\n'
+                '@classmethod\n@vectorcall\nOwner.__new__\n'
+                f'    value: object = None\n{slash}'
+                '[clinic start generated code]*/\n')
+            with self.subTest(limited=limited, slash=slash):
+                generated = _make_clinic(filename='owner.c', limited_capi=limited).parse(source)
+                self.assertNotIn('_clinic_tuple_args', generated)
+
     def test_owned_tuple_vararg_constructor_cleanup_order(self):
         for kind in ('__new__', '__init__'):
             for owner in ('owner_to_close', 'saved_exception'):
@@ -277,6 +350,115 @@ class ClinicWholeFileTest(TestCase):
         self.assertEqual(calls, ['fastargs[0]'])
         self.assertIn('_PyArg_ParseTupleAndKeywordsFast(', generated)
         self.assertNotIn('_PyArg_OwnerScope_', generated)
+
+    def test_owned_tuple_helper_rejects_unsupported_shapes(self):
+        from unittest.mock import patch
+
+        parameters = (
+            'value: object(converter="PyUnicode_FSConverter")',
+            'value: int\n    *items: array',
+            'first: int\n    *\n    old as first: int = 0',
+            '[until 3.15] value: int = 0',
+        )
+        for parameter in parameters:
+            source = (
+                '/*[clinic input]\noutput everything block\n'
+                'class Owner "OwnerObject *" "&Owner_Type"\n'
+                '@classmethod\nOwner.__new__\n'
+                f'    {parameter}\n[clinic start generated code]*/\n')
+            generated = _make_clinic(filename='owner.c').parse(source)
+            with self.subTest(parameter=parameter):
+                self.assertNotIn('_clinic_args_scope', generated)
+                self.assertIn('_PyArg_UnpackKeywords(', generated)
+
+        source = (
+            '/*[clinic input]\noutput everything block\n'
+            'class Owner "OwnerObject *" "&Owner_Type"\n'
+            '@classmethod\nOwner.__new__\n'
+            '    value: int\n[clinic start generated code]*/\n')
+        with patch.object(int_converter, 'parse_arg', return_value=None):
+            generated = _make_clinic(filename='owner.c').parse(source)
+        self.assertNotIn('_clinic_args_scope', generated)
+        self.assertIn('_PyArg_ParseTupleAndKeywordsFast(', generated)
+
+    def test_owned_tuple_helper_vectorcall_exclusions(self):
+        from unittest.mock import patch
+        from libclinic.parse_args import ParseArgsCodeGen
+
+        parameters = (
+            'value: object(converter="PyUnicode_FSConverter")',
+            'value: int\n    *items: array',
+            'first: int\n    *\n    old as first: int = 0',
+            '[until 3.15] value: int = 0',
+        )
+        for parameter in parameters:
+            source = (
+                '/*[clinic input]\noutput everything block\n'
+                'class Owner "OwnerObject *" "&Owner_Type"\n'
+                '@classmethod\n@vectorcall\nOwner.__new__\n'
+                f'    {parameter}\n[clinic start generated code]*/\n')
+
+            def parse(disable_helper):
+                if disable_helper:
+                    with patch.object(ParseArgsCodeGen,
+                                      'use_scoped_tuple_helper',
+                                      lambda self: False):
+                        return _make_clinic(filename='owner.c').parse(source)
+                else:
+                    return _make_clinic(filename='owner.c').parse(source)
+
+            try:
+                generated = parse(False)
+            except Exception as current_error:
+                with self.assertRaises(type(current_error)) as old_error:
+                    parse(True)
+                self.assertEqual(str(current_error), str(old_error.exception))
+                continue
+            baseline = parse(True)
+            with self.subTest(parameter=parameter):
+                self.assertEqual(generated, baseline)
+                self.assertNotIn('_clinic_tuple_args', generated)
+                self.assertNotIn('_clinic_args_scope', generated)
+
+        source = (
+            '/*[clinic input]\noutput everything block\n'
+            'class Owner "OwnerObject *" "&Owner_Type"\n'
+            '@classmethod\n@vectorcall\nOwner.__new__\n'
+            '    value: int\n[clinic start generated code]*/\n')
+
+        def parse_with_declined_inline_parse(disable_helper):
+            original = int_converter.parse_arg
+            calls = 0
+
+            def decline_after_vectorcall_validation(converter, *args, **kwargs):
+                nonlocal calls
+                calls += 1
+                if calls == 1:
+                    return original(converter, *args, **kwargs)
+                return None
+
+            try:
+                with patch.object(int_converter, 'parse_arg',
+                                  decline_after_vectorcall_validation):
+                    if disable_helper:
+                        with patch.object(ParseArgsCodeGen,
+                                          'use_scoped_tuple_helper',
+                                          lambda self: False):
+                            output = _make_clinic(filename='owner.c').parse(source)
+                    else:
+                        output = _make_clinic(filename='owner.c').parse(source)
+            except Exception as error:
+                return ('error', type(error), str(error), calls)
+            self.assertGreaterEqual(calls, 2)
+            return ('output', output, calls)
+
+        generated = parse_with_declined_inline_parse(False)
+        baseline = parse_with_declined_inline_parse(True)
+        self.assertEqual(generated, baseline)
+        if generated[0] == 'output':
+            self.assertNotIn('_clinic_tuple_args', generated[1])
+        else:
+            self.assertGreaterEqual(generated[3], 2)
 
     def test_owned_positional_constructor_order_and_defaults(self):
         for kind in ('__new__', '__init__'):

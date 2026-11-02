@@ -9,6 +9,8 @@ Template is committed as e0dfcd4d7ff and corrected TypeVar as bef49ec8fc9.
 Descriptor calls are committed as ca594319d0b. The shared bytes/bytearray join
 rule is committed as checkpoint32; Sol advances the held
 typeobject/MRO dependency while Luna applies the reviewed ABC selected-pair port.
+A second Sol 6.1 worker designs the shared Clinic helper constructors, starting
+with bytes, bytearray and enumerate. This design has no source grant yet.
 The coordinator integrates and validates the merged result.
 MRO providers and the public wrapper
 passed code/native attribution review; their delta remains held. The next

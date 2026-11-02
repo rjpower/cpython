@@ -893,6 +893,51 @@ class TestBasicOps(unittest.TestCase):
         self.assertEqual([pair for pair in zip_longest('abc', 'def')],
                          list(zip('abc', 'def')))
 
+    def test_zip_longest_constructor_callbacks_and_fillvalue(self):
+        events = []
+        fillvalue = object()
+
+        class LoggedIterable:
+            def __init__(self, name, values):
+                self.name = name
+                self.values = values
+
+            def __iter__(self):
+                events.append(("iter", self.name))
+                def generate():
+                    for value in self.values:
+                        events.append(("yield", self.name, value))
+                        yield value
+                return generate()
+
+        first = LoggedIterable("first", [1, 2])
+        second = LoggedIterable("second", [3])
+        result = list(zip_longest(first, second, fillvalue=fillvalue))
+        self.assertEqual(events, [
+            ("iter", "first"), ("iter", "second"),
+            ("yield", "first", 1), ("yield", "second", 3),
+            ("yield", "first", 2),
+        ])
+        self.assertIs(result[1][1], fillvalue)
+
+        sentinel = LookupError("zip_longest iterator sentinel")
+        calls = []
+
+        class FailingIterable:
+            def __iter__(self):
+                calls.append("second")
+                raise sentinel
+
+        class FirstIterable:
+            def __iter__(self):
+                calls.append("first")
+                return iter(())
+
+        with self.assertRaises(LookupError) as caught:
+            zip_longest(FirstIterable(), FailingIterable())
+        self.assertIs(caught.exception, sentinel)
+        self.assertEqual(calls, ["first", "second"])
+
     @support.impl_detail("tuple reuse is specific to CPython")
     @unittest.skipIf(support.Py_GC, "reusing the result tuple needs a reference count of 1")
     def test_zip_longest_tuple_reuse(self):
@@ -1105,6 +1150,61 @@ class TestBasicOps(unittest.TestCase):
             self.assertEqual(list(product(*args)), list(product2(*args)))
             args = map(iter, args)
             self.assertEqual(len(list(product(*args))), expected_len)
+
+    def test_product_constructor_callbacks_and_repeat_zero(self):
+        events = []
+
+        class LoggedIterable:
+            def __init__(self, name, values):
+                self.name = name
+                self.values = values
+
+            def __iter__(self):
+                events.append(("iter", self.name))
+                def generate():
+                    for value in self.values:
+                        events.append(("yield", self.name, value))
+                        yield value
+                return generate()
+
+        self.assertEqual(
+            list(product(LoggedIterable("first", [1, 2]),
+                         LoggedIterable("second", [3]))),
+            [(1, 3), (2, 3)],
+        )
+        self.assertEqual(events, [
+            ("iter", "first"), ("yield", "first", 1),
+            ("yield", "first", 2), ("iter", "second"),
+            ("yield", "second", 3),
+        ])
+
+        sentinel = LookupError("product iterator sentinel")
+        calls = []
+
+        class FailingIterable:
+            def __iter__(self):
+                calls.append("second")
+                raise sentinel
+
+        class FirstIterable:
+            def __iter__(self):
+                calls.append("first")
+                return iter((1,))
+
+        with self.assertRaises(LookupError) as caught:
+            product(FirstIterable(), FailingIterable())
+        self.assertIs(caught.exception, sentinel)
+        self.assertEqual(calls, ["first", "second"])
+
+        with self.assertRaisesRegex(ValueError, "repeat argument cannot be negative"):
+            product(FirstIterable(), repeat=-1)
+        self.assertEqual(calls, ["first", "second"])
+
+        class NeverIterated:
+            def __iter__(self):
+                raise AssertionError("repeat=0 must not iterate its arguments")
+
+        self.assertEqual(list(product(NeverIterated(), repeat=0)), [()])
 
     @support.bigaddrspacetest
     def test_product_overflow(self):
@@ -1388,6 +1488,39 @@ class TestBasicOps(unittest.TestCase):
         self.assertEqual(list(copy.copy(b)), long_ans[60:])
         self.assertEqual(list(a), long_ans[100:])
         self.assertEqual(list(b), long_ans[60:])
+
+    @support.cpython_only
+    def test_tee_dataobject_constructor_snapshot(self):
+        from itertools import _tee_dataobject
+
+        source = iter(())
+        empty = _tee_dataobject(source, [], None)
+        self.assertTrue(any(ref is source for ref in gc.get_referents(empty)))
+
+        marker = object()
+        values = [1, 1.5, None, "text", marker]
+        partial = _tee_dataobject(iter(()), values, None)
+        refs = gc.get_referents(partial)
+        self.assertTrue(any(type(ref) is int and ref == 1 for ref in refs))
+        self.assertTrue(any(type(ref) is float and ref == 1.5 for ref in refs))
+        self.assertTrue(any(ref is None for ref in refs))
+        self.assertTrue(any(ref is values[3] for ref in refs))
+        self.assertTrue(any(ref is marker for ref in refs))
+
+        full_values = [object() for _ in range(57)]
+        next_link = _tee_dataobject(iter(()), [], None)
+        full = _tee_dataobject(iter(()), full_values, next_link)
+        refs = gc.get_referents(full)
+        self.assertTrue(any(ref is next_link for ref in refs))
+        for value in full_values:
+            self.assertTrue(any(ref is value for ref in refs))
+
+        with self.assertRaisesRegex(ValueError, "Invalid arguments"):
+            _tee_dataobject(iter(()), [object() for _ in range(58)], None)
+        with self.assertRaisesRegex(ValueError, "Invalid arguments"):
+            _tee_dataobject(iter(()), [1], next_link)
+        with self.assertRaisesRegex(ValueError, "Invalid arguments"):
+            _tee_dataobject(iter(()), [object() for _ in range(57)], object())
 
     def test_tee_dealloc_segfault(self):
         # gh-115874: segfaults when accessing module state in tp_dealloc.

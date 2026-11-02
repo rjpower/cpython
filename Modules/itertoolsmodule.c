@@ -4,6 +4,7 @@
 #include "pycore_critical_section.h"  // Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_long.h"              // _PyLong_GetZero()
 #include "pycore_moduleobject.h"      // _PyModule_GetState()
+#include "pycore_value.h"              // PyValue_XCLOSE()
 #include "pycore_typeobject.h"        // _PyType_GetModuleState()
 #include "pycore_object.h"            // _PyObject_GC_TRACK()
 #include "pycore_tuple.h"             // _PyTuple_ITEMS()
@@ -898,42 +899,116 @@ itertools_teedataobject_impl(PyTypeObject *type, PyObject *it,
                              PyObject *values, PyObject *next)
 /*[clinic end generated code: output=3343ceb07e08df5e input=be60f2fabd2b72ba]*/
 {
-    teedataobject *tdo;
-    Py_ssize_t i, len;
+    teedataobject *tdo = NULL;
+    PyObject *item = NULL;
+    PyValue snapshot[LINKCELLS];
+    Py_ssize_t captured = 0;
+    Py_ssize_t len;
+    Py_ssize_t i;
 
     itertools_state *state = get_module_state_by_cls(type);
     assert(type == state->teedataobject_type);
 
     tdo = (teedataobject *)teedataobject_newinternal(state, it);
-    if (!tdo)
-        return NULL;
+    if (tdo == NULL || PyErr_Occurred()) {
+        goto error;
+    }
 
     len = PyList_GET_SIZE(values);
-    if (len > LINKCELLS)
-        goto err;
-    for (i=0; i<len; i++) {
-        tdo->values[i] = PyList_GET_ITEM(values, i);
-        Py_INCREF(tdo->values[i]);
+    if (len > LINKCELLS) {
+        PyErr_SetString(PyExc_ValueError, "Invalid arguments");
+        goto error;
     }
-    /* len <= LINKCELLS < INT_MAX */
-    tdo->numread = Py_SAFE_DOWNCAST(len, Py_ssize_t, int);
+
+    for (i = 0; i < LINKCELLS; i++) {
+        snapshot[i] = PyValue_NULL;
+    }
+    for (i = 0; i < len; i++) {
+        PyValue value = PyList_GetValue(values, i);
+        if (PyValue_IsNull(value)) {
+            if (!PyErr_Occurred()) {
+                PyErr_SetString(PyExc_SystemError,
+                                "list item is missing during tee state capture");
+            }
+            goto error;
+        }
+        snapshot[captured++] = value;
+        if (PyErr_Occurred()) {
+            goto error;
+        }
+    }
+
+    for (i = 0; i < captured; i++) {
+        item = PyValue_AsObject(snapshot[i]);
+        if (item == NULL || PyErr_Occurred()) {
+            if (item == NULL && !PyErr_Occurred()) {
+                PyErr_SetString(PyExc_SystemError,
+                                "tee state value could not be boxed");
+            }
+            goto error;
+        }
+        tdo->values[i] = item;
+        item = NULL;
+        tdo->numread = (int)i + 1;
+        if (PyErr_Occurred()) {
+            goto error;
+        }
+    }
+
+    for (i = 0; i < captured; i++) {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue retired = snapshot[i];
+        snapshot[i] = PyValue_NULL;
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+    }
+    captured = 0;
+    if (PyErr_Occurred()) {
+        goto error;
+    }
 
     if (len == LINKCELLS) {
         if (next != Py_None) {
-            if (!Py_IS_TYPE(next, state->teedataobject_type))
-                goto err;
+            if (!Py_IS_TYPE(next, state->teedataobject_type)) {
+                PyErr_SetString(PyExc_ValueError, "Invalid arguments");
+                goto error;
+            }
             assert(tdo->nextlink == NULL);
             tdo->nextlink = Py_NewRef(next);
+            if (PyErr_Occurred()) {
+                goto error;
+            }
         }
     } else {
-        if (next != Py_None)
-            goto err; /* shouldn't have a next if we are not full */
+        if (next != Py_None) {
+            PyErr_SetString(PyExc_ValueError, "Invalid arguments");
+            goto error; /* shouldn't have a next if we are not full */
+        }
     }
     return (PyObject*)tdo;
 
-err:
-    Py_XDECREF(tdo);
-    PyErr_SetString(PyExc_ValueError, "Invalid arguments");
+error:
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = item;
+        item = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    for (i = 0; i < captured; i++) {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue retired = snapshot[i];
+        snapshot[i] = PyValue_NULL;
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = (PyObject *)tdo;
+        tdo = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
     return NULL;
 }
 
@@ -2076,27 +2151,38 @@ struct productobject {
 static PyObject *
 product_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
-    productobject *lz;
+    productobject *lz = NULL;
     Py_ssize_t nargs, npools, repeat=1;
     PyObject *pools = NULL;
+    PyObject *item = NULL;
+    PyObject *pool = NULL;
+    PyObject *tmpargs = NULL;
     Py_ssize_t *indices = NULL;
     Py_ssize_t i;
+    int parse_status;
 
     if (kwds != NULL) {
         char *kwlist[] = {"repeat", 0};
-        PyObject *tmpargs = PyTuple_New(0);
-        if (tmpargs == NULL)
-            return NULL;
-        if (!PyArg_ParseTupleAndKeywords(tmpargs, kwds, "|n:product",
-                                         kwlist, &repeat)) {
-            Py_DECREF(tmpargs);
-            return NULL;
+        tmpargs = PyTuple_New(0);
+        if (tmpargs == NULL || PyErr_Occurred()) {
+            goto error;
         }
-        Py_DECREF(tmpargs);
+        parse_status = PyArg_ParseTupleAndKeywords(tmpargs, kwds, "|n:product",
+                                                   kwlist, &repeat);
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *retired = tmpargs;
+            tmpargs = NULL;
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        if (!parse_status || PyErr_Occurred()) {
+            goto error;
+        }
         if (repeat < 0) {
             PyErr_SetString(PyExc_ValueError,
                             "repeat argument cannot be negative");
-            return NULL;
+            goto error;
         }
     }
 
@@ -2119,21 +2205,39 @@ product_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     }
 
     pools = PyTuple_New(npools);
-    if (pools == NULL)
+    if (pools == NULL || PyErr_Occurred())
         goto error;
 
     for (i=0; i < nargs ; ++i) {
-        PyObject *item = PyTuple_GET_ITEM(args, i);
-        PyObject *pool = PySequence_Tuple(item);
-        if (pool == NULL)
+        item = PyTuple_GetItemRef(args, i);
+        if (item == NULL || PyErr_Occurred())
             goto error;
+
+        pool = PySequence_Tuple(item);
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *retired = item;
+            item = NULL;
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        if (pool == NULL || PyErr_Occurred())
+            goto error;
+
         PyTuple_SET_ITEM(pools, i, pool);
+        pool = NULL;
+        if (PyErr_Occurred())
+            goto error;
         indices[i] = 0;
     }
     for ( ; i < npools; ++i) {
-        PyObject *pool = PyTuple_GET_ITEM(pools, i - nargs);
-        Py_INCREF(pool);
+        pool = PyTuple_GetItemRef(pools, i - nargs);
+        if (pool == NULL || PyErr_Occurred())
+            goto error;
         PyTuple_SET_ITEM(pools, i, pool);
+        pool = NULL;
+        if (PyErr_Occurred())
+            goto error;
         indices[i] = 0;
     }
 
@@ -2143,16 +2247,60 @@ product_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         goto error;
 
     lz->pools = pools;
+    pools = NULL;
     lz->indices = indices;
+    indices = NULL;
     lz->result = NULL;
     lz->stopped = 0;
+
+    if (PyErr_Occurred())
+        goto error;
 
     return (PyObject *)lz;
 
 error:
-    if (indices != NULL)
-        PyMem_Free(indices);
-    Py_XDECREF(pools);
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = item;
+        item = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = pool;
+        pool = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_ssize_t *retired = indices;
+        indices = NULL;
+        PyMem_Free(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = tmpargs;
+        tmpargs = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = pools;
+        pools = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = (PyObject *)lz;
+        lz = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
     return NULL;
 }
 
@@ -3854,24 +4002,32 @@ struct ziplongestobject {
 static PyObject *
 zip_longest_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
-    ziplongestobject *lz;
+    ziplongestobject *lz = NULL;
     Py_ssize_t i;
-    PyObject *ittuple;  /* tuple of iterators */
-    PyObject *result;
-    PyObject *fillvalue = Py_None;
+    PyObject *ittuple = NULL;  /* tuple of iterators */
+    PyObject *result = NULL;
+    PyObject *item = NULL;
+    PyObject *iter = NULL;
+    PyObject *fillvalue = NULL;
     Py_ssize_t tuplesize;
 
     if (kwds != NULL && PyDict_CheckExact(kwds) && PyDict_GET_SIZE(kwds) > 0) {
-        fillvalue = NULL;
         if (PyDict_GET_SIZE(kwds) == 1) {
-            fillvalue = PyDict_GetItemWithError(kwds, &_Py_ID(fillvalue));
+            int status = PyDict_GetItemRef(kwds, &_Py_ID(fillvalue), &fillvalue);
+            if (status < 0 || PyErr_Occurred()) {
+                goto error;
+            }
         }
         if (fillvalue == NULL) {
-            if (!PyErr_Occurred()) {
-                PyErr_SetString(PyExc_TypeError,
-                    "zip_longest() got an unexpected keyword argument");
-            }
-            return NULL;
+            PyErr_SetString(PyExc_TypeError,
+                            "zip_longest() got an unexpected keyword argument");
+            goto error;
+        }
+    }
+    else {
+        fillvalue = Py_NewRef(Py_None);
+        if (fillvalue == NULL || PyErr_Occurred()) {
+            goto error;
         }
     }
 
@@ -3881,42 +4037,106 @@ zip_longest_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 
     /* obtain iterators */
     ittuple = PyTuple_New(tuplesize);
-    if (ittuple == NULL)
-        return NULL;
+    if (ittuple == NULL || PyErr_Occurred())
+        goto error;
     for (i=0; i < tuplesize; i++) {
-        PyObject *item = PyTuple_GET_ITEM(args, i);
-        PyObject *it = PyObject_GetIter(item);
-        if (it == NULL) {
-            Py_DECREF(ittuple);
-            return NULL;
+        item = PyTuple_GetItemRef(args, i);
+        if (item == NULL || PyErr_Occurred()) {
+            goto error;
         }
-        PyTuple_SET_ITEM(ittuple, i, it);
+
+        iter = PyObject_GetIter(item);
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *retired = item;
+            item = NULL;
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        if (iter == NULL || PyErr_Occurred()) {
+            goto error;
+        }
+
+        PyTuple_SET_ITEM(ittuple, i, iter);
+        iter = NULL;
+        if (PyErr_Occurred())
+            goto error;
     }
 
     /* create a result holder */
     result = PyTuple_New(tuplesize);
-    if (result == NULL) {
-        Py_DECREF(ittuple);
-        return NULL;
-    }
+    if (result == NULL || PyErr_Occurred())
+        goto error;
     for (i=0 ; i < tuplesize ; i++) {
-        Py_INCREF(Py_None);
-        PyTuple_SET_ITEM(result, i, Py_None);
+        item = Py_NewRef(Py_None);
+        if (item == NULL || PyErr_Occurred())
+            goto error;
+        PyTuple_SET_ITEM(result, i, item);
+        item = NULL;
+        if (PyErr_Occurred())
+            goto error;
     }
 
     /* create ziplongestobject structure */
     lz = (ziplongestobject *)type->tp_alloc(type, 0);
-    if (lz == NULL) {
-        Py_DECREF(ittuple);
-        Py_DECREF(result);
-        return NULL;
-    }
+    if (lz == NULL)
+        goto error;
     lz->ittuple = ittuple;
+    ittuple = NULL;
     lz->tuplesize = tuplesize;
     lz->numactive = tuplesize;
     lz->result = result;
-    lz->fillvalue = Py_NewRef(fillvalue);
+    result = NULL;
+    lz->fillvalue = fillvalue;
+    fillvalue = NULL;
+    if (PyErr_Occurred())
+        goto error;
     return (PyObject *)lz;
+
+error:
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = item;
+        item = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = iter;
+        iter = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = fillvalue;
+        fillvalue = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = result;
+        result = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = ittuple;
+        ittuple = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = (PyObject *)lz;
+        lz = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    return NULL;
 }
 
 static void

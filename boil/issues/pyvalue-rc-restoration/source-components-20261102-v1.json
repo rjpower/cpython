@@ -77,8 +77,39 @@
     "author_sha256": "fddc8b4f9a30437c03bedd5c9143f976af5b9cacec5ce16799db1791ef53d41d",
     "review_sha256": "589b030d098d889472c8c90f390b12af6a1742903774f2f29e7a840aff9bc3f0",
     "functions": ["_PyDict_LookupIndexAndOwnedValue", "_PyDict_Subscript"],
-    "actual_vm_composition_accepted": false,
-    "dictionary_storage_window_still_active": true
+    "actual_vm_reader_composition_source_accepted": true,
+    "dictionary_storage_window_still_active": false
+  },
+  "dictionary_copy_merge_conditional_managed_storage": {
+    "author_sha256": "7ab4e86a707a1b457e01ac71d7fca0943408b6769551e6359350f5f185b48bb6",
+    "review_sha256": "f7fc0884e54cf27a2f33e1acb309c2f392de4fe13b5b6c092d4579ca7b3a48bd",
+    "source_window_closed_early": true,
+    "fragments": 36,
+    "context_files": 7,
+    "runtime_ast_methods": 22,
+    "external_handoffs_accept_only_exact_hunks": true,
+    "whole_dictionary_accepted": false
+  },
+  "vm_reader_feedback": {
+    "author_sha256": "ce9144984856feab5d86bfaf5ed00fe87bb729e5dc6a4f5c1c560aea2dd29bf2",
+    "review_sha256": "c745b682146af7bba6d0de3df6dc8df6a36b5b508d8c087440741338de4153c2",
+    "source_window_closed_early": true,
+    "host_checks_pass": 44,
+    "generators_pass": 7,
+    "actual_syntax_units_pass": 2,
+    "runtime_ast_methods": 16,
+    "binary_nomination_nonescaping": true,
+    "user_getitem_nomination_and_history_growth_deferred": true,
+    "whole_vm_accepted": false
+  },
+  "repr_guard": {
+    "author_sha256": "612dc1da6043b317d527a5a18fb77582a9e419bdfed02664d21a31e2636108de",
+    "review_sha256": "522be1146082591b0da752b7d11fd28f92b12ba67fb0a804d723e6f00ccd204a",
+    "corrected_patch_sha256": "a81845e839e9d4ee3d684fb043ab4687c9d48a4b9b167fb0188afb2a22fba47b",
+    "source_window_closed": true,
+    "actual_syntax_units_pass": 2,
+    "runtime_ast_methods": 4,
+    "whole_object_behavior_accepted": false
   },
   "candidate_build": false,
   "runtime_tests_executed": false,

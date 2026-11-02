@@ -1,5 +1,11 @@
 # Dictionary copy, conditional insertion and managed storage
 
+Final disposition: source window closed early. Final-v2 author7ab4e86a and
+independent reviewf7fc0884 accept36 scoped fragments/seven context files,
+22 AST-only methods and four adapter entries. External object/import acceptance
+is limited to the named provider/error-check hunks. Whole Dict/native/runtime
+qualification remains open; legacy API-removal action remains unexecuted.
+
 The coordinator adopts D's critical design review of corrected proposal
 build/pyvalue-register-interpreter-checkpoint-20261101-v1/dict-mutation-source-v1/next-storage-cut.md,
 SHA256809751f8556bb778e0076e2f0a3845ce4c00de192513b7a2a35cb6718ebde6b9.

@@ -51,21 +51,26 @@ universal-value worktree. Dependent storage and native cuts continue.
 - restart_audit has frozen the foundation, specialized O-call and shared
   local/slot retirement source; dictionary VM consumers have a timely source
   checkpoint and are now independently accepted as source.
-  A separate reader/feedback source cut now covers owned specialization lookups
-  and coherent cold/warmed dictionary reads.
+  The reader/feedback source cut is independently accepted, including owned
+  specialization lookups and cold/warmed dictionary reads. Its next attribute
+  nomination/store design is under review; the previous window is closed.
 - value_api_consumer_map independently reviews source and maintains the exact
   native consumer inventory (660 paths in its sealed first version).
 - coroutine_design_review implements list/structseq storage and iteration;
   that partial source component is independently accepted. Its native-scope
   engine, bounded dictionary clear/release and owning-read components are
   source-accepted; mutation/growth and the value-native constructor are now
-  independently source-accepted, with remaining copy/managed storage in a
-  separate active source cut. The coordinator
+  independently source-accepted. Copy/merge, conditional insertion and managed
+  storage now also pass independent source review. The next native vector-call
+  engine and generic VM caller are designed, awaiting separate grants. The coordinator
   implements tuple/cell/member/iteration and set storage; partial tuple/member
   cell/iteration, set, instance-slot and common-constant components are
   independently accepted as source only. Compiler constant indexing/compaction
   and checked value-list replacement are independently source-accepted;
-  recursive cache/interning and code-key production remain in design.
+  canonical typed constant-key production and managed initialization before
+  CREATE are independently source-accepted. Recursive cache/interning remains
+  in design; the canonical repr guard is independently source-accepted with
+  actual Object/fixture syntax checks passing and four unexecuted methods.
 - The coordinator maintains the log and monitoring loop, prepares qualification
   and the interpreter performance checkpoint, and integrates reviewed changes.
 

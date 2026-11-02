@@ -236,3 +236,48 @@ capacity/header/root shape/absent dictionary and every NULL1 slot without
 allocation or exception changes. Two new tests are AST-only; actual fixture
 syntax passes, full type/native/runtime qualification remains open. The separate
 15-minute source window closed early. This changes no C-owned initializer body.
+
+## Storage and reader closure,2026-11-02 02:02 UTC
+
+Dictionary storage final v2 `7ab4e86a` passes independent review `f7fc0884`:
+36 scoped fragments cover copy/merge, conditional insertion, popitem and managed
+storage. Four external object/import handoffs accept only their precise provider
+and error-check hunks. Copy DUPs after allocation/reacquisition; detach MOVEs
+without resurrecting a refcount-zero instance. Conditional insertion returns
+0 inserted or1 existing with an independent requested output; only -1 is error.
+Non-inline managed dictionary replacement retains original delayed field-owner
+retirement. Twenty-two methods are AST-only; the actual C fixture passes syntax.
+Old Dict getters/views/iteration and wider native consumers still prevent whole
+dictionary qualification. The storage window closed early.
+
+Reader final `ce914498` passes independent review `c745b682`: four owned
+specializer lookups, inline-safe global/lazy handling, guarded attribute reads,
+and canonical cold/warmed dictionary reads. Capture scalar PCs before callbacks;
+publish/detach inputs and outputs, retire in original order, refresh even with
+Temps0. Abort never flushes NULL over a restored aliased input home. Binary
+nomination and statistics use canonical types without boxing; historical saves
+that require allocation are skipped, while existing rows/current nomination
+remain. User-GETITEM nomination and history growth are explicit later work.
+Forty-four host checks/seven generators and two actual syntax checks pass;
+16 methods are AST-only. The reader window closed early.
+
+The next attribute design includes nomination's real allocation boundaries,
+generic method two-output publication, inline class descriptors and managed
+stores. The native design extends the accepted engine through real generic
+NOARGS/FASTCALL/keyword dispatch, with caller-owned views through publication.
+Both remain design-only until independent review and separate source grants.
+Full HPy support remains outside the internal interpreter checkpoint.
+
+The repr guard also passes review522be114 (author612dc1da, corrected complete
+patcha81845e8). Identity scanning is canonical and cannot invoke user equality;
+conditional association reuses a guard installed during allocation reentry.
+Leave restores the exact entry exception. Review fixed fixture cleanup for an
+unexpected successful duplicate registration. Four methods remain AST-only;
+actual Objects/object.c and internal fixture TUs pass syntax. The15-minute
+source window is closed. No runtime repr behavior is claimed yet.
+
+Following critical design review, separate attribute (90min/30min checkpoint)
+and native vector-engine (60min/20min checkpoint) grants now proceed in
+parallel. Generic native VM caller adoption follows the attribute source
+freeze, preserving one owner for the VM producer/generation lane. Engine source
+alone cannot close its actual Python-to-native route.

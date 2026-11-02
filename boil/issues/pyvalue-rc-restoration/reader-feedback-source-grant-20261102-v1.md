@@ -51,3 +51,33 @@ exact callback/alias/error/metadata review, affected host checks/serial generati
 and at most3 meaningful changed syntax-only TUs30seconds each. Do not duplicate
 C provider checks. No objects/link/candidate/runtime/timing. A partial cold bridge
 must be reported partial; a warm-only read is not coherent reader acceptance.
+
+Actual first edit01:17:54 UTC. Additive adaptive-prelude amendment adopted
+under the unchanged02:44:50 ceiling: proposal67534709 and statistics/guard
+addendum4bb5cf62 in build/pyvalue-reader-consumer-design-20261102-v1/.
+D's critical review accepts this finite nonescaping design with the stats
+condition included. The exact extra specialize.c hunks are fb_save_mono,
+fb_begin/fb_begin_binary private arguments/calls, specialize_binary_op,
+_Py_Specialize_BinaryOp and binary_op_fail_kind. Necessary private declarations
+and affected host source assertions belong to this amendment; no public API,
+new representation/runtime mode, deadline extension or general feedback rewrite.
+
+Binary derives value types without scalar boxes. Its private feedback path
+skips only historical-row saves that would allocate POLY capacity; retain all
+already allocated rows and the current nomination. Other families keep their
+existing allocation policy. EXTEND accepts only real object operands and
+statically NULL guards, with a host table proof. The Py_STATS classifier must
+use values/types without nullable-pointer dereference, descriptor/type-name
+lookup or DECREF callbacks. User-GETITEM nomination is deferred here; its
+generic canonical operation retains complete Python semantics. Record this
+eligibility/history limitation as required future feedback/type-cache work,
+not full adaptive-family closure or a performance result. No post-call refresh
+may be used to excuse stale writes occurring inside a feedback allocator.
+
+Window closed early after final receipt ce914498 and independent review
+c745b682. The final source has44 passing host checks, seven successful
+generators and two stable actual syntax checks. Sixteen runtime methods are
+AST-only (seven new); five ID/format/target products remain exact. Binary
+noallocation nomination/statistics changes are included in this acceptance.
+User-GETITEM nomination and feedback-history growth remain later work. The
+second attribute/native caller designs do not extend this closed grant.

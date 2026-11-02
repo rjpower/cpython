@@ -486,3 +486,8 @@ candidate runtime or timing has executed.
   48,398characters/five diagrams; snapshot SHA256 `608b2f988d0c3104aee6b3f3dfcee2e5a8ecca77947db0236ff34f7462dfc212`.
   Managed constructor source accepted; remaining storage/readers and
   wider native/Clinic work still precede candidate execution.
+
+- 2026-11-02 02:09 UTC: Published/read back revision59 exactly,
+  47,284characters/five diagrams; snapshot SHA256 `a1c9faea6ca103550b4e50adf9e664569633b48fc42cae1c3ffb14ef1293e35c`.
+  Storage/readers/repr source accepted; next finite attribute and
+  native engine cuts proceed. Whole runtime/timing still pending.

@@ -1914,3 +1914,15 @@ Append concise, high-level actions and outcomes. Link issue results for detail.
   Publish/read back Loom58 exactly,48,398characters/five diagrams.
   No restored candidate/runtime/timing.
   [Disposition](issues/pyvalue-rc-restoration/managed-constructor-source-disposition-20261102-v1.json).
+- 2026-11-02 02:09 UTC: Accept scoped dictionary copy/merge/conditional/managed
+  storage7ab4e86a/f7fc0884 and VM reader/feedbackce914498/c745b682;
+  both source windows close early. Accept repr612dc1da/522be114
+  with fixture correction and two actual syntax checks; four
+  methods remain AST-only. Start independently reviewed attribute
+  and variable native-engine cuts in parallel, serialize generic
+  VM caller adoption. Root compiler cache/interning has a timely
+  concrete checkpointfa7b288e held for review, with seven old
+  metadata getter diagnostics outside the cut. Publish/read back
+  Loom59 exactly,47,284characters/five diagrams. No coherent
+  restored candidate execution or timing.
+  [Component evidence](issues/pyvalue-rc-restoration/source-components-20261102-v1.json).

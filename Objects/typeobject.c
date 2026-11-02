@@ -9914,78 +9914,193 @@ static PyObject *
 wrap_binaryfunc(PyObject *self, PyObject *args, void *wrapped)
 {
     binaryfunc func = (binaryfunc)wrapped;
-    PyObject *other;
+    PyObject *receiver = NULL;
+    PyObject *tuple = NULL;
+    PyObject *other = NULL;
+    PyObject *result = NULL;
 
-    if (!check_num_args(args, 1))
-        return NULL;
-    other = PyTuple_GET_ITEM(args, 0);
-    return (*func)(self, other);
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    receiver = Py_NewRef(self);
+    tuple = Py_NewRef(args);
+    if (!check_num_args(tuple, 1) || PyErr_Occurred()) {
+        goto done;
+    }
+    other = PyTuple_GetItemRef(tuple, 0);
+    if (other == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    result = (*func)(receiver, other);
+
+done:
+    type_mutation_close(&other);
+    type_mutation_close(&tuple);
+    type_mutation_close(&receiver);
+    if (PyErr_Occurred()) {
+        type_mutation_close(&result);
+    }
+    return result;
 }
 
 static PyObject *
 wrap_binaryfunc_l(PyObject *self, PyObject *args, void *wrapped)
 {
     binaryfunc func = (binaryfunc)wrapped;
-    PyObject *other;
+    PyObject *receiver = NULL;
+    PyObject *tuple = NULL;
+    PyObject *other = NULL;
+    PyObject *result = NULL;
 
-    if (!check_num_args(args, 1))
-        return NULL;
-    other = PyTuple_GET_ITEM(args, 0);
-    return (*func)(self, other);
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    receiver = Py_NewRef(self);
+    tuple = Py_NewRef(args);
+    if (!check_num_args(tuple, 1) || PyErr_Occurred()) {
+        goto done;
+    }
+    other = PyTuple_GetItemRef(tuple, 0);
+    if (other == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    result = (*func)(receiver, other);
+
+done:
+    type_mutation_close(&other);
+    type_mutation_close(&tuple);
+    type_mutation_close(&receiver);
+    if (PyErr_Occurred()) {
+        type_mutation_close(&result);
+    }
+    return result;
 }
 
 static PyObject *
 wrap_binaryfunc_r(PyObject *self, PyObject *args, void *wrapped)
 {
     binaryfunc func = (binaryfunc)wrapped;
-    PyObject *other;
+    PyObject *receiver = NULL;
+    PyObject *tuple = NULL;
+    PyObject *other = NULL;
+    PyObject *result = NULL;
 
-    if (!check_num_args(args, 1))
-        return NULL;
-    other = PyTuple_GET_ITEM(args, 0);
-    return (*func)(other, self);
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    receiver = Py_NewRef(self);
+    tuple = Py_NewRef(args);
+    if (!check_num_args(tuple, 1) || PyErr_Occurred()) {
+        goto done;
+    }
+    other = PyTuple_GetItemRef(tuple, 0);
+    if (other == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    result = (*func)(other, receiver);
+
+done:
+    type_mutation_close(&other);
+    type_mutation_close(&tuple);
+    type_mutation_close(&receiver);
+    if (PyErr_Occurred()) {
+        type_mutation_close(&result);
+    }
+    return result;
 }
 
 static PyObject *
 wrap_ternaryfunc(PyObject *self, PyObject *args, void *wrapped)
 {
     ternaryfunc func = (ternaryfunc)wrapped;
-    PyObject *other;
+    PyObject *receiver = NULL;
+    PyObject *tuple = NULL;
+    PyObject *other = NULL;
+    PyObject *third_owner = NULL;
     PyObject *third = Py_None;
+    PyObject *result = NULL;
+    Py_ssize_t size;
 
     /* Note: This wrapper only works for __pow__() */
 
-    Py_ssize_t size = check_pow_args(args);
-    if (size == -1) {
-        return NULL;
+    if (PyErr_Occurred()) {
+        goto done;
     }
-    other = PyTuple_GET_ITEM(args, 0);
+    receiver = Py_NewRef(self);
+    tuple = Py_NewRef(args);
+    size = check_pow_args(tuple);
+    if (size == -1 || PyErr_Occurred()) {
+        goto done;
+    }
+    other = PyTuple_GetItemRef(tuple, 0);
+    if (other == NULL || PyErr_Occurred()) {
+        goto done;
+    }
     if (size == 2) {
-       third = PyTuple_GET_ITEM(args, 1);
+        third_owner = PyTuple_GetItemRef(tuple, 1);
+        if (third_owner == NULL || PyErr_Occurred()) {
+            goto done;
+        }
+        third = third_owner;
     }
+    result = (*func)(receiver, other, third);
 
-    return (*func)(self, other, third);
+done:
+    type_mutation_close(&third_owner);
+    type_mutation_close(&other);
+    type_mutation_close(&tuple);
+    type_mutation_close(&receiver);
+    if (PyErr_Occurred()) {
+        type_mutation_close(&result);
+    }
+    return result;
 }
 
 static PyObject *
 wrap_ternaryfunc_r(PyObject *self, PyObject *args, void *wrapped)
 {
     ternaryfunc func = (ternaryfunc)wrapped;
-    PyObject *other;
+    PyObject *receiver = NULL;
+    PyObject *tuple = NULL;
+    PyObject *other = NULL;
+    PyObject *third_owner = NULL;
     PyObject *third = Py_None;
+    PyObject *result = NULL;
+    Py_ssize_t size;
 
     /* Note: This wrapper only works for __rpow__() */
 
-    Py_ssize_t size = check_pow_args(args);
-    if (size == -1) {
-        return NULL;
+    if (PyErr_Occurred()) {
+        goto done;
     }
-    other = PyTuple_GET_ITEM(args, 0);
+    receiver = Py_NewRef(self);
+    tuple = Py_NewRef(args);
+    size = check_pow_args(tuple);
+    if (size == -1 || PyErr_Occurred()) {
+        goto done;
+    }
+    other = PyTuple_GetItemRef(tuple, 0);
+    if (other == NULL || PyErr_Occurred()) {
+        goto done;
+    }
     if (size == 2) {
-       third = PyTuple_GET_ITEM(args, 1);
+        third_owner = PyTuple_GetItemRef(tuple, 1);
+        if (third_owner == NULL || PyErr_Occurred()) {
+            goto done;
+        }
+        third = third_owner;
     }
+    result = (*func)(other, receiver, third);
 
-    return (*func)(other, self, third);
+done:
+    type_mutation_close(&third_owner);
+    type_mutation_close(&other);
+    type_mutation_close(&tuple);
+    type_mutation_close(&receiver);
+    if (PyErr_Occurred()) {
+        type_mutation_close(&result);
+    }
+    return result;
 }
 
 static PyObject *
@@ -10002,16 +10117,38 @@ static PyObject *
 wrap_indexargfunc(PyObject *self, PyObject *args, void *wrapped)
 {
     ssizeargfunc func = (ssizeargfunc)wrapped;
-    PyObject* o;
+    PyObject *receiver = NULL;
+    PyObject *tuple = NULL;
+    PyObject *operand = NULL;
+    PyObject *result = NULL;
     Py_ssize_t i;
 
-    if (!check_num_args(args, 1))
-        return NULL;
-    o = PyTuple_GET_ITEM(args, 0);
-    i = PyNumber_AsSsize_t(o, PyExc_OverflowError);
-    if (i == -1 && PyErr_Occurred())
-        return NULL;
-    return (*func)(self, i);
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    receiver = Py_NewRef(self);
+    tuple = Py_NewRef(args);
+    if (!check_num_args(tuple, 1) || PyErr_Occurred()) {
+        goto done;
+    }
+    operand = PyTuple_GetItemRef(tuple, 0);
+    if (operand == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    i = PyNumber_AsSsize_t(operand, PyExc_OverflowError);
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    result = (*func)(receiver, i);
+
+done:
+    type_mutation_close(&operand);
+    type_mutation_close(&tuple);
+    type_mutation_close(&receiver);
+    if (PyErr_Occurred()) {
+        type_mutation_close(&result);
+    }
+    return result;
 }
 
 static Py_ssize_t
@@ -10040,19 +10177,40 @@ static PyObject *
 wrap_sq_item(PyObject *self, PyObject *args, void *wrapped)
 {
     ssizeargfunc func = (ssizeargfunc)wrapped;
-    PyObject *arg;
+    PyObject *receiver = NULL;
+    PyObject *tuple = NULL;
+    PyObject *operand = NULL;
+    PyObject *result = NULL;
     Py_ssize_t i;
 
-    if (PyTuple_GET_SIZE(args) == 1) {
-        arg = PyTuple_GET_ITEM(args, 0);
-        i = getindex(self, arg);
-        if (i == -1 && PyErr_Occurred())
-            return NULL;
-        return (*func)(self, i);
+    if (PyErr_Occurred()) {
+        goto done;
     }
-    check_num_args(args, 1);
+    receiver = Py_NewRef(self);
+    tuple = Py_NewRef(args);
+    if (PyTuple_GET_SIZE(tuple) == 1) {
+        operand = PyTuple_GetItemRef(tuple, 0);
+        if (operand == NULL || PyErr_Occurred()) {
+            goto done;
+        }
+        i = getindex(receiver, operand);
+        if (PyErr_Occurred()) {
+            goto done;
+        }
+        result = (*func)(receiver, i);
+        goto done;
+    }
+    check_num_args(tuple, 1);
     assert(PyErr_Occurred());
-    return NULL;
+
+done:
+    type_mutation_close(&operand);
+    type_mutation_close(&tuple);
+    type_mutation_close(&receiver);
+    if (PyErr_Occurred()) {
+        type_mutation_close(&result);
+    }
+    return result;
 }
 
 static PyObject *
@@ -10078,20 +10236,42 @@ static PyObject *
 wrap_sq_delitem(PyObject *self, PyObject *args, void *wrapped)
 {
     ssizeobjargproc func = (ssizeobjargproc)wrapped;
+    PyObject *receiver = NULL;
+    PyObject *tuple = NULL;
+    PyObject *operand = NULL;
+    PyObject *result = NULL;
     Py_ssize_t i;
-    int res;
-    PyObject *arg;
 
-    if (!check_num_args(args, 1))
-        return NULL;
-    arg = PyTuple_GET_ITEM(args, 0);
-    i = getindex(self, arg);
-    if (i == -1 && PyErr_Occurred())
-        return NULL;
-    res = (*func)(self, i, NULL);
-    if (res == -1 && PyErr_Occurred())
-        return NULL;
-    Py_RETURN_NONE;
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    receiver = Py_NewRef(self);
+    tuple = Py_NewRef(args);
+    if (!check_num_args(tuple, 1) || PyErr_Occurred()) {
+        goto done;
+    }
+    operand = PyTuple_GetItemRef(tuple, 0);
+    if (operand == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    i = getindex(receiver, operand);
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    (void)(*func)(receiver, i, NULL);
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    result = Py_NewRef(Py_None);
+
+done:
+    type_mutation_close(&operand);
+    type_mutation_close(&tuple);
+    type_mutation_close(&receiver);
+    if (PyErr_Occurred()) {
+        type_mutation_close(&result);
+    }
+    return result;
 }
 
 /* XXX objobjproc is a misnomer; should be objargpred */
@@ -10099,17 +10279,38 @@ static PyObject *
 wrap_objobjproc(PyObject *self, PyObject *args, void *wrapped)
 {
     objobjproc func = (objobjproc)wrapped;
+    PyObject *receiver = NULL;
+    PyObject *tuple = NULL;
+    PyObject *operand = NULL;
+    PyObject *result = NULL;
     int res;
-    PyObject *value;
 
-    if (!check_num_args(args, 1))
-        return NULL;
-    value = PyTuple_GET_ITEM(args, 0);
-    res = (*func)(self, value);
-    if (res == -1 && PyErr_Occurred())
-        return NULL;
-    else
-        return PyBool_FromLong(res);
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    receiver = Py_NewRef(self);
+    tuple = Py_NewRef(args);
+    if (!check_num_args(tuple, 1) || PyErr_Occurred()) {
+        goto done;
+    }
+    operand = PyTuple_GetItemRef(tuple, 0);
+    if (operand == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    res = (*func)(receiver, operand);
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    result = PyBool_FromLong((long)res);
+
+done:
+    type_mutation_close(&operand);
+    type_mutation_close(&tuple);
+    type_mutation_close(&receiver);
+    if (PyErr_Occurred()) {
+        type_mutation_close(&result);
+    }
+    return result;
 }
 
 static PyObject *
@@ -10131,16 +10332,37 @@ static PyObject *
 wrap_delitem(PyObject *self, PyObject *args, void *wrapped)
 {
     objobjargproc func = (objobjargproc)wrapped;
-    int res;
-    PyObject *key;
+    PyObject *receiver = NULL;
+    PyObject *tuple = NULL;
+    PyObject *operand = NULL;
+    PyObject *result = NULL;
 
-    if (!check_num_args(args, 1))
-        return NULL;
-    key = PyTuple_GET_ITEM(args, 0);
-    res = (*func)(self, key, NULL);
-    if (res == -1 && PyErr_Occurred())
-        return NULL;
-    Py_RETURN_NONE;
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    receiver = Py_NewRef(self);
+    tuple = Py_NewRef(args);
+    if (!check_num_args(tuple, 1) || PyErr_Occurred()) {
+        goto done;
+    }
+    operand = PyTuple_GetItemRef(tuple, 0);
+    if (operand == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    (void)(*func)(receiver, operand, NULL);
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    result = Py_NewRef(Py_None);
+
+done:
+    type_mutation_close(&operand);
+    type_mutation_close(&tuple);
+    type_mutation_close(&receiver);
+    if (PyErr_Occurred()) {
+        type_mutation_close(&result);
+    }
+    return result;
 }
 
 /* Helper to check for object.__setattr__ or __delattr__ applied to a type.
@@ -10230,18 +10452,42 @@ static PyObject *
 wrap_delattr(PyObject *self, PyObject *args, void *wrapped)
 {
     setattrofunc func = (setattrofunc)wrapped;
+    PyObject *receiver = NULL;
+    PyObject *tuple = NULL;
+    PyObject *name = NULL;
+    PyObject *result = NULL;
     int res;
-    PyObject *name;
 
-    if (!check_num_args(args, 1))
-        return NULL;
-    name = PyTuple_GET_ITEM(args, 0);
-    if (!hackcheck(self, func, "__delattr__"))
-        return NULL;
-    res = (*func)(self, name, NULL);
-    if (res < 0)
-        return NULL;
-    Py_RETURN_NONE;
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    receiver = Py_NewRef(self);
+    tuple = Py_NewRef(args);
+    if (!check_num_args(tuple, 1) || PyErr_Occurred()) {
+        goto done;
+    }
+    name = PyTuple_GetItemRef(tuple, 0);
+    if (name == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    res = hackcheck(receiver, func, "__delattr__");
+    if (!res || PyErr_Occurred()) {
+        goto done;
+    }
+    res = (*func)(receiver, name, NULL);
+    if (res < 0 || PyErr_Occurred()) {
+        goto done;
+    }
+    result = Py_NewRef(Py_None);
+
+done:
+    type_mutation_close(&name);
+    type_mutation_close(&tuple);
+    type_mutation_close(&receiver);
+    if (PyErr_Occurred()) {
+        type_mutation_close(&result);
+    }
+    return result;
 }
 
 static PyObject *
@@ -10282,12 +10528,33 @@ static PyObject *
 wrap_richcmpfunc(PyObject *self, PyObject *args, void *wrapped, int op)
 {
     richcmpfunc func = (richcmpfunc)wrapped;
-    PyObject *other;
+    PyObject *receiver = NULL;
+    PyObject *tuple = NULL;
+    PyObject *other = NULL;
+    PyObject *result = NULL;
 
-    if (!check_num_args(args, 1))
-        return NULL;
-    other = PyTuple_GET_ITEM(args, 0);
-    return (*func)(self, other, op);
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    receiver = Py_NewRef(self);
+    tuple = Py_NewRef(args);
+    if (!check_num_args(tuple, 1) || PyErr_Occurred()) {
+        goto done;
+    }
+    other = PyTuple_GetItemRef(tuple, 0);
+    if (other == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    result = (*func)(receiver, other, op);
+
+done:
+    type_mutation_close(&other);
+    type_mutation_close(&tuple);
+    type_mutation_close(&receiver);
+    if (PyErr_Occurred()) {
+        type_mutation_close(&result);
+    }
+    return result;
 }
 
 #undef RICHCMP_WRAPPER
@@ -10359,16 +10626,38 @@ static PyObject *
 wrap_descr_delete(PyObject *self, PyObject *args, void *wrapped)
 {
     descrsetfunc func = (descrsetfunc)wrapped;
-    PyObject *obj;
+    PyObject *receiver = NULL;
+    PyObject *tuple = NULL;
+    PyObject *operand = NULL;
+    PyObject *result = NULL;
     int ret;
 
-    if (!check_num_args(args, 1))
-        return NULL;
-    obj = PyTuple_GET_ITEM(args, 0);
-    ret = (*func)(self, obj, NULL);
-    if (ret < 0)
-        return NULL;
-    Py_RETURN_NONE;
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    receiver = Py_NewRef(self);
+    tuple = Py_NewRef(args);
+    if (!check_num_args(tuple, 1) || PyErr_Occurred()) {
+        goto done;
+    }
+    operand = PyTuple_GetItemRef(tuple, 0);
+    if (operand == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    ret = (*func)(receiver, operand, NULL);
+    if (ret < 0 || PyErr_Occurred()) {
+        goto done;
+    }
+    result = Py_NewRef(Py_None);
+
+done:
+    type_mutation_close(&operand);
+    type_mutation_close(&tuple);
+    type_mutation_close(&receiver);
+    if (PyErr_Occurred()) {
+        type_mutation_close(&result);
+    }
+    return result;
 }
 
 static PyObject *

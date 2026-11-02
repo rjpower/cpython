@@ -79,6 +79,15 @@ PyAPI_FUNC(int) _PyArg_ParseStackAndKeywords(
  * Args, kwargs and parser keyword metadata stay pinned through implementation
  * and converter cleanup; object outputs borrow the scope's independent owners.
  * The caller must already have published coherent IN_CALL state. */
+struct _PyArg_LeaseChunk;
+struct _PyArg_ResourceChunk;
+
+typedef int (*_PyArg_FormatDestructor)(PyObject *, void *);
+typedef struct {
+    void *item;
+    _PyArg_FormatDestructor destructor;  /* NULL means disarmed */
+} _PyArg_FormatResource;
+
 typedef struct {
     PyObject *tuple;
     PyObject *kwargs;
@@ -95,6 +104,9 @@ typedef struct {
     int ended;
     PyValue inline_values[4];
     PyObject *inline_objects[4];
+    struct _PyArg_LeaseChunk *lease_first, *lease_last;
+    struct _PyArg_ResourceChunk *resource_first, *resource_last;
+    int resource_state;
 } _PyArg_OwnerScope;
 
 PyAPI_FUNC(int) _PyArg_OwnerScope_BeginTuple(
@@ -112,6 +124,14 @@ PyAPI_FUNC(PyObject *const *) _PyArg_UnpackPositionalOwned(
 /* Safe after a partial Begin/unpack. Retains the primary or first cleanup error.
  * Run after converter cleanup; 0 has no pending error, -1 reports an error. */
 PyAPI_FUNC(int) _PyArg_OwnerScope_End(_PyArg_OwnerScope *);
+PyAPI_FUNC(PyObject *) _PyArg_OwnerScope_KeepObject(
+    _PyArg_OwnerScope *, PyObject *owned);
+PyAPI_FUNC(int) _PyArg_FormatResources_Begin(
+    _PyArg_OwnerScope *, Py_ssize_t initial_capacity);
+PyAPI_FUNC(int) _PyArg_FormatResources_Register(
+    _PyArg_OwnerScope *, void *item, _PyArg_FormatDestructor destructor);
+PyAPI_FUNC(int) _PyArg_FormatResources_Finish(
+    _PyArg_OwnerScope *, int success);
 PyAPI_FUNC(int) _PyArg_ParseTupleOwned(
     _PyArg_OwnerScope *scope, PyObject *args, const char *format, ...);
 

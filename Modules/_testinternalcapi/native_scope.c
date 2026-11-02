@@ -468,6 +468,50 @@ typedef struct {
     int consumed;
 } VectorFailure;
 
+typedef struct {
+    int counts[18];
+    int events[18];
+    Py_ssize_t nevents;
+    int invalid;
+    int nested_end_seen, nested_end_status;
+} FormatEngineTestLedger;
+
+typedef struct {
+    FormatEngineTestLedger *ledger;
+    int index;
+    int return_status;
+    PyObject *exception;
+    _PyArg_OwnerScope *end_scope;
+} FormatEngineTestRecord;
+
+static int
+format_engine_test_destructor(PyObject *ignored, void *opaque)
+{
+    FormatEngineTestRecord *record = opaque;
+    FormatEngineTestLedger *ledger = record->ledger;
+    if (record->index < 0 || record->index >= 18 || ledger->nevents >= 18) {
+        ledger->invalid = 1;
+    }
+    else {
+        ledger->counts[record->index]++;
+        ledger->events[ledger->nevents++] = record->index;
+    }
+    if (record->end_scope != NULL) {
+        if (!record->end_scope->ended) {
+            ledger->invalid = 1;
+        }
+        else {
+            ledger->nested_end_seen = 1;
+            ledger->nested_end_status = _PyArg_OwnerScope_End(record->end_scope);
+        }
+    }
+    if (record->exception != NULL) {
+        PyErr_SetRaisedException(Py_NewRef(record->exception));
+    }
+    return record->return_status;
+}
+
+
 static void *
 vector_fail_malloc(void *opaque, size_t size)
 {
@@ -1681,7 +1725,824 @@ done:
     return result;
 }
 
+static PyObject *
+format_engine_leases(PyObject *Py_UNUSED(module), PyObject *argument)
+{
+    if (PyErr_Occurred()) {
+        return NULL;
+    }
+    if (!PyTuple_CheckExact(argument) || PyTuple_GET_SIZE(argument) != 2) {
+        PyErr_SetString(PyExc_TypeError, "expected (values, callback)");
+        return NULL;
+    }
+
+    _PyArg_OwnerScope scope = {0};
+    PyObject *result = NULL;
+    PyObject *callback_result = NULL;
+    PyObject *copied = NULL;
+    PyObject *item = NULL;
+    PyObject *values = NULL;
+    PyObject *callback = NULL;
+    PyObject *argument_owner = NULL;
+    PyObject *const *items = NULL;
+    PyObject *const *original = NULL;
+    PyObject *const *grown = NULL;
+    PyObject *original_items[4] = {NULL, NULL, NULL, NULL};
+    int completed = 0;
+
+    argument_owner = Py_NewRef(argument);
+    values = PyTuple_GetItemRef(argument_owner, 0);
+    if (values == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    callback = PyTuple_GetItemRef(argument_owner, 1);
+    if (callback == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    if (!PyTuple_CheckExact(values) || PyTuple_GET_SIZE(values) != 4 ||
+        !PyCallable_Check(callback)) {
+        PyErr_SetString(PyExc_TypeError,
+                        "expected a four-item tuple and callable");
+        goto done;
+    }
+    if (_PyArg_OwnerScope_BeginTuple(&scope, values, 0) < 0 ||
+        PyErr_Occurred()) {
+        goto done;
+    }
+    items = _PyArg_UnpackPositionalOwned(&scope, "format_engine_leases", 4, 4);
+    if (items == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    original = _PyArg_OwnerScope_Objects(&scope);
+    if (original == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    original_items[0] = original[0];
+    original_items[1] = original[1];
+    original_items[2] = original[2];
+    original_items[3] = original[3];
+    for (int i = 0; i < 17; i++) {
+        if (_PyArg_OwnerScope_KeepObject(
+                &scope, Py_NewRef(items[i % 4])) == NULL ||
+            PyErr_Occurred()) {
+            goto done;
+        }
+    }
+    grown = _PyArg_OwnerScope_Objects(&scope);
+    if (grown == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    if (grown != original || grown[0] != original_items[0] ||
+        grown[1] != original_items[1] || grown[2] != original_items[2] ||
+        grown[3] != original_items[3]) {
+        PyErr_SetString(PyExc_AssertionError,
+                        "argument vector moved or changed");
+        goto done;
+    }
+    callback_result = PyObject_CallOneArg(callback, values);
+    if (callback_result == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    {
+        PyObject *retired = callback_result;
+        callback_result = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+
+    result = PyTuple_New(3);
+    if (result == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    copied = PyTuple_New(4);
+    if (copied == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    for (int i = 0; i < 4; i++) {
+        item = Py_NewRef(items[i]);
+        if (item == NULL || PyErr_Occurred()) {
+            goto done;
+        }
+        PyTuple_SET_ITEM(copied, i, item);
+        item = NULL;
+        if (PyErr_Occurred()) {
+            goto done;
+        }
+    }
+    item = Py_NewRef(copied);
+    if (item == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    PyTuple_SET_ITEM(result, 0, item);
+    item = NULL;
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    item = PyLong_FromLong(17);
+    if (item == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    PyTuple_SET_ITEM(result, 1, item);
+    item = NULL;
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    item = Py_NewRef(Py_True);
+    if (item == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    PyTuple_SET_ITEM(result, 2, item);
+    item = NULL;
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    completed = 1;
+
+done:
+    {
+        PyObject *retired = callback_result;
+        callback_result = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = copied;
+        copied = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = item;
+        item = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = values;
+        values = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = callback;
+        callback = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = argument_owner;
+        argument_owner = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    (void)_PyArg_OwnerScope_End(&scope);
+    (void)_PyArg_OwnerScope_End(&scope);
+    if (!completed || PyErr_Occurred()) {
+        {
+            PyObject *retired = result;
+            result = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        return NULL;
+    }
+    return result;
+}
+
+static PyObject *
+format_engine_resources(PyObject *Py_UNUSED(module), PyObject *argument)
+{
+    FormatEngineTestLedger ledger = {0};
+    FormatEngineTestRecord records[18] = {0};
+    _PyArg_OwnerScope scope = {0};
+    PyObject *counts = NULL;
+    PyObject *events = NULL;
+    PyObject *statuses = NULL;
+    PyObject *result = NULL;
+    PyObject *item = NULL;
+    int completed = 0;
+
+    if (PyErr_Occurred()) {
+        return NULL;
+    }
+    if (!PyLong_CheckExact(argument)) {
+        PyErr_SetString(PyExc_TypeError, "hint must be an exact int");
+        return NULL;
+    }
+    long hint = PyLong_AsLong(argument);
+    if (PyErr_Occurred()) {
+        return NULL;
+    }
+    if (hint != 0 && hint != 8 && hint != 17) {
+        PyErr_SetString(PyExc_ValueError, "hint must be 0, 8, or 17");
+        return NULL;
+    }
+
+    counts = PyTuple_New(17);
+    if (counts == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    events = PyTuple_New(17);
+    if (events == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    statuses = PyTuple_New(5);
+    if (statuses == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    result = PyTuple_New(3);
+    if (result == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+
+    item = PyLong_FromLong(1);
+    if (item == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    PyTuple_SET_ITEM(statuses, 0, item);
+    item = NULL;
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    item = PyLong_FromLong(1);
+    if (item == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    PyTuple_SET_ITEM(statuses, 1, item);
+    item = NULL;
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    item = PyLong_FromLong(0);
+    if (item == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    PyTuple_SET_ITEM(statuses, 2, item);
+    item = NULL;
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    item = PyLong_FromLong(0);
+    if (item == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    PyTuple_SET_ITEM(statuses, 3, item);
+    item = NULL;
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    item = Py_NewRef(Py_None);
+    if (item == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    PyTuple_SET_ITEM(statuses, 4, item);
+    item = NULL;
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+
+    if (_PyArg_FormatResources_Begin(&scope, hint) < 0 || PyErr_Occurred()) {
+        goto done;
+    }
+    for (int i = 0; i < 17; i++) {
+        records[i] = (FormatEngineTestRecord){&ledger, i, i % 2, NULL, NULL};
+        int registered = _PyArg_FormatResources_Register(
+            &scope, &records[i], format_engine_test_destructor);
+        if (registered < 0 || PyErr_Occurred()) {
+            goto done;
+        }
+    }
+    int finish = _PyArg_FormatResources_Finish(&scope, 1);
+    if (finish != 1 || PyErr_Occurred()) {
+        if (!PyErr_Occurred()) {
+            PyErr_SetString(PyExc_AssertionError,
+                            "resource transfer status mismatch");
+        }
+        goto done;
+    }
+    int repeated_finish = _PyArg_FormatResources_Finish(&scope, 0);
+    if (repeated_finish != 1 || PyErr_Occurred()) {
+        if (!PyErr_Occurred()) {
+            PyErr_SetString(PyExc_AssertionError,
+                            "resource transfer status mismatch");
+        }
+        goto done;
+    }
+    if (ledger.invalid || ledger.nevents != 0) {
+        PyErr_SetString(PyExc_AssertionError,
+                        "resource transfer released obligations");
+        goto done;
+    }
+    for (int i = 0; i < 18; i++) {
+        if (ledger.counts[i] != 0) {
+            PyErr_SetString(PyExc_AssertionError,
+                            "resource transfer released obligations");
+            goto done;
+        }
+    }
+
+    for (int i = 0; i < 17; i++) {
+        int status = format_engine_test_destructor(NULL, &records[i]);
+        if (status != i % 2 || PyErr_Occurred()) {
+            if (!PyErr_Occurred()) {
+                PyErr_SetString(PyExc_AssertionError,
+                                "resource destructor status mismatch");
+            }
+            goto done;
+        }
+    }
+    if (ledger.invalid || ledger.nevents != 17) {
+        PyErr_SetString(PyExc_AssertionError, "invalid resource event ledger");
+        goto done;
+    }
+    for (int i = 0; i < 18; i++) {
+        if (ledger.counts[i] != (i < 17 ? 1 : 0) ||
+            (i < 17 && ledger.events[i] != i)) {
+            PyErr_SetString(PyExc_AssertionError,
+                            "invalid resource count or event order");
+            goto done;
+        }
+    }
+    for (int i = 0; i < 17; i++) {
+        item = PyLong_FromLong(ledger.counts[i]);
+        if (item == NULL || PyErr_Occurred()) {
+            goto done;
+        }
+        PyTuple_SET_ITEM(counts, i, item);
+        item = NULL;
+        if (PyErr_Occurred()) {
+            goto done;
+        }
+        item = PyLong_FromLong(ledger.events[i]);
+        if (item == NULL || PyErr_Occurred()) {
+            goto done;
+        }
+        PyTuple_SET_ITEM(events, i, item);
+        item = NULL;
+        if (PyErr_Occurred()) {
+            goto done;
+        }
+    }
+
+    item = Py_NewRef(counts);
+    if (item == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    PyTuple_SET_ITEM(result, 0, item);
+    item = NULL;
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    item = Py_NewRef(events);
+    if (item == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    PyTuple_SET_ITEM(result, 1, item);
+    item = NULL;
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    item = Py_NewRef(statuses);
+    if (item == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    PyTuple_SET_ITEM(result, 2, item);
+    item = NULL;
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+
+    int end = _PyArg_OwnerScope_End(&scope);
+    int repeated_end = _PyArg_OwnerScope_End(&scope);
+    if (end != 0 || repeated_end != 0) {
+        if (!PyErr_Occurred()) {
+            PyErr_SetString(PyExc_AssertionError,
+                            "owner scope End status mismatch");
+        }
+        goto done;
+    }
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    if (ledger.invalid || ledger.nevents != 17) {
+        PyErr_SetString(PyExc_AssertionError,
+                        "End repeated transferred resource cleanup");
+        goto done;
+    }
+    for (int i = 0; i < 18; i++) {
+        if (ledger.counts[i] != (i < 17 ? 1 : 0) ||
+            (i < 17 && ledger.events[i] != i)) {
+            PyErr_SetString(PyExc_AssertionError,
+                            "End changed transferred resource ledger");
+            goto done;
+        }
+    }
+    completed = 1;
+
+done:
+    if (scope.resource_state == 1) {
+        (void)_PyArg_FormatResources_Finish(&scope, 0);
+    }
+    (void)_PyArg_OwnerScope_End(&scope);
+    (void)_PyArg_OwnerScope_End(&scope);
+    {
+        PyObject *retired = item;
+        item = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = counts;
+        counts = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = events;
+        events = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = statuses;
+        statuses = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (!completed || PyErr_Occurred()) {
+        {
+            PyObject *retired = result;
+            result = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        return NULL;
+    }
+    return result;
+}
+
+static PyObject *
+format_engine_resource_failure(PyObject *Py_UNUSED(module), PyObject *argument)
+{
+    if (PyErr_Occurred()) {
+        return NULL;
+    }
+    PyObject *argument_owner = NULL;
+    PyObject *mode = NULL, *hint_obj = NULL, *entry = NULL;
+    PyObject *first = NULL, *later = NULL;
+    PyObject *report = NULL, *result = NULL, *item = NULL;
+    PyObject *observed = NULL, *end_error = NULL;
+    PyObject *counts = NULL, *events = NULL, *statuses = NULL;
+    FormatEngineTestLedger ledger = {0};
+    FormatEngineTestRecord records[18] = {0};
+    _PyArg_OwnerScope scope = {0};
+    VectorFailure failure = {0};
+    int completed = 0;
+    int fault_first = 0, fault_overflow = 0, unused = 0;
+    int implicit = 0, reentry = 0, negative = 0;
+    int finish = -2, repeated_finish = -2, end = 0, repeated_end = 0;
+    int limit = 0, faulted_register = 0;
+
+    if (!PyTuple_CheckExact(argument) || PyTuple_GET_SIZE(argument) != 5) {
+        PyErr_SetString(PyExc_TypeError, "expected five-item failure description");
+        goto done;
+    }
+    argument_owner = Py_NewRef(argument);
+    if (argument_owner == NULL || PyErr_Occurred()) goto done;
+    mode = PyTuple_GetItemRef(argument_owner, 0);
+    if (mode == NULL || PyErr_Occurred()) goto done;
+    hint_obj = PyTuple_GetItemRef(argument_owner, 1);
+    if (hint_obj == NULL || PyErr_Occurred()) goto done;
+    entry = PyTuple_GetItemRef(argument_owner, 2);
+    if (entry == NULL || PyErr_Occurred()) goto done;
+    first = PyTuple_GetItemRef(argument_owner, 3);
+    if (first == NULL || PyErr_Occurred()) goto done;
+    later = PyTuple_GetItemRef(argument_owner, 4);
+    if (later == NULL || PyErr_Occurred()) goto done;
+    if (!PyUnicode_CheckExact(mode) || !PyLong_CheckExact(hint_obj)) {
+        PyErr_SetString(PyExc_TypeError, "mode and hint have exact types");
+        goto done;
+    }
+    const char *mode_name = PyUnicode_AsUTF8(mode);
+    if (mode_name == NULL || PyErr_Occurred()) goto done;
+    long hint = PyLong_AsLong(hint_obj);
+    if (hint == -1 && PyErr_Occurred()) goto done;
+    if (hint != 0 && hint != 8 && hint != 17) {
+        PyErr_SetString(PyExc_ValueError, "hint must be 0, 8, or 17");
+        goto done;
+    }
+    PyObject *error_inputs[3] = {entry, first, later};
+    for (int i = 0; i < 3; i++) {
+        if (error_inputs[i] != Py_None && !PyExceptionInstance_Check(error_inputs[i])) {
+            PyErr_SetString(PyExc_TypeError, "errors must be exception instances or None");
+            goto done;
+        }
+    }
+    fault_first = strcmp(mode_name, "first_alloc") == 0;
+    fault_overflow = strcmp(mode_name, "overflow_alloc") == 0;
+    unused = strcmp(mode_name, "unused") == 0;
+    implicit = strcmp(mode_name, "implicit") == 0;
+    reentry = strcmp(mode_name, "end_reentry") == 0;
+    negative = strcmp(mode_name, "negative") == 0;
+    if (!(fault_first || fault_overflow || unused || implicit || reentry || negative ||
+          strcmp(mode_name, "explicit") == 0)) {
+        PyErr_SetString(PyExc_ValueError, "unknown resource failure mode");
+        goto done;
+    }
+    if (unused && (hint != 0 || entry != Py_None || first != Py_None || later != Py_None)) {
+        PyErr_SetString(PyExc_ValueError, "unused mode requires hint 0 and no errors");
+        goto done;
+    }
+    if ((fault_first || fault_overflow) && entry != Py_None) {
+        PyErr_SetString(PyExc_ValueError, "allocation fault modes require no entry error");
+        goto done;
+    }
+    if (fault_first && hint == 17) {
+        PyErr_SetString(PyExc_ValueError, "first_alloc requires hint 0 or 8");
+        goto done;
+    }
+    if (negative && (entry != Py_None || first != Py_None)) {
+        PyErr_SetString(PyExc_ValueError, "negative mode requires no primary error");
+        goto done;
+    }
+    report = PyTuple_New(4);
+    if (report == NULL || PyErr_Occurred()) goto done;
+    if (!unused) {
+        int status = _PyArg_FormatResources_Begin(&scope, hint);
+        if (status < 0 || PyErr_Occurred()) goto done;
+    }
+    limit = fault_first ? 1 : fault_overflow ? (hint == 17 ? 18 : 17) : unused ? 0 : 17;
+    for (int i = 0; i < limit; i++) {
+        PyObject *record_error = NULL;
+        if ((fault_first && i == 0) || (fault_overflow && i == limit - 1)) {
+            record_error = later == Py_None ? NULL : later;
+        }
+        else if (i == 0) {
+            record_error = first == Py_None ? NULL : first;
+        }
+        else if (i == 1) {
+            record_error = later == Py_None ? NULL : later;
+        }
+        records[i] = (FormatEngineTestRecord){
+            &ledger, i, negative && i == 0 ? -1 : i % 2,
+            record_error, reentry && i == 0 ? &scope : NULL
+        };
+        if ((fault_first && i == 0) || (fault_overflow && i == limit - 1)) {
+            vector_arm_failure(&failure, PYMEM_DOMAIN_MEM);
+            int status = _PyArg_FormatResources_Register(
+                &scope, &records[i], format_engine_test_destructor);
+            PyMem_SetAllocator(failure.domain, &failure.saved);
+            if (status >= 0 || !failure.consumed || !PyErr_Occurred()) {
+                if (!PyErr_Occurred()) {
+                    PyErr_SetString(PyExc_AssertionError,
+                                    "expected Register allocation failure");
+                }
+                goto done;
+            }
+            faulted_register = 1;
+            break;
+        }
+        int status = _PyArg_FormatResources_Register(
+            &scope, &records[i], format_engine_test_destructor);
+        if (status < 0 || PyErr_Occurred()) goto done;
+    }
+    if ((fault_first || fault_overflow) && !faulted_register) {
+        PyErr_SetString(PyExc_AssertionError, "Register fault was not reached");
+        goto done;
+    }
+    if (entry != Py_None) PyErr_SetRaisedException(Py_NewRef(entry));
+    if (!implicit && !reentry) {
+        finish = _PyArg_FormatResources_Finish(&scope, 0);
+        observed = PyErr_GetRaisedException();
+        repeated_finish = _PyArg_FormatResources_Finish(&scope, 1);
+        if (finish != 0 || repeated_finish != 0 || PyErr_Occurred()) {
+            ledger.invalid = 1;
+        }
+        if (PyErr_Occurred()) goto done;
+        if (observed != NULL) PyErr_SetRaisedException(Py_NewRef(observed));
+    }
+    end = _PyArg_OwnerScope_End(&scope);
+    repeated_end = _PyArg_OwnerScope_End(&scope);
+    end_error = PyErr_GetRaisedException();
+
+    int expected_events = unused ? 0 : fault_first ? 1 :
+        fault_overflow ? limit : 17;
+    if (ledger.nevents != expected_events) ledger.invalid = 1;
+    for (int i = 0; i < expected_events; i++) {
+        int expected_index = fault_first ? 0 :
+            fault_overflow && i == 0 ? limit - 1 :
+            fault_overflow ? i - 1 : i;
+        if (ledger.events[i] != expected_index) ledger.invalid = 1;
+    }
+    for (int i = 0; i < 18; i++) {
+        int expected_count = fault_overflow ? (i < limit ? 1 : 0) :
+            fault_first ? (i == 0 ? 1 : 0) :
+            unused ? 0 : (i < 17 ? 1 : 0);
+        if (ledger.counts[i] != expected_count) ledger.invalid = 1;
+    }
+    if (ledger.invalid) {
+        PyErr_SetString(PyExc_AssertionError, "invalid fixture ledger/status");
+        goto done;
+    }
+    counts = PyTuple_New(18);
+    if (counts == NULL || PyErr_Occurred()) goto done;
+    events = PyTuple_New(ledger.nevents);
+    if (events == NULL || PyErr_Occurred()) goto done;
+    statuses = PyTuple_New(5);
+    if (statuses == NULL || PyErr_Occurred()) goto done;
+    for (int i = 0; i < 18; i++) {
+        item = PyLong_FromLong(ledger.counts[i]);
+        if (item == NULL || PyErr_Occurred()) goto done;
+        PyTuple_SET_ITEM(counts, i, item);
+        item = NULL;
+        if (PyErr_Occurred()) goto done;
+    }
+    for (Py_ssize_t i = 0; i < ledger.nevents; i++) {
+        item = PyLong_FromLong(ledger.events[i]);
+        if (item == NULL || PyErr_Occurred()) goto done;
+        PyTuple_SET_ITEM(events, i, item);
+        item = NULL;
+        if (PyErr_Occurred()) goto done;
+    }
+    item = finish == -2 ? Py_NewRef(Py_None) : PyLong_FromLong(finish);
+    if (item == NULL || PyErr_Occurred()) goto done;
+    PyTuple_SET_ITEM(statuses, 0, item);
+    item = NULL;
+    if (PyErr_Occurred()) goto done;
+    item = repeated_finish == -2 ? Py_NewRef(Py_None) : PyLong_FromLong(repeated_finish);
+    if (item == NULL || PyErr_Occurred()) goto done;
+    PyTuple_SET_ITEM(statuses, 1, item);
+    item = NULL;
+    if (PyErr_Occurred()) goto done;
+    item = PyLong_FromLong(end);
+    if (item == NULL || PyErr_Occurred()) goto done;
+    PyTuple_SET_ITEM(statuses, 2, item);
+    item = NULL;
+    if (PyErr_Occurred()) goto done;
+    item = PyLong_FromLong(repeated_end);
+    if (item == NULL || PyErr_Occurred()) goto done;
+    PyTuple_SET_ITEM(statuses, 3, item);
+    item = NULL;
+    if (PyErr_Occurred()) goto done;
+    item = ledger.nested_end_seen ? PyLong_FromLong(ledger.nested_end_status) : Py_NewRef(Py_None);
+    if (item == NULL || PyErr_Occurred()) goto done;
+    PyTuple_SET_ITEM(statuses, 4, item);
+    item = NULL;
+    if (PyErr_Occurred()) goto done;
+    item = Py_NewRef(end_error != NULL ? end_error : Py_None);
+    if (item == NULL || PyErr_Occurred()) goto done;
+    PyTuple_SET_ITEM(report, 0, item);
+    item = NULL;
+    if (PyErr_Occurred()) goto done;
+    item = Py_NewRef(counts);
+    if (item == NULL || PyErr_Occurred()) goto done;
+    PyTuple_SET_ITEM(report, 1, item);
+    item = NULL;
+    if (PyErr_Occurred()) goto done;
+    item = Py_NewRef(events);
+    if (item == NULL || PyErr_Occurred()) goto done;
+    PyTuple_SET_ITEM(report, 2, item);
+    item = NULL;
+    if (PyErr_Occurred()) goto done;
+    item = Py_NewRef(statuses);
+    if (item == NULL || PyErr_Occurred()) goto done;
+    PyTuple_SET_ITEM(report, 3, item);
+    item = NULL;
+    if (PyErr_Occurred()) goto done;
+    result = report;
+    report = NULL;
+    completed = 1;
+done:
+    if (scope.resource_state == 1) {
+        (void)_PyArg_FormatResources_Finish(&scope, 0);
+    }
+    (void)_PyArg_OwnerScope_End(&scope);
+    (void)_PyArg_OwnerScope_End(&scope);
+    {
+        PyObject *retired = item;
+        item = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = report;
+        report = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = observed;
+        observed = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = end_error;
+        end_error = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = counts;
+        counts = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = events;
+        events = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = statuses;
+        statuses = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = mode;
+        mode = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = hint_obj;
+        hint_obj = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = entry;
+        entry = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = first;
+        first = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = later;
+        later = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = argument_owner;
+        argument_owner = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (!completed || PyErr_Occurred()) {
+        {
+            PyObject *retired = result;
+            result = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        return NULL;
+    }
+    return result;
+}
+
+
 static PyMethodDef methods[] = {
+    {"format_engine_leases", format_engine_leases, METH_O},
+    {"format_engine_resources", format_engine_resources, METH_O},
+    {"format_engine_resource_failure", format_engine_resource_failure, METH_O},
     {"flat_format_views", flat_format_views, METH_O},
     {"flat_format_rejects_unsupported", flat_format_rejects_unsupported, METH_NOARGS},
     {"flat_format_typed_nullable", flat_format_typed_nullable, METH_O},

@@ -2719,6 +2719,227 @@ arg_scope_save_error(PyObject **saved)
     *saved = PyErr_GetRaisedException();
 }
 
+struct _PyArg_LeaseChunk {
+    struct _PyArg_LeaseChunk *next;
+    Py_ssize_t used;
+    PyObject *items[8];
+};
+
+struct _PyArg_ResourceChunk {
+    struct _PyArg_ResourceChunk *next;
+    Py_ssize_t used, capacity;
+    _PyArg_FormatResource items[];
+};
+
+PyObject *
+_PyArg_OwnerScope_KeepObject(_PyArg_OwnerScope *scope, PyObject *owned)
+{
+    if (PyErr_Occurred()) {
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(owned);
+        _PyValue_RestoreException(saved);
+        return NULL;
+    }
+    if (owned == NULL) {
+        PyErr_SetString(PyExc_SystemError, "cannot lease a NULL argument owner");
+        return NULL;
+    }
+    if (scope->ended) {
+        PyErr_SetString(PyExc_SystemError, "cannot lease an ended argument scope");
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_DECREF(owned);
+        _PyValue_RestoreException(saved);
+        return NULL;
+    }
+    struct _PyArg_LeaseChunk *chunk = scope->lease_last;
+    if (chunk == NULL || chunk->used == 8) {
+        chunk = PyMem_Malloc(sizeof(*chunk));
+        if (chunk == NULL || PyErr_Occurred()) {
+            if (!PyErr_Occurred()) {
+                PyErr_NoMemory();
+            }
+            PyObject *saved = PyErr_GetRaisedException();
+            PyMem_Free(chunk);
+            _PyValue_RestoreException(saved);
+            saved = PyErr_GetRaisedException();
+            Py_XDECREF(owned);
+            _PyValue_RestoreException(saved);
+            return NULL;
+        }
+        chunk->next = NULL;
+        chunk->used = 0;
+        for (int i = 0; i < 8; i++) {
+            chunk->items[i] = NULL;
+        }
+        if (scope->lease_last != NULL) {
+            scope->lease_last->next = chunk;
+        }
+        else {
+            scope->lease_first = chunk;
+        }
+        scope->lease_last = chunk;
+    }
+    chunk->items[chunk->used] = owned;
+    chunk->used++;
+    return owned;
+}
+
+int
+_PyArg_FormatResources_Begin(_PyArg_OwnerScope *scope, Py_ssize_t initial_capacity)
+{
+    if (PyErr_Occurred()) {
+        return -1;
+    }
+    if (scope->ended || scope->resource_state != 0 || initial_capacity < 0) {
+        PyErr_SetString(PyExc_SystemError, "invalid argument resource scope state");
+        return -1;
+    }
+    scope->resource_state = 1;
+    if (initial_capacity <= 8) {
+        return 0;
+    }
+    size_t capacity = (size_t)initial_capacity;
+    if (capacity > (SIZE_MAX - sizeof(struct _PyArg_ResourceChunk)) /
+                   sizeof(_PyArg_FormatResource) ||
+        capacity > (size_t)PY_SSIZE_T_MAX) {
+        PyErr_NoMemory();
+        return -1;
+    }
+    size_t size = sizeof(struct _PyArg_ResourceChunk) +
+                  capacity * sizeof(_PyArg_FormatResource);
+    struct _PyArg_ResourceChunk *chunk = PyMem_Malloc(size);
+    if (chunk == NULL || PyErr_Occurred()) {
+        if (!PyErr_Occurred()) {
+            PyErr_NoMemory();
+        }
+        PyObject *saved = PyErr_GetRaisedException();
+        PyMem_Free(chunk);
+        _PyValue_RestoreException(saved);
+        return -1;
+    }
+    chunk->next = NULL;
+    chunk->used = 0;
+    chunk->capacity = initial_capacity;
+    scope->resource_first = scope->resource_last = chunk;
+    return 0;
+}
+
+int
+_PyArg_FormatResources_Register(_PyArg_OwnerScope *scope, void *item,
+                                _PyArg_FormatDestructor destructor)
+{
+    assert(destructor != NULL);
+    PyObject *saved = PyErr_GetRaisedException();
+    struct _PyArg_ResourceChunk *chunk = scope->resource_last;
+    if (saved != NULL || scope->ended || scope->resource_state != 1) {
+        if (saved == NULL) {
+            PyErr_SetString(PyExc_SystemError, "invalid argument resource registration");
+            saved = PyErr_GetRaisedException();
+        }
+        (void)destructor(NULL, item);
+        PyObject *cleanup = PyErr_GetRaisedException();
+        if (cleanup != NULL) {
+            Py_DECREF(cleanup);
+        }
+        _PyValue_RestoreException(saved);
+        return -1;
+    }
+    if (chunk == NULL || chunk->used == chunk->capacity) {
+        size_t capacity = 8;
+        if (capacity > (SIZE_MAX - sizeof(*chunk)) / sizeof(_PyArg_FormatResource)) {
+            PyErr_NoMemory();
+            saved = PyErr_GetRaisedException();
+            (void)destructor(NULL, item);
+            PyObject *cleanup = PyErr_GetRaisedException();
+            Py_XDECREF(cleanup);
+            _PyValue_RestoreException(saved);
+            return -1;
+        }
+        size_t size = sizeof(*chunk) + capacity * sizeof(_PyArg_FormatResource);
+        chunk = PyMem_Malloc(size);
+        if (chunk == NULL || PyErr_Occurred()) {
+            if (!PyErr_Occurred()) {
+                PyErr_NoMemory();
+            }
+            saved = PyErr_GetRaisedException();
+            PyMem_Free(chunk);
+            _PyValue_RestoreException(saved);
+            saved = PyErr_GetRaisedException();
+            (void)destructor(NULL, item);
+            PyObject *cleanup = PyErr_GetRaisedException();
+            Py_XDECREF(cleanup);
+            _PyValue_RestoreException(saved);
+            return -1;
+        }
+        chunk->next = NULL;
+        chunk->used = 0;
+        chunk->capacity = 8;
+        if (scope->resource_last != NULL) {
+            scope->resource_last->next = chunk;
+        }
+        else {
+            scope->resource_first = chunk;
+        }
+        scope->resource_last = chunk;
+    }
+    chunk->items[chunk->used].item = item;
+    chunk->items[chunk->used].destructor = destructor;
+    chunk->used++;
+    return 0;
+}
+
+int
+_PyArg_FormatResources_Finish(_PyArg_OwnerScope *scope, int success)
+{
+    if (scope->resource_state == 3 || scope->resource_state == 4) {
+        return scope->resource_state == 4 && !PyErr_Occurred();
+    }
+    if (scope->resource_state == 0) {
+        scope->resource_state = PyErr_Occurred() || !success ? 3 : 4;
+        return scope->resource_state == 4;
+    }
+    if (scope->resource_state != 1) {
+        PyErr_SetString(PyExc_SystemError, "recursive argument resource cleanup");
+        return 0;
+    }
+    scope->resource_state = 2;
+    if (PyErr_Occurred()) {
+        success = 0;
+    }
+    if (success) {
+        for (struct _PyArg_ResourceChunk *chunk = scope->resource_first;
+             chunk != NULL; chunk = chunk->next) {
+            for (Py_ssize_t i = 0; i < chunk->used; i++) {
+                chunk->items[i].destructor = NULL;
+            }
+        }
+        scope->resource_state = 4;
+        return !PyErr_Occurred();
+    }
+    for (struct _PyArg_ResourceChunk *chunk = scope->resource_first;
+         chunk != NULL; chunk = chunk->next) {
+        for (Py_ssize_t i = 0; i < chunk->used; i++) {
+            _PyArg_FormatResource *resource = &chunk->items[i];
+            void *item = resource->item;
+            _PyArg_FormatDestructor destructor = resource->destructor;
+            resource->item = NULL;
+            resource->destructor = NULL;
+            if (destructor == NULL) {
+                continue;
+            }
+            PyObject *saved = PyErr_GetRaisedException();
+            int status = destructor(NULL, item);
+            if (status < 0 && saved == NULL && !PyErr_Occurred()) {
+                PyErr_SetString(PyExc_SystemError,
+                                "argument cleanup failed without an exception");
+            }
+            _PyValue_RestoreException(saved);
+        }
+    }
+    scope->resource_state = 3;
+    return 0;
+}
+
 int
 _PyArg_OwnerScope_End(_PyArg_OwnerScope *scope)
 {
@@ -2726,7 +2947,31 @@ _PyArg_OwnerScope_End(_PyArg_OwnerScope *scope)
         return PyErr_Occurred() ? -1 : 0;
     }
     scope->ended = 1;
+    if (scope->resource_state == 1) {
+        (void)_PyArg_FormatResources_Finish(scope, 0);
+    }
     PyObject *saved = PyErr_GetRaisedException();
+    struct _PyArg_LeaseChunk *lease = scope->lease_first;
+    scope->lease_first = scope->lease_last = NULL;
+    struct _PyArg_LeaseChunk *reversed = NULL;
+    while (lease != NULL) {
+        struct _PyArg_LeaseChunk *next = lease->next;
+        lease->next = reversed;
+        reversed = lease;
+        lease = next;
+    }
+    while (reversed != NULL) {
+        struct _PyArg_LeaseChunk *next = reversed->next;
+        for (Py_ssize_t i = reversed->used; i > 0; i--) {
+            PyObject *object = reversed->items[i - 1];
+            reversed->items[i - 1] = NULL;
+            Py_XDECREF(object);
+            arg_scope_save_error(&saved);
+        }
+        PyMem_Free(reversed);
+        arg_scope_save_error(&saved);
+        reversed = next;
+    }
     for (Py_ssize_t i = scope->nobjects; i > 0; i--) {
         PyObject *object = scope->objects[i - 1];
         scope->objects[i - 1] = NULL;
@@ -2752,6 +2997,14 @@ _PyArg_OwnerScope_End(_PyArg_OwnerScope *scope)
     if (storage != NULL) {
         PyMem_Free(storage);
         arg_scope_save_error(&saved);
+    }
+    struct _PyArg_ResourceChunk *resource = scope->resource_first;
+    scope->resource_first = scope->resource_last = NULL;
+    while (resource != NULL) {
+        struct _PyArg_ResourceChunk *next = resource->next;
+        PyMem_Free(resource);
+        arg_scope_save_error(&saved);
+        resource = next;
     }
     _PyValue_RestoreException(saved);
     return PyErr_Occurred() ? -1 : 0;

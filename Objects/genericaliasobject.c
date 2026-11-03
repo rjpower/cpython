@@ -8,6 +8,7 @@
 #include "pycore_typevarobject.h" // _Py_typing_type_repr
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString()
 #include "pycore_unionobject.h"   // _Py_union_type_or, _PyGenericAlias_Check
+#include "pycore_value.h"
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
 
@@ -90,59 +91,157 @@ ga_repr_items_list(PyUnicodeWriter *writer, PyObject *p)
 static PyObject *
 ga_repr(PyObject *self)
 {
-    gaobject *alias = (gaobject *)self;
-    Py_ssize_t len = PyTuple_GET_SIZE(alias->args);
+    if (PyErr_Occurred()) {
+        return NULL;
+    }
+
+    PyObject *self_owner = NULL;
+    PyObject *args_owner = NULL;
+    PyObject *origin_owner = NULL;
+    PyObject *p = NULL;
+    PyObject *result = NULL;
+    PyUnicodeWriter *writer = NULL;
+    int completed = 0;
+
+    self_owner = Py_NewRef(self);
+    if (self_owner == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    gaobject *alias = (gaobject *)self_owner;
+    args_owner = Py_NewRef(alias->args);
+    if (args_owner == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    Py_ssize_t len = PyTuple_GET_SIZE(args_owner);
 
     // Estimation based on the shortest format: "int[int, int, int]"
     Py_ssize_t estimate = (len <= PY_SSIZE_T_MAX / 5) ? len * 5 : len;
     estimate = 3 + 1 + estimate + 1;
-    PyUnicodeWriter *writer = PyUnicodeWriter_Create(estimate);
-    if (writer == NULL) {
-        return NULL;
+    writer = PyUnicodeWriter_Create(estimate);
+    if (writer == NULL || PyErr_Occurred()) {
+        goto done;
     }
 
     if (alias->starred) {
-        if (PyUnicodeWriter_WriteChar(writer, '*') < 0) {
-            goto error;
+        int status = PyUnicodeWriter_WriteChar(writer, '*');
+        if (status < 0 || PyErr_Occurred()) {
+            goto done;
         }
     }
-    if (_Py_typing_type_repr(writer, alias->origin) < 0) {
-        goto error;
+    origin_owner = Py_NewRef(alias->origin);
+    if (origin_owner == NULL || PyErr_Occurred()) {
+        goto done;
     }
-    if (PyUnicodeWriter_WriteChar(writer, '[') < 0) {
-        goto error;
+    int status = _Py_typing_type_repr(writer, origin_owner);
+    {
+        PyObject *retired = origin_owner;
+        origin_owner = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (status < 0 || PyErr_Occurred()) {
+        goto done;
+    }
+    status = PyUnicodeWriter_WriteChar(writer, '[');
+    if (status < 0 || PyErr_Occurred()) {
+        goto done;
     }
     for (Py_ssize_t i = 0; i < len; i++) {
         if (i > 0) {
-            if (PyUnicodeWriter_WriteASCII(writer, ", ", 2) < 0) {
-                goto error;
+            status = PyUnicodeWriter_WriteASCII(writer, ", ", 2);
+            if (status < 0 || PyErr_Occurred()) {
+                goto done;
             }
         }
-        PyObject *p = PyTuple_GET_ITEM(alias->args, i);
+        p = PyTuple_GetItemRef(args_owner, i);
+        if (p == NULL || PyErr_Occurred()) {
+            goto done;
+        }
         if (PyList_CheckExact(p)) {
             // Looks like we are working with ParamSpec's list of type args:
-            if (ga_repr_items_list(writer, p) < 0) {
-                goto error;
-            }
+            status = ga_repr_items_list(writer, p);
         }
-        else if (_Py_typing_type_repr(writer, p) < 0) {
-            goto error;
+        else {
+            status = _Py_typing_type_repr(writer, p);
+        }
+        {
+            PyObject *retired = p;
+            p = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        if (status < 0 || PyErr_Occurred()) {
+            goto done;
         }
     }
     if (len == 0) {
         // for something like tuple[()] we should print a "()"
-        if (PyUnicodeWriter_WriteASCII(writer, "()", 2) < 0) {
-            goto error;
+        status = PyUnicodeWriter_WriteASCII(writer, "()", 2);
+        if (status < 0 || PyErr_Occurred()) {
+            goto done;
         }
     }
-    if (PyUnicodeWriter_WriteChar(writer, ']') < 0) {
-        goto error;
+    status = PyUnicodeWriter_WriteChar(writer, ']');
+    if (status < 0 || PyErr_Occurred()) {
+        goto done;
     }
-    return PyUnicodeWriter_Finish(writer);
+    PyUnicodeWriter *finishing = writer;
+    writer = NULL;
+    result = PyUnicodeWriter_Finish(finishing);
+    if (result == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    completed = 1;
 
-error:
-    PyUnicodeWriter_Discard(writer);
-    return NULL;
+done:
+    if (writer != NULL) {
+        PyUnicodeWriter *retired = writer;
+        writer = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        PyUnicodeWriter_Discard(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = p;
+        p = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = origin_owner;
+        origin_owner = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = args_owner;
+        args_owner = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = self_owner;
+        self_owner = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (!completed || PyErr_Occurred()) {
+        {
+            PyObject *retired = result;
+            result = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        return NULL;
+    }
+    return result;
 }
 
 // Index of item in self[:len], or -1 if not found (self is a tuple)
@@ -150,7 +249,8 @@ static Py_ssize_t
 tuple_index(PyObject *self, Py_ssize_t len, PyObject *item)
 {
     for (Py_ssize_t i = 0; i < len; i++) {
-        if (PyTuple_GET_ITEM(self, i) == item) {
+        if (PyValue_Is(PyTuple_GET_VALUE(self, i),
+                       PyValue_FromPyObjectBorrow(item))) {
             return i;
         }
     }
@@ -169,68 +269,161 @@ tuple_add(PyObject *self, Py_ssize_t len, PyObject *item)
 
 static Py_ssize_t
 tuple_extend(PyObject **dst, Py_ssize_t dstindex,
-             PyObject **src, Py_ssize_t count)
+             PyObject *source)
 {
-    assert(count >= 0);
-    if (_PyTuple_Resize(dst, PyTuple_GET_SIZE(*dst) + count - 1) != 0) {
-        return -1;
+    PyObject *source_owner = NULL;
+    PyValue value = PyValue_NULL;
+
+    if (PyErr_Occurred()) {
+        goto failure;
+    }
+    source_owner = Py_NewRef(source);
+    if (PyErr_Occurred()) {
+        goto failure;
+    }
+    Py_ssize_t count = PyTuple_GET_SIZE(source_owner);
+    if (_PyTuple_Resize(dst, PyTuple_GET_SIZE(*dst) + count - 1) != 0 ||
+            PyErr_Occurred()) {
+        goto failure;
     }
     assert(dstindex + count <= PyTuple_GET_SIZE(*dst));
     for (Py_ssize_t i = 0; i < count; ++i) {
-        PyObject *item = src[i];
-        PyTuple_SET_ITEM(*dst, dstindex + i, Py_NewRef(item));
+        value = PyTuple_GetValue(source_owner, i);
+        if (PyValue_IsNull(value) || PyErr_Occurred()) {
+            goto failure;
+        }
+        PyTuple_SET_VALUE(*dst, dstindex + i, value);
+        value = PyValue_NULL;
+        if (PyErr_Occurred()) {
+            goto failure;
+        }
+    }
+
+    {
+        PyObject *retired = source_owner;
+        source_owner = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        goto failure;
     }
     return dstindex + count;
+
+failure:
+    {
+        PyValue retired = value;
+        value = PyValue_NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = source_owner;
+        source_owner = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = *dst;
+        *dst = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    return -1;
 }
 
 PyObject *
 _Py_make_parameters(PyObject *args)
 {
-    assert(PyTuple_Check(args) || PyList_Check(args));
-    if (Py_EnterRecursiveCall(" in __parameter__ calculation")) {
+    PyObject *input_owner = NULL;
+    PyObject *tuple_args = NULL;
+    PyObject *parameters = NULL;
+    PyObject *t = NULL;
+    PyObject *subparams = NULL;
+    PyObject *t2 = NULL;
+    PyObject *result = NULL;
+    int entered = 0;
+    int completed = 0;
+    Py_ssize_t nargs = 0;
+    Py_ssize_t len = 0;
+    Py_ssize_t iparam = 0;
+
+    if (PyErr_Occurred()) {
         return NULL;
     }
+    assert(PyTuple_Check(args) || PyList_Check(args));
+    input_owner = Py_NewRef(args);
+    if (input_owner == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    if (Py_EnterRecursiveCall(" in __parameter__ calculation")) {
+        goto done;
+    }
+    entered = 1;
+    if (PyErr_Occurred()) {
+        goto done;
+    }
 
-    const bool is_args_list = PyList_Check(args);
-    PyObject *tuple_args = NULL;
+    const bool is_args_list = PyList_Check(input_owner);
     if (is_args_list) {
-        args = tuple_args = PySequence_Tuple(args);
-        if (args == NULL) {
-            goto cleanup;
+        tuple_args = PySequence_Tuple(input_owner);
+        if (tuple_args == NULL || PyErr_Occurred()) {
+            goto done;
         }
     }
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t len = nargs;
-    PyObject *parameters = PyTuple_New(len);
-    if (parameters == NULL) {
-        goto error;
+    PyObject *source = is_args_list ? tuple_args : input_owner;
+    nargs = PyTuple_GET_SIZE(source);
+    len = nargs;
+    parameters = PyTuple_New(len);
+    if (parameters == NULL || PyErr_Occurred()) {
+        goto done;
     }
-    Py_ssize_t iparam = 0;
     for (Py_ssize_t iarg = 0; iarg < nargs; iarg++) {
-        PyObject *t = PyTuple_GET_ITEM(args, iarg);
+        t = PyTuple_GetItemRef(source, iarg);
+        if (t == NULL || PyErr_Occurred()) {
+            goto done;
+        }
         // We don't want __parameters__ descriptor of a bare Python class.
         if (PyType_Check(t)) {
+            {
+                PyObject *retired = t;
+                t = NULL;
+                PyObject *saved = PyErr_GetRaisedException();
+                Py_XDECREF(retired);
+                _PyValue_RestoreException(saved);
+            }
+            if (PyErr_Occurred()) {
+                goto done;
+            }
             continue;
         }
         int rc = PyObject_HasAttrWithError(t, &_Py_ID(__typing_subst__));
-        if (rc < 0) {
-            goto error;
+        if (rc < 0 || PyErr_Occurred()) {
+            goto done;
         }
         if (rc) {
-            iparam += tuple_add(parameters, iparam, t);
+            int delta = tuple_add(parameters, iparam, t);
+            if (PyErr_Occurred()) {
+                goto done;
+            }
+            iparam += delta;
         }
         else {
-            PyObject *subparams;
-            if (PyObject_GetOptionalAttr(t, &_Py_ID(__parameters__),
-                                     &subparams) < 0) {
-                goto error;
+            rc = PyObject_GetOptionalAttr(t, &_Py_ID(__parameters__),
+                                          &subparams);
+            if (rc < 0 || PyErr_Occurred()) {
+                goto done;
             }
             if (!subparams && (PyTuple_Check(t) || PyList_Check(t))) {
                 // Recursively call _Py_make_parameters for lists/tuples and
                 // add the results to the current parameters.
                 subparams = _Py_make_parameters(t);
-                if (subparams == NULL) {
-                    goto error;
+                if (subparams == NULL || PyErr_Occurred()) {
+                    goto done;
                 }
             }
             if (subparams && PyTuple_Check(subparams)) {
@@ -238,35 +431,134 @@ _Py_make_parameters(PyObject *args)
                 Py_ssize_t needed = len2 - 1 - (iarg - iparam);
                 if (needed > 0) {
                     len += needed;
-                    if (_PyTuple_Resize(&parameters, len) < 0) {
-                        Py_DECREF(subparams);
-                        Py_XDECREF(tuple_args);
-                        goto cleanup;
+                    if (_PyTuple_Resize(&parameters, len) < 0 || PyErr_Occurred()) {
+                        {
+                            PyObject *retired = subparams;
+                            subparams = NULL;
+                            PyObject *saved = PyErr_GetRaisedException();
+                            Py_XDECREF(retired);
+                            _PyValue_RestoreException(saved);
+                        }
+                        {
+                            PyObject *retired = tuple_args;
+                            tuple_args = NULL;
+                            PyObject *saved = PyErr_GetRaisedException();
+                            Py_XDECREF(retired);
+                            _PyValue_RestoreException(saved);
+                        }
+                        goto done;
                     }
                 }
                 for (Py_ssize_t j = 0; j < len2; j++) {
-                    PyObject *t2 = PyTuple_GET_ITEM(subparams, j);
-                    iparam += tuple_add(parameters, iparam, t2);
+                    t2 = PyTuple_GetItemRef(subparams, j);
+                    if (t2 == NULL || PyErr_Occurred()) {
+                        goto done;
+                    }
+                    int delta = tuple_add(parameters, iparam, t2);
+                    if (PyErr_Occurred()) {
+                        goto done;
+                    }
+                    iparam += delta;
+                    {
+                        PyObject *retired = t2;
+                        t2 = NULL;
+                        PyObject *saved = PyErr_GetRaisedException();
+                        Py_XDECREF(retired);
+                        _PyValue_RestoreException(saved);
+                    }
+                    if (PyErr_Occurred()) {
+                        goto done;
+                    }
                 }
             }
-            Py_XDECREF(subparams);
+            {
+                PyObject *retired = subparams;
+                subparams = NULL;
+                PyObject *saved = PyErr_GetRaisedException();
+                Py_XDECREF(retired);
+                _PyValue_RestoreException(saved);
+            }
+            if (PyErr_Occurred()) {
+                goto done;
+            }
+        }
+        {
+            PyObject *retired = t;
+            t = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        if (PyErr_Occurred()) {
+            goto done;
         }
     }
     if (iparam < len) {
-        if (_PyTuple_Resize(&parameters, iparam) < 0) {
-            goto error;
+        if (_PyTuple_Resize(&parameters, iparam) < 0 || PyErr_Occurred()) {
+            goto done;
         }
     }
-    Py_XDECREF(tuple_args);
-    Py_LeaveRecursiveCall();
-    return parameters;
+    result = parameters;
+    parameters = NULL;
+    completed = 1;
 
-error:
-    Py_XDECREF(parameters);
-    Py_XDECREF(tuple_args);
-cleanup:
-    Py_LeaveRecursiveCall();
-    return NULL;
+done:
+    {
+        PyObject *retired = t2;
+        t2 = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = t;
+        t = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = subparams;
+        subparams = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = parameters;
+        parameters = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = tuple_args;
+        tuple_args = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = input_owner;
+        input_owner = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (entered) {
+        Py_LeaveRecursiveCall();
+    }
+    if (!completed || PyErr_Occurred()) {
+        {
+            PyObject *retired = result;
+            result = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        return NULL;
+    }
+    return result;
 }
 
 /* If obj is a generic alias, substitute type variables params
@@ -275,54 +567,252 @@ cleanup:
    If obj doesn't have a __parameters__ attribute or that's not
    a non-empty tuple, return a new reference to obj. */
 static PyObject *
-subs_tvars(PyObject *obj, PyObject *params,
-           PyObject **argitems, Py_ssize_t nargs)
+subs_tvars(PyObject *obj, PyObject *params, PyObject *argitems,
+          int argitems_is_tuple, Py_ssize_t nargs)
 {
-    PyObject *subparams;
-    if (PyObject_GetOptionalAttr(obj, &_Py_ID(__parameters__), &subparams) < 0) {
-        return NULL;
+    PyObject *obj_owner = NULL;
+    PyObject *params_owner = NULL;
+    PyObject *items_owner = NULL;
+    PyObject *subparams = NULL;
+    PyObject *subargs = NULL;
+    PyObject *arg = NULL;
+    PyObject *param = NULL;
+    PyObject *replacement = NULL;
+    PyObject *result = NULL;
+    int completed = 0;
+
+    if (PyErr_Occurred()) {
+        goto done;
     }
-    if (subparams && PyTuple_Check(subparams) && PyTuple_GET_SIZE(subparams)) {
-        Py_ssize_t nparams = PyTuple_GET_SIZE(params);
+
+    obj_owner = Py_NewRef(obj);
+    if (obj_owner == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    params_owner = Py_NewRef(params);
+    if (params_owner == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    items_owner = Py_NewRef(argitems);
+    if (items_owner == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+
+    if (PyObject_GetOptionalAttr(obj_owner, &_Py_ID(__parameters__),
+                                 &subparams) < 0 || PyErr_Occurred()) {
+        goto done;
+    }
+    if (subparams != NULL && PyTuple_Check(subparams) &&
+        PyTuple_GET_SIZE(subparams) != 0)
+    {
+        Py_ssize_t nparams = PyTuple_GET_SIZE(params_owner);
         Py_ssize_t nsubargs = PyTuple_GET_SIZE(subparams);
-        PyObject *subargs = PyTuple_New(nsubargs);
-        if (subargs == NULL) {
-            Py_DECREF(subparams);
-            return NULL;
+        subargs = PyTuple_New(nsubargs);
+        if (subargs == NULL || PyErr_Occurred()) {
+            goto done;
         }
         Py_ssize_t j = 0;
         for (Py_ssize_t i = 0; i < nsubargs; ++i) {
-            PyObject *arg = PyTuple_GET_ITEM(subparams, i);
-            Py_ssize_t iparam = tuple_index(params, nparams, arg);
+            arg = PyTuple_GetItemRef(subparams, i);
+            if (arg == NULL || PyErr_Occurred()) {
+                goto done;
+            }
+            Py_ssize_t iparam = tuple_index(params_owner, nparams, arg);
             if (iparam >= 0) {
-                PyObject *param = PyTuple_GET_ITEM(params, iparam);
-                arg = argitems[iparam];
-                if (Py_TYPE(param)->tp_iter && PyTuple_Check(arg)) {  // TypeVarTuple
-                    j = tuple_extend(&subargs, j,
-                                    &PyTuple_GET_ITEM(arg, 0),
-                                    PyTuple_GET_SIZE(arg));
-                    if (j < 0) {
-                        Py_DECREF(subparams);
-                        assert(subargs == NULL);
-                        return NULL;
+                param = PyTuple_GetItemRef(params_owner, iparam);
+                if (param == NULL || PyErr_Occurred()) {
+                    goto done;
+                }
+                replacement = argitems_is_tuple
+                    ? PyTuple_GetItemRef(items_owner, iparam)
+                    : Py_NewRef(items_owner);
+                if (replacement == NULL || PyErr_Occurred()) {
+                    goto done;
+                }
+                if (Py_TYPE(param)->tp_iter && PyTuple_Check(replacement)) {
+                    j = tuple_extend(&subargs, j, replacement);
+                    if (j < 0 || PyErr_Occurred()) {
+                        goto done;
+                    }
+                    {
+                        PyObject *retired = replacement;
+                        replacement = NULL;
+                        PyObject *saved = PyErr_GetRaisedException();
+                        Py_XDECREF(retired);
+                        _PyValue_RestoreException(saved);
+                    }
+                    if (PyErr_Occurred()) {
+                        goto done;
+                    }
+                    {
+                        PyObject *retired = param;
+                        param = NULL;
+                        PyObject *saved = PyErr_GetRaisedException();
+                        Py_XDECREF(retired);
+                        _PyValue_RestoreException(saved);
+                    }
+                    if (PyErr_Occurred()) {
+                        goto done;
+                    }
+                    {
+                        PyObject *retired = arg;
+                        arg = NULL;
+                        PyObject *saved = PyErr_GetRaisedException();
+                        Py_XDECREF(retired);
+                        _PyValue_RestoreException(saved);
+                    }
+                    if (PyErr_Occurred()) {
+                        goto done;
                     }
                     continue;
                 }
+                PyTuple_SET_ITEM(subargs, j, Py_NewRef(replacement));
+                if (PyErr_Occurred()) {
+                    goto done;
+                }
+                j++;
+                {
+                    PyObject *retired = replacement;
+                    replacement = NULL;
+                    PyObject *saved = PyErr_GetRaisedException();
+                    Py_XDECREF(retired);
+                    _PyValue_RestoreException(saved);
+                }
+                if (PyErr_Occurred()) {
+                    goto done;
+                }
+                {
+                    PyObject *retired = param;
+                    param = NULL;
+                    PyObject *saved = PyErr_GetRaisedException();
+                    Py_XDECREF(retired);
+                    _PyValue_RestoreException(saved);
+                }
+                if (PyErr_Occurred()) {
+                    goto done;
+                }
+                {
+                    PyObject *retired = arg;
+                    arg = NULL;
+                    PyObject *saved = PyErr_GetRaisedException();
+                    Py_XDECREF(retired);
+                    _PyValue_RestoreException(saved);
+                }
+                if (PyErr_Occurred()) {
+                    goto done;
+                }
             }
-            PyTuple_SET_ITEM(subargs, j, Py_NewRef(arg));
-            j++;
+            else {
+                PyTuple_SET_ITEM(subargs, j, Py_NewRef(arg));
+                if (PyErr_Occurred()) {
+                    goto done;
+                }
+                j++;
+                {
+                    PyObject *retired = arg;
+                    arg = NULL;
+                    PyObject *saved = PyErr_GetRaisedException();
+                    Py_XDECREF(retired);
+                    _PyValue_RestoreException(saved);
+                }
+                if (PyErr_Occurred()) {
+                    goto done;
+                }
+            }
         }
         assert(j == PyTuple_GET_SIZE(subargs));
 
-        obj = PyObject_GetItem(obj, subargs);
-
-        Py_DECREF(subargs);
+        result = PyObject_GetItem(obj_owner, subargs);
+        if (result == NULL || PyErr_Occurred()) {
+            goto done;
+        }
+        {
+            PyObject *retired = subargs;
+            subargs = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        if (PyErr_Occurred()) {
+            goto done;
+        }
     }
     else {
-        Py_INCREF(obj);
+        result = Py_NewRef(obj_owner);
+        if (result == NULL || PyErr_Occurred()) {
+            goto done;
+        }
     }
-    Py_XDECREF(subparams);
-    return obj;
+    completed = 1;
+
+done:
+    {
+        PyObject *retired = replacement;
+        replacement = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = param;
+        param = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = arg;
+        arg = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = subargs;
+        subargs = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = subparams;
+        subparams = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = items_owner;
+        items_owner = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = params_owner;
+        params_owner = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = obj_owner;
+        obj_owner = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (!completed || PyErr_Occurred()) {
+        {
+            PyObject *retired = result;
+            result = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        return NULL;
+    }
+    return result;
 }
 
 static int
@@ -367,218 +857,658 @@ _unpacked_tuple_args(PyObject *arg)
 static PyObject *
 _unpack_args(PyObject *item)
 {
-    PyObject *newargs = PyList_New(0);
-    if (newargs == NULL) {
+    PyObject *input_owner = NULL;
+    PyObject *selected = NULL;
+    PyObject *subargs = NULL;
+    PyObject *newargs = NULL;
+    PyObject *result = NULL;
+    int completed = 0;
+
+    if (PyErr_Occurred()) {
         return NULL;
     }
-    int is_tuple = PyTuple_Check(item);
-    Py_ssize_t nitems = is_tuple ? PyTuple_GET_SIZE(item) : 1;
-    PyObject **argitems = is_tuple ? &PyTuple_GET_ITEM(item, 0) : &item;
+
+    input_owner = Py_NewRef(item);
+    if (input_owner == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+
+    newargs = PyList_New(0);
+    if (newargs == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+
+    int is_tuple = PyTuple_Check(input_owner);
+    Py_ssize_t nitems = is_tuple ? PyTuple_GET_SIZE(input_owner) : 1;
     for (Py_ssize_t i = 0; i < nitems; i++) {
-        item = argitems[i];
-        if (!PyType_Check(item)) {
-            PyObject *subargs = _unpacked_tuple_args(item);
-            if (subargs != NULL &&
-                PyTuple_Check(subargs) &&
-                !(PyTuple_GET_SIZE(subargs) &&
-                  PyTuple_GET_ITEM(subargs, PyTuple_GET_SIZE(subargs)-1) == Py_Ellipsis))
-            {
-                if (PyList_SetSlice(newargs, PY_SSIZE_T_MAX, PY_SSIZE_T_MAX, subargs) < 0) {
-                    Py_DECREF(subargs);
-                    Py_DECREF(newargs);
-                    return NULL;
-                }
-                Py_DECREF(subargs);
-                continue;
-            }
-            Py_XDECREF(subargs);
+        selected = is_tuple ? PyTuple_GetItemRef(input_owner, i)
+                            : Py_NewRef(input_owner);
+        if (selected == NULL || PyErr_Occurred()) {
+            goto done;
+        }
+
+        if (!PyType_Check(selected)) {
+            subargs = _unpacked_tuple_args(selected);
             if (PyErr_Occurred()) {
-                Py_DECREF(newargs);
-                return NULL;
+                goto done;
+            }
+            if (subargs != NULL && PyTuple_Check(subargs)) {
+                Py_ssize_t subargs_size = PyTuple_GET_SIZE(subargs);
+                int suppress_expansion = subargs_size > 0 &&
+                    PyValue_Is(PyTuple_GET_VALUE(subargs, subargs_size - 1),
+                               PyValue_FromPyObjectBorrow(Py_Ellipsis));
+                if (!suppress_expansion) {
+                    if (PyList_SetSlice(newargs, PY_SSIZE_T_MAX,
+                                        PY_SSIZE_T_MAX, subargs) < 0 ||
+                        PyErr_Occurred()) {
+                        goto done;
+                    }
+                    {
+                        PyObject *retired = subargs;
+                        subargs = NULL;
+                        PyObject *saved = PyErr_GetRaisedException();
+                        Py_XDECREF(retired);
+                        _PyValue_RestoreException(saved);
+                    }
+                    if (PyErr_Occurred()) {
+                        goto done;
+                    }
+                    {
+                        PyObject *retired = selected;
+                        selected = NULL;
+                        PyObject *saved = PyErr_GetRaisedException();
+                        Py_XDECREF(retired);
+                        _PyValue_RestoreException(saved);
+                    }
+                    if (PyErr_Occurred()) {
+                        goto done;
+                    }
+                    continue;
+                }
             }
         }
-        if (PyList_Append(newargs, item) < 0) {
-            Py_DECREF(newargs);
-            return NULL;
+
+        {
+            PyObject *retired = subargs;
+            subargs = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        if (PyErr_Occurred()) {
+            goto done;
+        }
+
+        if (PyList_Append(newargs, selected) < 0 || PyErr_Occurred()) {
+            goto done;
+        }
+        {
+            PyObject *retired = selected;
+            selected = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        if (PyErr_Occurred()) {
+            goto done;
         }
     }
-    Py_SETREF(newargs, PySequence_Tuple(newargs));
-    return newargs;
+
+    result = PySequence_Tuple(newargs);
+    if (result == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    {
+        PyObject *retired = newargs;
+        newargs = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    completed = 1;
+
+done:
+    {
+        PyObject *retired = subargs;
+        subargs = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = selected;
+        selected = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = newargs;
+        newargs = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = input_owner;
+        input_owner = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (!completed || PyErr_Occurred()) {
+        {
+            PyObject *retired = result;
+            result = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        return NULL;
+    }
+    return result;
 }
 
 PyObject *
-_Py_subs_parameters(PyObject *self, PyObject *args, PyObject *parameters, PyObject *item)
+_Py_subs_parameters(PyObject *self, PyObject *args, PyObject *parameters, PyObject *item_arg)
 {
-    Py_ssize_t nparams = PyTuple_GET_SIZE(parameters);
+    PyObject *self_owner = NULL;
+    PyObject *args_owner = NULL;
+    PyObject *params_owner = NULL;
+    PyObject *input_owner = NULL;
+    PyObject *item = NULL;
+    PyObject *param = NULL;
+    PyObject *prepare = NULL;
+    PyObject *tmp = NULL;
+    PyObject *old_item = NULL;
+    PyObject *tuple_args = NULL;
+    PyObject *newargs = NULL;
+    PyObject *arg = NULL;
+    PyObject *subst = NULL;
+    PyObject *subargs = NULL;
+    PyObject *subargs_list = NULL;
+    PyObject *original = NULL;
+    PyObject *replacement = NULL;
+    PyObject *result = NULL;
+    PyObject *source = NULL;
+    Py_ssize_t nparams;
+    Py_ssize_t nitems;
+    Py_ssize_t nargs;
+    int is_tuple;
+    int completed = 0;
+
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+
+    self_owner = Py_NewRef(self);
+    if (self_owner == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    args_owner = Py_NewRef(args);
+    if (args_owner == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    params_owner = Py_NewRef(parameters);
+    if (params_owner == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    input_owner = Py_NewRef(item_arg);
+    if (input_owner == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+
+    nparams = PyTuple_GET_SIZE(params_owner);
     if (nparams == 0) {
-        return PyErr_Format(PyExc_TypeError,
-                            "%R is not a generic class",
-                            self);
-    }
-    item = _unpack_args(item);
-    if (item == NULL) {
-        return NULL;
-    }
-    for (Py_ssize_t i = 0; i < nparams; i++) {
-        PyObject *param = PyTuple_GET_ITEM(parameters, i);
-        PyObject *prepare, *tmp;
-        if (PyObject_GetOptionalAttr(param, &_Py_ID(__typing_prepare_subst__), &prepare) < 0) {
-            Py_DECREF(item);
-            return NULL;
+        result = PyErr_Format(PyExc_TypeError,
+                              "%R is not a generic class",
+                              self_owner);
+        if (result == NULL || PyErr_Occurred()) {
+            goto done;
         }
-        if (prepare && prepare != Py_None) {
+        completed = 1;
+        goto done;
+    }
+
+    item = _unpack_args(input_owner);
+    if (item == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    {
+        PyObject *retired = input_owner;
+        input_owner = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+
+    for (Py_ssize_t i = 0; i < nparams; i++) {
+        param = PyTuple_GetItemRef(params_owner, i);
+        if (param == NULL || PyErr_Occurred()) {
+            goto done;
+        }
+        if (PyObject_GetOptionalAttr(param, &_Py_ID(__typing_prepare_subst__),
+                                     &prepare) < 0 || PyErr_Occurred()) {
+            goto done;
+        }
+        if (prepare != NULL && prepare != Py_None) {
             if (PyTuple_Check(item)) {
-                tmp = PyObject_CallFunction(prepare, "OO", self, item);
+                tmp = PyObject_CallFunction(prepare, "OO", self_owner, item);
             }
             else {
-                tmp = PyObject_CallFunction(prepare, "O(O)", self, item);
+                tmp = PyObject_CallFunction(prepare, "O(O)", self_owner, item);
             }
-            Py_DECREF(prepare);
-            Py_SETREF(item, tmp);
-            if (item == NULL) {
-                return NULL;
+            {
+                PyObject *retired = prepare;
+                prepare = NULL;
+                PyObject *saved = PyErr_GetRaisedException();
+                Py_XDECREF(retired);
+                _PyValue_RestoreException(saved);
+            }
+            if (tmp == NULL || PyErr_Occurred()) {
+                goto done;
+            }
+            old_item = item;
+            item = tmp;
+            tmp = NULL;
+            {
+                PyObject *retired = old_item;
+                old_item = NULL;
+                PyObject *saved = PyErr_GetRaisedException();
+                Py_XDECREF(retired);
+                _PyValue_RestoreException(saved);
+            }
+            if (PyErr_Occurred()) {
+                goto done;
             }
         }
+        else {
+            {
+                PyObject *retired = prepare;
+                prepare = NULL;
+                PyObject *saved = PyErr_GetRaisedException();
+                Py_XDECREF(retired);
+                _PyValue_RestoreException(saved);
+            }
+            if (PyErr_Occurred()) {
+                goto done;
+            }
+        }
+        {
+            PyObject *retired = param;
+            param = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        if (PyErr_Occurred()) {
+            goto done;
+        }
     }
-    int is_tuple = PyTuple_Check(item);
-    Py_ssize_t nitems = is_tuple ? PyTuple_GET_SIZE(item) : 1;
-    PyObject **argitems = is_tuple ? &PyTuple_GET_ITEM(item, 0) : &item;
+
+    is_tuple = PyTuple_Check(item);
+    nitems = is_tuple ? PyTuple_GET_SIZE(item) : 1;
     if (nitems != nparams) {
-        Py_DECREF(item);
-        return PyErr_Format(PyExc_TypeError,
-                            "Too %s arguments for %R; actual %zd, expected %zd",
-                            nitems > nparams ? "many" : "few",
-                            self, nitems, nparams);
-    }
-    /* Replace all type variables (specified by parameters)
-       with corresponding values specified by argitems.
-        t = list[T];          t[int]      -> newargs = [int]
-        t = dict[str, T];     t[int]      -> newargs = [str, int]
-        t = dict[T, list[S]]; t[str, int] -> newargs = [str, list[int]]
-        t = list[[T]];        t[str]      -> newargs = [[str]]
-     */
-    assert (PyTuple_Check(args) || PyList_Check(args));
-    const bool is_args_list = PyList_Check(args);
-    PyObject *tuple_args = NULL;
-    if (is_args_list) {
-        args = tuple_args = PySequence_Tuple(args);
-        if (args == NULL) {
-            Py_DECREF(item);
-            return NULL;
+        {
+            PyObject *retired = item;
+            item = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
         }
+        if (PyErr_Occurred()) {
+            goto done;
+        }
+        result = PyErr_Format(PyExc_TypeError,
+                              "Too %s arguments for %R; actual %zd, expected %zd",
+                              nitems > nparams ? "many" : "few",
+                              self_owner, nitems, nparams);
+        if (result == NULL || PyErr_Occurred()) {
+            goto done;
+        }
+        completed = 1;
+        goto done;
     }
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    PyObject *newargs = PyTuple_New(nargs);
-    if (newargs == NULL) {
-        Py_DECREF(item);
-        Py_XDECREF(tuple_args);
-        return NULL;
+
+    assert(PyTuple_Check(args_owner) || PyList_Check(args_owner));
+    if (PyList_Check(args_owner)) {
+        tuple_args = PySequence_Tuple(args_owner);
+        if (tuple_args == NULL || PyErr_Occurred()) {
+            goto done;
+        }
+        source = tuple_args;
     }
+    else {
+        source = args_owner;
+    }
+    nargs = PyTuple_GET_SIZE(source);
+    newargs = PyTuple_New(nargs);
+    if (newargs == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+
     for (Py_ssize_t iarg = 0, jarg = 0; iarg < nargs; iarg++) {
-        PyObject *arg = PyTuple_GET_ITEM(args, iarg);
+        arg = PyTuple_GetItemRef(source, iarg);
+        if (arg == NULL || PyErr_Occurred()) {
+            goto done;
+        }
         if (PyType_Check(arg)) {
-            PyTuple_SET_ITEM(newargs, jarg, Py_NewRef(arg));
+            PyTuple_SET_ITEM(newargs, jarg, arg);
+            arg = NULL;
+            if (PyErr_Occurred()) {
+                goto done;
+            }
             jarg++;
             continue;
         }
-        // Recursively substitute params in lists/tuples.
         if (PyTuple_Check(arg) || PyList_Check(arg)) {
-            PyObject *subargs = _Py_subs_parameters(self, arg, parameters, item);
-            if (subargs == NULL) {
-                Py_DECREF(newargs);
-                Py_DECREF(item);
-                Py_XDECREF(tuple_args);
-                return NULL;
+            subargs = _Py_subs_parameters(self_owner, arg, params_owner, item);
+            if (subargs == NULL || PyErr_Occurred()) {
+                goto done;
             }
             if (PyTuple_Check(arg)) {
                 PyTuple_SET_ITEM(newargs, jarg, subargs);
+                subargs = NULL;
+                if (PyErr_Occurred()) {
+                    goto done;
+                }
             }
             else {
-                // _Py_subs_parameters returns a tuple. If the original arg was a list,
-                // convert subargs to a list as well.
-                PyObject *subargs_list = PySequence_List(subargs);
-                Py_DECREF(subargs);
-                if (subargs_list == NULL) {
-                    Py_DECREF(newargs);
-                    Py_DECREF(item);
-                    Py_XDECREF(tuple_args);
-                    return NULL;
+                subargs_list = PySequence_List(subargs);
+                if (subargs_list == NULL || PyErr_Occurred()) {
+                    goto done;
+                }
+                {
+                    PyObject *retired = subargs;
+                    subargs = NULL;
+                    PyObject *saved = PyErr_GetRaisedException();
+                    Py_XDECREF(retired);
+                    _PyValue_RestoreException(saved);
+                }
+                if (PyErr_Occurred()) {
+                    goto done;
                 }
                 PyTuple_SET_ITEM(newargs, jarg, subargs_list);
+                subargs_list = NULL;
+                if (PyErr_Occurred()) {
+                    goto done;
+                }
+            }
+            {
+                PyObject *retired = arg;
+                arg = NULL;
+                PyObject *saved = PyErr_GetRaisedException();
+                Py_XDECREF(retired);
+                _PyValue_RestoreException(saved);
+            }
+            if (PyErr_Occurred()) {
+                goto done;
             }
             jarg++;
             continue;
         }
+
         int unpack = _is_unpacked_typevartuple(arg);
-        if (unpack < 0) {
-            Py_DECREF(newargs);
-            Py_DECREF(item);
-            Py_XDECREF(tuple_args);
-            return NULL;
+        if (unpack < 0 || PyErr_Occurred()) {
+            goto done;
         }
-        PyObject *subst;
-        if (PyObject_GetOptionalAttr(arg, &_Py_ID(__typing_subst__), &subst) < 0) {
-            Py_DECREF(newargs);
-            Py_DECREF(item);
-            Py_XDECREF(tuple_args);
-            return NULL;
+        if (PyObject_GetOptionalAttr(arg, &_Py_ID(__typing_subst__), &subst) < 0 ||
+            PyErr_Occurred()) {
+            goto done;
         }
-        if (subst) {
-            Py_ssize_t iparam = tuple_index(parameters, nparams, arg);
+        if (subst != NULL) {
+            Py_ssize_t iparam = tuple_index(params_owner, nparams, arg);
             if (iparam < 0) {
-                // __parameters__ may be stale if an argument gained
-                // __typing_subst__ after the tuple was computed.
                 PyErr_Format(PyExc_TypeError,
                              "argument %R with __typing_subst__ was not found "
                              "in __parameters__",
                              arg);
-                arg = NULL;
+                goto done;
             }
-            else {
-                arg = PyObject_CallOneArg(subst, argitems[iparam]);
+            replacement = is_tuple
+                ? PyTuple_GetItemRef(item, iparam)
+                : Py_NewRef(item);
+            if (replacement == NULL || PyErr_Occurred()) {
+                goto done;
             }
-            Py_DECREF(subst);
+            tmp = PyObject_CallOneArg(subst, replacement);
+            if (tmp == NULL || PyErr_Occurred()) {
+                goto done;
+            }
+            {
+                PyObject *retired = replacement;
+                replacement = NULL;
+                PyObject *saved = PyErr_GetRaisedException();
+                Py_XDECREF(retired);
+                _PyValue_RestoreException(saved);
+            }
+            if (PyErr_Occurred()) {
+                goto done;
+            }
+            {
+                PyObject *retired = subst;
+                subst = NULL;
+                PyObject *saved = PyErr_GetRaisedException();
+                Py_XDECREF(retired);
+                _PyValue_RestoreException(saved);
+            }
+            if (PyErr_Occurred()) {
+                goto done;
+            }
         }
         else {
-            arg = subs_tvars(arg, parameters, argitems, nitems);
-        }
-        if (arg == NULL) {
-            Py_DECREF(newargs);
-            Py_DECREF(item);
-            Py_XDECREF(tuple_args);
-            return NULL;
+            tmp = subs_tvars(arg, params_owner, item, is_tuple, nitems);
+            if (tmp == NULL || PyErr_Occurred()) {
+                goto done;
+            }
         }
         if (unpack) {
-            if (!PyTuple_Check(arg)) {
-                PyObject *original = PyTuple_GET_ITEM(args, iarg);
+            if (!PyTuple_Check(tmp)) {
+                original = PyTuple_GetItemRef(source, iarg);
+                if (original == NULL || PyErr_Occurred()) {
+                    goto done;
+                }
                 PyErr_Format(PyExc_TypeError,
                              "expected __typing_subst__ of %T objects to return a tuple, not %T",
-                             original, arg);
-                Py_DECREF(newargs);
-                Py_DECREF(item);
-                Py_XDECREF(tuple_args);
-                Py_DECREF(arg);
-                return NULL;
+                             original, tmp);
+                goto done;
             }
-            jarg = tuple_extend(&newargs, jarg,
-                    &PyTuple_GET_ITEM(arg, 0), PyTuple_GET_SIZE(arg));
-            Py_DECREF(arg);
-            if (jarg < 0) {
-                Py_DECREF(item);
-                Py_XDECREF(tuple_args);
-                assert(newargs == NULL);
-                return NULL;
+            jarg = tuple_extend(&newargs, jarg, tmp);
+            if (jarg < 0 || PyErr_Occurred()) {
+                goto done;
+            }
+            {
+                PyObject *retired = tmp;
+                tmp = NULL;
+                PyObject *saved = PyErr_GetRaisedException();
+                Py_XDECREF(retired);
+                _PyValue_RestoreException(saved);
+            }
+            if (PyErr_Occurred()) {
+                goto done;
             }
         }
         else {
-            PyTuple_SET_ITEM(newargs, jarg, arg);
+            PyTuple_SET_ITEM(newargs, jarg, tmp);
+            tmp = NULL;
+            if (PyErr_Occurred()) {
+                goto done;
+            }
             jarg++;
+        }
+        {
+            PyObject *retired = arg;
+            arg = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        if (PyErr_Occurred()) {
+            goto done;
         }
     }
 
-    Py_DECREF(item);
-    Py_XDECREF(tuple_args);
-    return newargs;
+    {
+        PyObject *retired = item;
+        item = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    {
+        PyObject *retired = tuple_args;
+        tuple_args = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    result = newargs;
+    newargs = NULL;
+    completed = 1;
+
+done:
+    {
+        PyObject *retired = replacement;
+        replacement = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = original;
+        original = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = subargs_list;
+        subargs_list = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = subargs;
+        subargs = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = subst;
+        subst = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = tmp;
+        tmp = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = old_item;
+        old_item = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = prepare;
+        prepare = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = param;
+        param = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = arg;
+        arg = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = newargs;
+        newargs = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = item;
+        item = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = tuple_args;
+        tuple_args = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = input_owner;
+        input_owner = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = params_owner;
+        params_owner = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = args_owner;
+        args_owner = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = self_owner;
+        self_owner = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (!completed || PyErr_Occurred()) {
+        {
+            PyObject *retired = result;
+            result = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        return NULL;
+    }
+    return result;
 }
 
 PyDoc_STRVAR(genericalias__doc__,
@@ -932,23 +1862,97 @@ setup_ga(gaobject *alias, PyObject *origin, PyObject *args) {
 static PyObject *
 ga_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
-    if (!_PyArg_NoKeywords("GenericAlias", kwds)) {
+    PyObject *args_owner = NULL;
+    PyObject *type_owner = NULL;
+    PyObject *origin = NULL;
+    PyObject *arguments = NULL;
+    PyObject *result = NULL;
+    int completed = 0;
+    int status;
+
+    if (PyErr_Occurred()) {
         return NULL;
     }
-    if (!_PyArg_CheckPositional("GenericAlias", PyTuple_GET_SIZE(args), 2, 2)) {
+
+    args_owner = Py_NewRef(args);
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    type_owner = Py_NewRef((PyObject *)type);
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+
+    if (!_PyArg_NoKeywords("GenericAlias", kwds) || PyErr_Occurred()) {
+        goto done;
+    }
+    if (!_PyArg_CheckPositional("GenericAlias", PyTuple_GET_SIZE(args_owner), 2, 2)
+            || PyErr_Occurred()) {
+        goto done;
+    }
+
+    origin = PyTuple_GetItemRef(args_owner, 0);
+    if (origin == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    arguments = PyTuple_GetItemRef(args_owner, 1);
+    if (arguments == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+
+    result = ((PyTypeObject *)type_owner)->tp_alloc(
+        (PyTypeObject *)type_owner, 0);
+    if (result == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+
+    status = setup_ga((gaobject *)result, origin, arguments);
+    if (!status || PyErr_Occurred()) {
+        goto done;
+    }
+    completed = 1;
+
+done:
+    {
+        PyObject *retired = origin;
+        origin = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = arguments;
+        arguments = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = args_owner;
+        args_owner = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = type_owner;
+        type_owner = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+
+    if (!completed || PyErr_Occurred()) {
+        {
+            PyObject *retired = result;
+            result = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
         return NULL;
     }
-    PyObject *origin = PyTuple_GET_ITEM(args, 0);
-    PyObject *arguments = PyTuple_GET_ITEM(args, 1);
-    gaobject *self = (gaobject *)type->tp_alloc(type, 0);
-    if (self == NULL) {
-        return NULL;
-    }
-    if (!setup_ga(self, origin, arguments)) {
-        Py_DECREF(self);
-        return NULL;
-    }
-    return (PyObject *)self;
+    return result;
 }
 
 static PyNumberMethods ga_as_number = {

@@ -3057,32 +3057,113 @@ _PyObject_LookupSpecial(PyObject *self, PyObject *attr)
 // stack. A descriptor may be invoked while `*method` holds the only
 // reference to the method object, and that can trigger a collection.
 int
-_PyObject_LookupSpecialMethod(PyObject *attr, _PyStackRef *method,
-                              _PyStackRef *self)
+_PyObject_LookupSpecialMethod(PyObject *attr, PyValue *method,
+                              PyValue *self)
 {
-    PyObject *self_o = PyStackRef_AsPyObjectBorrow(*self);
-    _PyType_LookupStackRefAndVersion(Py_TYPE(self_o), attr, method);
-    PyObject *method_o = PyStackRef_AsPyObjectBorrow(*method);
-    if (method_o == NULL) {
-        return 0;
+    assert(PyValue_IsNull(*method));
+    assert(!PyValue_IsNull(*self));
+    PyObject *attr_owner = NULL, *self_view = NULL, *method_view = NULL;
+    PyObject *bound = NULL, *binding_type = NULL;
+    PyValue found = PyValue_NULL;
+    int rc = -1;
+    if (PyErr_Occurred()) {
+        return -1;
     }
-
-    if (_PyType_HasFeature(Py_TYPE(method_o), Py_TPFLAGS_METHOD_DESCRIPTOR)) {
-        /* Avoid temporary PyMethodObject */
-        return 1;
+    attr_owner = Py_NewRef(attr);
+    self_view = PyValue_AsObject(*self);
+    if (self_view == NULL || PyErr_Occurred()) {
+        goto done;
     }
-
-    descrgetfunc f = Py_TYPE(method_o)->tp_descr_get;
-    if (f != NULL) {
-        PyObject *func = f(method_o, self_o, (PyObject *)(Py_TYPE(self_o)));
-        if (func == NULL) {
-            return -1;
+    (void)_PyType_LookupValueAndVersion(Py_TYPE(self_view), attr_owner, &found);
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    if (PyValue_IsNull(found)) {
+        rc = 0;
+        goto done;
+    }
+    method_view = PyValue_AsObject(found);
+    if (method_view == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    /* Successful method/self outputs retain owned object views for native
+       consumers, including WITH_EXCEPT_START; do not canonicalize them here. */
+    *method = PyValue_FromPyObjectSteal(method_view);
+    method_view = NULL;
+    {
+        PyValue retired = found;
+        found = PyValue_NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    PyObject *method_object = PyValue_AsPyObjectBorrow(*method);
+    if (_PyType_HasFeature(Py_TYPE(method_object), Py_TPFLAGS_METHOD_DESCRIPTOR)) {
+        PyValue retired = *self;
+        *self = PyValue_FromPyObjectSteal(self_view);
+        self_view = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+        if (!PyErr_Occurred()) {
+            rc = 1;
         }
-        PyStackRef_CLEAR(*method); // clear method
-        *method = PyStackRef_FromPyObjectSteal(func);
+        goto done;
     }
-    PyStackRef_CLEAR(*self); // clear self
-    return 1;
+    descrgetfunc f = Py_TYPE(method_object)->tp_descr_get;
+    if (f != NULL) {
+        binding_type = Py_NewRef((PyObject *)Py_TYPE(self_view));
+        bound = f(method_object, self_view, binding_type);
+        if (bound != NULL) {
+            PyValue retired = *method;
+            *method = PyValue_FromPyObjectSteal(bound);
+            bound = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            PyValue_XCLOSE(retired);
+            _PyValue_RestoreException(saved);
+        }
+        else {
+            goto done;
+        }
+        if (PyErr_Occurred()) {
+            goto done;
+        }
+    }
+    {
+        PyValue retired = *self;
+        *self = PyValue_NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (!PyErr_Occurred()) {
+        rc = 1;
+    }
+done:
+    {
+        PyValue retired = found;
+        found = PyValue_NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+    }
+    type_mutation_close(&bound);
+    type_mutation_close(&method_view);
+    type_mutation_close(&binding_type);
+    type_mutation_close(&attr_owner);
+    type_mutation_close(&self_view);
+    if (rc < 0 || PyErr_Occurred()) {
+        PyValue retired = *method;
+        *method = PyValue_NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+        return -1;
+    }
+    return rc;
 }
 
 static int
@@ -7140,7 +7221,7 @@ _Py_type_getattro(PyObject *tp, PyObject *name)
     return _Py_type_getattro_impl(type, name, NULL);
 }
 
-/* Like _Py_type_getattro but returns a _PyStackRef.
+/* Like _Py_type_getattro but returns a PyValue.
    This can return a deferred reference in the free-threaded build
    when the attribute is found without going through a descriptor.
 
@@ -7150,125 +7231,159 @@ _Py_type_getattro(PyObject *tp, PyObject *name)
      set *suppress_missing_attribute to 1 to signal we are returning NULL while
      having suppressed the exception (other exceptions are not suppressed)
 */
-_PyStackRef
-_Py_type_getattro_stackref(PyTypeObject *type, PyObject *name,
+PyValue
+_Py_type_getattro_value(PyTypeObject *type, PyObject *name,
                            int *suppress_missing_attribute)
 {
-    PyTypeObject *metatype = Py_TYPE(type);
-    descrgetfunc meta_get = NULL;
-
-    if (!PyUnicode_Check(name)) {
-        PyErr_Format(PyExc_TypeError,
-                     "attribute name must be string, not '%.200s'",
-                     Py_TYPE(name)->tp_name);
-        return PyStackRef_NULL;
-    }
-
-    /* Initialize this type (we'll assume the metatype is initialized) */
-    if (!_PyType_IsReady(type)) {
-        if (PyType_Ready(type) < 0)
-            return PyStackRef_NULL;
-    }
-
-    /* Set up GC-visible stack refs */
-    _PyCStackRef result_ref, meta_attribute_ref, attribute_ref;
+    PyObject *type_owner = NULL, *name_owner = NULL, *metatype_owner = NULL;
+    PyObject *diagnostic_type = NULL, *diagnostic_name = NULL;
+    PyValue result = PyValue_NULL;
+    _PyCValue result_ref, meta_attribute_ref, attribute_ref;
     PyThreadState *tstate = _PyThreadState_GET();
-    _PyThreadState_PushCStackRef(tstate, &result_ref);
-    _PyThreadState_PushCStackRef(tstate, &meta_attribute_ref);
-    _PyThreadState_PushCStackRef(tstate, &attribute_ref);
-
-    /* Look for the attribute in the metatype */
-    _PyType_LookupStackRefAndVersion(metatype, name, &meta_attribute_ref.ref);
-
-    if (!PyStackRef_IsNull(meta_attribute_ref.ref)) {
-        PyObject *meta_attr_obj = PyStackRef_AsPyObjectBorrow(meta_attribute_ref.ref);
-        meta_get = Py_TYPE(meta_attr_obj)->tp_descr_get;
-
-        if (meta_get != NULL && PyDescr_IsData(meta_attr_obj)) {
-            /* Data descriptors implement tp_descr_set to intercept
-             * writes. Assume the attribute is not overridden in
-             * type's tp_dict (and bases): call the descriptor now.
-             */
-            PyObject *res = meta_get(meta_attr_obj, (PyObject *)type,
-                                     (PyObject *)metatype);
-            if (res != NULL) {
-                result_ref.ref = PyStackRef_FromPyObjectSteal(res);
+    int active = 0, missing = 0;
+    descrgetfunc meta_get = NULL;
+    if (PyErr_Occurred()) {
+        return PyValue_NULL;
+    }
+    type_owner = Py_NewRef((PyObject *)type);
+    name_owner = Py_NewRef(name);
+    metatype_owner = Py_NewRef((PyObject *)Py_TYPE(type));
+    if (!PyUnicode_Check(name_owner)) {
+        diagnostic_type = Py_NewRef((PyObject *)Py_TYPE(name_owner));
+        PyTypeObject *selected = (PyTypeObject *)diagnostic_type;
+        if (selected->tp_flags & Py_TPFLAGS_HEAPTYPE) {
+            diagnostic_name = Py_NewRef(((PyHeapTypeObject *)selected)->ht_name);
+        }
+        const char *selected_name = selected->tp_name;
+        PyErr_Format(PyExc_TypeError,
+                     "attribute name must be string, not '%.200s'", selected_name);
+        goto done;
+    }
+    if (!_PyType_IsReady((PyTypeObject *)type_owner)) {
+        if (PyType_Ready((PyTypeObject *)type_owner) < 0 || PyErr_Occurred()) {
+            goto done;
+        }
+    }
+    _PyThreadState_PushCValue(tstate, &result_ref);
+    _PyThreadState_PushCValue(tstate, &meta_attribute_ref);
+    _PyThreadState_PushCValue(tstate, &attribute_ref);
+    active = 1;
+    if (_PyType_LookupValueUncached((PyTypeObject *)metatype_owner, name_owner,
+                                   &meta_attribute_ref.ref) < 0 || PyErr_Occurred()) {
+        goto done;
+    }
+    if (PyValue_IsObject(meta_attribute_ref.ref)) {
+        PyObject *meta_obj = PyValue_AsPyObjectBorrow(meta_attribute_ref.ref);
+        meta_get = Py_TYPE(meta_obj)->tp_descr_get;
+        if (meta_get != NULL && PyDescr_IsData(meta_obj)) {
+            PyObject *returned = meta_get(meta_obj, type_owner, metatype_owner);
+            if (returned != NULL) {
+                result_ref.ref = PyValue_FromPyObjectSteal(returned);
             }
             goto done;
         }
     }
-
-    /* No data descriptor found on metatype. Look in tp_dict of this
-     * type and its bases */
-    _PyType_LookupStackRefAndVersion(type, name, &attribute_ref.ref);
-    if (!PyStackRef_IsNull(attribute_ref.ref)) {
-        /* Implement descriptor functionality, if any */
-        PyObject *attr_obj = PyStackRef_AsPyObjectBorrow(attribute_ref.ref);
-        descrgetfunc local_get = Py_TYPE(attr_obj)->tp_descr_get;
-
-        /* Release meta_attribute early since we found in local dict */
-        PyStackRef_CLEAR(meta_attribute_ref.ref);
-
+    if (_PyType_LookupValueUncached((PyTypeObject *)type_owner, name_owner,
+                                   &attribute_ref.ref) < 0 || PyErr_Occurred()) {
+        goto done;
+    }
+    if (!PyValue_IsNull(attribute_ref.ref)) {
+        PyObject *attr_obj = PyValue_IsObject(attribute_ref.ref)
+            ? PyValue_AsPyObjectBorrow(attribute_ref.ref) : NULL;
+        descrgetfunc local_get = attr_obj == NULL ? NULL : Py_TYPE(attr_obj)->tp_descr_get;
+        {
+            PyValue retired = meta_attribute_ref.ref;
+            meta_attribute_ref.ref = PyValue_NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            PyValue_XCLOSE(retired);
+            _PyValue_RestoreException(saved);
+        }
+        if (PyErr_Occurred()) {
+            goto done;
+        }
         if (local_get != NULL) {
-            /* Special case staticmethod to avoid descriptor call overhead.
-             * staticmethod.__get__ just returns the wrapped callable. */
             if (Py_TYPE(attr_obj) == &PyStaticMethod_Type) {
                 PyObject *callable = _PyStaticMethod_GetFunc(attr_obj);
-                if (callable) {
-                    result_ref.ref = PyStackRef_FromPyObjectNew(callable);
+                if (callable != NULL) {
+                    result_ref.ref = PyValue_FromPyObjectNew(callable);
                     goto done;
                 }
             }
-            /* NULL 2nd argument indicates the descriptor was
-             * found on the target object itself (or a base)  */
-            PyObject *res = local_get(attr_obj, (PyObject *)NULL,
-                                      (PyObject *)type);
-            if (res != NULL) {
-                result_ref.ref = PyStackRef_FromPyObjectSteal(res);
+            PyObject *returned = local_get(attr_obj, NULL, type_owner);
+            if (returned != NULL) {
+                result_ref.ref = PyValue_FromPyObjectSteal(returned);
             }
             goto done;
         }
-
-        /* No descriptor, return the attribute directly */
         result_ref.ref = attribute_ref.ref;
-        attribute_ref.ref = PyStackRef_NULL;
+        attribute_ref.ref = PyValue_NULL;
         goto done;
     }
-
-    /* No attribute found in local __dict__ (or bases): use the
-     * descriptor from the metatype, if any */
     if (meta_get != NULL) {
-        PyObject *meta_attr_obj = PyStackRef_AsPyObjectBorrow(meta_attribute_ref.ref);
-        PyObject *res = meta_get(meta_attr_obj, (PyObject *)type,
-                                 (PyObject *)metatype);
-        if (res != NULL) {
-            result_ref.ref = PyStackRef_FromPyObjectSteal(res);
+        PyObject *meta_obj = PyValue_AsPyObjectBorrow(meta_attribute_ref.ref);
+        PyObject *returned = meta_get(meta_obj, type_owner, metatype_owner);
+        if (returned != NULL) {
+            result_ref.ref = PyValue_FromPyObjectSteal(returned);
         }
         goto done;
     }
-
-    /* If an ordinary attribute was found on the metatype, return it now */
-    if (!PyStackRef_IsNull(meta_attribute_ref.ref)) {
+    if (!PyValue_IsNull(meta_attribute_ref.ref)) {
         result_ref.ref = meta_attribute_ref.ref;
-        meta_attribute_ref.ref = PyStackRef_NULL;
+        meta_attribute_ref.ref = PyValue_NULL;
         goto done;
     }
-
-    /* Give up */
     if (suppress_missing_attribute == NULL) {
+        diagnostic_type = Py_NewRef(type_owner);
+        PyTypeObject *selected = (PyTypeObject *)diagnostic_type;
+        if (selected->tp_flags & Py_TPFLAGS_HEAPTYPE) {
+            diagnostic_name = Py_NewRef(((PyHeapTypeObject *)selected)->ht_name);
+        }
+        const char *selected_name = selected->tp_name;
         PyErr_Format(PyExc_AttributeError,
                      "type object '%.100s' has no attribute '%U'",
-                     type->tp_name, name);
+                     selected_name, name_owner);
     }
     else {
-        // signal the caller we have not set an PyExc_AttributeError and gave up
+        missing = 1;
+    }
+done:
+    if (active) {
+        {
+            PyValue retired = _PyThreadState_PopCValueSteal(tstate, &attribute_ref);
+            attribute_ref.ref = PyValue_NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            PyValue_XCLOSE(retired);
+            _PyValue_RestoreException(saved);
+        }
+        {
+            PyValue retired = _PyThreadState_PopCValueSteal(tstate, &meta_attribute_ref);
+            meta_attribute_ref.ref = PyValue_NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            PyValue_XCLOSE(retired);
+            _PyValue_RestoreException(saved);
+        }
+    }
+    type_mutation_close(&diagnostic_name);
+    type_mutation_close(&diagnostic_type);
+    type_mutation_close(&metatype_owner);
+    type_mutation_close(&name_owner);
+    type_mutation_close(&type_owner);
+    if (active) {
+        result = _PyThreadState_PopCValueSteal(tstate, &result_ref);
+        result_ref.ref = PyValue_NULL;
+    }
+    if (PyErr_Occurred()) {
+        PyValue retired = result;
+        result = PyValue_NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+        return PyValue_NULL;
+    }
+    if (missing) {
         *suppress_missing_attribute = 1;
     }
-
-done:
-    _PyThreadState_PopCStackRef(tstate, &attribute_ref);
-    _PyThreadState_PopCStackRef(tstate, &meta_attribute_ref);
-    return _PyThreadState_PopCStackRefSteal(tstate, &result_ref);
+    return result;
 }
 
 // Called by type_setattro().  Updates both the type dict and
@@ -12442,29 +12557,43 @@ _PyType_HasSlotTpIternext(PyTypeObject *type)
 static PyObject *
 slot_tp_descr_get(PyObject *self, PyObject *obj, PyObject *type)
 {
-    PyTypeObject *tp = Py_TYPE(self);
-    PyThreadState *tstate = _PyThreadState_GET();
-    _PyCStackRef cref;
-    _PyThreadState_PushCStackRef(tstate, &cref);
-    _PyType_LookupStackRefAndVersion(tp, &_Py_ID(__get__), &cref.ref);
-    if (PyStackRef_IsNull(cref.ref)) {
-        _PyThreadState_PopCStackRef(tstate, &cref);
-#ifndef Py_GIL_DISABLED
-        /* Avoid further slowdowns */
-        if (tp->tp_descr_get == slot_tp_descr_get)
-            tp->tp_descr_get = NULL;
-#endif
-        return Py_NewRef(self);
+    PyObject *self_owner = NULL, *obj_owner = NULL, *type_owner = NULL;
+    PyObject *receiver_type_owner = NULL, *get = NULL, *result = NULL;
+    if (PyErr_Occurred()) {
+        return NULL;
     }
-    if (obj == NULL)
-        obj = Py_None;
-    if (type == NULL)
-        type = Py_None;
-    PyObject *get = PyStackRef_AsPyObjectBorrow(cref.ref);
-    PyObject *stack[3] = {self, obj, type};
-    PyObject *res = PyObject_Vectorcall(get, stack, 3, NULL);
-    _PyThreadState_PopCStackRef(tstate, &cref);
-    return res;
+    self_owner = Py_NewRef(self);
+    obj_owner = Py_XNewRef(obj);
+    type_owner = Py_XNewRef(type);
+    receiver_type_owner = Py_NewRef((PyObject *)Py_TYPE(self_owner));
+    PyTypeObject *tp = (PyTypeObject *)receiver_type_owner;
+    get = _PyType_LookupRef(tp, &_Py_ID(__get__));
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    if (get == NULL) {
+#ifndef Py_GIL_DISABLED
+        if (tp->tp_descr_get == slot_tp_descr_get) {
+            tp->tp_descr_get = NULL;
+        }
+#endif
+        result = Py_NewRef(self_owner);
+        goto done;
+    }
+    PyObject *stack[3] = {self_owner,
+        obj_owner != NULL ? obj_owner : Py_None,
+        type_owner != NULL ? type_owner : Py_None};
+    result = PyObject_Vectorcall(get, stack, 3, NULL);
+done:
+    type_mutation_close(&get);
+    type_mutation_close(&receiver_type_owner);
+    type_mutation_close(&type_owner);
+    type_mutation_close(&obj_owner);
+    type_mutation_close(&self_owner);
+    if (PyErr_Occurred()) {
+        type_mutation_close(&result);
+    }
+    return result;
 }
 
 static int
@@ -12508,20 +12637,28 @@ slot_tp_init(PyObject *self, PyObject *args, PyObject *kwds)
 static PyObject *
 slot_tp_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyObject *result;
-
-    _PyCStackRef func_ref;
-    _PyThreadState_PushCStackRef(tstate, &func_ref);
-    func_ref.ref = _PyObject_GetAttrStackRef((PyObject *)type, &_Py_ID(__new__));
-    if (PyStackRef_IsNull(func_ref.ref)) {
-        _PyThreadState_PopCStackRef(tstate, &func_ref);
+    PyObject *type_owner = NULL, *args_owner = NULL, *kwds_owner = NULL;
+    PyObject *func = NULL, *result = NULL;
+    if (PyErr_Occurred()) {
         return NULL;
     }
-
-    PyObject *func = PyStackRef_AsPyObjectBorrow(func_ref.ref);
-    result = _PyObject_Call_Prepend(tstate, func, (PyObject *)type, args, kwds);
-    _PyThreadState_PopCStackRef(tstate, &func_ref);
+    type_owner = Py_NewRef((PyObject *)type);
+    args_owner = Py_NewRef(args);
+    kwds_owner = Py_XNewRef(kwds);
+    func = PyObject_GetAttr(type_owner, &_Py_ID(__new__));
+    if (func == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    result = _PyObject_Call_Prepend(_PyThreadState_GET(), func,
+                                  type_owner, args_owner, kwds_owner);
+done:
+    type_mutation_close(&func);
+    type_mutation_close(&kwds_owner);
+    type_mutation_close(&args_owner);
+    type_mutation_close(&type_owner);
+    if (PyErr_Occurred()) {
+        type_mutation_close(&result);
+    }
     return result;
 }
 
@@ -13269,7 +13406,7 @@ update_one_slot(PyTypeObject *type, pytype_slotdef *p, pytype_slotdef **next_p,
     assert(!PyErr_Occurred());
     do {
         /* Use faster uncached lookup as we won't get any cache hits during type setup. */
-        _PyStackRef descr_ref;
+        PyValue descr_ref;
         int res = find_name_in_mro(type, p->name_strobj, &descr_ref);
         if (res <= 0) {
             if (ptr == (void**)&type->tp_iternext) {
@@ -13277,8 +13414,9 @@ update_one_slot(PyTypeObject *type, pytype_slotdef *p, pytype_slotdef **next_p,
             }
             continue;
         }
-        descr = PyStackRef_AsPyObjectBorrow(descr_ref);
-        if (Py_IS_TYPE(descr, &PyWrapperDescr_Type) &&
+        descr = PyValue_IsObject(descr_ref)
+            ? PyValue_AsPyObjectBorrow(descr_ref) : NULL;
+        if (descr != NULL && Py_IS_TYPE(descr, &PyWrapperDescr_Type) &&
             ((PyWrapperDescrObject *)descr)->d_base->name_strobj == p->name_strobj) {
             void **tptr;
             size_t index = (p - slotdefs);
@@ -13320,7 +13458,7 @@ update_one_slot(PyTypeObject *type, pytype_slotdef *p, pytype_slotdef **next_p,
                 use_generic = 1;
             }
         }
-        else if (Py_IS_TYPE(descr, &PyCFunction_Type) &&
+        else if (descr != NULL && Py_IS_TYPE(descr, &PyCFunction_Type) &&
                  PyCFunction_GET_FUNCTION(descr) ==
                  _PyCFunction_CAST(tp_new_wrapper) &&
                  ptr == (void**)&type->tp_new)
@@ -13351,7 +13489,8 @@ update_one_slot(PyTypeObject *type, pytype_slotdef *p, pytype_slotdef **next_p,
         }
         else {
             use_generic = 1;
-            if (generic == NULL && Py_IS_TYPE(descr, &PyMethodDescr_Type) &&
+            if (generic == NULL && descr != NULL &&
+                Py_IS_TYPE(descr, &PyMethodDescr_Type) &&
                 *ptr == ((PyMethodDescrObject *)descr)->d_method->ml_meth)
             {
                 generic = *ptr;
@@ -13366,7 +13505,7 @@ update_one_slot(PyTypeObject *type, pytype_slotdef *p, pytype_slotdef **next_p,
                 }
             }
         }
-        PyStackRef_CLOSE(descr_ref);
+        PyValue_CLOSE(descr_ref);
     } while ((++p)->offset == offset);
 
     void *slot_value;

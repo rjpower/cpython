@@ -1416,7 +1416,7 @@ PyObject_GetOptionalAttr(PyObject *v, PyObject *name, PyObject **result)
         *result = _Py_type_getattro_impl((PyTypeObject*)v, name, &suppress_missing_attribute_exception);
         if (suppress_missing_attribute_exception) {
             // return 0 without having to clear the exception
-            return 0;
+            return PyErr_Occurred() ? -1 : 0;
         }
     }
     else if (tp->tp_getattro == (getattrofunc)_Py_module_getattro) {

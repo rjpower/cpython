@@ -6899,11 +6899,31 @@ _PyType_SetFlagsRecursive(PyTypeObject *self, unsigned long mask, unsigned long 
 PyObject *
 _Py_type_getattro_impl(PyTypeObject *type, PyObject *name, int *suppress_missing_attribute)
 {
-    _PyStackRef ref = _Py_type_getattro_stackref(type, name, suppress_missing_attribute);
-    if (PyStackRef_IsNull(ref)) {
+    PyObject *type_owner = NULL, *name_owner = NULL, *result = NULL;
+    PyValue ref = PyValue_NULL;
+    if (PyErr_Occurred()) {
         return NULL;
     }
-    return PyStackRef_AsPyObjectSteal(ref);
+    type_owner = Py_NewRef((PyObject *)type);
+    name_owner = Py_NewRef(name);
+    ref = _Py_type_getattro_value((PyTypeObject *)type_owner,
+                                 name_owner, suppress_missing_attribute);
+    if (!PyValue_IsNull(ref) && !PyErr_Occurred()) {
+        result = PyValue_AsObject(ref);
+    }
+    {
+        PyValue retired = ref;
+        ref = PyValue_NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+    }
+    type_mutation_close(&name_owner);
+    type_mutation_close(&type_owner);
+    if (PyErr_Occurred()) {
+        type_mutation_close(&result);
+    }
+    return result;
 }
 
 /* This is similar to PyObject_GenericGetAttr(),

@@ -1,7 +1,7 @@
 # Type foundations, cache and mutation admission
 
-Root owns composition and admission. Sol 6.1 is reviewing the remaining held
-source by cause; see the [board](../../README.md) for live assignments.
+Root owns composition and admission. Sol 6.1 reviews finite held-source
+packets by cause; see the [board](../../README.md) for live assignments.
 
 ## Current state
 
@@ -10,7 +10,9 @@ collection. Type-cache entries, mutation, installed guards and interpreter
 teardown must share a coherent invalidation/admission contract. The tracing-GC
 work is closed.
 
-Restoration checkpoint47 is `4f2734e77cd`. After the three pickle/state readers
+Restoration checkpoint48 is `dd26d8e34ca`. Its type attribute bridge and
+optional-attribute caller pass both full-TU/object probes; four host controls
+pass and candidate execution remains pending. After the three pickle/state readers
 landed in46, the complete current type translation unit and actual object compile
 without errors or warnings. Eight host controls pass. This establishes compilation,
 not semantic admission of the remaining held file or candidate execution.
@@ -34,7 +36,10 @@ Guard, terminal lifecycle and selected namespace-writer wiring remain distinct
 checks. Sol is binding the exact current bodies to earlier reviewed endpoints,
 classifying introduced defects against inherited upstream behavior and defining
 small dependency-ordered fixes or extractions. Its [sealed causal matrix](../../../../build/pyvalue-typecache-causal-triage-20261102-v1/README.md)
-is in independent peer review. No whole-file source grant follows
+passed independent peer review as a finite queue. Nine canonical foundations
+then passed actual-source review in place; no rewrite was required. The
+ten-body method lookup/call design is accepted and ready for bounded Luna
+implementation. These decisions do not admit the whole held file. No whole-file source grant follows
 from a successful compiler run or an old provider review.
 
 The earlier full transaction proposal requested stronger rollback, diamond and
@@ -43,9 +48,10 @@ are not automatically requirements to replace upstream's pointer-conditional
 algorithm before the first baseline. Retain necessary lifetime/invalidation fixes;
 choose further changes from concrete introduced failures and qualification.
 
-Next: freeze the causal matrix and exact fix/extraction manifests, obtain peer
-review, fan out bounded implementations, inspect actual code/native results and
-commit each dependency. Once the runtime links, execute cache/mutation/scalar,
+Next: fan out the accepted lookup/call recipes, extract exact reviewed
+foundations with declaration/include dependency proofs, and close remaining
+slot, MRO error, guard and lifecycle obligations. Inspect actual code/native
+results and commit each dependency. Once the runtime links, execute cache/mutation/scalar,
 reentry, teardown and fault controls on the candidate before measurement.
 
 ## Evidence and history
@@ -55,6 +61,9 @@ reentry, teardown and fault controls on the candidate before measurement.
 - [Graph source/native record](../../../../build/pyvalue-typecache-graph1-20261102-v1/coordinator-code-review.md)
 - [MRO provider endpoint](mro-providers/status.md)
 - [Pickle/state final composition](../../../../build/pyvalue-type-pickle-readers-composed-20261102-v2/independent-composed-review.md)
+- [Nine-foundation actual review](../../../../build/pyvalue-type-canonical-foundations-peer-20261102-v1/independent-solshared-review.md)
+- [Type attribute bridge](../core-consumers/type-getattro/status.md)
+- [Accepted lookup/call design](../../../../build/pyvalue-type-lookup-call-envelope-design-20261102-v1/README.md)
 - [Latest merged build](../merged-build/status.md)
 
 The recording-only counter foundation (`5a9d4841a67`) is committed; counter

@@ -821,5 +821,22 @@
     "native": "build/pyvalue-typecache-mro1-20261102-v1/native-v2/coordinator-native.json",
     "candidate_executed": false,
     "source_delta_committed": false
+  },
+  "type_attribute_object_bridge": {
+    "base": "4f2734e77cd9fc576e9642ece11c1331043c9a83",
+    "commit": "dd26d8e34caf36d36c614c1873522345a3c1e95b",
+    "paths_sha256": {
+      "Objects/typeobject.c": "0d477a4dbb55d95f2f0d4a577eb89e6fc9e5a6c8ec9e2c55f93b8409a93e6e57",
+      "Objects/object.c": "7884a396f852598722ede61827ff0b206bb4e0773cff4ce4406d574e69944637",
+      "Lib/test/test_pyvalue_type_getattro_bridge.py": "51de030b919bf263069a79917d3b8bde75070d4e0926225d1ba1e450148a935f"
+    },
+    "functions": 2,
+    "native_full_TUs_and_objects_pass": true,
+    "host_reference_pass": 4,
+    "staged_patch_sha256": "4a03f29c52b77ead719218d8cae0bdc4f72aab012e652e7dcc3aff9adf8f873e",
+    "independent_review_sha256": "0b0cc1580581250cbc3554ac9d9f569b574ecf6fbb02791b2039b0523cebac6b",
+    "projection_review_sha256": "ea2998f9c05d83d319f2cb5003aa0f9138343d5126264461b88170a45ed1a07c",
+    "coordinator_review_sha256": "ae84646e6479c30819d373e72a1513997ec49d01e554864103077ae3fd53132d",
+    "candidate_executed": false
   }
 }

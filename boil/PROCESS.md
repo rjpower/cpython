@@ -50,6 +50,10 @@ interfaces before dependent edits. Independent review and preparation can run
 beside implementation; shared builds and quiet timing windows serialize. The
 coordinator owns integration and final validation.
 
+Assign one reviewer to each packet and record that ownership. Additional reviews
+use distinct receipt and evidence filenames. Never overwrite a sealed review;
+retain prior bytes and bind any correction or superseding result explicitly.
+
 Give agents concrete work and completion conditions. Check their actual state;
 a queued message is not a running assignment. Stop obsolete agents and close
 assignments before replacing them. A restart or old plan does not renew work.

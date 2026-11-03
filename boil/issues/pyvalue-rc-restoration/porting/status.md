@@ -1,7 +1,7 @@
 # Porting rules and remaining work
 
 We are closing compiler and ownership gaps before the first universal-value
-register-interpreter measurement. Source checkpoint47 is `4f2734e77cd`.
+register-interpreter measurement. Source checkpoint48 is `dd26d8e34ca`; the latest merged build still describes checkpoint47.
 The [latest merged build](../merged-build/status.md) has 314 repeated/cascading
 errors, 169 objects and no executable; all 7,353 inputs stayed unchanged.
 There is no restored runtime or performance result.
@@ -20,8 +20,10 @@ and reviews rules; Luna analyzes errors and applies approved mechanical batches.
 | Shared FORMAT engine | Foundation A committed as checkpoint47 | Backend/export/public/caller closure design and dependent implementation |
 | Remaining itertools readers | Inventory complete; four tuple-result draft paused | Review reusable canonical copy/update rule; pairwise and zip-longest have separate call boundaries |
 | Pickle arguments/state | Three-reader checkpoint46 committed | Candidate runtime/fault qualification after linking |
-| GenericAlias tuple consumers | Luna inventory complete; Sol designs eight-body closure | Peer design review, then bounded mechanical packets |
-| Held type foundations/cache correctness | Sol causal review | Fix introduced scalar/error/guard defects and extract reviewed dependency-ordered bodies |
+| GenericAlias tuple consumers | Eight implementations composed; final packet correction and public-test coverage under review | Sol actual-code review, root full-TU/object probes, final composition review |
+| Type attribute object bridge | Checkpoint48 committed; both full TUs/objects pass | Linked candidate behavior/fault qualification |
+| Method lookup/call envelope | Ten-body design independently accepted | Bounded one-function Luna packets; compose before admission |
+| Held type foundations/cache correctness | Causal classification accepted; nine canonical foundations accepted in place | Extract exact reviewed dependencies; close remaining slot/MRO/guard/lifecycle defects |
 
 Exact designs and inventories:
 
@@ -30,8 +32,8 @@ Exact designs and inventories:
 - [Pickle per-function recipes](../../../../build/pyvalue-type-pickle-readers-design-20261102-v2/README.md)
 - [Six-function itertools inventory](../../../../build/pyvalue-itertools-tail-inventory-20261102-v1/README.md)
 - [GenericAlias inventory](../../../../build/pyvalue-genericalias-inventory-20261102-v1/README.md)
-- [GenericAlias design under peer review](../../../../build/pyvalue-genericalias-readers-design-20261102-v1/README.md)
-- [Type/cache causal matrix under peer review](../../../../build/pyvalue-typecache-causal-triage-20261102-v1/README.md)
+- [Accepted GenericAlias design and implementation recipes](../../../../build/pyvalue-genericalias-readers-design-20261102-v1/README.md)
+- [Accepted type/cache causal matrix](../../../../build/pyvalue-typecache-causal-triage-20261102-v1/README.md)
 - [Latest family census](../../../../build/pyvalue-v12-error-families-20261102-v1/README.md)
 
 The v12 census predates the latest type and Clinic packets. Its 332 observations map

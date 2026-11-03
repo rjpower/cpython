@@ -9,7 +9,7 @@ ported; hard source or binary compatibility with upstream is not required.
 
 The qualified interim interpreter is built from `eba351fee7d`: register IR and
 NaN-boxed frame values, with boxed heap fields. Universal PyValue restoration
-is on `boil/pyvalue-rc-universal` at `4f2734e77cd`: forty-seven reviewed
+is on `boil/pyvalue-rc-universal` at `dd26d8e34ca`: forty-eight reviewed
 dependent source checkpoints. The remaining original held file is typeobject.c.
 There is no linked or qualified restored interpreter or timing result.
 
@@ -27,8 +27,9 @@ callers are committed after independent code/native review, followed by six
 type readers, four MRO-adjacent readers and seven bootstrap type readers.
 Clinic4, the three pickle/state readers and shared FORMAT foundation A are
 committed after code/native review. The full type TU and object now compile
-without diagnostics. Held type/cache semantics still need admission. Sol designs
-finite type/MRO corrections and GenericAlias tuple ports; FORMAT backend/public
+without diagnostics. Held type/cache semantics still need admission. The type-attribute bridge is checkpoint48. Nine canonical foundations passed
+review in place; the method-lookup design is accepted. GenericAlias eight-body
+composition, code correction and test coverage are active; FORMAT backend/public
 API/caller closure remains mandatory queued work.
 The itertools inventory is complete; its tuple-result design is paused.
 The coordinator reviews actual code/results, integrates

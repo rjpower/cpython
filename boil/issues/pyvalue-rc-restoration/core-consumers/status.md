@@ -56,7 +56,9 @@ The [startup type constructor](type-new/status.md) and subsequent readers are
 committed; three pickle/state readers now make the full type TU/object compile
 without diagnostics. Held scalar/cache correctness remains separate.
 The [object call bridges](../native-parsers/object-call-bridges/status.md)
-are committed. Sol designs GenericAlias tuple consumers and triages concrete
-held type/MRO defects. Remaining format-parser/startup/container and bundled
+are committed. The [type attribute bridge](type-getattro/status.md) is
+checkpoint48. GenericAlias eight-body composition and public tests are under
+review. Sol has accepted the lookup/call design and nine canonical foundations
+in place; remaining held type/MRO defects are finite separate packets. Remaining format-parser/startup/container and bundled
 ports still block the baseline; generated AST/Clinic ports are checkpointed.
 The coordinator owns merged validation.

@@ -1,8 +1,8 @@
 # Current work
 
 Current milestone: complete universal PyValues under RC, then measure the
-register interpreter with JIT disabled. Restoration HEAD is `4f2734e77cd` on
-`boil/pyvalue-rc-universal`: forty-seven reviewed source commits; typeobject.c is the
+register interpreter with JIT disabled. Restoration HEAD is `dd26d8e34ca` on
+`boil/pyvalue-rc-universal`: forty-eight reviewed source commits; typeobject.c is the
 remaining original held file. The latest merged diagnostic build has 169
 objects present and failed to link. No restored runtime, qualification or performance pass is claimed.
 [State](pyvalue-rc-restoration/status.md), [process](../PROCESS.md) and
@@ -17,7 +17,9 @@ objects present and failed to link. No restored runtime, qualification or perfor
    four-wrapper batch is checkpoint45. Pickle/state readers46 and FORMAT
    foundation47 follow after independent code/native review. Full type TU/object
    compile without diagnostics; held scalar/cache semantics remain required.
-   Sol designs finite type/MRO corrections and GenericAlias ports.
+   Type-attribute bridge48 is committed. Nine canonical foundations are accepted
+   in place; the method-lookup/call design is accepted. GenericAlias composition
+   and tests are in review.
    Root gates each rule, integrates accepted deltas and validates the composition.
 3. The counter foundation and thirteen slot wrappers are committed. Full MRO
    admission is under causal review. Fix introduced scalar/error/guard defects;
@@ -31,9 +33,9 @@ objects present and failed to link. No restored runtime, qualification or perfor
 | Experiment | Stage | Owner | Next step |
 | --- | --- | --- | --- |
 | [Native callers and scoped parsers](pyvalue-rc-restoration/native-parsers/status.md) | Flat kernel/five callers and FORMAT foundation A committed | Coordinator; next design queued | Close backend/export/public/caller contract before dependent implementation |
-| [Core and extension consumers](pyvalue-rc-restoration/core-consumers/status.md) | Pickle/state committed; GenericAlias design active | Sol 6.1 design; coordinator gate | Review tuple-source/canonical-copy rules, then one-function Luna packets |
+| [Core and extension consumers](pyvalue-rc-restoration/core-consumers/status.md) | Getattro48 committed; GenericAlias eight-body composition/review active | Root integration; Sol code review; Luna tests | Correct the final packet, close test coverage and compile the composition |
 | [Porting batches](pyvalue-rc-restoration/porting/status.md) | Pickle46 and FORMAT47 committed; further core/bundled ports queued | Coordinator; Sol designs; Luna bulk | Grant bounded reviewed rules and continue merged validation |
-| [Canonical type cache](pyvalue-rc-restoration/typecache/status.md) | Recording-only foundation committed; causal matrix and finite manifests in peer review | Sol 6.1 peers; root gate | Admit exact reviewed dependencies and fix actual scalar/provider/guard defects |
+| [Canonical type cache](pyvalue-rc-restoration/typecache/status.md) | Causal matrix accepted; nine foundations accepted in place; lookup/call design accepted | Root gate; Sol 6.1 review | Grant finite lookup packets; extract reviewed dependencies and close slot/MRO/lifecycle defects |
 | [Value-native VM iteration](pyvalue-rc-restoration/iterator-vm/status.md) | Tuning after safe baseline | Unassigned | Remove boxing from correct iterator bridges and measure |
 | [Integration and interpreter checkpoint](pyvalue-rc-restoration/integration/status.md) | Build diagnostics → ports | Coordinator | Close concrete compile/link blockers, rebuild, qualify and measure |
 | [Method and tracing JIT](jit-e2e-system/status.md) | Deferred to interpreter checkpoint | Coordinator | Reconcile source/runtime with universal values before further native validation |
@@ -45,6 +47,7 @@ linked restored runtime. Primary-worktree documentation is separate.
 
 | Experiment | Source commit or outcome | Remaining validation |
 | --- | --- | --- |
+| [Type attribute bridge](pyvalue-rc-restoration/core-consumers/type-getattro/status.md) | `dd26d8e34ca`, checkpoint48 | Both full TUs/objects pass; four host controls; candidate execution pending |
 | [Wiki reset](wiki-reset/status.md) | Documentation accepted; `34486c7090f` | Maintain current assignments and Loom mirrors |
 | [Canonical value foundation](pyvalue-rc-restoration/foundation/status.md) | `359ea4732de` | Merged runtime |
 | [Canonical storage](pyvalue-rc-restoration/container-storage/status.md) | `edab780a715`, 38 files | Merged container/lifetime routes |

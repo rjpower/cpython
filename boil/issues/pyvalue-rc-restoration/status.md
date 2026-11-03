@@ -35,8 +35,11 @@ bootstrap readers44, corrected Clinic4 wrappers45, pickle/state readers46
 (`defd38874bf`) and shared FORMAT foundation47 (`4f2734e77cd`). Pickle used
 separate Luna function packets after an incomplete first attempt. Final code,
 scope and native/object receipts passed independent review. FORMAT backend,
-export/public API/caller closure remains mandatory. Sol designs GenericAlias
-ports and reviews actual type/MRO admission defects. The itertools
+export/public API/caller closure remains mandatory. Type attribute bridge48
+(`dd26d8e34ca`) is committed after clean full-TU/object probes and four host
+controls. GenericAlias eight-body composition and tests are under actual review;
+the ten-body method-lookup design is independently accepted. Nine canonical
+foundations are accepted in place, with extraction still pending. The itertools
 tuple-result draft is paused.
 Root integrates reviewed code and validates the composition.
 The MRO providers plus one immediate wrapper passed independent
@@ -63,7 +66,8 @@ remained unchanged; no candidate was executed. The checkpoint46 type composition
 passes the full configured translation unit and actual object emission with zero
 diagnostics; all eight host controls pass. Held scalar/type-cache semantics remain
 separate admission work. The recording-only counter is not transaction authority.
-The causal matrix and exact foundation/repair manifests are in peer review;
+The causal matrix is accepted as a finite queue; nine foundational definitions
+are accepted in place, with other slot/MRO/lifecycle obligations still open;
 stronger guarantees from the earlier transaction proposal are not automatically
 first-baseline requirements.
 

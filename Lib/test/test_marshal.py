@@ -721,6 +721,11 @@ class LargeValuesTestCase(unittest.TestCase):
     def test_bytearray(self, size):
         self.check_unmarshallable(bytearray(size))
 
+# Builds with inline values give each exact int in int32 range and each
+# non-NaN float a single identity (see test_tagged_values), so id() cannot
+# tell separately unmarshalled copies of one apart.
+VALUE_IDENTITY = float('1.5') is float('1.5')
+
 def CollectObjectIDs(ids, obj):
     """Collect object ids seen in a structure"""
     if id(obj) in ids:
@@ -756,7 +761,8 @@ class InstancingTestCase(unittest.TestCase, HelperMixin):
             s2 = marshal.dumps(sample, 2)
             n2 = CollectObjectIDs(set(), marshal.loads(s2))
             #old format generated more instances
-            self.assertGreater(n2, n0)
+            if not (VALUE_IDENTITY and type(rsample) in (int, float)):
+                self.assertGreater(n2, n0)
 
             #if complex objects are in there, old format is larger
             if not simple:

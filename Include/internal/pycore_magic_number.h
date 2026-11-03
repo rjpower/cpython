@@ -304,6 +304,16 @@ Known values:
     Python 3.16a1 3704 (Replace DELETE_ATTR with PUSH_NULL; STORE_ATTR)
     Python 3.16a1 3705 (Add INTRINSIC_ADD_CONDITIONAL_ANNOTATION)
     Python 3.16a1 3706 (Add INTRINSIC_MATCH_CLASS_ISINSTANCE)
+    Python 3.16a1 3707 (co_code holds register IR words; add the feedback table)
+    Python 3.16a1 3708 (the assembler folds loads into their consumers)
+    Python 3.16a1 3709 (RETURN_VALUE reads its value through a field)
+    Python 3.16a1 3710 (the assembler folds stores into their producers)
+    Python 3.16a1 3711 (conditional jumps test truth; COPY of a local is a load)
+    Python 3.16a1 3712 (the exception table names the slot of the exception)
+    Python 3.16a1 3713 (remove RESUME_CHECK)
+    Python 3.16a1 3714 (register passes; JUMP_IF_FALSE_OR_POP, JUMP_IF_TRUE_OR_POP)
+    Python 3.16a1 3715 (UNARY_NOT tests the truth of any value)
+    Python 3.16a1 3716 (a call may store its result in a local)
 
     Python 3.17 will start with 3750
 
@@ -313,7 +323,8 @@ Known values:
 
 */
 
-#define PYC_MAGIC_NUMBER 3706
+/* Separate the RC register-IR successor from upstream and tracing caches. */
+#define PYC_MAGIC_NUMBER 64401
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

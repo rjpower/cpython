@@ -46,9 +46,8 @@ def _samply_command_works():
                 "-c",
                 'print("hello")',
             )
-            env = {**os.environ, "PYTHON_JIT": "0"}
             stdout = subprocess.check_output(
-                cmd, cwd=script_dir, text=True, stderr=subprocess.STDOUT, env=env
+                cmd, cwd=script_dir, text=True, stderr=subprocess.STDOUT
             )
         except (subprocess.SubprocessError, OSError):
             return False
@@ -63,7 +62,6 @@ def run_samply(cwd, *args, **env_vars):
     env = os.environ.copy()
     if env_vars:
         env.update(env_vars)
-    env["PYTHON_JIT"] = "0"
     output_file = cwd + "/profile.json.gz"
     base_cmd = (
         "samply",
@@ -201,13 +199,11 @@ class TestSamplyProfiler(unittest.TestCase, TestSamplyProfilerMixin):
 
         with temp_dir() as script_dir:
             script = make_script(script_dir, "perftest", code)
-            env = {**os.environ, "PYTHON_JIT": "0"}
             with subprocess.Popen(
                 [sys.executable, "-Xperf", script],
                 universal_newlines=True,
                 stderr=subprocess.PIPE,
                 stdout=subprocess.PIPE,
-                env=env,
             ) as process:
                 stdout, stderr = process.communicate()
 

@@ -1,0 +1,95 @@
+{
+  "baseline": "617bea5be1b1b6b0d368e9ee8c4ca51eb18f7d5d",
+  "inputs": {
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Objects/codeobject.c": "84ddb0e63f399454d92a3debc99ffb91d2976333358558164fe1bc38f20fd23b",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Python/instrumentation.c": "0aba70e7cc8a795bf3e6ac81a9f4a64921cb3cb613d6b75364d7011b3e1faf32",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/internal/pycore_code.h": "1cab75205a39725c5c0bcc48e604f6368de65873dfa7561161bab43a84662d32",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/internal/pycore_instruments.h": "866202ce4c1cddc4328618fceea16cbab12b3629b17972ad8e1f8289c7d22e9f",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_code.py": "ccb08517c6e43c7d33db4a2332f3707b34543ee14a15294708b277e85b6ad29d",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/pyconfig.h": "ee10d3ffed6c7cbe03f5ab155fb81f44a1e581814ef01cb57db38ff52a5b3e94",
+    "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python": "e985d5790b7924dab4dd5cab4f686fe70d69548c0732ecc9fb1a99e43487a5d1"
+  },
+  "old_codeobject_sha256": "4af5fb4605ef7323b981a9994b6967eaa09a48d6027b368d457dd33635b5984b",
+  "decoder_bodies_sha256": [
+    "a29720355fb2698b349ccf37f66f3587f72c33aefb324bdebd8b0245eb5e662c",
+    "0ab7243fc8ee5ae79d7f6bdaae621472c0927488eb9bcb6d37402f045f732c70",
+    "a5e72c9e024802a1b1a3fa787a7b66c182ab990784d19091e0e767c5f79a2311"
+  ],
+  "compiler": "gcc (Ubuntu 15.2.0-16ubuntu1) 15.2.0\nCopyright (C) 2025 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.\n\n",
+  "variants": {
+    "positive": {
+      "body_sha256": "cf9d8bd07b5deac7551d8b7629a3c4a980a5f1708ea183d00d8e479985a33cba",
+      "source_sha256": "e95ed3c5d67efe66d48d2e62b6b6fea3073356b88b0d7c05827c7d908f7aff55",
+      "binary_sha256": "fcc30d58b13abbd0a10cdb1e12de7460f6ebb9d1ecc18d7e1a7088967d046e51",
+      "patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "command": [
+        "gcc",
+        "-shared",
+        "-fno-omit-frame-pointer",
+        "-mno-omit-leaf-frame-pointer",
+        "-fno-strict-overflow",
+        "-Wsign-compare",
+        "-g",
+        "-Og",
+        "-Wall",
+        "-fPIC",
+        "-I/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug",
+        "-I/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include",
+        "-I/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/internal",
+        "-MMD",
+        "-MF",
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2a/line-controls-debug/positive/headers.d",
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2a/line-controls-debug/positive/fixture.c",
+        "-o",
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2a/line-controls-debug/positive/_h3_safe_line.cpython-316d-x86_64-boil2-linux-gnu.so"
+      ],
+      "records": {
+        "loop": {
+          "returncode": 0,
+          "probe_sha256": "f715b9d20afc7acbfab8d0236dbc695d6dea194e9de712ab039f281cbb248779"
+        },
+        "send": {
+          "returncode": 0,
+          "probe_sha256": "f715b9d20afc7acbfab8d0236dbc695d6dea194e9de712ab039f281cbb248779"
+        }
+      }
+    },
+    "old-cache": {
+      "body_sha256": "accce0e0a9cc33451f51c151c44b28b461869a6ceea9ed72386d5505ad684da4",
+      "source_sha256": "e656d23d156b237578c9d6181931aa7c4933c1275b1c31beafd525b07323a586",
+      "binary_sha256": "11386fc8a9e6e821f2c64c2a9ae103278aeb13344981dc4969ab4b384b372ed3",
+      "patch_sha256": "80f0583479618aef9ea854efccb04943fa6225222a5f523b7f44c9385bdab012",
+      "command": [
+        "gcc",
+        "-shared",
+        "-fno-omit-frame-pointer",
+        "-mno-omit-leaf-frame-pointer",
+        "-fno-strict-overflow",
+        "-Wsign-compare",
+        "-g",
+        "-Og",
+        "-Wall",
+        "-fPIC",
+        "-I/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug",
+        "-I/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include",
+        "-I/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/internal",
+        "-MMD",
+        "-MF",
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2a/line-controls-debug/old-cache/headers.d",
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2a/line-controls-debug/old-cache/fixture.c",
+        "-o",
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2a/line-controls-debug/old-cache/_h3_safe_line.cpython-316d-x86_64-boil2-linux-gnu.so"
+      ],
+      "records": {
+        "loop": {
+          "returncode": 1,
+          "probe_sha256": "f715b9d20afc7acbfab8d0236dbc695d6dea194e9de712ab039f281cbb248779"
+        },
+        "send": {
+          "returncode": 1,
+          "probe_sha256": "f715b9d20afc7acbfab8d0236dbc695d6dea194e9de712ab039f281cbb248779"
+        }
+      }
+    }
+  }
+}

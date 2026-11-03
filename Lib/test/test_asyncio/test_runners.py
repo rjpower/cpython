@@ -6,6 +6,7 @@ import signal
 import sys
 import threading
 import unittest
+from test import support
 from test.test_asyncio import utils as test_utils
 from unittest import mock
 from unittest.mock import patch
@@ -409,6 +410,7 @@ class RunnerTests(BaseTest):
                     ),
                 ):
                     runner.run(f())
+                support.gc_collect()  # For other GCs.
 
     def test_interrupt_call_soon(self):
         # The only case when task is not suspended by waiting a future

@@ -360,13 +360,6 @@ def get_build_info():
         if support.built_with_c_assertions():
             build.append('with_assert')
 
-    # --enable-experimental-jit
-    if sys._jit.is_available():
-        if sys._jit.is_enabled():
-            build.append("JIT")
-        else:
-            build.append("JIT (disabled)")
-
     # --enable-framework=name
     framework = sysconfig.get_config_var('PYTHONFRAMEWORK')
     if framework:

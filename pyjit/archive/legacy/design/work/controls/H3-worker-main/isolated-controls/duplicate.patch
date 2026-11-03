@@ -1,0 +1,11 @@
+--- a/Tools/cases_generator/ir_generator.py
++++ b/Tools/cases_generator/ir_generator.py
+@@ -539,8 +539,6 @@
+             if name in ids and ids[name] != handler:
+                 raise ValueError(f"conflicting handler ID for {name}")
+             ids[name] = handler
+-        if len(set(ids.values())) != len(ids):
+-            raise ValueError("duplicate handler ID")
+         if any(not 0 <= handler < self.count for handler in ids.values()):
+             raise ValueError("handler ID outside domain")
+         if (set(self.bases) != set(ids) or set(self.kinds) != set(ids)

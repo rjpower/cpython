@@ -15,6 +15,9 @@ extern "C" {
 PyAPI_FUNC(PyObject*) _PyList_Extend(PyListObject *, PyObject *);
 PyAPI_FUNC(PyObject) *_PyList_SliceSubscript(PyObject*, PyObject*);
 PyAPI_FUNC(PyObject *) _PyList_BinarySlice(PyObject *, PyObject *, PyObject *);
+// list[start:stop] = value, with start and stop as PySlice_Unpack() gives
+// them for a slice with no step.
+extern int _PyList_StoreSlice(PyObject *, Py_ssize_t, Py_ssize_t, PyObject *);
 PyAPI_FUNC(PyObject *) _PyList_Concat(PyObject *, PyObject *);
 extern void _PyList_DebugMallocStats(FILE *out);
 // _PyList_GetItemRef should be used only when the object is known as a list

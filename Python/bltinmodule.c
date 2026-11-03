@@ -17,6 +17,7 @@
 #include "pycore_pyerrors.h"      // _PyErr_NoMemory()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_pythonrun.h"     // _Py_SourceAsString()
+#include "pycore_stackref.h"      // _PyObject_ValueIdentity()
 #include "pycore_tuple.h"         // _PyTuple_Recycle()
 
 #include "clinic/bltinmodule.c.h"
@@ -1421,14 +1422,15 @@ id as builtin_id
 Return the identity of an object.
 
 This is guaranteed to be unique among simultaneously existing objects.
-(CPython uses the object's memory address.)
+(CPython uses the object's memory address, or for some ints and floats
+a number derived from the value.)
 [clinic start generated code]*/
 
 static PyObject *
 builtin_id_impl(PyModuleDef *self, PyObject *v)
-/*[clinic end generated code: output=4908a6782ed343e9 input=5a534136419631f4]*/
+/*[clinic end generated code: output=4908a6782ed343e9 input=b57e756e2c58d479]*/
 {
-    PyObject *id = PyLong_FromVoidPtr(v);
+    PyObject *id = PyLong_FromVoidPtr((void *)_PyObject_ValueIdentity(v));
 
     if (id && PySys_Audit("builtins.id", "O", id) < 0) {
         Py_DECREF(id);

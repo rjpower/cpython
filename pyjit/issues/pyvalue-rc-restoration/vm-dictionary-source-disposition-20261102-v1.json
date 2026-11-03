@@ -1,0 +1,18 @@
+{
+  "status": "ACCEPT_DEPENDENT_VM_DICTIONARY_SOURCE_NOT_RUNTIME",
+  "author_receipt": "build/worktrees/pyvalue-rc-universal/build/pyvalue-vm-dict-source/final-v1/receipt.json",
+  "author_sha256": "d1606aba51afdb85087104351cf109ea99b1ea560fcaa0327bcf19b58ee2aaaf",
+  "review_receipt": "build/pyvalue-rc-native-consumer-map-20261101-v1/vm-dictionary-component-review-receipt.json",
+  "review_sha256": "57d1a09c1131993304e7e90dce37651f7391085a52cbd3c32bde3a48444eac58",
+  "source_window_closed_early": true,
+  "host_checks_pass": 42,
+  "generators_pass": 7,
+  "runtime_ast_methods": 9,
+  "temporary_input_linearity_proof_sha256": "80f9200411cbe3c99aeda5bc090e831ba00c9053045e0b60a2b86b92ad2a0cb4",
+  "closed": "BUILD_MAP, generic and specialized stores, hinted stores, pre-call scalar PC capture, forced refresh and exact failure-home restoration",
+  "metadata": "Stable IDs, IR formats and targets; exact required four-handler effect metadata changes reviewed",
+  "limits": "Compiler-produced input/window proof; arbitrary malformed injected IR is unsupported. Managed providers, readers, full dictionary and wider native qualification remain open.",
+  "candidate_build": false,
+  "runtime_tests_executed": false,
+  "performance_measured": false
+}

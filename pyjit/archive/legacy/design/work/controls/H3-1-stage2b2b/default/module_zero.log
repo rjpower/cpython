@@ -1,0 +1,6 @@
+{"phase": "state", "case": "module_zero", "optimize": 0, "__debug__": true, "verify": [0, 0], "stress": 0}
+{"phase": "ast", "case": "module_zero", "tree": "Module(body=[Assign(targets=[Name(id='value', ctx=Store(), lineno=1, col_offset=0, end_lineno=1, end_col_offset=5)], value=Constant(value=1, lineno=1, col_offset=8, end_lineno=1, end_col_offset=9), lineno=1, col_offset=0, end_lineno=1, end_col_offset=9)])", "core_limit": [0, 0]}
+{"phase": "compiled", "case": "module_zero", "firstlineno": 1, "co_lines": [[0, 1, 0], [1, 5, 1]], "safe_lines": {"0": 0, "1": 1, "2": 1, "3": 1, "4": 1}, "words": [["RESUME", 0, 0, 0, 0], ["LOAD_SMALL_INT_INLINE", 0, 1, 0, 0], ["STORE_NAME", 0, 0, 0, 0], ["LOAD_COMMON_CONSTANT", 0, 7, 0, 0], ["RETURN_VALUE", 0, 0, 0, 0]], "code_sha256": "1d7d31a837c7fc410810e1cdde4bad151a5b8885760cc9b27b3880ce22ea9839", "linetable_sha256": "65acc94d722488fd6beb720161a3fdb21661880359bd3a73fd05e64d452e9510", "capi_origin": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default/Modules/_testinternalcapi.cpython-316-x86_64-boil2-linux-gnu.so", "capi_sha256": "350ab243edcf9f1595362519694260b45fc0a89b827b62c6bc3d233f5d611f58"}
+{"phase": "enable", "case": "module_zero"}
+{"phase": "enabled", "case": "module_zero"}
+{"phase": "executed", "case": "module_zero", "events": [1]}

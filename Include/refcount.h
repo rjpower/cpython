@@ -105,7 +105,7 @@ PyAPI_FUNC(Py_ssize_t) Py_REFCNT(PyObject *ob);
     static inline Py_ssize_t _Py_REFCNT(PyObject *ob) {
     #if !defined(Py_GIL_DISABLED)
         return ob->ob_refcnt;
-    #else
+#else
         uint32_t local = _Py_atomic_load_uint32_relaxed(&ob->ob_ref_local);
         if (local == _Py_IMMORTAL_REFCNT_LOCAL) {
             return _Py_IMMORTAL_INITIAL_REFCNT;

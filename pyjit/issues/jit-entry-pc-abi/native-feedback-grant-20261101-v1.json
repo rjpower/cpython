@@ -1,0 +1,23 @@
+{
+  "decision": "AUTHORIZE_ONE_FOCUSED_BY_VALUE_PC_ABI_FEEDBACK_COHORT",
+  "source_head": "599897b6b5d0bb973b1eea12f8eb41957004b464",
+  "activation_sha256": "1217ca247657c8e86ed0614bfd113e13595e5c2c636fb125a27c2d709d55106d",
+  "start_utc": "2026-11-01T13:01:38.098912+00:00",
+  "deadline_utc": "2026-11-01T14:01:38.098912+00:00",
+  "source_repair_deadline_unchanged": "2026-11-01T13:16:17.846897+00:00",
+  "session_id": 78640,
+  "source_review_sha256": "9d11b3cb56208f8cf0dac7b64bb616dc8ac70c3235d8ee6ca294a4b9be36c542",
+  "helper_review_sha256": "213f3c566f3e6cca58b0c7579facc310d395af9e22cd9279c2314321caa2bf09",
+  "helper_receipt_sha256": "a1e2d38803b8a734b12582ab4ee7c5a2a55629ddefaa64c795184fc83e50980a",
+  "corrected_root_preflight_sha256": "1d541594c56b631c3b81beaab36bc789034dfe1aaf6616ac64e0b13ed18b7e53",
+  "preserved_parent_fingerprints_sha256": "179a0c38a0c7dcaccce374a6db2ef21f834f2fc5150c9e29f361d41e9df358e6",
+  "preflight_locks": 15,
+  "preserved_parent_fingerprints": 18,
+  "rows": ["fresh_release_build", "release54", "fresh_debug_build", "debug54"],
+  "offline_evidence": ["existing complete native leaf witnesses", "ordinary-handler instruction-pointer handling", "all fourteen entry calls"],
+  "additional_target_probes_authorized": false,
+  "elapsed_authorized": false,
+  "source_edits_during_cohort_authorized": false,
+  "qualification": false,
+  "old_rejection_unchanged": true
+}

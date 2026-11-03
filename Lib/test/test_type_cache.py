@@ -271,7 +271,8 @@ class TypeCacheWithSpecializationTests(unittest.TestCase):
         self._assign_valid_version_or_skip(H)
 
         def to_bool_1(instance):
-            not instance
+            # UNARY_NOT tests truth itself: TO_BOOL remains for "not not"
+            not not instance
 
         self._check_specialization(to_bool_1, H(), "TO_BOOL", should_specialize=True)
         del to_bool_1
@@ -279,7 +280,7 @@ class TypeCacheWithSpecializationTests(unittest.TestCase):
         self._no_more_versions(H)
 
         def to_bool_2(instance):
-            not instance
+            not not instance
 
         self._check_specialization(to_bool_2, H(), "TO_BOOL", should_specialize=False)
 

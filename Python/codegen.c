@@ -1100,6 +1100,10 @@ codegen_visit_annexpr(compiler *c, expr_ty annotation)
     return SUCCESS;
 }
 
+/* The annotations dict is built from this many name and value pairs at a
+ * time. */
+#define ANNOTATIONS_CHUNK (_PY_STACK_USE_GUIDELINE / 2)
+
 static int
 codegen_argannotation(compiler *c, identifier id,
     expr_ty annotation, Py_ssize_t *annotations_len, location loc)
@@ -1131,6 +1135,14 @@ codegen_argannotation(compiler *c, identifier id,
         }
     }
     *annotations_len += 1;
+    if (*annotations_len % ANNOTATIONS_CHUNK == 0) {
+        // Fold the pending pairs into the dict, as codegen_dict does, so
+        // that the stack stays within the slot limit of the register IR.
+        ADDOP_I(c, loc, BUILD_MAP, ANNOTATIONS_CHUNK);
+        if (*annotations_len > ANNOTATIONS_CHUNK) {
+            ADDOP_I(c, loc, DICT_UPDATE, 1);
+        }
+    }
     return SUCCESS;
 }
 
@@ -1206,7 +1218,14 @@ codegen_function_annotations(compiler *c, location loc,
         RETURN_IF_ERROR_IN_SCOPE(
             c, codegen_annotations_in_scope(c, loc, args, returns, &annotations_len)
         );
-        ADDOP_I_IN_SCOPE(c, loc, BUILD_MAP, annotations_len);
+        Py_ssize_t pending = annotations_len % ANNOTATIONS_CHUNK;
+        if (annotations_len < ANNOTATIONS_CHUNK) {
+            ADDOP_I_IN_SCOPE(c, loc, BUILD_MAP, pending);
+        }
+        else if (pending) {
+            ADDOP_I_IN_SCOPE(c, loc, BUILD_MAP, pending);
+            ADDOP_I_IN_SCOPE(c, loc, DICT_UPDATE, 1);
+        }
         RETURN_IF_ERROR(codegen_finish_annotations_scope(c, loc));
         return MAKE_FUNCTION_ANNOTATE;
     }

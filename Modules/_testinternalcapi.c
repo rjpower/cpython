@@ -11,7 +11,6 @@
 
 #include "Python.h"
 #include <string.h>
-#include "pycore_backoff.h"       // JUMP_BACKWARD_INITIAL_VALUE
 #include "pycore_bitutils.h"      // _Py_bswap32()
 #include "pycore_bytesobject.h"   // _PyBytes_Find()
 #include "pycore_ceval.h"         // _PyEval_AddPendingCall()
@@ -24,15 +23,15 @@
 #include "pycore_frame.h"         // _PyInterpreterFrame
 #include "pycore_function.h"      // _PyFunction_GET_BUILTINS
 #include "pycore_gc.h"            // PyGC_Head
+#include "pycore_gc_trace.h"      // _PyGC_TraceVerify()
 #include "pycore_hashtable.h"     // _Py_hashtable_new()
 #include "pycore_import.h"        // _PyImport_ClearExtension()
 #include "pycore_initconfig.h"    // _Py_GetConfigsAsDict()
 #include "pycore_instruction_sequence.h"  // _PyInstructionSequence_New()
 #include "pycore_interpframe.h"   // _PyFrame_GetFunction()
-#include "pycore_jit.h"           // _PyJIT_AddressInJitCode()
 #include "pycore_lock.h"          // PyEvent_WaitTimed()
 #include "pycore_object.h"        // _PyObject_IsFreed()
-#include "pycore_optimizer.h"     // _Py_Executor_DependsOn
+#include "pycore_opcode_metadata.h" // _PyOpcode_OpName
 #include "pycore_pathconfig.h"    // _PyPathConfig_ClearGlobal()
 #include "pycore_pyerrors.h"      // _PyErr_ChainExceptions1()
 #include "pycore_pylifecycle.h"   // _PyInterpreterConfig_InitFromDict()
@@ -228,7 +227,7 @@ test_stop_the_world(PyObject *self, PyObject *Py_UNUSED(args))
 
 #ifdef MS_WINDOWS
 static const char *
-classify_address(uintptr_t addr, int jit_enabled, PyInterpreterState *interp)
+classify_address(uintptr_t addr)
 {
     HMODULE module = NULL;
     if (GetModuleHandleExW(
@@ -246,19 +245,14 @@ classify_address(uintptr_t addr, int jit_enabled, PyInterpreterState *interp)
             }
             return "other";
         }
-        /* Module resolved but path unavailable: treat as non-JIT. */
+        /* Module resolved but path unavailable. */
         return "other";
     }
-#ifdef _Py_JIT
-    if (jit_enabled && _PyJIT_AddressInJitCode(interp, addr)) {
-        return "jit";
-    }
-#endif
     return "other";
 }
 #elif defined(HAVE_DLADDR) && !defined(__wasi__)
 static const char *
-classify_address(uintptr_t addr, int jit_enabled, PyInterpreterState *interp)
+classify_address(uintptr_t addr)
 {
     Dl_info info;
     if (dladdr((void *)addr, &info) != 0
@@ -282,22 +276,12 @@ classify_address(uintptr_t addr, int jit_enabled, PyInterpreterState *interp)
 #endif
         return "other";
     }
-#ifdef _Py_JIT
-    if (jit_enabled && _PyJIT_AddressInJitCode(interp, addr)) {
-        return "jit";
-    }
-#endif
     return "other";
 }
 #else
 static const char *
-classify_address(uintptr_t addr, int jit_enabled, PyInterpreterState *interp)
+classify_address(uintptr_t Py_UNUSED(addr))
 {
-#ifdef _Py_JIT
-    if (jit_enabled && _PyJIT_AddressInJitCode(interp, addr)) {
-        return "jit";
-    }
-#endif
     return "other";
 }
 #endif
@@ -306,10 +290,8 @@ static PyObject *
 classify_stack_addresses(PyObject *self, PyObject *args)
 {
     PyObject *seq = NULL;
-    int jit_enabled = 0;
 
-    if (!PyArg_ParseTuple(args, "O|p:classify_stack_addresses",
-                          &seq, &jit_enabled)) {
+    if (!PyArg_ParseTuple(args, "O:classify_stack_addresses", &seq)) {
         return NULL;
     }
     PyObject *fast = PySequence_Fast(seq, "addresses must be iterable");
@@ -322,8 +304,6 @@ classify_stack_addresses(PyObject *self, PyObject *args)
         Py_DECREF(fast);
         return NULL;
     }
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyInterpreterState *interp = tstate ? tstate->interp : NULL;
     PyObject **items = PySequence_Fast_ITEMS(fast);
     for (Py_ssize_t i = 0; i < n; i++) {
         unsigned long long value = PyLong_AsUnsignedLongLong(items[i]);
@@ -332,7 +312,7 @@ classify_stack_addresses(PyObject *self, PyObject *args)
             Py_DECREF(fast);
             return NULL;
         }
-        const char *label = classify_address((uintptr_t)value, jit_enabled, interp);
+        const char *label = classify_address((uintptr_t)value);
         PyObject *label_obj = PyUnicode_FromString(label);
         if (label_obj == NULL) {
             Py_DECREF(labels);
@@ -343,66 +323,6 @@ classify_stack_addresses(PyObject *self, PyObject *args)
     }
     Py_DECREF(fast);
     return labels;
-}
-
-static PyObject *
-get_jit_code_ranges(PyObject *self, PyObject *Py_UNUSED(args))
-{
-    PyObject *ranges = PyList_New(0);
-    if (ranges == NULL) {
-        return NULL;
-    }
-#ifdef _Py_JIT
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyInterpreterState *interp = tstate ? tstate->interp : NULL;
-    if (interp == NULL) {
-        return ranges;
-    }
-    for (size_t i = 0; i < interp->executor_count; i++) {
-        _PyExecutorObject *exec = interp->executor_ptrs[i];
-        if (exec->jit_code == NULL || exec->jit_size == 0) {
-            continue;
-        }
-        uintptr_t start = (uintptr_t)exec->jit_code;
-        uintptr_t end = start + exec->jit_size;
-        PyObject *start_obj = PyLong_FromUnsignedLongLong(start);
-        PyObject *end_obj = PyLong_FromUnsignedLongLong(end);
-        if (start_obj == NULL || end_obj == NULL) {
-            Py_XDECREF(start_obj);
-            Py_XDECREF(end_obj);
-            Py_DECREF(ranges);
-            return NULL;
-        }
-        PyObject *pair = PyTuple_New(2);
-        if (pair == NULL) {
-            Py_DECREF(start_obj);
-            Py_DECREF(end_obj);
-            Py_DECREF(ranges);
-            return NULL;
-        }
-        PyTuple_SET_ITEM(pair, 0, start_obj);
-        PyTuple_SET_ITEM(pair, 1, end_obj);
-        if (PyList_Append(ranges, pair) < 0) {
-            Py_DECREF(pair);
-            Py_DECREF(ranges);
-            return NULL;
-        }
-        Py_DECREF(pair);
-    }
-#endif
-    return ranges;
-}
-
-static PyObject *
-get_jit_backend(PyObject *self, PyObject *Py_UNUSED(args))
-{
-#ifdef _Py_JIT
-    return PyUnicode_FromString("jit");
-#elif defined(_Py_TIER2)
-    return PyUnicode_FromString("interpreter");
-#else
-    Py_RETURN_NONE;
-#endif
 }
 
 static int
@@ -1587,6 +1507,117 @@ get_co_framesize(PyObject *self, PyObject *arg)
     return PyLong_FromLong(code->co_framesize);
 }
 
+/* The feedback entry of the instruction at word index I of the executing
+ * copy of CODE, which this makes if CODE has never run: None if it has
+ * none, else (kind,
+ * state, first, second, rows), where first and second are the two 32-bit
+ * fields after the header and rows lists the (type_version, aux, handler)
+ * rows of its poly table. */
+static PyObject *
+get_feedback(PyObject *self, PyObject *args)
+{
+    static const char *const kinds[] = {
+        "COUNTER", "BRANCH", "UNARY", "BINARY", "ATTR", "GLOBAL", "CALL",
+    };
+    static const char *const states[] = {"COLD", "MONO", "POLY", "MEGA", "OFF"};
+    PyCodeObject *code;
+    int i;
+    if (!PyArg_ParseTuple(args, "O!i", &PyCode_Type, &code, &i)) {
+        return NULL;
+    }
+    if (i < 0 || i >= Py_SIZE(code)) {
+        PyErr_SetString(PyExc_ValueError, "index out of range");
+        return NULL;
+    }
+    _PyCodeExec *exec = _PyCode_GetExec(code);
+    if (exec == NULL) {
+        return NULL;
+    }
+    if (_PyCode_InstrFbIndex(code, i) <= 0) {
+        Py_RETURN_NONE;
+    }
+    _PyFbHeader *h = _PyIR_InstrFeedback(code, exec, &exec->words[i]);
+    PyObject *rows = PyList_New(0);
+    if (rows == NULL) {
+        return NULL;
+    }
+    if (h->poly) {
+        _PyFbPoly *poly = &exec->feedback->poly[h->poly - 1];
+        for (int r = 0; r < FB_POLY_SIZE && poly->handler[r]; r++) {
+            PyObject *row = Py_BuildValue("(IIi)", poly->type_version[r],
+                                          poly->aux[r], poly->handler[r]);
+            if (row == NULL || PyList_Append(rows, row) < 0) {
+                Py_XDECREF(row);
+                Py_DECREF(rows);
+                return NULL;
+            }
+            Py_DECREF(row);
+        }
+    }
+    uint32_t fields[2] = {0, 0};
+    if (h->kind != FB_COUNTER) {
+        memcpy(fields, h + 1, sizeof(fields));
+    }
+    return Py_BuildValue("(ssIIN)", kinds[h->kind], states[h->state],
+                         fields[0], fields[1], rows);
+}
+
+/* The words of CODE as the compiler emitted them, or with ADAPTIVE those of
+ * its executing copy, which specialisation and instrumentation rewrite:
+ * per word a tuple (handler, a, b, c, d) of the name of its handler and its
+ * fields.  The executing copy of code that has never run is co_code's. */
+static PyObject *
+get_ir(PyObject *self, PyObject *args)
+{
+    PyCodeObject *code;
+    int adaptive = 0;
+    if (!PyArg_ParseTuple(args, "O!|p", &PyCode_Type, &code, &adaptive)) {
+        return NULL;
+    }
+    const _PyIRWord *words = _PyCode_WORDS(code);
+    if (adaptive && code->_co_exec != NULL) {
+        words = code->_co_exec->words;
+    }
+    PyObject *result = PyList_New(0);
+    if (result == NULL) {
+        return NULL;
+    }
+    for (Py_ssize_t w = 0; w < Py_SIZE(code); w++) {
+        _PyIRWord word = FT_ATOMIC_LOAD_UINT64_RELAXED(words[w]);
+        int handler = IR_HANDLER(word);
+        const char *name = handler < IR_FIRST_ONLY_HANDLER
+            ? _PyOpcode_OpName[handler]
+            : _PyIR_OnlyNames[handler - IR_FIRST_ONLY_HANDLER];
+        PyObject *item = Py_BuildValue(
+            "(sIIII)", name, IR_A(word), IR_B(word), IR_C(word), IR_D(word));
+        if (item == NULL || PyList_Append(result, item) < 0) {
+            Py_XDECREF(item);
+            Py_DECREF(result);
+            return NULL;
+        }
+        Py_DECREF(item);
+    }
+    return result;
+}
+
+/* Set the farthest exit of FOR_ITER and SEND that the assembler does not
+ * relax, for code compiled from now on, and return the previous one. */
+static PyObject *
+set_ir_max_forward(PyObject *self, PyObject *arg)
+{
+    int value = PyLong_AsInt(arg);
+    if (value == -1 && PyErr_Occurred()) {
+        return NULL;
+    }
+    if (value < 0 || value > IR_MAX_FORWARD) {
+        PyErr_SetString(PyExc_ValueError, "distance out of range");
+        return NULL;
+    }
+    int old = _PyIR_MaxForward;
+    _PyIR_MaxForward = value;
+    return PyLong_FromLong(old);
+}
+
 static PyObject *
 get_co_localskinds(PyObject *self, PyObject *arg)
 {
@@ -1827,54 +1858,6 @@ verify_stateless_code(PyObject *self, PyObject *args, PyObject *kwargs)
     }
     Py_RETURN_NONE;
 }
-
-#ifdef _Py_TIER2
-
-static PyObject *
-add_executor_dependency(PyObject *self, PyObject *args)
-{
-    PyObject *exec;
-    PyObject *obj;
-    if (!PyArg_ParseTuple(args, "OO", &exec, &obj)) {
-        return NULL;
-    }
-    _Py_Executor_DependsOn((_PyExecutorObject *)exec, obj);
-    Py_RETURN_NONE;
-}
-
-static PyObject *
-invalidate_executors(PyObject *self, PyObject *obj)
-{
-    PyInterpreterState *interp = PyInterpreterState_Get();
-    _Py_Executors_InvalidateDependency(interp, obj, 1);
-    Py_RETURN_NONE;
-}
-
-static PyObject *
-clear_executor_deletion_list(PyObject *self, PyObject *Py_UNUSED(ignored))
-{
-    PyInterpreterState *interp = PyInterpreterState_Get();
-    _Py_ClearExecutorDeletionList(interp);
-    Py_RETURN_NONE;
-}
-
-static PyObject *
-get_exit_executor(PyObject *self, PyObject *arg)
-{
-    if (!PyLong_CheckExact(arg)) {
-        PyErr_SetString(PyExc_TypeError, "argument must be an ID to an _PyExitData");
-        return NULL;
-    }
-    uint64_t ptr;
-    if (PyLong_AsUInt64(arg, &ptr) < 0) {
-        // Error set by PyLong API
-        return NULL;
-    }
-    _PyExitData *exit = (_PyExitData *)ptr;
-    return Py_NewRef(exit->executor);
-}
-
-#endif
 
 static int _pending_callback(void *arg)
 {
@@ -2172,6 +2155,35 @@ get_object_dict_values(PyObject *self, PyObject *obj)
     }
     return res;
 }
+
+#ifdef Py_SHAPES
+// The shape index of an object with inline values, or None if it has none.
+static PyObject *
+get_object_shape(PyObject *self, PyObject *obj)
+{
+    if (!_PyType_HasFeature(Py_TYPE(obj), Py_TPFLAGS_INLINE_VALUES)) {
+        Py_RETURN_NONE;
+    }
+    uint8_t shape = _PyObject_InlineValues(obj)->shape;
+    if (shape == _Py_SHAPE_NONE) {
+        Py_RETURN_NONE;
+    }
+    return PyLong_FromLong(shape);
+}
+
+// The number of shapes of a type with inline values.
+static PyObject *
+get_type_shape_count(PyObject *self, PyObject *type)
+{
+    if (!PyType_Check(type) ||
+        !_PyType_HasFeature((PyTypeObject *)type, Py_TPFLAGS_INLINE_VALUES))
+    {
+        PyErr_SetString(PyExc_TypeError, "expected a type with inline values");
+        return NULL;
+    }
+    return PyLong_FromLong(_PyType_Shapes((PyTypeObject *)type)->nshapes);
+}
+#endif
 
 
 static PyObject*
@@ -2996,6 +3008,98 @@ incref_decref_delayed(PyObject *self, PyObject *op)
     Py_RETURN_NONE;
 }
 
+#ifdef Py_STACKREF_INLINE_VALUES
+// Encode an exact int32 or non-NaN float as an inline stack value, check that
+// the operations valid on any stackref treat it as a value, then box it.
+static PyObject *
+stackref_box_roundtrip(PyObject *self, PyObject *arg)
+{
+    _PyStackRef ref;
+    if (PyLong_CheckExact(arg)) {
+        int32_t i;
+        if (PyLong_AsInt32(arg, &i) < 0) {
+            return NULL;
+        }
+        ref = PyStackRef_FromInt32(i);
+        if (!PyStackRef_IsInlineInt(ref) || PyStackRef_InlineInt(ref) != i
+            || !PyStackRef_BothInlineInt(ref, ref) || !PyStackRef_LongCheck(ref))
+        {
+            PyErr_SetString(PyExc_AssertionError, "bad inline int");
+            return NULL;
+        }
+    }
+    else if (PyFloat_CheckExact(arg)) {
+        double d = PyFloat_AS_DOUBLE(arg);
+        if (isnan(d)) {
+            PyErr_SetString(PyExc_ValueError, "NaN has no inline encoding");
+            return NULL;
+        }
+        ref = PyStackRef_FromDoubleNotNaN(d);
+        double back = PyStackRef_InlineFloat(ref);
+        if (!PyStackRef_IsInlineFloat(ref) || memcmp(&back, &d, sizeof(d)) != 0
+            || PyStackRef_IsInlineInt(ref) || !PyStackRef_FloatCheck(ref))
+        {
+            PyErr_SetString(PyExc_AssertionError, "bad inline float");
+            return NULL;
+        }
+    }
+    else {
+        PyErr_SetString(PyExc_TypeError, "expected an exact int or float");
+        return NULL;
+    }
+    _PyStackRef dup = PyStackRef_DUP(ref);
+    if (!PyStackRef_IsInline(ref) || PyStackRef_IsPointerSpace(ref)
+        || PyStackRef_IsTaggedIndex(ref) || PyStackRef_IsNull(ref)
+        || PyStackRef_IsError(ref) || !PyStackRef_IsValid(ref)
+        || PyStackRef_RefcountOnObject(ref)
+        || PyStackRef_TYPE(ref) != Py_TYPE(arg)
+        || !PyStackRef_Is(dup, ref) || !PyStackRef_Is(PyStackRef_Borrow(ref), ref)
+        || !PyStackRef_Is(PyStackRef_BorrowAt(&ref), ref)
+        || !PyStackRef_IsInlineAt(&ref) || PyStackRef_IsPointerSpaceAt(&ref)
+        || PyStackRef_Is(ref, PyStackRef_None))
+    {
+        PyErr_SetString(PyExc_AssertionError, "inline value predicates disagree");
+        return NULL;
+    }
+    PyStackRef_CLOSE(dup);
+    _PyStackRef boxed = PyStackRef_Box(ref);
+    if (PyStackRef_IsInline(boxed)) {
+        return NULL;
+    }
+    if (!PyStackRef_IsPointerSpaceAt(&boxed) || PyStackRef_IsInlineAt(&boxed)) {
+        PyStackRef_CLOSE(boxed);
+        PyErr_SetString(PyExc_AssertionError, "box is not a pointer");
+        return NULL;
+    }
+    return PyStackRef_AsPyObjectSteal(boxed);
+}
+
+// The names of the frame's local variables that hold inline values.
+static PyObject *
+inline_locals(PyObject *self, PyObject *frame)
+{
+    if (!PyFrame_Check(frame)) {
+        PyErr_SetString(PyExc_TypeError, "argument must be a frame");
+        return NULL;
+    }
+    _PyInterpreterFrame *f = ((PyFrameObject *)frame)->f_frame;
+    PyCodeObject *co = _PyFrame_GetCode(f);
+    PyObject *names = PySet_New(NULL);
+    if (names == NULL) {
+        return NULL;
+    }
+    for (int i = 0; i < co->co_nlocalsplus; i++) {
+        if (PyStackRef_IsInline(f->base[i]) &&
+            PySet_Add(names, PyTuple_GET_ITEM(co->co_localsplusnames, i)) < 0)
+        {
+            Py_DECREF(names);
+            return NULL;
+        }
+    }
+    return names;
+}
+#endif
+
 #ifdef __EMSCRIPTEN__
 #include "emscripten.h"
 
@@ -3341,8 +3445,149 @@ static PyTypeObject SelfInterruptingContextManager_Type = {
 };
 
 
+/* The tracing verifier (Python/gc_trace.c) */
+
+static PyObject *
+verify_and_get_holes(void)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    if (_PyGC_TraceVerify(tstate) < 0) {
+        Py_RETURN_NONE;
+    }
+    return _PyGC_TraceGetHoles(tstate->interp);
+}
+
+/* Run a full collection and verify it whatever the verification mode.
+   Return the list of holes, or None if the verifier cannot run. */
+static PyObject *
+gc_verify(PyObject *self, PyObject *Py_UNUSED(args))
+{
+    return verify_and_get_holes();
+}
+
+/* The holes found by the last verification. */
+static PyObject *
+gc_verify_holes(PyObject *self, PyObject *Py_UNUSED(args))
+{
+    return _PyGC_TraceGetHoles(_PyInterpreterState_GET());
+}
+
+/* The number of verifications that ran in this interpreter. */
+static PyObject *
+gc_verify_count(PyObject *self, PyObject *Py_UNUSED(args))
+{
+    return PyLong_FromSsize_t(_PyGC_TraceCount(_PyInterpreterState_GET()));
+}
+
+
+/* Call factory() and keep the result only in a C local across a verified
+   collection.  Return (holes, id of the object). */
+static PyObject *
+gc_verify_with_c_local(PyObject *self, PyObject *factory)
+{
+    PyObject *obj = PyObject_CallNoArgs(factory);
+    if (obj == NULL) {
+        return NULL;
+    }
+    PyObject *holes = verify_and_get_holes();
+    PyObject *res = NULL;
+    if (holes != NULL) {
+        res = Py_BuildValue("(NK)", holes, (unsigned long long)(uintptr_t)obj);
+    }
+    Py_DECREF(obj);
+    return res;
+}
+
+/* Call factory() and keep the result only in a C local while calling
+   func(id of the object), which may block in another thread.  Return the
+   result of func. */
+static PyObject *
+call_with_c_local(PyObject *self, PyObject *args)
+{
+    PyObject *factory, *func;
+    if (!PyArg_ParseTuple(args, "OO", &factory, &func)) {
+        return NULL;
+    }
+    PyObject *obj = PyObject_CallNoArgs(factory);
+    if (obj == NULL) {
+        return NULL;
+    }
+    PyObject *res = PyObject_CallFunction(func, "K",
+                                          (unsigned long long)(uintptr_t)obj);
+    Py_DECREF(obj);
+    return res;
+}
+
+/* The array's address, masked so that no word of memory holds it: the
+   verifier scans the PyMem blocks that the C stack points to. */
+static uintptr_t hidden_array;
+#define HIDE_MASK ((uintptr_t)0x5a5a5a5a5a5a5a5aULL)
+
+/* Store factory() in a new array, keeping its address only in
+   hidden_array.  The registers that held it are restored on return. */
+static Py_NO_INLINE int
+store_in_hidden_array(PyObject *factory)
+{
+    PyObject **array = PyMem_Calloc(4, sizeof(PyObject *));
+    if (array == NULL) {
+        PyErr_NoMemory();
+        return -1;
+    }
+    array[2] = PyObject_CallNoArgs(factory);
+    if (array[2] == NULL) {
+        PyMem_Free(array);
+        return -1;
+    }
+    hidden_array = (uintptr_t)array ^ HIDE_MASK;
+    return 0;
+}
+
+/* Overwrite the dead stack below the caller, where the call to the
+   factory may have left the object's address. */
+static Py_NO_INLINE void
+clear_dead_stack(void)
+{
+    // Volatile stores, which the compiler may not remove as dead.
+    volatile char buf[16384];
+    for (size_t i = 0; i < sizeof(buf); i++) {
+        buf[i] = 0;
+    }
+}
+
+/* Call factory() and keep the result only in a PyMem_Malloc() array across
+   a verified collection: the pattern that a tracing collector cannot see,
+   which the verifier must report.  Return (holes, the object). */
+static PyObject *
+gc_verify_with_pymem_array(PyObject *self, PyObject *factory)
+{
+    if (store_in_hidden_array(factory) < 0) {
+        return NULL;
+    }
+    clear_dead_stack();
+    PyObject *holes = verify_and_get_holes();
+    PyObject **array = (PyObject **)(hidden_array ^ HIDE_MASK);
+    hidden_array = 0;
+    PyObject *res = NULL;
+    if (holes != NULL) {
+        // Pass on the array's reference, so that the caller can keep the
+        // object and with it its address.
+        res = Py_BuildValue("(NN)", holes, array[2]);
+    }
+    else {
+        Py_DECREF(array[2]);
+    }
+    PyMem_Free(array);
+    return res;
+}
+
 static PyMethodDef module_functions[] = {
     {"get_configs", get_configs, METH_NOARGS},
+    {"gc_verify", gc_verify, METH_NOARGS},
+    {"gc_verify_holes", gc_verify_holes, METH_NOARGS},
+    {"gc_verify_count", gc_verify_count, METH_NOARGS},
+    {"gc_verify_with_c_local", gc_verify_with_c_local, METH_O},
+    {"gc_verify_with_pymem_array", gc_verify_with_pymem_array, METH_O},
+    {"call_with_c_local", call_with_c_local, METH_VARARGS},
     {"get_eval_frame_stats", get_eval_frame_stats, METH_NOARGS, NULL},
     {"get_recursion_depth", get_recursion_depth, METH_NOARGS},
     {"get_c_recursion_remaining", get_c_recursion_remaining, METH_NOARGS},
@@ -3350,8 +3595,6 @@ static PyMethodDef module_functions[] = {
     {"get_stack_margin", get_stack_margin, METH_NOARGS},
     {"test_stop_the_world", test_stop_the_world, METH_NOARGS},
     {"classify_stack_addresses", classify_stack_addresses, METH_VARARGS},
-    {"get_jit_code_ranges", get_jit_code_ranges, METH_NOARGS},
-    {"get_jit_backend", get_jit_backend, METH_NOARGS},
     {"gnu_backtrace_unwind", gnu_backtrace_unwind, METH_NOARGS},
     {"manual_frame_pointer_unwind", manual_frame_pointer_unwind, METH_NOARGS},
     {"test_bswap", test_bswap, METH_NOARGS},
@@ -3384,16 +3627,13 @@ static PyMethodDef module_functions[] = {
     {"code_returns_only_none", code_returns_only_none, METH_O, NULL},
     {"get_co_framesize", get_co_framesize, METH_O, NULL},
     {"get_co_localskinds", get_co_localskinds, METH_O, NULL},
+    {"get_feedback", get_feedback, METH_VARARGS, NULL},
+    {"get_ir", get_ir, METH_VARARGS, NULL},
+    {"set_ir_max_forward", set_ir_max_forward, METH_O, NULL},
     {"get_code_var_counts", _PyCFunction_CAST(get_code_var_counts),
      METH_VARARGS | METH_KEYWORDS, NULL},
     {"verify_stateless_code", _PyCFunction_CAST(verify_stateless_code),
      METH_VARARGS | METH_KEYWORDS, NULL},
-#ifdef _Py_TIER2
-    {"add_executor_dependency", add_executor_dependency, METH_VARARGS, NULL},
-    {"invalidate_executors", invalidate_executors, METH_O, NULL},
-    {"clear_executor_deletion_list", clear_executor_deletion_list, METH_NOARGS, NULL},
-    {"get_exit_executor", get_exit_executor, METH_O, NULL},
-#endif
     {"pending_threadfunc", _PyCFunction_CAST(pending_threadfunc),
      METH_VARARGS | METH_KEYWORDS},
     {"pending_identify", pending_identify, METH_VARARGS, NULL},
@@ -3408,6 +3648,10 @@ static PyMethodDef module_functions[] = {
                               check_pyobject_uninitialized_is_freed, METH_NOARGS},
     {"pymem_getallocatorsname", test_pymem_getallocatorsname, METH_NOARGS},
     {"get_object_dict_values", get_object_dict_values, METH_O},
+#ifdef Py_SHAPES
+    {"get_object_shape", get_object_shape, METH_O},
+    {"get_type_shape_count", get_type_shape_count, METH_O},
+#endif
     {"hamt", new_hamt, METH_NOARGS},
     {"dict_getitem_knownhash",  dict_getitem_knownhash,          METH_VARARGS},
     {"create_interpreter", _PyCFunction_CAST(create_interpreter),
@@ -3446,9 +3690,6 @@ static PyMethodDef module_functions[] = {
     {"get_tlbc_id", get_tlbc_id, METH_O, NULL},
     {"get_long_lived_total", get_long_lived_total, METH_NOARGS},
 #endif
-#ifdef _Py_TIER2
-    {"uop_symbols_test", _Py_uop_symbols_test, METH_NOARGS},
-#endif
     GH_119213_GETARGS_METHODDEF
     {"get_static_builtin_types", get_static_builtin_types, METH_NOARGS},
     {"identify_type_slot_wrappers", identify_type_slot_wrappers, METH_NOARGS},
@@ -3456,6 +3697,10 @@ static PyMethodDef module_functions[] = {
     {"get_tracked_heap_size", get_tracked_heap_size, METH_NOARGS},
     {"is_static_immortal", is_static_immortal, METH_O},
     {"incref_decref_delayed", incref_decref_delayed, METH_O},
+#ifdef Py_STACKREF_INLINE_VALUES
+    {"stackref_box_roundtrip", stackref_box_roundtrip, METH_O},
+    {"inline_locals", inline_locals, METH_O},
+#endif
     GET_NEXT_DICT_KEYS_VERSION_METHODDEF
 #ifdef __EMSCRIPTEN__
     {"emscripten_set_up_async_input_device", emscripten_set_up_async_input_device, METH_NOARGS},
@@ -3479,8 +3724,6 @@ static PyMethodDef module_functions[] = {
 static int
 module_exec(PyObject *module)
 {
-    PyInterpreterState *interp = PyInterpreterState_Get();
-
     if (_PyTestInternalCapi_Init_Lock(module) < 0) {
         return 1;
     }
@@ -3531,21 +3774,6 @@ module_exec(PyObject *module)
         return 1;
     }
 
-    // + 1 more due to one loop spent on tracing.
-    unsigned long threshold = interp->opt_config.jump_backward_initial_value + 2;
-    if (PyModule_Add(module, "TIER2_THRESHOLD",
-                        PyLong_FromUnsignedLong(threshold)) < 0) {
-        return 1;
-    }
-
-    // + 1 to specialize from RESUME to RESUME_CHECK_JIT
-    // + 1 more due to one loop spent on tracing.
-    long resume_threshold = interp->opt_config.resume_initial_value + 2;
-    if (PyModule_Add(module, "TIER2_RESUME_THRESHOLD",
-                    PyLong_FromLong(resume_threshold)) < 0) {
-        return 1;
-    }
-
     if (PyModule_Add(module, "SPECIALIZATION_THRESHOLD",
                         PyLong_FromLong(ADAPTIVE_WARMUP_VALUE + 1)) < 0) {
         return 1;
@@ -3564,6 +3792,21 @@ module_exec(PyObject *module)
     if (PyModule_AddIntMacro(module, _PY_NSMALLPOSINTS) < 0) {
         return 1;
     }
+
+#ifdef Py_STACKREF_INLINE_VALUES
+    // Absent from builds without inline values; false under
+    // PYTHON_TAGGED_VALUES=0.
+    if (PyModule_Add(module, "TAGGED_VALUES", PyBool_FromLong(
+            _PyInterpreterState_GET()->opt_config.tagged_values_enabled)) < 0) {
+        return 1;
+    }
+#endif
+
+#ifdef Py_SHAPES
+    if (PyModule_AddIntMacro(module, _Py_SHAPE_MAX_PER_TYPE) < 0) {
+        return 1;
+    }
+#endif
 
 #ifdef _Py_WITH_FRAME_POINTERS
     if (PyModule_AddIntMacro(module, _Py_WITH_FRAME_POINTERS) < 0) {

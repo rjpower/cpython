@@ -10,7 +10,6 @@
 #include "pycore_interpframe.h"   // FRAME_SPECIALS_SIZE
 #include "pycore_opcode_metadata.h" // _PyOpcode_Caches
 #include "pycore_opcode_utils.h"  // RESUME_AT_FUNC_START
-#include "pycore_optimizer.h"     // _Py_ExecutorDetach
 #include "pycore_pymem.h"         // _PyMem_FreeDelayed()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_setobject.h"     // _PySet_NextEntry()
@@ -474,10 +473,16 @@ _PyCode_Validate(struct _PyCodeConstructor *con)
                         "code: co_code larger than INT_MAX");
         return -1;
     }
-    if (PyBytes_GET_SIZE(con->code) % sizeof(_Py_CODEUNIT) != 0 ||
-        !_Py_IS_ALIGNED(PyBytes_AS_STRING(con->code), sizeof(_Py_CODEUNIT))
-        ) {
+    if (PyBytes_GET_SIZE(con->code) % sizeof(_PyIRWord) != 0) {
         PyErr_SetString(PyExc_ValueError, "code: co_code is malformed");
+        return -1;
+    }
+    if (con->fbinit != NULL
+        && (!PyBytes_Check(con->fbinit)
+            || PyBytes_GET_SIZE(con->fbinit) % sizeof(uint32_t) != 0
+            || PyBytes_GET_SIZE(con->fbinit) / sizeof(uint32_t) > IR_FIELD_MAX + 1))
+    {
+        PyErr_SetString(PyExc_ValueError, "code: co_fbinit is malformed");
         return -1;
     }
 
@@ -500,11 +505,15 @@ _PyCode_Validate(struct _PyCodeConstructor *con)
     return 0;
 }
 
-extern void
-_PyCode_Quicken(_Py_CODEUNIT *instructions, Py_ssize_t size, int enable_counters, int flags);
-
 #ifdef Py_GIL_DISABLED
 static _PyCodeArray * _PyCodeArray_New(Py_ssize_t size);
+
+/* Free a thread-local copy of the bytecode of CO, with its poly tables. */
+static void
+free_bytecode_copy(PyCodeObject *co, char *bytecode)
+{
+    PyMem_Free(bytecode);
+}
 #endif
 
 static int
@@ -562,21 +571,27 @@ init_code(PyCodeObject *co, struct _PyCodeConstructor *con)
     co->co_weakreflist = NULL;
     co->co_extra = NULL;
     co->_co_cached = NULL;
-    co->co_executors = NULL;
 
-    memcpy(_PyCode_CODE(co), PyBytes_AS_STRING(con->code),
+    memcpy(co->co_words, PyBytes_AS_STRING(con->code),
            PyBytes_GET_SIZE(con->code));
+    co->co_nfeedback = 0;
+    if (con->fbinit != NULL && PyBytes_GET_SIZE(con->fbinit)) {
+        co->co_nfeedback = (int)(PyBytes_GET_SIZE(con->fbinit) / sizeof(uint32_t));
+        memcpy((uint32_t *)_PyCode_FBINIT(co), PyBytes_AS_STRING(con->fbinit),
+               PyBytes_GET_SIZE(con->fbinit));
+    }
+    co->_co_exec = NULL;
 #ifdef Py_GIL_DISABLED
     co->co_tlbc = _PyCodeArray_New(INITIAL_SPECIALIZED_CODE_SIZE);
     if (co->co_tlbc == NULL) {
         return -1;
     }
-    co->co_tlbc->entries[0] = co->co_code_adaptive;
+    co->co_tlbc->entries[0] = (char *)co->co_words;
 #endif
     int entry_point = 0;
     while (entry_point < Py_SIZE(co)) {
-        if (_PyCode_CODE(co)[entry_point].op.code == RESUME &&
-           (_PyCode_CODE(co)[entry_point].op.arg & RESUME_OPARG_LOCATION_MASK) != RESUME_AT_GEN_EXPR_START
+        if (_PyCode_InstrHandler(co, entry_point) == RESUME &&
+           (_PyCode_InstrOparg(co, entry_point) & RESUME_OPARG_LOCATION_MASK) != RESUME_AT_GEN_EXPR_START
         ) {
             break;
         }
@@ -584,12 +599,6 @@ init_code(PyCodeObject *co, struct _PyCodeConstructor *con)
     }
     co->_co_firsttraceable = entry_point;
 
-#ifdef Py_GIL_DISABLED
-    int enable_counters = interp->config.tlbc_enabled && interp->opt_config.specialization_enabled;
-    _PyCode_Quicken(_PyCode_CODE(co), Py_SIZE(co), enable_counters, co->co_flags);
-#else
-    _PyCode_Quicken(_PyCode_CODE(co), Py_SIZE(co), interp->opt_config.specialization_enabled, co->co_flags);
-#endif
     notify_code_watchers(PY_CODE_EVENT_CREATE, co);
     return 0;
 }
@@ -726,18 +735,23 @@ _PyCode_New(struct _PyCodeConstructor *con)
         con->linetable = replacement_locations;
     }
 
-    Py_ssize_t size = PyBytes_GET_SIZE(con->code) / sizeof(_Py_CODEUNIT);
+    Py_ssize_t size = PyBytes_GET_SIZE(con->code) / sizeof(_PyIRWord);
+    // The feedback table follows the words, two entries to an item
+    Py_ssize_t nfb = con->fbinit != NULL
+        ? PyBytes_GET_SIZE(con->fbinit) / (Py_ssize_t)sizeof(uint32_t) : 0;
+    Py_ssize_t nitems = size + (nfb + 1) / 2;
     PyCodeObject *co;
 #ifdef Py_GIL_DISABLED
-    co = PyObject_GC_NewVar(PyCodeObject, &PyCode_Type, size);
+    co = PyObject_GC_NewVar(PyCodeObject, &PyCode_Type, nitems);
 #else
-    co = PyObject_NewVar(PyCodeObject, &PyCode_Type, size);
+    co = PyObject_NewVar(PyCodeObject, &PyCode_Type, nitems);
 #endif
     if (co == NULL) {
         Py_XDECREF(replacement_locations);
         PyErr_NoMemory();
         return NULL;
     }
+    Py_SET_SIZE(co, size);
 
 #ifdef Py_GIL_DISABLED
     co->_co_unique_id = _Py_INVALID_UNIQUE_ID;
@@ -762,11 +776,101 @@ _PyCode_New(struct _PyCodeConstructor *con)
  * the legacy "constructors"
  ******************/
 
-PyCodeObject *
-PyUnstable_Code_NewWithPosOnlyArgs(
+/* Whether the inline constant handler of word fits the constant it names */
+static int
+inline_const_fits(_PyIRWord word, PyObject *consts)
+{
+    Py_ssize_t index = _PyIR_FieldOparg(word);
+    if (index >= PyTuple_GET_SIZE(consts)) {
+        return 0;
+    }
+    PyObject *value = PyTuple_GET_ITEM(consts, index);
+    if (IR_HANDLER(word) == LOAD_CONST_INLINE_INT) {
+        return _PyLong_CheckExactAndCompact(value);
+    }
+    return PyFloat_CheckExact(value) && !isnan(PyFloat_AS_DOUBLE(value));
+}
+
+/* Check the fields of words from outside the compiler and marshal that the
+ * interpreter uses as indices without checking them: each handler exists,
+ * each slot is in the frame, and each feedback index has an entry, which
+ * for an operand kept in the entry is not the shared entry 0.  Returns the
+ * words to use, a new reference: code itself, or a copy whose inline
+ * constant handlers that no longer fit their constant run LOAD_CONST, as
+ * after code.replace(co_consts=...). */
+static PyObject *
+check_words(PyObject *code, PyObject *fbinit, PyObject *consts, int nslots)
+{
+    PyObject *result = Py_NewRef(code);
+    const char *bytes = PyBytes_AS_STRING(code);
+    Py_ssize_t nwords = PyBytes_GET_SIZE(code) / (Py_ssize_t)sizeof(_PyIRWord);
+    Py_ssize_t nfb = fbinit == NULL ? 0
+        : PyBytes_GET_SIZE(fbinit) / (Py_ssize_t)sizeof(uint32_t);
+    for (Py_ssize_t i = 0; i < nwords; i++) {
+        _PyIRWord word;
+        memcpy(&word, bytes + i * sizeof(_PyIRWord), sizeof(word));
+        int handler = IR_HANDLER(word);
+        if (handler >= IR_NUM_HANDLERS
+            || !(_PyIR_Formats[handler].flags & _PyIR_VALID))
+        {
+            PyErr_Format(PyExc_ValueError,
+                         "code: word %zd has no handler %d", i, handler);
+            goto error;
+        }
+        const _PyIRFormat *fmt = &_PyIR_Formats[handler];
+        for (int k = 0; k < 4; k++) {
+            int role = fmt->roles[k];
+            uint32_t value = (uint32_t)(word >> (16 + 12 * k)) & IR_FIELD_MAX;
+            if ((role == _PyIR_ROLE_DST || role == _PyIR_ROLE_BASE
+                 || role >= _PyIR_ROLE_IN0) && value >= (uint32_t)nslots)
+            {
+                PyErr_Format(PyExc_ValueError,
+                             "code: word %zd names slot %u of %d", i, value,
+                             nslots);
+                goto error;
+            }
+            if (role == _PyIR_ROLE_FB
+                && (value >= (uint32_t)nfb
+                    || (value == 0 && fmt->imm == _PyIR_LOC_FBARG
+                        && !(handler >= _PyIR_BINARY_OP_FIRST
+                             && handler <= _PyIR_BINARY_OP_FIRST + NB_OPARG_LAST))))
+            {
+                PyErr_Format(PyExc_ValueError,
+                             "code: word %zd has no feedback entry %u", i,
+                             value);
+                goto error;
+            }
+        }
+        if ((handler == LOAD_CONST_INLINE_INT || handler == LOAD_CONST_INLINE_FLOAT)
+            && !inline_const_fits(word, consts))
+        {
+            if (result == code) {
+                Py_SETREF(result, PyBytes_FromStringAndSize(
+                    PyBytes_AS_STRING(code), PyBytes_GET_SIZE(code)));
+                if (result == NULL) {
+                    return NULL;
+                }
+            }
+            _PyIR_SetHandler(&word, LOAD_CONST);
+            memcpy(PyBytes_AS_STRING(result) + i * sizeof(_PyIRWord), &word,
+                   sizeof(word));
+        }
+    }
+    return result;
+
+error:
+    Py_DECREF(result);
+    return NULL;
+}
+
+/* As PyUnstable_Code_NewWithPosOnlyArgs(), with the feedback table of the
+ * words in fbinit, or NULL for none. */
+static PyCodeObject *
+code_new_with_fbinit(
                           int argcount, int posonlyargcount, int kwonlyargcount,
                           int nlocals, int stacksize, int flags,
-                          PyObject *code, PyObject *consts, PyObject *names,
+                          PyObject *code, PyObject *fbinit,
+                          PyObject *consts, PyObject *names,
                           PyObject *varnames, PyObject *freevars, PyObject *cellvars,
                           PyObject *filename, PyObject *name,
                           PyObject *qualname, int firstlineno,
@@ -776,6 +880,8 @@ PyUnstable_Code_NewWithPosOnlyArgs(
     PyCodeObject *co = NULL;
     PyObject *localsplusnames = NULL;
     PyObject *localspluskinds = NULL;
+    PyObject *checked = NULL;
+    PyObject *padded = NULL;
 
     if (varnames == NULL || !PyTuple_Check(varnames) ||
         cellvars == NULL || !PyTuple_Check(cellvars) ||
@@ -783,6 +889,24 @@ PyUnstable_Code_NewWithPosOnlyArgs(
         ) {
         PyErr_BadInternalCall();
         return NULL;
+    }
+
+    // Extensions built for 2-byte code units, such as Cython's, pass zeroed
+    // code that never runs and only spans the line table.  Pad it to whole
+    // words, which are CACHE.
+    if (code != NULL && PyBytes_Check(code)
+        && PyBytes_GET_SIZE(code) % (Py_ssize_t)sizeof(_PyIRWord) != 0
+        && PyBytes_GET_SIZE(code) % 2 == 0)
+    {
+        Py_ssize_t size = PyBytes_GET_SIZE(code);
+        Py_ssize_t words_size = _Py_SIZE_ROUND_UP(size, sizeof(_PyIRWord));
+        padded = PyBytes_FromStringAndSize(NULL, words_size);
+        if (padded == NULL) {
+            return NULL;
+        }
+        memcpy(PyBytes_AS_STRING(padded), PyBytes_AS_STRING(code), size);
+        memset(PyBytes_AS_STRING(padded) + size, 0, words_size - size);
+        code = padded;
     }
 
     // Set the "fast locals plus" info.
@@ -835,19 +959,13 @@ PyUnstable_Code_NewWithPosOnlyArgs(
 
     // gh-110543: Make sure the CO_FAST_HIDDEN flag is set correctly.
     if (!(flags & CO_OPTIMIZED)) {
-        Py_ssize_t code_len = PyBytes_GET_SIZE(code);
-        _Py_CODEUNIT *code_data = (_Py_CODEUNIT *)PyBytes_AS_STRING(code);
-        Py_ssize_t num_code_units = code_len / sizeof(_Py_CODEUNIT);
-        int extended_arg = 0;
-        for (int i = 0; i < num_code_units; i += 1 + _PyOpcode_Caches[code_data[i].op.code]) {
-            _Py_CODEUNIT *instr = &code_data[i];
-            uint8_t opcode = instr->op.code;
-            if (opcode == EXTENDED_ARG) {
-                extended_arg = extended_arg << 8 | instr->op.arg;
-                continue;
-            }
-            if (opcode == LOAD_FAST_AND_CLEAR) {
-                int oparg = extended_arg << 8 | instr->op.arg;
+        Py_ssize_t nwords = PyBytes_GET_SIZE(code) / sizeof(_PyIRWord);
+        const char *words = PyBytes_AS_STRING(code);
+        for (Py_ssize_t i = 0; i < nwords; i++) {
+            _PyIRWord word;
+            memcpy(&word, words + i * sizeof(_PyIRWord), sizeof(word));
+            if (IR_HANDLER(word) == LOAD_FAST_AND_CLEAR) {
+                int oparg = _PyIR_FieldOparg(word);
                 if (oparg >= nlocalsplus) {
                     PyErr_Format(PyExc_ValueError,
                                 "code: LOAD_FAST_AND_CLEAR oparg %d out of range",
@@ -857,7 +975,6 @@ PyUnstable_Code_NewWithPosOnlyArgs(
                 _PyLocals_Kind kind = _PyLocals_GetKind(localspluskinds, oparg);
                 _PyLocals_SetKind(localspluskinds, oparg, kind | CO_FAST_HIDDEN);
             }
-            extended_arg = 0;
         }
     }
 
@@ -876,6 +993,7 @@ PyUnstable_Code_NewWithPosOnlyArgs(
         .flags = flags,
 
         .code = code,
+        .fbinit = fbinit,
         .firstlineno = firstlineno,
         .linetable = linetable,
 
@@ -897,8 +1015,11 @@ PyUnstable_Code_NewWithPosOnlyArgs(
     if (_PyCode_Validate(&con) < 0) {
         goto error;
     }
-    assert(PyBytes_GET_SIZE(code) % sizeof(_Py_CODEUNIT) == 0);
-    assert(_Py_IS_ALIGNED(PyBytes_AS_STRING(code), sizeof(_Py_CODEUNIT)));
+    checked = check_words(code, fbinit, consts, nlocalsplus + stacksize);
+    if (checked == NULL) {
+        goto error;
+    }
+    con.code = checked;
     if (nlocals != PyTuple_GET_SIZE(varnames)) {
         PyErr_SetString(PyExc_ValueError,
                         "code: co_nlocals != len(co_varnames)");
@@ -913,7 +1034,27 @@ PyUnstable_Code_NewWithPosOnlyArgs(
 error:
     Py_XDECREF(localsplusnames);
     Py_XDECREF(localspluskinds);
+    Py_XDECREF(checked);
+    Py_XDECREF(padded);
     return co;
+}
+
+PyCodeObject *
+PyUnstable_Code_NewWithPosOnlyArgs(
+                          int argcount, int posonlyargcount, int kwonlyargcount,
+                          int nlocals, int stacksize, int flags,
+                          PyObject *code, PyObject *consts, PyObject *names,
+                          PyObject *varnames, PyObject *freevars, PyObject *cellvars,
+                          PyObject *filename, PyObject *name,
+                          PyObject *qualname, int firstlineno,
+                          PyObject *linetable,
+                          PyObject *exceptiontable)
+{
+    return code_new_with_fbinit(argcount, posonlyargcount, kwonlyargcount,
+                                nlocals, stacksize, flags, code, NULL, consts,
+                                names, varnames, freevars, cellvars, filename,
+                                name, qualname, firstlineno, linetable,
+                                exceptiontable);
 }
 
 PyCodeObject *
@@ -937,17 +1078,17 @@ PyUnstable_Code_New(int argcount, int kwonlyargcount,
 // NOTE: When modifying the construction of PyCode_NewEmpty, please also change
 // test.test_code.CodeLocationTest.test_code_new_empty to keep it in sync!
 
-static const uint8_t assert0[8] = {
-    RESUME, RESUME_AT_FUNC_START,
-    CACHE, 0,
-    LOAD_COMMON_CONSTANT, CONSTANT_ASSERTIONERROR,
-    RAISE_VARARGS, 1
+// Slot 0 is the only temporary
+static const _PyIRWord assert0[3] = {
+    IR_WORD(RESUME, RESUME_AT_FUNC_START, 0, 0, 0),
+    IR_WORD(LOAD_COMMON_CONSTANT, 0, CONSTANT_ASSERTIONERROR, 0, 0),
+    IR_WORD(RAISE_VARARGS, 0, 1, 0, 0),
 };
 
 static const uint8_t linetable[2] = {
     (1 << 7)  // New entry.
     | (PY_CODE_LOCATION_INFO_NO_COLUMNS << 3)
-    | (4 - 1),  // Four code units.
+    | (3 - 1),  // Three words.
     0,  // Offset from co_firstlineno.
 };
 
@@ -973,7 +1114,7 @@ PyCode_NewEmpty(const char *filename, const char *funcname, int firstlineno)
     if (filename_ob == NULL) {
         goto failed;
     }
-    code_ob = PyBytes_FromStringAndSize((const char *)assert0, 8);
+    code_ob = PyBytes_FromStringAndSize((const char *)assert0, sizeof(assert0));
     if (code_ob == NULL) {
         goto failed;
     }
@@ -1023,10 +1164,10 @@ PyCode_Addr2Line(PyCodeObject *co, int addrq)
     if (data) {
         _PyCoLineInstrumentationData *lines = _Py_atomic_load_ptr_acquire(&data->lines);
         if (lines) {
-            return _Py_Instrumentation_GetLine(co, lines, addrq/sizeof(_Py_CODEUNIT));
+            return _Py_Instrumentation_GetLine(co, lines, addrq);
         }
     }
-    assert(addrq >= 0 && addrq < _PyCode_NBYTES(co));
+    assert(addrq >= 0 && addrq < Py_SIZE(co));
     PyCodeAddressRange bounds;
     _PyCode_InitAddressRange(co, &bounds);
     return _PyCode_CheckLineNumber(addrq, &bounds);
@@ -1039,9 +1180,9 @@ _PyCode_SafeAddr2Line(PyCodeObject *co, int addrq)
         return co->co_firstlineno;
     }
     if (co->_co_monitoring && co->_co_monitoring->lines) {
-        return _Py_Instrumentation_GetLine(co, co->_co_monitoring->lines, addrq/sizeof(_Py_CODEUNIT));
+        return _Py_Instrumentation_GetLine(co, co->_co_monitoring->lines, addrq);
     }
-    if (!(addrq >= 0 && addrq < _PyCode_NBYTES(co))) {
+    if (!(addrq >= 0 && addrq < Py_SIZE(co))) {
         return -1;
     }
     PyCodeAddressRange bounds;
@@ -1105,7 +1246,7 @@ static int
 next_code_delta(PyCodeAddressRange *bounds)
 {
     assert((*bounds->opaque.lo_next) & 128);
-    return (((*bounds->opaque.lo_next) & 7) + 1) * sizeof(_Py_CODEUNIT);
+    return ((*bounds->opaque.lo_next) & 7) + 1;
 }
 
 static int
@@ -1120,7 +1261,7 @@ previous_code_delta(PyCodeAddressRange *bounds)
     while (((*ptr) & 128) == 0) {
         ptr--;
     }
-    return (((*ptr) & 7) + 1) * sizeof(_Py_CODEUNIT);
+    return ((*ptr) & 7) + 1;
 }
 
 static int
@@ -1202,7 +1343,7 @@ advance_with_locations(PyCodeAddressRange *bounds, int *endline, int *column, in
     int first_byte = read_byte(bounds);
     int code = (first_byte >> 3) & 15;
     bounds->ar_start = bounds->ar_end;
-    bounds->ar_end = bounds->ar_start + ((first_byte & 7) + 1) * sizeof(_Py_CODEUNIT);
+    bounds->ar_end = bounds->ar_start + (first_byte & 7) + 1;
     switch(code) {
         case PY_CODE_LOCATION_INFO_NONE:
             bounds->ar_line = *endline = -1;
@@ -1259,7 +1400,7 @@ PyCode_Addr2Location(PyCodeObject *co, int addrq,
         *start_column = *end_column = 0;
         return 1;
     }
-    assert(addrq >= 0 && addrq < _PyCode_NBYTES(co));
+    assert(addrq >= 0 && addrq < Py_SIZE(co));
     PyCodeAddressRange bounds;
     _PyCode_InitAddressRange(co, &bounds);
     _PyCode_CheckLineNumber(addrq, &bounds);
@@ -1343,6 +1484,13 @@ lineiter_next(PyObject *self)
                          _source_offset_converter, &line);
 }
 
+static int
+lineiter_traverse(PyObject *self, visitproc visit, void *arg)
+{
+    Py_VISIT(((lineiterator *)self)->li_code);
+    return 0;
+}
+
 PyTypeObject _PyLineIterator = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "line_iterator",                    /* tp_name */
@@ -1366,7 +1514,7 @@ PyTypeObject _PyLineIterator = {
     0,                                  /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,       /* tp_flags */
     0,                                  /* tp_doc */
-    0,                                  /* tp_traverse */
+    lineiter_traverse,                  /* tp_traverse */
     0,                                  /* tp_clear */
     0,                                  /* tp_richcompare */
     0,                                  /* tp_weaklistoffset */
@@ -1428,12 +1576,19 @@ positionsiter_next(PyObject *self)
         }
         advance_with_locations(&pi->pi_range, &pi->pi_endline, &pi->pi_column, &pi->pi_endcolumn);
     }
-    pi->pi_offset += 2;
+    pi->pi_offset += 1;
     return Py_BuildValue("(O&O&O&O&)",
         _source_offset_converter, &pi->pi_range.ar_line,
         _source_offset_converter, &pi->pi_endline,
         _source_offset_converter, &pi->pi_column,
         _source_offset_converter, &pi->pi_endcolumn);
+}
+
+static int
+positionsiter_traverse(PyObject *self, visitproc visit, void *arg)
+{
+    Py_VISIT(((positionsiterator *)self)->pi_code);
+    return 0;
 }
 
 PyTypeObject _PyPositionsIterator = {
@@ -1459,7 +1614,7 @@ PyTypeObject _PyPositionsIterator = {
     0,                                  /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,       /* tp_flags */
     0,                                  /* tp_doc */
-    0,                                  /* tp_traverse */
+    positionsiter_traverse,             /* tp_traverse */
     0,                                  /* tp_clear */
     0,                                  /* tp_richcompare */
     0,                                  /* tp_weaklistoffset */
@@ -1725,7 +1880,6 @@ PyCode_GetFreevars(PyCodeObject *code)
 }
 
 
-#define GET_OPARG(co, i, initial) (initial)
 // We may want to move these macros to pycore_opcode_utils.h
 // and use them in Python/bytecodes.c.
 #define LOAD_GLOBAL_NAME_INDEX(oparg) ((oparg)>>1)
@@ -1766,10 +1920,10 @@ identify_unbound_names(PyThreadState *tstate, PyCodeObject *co,
     struct co_unbound_counts unbound = {0};
     int numdupes = 0;
     Py_ssize_t len = Py_SIZE(co);
-    for (int i = 0; i < len; i += _PyInstruction_GetLength(co, i)) {
-        _Py_CODEUNIT inst = _Py_GetBaseCodeUnit(co, i);
-        if (inst.op.code == LOAD_ATTR) {
-            int oparg = GET_OPARG(co, i, inst.op.arg);
+    for (int i = 0; i < len; i++) {
+        int opcode = _PyIR_BaseOpcode(_PyCode_InstrHandler(co, i));
+        if (opcode == LOAD_ATTR) {
+            int oparg = _PyCode_InstrOparg(co, i);
             int index = LOAD_ATTR_NAME_INDEX(oparg);
             PyObject *name = GETITEM(co->co_names, index);
             if (PySet_Contains(attrnames, name)) {
@@ -1790,8 +1944,8 @@ identify_unbound_names(PyThreadState *tstate, PyCodeObject *co,
                 numdupes += 1;
             }
         }
-        else if (inst.op.code == LOAD_GLOBAL) {
-            int oparg = GET_OPARG(co, i, inst.op.arg);
+        else if (opcode == LOAD_GLOBAL) {
+            int oparg = _PyCode_InstrOparg(co, i);
             int index = LOAD_ATTR_NAME_INDEX(oparg);
             PyObject *name = GETITEM(co->co_names, index);
             if (PySet_Contains(globalnames, name)) {
@@ -2014,8 +2168,8 @@ int
 _PyCode_CheckNoInternalState(PyCodeObject *co, const char **p_errmsg)
 {
     const char *errmsg = NULL;
-    // We don't worry about co_executors, co_instrumentation,
-    // or co_monitoring.  They are essentially ephemeral.
+    // We don't worry about co_instrumentation or co_monitoring.
+    // They are essentially ephemeral.
     if (co->co_extra != NULL) {
         errmsg = "only basic code objects are supported";
     }
@@ -2137,21 +2291,18 @@ code_returns_only_none(PyCodeObject *co)
             break;
         }
     }
-    /* We don't worry about EXTENDED_ARG for now. */
-    for (int i = 0; i < len; i += _PyInstruction_GetLength(co, i)) {
-        _Py_CODEUNIT inst = _Py_GetBaseCodeUnit(co, i);
-        if (!IS_RETURN_OPCODE(inst.op.code)) {
+    for (int i = 0; i < len; i++) {
+        if (!IS_RETURN_OPCODE(_PyIR_BaseOpcode(_PyCode_InstrHandler(co, i)))) {
             continue;
         }
         assert(i != 0);
-        _Py_CODEUNIT prev = _Py_GetBaseCodeUnit(co, i-1);
-        if (prev.op.code == LOAD_COMMON_CONSTANT &&
-            prev.op.arg == CONSTANT_NONE)
-        {
+        int prev = _PyIR_BaseOpcode(_PyCode_InstrHandler(co, i - 1));
+        int prev_oparg = _PyCode_InstrOparg(co, i - 1);
+        if (prev == LOAD_COMMON_CONSTANT && prev_oparg == CONSTANT_NONE) {
             continue;
         }
-        if (none_index < nconsts && prev.op.code == LOAD_CONST
-            && prev.op.arg == none_index)
+        if (none_index < nconsts && prev == LOAD_CONST
+            && prev_oparg == none_index)
         {
             continue;
         }
@@ -2171,46 +2322,6 @@ _PyCode_ReturnsOnlyNone(PyCodeObject *co)
 }
 
 
-#ifdef _Py_TIER2
-
-static void
-clear_executors(PyCodeObject *co)
-{
-    assert(co->co_executors);
-    for (int i = 0; i < co->co_executors->size; i++) {
-        if (co->co_executors->executors[i]) {
-            _Py_ExecutorDetach(co->co_executors->executors[i]);
-            assert(co->co_executors->executors[i] == NULL);
-        }
-    }
-    PyMem_Free(co->co_executors);
-    co->co_executors = NULL;
-}
-
-void
-_PyCode_Clear_Executors(PyCodeObject *code)
-{
-    clear_executors(code);
-}
-
-#endif
-
-static void
-deopt_code(PyCodeObject *code, _Py_CODEUNIT *instructions)
-{
-    Py_ssize_t len = Py_SIZE(code);
-    for (int i = 0; i < len; i++) {
-        _Py_CODEUNIT inst = _Py_GetBaseCodeUnit(code, i);
-        assert(inst.op.code < MIN_SPECIALIZED_OPCODE);
-        int caches = _PyOpcode_Caches[inst.op.code];
-        instructions[i] = inst;
-        for (int j = 1; j <= caches; j++) {
-            instructions[i+j].cache = 0;
-        }
-        i += caches;
-    }
-}
-
 PyObject *
 _PyCode_GetCode(PyCodeObject *co)
 {
@@ -2227,10 +2338,9 @@ _PyCode_GetCode(PyCodeObject *co)
     Py_BEGIN_CRITICAL_SECTION(co);
     code = cached->_co_code;
     if (code == NULL) {
-        code = PyBytes_FromStringAndSize((const char *)_PyCode_CODE(co),
+        code = PyBytes_FromStringAndSize((const char *)co->co_words,
                                          _PyCode_NBYTES(co));
         if (code != NULL) {
-            deopt_code(co, (_Py_CODEUNIT *)PyBytes_AS_STRING(code));
             assert(cached->_co_code == NULL);
             FT_ATOMIC_STORE_PTR(cached->_co_code, code);
         }
@@ -2276,6 +2386,7 @@ code.__new__ as code_new
     exceptiontable: object(subclass_of="&PyBytes_Type")
     freevars: object(subclass_of="&PyTuple_Type", c_default="NULL") = ()
     cellvars: object(subclass_of="&PyTuple_Type", c_default="NULL") = ()
+    fbinit: object(subclass_of="&PyBytes_Type", c_default="NULL") = b''
     /
 
 Create a code object.  Not for the faint of heart.
@@ -2288,8 +2399,8 @@ code_new_impl(PyTypeObject *type, int argcount, int posonlyargcount,
               PyObject *varnames, PyObject *filename, PyObject *name,
               PyObject *qualname, int firstlineno, PyObject *linetable,
               PyObject *exceptiontable, PyObject *freevars,
-              PyObject *cellvars)
-/*[clinic end generated code: output=069fa20d299f9dda input=e31da3c41ad8064a]*/
+              PyObject *cellvars, PyObject *fbinit)
+/*[clinic end generated code: output=9e0481ed272aa222 input=9534933ed7e73334]*/
 {
     PyObject *co = NULL;
     PyObject *ournames = NULL;
@@ -2349,16 +2460,16 @@ code_new_impl(PyTypeObject *type, int argcount, int posonlyargcount,
     if (ourcellvars == NULL)
         goto cleanup;
 
-    co = (PyObject *)PyCode_NewWithPosOnlyArgs(argcount, posonlyargcount,
-                                               kwonlyargcount,
-                                               nlocals, stacksize, flags,
-                                               code, consts, ournames,
-                                               ourvarnames, ourfreevars,
-                                               ourcellvars, filename,
-                                               name, qualname, firstlineno,
-                                               linetable,
-                                               exceptiontable
-                                              );
+    co = (PyObject *)code_new_with_fbinit(argcount, posonlyargcount,
+                                          kwonlyargcount,
+                                          nlocals, stacksize, flags,
+                                          code, fbinit, consts, ournames,
+                                          ourvarnames, ourfreevars,
+                                          ourcellvars, filename,
+                                          name, qualname, firstlineno,
+                                          linetable,
+                                          exceptiontable
+                                         );
   cleanup:
     Py_XDECREF(ournames);
     Py_XDECREF(ourvarnames);
@@ -2392,6 +2503,23 @@ free_monitoring_data(_PyCoMonitoringData *data)
 }
 
 static void
+free_code_extras(PyCodeObject *co)
+{
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    _PyCodeObjectExtra *co_extra = co->co_extra;
+    co->co_extra = NULL;
+    for (Py_ssize_t i = 0; i < co_extra->ce_size; i++) {
+        freefunc free_extra = interp->co_extra_freefuncs[i];
+
+        if (free_extra != NULL) {
+            free_extra(co_extra->ce_extras[i]);
+        }
+    }
+    PyMem_Free(co_extra);
+}
+
+
+static void
 code_dealloc(PyObject *self)
 {
     PyThreadState *tstate = PyThreadState_GET();
@@ -2409,24 +2537,8 @@ code_dealloc(PyObject *self)
 
     _PyFunction_ClearCodeByVersion(co->co_version);
     if (co->co_extra != NULL) {
-        PyInterpreterState *interp = _PyInterpreterState_GET();
-        _PyCodeObjectExtra *co_extra = co->co_extra;
-
-        for (Py_ssize_t i = 0; i < co_extra->ce_size; i++) {
-            freefunc free_extra = interp->co_extra_freefuncs[i];
-
-            if (free_extra != NULL) {
-                free_extra(co_extra->ce_extras[i]);
-            }
-        }
-
-        PyMem_Free(co_extra);
+        free_code_extras(co);
     }
-#ifdef _Py_TIER2
-    if (co->co_executors != NULL) {
-        clear_executors(co);
-    }
-#endif
 
     Py_XDECREF(co->co_consts);
     Py_XDECREF(co->co_names);
@@ -2449,6 +2561,7 @@ code_dealloc(PyObject *self)
     }
     FT_CLEAR_WEAKREFS(self, co->co_weakreflist);
     free_monitoring_data(co->_co_monitoring);
+    _PyCode_ClearExec(co);
 #ifdef Py_GIL_DISABLED
     if (co->co_tlbc != NULL) {
         // The first element always points to the mutable bytecode at the end of
@@ -2456,7 +2569,7 @@ code_dealloc(PyObject *self)
         for (Py_ssize_t i = 1; i < co->co_tlbc->size; i++) {
             char *entry = co->co_tlbc->entries[i];
             if (entry != NULL) {
-                PyMem_Free(entry);
+                free_bytecode_copy(co, entry);
             }
         }
         PyMem_Free(co->co_tlbc);
@@ -2465,15 +2578,32 @@ code_dealloc(PyObject *self)
     PyObject_Free(co);
 }
 
-#ifdef Py_GIL_DISABLED
 static int
 code_traverse(PyObject *self, visitproc visit, void *arg)
 {
     PyCodeObject *co = _PyCodeObject_CAST(self);
     Py_VISIT(co->co_consts);
+#ifndef Py_GIL_DISABLED
+    /* Code objects are not GC objects in the default build, so the cycle
+       collector never calls this; the tracing collector (Python/gc_trace.c)
+       does, and must see every reference that the code object owns. */
+    Py_VISIT(co->co_names);
+    Py_VISIT(co->co_localsplusnames);
+    Py_VISIT(co->co_localspluskinds);
+    Py_VISIT(co->co_filename);
+    Py_VISIT(co->co_name);
+    Py_VISIT(co->co_qualname);
+    Py_VISIT(co->co_linetable);
+    Py_VISIT(co->co_exceptiontable);
+    if (co->_co_cached != NULL) {
+        Py_VISIT(co->_co_cached->_co_code);
+        Py_VISIT(co->_co_cached->_co_cellvars);
+        Py_VISIT(co->_co_cached->_co_freevars);
+        Py_VISIT(co->_co_cached->_co_varnames);
+    }
+#endif
     return 0;
 }
-#endif
 
 static PyObject *
 code_repr(PyObject *self)
@@ -2528,13 +2658,12 @@ code_richcompare(PyObject *self, PyObject *other, int op)
     if (!eq) {
         goto unequal;
     }
-    for (int i = 0; i < Py_SIZE(co); i++) {
-        _Py_CODEUNIT co_instr = _Py_GetBaseCodeUnit(co, i);
-        _Py_CODEUNIT cp_instr = _Py_GetBaseCodeUnit(cp, i);
-        if (co_instr.cache != cp_instr.cache) {
-            goto unequal;
-        }
-        i += _PyOpcode_Caches[co_instr.op.code];
+    eq = co->co_nfeedback == cp->co_nfeedback
+        && memcmp(co->co_words, cp->co_words, _PyCode_NBYTES(co)) == 0
+        && memcmp(_PyCode_FBINIT(co), _PyCode_FBINIT(cp),
+                  co->co_nfeedback * sizeof(uint32_t)) == 0;
+    if (!eq) {
+        goto unequal;
     }
 
     /* compare constants */
@@ -2614,10 +2743,10 @@ code_hash(PyObject *self)
     SCRAMBLE_IN(co->co_firstlineno);
     SCRAMBLE_IN(Py_SIZE(co));
     for (int i = 0; i < Py_SIZE(co); i++) {
-        _Py_CODEUNIT co_instr = _Py_GetBaseCodeUnit(co, i);
-        SCRAMBLE_IN(co_instr.op.code);
-        SCRAMBLE_IN(co_instr.op.arg);
-        i += _PyOpcode_Caches[co_instr.op.code];
+        SCRAMBLE_IN(_PyCode_WORDS(co)[i]);
+    }
+    for (int i = 0; i < co->co_nfeedback; i++) {
+        SCRAMBLE_IN(_PyCode_FBINIT(co)[i]);
     }
     if ((Py_hash_t)uhash == -1) {
         return -2;
@@ -2668,12 +2797,41 @@ code_getfreevars(PyObject *self, void *closure)
     return _PyCode_GetFreevars(code);
 }
 
+/* The words of the executing copy, whose handlers specialisation and
+ * instrumentation rewrite, or co_code before the first call. */
 static PyObject *
 code_getcodeadaptive(PyObject *self, void *closure)
 {
     PyCodeObject *code = _PyCodeObject_CAST(self);
-    return PyBytes_FromStringAndSize(code->co_code_adaptive,
-                                     _PyCode_NBYTES(code));
+    _PyCodeExec *exec = FT_ATOMIC_LOAD_PTR_ACQUIRE(code->_co_exec);
+    if (exec == NULL) {
+        return _PyCode_GetCode(code);
+    }
+    return PyBytes_FromStringAndSize((const char *)exec->words,
+                                     exec->nwords * sizeof(_PyIRWord));
+}
+
+/* The feedback entries of the executing copy, FB_STRIDE bytes each and
+ * entry 0 first, or None before the first call or without entries. */
+static PyObject *
+code_getfeedback(PyObject *self, void *closure)
+{
+    PyCodeObject *code = _PyCodeObject_CAST(self);
+    _PyCodeExec *exec = FT_ATOMIC_LOAD_PTR_ACQUIRE(code->_co_exec);
+    if (exec == NULL || exec->entries == NULL) {
+        Py_RETURN_NONE;
+    }
+    return PyBytes_FromStringAndSize(exec->entries,
+                                     code->co_nfeedback * FB_STRIDE);
+}
+
+/* The feedback table: per feedback entry, its kind and static operand */
+static PyObject *
+code_getfbinit(PyObject *self, void *closure)
+{
+    PyCodeObject *code = _PyCodeObject_CAST(self);
+    return PyBytes_FromStringAndSize((const char *)_PyCode_FBINIT(code),
+                                     code->co_nfeedback * sizeof(uint32_t));
 }
 
 static PyObject *
@@ -2685,6 +2843,8 @@ code_getcode(PyObject *self, void *closure)
 
 static PyGetSetDef code_getsetlist[] = {
     {"_co_code_adaptive", code_getcodeadaptive, NULL, NULL},
+    {"co_fbinit",         code_getfbinit,       NULL, NULL},
+    {"_co_feedback",      code_getfeedback,     NULL, NULL},
     // The following old names are kept for backward compatibility.
     {"co_varnames",       code_getvarnames,     NULL, NULL},
     {"co_cellvars",       code_getcellvars,     NULL, NULL},
@@ -2699,6 +2859,7 @@ code_sizeof(PyObject *self, PyObject *Py_UNUSED(args))
 {
     PyCodeObject *co = _PyCodeObject_CAST(self);
     size_t res = _PyObject_VAR_SIZE(Py_TYPE(co), Py_SIZE(co));
+    res += _PyCode_ExecSizeOf(co);
     _PyCodeObjectExtra *co_extra = (_PyCodeObjectExtra*) co->co_extra;
     if (co_extra != NULL) {
         res += sizeof(_PyCodeObjectExtra);
@@ -2745,6 +2906,7 @@ code.replace
     co_qualname: unicode(c_default="((PyCodeObject *)self)->co_qualname") = unchanged
     co_linetable: object(subclass_of="&PyBytes_Type", c_default="((PyCodeObject *)self)->co_linetable") = unchanged
     co_exceptiontable: object(subclass_of="&PyBytes_Type", c_default="((PyCodeObject *)self)->co_exceptiontable") = unchanged
+    co_fbinit: object(subclass_of="&PyBytes_Type", c_default="NULL") = unchanged
 
 Return a copy of the code object with new values for the specified fields.
 [clinic start generated code]*/
@@ -2758,8 +2920,8 @@ code_replace_impl(PyCodeObject *self, int co_argcount,
                   PyObject *co_freevars, PyObject *co_cellvars,
                   PyObject *co_filename, PyObject *co_name,
                   PyObject *co_qualname, PyObject *co_linetable,
-                  PyObject *co_exceptiontable)
-/*[clinic end generated code: output=e75c48a15def18b9 input=e944fdac8b456114]*/
+                  PyObject *co_exceptiontable, PyObject *co_fbinit)
+/*[clinic end generated code: output=ca4997a8f05a288c input=f2236468f8933e03]*/
 {
 #define CHECK_INT_ARG(ARG) \
         if (ARG < 0) { \
@@ -2799,6 +2961,7 @@ code_replace_impl(PyCodeObject *self, int co_argcount,
     PyObject *varnames = NULL;
     PyObject *cellvars = NULL;
     PyObject *freevars = NULL;
+    PyObject *fbinit = NULL;
     if (co_varnames == NULL) {
         varnames = get_localsplus_names(self, CO_FAST_LOCAL, self->co_nlocals);
         if (varnames == NULL) {
@@ -2821,14 +2984,23 @@ code_replace_impl(PyCodeObject *self, int co_argcount,
         co_freevars = freevars;
     }
 
-    co = PyCode_NewWithPosOnlyArgs(
+    if (co_fbinit == NULL) {
+        fbinit = PyBytes_FromStringAndSize((const char *)_PyCode_FBINIT(self),
+                                           self->co_nfeedback * sizeof(uint32_t));
+        if (fbinit == NULL) {
+            goto error;
+        }
+        co_fbinit = fbinit;
+    }
+    co = code_new_with_fbinit(
         co_argcount, co_posonlyargcount, co_kwonlyargcount, co_nlocals,
-        co_stacksize, co_flags, co_code, co_consts, co_names,
+        co_stacksize, co_flags, co_code, co_fbinit, co_consts, co_names,
         co_varnames, co_freevars, co_cellvars, co_filename, co_name,
         co_qualname, co_firstlineno,
         co_linetable, co_exceptiontable);
 
 error:
+    Py_XDECREF(fbinit);
     Py_XDECREF(code);
     Py_XDECREF(varnames);
     Py_XDECREF(cellvars);
@@ -2876,8 +3048,8 @@ static struct PyMethodDef code_methods[] = {
 PyTypeObject PyCode_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "code",
-    offsetof(PyCodeObject, co_code_adaptive),
-    sizeof(_Py_CODEUNIT),
+    offsetof(PyCodeObject, co_words),
+    sizeof(_PyIRWord),
     code_dealloc,                       /* tp_dealloc */
     0,                                  /* tp_vectorcall_offset */
     0,                                  /* tp_getattr */
@@ -2899,11 +3071,7 @@ PyTypeObject PyCode_Type = {
     Py_TPFLAGS_DEFAULT,                 /* tp_flags */
 #endif
     code_new__doc__,                    /* tp_doc */
-#ifdef Py_GIL_DISABLED
     code_traverse,                      /* tp_traverse */
-#else
-    0,                                  /* tp_traverse */
-#endif
     0,                                  /* tp_clear */
     code_richcompare,                   /* tp_richcompare */
     offsetof(PyCodeObject, co_weakreflist),     /* tp_weaklistoffset */
@@ -3337,97 +3505,6 @@ _PyCodeArray_New(Py_ssize_t size)
     return arr;
 }
 
-// Get the underlying code unit, leaving instrumentation
-static _Py_CODEUNIT
-deopt_code_unit(PyCodeObject *code, int i)
-{
-    _Py_CODEUNIT *src_instr = _PyCode_CODE(code) + i;
-    _Py_CODEUNIT inst = {
-        .cache = FT_ATOMIC_LOAD_UINT16_RELAXED(*(uint16_t *)src_instr)};
-    int opcode = inst.op.code;
-    if (opcode < MIN_INSTRUMENTED_OPCODE) {
-        inst.op.code = _PyOpcode_Deopt[opcode];
-        assert(inst.op.code < MIN_SPECIALIZED_OPCODE);
-    }
-    // JIT should not be enabled with free-threading
-    assert(inst.op.code != ENTER_EXECUTOR);
-    return inst;
-}
-
-static void
-copy_code(PyInterpreterState *interp, _Py_CODEUNIT *dst, PyCodeObject *co)
-{
-    int code_len = (int) Py_SIZE(co);
-    for (int i = 0; i < code_len; i += _PyInstruction_GetLength(co, i)) {
-        dst[i] = deopt_code_unit(co, i);
-    }
-    _PyCode_Quicken(dst, code_len, interp->opt_config.specialization_enabled, co->co_flags);
-}
-
-static Py_ssize_t
-get_pow2_greater(Py_ssize_t initial, Py_ssize_t limit)
-{
-    // initial must be a power of two
-    assert(!(initial & (initial - 1)));
-    Py_ssize_t res = initial;
-    while (res && res < limit) {
-        res <<= 1;
-    }
-    return res;
-}
-
-static _Py_CODEUNIT *
-create_tlbc_lock_held(PyInterpreterState *interp, PyCodeObject *co, Py_ssize_t idx)
-{
-    _PyCodeArray *tlbc = co->co_tlbc;
-    if (idx >= tlbc->size) {
-        Py_ssize_t new_size = get_pow2_greater(tlbc->size, idx + 1);
-        if (!new_size) {
-            PyErr_NoMemory();
-            return NULL;
-        }
-        _PyCodeArray *new_tlbc = _PyCodeArray_New(new_size);
-        if (new_tlbc == NULL) {
-            return NULL;
-        }
-        memcpy(new_tlbc->entries, tlbc->entries, tlbc->size * sizeof(void *));
-        _Py_atomic_store_ptr_release(&co->co_tlbc, new_tlbc);
-        _PyMem_FreeDelayed(tlbc, tlbc->size * sizeof(void *));
-        tlbc = new_tlbc;
-    }
-    char *bc = PyMem_Calloc(1, _PyCode_NBYTES(co));
-    if (bc == NULL) {
-        PyErr_NoMemory();
-        return NULL;
-    }
-    copy_code(interp, (_Py_CODEUNIT *) bc, co);
-    assert(tlbc->entries[idx] == NULL);
-    tlbc->entries[idx] = bc;
-    return (_Py_CODEUNIT *) bc;
-}
-
-static _Py_CODEUNIT *
-get_tlbc_lock_held(PyCodeObject *co)
-{
-    _PyCodeArray *tlbc = co->co_tlbc;
-    _PyThreadStateImpl *tstate = (_PyThreadStateImpl *)PyThreadState_GET();
-    int32_t idx = tstate->tlbc_index;
-    if (idx < tlbc->size && tlbc->entries[idx] != NULL) {
-        return (_Py_CODEUNIT *)tlbc->entries[idx];
-    }
-    PyInterpreterState *interp = tstate->base.interp;
-    return create_tlbc_lock_held(interp, co, idx);
-}
-
-_Py_CODEUNIT *
-_PyCode_GetTLBC(PyCodeObject *co)
-{
-    _Py_CODEUNIT *result;
-    Py_BEGIN_CRITICAL_SECTION(co);
-    result = get_tlbc_lock_held(co);
-    Py_END_CRITICAL_SECTION();
-    return result;
-}
 
 // My kingdom for a bitset
 struct flag_set {
@@ -3523,7 +3600,7 @@ free_unused_bytecode(PyCodeObject *co, struct flag_set *indices_in_use)
     // in the code object.
     for (Py_ssize_t i = 1; i < tlbc->size; i++) {
         if (is_bytecode_unused(tlbc, i, indices_in_use)) {
-            PyMem_Free(tlbc->entries[i]);
+            free_bytecode_copy(co, tlbc->entries[i]);
             tlbc->entries[i] = NULL;
         }
     }

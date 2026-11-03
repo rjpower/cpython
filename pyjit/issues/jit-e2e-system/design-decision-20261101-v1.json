@@ -1,0 +1,41 @@
+{
+  "canonical_copy_note": "Tracing proposal content unchanged except one method-proposal link rebased for its canonical repository location; immutable original719dc99e remains bound by independent review.",
+  "decision": "ACCEPT_COHESIVE_METHOD_AND_TRACING_JIT_ARCHITECTURE_FOR_FIRST_SOURCE_CUT",
+  "design": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/boil/design/jit-e2e-system.md",
+    "sha256": "724b2ab88e55394ea6e536887b2aeb6b871ce69e74d802fe02eb620a17912ccc"
+  },
+  "independent_receipt": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-e2e-system-review-20261101-v1/integrated-receipt.json",
+    "sha256": "42e579a348147b39fe1ae1889cfd1208ad6c0cc3d563180c4e82df10a8509257"
+  },
+  "independent_review": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-e2e-system-review-20261101-v1/integrated-review.md",
+    "sha256": "f220f0a9132ad6d3a9fd70a91e07c8461dda7c155c5cc10df061c54385abc9b7"
+  },
+  "loom_revision": 32,
+  "loom_snapshot": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/fundamental-runtime-review-20261101/runtime-execution-focus-artifact-v32.md",
+    "sha256": "c9f8abafba2a71cb13bb98b8f77896ad9a04fd7cf5f85797c78373d9ae8d1861"
+  },
+  "method_research": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/boil/design/jit-method-research-20261101.md",
+    "sha256": "edbfe8bb74d45a68466816af36a92f1ba0f0affb3f340c72b7959b53289109e5"
+  },
+  "milestones": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/boil/issues/jit-e2e-system/implementation-milestones-20261101-v1.md",
+    "sha256": "1dd376f89eaff125aae44a2ef5a5ec27e3884aebcd41a4cec6a8dfb22fd6f9e7"
+  },
+  "runtime_unchanged": true,
+  "source_compiler_target_timing_integration_authorized": false,
+  "tracing_original": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-e2e-tracing-design-20261101-v1/proposal.md",
+    "sha256": "719dc99ee4e5267520ec8556b9b2cbd8caf704ef59bd2564233658f3736f5f6a"
+  },
+  "tracing_research": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/boil/design/jit-tracing-research-20261101.md",
+    "sha256": "83c46de19d9fac99cdcb54c8c1faa35c0fbf0ec2196836ba9c44dd11b0f84694"
+  },
+  "user_feedback_review_id": 36,
+  "utc": "2026-11-01T16:12:50.853866+00:00"
+}

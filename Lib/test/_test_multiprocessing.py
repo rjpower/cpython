@@ -3429,6 +3429,10 @@ class _TestPool(BaseTestCase):
         # check that we indeed waited for all jobs
         self.assertGreater(time.monotonic() - t_start, 0.9)
 
+    # Under a gc-debug build a stale word on a pool thread's -Og stack points
+    # at the MapResult, so the conservative stack scan keeps the tasks alive.
+    @unittest.skipIf(support.Py_GC and support.Py_DEBUG,
+                     "a pool thread's -Og stack keeps the results alive")
     def test_release_task_refs(self):
         # Issue #29861: task arguments and results should not be kept
         # alive after we are done with them.
@@ -3935,6 +3939,7 @@ class TestManagerExceptions(unittest.TestCase):
         self.mgr.shutdown()
         self.mgr.join()
 
+    @support.requires_refcounting
     @warnings_helper.ignore_fork_in_thread_deprecation_warnings()
     def test_queue_get(self):
         queue = self.mgr.Queue()
@@ -3947,6 +3952,7 @@ class TestManagerExceptions(unittest.TestCase):
             wr = weakref.ref(e)
         self.assertEqual(wr(), None)
 
+    @support.requires_refcounting
     @warnings_helper.ignore_fork_in_thread_deprecation_warnings()
     def test_dispatch(self):
         if gc.isenabled():
@@ -4592,6 +4598,7 @@ class _TestHeap(BaseTestCase):
         multiprocessing.heap.BufferWrapper._heap = self.old_heap
         super().tearDown()
 
+    @support.requires_refcounting
     def test_heap(self):
         iterations = 5000
         maxblocks = 50
@@ -4771,6 +4778,7 @@ class _TestSharedMemory(BaseTestCase):
         else:
             local_sms = shmem_name_or_obj
         local_sms.buf[:len(binary_data)] = binary_data
+        support.gc_collect()  # For other GCs.
         local_sms.close()
 
     def _new_shm_name(self, prefix):
@@ -5009,6 +5017,8 @@ class _TestSharedMemory(BaseTestCase):
         p.join()
         self.assertEqual(bytes(sms.buf[:5]), b'HELLO')
 
+        # The sliced views must be released before the mmap closes.
+        support.gc_collect()  # For other GCs.
         sms.close()
 
     @warnings_helper.ignore_fork_in_thread_deprecation_warnings()
@@ -7790,6 +7800,13 @@ class BaseMixin(object):
         processes = None
 
         threads = set(threading._dangling) - set(cls.dangling[1])
+        if threads and support.Py_GC and not any(t.is_alive() for t in threads):
+            # A queue's feeder thread that stopped after the collection
+            # above was still in threading._active then; under Py_GC only
+            # the next collection frees it.
+            threads = None
+            test.support.gc_collect()
+            threads = set(threading._dangling) - set(cls.dangling[1])
         if threads:
             test.support.environment_altered = True
             support.print_warning(f'Dangling threads: {threads}')

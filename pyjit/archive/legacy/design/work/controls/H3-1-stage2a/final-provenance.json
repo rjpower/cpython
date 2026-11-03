@@ -1,0 +1,141 @@
+{
+  "tested_base": "6c724c29408f4751b570c6980320801921be7e64",
+  "evidence_head": "3dff5879df83487f0b5bc27fa896f15094638742",
+  "tested_tree": "base plus exactly recorded source hashes; commit follows evidence collection",
+  "sources": {
+    "Include/internal/pycore_ir.h": "856a6006988307d28ee67b7bc82cd91b1a355e95c7bd2f3333a696031856f754",
+    "Include/internal/pycore_ir_metadata.h": "89a8c568721eeaf16b64c608392502e657b01edeac18323bd24c7d7e2e8bcee6",
+    "Include/internal/pycore_opcode_metadata.h": "63de5388cad9f22f33736573603ca53ccbf476e21bc00d4e337b1cf67a3e0fed",
+    "Include/opcode_ids.h": "29226f817fa5520a279be89d5430e4b865a3addf557afdb440865845aa1187f9",
+    "Lib/test/libregrtest/worker.py": "d32b7ea772edfaa1e28f53c3c1a7219cdd132498416adcbde7d9159f331eab2f",
+    "Lib/test/test_code.py": "60e194368abd0b0a67f1b3bccb8e03fe34dabb542f052a97fdef984914666f35",
+    "Lib/test/test_generated_cases.py": "507ad00e47c7523107aa9d82c4b4e189f758f040dcc88cf49e373ab846e392f6",
+    "Lib/test/test_ir.py": "5045ccf9f4b952613115cb06f3fb56847acd099a77dcbdea1338ea2308662c36",
+    "Modules/_testinternalcapi.c": "d031f5e57f02b064df2d5b967a06bee8f5a6ea40104bffdd51c43a236e3382c3",
+    "Objects/codeobject.c": "4af5fb4605ef7323b981a9994b6967eaa09a48d6027b368d457dd33635b5984b",
+    "Python/assemble.c": "e1e9eb4bfd9eac3b6f7d02cc04a5f820d567b58e81b58e59d6a169f340dc264b",
+    "Python/bytecodes.c": "cf5f7c177820d6640b59f079d6c878a4db48d06c42f17cb0e6b4547e780e879e",
+    "Python/instrumentation.c": "0aba70e7cc8a795bf3e6ac81a9f4a64921cb3cb613d6b75364d7011b3e1faf32",
+    "Python/ir.c": "89df1b0566a298b654a02a67dfe80008929288e276a09908ce07da947909d2bf",
+    "Python/specialize.c": "9d87cb5fdf1b550720873fd645c649a0ff609ec8e04687395ae71bb19d8ac8e0",
+    "Tools/cases_generator/_typing_backports.py": "4fe25f5705e4f9f047ba330c70264032291c64d24cbd5f2d6da0615978521021",
+    "Tools/cases_generator/analyzer.py": "ca9f47ffce6c476c7b4319fc50d892e227e617497775e3e04d4adda3cf1c74c1",
+    "Tools/cases_generator/call_effects.py": "019e265f303bb7aec6caf4c38b94b1752bbbcfef905c2a04f6ab6d9a39974888",
+    "Tools/cases_generator/cwriter.py": "95f5d2f670fb23766830b4c2230c011d852a76e7e1482bbdde3c667e74dc6865",
+    "Tools/cases_generator/generators_common.py": "2b75dc0ea9c970ecb3c46c436c3842bcd3936806ec575445153aa01ed21fd4d6",
+    "Tools/cases_generator/ir_generator.py": "d30a55601af6ea3e7359c662b7a6291e41c22869b3b9caa620999e5a607dc0cf",
+    "Tools/cases_generator/ir_metadata_generator.py": "56de2c3e3bf9d6222113f8b0e1d42ac8dcb7363a5c45d45f3423e4745c6b7d42",
+    "Tools/cases_generator/lexer.py": "40596eaab735fa6630e3a11432d6bad1753e6ef0b2a81d6e7cd293f8855c2fce",
+    "Tools/cases_generator/opcode_id_generator.py": "ccb4f92fb5432f3670d28b56ccffe9f790e4b81e28d1eefe46bdee41a3046895",
+    "Tools/cases_generator/opcode_metadata_generator.py": "9eed1565e2a8bc34aa1e6ed291d8cffa71d6be805e578400ef4f4930ca37f3cd",
+    "Tools/cases_generator/parser.py": "5eaa82d5c1375a9b4da1da7ce65e7d971dcc8c8008980436bef85a4fcdbb4fd8",
+    "Tools/cases_generator/parsing.py": "a79ea8da0f1f18c1ae637ee130910174cd764692dd7196b19db8c4658f718ef9",
+    "Tools/cases_generator/plexer.py": "c13ce4a0b558791b1843e0969ee6abfc3e094e2116cc817fc1101dee9ccbb876",
+    "Tools/cases_generator/py_metadata_generator.py": "7ab01092ea9506b6ee0f9554d6e601a3cb60395a41ab4e3fbc134e2709695bde",
+    "Tools/cases_generator/root_check.py": "aa466a07f9fce22c91d2c12fc07aafbce140b1d91ea68b854297c5490c07540f",
+    "Tools/cases_generator/root_check_c.py": "990e247878dcc1982d6adba71a1ede5064da2f00bbb5d51a67a34f9d974ac571",
+    "Tools/cases_generator/stack.py": "056b64f0b098ea9add1a6c03dfa31d2929078c424132f035a906b71b4700bf96",
+    "Tools/cases_generator/uop_id_generator.py": "35faaeb3554025d5ae8589c3d5838bdd323bd8ea19e30fb41a809dbf92c7aef0"
+  },
+  "builds": {
+    "default": {
+      "build/default/python": "16d082c82415c5f83b1265f49f79319b7c3ba9b949e9c3b2d726078f8b51a5f1",
+      "build/default/pyconfig.h": "b5a7d11bb3f7315543313cb91ea3855397491f315aab6b9b771eec8bfa8f8cd0",
+      "build/default/Makefile": "aef20aa4deee2ba4c41b885bf11123a009338fefc17356cb605f85534942f82e",
+      "build/default/build/lib.linux-x86_64-3.16/_testinternalcapi.cpython-316-x86_64-boil2-linux-gnu.so": "8877fa9cf6077b602ea7d940f1a294872336920ef9c8c208d4658fa74545031b"
+    },
+    "debug": {
+      "build/debug/python": "6a73106f574a4242bead2436855e08fe09862a9581b8b1242cdb847c0ec5bd94",
+      "build/debug/pyconfig.h": "ee10d3ffed6c7cbe03f5ab155fb81f44a1e581814ef01cb57db38ff52a5b3e94",
+      "build/debug/Makefile": "7161e4e3eb90bc5c198c7af83439b31b019576f0a7a118984f5251bfdcdbc136",
+      "build/debug/build/lib.linux-x86_64-3.16/_testinternalcapi.cpython-316d-x86_64-boil2-linux-gnu.so": "8ff91c8a821c27341d209b00dd61fd6924b5fb9bd81b0390ed4b1b2563bfca04"
+    }
+  },
+  "products": {
+    "Include/opcode_ids.h": {
+      "stage1": "771037b58eb30ba432fbfb07a8d9f45a5b1d6e4a3d06b5b551efa4206bcd9a27",
+      "current": "29226f817fa5520a279be89d5430e4b865a3addf557afdb440865845aa1187f9",
+      "unchanged": false
+    },
+    "Include/internal/pycore_opcode_metadata.h": {
+      "stage1": "681c7e36e4ad1cd5b13cac4030648f452361f15f31ab6eb81ce5704b291f38de",
+      "current": "63de5388cad9f22f33736573603ca53ccbf476e21bc00d4e337b1cf67a3e0fed",
+      "unchanged": false
+    },
+    "Include/internal/pycore_ir_metadata.h": {
+      "stage1": "833284cb41c69784a815611db02925bbde707b2d6c7b52e0e6f99d40e1f76b53",
+      "current": "89a8c568721eeaf16b64c608392502e657b01edeac18323bd24c7d7e2e8bcee6",
+      "unchanged": false
+    },
+    "Include/internal/pycore_uop_ids.h": {
+      "stage1": "adef43dad1a4ba28590bd085da8d76c52e2bcf9d146f6170d9dc70e9f9d6bce5",
+      "current": "adef43dad1a4ba28590bd085da8d76c52e2bcf9d146f6170d9dc70e9f9d6bce5",
+      "unchanged": true
+    },
+    "Python/generated_ir_cases.c.h": {
+      "stage1": "8068a0b14f92492d234cbaec06f53946581536f569b10abff6c4390d1f85cfc7",
+      "current": "8068a0b14f92492d234cbaec06f53946581536f569b10abff6c4390d1f85cfc7",
+      "unchanged": true
+    },
+    "Python/ir_targets.h": {
+      "stage1": "f9c4a09ee2ea39803265e1d038ace8eae02eb31c16a55a0d128cf559c46e8076",
+      "current": "f9c4a09ee2ea39803265e1d038ace8eae02eb31c16a55a0d128cf559c46e8076",
+      "unchanged": true
+    },
+    "Lib/_opcode_metadata.py": {
+      "stage1": "22e857b0cdb86946239f10769c321da25e2c8e5b37e01d0127b3f4b53d2397a8",
+      "current": "22e857b0cdb86946239f10769c321da25e2c8e5b37e01d0127b3f4b53d2397a8",
+      "unchanged": true
+    }
+  },
+  "evidence": {
+    "assert-kill-worker-legacy.py": "51ac5e05325b8b44b1dfae9a56e80ef364731ee33d9eff83e1497d7ad434e8e9",
+    "assert-kill-worker.py": "5fe7b8c1e67af8e595913c2f2e28ce3bd7c1a3ab544594ea64a933dc28634958",
+    "baseline-constructor-marshal.log": "bc1bd0bd7b277d14f288cb2c85b810ec7469f45fe76a79b25b2af6a2fcc42ea8",
+    "baseline-constructor-marshal.py": "4158a88a64080d14867fb734fd09b08a74f92884292df0c6a81f292a0c3fc03b",
+    "baseline-pristine.log": "650f97030a4faa974a9bf02b01cb42a746959eff068060e1056215c2e6750180",
+    "baseline-pristine.py": "9d64a8615af5918ca6da088d89d4abfac32cc87c40495f4fb4ce4f38e4de2b5b",
+    "check_domain.py": "769d625f6f8cd07a8030ea06f58e404d5b626c85624eee4609b7fad9719fae96",
+    "check_regen.py": "52619cdd392fb806e03d7d2788c44c3abd81550170d037a34a3ec6ddad22822f",
+    "debug-gate0-accepted.log": "b217f40977fba848f6423134a1f8dce1a28d1391bb743a2180362ed2ebde404c",
+    "debug-gate1-accepted.log": "c53b626e0854c62167189dd60e77df24e2e149e622b6cef319d4fde470ad95e8",
+    "debug-kill-accepted.log": "c269d5f619e2e18b6cae8f717b552abc0d7901daa70aae25502c67aa043e422b",
+    "debug-kill-env-recheck.log": "faf8b752da432e2b597a25c21bc9a9d3bcd652ed1bc6ca7762268d0c7dbb148d",
+    "debug-kill-final.log": "654a11ede3ae46b63f8cbdd4b5d0409423ff5f24755ceda6a32267002996714e",
+    "debug-kill-strict.log": "7191ce0ff4248149513ccf38474e9569c0c2ba132db0be0f5fca23482285d497",
+    "default-gate0-accepted.log": "24bd1de7703d430600ca8f264255efa925d3e17df071c9f784070eab0feb37de",
+    "default-gate1-accepted.log": "9c47ad6f428a091d7999bb91799a0c60a48d96508889c3c2a6c771b0976dbe80",
+    "domain-equality.log": "99b55dfc2d5a59f7b8643def0041286f1eea133af3ed7fcf1e06759a184a5a8b",
+    "kill-workers-final.jsonl": "254502031747c363537aef73cf9c7848a6f62a2401490d42c6642e9d25ef2339",
+    "kill-workers.jsonl": "47222241429b1986b219c88aa377cda75533efad7c9f1f12a8e52214c952c177",
+    "regen-closure.log": "c39cced3a0dc30900ca494934088e6f23b9e2a7a1688704ec1d4361ba1d81d5a",
+    "root-source-scan.log": "0d9c206bfcfda16bec17c6b2c156196c00501bac0299e9011803b56c87c0dbe9",
+    "root-stats-check.log": "15d4797b433c1cddea0175c6d7551f2eacf3690695c2e85eeb70bb65996b4159",
+    "root-stats-final-check.log": "0c332238c7f6b3572879fc9cfb051b3651194ccb4a86a8553742b2e3aa7673f3",
+    "run_scalar_controls.py": "b93049cd40c1bef1b274fa88f7599db517d880f5de94370d80be092371eaed48",
+    "scalar-controls-debug/make/header.patch": "cd33aeca174809ce1bcdff5b272f630dfeb35e295ad89a0cbe626ebf09538296",
+    "scalar-controls-debug/make/headers.d": "d00fd295c62c07586ae76deb721a80177827d28fdf34cf6add22ecd8901dd931",
+    "scalar-controls-debug/make/output.json": "360229558d92d24cbd2b07c54ed6eaec550a77a0abf0612c6fa26d5cf9d3d5ea",
+    "scalar-controls-debug/manifest.json": "4eb5c690840d0728b0d5475dfdc09880cd24030a4bbcc8c5565a843ce7807a6e",
+    "scalar-controls-debug/positive/header.patch": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "scalar-controls-debug/positive/headers.d": "3c96e8b0e391b98b2627fd6a957ebb592a6bb53af39b83bfd8bcd309cd7a464c",
+    "scalar-controls-debug/positive/output.json": "1aee52383fc53a4a80427cc7879dc5a328b6d25310e7d76ce81fda7e12d48c18",
+    "scalar-controls-debug/rewrite/header.patch": "43af1a4a3a1181c96dcc1edf72206f59ad4cf67098a0711239bc4cd515804d7e",
+    "scalar-controls-debug/rewrite/headers.d": "e27d756c33bec6d2dcaf1597f7ac73fc91f4ba24bc08db3f07a68d9ae397bd6e",
+    "scalar-controls-debug/rewrite/output.json": "af673fd64ec717ae6d21966e5f11e5606016db9ef8234682e29a972b40737a97",
+    "scalar-controls-debug-accepted.log": "976bce9bfb0a7d3a4ce850a87f60d907d051cb2531211d80e6d4db44b2f37f51",
+    "scalar-controls-default/make/header.patch": "cd33aeca174809ce1bcdff5b272f630dfeb35e295ad89a0cbe626ebf09538296",
+    "scalar-controls-default/make/headers.d": "956005bc3d26f5a43739c43f683932667f5596c9ba0720371d25dadfc110e589",
+    "scalar-controls-default/make/output.json": "59b2398b0426f81f8ffbed7acd1ba7af28c24a005689426a835491cea7b1715a",
+    "scalar-controls-default/manifest.json": "e6ce9b8d10fb248f986fb4730f6f87c6d0e160052f135f004aee528935a74f07",
+    "scalar-controls-default/positive/header.patch": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "scalar-controls-default/positive/headers.d": "e6db5500cb52e85ca99b5160f3608d01bc47a5ef28c4dae92f69b6bcd70c633f",
+    "scalar-controls-default/positive/output.json": "ca2915b0848a3b1a8f2cb6ed108ea225349f757a970b21855f29d69a54247b98",
+    "scalar-controls-default/rewrite/header.patch": "43af1a4a3a1181c96dcc1edf72206f59ad4cf67098a0711239bc4cd515804d7e",
+    "scalar-controls-default/rewrite/headers.d": "34cb712d79507794849d078a94f437c5a1e2b1390f6044c4e5ec92329d710147",
+    "scalar-controls-default/rewrite/output.json": "8321bed93d03bc71ddb66917c0820f2608ff67f23fc14e928391e9a2287036e9",
+    "scalar-controls-default-accepted.log": "976bce9bfb0a7d3a4ce850a87f60d907d051cb2531211d80e6d4db44b2f37f51",
+    "scalar-fixture-proposal.patch": "0b6ddb4d3d0348606a4e9adcffcfc54c3444ec67ac62ae98ec44a20ec14b202b",
+    "unbuilt-accepted.log": "3dca492c2bd0d577aac0d8c03a65aea3d1f8a64e282a4c6109affb1685a94e99"
+  }
+}

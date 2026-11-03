@@ -360,8 +360,6 @@ class TraceTestCase(unittest.TestCase):
     # Disable gc collection when tracing, otherwise the
     # deallocators may be traced as well.
     def setUp(self):
-        if os.environ.get('PYTHON_UOPS_OPTIMIZE') == '0':
-            self.skipTest("Line tracing behavior differs when JIT optimizer is disabled")
         self.using_gc = gc.isenabled()
         gc.disable()
         self.addCleanup(sys.settrace, sys.gettrace())
@@ -445,6 +443,7 @@ class TraceTestCase(unittest.TestCase):
     def test_12_tighterloop(self):
         self.run_test(tighterloop_example)
 
+    @support.requires_refcounting
     def test_13_genexp(self):
         self.run_test(generator_example)
         # issue1265: if the trace function contains a generator,
@@ -3047,6 +3046,7 @@ class TestEdgeCases(unittest.TestCase):
         self.addCleanup(sys.settrace, sys.gettrace())
         sys.settrace(None)
 
+    @support.requires_refcounting
     def test_reentrancy(self):
         def foo(*args):
             ...

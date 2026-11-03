@@ -1,0 +1,40 @@
+--- a/Modules/_testinternalcapi.c
++++ b/Modules/_testinternalcapi.c
+@@ -28,6 +28,7 @@
+ #include "pycore_initconfig.h"    // _Py_GetConfigsAsDict()
+ #include "pycore_instruction_sequence.h"  // _PyInstructionSequence_New()
+ #include "pycore_interpframe.h"   // _PyFrame_GetFunction()
++#include "pycore_ir.h"              // _PyIR_MakeWord(), _PyIR_SetHandler()
+ #include "pycore_lock.h"          // PyEvent_WaitTimed()
+ #include "pycore_object.h"        // _PyObject_IsFreed()
+ #include "pycore_object_deferred.h" // _PyObject_SetDeferredRefcount()
+@@ -4398,7 +4399,29 @@
+     Py_RETURN_NONE;
+ }
+ 
++/* Exercise the actual scalar boundaries before their uint16_t casts. */
++static PyObject *
++ir_scalar_boundary(PyObject *self, PyObject *args)
++{
++    int rewrite, handler;
++    if (!PyArg_ParseTuple(args, "pi:ir_scalar_boundary", &rewrite, &handler)) {
++        return NULL;
++    }
++    _PyIRWord before = IR_WORD(NOP, 1, 2, 3, 4);
++    _PyIRWord word = before;
++    int accepted;
++    if (rewrite) {
++        accepted = _PyIR_SetHandler(&word, handler);
++    }
++    else {
++        accepted = _PyIR_MakeWord(handler, 1, 2, 3, 4, &word);
++    }
++    return Py_BuildValue("(iKK)", accepted,
++                         (unsigned long long)before, (unsigned long long)word);
++}
++
+ static PyMethodDef module_functions[] = {
++    {"ir_scalar_boundary", ir_scalar_boundary, METH_VARARGS},
+     {"specialize_current_instruction", specialize_current_instruction, METH_VARARGS},
+     {"get_configs", get_configs, METH_NOARGS},
+     {"gc_verify", gc_verify, METH_NOARGS},

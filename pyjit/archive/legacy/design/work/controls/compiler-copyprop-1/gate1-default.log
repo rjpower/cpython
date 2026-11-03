@@ -1,0 +1,15 @@
+Using random seed: 3864845658
+0:00:00 load avg: 6.03 mem:   47.4 MiB Run 16 tests in parallel using 8 worker processes (timeout: 10 min, worker timeout: 15 min)
+/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_coroutines.py:2281: RuntimeWarning: coroutine 'CoroutineTest.test_bpo_45813_1.<locals>.f' was never awaited
+  frame.clear()
+RuntimeWarning: Enable tracemalloc to get the object allocation traceback
+/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_ir.py:1049: RuntimeWarning: assigning None to 1 unbound local
+  frame.f_lineno = f.__code__.co_firstlineno + 1
+
+== Tests result: SUCCESS ==
+
+Total duration: 11.8 sec
+Total tests: run=1,783 (filtered) skipped=13
+Total test files: run=16/16 (filtered)
+Result: SUCCESS
+gate 1 passed on /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default

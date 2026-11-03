@@ -10,12 +10,12 @@
 #include "pycore_critical_section.h" // _PyCriticalSection_Resume()
 #include "pycore_dtoa.h"          // _dtoa_state_INIT()
 #include "pycore_freelist.h"      // _PyObject_ClearFreeLists()
+#include "pycore_gc_trace.h"      // _PyGC_TRACE_CAPTURE_THREAD()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_interpframe.h"   // _PyThreadState_HasStackSpace()
 #include "pycore_object.h"        // _Py_ClearImmortal()
 #include "pycore_obmalloc.h"      // _PyMem_obmalloc_state_on_heap()
 #include "pycore_opcode_utils.h"  // NUM_COMMON_CONSTANTS
-#include "pycore_optimizer.h"     // JIT_CLEANUP_THRESHOLD
 #include "pycore_parking_lot.h"   // _PyParkingLot_AfterFork()
 #include "pycore_pyerrors.h"      // _PyErr_Clear()
 #include "pycore_pylifecycle.h"   // _PyAST_Fini()
@@ -466,7 +466,7 @@ alloc_interpreter(void)
 static void
 free_interpreter(PyInterpreterState *interp)
 {
-#ifdef Py_GIL_DISABLED
+#ifdef WITH_MIMALLOC
     mi_subproc_t *subproc = interp->mimalloc.subproc;
     if (subproc != NULL) {
         // Delete the sub-process only when no abandoned segment points to it.
@@ -526,27 +526,6 @@ is_env_enabled(const char *env_name)
     return env && *env != '\0' && *env != '0';
 }
 
-static inline bool
-is_env_disabled(const char *env_name)
-{
-    char *env = Py_GETENV(env_name);
-    return env != NULL && *env == '0';
-}
-
-static inline void
-init_policy(uint16_t *target, const char *env_name, uint16_t default_value,
-            long min_value, long max_value)
-{
-    *target = default_value;
-    char *env = Py_GETENV(env_name);
-    if (env && *env != '\0') {
-        long value = atol(env);
-        if (value >= min_value && value <= max_value) {
-            *target = (uint16_t)value;
-        }
-    }
-}
-
 static PyStatus
 init_interpreter(PyInterpreterState *interp,
                  _PyRuntimeState *runtime, int64_t id,
@@ -583,7 +562,8 @@ init_interpreter(PyInterpreterState *interp,
     PyConfig_InitPythonConfig(&interp->config);
 #ifdef Py_GIL_DISABLED
     _Py_brc_init_state(interp);
-
+#endif
+#ifdef WITH_MIMALLOC
     interp->mimalloc.subproc = mi_subproc_new();
     if (interp->mimalloc.subproc == NULL) {
         return _PyStatus_NO_MEMORY();
@@ -604,53 +584,9 @@ init_interpreter(PyInterpreterState *interp,
         interp->monitoring_tool_versions[t] = 0;
     }
     interp->_code_object_generation = 0;
-    interp->jit = false;
-    interp->compiling = false;
-    interp->executor_blooms = NULL;
-    interp->executor_ptrs = NULL;
-    interp->executor_count = 0;
-    interp->executor_capacity = 0;
-    interp->executor_deletion_list_head = NULL;
-    interp->executor_creation_counter = JIT_CLEANUP_THRESHOLD;
-
-    // Initialize optimization configuration from environment variables
-    // PYTHON_JIT_STRESS sets aggressive defaults for testing, but can be overridden
-    uint16_t jump_default = JUMP_BACKWARD_INITIAL_VALUE;
-    uint16_t resume_default = RESUME_INITIAL_VALUE;
-    uint16_t side_exit_default = SIDE_EXIT_INITIAL_VALUE;
-
-    if (is_env_enabled("PYTHON_JIT_STRESS")) {
-        jump_default = 63;
-        side_exit_default = 63;
-        resume_default = 127;
-    }
-
-    init_policy(&interp->opt_config.jump_backward_initial_value,
-                "PYTHON_JIT_JUMP_BACKWARD_INITIAL_VALUE",
-                jump_default, 1, MAX_VALUE);
-    init_policy(&interp->opt_config.jump_backward_initial_backoff,
-                "PYTHON_JIT_JUMP_BACKWARD_INITIAL_BACKOFF",
-                JUMP_BACKWARD_INITIAL_BACKOFF, 0, MAX_BACKOFF);
-    init_policy(&interp->opt_config.resume_initial_value,
-                "PYTHON_JIT_RESUME_INITIAL_VALUE",
-                resume_default, 1, MAX_VALUE);
-    init_policy(&interp->opt_config.resume_initial_backoff,
-                "PYTHON_JIT_RESUME_INITIAL_BACKOFF",
-                RESUME_INITIAL_BACKOFF, 0, MAX_BACKOFF);
-    init_policy(&interp->opt_config.side_exit_initial_value,
-                "PYTHON_JIT_SIDE_EXIT_INITIAL_VALUE",
-                side_exit_default, 1, MAX_VALUE);
-    init_policy(&interp->opt_config.side_exit_initial_backoff,
-                "PYTHON_JIT_SIDE_EXIT_INITIAL_BACKOFF",
-                SIDE_EXIT_INITIAL_BACKOFF, 0, MAX_BACKOFF);
-
-    // Trace fitness configuration
-    init_policy(&interp->opt_config.fitness_initial,
-                "PYTHON_JIT_FITNESS_INITIAL",
-                FITNESS_INITIAL, EXIT_QUALITY_CLOSE_LOOP, FITNESS_INITIAL);
-
     interp->opt_config.specialization_enabled = !is_env_enabled("PYTHON_SPECIALIZATION_OFF");
-    interp->opt_config.uops_optimize_enabled = !is_env_disabled("PYTHON_UOPS_OPTIMIZE");
+    const char *tagged_values = Py_GETENV("PYTHON_TAGGED_VALUES");
+    interp->opt_config.tagged_values_enabled = !(tagged_values && *tagged_values == '0');
     if (interp != &runtime->_main_interpreter) {
         /* Fix the self-referential, statically initialized fields. */
         interp->dtoa = (struct _dtoa_state)_dtoa_state_INIT(interp);
@@ -913,10 +849,6 @@ interpreter_clear(PyInterpreterState *interp, PyThreadState *tstate)
     Py_CLEAR(interp->after_forkers_child);
 #endif
 
-
-#ifdef _Py_TIER2
-    _Py_ClearExecutorDeletionList(interp);
-#endif
     _PyAST_Fini(interp);
     _PyAtExit_Fini(interp);
 
@@ -931,21 +863,7 @@ interpreter_clear(PyInterpreterState *interp, PyThreadState *tstate)
     // Finalize warnings after last gc so that any finalizers can
     // access warnings state
     _PyWarnings_Fini(interp);
-    struct _PyExecutorObject *cold = interp->cold_executor;
-    if (cold != NULL) {
-        interp->cold_executor = NULL;
-        assert(cold->vm_data.valid);
-        assert(!cold->vm_data.cold);
-        _PyExecutor_Free(cold);
-    }
 
-    struct _PyExecutorObject *cold_dynamic = interp->cold_dynamic_executor;
-    if (cold_dynamic != NULL) {
-        interp->cold_dynamic_executor = NULL;
-        assert(cold_dynamic->vm_data.valid);
-        assert(!cold_dynamic->vm_data.cold);
-        _PyExecutor_Free(cold_dynamic);
-    }
     /* We don't clear sysdict and builtins until the end of this function.
        Because clearing other attributes can execute arbitrary Python code
        which requires sysdict and builtins. */
@@ -1609,8 +1527,7 @@ init_threadstate(_PyThreadStateImpl *_tstate,
     _tstate->base_frame.f_locals = NULL;
     _tstate->base_frame.frame_obj = NULL;
     _tstate->base_frame.instr_ptr = NULL;
-    _tstate->base_frame.stackpointer = _tstate->base_frame.localsplus;
-    _tstate->base_frame.return_offset = 0;
+    _tstate->base_frame.return_slot = 0;
     _tstate->base_frame.owner = FRAME_OWNED_BY_INTERPRETER;
     _tstate->base_frame.visited = 0;
 #ifdef Py_DEBUG
@@ -1619,7 +1536,8 @@ init_threadstate(_PyThreadStateImpl *_tstate,
 #ifdef Py_GIL_DISABLED
     _tstate->base_frame.tlbc_index = 0;
 #endif
-    _tstate->base_frame.localsplus[0] = PyStackRef_NULL;
+    _tstate->base_frame.base = _tstate->base_frame.owned_slots;
+    _tstate->base_frame.owned_slots[0] = PyStackRef_NULL;
 
     // current_frame starts pointing to the base frame
     tstate->current_frame = &_tstate->base_frame;
@@ -1632,8 +1550,6 @@ init_threadstate(_PyThreadStateImpl *_tstate,
     tstate->datastack_limit = NULL;
     tstate->datastack_cached_chunk = NULL;
     tstate->what_event = -1;
-    tstate->current_executor = NULL;
-    tstate->jit_exit = NULL;
     tstate->dict_global_version = 0;
 
     _tstate->c_stack_soft_limit = UINTPTR_MAX;
@@ -1647,9 +1563,6 @@ init_threadstate(_PyThreadStateImpl *_tstate,
     _tstate->asyncio_running_task = NULL;
     _tstate->lazy_imports = NULL;
 
-#ifdef _Py_TIER2
-    _tstate->jit_tracer_state = NULL;
-#endif
     tstate->delete_later = NULL;
 
     llist_init(&_tstate->mem_free_queue);
@@ -1914,10 +1827,6 @@ PyThreadState_Clear(PyThreadState *tstate)
 
     _PyThreadState_ClearMimallocHeaps(tstate);
 
-#ifdef _Py_TIER2
-    _PyJit_TracerFree((_PyThreadStateImpl *)tstate);
-#endif
-
     tstate->_status.cleared = 1;
 
     // XXX Call _PyThreadStateSwap(runtime, NULL) here if "current".
@@ -1989,10 +1898,6 @@ tstate_delete_common(PyThreadState *tstate, int release_gil, int is_unlinked)
     tstate->interp->object_state.reftotal += tstate_impl->reftotal;
     tstate_impl->reftotal = 0;
     assert(tstate_impl->refcounts.values == NULL);
-#endif
-
-#if _Py_TIER2
-    _PyJit_TracerFree((_PyThreadStateImpl *)tstate);
 #endif
 
     HEAD_UNLOCK(runtime);
@@ -2362,6 +2267,11 @@ _PyThreadState_Attach(PyThreadState *tstate)
         break;
     }
 
+#ifndef Py_GIL_DISABLED
+    // The registers recorded at the last detach are stale now.
+    ((_PyThreadStateImpl *)tstate)->gc_trace.valid = 0;
+#endif
+
     // Resume previous critical section. This acquires the lock(s) from the
     // top-most critical section.
     if (tstate->critical_section != 0) {
@@ -2383,6 +2293,13 @@ detach_thread(PyThreadState *tstate, int detached_state)
     // XXX assert(tstate_is_alive(tstate) && tstate_is_bound(tstate));
     assert(_Py_atomic_load_int_relaxed(&tstate->state) == _Py_THREAD_ATTACHED);
     assert(tstate == current_fast_get());
+#ifndef Py_GIL_DISABLED
+    if (!((_PyThreadStateImpl *)tstate)->gc_trace.valid) {
+        // Not detached through PyEval_SaveThread(), which records the
+        // registers before it changes any.
+        _PyGC_TRACE_CAPTURE_THREAD();
+    }
+#endif
     if (tstate->critical_section != 0) {
         _PyCriticalSection_SuspendAll(tstate);
     }
@@ -3158,11 +3075,6 @@ _PyInterpreterState_SetEvalFrameFunc(PyInterpreterState *interp,
     if (eval_frame == interp->eval_frame) {
         return;
     }
-#ifdef _Py_TIER2
-    if (eval_frame != NULL) {
-        _Py_Executors_InvalidateAll(interp, 1);
-    }
-#endif
     RARE_EVENT_INC(set_eval_frame_func);
     _PyEval_StopTheWorld(interp);
     interp->eval_frame = eval_frame;
@@ -3178,7 +3090,6 @@ _PyInterpreterState_SetEvalFrameAllowSpecialization(PyInterpreterState *interp,
     if (allow_specialization == interp->eval_frame_allow_specialization) {
         return;
     }
-    _Py_Executors_InvalidateAll(interp, 1);
     RARE_EVENT_INC(set_eval_frame_func);
     _PyEval_StopTheWorld(interp);
     interp->eval_frame_allow_specialization = allow_specialization;
@@ -3218,9 +3129,20 @@ _PyInterpreterState_HasFeature(PyInterpreterState *interp, unsigned long feature
 
 #define MINIMUM_OVERHEAD 1000
 
+/* The end of the frame stack in chunk: its first header ends one word
+ * before the end of the chunk, which keeps a frame header and the word after
+ * it, its owned_slots field, inside the chunk. */
 static PyObject **
-push_chunk(PyThreadState *tstate, int size)
+chunk_frames_end(_PyStackChunk *chunk)
 {
+    return (PyObject **)((char *)chunk + chunk->size) - 1;
+}
+
+/* Push a frame header and nslots slots onto a new chunk */
+static _PyInterpreterFrame *
+push_chunk(PyThreadState *tstate, int nslots)
+{
+    int size = nslots + FRAME_SPECIALS_SIZE + 1;
     int allocate_size = _PY_DATA_STACK_CHUNK_SIZE;
     while (allocate_size < (int)sizeof(PyObject*)*(size + MINIMUM_OVERHEAD)) {
         allocate_size *= 2;
@@ -3240,57 +3162,53 @@ push_chunk(PyThreadState *tstate, int size)
             return NULL;
         }
     }
+    // The root chunk's value stack starts empty
+    _PyStackRef *saved_top = new->previous == NULL ?
+        (_PyStackRef *)&new->data[0] : (_PyStackRef *)tstate->datastack_top;
     if (tstate->datastack_chunk) {
-        tstate->datastack_chunk->top = tstate->datastack_top -
+        // What popping the frame restores, with saved_top
+        tstate->datastack_chunk->top = tstate->datastack_limit -
                                        &tstate->datastack_chunk->data[0];
     }
     tstate->datastack_chunk = new;
-    tstate->datastack_limit = (PyObject **)(((char *)new) + allocate_size);
-    // When new is the "root" chunk (i.e. new->previous == NULL), we can keep
-    // _PyThreadState_PopFrame from freeing it later by "skipping" over the
-    // first element:
-    PyObject **res = &new->data[new->previous == NULL];
-    tstate->datastack_top = res + size;
-    return res;
+    _PyInterpreterFrame *frame =
+        (_PyInterpreterFrame *)(chunk_frames_end(new) - FRAME_SPECIALS_SIZE);
+    frame->base = (_PyStackRef *)&new->data[0];
+    frame->saved_top = saved_top;
+    tstate->datastack_limit = (PyObject **)frame;
+    tstate->datastack_top = (PyObject **)(frame->base + nslots);
+    return frame;
 }
 
 _PyInterpreterFrame *
 _PyThreadState_PushFrame(PyThreadState *tstate, size_t size)
 {
     assert(size < INT_MAX/sizeof(PyObject *));
+    assert(size >= (size_t)FRAME_SPECIALS_SIZE);
     if (_PyThreadState_HasStackSpace(tstate, (int)size)) {
-        _PyInterpreterFrame *res = (_PyInterpreterFrame *)tstate->datastack_top;
-        tstate->datastack_top += size;
-        return res;
+        return _PyThreadState_PushFrameUnchecked(
+            tstate, (int)size - FRAME_SPECIALS_SIZE);
     }
-    return (_PyInterpreterFrame *)push_chunk(tstate, (int)size);
+    return push_chunk(tstate, (int)size - FRAME_SPECIALS_SIZE);
 }
 
 void
-_PyThreadState_PopFrame(PyThreadState *tstate, _PyInterpreterFrame * frame)
+_PyThreadState_PopChunk(PyThreadState *tstate, _PyInterpreterFrame *frame)
 {
-    assert(tstate->datastack_chunk);
-    PyObject **base = (PyObject **)frame;
-    if (base == &tstate->datastack_chunk->data[0]) {
-        _PyStackChunk *chunk = tstate->datastack_chunk;
-        _PyStackChunk *previous = chunk->previous;
-        _PyStackChunk *cached = tstate->datastack_cached_chunk;
-        // push_chunk ensures that the root chunk is never popped:
-        assert(previous);
-        tstate->datastack_top = &previous->data[previous->top];
-        tstate->datastack_chunk = previous;
-        tstate->datastack_limit = (PyObject **)(((char *)previous) + previous->size);
-        chunk->previous = NULL;
-        if (cached != NULL) {
-            _PyObject_VirtualFree(cached, cached->size);
-        }
-        tstate->datastack_cached_chunk = chunk;
+    _PyStackChunk *chunk = tstate->datastack_chunk;
+    _PyStackChunk *previous = chunk->previous;
+    _PyStackChunk *cached = tstate->datastack_cached_chunk;
+    assert(previous != NULL);
+    assert((PyObject **)frame + FRAME_SPECIALS_SIZE == chunk_frames_end(chunk));
+    tstate->datastack_limit = &previous->data[previous->top];
+    tstate->datastack_chunk = previous;
+    chunk->previous = NULL;
+    if (cached != NULL) {
+        _PyObject_VirtualFree(cached, cached->size);
     }
-    else {
-        assert(tstate->datastack_top);
-        assert(tstate->datastack_top >= base);
-        tstate->datastack_top = base;
-    }
+    tstate->datastack_cached_chunk = chunk;
+    tstate->datastack_top = (PyObject **)frame->saved_top;
+    assert(tstate->datastack_top < tstate->datastack_limit);
 }
 
 
@@ -3342,7 +3260,7 @@ _PyThreadState_HangThread(PyThreadState *tstate)
 static void
 tstate_mimalloc_bind(PyThreadState *tstate)
 {
-#ifdef Py_GIL_DISABLED
+#ifdef WITH_MIMALLOC
     struct _mimalloc_thread_state *mts = &((_PyThreadStateImpl*)tstate)->mimalloc;
 
     // Initialize the mimalloc thread state. This must be called from the
@@ -3358,6 +3276,7 @@ tstate_mimalloc_bind(PyThreadState *tstate)
     assert(tstate->interp->mimalloc.subproc != NULL);
     tld->segments.subproc = tstate->interp->mimalloc.subproc;
 
+#ifdef Py_GIL_DISABLED
     // Don't fill in the first N bytes up to ob_type in debug builds. We may
     // access ob_tid and the refcount fields in the dict and list lock-less
     // accesses, so they must remain valid for a while after deallocation.
@@ -3371,18 +3290,23 @@ tstate_mimalloc_bind(PyThreadState *tstate)
         [_Py_MIMALLOC_HEAP_GC] = base_offset,
         [_Py_MIMALLOC_HEAP_GC_PRE] = base_offset + 2 * sizeof(PyObject *),
     };
+#endif
 
     // Initialize each heap
     for (uint8_t i = 0; i < _Py_MIMALLOC_HEAP_COUNT; i++) {
         _mi_heap_init(&mts->heaps[i], tld, _mi_arena_id_none(), false, i);
+#ifdef Py_GIL_DISABLED
         mts->heaps[i].debug_offset = (uint8_t)debug_offsets[i];
+#endif
     }
 
+#ifdef Py_GIL_DISABLED
     // Heaps that store Python objects should use QSBR to delay freeing
     // mimalloc pages while there may be concurrent lock-free readers.
     mts->heaps[_Py_MIMALLOC_HEAP_OBJECT].page_use_qsbr = true;
     mts->heaps[_Py_MIMALLOC_HEAP_GC].page_use_qsbr = true;
     mts->heaps[_Py_MIMALLOC_HEAP_GC_PRE].page_use_qsbr = true;
+#endif
 
     // By default, object allocations use _Py_MIMALLOC_HEAP_OBJECT.
     // _PyObject_GC_New() and similar functions temporarily override this to
@@ -3396,7 +3320,7 @@ tstate_mimalloc_bind(PyThreadState *tstate)
 void
 _PyThreadState_ClearMimallocHeaps(PyThreadState *tstate)
 {
-#ifdef Py_GIL_DISABLED
+#ifdef WITH_MIMALLOC
     if (!tstate->_status.bound) {
         // The mimalloc heaps are only initialized when the thread is bound.
         return;

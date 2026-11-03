@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/storage_probe.py", line 14, in <module>
+    assert actual == expected, ("adjacent storage values", actual, expected)
+           ^^^^^^^^^^^^^^^^^^
+AssertionError: ('adjacent storage values', ((255, 65535), (511, 0), (65535, 65535)), ((255, -1), (511, 0), (65535, 2147483647)))

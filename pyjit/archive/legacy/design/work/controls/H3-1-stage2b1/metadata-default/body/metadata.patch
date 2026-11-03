@@ -1,0 +1,11 @@
+--- a/Tools/cases_generator/ir_generator.py
++++ b/Tools/cases_generator/ir_generator.py
+@@ -1803,7 +1803,7 @@
+     if inst.properties.uses_opcode:
+         # A derived handler shares the instruction body, including its
+         # semantic opcode tests. Dispatch still uses the raw handler ID.
+-        out.emit(f"opcode = {inst.name};\n")
++        out.emit(f"opcode = {name};\n")
+     mode = store_mode(inst, external_io(inst)[1]) if fmt.store_dst else None
+     if mode == STORE_LEAVE:
+         out.emit(f"if (IR_IS_LOCAL({FIELD_VARS[fmt.field_of(ROLE_DST)]})) {{\n")

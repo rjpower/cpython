@@ -1,0 +1,28 @@
+{
+  "utc": "2026-11-01T17:17:09.038683+00:00",
+  "decision": "ACCEPT_M0_SHARED_SEMANTIC_LAYER_FOR_M1",
+  "source_commit": "f0a49b6d30a38db705329bcfd5e5f2d6d2413710",
+  "independent_review": {
+    "path": "m0-debug-outcome-review-20261101-v2.md",
+    "sha256": "6afaed6420e847548bbe7dd154482f1f927cf7e577c0392e03e2108873faaed7"
+  },
+  "independent_receipt": {
+    "path": "m0-debug-outcome-receipt-20261101-v2.json",
+    "sha256": "50e10b44474ffdc3afebeb54ec666ef6d2df8838068e26784c1dc67a9e54eeaf"
+  },
+  "debug_build": true,
+  "executed_methods": 8,
+  "skips": 0,
+  "host_tests_passed": 31,
+  "c_syntax_only_checks_passed": 2,
+  "native_jit_execution": false,
+  "performance_claimed": false,
+  "broad_qualification": false,
+  "source_integrated_into_main": false,
+  "main_runtime": "ACCEPTED_RC",
+  "gc_work_authorized": false,
+  "prior_failed_source_and_outputs_preserved": true,
+  "terminal_session": 80454,
+  "terminal_exit_code": 0,
+  "cleanup_complete": true
+}

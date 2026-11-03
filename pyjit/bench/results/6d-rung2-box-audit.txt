@@ -1,0 +1,51 @@
+box audit of /home/power/code/cpython/.worktrees/boil-6d-base/build/pystats/python at 7fdeef0401a
+built: 3.16.0a1+dev (heads/boil/6d-rung2:bb59ea53031, Oct 28 2026, 06:16:10) [GCC 15.2.0]
+ok       binary int               int 0.004/iter, float 0/iter
+ok       binary float             int 0.004/iter, float 0/iter
+ok       binary mixed             int 0.004/iter, float 0/iter
+ok       binary overflow          int 0.004/iter, float 0/iter
+ok       inplace                  int 0.004/iter, float 0/iter
+ok       subscr list/tuple/str    int 0.004/iter, float 0/iter
+ok       subscr dict              int 0.004/iter, float 0/iter
+ok       subscr slice             int 0.004/iter, float 0/iter
+ok       store subscr             int 0.004/iter, float 0/iter
+ok       delete subscr            int 0.004/iter, float 0/iter
+ok       compare                  int 0.004/iter, float 0/iter
+ok       contains                 int 0.004/iter, float 0/iter
+ok       is                       int 0.004/iter, float 0/iter
+ok       unary                    int 0.004/iter, float 0/iter
+ok       to_bool                  int 0.004/iter, float 0/iter
+ok       for iter                 int 0.004/iter, float 0/iter
+ok       attributes               int 0.004/iter, float 0/iter
+ok       build                    int 0.004/iter, float 0/iter
+residue  unpack                   int 1.004/iter, float 0/iter
+ok       comprehensions           int 0.004/iter, float 0/iter
+ok       generator                int 0.004/iter, float 0/iter
+ok       format                   int 0.004/iter, float 0/iter
+residue  format int spec          int 1.004/iter, float 0/iter
+ok       names                    int 0.004/iter, float 0/iter
+ok       property (getattr)       boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       property float (getattr) boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       property store           boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       __getattribute__ hook    boxes 0.004/iter, allocations 0.002/iter (budget 0 and 0)
+ok       __getattr__ hook         boxes 0.004/iter, allocations 0.002/iter (budget 0 and 0)
+ok       __setattr__ hook         boxes 0.004/iter, allocations 0.002/iter (budget 0 and 0)
+ok       __get__ descr            boxes 0.004/iter, allocations 0.002/iter (budget 0 and 0)
+ok       __set__ descr            boxes 0.004/iter, allocations 0.002/iter (budget 0 and 0)
+ok       getattr default          boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       hasattr                  boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       hasattr inline miss      boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       getattr inline miss      boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       slots member store       boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       class attr store         boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       proxy read               boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       proxy store              boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       local read               boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       module __getattr__       boxes 0.004/iter, allocations 3.001/iter (budget 0 and 3)
+ok       alias read               boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       pickler store            boxes 0.004/iter, allocations 0.001/iter (budget 0 and 0)
+ok       getattr inline method    boxes 1.004/iter, allocations 2.001/iter (budget 1 and 2)
+ok       pickler persistent_id    boxes 1.004/iter, allocations 1.001/iter (budget 1 and 1)
+residue  getset int.real          boxes 1.004/iter, allocations 1.001/iter
+residue  object.__getattribute__  boxes 1.004/iter, allocations 2.001/iter
+residue  super inline receiver    boxes 1.004/iter, allocations 2.001/iter

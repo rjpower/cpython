@@ -288,6 +288,7 @@ class TestBasicOps(unittest.TestCase):
 
         # Test implementation detail:  tuple re-use
     @support.impl_detail("tuple reuse is specific to CPython")
+    @unittest.skipIf(support.Py_GC, "reusing the result tuple needs a reference count of 1")
     def test_combinations_tuple_reuse(self):
         self.assertEqual(len(set(map(id, combinations('abcde', 3)))), 1)
         self.assertNotEqual(len(set(map(id, list(combinations('abcde', 3))))), 1)
@@ -363,6 +364,7 @@ class TestBasicOps(unittest.TestCase):
 
     # Test implementation detail:  tuple re-use
     @support.impl_detail("tuple reuse is specific to CPython")
+    @unittest.skipIf(support.Py_GC, "reusing the result tuple needs a reference count of 1")
     def test_combinations_with_replacement_tuple_reuse(self):
         cwr = combinations_with_replacement
         self.assertEqual(len(set(map(id, cwr('abcde', 3)))), 1)
@@ -434,6 +436,7 @@ class TestBasicOps(unittest.TestCase):
             permutations("A", 2**30)
 
     @support.impl_detail("tuple reuse is specific to CPython")
+    @unittest.skipIf(support.Py_GC, "reusing the result tuple needs a reference count of 1")
     def test_permutations_tuple_reuse(self):
         self.assertEqual(len(set(map(id, permutations('abcde', 3)))), 1)
         self.assertNotEqual(len(set(map(id, list(permutations('abcde', 3))))), 1)
@@ -841,6 +844,7 @@ class TestBasicOps(unittest.TestCase):
                          lzip('abc', 'def'))
 
     @support.impl_detail("tuple reuse is specific to CPython")
+    @unittest.skipIf(support.Py_GC, "reusing the result tuple needs a reference count of 1")
     def test_zip_tuple_reuse(self):
         ids = list(map(id, zip('abc', 'def')))
         self.assertEqual(min(ids), max(ids))
@@ -890,6 +894,7 @@ class TestBasicOps(unittest.TestCase):
                          list(zip('abc', 'def')))
 
     @support.impl_detail("tuple reuse is specific to CPython")
+    @unittest.skipIf(support.Py_GC, "reusing the result tuple needs a reference count of 1")
     def test_zip_longest_tuple_reuse(self):
         ids = list(map(id, zip_longest('abc', 'def')))
         self.assertEqual(min(ids), max(ids))
@@ -1107,6 +1112,7 @@ class TestBasicOps(unittest.TestCase):
             product(*(['ab']*2**5), repeat=2**25)
 
     @support.impl_detail("tuple reuse is specific to CPython")
+    @unittest.skipIf(support.Py_GC, "reusing the result tuple needs a reference count of 1")
     def test_product_tuple_reuse(self):
         self.assertEqual(len(set(map(id, product('abc', 'def')))), 1)
         self.assertNotEqual(len(set(map(id, list(product('abc', 'def'))))), 1)

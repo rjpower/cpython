@@ -17,6 +17,20 @@ can be disabled by calling ``gc.disable()``.  To debug a leaking program call
 ``gc.DEBUG_SAVEALL``, causing garbage-collected objects to be saved in
 gc.garbage for inspection.
 
+.. impl-detail::
+
+   A CPython build configured with ``--with-gc`` has no reference counts.
+   A tracing collector owns memory: it frees every unreachable object, not
+   only those in cycles, at a collection, and runs finalizers and weak
+   reference callbacks after it.  It also runs then, once per object, what a
+   deallocator would call that may run code: the destroy events of dict,
+   type, function and code watchers, a module's ``m_free`` and a capsule's
+   destructor; such an object is freed at a later collection, without
+   them.  There is one generation, and the counts and
+   thresholds below are in bytes.  The collector scans C stacks
+   conservatively, so a collection may leave an unreachable object alive
+   until a later one.  :func:`freeze` and :func:`unfreeze` do nothing.
+
 The :mod:`!gc` module provides the following functions:
 
 
@@ -119,6 +133,13 @@ The :mod:`!gc` module provides the following functions:
    .. versionchanged:: 3.15
       Add ``duration`` and ``candidates``.
 
+   .. impl-detail::
+
+      Under ``--with-gc`` the statistics are in the dictionary for
+      generation ``2``, which also has ``bytes_freed``, the bytes that
+      collections freed, ``live_bytes``, the bytes the last collection found
+      reachable, and ``max_pause``, the longest collection in seconds.
+
 
 .. function:: set_threshold(threshold0, [threshold1, [threshold2]])
 
@@ -147,11 +168,23 @@ The :mod:`!gc` module provides the following functions:
    .. versionchanged:: 3.14.5
       *threshold2* is restored to match Python 3.13 behavior.
 
+   .. impl-detail::
+
+      Under ``--with-gc`` a collection starts when the bytes allocated since
+      the last one reach *threshold0* or the bytes that collection found
+      reachable, whichever is larger.  *threshold0* is 32 MiB by default;
+      *threshold1* and *threshold2* are ignored.
+
 
 .. function:: get_count()
 
    Return the current collection  counts as a tuple of ``(count0, count1,
    count2)``.
+
+   .. impl-detail::
+
+      Under ``--with-gc`` *count0* is the bytes allocated since the last
+      collection, and the other counts are zero.
 
 
 .. function:: get_threshold()

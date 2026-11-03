@@ -1,0 +1,17 @@
+{
+  "decision": "IMPLEMENT_REVIEWED_FOUNDATION",
+  "utc": "2026-11-01T21:49:40.118275+00:00",
+  "deadline_utc": "2026-11-01T23:49:40.118275+00:00",
+  "checkpoint_seconds": 1200,
+  "owner": "restart_audit",
+  "independent_reviewer": "value_api_consumer_map",
+  "base": "95be1d28a12ebbd9de102f70e1b5e881d06c7384",
+  "manifest": "build/pyvalue-rc-foundation-manifest-20261101-v1/manifest.json",
+  "manifest_sha256": "46d190fe57cad6de42962da48392814ae4b4d650c202bd4b349e42d0acdedea2",
+  "worktree": "build/worktrees/pyvalue-rc-universal",
+  "source_and_host_generators_authorized": true,
+  "candidate_execution_authorized": false,
+  "universal_scope_required": true,
+  "foundation_is_complete_restoration": false,
+  "next_performance_checkpoint": "Unified-value register interpreter; verify JIT disabled before timing"
+}

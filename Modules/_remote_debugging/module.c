@@ -1341,11 +1341,55 @@ RemoteUnwinder_dealloc(PyObject *op)
     Py_DECREF(tp);
 }
 
+struct unwinder_visit {
+    visitproc visit;
+    void *arg;
+};
+
+static int
+visit_cached_code(_Py_hashtable_t *ht, const void *key, const void *value,
+                  void *data)
+{
+    struct unwinder_visit *v = (struct unwinder_visit *)data;
+    visitproc visit = v->visit;
+    void *arg = v->arg;
+    const CachedCodeMetadata *meta = (const CachedCodeMetadata *)value;
+    Py_VISIT(meta->func_name);
+    Py_VISIT(meta->file_name);
+    Py_VISIT(meta->linetable);
+    Py_VISIT(meta->last_frame_info);
+    return 0;
+}
+
+/* The type is not a GC type, but the tracing mark must reach the objects
+   that its caches hold in memory it allocates. */
+static int
+RemoteUnwinder_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    RemoteUnwinderObject *self = RemoteUnwinder_CAST(op);
+    if (self->code_object_cache != NULL) {
+        struct unwinder_visit v = {visit, arg};
+        int err = _Py_hashtable_foreach(self->code_object_cache,
+                                        visit_cached_code, &v);
+        if (err) {
+            return err;
+        }
+    }
+    if (self->frame_cache != NULL) {
+        for (int i = 0; i < FRAME_CACHE_MAX_THREADS; i++) {
+            Py_VISIT(self->frame_cache[i].thread_id_obj);
+            Py_VISIT(self->frame_cache[i].frame_list);
+        }
+    }
+    return 0;
+}
+
 static PyType_Slot RemoteUnwinder_slots[] = {
     {Py_tp_doc, (void *)"RemoteUnwinder(pid): Inspect stack of a remote Python process."},
     {Py_tp_methods, RemoteUnwinder_methods},
     {Py_tp_init, _remote_debugging_RemoteUnwinder___init__},
     {Py_tp_dealloc, RemoteUnwinder_dealloc},
+    {Py_tp_traverse, RemoteUnwinder_traverse},
     {0, NULL}
 };
 

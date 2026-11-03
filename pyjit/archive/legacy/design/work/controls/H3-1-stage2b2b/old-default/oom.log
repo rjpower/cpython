@@ -1,0 +1,19 @@
+{"case": "oom", "state": [0, true, [0, 0], 0], "old": 0, "requested": 96, "after": 96, "words_unchanged": true}
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/check_transitions.py", line 50, in child
+    _testcapi.call_with_nomemory(1, 0, mon.set_local_events,
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                 a, code, requested)
+                                 ^^^^^^^^^^^^^^^^^^^
+MemoryError
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/check_transitions.py", line 114, in <module>
+    child(sys.argv[2])
+    ~~~~~^^^^^^^^^^^^^
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/check_transitions.py", line 57, in child
+    assert current == old, ("local request changed on OOM", old, current)
+           ^^^^^^^^^^^^^^
+AssertionError: ('local request changed on OOM', 0, 96)

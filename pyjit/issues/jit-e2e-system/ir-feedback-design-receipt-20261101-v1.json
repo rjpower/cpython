@@ -1,0 +1,27 @@
+{
+  "utc": "2026-11-01T18:14:00.410842+00:00",
+  "decision": "ACCEPT_DESIGN_ONLY",
+  "review": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-ir-feedback-design-review-20261101-v1/review.md",
+    "sha256": "963822657a9e52d8e21e2f06a6b106bb87f4b2599e4574de8e4f1d9ee829c3f4"
+  },
+  "inputs": {
+    "design.md": {
+      "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-ir-feedback-design-20261101-v1/design.md",
+      "sha256": "2f7574a1af56160a9126ed9e6aa4b631e8bebe146a638bcb9ebd190a0a85ade7"
+    },
+    "dictionary-storage-comparison.md": {
+      "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-ir-feedback-design-20261101-v1/dictionary-storage-comparison.md",
+      "sha256": "66998d3eb7378b5755913e32fc5fa95592646d8e001bfc200c6c640a7b0b366f"
+    },
+    "evidence.json": {
+      "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-ir-feedback-design-20261101-v1/evidence.json",
+      "sha256": "c4653433400edb3e43e0a8a062f444e79a6f17059e83179990672bff2c4b5a7f"
+    }
+  },
+  "source_identities_checked": 16,
+  "author_artifacts_checked": 6,
+  "critical_ordering_amendments_addressed": true,
+  "implementation_or_storage_rewrite_or_performance_authority": false,
+  "reviewer_source_compiler_target_actions": 0
+}

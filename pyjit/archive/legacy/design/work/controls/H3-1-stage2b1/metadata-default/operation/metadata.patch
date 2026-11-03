@@ -1,0 +1,9 @@
+--- a/Lib/_opcode_metadata.py
++++ b/Lib/_opcode_metadata.py
+@@ -1390,3 +1390,6 @@
+ 
+ HAVE_ARGUMENT = 41
+ MIN_INSTRUMENTED_OPCODE = 233
++
++_handler_operations = tuple(10 if i == _ir_opmap['BINARY_OP_ADD'] else value
++                            for i, value in enumerate(_handler_operations))

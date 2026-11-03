@@ -72,6 +72,7 @@ static inline PyObject* _PyModule_GetDict(PyObject *mod) {
 }
 
 extern PyObject * _PyModule_GetFilenameObject(PyObject *);
+
 extern Py_ssize_t _PyModule_GetFilenameUTF8(
         PyObject *module,
         char *buffer,

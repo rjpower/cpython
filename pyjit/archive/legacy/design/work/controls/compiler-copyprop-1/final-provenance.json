@@ -1,0 +1,67 @@
+{
+  "tested_revision": "45a789ac036ed56164411dce23201fc8ab54a60b",
+  "source_sha256": {
+    "Python/specialize.c": "fd026a0fb318323b5c68707a302e0b22042e0de0afa2b8d76e6b131bd48a4832",
+    "Python/bytecodes.c": "3958ee7c3bc3929fab9dd4f53d344a7d6c02640eeeaab05586a04ca18b3969af",
+    "Python/generated_ir_cases.c.h": "8068a0b14f92492d234cbaec06f53946581536f569b10abff6c4390d1f85cfc7",
+    "Python/regcfg.c": "659a0fc199cdde78aba70fdd0ebb40d433e8ce1d32b48752003d94ac668da9ee",
+    "Python/compile.c": "167b845bb2dbf088e93acd76440d63b789f154cd95fd2b399f8225c746d41123",
+    "Python/codegen.c": "2bf48cd6e723832de64cbe885ee9846cbf84b84c1cb3eac9d0024c8ca7463e6a",
+    "Python/assemble.c": "31cbda2614eadaa700768e0cc6da16c3fa8961a96d5f3b2f546e876c661a7ef0",
+    "Python/ir.c": "445a1b095318be2f6bd3bf53468a1eedd3f8ed068f28fefc2ed27d480ef07cc1",
+    "Tools/cases_generator/ir_generator.py": "6ac456f9d18db57764afae88793893999493f113c6e4c8888ddc66ace4fffe90",
+    "Tools/cases_generator/ir_metadata_generator.py": "6eee50ccfd16cd4211985e9434c2163f340285de0b796c94797ca439e0ad83e7",
+    "Include/internal/pycore_ir.h": "ed40912bb116d725c524ef7c9cfdff5395eb6079a1d3b7444a7c8c09c1b72319",
+    "Include/internal/pycore_ir_metadata.h": "833284cb41c69784a815611db02925bbde707b2d6c7b52e0e6f99d40e1f76b53",
+    "Include/internal/pycore_magic_number.h": "bede626b63a575df678e3ea66083154721af92430a0103121476bf1885dad50c",
+    "Python/regcfg_passes.c": "37cb2289373b98b3b9f85423dc5c2f645d43cc568b85942aa294695f89913b3a",
+    "Python/gc_trace.c": "6d0e3291b522f5ac90097f64bb71779552e0381a108282288de07a7311ff05b9",
+    "Include/internal/pycore_gc_trace.h": "326fa347d31e5d6aceebe9663bd36abd0550bec2980496422e7143e4e4396bd7",
+    "Modules/_testinternalcapi.c": "10cc46d5ed8cf6a4b49a8bea97eb8a809211976874b47b79fa3cc8283e1c5a3f",
+    "Lib/test/test_peepholer.py": "b2d95b00d259b49c6ddf1bf30391a4d14a24a052317f59fd3aa94d1eb74f5c79",
+    "Lib/test/test_gc.py": "66fcb1c8cf80f2ed323287ed8c5a465cbc766bb6ab931a95c12e5787e4351d37",
+    "boil/design/work/controls/compiler-copyprop-1/assert-kill-worker.py": "c4d609466a5589f9f2db43e3645c951f7568598301a1aaa4ffa4a3dee33341f7"
+  },
+  "binary_sha256": {
+    "build/default/python": "3066cb8a0d17d80acbb71e36e03247ad3973248ba70bf8694e1739714b7a87ef",
+    "build/debug/python": "02f5c010914fceb7b1333d9534af56f0a9884a75c65fb65b7dca411cb26ad761"
+  },
+  "compiler_metadata_identical_to": "1bf1f941c88",
+  "identical_files": [
+    "Python/specialize.c",
+    "Python/bytecodes.c",
+    "Python/generated_ir_cases.c.h",
+    "Python/regcfg.c",
+    "Python/compile.c",
+    "Python/codegen.c",
+    "Python/assemble.c",
+    "Python/ir.c",
+    "Tools/cases_generator/ir_generator.py",
+    "Tools/cases_generator/ir_metadata_generator.py",
+    "Include/internal/pycore_ir.h",
+    "Include/internal/pycore_ir_metadata.h",
+    "Include/internal/pycore_magic_number.h"
+  ],
+  "declared_exceptions": [
+    "regcfg_passes.c comment",
+    "test C fixture and tests",
+    "read-only verification state accessor from 2155f16f45f"
+  ],
+  "regeneration_unchanged": true,
+  "build_configuration": {
+    "default": [
+      "CC=\t\tgcc",
+      "OPT=\t\t-DNDEBUG -g -O3 -Wall",
+      "CONFIG_ARGS=\t 'CC=gcc'"
+    ],
+    "debug": [
+      "CC=\t\tgcc",
+      "OPT=\t\t-g -Og -Wall",
+      "CONFIG_ARGS=\t 'CC=gcc' '--with-pydebug'"
+    ]
+  },
+  "extension_sha256": {
+    "build/default/Modules/_testinternalcapi.cpython-316-x86_64-boil2-linux-gnu.so": "e7188b4ec57243f939ec249ac7053fbb6f35169adaa2d79d1a16621e53bb3b7e",
+    "build/debug/Modules/_testinternalcapi.cpython-316d-x86_64-boil2-linux-gnu.so": "aa6c30be1d38f3a3ccab3703dd13b046965a996443f529140bb1ae4d93b2d157"
+  }
+}

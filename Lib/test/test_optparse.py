@@ -397,6 +397,7 @@ class TestOptionParser(BaseTest):
                           ValueError, "no such option 'foo'")
 
     @support.impl_detail('Relies on sys.getrefcount', cpython=True)
+    @support.requires_refcounting
     def test_refleak(self):
         # If an OptionParser is carrying around a reference to a large
         # object, various cycles can prevent it from being GC'd in

@@ -6,7 +6,7 @@ on:
       - 'Python/bytecodes.c'
       - 'Python/ceval.c'
       - 'Python/ceval_macros.h'
-      - 'Python/generated_cases.c.h'
+      - 'Python/generated_ir_cases.c.h'
   push:
     paths: *paths
   workflow_dispatch:

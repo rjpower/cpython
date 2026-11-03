@@ -1,0 +1,5 @@
+{"phase": "enter_suppressed", "state": [0, true, [0, 0], 0], "requested": 96, "word_count": 18}
+Timeout (0:00:02)!
+Thread 0x00007c93394207c0 [python] (most recent call first):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/eligibility_probe.py", line 18 in f
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/eligibility_probe.py", line 61 in <module>

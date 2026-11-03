@@ -8,6 +8,7 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
+#include "pycore_gc_trace.h"      // _PyGCRoot
 #include "pycore_pyerrors.h"
 
 
@@ -28,7 +29,8 @@ extern int _Py_CallInInterpreter(
     PyInterpreterState *interp,
     _Py_simple_func func,
     void *arg);
-extern int _Py_CallInInterpreterAndRawFree(
+// Export for '_interpreters' shared extension
+PyAPI_FUNC(int) _Py_CallInInterpreterAndRawFree(
     PyInterpreterState *interp,
     _Py_simple_func func,
     void *arg);

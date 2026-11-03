@@ -1,0 +1,8 @@
+{
+  "name": "cpython",
+  "default_variant": "default",
+  "variants": {
+    "default": {"configure": []},
+    "ft": {"configure": ["--disable-gil"]}
+  }
+}

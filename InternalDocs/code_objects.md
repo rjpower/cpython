@@ -7,25 +7,24 @@ metadata: data which is necessary to execute the bytecode instructions (such
 as the values of the constants they access) or context information such as
 the source code location, which is useful for debuggers and other tools.
 
-Since 3.11, the final field of the `PyCodeObject` C struct is an array
-of indeterminate length containing the bytecode, `code->co_code_adaptive`.
-(In older versions the code object was a
-[`bytes`](https://docs.python.org/dev/builtins/stdtypes.html#bytes)
-object, `code->co_code`; this was changed to save an allocation and to
-allow it to be mutated.)
+The final field of the `PyCodeObject` C struct is an array of indeterminate
+length, `code->co_words`, that holds the instructions in the register IR of
+[`Include/internal/pycore_ir.h`](../Include/internal/pycore_ir.h): one 64-bit
+word per instruction, followed by the code object's feedback table (one entry
+per instruction that collects feedback).  `co_code` returns the words as
+bytes, and instruction offsets everywhere count words.
 
 Code objects are typically produced by the bytecode [compiler](compiler.md),
 although they are often written to disk by one process and read back in by another.
 The disk version of a code object is serialized using the
 [marshal](https://docs.python.org/dev/library/marshal.html) protocol.
-When a `CodeObject` is created, the function `_PyCode_Quicken()` from
-[`Python/specialize.c`](../Python/specialize.c) is called to initialize
-the caches of all adaptive instructions. This is required because the
-on-disk format is a sequence of bytes, and some of the caches need to be
-initialized with 16-bit values.
+The assembler, [`Python/assemble.c`](../Python/assemble.c), emits the words.
+When a code object first runs, `_PyCode_GetExec()` copies them, with the
+feedback entries that the table describes, into the executing copy
+(`code->_co_exec`), which specialisation and instrumentation rewrite.
 
 Code objects are nominally immutable.
-Some fields (including `co_code_adaptive` and fields for runtime
+Some fields (including `_co_exec` and fields for runtime
 information such as `_co_monitoring`) are mutable, but mutable fields are
 not included when code objects are hashed or compared.
 

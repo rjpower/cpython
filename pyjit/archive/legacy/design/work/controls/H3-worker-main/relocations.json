@@ -1,0 +1,14 @@
+{
+  "compiler": {
+    "source": "boil/design/work/controls/compiler-copyprop-1/assert-kill-worker.py",
+    "sha256": "aa986f0cc6fbf230be84ccf84d010384de33599d1c04908e942a9ce5fcb2ce89",
+    "relocated_sha256": "7538b379914d5f11ebc6b80f8633f0dc221b9b5d2919fdb2a0ced2906b7b0308",
+    "relocation_patch": "--- a/boil/design/work/controls/compiler-copyprop-1/assert-kill-worker.py\n+++ b/build/H3-worker-main/compiler-worker.py\n@@ -19,7 +19,7 @@\n record = {\"mode\": list(actual), \"executable\": sys.executable,\n           \"ignore_environment\": sys.flags.ignore_environment,\n           \"isolated\": sys.flags.isolated}\n-path = Path(sys.executable).parent.parent / \"compiler-review-kill-workers.jsonl\"\n+path = Path(sys.executable).parent.parent / \"H3-worker-main/compiler-workers.jsonl\"\n with path.open(\"a\") as stream:\n     stream.write(json.dumps(record) + \"\\n\")\n \n"
+  },
+  "h3": {
+    "source": "boil/design/work/controls/H3-1-stage1/assert-kill-worker.py",
+    "sha256": "f256660476433085aa68e8b1f02cd941d79b80daad21fb3077f2faad4141af0d",
+    "relocated_sha256": "7b9501ce4296c33dfb9a1dbc607b23784e00188d762309c017d1995c5e793d3c",
+    "relocation_patch": "--- a/boil/design/work/controls/H3-1-stage1/assert-kill-worker.py\n+++ b/build/H3-worker-main/h3-worker.py\n@@ -19,7 +19,7 @@\n record = {\"mode\": list(actual), \"executable\": sys.executable,\n           \"ignore_environment\": sys.flags.ignore_environment,\n           \"isolated\": sys.flags.isolated}\n-path = Path(sys.executable).parent.parent / \"H3-1\" / \"kill-workers.jsonl\"\n+path = Path(sys.executable).parent.parent / \"H3-worker-main\" / \"h3-workers.jsonl\"\n with path.open(\"a\") as stream:\n     stream.write(json.dumps(record) + \"\\n\")\n \n"
+  }
+}

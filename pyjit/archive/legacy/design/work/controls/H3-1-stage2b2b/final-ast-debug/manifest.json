@@ -1,0 +1,63 @@
+{
+  "binary_sha256": "9ff555bea0a554559089590a5cac7f1ca756c81287853421e2621e939e90ca9b",
+  "config_sha256": "ee10d3ffed6c7cbe03f5ab155fb81f44a1e581814ef01cb57db38ff52a5b3e94",
+  "probe_sha256": "7feccf21ac66fb3f2da3a205a5d8e194d7446b0d70c72fa625f06dae8af0b612",
+  "script_sha256": "6587b4e73be0869342cb9d0ae038c54636207f90222522e1d8d566faa787be49",
+  "sources": {
+    "Python/instrumentation.c": "cc70ec7ae3a45fddf98096a592b194e7cb9c7e65b489d861679fd1bda668479a",
+    "Objects/codeobject.c": "20208af12a66053422ca6ff9780e7ffc67f1064cbd624ff50404680398fa2eae",
+    "Python/legacy_tracing.c": "e15db59df85fb19b04a54c07a234c631f519d7cc6eaf05a43425e06f2739ab5a",
+    "Include/internal/pycore_instruments.h": "81cab544b0ecf34c65c1dbd1b18ca0d5a52140018e7d8c5273ac37dd2b43afe5",
+    "Modules/_testinternalcapi.c": "2d819d2f14338d00851174396ed933e1bb33b8f24877388ab2b0f6ce1ac7b517"
+  },
+  "cases": {
+    "backward_9": {
+      "returncode": 0,
+      "command": [
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python",
+        "-X",
+        "pycache_prefix=/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/final-ast-debug/pycache-c8gld_a3",
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/boil/design/work/controls/H3-1-stage2b2b/probe_ast.py",
+        "--child",
+        "backward_9"
+      ],
+      "log_sha256": "e33d014754e965440693e929e556d056a911b3f942add57f61386c1d21bc5110"
+    },
+    "backward_2": {
+      "returncode": 0,
+      "command": [
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python",
+        "-X",
+        "pycache_prefix=/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/final-ast-debug/pycache-_ygrbzkm",
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/boil/design/work/controls/H3-1-stage2b2b/probe_ast.py",
+        "--child",
+        "backward_2"
+      ],
+      "log_sha256": "a46039ff19b599000551918ebd6ac704c8f1faea3421546f4e6589db6d12da79"
+    },
+    "module_zero": {
+      "returncode": 0,
+      "command": [
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python",
+        "-X",
+        "pycache_prefix=/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/final-ast-debug/pycache-2pvghqbg",
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/boil/design/work/controls/H3-1-stage2b2b/probe_ast.py",
+        "--child",
+        "module_zero"
+      ],
+      "log_sha256": "ac1a7511bb919e1a7c82a6ecfb2e6cb6952edcdca87c2cb011b76736614ee7a5"
+    },
+    "extreme_positive": {
+      "returncode": 0,
+      "command": [
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python",
+        "-X",
+        "pycache_prefix=/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/final-ast-debug/pycache-o9mxox8y",
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/boil/design/work/controls/H3-1-stage2b2b/probe_ast.py",
+        "--child",
+        "extreme_positive"
+      ],
+      "log_sha256": "9f7327480a92b90345583156547968a4f3b865cc4b4299b49f6c96ddf78268df"
+    }
+  }
+}

@@ -13,6 +13,9 @@ extern "C" {
 #include "pycore_object.h"           // _Py_REF_IS_MERGED()
 #include "pycore_pyatomic_ft_wrappers.h"
 
+// A deallocator clears weak references after its last owned reference is gone.
+#  define _PyWeakref_ASSERT_DEAD(obj) assert(Py_REFCNT(obj) == 0)
+
 #ifdef Py_GIL_DISABLED
 
 #define WEAKREF_LIST_LOCK(obj) \
@@ -31,7 +34,7 @@ extern "C" {
 
 #define FT_CLEAR_WEAKREFS(obj, weakref_list)    \
     do {                                        \
-        assert(Py_REFCNT(obj) == 0);            \
+        _PyWeakref_ASSERT_DEAD(obj);            \
         PyObject_ClearWeakRefs(obj);            \
     } while (0)
 
@@ -45,7 +48,7 @@ extern "C" {
 
 #define FT_CLEAR_WEAKREFS(obj, weakref_list)        \
     do {                                            \
-        assert(Py_REFCNT(obj) == 0);                \
+        _PyWeakref_ASSERT_DEAD(obj);                \
         if (weakref_list != NULL) {                 \
             PyObject_ClearWeakRefs(obj);            \
         }                                           \

@@ -34,8 +34,11 @@ DEFAULT_BUFFER_SIZE = 128 * 1024  # bytes
 # Rebind for compatibility
 BlockingIOError = BlockingIOError
 
-# Does open() check its 'errors' argument?
-_CHECK_ERRORS = (hasattr(sys, "gettotalrefcount") or sys.flags.dev_mode)
+# Does open() check its 'errors' argument?  It does in a debug build, which
+# has sys.gettotalrefcount() unless it has no reference counts (--with-gc).
+_CHECK_ERRORS = (hasattr(sys, "gettotalrefcount")
+                 or "d" in getattr(sys, "abiflags", "")
+                 or sys.flags.dev_mode)
 
 
 def text_encoding(encoding, stacklevel=2):
@@ -725,17 +728,16 @@ class BufferedIOBase(IOBase):
         return self._readinto(b, read1=True)
 
     def _readinto(self, b, read1):
-        if not isinstance(b, memoryview):
-            b = memoryview(b)
-        b = b.cast('B')
+        # The views are released on return, not when they are freed: until
+        # then, b cannot be resized.
+        with memoryview(b) as view, view.cast('B') as b:
+            if read1:
+                data = self.read1(len(b))
+            else:
+                data = self.read(len(b))
+            n = len(data)
 
-        if read1:
-            data = self.read1(len(b))
-        else:
-            data = self.read(len(b))
-        n = len(data)
-
-        b[:n] = data
+            b[:n] = data
 
         return n
 
@@ -1196,13 +1198,14 @@ class BufferedReader(_BufferedIOMixin):
 
         # Need to create a memoryview object of type 'b', otherwise
         # we may not be able to assign bytes to it, and slicing it
-        # would create a new object.
-        if not isinstance(buf, memoryview):
-            buf = memoryview(buf)
-        if buf.nbytes == 0:
-            return 0
-        buf = buf.cast('B')
+        # would create a new object.  The views are released on return, not
+        # when they are freed: until then, buf cannot be resized.
+        with memoryview(buf) as view, view.cast('B') as buf:
+            if buf.nbytes == 0:
+                return 0
+            return self._readinto_view(buf, read1)
 
+    def _readinto_view(self, buf, read1):
         written = 0
         with self._read_lock:
             while written < len(buf):
@@ -1220,7 +1223,8 @@ class BufferedReader(_BufferedIOMixin):
                 # If remaining space in callers buffer is larger than
                 # internal buffer, read directly into callers buffer
                 if len(buf) - written > self.buffer_size:
-                    n = self.raw.readinto(buf[written:])
+                    with buf[written:] as rest:
+                        n = self.raw.readinto(rest)
                     if not n:
                         break # eof
                     written += n
@@ -1754,7 +1758,12 @@ class FileIO(RawIOBase):
         result = bytearray(bufsize)
         bytes_read = 0
         try:
-            while n := os.readinto(self._fd, memoryview(result)[bytes_read:]):
+            while True:
+                # Released before the resize, which an export blocks.
+                with memoryview(result) as view, view[bytes_read:] as rest:
+                    n = os.readinto(self._fd, rest)
+                if not n:
+                    break
                 bytes_read += n
                 if bytes_read >= len(result):
                     result.resize(_new_buffersize(bytes_read))

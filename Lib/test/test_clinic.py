@@ -5251,6 +5251,7 @@ class ClinicFunctionalTest(unittest.TestCase):
     def test_gh_32092_kw_pass(self):
         ac_tester.gh_32092_kw_pass(1, 2, 3)
 
+    @support.requires_refcounting
     def test_gh_99233_refcount(self):
         arg = '*A unique string is not referenced by anywhere else.*'
         arg_refcount_origin = sys.getrefcount(arg)

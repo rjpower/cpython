@@ -1,0 +1,41 @@
+{
+  "GC_optimization_authorized": false,
+  "all_primary_and_aggregate_single_value_deletions_pass": true,
+  "campaign_result_sha256": "078bcb10f99048fa918c4d69a116e8cf59f055916916a471532616289caf06be",
+  "cleanup_utc": "2026-11-01T13:15:56.551231+00:00",
+  "decision": "ACCEPT_PILOT_ONLY_WITH_RECORDED_RICHARDS_TRADEOFF",
+  "four_workload_geomean_ratios": [
+    0.9721628985174868,
+    0.9814194454473544
+  ],
+  "full29_host_preparation_authorized": true,
+  "full29_target_execution_authorized": false,
+  "independent_receipt_sha256": "8e7df5660a8230171d1d2d44f757357ee89d464e5aa1c61d3274e2509f650558",
+  "independent_review_sha256": "81353afd0102f3cbf71a695c83ea7f341001dd498b7d7bd2c552d0c7f88df29a",
+  "main_runtime_changed": false,
+  "old_candidate_rejection_unchanged": true,
+  "parent_checkout_during_campaign": "67f5d5ec527ced40ccf05e5080d4e42a5f8e143e",
+  "parent_image_source": "eba351fee7dacef3f7616e4c0b6fc21c7082eb5d",
+  "primary_ratios": [
+    0.8734907404433998,
+    0.898666950632364
+  ],
+  "production_or_full29_or_landing_accepted": false,
+  "publication_or_broad_functional_execution_authorized": false,
+  "quiet_checks": 48,
+  "raw_values": 80,
+  "resampling_authorized": false,
+  "richards_ratios": [
+    1.0514759882528526,
+    1.0348679533854053
+  ],
+  "root_adopts_real_richards_tradeoff_for_broader_gate_only": true,
+  "scored_processes": 16,
+  "session_id": 45640,
+  "source_grant_closed_complete": true,
+  "source_grant_extended": false,
+  "source_head": "599897b6b5d0bb973b1eea12f8eb41957004b464",
+  "terminal_exit": 0,
+  "terminal_observed_utc": "2026-11-01T13:15:19+00:00",
+  "unscored_origins": 8
+}

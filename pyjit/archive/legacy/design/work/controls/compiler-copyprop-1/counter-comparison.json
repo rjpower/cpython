@@ -1,0 +1,150 @@
+{
+  "value": {
+    "rows": 94,
+    "changed_rows": 2,
+    "changes": {
+      "logging_format": {
+        "before": 20.0,
+        "after": 20.044,
+        "delta": 0.04400000000000048
+      },
+      "logging_simple": {
+        "before": 20.037,
+        "after": 20.0,
+        "delta": -0.036999999999999034
+      }
+    }
+  },
+  "allocations": {
+    "rows": 94,
+    "changed_rows": 2,
+    "changes": {
+      "logging_format": {
+        "before": 330.001,
+        "after": 330.133,
+        "delta": 0.132000000000005
+      },
+      "logging_simple": {
+        "before": 310.112,
+        "after": 310.001,
+        "delta": -0.11100000000004684
+      }
+    }
+  },
+  "dispatches": {
+    "rows": 94,
+    "changed_rows": 22,
+    "changes": {
+      "richards": {
+        "before": 5745478.5,
+        "after": 5790115.5,
+        "delta": 44637.0
+      },
+      "go": {
+        "before": 17936360.0,
+        "after": 18772205.0,
+        "delta": 835845.0
+      },
+      "nbody": {
+        "before": 17600848.0,
+        "after": 19300888.0,
+        "delta": 1700040.0
+      },
+      "float": {
+        "before": 7799931.5,
+        "after": 8099931.5,
+        "delta": 300000.0
+      },
+      "spectral_norm": {
+        "before": 16335441.5,
+        "after": 17011701.5,
+        "delta": 676260.0
+      },
+      "raytrace": {
+        "before": 30728307.5,
+        "after": 31275876.0,
+        "delta": 547568.5
+      },
+      "deltablue": {
+        "before": 548668.5833333334,
+        "after": 549897.5833333334,
+        "delta": 1229.0
+      },
+      "chaos": {
+        "before": 7051897.25,
+        "after": 7487175.25,
+        "delta": 435278.0
+      },
+      "nqueens": {
+        "before": 12004769.0,
+        "after": 12512450.0,
+        "delta": 507681.0
+      },
+      "fannkuch": {
+        "before": 47838301.5,
+        "after": 53069149.5,
+        "delta": 5230848.0
+      },
+      "comprehensions": {
+        "before": 2431.505416666667,
+        "after": 2485.5053333333335,
+        "delta": 53.99991666666665
+      },
+      "deepcopy": {
+        "before": 27986.15,
+        "after": 29711.148333333334,
+        "delta": 1724.998333333333
+      },
+      "deepcopy_reduce": {
+        "before": 265.000875,
+        "after": 279.000875,
+        "delta": 14.0
+      },
+      "deepcopy_memo": {
+        "before": 4661.0465,
+        "after": 4882.046375,
+        "delta": 220.99987499999952
+      },
+      "json_loads": {
+        "before": 4098.0075,
+        "after": 4158.0075,
+        "delta": 60.0
+      },
+      "regex_compile": {
+        "before": 17412526.5,
+        "after": 18340467.5,
+        "delta": 927941.0
+      },
+      "logging_format": {
+        "before": 5782.4145,
+        "after": 5862.726,
+        "delta": 80.3114999999998
+      },
+      "logging_simple": {
+        "before": 5552.676,
+        "after": 5622.413,
+        "delta": 69.73699999999917
+      },
+      "xml_etree_generate": {
+        "before": 6927957.0,
+        "after": 7030026.0,
+        "delta": 102069.0
+      },
+      "xml_etree_parse": {
+        "before": 1194019.5,
+        "after": 1214431.5,
+        "delta": 20412.0
+      },
+      "xml_etree_process": {
+        "before": 6137521.0,
+        "after": 6208969.0,
+        "delta": 71448.0
+      },
+      "class_attr_store": {
+        "before": 4.00812,
+        "after": 5.00812,
+        "delta": 1.0
+      }
+    }
+  }
+}

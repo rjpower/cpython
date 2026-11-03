@@ -714,66 +714,26 @@ _opcode_get_special_method_names(PyObject *module, PyObject *Py_UNUSED(ignored))
     return _opcode_get_special_method_names_impl(module);
 }
 
-PyDoc_STRVAR(_opcode_get_executor__doc__,
-"get_executor($module, /, code, offset)\n"
+PyDoc_STRVAR(_opcode_get_ir_formats__doc__,
+"get_ir_formats($module, /)\n"
 "--\n"
 "\n"
-"Return the executor object at offset in code if exists, None otherwise.");
+"Return the formats of the handlers of the register IR.\n"
+"\n"
+"Item h describes handler h: None if there is none, else (flags, roles,\n"
+"imm, fb, base), where roles holds the roles of fields A to D, imm and fb\n"
+"say where the oparg and the feedback index are, and base is the opcode\n"
+"that the handler stands for.");
 
-#define _OPCODE_GET_EXECUTOR_METHODDEF    \
-    {"get_executor", _PyCFunction_CAST(_opcode_get_executor), METH_FASTCALL|METH_KEYWORDS, _opcode_get_executor__doc__},
+#define _OPCODE_GET_IR_FORMATS_METHODDEF    \
+    {"get_ir_formats", (PyCFunction)_opcode_get_ir_formats, METH_NOARGS, _opcode_get_ir_formats__doc__},
 
 static PyObject *
-_opcode_get_executor_impl(PyObject *module, PyObject *code, int offset);
+_opcode_get_ir_formats_impl(PyObject *module);
 
 static PyObject *
-_opcode_get_executor(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+_opcode_get_ir_formats(PyObject *module, PyObject *Py_UNUSED(ignored))
 {
-    PyObject *return_value = NULL;
-    #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
-
-    #define NUM_KEYWORDS 2
-    static struct {
-        PyGC_Head _this_is_not_used;
-        PyObject_VAR_HEAD
-        Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
-    } _kwtuple = {
-        .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
-        .ob_hash = -1,
-        .ob_item = { &_Py_ID(code), &_Py_ID(offset), },
-    };
-    #undef NUM_KEYWORDS
-    #define KWTUPLE (&_kwtuple.ob_base.ob_base)
-
-    #else  // !Py_BUILD_CORE
-    #  define KWTUPLE NULL
-    #endif  // !Py_BUILD_CORE
-
-    static const char * const _keywords[] = {"code", "offset", NULL};
-    static _PyArg_Parser _parser = {
-        .keywords = _keywords,
-        .fname = "get_executor",
-        .kwtuple = KWTUPLE,
-    };
-    #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject *code;
-    int offset;
-
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
-        goto exit;
-    }
-    code = args[0];
-    offset = PyLong_AsInt(args[1]);
-    if (offset == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-    return_value = _opcode_get_executor_impl(module, code, offset);
-
-exit:
-    return return_value;
+    return _opcode_get_ir_formats_impl(module);
 }
-/*[clinic end generated code: output=a11f02989c3175d7 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=8ea31e9aef99990e input=a9049054013a1b77]*/

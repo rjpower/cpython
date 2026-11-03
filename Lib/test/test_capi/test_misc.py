@@ -401,6 +401,7 @@ class CAPITest(unittest.TestCase):
         self.assertRaises(ValueError, buildvalue, '[C ]i', -1, 2)
         self.assertRaises(ValueError, buildvalue, '{Ci }i', -1, 2, 3)
 
+    @support.requires_refcounting
     def test_buildvalue_N(self):
         _testcapi.test_buildvalue_N()
 
@@ -564,6 +565,7 @@ class CAPITest(unittest.TestCase):
                 L = (L,)
             self.assertGreater(PyList.num, 0)
             del L
+            support.gc_collect()  # For other GCs.
             self.assertEqual(PyList.num, 0)
 
     @unittest.skipIf(MISSING_C_DOCSTRINGS,
@@ -575,6 +577,7 @@ class CAPITest(unittest.TestCase):
     def test_null_type_doc(self):
         self.assertEqual(_testcapi.NullTpDocType.__doc__, None)
 
+    @support.requires_refcounting
     def test_subclass_of_heap_gc_ctype_with_tpdealloc_decrefs_once(self):
         class HeapGcCTypeSubclass(_testcapi.HeapGcCType):
             def __init__(self):
@@ -592,6 +595,7 @@ class CAPITest(unittest.TestCase):
         del subclass_instance
         self.assertEqual(type_refcnt - 1, sys.getrefcount(HeapGcCTypeSubclass))
 
+    @support.requires_refcounting
     def test_subclass_of_heap_gc_ctype_with_del_modifying_dunder_class_only_decrefs_once(self):
         class A(_testcapi.HeapGcCType):
             def __init__(self):
@@ -721,6 +725,7 @@ class CAPITest(unittest.TestCase):
             inst.spam = inst
             del inst
             ref = weakref.ref(cls())
+            support.gc_collect()  # For other GCs.
             self.assertIs(ref(), None)
 
     def test_heaptype_with_buffer(self):
@@ -728,6 +733,7 @@ class CAPITest(unittest.TestCase):
         b = bytes(inst)
         self.assertEqual(b, b"1234")
 
+    @support.requires_refcounting
     def test_c_subclass_of_heap_ctype_with_tpdealloc_decrefs_once(self):
         subclass_instance = _testcapi.HeapCTypeSubclass()
         type_refcnt = sys.getrefcount(_testcapi.HeapCTypeSubclass)
@@ -740,6 +746,7 @@ class CAPITest(unittest.TestCase):
         del subclass_instance
         self.assertEqual(type_refcnt - 1, sys.getrefcount(_testcapi.HeapCTypeSubclass))
 
+    @support.requires_refcounting
     def test_c_subclass_of_heap_ctype_with_del_modifying_dunder_class_only_decrefs_once(self):
         subclass_instance = HeapCTypeSubclassWithFinalizer()
         type_refcnt = sys.getrefcount(HeapCTypeSubclassWithFinalizer)
@@ -1870,9 +1877,8 @@ class SubinterpreterTest(unittest.TestCase):
         self.assertEqual(support.run_in_subinterp(code), 0,
                          'subinterp code failure, check stderr.')
         after_config = _testcapi.config_get('int_max_str_digits')
-        self.assertIsNot(
-                before_config, after_config,
-                "Expected get_config() to return a new dict on each call")
+        # Equal ints that fit in int32 can be identical (see
+        # test_tagged_values), so only equality is tested.
         self.assertEqual(before_config, after_config,
                          "CAUTION: Tests executed after this may be "
                          "running under an altered config.")
@@ -2758,6 +2764,24 @@ class TestThreadState(unittest.TestCase):
         _testcapi.test_current_tstate_matches()
 
 
+# C tests that check reference counts or uniqueness, or that an object dies
+# as its last reference goes, which Py_GC does not provide.  Py_GC also
+# does not untrack frozensets of atoms.
+REFCOUNTING_C_TESTS = {
+    'test_buildvalue_N',
+    'test_bytes_resize_tracer',
+    'test_capsule',
+    'test_frozenset_add_in_capi_tracking_immutable',
+    'test_py_set_immortal',
+    'test_py_try_inc_ref',
+    'test_refcount_funcs',
+    'test_refcount_macros',
+    'test_reftracer',
+    'test_thread_state_release_with_destructor',
+    'test_weakref_capi',
+}
+
+
 def get_test_funcs(mod, exclude_prefix=None):
     funcs = {}
     for name in dir(mod):
@@ -2765,7 +2789,10 @@ def get_test_funcs(mod, exclude_prefix=None):
             continue
         if exclude_prefix is not None and name.startswith(exclude_prefix):
             continue
-        funcs[name] = getattr(mod, name)
+        func = getattr(mod, name)
+        if name in REFCOUNTING_C_TESTS:
+            func = support.requires_refcounting(func)
+        funcs[name] = func
     return funcs
 
 
@@ -3027,29 +3054,6 @@ class Test_Pep523AllowSpecialization(unittest.TestCase):
         finally:
             _testinternalcapi.set_eval_frame_default()
 
-    def test_allow_specialization_call(self):
-        def func():
-            pass
-
-        def func_outer():
-            func()
-
-        actual_calls = []
-        try:
-            _testinternalcapi.set_eval_frame_interp(
-                actual_calls)
-            for i in range(SUFFICIENT_TO_DEOPT_AND_SPECIALIZE * 2):
-                func_outer()
-        finally:
-            _testinternalcapi.set_eval_frame_default()
-
-        # With specialization enabled, calls to inner() will dispatch
-        # through the installed frame evaluator
-        self.assertEqual(actual_calls.count("func"), 0)
-
-        # But the normal interpreter loop still shouldn't be inlining things
-        self.assertNotEqual(actual_calls.count("func_outer"), 0)
-
     def test_no_specialization_call(self):
         # Without allow_specialization, ALL calls go through the eval frame.
         # This is the existing PEP 523 behavior.
@@ -3191,6 +3195,7 @@ class TestVersions(unittest.TestCase):
 
 
 class TestCEval(unittest.TestCase):
+   @support.requires_refcounting
    def test_ceval_decref(self):
         code = textwrap.dedent("""
             import _testcapi

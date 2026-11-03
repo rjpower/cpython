@@ -1,0 +1,1091 @@
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2a/assert-kill-worker.py", line 13, in <module>
+    assert sys.argv[-3:-1] == ['-m','test.libregrtest.worker'], sys.argv
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ['/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2a/assert-kill-worker.py', '-m', 'platform']
+== CPython 3.16.0a1+dev (heads/boil/h3-dirty:6c724c29408, Oct 29 2026, 08:09:09) [GCC 15.2.0]
+== Linux-7.0.0-29-generic-x86_64-with-glibc2.43 little-endian
+== Python build: debug
+== cwd: /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/build/test_python_worker_2409189æ
+== CPU count: 16
+== encodings: locale=UTF-8 FS=utf-8
+== resources: all test resources are disabled, use -u option to unskip tests
+== host python: /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2a/assert-kill-worker.py
+== host platform: <command failed with exit code 1>
+
+Using random seed: 1434207971
+0:00:00 load avg: 2.54 mem:   48.1 MiB Run 10 tests in parallel using 8 worker processes (timeout: 10 min, worker timeout: 15 min)
+0:00:01 load avg: 2.54 mem:  359.2 MiB [ 1/10] test_monitoring passed
+test_async_for (test.test_monitoring.ExceptionMonitoringTest.test_async_for) ... ok
+test_explicit_reraise (test.test_monitoring.ExceptionMonitoringTest.test_explicit_reraise) ... ok
+test_explicit_reraise_named (test.test_monitoring.ExceptionMonitoringTest.test_explicit_reraise_named) ... ok
+test_gen_unwind (test.test_monitoring.ExceptionMonitoringTest.test_gen_unwind) ... ok
+test_implicit_reraise (test.test_monitoring.ExceptionMonitoringTest.test_implicit_reraise) ... ok
+test_implicit_reraise_named (test.test_monitoring.ExceptionMonitoringTest.test_implicit_reraise_named) ... ok
+test_implicit_stop_iteration (test.test_monitoring.ExceptionMonitoringTest.test_implicit_stop_iteration)
+Generators are documented as raising a StopIteration ... ok
+test_no_unwind_for_shim_frame (test.test_monitoring.ExceptionMonitoringTest.test_no_unwind_for_shim_frame) ... ok
+test_simple_try_except (test.test_monitoring.ExceptionMonitoringTest.test_simple_try_except) ... ok
+test_throw (test.test_monitoring.ExceptionMonitoringTest.test_throw) ... ok
+test_try_finally (test.test_monitoring.ExceptionMonitoringTest.test_try_finally) ... ok
+test_branch (test.test_monitoring.LineMonitoringTest.test_branch) ... ok
+test_linear (test.test_monitoring.LineMonitoringTest.test_linear) ... ok
+test_lines_loop (test.test_monitoring.LineMonitoringTest.test_lines_loop) ... ok
+test_lines_single (test.test_monitoring.LineMonitoringTest.test_lines_single) ... ok
+test_lines_two (test.test_monitoring.LineMonitoringTest.test_lines_two) ... ok
+test_try_except (test.test_monitoring.LineMonitoringTest.test_try_except) ... ok
+test_clear (test.test_monitoring.MonitoringBasicTest.test_clear) ... ok
+test_has_objects (test.test_monitoring.MonitoringBasicTest.test_has_objects) ... ok
+test_tool (test.test_monitoring.MonitoringBasicTest.test_tool) ... ok
+test_c_return_count (test.test_monitoring.MonitoringCountTest.test_c_return_count) ... ok
+test_call_count (test.test_monitoring.MonitoringCountTest.test_call_count) ... ok
+test_resume_count (test.test_monitoring.MonitoringCountTest.test_resume_count) ... ok
+test_return_count (test.test_monitoring.MonitoringCountTest.test_return_count) ... ok
+test_start_count (test.test_monitoring.MonitoringCountTest.test_start_count) ... ok
+test_caught (test.test_monitoring.MonitoringEventsTest.test_caught) ... ok
+test_just_call (test.test_monitoring.MonitoringEventsTest.test_just_call) ... ok
+test_just_pass (test.test_monitoring.MonitoringEventsTest.test_just_pass) ... ok
+test_just_raise (test.test_monitoring.MonitoringEventsTest.test_just_raise) ... ok
+test_nested_call (test.test_monitoring.MonitoringEventsTest.test_nested_call) ... ok
+test_disable (test.test_monitoring.MontoringDisableAndRestartTest.test_disable) ... ok
+test_restart (test.test_monitoring.MontoringDisableAndRestartTest.test_restart) ... ok
+test_three_same (test.test_monitoring.MultipleMonitorsTest.test_three_same) ... ok
+test_two_different (test.test_monitoring.MultipleMonitorsTest.test_two_different) ... ok
+test_two_same (test.test_monitoring.MultipleMonitorsTest.test_two_same) ... ok
+test_two_with_disable (test.test_monitoring.MultipleMonitorsTest.test_two_with_disable) ... ok
+test_with_instruction_event (test.test_monitoring.MultipleMonitorsTest.test_with_instruction_event)
+Test that the second tool can set events with instruction events set by the first tool. ... ok
+test_balanced (test.test_monitoring.SimulateProfileTest.test_balanced) ... ok
+test_frame_stack (test.test_monitoring.SimulateProfileTest.test_frame_stack) ... ok
+test_async_for (test.test_monitoring.TestBranchAndJumpEvents.test_async_for) ... ok
+test_callback_set_frame_lineno (test.test_monitoring.TestBranchAndJumpEvents.test_callback_set_frame_lineno) ... ok
+test_except_star (test.test_monitoring.TestBranchAndJumpEvents.test_except_star) ... ok
+test_loop (test.test_monitoring.TestBranchAndJumpEvents.test_loop) ... ok
+test_match (test.test_monitoring.TestBranchAndJumpEvents.test_match) ... ok
+test_while_offset_consistency (test.test_monitoring.TestBranchAndJumpEvents.test_while_offset_consistency) ... ok
+test4 (test.test_monitoring.TestBranchConsistency.test4) ... ok
+test_async_for (test.test_monitoring.TestBranchConsistency.test_async_for) ... ok
+test_except_star (test.test_monitoring.TestBranchConsistency.test_except_star) ... ok
+test_simple (test.test_monitoring.TestBranchConsistency.test_simple) ... ok
+test_disable_event (test.test_monitoring.TestCApiEventGeneration.test_disable_event) ... ok
+test_enter_scope_two_events (test.test_monitoring.TestCApiEventGeneration.test_enter_scope_two_events) ... ok
+test_fire_event (test.test_monitoring.TestCApiEventGeneration.test_fire_event) ... ok
+test_fire_event_failing_callback (test.test_monitoring.TestCApiEventGeneration.test_fire_event_failing_callback) ... ok
+test_missing_exception (test.test_monitoring.TestCApiEventGeneration.test_missing_exception) ... ok
+test_disable_legal_events (test.test_monitoring.TestDisable.test_disable_legal_events) ... ok
+test_call_then_instruction (test.test_monitoring.TestInstallIncrementally.test_call_then_instruction) ... ok
+test_instruction_then_call (test.test_monitoring.TestInstallIncrementally.test_instruction_then_call) ... ok
+test_instruction_then_line (test.test_monitoring.TestInstallIncrementally.test_instruction_then_line) ... ok
+test_line_then_instruction (test.test_monitoring.TestInstallIncrementally.test_line_then_instruction) ... ok
+test_c_call (test.test_monitoring.TestLineAndInstructionEvents.test_c_call) ... ok
+test_disable_line_keeps_instruction_events (test.test_monitoring.TestLineAndInstructionEvents.test_disable_line_keeps_instruction_events) ... ok
+test_simple (test.test_monitoring.TestLineAndInstructionEvents.test_simple) ... ok
+test_try_except (test.test_monitoring.TestLineAndInstructionEvents.test_try_except) ... ok
+test_turn_off_only_instruction (test.test_monitoring.TestLineAndInstructionEvents.test_turn_off_only_instruction)
+LINE events should be recorded after INSTRUCTION event is turned off ... ok
+test_with_restart (test.test_monitoring.TestLineAndInstructionEvents.test_with_restart) ... ok
+test_attr (test.test_monitoring.TestLoadSuperAttr.test_attr) ... ok
+test_method_call (test.test_monitoring.TestLoadSuperAttr.test_method_call) ... ok
+test_method_call_error (test.test_monitoring.TestLoadSuperAttr.test_method_call_error) ... ok
+test_vs_other_type_call (test.test_monitoring.TestLoadSuperAttr.test_vs_other_type_call) ... ok
+test_c_call (test.test_monitoring.TestLocalEvents.test_c_call) ... ok
+test_local_exception_handled (test.test_monitoring.TestLocalEvents.test_local_exception_handled)
+EXCEPTION_HANDLED fires as a local event only for the instrumented code object. ... ok
+test_local_exception_handled_disable (test.test_monitoring.TestLocalEvents.test_local_exception_handled_disable)
+Returning DISABLE from an EXCEPTION_HANDLED callback disables it for that code object. ... ok
+test_local_py_throw (test.test_monitoring.TestLocalEvents.test_local_py_throw)
+PY_THROW fires as a local event only for the instrumented code object. ... ok
+test_local_py_throw_disable (test.test_monitoring.TestLocalEvents.test_local_py_throw_disable)
+Returning DISABLE from a PY_THROW callback disables it for that code object. ... ok
+test_local_py_unwind (test.test_monitoring.TestLocalEvents.test_local_py_unwind)
+PY_UNWIND fires as a local event only for the instrumented code object. ... ok
+test_local_py_unwind_disable (test.test_monitoring.TestLocalEvents.test_local_py_unwind_disable)
+Returning DISABLE from a PY_UNWIND callback disables it for that code object. ... ok
+test_local_raise (test.test_monitoring.TestLocalEvents.test_local_raise)
+RAISE fires as a local event only for the instrumented code object. ... ok
+test_local_raise_disable (test.test_monitoring.TestLocalEvents.test_local_raise_disable)
+Returning DISABLE from a RAISE callback disables it for that code object. ... ok
+test_local_reraise (test.test_monitoring.TestLocalEvents.test_local_reraise)
+RERAISE fires as a local event only for the instrumented code object. ... ok
+test_local_reraise_disable (test.test_monitoring.TestLocalEvents.test_local_reraise_disable)
+Returning DISABLE from a RERAISE callback disables it for that code object. ... ok
+test_set_non_local_event (test.test_monitoring.TestLocalEvents.test_set_non_local_event) ... ok
+test_simple (test.test_monitoring.TestLocalEvents.test_simple) ... ok
+test_try_except (test.test_monitoring.TestLocalEvents.test_try_except) ... ok
+test_c_call (test.test_monitoring.TestManyEvents.test_c_call) ... ok
+test_simple (test.test_monitoring.TestManyEvents.test_simple) ... ok
+test_try_except (test.test_monitoring.TestManyEvents.test_try_except) ... ok
+test_monitoring_live_at_shutdown (test.test_monitoring.TestMonitoringAtShutdown.test_monitoring_live_at_shutdown) ... 
+===== script _test_monitoring_shutdown.py ======
+===== script _test_monitoring_shutdown.py completed: exit code 0 ======
+ok
+test_for_loop (test.test_monitoring.TestOptimizer.test_for_loop) ... ok
+test_105162 (test.test_monitoring.TestRegressions.test_105162) ... ok
+test_108390 (test.test_monitoring.TestRegressions.test_108390) ... ok
+test_130279 (test.test_monitoring.TestRegressions.test_130279) ... ok
+test_134879 (test.test_monitoring.TestRegressions.test_134879) ... ok
+test_call_function_ex (test.test_monitoring.TestRegressions.test_call_function_ex) ... ok
+test_gh108976 (test.test_monitoring.TestRegressions.test_gh108976) ... ok
+test_instruction_explicit_callback (test.test_monitoring.TestRegressions.test_instruction_explicit_callback) ... ok
+test_global (test.test_monitoring.TestSetGetEvents.test_global) ... ok
+test_local (test.test_monitoring.TestSetGetEvents.test_local) ... ok
+test_monitoring_already_opimized_loop (test.test_monitoring.TestTier2Optimizer.test_monitoring_already_opimized_loop) ... ok
+test_get_local_events_uninitialized (test.test_monitoring.TestUninitialized.test_get_local_events_uninitialized) ... ok
+
+----------------------------------------------------------------------
+Ran 99 tests in 0.175s
+
+OK
+0:00:03 load avg: 2.54 mem:  476.0 MiB [ 2/10] test_code passed
+test_bad_index (test.test_code.CoExtra.test_bad_index) ... ok
+test_free_called (test.test_code.CoExtra.test_free_called) ... ok
+test_free_different_thread (test.test_code.CoExtra.test_free_different_thread) ... ok
+test_get_non_code (test.test_code.CoExtra.test_get_non_code) ... ok
+test_get_set (test.test_code.CoExtra.test_get_set) ... ok
+test_interned_constants (test.test_code.CodeConstsTest.test_interned_constants) ... skipped 'does not intern all constants'
+test_interned_string (test.test_code.CodeConstsTest.test_interned_string) ... ok
+test_interned_string_default (test.test_code.CodeConstsTest.test_interned_string_default) ... ok
+test_interned_string_in_frozenset (test.test_code.CodeConstsTest.test_interned_string_in_frozenset) ... ok
+test_interned_string_in_tuple (test.test_code.CodeConstsTest.test_interned_string_in_tuple) ... ok
+test_interned_string_with_null (test.test_code.CodeConstsTest.test_interned_string_with_null) ... ok
+test_unusual_constants (test.test_code.CodeConstsTest.test_unusual_constants) ... ok
+test_co_branches (test.test_code.CodeLocationTest.test_co_branches) ... ok
+test_code_new_empty (test.test_code.CodeLocationTest.test_code_new_empty) ... ok
+test_docstring_under_o2 (test.test_code.CodeLocationTest.test_docstring_under_o2) ... ok
+test_lines (test.test_code.CodeLocationTest.test_lines) ... ok
+test_positions (test.test_code.CodeLocationTest.test_positions) ... ok
+test_closure_injection (test.test_code.CodeTest.test_closure_injection) ... ok
+test_co_positions_artificial_instructions (test.test_code.CodeTest.test_co_positions_artificial_instructions) ... ok
+test_co_positions_empty_linetable (test.test_code.CodeTest.test_co_positions_empty_linetable) ... ok
+test_code_equal_with_instrumentation (test.test_code.CodeTest.test_code_equal_with_instrumentation)
+GH-109052 ... ok
+test_code_equality (test.test_code.CodeTest.test_code_equality) ... ok
+test_code_hash_uses_bytecode (test.test_code.CodeTest.test_code_hash_uses_bytecode) ... ok
+test_code_hash_uses_firstlineno (test.test_code.CodeTest.test_code_hash_uses_firstlineno) ... ok
+test_code_hash_uses_order (test.test_code.CodeTest.test_code_hash_uses_order) ... ok
+test_code_richcompare_raise_exception (test.test_code.CodeTest.test_code_richcompare_raise_exception) ... ok
+test_code_units_padded (test.test_code.CodeTest.test_code_units_padded) ... ok
+test_constructor (test.test_code.CodeTest.test_constructor) ... ok
+test_empty_linetable (test.test_code.CodeTest.test_empty_linetable) ... ok
+test_endline_and_columntable_none_when_no_debug_ranges (test.test_code.CodeTest.test_endline_and_columntable_none_when_no_debug_ranges) ... ok
+test_endline_and_columntable_none_when_no_debug_ranges_env (test.test_code.CodeTest.test_endline_and_columntable_none_when_no_debug_ranges_env) ... ok
+test_invalid_bytecode (test.test_code.CodeTest.test_invalid_bytecode) ... ok
+test_local_kinds (test.test_code.CodeTest.test_local_kinds) ... ok
+test_newempty (test.test_code.CodeTest.test_newempty) ... ok
+test_nlocals_mismatch (test.test_code.CodeTest.test_nlocals_mismatch) ... ok
+test_qualname (test.test_code.CodeTest.test_qualname) ... ok
+test_replace (test.test_code.CodeTest.test_replace) ... ok
+test_replace_inline_constant (test.test_code.CodeTest.test_replace_inline_constant) ... ok
+test_returns_only_none (test.test_code.CodeTest.test_returns_only_none) ... ok
+test_runtime_handlers_not_pristine (test.test_code.CodeTest.test_runtime_handlers_not_pristine) ... ok
+test_shrinking_localsplus (test.test_code.CodeTest.test_shrinking_localsplus) ... ok
+test_stateless (test.test_code.CodeTest.test_stateless) ... ok
+test_var_counts (test.test_code.CodeTest.test_var_counts) ... ok
+test_basic (test.test_code.CodeWeakRefTest.test_basic) ... ok
+test_code (test)
+Doctest: test.test_code ... ok
+
+----------------------------------------------------------------------
+Ran 45 tests in 1.172s
+
+OK (skipped=1)
+0:00:04 load avg: 2.54 mem:  757.5 MiB [ 3/10] test__opcode passed
+test_invalid_opcodes (test.test__opcode.OpListTests.test_invalid_opcodes) ... ok
+test_is_valid (test.test__opcode.OpListTests.test_is_valid) ... ok
+test_oplists (test.test__opcode.OpListTests.test_oplists) ... ok
+test_opmaps (test.test__opcode.OpListTests.test_opmaps) ... ok
+test_specialization_stats (test.test__opcode.SpecializationStatsTests.test_specialization_stats) ... ok
+test_stack_effect (test.test__opcode.StackEffectTests.test_stack_effect) ... ok
+test_stack_effect_jump (test.test__opcode.StackEffectTests.test_stack_effect_jump) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.030s
+
+OK
+0:00:05 load avg: 3.06 mem:  652.7 MiB [ 4/10] test_peepholer passed
+test_call (test.test_peepholer.CopyPropagationAcrossCodeTests.test_call) ... ok
+test_comparison (test.test_peepholer.CopyPropagationAcrossCodeTests.test_comparison) ... ok
+test_fold_under_cell (test.test_peepholer.CopyPropagationAcrossCodeTests.test_fold_under_cell) ... ok
+test_fold_under_constant (test.test_peepholer.CopyPropagationAcrossCodeTests.test_fold_under_constant) ... ok
+test_fold_under_local (test.test_peepholer.CopyPropagationAcrossCodeTests.test_fold_under_local) ... ok
+test_fold_under_tuple_and_is (test.test_peepholer.CopyPropagationAcrossCodeTests.test_fold_under_tuple_and_is) ... ok
+test_folded_operand_outlives_rebinding (test.test_peepholer.CopyPropagationAcrossCodeTests.test_folded_operand_outlives_rebinding) ... ok
+test_getattr (test.test_peepholer.CopyPropagationAcrossCodeTests.test_getattr) ... ok
+test_global_colliding_key (test.test_peepholer.CopyPropagationAcrossCodeTests.test_global_colliding_key) ... ok
+test_global_in_dict_subclass (test.test_peepholer.CopyPropagationAcrossCodeTests.test_global_in_dict_subclass) ... ok
+test_no_fold_under_attribute (test.test_peepholer.CopyPropagationAcrossCodeTests.test_no_fold_under_attribute) ... ok
+test_no_fold_under_global (test.test_peepholer.CopyPropagationAcrossCodeTests.test_no_fold_under_global) ... ok
+test_property (test.test_peepholer.CopyPropagationAcrossCodeTests.test_property) ... ok
+test_reflected_binary_op (test.test_peepholer.CopyPropagationAcrossCodeTests.test_reflected_binary_op) ... ok
+test_specialization_phase_runs_no_code (test.test_peepholer.CopyPropagationAcrossCodeTests.test_specialization_phase_runs_no_code) ... ok
+test_specializer_runs_no_code (test.test_peepholer.CopyPropagationAcrossCodeTests.test_specializer_runs_no_code) ... ok
+test_specializer_type_lookup_runs_no_code (test.test_peepholer.CopyPropagationAcrossCodeTests.test_specializer_type_lookup_runs_no_code) ... ok
+test_subscript (test.test_peepholer.CopyPropagationAcrossCodeTests.test_subscript) ... ok
+test_under_monitoring (test.test_peepholer.CopyPropagationAcrossCodeTests.test_under_monitoring) ... ok
+test_under_settrace (test.test_peepholer.CopyPropagationAcrossCodeTests.test_under_settrace) ... ok
+test_build_empty_tuple (test.test_peepholer.DirectCfgOptimizerTests.test_build_empty_tuple) ... ok
+test_compiler_codegen_consts_include_none_required_for_implicit_return (test.test_peepholer.DirectCfgOptimizerTests.test_compiler_codegen_consts_include_none_required_for_implicit_return) ... ok
+test_compiler_codegen_metadata_consts_roundtrips_optimize_cfg (test.test_peepholer.DirectCfgOptimizerTests.test_compiler_codegen_metadata_consts_roundtrips_optimize_cfg) ... ok
+test_conditional_jump_backward_const_condition (test.test_peepholer.DirectCfgOptimizerTests.test_conditional_jump_backward_const_condition) ... ok
+test_conditional_jump_backward_non_const_condition (test.test_peepholer.DirectCfgOptimizerTests.test_conditional_jump_backward_non_const_condition) ... ok
+test_conditional_jump_forward_const_condition (test.test_peepholer.DirectCfgOptimizerTests.test_conditional_jump_forward_const_condition) ... ok
+test_conditional_jump_forward_non_const_condition (test.test_peepholer.DirectCfgOptimizerTests.test_conditional_jump_forward_non_const_condition) ... ok
+test_dead_store_elimination_in_same_lineno (test.test_peepholer.DirectCfgOptimizerTests.test_dead_store_elimination_in_same_lineno) ... ok
+test_except_handler_label (test.test_peepholer.DirectCfgOptimizerTests.test_except_handler_label) ... ok
+test_fold_constant_big_list_contains_op (test.test_peepholer.DirectCfgOptimizerTests.test_fold_constant_big_list_contains_op) ... ok
+test_fold_constant_big_list_for_iter (test.test_peepholer.DirectCfgOptimizerTests.test_fold_constant_big_list_for_iter) ... ok
+test_fold_constant_big_set_contains_op (test.test_peepholer.DirectCfgOptimizerTests.test_fold_constant_big_set_contains_op) ... ok
+test_fold_constant_big_set_for_iter (test.test_peepholer.DirectCfgOptimizerTests.test_fold_constant_big_set_for_iter) ... ok
+test_fold_constant_intrinsic_list_to_tuple (test.test_peepholer.DirectCfgOptimizerTests.test_fold_constant_intrinsic_list_to_tuple) ... ok
+test_fold_constant_list_to_tuple_for_iter (test.test_peepholer.DirectCfgOptimizerTests.test_fold_constant_list_to_tuple_for_iter) ... ok
+test_fold_tuple_of_constants (test.test_peepholer.DirectCfgOptimizerTests.test_fold_tuple_of_constants) ... ok
+test_list_exceeding_stack_use_guideline (test.test_peepholer.DirectCfgOptimizerTests.test_list_exceeding_stack_use_guideline) ... ok
+test_list_to_tuple_get_iter (test.test_peepholer.DirectCfgOptimizerTests.test_list_to_tuple_get_iter) ... ok
+test_list_to_tuple_get_iter_is_safe (test.test_peepholer.DirectCfgOptimizerTests.test_list_to_tuple_get_iter_is_safe) ... ok
+test_nested_const_foldings (test.test_peepholer.DirectCfgOptimizerTests.test_nested_const_foldings) ... ok
+test_no_dead_store_elimination_in_different_lineno (test.test_peepholer.DirectCfgOptimizerTests.test_no_dead_store_elimination_in_different_lineno) ... ok
+test_no_fold_big_list_for_iter_with_non_const (test.test_peepholer.DirectCfgOptimizerTests.test_no_fold_big_list_for_iter_with_non_const) ... ok
+test_no_unsafe_static_swap (test.test_peepholer.DirectCfgOptimizerTests.test_no_unsafe_static_swap) ... ok
+test_optimize_cfg_const_index_out_of_range (test.test_peepholer.DirectCfgOptimizerTests.test_optimize_cfg_const_index_out_of_range) ... ok
+test_optimize_cfg_consts_must_be_list (test.test_peepholer.DirectCfgOptimizerTests.test_optimize_cfg_consts_must_be_list) ... ok
+test_optimize_if_const_binop (test.test_peepholer.DirectCfgOptimizerTests.test_optimize_if_const_binop) ... ok
+test_optimize_if_const_list (test.test_peepholer.DirectCfgOptimizerTests.test_optimize_if_const_list) ... ok
+test_optimize_if_const_set (test.test_peepholer.DirectCfgOptimizerTests.test_optimize_if_const_set) ... ok
+test_optimize_if_const_unaryop (test.test_peepholer.DirectCfgOptimizerTests.test_optimize_if_const_unaryop) ... ok
+test_optimize_literal_list_contains (test.test_peepholer.DirectCfgOptimizerTests.test_optimize_literal_list_contains) ... ok
+test_optimize_literal_list_for_iter (test.test_peepholer.DirectCfgOptimizerTests.test_optimize_literal_list_for_iter) ... ok
+test_optimize_literal_set_contains (test.test_peepholer.DirectCfgOptimizerTests.test_optimize_literal_set_contains) ... ok
+test_optimize_literal_set_for_iter (test.test_peepholer.DirectCfgOptimizerTests.test_optimize_literal_set_for_iter) ... ok
+test_optimize_unary_not (test.test_peepholer.DirectCfgOptimizerTests.test_optimize_unary_not) ... ok
+test_set_exceeding_stack_use_guideline (test.test_peepholer.DirectCfgOptimizerTests.test_set_exceeding_stack_use_guideline) ... ok
+test_unconditional_jump_threading (test.test_peepholer.DirectCfgOptimizerTests.test_unconditional_jump_threading) ... ok
+test_build_empty_tuple (test.test_peepholer.OptimizeLoadFastTestCase.test_build_empty_tuple) ... ok
+test_check_exc_match (test.test_peepholer.OptimizeLoadFastTestCase.test_check_exc_match) ... ok
+test_compiler_codegen_consts_include_none_required_for_implicit_return (test.test_peepholer.OptimizeLoadFastTestCase.test_compiler_codegen_consts_include_none_required_for_implicit_return) ... ok
+test_compiler_codegen_metadata_consts_roundtrips_optimize_cfg (test.test_peepholer.OptimizeLoadFastTestCase.test_compiler_codegen_metadata_consts_roundtrips_optimize_cfg) ... ok
+test_conditional_jump_backward_const_condition (test.test_peepholer.OptimizeLoadFastTestCase.test_conditional_jump_backward_const_condition) ... ok
+test_conditional_jump_backward_non_const_condition (test.test_peepholer.OptimizeLoadFastTestCase.test_conditional_jump_backward_non_const_condition) ... ok
+test_conditional_jump_forward_const_condition (test.test_peepholer.OptimizeLoadFastTestCase.test_conditional_jump_forward_const_condition) ... ok
+test_conditional_jump_forward_non_const_condition (test.test_peepholer.OptimizeLoadFastTestCase.test_conditional_jump_forward_non_const_condition) ... ok
+test_consume_no_inputs (test.test_peepholer.OptimizeLoadFastTestCase.test_consume_no_inputs) ... ok
+test_consume_some_inputs_no_outputs (test.test_peepholer.OptimizeLoadFastTestCase.test_consume_some_inputs_no_outputs) ... ok
+test_dead_store_elimination_in_same_lineno (test.test_peepholer.OptimizeLoadFastTestCase.test_dead_store_elimination_in_same_lineno) ... ok
+test_del_in_finally (test.test_peepholer.OptimizeLoadFastTestCase.test_del_in_finally) ... ok
+test_except_handler_label (test.test_peepholer.OptimizeLoadFastTestCase.test_except_handler_label) ... ok
+test_fold_constant_big_list_contains_op (test.test_peepholer.OptimizeLoadFastTestCase.test_fold_constant_big_list_contains_op) ... ok
+test_fold_constant_big_list_for_iter (test.test_peepholer.OptimizeLoadFastTestCase.test_fold_constant_big_list_for_iter) ... ok
+test_fold_constant_big_set_contains_op (test.test_peepholer.OptimizeLoadFastTestCase.test_fold_constant_big_set_contains_op) ... ok
+test_fold_constant_big_set_for_iter (test.test_peepholer.OptimizeLoadFastTestCase.test_fold_constant_big_set_for_iter) ... ok
+test_fold_constant_intrinsic_list_to_tuple (test.test_peepholer.OptimizeLoadFastTestCase.test_fold_constant_intrinsic_list_to_tuple) ... ok
+test_fold_constant_list_to_tuple_for_iter (test.test_peepholer.OptimizeLoadFastTestCase.test_fold_constant_list_to_tuple_for_iter) ... ok
+test_fold_tuple_of_constants (test.test_peepholer.OptimizeLoadFastTestCase.test_fold_tuple_of_constants) ... ok
+test_for_iter (test.test_peepholer.OptimizeLoadFastTestCase.test_for_iter) ... ok
+test_format_simple (test.test_peepholer.OptimizeLoadFastTestCase.test_format_simple) ... ok
+test_format_simple_unicode (test.test_peepholer.OptimizeLoadFastTestCase.test_format_simple_unicode) ... ok
+test_get_yield_from_iter (test.test_peepholer.OptimizeLoadFastTestCase.test_get_yield_from_iter) ... ok
+test_list_exceeding_stack_use_guideline (test.test_peepholer.OptimizeLoadFastTestCase.test_list_exceeding_stack_use_guideline) ... ok
+test_list_to_tuple_get_iter (test.test_peepholer.OptimizeLoadFastTestCase.test_list_to_tuple_get_iter) ... ok
+test_list_to_tuple_get_iter_is_safe (test.test_peepholer.OptimizeLoadFastTestCase.test_list_to_tuple_get_iter_is_safe) ... ok
+test_load_attr (test.test_peepholer.OptimizeLoadFastTestCase.test_load_attr) ... ok
+test_load_special (test.test_peepholer.OptimizeLoadFastTestCase.test_load_special) ... ok
+test_nested_const_foldings (test.test_peepholer.OptimizeLoadFastTestCase.test_nested_const_foldings) ... ok
+test_no_dead_store_elimination_in_different_lineno (test.test_peepholer.OptimizeLoadFastTestCase.test_no_dead_store_elimination_in_different_lineno) ... ok
+test_no_fold_big_list_for_iter_with_non_const (test.test_peepholer.OptimizeLoadFastTestCase.test_no_fold_big_list_for_iter_with_non_const) ... ok
+test_no_unsafe_static_swap (test.test_peepholer.OptimizeLoadFastTestCase.test_no_unsafe_static_swap) ... ok
+test_optimize_cfg_const_index_out_of_range (test.test_peepholer.OptimizeLoadFastTestCase.test_optimize_cfg_const_index_out_of_range) ... ok
+test_optimize_cfg_consts_must_be_list (test.test_peepholer.OptimizeLoadFastTestCase.test_optimize_cfg_consts_must_be_list) ... ok
+test_optimize_if_const_binop (test.test_peepholer.OptimizeLoadFastTestCase.test_optimize_if_const_binop) ... ok
+test_optimize_if_const_list (test.test_peepholer.OptimizeLoadFastTestCase.test_optimize_if_const_list) ... ok
+test_optimize_if_const_set (test.test_peepholer.OptimizeLoadFastTestCase.test_optimize_if_const_set) ... ok
+test_optimize_if_const_unaryop (test.test_peepholer.OptimizeLoadFastTestCase.test_optimize_if_const_unaryop) ... ok
+test_optimize_literal_list_contains (test.test_peepholer.OptimizeLoadFastTestCase.test_optimize_literal_list_contains) ... ok
+test_optimize_literal_list_for_iter (test.test_peepholer.OptimizeLoadFastTestCase.test_optimize_literal_list_for_iter) ... ok
+test_optimize_literal_set_contains (test.test_peepholer.OptimizeLoadFastTestCase.test_optimize_literal_set_contains) ... ok
+test_optimize_literal_set_for_iter (test.test_peepholer.OptimizeLoadFastTestCase.test_optimize_literal_set_for_iter) ... ok
+test_optimize_unary_not (test.test_peepholer.OptimizeLoadFastTestCase.test_optimize_unary_not) ... ok
+test_optimized (test.test_peepholer.OptimizeLoadFastTestCase.test_optimized) ... ok
+test_push_exc_info (test.test_peepholer.OptimizeLoadFastTestCase.test_push_exc_info) ... ok
+test_send (test.test_peepholer.OptimizeLoadFastTestCase.test_send) ... ok
+test_set_exceeding_stack_use_guideline (test.test_peepholer.OptimizeLoadFastTestCase.test_set_exceeding_stack_use_guideline) ... ok
+test_set_function_attribute (test.test_peepholer.OptimizeLoadFastTestCase.test_set_function_attribute) ... ok
+test_super_attr (test.test_peepholer.OptimizeLoadFastTestCase.test_super_attr) ... ok
+test_unconditional_jump_threading (test.test_peepholer.OptimizeLoadFastTestCase.test_unconditional_jump_threading) ... ok
+test_unoptimized_if_aliased (test.test_peepholer.OptimizeLoadFastTestCase.test_unoptimized_if_aliased) ... ok
+test_unoptimized_if_support_killed (test.test_peepholer.OptimizeLoadFastTestCase.test_unoptimized_if_support_killed) ... ok
+test_unoptimized_if_unconsumed (test.test_peepholer.OptimizeLoadFastTestCase.test_unoptimized_if_unconsumed) ... ok
+test_bpo_42057 (test.test_peepholer.TestBuglets.test_bpo_42057) ... ok
+test_bpo_45773_pop_jump_if_false (test.test_peepholer.TestBuglets.test_bpo_45773_pop_jump_if_false) ... ok
+test_bpo_45773_pop_jump_if_true (test.test_peepholer.TestBuglets.test_bpo_45773_pop_jump_if_true) ... ok
+test_bug_11510 (test.test_peepholer.TestBuglets.test_bug_11510) ... ok
+test_import_from_doesnt_clobber_load_fast_borrow (test.test_peepholer.TestMarkingVariablesAsUnKnown.test_import_from_doesnt_clobber_load_fast_borrow) ... ok
+test_initializing_local_does_not_add_check (test.test_peepholer.TestMarkingVariablesAsUnKnown.test_initializing_local_does_not_add_check) ... ok
+test_load_fast_known_because_already_loaded (test.test_peepholer.TestMarkingVariablesAsUnKnown.test_load_fast_known_because_already_loaded) ... ok
+test_load_fast_known_because_parameter (test.test_peepholer.TestMarkingVariablesAsUnKnown.test_load_fast_known_because_parameter) ... ok
+test_load_fast_known_multiple_branches (test.test_peepholer.TestMarkingVariablesAsUnKnown.test_load_fast_known_multiple_branches) ... ok
+test_load_fast_known_simple (test.test_peepholer.TestMarkingVariablesAsUnKnown.test_load_fast_known_simple) ... ok
+test_load_fast_too_many_locals (test.test_peepholer.TestMarkingVariablesAsUnKnown.test_load_fast_too_many_locals) ... ok
+test_load_fast_unknown_after_error (test.test_peepholer.TestMarkingVariablesAsUnKnown.test_load_fast_unknown_after_error) ... ok
+test_load_fast_unknown_after_error_2 (test.test_peepholer.TestMarkingVariablesAsUnKnown.test_load_fast_unknown_after_error_2) ... ok
+test_load_fast_unknown_because_del (test.test_peepholer.TestMarkingVariablesAsUnKnown.test_load_fast_unknown_because_del) ... ok
+test_load_fast_unknown_simple (test.test_peepholer.TestMarkingVariablesAsUnKnown.test_load_fast_unknown_simple) ... ok
+test_modifying_local_does_not_add_check (test.test_peepholer.TestMarkingVariablesAsUnKnown.test_modifying_local_does_not_add_check) ... ok
+test_setting_lineno_no_undefined (test.test_peepholer.TestMarkingVariablesAsUnKnown.test_setting_lineno_no_undefined) ... ok
+test_setting_lineno_one_undefined (test.test_peepholer.TestMarkingVariablesAsUnKnown.test_setting_lineno_one_undefined) ... ok
+test_setting_lineno_two_undefined (test.test_peepholer.TestMarkingVariablesAsUnKnown.test_setting_lineno_two_undefined) ... ok
+test_store_fast_load_fast_borrow (test.test_peepholer.TestMarkingVariablesAsUnKnown.test_store_fast_load_fast_borrow) ... ok
+test_store_fast_load_fast_not_borrowable (test.test_peepholer.TestMarkingVariablesAsUnKnown.test_store_fast_load_fast_not_borrowable) ... ok
+test_assignment_idiom_in_comprehensions (test.test_peepholer.TestTranforms.test_assignment_idiom_in_comprehensions) ... ok
+test_condition_with_binop_with_bools (test.test_peepholer.TestTranforms.test_condition_with_binop_with_bools) ... ok
+test_constant_folding_binop (test.test_peepholer.TestTranforms.test_constant_folding_binop) ... ok
+test_constant_folding_lists_of_constants (test.test_peepholer.TestTranforms.test_constant_folding_lists_of_constants) ... ok
+test_constant_folding_remove_nop_location (test.test_peepholer.TestTranforms.test_constant_folding_remove_nop_location) ... ok
+test_constant_folding_sets_of_constants (test.test_peepholer.TestTranforms.test_constant_folding_sets_of_constants) ... ok
+test_constant_folding_small_int (test.test_peepholer.TestTranforms.test_constant_folding_small_int) ... ok
+test_constant_folding_tuples_of_constants (test.test_peepholer.TestTranforms.test_constant_folding_tuples_of_constants) ... ok
+test_constant_folding_unaryop (test.test_peepholer.TestTranforms.test_constant_folding_unaryop) ... ok
+test_elim_extra_return (test.test_peepholer.TestTranforms.test_elim_extra_return) ... ok
+test_elim_inversion_of_is_or_in (test.test_peepholer.TestTranforms.test_elim_inversion_of_is_or_in) ... ok
+test_elim_jump_after_return1 (test.test_peepholer.TestTranforms.test_elim_jump_after_return1) ... ok
+test_elim_jump_to_return (test.test_peepholer.TestTranforms.test_elim_jump_to_return) ... ok
+test_elim_jump_to_uncond_jump (test.test_peepholer.TestTranforms.test_elim_jump_to_uncond_jump) ... ok
+test_elim_jump_to_uncond_jump2 (test.test_peepholer.TestTranforms.test_elim_jump_to_uncond_jump2) ... ok
+test_elim_jump_to_uncond_jump3 (test.test_peepholer.TestTranforms.test_elim_jump_to_uncond_jump3) ... ok
+test_elim_jump_to_uncond_jump4 (test.test_peepholer.TestTranforms.test_elim_jump_to_uncond_jump4) ... ok
+test_format_combinations (test.test_peepholer.TestTranforms.test_format_combinations) ... skipped "resource 'cpu' is not enabled"
+test_format_errors (test.test_peepholer.TestTranforms.test_format_errors) ... ok
+test_format_misc (test.test_peepholer.TestTranforms.test_format_misc) ... ok
+test_global_as_constant (test.test_peepholer.TestTranforms.test_global_as_constant) ... ok
+test_if_with_if_expression (test.test_peepholer.TestTranforms.test_if_with_if_expression) ... ok
+test_in_literal_list (test.test_peepholer.TestTranforms.test_in_literal_list) ... ok
+test_iterate_literal_list (test.test_peepholer.TestTranforms.test_iterate_literal_list) ... ok
+test_make_function_doesnt_bail (test.test_peepholer.TestTranforms.test_make_function_doesnt_bail) ... ok
+test_pack_unpack (test.test_peepholer.TestTranforms.test_pack_unpack) ... ok
+test_static_swaps_match_class (test.test_peepholer.TestTranforms.test_static_swaps_match_class) ... ok
+test_static_swaps_match_mapping (test.test_peepholer.TestTranforms.test_static_swaps_match_mapping) ... ok
+test_static_swaps_match_sequence (test.test_peepholer.TestTranforms.test_static_swaps_match_sequence) ... ok
+test_static_swaps_unpack_three (test.test_peepholer.TestTranforms.test_static_swaps_unpack_three) ... ok
+test_static_swaps_unpack_two (test.test_peepholer.TestTranforms.test_static_swaps_unpack_two) ... ok
+test_trailing_nops (test.test_peepholer.TestTranforms.test_trailing_nops) ... ok
+test_unot (test.test_peepholer.TestTranforms.test_unot) ... ok
+test_unot_value (test.test_peepholer.TestTranforms.test_unot_value) ... ok
+test_while_one (test.test_peepholer.TestTranforms.test_while_one) ... ok
+
+----------------------------------------------------------------------
+Ran 166 tests in 3.896s
+
+OK (skipped=1)
+0:00:05 load avg: 3.06 mem:  622.8 MiB [ 5/10] test_dis passed
+test_bytecode_co_positions (test.test_dis.BytecodeTests.test_bytecode_co_positions) ... ok
+test_disassembled (test.test_dis.BytecodeTests.test_disassembled) ... ok
+test_explicit_first_line (test.test_dis.BytecodeTests.test_explicit_first_line) ... ok
+test_from_traceback (test.test_dis.BytecodeTests.test_from_traceback) ... ok
+test_from_traceback_dis (test.test_dis.BytecodeTests.test_from_traceback_dis) ... ok
+test_info (test.test_dis.BytecodeTests.test_info) ... ok
+test_instantiation (test.test_dis.BytecodeTests.test_instantiation) ... ok
+test_iteration (test.test_dis.BytecodeTests.test_iteration) ... ok
+test_source_line_in_disassembly (test.test_dis.BytecodeTests.test_source_line_in_disassembly) ... ok
+test_code_info (test.test_dis.CodeInfoTests.test_code_info) ... ok
+test_code_info_object (test.test_dis.CodeInfoTests.test_code_info_object) ... ok
+test_pretty_flags_no_flags (test.test_dis.CodeInfoTests.test_pretty_flags_no_flags) ... ok
+test_show_code (test.test_dis.CodeInfoTests.test_show_code) ... ok
+test__try_compile_no_context_exc_on_error (test.test_dis.DisTests.test__try_compile_no_context_exc_on_error) ... ok
+test_async_for_presentation (test.test_dis.DisTests.test_async_for_presentation) ... ok
+test_big_linenos (test.test_dis.DisTests.test_big_linenos) ... ok
+test_boundaries (test.test_dis.DisTests.test_boundaries) ... ok
+test_bug_1333982 (test.test_dis.DisTests.test_bug_1333982) ... ok
+test_bug_42562 (test.test_dis.DisTests.test_bug_42562) ... ok
+test_bug_45757 (test.test_dis.DisTests.test_bug_45757) ... ok
+test_bug_46724 (test.test_dis.DisTests.test_bug_46724) ... ok
+test_bug_708901 (test.test_dis.DisTests.test_bug_708901) ... ok
+test_call_specialize (test.test_dis.DisTests.test_call_specialize) ... ok
+test_dis (test.test_dis.DisTests.test_dis) ... ok
+test_dis_none (test.test_dis.DisTests.test_dis_none) ... ok
+test_dis_object (test.test_dis.DisTests.test_dis_object) ... ok
+test_dis_traceback (test.test_dis.DisTests.test_dis_traceback) ... ok
+test_dis_with_all_positions (test.test_dis.DisTests.test_dis_with_all_positions) ... ok
+test_dis_with_linenos_but_no_columns (test.test_dis.DisTests.test_dis_with_linenos_but_no_columns) ... ok
+test_dis_with_no_positions (test.test_dis.DisTests.test_dis_with_no_positions) ... ok
+test_dis_with_offsets (test.test_dis.DisTests.test_dis_with_offsets) ... ok
+test_dis_with_some_positions (test.test_dis.DisTests.test_dis_with_some_positions) ... ok
+test_disassemble_async_generator (test.test_dis.DisTests.test_disassemble_async_generator) ... ok
+test_disassemble_asyncwith (test.test_dis.DisTests.test_disassemble_asyncwith) ... ok
+test_disassemble_bytes (test.test_dis.DisTests.test_disassemble_bytes) ... ok
+test_disassemble_class (test.test_dis.DisTests.test_disassemble_class) ... ok
+test_disassemble_class_method (test.test_dis.DisTests.test_disassemble_class_method) ... ok
+test_disassemble_coroutine (test.test_dis.DisTests.test_disassemble_coroutine) ... ok
+test_disassemble_fstring (test.test_dis.DisTests.test_disassemble_fstring) ... ok
+test_disassemble_generator (test.test_dis.DisTests.test_disassemble_generator) ... ok
+test_disassemble_instance_method (test.test_dis.DisTests.test_disassemble_instance_method) ... ok
+test_disassemble_instance_method_bytes (test.test_dis.DisTests.test_disassemble_instance_method_bytes) ... ok
+test_disassemble_recursive (test.test_dis.DisTests.test_disassemble_recursive) ... ok
+test_disassemble_static_method (test.test_dis.DisTests.test_disassemble_static_method) ... ok
+test_disassemble_str (test.test_dis.DisTests.test_disassemble_str) ... ok
+test_disassemble_try_finally (test.test_dis.DisTests.test_disassemble_try_finally) ... ok
+test_disassemble_with (test.test_dis.DisTests.test_disassemble_with) ... ok
+test_extended_arg_quick (test.test_dis.DisTests.test_extended_arg_quick) ... ok
+test_intrinsic_1 (test.test_dis.DisTests.test_intrinsic_1) ... ok
+test_intrinsic_2 (test.test_dis.DisTests.test_intrinsic_2) ... ok
+test_kw_names (test.test_dis.DisTests.test_kw_names) ... ok
+test_load_attr_specialize (test.test_dis.DisTests.test_load_attr_specialize) ... ok
+test_loop_quicken (test.test_dis.DisTests.test_loop_quicken) ... ok
+test_loop_with_conditional_at_end_is_quickened (test.test_dis.DisTests.test_loop_with_conditional_at_end_is_quickened) ... ok
+test_opmap (test.test_dis.DisTests.test_opmap) ... ok
+test_opname (test.test_dis.DisTests.test_opname) ... ok
+test_show_caches (test.test_dis.DisTests.test_show_caches) ... ok
+test_show_caches_attr_guard (test.test_dis.DisTests.test_show_caches_attr_guard) ... ok
+test_show_currinstr_with_cache (test.test_dis.DisTests.test_show_currinstr_with_cache)
+Make sure that the current instruction is marked once, also when its ... ok
+test_super_instructions (test.test_dis.DisTests.test_super_instructions) ... ok
+test_widths (test.test_dis.DisTests.test_widths) ... ok
+test__try_compile_no_context_exc_on_error (test.test_dis.DisWithFileTests.test__try_compile_no_context_exc_on_error) ... ok
+test_async_for_presentation (test.test_dis.DisWithFileTests.test_async_for_presentation) ... ok
+test_big_linenos (test.test_dis.DisWithFileTests.test_big_linenos) ... ok
+test_boundaries (test.test_dis.DisWithFileTests.test_boundaries) ... ok
+test_bug_1333982 (test.test_dis.DisWithFileTests.test_bug_1333982) ... ok
+test_bug_42562 (test.test_dis.DisWithFileTests.test_bug_42562) ... ok
+test_bug_45757 (test.test_dis.DisWithFileTests.test_bug_45757) ... ok
+test_bug_46724 (test.test_dis.DisWithFileTests.test_bug_46724) ... ok
+test_bug_708901 (test.test_dis.DisWithFileTests.test_bug_708901) ... ok
+test_call_specialize (test.test_dis.DisWithFileTests.test_call_specialize) ... ok
+test_dis (test.test_dis.DisWithFileTests.test_dis) ... ok
+test_dis_none (test.test_dis.DisWithFileTests.test_dis_none) ... ok
+test_dis_object (test.test_dis.DisWithFileTests.test_dis_object) ... ok
+test_dis_traceback (test.test_dis.DisWithFileTests.test_dis_traceback) ... ok
+test_dis_with_all_positions (test.test_dis.DisWithFileTests.test_dis_with_all_positions) ... ok
+test_dis_with_linenos_but_no_columns (test.test_dis.DisWithFileTests.test_dis_with_linenos_but_no_columns) ... ok
+test_dis_with_no_positions (test.test_dis.DisWithFileTests.test_dis_with_no_positions) ... ok
+test_dis_with_offsets (test.test_dis.DisWithFileTests.test_dis_with_offsets) ... ok
+test_dis_with_some_positions (test.test_dis.DisWithFileTests.test_dis_with_some_positions) ... ok
+test_disassemble_async_generator (test.test_dis.DisWithFileTests.test_disassemble_async_generator) ... ok
+test_disassemble_asyncwith (test.test_dis.DisWithFileTests.test_disassemble_asyncwith) ... ok
+test_disassemble_bytes (test.test_dis.DisWithFileTests.test_disassemble_bytes) ... ok
+test_disassemble_class (test.test_dis.DisWithFileTests.test_disassemble_class) ... ok
+test_disassemble_class_method (test.test_dis.DisWithFileTests.test_disassemble_class_method) ... ok
+test_disassemble_coroutine (test.test_dis.DisWithFileTests.test_disassemble_coroutine) ... ok
+test_disassemble_fstring (test.test_dis.DisWithFileTests.test_disassemble_fstring) ... ok
+test_disassemble_generator (test.test_dis.DisWithFileTests.test_disassemble_generator) ... ok
+test_disassemble_instance_method (test.test_dis.DisWithFileTests.test_disassemble_instance_method) ... ok
+test_disassemble_instance_method_bytes (test.test_dis.DisWithFileTests.test_disassemble_instance_method_bytes) ... ok
+test_disassemble_recursive (test.test_dis.DisWithFileTests.test_disassemble_recursive) ... ok
+test_disassemble_static_method (test.test_dis.DisWithFileTests.test_disassemble_static_method) ... ok
+test_disassemble_str (test.test_dis.DisWithFileTests.test_disassemble_str) ... ok
+test_disassemble_try_finally (test.test_dis.DisWithFileTests.test_disassemble_try_finally) ... ok
+test_disassemble_with (test.test_dis.DisWithFileTests.test_disassemble_with) ... ok
+test_extended_arg_quick (test.test_dis.DisWithFileTests.test_extended_arg_quick) ... ok
+test_intrinsic_1 (test.test_dis.DisWithFileTests.test_intrinsic_1) ... ok
+test_intrinsic_2 (test.test_dis.DisWithFileTests.test_intrinsic_2) ... ok
+test_kw_names (test.test_dis.DisWithFileTests.test_kw_names) ... ok
+test_load_attr_specialize (test.test_dis.DisWithFileTests.test_load_attr_specialize) ... ok
+test_loop_quicken (test.test_dis.DisWithFileTests.test_loop_quicken) ... ok
+test_loop_with_conditional_at_end_is_quickened (test.test_dis.DisWithFileTests.test_loop_with_conditional_at_end_is_quickened) ... ok
+test_opmap (test.test_dis.DisWithFileTests.test_opmap) ... ok
+test_opname (test.test_dis.DisWithFileTests.test_opname) ... ok
+test_show_caches (test.test_dis.DisWithFileTests.test_show_caches) ... ok
+test_show_caches_attr_guard (test.test_dis.DisWithFileTests.test_show_caches_attr_guard) ... ok
+test_show_currinstr_with_cache (test.test_dis.DisWithFileTests.test_show_currinstr_with_cache)
+Make sure that the current instruction is marked once, also when its ... ok
+test_super_instructions (test.test_dis.DisWithFileTests.test_super_instructions) ... ok
+test_widths (test.test_dis.DisWithFileTests.test_widths) ... ok
+test_argval_argrepr (test.test_dis.InstructionTests.test_argval_argrepr) ... ok
+test_baseopname_and_baseopcode (test.test_dis.InstructionTests.test_baseopname_and_baseopcode) ... ok
+test_cache_offset_and_end_offset (test.test_dis.InstructionTests.test_cache_offset_and_end_offset) ... ok
+test_co_positions (test.test_dis.InstructionTests.test_co_positions) ... ok
+test_co_positions_missing_info (test.test_dis.InstructionTests.test_co_positions_missing_info) ... ok
+test_co_positions_per_word (test.test_dis.InstructionTests.test_co_positions_per_word) ... ok
+test_contains_op_format (test.test_dis.InstructionTests.test_contains_op_format) ... ok
+test_custom_arg_resolver (test.test_dis.InstructionTests.test_custom_arg_resolver) ... ok
+test_default_first_line (test.test_dis.InstructionTests.test_default_first_line) ... ok
+test_doubly_nested (test.test_dis.InstructionTests.test_doubly_nested) ... ok
+test_first_line_set_to_None (test.test_dis.InstructionTests.test_first_line_set_to_None) ... ok
+test_instruction_str (test.test_dis.InstructionTests.test_instruction_str) ... ok
+test_is_op_format (test.test_dis.InstructionTests.test_is_op_format) ... ok
+test_jump_target (test.test_dis.InstructionTests.test_jump_target) ... ok
+test_jumpy (test.test_dis.InstructionTests.test_jumpy) ... ok
+test_nested (test.test_dis.InstructionTests.test_nested) ... ok
+test_oparg_alias (test.test_dis.InstructionTests.test_oparg_alias) ... ok
+test_outer (test.test_dis.InstructionTests.test_outer) ... ok
+test_show_caches_with_label (test.test_dis.InstructionTests.test_show_caches_with_label) ... ok
+test_start_offset (test.test_dis.InstructionTests.test_start_offset) ... ok
+test_assert_not_in_with_arg_in_bytecode (test.test_dis.TestBytecodeTestCase.test_assert_not_in_with_arg_in_bytecode) ... ok
+test_assert_not_in_with_arg_not_in_bytecode (test.test_dis.TestBytecodeTestCase.test_assert_not_in_with_arg_not_in_bytecode) ... ok
+test_assert_not_in_with_op_not_in_bytecode (test.test_dis.TestBytecodeTestCase.test_assert_not_in_with_op_not_in_bytecode) ... ok
+test_invocation (test.test_dis.TestDisCLI.test_invocation) ... ok
+test_show_cache (test.test_dis.TestDisCLI.test_show_cache) ... ok
+test_show_offsets (test.test_dis.TestDisCLI.test_show_offsets) ... ok
+test_show_positions (test.test_dis.TestDisCLI.test_show_positions) ... ok
+test_specialized_code (test.test_dis.TestDisCLI.test_specialized_code) ... ok
+test_distb_empty (test.test_dis.TestDisTraceback.test_distb_empty) ... ok
+test_distb_explicit_arg (test.test_dis.TestDisTraceback.test_distb_explicit_arg) ... ok
+test_distb_last_traceback (test.test_dis.TestDisTraceback.test_distb_last_traceback) ... ok
+test_distb_empty (test.test_dis.TestDisTracebackWithFile.test_distb_empty) ... ok
+test_distb_explicit_arg (test.test_dis.TestDisTracebackWithFile.test_distb_explicit_arg) ... ok
+test_distb_last_traceback (test.test_dis.TestDisTracebackWithFile.test_distb_last_traceback) ... ok
+test__find_imports (test.test_dis.TestFinderMethods.test__find_imports) ... ok
+test__find_store_names (test.test_dis.TestFinderMethods.test__find_store_names) ... ok
+test_findlabels (test.test_dis.TestFinderMethods.test_findlabels) ... ok
+test_findlinestarts (test.test_dis.TestFinderMethods.test_findlinestarts) ... ok
+
+----------------------------------------------------------------------
+Ran 147 tests in 3.878s
+
+OK
+0:00:06 load avg: 3.06 mem:  515.6 MiB [ 6/10] test_marshal passed
+test_array (test.test_marshal.BufferTestCase.test_array) ... ok
+test_bytearray (test.test_marshal.BufferTestCase.test_bytearray) ... ok
+test_memoryview (test.test_marshal.BufferTestCase.test_memoryview) ... ok
+test_bad_reader (test.test_marshal.BugsTestCase.test_bad_reader) ... ok
+test_bug_5888452 (test.test_marshal.BugsTestCase.test_bug_5888452) ... ok
+test_deterministic_sets (test.test_marshal.BugsTestCase.test_deterministic_sets) ... ok
+test_eof (test.test_marshal.BugsTestCase.test_eof) ... ok
+test_error_in_buffer (test.test_marshal.BugsTestCase.test_error_in_buffer) ... ok
+test_exact_type_match (test.test_marshal.BugsTestCase.test_exact_type_match) ... ok
+test_fuzz (test.test_marshal.BugsTestCase.test_fuzz) ... ok
+test_invalid_longs (test.test_marshal.BugsTestCase.test_invalid_longs) ... ok
+test_large_marshal (test.test_marshal.BugsTestCase.test_large_marshal) ... ok
+test_loads_abnormal_reference_loops (test.test_marshal.BugsTestCase.test_loads_abnormal_reference_loops) ... ok
+test_loads_recursion (test.test_marshal.BugsTestCase.test_loads_recursion) ... ok
+test_loads_reference_loop_dict (test.test_marshal.BugsTestCase.test_loads_reference_loop_dict) ... ok
+test_loads_reference_loop_list (test.test_marshal.BugsTestCase.test_loads_reference_loop_list) ... ok
+test_loads_reject_unicode_strings (test.test_marshal.BugsTestCase.test_loads_reject_unicode_strings) ... ok
+test_multiple_dumps_and_loads (test.test_marshal.BugsTestCase.test_multiple_dumps_and_loads) ... ok
+test_patch_873224 (test.test_marshal.BugsTestCase.test_patch_873224) ... ok
+test_recursion_limit (test.test_marshal.BugsTestCase.test_recursion_limit) ... ok
+test_reference_loop_code (test.test_marshal.BugsTestCase.test_reference_loop_code) ... ok
+test_reference_loop_dict (test.test_marshal.BugsTestCase.test_reference_loop_dict) ... ok
+test_reference_loop_frozendict (test.test_marshal.BugsTestCase.test_reference_loop_frozendict) ... ok
+test_reference_loop_list (test.test_marshal.BugsTestCase.test_reference_loop_list) ... ok
+test_reference_loop_slice (test.test_marshal.BugsTestCase.test_reference_loop_slice) ... ok
+test_reference_loop_tuple (test.test_marshal.BugsTestCase.test_reference_loop_tuple) ... ok
+test_set_changed_size (test.test_marshal.BugsTestCase.test_set_changed_size) ... ok
+test_shared_reference_frozendict (test.test_marshal.BugsTestCase.test_shared_reference_frozendict) ... ok
+test_shared_reference_tuple (test.test_marshal.BugsTestCase.test_shared_reference_tuple) ... ok
+test_unmarshallable (test.test_marshal.BugsTestCase.test_unmarshallable) ... ok
+test_unorderable_set_items (test.test_marshal.BugsTestCase.test_unorderable_set_items) ... ok
+test_unorderable_set_items_in_code (test.test_marshal.BugsTestCase.test_unorderable_set_items_in_code) ... ok
+test_version_argument (test.test_marshal.BugsTestCase.test_version_argument) ... ok
+test_code (test.test_marshal.CodeTestCase.test_code) ... ok
+test_different_filenames (test.test_marshal.CodeTestCase.test_different_filenames) ... ok
+test_many_codeobjects (test.test_marshal.CodeTestCase.test_many_codeobjects) ... ok
+test_minimal_linetable_with_no_debug_ranges (test.test_marshal.CodeTestCase.test_minimal_linetable_with_no_debug_ranges) ... ok
+test_no_allow_code (test.test_marshal.CodeTestCase.test_no_allow_code) ... ok
+test_same_filename_used (test.test_marshal.CodeTestCase.test_same_filename_used) ... ok
+test0To3 (test.test_marshal.CompatibilityTestCase.test0To3) ... ok
+test1To3 (test.test_marshal.CompatibilityTestCase.test1To3) ... ok
+test2To3 (test.test_marshal.CompatibilityTestCase.test2To3) ... ok
+test3To3 (test.test_marshal.CompatibilityTestCase.test3To3) ... ok
+test_dict (test.test_marshal.ContainerTestCase.test_dict) ... ok
+test_list (test.test_marshal.ContainerTestCase.test_list) ... ok
+test_sets (test.test_marshal.ContainerTestCase.test_sets) ... ok
+test_tuple (test.test_marshal.ContainerTestCase.test_tuple) ... ok
+test_exceptions (test.test_marshal.ExceptionTestCase.test_exceptions) ... ok
+test_floats (test.test_marshal.FloatTestCase.test_floats) ... ok
+testBytes (test.test_marshal.InstancingTestCase.testBytes) ... ok
+testDict (test.test_marshal.InstancingTestCase.testDict) ... ok
+testFloat (test.test_marshal.InstancingTestCase.testFloat) ... ok
+testFrozenDict (test.test_marshal.InstancingTestCase.testFrozenDict) ... ok
+testFrozenSet (test.test_marshal.InstancingTestCase.testFrozenSet) ... ok
+testInt (test.test_marshal.InstancingTestCase.testInt) ... ok
+testList (test.test_marshal.InstancingTestCase.testList) ... ok
+testModule (test.test_marshal.InstancingTestCase.testModule) ... ok
+testRecursion (test.test_marshal.InstancingTestCase.testRecursion) ... ok
+testSet (test.test_marshal.InstancingTestCase.testSet) ... ok
+testStr (test.test_marshal.InstancingTestCase.testStr) ... ok
+testTuple (test.test_marshal.InstancingTestCase.testTuple) ... ok
+test_bool (test.test_marshal.IntTestCase.test_bool) ... ok
+test_int64 (test.test_marshal.IntTestCase.test_int64) ... ok
+test_ints (test.test_marshal.IntTestCase.test_ints) ... ok
+testIntern (test.test_marshal.InterningTestCase.testIntern) ... ok
+testNoIntern (test.test_marshal.InterningTestCase.testNoIntern) ... ok
+test_bytearray (test.test_marshal.LargeValuesTestCase.test_bytearray) ... skipped 'not enough memory: 4.0G minimum needed'
+test_bytes (test.test_marshal.LargeValuesTestCase.test_bytes) ... skipped 'not enough memory: 4.0G minimum needed'
+test_frozenset (test.test_marshal.LargeValuesTestCase.test_frozenset) ... skipped 'not enough memory: 240.0G minimum needed'
+test_int (test.test_marshal.LargeValuesTestCase.test_int) ... skipped 'not enough memory: 8.0G minimum needed'
+test_list (test.test_marshal.LargeValuesTestCase.test_list) ... skipped 'not enough memory: 18.0G minimum needed'
+test_set (test.test_marshal.LargeValuesTestCase.test_set) ... skipped 'not enough memory: 240.0G minimum needed'
+test_str (test.test_marshal.LargeValuesTestCase.test_str) ... skipped 'not enough memory: 4.0G minimum needed'
+test_tuple (test.test_marshal.LargeValuesTestCase.test_tuple) ... skipped 'not enough memory: 18.0G minimum needed'
+test_dump_to_file (test.test_marshal.ReferenceTestCase.test_dump_to_file) ... ok
+test_extra_references (test.test_marshal.ReferenceTestCase.test_extra_references) ... ok
+test_extra_references_code (test.test_marshal.ReferenceTestCase.test_extra_references_code) ... ok
+test_interned_strings (test.test_marshal.ReferenceTestCase.test_interned_strings) ... ok
+test_many_references (test.test_marshal.ReferenceTestCase.test_many_references) ... ok
+test_nan_in_set (test.test_marshal.ReferenceTestCase.test_nan_in_set) ... ok
+test_reference_index (test.test_marshal.ReferenceTestCase.test_reference_index) ... ok
+test_shared_objects (test.test_marshal.ReferenceTestCase.test_shared_objects) ... ok
+test_shared_objects_old_versions (test.test_marshal.ReferenceTestCase.test_shared_objects_old_versions) ... ok
+test_shared_recursion (test.test_marshal.ReferenceTestCase.test_shared_recursion) ... ok
+test_single_occurrence_is_not_flagged (test.test_marshal.ReferenceTestCase.test_single_occurrence_is_not_flagged) ... ok
+test_threads (test.test_marshal.ReferenceTestCase.test_threads) ... ok
+test_slice (test.test_marshal.SliceTestCase.test_slice) ... ok
+test_bytes (test.test_marshal.StringTestCase.test_bytes) ... ok
+test_bytes_singleton (test.test_marshal.StringTestCase.test_bytes_singleton) ... ok
+test_string (test.test_marshal.StringTestCase.test_string) ... ok
+test_unicode (test.test_marshal.StringTestCase.test_unicode) ... ok
+
+----------------------------------------------------------------------
+Ran 91 tests in 4.568s
+
+OK (skipped=8)
+0:00:10 load avg: 3.06 mem:  487.2 MiB [ 7/10/1] test_opcache failed (env changed)
+test_assign_init_code (test.test_opcache.TestCallCache.test_assign_init_code) ... ok
+test_dont_specialize_custom_vectorcall (test.test_opcache.TestCallCache.test_dont_specialize_custom_vectorcall) ... ok
+test_push_init_frame_fails (test.test_opcache.TestCallCache.test_push_init_frame_fails) ... ok
+test_recursion_check_for_general_calls (test.test_opcache.TestCallCache.test_recursion_check_for_general_calls) ... ok
+test_specialize_call_function_ex_py (test.test_opcache.TestCallCache.test_specialize_call_function_ex_py) ... ok
+test_specialize_call_function_ex_py_fail (test.test_opcache.TestCallCache.test_specialize_call_function_ex_py_fail) ... ok
+test_too_many_defaults_0 (test.test_opcache.TestCallCache.test_too_many_defaults_0) ... ok
+test_too_many_defaults_1 (test.test_opcache.TestCallCache.test_too_many_defaults_1) ... ok
+test_too_many_defaults_2 (test.test_opcache.TestCallCache.test_too_many_defaults_2) ... ok
+test_kinds (test.test_opcache.TestFeedback.test_kinds) ... ok
+test_operand_versions (test.test_opcache.TestFeedback.test_operand_versions) ... ok
+test_poly_and_mega (test.test_opcache.TestFeedback.test_poly_and_mega) ... ok
+test_125868 (test.test_opcache.TestInstanceDict.test_125868) ... ok
+test_dict_dematerialization_copy (test.test_opcache.TestInstanceDict.test_dict_dematerialization_copy) ... ok
+test_dict_dematerialization_multiple_refs (test.test_opcache.TestInstanceDict.test_dict_dematerialization_multiple_refs) ... ok
+test_dict_dematerialization_pickle (test.test_opcache.TestInstanceDict.test_dict_dematerialization_pickle) ... ok
+test_dict_dematerialization_subclass (test.test_opcache.TestInstanceDict.test_dict_dematerialization_subclass) ... ok
+test_dict_materialization (test.test_opcache.TestInstanceDict.test_dict_materialization) ... ok
+test_dictionary_mode_is_terminal (test.test_opcache.TestInstanceDict.test_dictionary_mode_is_terminal) ... ok
+test_values_on_instance (test.test_opcache.TestInstanceDict.test_values_on_instance) ... ok
+test_descriptor_added_after_optimization (test.test_opcache.TestLoadAttrCache.test_descriptor_added_after_optimization) ... ok
+test_load_borrowed_slot_should_not_crash (test.test_opcache.TestLoadAttrCache.test_load_borrowed_slot_should_not_crash) ... ok
+test_load_shadowing_slot_should_raise_type_error (test.test_opcache.TestLoadAttrCache.test_load_shadowing_slot_should_raise_type_error) ... ok
+test_metaclass_del_descriptor_after_optimization (test.test_opcache.TestLoadAttrCache.test_metaclass_del_descriptor_after_optimization) ... ok
+test_metaclass_descriptor_added_after_optimization (test.test_opcache.TestLoadAttrCache.test_metaclass_descriptor_added_after_optimization) ... ok
+test_metaclass_descriptor_shadows_class_attribute (test.test_opcache.TestLoadAttrCache.test_metaclass_descriptor_shadows_class_attribute) ... ok
+test_metaclass_getattribute (test.test_opcache.TestLoadAttrCache.test_metaclass_getattribute) ... ok
+test_metaclass_set_descriptor_after_optimization (test.test_opcache.TestLoadAttrCache.test_metaclass_set_descriptor_after_optimization) ... ok
+test_metaclass_swap (test.test_opcache.TestLoadAttrCache.test_metaclass_swap) ... ok
+test_store_borrowed_slot_should_not_crash (test.test_opcache.TestLoadAttrCache.test_store_borrowed_slot_should_not_crash) ... ok
+test_store_shadowing_slot_should_raise_type_error (test.test_opcache.TestLoadAttrCache.test_store_shadowing_slot_should_raise_type_error) ... ok
+test_type_descriptor_shadows_attribute_getset (test.test_opcache.TestLoadAttrCache.test_type_descriptor_shadows_attribute_getset) ... ok
+test_type_descriptor_shadows_attribute_member (test.test_opcache.TestLoadAttrCache.test_type_descriptor_shadows_attribute_member) ... ok
+test_type_descriptor_shadows_attribute_method (test.test_opcache.TestLoadAttrCache.test_type_descriptor_shadows_attribute_method) ... ok
+test_descriptor_added_after_optimization (test.test_opcache.TestLoadMethodCache.test_descriptor_added_after_optimization) ... ok
+test_metaclass_del_descriptor_after_optimization (test.test_opcache.TestLoadMethodCache.test_metaclass_del_descriptor_after_optimization) ... ok
+test_metaclass_descriptor_added_after_optimization (test.test_opcache.TestLoadMethodCache.test_metaclass_descriptor_added_after_optimization) ... ok
+test_metaclass_descriptor_shadows_class_attribute (test.test_opcache.TestLoadMethodCache.test_metaclass_descriptor_shadows_class_attribute) ... ok
+test_metaclass_getattribute (test.test_opcache.TestLoadMethodCache.test_metaclass_getattribute) ... ok
+test_metaclass_set_descriptor_after_optimization (test.test_opcache.TestLoadMethodCache.test_metaclass_set_descriptor_after_optimization) ... ok
+test_metaclass_swap (test.test_opcache.TestLoadMethodCache.test_metaclass_swap) ... ok
+test_type_descriptor_shadows_attribute_member (test.test_opcache.TestLoadMethodCache.test_type_descriptor_shadows_attribute_member) ... ok
+test_type_descriptor_shadows_attribute_method (test.test_opcache.TestLoadMethodCache.test_type_descriptor_shadows_attribute_method) ... ok
+test_descriptor_not_double_executed_on_spec_fail (test.test_opcache.TestLoadSuperAttrCache.test_descriptor_not_double_executed_on_spec_fail) ... ok
+test_binary_subscr_getitem (test.test_opcache.TestRacesDoNotCrash.test_binary_subscr_getitem) ... ok
+test_binary_subscr_list_int (test.test_opcache.TestRacesDoNotCrash.test_binary_subscr_list_int) ... ok
+test_for_iter_gen (test.test_opcache.TestRacesDoNotCrash.test_for_iter_gen) ... ok
+test_for_iter_list (test.test_opcache.TestRacesDoNotCrash.test_for_iter_list) ... ok
+test_load_attr_class (test.test_opcache.TestRacesDoNotCrash.test_load_attr_class) ... ok
+test_load_attr_class_with_metaclass_check (test.test_opcache.TestRacesDoNotCrash.test_load_attr_class_with_metaclass_check) ... ok
+test_load_attr_getattribute_overridden (test.test_opcache.TestRacesDoNotCrash.test_load_attr_getattribute_overridden) ... ok
+test_load_attr_instance_value (test.test_opcache.TestRacesDoNotCrash.test_load_attr_instance_value) ... ok
+test_load_attr_method_no_dict (test.test_opcache.TestRacesDoNotCrash.test_load_attr_method_no_dict) ... ok
+test_load_attr_method_shape (test.test_opcache.TestRacesDoNotCrash.test_load_attr_method_shape) ... ok
+test_load_attr_module (test.test_opcache.TestRacesDoNotCrash.test_load_attr_module) ... ok
+test_load_attr_property (test.test_opcache.TestRacesDoNotCrash.test_load_attr_property) ... ok
+test_load_attr_slot (test.test_opcache.TestRacesDoNotCrash.test_load_attr_slot) ... ok
+test_load_attr_with_hint (test.test_opcache.TestRacesDoNotCrash.test_load_attr_with_hint) ... ok
+test_load_global_module (test.test_opcache.TestRacesDoNotCrash.test_load_global_module) ... ok
+test_store_attr_shape (test.test_opcache.TestRacesDoNotCrash.test_store_attr_shape) ... ok
+test_store_attr_with_hint (test.test_opcache.TestRacesDoNotCrash.test_store_attr_with_hint) ... ok
+test_store_attr_with_hint_materialized_dict (test.test_opcache.TestRacesDoNotCrash.test_store_attr_with_hint_materialized_dict) ... ok
+test_store_subscr_list_int (test.test_opcache.TestRacesDoNotCrash.test_store_subscr_list_int) ... ok
+test_unpack_sequence_list (test.test_opcache.TestRacesDoNotCrash.test_unpack_sequence_list) ... ok
+test_attr_materialized_dict (test.test_opcache.TestSpecializer.test_attr_materialized_dict) ... ok
+test_binary_op (test.test_opcache.TestSpecializer.test_binary_op) ... ok
+test_binary_subscr (test.test_opcache.TestSpecializer.test_binary_subscr) ... ok
+test_call_c_function_extra_flags (test.test_opcache.TestSpecializer.test_call_c_function_extra_flags) ... ok
+test_call_list_append (test.test_opcache.TestSpecializer.test_call_list_append) ... ok
+test_call_list_append_memory_error (test.test_opcache.TestSpecializer.test_call_list_append_memory_error) ... ok
+test_compare_op (test.test_opcache.TestSpecializer.test_compare_op) ... ok
+test_contain_op (test.test_opcache.TestSpecializer.test_contain_op) ... ok
+test_for_iter (test.test_opcache.TestSpecializer.test_for_iter) ... ok
+test_get_iter (test.test_opcache.TestSpecializer.test_get_iter) ... ok
+test_load_attr_enum (test.test_opcache.TestSpecializer.test_load_attr_enum) ... ok
+test_load_attr_module_subclass_with_data_descriptor (test.test_opcache.TestSpecializer.test_load_attr_module_subclass_with_data_descriptor) ... ok
+test_load_attr_module_with_getattr (test.test_opcache.TestSpecializer.test_load_attr_module_with_getattr) ... ok
+test_load_super_attr (test.test_opcache.TestSpecializer.test_load_super_attr)
+Ensure that LOAD_SUPER_ATTR is specialized as expected. ... ok
+test_pop_jump_if (test.test_opcache.TestSpecializer.test_pop_jump_if) ... ok
+test_send_async_for (test.test_opcache.TestSpecializer.test_send_async_for) ... ok
+test_send_with (test.test_opcache.TestSpecializer.test_send_with) ... ok
+test_send_yield_from (test.test_opcache.TestSpecializer.test_send_yield_from) ... ok
+test_send_yield_from_iter (test.test_opcache.TestSpecializer.test_send_yield_from_iter) ... ok
+test_specialized_iter_doesnt_skip_send_check (test.test_opcache.TestSpecializer.test_specialized_iter_doesnt_skip_send_check) ... ok
+test_store_attr_instance_value (test.test_opcache.TestSpecializer.test_store_attr_instance_value) ... ok
+test_store_attr_slot (test.test_opcache.TestSpecializer.test_store_attr_slot) ... ok
+test_store_attr_with_hint (test.test_opcache.TestSpecializer.test_store_attr_with_hint) ... ok
+test_store_subscr (test.test_opcache.TestSpecializer.test_store_subscr) ... ok
+test_to_bool (test.test_opcache.TestSpecializer.test_to_bool) ... ok
+test_unpack_sequence (test.test_opcache.TestSpecializer.test_unpack_sequence) ... ok
+
+----------------------------------------------------------------------
+Ran 90 tests in 6.839s
+
+OK
+Warning -- files was modified by test_opcache
+Warning --   Before: ['.azure-pipelines/', '.coveragerc', '.devcontainer/', '.editorconfig', '.git', '.gitattributes', '.github/', '.gitignore', '.mailmap', '.pre-commit-config.yaml', '.readthedocs.yml', '.ruff.toml', '.well-known/', '@test_2409368_tmpæ', 'AGENTS.md', 'Doc/', 'Grammar/', 'Include/', 'InternalDocs/', 'LICENSE', 'Lib/', 'Mac/', 'Makefile.pre.in', 'Misc/', 'Modules/', 'Objects/', 'PC/', 'PCbuild/', 'Parser/', 'Platforms/', 'Programs/', 'Python/', 'README.rst', 'Tools/', 'aclocal.m4', 'boil/', 'build/', 'config.guess', 'config.sub', 'configure', 'configure.ac', 'install-sh', 'ports/', 'pyconfig.h.in']
+Warning --   After:  ['.azure-pipelines/', '.coveragerc', '.devcontainer/', '.editorconfig', '.git', '.gitattributes', '.github/', '.gitignore', '.mailmap', '.pre-commit-config.yaml', '.readthedocs.yml', '.ruff.toml', '.well-known/', 'AGENTS.md', 'Doc/', 'Grammar/', 'Include/', 'InternalDocs/', 'LICENSE', 'Lib/', 'Mac/', 'Makefile.pre.in', 'Misc/', 'Modules/', 'Objects/', 'PC/', 'PCbuild/', 'Parser/', 'Platforms/', 'Programs/', 'Python/', 'README.rst', 'Tools/', 'aclocal.m4', 'boil/', 'build/', 'config.guess', 'config.sub', 'configure', 'configure.ac', 'install-sh', 'ports/', 'pyconfig.h.in']
+0:00:24 load avg: 3.34 mem:  382.5 MiB [ 8/10/1] test_ir passed
+test_binary_op_deopt (test.test_ir.AssemblerTest.test_binary_op_deopt) ... ok
+test_binary_op_handlers (test.test_ir.AssemblerTest.test_binary_op_handlers) ... ok
+test_borrowed_load_folds (test.test_ir.AssemblerTest.test_borrowed_load_folds) ... ok
+test_branch_events_of_a_specialised_compare (test.test_ir.AssemblerTest.test_branch_events_of_a_specialised_compare) ... ok
+test_compare_and_branch (test.test_ir.AssemblerTest.test_compare_and_branch) ... ok
+test_constructor_checks_the_words (test.test_ir.AssemblerTest.test_constructor_checks_the_words) ... ok
+test_deopt_after_reading_a_local (test.test_ir.AssemblerTest.test_deopt_after_reading_a_local) ... ok
+test_exception_from_a_pushed_frame (test.test_ir.AssemblerTest.test_exception_from_a_pushed_frame) ... ok
+test_f_lasti (test.test_ir.AssemblerTest.test_f_lasti) ... ok
+test_frames_when_instrumented (test.test_ir.AssemblerTest.test_frames_when_instrumented) ... ok
+test_line_events (test.test_ir.AssemblerTest.test_line_events) ... ok
+test_many_constants (test.test_ir.AssemblerTest.test_many_constants) ... ok
+test_offsets (test.test_ir.AssemblerTest.test_offsets) ... ok
+test_opcode_events (test.test_ir.AssemblerTest.test_opcode_events) ... ok
+test_shared_feedback_entry (test.test_ir.AssemblerTest.test_shared_feedback_entry) ... ok
+test_sizeof (test.test_ir.AssemblerTest.test_sizeof) ... ok
+test_slot_limit (test.test_ir.AssemblerTest.test_slot_limit) ... ok
+test_stack_slots (test.test_ir.AssemblerTest.test_stack_slots) ... ok
+test_wide_operands (test.test_ir.AssemblerTest.test_wide_operands) ... ok
+test_yield_to_each_kind_of_resumer (test.test_ir.AssemblerTest.test_yield_to_each_kind_of_resumer) ... ok
+test_attribute_sum (test.test_ir.FoldTest.test_attribute_sum) ... ok
+test_augmented_assignment (test.test_ir.FoldTest.test_augmented_assignment) ... ok
+test_load_below_a_constant_folds (test.test_ir.FoldTest.test_load_below_a_constant_folds) ... ok
+test_raise_in_the_first_word_of_a_try (test.test_ir.FoldTest.test_raise_in_the_first_word_of_a_try) ... ok
+test_return_local (test.test_ir.FoldTest.test_return_local) ... ok
+test_store_to_the_loaded_local (test.test_ir.FoldTest.test_store_to_the_loaded_local) ... ok
+test_trace_sees_no_folded_value (test.test_ir.FoldTest.test_trace_sees_no_folded_value) ... ok
+test_precast_handler_boundaries (test.test_ir.HandlerScalarBoundaryTest.test_precast_handler_boundaries) ... ok
+test_runtime_wrapper_is_rewrite_only (test.test_ir.HandlerScalarBoundaryTest.test_runtime_wrapper_is_rewrite_only) ... ok
+test_call_result_to_a_local (test.test_ir.RegCfgTest.test_call_result_to_a_local) ... ok
+test_compaction (test.test_ir.RegCfgTest.test_compaction) ... ok
+test_frame_holds_the_handler_depth (test.test_ir.RegCfgTest.test_frame_holds_the_handler_depth) ... ok
+test_generator_keeps_the_loop_variable (test.test_ir.RegCfgTest.test_generator_keeps_the_loop_variable) ... ok
+test_load_folds_under_a_constant_only (test.test_ir.RegCfgTest.test_load_folds_under_a_constant_only) ... ok
+test_pop_top_of_a_call_stays (test.test_ir.RegCfgTest.test_pop_top_of_a_call_stays) ... ok
+test_pop_top_of_a_pure_value (test.test_ir.RegCfgTest.test_pop_top_of_a_pure_value) ... ok
+test_pushed_frame_result_to_a_local (test.test_ir.RegCfgTest.test_pushed_frame_result_to_a_local) ... ok
+test_raising_producer_keeps_the_old_value (test.test_ir.RegCfgTest.test_raising_producer_keeps_the_old_value) ... ok
+test_redefinition_kills_the_copy (test.test_ir.RegCfgTest.test_redefinition_kills_the_copy) ... ok
+test_store_elimination (test.test_ir.RegCfgTest.test_store_elimination) ... ok
+test_swap_renaming (test.test_ir.RegCfgTest.test_swap_renaming) ... ok
+test_truth_folding (test.test_ir.RegCfgTest.test_truth_folding) ... ok
+test_truth_folding_of_a_local (test.test_ir.RegCfgTest.test_truth_folding_of_a_local) ... ok
+test_events_of_a_relaxed_loop (test.test_ir.RelaxationTest.test_events_of_a_relaxed_loop) ... ok
+test_far_for_iter (test.test_ir.RelaxationTest.test_far_for_iter) ... ok
+test_relaxed_send (test.test_ir.RelaxationTest.test_relaxed_send) ... ok
+test_copy_before_the_store_to_its_source (test.test_ir.StoreFoldTest.test_copy_before_the_store_to_its_source) ... ok
+test_delete_and_store (test.test_ir.StoreFoldTest.test_delete_and_store) ... ok
+test_generator (test.test_ir.StoreFoldTest.test_generator) ... ok
+test_inplace_unicode_add (test.test_ir.StoreFoldTest.test_inplace_unicode_add) ... ok
+test_loop_index (test.test_ir.StoreFoldTest.test_loop_index) ... ok
+test_old_value_released_once (test.test_ir.StoreFoldTest.test_old_value_released_once) ... ok
+test_raise_keeps_the_old_value (test.test_ir.StoreFoldTest.test_raise_keeps_the_old_value) ... ok
+test_set_lineno_after_folded_store (test.test_ir.StoreFoldTest.test_set_lineno_after_folded_store) ... /home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_ir.py:1075: RuntimeWarning: assigning None to 1 unbound local
+  frame.f_lineno = f.__code__.co_firstlineno + 1
+ok
+test_sum_to_local (test.test_ir.StoreFoldTest.test_sum_to_local) ... ok
+test_always_true_after_the_type_changes (test.test_ir.TruthTest.test_always_true_after_the_type_changes) ... ok
+test_branch_events_of_any_value (test.test_ir.TruthTest.test_branch_events_of_any_value) ... ok
+test_copy_of_a_local_is_a_load (test.test_ir.TruthTest.test_copy_of_a_local_is_a_load) ... ok
+test_errors_of_the_truth_test (test.test_ir.TruthTest.test_errors_of_the_truth_test) ... ok
+test_no_to_bool_before_a_jump (test.test_ir.TruthTest.test_no_to_bool_before_a_jump) ... ok
+test_specialisations (test.test_ir.TruthTest.test_specialisations) ... ok
+
+----------------------------------------------------------------------
+Ran 61 tests in 22.419s
+
+OK
+0:00:39 load avg: 3.56 mem:  309.2 MiB [ 9/10/1] test_generated_cases passed (38.9 sec) -- running (1): test_compile (38.9 sec)
+test_array_size_inconsistency (test.test_generated_cases.TestAnalysisErrors.test_array_size_inconsistency) ... ok
+test_deopt_and_exit (test.test_generated_cases.TestAnalysisErrors.test_deopt_and_exit) ... ok
+test_frame_push_before_initialize (test.test_generated_cases.TestAnalysisErrors.test_frame_push_before_initialize) ... ok
+test_incorrect_spills (test.test_generated_cases.TestAnalysisErrors.test_incorrect_spills) ... ok
+test_instruction_size_macro (test.test_generated_cases.TestAnalysisErrors.test_instruction_size_macro) ... ok
+test_kill_in_wrong_order (test.test_generated_cases.TestAnalysisErrors.test_kill_in_wrong_order) ... ok
+test_no_escaping_calls_in_branching_macros (test.test_generated_cases.TestAnalysisErrors.test_no_escaping_calls_in_branching_macros) ... ok
+test_pep7_condition (test.test_generated_cases.TestAnalysisErrors.test_pep7_condition) ... ok
+test_root_held_across_allocation (test.test_generated_cases.TestAnalysisErrors.test_root_held_across_allocation) ... ok
+test_root_held_in_c_stack_ref (test.test_generated_cases.TestAnalysisErrors.test_root_held_in_c_stack_ref) ... ok
+test_root_held_only_in_c_local (test.test_generated_cases.TestAnalysisErrors.test_root_held_only_in_c_local) ... ok
+test_scalar_array_inconsistency (test.test_generated_cases.TestAnalysisErrors.test_scalar_array_inconsistency) ... ok
+test_slot_load_across_allocation (test.test_generated_cases.TestAnalysisErrors.test_slot_load_across_allocation) ... ok
+test_stack_passed_argument (test.test_generated_cases.TestAnalysisErrors.test_stack_passed_argument) ... ok
+test_stack_save_only (test.test_generated_cases.TestAnalysisErrors.test_stack_save_only) ... ok
+test_unused_cached_value (test.test_generated_cases.TestAnalysisErrors.test_unused_cached_value) ... ok
+test_effect_sizes (test.test_generated_cases.TestEffects.test_effect_sizes) ... ok
+test_absent_instrumented_pin (test.test_generated_cases.TestHandlerDomain.test_absent_instrumented_pin) ... ok
+test_base_does_not_classify_specialization (test.test_generated_cases.TestHandlerDomain.test_base_does_not_classify_specialization) ... ok
+test_base_metadata_rejected (test.test_generated_cases.TestHandlerDomain.test_base_metadata_rejected) ... ok
+test_capacity_without_large_tables (test.test_generated_cases.TestHandlerDomain.test_capacity_without_large_tables) ... ok
+test_conflicting_pristine_state_rejected (test.test_generated_cases.TestHandlerDomain.test_conflicting_pristine_state_rejected) ... ok
+test_consumers_reject_another_analysis (test.test_generated_cases.TestHandlerDomain.test_consumers_reject_another_analysis) ... ok
+test_derived_name_collision_rejected (test.test_generated_cases.TestHandlerDomain.test_derived_name_collision_rejected) ... ok
+test_duplicate_id_rejected (test.test_generated_cases.TestHandlerDomain.test_duplicate_id_rejected) ... ok
+test_inconsistent_admission_properties_rejected (test.test_generated_cases.TestHandlerDomain.test_inconsistent_admission_properties_rejected) ... ok
+test_runtime_state_and_pristine_are_distinct (test.test_generated_cases.TestHandlerDomain.test_runtime_state_and_pristine_are_distinct) ... ok
+test_binary_op_handlers (test.test_generated_cases.TestIRCases.test_binary_op_handlers) ... ok
+test_borrow_mask (test.test_generated_cases.TestIRCases.test_borrow_mask) ... ok
+test_borrowed_input_read_before_code (test.test_generated_cases.TestIRCases.test_borrowed_input_read_before_code) ... ok
+test_box_root_across_allocation (test.test_generated_cases.TestIRCases.test_box_root_across_allocation) ... ok
+test_consumed_inputs (test.test_generated_cases.TestIRCases.test_consumed_inputs) ... ok
+test_feedback_mapping (test.test_generated_cases.TestIRCases.test_feedback_mapping) ... ok
+test_frame_switch_needs_window (test.test_generated_cases.TestIRCases.test_frame_switch_needs_window) ... ok
+test_ir_only_after_pseudo (test.test_generated_cases.TestIRCases.test_ir_only_after_pseudo) ... ok
+test_jump (test.test_generated_cases.TestIRCases.test_jump) ... ok
+test_metadata (test.test_generated_cases.TestIRCases.test_metadata) ... ok
+test_oparg_in_entry (test.test_generated_cases.TestIRCases.test_oparg_in_entry) ... ok
+test_register_style (test.test_generated_cases.TestIRCases.test_register_style) ... ok
+test_runs_code (test.test_generated_cases.TestIRCases.test_runs_code) ... ok
+test_runs_code_covers_every_handler (test.test_generated_cases.TestIRCases.test_runs_code_covers_every_handler) ... ok
+test_store_dst (test.test_generated_cases.TestIRCases.test_store_dst) ... ok
+test_stores_early (test.test_generated_cases.TestIRCases.test_stores_early) ... ok
+test_stores_early_needs_early_store (test.test_generated_cases.TestIRCases.test_stores_early_needs_early_store) ... ok
+test_transparent (test.test_generated_cases.TestIRCases.test_transparent) ... ok
+test_unused_outputs_pass_through (test.test_generated_cases.TestIRCases.test_unused_outputs_pass_through) ... ok
+test_window_selection (test.test_generated_cases.TestIRCases.test_window_selection) ... ok
+test_window_style (test.test_generated_cases.TestIRCases.test_window_style) ... ok
+test_alias_macro_is_its_target (test.test_generated_cases.TestRootCheckC.test_alias_macro_is_its_target) ... ok
+test_call_through_pointer_collects (test.test_generated_cases.TestRootCheckC.test_call_through_pointer_collects) ... ok
+test_canonical_append_does_not_anchor_a_box (test.test_generated_cases.TestRootCheckC.test_canonical_append_does_not_anchor_a_box) ... ok
+test_cast_to_local_typedef (test.test_generated_cases.TestRootCheckC.test_cast_to_local_typedef) ... ok
+test_char_literals_and_splices (test.test_generated_cases.TestRootCheckC.test_char_literals_and_splices) ... ok
+test_cli (test.test_generated_cases.TestRootCheckC.test_cli) ... ok
+test_lent_slot (test.test_generated_cases.TestRootCheckC.test_lent_slot) ... ok
+test_marked_header_definition_is_checked (test.test_generated_cases.TestRootCheckC.test_marked_header_definition_is_checked) ... ok
+test_mem_domain_does_not_collect (test.test_generated_cases.TestRootCheckC.test_mem_domain_does_not_collect) ... ok
+test_negative (test.test_generated_cases.TestRootCheckC.test_negative) ... ok
+test_negative_more (test.test_generated_cases.TestRootCheckC.test_negative_more) ... ok
+test_out_parameter_into_span (test.test_generated_cases.TestRootCheckC.test_out_parameter_into_span) ... ok
+test_positive (test.test_generated_cases.TestRootCheckC.test_positive) ... ok
+test_push_before_initialize (test.test_generated_cases.TestRootCheckC.test_push_before_initialize) ... ok
+test_unknown_function_fails (test.test_generated_cases.TestRootCheckC.test_unknown_function_fails) ... ok
+test_unmarked_not_checked (test.test_generated_cases.TestRootCheckC.test_unmarked_not_checked) ... ok
+test_variadic_cannot_be_precise (test.test_generated_cases.TestRootCheckC.test_variadic_cannot_be_precise) ... ok
+
+----------------------------------------------------------------------
+Ran 65 tests in 35.986s
+
+OK
+0:00:45 load avg: 3.25 mem:   99.7 MiB [10/10/1] test_compile passed (45.1 sec)
+test_compound (test.test_compile.TestBooleanExpression.test_compound) ... ok
+test_exception (test.test_compile.TestBooleanExpression.test_exception) ... ok
+test_short_circuit_and (test.test_compile.TestBooleanExpression.test_short_circuit_and) ... ok
+test_short_circuit_or (test.test_compile.TestBooleanExpression.test_short_circuit_or) ... ok
+test_compiled (test.test_compile.TestConstantsIdentity.test_compiled) ... ok
+test_constant (test.test_compile.TestConstantsIdentity.test_constant) ... ok
+test_fresh (test.test_compile.TestConstantsIdentity.test_fresh) ... ok
+test_interned (test.test_compile.TestConstantsIdentity.test_interned) ... ok
+test_interned_some (test.test_compile.TestConstantsIdentity.test_interned_some) ... ok
+test_name (test.test_compile.TestConstantsIdentity.test_name) ... ok
+test_names_tuples (test.test_compile.TestConstantsIdentity.test_names_tuples) ... ok
+test_same_process_compiled_twice (test.test_compile.TestConstantsIdentity.test_same_process_compiled_twice) ... ok
+test_same_process_interned (test.test_compile.TestConstantsIdentity.test_same_process_interned) ... ok
+test_slice_strings (test.test_compile.TestConstantsIdentity.test_slice_strings) ... ok
+test_and (test.test_compile.TestExpressionStackSize.test_and) ... ok
+test_and_or (test.test_compile.TestExpressionStackSize.test_and_or) ... ok
+test_binop (test.test_compile.TestExpressionStackSize.test_binop) ... ok
+test_chained_comparison (test.test_compile.TestExpressionStackSize.test_chained_comparison) ... ok
+test_dict (test.test_compile.TestExpressionStackSize.test_dict) ... ok
+test_func_and (test.test_compile.TestExpressionStackSize.test_func_and) ... ok
+test_func_args (test.test_compile.TestExpressionStackSize.test_func_args) ... ok
+test_func_kwargs (test.test_compile.TestExpressionStackSize.test_func_kwargs) ... ok
+test_if_else (test.test_compile.TestExpressionStackSize.test_if_else) ... ok
+test_list (test.test_compile.TestExpressionStackSize.test_list) ... ok
+test_meth_args (test.test_compile.TestExpressionStackSize.test_meth_args) ... ok
+test_meth_kwargs (test.test_compile.TestExpressionStackSize.test_meth_kwargs) ... ok
+test_or (test.test_compile.TestExpressionStackSize.test_or) ... ok
+test_set (test.test_compile.TestExpressionStackSize.test_set) ... ok
+test_stack_3050 (test.test_compile.TestExpressionStackSize.test_stack_3050) ... ok
+test_stack_3050_2 (test.test_compile.TestExpressionStackSize.test_stack_3050_2) ... ok
+test_tuple (test.test_compile.TestExpressionStackSize.test_tuple) ... ok
+test_basics (test.test_compile.TestInstructionSequence.test_basics) ... ok
+test_nested (test.test_compile.TestInstructionSequence.test_nested) ... ok
+test_static_attributes_are_sorted (test.test_compile.TestInstructionSequence.test_static_attributes_are_sorted) ... ok
+test_attribute_augassign (test.test_compile.TestSourcePositions.test_attribute_augassign) ... ok
+test_attribute_del (test.test_compile.TestSourcePositions.test_attribute_del) ... ok
+test_attribute_load (test.test_compile.TestSourcePositions.test_attribute_load) ... ok
+test_attribute_store (test.test_compile.TestSourcePositions.test_attribute_store) ... ok
+test_column_offset_deduplication (test.test_compile.TestSourcePositions.test_column_offset_deduplication) ... ok
+test_compiles_to_extended_op_arg (test.test_compile.TestSourcePositions.test_compiles_to_extended_op_arg) ... ok
+test_complex_single_line_expression (test.test_compile.TestSourcePositions.test_complex_single_line_expression) ... ok
+test_lambda_return_position (test.test_compile.TestSourcePositions.test_lambda_return_position) ... ok
+test_load_super_attr (test.test_compile.TestSourcePositions.test_load_super_attr) ... ok
+test_matchcase_class (test.test_compile.TestSourcePositions.test_matchcase_class) ... ok
+test_matchcase_mapping (test.test_compile.TestSourcePositions.test_matchcase_mapping) ... ok
+test_matchcase_mapping_wildcard (test.test_compile.TestSourcePositions.test_matchcase_mapping_wildcard) ... ok
+test_matchcase_or (test.test_compile.TestSourcePositions.test_matchcase_or) ... ok
+test_matchcase_sequence (test.test_compile.TestSourcePositions.test_matchcase_sequence) ... ok
+test_matchcase_sequence_wildcard (test.test_compile.TestSourcePositions.test_matchcase_sequence_wildcard) ... ok
+test_method_call (test.test_compile.TestSourcePositions.test_method_call) ... ok
+test_multiline_assert (test.test_compile.TestSourcePositions.test_multiline_assert) ... ok
+test_multiline_assert_rewritten_as_method_call (test.test_compile.TestSourcePositions.test_multiline_assert_rewritten_as_method_call) ... ok
+test_multiline_async_dict_comprehension (test.test_compile.TestSourcePositions.test_multiline_async_dict_comprehension) ... ok
+test_multiline_async_generator_expression (test.test_compile.TestSourcePositions.test_multiline_async_generator_expression) ... ok
+test_multiline_async_list_comprehension (test.test_compile.TestSourcePositions.test_multiline_async_list_comprehension) ... ok
+test_multiline_async_set_comprehension (test.test_compile.TestSourcePositions.test_multiline_async_set_comprehension) ... ok
+test_multiline_boolean_expression (test.test_compile.TestSourcePositions.test_multiline_boolean_expression) ... ok
+test_multiline_dict_comprehension (test.test_compile.TestSourcePositions.test_multiline_dict_comprehension) ... ok
+test_multiline_expression (test.test_compile.TestSourcePositions.test_multiline_expression) ... ok
+test_multiline_generator_expression (test.test_compile.TestSourcePositions.test_multiline_generator_expression) ... ok
+test_multiline_list_comprehension (test.test_compile.TestSourcePositions.test_multiline_list_comprehension) ... ok
+test_multiline_set_comprehension (test.test_compile.TestSourcePositions.test_multiline_set_comprehension) ... ok
+test_push_null_load_global_positions (test.test_compile.TestSourcePositions.test_push_null_load_global_positions) ... ok
+test_return_in_with_positions (test.test_compile.TestSourcePositions.test_return_in_with_positions) ... ok
+test_simple_assignment (test.test_compile.TestSourcePositions.test_simple_assignment) ... ok
+test_very_long_line_end_offset (test.test_compile.TestSourcePositions.test_very_long_line_end_offset) ... ok
+test_weird_attribute_position_regressions (test.test_compile.TestSourcePositions.test_weird_attribute_position_regressions) ... ok
+test_32_63_bit_values (test.test_compile.TestSpecifics.test_32_63_bit_values) ... ok
+test_annotation_limit (test.test_compile.TestSpecifics.test_annotation_limit) ... ok
+test_apply_static_swaps (test.test_compile.TestSpecifics.test_apply_static_swaps) ... ok
+test_apply_static_swaps_2 (test.test_compile.TestSpecifics.test_apply_static_swaps_2) ... ok
+test_apply_static_swaps_3 (test.test_compile.TestSpecifics.test_apply_static_swaps_3) ... ok
+test_argument_handling (test.test_compile.TestSpecifics.test_argument_handling) ... ok
+test_argument_order (test.test_compile.TestSpecifics.test_argument_order) ... ok
+test_assemble_init_allocation_failure (test.test_compile.TestSpecifics.test_assemble_init_allocation_failure) ... ok
+test_backward_jump_conditional_in_loop_in_try (test.test_compile.TestSpecifics.test_backward_jump_conditional_in_loop_in_try) ... ok
+test_bad_single_statement (test.test_compile.TestSpecifics.test_bad_single_statement) ... ok
+test_big_dict_literal (test.test_compile.TestSpecifics.test_big_dict_literal) ... ok
+test_call_opcode_stack_use_limit (test.test_compile.TestSpecifics.test_call_opcode_stack_use_limit) ... ok
+test_cold_block_moved_to_end (test.test_compile.TestSpecifics.test_cold_block_moved_to_end) ... ok
+test_compare_positions (test.test_compile.TestSpecifics.test_compare_positions) ... ok
+test_compile_ast (test.test_compile.TestSpecifics.test_compile_ast) ... ok
+test_compile_filename (test.test_compile.TestSpecifics.test_compile_filename) ... ok
+test_compile_filename_refleak (test.test_compile.TestSpecifics.test_compile_filename_refleak) ... ok
+test_compile_invalid_namedexpr (test.test_compile.TestSpecifics.test_compile_invalid_namedexpr) ... ok
+test_compile_invalid_typealias (test.test_compile.TestSpecifics.test_compile_invalid_typealias) ... ok
+test_compile_redundant_jump_after_convert_pseudo_ops (test.test_compile.TestSpecifics.test_compile_redundant_jump_after_convert_pseudo_ops) ... ok
+test_compile_redundant_jumps_and_nops_after_moving_cold_blocks (test.test_compile.TestSpecifics.test_compile_redundant_jumps_and_nops_after_moving_cold_blocks) ... ok
+test_compile_warning_in_finally (test.test_compile.TestSpecifics.test_compile_warning_in_finally) ... ok
+test_compile_warnings (test.test_compile.TestSpecifics.test_compile_warnings) ... ok
+test_compiler_recursion_limit (test.test_compile.TestSpecifics.test_compiler_recursion_limit) ... ok
+test_condition_expression_with_dead_blocks_compiles (test.test_compile.TestSpecifics.test_condition_expression_with_dead_blocks_compiles) ... ok
+test_condition_expression_with_redundant_comparisons_compiles (test.test_compile.TestSpecifics.test_condition_expression_with_redundant_comparisons_compiles) ... ok
+test_consts_in_conditionals (test.test_compile.TestSpecifics.test_consts_in_conditionals) ... ok
+test_dead_blocks_do_not_generate_bytecode (test.test_compile.TestSpecifics.test_dead_blocks_do_not_generate_bytecode) ... ok
+test_dead_code_with_except_handler_compiles (test.test_compile.TestSpecifics.test_dead_code_with_except_handler_compiles) ... ok
+test_debug_assignment (test.test_compile.TestSpecifics.test_debug_assignment) ... ok
+test_dict_evaluation_order (test.test_compile.TestSpecifics.test_dict_evaluation_order) ... ok
+test_docstring (test.test_compile.TestSpecifics.test_docstring) ... ok
+test_docstring_interactive_mode (test.test_compile.TestSpecifics.test_docstring_interactive_mode) ... ok
+test_docstring_omitted (test.test_compile.TestSpecifics.test_docstring_omitted) ... ok
+test_dont_merge_constants (test.test_compile.TestSpecifics.test_dont_merge_constants) ... ok
+test_duplicate_global_local (test.test_compile.TestSpecifics.test_duplicate_global_local) ... ok
+test_duplicated_small_exit_block (test.test_compile.TestSpecifics.test_duplicated_small_exit_block) ... ok
+test_empty (test.test_compile.TestSpecifics.test_empty) ... ok
+test_empty_leading_tuple_unpack_list_and_tuple_bytecode_optimization (test.test_compile.TestSpecifics.test_empty_leading_tuple_unpack_list_and_tuple_bytecode_optimization) ... ok
+test_empty_set_unpack_literal_bytecode_optimization (test.test_compile.TestSpecifics.test_empty_set_unpack_literal_bytecode_optimization) ... ok
+test_encoding (test.test_compile.TestSpecifics.test_encoding) ... ok
+test_exec_with_general_mapping_for_locals (test.test_compile.TestSpecifics.test_exec_with_general_mapping_for_locals) ... ok
+test_extended_arg (test.test_compile.TestSpecifics.test_extended_arg) ... ok
+test_false_while_loop (test.test_compile.TestSpecifics.test_false_while_loop) ... ok
+test_filter_syntax_warnings_by_module (test.test_compile.TestSpecifics.test_filter_syntax_warnings_by_module) ... ok
+test_float_literals (test.test_compile.TestSpecifics.test_float_literals) ... ok
+test_folding_type_param (test.test_compile.TestSpecifics.test_folding_type_param) ... ok
+test_for_distinct_code_objects (test.test_compile.TestSpecifics.test_for_distinct_code_objects) ... ok
+test_global_declaration_in_except_used_in_else (test.test_compile.TestSpecifics.test_global_declaration_in_except_used_in_else) ... ok
+test_globals_dict_subclass (test.test_compile.TestSpecifics.test_globals_dict_subclass) ... ok
+test_if_expression_expression_empty_block (test.test_compile.TestSpecifics.test_if_expression_expression_empty_block) ... ok
+test_import (test.test_compile.TestSpecifics.test_import) ... ok
+test_imported_load_method (test.test_compile.TestSpecifics.test_imported_load_method) ... ok
+test_indentation (test.test_compile.TestSpecifics.test_indentation) ... ok
+test_int_literals_too_long (test.test_compile.TestSpecifics.test_int_literals_too_long) ... ok
+test_lambda_consts (test.test_compile.TestSpecifics.test_lambda_consts) ... ok
+test_lambda_doc (test.test_compile.TestSpecifics.test_lambda_doc) ... ok
+test_leading_newlines (test.test_compile.TestSpecifics.test_leading_newlines) ... ok
+test_line_number_genexp (test.test_compile.TestSpecifics.test_line_number_genexp) ... ok
+test_line_number_implicit_return_after_async_for (test.test_compile.TestSpecifics.test_line_number_implicit_return_after_async_for) ... ok
+test_line_number_synthetic_jump_multiple_predecessors (test.test_compile.TestSpecifics.test_line_number_synthetic_jump_multiple_predecessors) ... ok
+test_line_number_synthetic_jump_multiple_predecessors_more_nested (test.test_compile.TestSpecifics.test_line_number_synthetic_jump_multiple_predecessors_more_nested) ... ok
+test_line_number_synthetic_jump_multiple_predecessors_nested (test.test_compile.TestSpecifics.test_line_number_synthetic_jump_multiple_predecessors_nested) ... ok
+test_lineno_after_implicit_return (test.test_compile.TestSpecifics.test_lineno_after_implicit_return) ... ok
+test_lineno_after_no_code (test.test_compile.TestSpecifics.test_lineno_after_no_code) ... ok
+test_lineno_attribute (test.test_compile.TestSpecifics.test_lineno_attribute) ... ok
+test_lineno_of_backward_jump_conditional_in_loop (test.test_compile.TestSpecifics.test_lineno_of_backward_jump_conditional_in_loop) ... ok
+test_lineno_procedure_call (test.test_compile.TestSpecifics.test_lineno_procedure_call) ... ok
+test_lineno_propagation_empty_blocks (test.test_compile.TestSpecifics.test_lineno_propagation_empty_blocks) ... ok
+test_literals_with_leading_zeroes (test.test_compile.TestSpecifics.test_literals_with_leading_zeroes) ... ok
+test_mangling (test.test_compile.TestSpecifics.test_mangling) ... ok
+test_merge_code_attrs (test.test_compile.TestSpecifics.test_merge_code_attrs) ... ok
+test_merge_constants (test.test_compile.TestSpecifics.test_merge_constants) ... ok
+test_multi_line_lambda_as_argument (test.test_compile.TestSpecifics.test_multi_line_lambda_as_argument) ... ok
+test_no_ending_newline (test.test_compile.TestSpecifics.test_no_ending_newline) ... ok
+test_no_wraparound_jump (test.test_compile.TestSpecifics.test_no_wraparound_jump) ... ok
+test_none_assignment (test.test_compile.TestSpecifics.test_none_assignment) ... ok
+test_none_keyword_arg (test.test_compile.TestSpecifics.test_none_keyword_arg) ... ok
+test_null_terminated (test.test_compile.TestSpecifics.test_null_terminated) ... ok
+test_other_newlines (test.test_compile.TestSpecifics.test_other_newlines) ... ok
+test_particularly_evil_undecodable (test.test_compile.TestSpecifics.test_particularly_evil_undecodable) ... ok
+test_path_like_objects (test.test_compile.TestSpecifics.test_path_like_objects) ... ok
+test_peephole_opt_unreachable_code_array_access_in_bounds (test.test_compile.TestSpecifics.test_peephole_opt_unreachable_code_array_access_in_bounds)
+Regression test for issue35193 when run under clang msan. ... ok
+test_pep_765_no_warnings (test.test_compile.TestSpecifics.test_pep_765_no_warnings) ... ok
+test_pep_765_warnings (test.test_compile.TestSpecifics.test_pep_765_warnings) ... ok
+test_redundant_jump_in_if_else_break (test.test_compile.TestSpecifics.test_redundant_jump_in_if_else_break) ... ok
+test_regression_gh_120225 (test.test_compile.TestSpecifics.test_regression_gh_120225) ... ok
+test_remove_empty_basic_block_with_jump_target_label (test.test_compile.TestSpecifics.test_remove_empty_basic_block_with_jump_target_label) ... ok
+test_remove_redundant_nop_edge_case (test.test_compile.TestSpecifics.test_remove_redundant_nop_edge_case) ... ok
+test_remove_unused_consts (test.test_compile.TestSpecifics.test_remove_unused_consts) ... ok
+test_remove_unused_consts_extended_args (test.test_compile.TestSpecifics.test_remove_unused_consts_extended_args) ... ok
+test_remove_unused_consts_no_docstring (test.test_compile.TestSpecifics.test_remove_unused_consts_no_docstring) ... ok
+test_same_filename_used (test.test_compile.TestSpecifics.test_same_filename_used) ... ok
+test_sequence_unpacking_error (test.test_compile.TestSpecifics.test_sequence_unpacking_error) ... ok
+test_single_statement (test.test_compile.TestSpecifics.test_single_statement) ... ok
+test_stack_overflow (test.test_compile.TestSpecifics.test_stack_overflow) ... skipped "resource 'cpu' is not enabled"
+test_strip_unused_None (test.test_compile.TestSpecifics.test_strip_unused_None) ... ok
+test_subscripts (test.test_compile.TestSpecifics.test_subscripts) ... ok
+test_syntax_error (test.test_compile.TestSpecifics.test_syntax_error) ... ok
+test_too_many_locals (test.test_compile.TestSpecifics.test_too_many_locals) ... ok
+test_try_except_in_while_with_chained_condition_compiles (test.test_compile.TestSpecifics.test_try_except_in_while_with_chained_condition_compiles) ... ok
+test_unary_minus (test.test_compile.TestSpecifics.test_unary_minus) ... ok
+test_uses_slice_instructions (test.test_compile.TestSpecifics.test_uses_slice_instructions) ... ok
+test_variable_dependent (test.test_compile.TestSpecifics.test_variable_dependent) ... ok
+test_yet_more_evil_still_undecodable (test.test_compile.TestSpecifics.test_yet_more_evil_still_undecodable) ... ok
+test_async_for (test.test_compile.TestStackSizeStability.test_async_for) ... ok
+test_async_for_else (test.test_compile.TestStackSizeStability.test_async_for_else) ... ok
+test_async_with (test.test_compile.TestStackSizeStability.test_async_with) ... ok
+test_for (test.test_compile.TestStackSizeStability.test_for) ... ok
+test_for_break_continue (test.test_compile.TestStackSizeStability.test_for_break_continue) ... ok
+test_for_break_continue_inside_async_with_block (test.test_compile.TestStackSizeStability.test_for_break_continue_inside_async_with_block) ... ok
+test_for_break_continue_inside_except_block (test.test_compile.TestStackSizeStability.test_for_break_continue_inside_except_block) ... ok
+test_for_break_continue_inside_finally_block (test.test_compile.TestStackSizeStability.test_for_break_continue_inside_finally_block) ... ok
+test_for_break_continue_inside_try_finally_block (test.test_compile.TestStackSizeStability.test_for_break_continue_inside_try_finally_block) ... ok
+test_for_break_continue_inside_with_block (test.test_compile.TestStackSizeStability.test_for_break_continue_inside_with_block) ... ok
+test_for_else (test.test_compile.TestStackSizeStability.test_for_else) ... ok
+test_if (test.test_compile.TestStackSizeStability.test_if) ... ok
+test_if_else (test.test_compile.TestStackSizeStability.test_if_else) ... ok
+test_return_inside_async_with_block (test.test_compile.TestStackSizeStability.test_return_inside_async_with_block) ... ok
+test_return_inside_except_block (test.test_compile.TestStackSizeStability.test_return_inside_except_block) ... ok
+test_return_inside_finally_block (test.test_compile.TestStackSizeStability.test_return_inside_finally_block) ... ok
+test_return_inside_try_finally_block (test.test_compile.TestStackSizeStability.test_return_inside_try_finally_block) ... ok
+test_return_inside_with_block (test.test_compile.TestStackSizeStability.test_return_inside_with_block) ... ok
+test_try_except_as (test.test_compile.TestStackSizeStability.test_try_except_as) ... ok
+test_try_except_bare (test.test_compile.TestStackSizeStability.test_try_except_bare) ... ok
+test_try_except_qualified (test.test_compile.TestStackSizeStability.test_try_except_qualified) ... ok
+test_try_except_star_as (test.test_compile.TestStackSizeStability.test_try_except_star_as) ... ok
+test_try_except_star_finally (test.test_compile.TestStackSizeStability.test_try_except_star_finally) ... ok
+test_try_except_star_qualified (test.test_compile.TestStackSizeStability.test_try_except_star_qualified) ... ok
+test_try_finally (test.test_compile.TestStackSizeStability.test_try_finally) ... ok
+test_while_else (test.test_compile.TestStackSizeStability.test_while_else) ... ok
+test_with (test.test_compile.TestStackSizeStability.test_with) ... ok
+test_basic (test.test_compile.TestStaticAttributes.test_basic) ... ok
+test_nested_class (test.test_compile.TestStaticAttributes.test_nested_class) ... ok
+test_nested_function (test.test_compile.TestStaticAttributes.test_nested_function) ... ok
+test_subclass (test.test_compile.TestStaticAttributes.test_subclass) ... ok
+
+----------------------------------------------------------------------
+Ran 203 tests in 43.892s
+
+OK (skipped=1)
+
+== Tests result: ENV CHANGED ==
+
+1 test altered the execution environment (env changed):
+    test_opcache:
+        files was modified
+
+All 9 tests OK.
+
+Total duration: 45.5 sec
+Total tests: run=974 skipped=11
+Total test files: run=10/10 env_changed=1
+Result: ENV CHANGED

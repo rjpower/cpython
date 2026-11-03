@@ -1,0 +1,28 @@
+{
+  "capsule": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-quickened-block/build/jit-quickened-block-source/capsule.json",
+    "sha256": "74f452a97bd2c5841fcd8cf7c8d8bebd623fa4120dc144c92403f184dbe240c5"
+  },
+  "compiler_native_timing_integration_authorized": false,
+  "decision": "ACCEPT_FROZEN_SOURCE_FOR_SEPARATE_FOCUSED_NATIVE_ADMISSION",
+  "focused_runtime_roster_unchanged": 54,
+  "host_generator_tests_passed": 26,
+  "independent_receipt": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-quickened-block-source-review-20261101-v1/receipt.json",
+    "sha256": "5a78a2b05abad6b654f31d0d0e53fe71165810748dfe8e8a46b5170ab717c76f"
+  },
+  "independent_review": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-quickened-block-source-review-20261101-v1/review.md",
+    "sha256": "6e1aeea3fef26d2d8cc49b8c23ccca4791061ae90af07114df134d917eaadd80"
+  },
+  "paths": 18,
+  "six_generators_seven_products": true,
+  "source_attempt_closed_complete": true,
+  "source_edits_authorized": false,
+  "source_grant": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/boil/issues/jit-quickened-block/source-grant-20261101-v1.json",
+    "sha256": "e908e1349e91341d95945d32f37a22572af731ac7356328c16f5e0000e31decf"
+  },
+  "source_head": "a4b0bf358b4cae18f6abefb7af2ec50a7c3ac612",
+  "utc": "2026-11-01T15:51:12.468552+00:00"
+}

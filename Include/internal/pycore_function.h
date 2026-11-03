@@ -21,6 +21,7 @@ PyAPI_FUNC(PyObject *) _PyFunction_Vectorcall(
 
 extern PyFunctionObject* _PyFunction_FromConstructor(PyFrameConstructor *constr);
 
+
 static inline int
 _PyFunction_IsVersionValid(uint32_t version)
 {

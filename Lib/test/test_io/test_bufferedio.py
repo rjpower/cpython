@@ -85,6 +85,7 @@ class CommonBufferedTests:
         with support.catch_unraisable_exception() as cm:
             with self.assertRaises(AttributeError):
                 self.tp(rawio).xyzzy
+            support.gc_collect()  # For other GCs.
 
             self.assertEqual(cm.unraisable.exc_type, OSError)
 

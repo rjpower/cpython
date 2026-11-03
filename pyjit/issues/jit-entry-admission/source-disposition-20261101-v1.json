@@ -1,0 +1,23 @@
+{
+  "compiler_or_target_authorized": false,
+  "corrections": [
+    "Replace hook _PyFrame_Exec debug precondition with the same direct code->_co_exec load as full TryEntry",
+    "Move predicate truth-table/static-sentinel/seed introspection into one cold internal PyAPI fixture helper in jit_prefix.c, declared in already allowed pycore_ir.h; CAPIshim only",
+    "Avoid words+1 for empty code in cold seed observation; add an unexecuted empty-code fixture if constructor permits"
+  ],
+  "decision": "ALLOW_NARROW_PREFREEZE_COLD_FIXTURE_CORRECTIONS_WITHIN_ORIGINAL_SCOPE_AND_DEADLINE",
+  "extension_authorized": false,
+  "original_grant_unchanged": true,
+  "prohibited": [
+    "hidden global data export",
+    "eighth source path",
+    "production hot-path use of cold fixture",
+    "new counter/selector",
+    "decoder or full entry semantics change"
+  ],
+  "source_checkpoint_met_observed_utc": "2026-11-01T14:13:22+00:00",
+  "source_deadline_utc": "2026-11-01T14:35:30.915648+00:00",
+  "source_grant_sha256": "1c72a05b44a00d21dc0a99d709548f1160ab1840174ed113e48812f205a40b08",
+  "source_paths_unchanged": true,
+  "utc": "2026-11-01T14:16:03.483057+00:00"
+}

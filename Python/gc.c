@@ -11,6 +11,7 @@
 #include "pycore_interp.h"        // PyInterpreterState.gc
 #include "pycore_interpframe.h"   // _PyFrame_GetLocalsArray()
 #include "pycore_object.h"
+#include "pycore_gc_trace.h"       // _PyGC_TraceAfterCollect()
 #include "pycore_object_alloc.h"  // _PyObject_MallocWithType()
 #include "pycore_pyerrors.h"
 #include "pycore_pystate.h"       // _PyThreadState_GET()
@@ -143,6 +144,11 @@ _PyGC_Init(PyInterpreterState *interp)
     gcstate->garbage = PyList_New(0);
     if (gcstate->garbage == NULL) {
         return _PyStatus_NO_MEMORY();
+    }
+
+    PyStatus status = _PyGC_TraceInit(interp);
+    if (_PyStatus_EXCEPTION(status)) {
+        return status;
     }
 
     gcstate->callbacks = PyList_New(0);
@@ -462,7 +468,7 @@ _PyGC_VisitStackRef(_PyStackRef *ref, visitproc visit, void *arg)
     // This is a bit tricky! We want to ignore stackrefs with embedded
     // refcounts when computing the incoming references, but otherwise treat
     // them like normal.
-    assert(!PyStackRef_IsTaggedInt(*ref));
+    assert(PyStackRef_IsObject(*ref));
     if (!PyStackRef_RefcountOnObject(*ref) && (visit == visit_decref)) {
         return 0;
     }
@@ -474,11 +480,10 @@ int
 _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visit, void *arg)
 {
     _PyStackRef *ref = _PyFrame_GetLocalsArray(frame);
-    /* locals and stack */
-    for (; ref < frame->stackpointer; ref++) {
-        if (!PyStackRef_IsTaggedInt(*ref)) {
-            _Py_VISIT_STACKREF(*ref);
-        }
+    _PyStackRef *end = ref + _PyFrame_NumSlots(frame);
+    /* all slots; _Py_VISIT_STACKREF skips NULL, indices and inline values */
+    for (; ref < end; ref++) {
+        _Py_VISIT_STACKREF(*ref);
     }
     return 0;
 }
@@ -1661,6 +1666,10 @@ gc_collect_main(PyThreadState *tstate, int generation, _PyGC_Reason reason)
     }
 
     if (reason != _Py_GC_REASON_SHUTDOWN) {
+        // Check that a tracing collector would reach everything that
+        // survived (Python/gc_trace.c).
+        _PyGC_TraceAfterCollect(tstate, generation,
+                                reason == _Py_GC_REASON_MANUAL);
         invoke_gc_callback(tstate, "stop", generation, &stats);
     }
 
@@ -1899,6 +1908,7 @@ _PyGC_Fini(PyInterpreterState *interp)
     Py_CLEAR(gcstate->callbacks);
     PyMem_RawFree(gcstate->generation_stats);
     gcstate->generation_stats = NULL;
+    _PyGC_TraceFini(interp);
 
     /* Prevent a subtle bug that affects sub-interpreters that use basic
      * single-phase init extensions (m_size == -1).  Those extensions cause objects

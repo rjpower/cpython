@@ -144,6 +144,7 @@ class EnumerateTestCase(unittest.TestCase, PickleTest):
         self.assertRaises(TypeError, self.enum, x=0)
 
     @support.cpython_only
+    @unittest.skipIf(support.Py_GC, "reusing the result tuple needs a reference count of 1")
     def test_tuple_reuse(self):
         # Tests an implementation detail where tuple is reused
         # whenever nothing else holds a reference to it

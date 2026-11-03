@@ -1,0 +1,42 @@
+{
+  "utc": "2026-11-01T21:16:52.380511+00:00",
+  "decision": "FAILED_PARTIAL_NOT_ACCEPTED",
+  "source_head": "90cdb7bbda9d1547f1d1ccdcef2388a5b82744c5",
+  "image_sha256": "fb678ca21630f470ea7452e17a2a8c671d3f65a1ada1e0af098c448647f0e677",
+  "replay": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m3-debug-outcome-review-20261101-v1/replay.json",
+    "sha256": "2fd2d9c9d43a3ef85f66f1c7668495a3dc3e104b6bb482a0f9918c9cc7274240"
+  },
+  "review": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m3-debug-outcome-review-20261101-v1/review.md",
+    "sha256": "01c1bce48beff52ba3b3d3684495c98ee7fa6f1b72288465dc16e6cf64f53b44"
+  },
+  "witness": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m3-debug-outcome-review-20261101-v1/observed-witness.json",
+    "sha256": "4560bc4ab5d79679374610299067252cff862cd768a7963fdf7351d150020b41"
+  },
+  "native_bytes": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m3-debug-outcome-review-20261101-v1/observed-method.bin",
+    "sha256": "a2605c552a6a002a74452f68f71131917fd4563b4ad20e987f66929450d59779"
+  },
+  "root_cleanup": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m3-root-activation-20261101-v1/terminal-cleanup.json",
+    "sha256": "fe0df7bf13093cc9bb737f20cd2f30402c1a9c6ddcc85b0ea4eb312420ee232f"
+  },
+  "build_complete": true,
+  "tests": 36,
+  "passed": 35,
+  "errors": 1,
+  "failures": 0,
+  "skipped": 0,
+  "observed_loop_methods_passed": 8,
+  "native_products": 590,
+  "inputs": 17713,
+  "origin_records": 4,
+  "preserved_prior_files": 10392,
+  "parent_fingerprints": 30,
+  "locks": 25,
+  "candidate_or_compiler_calls": 0,
+  "whole_m3_behavior_accepted": false,
+  "performance_qualification_or_integration_claim": false
+}

@@ -1,0 +1,52 @@
+isolated driver generator verified /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1/isolated-controls/control-copy-b_9spfeh/Tools/cases_generator/ir_generator.py 2d54f90a53846ea88bf355b9fc5c1801bf3546564fa19361e686dbfe778b7bec
+== CPython 3.16.0a1+dev (heads/boil/compiler-copyprop-land:45a789ac036, Oct 29 2026, 06:05:50) [GCC 15.2.0]
+== Linux-7.0.0-29-generic-x86_64-with-glibc2.43 little-endian
+== Python build: release
+== cwd: /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default/build/test_python_worker_2320087æ
+== CPU count: 16
+== encodings: locale=UTF-8 FS=utf-8
+== resources: all test resources are disabled, use -u option to unskip tests
+== host python: /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default/python /home/power/code/cpython/.worktrees/boil-compiler-copyprop/boil/design/work/controls/H3-1-stage1/isolated-worker.py /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1/isolated-controls/control-copy-b_9spfeh 2d54f90a53846ea88bf355b9fc5c1801bf3546564fa19361e686dbfe778b7bec
+== host platform: Linux-7.0.0-29-generic-x86_64-with-glibc2.43
+
+Using random seed: 316787948
+0:00:00 load avg: 2.01 mem:   49.4 MiB Run 1 test in parallel using 1 worker process
+0:00:00 load avg: 2.01 mem:   50.5 MiB [1/1/1] test_generated_cases failed (2 failures)
+isolated worker generator verified /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1/isolated-controls/control-copy-b_9spfeh/Tools/cases_generator/ir_generator.py 2d54f90a53846ea88bf355b9fc5c1801bf3546564fa19361e686dbfe778b7bec
+test_capacity_without_large_tables (test.test_generated_cases.TestHandlerDomain.test_capacity_without_large_tables) ... 
+  test_capacity_without_large_tables (test.test_generated_cases.TestHandlerDomain.test_capacity_without_large_tables) (count=65537) ... FAIL
+test_capacity_without_large_tables (test.test_generated_cases.TestHandlerDomain.test_capacity_without_large_tables) ... FAIL
+
+======================================================================
+FAIL: test_capacity_without_large_tables (test.test_generated_cases.TestHandlerDomain.test_capacity_without_large_tables) (count=65537)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_generated_cases.py", line 1358, in test_capacity_without_large_tables
+    with self.assertRaisesRegex(ValueError, "16-bit domain"):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_capacity_without_large_tables (test.test_generated_cases.TestHandlerDomain.test_capacity_without_large_tables)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_generated_cases.py", line 1361, in test_capacity_without_large_tables
+    with self.assertRaisesRegex(ValueError, "16-bit domain"):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 0.003s
+
+FAILED (failures=2)
+test test_generated_cases failed
+
+== Tests result: FAILURE ==
+
+1 test failed:
+    test_generated_cases
+
+Total duration: 445 ms
+Total tests: run=1 (filtered) failures=2
+Total test files: run=1/1 (filtered) failed=1
+Result: FAILURE

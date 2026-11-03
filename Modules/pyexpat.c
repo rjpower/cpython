@@ -1744,10 +1744,14 @@ static int
 xmlparse_traverse(PyObject *op, visitproc visit, void *arg)
 {
     xmlparseobject *self = xmlparseobject_CAST(op);
-    for (size_t i = 0; handler_info[i].name != NULL; i++) {
-        Py_VISIT(self->handlers[i]);
+    // A parser that failed to build has no handlers.
+    if (self->handlers != NULL) {
+        for (size_t i = 0; handler_info[i].name != NULL; i++) {
+            Py_VISIT(self->handlers[i]);
+        }
     }
     Py_VISIT(self->parent);
+    Py_VISIT(self->intern);
     Py_VISIT(Py_TYPE(op));
     return 0;
 }
@@ -1764,6 +1768,7 @@ xmlparse_clear(PyObject *op)
     //       https://github.com/python/cpython/issues/139400
     return 0;
 }
+
 
 static void
 xmlparse_dealloc(PyObject *op)

@@ -1,0 +1,16 @@
+Marked source files:
+Objects/call.c
+Objects/listobject.c
+Objects/obmalloc.c
+Objects/shapeobject.c
+Objects/typeobject.c
+Python/ceval.c
+Python/ceval_gil.c
+Python/gc_live.c
+Python/pyvalue.c
+Modules/clinic/gcmodule.c.h
+Modules/gcmodule.c
+Include/internal/pycore_call.h
+Include/internal/pycore_gc_walk.h
+Include/internal/pycore_structs.h
+PASS: marked-source C checker scan after annotation tokens

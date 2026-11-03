@@ -1,0 +1,93 @@
+_PyObject_MakeTpCall|0|
+_PyObject_CallValue|0|
+PyObject_CallValue|0|
+PyObject_Call|0|
+PyVectorcall_Call|0|
+_PyVectorcall_Call|0|
+_PyObject_Call_PrependValue|0|
+PyEval_CallObjectWithKeywords|0|
+PyObject_CallObject|0|
+call_method_value|3|'args' is held only in a C local across the collecting call to 'lookup_method' (parameter 'args', which no spa
+slot_tp_call|0|
+slot_tp_init|0|
+slot_tp_new|3|'args' is held only in a C local across the collecting call to 'PyObject_GetAttrValue' (parameter 'args', whic
+wrap_call|1|'self' is held only in a C local across the collecting call to 'a function pointer' (parameter 'self', which n
+wrap_binaryfunc_l|3|'args' is held only in a C local across the collecting call to 'check_num_args' (parameter 'args', which no sp
+wrap_lenfunc|1|'self' is held only in a C local across the collecting call to 'check_num_args' (parameter 'self', which no sp
+wrap_next|0|
+wrap_descr_get|7|'args' is held only in a C local across the collecting call to 'wrapper_nargs' (parameter 'args', which no spa
+wrap_getattro|4|'args' is held only in a C local across the collecting call to 'check_num_args' (parameter 'args', which no sp
+type_call|0|
+classmethoddescr_call|6|'args' is held only in a C local across the collecting call to 'PyTuple_GET_ITEM' (parameter 'args', which no 
+wrapperdescr_call|13|'args' is held only in a C local across the collecting call to '_PyValue_BoxInline' (parameter 'args', which n
+wrapperdescr_raw_call|0|
+wrapper_call|2|an object is stored in 'wp', which is not object-typed
+cfunction_call|2|'func' is held only in a C local across the collecting call to '_PyCFunctionWithKeywords_TrampolineCall' (para
+PyObject_LengthHint|4|'o' is held only in a C local across the collecting call to 'PyObject_Length' (parameter 'o', which no span co
+# Appended for the landing review; the files are unchanged since 085c289b908:
+# every other function whose body rung 3 changes (git diff a3206a397d9..085c289b908
+# over Objects, Modules and Python/call.c), _testcapi's fixtures excluded.
+TaskStepMethWrapper_call|0|
+TaskStepMethWrapper_call_object|3|an object is stored in 'o', which is not object-typed
+PyCFuncPtr_call|0|
+PyCFuncPtr_call_object|unsupported|outside the C mode's subset: line 4771: unexpected ')' in expression
+_DictRemover_call|0|
+_DictRemover_call_object|2|'myself' is held only in a C local across the collecting call to 'PyDict_DelItem' (parameter 'myself', which n
+bounded_lru_cache_get_lock_held|3|the address of object local 'link_v' escapes to '_PyDict_GetItemValue_KnownHash'
+bounded_lru_cache_wrapper|4|the address of object local 'result' escapes to 'bounded_lru_cache_get_lock_held'
+infinite_lru_cache_wrapper|11|the address of object local 'result' escapes to '_PyDict_GetItemValue_KnownHash'
+keyobject_call|0|
+keyobject_call_object|4|the address of object local 'object' escapes to 'PyArg_ParseTupleAndKeywords'
+lru_cache_call|1|'op' is held only in a C local across the collecting call to 'a function pointer' (parameter 'op', which no sp
+lru_cache_make_key|3|'args' is held only in a C local across the collecting call to 'PyTuple_New' (parameter 'args', which no span 
+lru_cache_new|9|the address of object local 'func' escapes to 'PyArg_ParseTupleAndKeywords'
+partial_call|12|'args' is held only in a C local across the collecting call to 'PyDict_Copy' (parameter 'args', which no span 
+uncached_lru_cache_wrapper|0|
+encoder_call|0|
+encoder_call_object|4|the address of object local 'obj' escapes to 'PyArg_ParseTupleAndKeywords'
+scanner_call|0|
+scanner_call_object|4|the address of object local 'pystr' escapes to 'PyArg_ParseTupleAndKeywords'
+attrgetter_call|7|'args' is held only in a C local across the collecting call to '_PyArg_NoKeywords' (parameter 'args', which no
+itemgetter_call|7|'args' is held only in a C local across the collecting call to '_PyArg_NoKeywords' (parameter 'args', which no
+methodcaller_call|10|'args' is held only in a C local across the collecting call to 'methodcallerobject_CAST' (parameter 'args', wh
+pysqlite_connection_call|0|
+pysqlite_connection_call_object|11|the address of object local 'sql' escapes to 'PyArg_ParseTuple'
+_PyErr_CheckSignalsTstate|5|'func' is held only in a C local across the collecting call to 'compare_handler' (the result of 'get_handler' 
+inline_is_not_callable|0|
+instancemethod_call|0|
+_PyDict_GetItemValue_KnownHash|0|
+_PyDict_SetItemValue_KnownHash|0|
+sm_call|2|an object is stored in 'sm', which is not object-typed
+ga_call|2|an object is stored in 'alias', which is not object-typed
+ga_vectorcall|2|'self' is held only in a C local across the collecting call to 'PyObject_VectorcallValue' (parameter 'self', w
+set_orig_class_value|0|
+type_call_object|7|'args' is held only in a C local across the collecting call to 'a function pointer' (parameter 'args', which n
+wrap_binaryfunc|3|'args' is held only in a C local across the collecting call to 'check_num_args' (parameter 'args', which no sp
+wrap_binaryfunc_r|3|'args' is held only in a C local across the collecting call to 'check_num_args' (parameter 'args', which no sp
+wrap_buffer|3|the address of object local 'arg' escapes to 'PyArg_UnpackTuple'
+wrap_del|1|'self' is held only in a C local across the collecting call to 'check_num_args' (parameter 'self', which no sp
+wrap_delattr|5|'args' is held only in a C local across the collecting call to 'check_num_args' (parameter 'args', which no sp
+wrap_delitem|3|'args' is held only in a C local across the collecting call to 'check_num_args' (parameter 'args', which no sp
+wrap_descr_delete|3|'args' is held only in a C local across the collecting call to 'check_num_args' (parameter 'args', which no sp
+wrap_descr_set|4|'args' is held only in a C local across the collecting call to 'wrapper_nargs' (parameter 'args', which no spa
+wrap_hashfunc|1|'self' is held only in a C local across the collecting call to 'check_num_args' (parameter 'self', which no sp
+wrap_indexargfunc|3|'args' is held only in a C local across the collecting call to 'check_num_args' (parameter 'args', which no sp
+wrap_init|0|
+wrap_inquirypred|1|'self' is held only in a C local across the collecting call to 'check_num_args' (parameter 'self', which no sp
+wrap_objobjargproc|3|the address of object local 'key' escapes to 'PyArg_UnpackTuple'
+wrap_objobjproc|3|'args' is held only in a C local across the collecting call to 'check_num_args' (parameter 'args', which no sp
+wrap_releasebuffer|2|the address of object local 'arg' escapes to 'PyArg_UnpackTuple'
+wrap_richcmpfunc|3|'args' is held only in a C local across the collecting call to 'check_num_args' (parameter 'args', which no sp
+wrap_setattr|7|'args' is held only in a C local across the collecting call to 'wrapper_nargs' (parameter 'args', which no spa
+wrap_sq_delitem|3|'args' is held only in a C local across the collecting call to 'check_num_args' (parameter 'args', which no sp
+wrap_sq_item|1|'self' is held only in a C local across the collecting call to 'getindex' (parameter 'self', which no span cov
+wrap_sq_setitem|4|the address of object local 'arg' escapes to 'PyArg_UnpackTuple'
+wrap_ternaryfunc|6|'args' is held only in a C local across the collecting call to 'check_pow_args' (parameter 'args', which no sp
+wrap_ternaryfunc_r|6|'args' is held only in a C local across the collecting call to 'check_pow_args' (parameter 'args', which no sp
+wrap_unaryfunc|1|'self' is held only in a C local across the collecting call to 'check_num_args' (parameter 'self', which no sp
+constevaluator_call|0|
+constevaluator_call_object|9|'args' is held only in a C local across the collecting call to '_PyArg_NoKeywords' (parameter 'args', which no
+proxy_call|2|'args' is held only in a C local across the collecting call to 'proxy_unwrap' (parameter 'args', which no spa
+# proxy_call: the C mode does not find the definition, which follows WRAP_UNARY(proxy_str, ...)
+# with no semicolon; with one added in a scratch copy, it reports the 2 errors above.
+# PyCFuncPtr_call_object: outside the C mode's subset (the MS_WIN32 block's cast at _ctypes.c:4771).

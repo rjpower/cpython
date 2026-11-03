@@ -1,0 +1,83 @@
+diff --git a/Python/gc_live.c b/Python/gc_live.c
+index b940a0acf18..e10901d6e7f 100644
+--- a/Python/gc_live.c
++++ b/Python/gc_live.c
+@@ -276,9 +276,12 @@ _PyGC_LiveAddImmortal(PyObject *op)
+ int
+ _PyGC_LiveVisitRoots(PyInterpreterState *interp, visitproc visit, void *arg)
+ {
+-    for (live_call *c = interp->gc.queue_head; c != NULL; c = c->next) {
+-        Py_VISIT(c->op);
+-        Py_VISIT(c->callback);
++    const char *control = getenv("BOIL_QUEUE_CONTROL");
++    if (control == NULL || strcmp(control, "no_roots") != 0) {
++        for (live_call *c = interp->gc.queue_head; c != NULL; c = c->next) {
++            Py_VISIT(c->op);
++            Py_VISIT(c->callback);
++        }
+     }
+     struct _gc_live_state *ls = interp->gc.live;
+     if (ls == NULL) {
+@@ -369,7 +372,10 @@ queue_splice(GCState *gc, call_batch *b)
+     }
+     gc->queue_tail = b->tail;
+     b->head = b->tail = NULL;
+-    if (gc->queue_phase == QUEUE_OPEN) {
++    const char *control = getenv("BOIL_QUEUE_CONTROL");
++    if (gc->queue_phase == QUEUE_OPEN
++        && (control == NULL || strcmp(control, "no_ready") != 0))
++    {
+         _Py_atomic_store_int_relaxed(&gc->queue_ready, 1);
+     }
+ }
+@@ -1368,8 +1374,7 @@ static void
+ barrier_after_mark(PyThreadState *tstate, const _PyGCMarkResult *res)
+ {
+     PyInterpreterState *deleting = _Py_atomic_load_ptr(&barrier.deleting);
+-    if (deleting == NULL || _PyEvent_IsSet(&barrier.go)
+-        || !_Py_IsMainInterpreter(tstate->interp))
++    if (deleting == NULL || !_Py_IsMainInterpreter(tstate->interp))
+     {
+         return;
+     }
+@@ -1377,7 +1382,27 @@ barrier_after_mark(PyThreadState *tstate, const _PyGCMarkResult *res)
+     for (int d = 0; d < res->ndomain; d++) {
+         named |= res->domain[d] == deleting;
+     }
+-    if (!named) {
++    const char *control = getenv("BOIL_QUEUE_CONTROL");
++    if (control != NULL && strncmp(control, "trace_domain", 12) == 0) {
++        int modules = 0;
++        for (Py_ssize_t i = 0; i < res->ndead; i++) {
++            PyObject *op = res->dead[i].op;
++            if (Py_TYPE(op) == &PyModule_Type) {
++                PyModuleDef *def = _PyModule_GetDefOrNull(op);
++                if (def != NULL && strcmp(def->m_name, "_testinternalcapi") == 0) {
++                    modules++;
++                    fprintf(stderr, "QUEUE_MODULE owner=%lld dead=%d kinds=%d\n",
++                            (long long)_PyGC_LiveOwner(res, op)->id,
++                            (op->ob_flags & _Py_GC_DEAD_FLAG) != 0,
++                            res->dead[i].kinds);
++                }
++            }
++        }
++        fprintf(stderr, "QUEUE_DOMAIN later=%d named=%d size=%d modules=%d remapped=%zd unpinned=%lld\n",
++                _PyEvent_IsSet(&barrier.go), named, res->ndomain,
++                modules, barrier.remapped, (long long)barrier.unpinned);
++    }
++    if (!named || _PyEvent_IsSet(&barrier.go)) {
+         return;
+     }
+     _PyEvent_Notify(&barrier.go);
+@@ -1475,6 +1500,11 @@ _PyGC_LiveWaitUnpinned(PyInterpreterState *interp)
+         interp->gc.queue_unpinned = &unpinned;
+         HEAD_UNLOCK(&_PyRuntime);
+         PyEvent_Wait(&unpinned);
++        const char *control = getenv("BOIL_QUEUE_CONTROL");
++        if (control != NULL && strcmp(control, "trace_domain_delay") == 0) {
++            PyEvent pause = {0};
++            (void)PyEvent_WaitTimed(&pause, (PyTime_t)250 * 1000 * 1000, 0);
++        }
+         HEAD_LOCK(&_PyRuntime);
+     }
+     if (stopped && !barrier.armed) {

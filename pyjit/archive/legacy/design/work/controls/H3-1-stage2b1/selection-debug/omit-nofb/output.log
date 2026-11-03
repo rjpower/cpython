@@ -1,0 +1,9 @@
+{"before": 4398583513388, "live_installed": 4398583513385, "live_restored": 4398583513388, "copied": [4398583513336, 4398583513388], "extension": "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b1/selection-debug/omit-nofb/_h3_selection.cpython-316d-x86_64-boil2-linux-gnu.so", "events": [[16, 4398583513385], [65536, 4398583513385], [16, 4398583513385], [131072, 4398583513385]]}
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/boil/design/work/controls/H3-1-stage2b1/selection_probe.py", line 90, in <module>
+    probe(sys.argv[1])
+    ~~~~~^^^^^^^^^^^^^
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/boil/design/work/controls/H3-1-stage2b1/selection_probe.py", line 80, in probe
+    assert selected[0] == installed, ("installed NOFB twin", result)
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ('installed NOFB twin', {'before': 4398583513388, 'live_installed': 4398583513385, 'live_restored': 4398583513388, 'copied': [4398583513336, 4398583513388], 'extension': '/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b1/selection-debug/omit-nofb/_h3_selection.cpython-316d-x86_64-boil2-linux-gnu.so', 'events': [[16, 4398583513385], [65536, 4398583513385], [16, 4398583513385], [131072, 4398583513385]]})

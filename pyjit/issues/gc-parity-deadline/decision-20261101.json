@@ -1,0 +1,40 @@
+{
+  "branch": "boil/rc-successor",
+  "collector": "reference_counting_with_cyclic_collection",
+  "decision_utc": "2026-11-01T07:09:42.527849+00:00",
+  "deferred": [
+    "later core-wide PyValue and inline heap containers",
+    "later value-native ABI and header shapes"
+  ],
+  "elapsed_budget_seconds": 14098,
+  "final_gc_receipt": {
+    "path": "build/object-map-elapsed-review-20261101-v2/receipt.json",
+    "sha256": "2e4ed47412482c6b3764e4f71c9f72980e2407082164bc57fbc405f6f3101fde"
+  },
+  "final_gc_review": {
+    "path": "boil/issues/gc-nursery-old-work/reviews/maintained-object-map-elapsed-outcome-20261101-v2.md",
+    "sha256": "76d19a1d6c567e8fdf77478a7cae193fd269f2f22b7191a98f8196b0b9ba753c"
+  },
+  "full29_gc_parity_established": false,
+  "further_tracing_gc_optimization_grants": false,
+  "hard_deadline_extended": false,
+  "original_budget_sha256": "1bd70fa55b2a0fa26e9b6f27cf8d7cb720090e2286c78ebc6806e9678f9a3f0f",
+  "original_deadline_utc": "2026-11-01T15:14:44+00:00",
+  "preserve_all_tracing_sources_failures_products_and_user_work": true,
+  "profile_addendum_sha256": "0cc411e2a5dd45aba37f03a050d3a05d5abbd481d74a53a516880b975fbb0854",
+  "rc_integration_requires_remaining_qualification": true,
+  "rc_performance_claim": false,
+  "reason": "Engineering early stop after all active measured GC/IR/backend candidates were rejected; no surviving promising source. This does not prove tracing GC cannot win or that RC is faster.",
+  "resume_requires_new_explicit_user_direction": true,
+  "retained": [
+    "register CFG/liveness/compaction and generated IR interpreter",
+    "eight-byte NaN-boxed frame values",
+    "boxed-slot shape specialization",
+    "JIT publication/perf/unwind groundwork"
+  ],
+  "runtime_collector_switch": false,
+  "schema": 1,
+  "source": "d7df12b1d81722927e71d9734c70eeafdccfee73",
+  "state": "early_rejection_rc_selected_qualification_pending",
+  "worktree": "build/worktrees/rc-successor"
+}

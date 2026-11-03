@@ -1,0 +1,54 @@
+{
+  "schema": 1,
+  "declared_utc": "2026-11-01T05:44:57+00:00",
+  "state": "declared_before_any_vm0_elapsed_score",
+  "authority": "Coordinator adopts independently reviewed compiler-profile amendment; supersedes only budget.json parity.profile when the fixed selector chooses C or T",
+  "original_budget": {
+    "path": "boil/issues/gc-parity-deadline/budget.json",
+    "sha256": "1bd70fa55b2a0fa26e9b6f27cf8d7cb720090e2286c78ebc6806e9678f9a3f0f"
+  },
+  "measurement_protocol_sha256": "7f8c2769137dd94ca2cec79eb82ec0d537fb881f40c3332ddc236dc3e937fda8",
+  "vm0_plan_sha256": "ecaa2e25798e8039fe17bf22a8aa921045a2b15f60da1ae80dfb7c8a64964d06",
+  "independent_review": {
+    "path": "boil/issues/gc-parity-deadline/compiler-profile-addendum-review-20261101-v1.md",
+    "sha256": "57863f293427f370291b880a1dde19d170c7de119097078347d191f6ff65f09a"
+  },
+  "unchanged": {
+    "started_utc": "2026-11-01T03:14:44+00:00",
+    "deadline_utc": "2026-11-01T15:14:44+00:00",
+    "all_registered_workloads": 29,
+    "rounds": 3,
+    "serial_samples_per_process": 5,
+    "scored_processes": 174,
+    "elapsed_values": 870,
+    "maximum_aggregate_and_each_round_geomean": 1.0,
+    "registry_sha256": "0a7771918e609486940440a1a339fb4ee644e7b6ef80a9ae134ae58c0aa94468",
+    "correctness_resource_origin_cleanup_and_rc_fallback_requirements": true,
+    "full_qualification_before_integration": true
+  },
+  "selector": {
+    "arms": {"G": "GCC computed", "C": "Clang computed", "T": "Clang tail"},
+    "rule": "Choose T only if T/C and T/G both pass every predeclared VM0 usefulness, variability and control gate; otherwise choose C only if C/G passes every gate; otherwise retain G",
+    "selection_occurs_once": true,
+    "selected_profile_fixed_for_remainder_of_gc_timebox": true,
+    "no_new_flags_samples_gate_relaxation_or_post_full29_profile_shopping": true,
+    "separately_reviewed_runtime_source_hypotheses_may_continue_with_fresh_coherent_bindings": true
+  },
+  "matched_reference": {
+    "source": "321925c92c9e67864cafa1566840927f6f07e90a",
+    "if_G": "Original matched GCC O3 profile and qualified upstream",
+    "if_C_or_T": "One fresh unchanged upstream build with exact selected Clang implementation/dependencies and same computed/tail backend, effective O3 and GIL policy; debug, stats, JIT, tier2, PGO and LTO disabled",
+    "actual_build_config_imports_and_applicable_ordinary_semantics_required": true,
+    "own_standard_library_and_extensions_required": true,
+    "disclose_all_effective_flags_and_charge_architecture_required_differences": true,
+    "no_fork_abi_transplant_or_fork_only_diagnostics_required_of_upstream": true
+  },
+  "forbidden_credit": [
+    "Clang fork compared to GCC upstream",
+    "pilot subset as all-29 parity",
+    "arithmetic composition of isolated improvements",
+    "missing invalid inconclusive or critical-correctness-failing evidence"
+  ],
+  "execution_authority": false,
+  "reason": "The user requires parity of the coherent interpreter/collector package; fair matched compiler/backend comparison avoids an arbitrary GCC-only restriction while retaining the original hard decision"
+}

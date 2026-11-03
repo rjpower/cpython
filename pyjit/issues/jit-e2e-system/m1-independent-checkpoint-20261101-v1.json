@@ -1,0 +1,49 @@
+{
+  "utc": "2026-11-01T17:44:01.756065+00:00",
+  "disposition": "PARTIAL_CHECKPOINT_DELIVERABLES_PRESENT_NOT_SOURCE_ACCEPTANCE",
+  "source": {
+    "Include/internal/pycore_jit.h": "521859439cbff4f7ac2150094c189464aa5bf9dd4d76c333faed52f9be9e7833",
+    "Include/internal/pycore_ir.h": "e34a839a9a90f5537c9e05ac1aa98cf931fb0c77b5003d4e6c3e07cbf65dad8a",
+    "Python/jit_runtime.c": "0807a016c0fb17688779f85cd55347e4904dad702ee17f215516457d8d227796",
+    "Python/jit_baseline.c": "c4aac8496161e849821052f6c521d6d480bd0de07c1e793f29ea96cb642028c5",
+    "Python/jit_backend_x86.c": "fbcd289ad727c494a6fe5ceaa9c727a533b2cee32cd34cdda5f2c5bf0d79fb9e",
+    "Python/jit_x86.h": "71f93c38555ee79687924c56bf5328b1974c80f7a29576a3e304933923efa29f",
+    "Python/ceval.c": "d6fbba7d7296bf0b551c0ffe00f56e5a074cf28012a4f541d31c2981bee9cab0",
+    "Python/ceval_macros.h": "192360cdceedca23a42cab6996db11a65b15ace9648ad993880b21a5f4d0c7e0",
+    "Python/ir.c": "4b708b96a6dc4493e7ec85bda300f0f34e744fc1fe1df7f0866f6f114fa4d46a",
+    "Python/instrumentation.c": "1ab0fe64c0335599704d7692b832afe401075e7fccfcd5be7c7820f34402dc4c",
+    "Python/bytecodes.c": "4ecee876720b66c92c20e5a044f62b39481c4894f59f1a8520209a16b9e1b5b8",
+    "Python/generated_ir_cases.c.h": "b5085f17dc0350b8329c868a07c4d3014840370740e488ad2bc0b33efb1d4769",
+    "Makefile.pre.in": "4e2129efbff86c8e0dae6ab73c07f64a7affcb33fc2d9ec59a9686bfbe021426"
+  },
+  "evidence": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/build/jit-method-m1-source/checkpoint.json": "f4a1091c96b85e1ebcca072cd3ae1b168b415837b6631d5029d469bafecb6f64",
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/build/jit-method-m1-source/syntax-v1/syntax-result.json": "b4a52749dfebdc5d4b407c5fe1a8f80dbbf612fd979c659672b2d916d50c0569",
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/build/jit-method-m1-source/syntax-v2/syntax-result.json": "bec7785a7062093bd1cf30382b0e6a1cae1ca282691ff83957533972a19e27b8",
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/build/jit-method-m1-source/encoder-v1/result.json": "722994792c6e96097a11d0293200010f289224f44b13ce19bbb42e2ba509dbbc",
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/build/jit-method-m1-source/encoder_fixture.c": "38df6fc30167f49ad4d5b1ee545a042d3c29b35a3357bca346fbaac516611b27",
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/build/jit-method-m1-source/encoder-v1/fixture.stdout": "fcea178d4530297a670341dc5ed5c9b5be491e8c4fa7f69cd338ea2cd4e0e92b"
+  },
+  "actual_checks": {
+    "distinct_syntax_translation_units": 7,
+    "syntax_returncodes": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "standalone_backend_emission": "five-op graph; forward/backward branches; six ENDBR destinations; OOM/overflow/alignment checks",
+    "emitted_machine_code_executed": false
+  },
+  "source_review": "Actual scalar owner/frontend/backend/evaluator consumer read. Borrowed activation code avoids extending semantic lifetime; terminal actions precede old-frame reads; mapping pin retained through C callbacks and machine return. Conditional validation still pending exact final source and runtime fixtures.",
+  "historical_failure": "syntax-v1 repeated ceval for five named rows and runtime missed macro declaration; preserved. Syntax-v2 actual argv independently checked.",
+  "remaining": [
+    "CAPI and native behavioral fixtures",
+    "final source/ownership/error cleanup review",
+    "fresh runtime build and focused behavior under separate root grant"
+  ],
+  "reviewer_executed_compiler_or_target": false
+}

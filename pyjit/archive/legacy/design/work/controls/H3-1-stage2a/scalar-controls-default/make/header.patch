@@ -1,0 +1,11 @@
+--- a/Include/internal/pycore_ir.h
++++ b/Include/internal/pycore_ir.h
+@@ -271,7 +271,7 @@
+ _PyIR_MakeWord(int handler, uint32_t a, uint32_t b, uint32_t c, uint32_t d,
+                _PyIRWord *word)
+ {
+-    if (!_PyIR_HasProperty(handler, _PyIR_H_PRISTINE)) {
++    if (!_PyIR_HasProperty((uint16_t)handler, _PyIR_H_PRISTINE)) {
+         return 0;
+     }
+     *word = IR_WORD(handler, a, b, c, d);

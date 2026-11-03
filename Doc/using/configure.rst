@@ -414,10 +414,7 @@ General Options
      * free;
      * to/from free lists;
      * dictionary materialized/dematerialized;
-     * type cache;
-     * optimization attempts;
-     * optimization traces created/executed;
-     * uops executed.
+     * type cache.
 
    * Garbage collector:
 
@@ -441,30 +438,6 @@ General Options
    :data:`sys.abiflags`.
 
    See :ref:`whatsnew313-free-threaded-cpython` for more detail.
-
-   .. versionadded:: 3.13
-
-.. option:: --enable-experimental-jit=[no|yes|yes-off|interpreter]
-
-   Indicate how to integrate the :ref:`experimental just-in-time compiler <whatsnew314-jit-compiler>`.
-
-   * ``no``: Don't build the JIT.
-   * ``yes``: Enable the JIT. To disable it at runtime, set the environment
-     variable :envvar:`PYTHON_JIT=0 <PYTHON_JIT>`.
-   * ``yes-off``: Build the JIT, but disable it by default. To enable it at
-     runtime, set the environment variable :envvar:`PYTHON_JIT=1 <PYTHON_JIT>`.
-   * ``interpreter``: Enable the "JIT interpreter" (only useful for those
-     debugging the JIT itself). To disable it at runtime, set the environment
-     variable :envvar:`PYTHON_JIT=0 <PYTHON_JIT>`.
-
-   ``--enable-experimental-jit=no`` is the default behavior if the option is not
-   provided, and ``--enable-experimental-jit`` is shorthand for
-   ``--enable-experimental-jit=yes``.  See :file:`Tools/jit/README.md` for more
-   information, including how to install the necessary build-time dependencies.
-
-   .. note::
-
-      When building CPython with JIT enabled, ensure that your system has Python 3.11 or later installed.
 
    .. versionadded:: 3.13
 

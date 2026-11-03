@@ -1,0 +1,34 @@
+{
+  "build_passed": true,
+  "decision": "FAIL_M3_FIRST_NATIVE_COHORT_REQUIRE_RUNTIME_CORRECTION",
+  "errors": 1,
+  "image_sha256": "fb678ca21630f470ea7452e17a2a8c671d3f65a1ada1e0af098c448647f0e677",
+  "independent_receipt": {
+    "path": "boil/issues/jit-e2e-system/m3-debug-outcome-receipt-20261101-v1.json",
+    "sha256": "c8e502b0efbf6cb7de3cb08d422585fd5e13949687c003fdb2c5e26d05103bbb"
+  },
+  "independent_review": {
+    "path": "boil/issues/jit-e2e-system/m3-debug-outcome-review-20261101-v1.md",
+    "sha256": "01c1bce48beff52ba3b3d3684495c98ee7fa6f1b72288465dc16e6cf64f53b44"
+  },
+  "observed_methods_passed": 8,
+  "partial_trace_mechanism_evidence": true,
+  "primer": {
+    "path": "build/jit-method-m3-first-outcome-20261101-v1/primer.json",
+    "sha256": "1f41e8d80036e888d4b05579232f2147d8b267e2060d86badfdb7036407e3208"
+  },
+  "rerun_authorized": false,
+  "root_cleanup": {
+    "path": "build/jit-method-m3-root-activation-20261101-v1/terminal-cleanup.json",
+    "sha256": "fe0df7bf13093cc9bb737f20cd2f30402c1a9c6ddcc85b0ea4eb312420ee232f"
+  },
+  "skips": 0,
+  "source": "90cdb7bbda9d1547f1d1ccdcef2388a5b82744c5",
+  "source_attempt_and_native_grants_closed": true,
+  "supervisor": 41481,
+  "terminal_exit_code": 1,
+  "tests_passed": 35,
+  "tests_run": 36,
+  "utc": "2026-11-01T21:19:16.990615+00:00",
+  "whole_behavior_accepted": false
+}

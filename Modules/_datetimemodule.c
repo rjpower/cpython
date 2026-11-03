@@ -4382,6 +4382,16 @@ timezone_dealloc(PyObject *op)
     Py_TYPE(self)->tp_free(self);
 }
 
+/* The type is not GC; this is for the tracing collector. */
+static int
+timezone_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    PyDateTime_TimeZone *self = PyTimeZone_CAST(op);
+    Py_VISIT(self->offset);
+    Py_VISIT(self->name);
+    return 0;
+}
+
 static PyObject *
 timezone_richcompare(PyObject *self, PyObject *other, int op)
 {
@@ -4596,7 +4606,7 @@ static PyTypeObject PyDateTime_TimeZoneType = {
     0,                                /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT,               /* tp_flags */
     timezone_new__doc__,              /* tp_doc */
-    0,                                /* tp_traverse */
+    timezone_traverse,                /* tp_traverse */
     0,                                /* tp_clear */
     timezone_richcompare,             /* tp_richcompare */
     0,                                /* tp_weaklistoffset */
@@ -4847,6 +4857,17 @@ datetime_time_strptime_impl(PyTypeObject *type, PyObject *string,
 /*
  * Destructor.
  */
+
+/* The type is not a GC type, but the tracing mark must reach the tzinfo. */
+static int
+time_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    PyDateTime_Time *self = PyTime_CAST(op);
+    if (HASTZINFO(self)) {
+        Py_VISIT(self->tzinfo);
+    }
+    return 0;
+}
 
 static void
 time_dealloc(PyObject *op)
@@ -5414,7 +5435,7 @@ static PyTypeObject PyDateTime_TimeType = {
     0,                                          /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,   /* tp_flags */
     datetime_time__doc__,                       /* tp_doc */
-    0,                                          /* tp_traverse */
+    time_traverse,                              /* tp_traverse */
     0,                                          /* tp_clear */
     time_richcompare,                           /* tp_richcompare */
     0,                                          /* tp_weaklistoffset */
@@ -6260,6 +6281,17 @@ error:
 /*
  * Destructor.
  */
+
+/* The type is not a GC type, but the tracing mark must reach the tzinfo. */
+static int
+datetime_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    PyDateTime_DateTime *self = PyDateTime_CAST(op);
+    if (HASTZINFO(self)) {
+        Py_VISIT(self->tzinfo);
+    }
+    return 0;
+}
 
 static void
 datetime_dealloc(PyObject *op)
@@ -7402,7 +7434,7 @@ static PyTypeObject PyDateTime_DateTimeType = {
     0,                                          /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,   /* tp_flags */
     datetime_datetime__doc__,                   /* tp_doc */
-    0,                                          /* tp_traverse */
+    datetime_traverse,                          /* tp_traverse */
     0,                                          /* tp_clear */
     datetime_richcompare,                       /* tp_richcompare */
     0,                                          /* tp_weaklistoffset */
@@ -7583,6 +7615,17 @@ traverse_state(datetime_state *st, visitproc visit, void *arg)
 {
     /* heap types */
     Py_VISIT(st->isocalendar_date_type);
+
+    /* Atomic objects do not matter to the cycle collector, but a tracing
+       collector must reach them. */
+    Py_VISIT(st->us_per_ms);
+    Py_VISIT(st->us_per_second);
+    Py_VISIT(st->us_per_minute);
+    Py_VISIT(st->us_per_hour);
+    Py_VISIT(st->us_per_day);
+    Py_VISIT(st->us_per_week);
+    Py_VISIT(st->seconds_per_day);
+    Py_VISIT(st->epoch);
 
     Py_VISIT(st->time_struct_time);
     Py_VISIT(st->time_strftime);

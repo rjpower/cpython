@@ -400,7 +400,7 @@ _Py_DECREF_CODE(PyCodeObject *co)
 }
 #endif
 
-#ifndef Py_GIL_DISABLED
+#if !defined(Py_GIL_DISABLED)
 #ifdef Py_REF_DEBUG
 
 static inline void Py_DECREF_MORTAL(const char *filename, int lineno, PyObject *op)
@@ -463,7 +463,7 @@ static inline void Py_DECREF_MORTAL_SPECIALIZED(PyObject *op, destructor destruc
 #define Py_DECREF_MORTAL_SPECIALIZED(op, destruct) Py_DECREF_MORTAL_SPECIALIZED(_PyObject_CAST(op), destruct)
 
 #endif
-#else  // Py_GIL_DISABLED
+#else
 # define Py_DECREF_MORTAL(op) Py_DECREF(op)
 # define Py_DECREF_MORTAL_SPECIALIZED(op, destruct) Py_DECREF(op)
 #endif
@@ -477,6 +477,10 @@ static inline void
 _PyObject_Init(PyObject *op, PyTypeObject *typeobj)
 {
     assert(op != NULL);
+#if SIZEOF_VOID_P == 8 && !defined(Py_GIL_DISABLED)
+    // A stackref holds an object address only below 2**48 (pycore_stackref.h).
+    assert(((uintptr_t)op >> 48) == 0);
+#endif
     Py_SET_TYPE(op, typeobj);
     assert(_PyType_HasFeature(typeobj, Py_TPFLAGS_HEAPTYPE) || _Py_IsImmortal(typeobj));
     _Py_INCREF_TYPE(typeobj);
@@ -997,7 +1001,7 @@ enum _PyAnnotateFormat {
 extern int _PyObject_SetDict(PyObject *obj, PyObject *value);
 extern int _PyObject_SetManagedDict(PyObject *obj, PyObject *new_dict);
 
-#ifndef Py_GIL_DISABLED
+#if !defined(Py_GIL_DISABLED)
 static inline Py_ALWAYS_INLINE void _Py_INCREF_MORTAL(PyObject *op)
 {
     assert(!_Py_IsStaticImmortal(op));

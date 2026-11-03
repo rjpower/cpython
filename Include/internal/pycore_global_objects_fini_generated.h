@@ -376,6 +376,7 @@ _PyStaticObjects_CheckAll(PyInterpreterState *interp) {
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(co_code), "co_code", 7);
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(co_consts), "co_consts", 9);
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(co_exceptiontable), "co_exceptiontable", 17);
+    _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(co_fbinit), "co_fbinit", 9);
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(co_filename), "co_filename", 11);
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(co_firstlineno), "co_firstlineno", 14);
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(co_flags), "co_flags", 8);
@@ -707,7 +708,6 @@ _PyStaticObjects_CheckAll(PyInterpreterState *interp) {
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(other), "other", 5);
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(out_fd), "out_fd", 6);
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(outgoing), "outgoing", 8);
-    _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(outpath), "outpath", 7);
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(overlapped), "overlapped", 10);
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(owner), "owner", 5);
     _PyStaticObject_CheckUnicodeSingleton((PyObject *)&_Py_ID(pad), "pad", 3);

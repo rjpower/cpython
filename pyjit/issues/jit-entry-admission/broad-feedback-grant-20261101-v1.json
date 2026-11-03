@@ -1,0 +1,68 @@
+{
+  "binding_design": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-entry-admission-broad-elapsed-20261101-v1/design.md",
+    "sha256": "559b63ec66d28600365bbace8fde34b95eecb51ecc9053e63f13b2642ad493d3"
+  },
+  "cpu": 0,
+  "deadline_utc": "2026-11-01T15:33:41.354591+00:00",
+  "decision": "AUTHORIZE_ONE_TIME_ONLY_QUIET_CAMPAIGN",
+  "elapsed_values": 580,
+  "emission_review": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-entry-admission-emission-review-20261101-v1/finding.md",
+    "sha256": "77b56b95d557d1a4822b0261df7f70d7108b5902dc265ead8ec954b5ebeaa18c"
+  },
+  "execution_ready": true,
+  "helper_review": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-entry-admission-broad-helper-review-20261101-v1/review.md",
+    "sha256": "baad75d62838a13fcdf17542bbea690df19ae854c6e127a41b52044c3c802526"
+  },
+  "idle_sibling": 8,
+  "independent_helper_receipt": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-entry-admission-broad-helper-review-20261101-v1/receipt.json",
+    "sha256": "f99046ee4680d859cb208a6aeef690a2d31d779f8c751912ba5f0f40d76d875f"
+  },
+  "launch_sha256": "c90df9f6658fb008d106af23fb58bf685a0dc5960abb88059c76de3df9648257",
+  "native_outcome_review": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-entry-admission-native-outcome-review-20261101-v1/review.md",
+    "sha256": "0483f8a356f386f6bd26e11ebb3784dd35d67abb3cd1d09afe52bcb4a6c8e734"
+  },
+  "no_replacement_samples": true,
+  "no_source_edits": true,
+  "origin_processes": 58,
+  "other_native_and_bulk_hash_work_held": true,
+  "plan_sha256": "e4055293b4d68eef76f5020ca383000a6d2f2ceefe17117a3eadf21d8b61045e",
+  "preflight": {
+    "locks_available": [
+      "/tmp/boilgate-slot.1",
+      "/tmp/boilgate-slot.2",
+      "/home/power/code/cpython/.worktrees/boil-nursery-shape-qualification/build/nursery-shape-common/serialization.lock",
+      "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-entry-admission/build/jit-entry-admission-release-20261101/.workstack.lock",
+      "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-entry-admission/build/jit-entry-admission-debug-20261101/.workstack.lock",
+      "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/rc-successor/build/release/.workstack.lock",
+      "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/rc-successor/build/debug/.workstack.lock",
+      "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/rc-successor/build/rc-asan/.workstack.lock",
+      "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/rc-successor/build/rc-stackref-debug/.workstack.lock",
+      "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-prefix-stage1/build/jit-c-stage-release-20261101/.workstack.lock",
+      "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-prefix-stage1/build/jit-c-stage-debug-20261101/.workstack.lock",
+      "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-prefix-stage1/build/jit-native-stage-release-20261101/.workstack.lock",
+      "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-prefix-stage1/build/jit-native-stage-debug-20261101/.workstack.lock",
+      "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-entry-pc-abi/build/jit-entry-pc-release-20261101/.workstack.lock",
+      "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-entry-pc-abi/build/jit-entry-pc-debug-20261101/.workstack.lock",
+      "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/rc-integrated-release-20261101/.workstack.lock",
+      "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/rc-integrated-debug-20261101/.workstack.lock"
+    ],
+    "native_pids": []
+  },
+  "protocol_review": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-entry-pc-abi-control-disposition-20261101-v1/broad-design-review.md",
+    "sha256": "eb4a73acd75df91f1aab029cbb263b09eb4ac65e1de1d8dbfc6422285cba72d1"
+  },
+  "qualification": false,
+  "scored_processes": 116,
+  "start_utc": "2026-11-01T14:48:41.354591+00:00",
+  "terminal_capsule": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-entry-admission-broad-elapsed-20261101-v1/terminal-capsule.json",
+    "sha256": "e62954b61b5fa9673505d48e682f99efd8dbb4ba49a4f7e4a741741ff6be3696"
+  },
+  "unrelated_jobs_quiescent": true
+}

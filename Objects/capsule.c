@@ -296,6 +296,7 @@ capsule_dealloc(PyObject *op)
 }
 
 
+
 static PyObject *
 capsule_repr(PyObject *o)
 {

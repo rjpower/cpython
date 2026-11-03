@@ -93,6 +93,22 @@ class TestTranforms(BytecodeTestCase):
         self.assertInBytecode(unot, 'POP_JUMP_IF_TRUE')
         self.check_lnotab(unot)
 
+    def test_unot_value(self):
+        # UNARY_NOT tests the truth of any value, so no TO_BOOL precedes it
+        def unot(x):
+            return not x
+        self.assertInBytecode(unot, 'UNARY_NOT')
+        self.assertNotInBytecode(unot, 'TO_BOOL')
+        for value in (0, 1, 0.0, 2.5, 2**100, None, True, False,
+                      "", "a", [], [1], object()):
+            self.assertIs(unot(value), not bool(value), value)
+
+        class Raises:
+            def __bool__(self):
+                raise ZeroDivisionError
+        with self.assertRaises(ZeroDivisionError):
+            unot(Raises())
+
     def test_elim_inversion_of_is_or_in(self):
         for line, cmp_op, invert in (
             ('not a is b', 'IS_OP', 1,),
@@ -569,21 +585,25 @@ class TestTranforms(BytecodeTestCase):
                     and c)
         self.check_jump_targets(f)
         self.check_lnotab(f)
-        self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_FALSE'), 2)
+        # Both jumps keep the value they jump with and pop it where they
+        # fall through
+        self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_FALSE'), 0)
+        self.assertEqual(count_instr_recursively(f, 'JUMP_IF_FALSE_OR_POP'), 2)
         # POP_JUMP_IF_TRUE to POP_JUMP_IF_TRUE --> POP_JUMP_IF_TRUE to non-jump
         def f(a, b, c):
             return ((a or b)
                     or c)
         self.check_jump_targets(f)
         self.check_lnotab(f)
-        self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_TRUE'), 2)
+        self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_TRUE'), 0)
+        self.assertEqual(count_instr_recursively(f, 'JUMP_IF_TRUE_OR_POP'), 2)
         # JUMP_IF_FALSE_OR_POP to JUMP_IF_TRUE_OR_POP --> POP_JUMP_IF_FALSE to non-jump
         def f(a, b, c):
             return ((a and b)
                     or c)
         self.check_jump_targets(f)
         self.check_lnotab(f)
-        self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_FALSE'), 1)
+        self.assertEqual(count_instr_recursively(f, 'JUMP_IF_FALSE_OR_POP'), 1)
         self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_TRUE'), 1)
         # POP_JUMP_IF_TRUE to POP_JUMP_IF_FALSE --> POP_JUMP_IF_TRUE to non-jump
         def f(a, b, c):
@@ -592,7 +612,7 @@ class TestTranforms(BytecodeTestCase):
         self.check_jump_targets(f)
         self.check_lnotab(f)
         self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_FALSE'), 1)
-        self.assertEqual(count_instr_recursively(f, 'POP_JUMP_IF_TRUE'), 1)
+        self.assertEqual(count_instr_recursively(f, 'JUMP_IF_TRUE_OR_POP'), 1)
 
     def test_elim_jump_to_uncond_jump4(self):
         def f():
@@ -849,11 +869,20 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         self.addCleanup(sys.settrace, sys.gettrace())
         sys.settrace(None)
 
+    def assertAddReadsX(self, f):
+        # x + k reads x through the add's field: the borrowed load of x,
+        # under the constant, folds into the add
+        add = [i for i in dis.get_instructions(f) if i.opname == 'BINARY_OP'][0]
+        self.assertEqual(add.srcs[0], f.__code__.co_varnames.index('x'))
+
     def test_load_fast_known_simple(self):
         def f():
             x = 1
             y = x + x
-        self.assertInBytecode(f, 'LOAD_FAST_BORROW_LOAD_FAST_BORROW')
+        # Both borrowed loads fold into the add, which reads x twice
+        self.assertNotInBytecode(f, 'LOAD_FAST_CHECK')
+        add = [i for i in dis.get_instructions(f) if i.opname == 'BINARY_OP'][0]
+        self.assertEqual(add.srcs, (0, 0))
 
     def test_store_fast_load_fast_borrow(self):
         # gh-159493: a LOAD_FAST that can borrow must not be fused into
@@ -868,7 +897,10 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         for func in (f, g):
             with self.subTest(func=func.__name__):
                 self.assertNotInBytecode(func, 'STORE_FAST_LOAD_FAST')
-                self.assertInBytecode(func, 'LOAD_FAST_BORROW', 'shared')
+                # The borrowed load and its POP_TOP go: the statement
+                # "shared" does nothing
+                self.assertNotInBytecode(func, 'LOAD_FAST_BORROW', 'shared')
+                self.assertNotInBytecode(func, 'POP_TOP')
         self.assertEqual([i.opname for i in dis.get_instructions(f)],
                          [i.opname for i in dis.get_instructions(g)])
 
@@ -876,9 +908,8 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         def f(x):
             y = x; z = y
             return z
-        # The load of y is stored into z, so it needs a strong reference and
-        # can still be fused.
-        self.assertInBytecode(f, 'STORE_FAST_LOAD_FAST', ('y', 'y'))
+        # The load of y is stored into z, so it needs a strong reference
+        self.assertInBytecode(f, 'LOAD_FAST', 'y')
 
     def test_load_fast_unknown_simple(self):
         def f():
@@ -982,7 +1013,8 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
                 print(a00, a01, a62, a63)
                 print(a64, a65, a78, a79)
 
-        self.assertInBytecode(f, 'LOAD_FAST_BORROW_LOAD_FAST_BORROW', ("a00", "a01"))
+        self.assertInBytecode(f, 'LOAD_FAST_BORROW', "a00")
+        self.assertInBytecode(f, 'LOAD_FAST_BORROW', "a01")
         self.assertNotInBytecode(f, 'LOAD_FAST_CHECK', "a00")
         self.assertNotInBytecode(f, 'LOAD_FAST_CHECK', "a01")
         for i in 62, 63:
@@ -1020,7 +1052,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         ns = {}
         exec(code, ns)
         f = ns['f']
-        self.assertInBytecode(f, "LOAD_FAST_BORROW")
+        self.assertAddReadsX(f)
         self.assertNotInBytecode(f, "LOAD_FAST_CHECK")
         co_code = f.__code__.co_code
         def trace(frame, event, arg):
@@ -1032,7 +1064,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         sys.settrace(trace)
         result = f()
         self.assertIsNone(result)
-        self.assertInBytecode(f, "LOAD_FAST_BORROW")
+        self.assertAddReadsX(f)
         self.assertNotInBytecode(f, "LOAD_FAST_CHECK")
         self.assertEqual(f.__code__.co_code, co_code)
 
@@ -1052,7 +1084,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         ns = {}
         exec(code, ns)
         f = ns['f']
-        self.assertInBytecode(f, "LOAD_FAST_BORROW")
+        self.assertAddReadsX(f)
         self.assertNotInBytecode(f, "LOAD_FAST_CHECK")
         co_code = f.__code__.co_code
         def trace(frame, event, arg):
@@ -1066,7 +1098,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
             sys.settrace(trace)
             result = f()
         self.assertEqual(result, 4)
-        self.assertInBytecode(f, "LOAD_FAST_BORROW")
+        self.assertAddReadsX(f)
         self.assertNotInBytecode(f, "LOAD_FAST_CHECK")
         self.assertEqual(f.__code__.co_code, co_code)
 
@@ -1086,7 +1118,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         ns = {}
         exec(code, ns)
         f = ns['f']
-        self.assertInBytecode(f, "LOAD_FAST_BORROW")
+        self.assertAddReadsX(f)
         self.assertNotInBytecode(f, "LOAD_FAST_CHECK")
         co_code = f.__code__.co_code
         def trace(frame, event, arg):
@@ -1100,7 +1132,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
             sys.settrace(trace)
             result = f()
         self.assertEqual(result, 4)
-        self.assertInBytecode(f, "LOAD_FAST_BORROW")
+        self.assertAddReadsX(f)
         self.assertNotInBytecode(f, "LOAD_FAST_CHECK")
         self.assertEqual(f.__code__.co_code, co_code)
 
@@ -1118,7 +1150,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
         ns = {}
         exec(code, ns)
         f = ns['f']
-        self.assertInBytecode(f, "LOAD_FAST_BORROW")
+        self.assertAddReadsX(f)
         self.assertNotInBytecode(f, "LOAD_FAST_CHECK")
         return f
 
@@ -1132,7 +1164,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
             return trace
         sys.settrace(trace)
         f()
-        self.assertInBytecode(f, "LOAD_FAST_BORROW")
+        self.assertAddReadsX(f)
         self.assertNotInBytecode(f, "LOAD_FAST_CHECK")
 
     def test_initializing_local_does_not_add_check(self):
@@ -1145,7 +1177,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
             return trace
         sys.settrace(trace)
         f()
-        self.assertInBytecode(f, "LOAD_FAST_BORROW")
+        self.assertAddReadsX(f)
         self.assertNotInBytecode(f, "LOAD_FAST_CHECK")
 
     def test_import_from_doesnt_clobber_load_fast_borrow(self):
@@ -1154,7 +1186,9 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
             self.x
             from heapq import heapify_max
             print(heapify_max)
-        self.assertInBytecode(f, "LOAD_FAST_BORROW", "self")
+        # The borrowed load of self folds into LOAD_ATTR
+        attr = [i for i in dis.get_instructions(f) if i.opname == 'LOAD_ATTR'][0]
+        self.assertEqual(attr.srcs, (0,))
 
 class DirectCfgOptimizerTests(CfgOptimizationTestCase):
 

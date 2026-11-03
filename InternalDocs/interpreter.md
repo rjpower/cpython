@@ -300,7 +300,7 @@ entry in [`Doc/library/dis.rst`](../Doc/library/dis.rst).
 Then run `make regen-cases` to assign a number for it (see
 [`Include/opcode_ids.h`](../Include/opcode_ids.h)) and regenerate a
 number of files with the actual implementation of the bytecode in
-[`Python/generated_cases.c.h`](../Python/generated_cases.c.h) and
+[`Python/generated_ir_cases.c.h`](../Python/generated_ir_cases.c.h) and
 metadata about it in additional files.
 
 With a new bytecode you must also change what is called the "magic number" for

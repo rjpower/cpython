@@ -433,7 +433,6 @@ parse_code_object(RemoteUnwinderObject *unwinder,
         meta->last_frame_info = NULL;
         meta->last_addrq = -1;
         meta->first_lineno = GET_MEMBER(int, code_object, unwinder->debug_offsets.code_object.firstlineno);
-        meta->addr_code_adaptive = real_address + (uintptr_t)unwinder->debug_offsets.code_object.co_code_adaptive;
 
         if (unwinder && unwinder->code_object_cache && _Py_hashtable_set(unwinder->code_object_cache, key, meta) < 0) {
             // Ownership of func/file/linetable was transferred to meta,
@@ -454,77 +453,10 @@ parse_code_object(RemoteUnwinderObject *unwinder,
         linetable = NULL;
     }
 
+    // The frame runs the executing copy of the code object's words, which
+    // ir_words points to, and the line table counts words.
     uintptr_t ip = ctx->instruction_pointer;
-    ptrdiff_t addrq;
-
-#ifdef Py_GIL_DISABLED
-    // Handle thread-local bytecode (TLBC) in free threading builds
-    if (ctx->tlbc_index == 0 || unwinder == NULL || unwinder->debug_offsets.code_object.co_tlbc == 0) {
-        // No TLBC or no unwinder - use main bytecode directly
-        addrq = (uint16_t *)ip - (uint16_t *)meta->addr_code_adaptive;
-        goto done_tlbc;
-    }
-
-    // Try to get TLBC data from cache (we'll get generation from the caller)
-    TLBCCacheEntry *tlbc_entry = get_tlbc_cache_entry(unwinder, real_address, unwinder->tlbc_generation);
-
-    if (!tlbc_entry) {
-        // Cache miss - try to read and cache TLBC array
-        if (!cache_tlbc_array(unwinder, real_address, real_address + unwinder->debug_offsets.code_object.co_tlbc, unwinder->tlbc_generation)) {
-            set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to cache TLBC array");
-            goto error;
-        }
-        tlbc_entry = get_tlbc_cache_entry(unwinder, real_address, unwinder->tlbc_generation);
-    }
-
-    if (tlbc_entry && ctx->tlbc_index >= 0) {
-        uintptr_t *entries = (uintptr_t *)((char *)tlbc_entry->tlbc_array + sizeof(Py_ssize_t));
-        if (ctx->tlbc_index >= tlbc_entry->tlbc_array_size ||
-            entries[ctx->tlbc_index] == 0) {
-            TLBCCacheEntry *old = _Py_hashtable_steal(unwinder->tlbc_cache, (void *)real_address);
-            if (old != NULL) {
-                tlbc_cache_entry_destroy(old);
-            }
-            if (!cache_tlbc_array(unwinder, real_address, real_address + unwinder->debug_offsets.code_object.co_tlbc,
-                                unwinder->tlbc_generation)) {
-                goto error;
-            }
-            tlbc_entry = get_tlbc_cache_entry(unwinder, real_address, unwinder->tlbc_generation);
-        }
-    }
-
-    // Validate tlbc_index and check TLBC cache
-    if (tlbc_entry) {
-        // Validate index bounds (also catches negative values since tlbc_index is signed)
-        if (ctx->tlbc_index < 0 || ctx->tlbc_index >= tlbc_entry->tlbc_array_size) {
-            PyErr_Format(PyExc_RuntimeError,
-                "Invalid tlbc_index %d (array size %zd, corrupted remote memory)",
-                ctx->tlbc_index, tlbc_entry->tlbc_array_size);
-            set_exception_cause(unwinder, PyExc_RuntimeError,
-                "Invalid tlbc_index (corrupted remote memory)");
-            goto error;
-        }
-        assert(tlbc_entry->tlbc_array_size > 0);
-        // Use cached TLBC data
-        uintptr_t *entries = (uintptr_t *)((char *)tlbc_entry->tlbc_array + sizeof(Py_ssize_t));
-        uintptr_t tlbc_bytecode_addr = entries[ctx->tlbc_index];
-
-        if (tlbc_bytecode_addr != 0) {
-            // Calculate offset from TLBC bytecode
-            addrq = (uint16_t *)ip - (uint16_t *)tlbc_bytecode_addr;
-            goto done_tlbc;
-        }
-    }
-
-    // Fall back to main bytecode (no tlbc_entry or tlbc_bytecode_addr was 0)
-    addrq = (uint16_t *)ip - (uint16_t *)meta->addr_code_adaptive;
-
-done_tlbc:
-#else
-    // Non-free-threaded build, always use the main bytecode
-    addrq = (uint16_t *)ip - (uint16_t *)meta->addr_code_adaptive;
-#endif
-    ;  // Empty statement to avoid C23 extension warning
+    ptrdiff_t addrq = (ptrdiff_t)(ip - ctx->ir_words) / (ptrdiff_t)sizeof(uint64_t);
 
     if (!unwinder->opcodes && meta->last_frame_info != NULL && meta->last_addrq == addrq) {
         *result = Py_NewRef(meta->last_frame_info);
@@ -555,10 +487,12 @@ done_tlbc:
     // Read the instruction opcode from target process if opcodes flag is set
     PyObject *opcode_obj = NULL;
     if (unwinder->opcodes) {
-        uint16_t instruction_word = 0;
+        // The handler of the word, which may be specialised or
+        // instrumented: dis.opname and the _opcode module name every handler
+        uint64_t word = 0;
         if (_Py_RemoteDebug_PagedReadRemoteMemory(&unwinder->handle, ip,
-                                                   sizeof(uint16_t), &instruction_word) == 0) {
-            opcode_obj = PyLong_FromLong(instruction_word & 0xFF);
+                                                   sizeof(uint64_t), &word) == 0) {
+            opcode_obj = PyLong_FromLong((long)(word & 0xFFFF));
             if (!opcode_obj) {
                 Py_DECREF(location);
                 set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to create opcode object");

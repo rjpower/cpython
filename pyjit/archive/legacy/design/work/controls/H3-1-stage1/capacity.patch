@@ -1,0 +1,11 @@
+--- a/Tools/cases_generator/ir_generator.py
++++ b/Tools/cases_generator/ir_generator.py
+@@ -498,7 +498,7 @@
+ 
+ 
+ def check_handler_count(count: int) -> None:
+-    if not 0 < count <= 1 << 16:
++    if not 0 < count:
+         raise ValueError(f"handler count {count} does not fit the 16-bit domain")
+ 
+ 

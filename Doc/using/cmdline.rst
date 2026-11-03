@@ -1410,14 +1410,6 @@ conflict.
 
    .. versionadded:: 3.15
 
-.. envvar:: PYTHON_JIT
-
-   On builds where experimental just-in-time compilation is available, this
-   variable can force the JIT to be disabled (``0``) or enabled (``1``) at
-   interpreter startup.
-
-   .. versionadded:: 3.13
-
 .. envvar:: PYTHON_TLBC
 
    If set to ``1`` enables thread-local bytecode. If set to ``0`` thread-local
@@ -1437,6 +1429,16 @@ conflict.
    See also the :option:`-X lazy_imports <-X>` command-line option.
 
    .. versionadded:: 3.15
+
+.. envvar:: PYTHON_TAGGED_VALUES
+
+   If set to ``0``, the interpreter keeps every :class:`int` and :class:`float`
+   in a heap object instead of holding small ints and most floats in its
+   evaluation stack and local variables.
+   This is meant for comparing the two when investigating a problem. Only
+   applies to 64-bit builds without :option:`--disable-gil`.
+
+   .. versionadded:: 3.16
 
 Debug-mode variables
 ~~~~~~~~~~~~~~~~~~~~

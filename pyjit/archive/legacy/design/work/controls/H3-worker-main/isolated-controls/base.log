@@ -1,0 +1,41 @@
+isolated driver generator verified /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-worker-main/isolated-controls/control-copy-ov5gmmcq/Tools/cases_generator/ir_generator.py 244eb80059c829f81224b4210968cdea81f63fd4ee9908858e36fd8750904e3a
+== CPython 3.16.0a1+dev (heads/boil/h3-dirty:6c724c29408, Oct 29 2026, 08:09:14) [GCC 15.2.0]
+== Linux-7.0.0-29-generic-x86_64-with-glibc2.43 little-endian
+== Python build: release
+== cwd: /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default/build/test_python_worker_2416522æ
+== CPU count: 16
+== encodings: locale=UTF-8 FS=utf-8
+== resources: all test resources are disabled, use -u option to unskip tests
+== host python: /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default/python /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-worker-main/isolated-worker.py /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-worker-main/isolated-controls/control-copy-ov5gmmcq 244eb80059c829f81224b4210968cdea81f63fd4ee9908858e36fd8750904e3a
+== host platform: Linux-7.0.0-29-generic-x86_64-with-glibc2.43
+
+Using random seed: 3651196831
+0:00:00 load avg: 1.64 mem:   48.0 MiB Run 1 test in parallel using 1 worker process
+0:00:00 load avg: 1.64 mem:   49.0 MiB [1/1/1] test_generated_cases failed (1 failure)
+isolated worker generator verified /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-worker-main/isolated-controls/control-copy-ov5gmmcq/Tools/cases_generator/ir_generator.py 244eb80059c829f81224b4210968cdea81f63fd4ee9908858e36fd8750904e3a
+test_base_metadata_rejected (test.test_generated_cases.TestHandlerDomain.test_base_metadata_rejected) ... FAIL
+
+======================================================================
+FAIL: test_base_metadata_rejected (test.test_generated_cases.TestHandlerDomain.test_base_metadata_rejected)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_generated_cases.py", line 1406, in test_base_metadata_rejected
+    with self.assertRaisesRegex(ValueError, "invalid handler base"):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 0.004s
+
+FAILED (failures=1)
+test test_generated_cases failed
+
+== Tests result: FAILURE ==
+
+1 test failed:
+    test_generated_cases
+
+Total duration: 495 ms
+Total tests: run=1 (filtered) failures=1
+Total test files: run=1/1 (filtered) failed=1
+Result: FAILURE

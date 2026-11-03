@@ -1517,6 +1517,7 @@ test case
         with self.assertRaises(TypeError):
             self.assertRaises((ValueError, object))
 
+    @support.requires_refcounting
     def testAssertRaisesRefcount(self):
         # bpo-23890: assertRaises() must not keep objects alive longer
         # than expected
@@ -2396,6 +2397,7 @@ test case
             self.assertEqual(result.testsRun, 1)
 
     @support.cpython_only
+    @support.requires_refcounting
     def testNoCycles(self):
         case = unittest.TestCase()
         wr = weakref.ref(case)

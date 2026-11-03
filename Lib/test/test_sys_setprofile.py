@@ -2,6 +2,7 @@ import gc
 import pprint
 import sys
 import unittest
+from test import support
 
 
 class TestGetProfile(unittest.TestCase):
@@ -260,6 +261,7 @@ class ProfileHookTestCase(TestCaseBase):
                               (1, 'return', g_ident),
                               ])
 
+    @support.requires_refcounting
     def test_unfinished_generator(self):
         def f():
             for i in range(2):
@@ -443,6 +445,7 @@ class TestEdgeCases(unittest.TestCase):
         self.addCleanup(sys.setprofile, sys.getprofile())
         sys.setprofile(None)
 
+    @support.requires_refcounting
     def test_reentrancy(self):
         def foo(*args):
             ...

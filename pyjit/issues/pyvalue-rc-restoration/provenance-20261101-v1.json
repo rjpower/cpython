@@ -1,0 +1,171 @@
+{
+  "utc": "2026-11-01T21:34:08.491395+00:00",
+  "restore_commit": "1440f8c6fd1be82bc02028df5728c3cb3ad0c81a",
+  "restore_parent": "74f1705774b10a225e3342b8a952f96b7e3bc8f8",
+  "parent_tree": "c6a7df0932f3d3e40b1210890386c25364c1cd71",
+  "restored_tree": "d8cd16c7bb317fea1cde06dd6c68051c30a3eb0e",
+  "adoption": "98f38e1da76320b493324a9d22c65ac3e3e20b46",
+  "list_tuple_adoption": "20693f43a829e78a97607ebef0fe77853dca2b5f",
+  "last_measured_gc_source": "76fb129ec28179488fd2ee012a0ae5f599779bc1",
+  "last_gc_tree": "854fe4aa5b24bf269796d4d286c30efabd6d0981",
+  "changed_paths": 887,
+  "deleted_paths": [
+    "Include/internal/pycore_gc_walk.h",
+    "Include/internal/pycore_lookup.h",
+    "Include/internal/pycore_shape.h",
+    "Include/internal/pycore_value.h",
+    "Include/pyvalue.h",
+    "InternalDocs/values.md",
+    "Lib/test/test_capi/test_pyvalue.py",
+    "Lib/test/test_tools/test_gc_inline_audit.py",
+    "Lib/test/test_tools/test_summarize_stats.py",
+    "Lib/test/test_tools/test_traverse_audit.py",
+    "Modules/_testcapi/pyvalue.c",
+    "Modules/_testinternalcapi/gc_walk.c",
+    "Modules/_testinternalcapi/unicode_writer.c",
+    "Objects/lookupplan.c",
+    "Objects/shapeobject.c",
+    "Python/gc_capture.S",
+    "Python/gc_walk.c",
+    "Python/pyvalue.c",
+    "Tools/boil/traverse_allow.txt",
+    "Tools/build/gc_inline_audit.py",
+    "Tools/cases_generator/call_effects.py",
+    "Tools/cases_generator/root_check.py",
+    "Tools/cases_generator/root_check_c.py",
+    "ports/python/cffi/pyvalue-backend.patch",
+    "ports/python/cffi/pyvalue-generated.patch",
+    "ports/python/cffi/tests/api.py",
+    "ports/python/cffi/tests/tracing.py",
+    "ports/python/cffi/tracing-collector.patch",
+    "ports/python/cython/cyfunction-weakref.patch",
+    "ports/python/cython/item-values.patch",
+    "ports/python/cython/tests/cyvalue.pyx",
+    "ports/python/cython/tests/values.py",
+    "ports/python/cython/value-calls.patch"
+  ],
+  "selected_source": {
+    "Include/pyvalue.h": {
+      "parent_blob": "214999c3706aee3e4a87a3df8c207a1fba80b241",
+      "old_sha256": "5a6a86f3668a79c35e8341f54f6dea10172056171903fdd04e5d29126073b3ea",
+      "last_gc_sha256": "5a6a86f3668a79c35e8341f54f6dea10172056171903fdd04e5d29126073b3ea",
+      "same_as_last_gc": true
+    },
+    "Include/internal/pycore_value.h": {
+      "parent_blob": "e4b79718f197c5bbf2bb2f1f31d96c99653f8beb",
+      "old_sha256": "855c9f4264e054f5fb74e8a84f86afe789138c600e8bf14528d18051ff192a1d",
+      "last_gc_sha256": "855c9f4264e054f5fb74e8a84f86afe789138c600e8bf14528d18051ff192a1d",
+      "same_as_last_gc": true
+    },
+    "Python/pyvalue.c": {
+      "parent_blob": "e8e789959b57b26047d47a36a10155bc2086ca93",
+      "old_sha256": "5bab2d5494b2bfd6dcd22deb9c15e012ec105ee7f0c7375de393a1a223ae9994",
+      "last_gc_sha256": "5bab2d5494b2bfd6dcd22deb9c15e012ec105ee7f0c7375de393a1a223ae9994",
+      "same_as_last_gc": true
+    },
+    "InternalDocs/values.md": {
+      "parent_blob": "5a7669bdc7b8e8e312c8cb1e78a792378bd7c662",
+      "old_sha256": "0f6ef6c8a8ac774447056722aa846ed835e8e7d14bea13f6a5f907352526647b",
+      "last_gc_sha256": "0f6ef6c8a8ac774447056722aa846ed835e8e7d14bea13f6a5f907352526647b",
+      "same_as_last_gc": true
+    },
+    "Include/pytypedefs.h": {
+      "parent_blob": "bfc6f5b412928bb2b99db2dfbeb7402bde4e407f",
+      "old_sha256": "b6bf4e7b518eac2b0bcca441f5b1d2788551067a635322c4a81c9fe5e632e4f2",
+      "last_gc_sha256": "b6bf4e7b518eac2b0bcca441f5b1d2788551067a635322c4a81c9fe5e632e4f2",
+      "same_as_last_gc": true
+    },
+    "Include/cpython/listobject.h": {
+      "parent_blob": "973adb873a198b59d04d276f83b85cd5229a9f19",
+      "old_sha256": "21ed11abbd3c69e77776e0204741f8a9f326d7f14bc83f109f8bbde94a42bafc",
+      "last_gc_sha256": "21ed11abbd3c69e77776e0204741f8a9f326d7f14bc83f109f8bbde94a42bafc",
+      "same_as_last_gc": true
+    },
+    "Include/cpython/tupleobject.h": {
+      "parent_blob": "cd0f9002dabff4dc19088cf63d5cf1908f6cb1b2",
+      "old_sha256": "d6b3e9fbdd9bff76299301ba560a29a92c9bcbfdb33b0fd00ae6a8bb5ca02122",
+      "last_gc_sha256": "d6b3e9fbdd9bff76299301ba560a29a92c9bcbfdb33b0fd00ae6a8bb5ca02122",
+      "same_as_last_gc": true
+    },
+    "Include/internal/pycore_dict.h": {
+      "parent_blob": "b78bfb03ecd8d8ebdc3aa647b6f4a515cdb715e2",
+      "old_sha256": "30428f106d06359a1923fd49f6edfcdec70d25a0181614aacc7e084b25d65609",
+      "last_gc_sha256": "30428f106d06359a1923fd49f6edfcdec70d25a0181614aacc7e084b25d65609",
+      "same_as_last_gc": true
+    },
+    "Include/object.h": {
+      "parent_blob": "ba5c4f58a22542b6d66f6d5c2e70667270dfc73f",
+      "old_sha256": "5a290d4ef5b28f0dc3ccd672dd7d2a93e2ffb5ec1f7c635052435d250ce1cc7b",
+      "last_gc_sha256": "5a290d4ef5b28f0dc3ccd672dd7d2a93e2ffb5ec1f7c635052435d250ce1cc7b",
+      "same_as_last_gc": true
+    },
+    "Include/methodobject.h": {
+      "parent_blob": "c77a2c6873ae3866167ad0282736a1b5225306a0",
+      "old_sha256": "9c34026f1ad832930181a63b0b02805366d329aee4aa83f82fa9c29f943a5749",
+      "last_gc_sha256": "9c34026f1ad832930181a63b0b02805366d329aee4aa83f82fa9c29f943a5749",
+      "same_as_last_gc": true
+    },
+    "Include/abstract.h": {
+      "parent_blob": "234fef9f992a25011cd30052fcc550bd4daba2dc",
+      "old_sha256": "875a5e60b9639db21efa4db6a23a21293dc102187858575182a86c3be729af56",
+      "last_gc_sha256": "875a5e60b9639db21efa4db6a23a21293dc102187858575182a86c3be729af56",
+      "same_as_last_gc": true
+    },
+    "Include/internal/pycore_shape.h": {
+      "parent_blob": "4c79adbb490810097f02bebf9b64fb79ccb614c8",
+      "old_sha256": "7f1e57093bc3dd45a184d5746abe36c45b7e6a7fb898e11dfab7d3eac8ee3f4b",
+      "last_gc_sha256": "7f1e57093bc3dd45a184d5746abe36c45b7e6a7fb898e11dfab7d3eac8ee3f4b",
+      "same_as_last_gc": true
+    },
+    "Include/internal/pycore_call.h": {
+      "parent_blob": "c9a421aee748c753e0c65693fdb63cca46e9d2f4",
+      "old_sha256": "6d43c8b00208cf4216b09bb4c7ed90d4d6155677bc5bfd3630ffe9c4ee354f39",
+      "last_gc_sha256": "6d43c8b00208cf4216b09bb4c7ed90d4d6155677bc5bfd3630ffe9c4ee354f39",
+      "same_as_last_gc": true
+    },
+    "Python/bytecodes.c": {
+      "parent_blob": "7d71aeb3aafd99c40987fcb9d93735356caa21f6",
+      "old_sha256": "3d3fd8758b0962abbaa0c647da23fcca86904ce2fb4b9bd6ebd74dde4963e3f9",
+      "last_gc_sha256": "3d3fd8758b0962abbaa0c647da23fcca86904ce2fb4b9bd6ebd74dde4963e3f9",
+      "same_as_last_gc": true
+    },
+    "Objects/listobject.c": {
+      "parent_blob": "122e66f65c1a944686836ad5280a8dd291d60f6b",
+      "old_sha256": "8d6421933b9f71fa61744a94c4af23a98d8a5f46c271f3491f41a2ab9cd7bdbc",
+      "last_gc_sha256": "8d6421933b9f71fa61744a94c4af23a98d8a5f46c271f3491f41a2ab9cd7bdbc",
+      "same_as_last_gc": true
+    },
+    "Objects/tupleobject.c": {
+      "parent_blob": "e7c0f410501fb79e8a4ef60ead2baeb1ce54d31d",
+      "old_sha256": "6965ac189332bf266fca597dd4dc0b8ae9543572ab5a3e91300a4e358e316a81",
+      "last_gc_sha256": "6965ac189332bf266fca597dd4dc0b8ae9543572ab5a3e91300a4e358e316a81",
+      "same_as_last_gc": true
+    },
+    "Objects/dictobject.c": {
+      "parent_blob": "cc64f87960b74da6a59a1ad3f2ec5001778ae5e3",
+      "old_sha256": "be2d9e145bc2fff1a1105ea9470514ccab195935f4d30629d992f0002a039616",
+      "last_gc_sha256": "be2d9e145bc2fff1a1105ea9470514ccab195935f4d30629d992f0002a039616",
+      "same_as_last_gc": true
+    },
+    "Objects/typeobject.c": {
+      "parent_blob": "36801a842ffee6312fea1979ce61b5260fa9a36b",
+      "old_sha256": "df4364b083eea9602be032f523b18d6daad69712bbe9da902a531151bf7ee14e",
+      "last_gc_sha256": "df4364b083eea9602be032f523b18d6daad69712bbe9da902a531151bf7ee14e",
+      "same_as_last_gc": true
+    },
+    "Tools/cases_generator/ir_generator.py": {
+      "parent_blob": "aa4b72c20a230714257f2c945aed976b898bb37e",
+      "old_sha256": "0a24d1cd83b7dbeac95abdfe018ed93b9bfd6198f19be136c0b890fddeb93cdd",
+      "last_gc_sha256": "0a24d1cd83b7dbeac95abdfe018ed93b9bfd6198f19be136c0b890fddeb93cdd",
+      "same_as_last_gc": true
+    },
+    "Tools/cases_generator/root_check.py": {
+      "parent_blob": "aab2bd12e0a92f33f3cdd110e00d9423024862c1",
+      "old_sha256": "aa466a07f9fce22c91d2c12fc07aafbce140b1d91ea68b854297c5490c07540f",
+      "last_gc_sha256": "aa466a07f9fce22c91d2c12fc07aafbce140b1d91ea68b854297c5490c07540f",
+      "same_as_last_gc": true
+    }
+  },
+  "actual_source_edits": false,
+  "compiler_or_candidate_execution": false
+}

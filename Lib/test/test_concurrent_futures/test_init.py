@@ -135,6 +135,8 @@ class FailingInitializerResourcesTest(unittest.TestCase):
 
         runner = unittest.TextTestRunner(stream=io.StringIO())
         runner.run(test_class('test_initializer'))
+        # The executor's semaphores are unlinked when they die.
+        support.gc_collect()  # For other GCs.
 
         # GH-104090:
         # Stop resource tracker manually now, so we can verify there are not leaked resources by checking

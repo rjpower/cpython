@@ -16,9 +16,11 @@
 
 #include "Python.h"
 #include "pycore_ast.h"           // PyAST_Check()
+#include "pycore_capsule.h"       // _PyCapsule_SetTraverse()
 #include "pycore_code.h"
 #include "pycore_compile.h"
 #include "pycore_flowgraph.h"     // _PyCfg_FromInstructionSequence()
+#include "pycore_regcfg.h"        // _PyRegCfg_Free()
 #include "pycore_pystate.h"       // _Py_GetConfig()
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_setobject.h"     // _PySet_NextEntry()
@@ -205,6 +207,45 @@ compiler_unit_free(struct compiler_unit *u)
 }
 
 #define CAPSULE_NAME "compile.c compiler unit"
+
+/* The capsules on c_stack hold the units of the enclosing scopes, which are
+   PyMem blocks that no traverse function reaches.  The capsule visits the
+   unit's objects, so that a collection while a nested scope is compiled sees
+   them (note 06, section 14.5). */
+static int
+compiler_unit_capsule_traverse(PyObject *capsule, visitproc visit, void *arg)
+{
+    // A capsule popped from c_stack has no name: the compiler may have
+    // freed its unit (_PyCompile_ExitScope()).
+    if (!PyCapsule_IsValid(capsule, CAPSULE_NAME)) {
+        return 0;
+    }
+    struct compiler_unit *u = (struct compiler_unit *)PyCapsule_GetPointer(
+        capsule, CAPSULE_NAME);
+    Py_VISIT(u->u_instr_sequence);
+    Py_VISIT(u->u_stashed_instr_sequence);
+    Py_VISIT(u->u_ste);
+    Py_VISIT(u->u_metadata.u_name);
+    Py_VISIT(u->u_metadata.u_qualname);
+    Py_VISIT(u->u_metadata.u_consts);
+    Py_VISIT(u->u_metadata.u_names);
+    Py_VISIT(u->u_metadata.u_varnames);
+    Py_VISIT(u->u_metadata.u_freevars);
+    Py_VISIT(u->u_metadata.u_cellvars);
+    Py_VISIT(u->u_metadata.u_fasthidden);
+    Py_VISIT(u->u_private);
+    Py_VISIT(u->u_static_attributes);
+    Py_VISIT(u->u_deferred_annotations);
+    Py_VISIT(u->u_conditional_annotation_indices);
+    return 0;
+}
+
+/* The compiler frees the unit itself in _PyCompile_ExitScope(). */
+static int
+compiler_unit_capsule_clear(PyObject *capsule)
+{
+    return 0;
+}
 
 int
 _PyCompile_MaybeAddStaticAttributeToClass(compiler *c, expr_ty e)
@@ -794,7 +835,11 @@ _PyCompile_EnterScope(compiler *c, identifier name, int scope_type,
     /* Push the old compiler_unit on the stack. */
     if (c->u) {
         PyObject *capsule = PyCapsule_New(c->u, CAPSULE_NAME, NULL);
-        if (!capsule || PyList_Append(c->c_stack, capsule) < 0) {
+        if (!capsule
+            || _PyCapsule_SetTraverse(capsule, compiler_unit_capsule_traverse,
+                                      compiler_unit_capsule_clear) < 0
+            || PyList_Append(c->c_stack, capsule) < 0)
+        {
             Py_XDECREF(capsule);
             compiler_unit_free(u);
             return ERROR;
@@ -829,6 +874,9 @@ _PyCompile_ExitScope(compiler *c)
         PyObject *capsule = PyList_GET_ITEM(c->c_stack, n);
         c->u = (struct compiler_unit *)PyCapsule_GetPointer(capsule, CAPSULE_NAME);
         assert(c->u);
+        // The capsule can outlive the unit, which its traverse must then
+        // not read; cannot fail for a valid capsule.
+        (void)PyCapsule_SetName(capsule, NULL);
         /* we are deleting from a list so this really shouldn't fail */
         if (PySequence_DelItem(c->c_stack, n) < 0) {
             PyErr_FormatUnraisable("Exception ignored while removing "
@@ -1617,8 +1665,7 @@ optimize_and_assemble_code_unit(struct compiler_unit *u, PyObject *const_cache,
                                 int code_flags, PyObject *filename)
 {
     cfg_builder *g = NULL;
-    instr_sequence optimized_instrs;
-    memset(&optimized_instrs, 0, sizeof(instr_sequence));
+    _PyRegCfg *regcfg = NULL;
 
     PyCodeObject *co = NULL;
     PyObject *consts = consts_dict_keys_inorder(u->u_metadata.u_consts);
@@ -1640,9 +1687,8 @@ optimize_and_assemble_code_unit(struct compiler_unit *u, PyObject *const_cache,
 
     int stackdepth;
     int nlocalsplus;
-    if (_PyCfg_OptimizedCfgToInstructionSequence(g, &u->u_metadata,
-                                                 &stackdepth, &nlocalsplus,
-                                                 &optimized_instrs) < 0) {
+    if (_PyCfg_OptimizedCfgToRegCfg(g, &u->u_metadata, &stackdepth,
+                                    &nlocalsplus, &regcfg) < 0) {
         goto error;
     }
 
@@ -1652,12 +1698,11 @@ optimize_and_assemble_code_unit(struct compiler_unit *u, PyObject *const_cache,
 
     /** Assembly **/
     co = _PyAssemble_MakeCodeObject(&u->u_metadata, const_cache, consts,
-                                    stackdepth, &optimized_instrs, nlocalsplus,
-                                    code_flags, filename);
+                                    regcfg, nlocalsplus, code_flags, filename);
 
 error:
     Py_XDECREF(consts);
-    PyInstructionSequence_Fini(&optimized_instrs);
+    _PyRegCfg_Free(regcfg);
     _PyCfgBuilder_Free(g);
     return co;
 }
@@ -1911,8 +1956,7 @@ _PyCompile_Assemble(_PyCompile_CodeUnitMetadata *umd, PyObject *filename,
     }
     cfg_builder *g = NULL;
     PyCodeObject *co = NULL;
-    instr_sequence optimized_instrs;
-    memset(&optimized_instrs, 0, sizeof(instr_sequence));
+    _PyRegCfg *regcfg = NULL;
 
     PyObject *const_cache = PyDict_New();
     if (const_cache == NULL) {
@@ -1930,9 +1974,8 @@ _PyCompile_Assemble(_PyCompile_CodeUnitMetadata *umd, PyObject *filename,
 
     int code_flags = 0;
     int stackdepth, nlocalsplus;
-    if (_PyCfg_OptimizedCfgToInstructionSequence(g, umd,
-                                                 &stackdepth, &nlocalsplus,
-                                                 &optimized_instrs) < 0) {
+    if (_PyCfg_OptimizedCfgToRegCfg(g, umd, &stackdepth, &nlocalsplus,
+                                    &regcfg) < 0) {
         goto error;
     }
 
@@ -1940,15 +1983,14 @@ _PyCompile_Assemble(_PyCompile_CodeUnitMetadata *umd, PyObject *filename,
     if (consts == NULL) {
         goto error;
     }
-    co = _PyAssemble_MakeCodeObject(umd, const_cache,
-                                    consts, stackdepth, &optimized_instrs,
+    co = _PyAssemble_MakeCodeObject(umd, const_cache, consts, regcfg,
                                     nlocalsplus, code_flags, filename);
     Py_DECREF(consts);
 
 error:
     Py_DECREF(const_cache);
     _PyCfgBuilder_Free(g);
-    PyInstructionSequence_Fini(&optimized_instrs);
+    _PyRegCfg_Free(regcfg);
     return co;
 }
 

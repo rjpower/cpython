@@ -1,0 +1,39 @@
+== CPython 3.16.0a1+dev (heads/boil/compiler-copyprop-land:45a789ac036, Oct 29 2026, 06:05:50) [GCC 15.2.0]
+== Linux-7.0.0-29-generic-x86_64-with-glibc2.43 little-endian
+== Python build: release
+== cwd: /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default/build/test_python_worker_2173396æ
+== CPU count: 16
+== encodings: locale=UTF-8 FS=utf-8
+== resources: all test resources are disabled, use -u option to unskip tests
+
+Using random seed: 2419723080
+0:00:00 load avg: 2.55 mem:   37.8 MiB Run 1 test sequentially in a single process
+0:00:00 load avg: 2.55 mem:   38.0 MiB [1/1] test_generated_cases
+test_base_does_not_classify_specialization (test.test_generated_cases.TestHandlerDomain.test_base_does_not_classify_specialization) ... 
+  test_base_does_not_classify_specialization (test.test_generated_cases.TestHandlerDomain.test_base_does_not_classify_specialization) (handler='BINARY_OP_ADD') ... FAIL
+
+======================================================================
+FAIL: test_base_does_not_classify_specialization (test.test_generated_cases.TestHandlerDomain.test_base_does_not_classify_specialization) (handler='BINARY_OP_ADD')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_generated_cases.py", line 1440, in test_base_does_not_classify_specialization
+    self.assertFalse(domain.kinds[name] & kind.SPECIALIZED)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: <HandlerKind.SPECIALIZED: 1> is not false
+
+----------------------------------------------------------------------
+Ran 1 test in 0.692s
+
+FAILED (failures=1)
+test test_generated_cases failed
+0:00:00 load avg: 2.55 mem:   76.1 MiB [1/1/1] test_generated_cases failed (1 failure)
+
+== Tests result: FAILURE ==
+
+1 test failed:
+    test_generated_cases
+
+Total duration: 969 ms
+Total tests: run=1 (filtered) failures=1
+Total test files: run=1/1 (filtered) failed=1
+Result: FAILURE

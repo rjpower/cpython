@@ -1,0 +1,20 @@
+{
+  "candidate_head": "c4acfdde9d794345cd1f7001bcc7198d7d810f2d",
+  "carry": "Prior accepted full suites, scoped ASan, ownership/refleak, source/canonical checks and reviewed semantic image bridges remain at their recorded scopes.",
+  "decision": "QUALIFIED_CANDIDATE_FOR_LOCAL_RC_INTEGRATION",
+  "fresh_main_builds_required": true,
+  "global_stackref_failures_unresolved": true,
+  "global_stackref_profile_supported": false,
+  "jit_implementation_authorized": false,
+  "main_integration_accepted": false,
+  "references": {
+    "boil/issues/rc-integration/clinic-semantic-bridge-review-20261101-v1.md": "d4446771c31989b58dfce777e0ac8571420941f933865a5838929cc514b8efb5",
+    "boil/issues/rc-integration/packaging-outcome-review-20261101-v4.md": "ecbaa7886bb67091c0388f3f158f25a245ddc4a32ec76c24d937b08a6c8e374d",
+    "boil/issues/rc-integration/stackref-gate-decision-20261101-v1.json": "5dbe9450be7947a3839dd83290669846556cae82a54a6a57189303a44cfde9ca",
+    "build/rc-packaging-outcome-review-20261101-v4/receipt.json": "29773f783f16493e0745085a7559c7e546a760f86f8071883eff671db1a8acfd"
+  },
+  "remote_push_authorized": false,
+  "smoke_methods_per_fresh_image": 42,
+  "supported_scope": "Linux x86-64 GIL GCC computed ordinary release and O1-debug boxed-slot shapes",
+  "utc": "2026-11-01T10:34:24.329703+00:00"
+}

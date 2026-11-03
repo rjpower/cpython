@@ -1,0 +1,5 @@
+combined-regen-v2.log 0
+combined-domain-v2.log 0
+combined-root-source-scan-v2.log 0
+combined-traverse-audit-v2.log 0
+PASS: regeneration, IDs, checker/traversal; source/status/binary unchanged

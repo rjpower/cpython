@@ -1,0 +1,14 @@
+eligibility-old default 1
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/run_frozen_probe.py", line 53, in <module>
+    main(*sys.argv[1:4])
+    ~~~~^^^^^^^^^^^^^^^^
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/run_frozen_probe.py", line 48, in main
+    assert result.returncode == 0, result.stdout + result.stderr
+           ^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {"phase": "enter_suppressed", "state": [0, true, [0, 0], 0], "requested": 96, "word_count": 18}
+Timeout (0:00:02)!
+Thread 0x00007c93394207c0 [python] (most recent call first):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/eligibility_probe.py", line 18 in f
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/eligibility_probe.py", line 61 in <module>
+

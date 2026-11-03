@@ -14,6 +14,7 @@ PyObject *
 _PyMemoryView_FromBufferProc(PyObject *v, int flags,
                              getbufferproc bufferproc);
 
+
 #ifdef __cplusplus
 }
 #endif

@@ -1717,7 +1717,18 @@ static PyMemberDef Uuid_members[] = {
     {NULL}
 };
 
+/* The type is not a GC type, but the tracing mark must reach its
+   members.  The mark visits the heap type itself. */
+static int
+Uuid_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    uuidobject *self = uuidobject_CAST(op);
+    Py_VISIT(self->is_safe);
+    return 0;
+}
+
 static PyType_Slot Uuid_slots[] = {
+    {Py_tp_traverse, Uuid_traverse},
     {Py_tp_alloc, Uuid_alloc},
     {Py_tp_dealloc, Uuid_dealloc},
     {Py_tp_getattro, PyObject_GenericGetAttr},

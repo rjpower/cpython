@@ -434,9 +434,20 @@ Pdata_dealloc(PyObject *op)
     Py_DECREF(tp);
 }
 
+static int
+Pdata_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    Pdata *self = Pdata_CAST(op);
+    Py_VISIT(Py_TYPE(self));
+    for (Py_ssize_t i = 0; i < Py_SIZE(self); i++) {
+        Py_VISIT(self->data[i]);
+    }
+    return 0;
+}
+
 static PyType_Slot pdata_slots[] = {
     {Py_tp_dealloc, Pdata_dealloc},
-    {Py_tp_traverse, _PyObject_VisitType},
+    {Py_tp_traverse, Pdata_traverse},
     {0, NULL},
 };
 
@@ -5265,6 +5276,7 @@ Pickler_traverse(PyObject *op, visitproc visit, void *arg)
     Py_VISIT(self->fast_memo);
     Py_VISIT(self->reducer_override);
     Py_VISIT(self->buffer_callback);
+    Py_VISIT(self->output_buffer);
     PyMemoTable *memo = self->memo;
     if (memo && memo->mt_table) {
         Py_ssize_t i = memo->mt_allocated;
@@ -7806,6 +7818,7 @@ Unpickler_traverse(PyObject *op, visitproc visit, void *arg)
     Py_VISIT(self->persistent_load_attr);
     Py_VISIT(self->buffers);
     Py_VISIT(self->memo_dict);
+    Py_VISIT(self->buffer.obj);
     PyObject **memo = self->memo;
     if (memo) {
         Py_ssize_t i = self->memo_size;

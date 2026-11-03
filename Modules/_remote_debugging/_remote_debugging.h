@@ -27,6 +27,7 @@ extern "C" {
 #include "internal/pycore_debug_offsets.h"  // _Py_DebugOffsets
 #include "internal/pycore_frame.h"          // FRAME_SUSPENDED_YIELD_FROM
 #include "internal/pycore_interpframe.h"    // FRAME_OWNED_BY_INTERPRETER
+#include "internal/pycore_ir.h"             // _PyIRBlock
 #include "internal/pycore_llist.h"          // struct llist_node
 #include "internal/pycore_long.h"           // _PyLong_GetZero
 #include "internal/pycore_pyerrors.h"       // _PyErr_FormatFromCause
@@ -221,7 +222,6 @@ typedef struct {
     PyObject *linetable;  // bytes
     PyObject *last_frame_info;
     ptrdiff_t last_addrq;
-    uintptr_t addr_code_adaptive;
 } CachedCodeMetadata;
 
 /* Frame cache constants and types */
@@ -463,7 +463,7 @@ typedef struct {
 typedef struct {
     uintptr_t code_addr;            // Code object address in remote process
     uintptr_t instruction_pointer;  // Current instruction pointer
-    int32_t tlbc_index;             // Thread-local bytecode index (free-threading)
+    uintptr_t ir_words;             // The first word of the frame's executing copy
 } CodeObjectContext;
 
 typedef struct {
@@ -604,7 +604,6 @@ extern int parse_frame_from_chunks(
     PyObject **result,
     uintptr_t address,
     uintptr_t *previous_frame,
-    uintptr_t *stackpointer,
     StackChunkList *chunks
 );
 

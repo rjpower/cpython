@@ -1,0 +1,39 @@
+isolated driver generator verified /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-worker-main/isolated-controls/control-copy-ov5gmmcq/Tools/cases_generator/ir_generator.py d30a55601af6ea3e7359c662b7a6291e41c22869b3b9caa620999e5a607dc0cf
+== CPython 3.16.0a1+dev (heads/boil/h3-dirty:6c724c29408, Oct 29 2026, 08:09:14) [GCC 15.2.0]
+== Linux-7.0.0-29-generic-x86_64-with-glibc2.43 little-endian
+== Python build: release
+== cwd: /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default/build/test_python_worker_2416265æ
+== CPU count: 16
+== encodings: locale=UTF-8 FS=utf-8
+== resources: all test resources are disabled, use -u option to unskip tests
+== host python: /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default/python /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-worker-main/isolated-worker.py /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-worker-main/isolated-controls/control-copy-ov5gmmcq d30a55601af6ea3e7359c662b7a6291e41c22869b3b9caa620999e5a607dc0cf
+== host platform: Linux-7.0.0-29-generic-x86_64-with-glibc2.43
+
+Using random seed: 2696968455
+0:00:00 load avg: 1.21 mem:   48.6 MiB Run 1 test in parallel using 1 worker process
+0:00:01 load avg: 1.43 mem:   49.6 MiB [1/1] test_generated_cases passed
+isolated worker generator verified /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-worker-main/isolated-controls/control-copy-ov5gmmcq/Tools/cases_generator/ir_generator.py d30a55601af6ea3e7359c662b7a6291e41c22869b3b9caa620999e5a607dc0cf
+test_absent_instrumented_pin (test.test_generated_cases.TestHandlerDomain.test_absent_instrumented_pin) ... ok
+test_base_does_not_classify_specialization (test.test_generated_cases.TestHandlerDomain.test_base_does_not_classify_specialization) ... ok
+test_base_metadata_rejected (test.test_generated_cases.TestHandlerDomain.test_base_metadata_rejected) ... ok
+test_capacity_without_large_tables (test.test_generated_cases.TestHandlerDomain.test_capacity_without_large_tables) ... ok
+test_conflicting_pristine_state_rejected (test.test_generated_cases.TestHandlerDomain.test_conflicting_pristine_state_rejected) ... ok
+test_consumers_reject_another_analysis (test.test_generated_cases.TestHandlerDomain.test_consumers_reject_another_analysis) ... ok
+test_derived_name_collision_rejected (test.test_generated_cases.TestHandlerDomain.test_derived_name_collision_rejected) ... ok
+test_duplicate_id_rejected (test.test_generated_cases.TestHandlerDomain.test_duplicate_id_rejected) ... ok
+test_inconsistent_admission_properties_rejected (test.test_generated_cases.TestHandlerDomain.test_inconsistent_admission_properties_rejected) ... ok
+test_runtime_state_and_pristine_are_distinct (test.test_generated_cases.TestHandlerDomain.test_runtime_state_and_pristine_are_distinct) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 1.412s
+
+OK
+
+== Tests result: SUCCESS ==
+
+1 test OK.
+
+Total duration: 1.8 sec
+Total tests: run=10 (filtered)
+Total test files: run=1/1 (filtered)
+Result: SUCCESS

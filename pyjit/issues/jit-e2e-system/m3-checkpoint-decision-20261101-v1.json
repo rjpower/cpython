@@ -1,0 +1,37 @@
+{
+  "utc": "2026-11-01T20:34:12.087946+00:00",
+  "decision": "ACCEPT_TIMELY_M3_PARTIAL_CHECKPOINT_CONTINUE_WITHIN_ORIGINAL_SOURCE_CAP",
+  "author_sealed_utc": "2026-11-01T20:27:28.859269+00:00",
+  "independent_review_utc": "2026-11-01T20:31:07.217545+00:00",
+  "checkpoint_utc": "2026-11-01T20:31:13.818210+00:00",
+  "deadline_utc": "2026-11-01T21:31:13.818210+00:00",
+  "extension_authorized": false,
+  "author_checkpoint": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-observed-loop/build/jit-method-m3-source/checkpoint.json",
+    "sha256": "161483b12fe581e53e807ef5ebbd6be4dd1b8fc30813b29462bc6bee11d6703a"
+  },
+  "independent_review": {
+    "checkpoint-review.md": {
+      "path": "boil/issues/jit-e2e-system/m3-checkpoint-review-20261101-v1.md",
+      "sha256": "8260a570603f5ac56170ce7fba14571e295c5d94943c17f828ec864beaba21b8"
+    },
+    "checkpoint-receipt.json": {
+      "path": "boil/issues/jit-e2e-system/m3-checkpoint-receipt-20261101-v1.json",
+      "sha256": "064bb3b569df0594e7d3431a39b7bd23d4dbf8b340df94aa56e03c6ceeefbe2c"
+    }
+  },
+  "source_paths": 12,
+  "host_methods": 34,
+  "ssa_fixture_actual_sources": true,
+  "ssa_fixture_inputs_synthetic": true,
+  "syntax_actual_path_commands_passed": 7,
+  "syntax_source_byte_identity_proven": false,
+  "remaining": [
+    "Complete register PHIs and scalar passes including genuine rooted DCE",
+    "Exact post-helper/recovery/call lifetime review",
+    "Full actual backend emission/relocation/failure evidence",
+    "Eight meaningful runtime fixtures plus old28methods",
+    "Exact final source freeze/review before native activation"
+  ],
+  "source_completion_or_runtime_or_timing_accepted": false
+}

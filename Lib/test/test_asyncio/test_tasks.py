@@ -3154,6 +3154,7 @@ class CTask_CFuture_Tests(BaseTaskTests, SetMethodsTest,
     current_task = staticmethod(getattr(tasks, '_c_current_task', None))
 
     @threading_helper.requires_working_threading()
+    @support.requires_refcounting
     def test_task_created_during_thread_state_clear(self):
         loop = self.loop
         task = None

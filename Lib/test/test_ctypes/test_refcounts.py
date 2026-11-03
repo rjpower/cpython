@@ -86,6 +86,7 @@ class RefcountTestCase(unittest.TestCase):
 
 @thread_unsafe('not thread safe')
 class AnotherLeak(unittest.TestCase):
+    @support.requires_refcounting
     def test_callback(self):
         proto = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_int, ctypes.c_int)
         def func(a, b):

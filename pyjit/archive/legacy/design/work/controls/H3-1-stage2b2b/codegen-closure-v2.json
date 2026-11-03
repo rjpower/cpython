@@ -1,0 +1,157 @@
+{
+  "before": {
+    "sources": {
+      "Include/internal/pycore_instruments.h": "81cab544b0ecf34c65c1dbd1b18ca0d5a52140018e7d8c5273ac37dd2b43afe5",
+      "Include/internal/pycore_ir_metadata.h": "34207222de5297d36d4be803742e35a825a606855d7d7f76488428e5a2462792",
+      "Lib/test/test_generated_cases.py": "5f920b8dbb1d38b30ca97d634ef836648553d6060fd3e8a78a782fec10a14cbe",
+      "Lib/test/test_monitoring.py": "0fc00bd57540d962c9f58d83e8ef0ef78cd1502e2eede4c975195a7727761a9f",
+      "Modules/_testinternalcapi.c": "2d819d2f14338d00851174396ed933e1bb33b8f24877388ab2b0f6ce1ac7b517",
+      "Objects/codeobject.c": "20208af12a66053422ca6ff9780e7ffc67f1064cbd624ff50404680398fa2eae",
+      "Python/bytecodes.c": "3cfd4e0d361ec5f2cca23616126cc3445dcb8c26997ed39def11ca7aa4a47e62",
+      "Python/ceval.h": "46aef846f2d1bbaaba998e1bd890d21453392b811a054fef196d50075f3ad875",
+      "Python/generated_ir_cases.c.h": "cdf014ed8f09a648e29d78a8d2cd11ab569b431b6507f79bf64a86f4bcf092a9",
+      "Python/instrumentation.c": "cc70ec7ae3a45fddf98096a592b194e7cb9c7e65b489d861679fd1bda668479a",
+      "Python/legacy_tracing.c": "e15db59df85fb19b04a54c07a234c631f519d7cc6eaf05a43425e06f2739ab5a",
+      "Tools/cases_generator/ir_generator.py": "b28932bdcba9e52b30c79ad4716e438129f66b253882a58fb9f44dfe733138a6",
+      "Tools/cases_generator/ir_metadata_generator.py": "8b5b76dffb553c9222e68ac39179c974a8e2704a1cc3fda1f1f1ecc7ac9c248a"
+    },
+    "diff_sha256": "b209836201b0fbdc9356dae76ec1fbe4a2e8fc259acc702be025ccfe6503abc6",
+    "status": [
+      " M Include/internal/pycore_instruments.h",
+      " M Include/internal/pycore_ir_metadata.h",
+      " M Lib/test/test_generated_cases.py",
+      " M Lib/test/test_monitoring.py",
+      " M Modules/_testinternalcapi.c",
+      " M Objects/codeobject.c",
+      " M Python/bytecodes.c",
+      " M Python/ceval.h",
+      " M Python/generated_ir_cases.c.h",
+      " M Python/instrumentation.c",
+      " M Python/legacy_tracing.c",
+      " M Tools/cases_generator/ir_generator.py",
+      " M Tools/cases_generator/ir_metadata_generator.py",
+      "?? boil/design/work/H3-1-stage2b2b-work.md"
+    ],
+    "binary_sha256": "c96ddb788f3cbbda953abeb9ad879fd6e39e40fa49b91568622eb133c514814a"
+  },
+  "after": {
+    "sources": {
+      "Include/internal/pycore_instruments.h": "81cab544b0ecf34c65c1dbd1b18ca0d5a52140018e7d8c5273ac37dd2b43afe5",
+      "Include/internal/pycore_ir_metadata.h": "34207222de5297d36d4be803742e35a825a606855d7d7f76488428e5a2462792",
+      "Lib/test/test_generated_cases.py": "5f920b8dbb1d38b30ca97d634ef836648553d6060fd3e8a78a782fec10a14cbe",
+      "Lib/test/test_monitoring.py": "0fc00bd57540d962c9f58d83e8ef0ef78cd1502e2eede4c975195a7727761a9f",
+      "Modules/_testinternalcapi.c": "2d819d2f14338d00851174396ed933e1bb33b8f24877388ab2b0f6ce1ac7b517",
+      "Objects/codeobject.c": "20208af12a66053422ca6ff9780e7ffc67f1064cbd624ff50404680398fa2eae",
+      "Python/bytecodes.c": "3cfd4e0d361ec5f2cca23616126cc3445dcb8c26997ed39def11ca7aa4a47e62",
+      "Python/ceval.h": "46aef846f2d1bbaaba998e1bd890d21453392b811a054fef196d50075f3ad875",
+      "Python/generated_ir_cases.c.h": "cdf014ed8f09a648e29d78a8d2cd11ab569b431b6507f79bf64a86f4bcf092a9",
+      "Python/instrumentation.c": "cc70ec7ae3a45fddf98096a592b194e7cb9c7e65b489d861679fd1bda668479a",
+      "Python/legacy_tracing.c": "e15db59df85fb19b04a54c07a234c631f519d7cc6eaf05a43425e06f2739ab5a",
+      "Tools/cases_generator/ir_generator.py": "b28932bdcba9e52b30c79ad4716e438129f66b253882a58fb9f44dfe733138a6",
+      "Tools/cases_generator/ir_metadata_generator.py": "8b5b76dffb553c9222e68ac39179c974a8e2704a1cc3fda1f1f1ecc7ac9c248a"
+    },
+    "diff_sha256": "b209836201b0fbdc9356dae76ec1fbe4a2e8fc259acc702be025ccfe6503abc6",
+    "status": [
+      " M Include/internal/pycore_instruments.h",
+      " M Include/internal/pycore_ir_metadata.h",
+      " M Lib/test/test_generated_cases.py",
+      " M Lib/test/test_monitoring.py",
+      " M Modules/_testinternalcapi.c",
+      " M Objects/codeobject.c",
+      " M Python/bytecodes.c",
+      " M Python/ceval.h",
+      " M Python/generated_ir_cases.c.h",
+      " M Python/instrumentation.c",
+      " M Python/legacy_tracing.c",
+      " M Tools/cases_generator/ir_generator.py",
+      " M Tools/cases_generator/ir_metadata_generator.py",
+      "?? boil/design/work/H3-1-stage2b2b-work.md"
+    ],
+    "binary_sha256": "c96ddb788f3cbbda953abeb9ad879fd6e39e40fa49b91568622eb133c514814a"
+  },
+  "commands": [
+    {
+      "command": [
+        "make",
+        "-C",
+        "build/default",
+        "-s",
+        "regen-cases",
+        "clinic"
+      ],
+      "returncode": 0,
+      "log": "combined-regen-v2.log",
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": [
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default/python",
+        "-X",
+        "pycache_prefix=/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/pycache-1438gw0u",
+        "-c",
+        "import sys,runpy,_testinternalcapi as c; assert (sys.flags.optimize,__debug__,c.gc_verify_mode(),c.gc_get_stress()) == (0,True,(0,0),0); print('actual mode: optimize=0 __debug__=True verifier=(0,0) stress=0',flush=True); sys.argv=sys.argv[1:]; sys.path.insert(0,__import__('os').path.dirname(sys.argv[0])); runpy.run_path(sys.argv[0],run_name='__main__')",
+        "boil/design/work/controls/H3-1-stage2b1/check_domain.py"
+      ],
+      "returncode": 0,
+      "log": "combined-domain-v2.log",
+      "log_sha256": "06dfd1c4d198c8f0f27ba58fb2d97ab25aa8f483289a71fb9ce7bcecf0b95b97"
+    },
+    {
+      "command": [
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default/python",
+        "-X",
+        "pycache_prefix=/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/pycache-1438gw0u",
+        "-c",
+        "import sys,runpy,_testinternalcapi as c; assert (sys.flags.optimize,__debug__,c.gc_verify_mode(),c.gc_get_stress()) == (0,True,(0,0),0); print('actual mode: optimize=0 __debug__=True verifier=(0,0) stress=0',flush=True); sys.argv=sys.argv[1:]; sys.path.insert(0,__import__('os').path.dirname(sys.argv[0])); runpy.run_path(sys.argv[0],run_name='__main__')",
+        "Tools/cases_generator/root_check_c.py",
+        "--summary",
+        "Modules/clinic/gcmodule.c.h",
+        "Modules/gcmodule.c",
+        "Objects/call.c",
+        "Objects/listobject.c",
+        "Objects/obmalloc.c",
+        "Objects/shapeobject.c",
+        "Objects/typeobject.c",
+        "Python/ceval.c",
+        "Python/ceval_gil.c",
+        "Python/gc_live.c",
+        "Python/gc_walk.c",
+        "Python/ir_targets.h",
+        "Python/pyvalue.c"
+      ],
+      "returncode": 0,
+      "log": "combined-root-source-scan-v2.log",
+      "log_sha256": "8d3da7673c22cb282b5353350445d2206de8adc85444f6b37fd1067cad962828"
+    },
+    {
+      "command": [
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default/python",
+        "-X",
+        "pycache_prefix=/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/pycache-1438gw0u",
+        "-c",
+        "import sys,runpy,_testinternalcapi as c; assert (sys.flags.optimize,__debug__,c.gc_verify_mode(),c.gc_get_stress()) == (0,True,(0,0),0); print('actual mode: optimize=0 __debug__=True verifier=(0,0) stress=0',flush=True); sys.argv=sys.argv[1:]; sys.path.insert(0,__import__('os').path.dirname(sys.argv[0])); runpy.run_path(sys.argv[0],run_name='__main__')",
+        "Tools/boil/traverse_audit.py",
+        "--check"
+      ],
+      "returncode": 0,
+      "log": "combined-traverse-audit-v2.log",
+      "log_sha256": "e144b930f19c49b416c773e63315d86f45c8a921f2816632b1f3db377d4051a5"
+    }
+  ],
+  "marked_sources": [
+    "Modules/clinic/gcmodule.c.h",
+    "Modules/gcmodule.c",
+    "Objects/call.c",
+    "Objects/listobject.c",
+    "Objects/obmalloc.c",
+    "Objects/shapeobject.c",
+    "Objects/typeobject.c",
+    "Python/ceval.c",
+    "Python/ceval_gil.c",
+    "Python/gc_live.c",
+    "Python/gc_walk.c",
+    "Python/ir_targets.h",
+    "Python/pyvalue.c"
+  ],
+  "driver_sha256": "c1d7186f1ee0c24a4b9076397e1500be2f3ab33f670fe4716aaef9f9b45d8827"
+}

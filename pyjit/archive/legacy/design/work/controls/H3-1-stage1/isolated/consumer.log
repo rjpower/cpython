@@ -1,0 +1,108 @@
+isolated driver generator verified /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1/isolated-controls/control-copy-b_9spfeh/Tools/cases_generator/ir_generator.py 2b00ae54085be8c78d62ebfd876372cadd5350ae8373154f223cd0bec0d87a1c
+== CPython 3.16.0a1+dev (heads/boil/compiler-copyprop-land:45a789ac036, Oct 29 2026, 06:05:50) [GCC 15.2.0]
+== Linux-7.0.0-29-generic-x86_64-with-glibc2.43 little-endian
+== Python build: release
+== cwd: /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default/build/test_python_worker_2320160æ
+== CPU count: 16
+== encodings: locale=UTF-8 FS=utf-8
+== resources: all test resources are disabled, use -u option to unskip tests
+== host python: /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default/python /home/power/code/cpython/.worktrees/boil-compiler-copyprop/boil/design/work/controls/H3-1-stage1/isolated-worker.py /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1/isolated-controls/control-copy-b_9spfeh 2b00ae54085be8c78d62ebfd876372cadd5350ae8373154f223cd0bec0d87a1c
+== host platform: Linux-7.0.0-29-generic-x86_64-with-glibc2.43
+
+Using random seed: 2754183502
+0:00:00 load avg: 2.01 mem:   47.8 MiB Run 1 test in parallel using 1 worker process
+0:00:00 load avg: 2.01 mem:   49.4 MiB [1/1/1] test_generated_cases failed (7 failures)
+isolated worker generator verified /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1/isolated-controls/control-copy-b_9spfeh/Tools/cases_generator/ir_generator.py 2b00ae54085be8c78d62ebfd876372cadd5350ae8373154f223cd0bec0d87a1c
+test_consumers_reject_another_analysis (test.test_generated_cases.TestHandlerDomain.test_consumers_reject_another_analysis) ... 
+  test_consumers_reject_another_analysis (test.test_generated_cases.TestHandlerDomain.test_consumers_reject_another_analysis) (consumer='generate_opcode_header') ... FAIL
+  test_consumers_reject_another_analysis (test.test_generated_cases.TestHandlerDomain.test_consumers_reject_another_analysis) (consumer='generate_opcode_metadata') ... FAIL
+  test_consumers_reject_another_analysis (test.test_generated_cases.TestHandlerDomain.test_consumers_reject_another_analysis) (consumer='generate_py_metadata') ... FAIL
+  test_consumers_reject_another_analysis (test.test_generated_cases.TestHandlerDomain.test_consumers_reject_another_analysis) (consumer='generate_uop_ids') ... FAIL
+  test_consumers_reject_another_analysis (test.test_generated_cases.TestHandlerDomain.test_consumers_reject_another_analysis) (consumer='generate_ir_metadata') ... FAIL
+  test_consumers_reject_another_analysis (test.test_generated_cases.TestHandlerDomain.test_consumers_reject_another_analysis) (consumer='generate_ir') ... FAIL
+  test_consumers_reject_another_analysis (test.test_generated_cases.TestHandlerDomain.test_consumers_reject_another_analysis) (consumer='generate_ir_targets') ... FAIL
+
+======================================================================
+FAIL: test_consumers_reject_another_analysis (test.test_generated_cases.TestHandlerDomain.test_consumers_reject_another_analysis) (consumer='generate_opcode_header')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_generated_cases.py", line 1425, in test_consumers_reject_another_analysis
+    with self.assertRaisesRegex(ValueError, "different analysis"):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_consumers_reject_another_analysis (test.test_generated_cases.TestHandlerDomain.test_consumers_reject_another_analysis) (consumer='generate_opcode_metadata')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_generated_cases.py", line 1426, in test_consumers_reject_another_analysis
+    generate(["test.c"], analysis, domain, out, *extra)
+    ~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1/isolated-controls/control-copy-b_9spfeh/Tools/cases_generator/opcode_metadata_generator.py", line 438, in generate_opcode_metadata
+    generate_deopt_table(analysis, domain, out)
+    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1/isolated-controls/control-copy-b_9spfeh/Tools/cases_generator/opcode_metadata_generator.py", line 162, in generate_deopt_table
+    assert len(deopts) == 256
+           ^^^^^^^^^^^^^^^^^^
+AssertionError
+
+======================================================================
+FAIL: test_consumers_reject_another_analysis (test.test_generated_cases.TestHandlerDomain.test_consumers_reject_another_analysis) (consumer='generate_py_metadata')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_generated_cases.py", line 1425, in test_consumers_reject_another_analysis
+    with self.assertRaisesRegex(ValueError, "different analysis"):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_consumers_reject_another_analysis (test.test_generated_cases.TestHandlerDomain.test_consumers_reject_another_analysis) (consumer='generate_uop_ids')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_generated_cases.py", line 1425, in test_consumers_reject_another_analysis
+    with self.assertRaisesRegex(ValueError, "different analysis"):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_consumers_reject_another_analysis (test.test_generated_cases.TestHandlerDomain.test_consumers_reject_another_analysis) (consumer='generate_ir_metadata')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_generated_cases.py", line 1425, in test_consumers_reject_another_analysis
+    with self.assertRaisesRegex(ValueError, "different analysis"):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_consumers_reject_another_analysis (test.test_generated_cases.TestHandlerDomain.test_consumers_reject_another_analysis) (consumer='generate_ir')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_generated_cases.py", line 1425, in test_consumers_reject_another_analysis
+    with self.assertRaisesRegex(ValueError, "different analysis"):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_consumers_reject_another_analysis (test.test_generated_cases.TestHandlerDomain.test_consumers_reject_another_analysis) (consumer='generate_ir_targets')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_generated_cases.py", line 1425, in test_consumers_reject_another_analysis
+    with self.assertRaisesRegex(ValueError, "different analysis"):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 0.007s
+
+FAILED (failures=7)
+test test_generated_cases failed
+
+== Tests result: FAILURE ==
+
+1 test failed:
+    test_generated_cases
+
+Total duration: 437 ms
+Total tests: run=1 (filtered) failures=7
+Total test files: run=1/1 (filtered) failed=1
+Result: FAILURE

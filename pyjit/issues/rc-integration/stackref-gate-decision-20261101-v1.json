@@ -1,0 +1,20 @@
+{
+  "additional_upstream_repair_authorized": false,
+  "decision": "ADOPT_ORDINARY_RC_SCOPE_WITH_GLOBAL_STACKREF_PROFILE_UNVALIDATED",
+  "global_stackref_full_qualified": false,
+  "global_stackref_profile_supported": false,
+  "jit_implementation_authorized": false,
+  "landing_authorized": false,
+  "refs": {
+    "boil/issues/rc-integration/stackref-control-final-assessment-20261101-v1.md": "71c3329fcf53f4f3cae4e7e515677341fec06f40b2ca302a6e1dc52e80069802",
+    "boil/issues/rc-integration/stackref-gate-amendment-proposal-20261101-v1.md": "cef03a3c349b7af8e9c90a67870359abbba3b2788c0e2f988a510204a786dae0",
+    "boil/issues/rc-integration/stackref-gate-amendment-review-20261101-v1.md": "11cb22011bed2dbf23edb08aafaa88c879d0afc7f54e580ab63a01aa49dd1261",
+    "boil/issues/rc-integration/stackref-gate-decision-20261101-v1.md": "e8d945218afb27c4322ba14a653122fda552eb9d51ab67a968cab11158d0ad6a",
+    "build/rc-stackref-gate-amendment-review-20261101-v1/receipt.json": "c6c2b609d57c62a1394acca8a1bc9ad8b3ab4c4cdd86d34bd147ddf7889d3571"
+  },
+  "runtime_or_test_changes": false,
+  "source_head": "8e132becdad485f9d281d63c5ec1c9c60ef3e56f",
+  "stackref_failures_remain_unresolved": true,
+  "upstream_comparison_methods_run": 0,
+  "utc": "2026-11-01T10:03:42.896939+00:00"
+}

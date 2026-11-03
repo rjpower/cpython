@@ -1,0 +1,70 @@
+{
+  "GC_optimization_authorized": false,
+  "allowed_source_paths": [
+    "Include/internal/pycore_ir.h",
+    "Include/internal/pycore_jit_prefix.h",
+    "Python/bytecodes.c",
+    "Python/specialize.c",
+    "Python/jit_prefix.c",
+    "Python/jit_prefix_entry.c",
+    "Python/ir.c",
+    "Python/instrumentation.c",
+    "Objects/codeobject.c",
+    "Tools/cases_generator/analyzer.py",
+    "Tools/cases_generator/ir_generator.py",
+    "Tools/cases_generator/ir_metadata_generator.py",
+    "Modules/_opcode.c",
+    "Lib/dis.py",
+    "Modules/_testinternalcapi.c",
+    "Lib/test/test_ir.py",
+    "Lib/test/test_generated_cases.py",
+    "Include/opcode_ids.h",
+    "Include/internal/pycore_uop_ids.h",
+    "Lib/_opcode_metadata.py",
+    "Include/internal/pycore_opcode_metadata.h",
+    "Python/generated_ir_cases.c.h",
+    "Python/ir_targets.h",
+    "Include/internal/pycore_ir_metadata.h"
+  ],
+  "base_source_head": "11aefbdd6405953a0bf3605b3a9f703c01285bf6",
+  "branch": "boil/jit-quickened-block",
+  "candidate_integration_authorized": false,
+  "checkpoint_requirement": "Prove complete old ID/format/302-table stability and unused127 exec-only family/readers/pristine rejection closure; remove both canonical/all14 generated frame hooks; otherwise STOP before compiler/native",
+  "checkpoint_utc": "2026-11-01T15:36:30.877552+00:00",
+  "compiler_or_native_execution_authorized": false,
+  "deadline_utc": "2026-11-01T16:11:30.877552+00:00",
+  "decision": "AUTHORIZE_ONE_BOUNDED_QUICKENED_BLOCK_SOURCE_ATTEMPT",
+  "design": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-quickened-block-design-20261101-v1/proposal.md",
+    "sha256": "283386f71059e584feb8a6d91507de33f51514ec0e68d47edbf04efe4528e85c"
+  },
+  "eligible_threshold": 64,
+  "extension_authorized": false,
+  "fixed_roster": "Existing12 JIT method IDs /54 focused tests retained; update interior contracts within existing methods",
+  "host_generator_tests_authorized": true,
+  "hypothesis": "Cold quickening of one arithmetic IR block removes global frame-entry overhead while retaining native arithmetic gains",
+  "independent_receipt": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-quickened-block-source-cut-review-20261101-v1/receipt.json",
+    "sha256": "3a75d53b6c7b8652e6031d922ed3ba848c83673b9b66b6487360b0fb514a0f3a"
+  },
+  "independent_review": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-quickened-block-source-cut-review-20261101-v1/review.md",
+    "sha256": "bf7b4a0666ab11faf4dbe3c3489da0e2f2c9a9dea7bd84436ccfd0fca84935be"
+  },
+  "new_exec_header_fields_authorized": false,
+  "new_parser_DSL_ISA_loop_cache_magic_or_runtime_selector_authorized": false,
+  "next_gates": [
+    "Independent complete source review and six generators/seven products plus focused host controls",
+    "Separate fresh release/debug54 and actual entry/CFG/ABI/owner/RX check",
+    "One fixed all29 campaign with unchanged scored commands and numerical rules",
+    "Publication and broad qualification only after useful all29 elapsed outcome"
+  ],
+  "runtime_probe_authorized": false,
+  "source_ceiling_seconds": 2700,
+  "source_manifest": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-quickened-block-design-20261101-v1/source-manifest.md",
+    "sha256": "06263fe89bf6e458218b3503c2c9da435b2679662d2f7b1c7caf9aababc4f3d2"
+  },
+  "start_utc": "2026-11-01T15:26:30.877552+00:00",
+  "worktree": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-quickened-block"
+}

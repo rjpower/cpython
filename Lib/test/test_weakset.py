@@ -364,6 +364,9 @@ class TestWeakSet(unittest.TestCase):
         # We have removed either the first consumed items, or another one
         self.assertIn(len(list(it)), [len(items), len(items) - 1])
         del it
+        # The iterator may have held the destroyed item; the tracing
+        # collector frees it only when it collects.
+        gc.collect()
         # The removal has been committed
         self.assertEqual(len(s), len(items))
 

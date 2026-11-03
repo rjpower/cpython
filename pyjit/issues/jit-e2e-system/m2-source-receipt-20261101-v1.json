@@ -1,0 +1,105 @@
+{
+  "utc": "2026-11-01T19:29:05.883824+00:00",
+  "decision": "ACCEPT_SOURCE_FOR_SEPARATELY_AUTHORIZED_FOCUSED_DEBUG_FEEDBACK",
+  "source_commit": "3bcb891956a9d2796bbe5e92c4f0c9e2f2516899",
+  "source_parent": "15987a03c236d5257b8a7b944bf858ee20e52fc3",
+  "review": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-source-review-20261101-v1/review.md",
+    "sha256": "05c79bf53088597f50a58f4e48bb53aab40dbf323f5213ba07afb189cf97f395"
+  },
+  "author_capsule": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-natural-method/build/jit-method-m2-source/capsule.json",
+    "sha256": "1e7e030bc0f8eb77f2a27119ed7da3694ae453ad301ac051b092878695228f5a"
+  },
+  "patch": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-natural-method/build/jit-method-m2-source/source.patch",
+    "sha256": "bba45e8e83fd2f7685449f48eefc93dfcc543c475222e82122ccb7c8987a5129"
+  },
+  "independent_replay": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-source-review-20261101-v1/final-replay.json",
+    "sha256": "df639ff08ed04955635b2443390f3b60f7b4bb9255f0ddacf6df5d46109fb4b4"
+  },
+  "independent_host_log": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-source-review-20261101-v1/final-host-tests.log",
+    "sha256": "834da18d5862fa289e6345c79ae84a3602bdbfdc723e14405b970762461b650d"
+  },
+  "independent_replay_script": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/jit-method-m2-source-review-20261101-v1/final_replay.py",
+    "sha256": "d6b8cc7449e63b1b5e0c03d7f126504f871c90581fd5304c0a0d9a7937e2bfdf"
+  },
+  "final_syntax_record": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-natural-method/build/jit-method-m2-source/syntax-final-v2/syntax-result.json",
+    "sha256": "7970bfaf669a9df9e2c63e0a37950bf136300d4bdc2daa5cc4de0f30c66def93"
+  },
+  "failed_style_syntax_record": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-natural-method/build/jit-method-m2-source/syntax-final/syntax-result.json",
+    "sha256": "ad4daded1684a89ada2778c5b472e3adfa5304f9b2f55774d6e9afbf09153c3b"
+  },
+  "encoder_record": {
+    "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-natural-method/build/jit-method-m2-source/encoder-final/result.json",
+    "sha256": "fb32e64a5ff3d3e358763fe76b85730262beca364d1bc0a4d3a6c6099cfbafb9"
+  },
+  "source_files": {
+    "Include/internal/pycore_feedback.h": "10e88470d8df44838e26a7a573d282c8fbf58236c85d41ca6b3ffd5ffe9208e6",
+    "Include/internal/pycore_ir_metadata.h": "33efde5c554374221aa2772440a269b17619250bd40b4c23790a9b52ab0ef857",
+    "Include/internal/pycore_jit.h": "5e9e4b3bb95d0600ef77a2ff8c1e2f29442a7a7c38a447e793659f992a4cf664",
+    "Lib/_opcode_metadata.py": "ed2778a5a14516b63c44c138c280b533da99155d06d8ed60fec3b9d34d4d2453",
+    "Lib/test/test_generated_cases.py": "d52582082c91f28a7b32ad5dda1d956dac10336e85927559542fc07496003c4b",
+    "Lib/test/test_jit_method.py": "0ce3a5400b406690eddd3d33f27e9c9e1e6976c226bf47d579ab8e3d348f30a2",
+    "Modules/_testinternalcapi.c": "d94f5431a3668300d2b5906b7bd3e81292d88c0214321cc96419cdacf4ddd275",
+    "Objects/codeobject.c": "335995a7714cabcfe79c7260c8470d8ebfee3c05b293acbcd0391ff3738ff083",
+    "Python/bytecodes.c": "92b350f9a0f9ddda532ef62329c49a7d9e9b542627bac102082beb5f919fe35a",
+    "Python/ceval.c": "e8923f8be8686a78a3fa74382f6716dd797f38cb3ffdd88d9662a5a025b8a8a2",
+    "Python/ceval_macros.h": "9910bd0133de1b2ec1369881c5e72d890955a9645ba4cee32c1d408d39c497c6",
+    "Python/generated_ir_cases.c.h": "0d8b171c78d4cf488c27bd45723026262546e883416b0c35a3bacee32ee8541e",
+    "Python/generated_jit_helpers.c.h": "dca71572e846acee5907255a78e4d44555e5f0c8719e15bbb449b8b770bc5ffd",
+    "Python/instrumentation.c": "dd0671a133cfbf8d8883af3e13bdb3420a2ed49f8667390c93468c41000f5ac9",
+    "Python/ir.c": "c8229ce08c26ff6bb53a9dfb492355ea0aedecc4aba8ebd573d60352606599d5",
+    "Python/ir_targets.h": "45e2736da6ef026ad18c9949ea3111759beedb9b920a8cc308abf3e58398f8ef",
+    "Python/jit_baseline.c": "d936f051822583b660158113eea5e044175d90ec310765087987cf9022ea5b09",
+    "Python/jit_runtime.c": "57e336f1c38873a1a989c28434a1c9bb8763c19ef0034d474ee878a0d42881a9",
+    "Python/specialize.c": "7abffc851ccb1d933b592a310441a03f0f77480e010d34bf0543615a6e51b0ef",
+    "Tools/cases_generator/ir_generator.py": "cb5f0cde14908c9981450f8aea02926ed4e93e5aa30d068a79a17c6316e93d6a",
+    "Tools/cases_generator/ir_metadata_generator.py": "d2f0fa647dc90847c1929b192d9910047b2c2bbbe1b7e9888d0413cc9f540603",
+    "Tools/cases_generator/jit_helpers_generator.py": "0a26c39ce873af64777a41bd84744af6cf65b64d86e0b0046c1735b3dcc437a1"
+  },
+  "roster": {
+    "TestMethodHelpers": [
+      "test_loop_branch_and_python_call",
+      "test_c_call_dunder_and_effects_once",
+      "test_error_action_caught_without_replay",
+      "test_request_restored_on_raise_and_nested_request",
+      "test_bounded_before_effect_tier_down",
+      "test_profile_enabled_from_callee",
+      "test_owned_local_published_before_destructor_reentry",
+      "test_generator_callee_fallback_and_unexpected_exception"
+    ],
+    "TestNativeMethods": [
+      "test_loop_python_call_c_call_and_dunder",
+      "test_raise_effect_and_traceback",
+      "test_observer_after_effect_and_recompile",
+      "test_unsupported_disables_only_affected_code",
+      "test_ephemeral_code_constants_die_before_result_store",
+      "test_callback_invalidation_keeps_live_native_return"
+    ],
+    "TestNaturalMethods": [
+      "test_call_heat_and_attribute_semantics",
+      "test_periodic_loop_iteration_and_containers",
+      "test_keyword_call_and_closure_continuation",
+      "test_unsupported_cache_and_unrelated_method",
+      "test_generator_creation_return_and_suspension",
+      "test_target_replacement_and_exception_frame_reuse",
+      "test_exec_only_words_rejected_by_constructor_and_marshal",
+      "test_observer_off_fresh_call_and_same_loop_rearm",
+      "test_pending_capacity_preserves_older_callers",
+      "test_actual_coroutine_creation_and_interpreted_suspension",
+      "test_visible_store_precedes_displaced_owner_finalizer",
+      "test_bootstrap_resource_failure_obeys_eligible_cooldown",
+      "test_cold_call_owns_original_operand_and_retries_observers",
+      "test_flow_failure_and_callback_error_restore_request"
+    ]
+  },
+  "candidate_runtime_executed_by_reviewer": false,
+  "compiler_or_encoder_executed_by_reviewer": false,
+  "runtime_tests_pending": 28
+}

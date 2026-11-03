@@ -1,0 +1,172 @@
+--- a/Python/specialize.c
++++ b/Python/specialize.c
+@@ -784,29 +784,6 @@
+     return SHAPE_GUARD_DECLINED;
+ }
+ 
+-/* Whether looking a name up on TYPE runs no Python code.  A specializer
+- * runs none (specialize_dict_hint()); a lookup that misses the type cache,
+- * as after any change to the type, compares the keys of every dict on the
+- * MRO, and a class namespace may hold a str subclass key whose __eq__ runs.
+- * Every dict on the MRO must have only exact str keys. */
+-static int
+-type_lookup_runs_no_code(PyTypeObject *type)
+-{
+-    PyObject *mro = type->tp_mro;
+-    if (mro == NULL) {
+-        return 0;
+-    }
+-    for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(mro); i++) {
+-        PyObject *dict = _PyType_GetDict((PyTypeObject *)PyTuple_GET_ITEM(mro, i));
+-        if (dict == NULL || !PyDict_CheckExact(dict)
+-            || ((PyDictObject *)dict)->ma_keys->dk_kind != DICT_KEYS_UNICODE)
+-        {
+-            return 0;
+-        }
+-    }
+-    return 1;
+-}
+-
+ /* A DICT plan: WITH_HINT if OWNER's instance dict holds NAME.  1 if
+  * specialised; 0 if the dict lacks NAME, so that the class attribute
+  * (steps 3 to 5) is the result; -1 to fail. */
+@@ -832,13 +809,6 @@
+     PyDictObject *dict = (PyDictObject *)_PyObject_DictAt(owner, (int32_t)dictoffset);
+     if (dict == NULL || !PyDict_CheckExact(dict)) {
+         SPECIALIZATION_FAIL(base_op, SPEC_FAIL_NO_DICT);
+-        return -1;
+-    }
+-    // A specializer runs no Python code: the lookup in a dict with keys
+-    // other than exact str compares them, which may call __eq__, and the
+-    // word dispatched again would read a local that the call rebound.
+-    if (dict->ma_keys->dk_kind != DICT_KEYS_UNICODE) {
+-        SPECIALIZATION_FAIL(base_op, SPEC_FAIL_ATTR_NON_STRING);
+         return -1;
+     }
+     int res;
+@@ -1124,13 +1094,6 @@
+         SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OTHER);
+         fail = true;
+     }
+-    else if (!type_lookup_runs_no_code(type)
+-             || (PyType_Check(owner)
+-                 && !type_lookup_runs_no_code((PyTypeObject *)owner)))
+-    {
+-        SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_NON_STRING);
+-        fail = true;
+-    }
+     else if (PyModule_CheckExact(owner)) {
+         fail = specialize_module_load_attr(owner, instr, name);
+     }
+@@ -1165,13 +1128,6 @@
+         // PyObject_GenericSetAttr and friends... and this way we still do the
+         // right thing if someone forgets to call PyType_Ready(type):
+         SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_OTHER);
+-        goto fail;
+-    }
+-    if (!type_lookup_runs_no_code(type)
+-        || (PyType_Check(owner)
+-            && !type_lookup_runs_no_code((PyTypeObject *)owner)))
+-    {
+-        SPECIALIZATION_FAIL(STORE_ATTR, SPEC_FAIL_ATTR_NON_STRING);
+         goto fail;
+     }
+     if (PyModule_CheckExact(owner)) {
+@@ -1684,9 +1640,6 @@
+         }
+         return SPEC_FAIL_OTHER;
+     }
+-    if (!type_lookup_runs_no_code(container_type)) {
+-        return SPEC_FAIL_OTHER;
+-    }
+     PyObject *descriptor = _PyType_Lookup(container_type, &_Py_ID(__setitem__));
+     if (descriptor && Py_TYPE(descriptor) == &PyFunction_Type) {
+         PyFunctionObject *func = (PyFunctionObject *)descriptor;
+@@ -1764,10 +1717,6 @@
+     if (!(tp_flags & Py_TPFLAGS_HEAPTYPE)) {
+         /* Is this possible? */
+         SPECIALIZATION_FAIL(CALL, SPEC_FAIL_EXPECTED_ERROR);
+-        return NULL;
+-    }
+-    if (!type_lookup_runs_no_code(tp)) {
+-        SPECIALIZATION_FAIL(CALL, SPEC_FAIL_OTHER);
+         return NULL;
+     }
+     PyObject *init = _PyType_LookupRefAndVersion(tp, &_Py_ID(__init__), tp_version);
+@@ -2189,9 +2138,6 @@
+             }
+             unsigned int tp_version;
+             PyTypeObject *container_type = lhs_type;
+-            if (!type_lookup_runs_no_code(container_type)) {
+-                return SPEC_FAIL_OTHER;
+-            }
+             PyObject *descriptor = _PyType_LookupRefAndVersion(container_type, &_Py_ID(__getitem__), &tp_version);
+             if (descriptor && Py_TYPE(descriptor) == &PyFunction_Type) {
+                 if (!(container_type->tp_flags & Py_TPFLAGS_HEAPTYPE)) {
+@@ -2531,9 +2477,6 @@
+             }
+             unsigned int tp_version;
+             PyTypeObject *container_type = lhs_type;
+-            if (!type_lookup_runs_no_code(container_type)) {
+-                break;
+-            }
+             PyObject *descriptor = _PyType_LookupRefAndVersion(container_type, &_Py_ID(__getitem__), &tp_version);
+             if (descriptor && Py_TYPE(descriptor) == &PyFunction_Type &&
+                 container_type->tp_flags & Py_TPFLAGS_HEAPTYPE)
+--- a/Python/regcfg_passes.c
++++ b/Python/regcfg_passes.c
+@@ -153,26 +153,14 @@
+ /* Copy propagation (pass a).
+  *
+  * A load of a local whose value an op reads through a field that may name
+- * a local becomes that field: the op reads the local in place, borrowed,
+- * when it runs rather than when the load would have.  So nothing in
+- * between may change the local.  A pending load dies at a write to the
+- * local, and at an op that may run Python code, which may rebind it
+- * through frame.f_locals: a call, a generic LOAD_GLOBAL or LOAD_ATTR, a
+- * binary op, anything whose family the generator marks _PyIR_RUNS_CODE
+- * (Tools/cases_generator/ir_generator.py, runs_code()).  The collector
+- * runs finalizers and callbacks only at such ops, at the eval breaker or
+- * in an explicit collection; a collection that an allocation starts runs
+- * none, apart from the recorded Py_buffer-release defect owned by 10a
+- * rung 3 (boil/PROCESS.md section 0.3).  The load may sit under constants,
+- * other locals, cells and the
+- * like.  The reader itself may run code: every field a fold can name is
+- * read before any.  A load also keeps its op if the line changes before
+- * its reader, so that line events, and the stack that f_lineno assignment
+- * sees at a line start, stay where they were.  Per-instruction events
+- * (sys.monitoring INSTRUCTION, f_trace_opcodes) fire before every word and
+- * see the local where the reader reads it, which is a documented
+- * difference from the stack machine
+- * (boil/design/work/compiler-copyprop-1.md).
++ * a local becomes that field: the op reads the local in place, borrowed.
++ * The load may sit under other values, such as a constant, a global or a
++ * call's result, as long as nothing writes the local in between, which the
++ * kill on every write checks.  A load keeps its op if the line changes
++ * before its reader, so that line events, and the stack that f_lineno
++ * assignment sees at a line start, stay where they were.  A call in
++ * between may still rebind the local through frame.f_locals; the reader
++ * then sees the new value, where the stack would have kept the old one.
+  *
+  * Only LOAD_FAST_BORROW folds: optimize_load_fast() makes a load strong
+  * when its value outlives the local's reference or escapes, as into a
+@@ -257,8 +245,6 @@
+             }
+             int *in = _PyReg_IN(cfg, op);
+             int written = written_local(op);
+-            int runs_code = (_PyRegCfg_FormatOf(op->opcode)->flags
+-                             & _PyIR_RUNS_CODE) != 0;
+             int n = 0;
+             for (int p = 0; p < npend; p++) {
+                 _PyRegOp *load = pend[p].load;
+@@ -269,9 +255,7 @@
+                 int uses = reads_count(cfg, op, v);
+                 if (uses == 0) {
+                     // Nothing here reads it; the local must keep its value
+-                    if (load->oparg != written && load->oparg != op->dst
+-                        && !runs_code)
+-                    {
++                    if (load->oparg != written && load->oparg != op->dst) {
+                         pend[n++] = pend[p];
+                     }
+                     continue;

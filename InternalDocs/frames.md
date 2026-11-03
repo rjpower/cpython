@@ -2,13 +2,20 @@
 
 Each call to a Python function has an activation record, commonly known as a
 "frame". It contains information about the function being executed, consisting
-of three conceptual sections:
+of two parts:
 
-* Local variables (including arguments, cells and free variables)
-* Evaluation stack
-* Specials: The per-frame object references needed by the VM, including
-  globals dict, code object, instruction pointer, stack depth, the
-  previous frame, etc.
+* The header: the per-frame object references needed by the VM, including
+  globals dict, code object, instruction pointer, the previous frame, etc.
+* The slots: the local variables (including arguments, cells and free
+  variables), then the temporaries, which hold the values of expressions
+  being evaluated.  The instructions of the register IR name slots by
+  number (see [Include/internal/pycore_ir.h](../Include/internal/pycore_ir.h)).
+
+A frame has `co_nlocalsplus + co_stacksize` slots, a fixed number.  There is
+no stack pointer: every slot holds a value or NULL.  A temporary that no
+instruction has written yet, or that an instruction consumed, is NULL, so
+the code that walks a frame (clearing it, the garbage collectors, `f_locals`,
+setting `f_lineno`) visits every slot and skips NULL.
 
 The definition of the `_PyInterpreterFrame` struct is in
 [Include/internal/pycore_interpframe_structs.h](../Include/internal/pycore_interpframe_structs.h).
@@ -17,41 +24,52 @@ The definition of the `_PyInterpreterFrame` struct is in
 
 Python semantics allows frames to outlive the activation, so they need to
 be allocated outside the C call stack. To reduce overhead and improve locality
-of reference, most frames are allocated contiguously in a per-thread stack
-(see `_PyThreadState_PushFrame` in [Python/pystate.c](../Python/pystate.c)).
+of reference, most frames are allocated in two per-thread stacks: the frame
+stack holds their headers and the value stack holds their slots, and
+`frame->base` points to slot 0 (see `_PyThreadState_PushFrame` in
+[Python/pystate.c](../Python/pystate.c)).
 
 Frames of generators and coroutines are embedded in the generator and coroutine
-objects, so are not allocated in the per-thread stack. See `_PyGenObject` in
+objects, with their slots, so are not allocated in the per-thread stacks. See
+`_PyGenObject` in
 [Include/internal/pycore_interpframe_structs.h](../Include/internal/pycore_interpframe_structs.h).
+A frame that keeps its slots, as these do, has them in `owned_slots`, and
+`base` points there.
 
 ## Layout
 
-Each activation record is laid out as:
+The two stacks share the chunks of the thread's data stack.  The value
+stack grows from the start of a chunk, up to `tstate->datastack_top`, and
+the frame stack grows from its end, down to `tstate->datastack_limit`, so
+that one test, `_PyThreadState_HasStackSpace()`, checks the room for both:
 
-* Specials
-* Locals
-* Stack
+```
+  chunk:  | slots of A | slots of B ... |    free    | header B | header A |
+          ^ data[0]                     ^ top        ^ limit
+```
 
-This seems to provide the best performance without excessive complexity.
-The specials have a fixed size, so the offset of the locals is known. The
-interpreter needs to hold two pointers, a frame pointer and a stack pointer.
+When a call has no room, both the header and the slots go to a new chunk.
+A header records the top of the value stack before it was pushed,
+`saved_top`, which popping the frame restores.
 
-#### Alternative layout
+#### Overlapping frames
 
-An alternative layout that was used for part of 3.11 alpha was:
+The caller evaluates the callable into slot `c`, `self` or NULL into
+`c + 1`, and the arguments into the slots after.  `CALL_PY_EXACT_ARGS`
+pushes the callee with its base at the first argument, `c + 2`, or at
+`self`, `c + 1`: the arguments are already where the callee's parameters
+go, and nothing is copied (`_PyFrame_PushOverlapping()`).  This is Lua's
+convention, and the layout that part of 3.11 alpha used.  The slots of
+the caller above the call's window are dead temporaries, NULL, which the
+callee uses and leaves NULL.  The caller's slots must be on the value stack:
+a generator's caller copies, as do calls with keywords or defaults.
 
-* Locals
-* Specials
-* Stack
+This needs the slots above a call's window to be dead, as they are when
+temporaries are numbered by stack depth.
 
-This has the advantage that no copying is required when making a call,
-as the arguments on the stack are (usually) already in the correct
-location for the parameters. However, it requires the VM to maintain
-an extra pointer for the locals, which can hurt performance.
+### The header
 
-### Specials
-
-The specials section contains the following pointers:
+The header contains the following pointers:
 
 * Globals dict
 * Builtins dict
@@ -68,12 +86,12 @@ and builtins, than strong references to both globals and builtins.
 
 When creating a backtrace or when calling `sys._getframe()` the frame becomes
 visible to Python code. When this happens a new `PyFrameObject` is created
-and a strong reference to it is placed in the `frame_obj` field of the specials
+and a strong reference to it is placed in the `frame_obj` field of the header
 section. The `frame_obj` field is initially `NULL`.
 
 The `PyFrameObject` may outlive a stack-allocated `_PyInterpreterFrame`.
 If it does then `_PyInterpreterFrame` is copied into the `PyFrameObject`,
-except the evaluation stack which must be empty at this point.
+whose temporaries are NULL at this point.
 The previous frame link is updated to reflect the new location of the frame.
 
 This mechanism provides the appearance of persistent, heap-allocated
@@ -89,7 +107,9 @@ frames on the per-thread stack via the linkage fields.
 
 If a frame object associated with a generator outlives the generator, then
 the embedded `_PyInterpreterFrame` is copied into the frame object (see
-`take_ownership()` in [Python/frame.c](../Python/frame.c)).
+`take_ownership()` in [Python/frame.c](../Python/frame.c)).  The copy,
+`_PyFrame_Copy()`, moves the slots and leaves NULL behind, because the slots
+of a frame on the value stack may be its caller's.
 
 ### Field names
 
@@ -166,9 +186,6 @@ when profiling is inactive.
 
 ### The Instruction Pointer
 
-`_PyInterpreterFrame` has two fields which are used to maintain the instruction
-pointer: `instr_ptr` and `return_offset`.
-
 When a frame is executing, `instr_ptr` points to the instruction currently being
 executed. In a suspended frame, it points to the instruction that would execute
 if the frame were to resume. After `frame.f_lineno` is set, `instr_ptr` points to
@@ -176,14 +193,23 @@ the next instruction to be executed. During a call to a python function,
 `instr_ptr` points to the call instruction, because this is what we would expect
 to see in an exception traceback.
 
-The `return_offset` field determines where a `RETURN` should go in the caller,
-relative to `instr_ptr`.  It is only meaningful to the callee, so it needs to
-be set in any instruction that implements a call (to a Python function),
-including CALL, SEND and BINARY_OP_SUBSCR_GETITEM, among others. If there is no
-callee, then return_offset is meaningless. It is necessary to have a separate
-field for the return offset because (1) if we apply this offset to `instr_ptr`
-while executing the `RETURN`, this is too early and would lose us information
-about the previous instruction which we could need for introspecting and
-debugging. (2) `SEND` needs to pass two offsets to the generator: one for
-`RETURN` and one for `YIELD`. It uses the `oparg` for one, and the
-`return_offset` for the other.
+A return or a yield resumes the caller at the word after `instr_ptr`.  When a
+generator returns to the `SEND` or `FOR_ITER` that resumed it, the caller
+goes on to that instruction's exit instead, which
+`_PyEval_GeneratorReturnTarget()` finds from the caller's word.  The entry
+frame and the `__init__` shim keep `instr_ptr` on a `NOP` before the word that
+a return reaches.
+
+The value that comes back goes to the caller's slot `return_slot`: the dst of
+the call, which the calling instruction sets.  For a suspended generator,
+`return_slot` names the slot of the value it yielded, where the value sent in
+goes.
+
+### RESUME
+
+A frame that a call pushes, that the interpreter enters, or that a generator
+resumes starts after its `RESUME` when that would do nothing: the eval
+breaker has nothing pending and the code's instrumentation is current
+(`IR_SKIP_RESUME` in [Python/ceval_macros.h](../Python/ceval_macros.h)).
+Otherwise `RESUME` runs, and it does after the instructions that make cells
+and copy free variables, and at a generator's first start.

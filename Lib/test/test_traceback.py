@@ -23,7 +23,7 @@ from test.support import (Error, captured_output, cpython_only, ALWAYS_EQ,
                           requires_subprocess, os_helper)
 from test.support.os_helper import TESTFN, temp_dir, unlink
 from test.support.script_helper import assert_python_ok, assert_python_failure, make_script
-from test.support.import_helper import ensure_lazy_imports, forget
+from test.support.import_helper import DirsOnSysPath, ensure_lazy_imports, forget
 from test.support import force_not_colorized, force_not_colorized_test_class
 
 import json
@@ -3746,6 +3746,7 @@ class TestTracebackException(unittest.TestCase):
         with self.assertWarns(DeprecationWarning):
             self.assertIsNone(te.exc_type)
 
+    @support.requires_refcounting
     def test_no_refs_to_exception_and_traceback_objects(self):
         exc_obj = None
         try:
@@ -5360,40 +5361,33 @@ class MiscTest(unittest.TestCase):
 
     @unittest.skipIf(not importlib.machinery.EXTENSION_SUFFIXES, 'Platform does not support extension modules')
     def test_find_incompatible_extension_modules(self):
-        """_find_incompatible_extension_modules assumes the last extension in
-        importlib.machinery.EXTENSION_SUFFIXES (defined in Python/dynload_*.c)
-        is untagged (eg. .so, .pyd).
-
-        This test exists to make sure that assumption is correct.
-        """
-        last_extension_suffix = importlib.machinery.EXTENSION_SUFFIXES[-1]
-        if shlib_suffix := sysconfig.get_config_var('SHLIB_SUFFIX'):
-            self.assertEqual(last_extension_suffix, shlib_suffix)
-        else:
-            before_dot, *extensions = last_extension_suffix.split('.')
-            expected_prefixes = ['']
-            if os.name == 'nt':
-                # Windows puts the debug tag in the module file stem (eg. foo_d.pyd)
-                expected_prefixes.append('_d')
-            self.assertIn(before_dot, expected_prefixes, msg=(
-                f'Unexpected prefix {before_dot!r} in extension module '
-                f'suffix {last_extension_suffix!r}. '
-                'traceback._find_incompatible_extension_module needs to be '
-                'updated to take this into account!'
-            ))
-            # if SHLIB_SUFFIX is not define, we assume the native
-            # shared library suffix only contains one extension
-            # (eg. '.so', bad eg. '.cpython-315-x86_64-linux-gnu.so')
-            self.assertEqual(len(extensions), 1, msg=(
-                'The last suffix in importlib.machinery.EXTENSION_SUFFIXES '
-                'contains more than one extension, so it is probably different '
-                'than SHLIB_SUFFIX. It probably contains an ABI tag! '
-                'If this is a false positive, define SHLIB_SUFFIX in sysconfig.'
-            ))
+        native_suffix = (sysconfig.get_config_var('SHLIB_SUFFIX') or
+                         os.path.splitext(importlib.machinery.EXTENSION_SUFFIXES[-1])[1])
+        module = 'boil_rc_extension_hint_fixture'
+        cases = [
+            (f'{module}.cpython-999{native_suffix}', True),
+            (f'{module}.abi3{native_suffix}', True),
+            (f'{module}{native_suffix}', True),
+            (f'{module}{importlib.machinery.EXTENSION_SUFFIXES[0]}', True),
+            (f'{module}_other.abi3{native_suffix}', False),
+            (f'{module}.py', False),
+            (f'{module}.abi3{native_suffix}.txt', False),
+        ]
+        for filename, expected in cases:
+            with self.subTest(filename=filename):
+                with os_helper.temp_dir() as tmp, DirsOnSysPath(tmp):
+                    open(os.path.join(tmp, filename), 'wb').close()
+                    self.assertEqual(
+                        traceback._find_incompatible_extension_module(module),
+                        filename if expected else None)
+        self.assertIsNone(traceback._find_incompatible_extension_module(''))
+        with unittest.mock.patch.object(importlib.machinery, 'EXTENSION_SUFFIXES', []):
+            self.assertIsNone(traceback._find_incompatible_extension_module(module))
 
     @unittest.skipIf(not importlib.machinery.EXTENSION_SUFFIXES, 'Platform does not support extension modules')
     def test_incompatible_extension_modules_hint(self):
-        untagged_suffix = importlib.machinery.EXTENSION_SUFFIXES[-1]
+        untagged_suffix = (sysconfig.get_config_var('SHLIB_SUFFIX') or
+                           os.path.splitext(importlib.machinery.EXTENSION_SUFFIXES[-1])[1])
         with os_helper.temp_dir() as tmp:
             # create a module with a incompatible ABI tag
             incompatible_module = f'foo.some-abi{untagged_suffix}'

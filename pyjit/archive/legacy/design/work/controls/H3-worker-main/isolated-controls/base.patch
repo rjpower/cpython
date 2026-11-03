@@ -1,0 +1,12 @@
+--- a/Tools/cases_generator/ir_generator.py
++++ b/Tools/cases_generator/ir_generator.py
+@@ -546,9 +546,6 @@
+         if (set(self.bases) != set(ids) or set(self.kinds) != set(ids)
+                 or set(self.required_state) != set(ids)):
+             raise ValueError("incomplete handler base/kind metadata")
+-        for name, base in self.bases.items():
+-            if base not in ids or self.bases[base] != base:
+-                raise ValueError(f"invalid handler base for {name}: {base}")
+         for name, kind in self.kinds.items():
+             if kind & HandlerKind.DISPATCH and not kind & HandlerKind.METADATA:
+                 raise ValueError(f"dispatch handler has no metadata: {name}")

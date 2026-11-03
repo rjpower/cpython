@@ -1,0 +1,18 @@
+../../Python/instrumentation.c: In function ‘prepare_instrumentation_data’:
+../../Python/instrumentation.c:1610:9: error: implicit declaration of function ‘set_local_events’; did you mean ‘get_local_events’? [-Wimplicit-function-declaration]
+ 1610 |         set_local_events(&prepared->local_monitors, tool_id, events);
+      |         ^~~~~~~~~~~~~~~~
+      |         get_local_events
+../../Python/instrumentation.c: At top level:
+../../Python/instrumentation.c:1909:1: warning: conflicting types for ‘set_local_events’; have ‘void(_Py_LocalMonitors *, int,  _PyMonitoringEventSet)’ {aka ‘void(_Py_LocalMonitors *, int,  unsigned int)’}
+ 1909 | set_local_events(_Py_LocalMonitors *m, int tool_id, _PyMonitoringEventSet events)
+      | ^~~~~~~~~~~~~~~~
+../../Python/instrumentation.c:1909:1: error: static declaration of ‘set_local_events’ follows non-static declaration
+../../Python/instrumentation.c:1610:9: note: previous implicit declaration of ‘set_local_events’ with type ‘void(_Py_LocalMonitors *, int,  _PyMonitoringEventSet)’ {aka ‘void(_Py_LocalMonitors *, int,  unsigned int)’}
+ 1610 |         set_local_events(&prepared->local_monitors, tool_id, events);
+      |         ^~~~~~~~~~~~~~~~
+../../Python/instrumentation.c:1909:1: warning: ‘set_local_events’ defined but not used [-Wunused-function]
+ 1909 | set_local_events(_Py_LocalMonitors *m, int tool_id, _PyMonitoringEventSet events)
+      | ^~~~~~~~~~~~~~~~
+make: *** [Makefile:3329: Python/instrumentation.o] Error 1
+make: *** Waiting for unfinished jobs....

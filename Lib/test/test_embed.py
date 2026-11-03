@@ -457,6 +457,7 @@ class EmbeddingTests(EmbeddingTestsMixin, unittest.TestCase):
         out, err = self.run_embedded_interpreter("test_repeated_init_exec", code)
         self.assertEqual(out, 'Tests passed\n' * INIT_LOOPS)
 
+    @support.requires_refcounting
     def test_asyncio_task_during_interpreter_clear(self):
         import_helper.import_module('_asyncio')
         code = textwrap.dedent("""
@@ -2160,6 +2161,7 @@ class MiscTests(EmbeddingTestsMixin, unittest.TestCase):
 
     @unittest.skipUnless(support.Py_DEBUG,
                          '-X showrefcount requires a Python debug build')
+    @support.requires_refcounting
     def test_no_memleak(self):
         # bpo-1635741: Python must release all memory at exit
         tests = (

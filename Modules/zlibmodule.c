@@ -724,6 +724,8 @@ compobject_traverse(PyObject *op, visitproc visit, void *arg)
     compobject *self = _compobject_CAST(op);
     Py_VISIT(Py_TYPE(op));
     Py_VISIT(self->zdict);
+    Py_VISIT(self->unused_data);
+    Py_VISIT(self->unconsumed_tail);
     return 0;
 }
 
@@ -1403,6 +1405,7 @@ ZlibDecompressor_traverse(PyObject *op, visitproc visit, void *arg)
     ZlibDecompressor *self = ZlibDecompressor_CAST(op);
     Py_VISIT(Py_TYPE(op));
     Py_VISIT(self->zdict);
+    Py_VISIT(self->unused_data);
     return 0;
 }
 

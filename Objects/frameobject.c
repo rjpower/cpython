@@ -13,7 +13,6 @@
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_object.h"        // _PyObject_GC_UNTRACK()
 #include "pycore_opcode_metadata.h" // _PyOpcode_Caches
-#include "pycore_optimizer.h"     // _Py_Executors_InvalidateDependency()
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_unicodeobject.h" // _PyUnicode_Equal()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
@@ -41,13 +40,17 @@ class frame "PyFrameObject *" "&PyFrame_Type"
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=2d1dbf2e06cf351f]*/
 
 
-// Returns new reference or NULL
+// Returns a new reference, or NULL if the variable is unset. Boxing an
+// inline value can fail, which returns NULL with an exception set.
 static PyObject *
 framelocalsproxy_getval(_PyInterpreterFrame *frame, PyCodeObject *co, int i)
 {
     _PyStackRef *fast = _PyFrame_GetLocalsArray(frame);
     _PyLocals_Kind kind = _PyLocals_GetKind(co->co_localspluskinds, i);
 
+    if (PyStackRef_IsInline(fast[i])) {
+        return PyStackRef_AsPyObjectNewBoxed(fast[i]);
+    }
     PyObject *value = PyStackRef_AsPyObjectBorrow(fast[i]);
     PyObject *cell = NULL;
 
@@ -86,6 +89,9 @@ framelocalsproxy_getval(_PyInterpreterFrame *frame, PyCodeObject *co, int i)
 static bool
 framelocalsproxy_hasval(_PyInterpreterFrame *frame, PyCodeObject *co, int i)
 {
+    if (PyStackRef_IsInline(_PyFrame_GetLocalsArray(frame)[i])) {
+        return true;
+    }
     PyObject *value = framelocalsproxy_getval(frame, co, i);
     if (value == NULL) {
         return false;
@@ -153,6 +159,9 @@ framelocalsproxy_getkeyindex(PyFrameObject *frame, PyObject *key, bool read, PyO
                     }
                     return i;
                 }
+                if (PyErr_Occurred()) {
+                    return -2;
+                }
             } else {
                 if (!(_PyLocals_GetKind(co->co_localspluskinds, i) & CO_FAST_HIDDEN)) {
                     return i;
@@ -190,6 +199,9 @@ framelocalsproxy_getkeyindex(PyFrameObject *frame, PyObject *key, bool read, PyO
                         Py_DECREF(value);
                     }
                     return i;
+                }
+                if (PyErr_Occurred()) {
+                    return -2;
                 }
             } else {
                 if (!(_PyLocals_GetKind(co->co_localspluskinds, i) & CO_FAST_HIDDEN)) {
@@ -279,10 +291,6 @@ framelocalsproxy_setitem(PyObject *self, PyObject *key, PyObject *value)
             return -1;
         }
 
-#if _Py_TIER2
-        _Py_Executors_InvalidateDependency(_PyInterpreterState_GET(), co, 1);
-#endif
-
         _PyLocals_Kind kind = _PyLocals_GetKind(co->co_localspluskinds, i);
         _PyStackRef oldvalue = fast[i];
         PyObject *cell = NULL;
@@ -291,7 +299,7 @@ framelocalsproxy_setitem(PyObject *self, PyObject *key, PyObject *value)
             // the function's closure.
             assert(!PyStackRef_IsNull(oldvalue) && PyCell_Check(PyStackRef_AsPyObjectBorrow(oldvalue)));
             cell = PyStackRef_AsPyObjectBorrow(oldvalue);
-        } else if (kind & CO_FAST_CELL && !PyStackRef_IsNull(oldvalue)) {
+        } else if (kind & CO_FAST_CELL && PyStackRef_IsObject(oldvalue)) {
             PyObject *as_obj = PyStackRef_AsPyObjectBorrow(oldvalue);
             if (PyCell_Check(as_obj)) {
                 cell = as_obj;
@@ -300,12 +308,19 @@ framelocalsproxy_setitem(PyObject *self, PyObject *key, PyObject *value)
         if (cell != NULL) {
             Py_XINCREF(value);
             PyCell_SetTakeRef((PyCellObject *)cell, value);
+        } else if (PyStackRef_IsInline(oldvalue)) {
+            // An inline value holds no reference to keep alive.
+            fast[i] = PyStackRef_FromPyObjectNew(value);
         } else if (value != PyStackRef_AsPyObjectBorrow(oldvalue)) {
             PyObject *old_obj = PyStackRef_AsPyObjectBorrow(fast[i]);
             if (old_obj != NULL && !_Py_IsImmortal(old_obj)) {
                 if (add_overwritten_fast_local(frame, old_obj) < 0) {
                     return -1;
                 }
+                // f_overwritten_fast_locals now keeps old_obj alive until the
+                // frame dies, so LOAD_FAST_BORROW references to it elsewhere
+                // on the stack stay valid after the slot's own reference goes.
+                _Py_stackref_allow_borrows_outlive_close(fast[i]);
                 PyStackRef_CLOSE(fast[i]);
             }
             fast[i] = PyStackRef_FromPyObjectNew(value);
@@ -630,6 +645,9 @@ framelocalsproxy_values(PyObject *self, PyObject *Py_UNUSED(ignored))
 
     for (int i = 0; i < co->co_nlocalsplus; i++) {
         PyObject *value = framelocalsproxy_getval(frame->f_frame, co, i);
+        if (value == NULL && PyErr_Occurred()) {
+            goto error;
+        }
         if (value) {
             PyObject *name = PyTuple_GET_ITEM(co->co_localsplusnames, i);
             int first = framelocalsproxy_is_first_occurrence(seen, name);
@@ -686,6 +704,9 @@ framelocalsproxy_items(PyObject *self, PyObject *Py_UNUSED(ignored))
     for (int i = 0; i < co->co_nlocalsplus; i++) {
         PyObject *name = PyTuple_GET_ITEM(co->co_localsplusnames, i);
         PyObject *value = framelocalsproxy_getval(frame->f_frame, co, i);
+        if (value == NULL && PyErr_Occurred()) {
+            goto error;
+        }
 
         if (value) {
             int first = framelocalsproxy_is_first_occurrence(seen, name);
@@ -1306,6 +1327,18 @@ top_of_stack(int64_t stack)
     return stack & MASK;
 }
 
+/* The number of values on stack; every kind is nonzero */
+static int
+stack_depth(int64_t stack)
+{
+    int depth = 0;
+    while (stack != EMPTY_STACK) {
+        stack = pop_value(stack);
+        depth++;
+    }
+    return depth;
+}
+
 static inline Kind
 peek(int64_t stack, int n)
 {
@@ -1392,15 +1425,10 @@ print_stacks(int64_t *stacks, int n) {
 static int64_t *
 mark_stacks(PyCodeObject *code_obj, int len)
 {
-    PyObject *co_code = _PyCode_GetCode(code_obj);
-    if (co_code == NULL) {
-        return NULL;
-    }
     int64_t *stacks = PyMem_New(int64_t, len+1);
 
     if (stacks == NULL) {
         PyErr_NoMemory();
-        Py_DECREF(co_code);
         return NULL;
     }
     for (int i = 1; i <= len; i++) {
@@ -1410,25 +1438,22 @@ mark_stacks(PyCodeObject *code_obj, int len)
     int todo = 1;
     while (todo) {
         todo = 0;
-        /* Scan instructions */
+        /* Scan instructions, one word each.  The jumps of a relaxed FOR_ITER
+         * or SEND are JUMP_FORWARD. */
         for (int i = 0; i < len;) {
             int j;
             int64_t next_stack = stacks[i];
-            _Py_CODEUNIT inst = _Py_GetBaseCodeUnit(code_obj, i);
-            int opcode = inst.op.code;
-            int oparg = 0;
-            while (opcode == EXTENDED_ARG) {
-                oparg = (oparg << 8) | inst.op.arg;
-                i++;
-                inst = _Py_GetBaseCodeUnit(code_obj, i);
-                opcode = inst.op.code;
-                stacks[i] = next_stack;
-            }
-            oparg = (oparg << 8) | inst.op.arg;
-            int next_i = i + _PyOpcode_Caches[opcode] + 1;
+            int opcode = _PyIR_BaseOpcode(_PyCode_InstrHandler(code_obj, i));
+            int oparg = _PyCode_InstrOparg(code_obj, i);
+            int next_i = i + 1;
             if (next_stack == UNINITIALIZED) {
                 i = next_i;
                 continue;
+            }
+            // The loads folded into the word push their values only as it
+            // runs, so the stack before it holds none of them.
+            for (int k = _PyCode_InstrFoldedInputs(code_obj, i); k > 0; k--) {
+                next_stack = push_value(next_stack, Object);
             }
             switch (opcode) {
                 case POP_JUMP_IF_FALSE:
@@ -1437,7 +1462,7 @@ mark_stacks(PyCodeObject *code_obj, int len)
                 case POP_JUMP_IF_NOT_NONE:
                 {
                     int64_t target_stack;
-                    j = next_i + oparg;
+                    j = _PyCode_InstrTarget(code_obj, i);
                     assert(j < len);
                     next_stack = pop_value(next_stack);
                     target_stack = next_stack;
@@ -1446,22 +1471,34 @@ mark_stacks(PyCodeObject *code_obj, int len)
                     stacks[next_i] = next_stack;
                     break;
                 }
+                case JUMP_IF_FALSE_OR_POP:
+                case JUMP_IF_TRUE_OR_POP:
+                {
+                    // The value stays where the jump goes and is popped
+                    // where it falls through
+                    j = _PyCode_InstrTarget(code_obj, i);
+                    assert(j < len);
+                    assert(stacks[j] == UNINITIALIZED || stacks[j] == next_stack);
+                    stacks[j] = next_stack;
+                    stacks[next_i] = pop_value(next_stack);
+                    break;
+                }
                 case SEND:
-                    j = oparg + i + INLINE_CACHE_ENTRIES_SEND + 1;
+                    j = _PyCode_InstrTarget(code_obj, i);
                     assert(j < len);
                     assert(stacks[j] == UNINITIALIZED || stacks[j] == next_stack);
                     stacks[j] = next_stack;
                     stacks[next_i] = next_stack;
                     break;
                 case JUMP_FORWARD:
-                    j = oparg + i + 1;
+                    j = _PyCode_InstrTarget(code_obj, i);
                     assert(j < len);
                     assert(stacks[j] == UNINITIALIZED || stacks[j] == next_stack);
                     stacks[j] = next_stack;
                     break;
                 case JUMP_BACKWARD:
                 case JUMP_BACKWARD_NO_INTERRUPT:
-                    j = next_i - oparg;
+                    j = _PyCode_InstrTarget(code_obj, i);
                     assert(j >= 0);
                     assert(j < len);
                     if (stacks[j] == UNINITIALIZED && j < i) {
@@ -1483,7 +1520,7 @@ mark_stacks(PyCodeObject *code_obj, int len)
                 {
                     int64_t target_stack = push_value(next_stack, Object);
                     stacks[next_i] = target_stack;
-                    j = oparg + 1 + INLINE_CACHE_ENTRIES_FOR_ITER + i;
+                    j = _PyCode_InstrTarget(code_obj, i);
                     assert(j < len);
                     assert(stacks[j] == UNINITIALIZED || stacks[j] == target_stack);
                     stacks[j] = target_stack;
@@ -1552,11 +1589,6 @@ mark_stacks(PyCodeObject *code_obj, int len)
                     stacks[next_i] = next_stack;
                     break;
                 }
-                case CACHE:
-                case RESERVED:
-                {
-                    assert(0);
-                }
                 default:
                 {
                     int delta = PyCompile_OpcodeStackEffect(opcode, oparg);
@@ -1572,6 +1604,10 @@ mark_stacks(PyCodeObject *code_obj, int len)
                     stacks[next_i] = next_stack;
                 }
             }
+            if (_PyCode_InstrStoredLocal(code_obj, i) >= 0) {
+                // A STORE_FAST of the result is folded into the word
+                stacks[next_i] = pop_value(stacks[next_i]);
+            }
             i = next_i;
         }
         /* Scan exception table */
@@ -1586,10 +1622,11 @@ mark_stacks(PyCodeObject *code_obj, int len)
             assert(size >= 0 && start_offset+size <= len);
             scan = parse_varint(scan, &handler);
             assert(handler >= 0 && handler < len);
-            int depth_and_lasti;
-            scan = parse_varint(scan, &depth_and_lasti);
-            int level = depth_and_lasti >> 1;
-            int lasti = depth_and_lasti & 1;
+            int slot_and_lasti;
+            scan = parse_varint(scan, &slot_and_lasti);
+            int lasti = slot_and_lasti & 1;
+            /* The entry names the slot of the exception, above lasti */
+            int level = (slot_and_lasti >> 1) - lasti - code_obj->co_nlocalsplus;
             if (stacks[start_offset] != UNINITIALIZED) {
                 if (stacks[handler] == UNINITIALIZED) {
                     todo = 1;
@@ -1603,7 +1640,6 @@ mark_stacks(PyCodeObject *code_obj, int len)
             }
         }
     }
-    Py_DECREF(co_code);
     return stacks;
 }
 
@@ -1671,9 +1707,9 @@ marklines(PyCodeObject *code, int len)
     }
 
     while (_PyLineTable_NextAddressRange(&bounds)) {
-        assert(bounds.ar_start / (int)sizeof(_Py_CODEUNIT) < len);
+        assert(bounds.ar_start < len);
         if (bounds.ar_line != last_line && bounds.ar_line != -1) {
-            linestarts[bounds.ar_start / sizeof(_Py_CODEUNIT)] = bounds.ar_line;
+            linestarts[bounds.ar_start] = bounds.ar_line;
             last_line = bounds.ar_line;
         }
     }
@@ -1877,7 +1913,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     for (int i = 0; i < code->co_nlocalsplus; i++) {
         // Counting every unbound local is overly-cautious, but a full flow
         // analysis (like we do in the compiler) is probably too expensive:
-        unbound += PyStackRef_IsNull(self->f_frame->localsplus[i]);
+        unbound += PyStackRef_IsNull(self->f_frame->base[i]);
     }
     if (unbound) {
         const char *e = "assigning None to %d unbound local%s";
@@ -1888,8 +1924,8 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         // Do this in a second pass to avoid writing a bunch of Nones when
         // warnings are being treated as errors and the previous bit raises:
         for (int i = 0; i < code->co_nlocalsplus; i++) {
-            if (PyStackRef_IsNull(self->f_frame->localsplus[i])) {
-                self->f_frame->localsplus[i] = PyStackRef_None;
+            if (PyStackRef_IsNull(self->f_frame->base[i])) {
+                self->f_frame->base[i] = PyStackRef_None;
                 unbound--;
             }
         }
@@ -1899,8 +1935,13 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         /* Account for value popped by yield */
         start_stack = pop_value(start_stack);
     }
+    /* The temporary at depth d is in slot co_nlocalsplus + d */
+    _PyStackRef *stack_base = _PyFrame_Stackbase(self->f_frame);
+    int depth = stack_depth(start_stack);
     while (start_stack > best_stack) {
-        _PyStackRef popped = _PyFrame_StackPop(self->f_frame);
+        depth--;
+        _PyStackRef popped = stack_base[depth];
+        stack_base[depth] = PyStackRef_NULL;
         if (top_of_stack(start_stack) == Except) {
             /* Pop exception stack as well as the evaluation stack */
             PyObject *exc = PyStackRef_AsPyObjectBorrow(popped);
@@ -1913,9 +1954,13 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         }
         start_stack = pop_value(start_stack);
     }
+    if (is_suspended) {
+        /* The value sent in goes on top of the new stack */
+        self->f_frame->return_slot = (uint16_t)(code->co_nlocalsplus + depth);
+    }
     /* Finally set the new lasti and return OK. */
     self->f_lineno = 0;
-    self->f_frame->instr_ptr = _PyFrame_GetBytecode(self->f_frame) + best_addr;
+    self->f_frame->instr_ptr = _PyFrame_InstrAt(self->f_frame, best_addr);
     return 0;
 }
 
@@ -2018,11 +2063,12 @@ frame_dealloc(PyObject *op)
 
     /* Kill all local variables including specials, if we own them */
     if (f->f_frame == frame && frame->owner == FRAME_OWNED_BY_FRAME_OBJECT) {
+        int nslots = _PyFrame_NumSlots(frame);
         PyStackRef_CLEAR(frame->f_executable);
         PyStackRef_CLEAR(frame->f_funcobj);
         Py_CLEAR(frame->f_locals);
         _PyStackRef *locals = _PyFrame_GetLocalsArray(frame);
-        _PyStackRef *sp = frame->stackpointer;
+        _PyStackRef *sp = locals + nslots;
         while (sp > locals) {
             sp--;
             PyStackRef_CLEAR(*sp);
@@ -2061,15 +2107,13 @@ frame_tp_clear(PyObject *op)
     Py_CLEAR(f->f_locals_cache);
     Py_CLEAR(f->f_overwritten_fast_locals);
 
-    /* locals and stack */
+    /* all slots */
     _PyStackRef *locals = _PyFrame_GetLocalsArray(f->f_frame);
-    _PyStackRef *sp = f->f_frame->stackpointer;
-    assert(sp >= locals);
+    _PyStackRef *sp = locals + _PyFrame_NumSlots(f->f_frame);
     while (sp > locals) {
         sp--;
         PyStackRef_CLEAR(*sp);
     }
-    f->f_frame->stackpointer = locals;
     Py_CLEAR(f->f_frame->f_locals);
     return 0;
 }
@@ -2115,7 +2159,7 @@ frame___sizeof___impl(PyFrameObject *self)
 /*[clinic end generated code: output=82948688e81078e2 input=908f90a83e73131d]*/
 {
     Py_ssize_t res;
-    res = offsetof(PyFrameObject, _f_frame_data) + offsetof(_PyInterpreterFrame, localsplus);
+    res = offsetof(PyFrameObject, _f_frame_data) + offsetof(_PyInterpreterFrame, owned_slots);
     PyCodeObject *code = _PyFrame_GetCode(self->f_frame);
     res += _PyFrame_NumSlotsForCodeObject(code) * sizeof(PyObject *);
     return PyLong_FromSsize_t(res);
@@ -2147,7 +2191,7 @@ PyTypeObject PyFrame_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "frame",
     offsetof(PyFrameObject, _f_frame_data) +
-    offsetof(_PyInterpreterFrame, localsplus),
+    offsetof(_PyInterpreterFrame, owned_slots),
     sizeof(PyObject *),
     frame_dealloc,                              /* tp_dealloc */
     0,                                          /* tp_vectorcall_offset */
@@ -2185,7 +2229,7 @@ init_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
 {
     PyCodeObject *code = (PyCodeObject *)func->func_code;
     _PyFrame_Initialize(tstate, frame, PyStackRef_FromPyObjectNew(func),
-                        Py_XNewRef(locals), code, 0, NULL);
+                        Py_XNewRef(locals), code, frame->owned_slots, 0, NULL);
 }
 
 PyFrameObject*
@@ -2233,6 +2277,10 @@ PyFrame_New(PyThreadState *tstate, PyCodeObject *code,
     if (func == NULL) {
         return NULL;
     }
+    if (_PyCode_GetExec(code) == NULL) {
+        Py_DECREF(func);
+        return NULL;
+    }
     PyFrameObject *f = _PyFrame_New_NoTrack(code);
     if (f == NULL) {
         Py_DECREF(func);
@@ -2242,7 +2290,7 @@ PyFrame_New(PyThreadState *tstate, PyCodeObject *code,
     f->f_frame = (_PyInterpreterFrame *)f->_f_frame_data;
     f->f_frame->owner = FRAME_OWNED_BY_FRAME_OBJECT;
     // This frame needs to be "complete", so pretend that the first RESUME ran:
-    f->f_frame->instr_ptr = _PyCode_CODE(code) + code->_co_firsttraceable + 1;
+    f->f_frame->instr_ptr = f->f_frame->ir_words + code->_co_firsttraceable + 1;
     assert(!_PyFrame_IsIncomplete(f->f_frame));
     Py_DECREF(func);
     _PyObject_GC_TRACK(f);
@@ -2258,7 +2306,7 @@ frame_init_get_vars(_PyInterpreterFrame *frame)
     PyCodeObject *co = _PyFrame_GetCode(frame);
     int lasti = _PyInterpreterFrame_LASTI(frame);
     if (!(lasti < 0
-          && _PyFrame_GetBytecode(frame)->op.code == COPY_FREE_VARS
+          && _PyCode_InstrHandler(co, 0) == COPY_FREE_VARS
           && PyStackRef_FunctionCheck(frame->f_funcobj)))
     {
         /* Free vars are initialized */
@@ -2271,13 +2319,15 @@ frame_init_get_vars(_PyInterpreterFrame *frame)
     int offset = PyUnstable_Code_GetFirstFree(co);
     for (int i = 0; i < co->co_nfreevars; ++i) {
         PyObject *o = PyTuple_GET_ITEM(closure, i);
-        frame->localsplus[offset + i] = PyStackRef_FromPyObjectNew(o);
+        frame->base[offset + i] = PyStackRef_FromPyObjectNew(o);
     }
     // COPY_FREE_VARS doesn't have inline CACHEs, either:
-    frame->instr_ptr = _PyFrame_GetBytecode(frame);
+    frame->instr_ptr = _PyFrame_InstrAt(frame, 0);
 }
 
 
+// Return 1 and set *pvalue to a new reference (NULL if the variable is
+// unset), 0 if the variable is skipped, or -1 with an exception set.
 static int
 frame_get_var(_PyInterpreterFrame *frame, PyCodeObject *co, int i,
               PyObject **pvalue)
@@ -2297,8 +2347,16 @@ frame_get_var(_PyInterpreterFrame *frame, PyCodeObject *co, int i,
     }
 
     PyObject *value = NULL;
-    if (frame->stackpointer == NULL || frame->stackpointer > frame->localsplus + i) {
-        value = PyStackRef_AsPyObjectBorrow(frame->localsplus[i]);
+    {
+        if (PyStackRef_IsInline(frame->base[i])) {
+            value = PyStackRef_AsPyObjectNewBoxed(frame->base[i]);
+            if (value == NULL) {
+                return -1;
+            }
+            *pvalue = value;
+            return 1;
+        }
+        value = PyStackRef_AsPyObjectBorrow(frame->base[i]);
         if (kind & CO_FAST_FREE) {
             // The cell was set by COPY_FREE_VARS.
             assert(value != NULL && PyCell_Check(value));
@@ -2399,7 +2457,11 @@ PyFrame_GetVar(PyFrameObject *frame_obj, PyObject *name)
         }
 
         PyObject *value;
-        if (!frame_get_var(frame, co, i, &value)) {
+        int r = frame_get_var(frame, co, i, &value);
+        if (r < 0) {
+            return NULL;
+        }
+        if (r == 0) {
             break;
         }
         if (value == NULL) {
@@ -2519,7 +2581,7 @@ PyFrame_GetLasti(PyFrameObject *frame)
     Py_BEGIN_CRITICAL_SECTION(frame);
     assert(!_PyFrame_IsIncomplete(frame->f_frame));
     int lasti = _PyInterpreterFrame_LASTI(frame->f_frame);
-    ret = lasti < 0 ? -1 : lasti * (int)sizeof(_Py_CODEUNIT);
+    ret = lasti;
     Py_END_CRITICAL_SECTION();
     return ret;
 }

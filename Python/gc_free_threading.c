@@ -251,7 +251,6 @@ frame_disable_deferred_refcounting(_PyInterpreterFrame *frame)
 {
     // Convert locals, variables, and the executable object to strong
     // references from (possibly) deferred references.
-    assert(frame->stackpointer != NULL);
     assert(frame->owner == FRAME_OWNED_BY_FRAME_OBJECT ||
            frame->owner == FRAME_OWNED_BY_GENERATOR);
 
@@ -267,8 +266,9 @@ frame_disable_deferred_refcounting(_PyInterpreterFrame *frame)
     }
 
     frame->f_funcobj = PyStackRef_AsStrongReference(frame->f_funcobj);
-    for (_PyStackRef *ref = frame->localsplus; ref < frame->stackpointer; ref++) {
-        if (!PyStackRef_IsNullOrInt(*ref) && !PyStackRef_RefcountOnObject(*ref)) {
+    _PyStackRef *end = frame->base + _PyFrame_NumSlots(frame);
+    for (_PyStackRef *ref = frame->base; ref < end; ref++) {
+        if (PyStackRef_IsObject(*ref) && !PyStackRef_RefcountOnObject(*ref)) {
             *ref = PyStackRef_AsStrongReference(*ref);
         }
     }
@@ -437,7 +437,7 @@ gc_visit_heaps(PyInterpreterState *interp, mi_block_visit_fun *visitor,
 static inline void
 gc_visit_stackref(_PyStackRef stackref)
 {
-    if (!PyStackRef_IsNullOrInt(stackref) && !PyStackRef_RefcountOnObject(stackref)) {
+    if (PyStackRef_IsObject(stackref) && !PyStackRef_RefcountOnObject(stackref)) {
         PyObject *obj = PyStackRef_AsPyObjectBorrow(stackref);
         if (_PyObject_GC_IS_TRACKED(obj) && !gc_is_frozen(obj)) {
             gc_add_refs(obj, 1);
@@ -461,17 +461,9 @@ gc_visit_thread_stacks(PyInterpreterState *interp, struct collection_state *stat
                 continue;
             }
 
-            _PyStackRef *top = f->stackpointer;
-            if (top == NULL) {
-                // GH-129236: The stackpointer may be NULL in cases where
-                // the GC is run during a PyStackRef_CLOSE() call. Skip this
-                // frame and don't collect objects with deferred references.
-                state->skip_deferred_objects = 1;
-                continue;
-            }
-
+            _PyStackRef *top = f->base + _PyFrame_NumSlots(f);
             gc_visit_stackref(f->f_executable);
-            while (top != f->localsplus) {
+            while (top != f->base) {
                 --top;
                 gc_visit_stackref(*top);
             }
@@ -839,7 +831,7 @@ gc_abort_mark_alive(PyInterpreterState *interp,
 static int
 gc_visit_stackref_mark_alive(gc_mark_args_t *args, _PyStackRef stackref)
 {
-    if (!PyStackRef_IsNullOrInt(stackref)) {
+    if (PyStackRef_IsObject(stackref)) {
         PyObject *op = PyStackRef_AsPyObjectBorrow(stackref);
         if (gc_mark_enqueue(op, args) < 0) {
             return -1;
@@ -858,19 +850,12 @@ gc_visit_thread_stacks_mark_alive(PyInterpreterState *interp, gc_mark_args_t *ar
                 continue;
             }
 
-            if (f->stackpointer == NULL) {
-                // GH-129236: The stackpointer may be NULL in cases where
-                // the GC is run during a PyStackRef_CLOSE() call. Skip this
-                // frame for now.
-                continue;
-            }
-
-            _PyStackRef *top = f->stackpointer;
+            _PyStackRef *top = f->base + _PyFrame_NumSlots(f);
             if (gc_visit_stackref_mark_alive(args, f->f_executable) < 0) {
                 err = -1;
                 goto exit;
             }
-            while (top != f->localsplus) {
+            while (top != f->base) {
                 --top;
                 if (gc_visit_stackref_mark_alive(args, *top) < 0) {
                     err = -1;
@@ -1831,7 +1816,7 @@ _PyGC_VisitStackRef(_PyStackRef *ref, visitproc visit, void *arg)
     // This is a bit tricky! We want to ignore deferred references when
     // computing the incoming references, but otherwise treat them like
     // regular references.
-    assert(!PyStackRef_IsTaggedInt(*ref));
+    assert(PyStackRef_IsObject(*ref));
     if (PyStackRef_RefcountOnObject(*ref) ||
         (visit != visit_decref && visit != visit_decref_unreachable))
     {
@@ -1844,8 +1829,9 @@ int
 _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visit, void *arg)
 {
     _PyStackRef *ref = _PyFrame_GetLocalsArray(frame);
-    /* locals and stack */
-    for (; ref < frame->stackpointer; ref++) {
+    _PyStackRef *end = ref + _PyFrame_NumSlots(frame);
+    /* all slots, of which NULL ones are dead */
+    for (; ref < end; ref++) {
         _Py_VISIT_STACKREF(*ref);
     }
     return 0;

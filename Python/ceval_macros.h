@@ -47,6 +47,14 @@
 #define OR_DTRACE_LINE
 #endif
 
+// Branch hint for generated code, such as the test before boxing an inline
+// value.
+#if defined(__GNUC__) || defined(__clang__)
+#  define Py_UNLIKELY(x) __builtin_expect(!!(x), 0)
+#else
+#  define Py_UNLIKELY(x) (x)
+#endif
+
 #ifdef HAVE_COMPUTED_GOTOS
     #ifndef USE_COMPUTED_GOTOS
     #define USE_COMPUTED_GOTOS 1
@@ -60,23 +68,32 @@
 #endif
 
 #ifdef Py_STATS
+/* The handlers of the register IR that have no opcode have no statistics. */
 #define INSTRUCTION_STATS(op) \
     do { \
-        PyStats *s = _PyStats_GET(); \
-        OPCODE_EXE_INC(op); \
-        if (s) s->opcode_stats[lastopcode].pair_count[op]++; \
-        lastopcode = op; \
+        if ((op) < 256) { \
+            PyStats *s = _PyStats_GET(); \
+            OPCODE_EXE_INC(op); \
+            if (s) s->opcode_stats[lastopcode].pair_count[op]++; \
+            lastopcode = op; \
+        } \
     } while (0)
 #else
 #define INSTRUCTION_STATS(op) ((void)0)
 #endif
 
+/* The word that dispatch loads, from which the handler extracts its fields
+ * (Include/internal/pycore_ir.h). */
+#   define TAIL_CALL_OPERANDS _PyIRWord ir_word
+#   define TAIL_CALL_OPERAND_ARGS ir_word
+#   define TAIL_CALL_NO_OPERANDS 0
+
 #ifdef Py_STATS
-#   define TAIL_CALL_PARAMS _PyInterpreterFrame *frame, _PyStackRef *stack_pointer, PyThreadState *tstate, _Py_CODEUNIT *next_instr, const void *instruction_funcptr_table, int oparg, int lastopcode
-#   define TAIL_CALL_ARGS frame, stack_pointer, tstate, next_instr, instruction_funcptr_table, oparg, lastopcode
+#   define TAIL_CALL_PARAMS _PyStackRef *slots, PyThreadState *tstate, _PyInstr *next_instr, TAIL_CALL_OPERANDS, int lastopcode
+#   define TAIL_CALL_ARGS slots, tstate, next_instr, TAIL_CALL_OPERAND_ARGS, lastopcode
 #else
-#   define TAIL_CALL_PARAMS _PyInterpreterFrame *frame, _PyStackRef *stack_pointer, PyThreadState *tstate, _Py_CODEUNIT *next_instr, const void *instruction_funcptr_table, int oparg
-#   define TAIL_CALL_ARGS frame, stack_pointer, tstate, next_instr, instruction_funcptr_table, oparg
+#   define TAIL_CALL_PARAMS _PyStackRef *slots, PyThreadState *tstate, _PyInstr *next_instr, TAIL_CALL_OPERANDS
+#   define TAIL_CALL_ARGS slots, tstate, next_instr, TAIL_CALL_OPERAND_ARGS
 #endif
 
 #if _Py_TAIL_CALL_INTERP
@@ -96,18 +113,15 @@
 #   endif
     typedef PyObject *(Py_PRESERVE_NONE_CC *py_tail_call_funcptr)(TAIL_CALL_PARAMS);
 
-#   define DISPATCH_TABLE_VAR instruction_funcptr_table
-#   define DISPATCH_TABLE instruction_funcptr_handler_table
-#   define TRACING_DISPATCH_TABLE instruction_funcptr_tracing_table
 #   define TARGET(op) Py_NO_INLINE PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_##op(TAIL_CALL_PARAMS)
+/* A handler finds the frame in the thread state, which is not one of the
+ * registers that the handlers pass on. */
+#   define TAIL_CALL_LOAD_FRAME() \
+        _PyInterpreterFrame *frame = tstate->current_frame
 
 #   define DISPATCH_GOTO() \
         do { \
-            Py_MUSTTAIL return (((py_tail_call_funcptr *)instruction_funcptr_table)[opcode])(TAIL_CALL_ARGS); \
-        } while (0)
-#   define DISPATCH_GOTO_NON_TRACING() \
-        do { \
-            Py_MUSTTAIL return (((py_tail_call_funcptr *)DISPATCH_TABLE)[opcode])(TAIL_CALL_ARGS); \
+            Py_MUSTTAIL return (instruction_funcptr_handler_table[opcode])(TAIL_CALL_ARGS); \
         } while (0)
 #   define JUMP_TO_LABEL(name) \
         do { \
@@ -116,62 +130,91 @@
 #   ifdef Py_STATS
 #       define JUMP_TO_PREDICTED(name) \
             do { \
-                Py_MUSTTAIL return (_TAIL_CALL_##name)(frame, stack_pointer, tstate, this_instr, instruction_funcptr_table, oparg, lastopcode); \
+                Py_MUSTTAIL return (_TAIL_CALL_##name)(slots, tstate, this_instr, TAIL_CALL_OPERAND_ARGS, lastopcode); \
             } while (0)
 #   else
 #       define JUMP_TO_PREDICTED(name) \
             do { \
-                Py_MUSTTAIL return (_TAIL_CALL_##name)(frame, stack_pointer, tstate, this_instr, instruction_funcptr_table, oparg); \
+                Py_MUSTTAIL return (_TAIL_CALL_##name)(slots, tstate, this_instr, TAIL_CALL_OPERAND_ARGS); \
             } while (0)
 #   endif
 #    define LABEL(name) TARGET(name)
 #elif USE_COMPUTED_GOTOS
-#  define DISPATCH_TABLE_VAR opcode_targets
-#  define DISPATCH_TABLE opcode_targets_table
-#  define TRACING_DISPATCH_TABLE opcode_tracing_targets_table
 #  define TARGET(op) TARGET_##op:
 #  define DISPATCH_GOTO() goto *opcode_targets[opcode]
-#  define DISPATCH_GOTO_NON_TRACING() goto *DISPATCH_TABLE[opcode];
 #  define JUMP_TO_LABEL(name) goto name;
 #  define JUMP_TO_PREDICTED(name) goto PREDICTED_##name;
 #  define LABEL(name) name:
+#  define TAIL_CALL_LOAD_FRAME() ((void)0)
 #else
 #  define TARGET(op) case op: TARGET_##op:
-#  define DISPATCH_GOTO() dispatch_code = opcode | tracing_mode ; goto dispatch_opcode
-#  define DISPATCH_GOTO_NON_TRACING() dispatch_code = opcode; goto dispatch_opcode
+#  define DISPATCH_GOTO() goto dispatch_opcode
 #  define JUMP_TO_LABEL(name) goto name;
 #  define JUMP_TO_PREDICTED(name) goto PREDICTED_##name;
 #  define LABEL(name) name:
+#  define TAIL_CALL_LOAD_FRAME() ((void)0)
 #endif
 
-#if (_Py_TAIL_CALL_INTERP || USE_COMPUTED_GOTOS) && _Py_TIER2
-#  define IS_JIT_TRACING() (DISPATCH_TABLE_VAR == TRACING_DISPATCH_TABLE)
-#  define ENTER_TRACING() \
-    DISPATCH_TABLE_VAR = TRACING_DISPATCH_TABLE;
-#  define LEAVE_TRACING() \
-    DISPATCH_TABLE_VAR = DISPATCH_TABLE;
+/* Dispatch loads the word of the instruction into ir_word and takes the
+ * handler from it.  A handler reads field A, B, C or D, or CD, of its word W,
+ * which is this_instr, as IR_FIELD_A(W) and so on.  A handler that runs
+ * another on the same word, as INSTRUMENTED_LINE does and a specialisation
+ * that deoptimises to its family head's PREDICTED_ label, leaves ir_word as
+ * it is, so the other handler finds the same fields.
+ *
+ * Fields never change once a block is lowered, so with the GIL the
+ * computed-goto build reads each from W in memory, with a 16-bit load and a
+ * shift or a mask.  Decoding ir_word instead keeps it live through the
+ * handler and costs a copy, a shift and a mask per field; GCC then keeps
+ * next_instr on the stack, which adds a load and a store to every handler.
+ * The tail-call build, which receives ir_word as an argument, and the
+ * free-threaded build, which loads it atomically, decode ir_word. */
+#if USE_COMPUTED_GOTOS && !_Py_TAIL_CALL_INTERP \
+    && !defined(Py_GIL_DISABLED) && PY_LITTLE_ENDIAN
+/* The unsigned integer of N bytes at byte K of the word at W */
+static inline uintptr_t
+ir_bytes_at(const _PyIRWord *w, int k, int n)
+{
+    if (n == 2) {
+        uint16_t v;
+        memcpy(&v, (const char *)w + k, sizeof(v));
+        return v;
+    }
+    uint32_t v;
+    memcpy(&v, (const char *)w + k, sizeof(v));
+    return v;
+}
+/* In a debug build, the field in memory is the one in ir_word */
+static inline uintptr_t
+ir_check_field(uintptr_t field, uint64_t expected)
+{
+    assert(field == expected);
+    (void)expected;
+    return field;
+}
+#  define IR_MEMORY_FIELD(W, K, N, SHIFT, MASK, F) \
+    ir_check_field((ir_bytes_at((W), (K), (N)) >> (SHIFT)) & (MASK), F(ir_word))
+#  define IR_FIELD_A(W) IR_MEMORY_FIELD(W, 2, 2, 0, IR_FIELD_MAX, IR_A)
+#  define IR_FIELD_B(W) IR_MEMORY_FIELD(W, 3, 2, 4, IR_FIELD_MAX, IR_B)
+#  define IR_FIELD_C(W) IR_MEMORY_FIELD(W, 5, 2, 0, IR_FIELD_MAX, IR_C)
+#  define IR_FIELD_D(W) IR_MEMORY_FIELD(W, 6, 2, 4, IR_FIELD_MAX, IR_D)
+#  define IR_FIELD_CD(W) IR_MEMORY_FIELD(W, 4, 4, 8, IR_CD_MAX, IR_CD)
 #else
-#  define IS_JIT_TRACING() (tracing_mode != 0)
-#  define ENTER_TRACING() tracing_mode = 255
-#  define LEAVE_TRACING() tracing_mode = 0
+#  define IR_FIELD_A(W) IR_A(ir_word)
+#  define IR_FIELD_B(W) IR_B(ir_word)
+#  define IR_FIELD_C(W) IR_C(ir_word)
+#  define IR_FIELD_D(W) IR_D(ir_word)
+#  define IR_FIELD_CD(W) IR_CD(ir_word)
 #endif
-
-#if _Py_TIER2
-#define STOP_TRACING() \
-    do { \
-        if (IS_JIT_TRACING()) { \
-            LEAVE_TRACING(); \
-            _PyJit_FinalizeTracing(tstate, 0); \
-        } \
-    } while (0);
-#else
-#define STOP_TRACING() ((void)(0));
-#endif
+#define IR_PREDICTED(op) PREDICTED_##op:
 
 /* PRE_DISPATCH_GOTO() does lltrace if enabled. Normally a no-op */
 #ifdef Py_DEBUG
-#define PRE_DISPATCH_GOTO() if (frame->lltrace >= 5) { \
-    lltrace_instruction(frame, stack_pointer, next_instr, opcode, oparg); }
+/* The tail-call handlers find the frame in tstate->current_frame. */
+#define PRE_DISPATCH_GOTO() \
+    assert(frame == tstate->current_frame); \
+    if (frame->lltrace >= 5) { \
+        lltrace_instruction(frame, next_instr, opcode); }
 #else
 #define PRE_DISPATCH_GOTO() ((void)0)
 #endif
@@ -179,9 +222,7 @@
 #ifdef Py_DEBUG
 #define LLTRACE_RESUME_FRAME() \
 do { \
-    _PyFrame_SetStackPointer(frame, stack_pointer); \
     int lltrace = maybe_lltrace_resume_frame(frame, GLOBALS()); \
-    stack_pointer = _PyFrame_GetStackPointer(frame); \
     frame->lltrace = lltrace; \
 } while (0)
 #else
@@ -198,32 +239,21 @@ do { \
 /* Do interpreter dispatch accounting for tracing and instrumentation */
 #define DISPATCH() \
     { \
-        _PyFrame_StackAssertInvalid(frame); \
         NEXTOPARG(); \
         PRE_DISPATCH_GOTO(); \
         DISPATCH_GOTO(); \
     }
 
-#define DISPATCH_NON_TRACING() \
-    { \
-        _PyFrame_StackAssertInvalid(frame); \
-        NEXTOPARG(); \
-        PRE_DISPATCH_GOTO(); \
-        DISPATCH_GOTO_NON_TRACING(); \
-    }
-
 #define DISPATCH_SAME_OPARG() \
     { \
-        opcode = next_instr->op.code; \
+        opcode = IR_HANDLER(*next_instr); \
         PRE_DISPATCH_GOTO(); \
-        DISPATCH_GOTO_NON_TRACING(); \
+        DISPATCH_GOTO(); \
     }
 
 #define DISPATCH_INLINED(NEW_FRAME)                              \
     do {                                                         \
         assert(!IS_PEP523_HOOKED(tstate));                       \
-        _PyFrame_SetStackPointer(frame, stack_pointer);          \
-        _PyFrame_StackPointerValidate(frame);                    \
         assert((NEW_FRAME)->previous == frame);                  \
         frame = tstate->current_frame = (NEW_FRAME);             \
         CALL_STAT_INC(inlined_py_calls);                         \
@@ -246,12 +276,11 @@ GETITEM(PyObject *v, Py_ssize_t i) {
 
 /* Code access macros */
 
-/* The integer overflow is checked by an assertion below. */
-#define INSTR_OFFSET() ((int)(next_instr - _PyFrame_GetBytecode(frame)))
+/* In words */
+#define INSTR_OFFSET() ((int)(next_instr - frame->ir_words))
 #define NEXTOPARG()  do { \
-        _Py_CODEUNIT word  = {.cache = FT_ATOMIC_LOAD_UINT16_RELAXED(*(uint16_t*)next_instr)}; \
-        opcode = word.op.code; \
-        oparg = word.op.arg; \
+        ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*next_instr); \
+        opcode = IR_HANDLER(ir_word); \
     } while (0)
 
 /* JUMPBY makes the generator identify the instruction as a jump. SKIP_OVER is
@@ -259,21 +288,12 @@ GETITEM(PyObject *v, Py_ssize_t i) {
  * and skipped instructions.
  */
 #define JUMPBY(x)       (next_instr += (x))
+/* The word at absolute index T, the target of a jump, and a jump there. */
+#define JUMP_TARGET(T)  (IR_CHECK_BLOCK(), frame->ir_words + (T))
+#define JUMPTO(T)       (next_instr = JUMP_TARGET(T))
 #define SKIP_OVER(x)    (next_instr += (x))
 
-#define STACK_LEVEL()     ((int)(stack_pointer - _PyFrame_Stackbase(frame)))
-#define STACK_SIZE()      (_PyFrame_GetCode(frame)->co_stacksize)
 
-#define WITHIN_STACK_BOUNDS() \
-   (frame->owner == FRAME_OWNED_BY_INTERPRETER || (STACK_LEVEL() >= 0 && STACK_LEVEL() <= STACK_SIZE()))
-
-#if defined(Py_DEBUG) && !defined(_Py_JIT)
-// This allows temporary stack "overflows", provided it's all in the cache at any point of time.
-#define ASSERT_WITHIN_STACK_BOUNDS_IGNORING_CACHE(F, L) \
-   assert(frame->owner == FRAME_OWNED_BY_INTERPRETER || (STACK_LEVEL() >= 0 && (STACK_LEVEL()) <= STACK_SIZE()))
-#else
-#define ASSERT_WITHIN_STACK_BOUNDS_IGNORING_CACHE ASSERT_WITHIN_STACK_BOUNDS
-#endif
 
 /* Data access macros */
 #define FRAME_CO_CONSTS (_PyFrame_GetCode(frame)->co_consts)
@@ -281,8 +301,8 @@ GETITEM(PyObject *v, Py_ssize_t i) {
 
 /* Local variable macros */
 
-#define LOCALS_ARRAY    (frame->localsplus)
-#define GETLOCAL(i)     (frame->localsplus[i])
+#define LOCALS_ARRAY    (slots)
+#define GETLOCAL(i)     (slots[i])
 
 
 #ifdef Py_STATS
@@ -290,8 +310,7 @@ GETITEM(PyObject *v, Py_ssize_t i) {
     do {                                                         \
         STAT_INC(opcode, miss);                                  \
         STAT_INC((INSTNAME), miss);                              \
-        /* The counter is always the first cache entry: */       \
-        if (ADAPTIVE_COUNTER_TRIGGERS(next_instr->cache)) {      \
+        if (ADAPTIVE_COUNTER_TRIGGERS(_PyIR_FbHeaderOf(frame, this_instr, opcode))) { \
             STAT_INC((INSTNAME), deopt);                         \
         }                                                        \
     } while (0)
@@ -347,40 +366,42 @@ static void dtrace_function_return(_PyInterpreterFrame *);
 #define DTRACE_FUNCTION_RETURN() ((void)0)
 #endif
 
-/* This takes a uint16_t instead of a _Py_BackoffCounter,
- * because it is used directly on the cache entry in generated code,
- * which is always an integral type. */
-// Force re-specialization when tracing a side exit to get good side exits.
-#define ADAPTIVE_COUNTER_TRIGGERS(COUNTER) \
-    backoff_counter_triggers(forge_backoff_counter((COUNTER)))
+/* Counters live in feedback entries (pycore_feedback.h).  FB is the entry
+ * header of the instruction, or NULL if it has none, which never triggers. */
+#define ADAPTIVE_COUNTER_TRIGGERS(FB) \
+    ((FB) != NULL && backoff_counter_triggers((FB)->counter))
 
 #ifdef Py_GIL_DISABLED
 /* Counters are unreachable when thread-local bytecode is disabled,
  * so there is no need to update them. */
-#define ADVANCE_ADAPTIVE_COUNTER(COUNTER) \
+#define ADVANCE_ADAPTIVE_COUNTER(FB) \
     do { \
-        _Py_BackoffCounter cnt = (COUNTER); \
-        if (!backoff_counter_is_unreachable(cnt)) { \
-            (COUNTER) = advance_backoff_counter(cnt); \
+        if ((FB) != NULL && !backoff_counter_is_unreachable((FB)->counter)) { \
+            (FB)->counter = advance_backoff_counter((FB)->counter); \
         } \
     } while (0);
 
-#define PAUSE_ADAPTIVE_COUNTER(COUNTER) \
+#define PAUSE_ADAPTIVE_COUNTER(FB) \
     do { \
-        _Py_BackoffCounter cnt = (COUNTER); \
-        if (!backoff_counter_is_unreachable(cnt)) { \
-            (COUNTER) = pause_backoff_counter(cnt); \
+        _PyFbHeader *fb_ = (FB); \
+        if (fb_ != NULL && !backoff_counter_is_unreachable(fb_->counter)) { \
+            fb_->counter = pause_backoff_counter(fb_->counter); \
         } \
     } while (0);
 #else
-#define ADVANCE_ADAPTIVE_COUNTER(COUNTER) \
+#define ADVANCE_ADAPTIVE_COUNTER(FB) \
     do { \
-        (COUNTER) = advance_backoff_counter((COUNTER)); \
+        if ((FB) != NULL) { \
+            (FB)->counter = advance_backoff_counter((FB)->counter); \
+        } \
     } while (0);
 
-#define PAUSE_ADAPTIVE_COUNTER(COUNTER) \
+#define PAUSE_ADAPTIVE_COUNTER(FB) \
     do { \
-        (COUNTER) = pause_backoff_counter((COUNTER)); \
+        _PyFbHeader *fb_ = (FB); \
+        if (fb_ != NULL) { \
+            fb_->counter = pause_backoff_counter(fb_->counter); \
+        } \
     } while (0);
 #endif
 
@@ -409,13 +430,11 @@ static void dtrace_function_return(_PyInterpreterFrame *);
 // for an exception handler, displaying the traceback, and so on
 #define INSTRUMENTED_JUMP(src, dest, event) \
 do { \
-    _Py_CODEUNIT *_dest = (dest); \
+    _PyInstr *_dest = (dest); \
     if (tstate->tracing) {\
         next_instr = _dest; \
     } else { \
-        _PyFrame_SetStackPointer(frame, stack_pointer); \
         next_instr = _Py_call_instrumentation_jump(this_instr, tstate, event, frame, src, _dest); \
-        stack_pointer = _PyFrame_GetStackPointer(frame); \
         if (next_instr == NULL) { \
             next_instr = _dest + 1; \
             JUMP_TO_LABEL(error); \
@@ -434,9 +453,7 @@ static inline void _Py_LeaveRecursiveCallPy(PyThreadState *tstate)  {
 }
 
 /* Implementation of "macros" that modify the instruction pointer,
- * stack pointer, or frame pointer.
- * These need to treated differently by tier 1 and 2.
- * The Tier 1 version is here; Tier 2 is inlined in ceval.c. */
+ * stack pointer, or frame pointer. */
 
 #define LOAD_IP(OFFSET) do { \
         next_instr = frame->instr_ptr + (OFFSET); \
@@ -444,78 +461,13 @@ static inline void _Py_LeaveRecursiveCallPy(PyThreadState *tstate)  {
 
 /* There's no STORE_IP(), it's inlined by the code generator. */
 
-#define LOAD_SP() \
-stack_pointer = _PyFrame_GetStackPointer(frame)
-
-#define SAVE_SP() \
-_PyFrame_SetStackPointer(frame, stack_pointer)
-
-/* Tier-switching macros. */
-
-#define TIER1_TO_TIER2(EXECUTOR)                        \
-do {                                                   \
-    OPT_STAT_INC(traces_executed);                     \
-    next_instr = _Py_jit_entry((EXECUTOR), frame, stack_pointer, tstate); \
-    frame = tstate->current_frame;                     \
-    stack_pointer = _PyFrame_GetStackPointer(frame);   \
-    int keep_tracing_bit = (uintptr_t)next_instr & 1;   \
-    next_instr = (_Py_CODEUNIT *)(((uintptr_t)next_instr) & (~1)); \
-    if (next_instr == NULL) {                          \
-        /* gh-140104: The exception handler expects frame->instr_ptr
-            to after this_instr, not this_instr! */ \
-        next_instr = frame->instr_ptr + 1;                 \
-        JUMP_TO_LABEL(error);                          \
-    }                                                  \
-    if (keep_tracing_bit) { \
-        assert(uop_buffer_length(&((_PyThreadStateImpl *)tstate)->jit_tracer_state->code_buffer)); \
-        ENTER_TRACING(); \
-        DISPATCH_NON_TRACING(); \
-    } \
-    DISPATCH();                                        \
-} while (0)
-
-#define TIER2_TO_TIER2(EXECUTOR) \
-do {                                                   \
-    OPT_STAT_INC(traces_executed);                     \
-    current_executor = (EXECUTOR);                     \
-    goto tier2_start;                                  \
-} while (0)
-
-#define GOTO_TIER_ONE_SETUP \
-    tstate->current_executor = NULL;                              \
-    OPT_HIST(trace_uop_execution_counter, trace_run_length_hist); \
-    _PyFrame_SetStackPointer(frame, stack_pointer);
-
-#define GOTO_TIER_ONE(TARGET) \
-    do \
-    { \
-        GOTO_TIER_ONE_SETUP \
-        return (_Py_CODEUNIT *)(TARGET); \
-    } while (0)
-
-#define GOTO_TIER_ONE_CONTINUE_TRACING(TARGET) \
-    do \
-    { \
-        GOTO_TIER_ONE_SETUP \
-        return (_Py_CODEUNIT *)(((uintptr_t)(TARGET))| 1); \
-    } while (0)
-
-#define CURRENT_OPARG()    (next_uop[-1].oparg)
-#define CURRENT_OPERAND0_64() (next_uop[-1].operand0)
-#define CURRENT_OPERAND1_64() (next_uop[-1].operand1)
-#define CURRENT_OPERAND0_32() (next_uop[-1].operand0)
-#define CURRENT_OPERAND1_32() (next_uop[-1].operand1)
-#define CURRENT_OPERAND0_16() (next_uop[-1].operand0)
-#define CURRENT_OPERAND1_16() (next_uop[-1].operand1)
-#define CURRENT_TARGET()   (next_uop[-1].target)
-
-#define JUMP_TO_JUMP_TARGET() goto jump_to_jump_target
-#define JUMP_TO_ERROR() goto jump_to_error_target
 
 /* Stackref macros */
 
 /* How much scratch space to give stackref to PyObject* conversion. */
 #define MAX_STACKREF_SCRATCH 10
+
+#define _PyGC_CLEAR_ARRAY(ARR) ((void)0)
 
 #define STACKREFS_TO_PYOBJECTS(ARGS, ARG_COUNT, NAME) \
     /* +1 because vectorcall might use -1 to write self */ \
@@ -524,17 +476,10 @@ do {                                                   \
 
 #define STACKREFS_TO_PYOBJECTS_CLEANUP(NAME) \
     /* +1 because we +1 previously */ \
-    _PyObjectArray_Free(NAME - 1, NAME##_temp);
+    _PyObjectArray_Free(NAME - 1, NAME##_temp); \
+    _PyGC_CLEAR_ARRAY(NAME##_temp);
 
 #define CONVERSION_FAILED(NAME) ((NAME) == NULL)
-
-#if defined(Py_DEBUG) && !defined(_Py_JIT)
-#define SET_CURRENT_CACHED_VALUES(N) current_cached_values = (N)
-#define CHECK_CURRENT_CACHED_VALUES(N) assert(current_cached_values == (N))
-#else
-#define SET_CURRENT_CACHED_VALUES(N) ((void)0)
-#define CHECK_CURRENT_CACHED_VALUES(N) ((void)0)
-#endif
 
 #define IS_PEP523_HOOKED(tstate) (tstate->interp->eval_frame != NULL)
 
@@ -556,7 +501,7 @@ check_periodics_at_end(PyThreadState *tstate, _PyInterpreterFrame *frame) {
         // Do not handle pending interrupts if the previous instruction was LOAD_SPECIAL
         // This may also not handle interrupts if a cache looks like LOAD_SPECIAL,
         // but this is benign as we won't skip periodic checks indefinitely.
-        if (frame->instr_ptr[-1].op.code == LOAD_SPECIAL) {
+        if (IR_HANDLER(frame->instr_ptr[-1]) == LOAD_SPECIAL) {
             return 0;
         }
         return _Py_HandlePending(tstate);
@@ -594,90 +539,226 @@ gen_try_set_executing(PyGenObject *gen)
     return false;
 }
 
-// Macro for inplace float binary ops (tier 2 only).
-// Mutates the uniquely-referenced TARGET operand in place.
-// TARGET must be either left or right.
-#define FLOAT_INPLACE_OP(left, right, TARGET, OP)                        \
-    do {                                                                 \
-        PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);            \
-        PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);          \
-        assert(PyFloat_CheckExact(left_o));                              \
-        assert(PyFloat_CheckExact(right_o));                             \
-        assert(_PyObject_IsUniquelyReferenced(                           \
-            PyStackRef_AsPyObjectBorrow(TARGET)));                       \
-        STAT_INC(BINARY_OP, hit);                                        \
-        double _dres =                                                   \
-            ((PyFloatObject *)left_o)->ob_fval                           \
-            OP ((PyFloatObject *)right_o)->ob_fval;                      \
-        ((PyFloatObject *)PyStackRef_AsPyObjectBorrow(TARGET))           \
-            ->ob_fval = _dres;                                           \
-    } while (0)
-
-// Inplace float true division. Sets _divop_err to 1 on zero division.
-// Caller must check _divop_err and call ERROR_NO_POP() if set.
-#define FLOAT_INPLACE_DIVOP(left, right, TARGET)                         \
-    int _divop_err = 0;                                                  \
-    do {                                                                 \
-        PyObject *left_o = PyStackRef_AsPyObjectBorrow(left);            \
-        PyObject *right_o = PyStackRef_AsPyObjectBorrow(right);          \
-        assert(PyFloat_CheckExact(left_o));                              \
-        assert(PyFloat_CheckExact(right_o));                             \
-        assert(_PyObject_IsUniquelyReferenced(                           \
-            PyStackRef_AsPyObjectBorrow(TARGET)));                       \
-        STAT_INC(BINARY_OP, hit);                                        \
-        double _divisor = ((PyFloatObject *)right_o)->ob_fval;           \
-        if (_divisor == 0.0) {                                           \
-            PyErr_SetString(PyExc_ZeroDivisionError,                     \
-                            "float division by zero");                   \
-            _divop_err = 1;                                              \
-            break;                                                       \
-        }                                                                \
-        double _dres = ((PyFloatObject *)left_o)->ob_fval / _divisor;    \
-        ((PyFloatObject *)PyStackRef_AsPyObjectBorrow(TARGET))           \
-            ->ob_fval = _dres;                                           \
-    } while (0)
-
-// Inplace compact int operation. TARGET is expected to be uniquely
-// referenced at the optimizer level, but at runtime it may be a
-// cached small int singleton. We check _Py_IsImmortal on TARGET
-// to decide whether inplace mutation is safe.
-//
-// After the macro, _int_inplace_res holds the result (may be NULL
-// on allocation failure). On success, TARGET was mutated in place
-// and _int_inplace_res is a DUP'd reference to it. On fallback
-// (small int target, small int result, or overflow), _int_inplace_res
-// is from FUNC (_PyCompactLong_Add etc.).
-// FUNC is the fallback function (_PyCompactLong_Add etc.)
-#define INT_INPLACE_OP(left, right, TARGET, OP, FUNC)                    \
-    _PyStackRef _int_inplace_res = PyStackRef_NULL;                      \
-    do {                                                                 \
-        PyObject *target_o = PyStackRef_AsPyObjectBorrow(TARGET);        \
-        if (_Py_IsImmortal(target_o)) {                                  \
-            break;                                                       \
-        }                                                                \
-        assert(_PyObject_IsUniquelyReferenced(target_o));                \
-        Py_ssize_t left_val = _PyLong_CompactValue(                      \
-            (PyLongObject *)PyStackRef_AsPyObjectBorrow(left));          \
-        Py_ssize_t right_val = _PyLong_CompactValue(                     \
-            (PyLongObject *)PyStackRef_AsPyObjectBorrow(right));         \
-        Py_ssize_t result = left_val OP right_val;                       \
-        if (!_PY_IS_SMALL_INT(result)                                    \
-            && ((twodigits)((stwodigits)result) + PyLong_MASK            \
-                < (twodigits)PyLong_MASK + PyLong_BASE))                 \
-        {                                                                \
-            _PyLong_SetSignAndDigitCount(                                \
-                (PyLongObject *)target_o, result < 0 ? -1 : 1, 1);       \
-            ((PyLongObject *)target_o)->long_value.ob_digit[0] =         \
-                (digit)(result < 0 ? -result : result);                  \
-            _int_inplace_res = PyStackRef_DUP(TARGET);                   \
-            break;                                                       \
-        }                                                                \
-    } while (0);                                                         \
-    if (PyStackRef_IsNull(_int_inplace_res)) {                           \
-        _int_inplace_res = FUNC(                                         \
-            (PyLongObject *)PyStackRef_AsPyObjectBorrow(left),           \
-            (PyLongObject *)PyStackRef_AsPyObjectBorrow(right));         \
-    }
-
 #define CALL_TP_ITERITEM_NO_ESCAPE(ITER, INDEX) \
     Py_TYPE(ITER)->_tp_iteritem((ITER), (INDEX))
+
+/* Operands of the register IR handlers (Tools/cases_generator/ir_generator.py).
+ * F is a field, IR_FIELD_A(this_instr) and so on. */
+
+/* The slot that a slot field names, an lvalue.  `slots` is the frame's
+ * slots, _PyFrame_Slots(frame), which the handlers keep in a register. */
+#define IR_SLOT(F) (slots[(F)])
+
+/* Whether field F names a local, a cell or a free variable rather than a
+ * temporary: the executing copy keeps co_nlocalsplus in its header.  An
+ * input read through a local is borrowed; one read through a temporary is
+ * the handler's, which it takes, leaving NULL in the slot. */
+#define IR_NLOCALSPLUS() \
+    ((int)(((const _PyCodeExec *)frame->ir_words) - 1)->nlocalsplus)
+#define IR_IS_LOCAL(F) ((int)(F) < IR_NLOCALSPLUS())
+
+/* REF, read through field F and known to be a pointer, borrowed if F names
+ * a local. */
+static_assert(Py_TAG_REFCNT == 1, "IR_BORROW_KNOWN sets the tag from a test");
+#ifdef Py_STACKREF_DEBUG
+#  define IR_BORROW_KNOWN(REF, F) \
+    (IR_IS_LOCAL(F) ? PyStackRef_Borrow(REF) : (REF))
+#else
+#  define IR_BORROW_KNOWN(REF, F) \
+    ((_PyStackRef){ .bits = (REF).bits | (uintptr_t)IR_IS_LOCAL(F) })
+#endif
+
+/* The box of an inline value read through field F, which belongs to the
+ * slot if F names a temporary.  A local keeps its inline value, and the
+ * handler drops the box as it would a temporary's. */
+#define IR_KEEP_BOX(REF, F) \
+    do { \
+        if (!IR_IS_LOCAL(F)) { \
+            IR_SLOT(F) = (REF); \
+        } \
+    } while (0)
+
+/* Before a deopt, drop REF, an object input read through field F, if F
+ * names a local: the family head reads the local again.  REF is a borrow,
+ * which only the Py_STACKREF_DEBUG checker counts, or the box of the
+ * local's inline value. */
+#define IR_DROP_BORROW(REF, F) \
+    do { \
+        if (IR_IS_LOCAL(F)) { \
+            PyStackRef_CLOSE(REF); \
+        } \
+    } while (0)
+
+/* An input that the handler consumes as it is, through field F: a
+ * temporary, or a borrow of the local that F names, which is what
+ * LOAD_FAST_BORROW would have pushed. */
+#if defined(Py_STACKREF_DEBUG) || !defined(Py_STACKREF_INLINE_VALUES)
+#  define IR_LOAD_BORROWED(F) \
+    (IR_IS_LOCAL(F) ? PyStackRef_BorrowAt(&IR_SLOT(F)) : IR_SLOT(F))
+#else
+#  define IR_LOAD_BORROWED(F) \
+    ((_PyStackRef){ .bits = IR_SLOT(F).bits \
+        | ((uintptr_t)IR_IS_LOCAL(F) & _PyStackRef_BorrowBitAt(&IR_SLOT(F))) })
+#endif
+
+/* The truth of a value, as TO_BOOL tests it, or -1 with an exception set */
+static inline int
+_PyStackRef_Truth(_PyStackRef ref)
+{
+    if (PyStackRef_IsTrue(ref)) {
+        return 1;
+    }
+    if (PyStackRef_IsFalse(ref) || PyStackRef_IsNone(ref)) {
+        return 0;
+    }
+    if (PyStackRef_IsInlineInt(ref)) {
+        return PyStackRef_InlineInt(ref) != 0;
+    }
+    if (PyStackRef_IsInlineFloat(ref)) {
+        return PyStackRef_InlineFloat(ref) != 0.0;
+    }
+    return PyObject_IsTrue(PyStackRef_AsPyObjectBorrow(ref));
+}
+
+/* The handler takes the input that it read through field F: a temporary's
+ * slot becomes NULL, and a local keeps its value. */
+#define IR_CONSUME_INPUT(F) \
+    do { \
+        if (!IR_IS_LOCAL(F)) { \
+            IR_SLOT(F) = PyStackRef_NULL; \
+        } \
+    } while (0)
+
+/* V, the input read through field F or what replaced it, goes back to a
+ * temporary's slot. */
+#define IR_STORE_INPUT(F, V) \
+    do { \
+        if (!IR_IS_LOCAL(F)) { \
+            IR_SLOT(F) = (V); \
+        } \
+    } while (0)
+
+/* A handler writes a temporary into a slot that holds NULL. */
+#define IR_STORE_TEMP(SLOT, V) \
+    do { \
+        assert(PyStackRef_IsNull(SLOT)); \
+        (SLOT) = (V); \
+    } while (0)
+
+/* The result V goes to dst field F, which may name a local (a folded
+ * STORE_FAST, _PyIR_STORE_DST): the local's old value is released after
+ * it, as STORE_FAST does.  A temporary's slot holds NULL, or V when the
+ * handler wrote it there before (IR_STORE_TEMP_DST). */
+#define IR_STORE_DST(F, V) \
+    do { \
+        if (IR_IS_LOCAL(F)) { \
+            _PyStackRef ir_old = IR_SLOT(F); \
+            IR_SLOT(F) = (V); \
+            PyStackRef_XCLOSE(ir_old); \
+        } \
+        else { \
+            assert(PyStackRef_IsNull(IR_SLOT(F)) \
+                   || _PyStackRef_BITS(IR_SLOT(F)) == _PyStackRef_BITS(V)); \
+            IR_SLOT(F) = (V); \
+        } \
+    } while (0)
+
+/* Before code that may run other code, the result V goes to dst field F
+ * if F names a temporary.  A local gets it at the end, IR_STORE_DST. */
+#define IR_STORE_TEMP_DST(F, V) \
+    do { \
+        if (!IR_IS_LOCAL(F)) { \
+            assert(PyStackRef_IsNull(IR_SLOT(F)) \
+                   || _PyStackRef_BITS(IR_SLOT(F)) == _PyStackRef_BITS(V)); \
+            IR_SLOT(F) = (V); \
+        } \
+    } while (0)
+
+/* A window-style handler whose dst field F may name a local moves its
+ * result from SLOT of its window there, releasing the local's old value. */
+#define IR_MOVE_TO_DST(F, SLOT) \
+    do { \
+        if (IR_IS_LOCAL(F)) { \
+            _PyStackRef ir_old = IR_SLOT(F); \
+            IR_SLOT(F) = (SLOT); \
+            (SLOT) = PyStackRef_NULL; \
+            PyStackRef_XCLOSE(ir_old); \
+        } \
+    } while (0)
+
+/* Clear N slots from PTR on; N may be zero or less. */
+#define IR_CLEAR_SLOTS(PTR, N) \
+    do { \
+        _PyStackRef *ir_p = (PTR); \
+        for (int ir_i = 0; ir_i < (int)(N); ir_i++) { \
+            ir_p[ir_i] = PyStackRef_NULL; \
+        } \
+    } while (0)
+
+/* The frame's view of its executing copy: frame->ir_words and
+ * frame->ir_feedback follow the copy that instr_ptr points into. */
+#define IR_CHECK_BLOCK() \
+    assert(frame->ir_words == _PyFrame_Exec(frame)->words && \
+           frame->ir_feedback == _PyFrame_Exec(frame)->entries)
+
+/* The feedback entry at index F. */
+#define IR_FB(F) (IR_CHECK_BLOCK(), (void *)_PyIR_FbEntry(frame->ir_feedback, (F)))
+
+/* The oparg that the generic handler of an instruction with entry FB, at
+ * index F, keeps in the arg field of the entry.  The sites that share entry
+ * 0 run NOFB forms, which keep theirs in the word. */
+#define IR_FB_ARG(FB, F) \
+    (assert((F) != 0), (int)((_PyFbHeader *)(FB))->arg)
+
+/* A specialisation of BINARY_OP deoptimises to the handler of the operation
+ * that its entry, at index F, records. */
+#define IR_DEOPT_BINARY_OP(F) \
+    do { \
+        opcode = _PyIR_BINARY_OP_FIRST + \
+            (int)((_PyFbHeader *)IR_FB(F))->arg; \
+        next_instr = this_instr; \
+        DISPATCH_GOTO(); \
+    } while (0)
+
+/* On entry to a frame at next_instr, its instr_ptr: if the word there is a
+ * RESUME that would do nothing, because the eval breaker has nothing pending
+ * and the code's instrumentation is current, start at the word after it, as
+ * if it had run.  An instrumented RESUME always runs. */
+#if defined(__EMSCRIPTEN__)
+#  define IR_SKIP_RESUME_EMSCRIPTEN() \
+    (_Py_emscripten_signal_clock != 0 && \
+     (_Py_emscripten_signal_clock -= Py_EMSCRIPTEN_SIGNAL_HANDLING, 1))
+#else
+#  define IR_SKIP_RESUME_EMSCRIPTEN() 1
+#endif
+#ifdef Py_GIL_DISABLED
+#  define IR_SKIP_RESUME_TLBC() \
+    (frame->tlbc_index == ((_PyThreadStateImpl *)tstate)->tlbc_index)
+#else
+#  define IR_SKIP_RESUME_TLBC() 1
+#endif
+#define IR_SKIP_RESUME() \
+    do { \
+        if (IR_HANDLER(*next_instr) == RESUME && \
+            _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) == \
+                FT_ATOMIC_LOAD_UINTPTR_ACQUIRE( \
+                    _PyFrame_GetCode(frame)->_co_instrumentation_version) && \
+            IR_SKIP_RESUME_TLBC() && IR_SKIP_RESUME_EMSCRIPTEN()) \
+        { \
+            frame->instr_ptr = next_instr; \
+            next_instr++; \
+        } \
+    } while (0)
+
+/* After a frame switch, V goes to the slot of the frame that control came
+ * back to (frame->return_slot). */
+#define IR_STORE_RETURN(V) _PyFrame_SetReturnValue(frame, (V))
+
+/* The oparg and feedback entry of another instruction of the frame. */
+#define _PyIR_Oparg(FRAME, INSTR) \
+    _PyCode_InstrOparg(_PyFrame_GetCode(FRAME), \
+                       _PyFrame_InstrOffset((FRAME), (INSTR)))
+#define _PyIR_FbHeaderOf(FRAME, INSTR, HANDLER) \
+    ((void)(HANDLER), \
+     _PyIR_InstrFeedback(_PyFrame_GetCode(FRAME), _PyFrame_Exec(FRAME), (INSTR)))
+

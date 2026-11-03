@@ -1,0 +1,232 @@
+{
+  "budget_seconds": 43200,
+  "deadline_utc": "2026-11-01T15:14:44+00:00",
+  "fallback": {
+    "action": "Stop tracing-GC optimization and switch to one reference-counting successor; preserve current source and evidence; no silent extension",
+    "preparation_deadline_utc": "2026-11-01T03:46:00+00:00",
+    "prepared_by": "restart_audit",
+    "trigger": "No valid full-29 parity evidence by deadline, including missing/invalid/inconclusive data"
+  },
+  "gates": [
+    "hypothesis and finite deciding measurement",
+    "critical ownership/root/effect design review",
+    "implementation and cheap host/source checks",
+    "focused semantic/root/lifecycle/failure tests on fresh debug/release products",
+    "source/native outcome review and early elapsed/RSS pilot",
+    "all-29 elapsed/RSS parity decision as soon as pilot warrants",
+    "expensive full stress/ASan/stdlib/extension qualification only for a promising candidate; required before integration"
+  ],
+  "milestones": [
+    {
+      "purpose": "First measured candidate or concrete early rejection; do not wait for milestone",
+      "utc": "2026-11-01T05:14:44+00:00"
+    },
+    {
+      "purpose": "Broad all-29 evidence on best surviving candidate; expensive qualification follows promising evidence",
+      "utc": "2026-11-01T09:14:44+00:00"
+    },
+    {
+      "purpose": "Final performance decision target, leaving time for qualification and fallback",
+      "utc": "2026-11-01T13:14:44+00:00"
+    },
+    {
+      "purpose": "Hard parity/fallback decision; stop optimization if parity unproven",
+      "utc": "2026-11-01T15:14:44+00:00"
+    }
+  ],
+  "owner": "coordinator",
+  "parity": {
+    "evidence": "Fixed all-29 protocol and rotating process order declared before scores; consistent fresh-process rounds with variability sufficient for claim; no unresolved critical correctness failure",
+    "maximum_ratio": 1.0,
+    "metric": "geometric_mean",
+    "missing_or_inconclusive": "does not establish parity",
+    "per_workload_ratio": "fork median elapsed per registered loop / upstream median elapsed per registered loop",
+    "profile": "Matched GCC O3; JIT/PGO/LTO/debug/stats/tail off; each image uses its own bound stdlib/extensions",
+    "upstream_source": "321925c92c9",
+    "workloads": [
+      {
+        "kernel": "boil/bench/internal/kernels/richards.py",
+        "loops": 2,
+        "name": "richards",
+        "variant": null
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/go.py",
+        "loops": 1,
+        "name": "go",
+        "variant": null
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/nbody.py",
+        "loops": 1,
+        "name": "nbody",
+        "variant": null
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/float.py",
+        "loops": 1,
+        "name": "float",
+        "variant": null
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/spectral_norm.py",
+        "loops": 1,
+        "name": "spectral_norm",
+        "variant": null
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/raytrace.py",
+        "loops": 1,
+        "name": "raytrace",
+        "variant": null
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/deltablue.py",
+        "loops": 30,
+        "name": "deltablue",
+        "variant": null
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/chaos.py",
+        "loops": 2,
+        "name": "chaos",
+        "variant": null
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/nqueens.py",
+        "loops": 1,
+        "name": "nqueens",
+        "variant": null
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/fannkuch.py",
+        "loops": 1,
+        "name": "fannkuch",
+        "variant": null
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/generators.py",
+        "loops": 2,
+        "name": "generators",
+        "variant": null
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/comprehensions.py",
+        "loops": 6000,
+        "name": "comprehensions",
+        "variant": null
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/coroutines.py",
+        "loops": 4,
+        "name": "coroutines",
+        "variant": null
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/unpack_sequence.py",
+        "loops": 4000,
+        "name": "unpack_sequence",
+        "variant": null
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/deepcopy.py",
+        "loops": 300,
+        "name": "deepcopy",
+        "variant": "deepcopy"
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/deepcopy.py",
+        "loops": 20000,
+        "name": "deepcopy_reduce",
+        "variant": "deepcopy_reduce"
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/deepcopy.py",
+        "loops": 4000,
+        "name": "deepcopy_memo",
+        "variant": "deepcopy_memo"
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/json_dumps.py",
+        "loops": 10,
+        "name": "json_dumps",
+        "variant": null
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/json_loads.py",
+        "loops": 200,
+        "name": "json_loads",
+        "variant": null
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/pickle.py",
+        "loops": 400,
+        "name": "pickle",
+        "variant": "pickle"
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/pickle.py",
+        "loops": 300,
+        "name": "unpickle",
+        "variant": "unpickle"
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/regex_compile.py",
+        "loops": 1,
+        "name": "regex_compile",
+        "variant": null
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/logging.py",
+        "loops": 1000,
+        "name": "logging_format",
+        "variant": "logging_format"
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/logging.py",
+        "loops": 60000,
+        "name": "logging_silent",
+        "variant": "logging_silent"
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/logging.py",
+        "loops": 1000,
+        "name": "logging_simple",
+        "variant": "logging_simple"
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/xml_etree.py",
+        "loops": 1,
+        "name": "xml_etree_generate",
+        "variant": "xml_etree_generate"
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/xml_etree.py",
+        "loops": 1,
+        "name": "xml_etree_iterparse",
+        "variant": "xml_etree_iterparse"
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/xml_etree.py",
+        "loops": 1,
+        "name": "xml_etree_parse",
+        "variant": "xml_etree_parse"
+      },
+      {
+        "kernel": "boil/bench/internal/kernels/xml_etree.py",
+        "loops": 1,
+        "name": "xml_etree_process",
+        "variant": "xml_etree_process"
+      }
+    ]
+  },
+  "reason": "User hard timebox: reach full-suite parity with tracing GC or abort and restore reference counting to unblock JIT",
+  "registry": {
+    "path": "boil/bench/run.py",
+    "sha256": "0a7771918e609486940440a1a339fb4ee644e7b6ef80a9ae134ae58c0aa94468"
+  },
+  "schema": 1,
+  "started_utc": "2026-11-01T03:14:44+00:00",
+  "state": "active",
+  "status_path": "boil/issues/gc-parity-deadline/status.md"
+}

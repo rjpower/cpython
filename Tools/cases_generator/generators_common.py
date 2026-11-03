@@ -1,9 +1,11 @@
 from pathlib import Path
+import re
 
 from analyzer import (
     Instruction,
     Properties,
     StackItem,
+    Uop,
     analysis_error,
     Label,
     CodeSection,
@@ -11,7 +13,7 @@ from analyzer import (
 from cwriter import CWriter
 from typing import Callable, TextIO, Iterator, Iterable
 from lexer import Token
-from stack import Storage, StackError
+from stack import Local, Storage, StackError
 from parser import Stmt, SimpleStmt, BlockStmt, IfStmt, ForStmt, WhileStmt, MacroIfStmt
 DEBUG = False
 
@@ -97,9 +99,104 @@ def always_true(tkn: Token | None) -> bool:
 
 NON_ESCAPING_DEALLOCS = {
     "_PyFloat_ExactDealloc",
+    "_PyFloat_OrLongExactDealloc",
     "_PyLong_ExactDealloc",
     "_PyUnicode_ExactDealloc",
 }
+
+# Cheaper forms of these calls for a reference known to be in pointer space
+# (see Local.known_object and _PyStackRef_CLOSE_POINTER()).
+POINTER_VARIANTS = {
+    "PyStackRef_CLOSE": "_PyStackRef_CLOSE_POINTER",
+    "PyStackRef_XCLOSE": "_PyStackRef_XCLOSE_POINTER",
+    "PyStackRef_CLOSE_SPECIALIZED": "_PyStackRef_CLOSE_SPECIALIZED_POINTER",
+    "PyStackRef_DUP": "_PyStackRef_DUP_POINTER",
+    "PyStackRef_AsPyObjectSteal": "_PyStackRef_AsPyObjectStealPointer",
+}
+
+# Calls that always return a reference in pointer space.
+POINTER_CONSTRUCTORS = {
+    "PyStackRef_FromPyObjectBorrow",
+    "PyStackRef_FromPyObjectImmortal",
+    "PyStackRef_FromPyObjectNew",
+    "PyStackRef_FromPyObjectNewMortal",
+    "PyStackRef_FromPyObjectSteal",
+    "PyStackRef_FromPyObjectStealMortal",
+}
+
+
+# Macros of the DSL that name the instruction stream or the feedback entry.
+# Each generator expands them for its form of the code: these are the stack
+# interpreter's expansions, and ir_generator.IR_INSTRUCTION_MACROS holds the
+# register IR's. "{0}" and "{1}" stand for the arguments, "{0p}" for the
+# first argument in parentheses unless it is a single token.
+STACK_INSTRUCTION_MACROS = {
+    # The header of the instruction's feedback entry, which holds its counter.
+    "FB_COUNTER": "_PyFb_Header(this_instr)",
+    # The 16-bit taken history of a conditional branch.
+    "FB_BRANCH": "this_instr[1].cache",
+    # The entry header of the instruction at {0} once it runs as opcode {1}.
+    "FB_HEADER_OF": "_PyFb_Header({0})",
+    # The opcode and oparg of the instruction at {0}.
+    "INSTR_OPCODE": "{0p}->op.code",
+    "INSTR_OPARG": "{0p}->op.arg",
+    # The size of an instruction of family {0}, in units of next_instr.
+    "INSTRUCTION_SIZE_OF": "1 + INLINE_CACHE_ENTRIES_{0}",
+    # The bytecode offset of the instruction at {0}, and the instruction at
+    # bytecode offset {0}.
+    "INSTR_OFFSET_OF": "{0} - _PyFrame_GetBytecode(frame)",
+    "INSTR_AT_OFFSET": "_PyFrame_GetBytecode(frame) + {0}",
+    # The bytecode offset of the instruction that is executing, from
+    # next_instr, for exception_unwind.
+    "CURRENT_OFFSET": "INSTR_OFFSET()-1",
+    # The handler that runs an instruction whose original opcode, as the
+    # instrumentation records it, is {0}.
+    "ORIGINAL_HANDLER": "{0}",
+}
+
+
+def tokens_text(tkns: list[Token]) -> str:
+    "The source text of tkns, with the spacing they have in the input"
+    text = ""
+    prev: Token | None = None
+    for tkn in tkns:
+        if prev is not None:
+            if prev.end_line < tkn.line:
+                text += " "
+            else:
+                text += " " * (tkn.column - prev.end_column)
+        text += tkn.text
+        prev = tkn
+    return text
+
+
+def find_local(name: str, storage: Storage) -> Local | None:
+    for var in storage.inputs + storage.outputs:
+        if var.name == name:
+            return var
+    return None
+
+
+def matching_rparen(tkns: list[Token], lparen: int) -> int:
+    depth = 0
+    for i in range(lparen, len(tkns)):
+        if tkns[i].kind == "LPAREN":
+            depth += 1
+        elif tkns[i].kind == "RPAREN":
+            depth -= 1
+            if depth == 0:
+                return i
+    return -1
+
+
+def forget_stored_pointers(uop: CodeSection, storage: Storage) -> None:
+    """Before a loop body: a later iteration may see a value assigned by an
+    earlier one, which need not be a pointer."""
+    stored = {tkn.text for tkn in uop.local_stores}
+    for var in storage.inputs + storage.outputs:
+        if var.name in stored:
+            var.known_object = False
+
 
 class Emitter:
     out: CWriter
@@ -107,13 +204,12 @@ class Emitter:
     _replacers: dict[str, ReplacementFunctionType]
     cannot_escape: bool
     jump_prefix: str
+    instruction_macros: dict[str, str] = STACK_INSTRUCTION_MACROS
 
     def __init__(self, out: CWriter, labels: dict[str, Label], cannot_escape: bool = False, jump_prefix: str = ""):
         self._replacers = {
             "EXIT_IF": self.exit_if,
-            "AT_END_EXIT_IF": self.exit_if_after,
             "DEOPT_IF": self.deopt_if,
-            "HANDLE_PENDING_AND_DEOPT_IF": self.periodic_if,
             "ERROR_IF": self.error_if,
             "ERROR_NO_POP": self.error_no_pop,
             "DECREF_INPUTS": self.decref_inputs,
@@ -123,16 +219,19 @@ class Emitter:
             "SAVE_STACK": self.save_stack,
             "RELOAD_STACK": self.reload_stack,
             "PyStackRef_CLOSE_SPECIALIZED": self.stackref_close_specialized,
+            "PyStackRef_CLOSE": self.stackref_pointer_variant,
+            "PyStackRef_XCLOSE": self.stackref_pointer_variant,
+            "PyStackRef_DUP": self.stackref_pointer_variant,
             "PyStackRef_AsPyObjectSteal": self.stackref_steal,
             "DISPATCH": self.dispatch,
             "INSTRUCTION_SIZE": self.instruction_size,
             "stack_pointer": self.stack_pointer,
             "Py_UNREACHABLE": self.unreachable,
-            "TIER1_TO_TIER2": self.tier1_to_tier2,
-            "TIER2_TO_TIER2": self.tier2_to_tier2,
-            "GOTO_TIER_ONE": self.goto_tier_one
         }
+        for name in self.instruction_macros:
+            self._replacers[name] = self.instruction_macro
         self.out = out
+        self.killed_pointer: str | None = None
         self.labels = labels
         self.cannot_escape = cannot_escape
         self.jump_prefix = jump_prefix
@@ -180,49 +279,84 @@ class Emitter:
         emit_to(self.out, tkn_iter, "RPAREN")
         self.emit(") {\n")
         next(tkn_iter)  # Semi colon
+        self.emit_jump_to_predicted(inst)
+        self.emit("}\n")
+        return not always_true(first_tkn)
+
+    exit_if = deopt_if
+
+    def emit_jump_to_predicted(self, inst: Instruction | None) -> None:
         assert inst is not None
         assert inst.family is not None
         family_name = inst.family.name
         self.emit(f"UPDATE_MISS_STATS({family_name});\n")
         self.emit(f"assert(_PyOpcode_Deopt[opcode] == ({family_name}));\n")
         self.emit(f"JUMP_TO_PREDICTED({self.jump_prefix}{family_name});\n")
-        self.emit("}\n")
-        return not always_true(first_tkn)
 
-    exit_if = deopt_if
+    def emit_object_inputs(
+        self, uop: Uop, storage: Storage, inst: Instruction | None, stack_read_later: bool
+    ) -> None:
+        """Make each input that uop converts to PyObject * hold a pointer.
 
-    def periodic_if(
-        self,
-        tkn: Token,
-        tkn_iter: TokenIterator,
-        uop: CodeSection,
-        storage: Storage,
-        inst: Instruction | None,
-    ) -> bool:
-        raise NotImplementedError("HANDLE_PENDING_AND_DEOPT_IF not support in tier 1")
+        A guard exits if the input holds an inline value; any other uop boxes
+        the value, by value so that the input can stay in a register. Either
+        way the input is known to be an object for the rest of the
+        instruction. The test is marked unlikely, so the boxing code goes out
+        of line. See "Inline values" in interpreter_definition.md.
 
-    def exit_if_after(
-        self,
-        tkn: Token,
-        tkn_iter: TokenIterator,
-        uop: CodeSection,
-        storage: Storage,
-        inst: Instruction | None,
-    ) -> bool:
-        storage.clear_inputs("in AT_END_EXIT_IF")
-        storage.flush(self.out)
-        storage.stack.clear(self.out)
-        return self.exit_if(tkn, tkn_iter, uop, storage, inst)
+        The box is written back to the input's stack slot only if something
+        can still read that slot: the input outlives the uop, or
+        stack_read_later says that a deopt, exit, escaping call or error
+        without pop may follow.
+        """
+        for var in storage.inputs:
+            if var.name in uop.asserted_objects:
+                var.known_object = True
+        if uop.properties.inline_ok:
+            return
+        guard = uop.is_guard()
+        peeks = {item.name for item in uop.stack.inputs if item.peek}
+        # Boxed inputs whose stack slot still holds the inline value.
+        unsynced: list[Local] = []
+        for var in storage.inputs:
+            if var.name not in uop.object_inputs or var.known_object:
+                continue
+            self.out.start_line()
+            # Test the stack slot rather than the local where the slot holds
+            # the value, which is cheaper (see _PyStackRef_TopBitsAt()).
+            ref = var.name
+            at = ""
+            if var.memory_offset is not None:
+                ref = f"&{storage.stack.address(var.memory_offset)}"
+                at = "At"
+            if guard:
+                self.emit(f"if (Py_UNLIKELY(!PyStackRef_IsPointerSpace{at}({ref}))) {{\n")
+                self.emit_jump_to_predicted(inst)
+            else:
+                self.emit(f"if (Py_UNLIKELY(PyStackRef_IsInline{at}({ref}))) {{\n")
+                self.emit(f"{var.name} = PyStackRef_Box({var.name});\n")
+                # A failed box leaves the value inline. Every input is still
+                # live, so leave them all to exception_unwind, boxes included.
+                self.emit(f"if (PyStackRef_IsInline({var.name})) {{\n")
+                for other in unsynced:
+                    self.emit_store_input(other, storage)
+                storage.stack.copy().flush(self.out)
+                self.emit(f"{self.jump_prefix}JUMP_TO_LABEL(error);\n")
+                self.emit("}\n")
+                if inst is not None:
+                    self.emit(f"BOX_STAT_INC({inst.name});\n")
+                if var.memory_offset is not None:
+                    if var.name in peeks or stack_read_later:
+                        self.emit_store_input(var, storage)
+                    else:
+                        unsynced.append(var)
+            self.emit("}\n")
+            var.known_object = True
 
-    def goto_tier_one(
-        self,
-        tkn: Token,
-        tkn_iter: TokenIterator,
-        uop: CodeSection,
-        storage: Storage,
-        inst: Instruction | None,
-    ) -> bool:
-        raise NotImplementedError("GOTO_TIER_ONE not supported in tier 1")
+    def emit_store_input(self, var: Local, storage: Storage) -> None:
+        assert var.memory_offset is not None
+        self.out.start_line()
+        storage.stack.store(self.out, var, var.memory_offset)
 
     def goto_error(self, offset: int, storage: Storage) -> str:
         if offset > 0:
@@ -265,24 +399,6 @@ class Emitter:
         if not unconditional:
             self.out.emit("}\n")
         return not unconditional
-
-    def tier1_to_tier2(
-        self,
-        tkn: Token,
-        tkn_iter: TokenIterator,
-        uop: CodeSection,
-        storage: Storage,
-        inst: Instruction | None,
-    ) -> bool:
-        self.out.emit(tkn)
-        lparen = next(tkn_iter)
-        assert lparen.kind == "LPAREN"
-        self.emit(lparen)
-        emit_to(self.out, tkn_iter, "RPAREN")
-        self.out.emit(")")
-        return False
-
-    tier2_to_tier2 = tier1_to_tier2
 
     def error_no_pop(
         self,
@@ -377,6 +493,32 @@ class Emitter:
                 live = var.name
         return True
 
+    def emit_function_name(self, func: Token, arg: Token, storage: Storage) -> None:
+        "Emit func, or its pointer-only variant if arg is known to be a pointer"
+        var = find_local(arg.text, storage) if arg.kind == "IDENTIFIER" else None
+        if (var is not None and var.known_object) or (
+            arg.kind == "IDENTIFIER" and arg.text == self.killed_pointer
+        ):
+            self.out.emit_at(POINTER_VARIANTS[func.text], func)
+        else:
+            self.out.emit(func)
+
+    def stackref_pointer_variant(
+        self,
+        tkn: Token,
+        tkn_iter: TokenIterator,
+        uop: CodeSection,
+        storage: Storage,
+        inst: Instruction | None,
+    ) -> bool:
+        lparen = next(tkn_iter)
+        assert lparen.kind == "LPAREN"
+        arg = tkn_iter.peek()
+        assert arg is not None
+        self.emit_function_name(tkn, arg, storage)
+        self.out.emit(lparen)
+        return True
+
     def stackref_close_specialized(
         self,
         tkn: Token,
@@ -386,11 +528,11 @@ class Emitter:
         inst: Instruction | None,
     ) -> bool:
 
-        self.out.emit(tkn)
-        tkn = next(tkn_iter)
-        assert tkn.kind == "LPAREN"
-        self.out.emit(tkn)
+        lparen = next(tkn_iter)
+        assert lparen.kind == "LPAREN"
         name = next(tkn_iter)
+        self.emit_function_name(tkn, name, storage)
+        self.out.emit(lparen)
         self.out.emit(name)
         comma = next(tkn_iter)
         if comma.kind != "COMMA":
@@ -415,11 +557,11 @@ class Emitter:
         storage: Storage,
         inst: Instruction | None,
     ) -> bool:
-        self.out.emit(tkn)
-        tkn = next(tkn_iter)
-        assert tkn.kind == "LPAREN"
-        self.out.emit(tkn)
+        lparen = next(tkn_iter)
+        assert lparen.kind == "LPAREN"
         name = next(tkn_iter)
+        self.emit_function_name(tkn, name, storage)
+        self.out.emit(lparen)
         self.out.emit(name)
         if name.kind == "IDENTIFIER":
             return self.stackref_kill(name, storage, False)
@@ -520,6 +662,59 @@ class Emitter:
         self.out.emit(f" {uop.instruction_size}u ")
         return True
 
+    def instruction_macro_args(self, tkn: Token, tkn_iter: TokenIterator) -> tuple[list[list[Token]], Token]:
+        lparen = next(tkn_iter)
+        if lparen.kind != "LPAREN":
+            raise analysis_error(f"Expected '(' after {tkn.text}", lparen)
+        args: list[list[Token]] = [[]]
+        depth = 0
+        for t in tkn_iter:
+            if t.kind == "RPAREN" and depth == 0:
+                if args == [[]]:
+                    args = []
+                return args, t
+            if t.kind in ("LPAREN", "LBRACKET"):
+                depth += 1
+            elif t.kind in ("RPAREN", "RBRACKET"):
+                depth -= 1
+            if t.kind == "COMMA" and depth == 0:
+                args.append([])
+            else:
+                if t.text in self._replacers:
+                    raise analysis_error(f"{t.text} in an argument of {tkn.text}", t)
+                args[-1].append(t)
+        raise analysis_error(f"Unterminated {tkn.text}", tkn)
+
+    def expand_instruction_macro(self, tkn: Token, args: list[list[Token]], inst: Instruction | None) -> str:
+        template = self.instruction_macros[tkn.text]
+        texts = [tokens_text(arg) for arg in args]
+        values = {str(i): text for i, text in enumerate(texts)}
+        if args:
+            values["0p"] = texts[0] if len(args[0]) == 1 else f"({texts[0]})"
+        def substitute(m: re.Match[str]) -> str:
+            if m.group(1) not in values:
+                raise analysis_error(f"Wrong number of arguments to {tkn.text}", tkn)
+            return values[m.group(1)]
+        return re.sub(r"\{(\w+)\}", substitute, template)
+
+    def instruction_macro(
+        self,
+        tkn: Token,
+        tkn_iter: TokenIterator,
+        uop: CodeSection,
+        storage: Storage,
+        inst: Instruction | None,
+    ) -> bool:
+        """Expand a macro of STACK_INSTRUCTION_MACROS. The text takes the place
+        of the macro and its arguments, so spacing around it is kept."""
+        args, rparen = self.instruction_macro_args(tkn, tkn_iter)
+        text = self.expand_instruction_macro(tkn, args, inst)
+        self.out.maybe_dedent(text)
+        self.out.emit_at(text, tkn)
+        self.out.maybe_indent(text)
+        self.out.last_token = rparen
+        return True
+
     def _print_storage(self, reason:str, storage: Storage) -> None:
         if DEBUG:
             self.out.start_line()
@@ -550,10 +745,16 @@ class Emitter:
         local_stores = set(uop.local_stores)
         reachable = True
         tkn = stmt.contents[-1]
+        self.killed_pointer = None
         try:
             if stmt in uop.properties.escaping_calls and not self.cannot_escape:
                 escape = uop.properties.escaping_calls[stmt]
                 if escape.kills is not None:
+                    # The kill drops the input from storage before its call
+                    # is emitted, so remember whether it holds a pointer.
+                    killed = find_local(escape.kills.text, storage)
+                    if killed is not None and killed.known_object:
+                        self.killed_pointer = killed.name
                     self.stackref_kill(escape.kills, storage, True)
                 self.emit_save(storage)
             tkn_iter = TokenIterator(stmt.contents)
@@ -577,23 +778,49 @@ class Emitter:
                                 if var.name == tkn.text:
                                     var.in_local = True
                                     var.memory_offset = None
+                                    var.known_object = False
+                                    var.ir_borrowed = False
+                                    var.ir_field = None
                                     break
                             for var in storage.outputs:
                                 if var.name == tkn.text:
                                     var.in_local = True
                                     var.memory_offset = None
+                                    var.known_object = False
+                                    var.ir_borrowed = False
+                                    var.ir_field = None
                                     break
                         if tkn.text.startswith("DISPATCH"):
                             reachable = False
                         self.out.emit(tkn)
                 else:
                     self.out.emit(tkn)
+            self.note_pointer_assignment(stmt, storage)
             if stmt in uop.properties.escaping_calls and not self.cannot_escape:
                 self.emit_reload(storage)
             return reachable, None, storage
         except StackError as ex:
             raise analysis_error(ex.args[0], tkn) #from None
 
+
+    def note_pointer_assignment(self, stmt: SimpleStmt, storage: Storage) -> None:
+        """After `a = b;` with b known to hold a pointer, or `a = C(...);` with
+        C in POINTER_CONSTRUCTORS, a is known to hold a pointer too."""
+        tkns = stmt.contents
+        if len(tkns) < 4 or tkns[1].kind != "EQUALS" or tkns[-1].kind != "SEMI":
+            return
+        if len(tkns) == 4:
+            source = find_local(tkns[2].text, storage)
+            if source is None or not source.known_object:
+                return
+        elif not (tkns[2].text in POINTER_CONSTRUCTORS and tkns[3].kind == "LPAREN"
+                  and matching_rparen(tkns, 3) == len(tkns) - 2):
+            return
+        # A peeked item has one Local among the inputs and another among the
+        # outputs of a copied storage; mark both, as the store cleared both.
+        for var in storage.inputs + storage.outputs:
+            if var.name == tkns[0].text:
+                var.known_object = True
 
     def emit_MacroIfStmt(
         self,
@@ -710,6 +937,7 @@ class Emitter:
         self.out.emit(stmt.for_)
         for tkn in stmt.header:
             self.out.emit(tkn)
+        forget_stored_pointers(uop, storage)
         reachable, brace, body_storage = self._emit_stmt(stmt.body, uop, storage.copy(), inst)
         body_storage.merge(storage, self.out)
         if brace is not None:
@@ -727,6 +955,7 @@ class Emitter:
         self.out.emit(stmt.while_)
         for tkn in stmt.condition:
             self.out.emit(tkn)
+        forget_stored_pointers(uop, storage)
         return self._emit_stmt(stmt.body, uop, storage, inst)
 
 
@@ -771,9 +1000,7 @@ def cflags(p: Properties) -> str:
         flags.append("HAS_EVAL_BREAK_FLAG")
     if p.deopts:
         flags.append("HAS_DEOPT_FLAG")
-    if p.deopts_periodic:
-        flags.append("HAS_PERIODIC_FLAG")
-    if p.side_exit or p.side_exit_at_end:
+    if p.side_exit:
         flags.append("HAS_EXIT_FLAG")
     if not p.infallible:
         flags.append("HAS_ERROR_FLAG")
@@ -787,12 +1014,6 @@ def cflags(p: Properties) -> str:
         flags.append("HAS_NO_SAVE_IP_FLAG")
     if p.sync_sp:
         flags.append("HAS_SYNC_SP_FLAG")
-    if p.unpredictable_jump:
-        flags.append("HAS_UNPREDICTABLE_JUMP_FLAG")
-    if p.needs_guard_ip:
-        flags.append("HAS_NEEDS_GUARD_IP_FLAG")
-    if p.records_value:
-        flags.append("HAS_RECORDS_VALUE_FLAG")
     if flags:
         return " | ".join(flags)
     else:

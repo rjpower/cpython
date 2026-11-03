@@ -323,6 +323,7 @@ class SimpleTypesTestCase(unittest.TestCase):
                              r"^<cparam 'Zg' at 0x[A-Fa-f0-9]+>$")
 
     @test.support.cpython_only
+    @test.support.requires_refcounting
     def test_from_param_result_refcount(self):
         # Issue #99952
         class X(Structure):

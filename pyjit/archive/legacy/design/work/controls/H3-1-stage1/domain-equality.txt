@@ -1,0 +1,3 @@
+f46276debf3 baseline versus stage1 restored source
+All264 opcode/pseudo entries and287 dispatch handlers match exactly.
+count302 first267 HAVE_ARGUMENT41 MIN_INSTRUMENTED233

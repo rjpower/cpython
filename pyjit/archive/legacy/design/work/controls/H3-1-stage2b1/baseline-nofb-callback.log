@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/boil/design/work/controls/H3-1-stage2b1/selection_probe.py", line 76, in <module>
+    probe(sys.argv[1])
+    ~~~~~^^^^^^^^^^^^^
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/boil/design/work/controls/H3-1-stage2b1/selection_probe.py", line 52, in probe
+    assert installed in events
+           ^^^^^^^^^^^^^^^^^^^
+AssertionError

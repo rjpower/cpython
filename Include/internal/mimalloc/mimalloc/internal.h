@@ -536,6 +536,7 @@ static inline mi_page_t* _mi_heap_get_free_small_page(mi_heap_t* heap, size_t si
   return heap->pages_free_direct[idx];
 }
 
+
 // Segment that contains the pointer
 // Large aligned blocks may be aligned at N*MI_SEGMENT_SIZE (inside a huge segment > MI_SEGMENT_SIZE),
 // and we need align "down" to the segment info which is `MI_SEGMENT_SIZE` bytes before it;

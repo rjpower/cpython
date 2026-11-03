@@ -337,6 +337,7 @@ class ContextTest(unittest.TestCase):
         self.assertEqual(c.get(), [])
 
     @isolated_context
+    @support.requires_refcounting
     def test_reset_with_reentrant_finalizer(self):
         var = contextvars.ContextVar('var')
         var.set('original')

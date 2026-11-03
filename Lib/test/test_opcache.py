@@ -8,7 +8,7 @@ import types
 import unittest
 from test.support import (threading_helper, check_impl_detail,
                           requires_specialization,
-                          cpython_only, requires_jit_disabled, reset_code)
+                          cpython_only, reset_code, Py_GC, Py_SHAPES)
 from test.support.import_helper import import_module
 
 # Skip this module on other interpreters, it is cpython specific:
@@ -17,12 +17,21 @@ if check_impl_detail(cpython=False):
 
 _testinternalcapi = import_module("_testinternalcapi")
 
+# PYTHON_TAGGED_VALUES=0 turns off the specializations that produce inline
+# ints, which builds without inline values do not have.
+int_producers = getattr(_testinternalcapi, "TAGGED_VALUES", True)
+
+# Instances with inline values and no __dict__ get the shape handlers
+# under --with-shapes.
+LOAD_ATTR_INSTANCE = "LOAD_ATTR_SHAPE" if Py_SHAPES else "LOAD_ATTR_INSTANCE_VALUE"
+STORE_ATTR_INSTANCE = "STORE_ATTR_SHAPE" if Py_SHAPES else "STORE_ATTR_INSTANCE_VALUE"
+
 
 def have_dict_key_versions():
-    # max version value that can be stored in the load global cache. This is
-    # determined by the type of module_keys_version and builtin_keys_version
-    # in _PyLoadGlobalCache, uint16_t.
-    max_version = 1<<16
+    # max version value that can be stored in the LOAD_GLOBAL feedback entry.
+    # This is determined by the type of globals_version and builtins_version
+    # in _PyFbGlobal, uint32_t.
+    max_version = 1<<32
     # use a wide safety margin (use only half of what's available)
     limit = max_version // 2
     return _testinternalcapi.get_next_dict_keys_version() < limit
@@ -525,7 +534,6 @@ class TestCallCache(TestBase):
             f(None)
             f()
 
-    @requires_jit_disabled
     @requires_specialization
     def test_assign_init_code(self):
         class MyClass:
@@ -548,7 +556,6 @@ class TestCallCache(TestBase):
         MyClass.__init__.__code__ = count_args.__code__
         instantiate()
 
-    @requires_jit_disabled
     @requires_specialization
     def test_push_init_frame_fails(self):
         def instantiate():
@@ -577,7 +584,6 @@ class TestCallCache(TestBase):
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
             f()
 
-    @requires_jit_disabled
     @requires_specialization
     def test_specialize_call_function_ex_py(self):
         def ex_py(*args, **kwargs):
@@ -593,7 +599,6 @@ class TestCallCache(TestBase):
             instantiate()
         self.assert_specialized(instantiate, "CALL_EX_PY")
 
-    @requires_jit_disabled
     @requires_specialization
     def test_specialize_call_function_ex_py_fail(self):
         def ex_py(*args, **kwargs):
@@ -629,7 +634,6 @@ class TestRacesDoNotCrash(TestBase):
     LOOPS = 4
     WRITERS = 2
 
-    @requires_jit_disabled
     def assert_races_do_not_crash(
         self, opname, get_items, read, write, *, check_items=False
     ):
@@ -884,7 +888,7 @@ class TestRacesDoNotCrash(TestBase):
             for item in items:
                 item.__dict__[None] = None
 
-        opname = "LOAD_ATTR_INSTANCE_VALUE"
+        opname = LOAD_ATTR_INSTANCE
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
@@ -1161,6 +1165,32 @@ class TestRacesDoNotCrash(TestBase):
         self.assert_races_do_not_crash(opname, get_items, read, write)
 
     @requires_specialization
+    def test_store_attr_with_hint_materialized_dict(self):
+        def get_items():
+            class C:
+                pass
+
+            items = []
+            for _ in range(self.ITEMS):
+                item = C()
+                item.a = None
+                # A split dict that shares the inline values:
+                vars(item)
+                items.append(item)
+            return items
+
+        def read(items):
+            for item in items:
+                item.a = None
+
+        def write(items):
+            for item in items:
+                item.__dict__[None] = None
+
+        opname = "STORE_ATTR_WITH_HINT"
+        self.assert_races_do_not_crash(opname, get_items, read, write)
+
+    @requires_specialization
     def test_store_subscr_list_int(self):
         def get_items():
             items = []
@@ -1373,8 +1403,9 @@ class TestSpecializer(TestBase):
                 self.assertEqual(c, 3)
 
         binary_op_add_int()
-        self.assert_specialized(binary_op_add_int, "BINARY_OP_ADD_INT")
-        self.assert_no_opcode(binary_op_add_int, "BINARY_OP")
+        if int_producers:
+            self.assert_specialized(binary_op_add_int, "BINARY_OP_ADD_INT")
+            self.assert_no_opcode(binary_op_add_int, "BINARY_OP")
 
         def binary_op_int_non_compact():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
@@ -1446,8 +1477,13 @@ class TestSpecializer(TestBase):
                 self.assertEqual(c, 0.5)
 
         binary_op_add_extend()
-        self.assert_specialized(binary_op_add_extend, "BINARY_OP_EXTEND")
-        self.assert_no_opcode(binary_op_add_extend, "BINARY_OP")
+        # Float arithmetic takes an int operand.
+        if int_producers:
+            for opname in ("BINARY_OP_ADD_FLOAT", "BINARY_OP_SUBTRACT_FLOAT",
+                           "BINARY_OP_MULTIPLY_FLOAT", "BINARY_OP_TRUEDIV_FLOAT"):
+                self.assert_specialized(binary_op_add_extend, opname)
+            self.assert_no_opcode(binary_op_add_extend, "BINARY_OP")
+        self.assert_no_opcode(binary_op_add_extend, "BINARY_OP_EXTEND")
 
         def binary_op_add_extend_sequences():
             l1 = [1, 2]
@@ -1534,8 +1570,26 @@ class TestSpecializer(TestBase):
                 self.assertEqual(a, 10)
 
         binary_op_bitwise_extend()
-        self.assert_specialized(binary_op_bitwise_extend, "BINARY_OP_EXTEND")
-        self.assert_no_opcode(binary_op_bitwise_extend, "BINARY_OP")
+        if int_producers:
+            for opname in ("BINARY_OP_AND_INT", "BINARY_OP_OR_INT", "BINARY_OP_XOR_INT"):
+                self.assert_specialized(binary_op_bitwise_extend, opname)
+            self.assert_no_opcode(binary_op_bitwise_extend, "BINARY_OP")
+        self.assert_no_opcode(binary_op_bitwise_extend, "BINARY_OP_EXTEND")
+
+        def binary_op_int_division_and_shifts():
+            for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
+                a, b = -7, 2
+                self.assertEqual(a // b, -4)
+                self.assertEqual(a % b, 1)
+                self.assertEqual(a << b, -28)
+                self.assertEqual(a >> b, -2)
+
+        binary_op_int_division_and_shifts()
+        if int_producers:
+            for opname in ("BINARY_OP_FLOOR_DIVIDE_INT", "BINARY_OP_REMAINDER_INT",
+                           "BINARY_OP_LSHIFT_INT", "BINARY_OP_RSHIFT_INT"):
+                self.assert_specialized(binary_op_int_division_and_shifts, opname)
+            self.assert_no_opcode(binary_op_int_division_and_shifts, "BINARY_OP")
 
     @cpython_only
     @requires_specialization
@@ -1728,13 +1782,13 @@ class TestSpecializer(TestBase):
 
         set_value(_testinternalcapi.SPECIALIZATION_THRESHOLD)
 
-        self.assert_specialized(set_value, "STORE_ATTR_INSTANCE_VALUE")
+        self.assert_specialized(set_value, STORE_ATTR_INSTANCE)
         self.assert_no_opcode(set_value, "STORE_ATTR")
 
         # Adding a property for 'x' should unspecialize it.
         C.x = property(lambda self: None, lambda self, x: None)
         set_value(_testinternalcapi.SPECIALIZATION_COOLDOWN)
-        self.assert_no_opcode(set_value, "STORE_ATTR_INSTANCE_VALUE")
+        self.assert_no_opcode(set_value, STORE_ATTR_INSTANCE)
 
     @cpython_only
     @requires_specialization
@@ -1763,7 +1817,69 @@ class TestSpecializer(TestBase):
 
     @cpython_only
     @requires_specialization
+    def test_attr_materialized_dict(self):
+        class C:
+            def __init__(self):
+                self.x = 0
+
+        c = C()
+        d = vars(c)
+        self.assertTrue(_testinternalcapi.has_inline_values(c))
+
+        @reset_code
+        def get_value(n):
+            for _ in range(n):
+                c.x
+
+        @reset_code
+        def set_value(n):
+            for i in range(n):
+                c.x = i
+
+        n = _testinternalcapi.SPECIALIZATION_THRESHOLD
+        get_value(n)
+        self.assert_specialized(get_value, "LOAD_ATTR_INSTANCE_VALUE")
+        self.assert_no_opcode(get_value, "LOAD_ATTR")
+
+        set_value(n)
+        self.assert_specialized(set_value, "STORE_ATTR_WITH_HINT")
+        self.assert_no_opcode(set_value, "STORE_ATTR")
+        self.assertTrue(_testinternalcapi.has_inline_values(c))
+        self.assertIs(vars(c), d)
+        self.assertEqual(d, {"x": n - 1})
+        d["x"] = "y"
+        self.assertEqual(c.x, "y")
+
+    @cpython_only
+    @requires_specialization
     def test_to_bool(self):
+        # UNARY_NOT and the conditional jumps test truth themselves, so
+        # TO_BOOL remains only for "not not x"
+        def to_bool_value(elems):
+            return [not not e for e in elems]
+
+        cases = (("BOOL", [True, False]), ("INT", [0, 1, 2**40]),
+                 ("LIST", [[], [1]]), ("NONE", [None]), ("STR", ["", "a"]))
+        for kind, values in cases:
+            with self.subTest(kind=kind):
+                f = types.FunctionType(to_bool_value.__code__.replace(), {})
+                elems = values * _testinternalcapi.SPECIALIZATION_THRESHOLD
+                self.assertEqual(f(elems), [bool(e) for e in elems])
+                self.assert_specialized(f, f"TO_BOOL_{kind}")
+                self.assert_no_opcode(f, "TO_BOOL")
+
+    def assert_jump_specialized(self, f, kind):
+        # Either sense: the layout of the blocks may invert a jump
+        opnames = {i.opname for i in dis.get_instructions(f, adaptive=True)}
+        self.assertTrue({f"POP_JUMP_IF_FALSE_{kind}",
+                         f"POP_JUMP_IF_TRUE_{kind}"} & opnames, opnames)
+        self.assertFalse({"POP_JUMP_IF_FALSE", "POP_JUMP_IF_TRUE",
+                          "TO_BOOL", "UNARY_NOT"} & opnames, opnames)
+
+    @cpython_only
+    @requires_specialization
+    def test_pop_jump_if(self):
+        # The conditional jumps test truth, and specialise as TO_BOOL does
         def to_bool_bool():
             true_cnt, false_cnt = 0, 0
             elems = [e % 2 == 0 for e in range(_testinternalcapi.SPECIALIZATION_THRESHOLD)]
@@ -1777,8 +1893,7 @@ class TestSpecializer(TestBase):
             self.assertEqual(false_cnt, d)
 
         to_bool_bool()
-        self.assert_specialized(to_bool_bool, "TO_BOOL_BOOL")
-        self.assert_no_opcode(to_bool_bool, "TO_BOOL")
+        self.assert_jump_specialized(to_bool_bool, "BOOL")
 
         def to_bool_int():
             count = 0
@@ -1790,8 +1905,7 @@ class TestSpecializer(TestBase):
             self.assertEqual(count, _testinternalcapi.SPECIALIZATION_THRESHOLD - 2)
 
         to_bool_int()
-        self.assert_specialized(to_bool_int, "TO_BOOL_INT")
-        self.assert_no_opcode(to_bool_int, "TO_BOOL")
+        self.assert_jump_specialized(to_bool_int, "INT")
 
         def to_bool_list():
             count = 0
@@ -1802,8 +1916,7 @@ class TestSpecializer(TestBase):
             self.assertEqual(count, sum(range(_testinternalcapi.SPECIALIZATION_THRESHOLD)))
 
         to_bool_list()
-        self.assert_specialized(to_bool_list, "TO_BOOL_LIST")
-        self.assert_no_opcode(to_bool_list, "TO_BOOL")
+        self.assert_jump_specialized(to_bool_list, "LIST")
 
         def to_bool_none():
             count = 0
@@ -1814,8 +1927,7 @@ class TestSpecializer(TestBase):
             self.assertEqual(count, _testinternalcapi.SPECIALIZATION_THRESHOLD)
 
         to_bool_none()
-        self.assert_specialized(to_bool_none, "TO_BOOL_NONE")
-        self.assert_no_opcode(to_bool_none, "TO_BOOL")
+        self.assert_jump_specialized(to_bool_none, "NONE")
 
         def to_bool_str():
             count = 0
@@ -1826,8 +1938,7 @@ class TestSpecializer(TestBase):
             self.assertEqual(count, _testinternalcapi.SPECIALIZATION_THRESHOLD - 1)
 
         to_bool_str()
-        self.assert_specialized(to_bool_str, "TO_BOOL_STR")
-        self.assert_no_opcode(to_bool_str, "TO_BOOL")
+        self.assert_jump_specialized(to_bool_str, "STR")
 
     @cpython_only
     @requires_specialization
@@ -2110,8 +2221,9 @@ class TestSpecializer(TestBase):
                 self.assertIn(i, r)
 
         for_iter_range()
-        self.assert_specialized(for_iter_range, "FOR_ITER_RANGE")
-        self.assert_no_opcode(for_iter_range, "FOR_ITER")
+        if int_producers:
+            self.assert_specialized(for_iter_range, "FOR_ITER_RANGE")
+            self.assert_no_opcode(for_iter_range, "FOR_ITER")
 
         def for_iter_generator():
             for i in (i for i in range(10)):
@@ -2193,7 +2305,7 @@ class TestSpecializer(TestBase):
             list_append([], holder)
         self.assert_specialized(list_append, "CALL_LIST_APPEND")
 
-        refcount = sys.getrefcount(item)
+        refcount = sys.getrefcount(item) if not Py_GC else None
         # An empty list has no spare capacity, so append() must resize it.
         lst = []
         with self.assertRaises(MemoryError):
@@ -2203,7 +2315,8 @@ class TestSpecializer(TestBase):
             finally:
                 _testcapi.remove_mem_hooks()
         self.assertEqual(lst, [])
-        self.assertEqual(sys.getrefcount(item), refcount)
+        if not Py_GC:
+            self.assertEqual(sys.getrefcount(item), refcount)
 
     @cpython_only
     @requires_specialization
@@ -2385,6 +2498,128 @@ class TestSpecializer(TestBase):
         load_enum_member()
         self.assert_specialized(load_enum_member,
                                 "LOAD_ATTR_CLASS_WITH_METACLASS_CHECK")
+
+
+@cpython_only
+class TestFeedback(TestBase):
+    """The typed feedback entries of Include/internal/pycore_feedback.h."""
+
+    KINDS = {
+        "RESUME": "COUNTER", "JUMP_BACKWARD": "COUNTER",
+        "TO_BOOL": "UNARY", "UNPACK_SEQUENCE": "UNARY", "FOR_ITER": "UNARY",
+        "GET_ITER": "UNARY", "SEND": "UNARY",
+        "BINARY_OP": "BINARY", "COMPARE_OP": "BINARY",
+        "CONTAINS_OP": "BINARY", "STORE_SUBSCR": "BINARY",
+        "LOAD_ATTR": "ATTR", "STORE_ATTR": "ATTR", "LOAD_SUPER_ATTR": "ATTR",
+        "LOAD_GLOBAL": "GLOBAL",
+        "CALL": "CALL", "CALL_KW": "CALL", "CALL_FUNCTION_EX": "CALL",
+        "POP_JUMP": "BRANCH",
+    }
+
+    def feedback(self, func, opname):
+        return [_testinternalcapi.get_feedback(func.__code__, i.offset)
+                for i in dis.get_instructions(func) if i.opname == opname]
+
+    def test_kinds(self):
+        class C:
+            def m(self, o, a, b, *args, **kw):
+                for x in [a, b]:
+                    if x in o and not a or a < b:
+                        o.y = a + b
+                        o[x] = o.z
+                        a, b = o
+                print(len(args), *args, **kw)
+                print(a, end=not not b)
+                return super().m
+
+        def g(it):
+            yield from it
+
+        # No handler of the register IR reads a COUNTER entry, so it has none
+        no_entry = {op for op, kind in self.KINDS.items() if kind == "COUNTER"}
+        seen = set()
+        for func in C.m, g:
+            for instr in dis.get_instructions(func):
+                entry = _testinternalcapi.get_feedback(func.__code__,
+                                                       instr.offset)
+                name = instr.opname
+                if name.startswith("POP_JUMP"):
+                    # A branch keeps its history in the arg of its entry
+                    name = "POP_JUMP"
+                if instr.fb is None or name in no_entry:
+                    self.assertIsNone(entry, instr.opname)
+                    continue
+                kind, state, *_ = entry
+                self.assertEqual(kind, self.KINDS[name], instr.opname)
+                self.assertEqual(state, "COLD", instr.opname)
+                seen.add(name)
+        self.assertEqual(seen, set(self.KINDS) - no_entry)
+
+    @requires_specialization
+    def test_poly_and_mega(self):
+        _testcapi = import_module("_testcapi")
+
+        class C:
+            def __init__(self):
+                self.x = 1
+
+        # One type more than a poly table holds
+        classes = [type(f"C{i}", (C,), {}) for i in range(5)]
+        objects = [cls() for cls in classes]
+
+        def f(o):
+            return o.x
+
+        handler = dis._specialized_opmap[LOAD_ATTR_INSTANCE]
+        # A row's aux field holds the shape of the object, if it has one.
+        aux = _testinternalcapi.get_object_shape(objects[0]) if Py_SHAPES else 0
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
+            f(objects[0])
+        self.assert_specialized(f, LOAD_ATTR_INSTANCE)
+        [(kind, state, type_version, _, rows)] = self.feedback(f, "LOAD_ATTR")
+        self.assertEqual((kind, state, rows), ("ATTR", "MONO", []))
+        self.assertEqual(type_version, _testcapi.type_get_version(classes[0]))
+
+        for n in range(1, len(classes)):
+            for _ in range(_testinternalcapi.SPECIALIZATION_COOLDOWN):
+                f(objects[n])
+            [(_, state, type_version, _, rows)] = self.feedback(f, "LOAD_ATTR")
+            self.assertEqual(type_version,
+                             _testcapi.type_get_version(classes[n]))
+            expected = [(_testcapi.type_get_version(cls), aux, handler)
+                        for cls in classes[:n + 1]]
+            if n < 4:
+                self.assertEqual(state, "POLY")
+                self.assertEqual(rows, expected)
+            else:
+                self.assertEqual(state, "MEGA")
+                self.assertEqual(rows, expected[:4])
+
+    @requires_specialization
+    def test_operand_versions(self):
+        _testcapi = import_module("_testcapi")
+
+        def mul(a, b):
+            return a * b
+
+        def g():
+            pass
+
+        def call(f):
+            return f()
+
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
+            mul("ab", 3)
+            call(g)
+        [(kind, state, lhs, rhs, _)] = self.feedback(mul, "BINARY_OP")
+        self.assertEqual((kind, state), ("BINARY", "MONO"))
+        self.assertEqual(lhs, _testcapi.type_get_version(str))
+        self.assertEqual(rhs, _testcapi.type_get_version(int))
+        [(kind, state, func_version, callable_type, _)] = self.feedback(call, "CALL")
+        self.assertEqual((kind, state), ("CALL", "MONO"))
+        self.assertNotEqual(func_version, 0)
+        self.assertEqual(callable_type,
+                         _testcapi.type_get_version(types.FunctionType))
 
 
 if __name__ == "__main__":

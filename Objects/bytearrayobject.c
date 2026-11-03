@@ -2982,6 +2982,15 @@ Construct a mutable bytearray object from:\n\
 
 static PyObject *bytearray_iter(PyObject *seq);
 
+/* bytearray is not a GC type; its buffer is a bytes object, which the
+   tracing mark must still reach. */
+static int
+bytearray_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    Py_VISIT(((PyByteArrayObject *)op)->ob_bytes_object);
+    return 0;
+}
+
 PyTypeObject PyByteArray_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "bytearray",
@@ -3005,7 +3014,7 @@ PyTypeObject PyByteArray_Type = {
     Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE |
         _Py_TPFLAGS_MATCH_SELF,       /* tp_flags */
     bytearray_doc,                      /* tp_doc */
-    0,                                  /* tp_traverse */
+    bytearray_traverse,                 /* tp_traverse */
     0,                                  /* tp_clear */
     bytearray_richcompare,              /* tp_richcompare */
     0,                                  /* tp_weaklistoffset */

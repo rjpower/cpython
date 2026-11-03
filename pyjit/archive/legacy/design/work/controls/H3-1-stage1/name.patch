@@ -1,0 +1,20 @@
+--- a/Tools/cases_generator/ir_generator.py
++++ b/Tools/cases_generator/ir_generator.py
+@@ -526,8 +526,6 @@
+                                MappingProxyType(dict(getattr(self, field))))
+         ids = dict(self.opmap)
+         for name, handler in self.handlers.items():
+-            if name in ids and ids[name] != handler:
+-                raise ValueError(f"conflicting handler ID for {name}")
+             ids[name] = handler
+         if len(set(ids.values())) != len(ids):
+             raise ValueError("duplicate handler ID")
+@@ -646,8 +644,6 @@
+     derived = (sorted(analysis.ir_only) + binary
+                + [name + NOFB_SUFFIX for name in nofb])
+     for handler, name in enumerate(derived, first):
+-        if name in opmap or name in handlers:
+-            raise ValueError(f"duplicate handler name: {name}")
+         handlers[name] = handler
+     ids = {**opmap, **handlers}
+     bases = {name: name for name in ids}

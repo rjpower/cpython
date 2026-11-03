@@ -1198,7 +1198,19 @@ lru_list_elem_dealloc(PyObject *op)
     Py_DECREF(tp);
 }
 
+/* The type is not a GC type, but the tracing mark must reach its
+   members.  The mark visits the heap type itself. */
+static int
+lru_list_elem_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    lru_list_elem *self = lru_list_elem_CAST(op);
+    Py_VISIT(self->key);
+    Py_VISIT(self->result);
+    return 0;
+}
+
 static PyType_Slot lru_list_elem_type_slots[] = {
+    {Py_tp_traverse, lru_list_elem_traverse},
     {Py_tp_dealloc, lru_list_elem_dealloc},
     {0, 0}
 };
@@ -1854,6 +1866,10 @@ lru_cache_tp_traverse(PyObject *op, visitproc visit, void *arg)
     lru_list_elem *link = self->root.next;
     while (link != &self->root) {
         lru_list_elem *next = link->next;
+        /* The list owns its links.  A link is not a GC object, so the
+           cycle collector needs its members visited here; the tracing
+           mark needs the link itself. */
+        Py_VISIT(link);
         Py_VISIT(link->key);
         Py_VISIT(link->result);
         Py_VISIT(Py_TYPE(link));

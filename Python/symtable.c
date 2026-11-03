@@ -205,6 +205,24 @@ ste_dealloc(PyObject *op)
     PyObject_Free(ste);
 }
 
+/* The type is not a GC type, but the tracing mark must reach its
+   members. */
+static int
+ste_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    PySTEntryObject *ste = (PySTEntryObject *)op;
+    Py_VISIT(ste->ste_id);
+    Py_VISIT(ste->ste_name);
+    Py_VISIT(ste->ste_function_name);
+    Py_VISIT(ste->ste_symbols);
+    Py_VISIT(ste->ste_varnames);
+    Py_VISIT(ste->ste_children);
+    Py_VISIT(ste->ste_directives);
+    Py_VISIT(ste->ste_annotation_block);
+    Py_VISIT(ste->ste_mangled_names);
+    return 0;
+}
+
 #define OFF(x) offsetof(PySTEntryObject, x)
 
 static PyMemberDef ste_memberlist[] = {
@@ -241,7 +259,7 @@ PyTypeObject PySTEntry_Type = {
     0,                                          /* tp_as_buffer */
     Py_TPFLAGS_DEFAULT,                         /* tp_flags */
     0,                                          /* tp_doc */
-    0,                                          /* tp_traverse */
+    ste_traverse,                               /* tp_traverse */
     0,                                          /* tp_clear */
     0,                                          /* tp_richcompare */
     0,                                          /* tp_weaklistoffset */

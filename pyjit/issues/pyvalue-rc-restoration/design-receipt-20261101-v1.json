@@ -1,0 +1,18 @@
+{
+  "decision": "ACCEPT_DESIGN_ONLY",
+  "author_files": {
+    "proposal.txt": "d20b40a11f9602b0a92f7117816d9e12dc948ef673d8928075bb8da6fce38f91",
+    "dependency-ledger.json": "2b28124e077f46ffa4d7742178e0344e22886638e19d68ba30fa6083c714a976",
+    "provenance.json": "5a983d78902105703d59f603347f83e10c24b391fd81786d8bbac1cf5e2ff711"
+  },
+  "review_sha256": "2d9772ecc3419047c0a4153ac3ff65672233e4854631055ea7d9f6953465c6d8",
+  "provenance_replay_sha256": "7b47559b088ebb41bd6dd598ba286f46d000c30e431a189e64f52bdc0af8d5db",
+  "audit_sha256": "3612607f8068fe628f3cd84da0c6c03160ffb4b5f7d19d7d6c2b3b7d5599b2de",
+  "seal_sha256": "62d7df5ed54d6b8fa389159fb0f4107ae8bac2b29cf2b8f4ef307b6447f3b14d",
+  "current_reference14_hashes_independently_checked": true,
+  "historical_reference20_hashes_independently_checked": true,
+  "source_or_helper_mutations": false,
+  "compiler_candidate_or_activation_execution": false,
+  "implementation_authority": false,
+  "next_native_batch": "HELD_NO_ACTIVATION"
+}

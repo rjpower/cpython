@@ -63,6 +63,10 @@ extern "C" {
 # define _Py_Debug_interpreter_state_tlbc_generation 0
 #endif
 
+// The register IR has no thread-local bytecode.
+# undef _Py_Debug_code_object_co_tlbc
+# define _Py_Debug_code_object_co_tlbc 0
+
 
 typedef struct _Py_DebugOffsets {
     char cookie[8] _Py_NONSTRING;
@@ -126,9 +130,10 @@ typedef struct _Py_DebugOffsets {
         uint64_t previous;
         uint64_t executable;
         uint64_t instr_ptr;
-        uint64_t localsplus;
+        uint64_t ir_words;
+        uint64_t owned_slots;
         uint64_t owner;
-        uint64_t stackpointer;
+        uint64_t return_slot;
         uint64_t tlbc_index;
     } interpreter_frame;
 
@@ -143,7 +148,11 @@ typedef struct _Py_DebugOffsets {
         uint64_t argcount;
         uint64_t localsplusnames;
         uint64_t localspluskinds;
-        uint64_t co_code_adaptive;
+        // The 8-byte IR words as the compiler emitted them; a frame runs
+        // a copy, whose first word interpreter_frame.ir_words points to, so
+        // (instr_ptr - ir_words) / 8 is the word index that the line table
+        // and the exception table use.
+        uint64_t co_words;
         uint64_t co_tlbc;
     } code_object;
 
@@ -313,9 +322,10 @@ typedef struct _Py_DebugOffsets {
         .previous = offsetof(_PyInterpreterFrame, previous), \
         .executable = offsetof(_PyInterpreterFrame, f_executable), \
         .instr_ptr = offsetof(_PyInterpreterFrame, instr_ptr), \
-        .localsplus = offsetof(_PyInterpreterFrame, localsplus), \
+        .ir_words = offsetof(_PyInterpreterFrame, ir_words), \
+        .owned_slots = offsetof(_PyInterpreterFrame, owned_slots), \
         .owner = offsetof(_PyInterpreterFrame, owner), \
-        .stackpointer = offsetof(_PyInterpreterFrame, stackpointer), \
+        .return_slot = offsetof(_PyInterpreterFrame, return_slot), \
         .tlbc_index = _Py_Debug_interpreter_frame_tlbc_index, \
     }, \
     .code_object = { \
@@ -328,7 +338,7 @@ typedef struct _Py_DebugOffsets {
         .argcount = offsetof(PyCodeObject, co_argcount), \
         .localsplusnames = offsetof(PyCodeObject, co_localsplusnames), \
         .localspluskinds = offsetof(PyCodeObject, co_localspluskinds), \
-        .co_code_adaptive = offsetof(PyCodeObject, co_code_adaptive), \
+        .co_words = offsetof(PyCodeObject, co_words), \
         .co_tlbc = _Py_Debug_code_object_co_tlbc, \
     }, \
     .pyobject = { \

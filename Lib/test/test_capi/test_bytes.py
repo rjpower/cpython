@@ -244,8 +244,12 @@ class CAPITest(unittest.TestCase):
         """Test _PyBytes_Resize()"""
         _resize = _testcapi.bytes_resize
 
+        def assert_is_refcnt_one(refcnt):
+            if not support.Py_GC:  # Py_GC reports no reference counts.
+                self.assertEqual(refcnt, 1)
+
         def assert_is_fresh_copy(result, refcnt, is_new_obj):
-            self.assertEqual(refcnt, 1)
+            assert_is_refcnt_one(refcnt)
             self.assertTrue(is_new_obj)
             self.assertFalse(sys._is_immortal(result))
 
@@ -272,7 +276,7 @@ class CAPITest(unittest.TestCase):
             else:
                 # An in-place resize can return the same memory address, or
                 # not. 'is_new_obj' cannot be tested.
-                self.assertEqual(refcnt, 1)
+                assert_is_refcnt_one(refcnt)
                 self.assertFalse(sys._is_immortal(result))
 
             return result
@@ -346,6 +350,8 @@ class CAPITest(unittest.TestCase):
             bytes_join(b'', NULL)
 
     @unittest.skipUnless(support.Py_DEBUG, 'need debug build (Py_DEBUG)')
+    @unittest.skipIf(support.Py_GC, "the sweep does not check dead objects "
+                     "for overflow")
     def test_detect_overflow(self):
         # Test detection of buffer overflow
         size = 123    # bytes

@@ -2913,7 +2913,20 @@ uptime_bsd(PyObject *Py_UNUSED(self), PyObject *Py_UNUSED(args))
 #endif
 
 
+/* An extension-owned cached reference for the diagnostic verifier's data
+   segment scan. Volatile prevents dead-store removal by the compiler. */
+static PyObject *volatile static_object = NULL;
+
+static PyObject *
+set_static_object(PyObject *self, PyObject *obj)
+{
+    Py_XSETREF(static_object, Py_IsNone(obj) ? NULL : Py_NewRef(obj));
+    Py_RETURN_NONE;
+}
+
+
 static PyMethodDef TestMethods[] = {
+    {"set_static_object",       set_static_object,               METH_O},
     {"set_errno",               set_errno,                       METH_VARARGS},
     {"test_config",             test_config,                     METH_NOARGS},
     {"test_sizeof_c_types",     test_sizeof_c_types,             METH_NOARGS},
@@ -3482,6 +3495,15 @@ ContainerNoGC_dealloc(PyObject *op)
     Py_TYPE(self)->tp_free(self);
 }
 
+/* Without Py_TPFLAGS_HAVE_GC the cycle collector never calls this, so the
+   type still hides its value from it; the tracing mark does call it. */
+static int
+ContainerNoGC_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    Py_VISIT(((ContainerNoGCobject *)op)->value);
+    return 0;
+}
+
 static PyMemberDef ContainerNoGC_members[] = {
     {"value", _Py_T_OBJECT, offsetof(ContainerNoGCobject, value), Py_READONLY,
      PyDoc_STR("a container value for test purposes")},
@@ -3494,6 +3516,7 @@ static PyTypeObject ContainerNoGC_type = {
     sizeof(ContainerNoGCobject),
     .tp_dealloc = ContainerNoGC_dealloc,
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+    .tp_traverse = ContainerNoGC_traverse,
     .tp_members = ContainerNoGC_members,
     .tp_new = ContainerNoGC_new,
 };

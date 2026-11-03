@@ -1040,7 +1040,18 @@ static PyGetSetDef HMACObject_getsets[] = {
     {NULL, NULL, NULL, NULL, NULL} /* sentinel */
 };
 
+/* The type is not a GC type, but the tracing mark must reach its
+   members.  The mark visits the heap type itself. */
+static int
+HMACObject_traverse(PyObject *op, visitproc visit, void *arg)
+{
+    HMACObject *self = HMACObject_CAST(op);
+    Py_VISIT(self->name);
+    return 0;
+}
+
 static PyType_Slot HMACObject_Type_slots[] = {
+    {Py_tp_traverse, HMACObject_traverse},
     {Py_tp_repr, HMACObject_repr},
     {Py_tp_methods, HMACObject_methods},
     {Py_tp_getset, HMACObject_getsets},
@@ -1654,11 +1665,38 @@ hmacmodule_exec(PyObject *module)
     return 0;
 }
 
+struct hinfo_visit_args {
+    visitproc visit;
+    void *arg;
+};
+
+static int
+hinfo_traverse_entry(_Py_hashtable_t *ht, const void *key, const void *value,
+                     void *user_data)
+{
+    const py_hmac_hinfo *info = (const py_hmac_hinfo *)value;
+    struct hinfo_visit_args *a = (struct hinfo_visit_args *)user_data;
+    // An entry is also linked under its hashlib name; visit it once.
+    if (key == info->name && info->display_name != NULL) {
+        return a->visit(info->display_name, a->arg);
+    }
+    return 0;
+}
+
 static int
 hmacmodule_traverse(PyObject *mod, visitproc visit, void *arg)
 {
     Py_VISIT(Py_TYPE(mod));
     hmacmodule_state *state = get_hmacmodule_state(mod);
+    // The display names are strings, which only the tracing mark needs.
+    if (state->hinfo_table != NULL) {
+        struct hinfo_visit_args a = {visit, arg};
+        int err = _Py_hashtable_foreach(state->hinfo_table,
+                                        hinfo_traverse_entry, &a);
+        if (err) {
+            return err;
+        }
+    }
     Py_VISIT(state->unknown_hash_error);
     Py_VISIT(state->hmac_type);
     Py_VISIT(state->str_lower);

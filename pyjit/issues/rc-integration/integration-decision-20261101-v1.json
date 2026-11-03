@@ -1,0 +1,34 @@
+{
+  "collector_selector": false,
+  "decision": "ACCEPT_INTEGRATED_REFERENCE_COUNTING_RUNTIME",
+  "fresh_images": {
+    "debug": {
+      "methods_passed": 42,
+      "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/rc-integrated-debug-20261101/python",
+      "sha256": "5fad985a78251a280d5d8659092f04eb418fa0c62e0dc6a19dcaa70b6a3856ff",
+      "skips": 0
+    },
+    "release": {
+      "methods_passed": 42,
+      "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/rc-integrated-release-20261101/python",
+      "sha256": "1561b0a9617fc9b97c77766faee1317905a056e20780bfe9fa627d0fc591295b",
+      "skips": 0
+    }
+  },
+  "global_stackref_failures_unresolved": true,
+  "global_stackref_supported": false,
+  "optional_module_limits_retained": true,
+  "performance_parity_claim": false,
+  "qualified_candidate_head": "c4acfdde9d794345cd1f7001bcc7198d7d810f2d",
+  "references": {
+    "build/rc-landing-native-outcome-review-20261101-v1/receipt.json": "d230178ba0e860764d45041932d5ac70f84c3ec0c33c66757f77b44a2178afa1",
+    "build/rc-landing-native-outcome-review-20261101-v1/review.md": "9e5b402f270aec5ebf3e264f6cebd86656ee4d135048f796566ca1157dfe9963",
+    "build/rc-landing-root-activation-20261101-v1/terminal-cleanup.json": "e966153e02f76804a47de32f58c15c818aed84cf4d966276262d4cf1740554ae",
+    "build/rc-main-final-source-bridge-20261101-v1/bridge.json": "f6cf8a2db83da1166401f85c6f9385e78142daa89c55b4845a5ef684d15f27f7"
+  },
+  "remote_push_authorized": false,
+  "source_head": "eba351fee7dacef3f7616e4c0b6fc21c7082eb5d",
+  "source_projection_entries": 6113,
+  "supported_scope": "Linux x86-64 GIL GCC computed mimalloc boxed-slot shapes ordinary release/O1-debug",
+  "utc": "2026-11-01T11:03:54.295926+00:00"
+}

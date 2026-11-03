@@ -414,6 +414,7 @@ class ListTest(list_tests.CommonTest):
         rc, _, _ = assert_python_ok("-c", code)
         self.assertEqual(rc, 0)
 
+    @support.requires_refcounting
     def test_list_overwrite_local(self):
         """Test that overwriting the last reference to the
            iterable doesn't prematurely free the iterable"""

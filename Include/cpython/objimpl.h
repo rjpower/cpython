@@ -102,3 +102,14 @@ PyAPI_FUNC(PyObject *) PyUnstable_Object_GC_NewWithExtraData(PyTypeObject *,
  */
 typedef int (*gcvisitobjects_t)(PyObject*, void*);
 PyAPI_FUNC(void) PyUnstable_GC_VisitObjects(gcvisitobjects_t callback, void* arg);
+
+/* Register an object-pointer location for the diagnostic verifier, such as a
+ * field of native memory that no tp_traverse visits. Registration acquires no
+ * reference and does not keep the object alive: the caller must retain its
+ * ordinary owned reference and remove the registration before freeing its
+ * location. Both operations need an attached thread state. PyGC_AddRoot()
+ * returns 0, or -1 with MemoryError set. */
+PyAPI_FUNC(int) PyGC_AddRoot(PyObject **ref);
+PyAPI_FUNC(void) PyGC_RemoveRoot(PyObject **ref);
+/* For code that also builds against interpreters without these. */
+#define Py_HAVE_PYGC_ADDROOT 1

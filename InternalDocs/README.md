@@ -43,8 +43,6 @@ Program Execution
 
 - [Stack references (_PyStackRef)](stackrefs.md)
 
-- [The JIT](jit.md)
-
 - [Garbage Collector Design](garbage_collector.md)
 
 - [Exception Handling](exception_handling.md)

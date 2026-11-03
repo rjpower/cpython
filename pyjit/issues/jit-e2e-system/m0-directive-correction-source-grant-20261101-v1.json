@@ -1,0 +1,33 @@
+{
+  "decision": "AUTHORIZE_FOCUSED_M0_GENERATOR_CORRECTION",
+  "start_utc": "2026-11-01T17:01:30.776290+00:00",
+  "deadline_utc": "2026-11-01T17:21:30.776290+00:00",
+  "extension_authorized": false,
+  "worktree": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline",
+  "source_base": "49cc47360ccd79c7a89acc8bfa3d546f94afc46c",
+  "allowed_source_paths": [
+    "Tools/cases_generator/ir_generator.py",
+    "Tools/cases_generator/jit_helpers_generator.py",
+    "Python/generated_jit_helpers.c.h",
+    "Python/generated_ir_cases.c.h",
+    "Lib/test/test_generated_cases.py"
+  ],
+  "hypothesis": "The observed C compilation failure is missing physical-line separation before generated preprocessor directives; enforcing writer line boundaries and testing emitted directives fixes this source defect without changing VM semantics.",
+  "requirements": [
+    "Preserve frozen49cc commit and failed build/test logs; no retry of the terminal batch",
+    "Correct generation and add a meaningful check of directive placement; regenerate through existing commands",
+    "Independent exact source review and unchanged old ID/metadata products",
+    "A bounded gcc -fsyntax-only check of corrected ceval.c and jit_runtime.c may read the retained failed debug configuration; use matching include paths/defines, write only new correction logs and no objects/executables",
+    "Freeze correction as a new source commit and capsule"
+  ],
+  "host_tests_authorized": true,
+  "c_syntax_only_authorized": true,
+  "c_syntax_check_ceiling_seconds": 120,
+  "native_executable_target_or_timing_authorized": false,
+  "failed_build_configuration": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/jit-method-baseline/build/jit-method-m0-debug-20261101",
+  "m1_source_authorized": false,
+  "gc_work_authorized": false,
+  "prior_supervisor_session": 78057,
+  "prior_terminal_exit_code": 1,
+  "prior_cache_removed": true
+}

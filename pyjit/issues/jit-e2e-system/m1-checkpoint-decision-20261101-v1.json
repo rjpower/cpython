@@ -1,0 +1,26 @@
+{
+  "utc": "2026-11-01T17:47:07.499886+00:00",
+  "decision": "CHECKPOINT_DELIVERABLES_PRESENT_CONTINUE_SOURCE_WITHIN_ORIGINAL_CAP",
+  "source_complete": false,
+  "source_accepted": false,
+  "candidate_runtime_executed": false,
+  "checkpoint_deadline_utc": "2026-11-01T17:47:09.038683+00:00",
+  "source_deadline_utc": "2026-11-01T18:47:09.038683+00:00",
+  "author_checkpoint": {
+    "path": "build/worktrees/jit-method-baseline/build/jit-method-m1-source/checkpoint.json",
+    "sha256": "f4a1091c96b85e1ebcca072cd3ae1b168b415837b6631d5029d469bafecb6f64"
+  },
+  "independent_checkpoint": {
+    "path": "build/jit-method-m1-source-review-20261101-v1/checkpoint.json",
+    "sha256": "63c33a7508841521645bd810e6603f0681e5ec35d6df4b262dad90e3c869c354"
+  },
+  "concrete_evidence": "Actual descriptor/LIR, x86 branch/helper emission, exec-owned unit and evaluator Action consumer; seven distinct syntax-only TUs pass; standalone encoder emits 501 bytes/six ENDBR destinations, no JIT bytes executed.",
+  "remaining": [
+    "CAPI compile/info and native behavioral fixtures",
+    "Exact final source/ownership review and host regeneration",
+    "Separate focused candidate build/runtime validation"
+  ],
+  "historical_failure_preserved": "syntax-v1 repeated ceval argv for five named rows and failed runtime include; corrected syntax-v2 preserves both original errors.",
+  "source_extension_authorized": false,
+  "candidate_build_runtime_timing_authorized": false
+}

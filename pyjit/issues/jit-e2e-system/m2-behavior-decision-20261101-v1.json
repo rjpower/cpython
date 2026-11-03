@@ -1,0 +1,36 @@
+{
+  "utc": "2026-11-01T19:57:57.717798+00:00",
+  "decision": "ACCEPT_M2_FOCUSED_NATURAL_METHOD_DEBUG_BEHAVIOR",
+  "source": "3174bc0ab726cb7b7b39f25d93f4ec9194c88d3a",
+  "image_sha256": "f92c752a29d365b044b2603e376baedc4c9e864b7bd2f75d96ceee3c49a1e722",
+  "independent_outcome": {
+    "review.md": {
+      "path": "boil/issues/jit-e2e-system/m2-corrected-debug-outcome-review-20261101-v1.md",
+      "sha256": "1dcd8e150cbf927b50ccd5716dfa58025056afe6db2574d63f8d0a0d900e8ab6"
+    },
+    "receipt.json": {
+      "path": "boil/issues/jit-e2e-system/m2-corrected-debug-outcome-receipt-20261101-v1.json",
+      "sha256": "dd077a4657e3ff9f541f0dd3ed50311e71f2f13dec05c6b771251b58d9a28694"
+    }
+  },
+  "completion_sha256": "f5294caa7498efcdcf9de6a1c6c5bd8f4fc7020ed605f447b8c7056a341a84f5",
+  "terminal_cleanup_sha256": "176506c3b7bcea6d66e5cc71f77f5e7fd34bc41f77e14552f0df25c89e1cc1c3",
+  "methods_passed": 28,
+  "natural_methods_passed": 14,
+  "skips": 0,
+  "supervisor_session": 53412,
+  "terminal_exit_code": 0,
+  "fresh_products": 587,
+  "previous_failed_attempt_reclassified": false,
+  "limitations": [
+    "Focused debug behavior only; no release/ASan/full-suite or main integration",
+    "No elapsed benefit or whole-program coverage claim",
+    "Optimizing SSA and genuine trace execution remain unimplemented",
+    "Known optional-module limits persist"
+  ],
+  "next": [
+    "Unchanged-kernel natural workload diagnostics",
+    "Independent observed-loop SSA design review and bounded implementation"
+  ],
+  "gc_or_permanent_backend_options_authorized": false
+}

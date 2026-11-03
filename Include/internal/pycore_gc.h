@@ -71,7 +71,7 @@ _PyObject_CLEAR_GC_BITS(PyObject *op, uint8_t bits_to_clear)
 
 /* True if the object is currently tracked by the GC. */
 static inline int _PyObject_GC_IS_TRACKED(PyObject *op) {
-#ifdef Py_GIL_DISABLED
+#if defined(Py_GIL_DISABLED)
     return _PyObject_HAS_GC_BITS(op, _PyGC_BITS_TRACKED);
 #else
     PyGC_Head *gc = _Py_AS_GC(op);
@@ -164,7 +164,7 @@ static inline void _PyGCHead_SET_PREV(PyGC_Head *gc, PyGC_Head *prev) {
 }
 
 static inline int _PyGC_FINALIZED(PyObject *op) {
-#ifdef Py_GIL_DISABLED
+#if defined(Py_GIL_DISABLED)
     return _PyObject_HAS_GC_BITS(op, _PyGC_BITS_FINALIZED);
 #else
     PyGC_Head *gc = _Py_AS_GC(op);
@@ -172,7 +172,7 @@ static inline int _PyGC_FINALIZED(PyObject *op) {
 #endif
 }
 static inline void _PyGC_SET_FINALIZED(PyObject *op) {
-#ifdef Py_GIL_DISABLED
+#if defined(Py_GIL_DISABLED)
     _PyObject_SET_GC_BITS(op, _PyGC_BITS_FINALIZED);
 #else
     PyGC_Head *gc = _Py_AS_GC(op);
@@ -180,7 +180,7 @@ static inline void _PyGC_SET_FINALIZED(PyObject *op) {
 #endif
 }
 static inline void _PyGC_CLEAR_FINALIZED(PyObject *op) {
-#ifdef Py_GIL_DISABLED
+#if defined(Py_GIL_DISABLED)
     _PyObject_CLEAR_GC_BITS(op, _PyGC_BITS_FINALIZED);
 #else
     PyGC_Head *gc = _Py_AS_GC(op);
@@ -214,7 +214,7 @@ static inline void _PyObject_GC_TRACK(
     _PyObject_ASSERT_FROM(op, !_PyObject_GC_IS_TRACKED(op),
                           "object already tracked by the garbage collector",
                           filename, lineno, __func__);
-#ifdef Py_GIL_DISABLED
+#if defined(Py_GIL_DISABLED)
     _PyObject_SET_GC_BITS(op, _PyGC_BITS_TRACKED);
 #else
     PyGC_Head *gc = _Py_AS_GC(op);
@@ -255,7 +255,7 @@ static inline void _PyObject_GC_UNTRACK(
                           "object not tracked by the garbage collector",
                           filename, lineno, __func__);
 
-#ifdef Py_GIL_DISABLED
+#if defined(Py_GIL_DISABLED)
     _PyObject_CLEAR_GC_BITS(op, _PyGC_BITS_TRACKED);
 #else
     PyGC_Head *gc = _Py_AS_GC(op);
@@ -337,6 +337,21 @@ union _PyStackRef;
 // GC visit callback for tracked interpreter frames
 // GH-150766: exported for greenlet
 PyAPI_FUNC(int) _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visit, void *arg);
+
+/* Visit a reference that cannot be part of a cycle, such as a string, and
+   that only the tracing collector (Python/gc_trace.c) needs.  Immortal
+   objects are skipped: they are roots of the tracing mark, and visiting
+   them would only slow the cycle collector. */
+#define _Py_VISIT_ATOMIC(op)                                        \
+    do {                                                            \
+        PyObject *_atomic_op = _PyObject_CAST(op);                  \
+        if (_atomic_op != NULL && !_Py_IsImmortal(_atomic_op)) {    \
+            int _atomic_vret = visit(_atomic_op, arg);              \
+            if (_atomic_vret) {                                     \
+                return _atomic_vret;                                \
+            }                                                       \
+        }                                                           \
+    } while (0)
 PyAPI_FUNC(int) _PyGC_VisitStackRef(union _PyStackRef *ref, visitproc visit, void *arg);
 
 #ifdef Py_GIL_DISABLED

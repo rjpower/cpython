@@ -1,0 +1,54 @@
+{
+  "GC_optimization_authorized": false,
+  "activation_sha256": "88f82e987d535678382d9b3ac6cc93c49a34331a700b404ffdf1888cdecae365",
+  "aggregate_deletions_per_round": 290,
+  "all_aggregate_single_value_deletions_slower": true,
+  "campaign_result_sha256": "90ba9b9f77884b8770e51cf2a5b43b444274ac91dccf02a456ae9850de69f446",
+  "decision": "REJECT_PC_ABI_NATIVE_PREFIX_ON_FIXED_FULL29_AGGREGATE_ELAPSED_LOSS",
+  "earlier_pilot_only_acceptance_unchanged": true,
+  "geomean29_ratios": [
+    1.022646033918671,
+    1.019360412625895
+  ],
+  "improved_workloads_per_round": [
+    8,
+    7
+  ],
+  "independent_receipt_sha256": "d76d54b6ad0127f1aa66b3ea63b3a974af6f08f4263a2ba8303714ebf9f922a6",
+  "independent_review_sha256": "5bafe471a2f4a6a4b5876e3c13711d3e3baa8577f7a2d32b0c95af66b1b5cb3f",
+  "late_qualification_authorized": false,
+  "main_runtime_changed": false,
+  "material_disposition_receipt_sha256": "6b1c4a94d203d6b81b8f27baf15a7966f1886b0ef4e1a6b8e465b84d292f3b53",
+  "material_disposition_review_sha256": "284cd025e39d6a7a83c8ee501bc935747bda808f70b7a94495c7b3895be58f4f",
+  "material_losses_any_round": 18,
+  "material_losses_both_rounds": 13,
+  "next_authority": "Read-only hot-entry admission diagnosis and design only; no source/compiler/target grant",
+  "parent_checkout": "01d97e1591a55121a61a003e3f201f0f5c889160",
+  "parent_image_source": "eba351fee7dacef3f7616e4c0b6fc21c7082eb5d",
+  "plan_sha256": "fe26ff1997a7a02d7628d222093b0e0aa4cc5fbd72f1d1e93f925474242ca487",
+  "primary_ratios": [
+    0.8726779377309033,
+    0.861372563549249
+  ],
+  "prior_incomplete_campaign_preserved": true,
+  "prior_incomplete_campaign_scored_values": 0,
+  "production_or_landing_accepted": false,
+  "publication_work_authorized": false,
+  "quiet_checks": 348,
+  "regressed_workloads_per_round": [
+    21,
+    22
+  ],
+  "resampling_authorized": false,
+  "root_cleanup_utc": "2026-11-01T13:50:50.124465+00:00",
+  "root_disposition": "Reject progression under the predeclared GM29 rule; retain every loss, without noise or causal claims",
+  "scored_processes": 116,
+  "scored_values": 580,
+  "session_id": 46516,
+  "source_head": "599897b6b5d0bb973b1eea12f8eb41957004b464",
+  "terminal_exit": 0,
+  "terminal_observed_utc": "2026-11-01T13:50:35+00:00",
+  "unscored_origins": 58,
+  "verified_campaign_artifacts": 1158,
+  "workload_deletion_is_diagnostic_only": true
+}

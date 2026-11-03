@@ -1413,57 +1413,26 @@ always available. Unless explicitly noted otherwise, all variables are read-only
 
    .. impl-detail::
 
-      JIT compilation is an *experimental implementation detail* of CPython.
       ``sys._jit`` is not guaranteed to exist or behave the same way in all
-      Python implementations, versions, or build configurations.
+      Python implementations, versions, or build configurations.  This
+      CPython has no JIT compiler, so all three functions return ``False``.
 
    .. versionadded:: 3.14
 
    .. function:: _jit.is_available()
 
       Return ``True`` if the current Python executable supports JIT compilation,
-      and ``False`` otherwise.  This can be controlled by building CPython with
-      the ``--experimental-jit`` option on Windows, and the
-      :option:`--enable-experimental-jit` option on all other platforms.
+      and ``False`` otherwise.
 
    .. function:: _jit.is_enabled()
 
       Return ``True`` if JIT compilation is enabled for the current Python
       process (implies :func:`sys._jit.is_available`), and ``False`` otherwise.
-      If JIT compilation is available, this can be controlled by setting the
-      :envvar:`PYTHON_JIT` environment variable to ``0`` (disabled) or ``1``
-      (enabled) at interpreter startup.
 
    .. function:: _jit.is_active()
 
       Return ``True`` if the topmost Python frame is currently executing JIT
       code (implies :func:`sys._jit.is_enabled`), and ``False`` otherwise.
-
-      .. note::
-
-         This function is intended for testing and debugging the JIT itself.
-         It should be avoided for any other purpose.
-
-      .. note::
-
-         Due to the nature of tracing JIT compilers, repeated calls to this
-         function may give surprising results. For example, branching on its
-         return value will likely lead to unexpected behavior (if doing so
-         causes JIT code to be entered or exited):
-
-         .. code-block:: pycon
-
-            >>> for warmup in range(BIG_NUMBER):
-            ...     # This line is "hot", and is eventually JIT-compiled:
-            ...     if sys._jit.is_active():
-            ...         # This line is "cold", and is run in the interpreter:
-            ...         assert sys._jit.is_active()
-            ...
-            Traceback (most recent call last):
-              File "<stdin>", line 5, in <module>
-                assert sys._jit.is_active()
-                       ~~~~~~~~~~~~~~~~~~^^
-            AssertionError
 
 .. data:: last_exc
 
@@ -2093,8 +2062,6 @@ always available. Unless explicitly noted otherwise, all variables are read-only
 
    Activate the stack profiler trampoline *backend*.
    The only supported backend is ``"perf"``.
-
-   Stack trampolines cannot be activated if the JIT is active.
 
    .. availability:: Linux.
 

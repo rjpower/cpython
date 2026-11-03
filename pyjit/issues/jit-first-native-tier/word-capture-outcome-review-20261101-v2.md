@@ -1,0 +1,19 @@
+# Independent G0 word-capture outcome
+
+2026-11-01 08:57 UTC. **ACCEPT bounded metadata observation only.** Root confirmed supervisor 97754 terminal exit 0. The capture uses clean RC source `dce654018d5ae16ffe5e772976d9ccc2c9d1e01a`, the retained qualified release image `1059ddbd1fc5c212965c0450dd996b95c2172609797472499113a7d274db9c37`, and the actual registered `spectral_norm.py` source SHA `54f77c69a148906d3a346943b4f096d3d91c084920cfdc0145817b922cac43b4`.
+
+One directly scheduled process, PID 2126396, captured the same function and code object before and after exactly 64 calls to `eval_A`: every ordered argument pair in 0–7 once. Its checksum `0x1.2aa497070336fp+2` agrees exactly with an independent host calculation of the pinned expression. The helper invokes neither the registered benchmark `run` nor a JIT entry. This is not an elapsed measurement, full-domain check or successful native-tier admission.
+
+The pristine function contains 14 words. The four arithmetic sites nominated before floor division are concretely present at offsets 2, 3, 5 and 6: two `i+j`, then `+1`, then multiply. The complete function has eight arithmetic sites. Its remaining arithmetic is floor division at 8, adds at 9/11 and true division at 12. Inline loads and RETURN_VALUE remain explicit. No word subset was selected or implementation menu enlarged by this observation.
+
+After those calls the executing copy shows ADD_INT at 2/3/5/9/11, MULTIPLY_INT at 6, FLOOR_DIVIDE_INT at 8 and TRUEDIV_FLOAT at 12. Pristine bytes are unchanged. This records final handler state; it does not measure successful specialized execution frequency, native work removed, register allocation or performance.
+
+I independently decoded all 64-bit words and four 12-bit fields, checked folded-local roles against the actual role enum/borrow masks, and replayed all five recorded pristine accessors against pinned `Python/ir.c` rules. FBARG binary arguments were also cross-checked with the retained disassembly. FoldedInputs is a count, not a borrow mask. Locals, temporaries, feedback indices and physical destinations remain distinct in the retained rows; specialization does not turn those physical homes into SSA values.
+
+The pre-call feedback bytes are genuinely null. The post-call feedback is present. The capture reads raw feedback bytes before requesting detailed feedback; that request can materialize the executing copy. The first snapshot therefore perturbs observation state before warmup. Its label and raw records preserve this fact; the run is not an unobserved specialization experiment. The original v1 nullable-feedback failure remains failed, before its planned 64 calls, with no retroactive credit.
+
+Source/product replay passed all 7,227 inputs, 7,236 completion bindings, the 584-product build baseline plus the existing explicit regular-cache policy, current Makefile/pyconfig/tool file identities and the exact source-to-old-image bridge. Both snapshots bind actual image/kernel/module/extension paths and hashes, shared function/code identities, release RC configuration, mode 0, tagged values, seed 0, no tracing/profiling/monitoring or GC callbacks. Built-in module origins are bound to the image. Raw maps are retained and hashed.
+
+The run/verification receipts passed before the unchanged five-minute deadline. The owned cache was removed; recorded cleanup and an independent current build-lock observation both show Python and `_testembed` idle. No compiler query, compilation, target invocation, rerun or source change occurred in this review. RC qualification and future JIT design/implementation remain separate decisions.
+
+Evidence: `build/jit-word-capture-outcome-review-20261101-v2/`; original before/after/child/maps and all raw outer receipts remain under `build/jit-first-native-tier-word-capture-20261101-v2/`.

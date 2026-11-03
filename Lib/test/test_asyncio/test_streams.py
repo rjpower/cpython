@@ -14,6 +14,7 @@ except ImportError:
 
 import asyncio
 from test.test_asyncio import utils as test_utils
+from test import support
 from test.support import socket_helper
 
 
@@ -1299,6 +1300,7 @@ class StreamTests(test_utils.TestCase):
         self.assertEqual(messages[0]['message'],
                     'Unhandled exception in client_connected_cb')
 
+    @support.requires_refcounting
     def test_open_connection_happy_eyeball_refcycles(self):
         port = socket_helper.find_unused_port()
         async def main():

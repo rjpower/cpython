@@ -43,6 +43,7 @@ The module also extends gdb with some python-specific commands.
 
 import gdb
 import os
+import struct
 import sys
 
 
@@ -78,15 +79,6 @@ def _managed_dict_offset():
         return -1 * _sizeof_void_p()
     else:
         return -3 * _sizeof_void_p()
-
-_INTERP_FRAME_HAS_TLBC_INDEX = None
-def interp_frame_has_tlbc_index():
-    global _INTERP_FRAME_HAS_TLBC_INDEX
-    if _INTERP_FRAME_HAS_TLBC_INDEX is None:
-        interp_frame = gdb.lookup_type("_PyInterpreterFrame")
-        _INTERP_FRAME_HAS_TLBC_INDEX = any(field.name == "tlbc_index"
-                                           for field in interp_frame.fields())
-    return _INTERP_FRAME_HAS_TLBC_INDEX
 
 Py_TPFLAGS_INLINE_VALUES     = (1 << 2)
 Py_TPFLAGS_MANAGED_DICT      = (1 << 4)
@@ -155,6 +147,22 @@ class TruncatedStringIO(object):
 
 def _PyStackRef_AsPyObjectBorrow(gdbval):
     return gdb.Value(int(gdbval['bits']) & ~USED_TAGS)
+
+# Inline ints and floats (Include/internal/pycore_stackref.h). Pointers and
+# indices lie below STACKREF_DOUBLE_OFFSET in every build.
+STACKREF_DOUBLE_OFFSET = 1 << 49
+STACKREF_INT_BASE = 0xFFFE << 48
+
+def _PyStackRef_InlineValue(gdbval):
+    '''Return the int or float that a _PyStackRef holds inline, or None'''
+    bits = int(gdbval['bits'])
+    if bits < STACKREF_DOUBLE_OFFSET:
+        return None
+    if bits >= STACKREF_INT_BASE:
+        value = bits & 0xFFFFFFFF
+        return value - (1 << 32) if value >= (1 << 31) else value
+    raw = struct.pack('<Q', bits - STACKREF_DOUBLE_OFFSET)
+    return struct.unpack('<d', raw)[0]
 
 
 class PyObjectPtr(object):
@@ -388,6 +396,10 @@ class PyObjectPtr(object):
         Try to locate the appropriate derived class dynamically, and cast
         the pointer accordingly.
         '''
+        if gdbval.type.name == '_PyStackRef':
+            value = _PyStackRef_InlineValue(gdbval)
+            if value is not None:
+                return InlineStackValue(value)
         try:
             p = PyObjectPtr(gdbval)
             cls = cls.subclass_from_type(p.type())
@@ -407,6 +419,24 @@ class PyObjectPtr(object):
 
 class PyVarObjectPtr(PyObjectPtr):
     _typename = 'PyVarObject'
+
+class InlineStackValue(PyObjectPtr):
+    '''An int or float held in a _PyStackRef without a heap object'''
+
+    def __init__(self, value):
+        self._value = value
+
+    def is_null(self):
+        return False
+
+    def safe_tp_name(self):
+        return type(self._value).__name__
+
+    def proxyval(self, visited):
+        return self._value
+
+    def write_repr(self, out, visited):
+        out.write(repr(self._value))
 
 class ProxyAlreadyVisited(object):
     '''
@@ -707,15 +737,6 @@ def parse_location_table(firstlineno, linetable):
             column = code << 3 | (second_byte >> 4)
         yield addr, end_addr, line
         addr = end_addr
-
-
-class PyCodeArrayPtr:
-    def __init__(self, gdbval):
-        self._gdbval = gdbval
-
-    def get_entry(self, index):
-        assert (index >= 0) and (index < self._gdbval["size"])
-        return self._gdbval["entries"][index]
 
 
 class PyCodeObjectPtr(PyObjectPtr):
@@ -1108,10 +1129,10 @@ class PyFramePtr:
 
         obj_ptr_ptr = gdb.lookup_type("PyObject").pointer().pointer()
 
-        localsplus = self._gdbval["localsplus"]
+        slots = self._gdbval["base"]
 
         for i in safe_range(self.co_nlocals):
-            pyop_value = PyObjectPtr.from_pyobject_ptr(localsplus[i])
+            pyop_value = PyObjectPtr.from_pyobject_ptr(slots[i])
             if pyop_value.is_null():
                 continue
             pyop_name = PyObjectPtr.from_pyobject_ptr(self.co_localsplusnames[i])
@@ -1136,15 +1157,9 @@ class PyFramePtr:
         return self._f_special("nlocalsplus", int_from_int)
 
     def _f_lasti(self):
-        codeunit_p = gdb.lookup_type("_Py_CODEUNIT").pointer()
-        instr_ptr = self._gdbval["instr_ptr"]
-        if interp_frame_has_tlbc_index():
-            tlbc_index = self._gdbval["tlbc_index"]
-            code_arr = PyCodeArrayPtr(self._f_code().field("co_tlbc"))
-            first_instr = code_arr.get_entry(tlbc_index).cast(codeunit_p)
-        else:
-            first_instr = self._f_code().field("co_code_adaptive").cast(codeunit_p)
-        return int(instr_ptr - first_instr)
+        # The index of the word at instr_ptr in the executing copy of the
+        # code (Include/internal/pycore_ir.h), which the line table counts
+        return int(self._gdbval["instr_ptr"] - self._gdbval["ir_words"])
 
     def is_shim(self):
         return self._f_special("owner", int) == FRAME_OWNED_BY_INTERPRETER

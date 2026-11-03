@@ -1,0 +1,21 @@
+# Design review: private-cache and extension-hint integration
+
+2026-11-01. **ACCEPT the proposed three-file correction for implementation and exact source review.** This is a design decision, not acceptance of a patch, existing failed row, rebuilt image or future execution. Source reviewed: RC `d7df12b1d81722927e71d9734c70eeafdccfee73` and the preserved 12-assertion release-full failure.
+
+The proposed scope is coherent: update `Lib/test/test_import/__init__.py`, `Lib/traceback.py` and `Lib/test/test_traceback.py`; change no loader table, C code, build policy, collector, bytecode magic or ABI/cache namespace. Temporary-directory and worker-origin corrections remain a separate helper task. The old row retains all failures.
+
+For the magic test, retain conversion of the token to four little-endian bytes and the exact trailing CRLF assertion. Replace the upstream version range with literal expected magic **64401**, and assert the exact cache namespace `cpython-rc1-{major}{minor}`. The C sources intentionally select those independent constants. Deriving expected magic from `_imp.pyc_magic_number_token` itself would be tautological. An exact expected cache tag is sufficient for this narrow correction; the existing import/cache tests continue to test how that tag is used. Do not turn this into a permissive upstream-or-private fallback.
+
+For extension hints, `os.path.splitext(EXTENSION_SUFFIXES[-1])[1]` yields the actual native extension for the maintained private `.boilrc1-…so` suffix and the usual `.so`, `_d.pyd`, tagged `.pyd` and `.dll` forms. Preserve the existing empty-name/empty-suffix-list guard, module-stem boundary, qualified-parent handling and suffix-ending check. This corrects diagnostic discovery while leaving extension admission unchanged. Do not modify `EXTENSION_SUFFIXES` or try loading a discovered incompatible file. Keeping current hint wording is acceptable within this correction; the hint remains a filename-based diagnostic heuristic.
+
+Minimum meaningful tests:
+
+* Exercise the actual discovery function with real temporary entries. Give each positive case its own directory so the assertion does not depend on directory iteration order. Independently constructed native filenames should cover an upstream-style tag, `abi3`, an untagged native file and the private RC tag. Derive the native file extension from actual `SHLIB_SUFFIX` where provided; use the suffix's final extension only on platforms lacking it.
+* Reject a different module stem, a Python source filename and a native-looking filename followed by `.txt`; require absence to return no hint. Retain an empty-name/empty-suffix-list control. These establish that the intended broader ABI-tag discovery does not become arbitrary-prefix or substring matching.
+* Keep a real end-to-end `ModuleNotFoundError` hint test whose incompatible filename is `foo.some-abi` plus the native extension. Do not append the private RC suffix: that old fixture accidentally satisfied the buggy implementation. Assert the existing exact filename-bearing hint and failed import; no successful native load is expected.
+
+The old implementation must fail at least the real upstream/abi3/untagged discovery cases and the corrected end-to-end fixture on this RC runtime. The new implementation must retain the negatives. Merely asserting that `splitext` returns the same suffix used to build a fixture would not test discovery. A temporary file with a wrong stem or wrong final extension must never produce the hint.
+
+The existing native images can be retained through an explicit bridge only after source review proves the complete change set is these Python files and every compiled input, configuration and product remains exact. New stdlib/test hashes and actual origins must bind to the successor source. That bridge does not retroactively repair the failed full-suite receipts or grant another native invocation. Root retains activation authority.
+
+Source facts are pinned by the independent failed-outcome receipt `946535eef6cb18a8ff6c9aa51915fa3195a011c6baf2360c8bdc2914fc7c4648`, including the private magic definition, loader suffix policy, diagnostic consumer and both failed tests. This review involved source/artifact reading only; no target, compiler, probe, source mutation or test execution.

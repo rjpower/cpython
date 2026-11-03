@@ -8,6 +8,7 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
+#include "pycore_long.h"          // _PyLong_ExactDealloc()
 #include "pycore_unicodeobject.h" // _PyUnicodeWriter
 
 /* runtime lifecycle */
@@ -19,6 +20,19 @@ extern void _PyFloat_FiniType(PyInterpreterState *);
 
 
 PyAPI_FUNC(void) _PyFloat_ExactDealloc(PyObject *op);
+
+// Deallocate an exact float or an exact int, the operands of specialized
+// float arithmetic. Neither runs Python code.
+static inline void
+_PyFloat_OrLongExactDealloc(PyObject *op)
+{
+    if (PyFloat_CheckExact(op)) {
+        _PyFloat_ExactDealloc(op);
+    }
+    else {
+        _PyLong_ExactDealloc(op);
+    }
+}
 
 
 extern void _PyFloat_DebugMallocStats(FILE* out);

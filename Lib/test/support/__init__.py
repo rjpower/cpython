@@ -34,6 +34,7 @@ __all__ = [
     "is_resource_enabled", "get_resource_value", "requires", "requires_resource",
     "requires_freebsd_version",
     "requires_gil_enabled", "requires_linux_version", "requires_mac_ver",
+    "requires_refcounting",
     "requires_ios_ver",
     "check_syntax_error",
     "requires_gzip", "requires_bz2", "requires_lzma", "requires_zstd",
@@ -66,8 +67,6 @@ __all__ = [
     "ALWAYS_EQ", "NEVER_EQ", "LARGEST", "SMALLEST",
     "LOOPBACK_TIMEOUT", "INTERNET_TIMEOUT", "SHORT_TIMEOUT", "LONG_TIMEOUT",
     "Py_DEBUG", "exceeds_recursion_limit", "skip_on_s390x",
-    "requires_jit_enabled",
-    "requires_jit_disabled",
     "force_not_colorized",
     "force_not_colorized_test_class",
     "make_clean_env",
@@ -1064,6 +1063,17 @@ def expected_failure_if_gil_disabled():
         return unittest.expectedFailure
     return lambda test_case: test_case
 
+# Instance attribute access guards per-type shapes (--with-shapes)
+Py_SHAPES = bool(sysconfig.get_config_var('Py_SHAPES'))
+
+# Historical test metadata; there is no owning tracing-collector build.
+Py_GC = False
+
+def requires_refcounting(test):
+    """Skip a test that needs reference counts: sys.getrefcount(), or an
+    object that dies, and runs its finalizer, as its last reference goes."""
+    return test
+
 if Py_GIL_DISABLED:
     _header = 'PHBBInP'
 else:
@@ -1521,7 +1531,7 @@ def refcount_test(test):
     unexpected refcounts caused by the trace function.
 
     """
-    return no_tracing(cpython_only(test))
+    return requires_refcounting(no_tracing(cpython_only(test)))
 
 
 def requires_limited_api(test):
@@ -2187,9 +2197,14 @@ def check_free_after_iterating(test, iter, cls, args=()):
         # Issue 26494: Shouldn't crash
         test.assertRaises(StopIteration, next, it)
 
-    wrapper()
-    # The sequence should be deallocated just after the end of iterating
-    gc_collect()
+    # The sequence should be deallocated just after the end of iterating.
+    # Under Py_GC a stale word on the C stack can keep one attempt's
+    # sequence alive; each attempt makes a new one.
+    for _ in range(5 if Py_GC else 1):
+        wrapper()
+        gc_collect()
+        if done:
+            break
     test.assertTrue(done)
 
 
@@ -3003,10 +3018,6 @@ skip_on_newlib = unittest.skipIf(sys.platform == 'cygwin',
                                  'the test fails on newlib C library')
 
 Py_TRACE_REFS = hasattr(sys, 'getobjects')
-
-_JIT_ENABLED = sys._jit.is_enabled()
-requires_jit_enabled = unittest.skipUnless(_JIT_ENABLED, "requires JIT enabled")
-requires_jit_disabled = unittest.skipIf(_JIT_ENABLED, "requires JIT disabled")
 
 
 _BASE_COPY_SRC_DIR_IGNORED_NAMES = frozenset({

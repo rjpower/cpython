@@ -1,0 +1,50 @@
+# Private RC ABI support in wheel producers and installers
+
+2026-11-01. Design only, against selected RC `dce654018d5ae16ffe5e772976d9ccc2c9d1e01a`. Preserve the failed CPU-extension batch and its fifteen real failures. No source, wheel, runtime identity, loader or test change is authorized here.
+
+Choose a small downstream packaging integration: teach the three actual vendored `packaging.tags.sys_tags()` implementations to recognize the selected runtime's private ABI. Keep `sys.implementation.name == 'cpython'`, wheel interpreter `cp316`, private `boilrc1` SOABI/extension suffixes and the current native loader table. Do not disable setuptools' supported-tag assertion, label this runtime `cp316d`, advertise upstream stable ABI, or alter the sixteen original C/C++ tests.
+
+## Actual failure and source boundary
+
+All fifteen non-skipped CPU cases reached the wheel-building stage after compiling/linking their extension. Setuptools79.0.1 rejected its computed `('cp316', 'boilrc1_316d_x86_64_linux_gnu', 'linux_x86_64')` against its vendored `tags.sys_tags()` result. The original expected Linux C++14 skip remains separate; regeneration did not run. These observations do not establish successful wheel installation or imported-extension behavior.
+
+The current private SOABI is `boilrc1-316-x86_64-linux-gnu`; debug adds `d`. `configure.ac:7022–7036` creates the matching EXT_SUFFIX and sanctions a private release ALT_SOABI for debug. `Python/dynload_shlib.c` admits only these private suffixes. Neither `.abi3.so` nor ordinary upstream CPython suffixes are a supported binary contract.
+
+Pinned source inspection finds the same relevant `sys_tags()` branch in:
+
+- `pip-26.2.2-py3-none-any.whl`: `pip/_vendor/packaging/tags.py`.
+- `setuptools-79.0.1-py3-none-any.whl`: `setuptools/_vendor/packaging/tags.py` **and** `setuptools/_vendor/wheel/vendored/packaging/tags.py`.
+
+All three presently choose `cpython_tags()` for `interpreter_name() == 'cp'`. Its conventional CPython ABI calculation does not represent this SOABI, and its stable-ABI tags must not leak into the private runtime. Setuptools' actual build-side assertion uses `sys_tags()`. Fix both producer and installer policy; patching one vendor, changing only `_cpython_abis()`, or altering only the test observer is insufficient.
+
+## Exact policy
+
+Insert one private-ABI branch into each `sys_tags()` implementation, sharing one source template in the reproducible patch tool. Leave the existing non-private branch and explicit public `cpython_tags()` API behavior unchanged.
+
+1. If SOABI does not start with `boilrc1-`, follow the original function unchanged.
+2. For this private branch, require CPython identity and consistent string metadata: EXT_SUFFIX must equal `'.' + SOABI + SHLIB_SUFFIX`, and that exact primary suffix must occur in `importlib.machinery.EXTENSION_SUFFIXES`. Inconsistent private metadata raises a clear error; it must not fall through to ordinary CPython tags.
+3. Derive the ordered ABI list only from the loader's own private `boilrc1-` suffixes. Strip the leading dot and exact shared-library suffix, then apply packaging's ordinary dash/dot-to-underscore normalization. Require the first private suffix to match SOABI. This admits debug's existing release alternative only because the actual loader advertises it; invent no ABI alternative.
+4. Use `generic_tags(interpreter='cp' + interpreter_version(...), abis=private_abis)` with the existing platform-tag enumeration. Then preserve the existing `compatible_tags(interpreter=...)` tail. `none` tags denote no interpreter-ABI requirement and remain available, including pure `py3-none-any`; they do not assert compatibility with a foreign C API.
+5. Do not call `cpython_tags()` on this branch. Its supported ABI set must contain only those exact private ABIs plus `none`, never upstream `cp316`, `cp316d`, `abi3`, `abi3t`, a foreign threading ABI or a previous tracing namespace.
+
+The unusual platform component already present inside the private ABI remains unchanged; this proposal does not rename native files. Genuine `Extension(py_limited_api=True)` wheels still requesting `abi3` remain unsupported. The existing test_cext limited/abi3t methods set header-test macros, not that wheel option, so their newly built own-private extensions can pass without claiming upstream stable binary compatibility.
+
+## Reproducible source change
+
+Propose one public source tool, for example `Tools/boil/patch_private_abi_wheels.py`, plus focused host tests and a short packaging-policy note. It accepts exact supported input wheel hashes/vendor member hashes, applies the shared policy to all declared vendor locations, and fails on an unknown vendor layout or original hash. Keep a marker with policy revision, input hash and changed-member hashes. It must not import/install the wheel, run a target, fetch packages, or alter the original archive in place during preparation.
+
+Produce deterministic output wheels: preserve untouched member bytes; fixed member order, ZIP metadata and compression policy; regenerate CSV RECORD hashes/sizes for every member, leaving RECORD's own digest/size empty. Record input/output archive SHA256 and every changed member. No timestamps, local paths or nondeterministic metadata enter the marker. Reject unexpected signatures rather than silently invalidating them. Two independent repacks must be byte-identical. Retaining the existing downstream bundled filenames/versions is acceptable only with these explicit downstream content hashes/provenance; no published-upstream byte-identity claim follows.
+
+After source/design approval, replace the **actual** bundled pip wheel and Lib/test/wheeldata setuptools wheel using that tool. Keep `ensurepip` and `support._findwheel()` on their normal source paths; no test-only sysconfig/WHEEL_PKG_DIR override, sitecustomize hook or assertion suppression. These ordinary runtime/tooling entry points then share the policy. Do not change core C, headers, configure, cache tag or loader ABI.
+
+`ports/_support/sdk.py` already segregates artifacts by explicit `abi_id` and verifies recorded SOABI; this prevents cache reuse but does not repair packaging tags. The current `ports/sdk.json` still names the historical value-v2 SDK. Any future RC port use needs its actual selected interpreter and a fresh RC ABI/cache identity, and must include patched build-tool wheel hashes in its recipe/cache key. Existing ports use other tooling pins, so they do **not** gain support from the two bundled profiles alone. The public patch tool should reject unsupported wheel profiles until reviewed adapters are supplied. No old value/tracing port binary is reused or newly qualified here.
+
+## Finite validation and source reuse
+
+Before a native grant, run eighteen host policy rows: three vendor modules × private release, private debug with its sanctioned release alternative, inconsistent EXT_SUFFIX, missing primary loader suffix, ordinary CPython and ordinary PyPy. Positive private rows also assert the full negative ABI set above and pure-Python compatibility. For non-private rows compare the complete ordered tag sequence against the unmodified vendor implementation under identical fixed platform/runtime facts. Add exact-original-vendor rejection, deterministic-repack/RECORD verification, and an old-unpatched private-tag negative. Do not execute the interpreter or compile an extension for these host checks.
+
+The first native feedback should retain the unchanged sixteen test_cext IDs, fifteen required passes/one Linux skip and original thirty-two direct setup/install/test calls, then run the already held regeneration row. Preserve the child's standard three-warmup/three-measured refcount interval. Own wheel construction, installation and actual imported-extension tests must all succeed; a successful compiler invocation alone earns no gate. Before claiming public installer isolation, separately freeze a tiny native pip rejection check for ordinary CPython-ABI and abi3 wheels, with exact expected unsupported-wheel results and no foreign code import. No such extra calls are authorized by this design.
+
+A tooling/wheel-only successor can reuse the existing four native profiles only after an independent bridge proves unchanged C/generated/frozen/config/tool/native-product inputs and binds the new dynamic wheel/source hashes. All currently running native jobs must finish before edits. Source changes and a fresh exact helper capsule precede any retry; the failed batch stays failed. Propose a thirty-minute source/host-check ceiling, then the existing finite two-row native batch; stop on the first unexpected result. This fixes one concrete integration boundary and adds no new runtime option or ecosystem-port qualification project.
+
+Evidence: `build/rc-private-abi-packaging-design-20261101/{read_sources.py,source-facts.json}` retains exact wheel/member/function hashes and source excerpts. The existing `ports/README.md`, `ports/_support/sdk.py`, configure/loader sources and failed debug-cext log ground the integration boundaries. No target, compiler, wheel patch or runtime edit was performed for this design.

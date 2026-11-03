@@ -1,0 +1,40 @@
+{
+  "GC_optimization_authorized": false,
+  "all_geomean_single_deletions_slower": true,
+  "all_three_controls_lose_over_two_percent_each_round": true,
+  "campaign_result_sha256": "6941d0ca8d0723fa052d53af48c51219a0d5ad06cb65b89d3f4d88b6e2d59e08",
+  "decision": "REJECT_NATIVE_PREFIX_INCREMENT_ON_FIXED_AGGREGATE_ELAPSED_LOSS",
+  "four_workload_geomean_ratios": [
+    1.0200972320491382,
+    1.0530615964776953
+  ],
+  "future_work": "Separate source/disassembly diagnosis only; no source, compiler or native grant",
+  "independent_receipt_sha256": "1fe8dbda3a4656275140d051ba0018a0009555a18ac880472cf94041630df27a",
+  "independent_review_sha256": "644bfe5279d4e5e1aaa35aecadd37d9f09ca25c8bb65504899adb1619309f8ce",
+  "late_qualification_authorized": false,
+  "main_runtime_changed": false,
+  "native_correctness_accepted": true,
+  "native_profiles": 2,
+  "native_test_skips": 0,
+  "native_tests_per_profile": 54,
+  "parent_checkout_during_campaign": "2e9c8c1957965230ac694d6c9c7d69032eecf3c1",
+  "parent_image_source": "eba351fee7dacef3f7616e4c0b6fc21c7082eb5d",
+  "performance_accepted": false,
+  "primary_ratios": [
+    0.8794520280970508,
+    0.9881848552896543
+  ],
+  "quiet_checks": 48,
+  "raw_values": 80,
+  "resampling_authorized": false,
+  "root_cleanup_utc": "2026-11-01T12:33:57.773275+00:00",
+  "scored_processes": 16,
+  "session_id": 97466,
+  "shorter_region_rescue_authorized": false,
+  "source_attempt_closed": true,
+  "source_ceiling_utc": "2026-11-01T12:33:54.295926+00:00",
+  "source_head": "67f5d22bb386e362571e9555c08073d1bf79f6ea",
+  "terminal_exit": 0,
+  "terminal_observed_utc": "2026-11-01T12:32:43+00:00",
+  "unscored_origins": 8
+}

@@ -379,9 +379,9 @@ sys_trace_jump_func(
         Py_RETURN_NONE;
     }
     assert(PyVectorcall_NARGS(nargsf) == 3);
-    int from = PyLong_AsInt(args[1])/sizeof(_Py_CODEUNIT);
+    int from = PyLong_AsInt(args[1]);
     assert(from >= 0);
-    int to = PyLong_AsInt(args[2])/sizeof(_Py_CODEUNIT);
+    int to = PyLong_AsInt(args[2]);
     assert(to >= 0);
     if (to > from) {
         /* Forward jump */

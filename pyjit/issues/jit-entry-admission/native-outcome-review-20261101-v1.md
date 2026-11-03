@@ -1,0 +1,9 @@
+Accepted focused native behavior and emitted admission mechanism for clean source `11aefbdd6405953a0bf3605b3a9f703c01285bf6`.
+
+Root confirmed supervisor 67238 terminal exit 0. All four fresh build/focus rows completed. Independent replay verified 7,285 completion artifacts, configuration/tool identities, and 586 current products per image. Debug and release each executed the exact 54 selected methods across eight modules, with zero skips. Existing contracts checked actual case IDs, nine driver-worker boundaries and 18 main-origin records per image, source/stdlib/config bindings and cleanup. The existing RC count/holes readings are diagnostic evidence; verification was OFF and no tracing-root telemetry or total-process census is claimed.
+
+The new admission fixture and all existing rollback, observer, malformed, ownership, native-fault and lifetime methods passed in both images. Offline release review verifies all 14 NULL/static/state rejection paths bypass full TryEntry, all admitted paths retain the entry-PC check, and the inspected ordinary PC paths retain r15/rbx. Both logs retain unchanged 94/234-byte native leaves, automatic success_seen with RX/non-W mapping, and six pressure spills. See the separately sealed emission finding for addresses and CFG limits.
+
+Root cleanup at 14:32:27.030975 UTC reports no native PIDs, all 17 locks available and the owned short cache removed. The 24 historical image/config fingerprints and nine immutable authority references were independently rehashed unchanged. Source remains clean and exact. Completion SHA256: `3f6c792fce031ae7cd9714afe0e2289deb457bdd7d279d24935e80669df91763`.
+
+This supports the separately reviewed fixed all-29 elapsed experiment. It grants no timing execution, performance acceptance, publication or broad stdlib qualification. Earlier rejected candidates and scores remain unchanged. No replacement target, compiler or probe was run for this review.

@@ -24,7 +24,6 @@
 #include "pycore_memoryobject.h"  // _PyManagedBuffer_Type
 #include "pycore_namespace.h"     // _PyNamespace_Type
 #include "pycore_object.h"        // export _Py_SwappedOp
-#include "pycore_optimizer.h"     // _PyUOpExecutor_Type
 #include "pycore_pyerrors.h"      // _PyErr_Occurred()
 #include "pycore_pymem.h"         // _PyMem_IsPtrFreed()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
@@ -2654,12 +2653,6 @@ static PyTypeObject* static_types[_Py_NUM_MANAGED_PREINITIALIZED_TYPES] = {
     &_PyTemplateIter_Type,
     &_PyUnicodeASCIIIter_Type,
     &_PyUnion_Type,
-#ifdef _Py_TIER2
-    &_PyUOpExecutor_Type,
-#else
-    // The array should have the same size on all builds; see gh-149139
-    NULL,
-#endif
     &_PyWeakref_CallableProxyType,
     &_PyWeakref_ProxyType,
     &_PyWeakref_RefType,
@@ -2871,12 +2864,13 @@ PyUnstable_Object_IsUniqueReferencedTemporary(PyObject *op)
         return 0;
     }
 
+    /* The temporaries; NULL ones are not objects */
     _PyStackRef *base = _PyFrame_Stackbase(frame);
-    _PyStackRef *stackpointer = frame->stackpointer;
+    _PyStackRef *stackpointer = frame->base + _PyFrame_NumSlots(frame);
     while (stackpointer > base) {
         stackpointer--;
         _PyStackRef ref = *stackpointer;
-        if (PyStackRef_IsTaggedInt(ref)) {
+        if (!PyStackRef_IsObject(ref)) {
             continue;
         }
         if (op == PyStackRef_AsPyObjectBorrow(ref)) {
@@ -3322,11 +3316,6 @@ py_dealloc(PyObject *op)
     if (tstate == NULL) {
         tstate = _PyThreadState_GET();
     }
-#if !defined(Py_GIL_DISABLED) && !defined(Py_STACKREF_DEBUG)
-    /* This assertion doesn't hold for the free-threading build, as
-     * PyStackRef_CLOSE_SPECIALIZED is not implemented */
-    assert(tstate->current_frame == NULL || tstate->current_frame->stackpointer != NULL);
-#endif
     PyObject *old_exc = tstate != NULL ? tstate->current_exception : NULL;
     // Keep the old exception type alive to prevent undefined behavior
     // on (tstate->curexc_type != old_exc_type) below

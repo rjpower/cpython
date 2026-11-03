@@ -1,4 +1,5 @@
 #include "Python.h"
+#include "pycore_gc_trace.h"      // _PyGC_AddRoot()
 #include "pycore_pyarena.h"       // PyArena
 
 /* A simple arena block structure.
@@ -59,6 +60,11 @@ struct _arena {
        when the arena is freed.
     */
     PyObject *a_objects;
+
+    /* The arena is PyMem_Malloc() memory, which the tracing collector does
+       not scan, so a_objects is registered as a root while the arena
+       lives. */
+    _PyGCRoot a_root;
 
 #if defined(Py_DEBUG)
     /* Debug output */
@@ -140,6 +146,7 @@ _PyArena_New(void)
         PyMem_Free((void *)arena);
         return (PyArena*)PyErr_NoMemory();
     }
+    _PyGC_AddRoot(&arena->a_root, &arena->a_objects, 1);
 #if defined(Py_DEBUG)
     arena->total_allocs = 0;
     arena->total_size = 0;
@@ -169,6 +176,7 @@ _PyArena_Free(PyArena *arena)
     assert(arena->a_objects->ob_refcnt == 1);
     */
 
+    _PyGC_RemoveRoot(&arena->a_root);
     Py_DECREF(arena->a_objects);
     PyMem_Free(arena);
 }

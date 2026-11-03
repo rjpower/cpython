@@ -778,7 +778,8 @@ PyDoc_STRVAR(builtin_id__doc__,
 "Return the identity of an object.\n"
 "\n"
 "This is guaranteed to be unique among simultaneously existing objects.\n"
-"(CPython uses the object\'s memory address.)");
+"(CPython uses the object\'s memory address, or for some ints and floats\n"
+"a number derived from the value.)");
 
 #define BUILTIN_ID_METHODDEF    \
     {"id", (PyCFunction)builtin_id, METH_O, builtin_id__doc__},
@@ -1495,4 +1496,4 @@ builtin_issubclass(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=1dacff294aaa7485 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=5c813ceb82c3ecca input=a9049054013a1b77]*/

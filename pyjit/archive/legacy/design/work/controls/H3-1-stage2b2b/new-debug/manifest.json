@@ -1,0 +1,50 @@
+{
+  "head": "878647973ba08be9f2c8e32e972504b507440b46",
+  "binary_sha256": "5c40843083ca404e5e77312d2d1b4a377cae78d4aed60d4a0ca9195532ffda64",
+  "config_sha256": "ee10d3ffed6c7cbe03f5ab155fb81f44a1e581814ef01cb57db38ff52a5b3e94",
+  "script_sha256": "a22486a65c58a5a8088e65b36162613b72cf2eb1e53addb2aeb5a326ffe98aec",
+  "sources": {
+    "Python/instrumentation.c": "94e1cd97c5547474e0e4c8cf49a674430b1284b34a5553c7e297118debd66249",
+    "Objects/codeobject.c": "20208af12a66053422ca6ff9780e7ffc67f1064cbd624ff50404680398fa2eae",
+    "Include/internal/pycore_instruments.h": "81cab544b0ecf34c65c1dbd1b18ca0d5a52140018e7d8c5273ac37dd2b43afe5",
+    "Python/legacy_tracing.c": "e15db59df85fb19b04a54c07a234c631f519d7cc6eaf05a43425e06f2739ab5a"
+  },
+  "cases": {
+    "same_event": {
+      "returncode": 0,
+      "log_sha256": "15d2c210976d42392a1ccb4ab894e9fd80ed60bbb197522cce99a3862a9b8772",
+      "command": [
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python",
+        "-X",
+        "pycache_prefix=/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/new-debug/pycache-ip4tc3zh",
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/check_transitions.py",
+        "--child",
+        "same_event"
+      ]
+    },
+    "other_event": {
+      "returncode": 0,
+      "log_sha256": "d86ed4234c661c514f496b0119297bf3664f10a9706b90207a283a41d6a22914",
+      "command": [
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python",
+        "-X",
+        "pycache_prefix=/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/new-debug/pycache-ll9j_q01",
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/check_transitions.py",
+        "--child",
+        "other_event"
+      ]
+    },
+    "oom": {
+      "returncode": 0,
+      "log_sha256": "dd33fb0c13ab2ce640b51a34ea8fc991d59aff4edbdaf5b74c8c8101a0a98c27",
+      "command": [
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/debug/python",
+        "-X",
+        "pycache_prefix=/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/new-debug/pycache-hvmk6w0v",
+        "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/check_transitions.py",
+        "--child",
+        "oom"
+      ]
+    }
+  }
+}

@@ -13,7 +13,6 @@ extern "C" {
 #include "pycore_interpframe_structs.h"  // _PyInterpreterFrame
 #include "pycore_mimalloc.h"        // struct _mimalloc_thread_state
 #include "pycore_qsbr.h"            // struct qsbr
-#include "pycore_uop.h"             // struct _PyUOpInstruction
 #include "pycore_structs.h"
 
 #ifdef Py_GIL_DISABLED
@@ -68,11 +67,25 @@ typedef struct _PyThreadStateImpl {
     struct _qsbr_thread_state *qsbr;  // only used by free-threaded build
     struct llist_node mem_free_queue; // delayed free queue
 
+#ifdef WITH_MIMALLOC
+    struct _mimalloc_thread_state mimalloc;
+#endif
+
+#ifndef Py_GIL_DISABLED
+    // The callee-saved registers and stack pointer of the thread when it
+    // last released the GIL, for the tracing verifier's scan of its C stack
+    // (Python/gc_trace.c).  "valid" is cleared when the thread attaches.
+    struct {
+        uintptr_t regs[24];
+        uintptr_t sp;
+        int valid;
+    } gc_trace;
+#endif
+
 #ifdef Py_GIL_DISABLED
     // Stack references for the current thread that exist on the C stack
     struct _PyCStackRef *c_stack_refs;
     struct _gc_thread_state gc;
-    struct _mimalloc_thread_state mimalloc;
     struct _Py_freelists freelists;
     struct _brc_thread_state brc;
     struct {
@@ -101,9 +114,6 @@ typedef struct _PyThreadStateImpl {
 
 #if defined(Py_REF_DEBUG) && defined(Py_GIL_DISABLED)
     Py_ssize_t reftotal;  // this thread's total refcount operations
-#endif
-#if _Py_TIER2
-    struct _PyJitTracerState *jit_tracer_state;
 #endif
 
 #ifdef Py_GIL_DISABLED

@@ -3612,6 +3612,7 @@ class TestSingleDispatch(unittest.TestCase):
         hash(A().t)
         A().t == A().t
 
+    @support.requires_refcounting
     def test_method_no_reference_loops(self):
         # gh-127750: Created a strong reference to self
         class A:

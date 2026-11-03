@@ -966,6 +966,19 @@ _lsprof_Profiler_clear_impl(ProfilerObject *self)
     Py_RETURN_NONE;
 }
 
+struct entry_visit {
+    visitproc visit;
+    void *arg;
+};
+
+static int
+visit_entry(rotating_node_t *header, void *arg)
+{
+    ProfilerEntry *entry = (ProfilerEntry *)header;
+    struct entry_visit *v = (struct entry_visit *)arg;
+    return entry->userObj != NULL ? v->visit(entry->userObj, v->arg) : 0;
+}
+
 static int
 profiler_traverse(PyObject *op, visitproc visit, void *arg)
 {
@@ -973,8 +986,26 @@ profiler_traverse(PyObject *op, visitproc visit, void *arg)
     Py_VISIT(Py_TYPE(op));
     Py_VISIT(self->externalTimer);
     Py_VISIT(self->missing);
+    // The entries' code objects and names, for a tracing collector
+    struct entry_visit v = {visit, arg};
+    return RotatingTree_Enum(self->profilerEntries, visit_entry, &v);
+}
 
-    return 0;
+/* Removing the profile function runs code (audit hooks), which a dealloc
+   that the sweep of a tracing collector makes may not do; the collector
+   calls the finalizer first. */
+static void
+profiler_finalize(PyObject *op)
+{
+    ProfilerObject *self = ProfilerObject_CAST(op);
+    if (self->flags & POF_ENABLED) {
+        PyThreadState *tstate = _PyThreadState_GET();
+        if (_PyEval_SetProfile(tstate, NULL, NULL) < 0) {
+            PyErr_FormatUnraisable("Exception ignored while "
+                                   "destroying _lsprof profiler");
+        }
+        self->flags &= ~POF_ENABLED;
+    }
 }
 
 static void
@@ -1062,6 +1093,7 @@ static PyType_Slot _lsprof_profiler_type_spec_slots[] = {
     {Py_tp_dealloc, profiler_dealloc},
     {Py_tp_init, profiler_init},
     {Py_tp_traverse, profiler_traverse},
+    {Py_tp_finalize, profiler_finalize},
     {0, 0}
 };
 

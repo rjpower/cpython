@@ -1,0 +1,41 @@
+isolated driver generator verified /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-worker-main/isolated-controls/control-copy-ov5gmmcq/Tools/cases_generator/ir_generator.py 074eb2ccd8828b25e5cfb050dc4217ca4360a06e379535f15c75e49e407001fe
+== CPython 3.16.0a1+dev (heads/boil/h3-dirty:6c724c29408, Oct 29 2026, 08:09:14) [GCC 15.2.0]
+== Linux-7.0.0-29-generic-x86_64-with-glibc2.43 little-endian
+== Python build: release
+== cwd: /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default/build/test_python_worker_2417969æ
+== CPU count: 16
+== encodings: locale=UTF-8 FS=utf-8
+== resources: all test resources are disabled, use -u option to unskip tests
+== host python: /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default/python /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-worker-main/isolated-worker.py /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-worker-main/isolated-controls/control-copy-ov5gmmcq 074eb2ccd8828b25e5cfb050dc4217ca4360a06e379535f15c75e49e407001fe
+== host platform: Linux-7.0.0-29-generic-x86_64-with-glibc2.43
+
+Using random seed: 3409333538
+0:00:00 load avg: 1.83 mem:   47.7 MiB Run 1 test in parallel using 1 worker process
+0:00:00 load avg: 1.83 mem:   49.0 MiB [1/1/1] test_generated_cases failed (1 failure)
+isolated worker generator verified /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-worker-main/isolated-controls/control-copy-ov5gmmcq/Tools/cases_generator/ir_generator.py 074eb2ccd8828b25e5cfb050dc4217ca4360a06e379535f15c75e49e407001fe
+test_derived_name_collision_rejected (test.test_generated_cases.TestHandlerDomain.test_derived_name_collision_rejected) ... FAIL
+
+======================================================================
+FAIL: test_derived_name_collision_rejected (test.test_generated_cases.TestHandlerDomain.test_derived_name_collision_rejected)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_generated_cases.py", line 1400, in test_derived_name_collision_rejected
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 1 test in 0.003s
+
+FAILED (failures=1)
+test test_generated_cases failed
+
+== Tests result: FAILURE ==
+
+1 test failed:
+    test_generated_cases
+
+Total duration: 453 ms
+Total tests: run=1 (filtered) failures=1
+Total test files: run=1/1 (filtered) failed=1
+Result: FAILURE

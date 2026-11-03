@@ -1,0 +1,13 @@
+gate 1 starting on /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default at f46276debf3
+Using random seed: 2953429521
+0:00:00 load avg: 5.41 mem:   47.3 MiB Run 10 tests in parallel using 8 worker processes (timeout: 10 min, worker timeout: 15 min)
+/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_ir.py:1049: RuntimeWarning: assigning None to 1 unbound local
+  frame.f_lineno = f.__code__.co_firstlineno + 1
+
+== Tests result: SUCCESS ==
+
+Total duration: 11.3 sec
+Total tests: run=790 (filtered) skipped=3
+Total test files: run=10/10 (filtered)
+Result: SUCCESS
+gate 1 passed on /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default

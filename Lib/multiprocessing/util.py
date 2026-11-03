@@ -603,6 +603,10 @@ def _cleanup_tests():
     # cleanup multiprocessing
     process._cleanup()
 
+    # Finalize the dead semaphores before the ResourceTracker, when it
+    # stops, unlinks those still registered.
+    support.gc_collect()  # For other GCs.
+
     # Stop the ForkServer process if it's running
     from multiprocessing import forkserver
     forkserver._forkserver._stop()

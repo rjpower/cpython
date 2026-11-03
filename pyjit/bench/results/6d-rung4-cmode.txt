@@ -1,0 +1,27 @@
+# 6d rung 4, root_check_c.py --function (function|file|errors|first cause).
+# Getters: the tree of commit 1 (04c7397b65d), which commit 2 does not change in these functions.
+getset_get|Objects/descrobject.c|3|'descr' is held only in a C local across the collecting call to 'descr_check' (parameter 'self', which no span covers)
+PyObject_GenericGetDict|Objects/dictobject.c|2|'obj' is held only in a C local across the collecting call to '_PyObject_ComputedDictPointer' (parameter 'obj', which no
+subtype_dict|Objects/typeobject.c|2|'obj' is held only in a C local across the collecting call to 'get_dict_descriptor' (parameter 'obj', which no span cove
+type_dict_entry_get|Objects/typeobject.c|1|'descr' is held only in a C local across the collecting call to 'get' (parameter 'v', which no span covers)
+type_get_doc|Objects/typeobject.c|2|the address of object local 'result' escapes to 'PyDict_GetItemRefValue'
+type_get_annotate|Objects/typeobject.c|6|the address of object local 'annotate' escapes to 'PyDict_GetItemRefValue'
+type_get_annotations|Objects/typeobject.c|15|the address of object local 'stored' escapes to 'PyDict_GetItemRefValue'
+module_get_annotate|Objects/moduleobject.c|2|the address of object local 'annotate' escapes to 'PyDict_GetItemRefValue'
+module_get_annotations|Objects/moduleobject.c|12|the address of object local 'stored' escapes to 'PyDict_GetItemRefValue'
+cell_get_contents|Objects/cellobject.c|0|
+object_getstate_default|Objects/typeobject.c|21|the address of object local 'value' escapes to 'PyObject_GetOptionalAttr'
+# Setters and the dict functions: 5db4aeaff81 (commit 2).
+PyObject_GenericSetDict|Objects/object.c|0|
+getset_set|Objects/descrobject.c|3|'descr' is held only in a C local across the collecting call to 'descr_setcheck' (parameter 'self', which no s
+_PyObject_SetDict|Objects/typeobject.c|2|'obj' is held only in a C local across the collecting call to '_PyObject_ComputedDictPointer' (parameter 'obj'
+subtype_setdict|Objects/typeobject.c|2|'obj' is held only in a C local across the collecting call to 'get_dict_descriptor' (parameter 'obj', which no
+object_set_class|Objects/typeobject.c|5|'self' is held only in a C local across the collecting call to 'PyValue_Object' (parameter 'self', which no sp
+cell_set_contents|Objects/cellobject.c|0|
+module_set_annotations|Objects/moduleobject.c|4|'value' is held only in a C local across the collecting call to 'module_load_dict' (parameter 'value', which n
+type_set_abstractmethods|Objects/typeobject.c|6|'dict' is held only in a C local across the collecting call to 'PyObject_IsTrueValue' (the result of 'lookup_t
+type_set_annotations|Objects/typeobject.c|16|'dict' is held only in a C local across the collecting call to 'PyDict_ContainsString' (the result of 'PyType_
+OSError_written_set|Objects/exceptions.c|1|'self' is held only in a C local across the collecting call to 'PyNumber_AsSsize_tValue' (the result of 'PyOSE
+PyCField_set|Modules/_ctypes/cfield.c|2|'inst' is held only in a C local across the collecting call to '_PyValue_BoxInline' (parameter 'inst', which n
+# getset_get, PyObject_GenericGetDict and subtype_dict at 5db4aeaff81: the same counts as above (3, 2, 2).
+# None is marked Py_GC_PRECISE, so none is a missing root under the conservative scan; 10a marks them.

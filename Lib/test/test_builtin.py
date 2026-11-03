@@ -3026,6 +3026,7 @@ class ShutdownTest(unittest.TestCase):
 
 
 @cpython_only
+@support.requires_refcounting
 class ImmortalTests(unittest.TestCase):
 
     if sys.maxsize < (1 << 32):

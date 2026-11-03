@@ -408,6 +408,7 @@ PyCField_traverse(PyObject *op, visitproc visit, void *arg)
     CFieldObject *self = _CFieldObject_CAST(op);
     Py_VISIT(Py_TYPE(self));
     Py_VISIT(self->proto);
+    Py_VISIT(self->name);
     return 0;
 }
 

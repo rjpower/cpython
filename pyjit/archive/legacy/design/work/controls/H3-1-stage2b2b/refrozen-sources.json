@@ -1,0 +1,20 @@
+{
+  "head": "878647973ba08be9f2c8e32e972504b507440b46",
+  "baseline": "878647973ba08be9f2c8e32e972504b507440b46",
+  "native_baseline": "dc02f76c0ccf69cd7195431dc0335a349bdec48f",
+  "diff_sha256": "7c64784ac0481248cdf88f5d381da355d028246a008615531768c8af8a0c907d",
+  "sources": {
+    "Include/internal/pycore_instruments.h": "81cab544b0ecf34c65c1dbd1b18ca0d5a52140018e7d8c5273ac37dd2b43afe5",
+    "Include/internal/pycore_ir_metadata.h": "34207222de5297d36d4be803742e35a825a606855d7d7f76488428e5a2462792",
+    "Lib/test/test_generated_cases.py": "5f920b8dbb1d38b30ca97d634ef836648553d6060fd3e8a78a782fec10a14cbe",
+    "Lib/test/test_monitoring.py": "5d4f75b0e850593961560758a729f061a9fb8b55c112fc9d4b8754ea57698e82",
+    "Modules/_testinternalcapi.c": "2d819d2f14338d00851174396ed933e1bb33b8f24877388ab2b0f6ce1ac7b517",
+    "Objects/codeobject.c": "20208af12a66053422ca6ff9780e7ffc67f1064cbd624ff50404680398fa2eae",
+    "Python/bytecodes.c": "0b45b41af826d87ad7bff32b0446a3016f7815d30317cfdb213d8b3eade1f561",
+    "Python/generated_ir_cases.c.h": "ccba27ee58ad74c3cf46f6db3444b6e7a7e9ae8b357ac0eba7dd51e7b618f03f",
+    "Python/instrumentation.c": "128cd5f43029560438a3e938bcdb59d04241ecad711115c097e672460343df94",
+    "Python/legacy_tracing.c": "e15db59df85fb19b04a54c07a234c631f519d7cc6eaf05a43425e06f2739ab5a",
+    "Tools/cases_generator/ir_generator.py": "b28932bdcba9e52b30c79ad4716e438129f66b253882a58fb9f44dfe733138a6",
+    "Tools/cases_generator/ir_metadata_generator.py": "8b5b76dffb553c9222e68ac39179c974a8e2704a1cc3fda1f1f1ecc7ac9c248a"
+  }
+}

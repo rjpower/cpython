@@ -1014,6 +1014,7 @@ class TestInlineValues(unittest.TestCase):
         C.a = X()
 
     @support.nomemtest
+    @support.requires_refcounting
     def test_detach_materialized_dict_no_memory(self):
         import _testcapi
 

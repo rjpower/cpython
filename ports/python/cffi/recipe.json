@@ -1,0 +1,29 @@
+{
+  "name": "cffi",
+  "version": "2.1.1",
+  "kind": "sdist",
+  "source": {
+    "url": "https://files.pythonhosted.org/packages/9e/ef/008a1939e372c06329a3fce4279c02f328488f3526744906eeec3da7ad5f/cffi-2.1.1.tar.gz",
+    "sha256": "dd31f52ea1086513bb9df30f8fcee9b8918323ae067a3d5b78bc826a000712be"
+  },
+  "requires": [
+    "python/pycparser"
+  ],
+  "build_requires": [
+    "setuptools==84.2.1"
+  ],
+  "patches": [
+    {
+      "file": "fs-encoding.patch",
+      "sha256": "f4f5d04f40afcd3788a3862794fe9da72651b621205e020e41e7ebade95f2dc3",
+      "touches": {
+        "src/c/_cffi_backend.c": "335899c93f88c53939fa8121502fb7129f34b9b8bdd97563d33346e0e91f9964"
+      }
+    }
+  ],
+  "tests": [
+    {
+      "script": "tests/smoke.py"
+    }
+  ]
+}

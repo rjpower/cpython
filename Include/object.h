@@ -51,6 +51,12 @@ A standard interface exists for objects that contain an array of items
 whose size is determined when the object is allocated.
 */
 
+/* This interpreter uses reference counting and the cyclic collector.
+   An external owner macro must not silently disable reference operations. */
+#ifdef Py_GC
+#  error "Py_GC is unsupported: this runtime requires reference counting"
+#endif
+
 /* Py_DEBUG implies Py_REF_DEBUG. */
 #if defined(Py_DEBUG) && !defined(Py_REF_DEBUG)
 #  define Py_REF_DEBUG
@@ -538,6 +544,13 @@ given type object has a specified feature.
 
 /* Type is abstract and cannot be instantiated */
 #define Py_TPFLAGS_IS_ABSTRACT (1UL << 20)
+
+#ifndef Py_LIMITED_API
+/* Diagnostic metadata for deallocators that read their referents' C state.
+   Reference counting already destroys the owner before releasing its owned
+   references. Subtypes inherit this flag. */
+#define Py_TPFLAGS_DEALLOC_READS_REFERENTS (1UL << 21)
+#endif
 
 // This undocumented flag gives certain built-ins their unique pattern-matching
 // behavior, which allows a single positional subpattern to match against the

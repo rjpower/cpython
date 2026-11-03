@@ -124,15 +124,6 @@ _PyEval_EvalFrame(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwfl
     return tstate->interp->eval_frame(tstate, frame, throwflag);
 }
 
-#ifdef _Py_TIER2
-_Py_CODEUNIT *_PyTier2Interpreter(
-    struct _PyExecutorObject *current_executor, _PyInterpreterFrame *frame,
-    _PyStackRef *stack_pointer, PyThreadState *tstate
-);
-#endif
-
-PyAPI_DATA(_PyJitEntryFuncPtr) _Py_jit_entry;
-
 extern PyObject*
 _PyEval_Vector(PyThreadState *tstate,
             PyFunctionObject *func, PyObject *locals,
@@ -189,17 +180,6 @@ _PyEval_IsGILEnabled(PyThreadState *tstate)
 extern int _PyEval_EnableGILTransient(PyThreadState *tstate);
 extern int _PyEval_EnableGILPermanent(PyThreadState *tstate);
 extern int _PyEval_DisableGIL(PyThreadState *state);
-
-
-static inline _Py_CODEUNIT *
-_PyEval_GetExecutableCode(PyThreadState *tstate, PyCodeObject *co)
-{
-    _Py_CODEUNIT *bc = _PyCode_GetTLBCFast(tstate, co);
-    if (bc != NULL) {
-        return bc;
-    }
-    return _PyCode_GetTLBC(co);
-}
 
 #endif
 
@@ -314,10 +294,13 @@ PyObject * _PyEval_ImportNameWithImport(
     PyObject *locals, PyObject *name, PyObject *fromlist, PyObject *level);
 PyAPI_FUNC(PyObject *)_PyEval_MatchClass(PyThreadState *tstate, PyObject *subject, PyObject *type, Py_ssize_t nargs, PyObject *kwargs);
 PyAPI_FUNC(PyObject *)_PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys);
-PyAPI_FUNC(void) _PyEval_MonitorRaise(PyThreadState *tstate, _PyInterpreterFrame *frame, _Py_CODEUNIT *instr);
+PyAPI_FUNC(void) _PyEval_MonitorRaise(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *instr);
 PyAPI_FUNC(bool) _PyEval_NoToolsForUnwind(PyThreadState *tstate, _PyInterpreterFrame *frame);
 PyAPI_FUNC(int) _PyEval_UnpackIterableStackRef(PyThreadState *tstate, PyObject *v, int argcnt, int argcntafter, _PyStackRef *sp);
 PyAPI_FUNC(void) _PyEval_FrameClearAndPop(PyThreadState *tstate, _PyInterpreterFrame *frame);
+/* Where frame resumes when a generator that it resumed returns: past the
+ * exit of its SEND or FOR_ITER, or for the entry frame, the next word. */
+PyAPI_FUNC(_PyInstr *) _PyEval_GeneratorReturnTarget(_PyInterpreterFrame *frame);
 PyAPI_FUNC(PyObject **) _PyObjectArray_FromStackRefArray(_PyStackRef *input, Py_ssize_t nargs, PyObject **scratch);
 
 PyAPI_FUNC(void) _PyObjectArray_Free(PyObject **array, PyObject **scratch);
@@ -330,6 +313,9 @@ PyAPI_FUNC(int)
 _Py_Check_ArgsIterable(PyThreadState *tstate, PyObject *func, PyObject *args);
 PyAPI_FUNC(_PyStackRef) _PyEval_GetIter(_PyStackRef iterable, _PyStackRef *null_or_index, int yield_from);
 PyAPI_FUNC(int) _PyEval_StoreName(PyThreadState *tstate, _PyStackRef v, PyObject *name, PyObject* ns);
+PyAPI_FUNC(PyObject *) _PyEval_BinarySlice(_PyStackRef container, _PyStackRef start, _PyStackRef stop);
+PyAPI_FUNC(int) _PyEval_StoreSlice(_PyStackRef v, _PyStackRef container, _PyStackRef start, _PyStackRef stop);
+PyAPI_FUNC(int) _PyEval_IsInstanceStackRef(_PyStackRef inst, _PyStackRef cls);
 
 /*
  * Indicate whether a special method of given 'oparg' can use the (improved)
@@ -349,7 +335,6 @@ _PyEval_SpecialMethodCanSuggest(PyObject *self, int oparg);
 #define _PY_GC_SCHEDULED_BIT (1U << 4)
 #define _PY_EVAL_PLEASE_STOP_BIT (1U << 5)
 #define _PY_EVAL_EXPLICIT_MERGE_BIT (1U << 6)
-#define _PY_EVAL_JIT_INVALIDATE_COLD_BIT (1U << 7)
 
 /* Reserve a few bits for future use */
 #define _PY_EVAL_EVENTS_BITS 8
@@ -406,7 +391,7 @@ _PyForIter_VirtualIteratorNext(PyThreadState* tstate, struct _PyInterpreterFrame
 #define SPECIAL___AEXIT__   3
 #define SPECIAL_MAX   3
 
-PyAPI_DATA(const _Py_CODEUNIT *) _Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS_PTR;
+PyAPI_DATA(const _PyInstr *) _Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS_PTR;
 
 /* Helper functions for large uops */
 
@@ -425,7 +410,7 @@ _Py_VectorCallInstrumentation_StackRefSteal(
     _PyStackRef kwnames,
     bool call_instrumentation,
     _PyInterpreterFrame* frame,
-    _Py_CODEUNIT* this_instr,
+    _PyInstr* this_instr,
     PyThreadState* tstate);
 
 PyAPI_FUNC(PyObject *)
@@ -471,11 +456,6 @@ PyAPI_FUNC(PyObject *)
 _Py_BuildMap_StackRefSteal(
     _PyStackRef *arguments,
     int half_args);
-
-PyAPI_FUNC(void)
-_Py_assert_within_stack_bounds(
-    _PyInterpreterFrame *frame, _PyStackRef *stack_pointer,
-    const char *filename, int lineno);
 
 PyAPI_FUNC(_PyStackRef)
 _Py_LoadAttr_StackRefSteal(

@@ -3,6 +3,7 @@
 
 #include "Python.h"
 #include "pycore_fileutils.h"     // _PyFile_Flush
+#include "pycore_gc_trace.h"      // _PyGC_AddRoot()
 #include "pycore_interp.h"        // _PyInterpreterState.threads.count
 #include "pycore_lock.h"
 #include "pycore_modsupport.h"    // _PyArg_NoKeywords()
@@ -337,6 +338,8 @@ struct bootstate {
     PyObject *func;
     PyObject *args;
     PyObject *kwargs;
+    // Registers func, args and kwargs: raw memory is not scanned.
+    _PyGCRoot root;
     ThreadHandle *handle;
     PyEvent handle_ready;
 };
@@ -344,6 +347,7 @@ struct bootstate {
 static void
 thread_bootstate_free(struct bootstate *boot, int decref)
 {
+    _PyGC_RemoveRoot(&boot->root);
     if (decref) {
         Py_DECREF(boot->func);
         Py_DECREF(boot->args);
@@ -467,6 +471,7 @@ ThreadHandle_start(ThreadHandle *self, PyObject *func, PyObject *args,
     boot->func = Py_NewRef(func);
     boot->args = Py_NewRef(args);
     boot->kwargs = Py_XNewRef(kwargs);
+    _PyGC_AddRoot(&boot->root, &boot->func, 3);
     boot->handle = self;
     ThreadHandle_incref(self);
     boot->handle_ready = (PyEvent){0};

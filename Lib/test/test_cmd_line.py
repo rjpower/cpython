@@ -184,10 +184,11 @@ class CmdLineTest(unittest.TestCase):
         self.assertEqual(proc.err, b'')
 
         # "-X showrefcount" shows the refcount, but only in debug builds
+        # that count references, which Py_GC builds do not.
         proc = assert_python_ok('-I', '-X', 'showrefcount', '-c', code)
         self.assertEqual(proc.out.rstrip(),
                          b"{'faulthandler': True, 'showrefcount': True}")
-        if support.Py_DEBUG:
+        if support.Py_DEBUG and not support.Py_GC:
             # bpo-46417: Tolerate negative reference count which can occur
             # because of bugs in C extensions. This test is only about checking
             # the showrefcount feature.
@@ -845,6 +846,8 @@ class CmdLineTest(unittest.TestCase):
             elif support.check_sanitizer(address=True, memory=True):
                 # ASan and MSan builds default to malloc, even with pymalloc.
                 alloc_name = "malloc_debug"
+            elif support.with_mimalloc():
+                alloc_name = "mimalloc_debug"
             elif support.with_pymalloc():
                 alloc_name = "pymalloc_debug"
             else:
@@ -921,6 +924,7 @@ class CmdLineTest(unittest.TestCase):
         self.assertEqual(proc.returncode, 0)
 
     @support.cpython_only
+    @unittest.skipIf(support.Py_GC, "--with-gc forces the mimalloc allocator")
     def test_pythonmalloc(self):
         # Test the PYTHONMALLOC environment variable
         malloc = not support.Py_GIL_DISABLED
@@ -934,6 +938,10 @@ class CmdLineTest(unittest.TestCase):
             # ASan and MSan builds default to malloc, even with pymalloc.
             default_name = 'malloc_debug' if support.Py_DEBUG else 'malloc'
             default_name_debug = 'malloc_debug'
+        elif mimalloc:
+            # mimalloc is the default when built in, for the tracing collector.
+            default_name = 'mimalloc_debug' if support.Py_DEBUG else 'mimalloc'
+            default_name_debug = 'mimalloc_debug'
         elif pymalloc:
             default_name = 'pymalloc_debug' if support.Py_DEBUG else 'pymalloc'
             default_name_debug = 'pymalloc_debug'

@@ -1,0 +1,3 @@
+default new same_event 0
+default new other_event 0
+default new oom 0

@@ -29,7 +29,6 @@ on:
       - "Tools/cases_generator/**"
       - "Tools/check-c-api-docs/**"
       - "Tools/clinic/**"
-      - "Tools/jit/**"
       - "Tools/peg_generator/**"
       - "Tools/requirements-dev.txt"
   workflow_dispatch:
@@ -62,7 +61,6 @@ jobs:
           "Tools/cases_generator",
           "Tools/check-c-api-docs",
           "Tools/clinic",
-          "Tools/jit",
           "Tools/peg_generator",
         ]
     steps:

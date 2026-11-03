@@ -164,7 +164,9 @@ PyTypeObject _PyManagedBuffer_Type = {
     PyObject_GenericGetAttr,                 /* tp_getattro */
     0,                                       /* tp_setattro */
     0,                                       /* tp_as_buffer */
-    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC, /* tp_flags */
+    /* Releasing the buffer updates the exporter's export state. */
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC
+        | Py_TPFLAGS_DEALLOC_READS_REFERENTS,  /* tp_flags */
     0,                                       /* tp_doc */
     mbuf_traverse,                           /* tp_traverse */
     mbuf_clear                               /* tp_clear */
@@ -1118,6 +1120,7 @@ _memory_release(PyMemoryViewObject *self)
         mbuf_release(self->mbuf);
     }
 }
+
 
 /*[clinic input]
 memoryview.release

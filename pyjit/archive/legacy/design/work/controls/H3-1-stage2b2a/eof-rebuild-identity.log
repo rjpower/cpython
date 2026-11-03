@@ -1,0 +1,4 @@
+build/default/python: FAILED
+build/debug/python: FAILED
+build/default/Objects/codeobject.o: OK
+build/debug/Objects/codeobject.o: OK

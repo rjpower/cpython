@@ -1,0 +1,42 @@
+isolated driver generator verified /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1/isolated-controls/control-copy-b_9spfeh/Tools/cases_generator/ir_generator.py 30a5f50265db74a93bd1ca0809d9250e86ef863db67fb8d7c1be4c532bf6bba1
+== CPython 3.16.0a1+dev (heads/boil/compiler-copyprop-land:45a789ac036, Oct 29 2026, 06:05:50) [GCC 15.2.0]
+== Linux-7.0.0-29-generic-x86_64-with-glibc2.43 little-endian
+== Python build: release
+== cwd: /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default/build/test_python_worker_2320253æ
+== CPU count: 16
+== encodings: locale=UTF-8 FS=utf-8
+== resources: all test resources are disabled, use -u option to unskip tests
+== host python: /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default/python /home/power/code/cpython/.worktrees/boil-compiler-copyprop/boil/design/work/controls/H3-1-stage1/isolated-worker.py /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1/isolated-controls/control-copy-b_9spfeh 30a5f50265db74a93bd1ca0809d9250e86ef863db67fb8d7c1be4c532bf6bba1
+== host platform: Linux-7.0.0-29-generic-x86_64-with-glibc2.43
+
+Using random seed: 1497044680
+0:00:00 load avg: 2.25 mem:   48.0 MiB Run 1 test in parallel using 1 worker process
+0:00:01 load avg: 2.25 mem:   49.3 MiB [1/1/1] test_generated_cases failed (1 failure)
+isolated worker generator verified /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1/isolated-controls/control-copy-b_9spfeh/Tools/cases_generator/ir_generator.py 30a5f50265db74a93bd1ca0809d9250e86ef863db67fb8d7c1be4c532bf6bba1
+test_base_does_not_classify_specialization (test.test_generated_cases.TestHandlerDomain.test_base_does_not_classify_specialization) ... 
+  test_base_does_not_classify_specialization (test.test_generated_cases.TestHandlerDomain.test_base_does_not_classify_specialization) (handler='BINARY_OP_ADD') ... FAIL
+
+======================================================================
+FAIL: test_base_does_not_classify_specialization (test.test_generated_cases.TestHandlerDomain.test_base_does_not_classify_specialization) (handler='BINARY_OP_ADD')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/test/test_generated_cases.py", line 1440, in test_base_does_not_classify_specialization
+    self.assertFalse(domain.kinds[name] & kind.SPECIALIZED)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: <HandlerKind.SPECIALIZED: 1> is not false
+
+----------------------------------------------------------------------
+Ran 1 test in 0.689s
+
+FAILED (failures=1)
+test test_generated_cases failed
+
+== Tests result: FAILURE ==
+
+1 test failed:
+    test_generated_cases
+
+Total duration: 1.1 sec
+Total tests: run=1 (filtered) failures=1
+Total test files: run=1/1 (filtered) failed=1
+Result: FAILURE

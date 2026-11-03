@@ -1,0 +1,8 @@
+dc02f76c0cc:Include/internal/pycore_instruments.h:122:_Py_Instrumentation_GetLine(PyCodeObject *code, _PyCoLineInstrumentationData *line_data, int index);
+dc02f76c0cc:Objects/codeobject.c:1037:            return _Py_Instrumentation_GetLine(co, lines, addrq);
+dc02f76c0cc:Python/instrumentation.c:1346:_Py_Instrumentation_GetLine(PyCodeObject *code, _PyCoLineInstrumentationData *line_data, int index)
+dc02f76c0cc:Python/instrumentation.c:1366:    int line = _Py_Instrumentation_GetLine(code, line_data, i);
+dc02f76c0cc:Python/instrumentation.c:1370:    int prev_line = _Py_Instrumentation_GetLine(code, line_data, prev_index);
+dc02f76c0cc:Python/legacy_tracing.c:416:    /* We can call _Py_Instrumentation_GetLine because we always set
+dc02f76c0cc:Python/legacy_tracing.c:418:    int to_line = _Py_Instrumentation_GetLine(code, code->_co_monitoring->lines, to);
+dc02f76c0cc:Python/legacy_tracing.c:419:    int from_line = _Py_Instrumentation_GetLine(code, code->_co_monitoring->lines, from);

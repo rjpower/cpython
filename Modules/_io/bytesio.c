@@ -24,7 +24,8 @@ typedef struct {
     PyObject *dict;
     PyObject *weakreflist;
     Py_ssize_t exports;
-#ifdef Py_GIL_DISABLED
+#if defined(Py_GIL_DISABLED)
+    /* The free-threaded build records when buf escapes. */
     int buf_shared;
 #endif
 } bytesio;
@@ -83,7 +84,7 @@ check_exports(bytesio *self)
 #define HASHED_BUF(self) \
     (_PyBytes_GET_CACHED_HASH((PyBytesObject *)(self)->buf) != -1)
 
-#ifdef Py_GIL_DISABLED
+#if defined(Py_GIL_DISABLED)
 #define SHARED_BUF(self) \
     ((self)->buf_shared || !_PyObject_IsUniquelyReferenced((self)->buf) \
      || HASHED_BUF(self))
@@ -95,7 +96,7 @@ check_exports(bytesio *self)
 static inline void
 set_shared_buf(bytesio *self)
 {
-#ifdef Py_GIL_DISABLED
+#if defined(Py_GIL_DISABLED)
     self->buf_shared = 1;
 #endif
 }
@@ -103,7 +104,7 @@ set_shared_buf(bytesio *self)
 static inline void
 clear_shared_buf(bytesio *self)
 {
-#ifdef Py_GIL_DISABLED
+#if defined(Py_GIL_DISABLED)
     self->buf_shared = 0;
 #endif
 }

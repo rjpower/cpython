@@ -7,6 +7,7 @@
 #include "pycore_descrobject.h"   // _PyMember_GetOffset()
 #include "pycore_dict.h"          // _PyDict_KeysSize()
 #include "pycore_function.h"      // _PyFunction_GetVersionForCurrentState()
+#include "pycore_gc_trace.h"      // _PyGC_TraceRegisterStaticType()
 #include "pycore_interpframe.h"   // _PyInterpreterFrame
 #include "pycore_long.h"          // _PyLong_IsNegative(), _PyLong_GetOne()
 #include "pycore_memoryobject.h"  // _PyMemoryView_FromBufferProc()
@@ -1290,8 +1291,8 @@ type_mro_modified(PyTypeObject *type, PyObject *bases)
 }
 
 /*
-The Tier 2 interpreter requires looking up the type object by the type version, so it can install
-watchers to understand when they change.
+An optimizer that reads a type version from an inline cache needs the type object itself,
+for example to install watchers to understand when it changes.
 
 So we add a global cache from type version to borrowed references of type objects.
 
@@ -6876,6 +6877,29 @@ _PyTypes_FiniCachedDescriptors(PyInterpreterState *interp)
 
 
 static void
+notify_type_destroy(PyTypeObject *type)
+{
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    int bits = type->tp_watched;
+    int i = 0;
+    while (bits) {
+        assert(i < TYPE_MAX_WATCHERS);
+        if (bits & 1) {
+            PyType_WatchCallback cb = interp->type_watchers[i];
+            if (cb && (cb(type) < 0)) {
+                PyErr_FormatUnraisable(
+                    "Exception ignored in type watcher callback #%d "
+                    "for %R",
+                    i, type);
+            }
+        }
+        i++;
+        bits >>= 1;
+    }
+}
+
+
+static void
 type_dealloc(PyObject *self)
 {
     PyTypeObject *type = PyTypeObject_CAST(self);
@@ -6888,23 +6912,7 @@ type_dealloc(PyObject *self)
     // callbacks can safely inspect it.
     if (type->tp_watched) {
         _PyObject_ResurrectStart(self);
-        PyInterpreterState *interp = _PyInterpreterState_GET();
-        int bits = type->tp_watched;
-        int i = 0;
-        while (bits) {
-            assert(i < TYPE_MAX_WATCHERS);
-            if (bits & 1) {
-                PyType_WatchCallback cb = interp->type_watchers[i];
-                if (cb && (cb(type) < 0)) {
-                    PyErr_FormatUnraisable(
-                        "Exception ignored in type watcher callback #%d "
-                        "for %R",
-                        i, type);
-                }
-            }
-            i++;
-            bits >>= 1;
-        }
+        notify_type_destroy(type);
         if (_PyObject_ResurrectEnd(self)) {
             return;     // callback resurrected the object
         }
@@ -7115,15 +7123,35 @@ type_traverse(PyObject *self, visitproc visit, void *arg)
     Py_VISIT(type->tp_mro);
     Py_VISIT(type->tp_bases);
     Py_VISIT(type->tp_base);
-    Py_VISIT(((PyHeapTypeObject *)type)->ht_module);
+    PyHeapTypeObject *ht = (PyHeapTypeObject *)type;
+    Py_VISIT(ht->ht_module);
 
-    /* There's no need to visit others because they can't be involved
-       in cycles:
-       type->tp_subclasses is a list of weak references,
-       ((PyHeapTypeObject *)type)->ht_slots is a tuple of strings,
-       ((PyHeapTypeObject *)type)->ht_*name are strings.
-       */
+    /* The rest cannot be involved in cycles, but the tracing collector
+       must see every reference the type owns: tp_subclasses is a dict of
+       weak references, ht_slots is a tuple of strings, ht_*name are
+       strings, and the shared keys hold strings. */
+    Py_VISIT(type->tp_subclasses);
+    _Py_VISIT_ATOMIC(ht->ht_name);
+    _Py_VISIT_ATOMIC(ht->ht_qualname);
+    Py_VISIT(ht->ht_slots);
+    return _PyDict_TraverseKeysForClass(ht, visit, arg);
+}
 
+/* Visit what a static type refers to, for the tracing verifier.  A static
+   builtin type keeps its dict and subclasses per interpreter. */
+int
+_PyType_TraverseStatic(PyTypeObject *type, visitproc visit, void *arg)
+{
+    assert(!(type->tp_flags & Py_TPFLAGS_HEAPTYPE));
+    if (!(type->tp_flags & Py_TPFLAGS_READY)) {
+        return 0;
+    }
+    Py_VISIT(lookup_tp_dict(type));
+    Py_VISIT(lookup_tp_subclasses(type));
+    Py_VISIT(type->tp_cache);
+    Py_VISIT(lookup_tp_mro(type));
+    Py_VISIT(lookup_tp_bases(type));
+    Py_VISIT(type->tp_base);
     return 0;
 }
 
@@ -8655,7 +8683,8 @@ inherit_special(PyTypeObject *type, PyTypeObject *base)
         if (type->tp_clear == NULL)
             type->tp_clear = base->tp_clear;
     }
-    type_add_flags(type, base->tp_flags & Py_TPFLAGS_PREHEADER);
+    type_add_flags(type, base->tp_flags & (Py_TPFLAGS_PREHEADER
+                                           | Py_TPFLAGS_DEALLOC_READS_REFERENTS));
 
     if (type->tp_basicsize == 0)
         type->tp_basicsize = base->tp_basicsize;
@@ -9393,6 +9422,7 @@ type_ready_managed_dict(PyTypeObject *type)
     return 0;
 }
 
+
 static int
 type_ready_post_checks(PyTypeObject *type)
 {
@@ -9441,6 +9471,12 @@ type_ready(PyTypeObject *type, int initial, int add_subclasses)
     }
 
     _PyTypeCache_InitType(type);
+
+    if (!(type->tp_flags & Py_TPFLAGS_HEAPTYPE)) {
+        // A static type is a root for the tracing collector: its dict and
+        // the rest are reachable from nothing else on the heap.
+        _PyGC_TraceRegisterStaticType(_PyInterpreterState_GET(), type);
+    }
 
 #ifdef Py_TRACE_REFS
     /* PyType_Ready is the closest thing we have to a choke point
@@ -11248,6 +11284,7 @@ bufferwrapper_releasebuf(PyObject *self, Py_buffer *view)
     Py_CLEAR(bw->obj);
 }
 
+
 static PyBufferProcs bufferwrapper_as_buffer = {
     .bf_releasebuffer = bufferwrapper_releasebuf,
 };
@@ -12778,11 +12815,12 @@ super_init_without_args(_PyInterpreterFrame *cframe, PyTypeObject **type_p,
     }
 
     assert(_PyFrame_GetCode(cframe)->co_nlocalsplus > 0);
-    PyObject *firstarg = PyStackRef_AsPyObjectBorrow(_PyFrame_GetLocalsArray(cframe)[0]);
-    if (firstarg == NULL) {
+    _PyStackRef firstref = _PyFrame_GetLocalsArray(cframe)[0];
+    if (PyStackRef_IsNull(firstref)) {
         PyErr_SetString(PyExc_RuntimeError, "super(): arg[0] deleted");
         return -1;
     }
+    PyObject *firstarg;
     // The first argument might be a cell.
     // "firstarg" is a cell here unless (very unlikely) super()
     // was called from the C-API before the first MAKE_CELL op.
@@ -12790,17 +12828,22 @@ super_init_without_args(_PyInterpreterFrame *cframe, PyTypeObject **type_p,
             (_PyInterpreterFrame_LASTI(cframe) >= 0)) {
         // MAKE_CELL and COPY_FREE_VARS have no quickened forms, so no need
         // to use _PyOpcode_Deopt here:
-        assert(_PyCode_CODE(co)[0].op.code == MAKE_CELL ||
-                _PyCode_CODE(co)[0].op.code == COPY_FREE_VARS);
-        assert(PyCell_Check(firstarg));
-        firstarg = PyCell_GetRef((PyCellObject *)firstarg);
+        assert(_PyCode_InstrHandler(co, 0) == MAKE_CELL ||
+               _PyCode_InstrHandler(co, 0) == COPY_FREE_VARS);
+        PyObject *cell = PyStackRef_AsPyObjectBorrow(firstref);
+        assert(PyCell_Check(cell));
+        firstarg = PyCell_GetRef((PyCellObject *)cell);
         if (firstarg == NULL) {
             PyErr_SetString(PyExc_RuntimeError, "super(): arg[0] deleted");
             return -1;
         }
     }
     else {
-        Py_INCREF(firstarg);
+        // The argument may be an inline value, which this boxes.
+        firstarg = PyStackRef_AsPyObjectNewBoxed(firstref);
+        if (firstarg == NULL) {
+            return -1;
+        }
     }
 
     // Look for __class__ in the free vars.

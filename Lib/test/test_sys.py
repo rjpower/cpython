@@ -892,6 +892,7 @@ class SysModuleTest(unittest.TestCase):
         self.assertIs(t, s)
 
         interp = interpreters.create()
+        self.addCleanup(interp.close)
         interp.exec(textwrap.dedent(f'''
             import sys
 
@@ -918,6 +919,7 @@ class SysModuleTest(unittest.TestCase):
                 t = sys.intern(s)
 
                 interp = interpreters.create()
+                self.addCleanup(interp.close)
                 interp.exec(textwrap.dedent(f'''
                     import sys
 
@@ -936,6 +938,7 @@ class SysModuleTest(unittest.TestCase):
         for s in '', '\n', '_', 'x', '\0', '\N{CEDILLA}', '\xff':
             with self.subTest(s=s):
                 interp = interpreters.create()
+                self.addCleanup(interp.close)
                 interp.exec(textwrap.dedent(f'''
                     import sys
 
@@ -1556,6 +1559,7 @@ class UnraisableHookTest(unittest.TestCase):
                                             sys.__unraisablehook__):
                     # Trigger obj.__del__()
                     del obj
+                    test.support.gc_collect()  # For other GCs.
 
                 report = stderr.getvalue()
                 self.assertIn("Exception ignored", report)
@@ -1820,9 +1824,9 @@ class SizeofTest(unittest.TestCase):
             return sys._getframe()
         x = func()
         if support.Py_GIL_DISABLED:
-            INTERPRETER_FRAME = '9PihcP'
+            INTERPRETER_FRAME = '12PihccP'
         else:
-            INTERPRETER_FRAME = '9PhcP'
+            INTERPRETER_FRAME = '12PhccP'
         check(x, size('3PiccPPPP' + INTERPRETER_FRAME + 'P'))
         # function
         def func(): pass
@@ -2468,63 +2472,12 @@ this is invalid python code
 
 class TestSysJIT(unittest.TestCase):
 
-    def test_jit_is_available(self):
-        available = sys._jit.is_available()
-        script = f"import sys; assert sys._jit.is_available() is {available}"
-        assert_python_ok("-c", script, PYTHON_JIT="0")
-        assert_python_ok("-c", script, PYTHON_JIT="1")
-
-    def test_jit_is_enabled(self):
-        available = sys._jit.is_available()
-        script = "import sys; assert sys._jit.is_enabled() is {enabled}"
-        assert_python_ok("-c", script.format(enabled=False), PYTHON_JIT="0")
-        assert_python_ok("-c", script.format(enabled=available), PYTHON_JIT="1")
-
-    def test_jit_is_active(self):
-        available = sys._jit.is_available()
-        script = textwrap.dedent(
-            """
-            import _testcapi
-            import _testinternalcapi
-            import sys
-
-            def frame_0_interpreter() -> None:
-                assert sys._jit.is_active() is False
-
-            def frame_1_interpreter() -> None:
-                assert sys._jit.is_active() is False
-                frame_0_interpreter()
-                assert sys._jit.is_active() is False
-
-            def frame_2_jit(expected: bool) -> None:
-                # Inlined into the last loop of frame_3_jit:
-                assert sys._jit.is_active() is expected
-                # Insert C frame:
-                _testcapi.pyobject_vectorcall(frame_1_interpreter, None, None)
-                assert sys._jit.is_active() is expected
-
-            def frame_3_jit() -> None:
-                # JITs just before the last loop:
-                # 1 extra iteration for tracing.
-                for i in range(_testinternalcapi.TIER2_THRESHOLD + 2):
-                    # Careful, doing this in the reverse order breaks tracing:
-                    expected = {enabled} and i >= _testinternalcapi.TIER2_THRESHOLD
-                    assert sys._jit.is_active() is expected
-                    frame_2_jit(expected)
-                    assert sys._jit.is_active() is expected
-
-            def frame_4_interpreter() -> None:
-                assert sys._jit.is_active() is False
-                frame_3_jit()
-                assert sys._jit.is_active() is False
-
-            assert sys._jit.is_active() is False
-            frame_4_interpreter()
-            assert sys._jit.is_active() is False
-            """
-        )
-        assert_python_ok("-c", script.format(enabled=False), PYTHON_JIT="0")
-        assert_python_ok("-c", script.format(enabled=available), PYTHON_JIT="1")
+    def test_jit_stub(self):
+        # This interpreter has no JIT; sys._jit still exists so that tools
+        # which probe it keep working.
+        self.assertIs(sys._jit.is_available(), False)
+        self.assertIs(sys._jit.is_enabled(), False)
+        self.assertIs(sys._jit.is_active(), False)
 
 
 if __name__ == "__main__":

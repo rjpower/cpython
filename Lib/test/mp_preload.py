@@ -1,6 +1,9 @@
+import gc
 import multiprocessing
 
 multiprocessing.Lock()
+# Reference counting unlinks the lock's semaphore here, as it dies.
+gc.collect()  # For other GCs.
 
 
 def f():

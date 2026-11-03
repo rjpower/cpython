@@ -13,15 +13,29 @@ _UNSPECIFIED = object()
 
 def instructions_with_positions(instrs, co_positions):
     # Return (instr, positions) pairs from the instrs list and co_positions
-    # iterator. The latter contains items for cache lines and the former
-    # doesn't, so those need to be skipped.
+    # iterator. Each instruction is one word, with one entry in co_positions.
 
     co_positions = co_positions or iter(())
     for instr in instrs:
         yield instr, next(co_positions, ())
-        for _, size, _ in (instr.cache_info or ()):
-            for i in range(size):
-                next(co_positions, ())
+
+def encode_words(*words):
+    """Return co_code bytes for the given (handler, a, b, c, d) words.
+
+    Missing fields are zero.  The handler may be an opcode name.
+    """
+    out = bytearray()
+    for word in words:
+        handler, *fields = word
+        if isinstance(handler, str):
+            handler = opcode.opmap[handler]
+        fields += [0] * (4 - len(fields))
+        value = handler
+        for shift, field in zip((16, 28, 40, 52), fields):
+            assert 0 <= field < 4096
+            value |= field << shift
+        out += value.to_bytes(8, 'little')
+    return bytes(out)
 
 class BytecodeTestCase(unittest.TestCase):
     """Custom assertion methods for inspecting bytecode."""

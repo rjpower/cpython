@@ -1,0 +1,30 @@
+storage-controls-final default 1
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/run_frozen_probe.py", line 53, in <module>
+    main(*sys.argv[1:4])
+    ~~~~^^^^^^^^^^^^^^^^
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/run_frozen_probe.py", line 48, in main
+    assert result.returncode == 0, result.stdout + result.stderr
+           ^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: /home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/final-storage-default/positive/fixture.c: In function ‘monitoring_storage_roundtrip’:
+/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/final-storage-default/positive/fixture.c:23:17: error: variable-sized object may not be initialized except with an empty initializer
+   23 |     } storage = {0};
+      |                 ^
+/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/final-storage-default/positive/fixture.c:24:51: error: variable-sized object may not be initialized except with an empty initializer
+   24 |     uint16_t tokens[Py_ARRAY_LENGTH(originals)] = {255, 511, UINT16_MAX};
+      |                                                   ^
+/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/final-storage-default/positive/fixture.c:25:45: error: variable-sized object may not be initialized except with an empty initializer
+   25 |     int lines[Py_ARRAY_LENGTH(originals)] = {-1, 0, INT_MAX};
+      |                                             ^
+Traceback (most recent call last):
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/storage_controls_final.py", line 2, in <module>
+    run_storage_controls.main("final")
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/run_storage_controls.py", line 85, in main
+    subprocess.run(command, check=True, timeout=120)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Lib/subprocess.py", line 692, in run
+    raise CalledProcessError(retcode, process.args,
+                             output=stdout, stderr=stderr)
+subprocess.CalledProcessError: Command ['gcc', '-shared', '-fno-omit-frame-pointer', '-mno-omit-leaf-frame-pointer', '-fno-strict-overflow', '-Wsign-compare', '-DNDEBUG', '-g', '-O3', '-Wall', '-fPIC', '-I/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/final-storage-default/positive', '-I/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/default', '-I/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include', '-I/home/power/code/cpython/.worktrees/boil-compiler-copyprop/Include/internal', '-MMD', '-MF', '/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/final-storage-default/positive/headers.d', '/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/final-storage-default/positive/fixture.c', '-o', '/home/power/code/cpython/.worktrees/boil-compiler-copyprop/build/H3-1-stage2b2b/final-storage-default/positive/_h3_storage.cpython-316-x86_64-boil2-linux-gnu.so'] returned non-zero exit status 1.
+

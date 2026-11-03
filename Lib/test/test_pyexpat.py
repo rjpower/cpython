@@ -1156,6 +1156,16 @@ class ParentParserLifetimeTest(unittest.TestCase):
         del parser
         del subparser
 
+    def test_parsers_and_subparsers_die_together(self):
+        # A collector that frees dead objects in no particular order must
+        # still free each subparser's XML_Parser before its parent's.
+        for _ in range(10):
+            parser = expat.ParserCreate()
+            subparser = parser.ExternalEntityParserCreate(None)
+            subsubparser = subparser.ExternalEntityParserCreate(None)
+            del parser, subparser, subsubparser
+        support.gc_collect()
+
     # gh-155485: GetReparseDeferralEnabled always returns False with Expat <2.6.0.
     @unittest.skipIf(not expat.ParserCreate().GetReparseDeferralEnabled(),
                      "requires Python compiled with Expat >= 2.6.0")
@@ -1186,14 +1196,15 @@ class ExternalEntityParserCreateErrorTest(unittest.TestCase):
         # parent parser's refcount.
         parser = expat.ParserCreate()
         parser.buffer_text = True
-        rc_before = sys.getrefcount(parser)
+        rc_before = sys.getrefcount(parser) if not support.Py_GC else None
 
         with self.assertRaises(MemoryError):
             with support.inject_memory_error_cm(1, 10):
                 parser.ExternalEntityParserCreate(None)
 
-        rc_after = sys.getrefcount(parser)
-        self.assertEqual(rc_after, rc_before)
+        if not support.Py_GC:
+            rc_after = sys.getrefcount(parser)
+            self.assertEqual(rc_after, rc_before)
 
 
 class ReparseDeferralTest(unittest.TestCase):

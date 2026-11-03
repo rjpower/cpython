@@ -139,7 +139,7 @@ code.
 
 .. class:: Bytecode(x, *, first_line=None, current_offset=None,\
                     show_caches=False, adaptive=False, show_offsets=False,\
-                    show_positions=False, show_jit=False)
+                    show_positions=False)
 
    Analyse the bytecode corresponding to a function, generator, asynchronous
    generator, coroutine, method, string of source code, or a code object (as
@@ -169,9 +169,6 @@ code.
 
    If *show_positions* is ``True``, :meth:`.dis` will include instruction
    source code positions in the output.
-
-   If *show_jit* is ``True``, :meth:`.dis` will show ``ENTER_EXECUTOR``
-   instructions, which mark JIT entry points and are hidden by default.
 
    .. classmethod:: from_traceback(tb, *, show_caches=False)
 
@@ -207,9 +204,6 @@ code.
 
    .. versionchanged:: 3.14
       Added the *show_positions* parameter.
-
-   .. versionchanged:: 3.16
-      Added the *show_jit* parameter.
 
 Example:
 
@@ -265,8 +259,7 @@ operation is being performed, so the intermediate analysis object isn't useful:
 
 
 .. function:: dis(x=None, *, file=None, depth=None, show_caches=False,\
-                  adaptive=False, show_offsets=False, show_positions=False,\
-                  show_jit=False)
+                  adaptive=False, show_offsets=False, show_positions=False)
 
    Disassemble the *x* object.  *x* can denote either a module, a class, a
    method, a function, a generator, an asynchronous generator, a coroutine,
@@ -293,9 +286,6 @@ operation is being performed, so the intermediate analysis object isn't useful:
    If *adaptive* is ``True``, this function will display specialized bytecode
    that may be different from the original bytecode.
 
-   If *show_jit* is ``True``, this function will show ``ENTER_EXECUTOR``
-   instructions, which mark JIT entry points and are hidden by default.
-
    .. versionchanged:: 3.4
       Added *file* parameter.
 
@@ -314,11 +304,8 @@ operation is being performed, so the intermediate analysis object isn't useful:
    .. versionchanged:: 3.14
       Added the *show_positions* parameter.
 
-   .. versionchanged:: 3.16
-      Added the *show_jit* parameter.
-
 .. function:: distb(tb=None, *, file=None, show_caches=False, adaptive=False,\
-                    show_offsets=False, show_positions=False, show_jit=False)
+                    show_offsets=False, show_positions=False)
 
    Disassemble the top-of-stack function of a traceback, using the last
    traceback if none was passed.  The instruction causing the exception is
@@ -339,14 +326,10 @@ operation is being performed, so the intermediate analysis object isn't useful:
    .. versionchanged:: 3.14
       Added the *show_positions* parameter.
 
-   .. versionchanged:: 3.16
-      Added the *show_jit* parameter.
-
 .. function:: disassemble(code, lasti=-1, *, file=None, show_caches=False,\
-                          adaptive=False, show_offsets=False, show_positions=False,\
-                          show_jit=False)
+                          adaptive=False, show_offsets=False, show_positions=False)
               disco(code, lasti=-1, *, file=None, show_caches=False, adaptive=False,\
-                    show_offsets=False, show_positions=False, show_jit=False)
+                    show_offsets=False, show_positions=False)
 
    Disassemble a code object, indicating the last instruction if *lasti* was
    provided.  The output is divided in the following columns:
@@ -379,10 +362,7 @@ operation is being performed, so the intermediate analysis object isn't useful:
    .. versionchanged:: 3.14
       Added the *show_positions* parameter.
 
-   .. versionchanged:: 3.16
-      Added the *show_jit* parameter.
-
-.. function:: get_instructions(x, *, first_line=None, show_caches=False, adaptive=False, show_jit=False)
+.. function:: get_instructions(x, *, first_line=None, show_caches=False, adaptive=False)
 
    Return an iterator over the instructions in the supplied function, method,
    source code string or code object.
@@ -397,8 +377,6 @@ operation is being performed, so the intermediate analysis object isn't useful:
 
    The *adaptive* parameter works as it does in :func:`dis`.
 
-   The *show_jit* parameter works as it does in :func:`dis`.
-
    .. versionadded:: 3.4
 
    .. versionchanged:: 3.11
@@ -409,9 +387,6 @@ operation is being performed, so the intermediate analysis object isn't useful:
       generates the :class:`Instruction` instances with the *cache_info*
       field populated (regardless of the value of *show_caches*) and it no longer
       generates separate items for the cache entries.
-
-   .. versionchanged:: 3.16
-      Added the *show_jit* parameter.
 
 .. function:: findlinestarts(code)
 
@@ -1386,6 +1361,10 @@ iterations of the loop.
    .. versionchanged:: 3.13
       This instruction now requires an exact :class:`bool` operand.
 
+   .. versionchanged:: 3.16
+      This instruction tests the truth of any operand again, so the
+      compiler no longer emits a ``TO_BOOL`` before it.
+
 .. opcode:: POP_JUMP_IF_FALSE (delta)
 
    If ``STACK[-1]`` is false, increments the bytecode counter by *delta*.
@@ -1401,6 +1380,10 @@ iterations of the loop.
 
    .. versionchanged:: 3.13
       This instruction now requires an exact :class:`bool` operand.
+
+   .. versionchanged:: 3.16
+      This instruction tests the truth of any operand again, so the
+      compiler no longer emits a ``TO_BOOL`` before it.
 
 .. opcode:: POP_JUMP_IF_NOT_NONE (delta)
 
@@ -1995,7 +1978,7 @@ but are replaced by real opcodes or removed before bytecode is generated.
             JUMP_IF_FALSE
 
    Conditional jumps which do not impact the stack. Replaced by the sequence
-   ``COPY 1``, ``TO_BOOL``, ``POP_JUMP_IF_TRUE/FALSE``.
+   ``COPY 1``, ``POP_JUMP_IF_TRUE/FALSE``.
 
 .. opcode:: LOAD_CLOSURE (i)
 

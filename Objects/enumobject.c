@@ -7,6 +7,7 @@
 #include "pycore_object.h"        // _PyObject_GC_TRACK()
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString
 #include "pycore_tuple.h"         // _PyTuple_Recycle()
+#include "pycore_value.h"         // _PyValue_RestoreException()
 
 #include "clinic/enumobject.c.h"
 
@@ -135,76 +136,208 @@ increment_longindex_lock_held(enumobject *en)
 static PyObject *
 enum_next_long(enumobject *en, PyObject* next_item)
 {
+    PyObject *iterator_owner = Py_NewRef(en);
     PyObject *result = en->en_result;
-    PyObject *next_index;
-    PyObject *old_index;
-    PyObject *old_item;
-
+    PyObject *next_index = NULL;
+    PyObject *retired_index = NULL;
+    PyObject *retired_item = NULL;
+    PyObject *output = NULL;
 
     Py_BEGIN_CRITICAL_SECTION(en);
     next_index = increment_longindex_lock_held(en);
     Py_END_CRITICAL_SECTION();
-    if (next_index == NULL) {
-        Py_DECREF(next_item);
-        return NULL;
+    if (next_index == NULL || PyErr_Occurred()) {
+        goto done;
     }
 
     if (_PyObject_IsUniquelyReferenced(result)) {
-        Py_INCREF(result);
-        old_index = PyTuple_GET_ITEM(result, 0);
-        old_item = PyTuple_GET_ITEM(result, 1);
-        PyTuple_SET_ITEM(result, 0, next_index);
-        PyTuple_SET_ITEM(result, 1, next_item);
-        Py_DECREF(old_index);
-        Py_DECREF(old_item);
-        // bpo-42536: The GC may have untracked this result tuple. Since we're
-        // recycling it, make sure it's tracked again:
+        output = Py_NewRef(result);
+        PyValue replacement_index = PyValue_PrepareOwned(next_index, &retired_index);
+        next_index = NULL;
+        PyValue replacement_item = PyValue_PrepareOwned(next_item, &retired_item);
+        next_item = NULL;
+        PyValue old_index = _PyTuple_CAST(result)->ob_item[0];
+        PyValue old_item = _PyTuple_CAST(result)->ob_item[1];
+        _PyTuple_CAST(result)->ob_item[0] = replacement_index;
+        _PyTuple_CAST(result)->ob_item[1] = replacement_item;
+        // Reset the hash and GC tracking before retiring displaced owners.
         _PyTuple_Recycle(result);
-        return result;
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyValue_XCLOSE(old_index);
+            _PyValue_RestoreException(saved);
+        }
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyValue_XCLOSE(old_item);
+            _PyValue_RestoreException(saved);
+        }
     }
-    return _PyTuple_FromPairSteal(next_index, next_item);
+    else {
+        PyObject *transferred_index = next_index;
+        PyObject *transferred_item = next_item;
+        next_index = NULL;
+        next_item = NULL;
+        output = _PyTuple_FromPairSteal(transferred_index, transferred_item);
+    }
+
+done:
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = next_index;
+        next_index = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = next_item;
+        next_item = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = retired_index;
+        retired_index = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = retired_item;
+        retired_item = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = iterator_owner;
+        iterator_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *retired = output;
+            output = NULL;
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+    }
+    return output;
 }
 
 static PyObject *
 enum_next(PyObject *op)
 {
     enumobject *en = _enumobject_CAST(op);
-    PyObject *next_index;
-    PyObject *next_item;
+    PyObject *iterator_owner = Py_NewRef(en);
     PyObject *result = en->en_result;
-    PyObject *it = en->en_sit;
-    PyObject *old_index;
-    PyObject *old_item;
+    PyObject *next_index = NULL;
+    PyObject *next_item = NULL;
+    PyObject *retired_index = NULL;
+    PyObject *retired_item = NULL;
+    PyObject *output = NULL;
 
+    PyObject *it = en->en_sit;
     next_item = (*Py_TYPE(it)->tp_iternext)(it);
-    if (next_item == NULL)
-        return NULL;
+    if (next_item == NULL || PyErr_Occurred()) {
+        goto done;
+    }
 
     Py_ssize_t en_index = FT_ATOMIC_LOAD_SSIZE_RELAXED(en->en_index);
-    if (en_index == PY_SSIZE_T_MAX)
-        return enum_next_long(en, next_item);
+    if (en_index == PY_SSIZE_T_MAX) {
+        PyObject *transferred = next_item;
+        next_item = NULL;
+        output = enum_next_long(en, transferred);
+        goto done;
+    }
 
     next_index = PyLong_FromSsize_t(en_index);
-    if (next_index == NULL) {
-        Py_DECREF(next_item);
-        return NULL;
+    if (next_index == NULL || PyErr_Occurred()) {
+        goto done;
     }
     FT_ATOMIC_STORE_SSIZE_RELAXED(en->en_index, en_index + 1);
 
     if (_PyObject_IsUniquelyReferenced(result)) {
-        Py_INCREF(result);
-        old_index = PyTuple_GET_ITEM(result, 0);
-        old_item = PyTuple_GET_ITEM(result, 1);
-        PyTuple_SET_ITEM(result, 0, next_index);
-        PyTuple_SET_ITEM(result, 1, next_item);
-        Py_DECREF(old_index);
-        Py_DECREF(old_item);
-        // bpo-42536: The GC may have untracked this result tuple. Since we're
-        // recycling it, make sure it's tracked again:
+        output = Py_NewRef(result);
+        PyValue replacement_index = PyValue_PrepareOwned(next_index, &retired_index);
+        next_index = NULL;
+        PyValue replacement_item = PyValue_PrepareOwned(next_item, &retired_item);
+        next_item = NULL;
+        PyValue old_index = _PyTuple_CAST(result)->ob_item[0];
+        PyValue old_item = _PyTuple_CAST(result)->ob_item[1];
+        _PyTuple_CAST(result)->ob_item[0] = replacement_index;
+        _PyTuple_CAST(result)->ob_item[1] = replacement_item;
+        // Reset the hash and GC tracking before retiring displaced owners.
         _PyTuple_Recycle(result);
-        return result;
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyValue_XCLOSE(old_index);
+            _PyValue_RestoreException(saved);
+        }
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyValue_XCLOSE(old_item);
+            _PyValue_RestoreException(saved);
+        }
     }
-    return _PyTuple_FromPairSteal(next_index, next_item);
+    else {
+        PyObject *transferred_index = next_index;
+        PyObject *transferred_item = next_item;
+        next_index = NULL;
+        next_item = NULL;
+        output = _PyTuple_FromPairSteal(transferred_index, transferred_item);
+    }
+
+done:
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = next_index;
+        next_index = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = next_item;
+        next_item = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = retired_index;
+        retired_index = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = retired_item;
+        retired_item = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = iterator_owner;
+        iterator_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *retired = output;
+            output = NULL;
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+    }
+    return output;
 }
 
 static PyObject *

@@ -1672,21 +1672,72 @@ static PyObject *
 map_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     mapobject *lz = _mapobject_CAST(self);
-    Py_ssize_t numargs = PyTuple_GET_SIZE(lz->iters);
-    PyObject *args = PyTuple_New(numargs+1);
-    Py_ssize_t i;
-    if (args == NULL)
-        return NULL;
+    PyObject *iterator_owner = Py_NewRef(self);
+    PyObject *iters_owner = Py_NewRef(lz->iters);
+    PyObject *args = NULL;
+    PyObject *type_owner = NULL;
+    PyObject *output = NULL;
+    Py_ssize_t numargs = PyTuple_GET_SIZE(iters_owner);
+
+    args = PyTuple_New(numargs+1);
+    if (args == NULL || PyErr_Occurred()) {
+        goto done;
+    }
     PyTuple_SET_ITEM(args, 0, Py_NewRef(lz->func));
-    for (i = 0; i<numargs; i++){
-        PyObject *it = PyTuple_GET_ITEM(lz->iters, i);
-        PyTuple_SET_ITEM(args, i+1, Py_NewRef(it));
+    for (Py_ssize_t i = 0; i < numargs; i++) {
+        PyValue item = PyTuple_GET_VALUE(iters_owner, i);
+        PyTuple_SET_VALUE(args, i+1, PyValue_MakeHeapSafe(item));
     }
 
+    type_owner = Py_NewRef((PyObject *)Py_TYPE(lz));
+    PyObject *transferred_args = args;
+    args = NULL;
     if (lz->strict) {
-        return Py_BuildValue("ONO", Py_TYPE(lz), args, Py_True);
+        output = Py_BuildValue("ONO", type_owner, transferred_args, Py_True);
     }
-    return Py_BuildValue("ON", Py_TYPE(lz), args);
+    else {
+        output = Py_BuildValue("ON", type_owner, transferred_args);
+    }
+
+done:
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = args;
+        args = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = type_owner;
+        type_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = iters_owner;
+        iters_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = iterator_owner;
+        iterator_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *retired = output;
+            output = NULL;
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+    }
+    return output;
 }
 
 PyDoc_STRVAR(setstate_doc, "Set state information for unpickling.");

@@ -5,16 +5,18 @@ Root owns integration and validation; see the [board](../../README.md).
 
 ## Current evidence
 
-The [v16 probe](../../../../build/pyvalue-merged-build-20261103-v16/results.json)
-binds source checkpoint49 `7a6cba14ed0` plus held typeobject `0d477a4d`.
-`make -k -j4 python` exited 2 in 4.03 seconds, leaving 170 objects and no executable,
-with 299 repeated/cascading errors. All 7,355 source inputs remained unchanged.
-The isolated method-lookup composition is excluded from this snapshot.
+The [v17 probe](../../../../build/pyvalue-merged-build-20261103-v17/results.json)
+binds source checkpoint51 `14fc009d42f` plus held typeobject `ce8c0c45`.
+`make -k -j4 python` exited 2 in 3.84 seconds, leaving 170 objects and no executable,
+with 299 repeated/cascading errors. All 7,357 source inputs remained unchanged.
+Lookup/call50 and scalar boundaries51 are included. The error/warning multiset
+is [exactly unchanged from v16](../../../../build/pyvalue-merged-build-20261103-v17/diagnostic-comparison.json);
+these increments close semantic domain/error gaps in previously compiling code.
 
-- [Identity](../../../../build/pyvalue-merged-build-20261103-v16/identity.json)
-- [Raw log](../../../../build/pyvalue-merged-build-20261103-v16/make.log)
-- [Before inputs](../../../../build/pyvalue-merged-build-20261103-v16/source-before.json)
-- [After inputs](../../../../build/pyvalue-merged-build-20261103-v16/source-after.json)
+- [Identity](../../../../build/pyvalue-merged-build-20261103-v17/identity.json)
+- [Raw log](../../../../build/pyvalue-merged-build-20261103-v17/make.log)
+- [Before inputs](../../../../build/pyvalue-merged-build-20261103-v17/source-before.json)
+- [After inputs](../../../../build/pyvalue-merged-build-20261103-v17/source-after.json)
 
 Counts include repeated diagnostics and shared-header cascades. They are not
 independent edits, a percentage complete, or a performance result. Object counts
@@ -37,7 +39,10 @@ for live assignments.
 
 ## Prior evidence
 
-The preceding [v15 probe](../../../../build/pyvalue-merged-build-20261102-v15/results.json)
+The preceding [v16 probe](../../../../build/pyvalue-merged-build-20261103-v16/results.json)
+had 299 errors/170 objects at checkpoint49; its census remains source-bound there.
+
+The earlier [v15 probe](../../../../build/pyvalue-merged-build-20261102-v15/results.json)
 had 314 errors/169 objects at checkpoint47; its raw evidence stays preserved.
 
 The earlier [v14 probe](../../../../build/pyvalue-merged-build-20261102-v14/results.json)

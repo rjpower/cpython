@@ -1,9 +1,9 @@
 # Porting rules and remaining work
 
 We are closing compiler and ownership gaps before the first universal-value
-register-interpreter measurement. Source checkpoint49 is `7a6cba14ed0`; the latest merged build describes that checkpoint plus held typeobject.
+register-interpreter measurement. Source checkpoint51 is `14fc009d42f`; the latest merged build describes that checkpoint plus held typeobject.
 The [latest merged build](../merged-build/status.md) has 299 repeated/cascading
-errors, 170 objects and no executable; all 7,355 inputs stayed unchanged.
+errors, 170 objects and no executable; all 7,357 inputs stayed unchanged.
 There is no restored runtime or performance result.
 
 The [board](../../README.md) owns current assignments and accepted checkpoints.
@@ -18,12 +18,13 @@ and reviews rules; Luna analyzes errors and applies approved mechanical batches.
 | Seven bootstrap type readers | Committed after independent code/native review | Merged runtime/startup and fault qualification |
 | Four remaining Clinic wrappers | Corrected v3 committed as checkpoint45 | Candidate runtime/fault qualification after linking |
 | Shared FORMAT engine | Foundation A committed as checkpoint47 | Backend/export/public/caller closure design and dependent implementation |
-| Remaining itertools readers | Inventory complete; four tuple-result draft paused | Review reusable canonical copy/update rule; pairwise and zip-longest have separate call boundaries |
+| Remaining itertools readers | Four canonical tuple-loop templates accepted; two call envelopes in design | Apply exact templates, review pairwise/zip-longest recipes, compose full TU |
+| Datetime readers | Twelve function packets independently reviewed; includes three undiagnosed varargs reads | Root full composition/include/native/test/final review |
 | Pickle arguments/state | Three-reader checkpoint46 committed | Candidate runtime/fault qualification after linking |
 | GenericAlias tuple consumers | Reviewed eight-body checkpoint49 committed | Candidate runtime/fault qualification |
 | Type attribute object bridge | Checkpoint48 committed; both full TUs/objects pass | Linked candidate behavior/fault qualification |
-| Method lookup/call envelope | Ten-body composition passes full TU/object; final code/test review | Admit corrected recipe/error-flag envelope, then candidate qualification |
-| Remaining scalar type boundaries | Sol designs five bodies and actual caller contracts | Independent recipe review, bounded Luna packets |
+| Method lookup/call envelope | Checkpoint50 committed | Execute eight candidate contracts; six ordinary reference controls pass |
+| Scalar type boundaries | Checkpoint51 committed; full TU/object and five host controls pass | Candidate qualification, then dependency extraction/MRO/error/lifecycle closure |
 | Held type foundations/cache correctness | Causal classification accepted; nine canonical foundations accepted in place | Extract exact reviewed dependencies; close remaining slot/MRO/guard/lifecycle defects |
 
 Exact designs and inventories:
@@ -35,9 +36,16 @@ Exact designs and inventories:
 - [GenericAlias inventory](../../../../build/pyvalue-genericalias-inventory-20261102-v1/README.md)
 - [Accepted GenericAlias design and implementation recipes](../../../../build/pyvalue-genericalias-readers-design-20261102-v1/README.md)
 - [Accepted type/cache causal matrix](../../../../build/pyvalue-typecache-causal-triage-20261102-v1/README.md)
-- [Latest family census](../../../../build/pyvalue-v12-error-families-20261102-v1/README.md)
+- [Current family census](../../../../build/pyvalue-v16-error-families-20261103-v1/README.md)
 
-The v12 census predates the latest type and Clinic packets. Its 332 observations map
+The current census has 299 observations at 246 sites in 52 paths; 31 warnings are
+separate. Tuple readers contribute 178 observations, list readers 49 and
+dictionary lookup/iteration 34. Generated Clinic paths have zero errors; seven
+handwritten atexit consumer errors remain. The v17 diagnostic multiset is exact
+to v16, with only the undiagnosed type source and two test paths changed;
+[comparison](../../../../build/pyvalue-merged-build-20261103-v17/diagnostic-comparison.json).
+
+The historical v12 census predates the latest type and Clinic packets. Its 332 observations map
 to 278 sites in 58 paths, with 77 warnings counted separately. All eight then-remaining
 Clinic errors map to four producers: reversed_new, float_new, tuple_new and
 atexit_register. None matches the earlier fixed tuple-keyword rule. The itertools

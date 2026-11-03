@@ -804,15 +804,15 @@
     "candidate_linked": false
   },
   "latest_diagnostic_build": {
-    "head": "7a6cba14ed02d3da46886887a48d7e433d623b37",
+    "head": "14fc009d42fb8ef587bd817027b0de87fb02b443",
     "objects_present": 170,
     "error_diagnostics": 299,
     "source_unchanged": true,
     "candidate_linked": false,
     "includes_held_source_files": true,
     "make_exit": 2,
-    "source_manifest_paths": 7355,
-    "evidence": "build/pyvalue-merged-build-20261103-v16"
+    "source_manifest_paths": 7357,
+    "evidence": "build/pyvalue-merged-build-20261103-v17"
   },
   "mro_provider_reviewed_delta": {
     "typeobject_sha256": "d07219973716cab2749c7f9992ee268dd014815d28fd574c6d6c2d84b74dcf1d",
@@ -862,5 +862,49 @@
     "native_receipt_sha256": "400e7c16af0a49b1ecb793706ac3fb9d92cbc47f6808671d7eb64ddf7a69f6af",
     "object_receipt_sha256": "acc2c08fb2d0dd7cab67b60817d8fe608273602db9ddf40386755e743e34edab",
     "staged_patch_sha256": "15526222eb7c60f51d02ea37d8413262e70e8108a0f9c8ca937fb14f32f39bba"
+  },
+  "method_lookup_call_envelope": {
+    "base": "7a6cba14ed02d3da46886887a48d7e433d623b37",
+    "commit": "3a3ee2ac3681aa963ac7b023ef256953e5fb69c0",
+    "paths_sha256": {
+      "Objects/typeobject.c": "ac133cf81708bc113e0a0d3999fcc8da95aaa3445f5e296a2971c6e1711ee4b9",
+      "Lib/test/test_pyvalue_type_lookup_calls.py": "9bdead1127d217b576cc71523f3dd00b568a7da711165c72092ca1110642b981"
+    },
+    "implementation_functions": 10,
+    "reviewed_forwarding_signature_dependencies": 2,
+    "full_held_TU_and_object_pass": true,
+    "object_bytes": 2424896,
+    "candidate_tests_discovered": 8,
+    "reference_safe_pass": 6,
+    "reference_full_exit": 1,
+    "reference_contract_differences": 2,
+    "candidate_skips": 0,
+    "candidate_executed": false,
+    "standalone_HEAD_build_claim": false,
+    "independent_review_sha256": "3f14805a3ca473ded88d37e75dbbc9aac8f754ef10e1c4effc16a452e26058dd",
+    "coordinator_review_sha256": "273c8f08f53193a6d1e47e64bee8aa28fcaacaf6c7f3ca2230f353dd07239dc4",
+    "native_receipt_sha256": "6e2b630b8d9b5002b782415030240231da74b9b5c1230732dbffbbde18460666",
+    "object_receipt_sha256": "375df7ff2a5d6fd7854abb95392afc596badc79d8e8fab6b80d299bcdb3290f2",
+    "staged_patch_sha256": "e8be23705e393791850162c944e3cacd6b47453fe68ed8a0b8cb0d83f5ab8452"
+  },
+  "scalar_type_boundaries": {
+    "base": "3a3ee2ac3681aa963ac7b023ef256953e5fb69c0",
+    "commit": "14fc009d42fb8ef587bd817027b0de87fb02b443",
+    "paths_sha256": {
+      "Objects/typeobject.c": "ce8c0c45f1ea59c16b0762f9dc485f21e88c7cdfb641d4ce69d49005d3b59969",
+      "Lib/test/test_pyvalue_type_scalar_boundaries.py": "00ecb50a33dcb858e82637dc68ac933ccb676cc7db3e33ac17fb576499dad630"
+    },
+    "functions": 5,
+    "full_held_TU_and_object_pass": true,
+    "host_reference_pass": 5,
+    "host_reference_skip": 0,
+    "object_bytes": 2447336,
+    "candidate_executed": false,
+    "standalone_HEAD_build_claim": false,
+    "independent_review_sha256": "46f05809b825390da9494fc54654affa7f990c7707707cddc8824c414ee72e39",
+    "coordinator_review_sha256": "4403b358752b5e278fc534d67086fddb8b1a722b6457755109c707d68fc00415",
+    "native_receipt_sha256": "680c83f47a976821150ba206bb731d4508423d04f7b8aaa4e783a1e71a1eb744",
+    "object_receipt_sha256": "ae07fc14bdfadc70d440b130bb4b57631bb2f7df1f013018cd572ef27734ac09",
+    "staged_patch_sha256": "bca142975df0380c5f67bca2a815758bb9e84307a71920f30553c9a7dd5efc6b"
   }
 }

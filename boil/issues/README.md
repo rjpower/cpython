@@ -1,8 +1,8 @@
 # Current work
 
 Current milestone: complete universal PyValues under RC, then measure the
-register interpreter with JIT disabled. Restoration HEAD is `7a6cba14ed0` on
-`boil/pyvalue-rc-universal`: forty-nine reviewed source commits; typeobject.c is the
+register interpreter with JIT disabled. Restoration HEAD is `14fc009d42f` on
+`boil/pyvalue-rc-universal`: fifty-one reviewed source commits; typeobject.c is the
 remaining original held file. The latest merged diagnostic build has 170
 objects present and failed to link. No restored runtime, qualification or performance pass is claimed.
 [State](pyvalue-rc-restoration/status.md), [process](../PROCESS.md) and
@@ -11,16 +11,17 @@ objects present and failed to link. No restored runtime, qualification or perfor
 ## Now and next
 
 1. The first safe universal-value register-interpreter baseline remains the goal.
-   Merged v16 at checkpoint49 failed before linking: 299 compiler-error observations, 170 objects
-   present, all 7,355 inputs unchanged. Focused component passes are not a runtime pass.
+   Merged v17 at checkpoint51 failed before linking: 299 compiler-error observations, 170 objects
+   present, all 7,357 inputs unchanged. Focused component passes are not a runtime pass.
 2. Seven bootstrap readers are committed after code/native review. The Clinic
    four-wrapper batch is checkpoint45. Pickle/state readers46 and FORMAT
    foundation47 follow after independent code/native review. Full type TU/object
    compile without diagnostics; held scalar/cache semantics remain required.
    Type-attribute bridge48 is committed. Nine canonical foundations are accepted
-   in place. GenericAlias49 is committed. The ten-body method-lookup composition
-   passes native checks; final code/test review is active. Sol designs the five
-   remaining scalar boundaries; Luna clusters the latest merged errors.
+   in place. GenericAlias49, lookup/call50 and scalar boundaries51 are committed.
+   Twelve datetime functions are individually reviewed; root composes their
+   Luna packets. Four itertools templates are in mechanical application; the
+   remaining two call envelopes are in design.
    Root gates each rule, integrates accepted deltas and validates the composition.
 3. The counter foundation and thirteen slot wrappers are committed. Full MRO
    admission is under causal review. Fix introduced scalar/error/guard defects;
@@ -34,9 +35,9 @@ objects present and failed to link. No restored runtime, qualification or perfor
 | Experiment | Stage | Owner | Next step |
 | --- | --- | --- | --- |
 | [Native callers and scoped parsers](pyvalue-rc-restoration/native-parsers/status.md) | Flat kernel/five callers and FORMAT foundation A committed | Coordinator; next design queued | Close backend/export/public/caller contract before dependent implementation |
-| [Core and extension consumers](pyvalue-rc-restoration/core-consumers/status.md) | GenericAlias49 committed; lookup/call final review active | Root integration; Sol actual review | Admit corrected ten-body composition and tests; continue ranked compiler families |
-| [Porting batches](pyvalue-rc-restoration/porting/status.md) | GenericAlias49 committed; v16 census active | Root integration; Sol design; Luna analysis/bulk | Cluster299 observations into reusable bounded port rules |
-| [Canonical type cache](pyvalue-rc-restoration/typecache/status.md) | Lookup/call final review; five scalar boundaries in design; nine foundations accepted in place | Root gate; Sol 6.1 design/review | Admit lookup closure, review scalar recipes, extract dependencies and close MRO/lifecycle defects |
+| [Core and extension consumers](pyvalue-rc-restoration/core-consumers/status.md) | Lookup50/scalar51 committed; datetime12 individually reviewed | Root integration; Luna artifact composition; Sol final review | Compose datetime12, compile/test/review and commit |
+| [Porting batches](pyvalue-rc-restoration/porting/status.md) | Census complete; datetime12 and itertools4 packets active | Root integration; Sol design/review; Luna mechanical work | Admit datetime closure; finish the two remaining itertools call envelopes |
+| [Canonical type cache](pyvalue-rc-restoration/typecache/status.md) | Scalar families committed; nine foundations accepted in place | Root gate; finite design/review queued | Extract reviewed dependencies and close remaining MRO/error/guard/lifecycle obligations |
 | [Value-native VM iteration](pyvalue-rc-restoration/iterator-vm/status.md) | Tuning after safe baseline | Unassigned | Remove boxing from correct iterator bridges and measure |
 | [Integration and interpreter checkpoint](pyvalue-rc-restoration/integration/status.md) | Build diagnostics → ports | Coordinator | Close concrete compile/link blockers, rebuild, qualify and measure |
 | [Method and tracing JIT](jit-e2e-system/status.md) | Deferred to interpreter checkpoint | Coordinator | Reconcile source/runtime with universal values before further native validation |
@@ -48,6 +49,8 @@ linked restored runtime. Primary-worktree documentation is separate.
 
 | Experiment | Source commit or outcome | Remaining validation |
 | --- | --- | --- |
+| [Lookup/call and scalar boundaries](pyvalue-rc-restoration/core-consumers/type-scalar/status.md) | `3a3ee2ac368`, `14fc009d42f`, checkpoints50/51 | Full held TU/objects pass; candidate behavior/fault qualification pending |
+| [Merged diagnostic v17](pyvalue-rc-restoration/merged-build/status.md) | Probe at checkpoint51 plus held typeobject | All 7,357 inputs unchanged;299 errors/170 objects; no executable |
 | [GenericAlias closure](pyvalue-rc-restoration/core-consumers/genericalias/status.md) | `7a6cba14ed0`, checkpoint49 | Full TU/object pass; ten host passes/one older-version skip; candidate pending |
 | [Merged diagnostic v16](pyvalue-rc-restoration/merged-build/status.md) | Probe at checkpoint49 plus held typeobject | All7,355 inputs unchanged;299 errors/170 objects; no executable |
 | [Type attribute bridge](pyvalue-rc-restoration/core-consumers/type-getattro/status.md) | `dd26d8e34ca`, checkpoint48 | Both full TUs/objects pass; four host controls; candidate execution pending |

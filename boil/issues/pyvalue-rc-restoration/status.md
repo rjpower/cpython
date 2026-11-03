@@ -39,9 +39,11 @@ export/public API/caller closure remains mandatory. Type attribute bridge48
 (`dd26d8e34ca`) is committed after clean full-TU/object probes and four host
 controls. GenericAlias49 (`7a6cba14ed0`) is committed after full-TU/object
 review and ten host passes/one older-version skip. The ten-body method-lookup
-composition passes native checks; final code/test review is active. Nine canonical
+closure is checkpoint50 (`3a3ee2ac368`) and five scalar boundaries are51
+(`14fc009d42f`), both with clean full-TU/object results. Twelve datetime
+functions are individually reviewed; their composition is active. Nine canonical
 foundations are accepted in place, with extraction still pending. The itertools
-tuple-result draft is paused.
+tuple-loop templates are accepted; pairwise/zip-longest call envelopes remain in design.
 Root integrates reviewed code and validates the composition.
 The MRO providers plus one immediate wrapper passed independent
 code/native attribution review; their syntax comparison has 61 diagnostics,
@@ -61,8 +63,8 @@ and [native caller](native-callers/status.md) receipts describe their frozen
 checkpoints. The later [caller transaction](native-parsers/caller-transaction/status.md)
 repairs and checkpoints their composition; its candidate runtime tests remain
 unexecuted. The [merged diagnostic build](merged-build/status.md) still fails to
-link. Its latest v16 snapshot at checkpoint49 plus held typeobject has 170 objects
-present and 299 repeated/cascading error diagnostics. All 7,355 source paths
+link. Its latest v17 snapshot at checkpoint51 plus held typeobject has 170 objects
+present and 299 repeated/cascading error diagnostics. All 7,357 source paths
 remained unchanged; no candidate was executed. The checkpoint46 type composition
 passes the full configured translation unit and actual object emission with zero
 diagnostics; all eight host controls pass. Held scalar/type-cache semantics remain

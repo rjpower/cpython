@@ -10,7 +10,10 @@ collection. Type-cache entries, mutation, installed guards and interpreter
 teardown must share a coherent invalidation/admission contract. The tracing-GC
 work is closed.
 
-Restoration checkpoint48 is `dd26d8e34ca`. Its type attribute bridge and
+Restoration checkpoint51 is `14fc009d42f`. Lookup/call50 and five scalar
+boundaries51 are committed after native/source review; reference outcomes and
+mandatory candidate error contracts are recorded [here](../core-consumers/type-scalar/status.md).
+The earlier type attribute bridge is checkpoint48 (`dd26d8e34ca`). Its type attribute bridge and
 optional-attribute caller pass both full-TU/object probes; four host controls
 pass and candidate execution remains pending. After the three pickle/state readers
 landed in46, the complete current type translation unit and actual object compile
@@ -38,8 +41,8 @@ classifying introduced defects against inherited upstream behavior and defining
 small dependency-ordered fixes or extractions. Its [sealed causal matrix](../../../../build/pyvalue-typecache-causal-triage-20261102-v1/README.md)
 passed independent peer review as a finite queue. Nine canonical foundations
 then passed actual-source review in place; no rewrite was required. The
-ten-body method lookup/call composition passes native checks and is in final
-code/test review. Five remaining scalar boundaries are in finite design. These decisions do not admit the whole held file. No whole-file source grant follows
+ten-body method lookup/call and five scalar boundaries are committed. Their
+selected definitions are now separated from the remaining held foundations. These decisions do not admit the whole held file. No whole-file source grant follows
 from a successful compiler run or an old provider review.
 
 The earlier full transaction proposal requested stronger rollback, diamond and
@@ -48,8 +51,7 @@ are not automatically requirements to replace upstream's pointer-conditional
 algorithm before the first baseline. Retain necessary lifetime/invalidation fixes;
 choose further changes from concrete introduced failures and qualification.
 
-Next: admit the corrected lookup/call composition, review scalar recipes and
-extract exact reviewed foundations with declaration/include dependency proofs,
+Next: extract exact reviewed foundations with declaration/include dependency proofs,
 and close remaining
 slot, MRO error, guard and lifecycle obligations. Inspect actual code/native
 results and commit each dependency. Once the runtime links, execute cache/mutation/scalar,

@@ -3086,48 +3086,103 @@ _PyObject_LookupSpecialMethod(PyObject *attr, _PyStackRef *method,
 }
 
 static int
-lookup_method_ex(PyObject *self, PyObject *attr, _PyStackRef *out,
+lookup_method_ex(PyObject *self, PyObject *attr, PyValue *out,
                  int raise_attribute_error)
 {
-    _PyType_LookupStackRefAndVersion(Py_TYPE(self), attr, out);
-    if (PyStackRef_IsNull(*out)) {
-        if (raise_attribute_error) {
-            PyErr_SetObject(PyExc_AttributeError, attr);
-        }
+    assert(PyValue_IsNull(*out));
+    PyObject *self_owner = NULL, *attr_owner = NULL;
+    PyObject *view = NULL, *bound = NULL, *binding_type = NULL;
+    PyObject *suppressed_error = NULL;
+    int rc = -1;
+    if (PyErr_Occurred()) {
         return -1;
     }
-
-    PyObject *value = PyStackRef_AsPyObjectBorrow(*out);
-    if (_PyType_HasFeature(Py_TYPE(value), Py_TPFLAGS_METHOD_DESCRIPTOR)) {
-        /* Avoid temporary PyMethodObject */
-        return 1;
+    self_owner = Py_NewRef(self);
+    attr_owner = Py_NewRef(attr);
+    (void)_PyType_LookupValueAndVersion(Py_TYPE(self_owner), attr_owner, out);
+    if (PyErr_Occurred()) {
+        goto done;
     }
-
-    descrgetfunc f = Py_TYPE(value)->tp_descr_get;
-    if (f != NULL) {
-        value = f(value, self, (PyObject *)(Py_TYPE(self)));
-        PyStackRef_CLEAR(*out);
-        if (value == NULL) {
-            if (!raise_attribute_error &&
-                PyErr_ExceptionMatches(PyExc_AttributeError))
-            {
-                PyErr_Clear();
-            }
-            return -1;
+    if (PyValue_IsNull(*out)) {
+        if (raise_attribute_error) {
+            PyErr_SetObject(PyExc_AttributeError, attr_owner);
         }
-        *out = PyStackRef_FromPyObjectSteal(value);
+        goto done;
     }
-    return 0;
+    view = PyValue_AsObject(*out);
+    if (view == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    {
+        PyValue retired = *out;
+        *out = PyValue_FromPyObjectSteal(view);
+        view = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    PyObject *value = PyValue_AsPyObjectBorrow(*out);
+    if (_PyType_HasFeature(Py_TYPE(value), Py_TPFLAGS_METHOD_DESCRIPTOR)) {
+        rc = 1;
+        goto done;
+    }
+    descrgetfunc f = Py_TYPE(value)->tp_descr_get;
+    if (f == NULL) {
+        rc = 0;
+        goto done;
+    }
+    binding_type = Py_NewRef((PyObject *)Py_TYPE(self_owner));
+    bound = f(value, self_owner, binding_type);
+    /* Suppress only the descriptor's actual NULL/AttributeError result.
+       New cleanup errors still propagate after this deliberate suppression. */
+    if (bound == NULL && !raise_attribute_error &&
+        PyErr_ExceptionMatches(PyExc_AttributeError)) {
+        suppressed_error = PyErr_GetRaisedException();
+    }
+    int had_bound = bound != NULL;
+    {
+        PyValue retired = *out;
+        *out = PyValue_NULL;
+        if (bound != NULL) {
+            *out = PyValue_FromPyObjectSteal(bound);
+            bound = NULL;
+        }
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (had_bound && !PyErr_Occurred()) {
+        rc = 0;
+    }
+done:
+    type_mutation_close(&view);
+    type_mutation_close(&bound);
+    type_mutation_close(&suppressed_error);
+    type_mutation_close(&binding_type);
+    type_mutation_close(&attr_owner);
+    type_mutation_close(&self_owner);
+    if (rc < 0 || PyErr_Occurred()) {
+        PyValue retired = *out;
+        *out = PyValue_NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+        return -1;
+    }
+    return rc;
 }
 
 static int
-lookup_maybe_method(PyObject *self, PyObject *attr, _PyStackRef *out)
+lookup_maybe_method(PyObject *self, PyObject *attr, PyValue *out)
 {
     return lookup_method_ex(self, attr, out, 0);
 }
 
 static int
-lookup_method(PyObject *self, PyObject *attr, _PyStackRef *out)
+lookup_method(PyObject *self, PyObject *attr, PyValue *out)
 {
     return lookup_method_ex(self, attr, out, 1);
 }
@@ -3165,37 +3220,84 @@ static PyObject *
 call_method_noarg(PyObject *self, PyObject *attr)
 {
     PyThreadState *tstate = _PyThreadState_GET();
-    _PyCStackRef cref;
-    _PyThreadState_PushCStackRef(tstate, &cref);
-    PyObject *res = NULL;
-    int unbound = lookup_method(self, attr, &cref.ref);
-    if (unbound >= 0) {
-        PyObject *func = PyStackRef_AsPyObjectBorrow(cref.ref);
-        res = call_unbound_noarg(unbound, func, self);
+    PyObject *self_owner = NULL;
+    PyObject *result = NULL;
+    _PyCValue cref;
+    int unbound = -1;
+    if (PyErr_Occurred()) {
+        return NULL;
     }
-    _PyThreadState_PopCStackRef(tstate, &cref);
-    return res;
+    self_owner = Py_NewRef(self);
+    _PyThreadState_PushCValue(tstate, &cref);
+    unbound = lookup_method(self_owner, attr, &cref.ref);
+    if (PyErr_Occurred() || unbound < 0) {
+        goto done;
+    }
+    assert(!PyValue_IsNull(cref.ref));
+    assert(PyValue_IsPointerSpace(cref.ref));
+    PyObject *func = PyValue_AsPyObjectBorrow(cref.ref);
+    result = call_unbound_noarg(unbound, func, self_owner);
+done:
+    {
+        PyValue retired = _PyThreadState_PopCValueSteal(tstate, &cref);
+        cref.ref = PyValue_NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+    }
+    type_mutation_close(&self_owner);
+    if (PyErr_Occurred()) {
+        type_mutation_close(&result);
+        return NULL;
+    }
+    return result;
 }
 
 static PyObject *
 call_method(PyObject *self, PyObject *attr, PyObject *args, PyObject *kwds)
 {
     PyThreadState *tstate = _PyThreadState_GET();
-    _PyCStackRef cref;
-    _PyThreadState_PushCStackRef(tstate, &cref);
-    PyObject *res = NULL;
-    int unbound = lookup_method(self, attr, &cref.ref);
-    if (unbound >= 0) {
-        PyObject *meth = PyStackRef_AsPyObjectBorrow(cref.ref);
-        if (unbound) {
-            res = _PyObject_Call_Prepend(tstate, meth, self, args, kwds);
-        }
-        else {
-            res = _PyObject_Call(tstate, meth, args, kwds);
-        }
+    PyObject *self_owner = NULL, *args_owner = NULL, *kwds_owner = NULL;
+    PyObject *result = NULL;
+    _PyCValue cref;
+    int unbound = -1;
+    if (PyErr_Occurred()) {
+        return NULL;
     }
-    _PyThreadState_PopCStackRef(tstate, &cref);
-    return res;
+    self_owner = Py_NewRef(self);
+    args_owner = Py_NewRef(args);
+    kwds_owner = Py_XNewRef(kwds);
+    _PyThreadState_PushCValue(tstate, &cref);
+    unbound = lookup_method(self_owner, attr, &cref.ref);
+    if (PyErr_Occurred() || unbound < 0) {
+        goto done;
+    }
+    assert(!PyValue_IsNull(cref.ref));
+    assert(PyValue_IsPointerSpace(cref.ref));
+    PyObject *meth = PyValue_AsPyObjectBorrow(cref.ref);
+    if (unbound) {
+        result = _PyObject_Call_Prepend(tstate, meth, self_owner, args_owner,
+                                        kwds_owner);
+    }
+    else {
+        result = _PyObject_Call(tstate, meth, args_owner, kwds_owner);
+    }
+done:
+    {
+        PyValue retired = _PyThreadState_PopCValueSteal(tstate, &cref);
+        cref.ref = PyValue_NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+    }
+    type_mutation_close(&kwds_owner);
+    type_mutation_close(&args_owner);
+    type_mutation_close(&self_owner);
+    if (PyErr_Occurred()) {
+        type_mutation_close(&result);
+        return NULL;
+    }
+    return result;
 }
 
 /* A variation of PyObject_CallMethod* that uses lookup_method()
@@ -3207,19 +3309,37 @@ static PyObject *
 vectorcall_method(PyObject *name, PyObject *const *args, Py_ssize_t nargs)
 {
     assert(nargs >= 1);
-
     PyThreadState *tstate = _PyThreadState_GET();
-    PyObject *retval = NULL;
-    PyObject *self = args[0];
-    _PyCStackRef cref;
-    _PyThreadState_PushCStackRef(tstate, &cref);
-    int unbound = lookup_method(self, name, &cref.ref);
-    if (unbound >= 0) {
-        PyObject *func = PyStackRef_AsPyObjectBorrow(cref.ref);
-        retval = vectorcall_unbound(tstate, unbound, func, args, nargs);
+    PyObject *self_owner = NULL, *result = NULL;
+    _PyCValue cref;
+    int unbound = -1;
+    if (PyErr_Occurred()) {
+        return NULL;
     }
-    _PyThreadState_PopCStackRef(tstate, &cref);
-    return retval;
+    self_owner = Py_NewRef(args[0]);
+    _PyThreadState_PushCValue(tstate, &cref);
+    unbound = lookup_method(self_owner, name, &cref.ref);
+    if (PyErr_Occurred() || unbound < 0) {
+        goto done;
+    }
+    assert(!PyValue_IsNull(cref.ref));
+    assert(PyValue_IsPointerSpace(cref.ref));
+    PyObject *func = PyValue_AsPyObjectBorrow(cref.ref);
+    result = vectorcall_unbound(tstate, unbound, func, args, nargs);
+done:
+    {
+        PyValue retired = _PyThreadState_PopCValueSteal(tstate, &cref);
+        cref.ref = PyValue_NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+    }
+    type_mutation_close(&self_owner);
+    if (PyErr_Occurred()) {
+        type_mutation_close(&result);
+        return NULL;
+    }
+    return result;
 }
 
 /* Clone of vectorcall_method() that returns NotImplemented
@@ -3230,21 +3350,43 @@ vectorcall_maybe(PyThreadState *tstate, PyObject *name,
 {
     assert(nargs >= 1);
 
-    PyObject *self = args[0];
-    _PyCStackRef cref;
-    _PyThreadState_PushCStackRef(tstate, &cref);
-    int unbound = lookup_maybe_method(self, name, &cref.ref);
-    PyObject *func = PyStackRef_AsPyObjectBorrow(cref.ref);
-    if (func == NULL) {
-        _PyThreadState_PopCStackRef(tstate, &cref);
-        if (!PyErr_Occurred()) {
-            Py_RETURN_NOTIMPLEMENTED;
-        }
+    PyObject *self_owner = NULL;
+    PyObject *result = NULL;
+    _PyCValue cref = { .ref = PyValue_NULL };
+    int unbound = -1;
+
+    if (PyErr_Occurred()) {
         return NULL;
     }
-    PyObject *retval = vectorcall_unbound(tstate, unbound, func, args, nargs);
-    _PyThreadState_PopCStackRef(tstate, &cref);
-    return retval;
+    self_owner = Py_NewRef(args[0]);
+    _PyThreadState_PushCValue(tstate, &cref);
+    unbound = lookup_maybe_method(self_owner, name, &cref.ref);
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    if (unbound < 0) {
+        result = Py_NewRef(Py_NotImplemented);
+        goto done;
+    }
+    assert(!PyValue_IsNull(cref.ref));
+    assert(PyValue_IsPointerSpace(cref.ref));
+    PyObject *func = PyValue_AsPyObjectBorrow(cref.ref);
+    result = vectorcall_unbound(tstate, unbound, func, args, nargs);
+
+done:
+    {
+        PyValue retired = _PyThreadState_PopCValueSteal(tstate, &cref);
+        cref.ref = PyValue_NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+    }
+    type_mutation_close(&self_owner);
+    if (PyErr_Occurred()) {
+        type_mutation_close(&result);
+        return NULL;
+    }
+    return result;
 }
 
 /* Call the method with the name `attr` on `self`. Returns NULL if the
@@ -3255,20 +3397,50 @@ static PyObject *
 maybe_call_special_no_args(PyObject *self, PyObject *attr, int *attr_is_none)
 {
     PyThreadState *tstate = _PyThreadState_GET();
-    _PyCStackRef cref;
-    _PyThreadState_PushCStackRef(tstate, &cref);
+    PyObject *self_owner = NULL;
+    PyObject *result = NULL;
+    _PyCValue cref = { .ref = PyValue_NULL };
+    int unbound = -1;
 
-    PyObject *res = NULL;
-    int unbound = lookup_maybe_method(self, attr, &cref.ref);
-    PyObject *func = PyStackRef_AsPyObjectBorrow(cref.ref);
+    if (attr_is_none != NULL) {
+        *attr_is_none = 0;
+    }
+    if (PyErr_Occurred()) {
+        return NULL;
+    }
+    self_owner = Py_NewRef(self);
+    _PyThreadState_PushCValue(tstate, &cref);
+    unbound = lookup_maybe_method(self_owner, attr, &cref.ref);
+    if (PyErr_Occurred() || unbound < 0) {
+        goto done;
+    }
+    assert(!PyValue_IsNull(cref.ref));
+    assert(PyValue_IsPointerSpace(cref.ref));
+    PyObject *func = PyValue_AsPyObjectBorrow(cref.ref);
     if (attr_is_none != NULL) {
         *attr_is_none = (func == Py_None);
     }
-    if (func != NULL && (func != Py_None || attr_is_none == NULL)) {
-        res = call_unbound_noarg(unbound, func, self);
+    if (func != Py_None || attr_is_none == NULL) {
+        result = call_unbound_noarg(unbound, func, self_owner);
     }
-    _PyThreadState_PopCStackRef(tstate, &cref);
-    return res;
+
+done:
+    {
+        PyValue retired = _PyThreadState_PopCValueSteal(tstate, &cref);
+        cref.ref = PyValue_NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+    }
+    type_mutation_close(&self_owner);
+    if (PyErr_Occurred()) {
+        if (attr_is_none != NULL) {
+            *attr_is_none = 0;
+        }
+        type_mutation_close(&result);
+        return NULL;
+    }
+    return result;
 }
 
 static PyObject *
@@ -3276,21 +3448,54 @@ maybe_call_special_one_arg(PyObject *self, PyObject *attr, PyObject *arg,
                            int *attr_is_none)
 {
     PyThreadState *tstate = _PyThreadState_GET();
-    _PyCStackRef cref;
-    _PyThreadState_PushCStackRef(tstate, &cref);
+    PyObject *self_owner = NULL;
+    PyObject *arg_owner = NULL;
+    PyObject *result = NULL;
+    _PyCValue cref = { .ref = PyValue_NULL };
+    int unbound = -1;
 
-    PyObject *res = NULL;
-    int unbound = lookup_maybe_method(self, attr, &cref.ref);
-    PyObject *func = PyStackRef_AsPyObjectBorrow(cref.ref);
+    if (attr_is_none != NULL) {
+        *attr_is_none = 0;
+    }
+    if (PyErr_Occurred()) {
+        return NULL;
+    }
+    self_owner = Py_NewRef(self);
+    arg_owner = Py_NewRef(arg);
+    _PyThreadState_PushCValue(tstate, &cref);
+    unbound = lookup_maybe_method(self_owner, attr, &cref.ref);
+    if (PyErr_Occurred() || unbound < 0) {
+        goto done;
+    }
+    assert(!PyValue_IsNull(cref.ref));
+    assert(PyValue_IsPointerSpace(cref.ref));
+    PyObject *func = PyValue_AsPyObjectBorrow(cref.ref);
     if (attr_is_none != NULL) {
         *attr_is_none = (func == Py_None);
     }
-    if (func != NULL && (func != Py_None || attr_is_none == NULL)) {
-        PyObject *args[] = { self, arg };
-        res = vectorcall_unbound(tstate, unbound, func, args, 2);
+    if (func != Py_None || attr_is_none == NULL) {
+        PyObject *args[] = { self_owner, arg_owner };
+        result = vectorcall_unbound(tstate, unbound, func, args, 2);
     }
-    _PyThreadState_PopCStackRef(tstate, &cref);
-    return res;
+
+done:
+    {
+        PyValue retired = _PyThreadState_PopCValueSteal(tstate, &cref);
+        cref.ref = PyValue_NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+    }
+    type_mutation_close(&arg_owner);
+    type_mutation_close(&self_owner);
+    if (PyErr_Occurred()) {
+        if (attr_is_none != NULL) {
+            *attr_is_none = 0;
+        }
+        type_mutation_close(&result);
+        return NULL;
+    }
+    return result;
 }
 
 PyObject *
@@ -12138,33 +12343,87 @@ static int
 has_dunder_getitem(PyObject *self)
 {
     PyThreadState *tstate = _PyThreadState_GET();
-    _PyCStackRef c_ref;
-    _PyThreadState_PushCStackRef(tstate, &c_ref);
-    lookup_maybe_method(self, &_Py_ID(__getitem__), &c_ref.ref);
-    int has_dunder_getitem = !PyStackRef_IsNull(c_ref.ref);
-    _PyThreadState_PopCStackRef(tstate, &c_ref);
-    return has_dunder_getitem;
+    PyObject *self_owner = NULL;
+    _PyCValue cref;
+    int status = -1;
+    int result = -1;
+    if (PyErr_Occurred()) {
+        return -1;
+    }
+    self_owner = Py_NewRef(self);
+    _PyThreadState_PushCValue(tstate, &cref);
+    status = lookup_maybe_method(self_owner, &_Py_ID(__getitem__), &cref.ref);
+    if (PyErr_Occurred()) {
+        result = -1;
+    }
+    else {
+        result = status >= 0 ? 1 : 0;
+    }
+    {
+        PyValue retired = _PyThreadState_PopCValueSteal(tstate, &cref);
+        cref.ref = PyValue_NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+    }
+    type_mutation_close(&self_owner);
+    if (PyErr_Occurred()) {
+        return -1;
+    }
+    return result;
 }
 
 static PyObject *
 slot_tp_iter(PyObject *self)
 {
+    PyObject *self_owner = NULL;
+    PyObject *result = NULL;
+    PyObject *diagnostic_type = NULL;
+    PyObject *diagnostic_name = NULL;
     int attr_is_none = 0;
-    PyObject *res = maybe_call_special_no_args(self, &_Py_ID(__iter__),
-                                               &attr_is_none);
-    if (res != NULL) {
-        return res;
-    }
-    else if (PyErr_Occurred()) {
+    int present;
+    if (PyErr_Occurred()) {
         return NULL;
     }
-    else if (attr_is_none || !has_dunder_getitem(self)) {
-        PyErr_Format(PyExc_TypeError,
-            "'%.200s' object is not iterable",
-            Py_TYPE(self)->tp_name);
+    self_owner = Py_NewRef(self);
+    result = maybe_call_special_no_args(self_owner, &_Py_ID(__iter__),
+                                        &attr_is_none);
+    if (PyErr_Occurred() || result != NULL) {
+        goto done;
+    }
+    if (attr_is_none) {
+        goto not_iterable;
+    }
+    present = has_dunder_getitem(self_owner);
+    if (PyErr_Occurred() || present < 0) {
+        goto done;
+    }
+    if (present) {
+        result = PySeqIter_New(self_owner);
+        goto done;
+    }
+
+not_iterable:
+    diagnostic_type = Py_NewRef((PyObject *)Py_TYPE(self_owner));
+    if (PyType_HasFeature((PyTypeObject *)diagnostic_type,
+                          Py_TPFLAGS_HEAPTYPE)) {
+        diagnostic_name = Py_NewRef(
+            ((PyHeapTypeObject *)diagnostic_type)->ht_name);
+    }
+    const char *type_name = ((PyTypeObject *)diagnostic_type)->tp_name;
+    PyErr_Format(PyExc_TypeError,
+        "'%.200s' object is not iterable",
+        type_name);
+
+done:
+    type_mutation_close(&diagnostic_name);
+    type_mutation_close(&diagnostic_type);
+    type_mutation_close(&self_owner);
+    if (PyErr_Occurred()) {
+        type_mutation_close(&result);
         return NULL;
     }
-    return PySeqIter_New(self);
+    return result;
 }
 
 static PyObject *
@@ -12269,31 +12528,45 @@ slot_tp_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 static void
 slot_tp_finalize(PyObject *self)
 {
-    /* Save the current exception, if any. */
     PyThreadState *tstate = _PyThreadState_GET();
     PyObject *exc = _PyErr_GetRaisedException(tstate);
-
-    _PyCStackRef cref;
-    _PyThreadState_PushCStackRef(tstate, &cref);
-
-    /* Execute __del__ method, if any. */
-    int unbound = lookup_maybe_method(self, &_Py_ID(__del__), &cref.ref);
-    if (unbound >= 0) {
-        PyObject *del = PyStackRef_AsPyObjectBorrow(cref.ref);
-        PyObject *res = call_unbound_noarg(unbound, del, self);
-        if (res == NULL) {
-            PyErr_FormatUnraisable("Exception ignored while "
-                                   "calling deallocator %R", del);
-        }
-        else {
-            Py_DECREF(res);
-        }
+    PyObject *self_owner = Py_NewRef(self);
+    PyObject *result = NULL;
+    PyObject *report_owner = NULL;
+    _PyCValue cref;
+    _PyThreadState_PushCValue(tstate, &cref);
+    int unbound = lookup_maybe_method(self_owner, &_Py_ID(__del__), &cref.ref);
+    if (unbound >= 0 && !PyErr_Occurred()) {
+        assert(!PyValue_IsNull(cref.ref));
+        PyObject *del = PyValue_AsPyObjectBorrow(cref.ref);
+        report_owner = Py_NewRef(del);
+        result = call_unbound_noarg(unbound, del, self_owner);
     }
-
-    _PyThreadState_PopCStackRef(tstate, &cref);
-
-    /* Restore the saved exception. */
+    else {
+        report_owner = Py_NewRef(self_owner);
+    }
+    type_mutation_close(&result);
+    {
+        PyValue retired = _PyThreadState_PopCValueSteal(tstate, &cref);
+        cref.ref = PyValue_NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        PyValue_XCLOSE(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        PyErr_FormatUnraisable("Exception ignored while "
+                               "calling deallocator %R", report_owner);
+    }
+    type_mutation_close(&report_owner);
+    type_mutation_close(&self_owner);
+    if (PyErr_Occurred()) {
+        /* Original caller/live or temporary-resurrection owner still roots self. */
+        PyErr_FormatUnraisable("Exception ignored while "
+                               "calling deallocator %R", self);
+    }
+    /* format_unraisable_v clears its error even when the hook fails. */
     _PyErr_SetRaisedException(tstate, exc);
+    exc = NULL;
 }
 
 typedef struct _PyBufferWrapper {

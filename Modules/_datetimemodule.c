@@ -15,6 +15,8 @@
 #include "pycore_time.h"          // _PyTime_ObjectToTime_t()
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_unicodeobject.h" // _PyUnicode_Copy()
+/* PyValue accessors for tuple-backed object references. */
+#include "pycore_value.h"
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_pyatomic_ft_wrappers.h"
 
@@ -394,15 +396,34 @@ divmod(int x, int y, int *r)
 static PyObject *
 divide_nearest(PyObject *m, PyObject *n)
 {
-    PyObject *result;
-    PyObject *temp;
+    PyObject *temp = NULL;
+    PyObject *result = NULL;
 
     temp = _PyLong_DivmodNear(m, n);
-    if (temp == NULL)
-        return NULL;
-    result = Py_NewRef(PyTuple_GET_ITEM(temp, 0));
-    Py_DECREF(temp);
+    if (temp == NULL || PyErr_Occurred()) {
+        goto Done;
+    }
+    result = PyTuple_GetItemRef(temp, 0);
+    if (result == NULL || PyErr_Occurred()) {
+        goto Done;
+    }
 
+Done:
+    {
+        PyObject *retired = temp;
+        temp = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        PyObject *retired = result;
+        result = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+        return NULL;
+    }
     return result;
 }
 
@@ -2221,58 +2242,141 @@ microseconds_to_delta_ex(PyObject *pyus, PyTypeObject *type)
 
     PyObject *tuple = NULL;
     PyObject *num = NULL;
+    PyObject *remainder = NULL;
     PyObject *result = NULL;
 
-    PyObject *current_mod;
+    PyObject *current_mod = NULL;
     datetime_state *st = GET_CURRENT_STATE(current_mod);
     if (st == NULL) {
         return NULL;
     }
-
-    tuple = checked_divmod(pyus, CONST_US_PER_SECOND(st));
-    if (tuple == NULL) {
+    if (PyErr_Occurred()) {
         goto Done;
     }
 
-    num = PyTuple_GET_ITEM(tuple, 1);           /* us */
-    us = PyLong_AsInt(num);
-    num = NULL;
-    if (us == -1 && PyErr_Occurred()) {
+    tuple = checked_divmod(pyus, CONST_US_PER_SECOND(st));
+    if (tuple == NULL || PyErr_Occurred()) {
+        goto Done;
+    }
+
+    remainder = PyTuple_GetItemRef(tuple, 1);  /* us */
+    if (remainder == NULL || PyErr_Occurred()) {
+        goto Done;
+    }
+    us = PyLong_AsInt(remainder);
+    {
+        PyObject *retired = remainder;
+        remainder = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
         goto Done;
     }
     if (!(0 <= us && us < 1000000)) {
         goto BadDivmod;
     }
 
-    num = Py_NewRef(PyTuple_GET_ITEM(tuple, 0));        /* leftover seconds */
-    Py_DECREF(tuple);
+    num = PyTuple_GetItemRef(tuple, 0);  /* leftover seconds */
+    if (num == NULL || PyErr_Occurred()) {
+        goto Done;
+    }
+    {
+        PyObject *retired = tuple;
+        tuple = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        goto Done;
+    }
 
     tuple = checked_divmod(num, CONST_SEC_PER_DAY(st));
-    if (tuple == NULL)
+    if (tuple == NULL || PyErr_Occurred()) {
         goto Done;
-    Py_DECREF(num);
+    }
+    {
+        PyObject *retired = num;
+        num = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        goto Done;
+    }
 
-    num = PyTuple_GET_ITEM(tuple, 1);           /* seconds */
-    s = PyLong_AsInt(num);
-    num = NULL;
-    if (s == -1 && PyErr_Occurred()) {
+    remainder = PyTuple_GetItemRef(tuple, 1);  /* seconds */
+    if (remainder == NULL || PyErr_Occurred()) {
+        goto Done;
+    }
+    s = PyLong_AsInt(remainder);
+    {
+        PyObject *retired = remainder;
+        remainder = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
         goto Done;
     }
     if (!(0 <= s && s < 24*3600)) {
         goto BadDivmod;
     }
 
-    num = Py_NewRef(PyTuple_GET_ITEM(tuple, 0));           /* leftover days */
+    num = PyTuple_GetItemRef(tuple, 0);  /* leftover days */
+    if (num == NULL || PyErr_Occurred()) {
+        goto Done;
+    }
     d = PyLong_AsInt(num);
-    if (d == -1 && PyErr_Occurred()) {
+    if (PyErr_Occurred()) {
         goto Done;
     }
     result = new_delta_ex(d, s, us, 0, type);
+    if (result == NULL || PyErr_Occurred()) {
+        goto Done;
+    }
 
 Done:
-    Py_XDECREF(tuple);
-    Py_XDECREF(num);
-    RELEASE_CURRENT_STATE(st, current_mod);
+    {
+        PyObject *retired = remainder;
+        remainder = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = num;
+        num = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = tuple;
+        tuple = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = current_mod;
+        current_mod = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        RELEASE_CURRENT_STATE(st, retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        PyObject *retired = result;
+        result = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+        return NULL;
+    }
     return result;
 
 BadDivmod:
@@ -2337,30 +2441,145 @@ static PyObject *
 multiply_truedivide_timedelta_float(PyDateTime_Delta *delta, PyObject *floatobj, int op)
 {
     PyObject *result = NULL;
-    PyObject *pyus_in = NULL, *temp, *pyus_out;
+    PyObject *pyus_in = NULL;
     PyObject *ratio = NULL;
+    PyObject *factor = NULL;
+    PyObject *divisor = NULL;
+    PyObject *temp = NULL;
+    PyObject *pyus_out = NULL;
 
     pyus_in = delta_to_microseconds(delta);
-    if (pyus_in == NULL)
-        return NULL;
-    ratio = get_float_as_integer_ratio(floatobj);
-    if (ratio == NULL) {
-        goto error;
+    if (pyus_in == NULL || PyErr_Occurred()) {
+        goto Done;
     }
-    temp = PyNumber_Multiply(pyus_in, PyTuple_GET_ITEM(ratio, op));
-    Py_SETREF(pyus_in, NULL);
-    if (temp == NULL)
-        goto error;
-    pyus_out = divide_nearest(temp, PyTuple_GET_ITEM(ratio, !op));
-    Py_DECREF(temp);
-    if (pyus_out == NULL)
-        goto error;
-    result = microseconds_to_delta(pyus_out);
-    Py_DECREF(pyus_out);
- error:
-    Py_XDECREF(pyus_in);
-    Py_XDECREF(ratio);
+    ratio = get_float_as_integer_ratio(floatobj);
+    if (ratio == NULL || PyErr_Occurred()) {
+        goto Done;
+    }
+    factor = PyTuple_GetItemRef(ratio, op);
+    if (factor == NULL || PyErr_Occurred()) {
+        goto Done;
+    }
+    temp = PyNumber_Multiply(pyus_in, factor);
+    if (temp == NULL || PyErr_Occurred()) {
+        goto Done;
+    }
+    {
+        PyObject *retired = factor;
+        factor = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        goto Done;
+    }
+    {
+        PyObject *retired = pyus_in;
+        pyus_in = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        goto Done;
+    }
 
+    divisor = PyTuple_GetItemRef(ratio, !op);
+    if (divisor == NULL || PyErr_Occurred()) {
+        goto Done;
+    }
+    pyus_out = divide_nearest(temp, divisor);
+    if (pyus_out == NULL || PyErr_Occurred()) {
+        goto Done;
+    }
+    {
+        PyObject *retired = divisor;
+        divisor = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        goto Done;
+    }
+    {
+        PyObject *retired = temp;
+        temp = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        goto Done;
+    }
+
+    result = microseconds_to_delta(pyus_out);
+    if (result == NULL || PyErr_Occurred()) {
+        goto Done;
+    }
+    {
+        PyObject *retired = pyus_out;
+        pyus_out = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        goto Done;
+    }
+
+Done:
+    {
+        PyObject *retired = pyus_out;
+        pyus_out = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = temp;
+        temp = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = divisor;
+        divisor = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = factor;
+        factor = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = pyus_in;
+        pyus_in = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = ratio;
+        ratio = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        PyObject *retired = result;
+        result = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+        return NULL;
+    }
     return result;
 }
 
@@ -2682,39 +2901,130 @@ delta_remainder(PyObject *left, PyObject *right)
 static PyObject *
 delta_divmod(PyObject *left, PyObject *right)
 {
-    PyObject *pyus_left;
-    PyObject *pyus_right;
-    PyObject *divmod;
-    PyObject *delta;
-    PyObject *result;
+    PyObject *pyus_left = NULL;
+    PyObject *pyus_right = NULL;
+    PyObject *divmod = NULL;
+    PyObject *remainder = NULL;
+    PyObject *quotient = NULL;
+    PyObject *delta = NULL;
+    PyObject *result = NULL;
 
-    if (!PyDelta_Check(left) || !PyDelta_Check(right))
+    if (!PyDelta_Check(left) || !PyDelta_Check(right)) {
         Py_RETURN_NOTIMPLEMENTED;
+    }
 
     pyus_left = delta_to_microseconds((PyDateTime_Delta *)left);
-    if (pyus_left == NULL)
-        return NULL;
-
+    if (pyus_left == NULL || PyErr_Occurred()) {
+        goto Done;
+    }
     pyus_right = delta_to_microseconds((PyDateTime_Delta *)right);
-    if (pyus_right == NULL) {
-        Py_DECREF(pyus_left);
-        return NULL;
+    if (pyus_right == NULL || PyErr_Occurred()) {
+        goto Done;
     }
-
     divmod = checked_divmod(pyus_left, pyus_right);
-    Py_DECREF(pyus_left);
-    Py_DECREF(pyus_right);
-    if (divmod == NULL)
-        return NULL;
+    if (divmod == NULL || PyErr_Occurred()) {
+        goto Done;
+    }
+    {
+        PyObject *retired = pyus_left;
+        pyus_left = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        goto Done;
+    }
+    {
+        PyObject *retired = pyus_right;
+        pyus_right = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        goto Done;
+    }
 
-    delta = microseconds_to_delta(PyTuple_GET_ITEM(divmod, 1));
-    if (delta == NULL) {
-        Py_DECREF(divmod);
+    remainder = PyTuple_GetItemRef(divmod, 1);
+    if (remainder == NULL || PyErr_Occurred()) {
+        goto Done;
+    }
+    delta = microseconds_to_delta(remainder);
+    if (delta == NULL || PyErr_Occurred()) {
+        goto Done;
+    }
+    {
+        PyObject *retired = remainder;
+        remainder = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        goto Done;
+    }
+
+    quotient = PyTuple_GetItemRef(divmod, 0);
+    if (quotient == NULL || PyErr_Occurred()) {
+        goto Done;
+    }
+    result = _PyTuple_FromPair(quotient, delta);
+    if (result == NULL || PyErr_Occurred()) {
+        goto Done;
+    }
+
+Done:
+    {
+        PyObject *retired = quotient;
+        quotient = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = remainder;
+        remainder = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = delta;
+        delta = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = divmod;
+        divmod = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = pyus_right;
+        pyus_right = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = pyus_left;
+        pyus_left = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        PyObject *retired = result;
+        result = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
         return NULL;
     }
-    result = _PyTuple_FromPair(PyTuple_GET_ITEM(divmod, 0), delta);
-    Py_DECREF(delta);
-    Py_DECREF(divmod);
     return result;
 }
 
@@ -3232,39 +3542,95 @@ date_from_pickle(PyTypeObject *type, PyObject *state)
 static PyObject *
 date_new(PyTypeObject *type, PyObject *args, PyObject *kw)
 {
+    PyObject *state = NULL;
+    PyObject *encoded = NULL;
+    PyObject *result = NULL;
+
     /* Check for invocation from pickle with __getstate__ state */
-    if (PyTuple_GET_SIZE(args) == 1) {
-        PyObject *state = PyTuple_GET_ITEM(args, 0);
-        if (PyBytes_Check(state)) {
-            if (PyBytes_GET_SIZE(state) == _PyDateTime_DATE_DATASIZE &&
-                MONTH_IS_SANE(PyBytes_AS_STRING(state)[2]))
-            {
-                return date_from_pickle(type, state);
-            }
+    if (!(PyTuple_GET_SIZE(args) == 1)) {
+        return datetime_date(type, args, kw);
+    }
+    state = PyTuple_GetItemRef(args, 0);
+    if (state == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    if (PyBytes_Check(state)) {
+        if (PyBytes_GET_SIZE(state) == _PyDateTime_DATE_DATASIZE &&
+            MONTH_IS_SANE(PyBytes_AS_STRING(state)[2]))
+        {
+            result = date_from_pickle(type, state);
+            if (result == NULL || PyErr_Occurred()) goto done;
+            goto done;
         }
-        else if (PyUnicode_Check(state)) {
-            if (PyUnicode_GET_LENGTH(state) == _PyDateTime_DATE_DATASIZE &&
-                MONTH_IS_SANE(PyUnicode_READ_CHAR(state, 2)))
-            {
-                state = PyUnicode_AsLatin1String(state);
-                if (state == NULL) {
-                    if (PyErr_ExceptionMatches(PyExc_UnicodeEncodeError)) {
-                        /* More informative error message. */
-                        PyErr_SetString(PyExc_ValueError,
-                            "Failed to encode latin1 string when unpickling "
-                            "a date object. "
-                            "pickle.load(data, encoding='latin1') is assumed.");
-                    }
-                    return NULL;
+    }
+    else if (PyUnicode_Check(state)) {
+        if (PyUnicode_GET_LENGTH(state) == _PyDateTime_DATE_DATASIZE &&
+            MONTH_IS_SANE(PyUnicode_READ_CHAR(state, 2)))
+        {
+            encoded = PyUnicode_AsLatin1String(state);
+            if (encoded == NULL) {
+                if (PyErr_ExceptionMatches(PyExc_UnicodeEncodeError)) {
+                    /* More informative error message. */
+                    PyErr_SetString(PyExc_ValueError,
+                        "Failed to encode latin1 string when unpickling "
+                        "a date object. "
+                        "pickle.load(data, encoding='latin1') is assumed.");
                 }
-                PyObject *self = date_from_pickle(type, state);
-                Py_DECREF(state);
-                return self;
+                goto done;
             }
+            if (PyErr_Occurred()) goto done;
+            result = date_from_pickle(type, encoded);
+            if (result == NULL || PyErr_Occurred()) goto done;
+            goto done;
         }
     }
 
-    return datetime_date(type, args, kw);
+    /* Invalid pickle state: retire selections before ordinary parsing. */
+    {
+        PyObject *retired = encoded;
+        encoded = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) goto done;
+    {
+        PyObject *retired = state;
+        state = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) goto done;
+    result = datetime_date(type, args, kw);
+    if (result == NULL || PyErr_Occurred()) goto done;
+
+done:
+    {
+        PyObject *retired = encoded;
+        encoded = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = state;
+        state = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        {
+            PyObject *retired = result;
+            result = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        return NULL;
+    }
+    return result;
 }
 
 /*[clinic input]
@@ -3729,65 +4095,185 @@ typedef struct {
 static PyObject *
 iso_calendar_date_repr(PyObject *self)
 {
-    PyObject *year = PyTuple_GetItem(self, 0);
-    if (year == NULL) {
-        return NULL;
+    PyObject *year = NULL;
+    PyObject *week = NULL;
+    PyObject *weekday = NULL;
+    PyObject *result = NULL;
+
+    year = PyTuple_GetItemRef(self, 0);
+    if (year == NULL || PyErr_Occurred()) {
+        goto done;
     }
-    PyObject *week = PyTuple_GetItem(self, 1);
-    if (week == NULL) {
-        return NULL;
+    week = PyTuple_GetItemRef(self, 1);
+    if (week == NULL || PyErr_Occurred()) {
+        goto done;
     }
-    PyObject *weekday = PyTuple_GetItem(self, 2);
-    if (weekday == NULL) {
-        return NULL;
+    weekday = PyTuple_GetItemRef(self, 2);
+    if (weekday == NULL || PyErr_Occurred()) {
+        goto done;
     }
 
-    return PyUnicode_FromFormat("%.200s(year=%S, week=%S, weekday=%S)",
-                               Py_TYPE(self)->tp_name, year, week, weekday);
+    result = PyUnicode_FromFormat("%.200s(year=%S, week=%S, weekday=%S)",
+                                  Py_TYPE(self)->tp_name, year, week, weekday);
+    if (result == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+done:
+    {
+        PyObject *retired = weekday;
+        weekday = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = week;
+        week = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = year;
+        year = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        {
+            PyObject *retired = result;
+            result = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        return NULL;
+    }
+    return result;
 }
 
 static PyObject *
 iso_calendar_date_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     // Construct the tuple that this reduces to
-    PyObject *reduce_tuple = Py_BuildValue(
-        "O((OOO))", &PyTuple_Type,
-        PyTuple_GET_ITEM(self, 0),
-        PyTuple_GET_ITEM(self, 1),
-        PyTuple_GET_ITEM(self, 2)
-    );
+    PyObject *year = NULL;
+    PyObject *week = NULL;
+    PyObject *weekday = NULL;
+    PyObject *result = NULL;
 
-    return reduce_tuple;
+    year = PyTuple_GetItemRef(self, 0);
+    if (year == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    week = PyTuple_GetItemRef(self, 1);
+    if (week == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    weekday = PyTuple_GetItemRef(self, 2);
+    if (weekday == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+
+    result = Py_BuildValue(
+        "O((OOO))", &PyTuple_Type, year, week, weekday
+    );
+    if (result == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+done:
+    {
+        PyObject *retired = weekday;
+        weekday = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = week;
+        week = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = year;
+        year = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        {
+            PyObject *retired = result;
+            result = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        return NULL;
+    }
+    return result;
 }
 
 static PyObject *
 iso_calendar_date_year(PyObject *self, void *Py_UNUSED(closure))
 {
-    PyObject *year = PyTuple_GetItem(self, 0);
+    PyObject *year = PyTuple_GetItemRef(self, 0);
     if (year == NULL) {
         return NULL;
     }
-    return Py_NewRef(year);
+    if (PyErr_Occurred()) {
+        {
+            PyObject *retired = year;
+            year = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        return NULL;
+    }
+    return year;
 }
 
 static PyObject *
 iso_calendar_date_week(PyObject *self, void *Py_UNUSED(closure))
 {
-    PyObject *week = PyTuple_GetItem(self, 1);
+    PyObject *week = PyTuple_GetItemRef(self, 1);
     if (week == NULL) {
         return NULL;
     }
-    return Py_NewRef(week);
+    if (PyErr_Occurred()) {
+        {
+            PyObject *retired = week;
+            week = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        return NULL;
+    }
+    return week;
 }
 
 static PyObject *
 iso_calendar_date_weekday(PyObject *self, void *Py_UNUSED(closure))
 {
-    PyObject *weekday = PyTuple_GetItem(self, 2);
+    PyObject *weekday = PyTuple_GetItemRef(self, 2);
     if (weekday == NULL) {
         return NULL;
     }
-    return Py_NewRef(weekday);
+    if (PyErr_Occurred()) {
+        {
+            PyObject *retired = weekday;
+            weekday = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        return NULL;
+    }
+    return weekday;
 }
 
 static PyGetSetDef iso_calendar_date_getset[] = {
@@ -4742,43 +5228,122 @@ time_from_pickle(PyTypeObject *type, PyObject *state, PyObject *tzinfo)
 static PyObject *
 time_new(PyTypeObject *type, PyObject *args, PyObject *kw)
 {
+    PyObject *state = NULL;
+    PyObject *encoded = NULL;
+    PyObject *tzinfo = NULL;
+    PyObject *result = NULL;
+
     /* Check for invocation from pickle with __getstate__ state */
-    if (PyTuple_GET_SIZE(args) >= 1 && PyTuple_GET_SIZE(args) <= 2) {
-        PyObject *state = PyTuple_GET_ITEM(args, 0);
-        PyObject *tzinfo = Py_None;
-        if (PyTuple_GET_SIZE(args) == 2) {
-            tzinfo = PyTuple_GET_ITEM(args, 1);
+    if (!(PyTuple_GET_SIZE(args) >= 1 && PyTuple_GET_SIZE(args) <= 2)) {
+        return datetime_time(type, args, kw);
+    }
+    state = PyTuple_GetItemRef(args, 0);
+    if (state == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    if (PyTuple_GET_SIZE(args) == 2) {
+        tzinfo = PyTuple_GetItemRef(args, 1);
+    }
+    else {
+        tzinfo = Py_NewRef(Py_None);
+    }
+    if (tzinfo == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    if (PyBytes_Check(state)) {
+        if (PyBytes_GET_SIZE(state) == _PyDateTime_TIME_DATASIZE &&
+            (0x7F & ((unsigned char) (PyBytes_AS_STRING(state)[0]))) < 24)
+        {
+            result = time_from_pickle(type, state, tzinfo);
+            if (result == NULL || PyErr_Occurred()) goto done;
+            goto done;
         }
-        if (PyBytes_Check(state)) {
-            if (PyBytes_GET_SIZE(state) == _PyDateTime_TIME_DATASIZE &&
-                (0x7F & ((unsigned char) (PyBytes_AS_STRING(state)[0]))) < 24)
-            {
-                return time_from_pickle(type, state, tzinfo);
-            }
-        }
-        else if (PyUnicode_Check(state)) {
-            if (PyUnicode_GET_LENGTH(state) == _PyDateTime_TIME_DATASIZE &&
-                (0x7F & PyUnicode_READ_CHAR(state, 0)) < 24)
-            {
-                state = PyUnicode_AsLatin1String(state);
-                if (state == NULL) {
-                    if (PyErr_ExceptionMatches(PyExc_UnicodeEncodeError)) {
-                        /* More informative error message. */
-                        PyErr_SetString(PyExc_ValueError,
-                            "Failed to encode latin1 string when unpickling "
-                            "a time object. "
-                            "pickle.load(data, encoding='latin1') is assumed.");
-                    }
-                    return NULL;
+    }
+    else if (PyUnicode_Check(state)) {
+        if (PyUnicode_GET_LENGTH(state) == _PyDateTime_TIME_DATASIZE &&
+            (0x7F & PyUnicode_READ_CHAR(state, 0)) < 24)
+        {
+            encoded = PyUnicode_AsLatin1String(state);
+            if (encoded == NULL) {
+                if (PyErr_ExceptionMatches(PyExc_UnicodeEncodeError)) {
+                    /* More informative error message. */
+                    PyErr_SetString(PyExc_ValueError,
+                        "Failed to encode latin1 string when unpickling "
+                        "a time object. "
+                        "pickle.load(data, encoding='latin1') is assumed.");
                 }
-                PyObject *self = time_from_pickle(type, state, tzinfo);
-                Py_DECREF(state);
-                return self;
+                goto done;
             }
+            if (PyErr_Occurred()) goto done;
+            result = time_from_pickle(type, encoded, tzinfo);
+            if (result == NULL || PyErr_Occurred()) goto done;
+            goto done;
         }
     }
 
-    return datetime_time(type, args, kw);
+    /* Invalid pickle state: retire selections before ordinary parsing. */
+    {
+        PyObject *retired = encoded;
+        encoded = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) goto done;
+    {
+        PyObject *retired = tzinfo;
+        tzinfo = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    {
+        PyObject *retired = state;
+        state = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) goto done;
+    result = datetime_time(type, args, kw);
+    if (result == NULL || PyErr_Occurred()) goto done;
+
+done:
+    {
+        PyObject *retired = encoded;
+        encoded = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = tzinfo;
+        tzinfo = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = state;
+        state = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        {
+            PyObject *retired = result;
+            result = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        return NULL;
+    }
+    return result;
 }
 
 /*[clinic input]
@@ -5555,43 +6120,122 @@ datetime_from_pickle(PyTypeObject *type, PyObject *state, PyObject *tzinfo)
 static PyObject *
 datetime_new(PyTypeObject *type, PyObject *args, PyObject *kw)
 {
+    PyObject *state = NULL;
+    PyObject *encoded = NULL;
+    PyObject *tzinfo = NULL;
+    PyObject *result = NULL;
+
     /* Check for invocation from pickle with __getstate__ state */
-    if (PyTuple_GET_SIZE(args) >= 1 && PyTuple_GET_SIZE(args) <= 2) {
-        PyObject *state = PyTuple_GET_ITEM(args, 0);
-        PyObject *tzinfo = Py_None;
-        if (PyTuple_GET_SIZE(args) == 2) {
-            tzinfo = PyTuple_GET_ITEM(args, 1);
+    if (!(PyTuple_GET_SIZE(args) >= 1 && PyTuple_GET_SIZE(args) <= 2)) {
+        return datetime_datetime(type, args, kw);
+    }
+    state = PyTuple_GetItemRef(args, 0);
+    if (state == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    if (PyTuple_GET_SIZE(args) == 2) {
+        tzinfo = PyTuple_GetItemRef(args, 1);
+    }
+    else {
+        tzinfo = Py_NewRef(Py_None);
+    }
+    if (tzinfo == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    if (PyBytes_Check(state)) {
+        if (PyBytes_GET_SIZE(state) == _PyDateTime_DATETIME_DATASIZE &&
+            MONTH_IS_SANE(PyBytes_AS_STRING(state)[2] & 0x7F))
+        {
+            result = datetime_from_pickle(type, state, tzinfo);
+            if (result == NULL || PyErr_Occurred()) goto done;
+            goto done;
         }
-        if (PyBytes_Check(state)) {
-            if (PyBytes_GET_SIZE(state) == _PyDateTime_DATETIME_DATASIZE &&
-                MONTH_IS_SANE(PyBytes_AS_STRING(state)[2] & 0x7F))
-            {
-                return datetime_from_pickle(type, state, tzinfo);
-            }
-        }
-        else if (PyUnicode_Check(state)) {
-            if (PyUnicode_GET_LENGTH(state) == _PyDateTime_DATETIME_DATASIZE &&
-                MONTH_IS_SANE(PyUnicode_READ_CHAR(state, 2) & 0x7F))
-            {
-                state = PyUnicode_AsLatin1String(state);
-                if (state == NULL) {
-                    if (PyErr_ExceptionMatches(PyExc_UnicodeEncodeError)) {
-                        /* More informative error message. */
-                        PyErr_SetString(PyExc_ValueError,
-                            "Failed to encode latin1 string when unpickling "
-                            "a datetime object. "
-                            "pickle.load(data, encoding='latin1') is assumed.");
-                    }
-                    return NULL;
+    }
+    else if (PyUnicode_Check(state)) {
+        if (PyUnicode_GET_LENGTH(state) == _PyDateTime_DATETIME_DATASIZE &&
+            MONTH_IS_SANE(PyUnicode_READ_CHAR(state, 2) & 0x7F))
+        {
+            encoded = PyUnicode_AsLatin1String(state);
+            if (encoded == NULL) {
+                if (PyErr_ExceptionMatches(PyExc_UnicodeEncodeError)) {
+                    /* More informative error message. */
+                    PyErr_SetString(PyExc_ValueError,
+                        "Failed to encode latin1 string when unpickling "
+                        "a datetime object. "
+                        "pickle.load(data, encoding='latin1') is assumed.");
                 }
-                PyObject *self = datetime_from_pickle(type, state, tzinfo);
-                Py_DECREF(state);
-                return self;
+                goto done;
             }
+            if (PyErr_Occurred()) goto done;
+            result = datetime_from_pickle(type, encoded, tzinfo);
+            if (result == NULL || PyErr_Occurred()) goto done;
+            goto done;
         }
     }
 
-    return datetime_datetime(type, args, kw);
+    /* Invalid pickle state: retire selections before ordinary parsing. */
+    {
+        PyObject *retired = encoded;
+        encoded = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) goto done;
+    {
+        PyObject *retired = tzinfo;
+        tzinfo = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        goto done;
+    }
+    {
+        PyObject *retired = state;
+        state = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) goto done;
+    result = datetime_datetime(type, args, kw);
+    if (result == NULL || PyErr_Occurred()) goto done;
+
+done:
+    {
+        PyObject *retired = encoded;
+        encoded = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = tzinfo;
+        tzinfo = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = state;
+        state = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        {
+            PyObject *retired = result;
+            result = NULL;
+            PyObject *saved = PyErr_GetRaisedException();
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        return NULL;
+    }
+    return result;
 }
 
 /*[clinic input]

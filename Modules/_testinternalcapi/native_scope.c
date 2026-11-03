@@ -2539,7 +2539,148 @@ done:
 }
 
 
+typedef struct {
+    PyObject_HEAD
+    PyObject *backing;
+    Py_ssize_t get_calls;
+} FormatExportForwarder;
+
+static int
+format_export_forward_getbuffer(PyObject *op, Py_buffer *view, int flags)
+{
+    FormatExportForwarder *self = (FormatExportForwarder *)op;
+    self->get_calls++;
+    return PyObject_GetBuffer(self->backing, view, flags);
+}
+
+static void
+format_export_forward_dealloc(PyObject *op)
+{
+    FormatExportForwarder *self = (FormatExportForwarder *)op;
+    PyObject *retired = self->backing;
+    self->backing = NULL;
+    PyObject *saved = PyErr_GetRaisedException();
+    Py_XDECREF(retired);
+    _PyValue_RestoreException(saved);
+    saved = PyErr_GetRaisedException();
+    PyObject_Free(op);
+    _PyValue_RestoreException(saved);
+}
+
+static PyBufferProcs format_export_forward_buffer = {
+    .bf_getbuffer = format_export_forward_getbuffer,
+    .bf_releasebuffer = NULL,
+};
+
+static PyTypeObject FormatExportForwarder_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testinternalcapi._FormatExportForwarder",
+    .tp_basicsize = sizeof(FormatExportForwarder),
+    .tp_dealloc = format_export_forward_dealloc,
+    .tp_as_buffer = &format_export_forward_buffer,
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+};
+
+static PyObject *
+format_engine_export(PyObject *self, PyObject *args)
+{
+    _PyArg_OwnerScope scope = {0};
+    PyObject *backing = NULL;
+    PyObject *callback = NULL;
+    Py_ssize_t count = 1;
+    PyObject *forwarder_owner = NULL;
+    FormatExportForwarder *forwarder = NULL;
+    PyObject *callback_result = NULL;
+    PyObject *result = NULL;
+    const Py_buffer *view = NULL;
+    int completed = 0;
+
+    if (!_PyArg_ParseTupleOwned(&scope, args, "OO|n:format_engine_export",
+                               &backing, &callback, &count) || PyErr_Occurred()) {
+        goto done;
+    }
+    if (count < 1 || count > 17) {
+        PyErr_SetString(PyExc_ValueError, "export count must be between 1 and 17");
+        goto done;
+    }
+    if (PyType_Ready(&FormatExportForwarder_Type) < 0 || PyErr_Occurred()) {
+        goto done;
+    }
+    forwarder_owner = (PyObject *)PyObject_New(
+        FormatExportForwarder, &FormatExportForwarder_Type);
+    if (forwarder_owner != NULL) {
+        ((FormatExportForwarder *)forwarder_owner)->backing = NULL;
+        ((FormatExportForwarder *)forwarder_owner)->get_calls = 0;
+    }
+    if (forwarder_owner == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    ((FormatExportForwarder *)forwarder_owner)->backing = Py_NewRef(backing);
+    forwarder = (FormatExportForwarder *)_PyArg_OwnerScope_KeepObject(
+        &scope, forwarder_owner);
+    forwarder_owner = NULL;
+    if (forwarder == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    for (Py_ssize_t i = 0; i < count; i++) {
+        view = _PyArg_OwnerScope_GetBuffer(&scope, (PyObject *)forwarder);
+        if (view == NULL || PyErr_Occurred()) {
+            goto done;
+        }
+        if (view->obj == (PyObject *)forwarder) {
+            PyErr_SetString(PyExc_AssertionError, "export owner did not differ");
+            goto done;
+        }
+    }
+    if (forwarder->get_calls != count) {
+        PyErr_SetString(PyExc_AssertionError, "export acquisition was replayed");
+        goto done;
+    }
+    callback_result = PyObject_CallOneArg(callback, backing);
+    if (callback_result == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    result = PyBytes_FromStringAndSize(view->buf, view->len);
+    if (result == NULL || PyErr_Occurred()) {
+        goto done;
+    }
+    completed = 1;
+done:
+    {
+        PyObject *retired = callback_result;
+        callback_result = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *retired = forwarder_owner;
+        forwarder_owner = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (_PyArg_OwnerScope_End(&scope) < 0 || PyErr_Occurred()) {
+        completed = 0;
+    }
+    /* No descriptor or forwarder borrow is accessed after the first End. */
+    if (_PyArg_OwnerScope_End(&scope) < 0 || PyErr_Occurred()) {
+        completed = 0;
+    }
+    if (!completed || PyErr_Occurred()) {
+        PyObject *retired = result;
+        result = NULL;
+        PyObject *saved = PyErr_GetRaisedException();
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+        return NULL;
+    }
+    return result;
+}
+
+
 static PyMethodDef methods[] = {
+    {"format_engine_export", format_engine_export, METH_VARARGS},
     {"format_engine_leases", format_engine_leases, METH_O},
     {"format_engine_resources", format_engine_resources, METH_O},
     {"format_engine_resource_failure", format_engine_resource_failure, METH_O},

@@ -2719,10 +2719,15 @@ arg_scope_save_error(PyObject **saved)
     *saved = PyErr_GetRaisedException();
 }
 
+enum { ARG_LEASE_OBJECTS = 1, ARG_LEASE_BUFFER = 2 };
 struct _PyArg_LeaseChunk {
     struct _PyArg_LeaseChunk *next;
     Py_ssize_t used;
-    PyObject *items[8];
+    int kind;
+    union {
+        PyObject *objects[8];
+        Py_buffer buffer;
+    } payload;
 };
 
 struct _PyArg_ResourceChunk {
@@ -2752,7 +2757,7 @@ _PyArg_OwnerScope_KeepObject(_PyArg_OwnerScope *scope, PyObject *owned)
         return NULL;
     }
     struct _PyArg_LeaseChunk *chunk = scope->lease_last;
-    if (chunk == NULL || chunk->used == 8) {
+    if (chunk == NULL || chunk->kind != ARG_LEASE_OBJECTS || chunk->used == 8) {
         chunk = PyMem_Malloc(sizeof(*chunk));
         if (chunk == NULL || PyErr_Occurred()) {
             if (!PyErr_Occurred()) {
@@ -2768,8 +2773,9 @@ _PyArg_OwnerScope_KeepObject(_PyArg_OwnerScope *scope, PyObject *owned)
         }
         chunk->next = NULL;
         chunk->used = 0;
+        chunk->kind = ARG_LEASE_OBJECTS;
         for (int i = 0; i < 8; i++) {
-            chunk->items[i] = NULL;
+            chunk->payload.objects[i] = NULL;
         }
         if (scope->lease_last != NULL) {
             scope->lease_last->next = chunk;
@@ -2779,9 +2785,55 @@ _PyArg_OwnerScope_KeepObject(_PyArg_OwnerScope *scope, PyObject *owned)
         }
         scope->lease_last = chunk;
     }
-    chunk->items[chunk->used] = owned;
+    chunk->payload.objects[chunk->used] = owned;
     chunk->used++;
     return owned;
+}
+
+/* PROPOSED new private API, not an existing spelling. Caller roots arg. */
+const Py_buffer *
+_PyArg_OwnerScope_GetBuffer(_PyArg_OwnerScope *scope, PyObject *arg)
+{
+    if (PyErr_Occurred()) {
+        return NULL;
+    }
+    if (scope == NULL || scope->ended || arg == NULL) {
+        PyErr_BadInternalCall();
+        return NULL;
+    }
+    struct _PyArg_LeaseChunk *chunk = PyMem_Malloc(sizeof(*chunk));
+    if (chunk == NULL || PyErr_Occurred()) {
+        if (!PyErr_Occurred()) {
+            PyErr_NoMemory();
+        }
+        PyObject *saved = PyErr_GetRaisedException();
+        PyMem_Free(chunk);
+        _PyValue_RestoreException(saved);
+        return NULL;
+    }
+    chunk->next = NULL;
+    chunk->used = 0;
+    chunk->kind = ARG_LEASE_BUFFER;
+    memset(&chunk->payload.buffer, 0, sizeof(chunk->payload.buffer));
+    if (scope->lease_last != NULL) {
+        scope->lease_last->next = chunk;
+    }
+    else {
+        scope->lease_first = chunk;
+    }
+    scope->lease_last = chunk;
+    /* Export directly into stationary storage. No stack descriptor is moved. */
+    int status = PyObject_GetBuffer(arg, &chunk->payload.buffer, PyBUF_SIMPLE);
+    if (status != 0) {
+        /* A failing exporter owns its partial initialization, as in GetBuffer. */
+        return NULL;
+    }
+    chunk->used = 1;
+    if (PyErr_Occurred()) {
+        /* Success acquired an obligation even with a pending exception. */
+        return NULL;
+    }
+    return &chunk->payload.buffer;
 }
 
 int
@@ -2962,11 +3014,31 @@ _PyArg_OwnerScope_End(_PyArg_OwnerScope *scope)
     }
     while (reversed != NULL) {
         struct _PyArg_LeaseChunk *next = reversed->next;
-        for (Py_ssize_t i = reversed->used; i > 0; i--) {
-            PyObject *object = reversed->items[i - 1];
-            reversed->items[i - 1] = NULL;
-            Py_XDECREF(object);
-            arg_scope_save_error(&saved);
+        if (reversed->kind == ARG_LEASE_OBJECTS) {
+            for (Py_ssize_t i = reversed->used; i > 0; i--) {
+                PyObject *object = reversed->payload.objects[i - 1];
+                reversed->payload.objects[i - 1] = NULL;
+                Py_XDECREF(object);
+                arg_scope_save_error(&saved);
+            }
+        }
+        else {
+            assert(reversed->kind == ARG_LEASE_BUFFER);
+            if (reversed->used != 0) {
+                reversed->used = 0;  /* Disarm before callback. */
+                Py_buffer *view = &reversed->payload.buffer;
+                PyObject *exporter = view->obj;
+                if (exporter != NULL) {
+                    PyBufferProcs *pb = Py_TYPE(exporter)->tp_as_buffer;
+                    if (pb != NULL && pb->bf_releasebuffer != NULL) {
+                        pb->bf_releasebuffer(exporter, view);
+                    }
+                    view->obj = NULL;
+                    arg_scope_save_error(&saved);
+                    Py_DECREF(exporter);
+                    arg_scope_save_error(&saved);
+                }
+            }
         }
         PyMem_Free(reversed);
         arg_scope_save_error(&saved);

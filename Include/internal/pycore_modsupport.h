@@ -121,6 +121,21 @@ PyAPI_FUNC(PyObject *const *) _PyArg_UnpackKeywordsOwned(
  * views borrow independent scope owners through implementation and cleanup. */
 PyAPI_FUNC(PyObject *const *) _PyArg_UnpackPositionalOwned(
     _PyArg_OwnerScope *, const char *name, Py_ssize_t min, Py_ssize_t max);
+/* A fresh scope supports one parse and stays live through consumer use and
+ * successful converter-resource cleanup. During Begin, KeepObject, GetBuffer,
+ * Register or EXPLICIT Finish, callbacks must not operate on this SAME scope,
+ * including End. A nested parse must use a different scope. End sets ended
+ * before callbacks: End -> callback -> End and repeated End are supported.
+ * Explicit Finish -> callback -> End is not supported. */
+/* Acquire one PyBUF_SIMPLE export directly into stationary scope storage.
+ * The caller roots arg through this call. The returned const descriptor is a
+ * borrow through End: never modify/release it or retain it after End. Scope
+ * owns the actual export, including when acquisition succeeds with an error
+ * pending. A NULL return leaves the scope End-able. Failure does not transfer
+ * an export to the caller. Input leases are independent of successful parser
+ * resources, which the consumer still releases before End. */
+PyAPI_FUNC(const Py_buffer *) _PyArg_OwnerScope_GetBuffer(
+    _PyArg_OwnerScope *, PyObject *arg);
 /* Safe after a partial Begin/unpack. Retains the primary or first cleanup error.
  * Run after converter cleanup; 0 has no pending error, -1 reports an error. */
 PyAPI_FUNC(int) _PyArg_OwnerScope_End(_PyArg_OwnerScope *);

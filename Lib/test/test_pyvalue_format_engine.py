@@ -4,6 +4,7 @@ import weakref
 
 from _testinternalcapi import (
     format_engine_leases,
+    format_engine_export,
     format_engine_resource_failure,
     format_engine_resources,
 )
@@ -228,6 +229,82 @@ class FormatEngineFixturesTests(unittest.TestCase):
             with self.subTest(arguments=arguments[:2]):
                 with self.assertRaises(Exception):
                     format_engine_resource_failure(arguments)
+
+
+class FormatEngineExportTests(unittest.TestCase):
+    def test_alternate_export_owner_lives_until_end(self):
+        for count in (1, 17):
+            with self.subTest(count=count):
+                backing = bytearray(b"actual export")
+                events = []
+
+                def callback(actual):
+                    self.assertIs(actual, backing)
+                    self.assertEqual(bytes(actual), b"actual export")
+                    with self.assertRaises(BufferError):
+                        actual.extend(b"blocked")
+                    events.append("callback")
+
+                copied = format_engine_export(backing, callback, count)
+                self.assertEqual(copied, b"actual export")
+                self.assertEqual(events, ["callback"])
+                backing.extend(b" released")
+                self.assertEqual(backing, b"actual export released")
+
+    def test_callback_failure_releases_all_exports(self):
+        for count in (1, 17):
+            with self.subTest(count=count):
+                backing = bytearray(b"held")
+                sentinel = RuntimeError("export callback sentinel")
+                calls = []
+
+                def callback(actual):
+                    self.assertIs(actual, backing)
+                    with self.assertRaises(BufferError):
+                        actual.clear()
+                    calls.append(1)
+                    raise sentinel
+
+                with self.assertRaises(RuntimeError) as caught:
+                    format_engine_export(backing, callback, count)
+                self.assertIs(caught.exception, sentinel)
+                self.assertEqual(calls, [1])
+                backing.extend(b" released")
+                self.assertEqual(backing, b"held released")
+
+    def test_failed_export_does_not_call_callback(self):
+        calls = []
+        with self.assertRaises(TypeError):
+            format_engine_export(object(), lambda actual: calls.append(actual))
+        self.assertEqual(calls, [])
+
+    def test_callback_result_retirement_keeps_export_live(self):
+        backing = bytearray(b"held")
+        events = []
+
+        class Returned:
+            def __del__(self):
+                try:
+                    backing.clear()
+                except BufferError:
+                    events.append("still exported")
+                else:
+                    events.append("released too early")
+
+        self.assertEqual(format_engine_export(backing, lambda actual: Returned()),
+                         b"held")
+        self.assertEqual(events, ["still exported"])
+        backing.clear()
+        self.assertEqual(backing, b"")
+
+    def test_invalid_count_does_not_call_callback(self):
+        for count in (0, 18):
+            with self.subTest(count=count):
+                calls = []
+                with self.assertRaises(ValueError):
+                    format_engine_export(bytearray(b"held"),
+                                         lambda actual: calls.append(actual), count)
+                self.assertEqual(calls, [])
 
 
 if __name__ == "__main__":

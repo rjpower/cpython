@@ -44,7 +44,10 @@ closure is checkpoint50 (`3a3ee2ac368`) and five scalar boundaries are51
 [datetime closure](core-consumers/datetime/status.md) is checkpoint52 (`67210b9cf67`),
 with clean full-TU/object results and seven host controls. Nine canonical
 foundations are accepted in place, with extraction still pending. The itertools
-six next-function templates are reviewed; Luna prepares their mechanical composition.
+six-function port is checkpoint53 (`5b993d71b1e`): native 27 errors become one
+unchanged batched error. Ten host controls pass; no full-TU/object pass is claimed.
+Sol prepares the final batched recipe and reviews enum/map recipes; Luna inventories
+complete held type definitions and declaration/include dependencies.
 Root integrates reviewed code and validates the composition.
 The MRO providers plus one immediate wrapper passed independent
 code/native attribution review; their syntax comparison has 61 diagnostics,
@@ -64,8 +67,8 @@ and [native caller](native-callers/status.md) receipts describe their frozen
 checkpoints. The later [caller transaction](native-parsers/caller-transaction/status.md)
 repairs and checkpoints their composition; its candidate runtime tests remain
 unexecuted. The [merged diagnostic build](merged-build/status.md) still fails to
-link. Its latest v18 snapshot at checkpoint52 plus held typeobject has 171 objects
-present and 280 repeated/cascading error diagnostics. All 7,358 source paths
+link. Its latest v19 snapshot at checkpoint53 plus held typeobject has 171 objects
+present and 254 repeated/cascading error diagnostics. All 7,360 source paths
 remained unchanged; no candidate was executed. The checkpoint46 type composition
 passes the full configured translation unit and actual object emission with zero
 diagnostics; all eight host controls pass. Held scalar/type-cache semantics remain

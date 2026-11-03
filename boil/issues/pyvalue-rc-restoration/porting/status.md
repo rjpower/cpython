@@ -1,9 +1,9 @@
 # Porting rules and remaining work
 
 We are closing compiler and ownership gaps before the first universal-value
-register-interpreter measurement. Source checkpoint52 is `67210b9cf67`; the latest merged build describes that checkpoint plus held typeobject.
-The [latest merged build](../merged-build/status.md) has 280 repeated/cascading
-errors, 171 objects and no executable; all 7,358 inputs stayed unchanged.
+register-interpreter measurement. Source checkpoint53 is `5b993d71b1e`; the latest merged build describes that checkpoint plus held typeobject.
+The [latest merged build](../merged-build/status.md) has 254 repeated/cascading
+errors, 171 objects and no executable; all 7,360 inputs stayed unchanged.
 There is no restored runtime or performance result.
 
 The [board](../../README.md) owns current assignments and accepted checkpoints.
@@ -18,7 +18,8 @@ and reviews rules; Luna analyzes errors and applies approved mechanical batches.
 | Seven bootstrap type readers | Committed after independent code/native review | Merged runtime/startup and fault qualification |
 | Four remaining Clinic wrappers | Corrected v3 committed as checkpoint45 | Candidate runtime/fault qualification after linking |
 | Shared FORMAT engine | Foundation A committed as checkpoint47 | Backend/export/public/caller closure design and dependent implementation |
-| Remaining itertools readers | Six templates reviewed; zip cleanup erratum sealed; Luna composition active | Full composed TU/object, copied controls, independent actual code/results review |
+| [Itertools readers](../core-consumers/itertools/status.md) | Six-function checkpoint53 committed; native 27→1 unchanged batched error | Review/apply final batched recipe, then full TU/object |
+| Enum/map readers | Three-body enum2/map_reduce design frozen with corrected proposed test | Independent design review, Luna application, native/code review |
 | [Datetime readers](../core-consumers/datetime/status.md) | Twelve-function checkpoint52 committed, including three undiagnosed varargs reads | Linked candidate qualification |
 | Pickle arguments/state | Three-reader checkpoint46 committed | Candidate runtime/fault qualification after linking |
 | GenericAlias tuple consumers | Reviewed eight-body checkpoint49 committed | Candidate runtime/fault qualification |
@@ -47,6 +48,13 @@ to v16, with only the undiagnosed type source and two test paths changed;
 V18 removes nineteen datetime error observations and three header warnings, adding no
 diagnostics; all other diagnostic rows are unchanged. The source-bound census
 remains historical, with this [exact delta](../../../../build/pyvalue-merged-build-20261103-v18/diagnostic-comparison.json).
+V19 removes another 26 errors through itertools53, including four array errors
+reported through header expansions. All other diagnostics are unchanged in its
+[comparison](../../../../build/pyvalue-merged-build-20261103-v19/diagnostic-comparison.json).
+The earlier 22-error itertools inventory missed those four plus the remaining
+batched header error. The actual full-TU baseline has 27 errors.
+A [four-scope inventory](../../../../build/pyvalue-core-reader-inventory-20261103-v1/README.md)
+now maps builtin/exception/enum/atexit diagnostics to concrete next packets.
 
 The historical v12 census predates the latest type and Clinic packets. Its 332 observations map
 to 278 sites in 58 paths, with 77 warnings counted separately. All eight then-remaining

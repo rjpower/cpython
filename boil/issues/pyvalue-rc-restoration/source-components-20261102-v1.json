@@ -804,15 +804,15 @@
     "candidate_linked": false
   },
   "latest_diagnostic_build": {
-    "head": "67210b9cf67ed03d059e048e020debf07987fd17",
-    "objects_present": 171,
-    "error_diagnostics": 280,
-    "source_unchanged": true,
     "candidate_linked": false,
+    "error_diagnostics": 254,
+    "evidence": "build/pyvalue-merged-build-20261103-v19",
+    "head": "5b993d71b1e2a6011ac310c9eafa5711874e493b",
     "includes_held_source_files": true,
     "make_exit": 2,
-    "source_manifest_paths": 7358,
-    "evidence": "build/pyvalue-merged-build-20261103-v18"
+    "objects_present": 171,
+    "source_manifest_paths": 7360,
+    "source_unchanged": true
   },
   "mro_provider_reviewed_delta": {
     "typeobject_sha256": "d07219973716cab2749c7f9992ee268dd014815d28fd574c6d6c2d84b74dcf1d",
@@ -930,5 +930,31 @@
     "native_receipt_sha256": "fb2a912c893eec0dac2127822ff44ba3f01d597c6bf9251d37e9a802832e6bb8",
     "object_receipt_sha256": "b66314bd66f49aaf76766ee8ca09750024f012d4b24243bae28cef06c30f9471",
     "staged_patch_sha256": "108e1ea9df80ee19049aec67d02cef6f01c751b00a7906b2d7f8251c012bd4f4"
+  },
+  "itertools_next_six": {
+    "base": "67210b9cf67ed03d059e048e020debf07987fd17",
+    "commit": "5b993d71b1e2a6011ac310c9eafa5711874e493b",
+    "paths_sha256": {
+      "Modules/itertoolsmodule.c": "87a1072725d8184e3aa784647cabed776bcc68c5bc2cfdd79f2231d3dfd3af8a",
+      "Lib/test/test_pyvalue_itertools_next_tuples.py": "b57ab5bf40fdf33178773b880e95d74f4b7f58b13cee7d7e4087fb6e4dd5b323",
+      "Lib/test/test_pyvalue_itertools_call_envelopes.py": "f8ea98fe30bb1c3e772523ee9d6b2eb599bb7b93f6082be48ab23c79874b7c48"
+    },
+    "functions": 6,
+    "obsolete_getter_uses_removed": 21,
+    "full_TU_pass": false,
+    "object_emitted": false,
+    "native_errors_before": 27,
+    "native_errors_after": 1,
+    "native_warnings_before": 0,
+    "native_warnings_after": 0,
+    "selected_diagnostics_after": 0,
+    "unchanged_blocker": "batched_next",
+    "host_reference_pass": 10,
+    "host_reference_skip": 0,
+    "candidate_executed": false,
+    "runnable": false,
+    "independent_review_sha256": "2387e0bd0b3a536a27031dd5879858f286ef1f187afa5b034648f6f6d0a71915",
+    "coordinator_review_sha256": "38a723e947f022913590fae8057d9c661959c2900acded67c6ce7f3e97c2f793",
+    "staged_patch_sha256": "acbc9ccc50c55456ba35823a327a4d12c92107cf015d30f8bb36ed612bfd01d7"
   }
 }

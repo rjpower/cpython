@@ -1,8 +1,8 @@
 # Current work
 
 Current milestone: complete universal PyValues under RC, then measure the
-register interpreter with JIT disabled. Restoration HEAD is `67210b9cf67` on
-`boil/pyvalue-rc-universal`: fifty-two reviewed source commits; typeobject.c is the
+register interpreter with JIT disabled. Restoration HEAD is `5b993d71b1e` on
+`boil/pyvalue-rc-universal`: fifty-three reviewed source commits; typeobject.c is the
 remaining original held file. The latest merged diagnostic build has 171
 objects present and failed to link. No restored runtime, qualification or performance pass is claimed.
 [State](pyvalue-rc-restoration/status.md), [process](../PROCESS.md) and
@@ -11,8 +11,8 @@ objects present and failed to link. No restored runtime, qualification or perfor
 ## Now and next
 
 1. The first safe universal-value register-interpreter baseline remains the goal.
-   Merged v18 at checkpoint52 failed before linking: 280 compiler-error observations, 171 objects
-   present, all 7,358 inputs unchanged. Focused component passes are not a runtime pass.
+   Merged v19 at checkpoint53 failed before linking: 254 compiler-error observations, 171 objects
+   present, all 7,360 inputs unchanged. Focused component passes are not a runtime pass.
 2. Seven bootstrap readers are committed after code/native review. The Clinic
    four-wrapper batch is checkpoint45. Pickle/state readers46 and FORMAT
    foundation47 follow after independent code/native review. Full type TU/object
@@ -20,8 +20,9 @@ objects present and failed to link. No restored runtime, qualification or perfor
    Type-attribute bridge48 is committed. Nine canonical foundations are accepted
    in place. GenericAlias49, lookup/call50 and scalar boundaries51 are committed.
    Datetime52 is committed after clean full-TU/object checks and seven host controls.
-   All six itertools templates are reviewed, including the bounded zip cleanup
-   amendment; Luna prepares their mechanical composition.
+   The six-function itertools port is checkpoint53; its selected diagnostics are
+   gone and batched remains a separate final module blocker. Enum/map recipes
+   await independent review; Luna inventories held type dependencies.
    Root gates each rule, integrates accepted deltas and validates the composition.
 3. The counter foundation and thirteen slot wrappers are committed. Full MRO
    admission is under causal review. Fix introduced scalar/error/guard defects;
@@ -35,9 +36,9 @@ objects present and failed to link. No restored runtime, qualification or perfor
 | Experiment | Stage | Owner | Next step |
 | --- | --- | --- | --- |
 | [Native callers and scoped parsers](pyvalue-rc-restoration/native-parsers/status.md) | FORMAT next closure in design; foundation A committed | Sol shared-parser design; root coordination | Freeze bounded backend/export/public/caller recipes for review |
-| [Core and extension consumers](pyvalue-rc-restoration/core-consumers/status.md) | Datetime52 committed; itertools6 composition active | Root integration; Luna mechanical composition; Sol port review | Compile/test/review full itertools composition and commit |
-| [Porting batches](pyvalue-rc-restoration/porting/status.md) | Census bound to v16/v17; v18 removes datetime19 only | Root integration; Sol design/review; Luna analysis/bulk | Continue concrete tuple/list/dictionary compiler families |
-| [Canonical type cache](pyvalue-rc-restoration/typecache/status.md) | Scalar families committed; nine foundations accepted in place | Root gate; finite design/review queued | Extract reviewed dependencies and close remaining MRO/error/guard/lifecycle obligations |
+| [Core and extension consumers](pyvalue-rc-restoration/core-consumers/status.md) | Datetime52 and itertools6 checkpoint53 committed | Root integration; Sol design/review | Close batched; review enum/map recipes and assign Luna bulk |
+| [Porting batches](pyvalue-rc-restoration/porting/status.md) | v19 removes 26 itertools errors; four-scope inventory complete | Root integration; Sol design/review; Luna analysis/bulk | Continue concrete tuple/list/dictionary compiler families |
+| [Canonical type cache](pyvalue-rc-restoration/typecache/status.md) | Scalar families committed; held extraction inventory active | Luna mechanical inventory; root/Sol admission | Bind complete definitions/prototypes/includes; close MRO/error/guard/lifecycle obligations |
 | [Value-native VM iteration](pyvalue-rc-restoration/iterator-vm/status.md) | Tuning after safe baseline | Unassigned | Remove boxing from correct iterator bridges and measure |
 | [Integration and interpreter checkpoint](pyvalue-rc-restoration/integration/status.md) | Build diagnostics → ports | Coordinator | Close concrete compile/link blockers, rebuild, qualify and measure |
 | [Method and tracing JIT](jit-e2e-system/status.md) | Deferred to interpreter checkpoint | Coordinator | Reconcile source/runtime with universal values before further native validation |
@@ -49,6 +50,8 @@ linked restored runtime. Primary-worktree documentation is separate.
 
 | Experiment | Source commit or outcome | Remaining validation |
 | --- | --- | --- |
+| [Itertools next readers](pyvalue-rc-restoration/core-consumers/itertools/status.md) | `5b993d71b1e`, checkpoint53 | Native 27 errors→1 unchanged batched error, ten host controls; no full-TU/object pass |
+| [Merged diagnostic v19](pyvalue-rc-restoration/merged-build/status.md) | Probe at checkpoint53 plus held typeobject | All 7,360 inputs unchanged; 254 errors/171 objects; no executable |
 | [Datetime readers](pyvalue-rc-restoration/core-consumers/datetime/status.md) | `67210b9cf67`, checkpoint52 | Full TU/object and seven host controls pass; candidate execution pending |
 | [Merged diagnostic v18](pyvalue-rc-restoration/merged-build/status.md) | Probe at checkpoint52 plus held typeobject | All 7,358 inputs unchanged; 280 errors/171 objects; no executable |
 | [Lookup/call and scalar boundaries](pyvalue-rc-restoration/core-consumers/type-scalar/status.md) | `3a3ee2ac368`, `14fc009d42f`, checkpoints50/51 | Full held TU/objects pass; candidate behavior/fault qualification pending |

@@ -60,7 +60,9 @@ are committed. The [type attribute bridge](type-getattro/status.md) is
 checkpoint48. [GenericAlias closure](genericalias/status.md) is checkpoint49.
 The [lookup/call and scalar boundaries](type-scalar/status.md) are checkpoints50/51.
 The twelve-function [datetime closure](datetime/status.md) is checkpoint52.
-All six itertools templates are reviewed; Luna prepares their mechanical composition.
+The six-function [itertools port](itertools/status.md) is checkpoint53. Its selected
+native diagnostics are gone; unchanged batched remains. Enum2/map_reduce recipes
+await independent review; Luna inventories remaining held type dependencies.
 Sol accepted nine canonical foundations
 in place; remaining held type/MRO defects are finite separate packets. Remaining format-parser/startup/container and bundled
 ports still block the baseline; generated AST/Clinic ports are checkpointed.

@@ -206,60 +206,174 @@ batched_next(PyObject *op)
     batchedobject *bo = batchedobject_CAST(op);
     Py_ssize_t i;
     Py_ssize_t n = FT_ATOMIC_LOAD_SSIZE_RELAXED(bo->batch_size);
-    PyObject *it = bo->it;
-    PyObject *item;
-    PyObject *result;
+    PyObject *iterator_owner = NULL;
+    PyObject *it_owner = NULL;
+    PyObject *item = NULL;
+    PyObject *retired_item = NULL;
+    PyObject *retired_iterator = NULL;
+    PyObject *suppressed_error = NULL;
+    PyObject *result = NULL;
+    PyObject *output = NULL;
+    int strict_failure = 0;
 
-    if (n < 0) {
+    if (n < 0 || PyErr_Occurred()) {
         return NULL;
     }
+    iterator_owner = Py_NewRef(op);
+    it_owner = Py_NewRef(bo->it);
     result = PyTuple_New(n);
-    if (result == NULL) {
-        return NULL;
+    if (result == NULL || PyErr_Occurred()) {
+        goto done;
     }
-    iternextfunc iternext = *Py_TYPE(it)->tp_iternext;
-    PyObject **items = _PyTuple_ITEMS(result);
-    for (i=0 ; i < n ; i++) {
-        item = iternext(it);
+    iternextfunc iternext = *Py_TYPE(it_owner)->tp_iternext;
+    PyValue *items = _PyTuple_ITEMS(result);
+    for (i = 0; i < n; i++) {
+        item = iternext(it_owner);
         if (item == NULL) {
             goto null_item;
         }
-        items[i] = item;
+        if (PyErr_Occurred()) {
+            goto terminal;
+        }
+        PyValue replacement = PyValue_PrepareOwned(item, &retired_item);
+        item = NULL;
+        assert(PyValue_IsNull(items[i]));
+        items[i] = replacement;
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *retired = retired_item;
+            retired_item = NULL;
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        if (PyErr_Occurred()) {
+            goto terminal;
+        }
     }
-    return result;
+    output = result;
+    result = NULL;
+    goto done;
 
- null_item:
+null_item:
     if (PyErr_Occurred()) {
         if (!PyErr_ExceptionMatches(PyExc_StopIteration)) {
-            /* Input raised an exception other than StopIteration */
-            FT_ATOMIC_STORE_SSIZE_RELAXED(bo->batch_size, -1);
-#ifndef Py_GIL_DISABLED
-            Py_CLEAR(bo->it);
-#endif
-            Py_DECREF(result);
-            return NULL;
+            goto terminal;
         }
-        PyErr_Clear();
+        suppressed_error = PyErr_GetRaisedException();
+        {
+            PyObject *saved = PyErr_GetRaisedException();
+            PyObject *retired = suppressed_error;
+            suppressed_error = NULL;
+            Py_XDECREF(retired);
+            _PyValue_RestoreException(saved);
+        }
+        if (PyErr_Occurred()) {
+            goto terminal;
+        }
     }
     if (i == 0) {
-        FT_ATOMIC_STORE_SSIZE_RELAXED(bo->batch_size, -1);
-#ifndef Py_GIL_DISABLED
-        Py_CLEAR(bo->it);
-#endif
-        Py_DECREF(result);
-        return NULL;
+        goto terminal;
     }
     if (bo->strict) {
-        FT_ATOMIC_STORE_SSIZE_RELAXED(bo->batch_size, -1);
-#ifndef Py_GIL_DISABLED
-        Py_CLEAR(bo->it);
-#endif
-        Py_DECREF(result);
-        PyErr_SetString(PyExc_ValueError, "batched(): incomplete batch");
-        return NULL;
+        strict_failure = 1;
+        goto terminal;
     }
-    _PyTuple_Resize(&result, i);
-    return result;
+    int resize_status = _PyTuple_Resize(&result, i);
+    if (resize_status < 0 || PyErr_Occurred()) {
+        goto done;
+    }
+    output = result;
+    result = NULL;
+    goto done;
+
+terminal:
+    FT_ATOMIC_STORE_SSIZE_RELAXED(bo->batch_size, -1);
+#ifndef Py_GIL_DISABLED
+    retired_iterator = bo->it;
+    bo->it = NULL;
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = retired_iterator;
+        retired_iterator = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+#endif
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = it_owner;
+        it_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = result;
+        result = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (strict_failure && !PyErr_Occurred()) {
+        PyErr_SetString(PyExc_ValueError, "batched(): incomplete batch");
+    }
+done:
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = suppressed_error;
+        suppressed_error = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = retired_item;
+        retired_item = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = item;
+        item = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = retired_iterator;
+        retired_iterator = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = result;
+        result = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = it_owner;
+        it_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = iterator_owner;
+        iterator_owner = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    if (PyErr_Occurred()) {
+        PyObject *saved = PyErr_GetRaisedException();
+        PyObject *retired = output;
+        output = NULL;
+        Py_XDECREF(retired);
+        _PyValue_RestoreException(saved);
+    }
+    return output;
 }
 
 static PyType_Slot batched_slots[] = {

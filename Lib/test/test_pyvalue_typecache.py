@@ -334,5 +334,349 @@ class ScopedMutationCallbackTests(unittest.TestCase):
         self.assertIsNone(reference())
 
 
+class TypeGraphReferenceControls(unittest.TestCase):
+    def test_snapshot_retains_child_until_snapshot_release(self):
+        class Base:
+            pass
+
+        class Child(Base):
+            pass
+
+        reference = weakref.ref(Child)
+        snapshot = Base.__subclasses__()
+        self.assertEqual(snapshot, [Child])
+        del Child
+        gc.collect()
+        self.assertIs(reference(), snapshot[0])
+        del snapshot
+        gc.collect()
+        self.assertIsNone(reference())
+        self.assertEqual(Base.__subclasses__(), [])
+
+    def test_returned_snapshot_is_independent_of_later_insertions(self):
+        class Base:
+            pass
+
+        class First(Base):
+            pass
+
+        snapshot = Base.__subclasses__()
+
+        class Second(Base):
+            pass
+
+        self.assertEqual(snapshot, [First])
+        self.assertEqual(Base.__subclasses__(), [First, Second])
+        snapshot.clear()
+        self.assertEqual(Base.__subclasses__(), [First, Second])
+
+    def test_dead_siblings_do_not_hide_surviving_children(self):
+        class Base:
+            pass
+
+        children = [type(f"Child{i}", (Base,), {}) for i in range(24)]
+        dead = [weakref.ref(child) for child in children[::2]]
+        survivors = children[1::2]
+        del children
+        gc.collect()
+        self.assertTrue(all(ref() is None for ref in dead))
+        self.assertEqual(Base.__subclasses__(), survivors)
+
+    def test_diamond_lists_each_immediate_child_once(self):
+        class Root:
+            pass
+
+        class Left(Root):
+            pass
+
+        class Right(Root):
+            pass
+
+        class Leaf(Left, Right):
+            pass
+
+        self.assertEqual(Root.__subclasses__(), [Left, Right])
+        self.assertEqual(Left.__subclasses__(), [Leaf])
+        self.assertEqual(Right.__subclasses__(), [Leaf])
+        self.assertEqual(Leaf.__subclasses__(), [])
+
+    def test_reparenting_updates_both_parents_and_preserves_snapshot(self):
+        class Before:
+            pass
+
+        class After:
+            pass
+
+        class Child(Before):
+            pass
+
+        snapshot = Before.__subclasses__()
+        Child.__bases__ = (After,)
+        self.assertEqual(snapshot, [Child])
+        self.assertEqual(Before.__subclasses__(), [])
+        self.assertEqual(After.__subclasses__(), [Child])
+        self.assertEqual(Child.__bases__, (After,))
+
+    def test_failed_construction_does_not_leave_a_live_graph_entry(self):
+        references = []
+        error = ValueError("failed subclass")
+
+        class Base:
+            def __init_subclass__(cls):
+                references.append(weakref.ref(cls))
+                raise error
+
+        with self.assertRaises(ValueError) as caught:
+            type("Failed", (Base,), {})
+        self.assertIs(caught.exception, error)
+        error.__traceback__ = None
+        gc.collect()
+        self.assertEqual(len(references), 1)
+        self.assertIsNone(references[0]())
+        self.assertEqual(Base.__subclasses__(), [])
+
+    def test_nested_creation_during_mro_keeps_completed_snapshot(self):
+        class Base:
+            pass
+
+        events = []
+        snapshots = []
+        siblings = []
+
+        class Meta(type):
+            def mro(cls):
+                events.append(cls.__name__)
+                sibling = type("Sibling", (Base,), {})
+                siblings.append(sibling)
+                snapshots.append(Base.__subclasses__())
+                return super().mro()
+
+        class Child(Base, metaclass=Meta):
+            pass
+
+        self.assertEqual(events, ["Child"])
+        self.assertEqual(snapshots, [siblings])
+        self.assertEqual(Base.__subclasses__(), [siblings[0], Child])
+
+
+class TypeMroReferenceControls(unittest.TestCase):
+    def test_single_base_and_returned_mro_snapshot(self):
+        class Base:
+            pass
+
+        class Child(Base):
+            pass
+
+        selected = type.mro(Child)
+        self.assertEqual(selected, [Child, Base, object])
+        selected.clear()
+        self.assertEqual(Child.__mro__, (Child, Base, object))
+
+    def test_c3_diamond_and_dominant_base_order(self):
+        class Root:
+            pass
+
+        class Left(Root):
+            pass
+
+        class Right(Root):
+            pass
+
+        class Combined(Left, Right):
+            pass
+
+        self.assertEqual(type.mro(Combined),
+                         [Combined, Left, Right, Root, object])
+        self.assertIs(Combined.__base__, Left)
+        self.assertTrue(issubclass(Combined, Right))
+        self.assertFalse(issubclass(Right, Left))
+
+    def test_duplicate_base_error_uses_name_once(self):
+        events = []
+
+        class Named(type):
+            def __getattribute__(cls, name):
+                if name == "__name__":
+                    events.append("name")
+                return super().__getattribute__(name)
+
+        class Base(metaclass=Named):
+            pass
+
+        with self.assertRaises(TypeError) as caught:
+            type("Duplicate", (Base, Base), {})
+        self.assertEqual(str(caught.exception), "duplicate base class Base")
+        self.assertEqual(events, ["name"])
+
+    def test_duplicate_base_name_error_remains_primary(self):
+        events = []
+        error = LookupError("selected base name")
+
+        class Named(type):
+            def __getattribute__(cls, name):
+                if name == "__name__":
+                    events.append("name")
+                    raise error
+                return super().__getattribute__(name)
+
+        class Base(metaclass=Named):
+            pass
+
+        with self.assertRaises(LookupError) as caught:
+            type("Duplicate", (Base, Base), {})
+        self.assertIs(caught.exception, error)
+        self.assertEqual(events, ["name"])
+
+    def test_conflicting_c3_formats_owned_candidates_once(self):
+        events = []
+        enabled = False
+
+        class Named(type):
+            def __getattribute__(cls, name):
+                if name == "__name__" and enabled:
+                    events.append(super().__getattribute__(name))
+                    gc.collect()
+                return super().__getattribute__(name)
+
+        class X(metaclass=Named):
+            pass
+
+        class Y(metaclass=Named):
+            pass
+
+        class A(X, Y):
+            pass
+
+        class B(Y, X):
+            pass
+
+        enabled = True
+        with self.assertRaisesRegex(TypeError,
+                                    r"consistent method resolution order .*X, Y"):
+            type("Conflict", (A, B), {})
+        self.assertEqual(events, ["X", "Y"])
+
+    def test_layout_conflict_and_unacceptable_base(self):
+        with self.assertRaisesRegex(TypeError, "instance lay-out conflict"):
+            type("Conflict", (int, str), {})
+        with self.assertRaisesRegex(TypeError, "not an acceptable base type"):
+            type("BoolBase", (bool,), {})
+
+    def test_metaclass_winner_and_conflict(self):
+        class First(type):
+            pass
+
+        class Derived(First):
+            pass
+
+        class Other(type):
+            pass
+
+        class A(metaclass=First):
+            pass
+
+        class B(metaclass=Derived):
+            pass
+
+        class C(metaclass=Other):
+            pass
+
+        made = type("Winner", (A, B), {})
+        self.assertIs(type(made), Derived)
+        self.assertEqual(made.__mro__, (made, A, B, object))
+        with self.assertRaisesRegex(TypeError, "metaclass conflict"):
+            type("Conflict", (A, C), {})
+
+    def test_custom_mro_rejects_inline_entries_in_order(self):
+        for invalid, name in ((2147483647, "int"), (3.25, "float"), (None, "NoneType")):
+            events = []
+
+            class Bad(type):
+                def mro(cls):
+                    events.append(cls)
+                    return [cls, invalid, object]
+
+            with self.subTest(invalid=invalid), self.assertRaises(TypeError) as caught:
+                Bad("Invalid", (), {})
+            self.assertIn(f"mro() returned a non-class ('{name}')", str(caught.exception))
+            self.assertEqual(len(events), 1)
+
+    def test_custom_mro_empty_and_unsuitable_layout(self):
+        events = []
+
+        class Empty(type):
+            def mro(cls):
+                events.append("empty")
+                return []
+
+        with self.assertRaisesRegex(TypeError, "type MRO must not be empty"):
+            Empty("EmptyMro", (), {})
+
+        class Unsuitable(type):
+            def mro(cls):
+                events.append("layout")
+                return [cls, int, object]
+
+        with self.assertRaisesRegex(TypeError, "unsuitable layout"):
+            Unsuitable("InvalidLayout", (), {})
+        self.assertEqual(events, ["empty", "layout"])
+
+    def test_custom_mro_conversion_error_is_not_replayed(self):
+        events = []
+        error = ValueError("selected MRO iterator")
+
+        class Sequence:
+            def __iter__(self):
+                events.append("iter")
+                raise error
+
+        class Meta(type):
+            def mro(cls):
+                events.append("mro")
+                return Sequence()
+
+        with self.assertRaises(ValueError) as caught:
+            Meta("ConversionError", (), {})
+        self.assertIs(caught.exception, error)
+        self.assertEqual(events, ["mro", "iter"])
+
+    def test_custom_mro_result_retires_after_conversion(self):
+        events = []
+
+        class Sequence:
+            def __init__(self, cls):
+                self.cls = cls
+
+            def __iter__(self):
+                events.append("iter")
+                return iter((self.cls, object))
+
+            def __del__(self):
+                events.append("retired")
+
+        class Meta(type):
+            def mro(cls):
+                events.append("mro")
+                return Sequence(cls)
+
+        made = Meta("Selected", (), {})
+        self.assertEqual(made.__mro__, (made, object))
+        self.assertEqual(events, ["mro", "iter", "retired"])
+
+    def test_custom_mro_can_omit_dominant_base(self):
+        class Base:
+            pass
+
+        class Meta(type):
+            def mro(cls):
+                return [cls, object]
+
+        made = Meta("OmittedBase", (Base,), {})
+        self.assertIs(made.__base__, Base)
+        self.assertEqual(made.__mro__, (made, object))
+        self.assertFalse(issubclass(made, Base))
+        self.assertIs(type(made()), made)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -9,13 +9,13 @@ ported; hard source or binary compatibility with upstream is not required.
 
 The qualified interim interpreter is built from `eba351fee7d`: register IR and
 NaN-boxed frame values, with boxed heap fields. Universal PyValue restoration
-is on `boil/pyvalue-rc-universal` at `dd26d8e34ca`: forty-eight reviewed
+is on `boil/pyvalue-rc-universal` at `7a6cba14ed0`: forty-nine reviewed
 dependent source checkpoints. The remaining original held file is typeobject.c.
 There is no linked or qualified restored interpreter or timing result.
 
 **Current step:** close compiler/linker blockers under reviewed ownership rules.
-Merged v15 at checkpoint47 has 314 repeated/cascading errors, 169 objects present and no executable;
-all 7,353 source inputs stayed unchanged. Clinic producer rules now cover fixed
+Merged v16 at checkpoint49 has 299 repeated/cascading errors, 170 objects present and no executable;
+all 7,355 source inputs stayed unchanged. Clinic producer rules now cover fixed
 positional/keyword wrappers and seven constructor helpers. Three iterator
 constructors, the recording-only MRO counter foundation and thirteen native
 slot wrappers are committed. The earlier type_new boundary and ten construction
@@ -27,9 +27,12 @@ callers are committed after independent code/native review, followed by six
 type readers, four MRO-adjacent readers and seven bootstrap type readers.
 Clinic4, the three pickle/state readers and shared FORMAT foundation A are
 committed after code/native review. The full type TU and object now compile
-without diagnostics. Held type/cache semantics still need admission. The type-attribute bridge is checkpoint48. Nine canonical foundations passed
-review in place; the method-lookup design is accepted. GenericAlias eight-body
-composition, code correction and test coverage are active; FORMAT backend/public
+without diagnostics. Held type/cache semantics still need admission. The type
+attribute bridge is checkpoint48. Nine canonical foundations passed
+review in place. GenericAlias eight-body closure is checkpoint49. The ten-body
+method-lookup composition passes native checks and is in final code/test review;
+Sol designs the remaining scalar boundaries and Luna clusters the latest log.
+FORMAT backend/public
 API/caller closure remains mandatory queued work.
 The itertools inventory is complete; its tuple-result design is paused.
 The coordinator reviews actual code/results, integrates

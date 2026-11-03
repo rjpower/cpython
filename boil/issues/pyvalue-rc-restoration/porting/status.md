@@ -1,9 +1,9 @@
 # Porting rules and remaining work
 
 We are closing compiler and ownership gaps before the first universal-value
-register-interpreter measurement. Source checkpoint48 is `dd26d8e34ca`; the latest merged build still describes checkpoint47.
-The [latest merged build](../merged-build/status.md) has 314 repeated/cascading
-errors, 169 objects and no executable; all 7,353 inputs stayed unchanged.
+register-interpreter measurement. Source checkpoint49 is `7a6cba14ed0`; the latest merged build describes that checkpoint plus held typeobject.
+The [latest merged build](../merged-build/status.md) has 299 repeated/cascading
+errors, 170 objects and no executable; all 7,355 inputs stayed unchanged.
 There is no restored runtime or performance result.
 
 The [board](../../README.md) owns current assignments and accepted checkpoints.
@@ -20,9 +20,10 @@ and reviews rules; Luna analyzes errors and applies approved mechanical batches.
 | Shared FORMAT engine | Foundation A committed as checkpoint47 | Backend/export/public/caller closure design and dependent implementation |
 | Remaining itertools readers | Inventory complete; four tuple-result draft paused | Review reusable canonical copy/update rule; pairwise and zip-longest have separate call boundaries |
 | Pickle arguments/state | Three-reader checkpoint46 committed | Candidate runtime/fault qualification after linking |
-| GenericAlias tuple consumers | Eight implementations composed; final packet correction and public-test coverage under review | Sol actual-code review, root full-TU/object probes, final composition review |
+| GenericAlias tuple consumers | Reviewed eight-body checkpoint49 committed | Candidate runtime/fault qualification |
 | Type attribute object bridge | Checkpoint48 committed; both full TUs/objects pass | Linked candidate behavior/fault qualification |
-| Method lookup/call envelope | Ten-body design independently accepted | Bounded one-function Luna packets; compose before admission |
+| Method lookup/call envelope | Ten-body composition passes full TU/object; final code/test review | Admit corrected recipe/error-flag envelope, then candidate qualification |
+| Remaining scalar type boundaries | Sol designs five bodies and actual caller contracts | Independent recipe review, bounded Luna packets |
 | Held type foundations/cache correctness | Causal classification accepted; nine canonical foundations accepted in place | Extract exact reviewed dependencies; close remaining slot/MRO/guard/lifecycle defects |
 
 Exact designs and inventories:

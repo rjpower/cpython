@@ -38,8 +38,8 @@ classifying introduced defects against inherited upstream behavior and defining
 small dependency-ordered fixes or extractions. Its [sealed causal matrix](../../../../build/pyvalue-typecache-causal-triage-20261102-v1/README.md)
 passed independent peer review as a finite queue. Nine canonical foundations
 then passed actual-source review in place; no rewrite was required. The
-ten-body method lookup/call design is accepted and ready for bounded Luna
-implementation. These decisions do not admit the whole held file. No whole-file source grant follows
+ten-body method lookup/call composition passes native checks and is in final
+code/test review. Five remaining scalar boundaries are in finite design. These decisions do not admit the whole held file. No whole-file source grant follows
 from a successful compiler run or an old provider review.
 
 The earlier full transaction proposal requested stronger rollback, diamond and
@@ -48,8 +48,9 @@ are not automatically requirements to replace upstream's pointer-conditional
 algorithm before the first baseline. Retain necessary lifetime/invalidation fixes;
 choose further changes from concrete introduced failures and qualification.
 
-Next: fan out the accepted lookup/call recipes, extract exact reviewed
-foundations with declaration/include dependency proofs, and close remaining
+Next: admit the corrected lookup/call composition, review scalar recipes and
+extract exact reviewed foundations with declaration/include dependency proofs,
+and close remaining
 slot, MRO error, guard and lifecycle obligations. Inspect actual code/native
 results and commit each dependency. Once the runtime links, execute cache/mutation/scalar,
 reentry, teardown and fault controls on the candidate before measurement.

@@ -804,15 +804,15 @@
     "candidate_linked": false
   },
   "latest_diagnostic_build": {
-    "head": "4f2734e77cd9fc576e9642ece11c1331043c9a83",
-    "objects_present": 169,
-    "error_diagnostics": 314,
+    "head": "7a6cba14ed02d3da46886887a48d7e433d623b37",
+    "objects_present": 170,
+    "error_diagnostics": 299,
     "source_unchanged": true,
     "candidate_linked": false,
     "includes_held_source_files": true,
     "make_exit": 2,
-    "source_manifest_paths": 7353,
-    "evidence": "build/pyvalue-merged-build-20261102-v15"
+    "source_manifest_paths": 7355,
+    "evidence": "build/pyvalue-merged-build-20261103-v16"
   },
   "mro_provider_reviewed_delta": {
     "typeobject_sha256": "d07219973716cab2749c7f9992ee268dd014815d28fd574c6d6c2d84b74dcf1d",
@@ -838,5 +838,29 @@
     "projection_review_sha256": "ea2998f9c05d83d319f2cb5003aa0f9138343d5126264461b88170a45ed1a07c",
     "coordinator_review_sha256": "ae84646e6479c30819d373e72a1513997ec49d01e554864103077ae3fd53132d",
     "candidate_executed": false
+  },
+  "generic_alias_readers": {
+    "base": "dd26d8e34caf36d36c614c1873522345a3c1e95b",
+    "commit": "7a6cba14ed02d3da46886887a48d7e433d623b37",
+    "paths_sha256": {
+      "Objects/genericaliasobject.c": "ac71fb9c17f2d781ee45a9dc2b21dcca3f4c71d7964b0edb49b1dc915611a14d",
+      "Lib/test/test_pyvalue_genericalias_readers.py": "9036f9dc0265a1c246602d827247e11ae16baa0ba9eb5c6a93295764ab3b99aa"
+    },
+    "functions": 8,
+    "selected_errors_before": 15,
+    "selected_errors_after": 0,
+    "warnings_before": 2,
+    "warnings_after": 0,
+    "full_TU_and_object_pass": true,
+    "host_reference_pass": 10,
+    "host_reference_skip": 1,
+    "host_tests_run": 11,
+    "candidate_executed": false,
+    "runnable": false,
+    "independent_review_sha256": "8c44d0de3692eebefb89023914ced939a853532f2f9d7eff02c5688e160bb503",
+    "coordinator_review_sha256": "7203dbf3cd421a1aeddaac48e745e3aa7cf7be4c4d016faed1e39ad2d2bd5b9e",
+    "native_receipt_sha256": "400e7c16af0a49b1ecb793706ac3fb9d92cbc47f6808671d7eb64ddf7a69f6af",
+    "object_receipt_sha256": "acc2c08fb2d0dd7cab67b60817d8fe608273602db9ddf40386755e743e34edab",
+    "staged_patch_sha256": "15526222eb7c60f51d02ea37d8413262e70e8108a0f9c8ca937fb14f32f39bba"
   }
 }

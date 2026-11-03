@@ -37,8 +37,9 @@ separate Luna function packets after an incomplete first attempt. Final code,
 scope and native/object receipts passed independent review. FORMAT backend,
 export/public API/caller closure remains mandatory. Type attribute bridge48
 (`dd26d8e34ca`) is committed after clean full-TU/object probes and four host
-controls. GenericAlias eight-body composition and tests are under actual review;
-the ten-body method-lookup design is independently accepted. Nine canonical
+controls. GenericAlias49 (`7a6cba14ed0`) is committed after full-TU/object
+review and ten host passes/one older-version skip. The ten-body method-lookup
+composition passes native checks; final code/test review is active. Nine canonical
 foundations are accepted in place, with extraction still pending. The itertools
 tuple-result draft is paused.
 Root integrates reviewed code and validates the composition.
@@ -60,8 +61,8 @@ and [native caller](native-callers/status.md) receipts describe their frozen
 checkpoints. The later [caller transaction](native-parsers/caller-transaction/status.md)
 repairs and checkpoints their composition; its candidate runtime tests remain
 unexecuted. The [merged diagnostic build](merged-build/status.md) still fails to
-link. Its latest v15 snapshot at checkpoint47 plus held typeobject has 169 objects
-present and 314 repeated/cascading error diagnostics. All 7,353 source paths
+link. Its latest v16 snapshot at checkpoint49 plus held typeobject has 170 objects
+present and 299 repeated/cascading error diagnostics. All 7,355 source paths
 remained unchanged; no candidate was executed. The checkpoint46 type composition
 passes the full configured translation unit and actual object emission with zero
 diagnostics; all eight host controls pass. Held scalar/type-cache semantics remain

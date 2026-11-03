@@ -1,9 +1,9 @@
 # Current work
 
 Current milestone: complete universal PyValues under RC, then measure the
-register interpreter with JIT disabled. Restoration HEAD is `dd26d8e34ca` on
-`boil/pyvalue-rc-universal`: forty-eight reviewed source commits; typeobject.c is the
-remaining original held file. The latest merged diagnostic build has 169
+register interpreter with JIT disabled. Restoration HEAD is `7a6cba14ed0` on
+`boil/pyvalue-rc-universal`: forty-nine reviewed source commits; typeobject.c is the
+remaining original held file. The latest merged diagnostic build has 170
 objects present and failed to link. No restored runtime, qualification or performance pass is claimed.
 [State](pyvalue-rc-restoration/status.md), [process](../PROCESS.md) and
 [gates](../design/validation.md) own details.
@@ -11,15 +11,16 @@ objects present and failed to link. No restored runtime, qualification or perfor
 ## Now and next
 
 1. The first safe universal-value register-interpreter baseline remains the goal.
-   Merged v15 at checkpoint47 failed before linking: 314 compiler-error observations, 169 objects
-   present, all 7,353 inputs unchanged. Focused component passes are not a runtime pass.
+   Merged v16 at checkpoint49 failed before linking: 299 compiler-error observations, 170 objects
+   present, all 7,355 inputs unchanged. Focused component passes are not a runtime pass.
 2. Seven bootstrap readers are committed after code/native review. The Clinic
    four-wrapper batch is checkpoint45. Pickle/state readers46 and FORMAT
    foundation47 follow after independent code/native review. Full type TU/object
    compile without diagnostics; held scalar/cache semantics remain required.
    Type-attribute bridge48 is committed. Nine canonical foundations are accepted
-   in place; the method-lookup/call design is accepted. GenericAlias composition
-   and tests are in review.
+   in place. GenericAlias49 is committed. The ten-body method-lookup composition
+   passes native checks; final code/test review is active. Sol designs the five
+   remaining scalar boundaries; Luna clusters the latest merged errors.
    Root gates each rule, integrates accepted deltas and validates the composition.
 3. The counter foundation and thirteen slot wrappers are committed. Full MRO
    admission is under causal review. Fix introduced scalar/error/guard defects;
@@ -33,9 +34,9 @@ objects present and failed to link. No restored runtime, qualification or perfor
 | Experiment | Stage | Owner | Next step |
 | --- | --- | --- | --- |
 | [Native callers and scoped parsers](pyvalue-rc-restoration/native-parsers/status.md) | Flat kernel/five callers and FORMAT foundation A committed | Coordinator; next design queued | Close backend/export/public/caller contract before dependent implementation |
-| [Core and extension consumers](pyvalue-rc-restoration/core-consumers/status.md) | Getattro48 committed; GenericAlias eight-body composition/review active | Root integration; Sol code review; Luna tests | Correct the final packet, close test coverage and compile the composition |
-| [Porting batches](pyvalue-rc-restoration/porting/status.md) | Pickle46 and FORMAT47 committed; further core/bundled ports queued | Coordinator; Sol designs; Luna bulk | Grant bounded reviewed rules and continue merged validation |
-| [Canonical type cache](pyvalue-rc-restoration/typecache/status.md) | Causal matrix accepted; nine foundations accepted in place; lookup/call design accepted | Root gate; Sol 6.1 review | Grant finite lookup packets; extract reviewed dependencies and close slot/MRO/lifecycle defects |
+| [Core and extension consumers](pyvalue-rc-restoration/core-consumers/status.md) | GenericAlias49 committed; lookup/call final review active | Root integration; Sol actual review | Admit corrected ten-body composition and tests; continue ranked compiler families |
+| [Porting batches](pyvalue-rc-restoration/porting/status.md) | GenericAlias49 committed; v16 census active | Root integration; Sol design; Luna analysis/bulk | Cluster299 observations into reusable bounded port rules |
+| [Canonical type cache](pyvalue-rc-restoration/typecache/status.md) | Lookup/call final review; five scalar boundaries in design; nine foundations accepted in place | Root gate; Sol 6.1 design/review | Admit lookup closure, review scalar recipes, extract dependencies and close MRO/lifecycle defects |
 | [Value-native VM iteration](pyvalue-rc-restoration/iterator-vm/status.md) | Tuning after safe baseline | Unassigned | Remove boxing from correct iterator bridges and measure |
 | [Integration and interpreter checkpoint](pyvalue-rc-restoration/integration/status.md) | Build diagnostics → ports | Coordinator | Close concrete compile/link blockers, rebuild, qualify and measure |
 | [Method and tracing JIT](jit-e2e-system/status.md) | Deferred to interpreter checkpoint | Coordinator | Reconcile source/runtime with universal values before further native validation |
@@ -47,6 +48,8 @@ linked restored runtime. Primary-worktree documentation is separate.
 
 | Experiment | Source commit or outcome | Remaining validation |
 | --- | --- | --- |
+| [GenericAlias closure](pyvalue-rc-restoration/core-consumers/genericalias/status.md) | `7a6cba14ed0`, checkpoint49 | Full TU/object pass; ten host passes/one older-version skip; candidate pending |
+| [Merged diagnostic v16](pyvalue-rc-restoration/merged-build/status.md) | Probe at checkpoint49 plus held typeobject | All7,355 inputs unchanged;299 errors/170 objects; no executable |
 | [Type attribute bridge](pyvalue-rc-restoration/core-consumers/type-getattro/status.md) | `dd26d8e34ca`, checkpoint48 | Both full TUs/objects pass; four host controls; candidate execution pending |
 | [Wiki reset](wiki-reset/status.md) | Documentation accepted; `34486c7090f` | Maintain current assignments and Loom mirrors |
 | [Canonical value foundation](pyvalue-rc-restoration/foundation/status.md) | `359ea4732de` | Merged runtime |

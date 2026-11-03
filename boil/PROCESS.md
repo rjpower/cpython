@@ -61,7 +61,9 @@ assignments before replacing them. A restart or old plan does not renew work.
 For bulk ports, review a reusable ownership rule and representative examples
 once, then assign bounded file groups to cheaper agents or a mechanical rewriter.
 Each group records its rule, source identity, file ownership, exceptions and
-results. Regenerate products from their producers. Workers must report cases
+results. Review a mechanical rewriter's write targets before execution. Under an
+artifact-only grant, workers treat live worktrees as read-only; root runs the
+reviewed generator and verifies source/index stability before integration. Regenerate products from their producers. Workers must report cases
 outside the rule rather than inventing lifetime policies. Review the actual
 batch diff and focused checks before checkpointing; the coordinator validates
 composition with shared builds. Full qualification belongs to coherent merged

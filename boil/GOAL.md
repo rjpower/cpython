@@ -55,7 +55,9 @@ design reusable solutions with Sol 6.1, fan out approved batches mechanically or
 to Luna, review and integrate, then rebuild and repeat. A completed agent task
 is a handoff to process, not the end of the overall run.
 Give callback-heavy bulk ports explicit typed owner/control-flow recipes and
-small function packets. Bind newly used APIs to actual providers; preserve
+small function packets. For artifact-only batches, review generator write targets
+before root execution and verify that live source and index remain unchanged.
+Bind newly used APIs to actual providers; preserve
 failed attempts and correct their receipts instead of silently relabeling them.
 
 ## Recover after restart or compaction

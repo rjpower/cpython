@@ -45,9 +45,11 @@ closure is checkpoint50 (`3a3ee2ac368`) and five scalar boundaries are51
 with clean full-TU/object results and seven host controls. Nine canonical
 foundations are accepted in place, with extraction still pending. The itertools
 six-function port is checkpoint53 (`5b993d71b1e`): native 27 errors become one
-unchanged batched error. Ten host controls pass; no full-TU/object pass is claimed.
-Sol prepares the final batched recipe and reviews enum/map recipes; Luna inventories
-complete held type definitions and declaration/include dependencies.
+unchanged batched error. Checkpoint54 (`a714cb97c14`) closes that writer and
+the full itertools TU/object pass. Enum2/map_reduce55 (`f7f53c043fc`) follows
+with a clean enum TU/object and eleven unrelated builtin errors. The full held
+type dependency projection has a finite source acceptance; a borrowed lookup
+lifetime defect and guard/runtime obligations still require closure.
 Root integrates reviewed code and validates the composition.
 The MRO providers plus one immediate wrapper passed independent
 code/native attribution review; their syntax comparison has 61 diagnostics,
@@ -67,8 +69,8 @@ and [native caller](native-callers/status.md) receipts describe their frozen
 checkpoints. The later [caller transaction](native-parsers/caller-transaction/status.md)
 repairs and checkpoints their composition; its candidate runtime tests remain
 unexecuted. The [merged diagnostic build](merged-build/status.md) still fails to
-link. Its latest v19 snapshot at checkpoint53 plus held typeobject has 171 objects
-present and 254 repeated/cascading error diagnostics. All 7,360 source paths
+link. Its latest v21 snapshot at checkpoint55 plus held typeobject has 173 objects
+present and 247 repeated/cascading error diagnostics. All 7,362 source paths
 remained unchanged; no candidate was executed. The checkpoint46 type composition
 passes the full configured translation unit and actual object emission with zero
 diagnostics; all eight host controls pass. Held scalar/type-cache semantics remain

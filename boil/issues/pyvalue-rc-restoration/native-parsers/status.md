@@ -87,3 +87,15 @@ owning view.obj alone does not retain released export storage. The four final
 Clinic wrappers are committed as checkpoint45 after corrected v3 code/native
 review; they do not widen the flat parser whitelist or depend on the new
 foundation.
+
+
+The [E export packet](../../../../build/pyvalue-format-export-E-composed-20261103-v1/README.md)
+now passes the configured header-overlay gate: getargs retains exactly twelve
+errors with no new diagnostic signatures; the expanded fixture TU/object are
+clean. Five added candidate methods preserve all original tests. Independent
+actual review is active; no new fixture behavior has executed. Sol has frozen
+[B1 positional templates](../../../../build/pyvalue-format-B-positional-design-20261103-v1/README.md)
+and [B2 resource/converter templates](../../../../build/pyvalue-format-B-resources-design-20261103-v1/README.md),
+with C keyword and public/caller closure still in design. These signature-changing
+overlays stay isolated until the whole dependent contract is ready; E alone does
+not close the parser or retire its raw wrappers.

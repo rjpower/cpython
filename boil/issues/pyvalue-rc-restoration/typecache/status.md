@@ -10,7 +10,7 @@ collection. Type-cache entries, mutation, installed guards and interpreter
 teardown must share a coherent invalidation/admission contract. The tracing-GC
 work is closed.
 
-Restoration checkpoint51 is `14fc009d42f`. Lookup/call50 and five scalar
+Scalar closure checkpoint51 is `14fc009d42f`. Lookup/call50 and five scalar
 boundaries51 are committed after native/source review; reference outcomes and
 mandatory candidate error contracts are recorded [here](../core-consumers/type-scalar/status.md).
 The earlier type attribute bridge is checkpoint48 (`dd26d8e34ca`). Its type attribute bridge and
@@ -25,37 +25,35 @@ from committed reader ports. Their old source reviews do not automatically
 cover every foundational body in the current composition. The held typecache
 test also needs to travel with the appropriate admitted component.
 
-## Required review and fixes
+## Current admission queue
 
-The current causal review has found concrete scalar-domain problems in held
-method/slot/type-getattr paths: a heap-only decoder cannot materialize an inline
-integer or float. Fallible owning conversion and its cleanup must be explicit.
-The MRO error envelope also needs audit under the changed provider contract.
-Ignored has_custom_mro statuses already occur upstream; that fact must not be
-misreported as an entirely new bug. Concrete changed-provider failures require
-finite fixes and caller-envelope review even though the file compiles.
+The fifteen scalar boundaries are committed. A complete-definition audit now
+accepts the exact held 67-definition delta for a dependent source projection:
+55 prior endpoint definitions and nine foundations match completely; the
+remaining MRO/counter/deletion differences are explicitly reviewed. It also
+accounts for signatures, declarations, includes and nonfunction code. The
+independent inventory corrects an omitted unchanged same-line definition:
+423→436 definitions, with the 67-definition delta unchanged.
 
-Guard, terminal lifecycle and selected namespace-writer wiring remain distinct
-checks. Sol is binding the exact current bodies to earlier reviewed endpoints,
-classifying introduced defects against inherited upstream behavior and defining
-small dependency-ordered fixes or extractions. Its [sealed causal matrix](../../../../build/pyvalue-typecache-causal-triage-20261102-v1/README.md)
-passed independent peer review as a finite queue. Nine canonical foundations
-then passed actual-source review in place; no rewrite was required. The
-ten-body method lookup/call and five scalar boundaries are committed. Their
-selected definitions are now separated from the remaining held foundations. These decisions do not admit the whole held file. No whole-file source grant follows
-from a successful compiler run or an old provider review.
+- [Held admission review](../../../../build/pyvalue-type-held-admission-review-20261103-v1/README.md)
+- [Mechanical inventory](../../../../build/pyvalue-type-held-extraction-inventory-20261103-v1/README.md)
 
-The earlier full transaction proposal requested stronger rollback, diamond and
-cross-receiver guarantees. Its review constraints describe that proposal. They
-are not automatically requirements to replace upstream's pointer-conditional
-algorithm before the first baseline. Retain necessary lifetime/invalidation fixes;
-choose further changes from concrete introduced failures and qualification.
+Root still must validate the exact source/test projection and checkpoint it.
+The audit found a concrete separate defect: obsolete borrowed _PyType_Lookup
+can return a scalar box after releasing it. Sol designs removal and migration
+of its actual callers/declaration to owning or canonical results. Hard
+compatibility does not preserve that API. Guard/feedback wiring must also close
+before runtime admission; terminal lifecycle behavior needs candidate qualification.
 
-Next: extract exact reviewed foundations with declaration/include dependency proofs,
-and close remaining
-slot, MRO error, guard and lifecycle obligations. Inspect actual code/native
-results and commit each dependency. Once the runtime links, execute cache/mutation/scalar,
-reentry, teardown and fault controls on the candidate before measurement.
+Ignored has_custom_mro statuses already occur upstream; version zero can be a
+successful uncached result. The audit found no new unchecked scalar boxing in
+the eight MRO envelopes and does not invent failure witnesses from invalid C
+deallocators. Snapshot pins and displaced field owners remain separate owners.
+No new graph journal, diamond or stronger rollback policy is a baseline gate.
+
+After source and wiring closure, execute cache/mutation/scalar/reentry/teardown
+and fault controls on the linked candidate before measurement. Recording-only
+counters do not establish transaction authority.
 
 ## Evidence and history
 

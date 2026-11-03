@@ -5,17 +5,18 @@ Root owns integration and validation; see the [board](../../README.md).
 
 ## Current evidence
 
-The [v19 probe](../../../../build/pyvalue-merged-build-20261103-v19/results.json)
-binds source checkpoint53 `5b993d71b1e` plus held typeobject `ce8c0c45`.
-`make -k -j4 python` exited 2 in 2.58 seconds, leaving 171 objects and no executable,
-with 254 repeated/cascading errors. All 7,360 source inputs remained unchanged.
-Itertools53 removes exactly 26 errors, including header-attributed array errors;
-all other diagnostics are unchanged in the [v18 comparison](../../../../build/pyvalue-merged-build-20261103-v19/diagnostic-comparison.json).
+The [v21 probe](../../../../build/pyvalue-merged-build-20261103-v21/results.json)
+binds checkpoint55 `f7f53c043fc` plus held typeobject `ce8c0c45`.
+`make -k -j4 python` exits 2 in 2.64 seconds, with 247 errors, 173 objects and no
+executable. All 7,362 source inputs stay unchanged. Enum/map55 removes six error
+observations; remaining builtin errors move by the reviewed body expansion.
+The [comparison](../../../../build/pyvalue-merged-build-20261103-v21/diagnostic-comparison.json)
+retains raw moved rows and verifies no added diagnostic messages.
 
-- [Identity](../../../../build/pyvalue-merged-build-20261103-v19/identity.json)
-- [Raw log](../../../../build/pyvalue-merged-build-20261103-v19/make.log)
-- [Before inputs](../../../../build/pyvalue-merged-build-20261103-v19/source-before.json)
-- [After inputs](../../../../build/pyvalue-merged-build-20261103-v19/source-after.json)
+- [Identity](../../../../build/pyvalue-merged-build-20261103-v21/identity.json)
+- [Raw log](../../../../build/pyvalue-merged-build-20261103-v21/make.log)
+- [Before inputs](../../../../build/pyvalue-merged-build-20261103-v21/source-before.json)
+- [After inputs](../../../../build/pyvalue-merged-build-20261103-v21/source-after.json)
 
 Counts include repeated diagnostics and shared-header cascades. They are not
 independent edits, a percentage complete, or a performance result. Object counts
@@ -37,6 +38,12 @@ public API/caller closure remains required. See [porting](../porting/status.md)
 for live assignments.
 
 ## Prior evidence
+
+The [v20 probe](../../../../build/pyvalue-merged-build-20261103-v20/results.json)
+has 253 errors/172 objects at checkpoint54, all 7,361 inputs unchanged. It removes
+exactly the final batched error without added diagnostics. The preceding
+[v19 probe](../../../../build/pyvalue-merged-build-20261103-v19/results.json)
+has 254 errors/171 objects at checkpoint53, all 7,360 inputs unchanged.
 
 The [v18 probe](../../../../build/pyvalue-merged-build-20261103-v18/results.json)
 had 280 errors/171 objects at checkpoint52; it removed nineteen datetime errors

@@ -1,9 +1,9 @@
 # Porting rules and remaining work
 
 We are closing compiler and ownership gaps before the first universal-value
-register-interpreter measurement. Source checkpoint53 is `5b993d71b1e`; the latest merged build describes that checkpoint plus held typeobject.
-The [latest merged build](../merged-build/status.md) has 254 repeated/cascading
-errors, 171 objects and no executable; all 7,360 inputs stayed unchanged.
+register-interpreter measurement. Source checkpoint55 is `f7f53c043fc`; the latest merged build describes that checkpoint plus held typeobject.
+The [latest merged build](../merged-build/status.md) has 247 repeated/cascading
+errors, 173 objects and no executable; all 7,362 inputs stayed unchanged.
 There is no restored runtime or performance result.
 
 The [board](../../README.md) owns current assignments and accepted checkpoints.
@@ -18,8 +18,8 @@ and reviews rules; Luna analyzes errors and applies approved mechanical batches.
 | Seven bootstrap type readers | Committed after independent code/native review | Merged runtime/startup and fault qualification |
 | Four remaining Clinic wrappers | Corrected v3 committed as checkpoint45 | Candidate runtime/fault qualification after linking |
 | Shared FORMAT engine | Foundation A committed as checkpoint47 | Backend/export/public/caller closure design and dependent implementation |
-| [Itertools readers](../core-consumers/itertools/status.md) | Six-function checkpoint53 committed; native 27→1 unchanged batched error | Review/apply final batched recipe, then full TU/object |
-| Enum/map readers | Three-body enum2/map_reduce design frozen with corrected proposed test | Independent design review, Luna application, native/code review |
+| [Itertools readers](../core-consumers/itertools/status.md) | Checkpoints53/54 committed; full TU/object clean | Linked candidate qualification |
+| Enum/map readers | Checkpoint55 committed; enum TU/object clean, builtin11 errors outside selected body | Remaining builtin recipes and candidate qualification |
 | [Datetime readers](../core-consumers/datetime/status.md) | Twelve-function checkpoint52 committed, including three undiagnosed varargs reads | Linked candidate qualification |
 | Pickle arguments/state | Three-reader checkpoint46 committed | Candidate runtime/fault qualification after linking |
 | GenericAlias tuple consumers | Reviewed eight-body checkpoint49 committed | Candidate runtime/fault qualification |
@@ -54,7 +54,18 @@ reported through header expansions. All other diagnostics are unchanged in its
 The earlier 22-error itertools inventory missed those four plus the remaining
 batched header error. The actual full-TU baseline has 27 errors.
 A [four-scope inventory](../../../../build/pyvalue-core-reader-inventory-20261103-v1/README.md)
-now maps builtin/exception/enum/atexit diagnostics to concrete next packets.
+maps builtin/exception/enum/atexit diagnostics to concrete packets; enum2 and
+map_reduce are now committed as55. V20 removes the final batched error; v21
+removes six more observations, with remaining builtin row-number drift retained
+in its [comparison](../../../../build/pyvalue-merged-build-20261103-v21/diagnostic-comparison.json).
+
+The enum/map v1 composer violated its artifact-only grant. Root stopped it and
+restored exactly its three live paths after hash verification, preserving held
+type/cache work. V1 is excluded. The corrected v2 generator was inspected and
+run by root under a full 7,361-input/index guard; source and index stayed unchanged.
+Its [commit and evidence](../../../../build/pyvalue-core3-readers-composed-20261103-v2/commit.json)
+bind three exact templates, the type-owner erratum and corrected discoverable
+controls. Four reference controls pass; candidate execution remains pending.
 
 The historical v12 census predates the latest type and Clinic packets. Its 332 observations map
 to 278 sites in 58 paths, with 77 warnings counted separately. All eight then-remaining

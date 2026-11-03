@@ -61,8 +61,10 @@ checkpoint48. [GenericAlias closure](genericalias/status.md) is checkpoint49.
 The [lookup/call and scalar boundaries](type-scalar/status.md) are checkpoints50/51.
 The twelve-function [datetime closure](datetime/status.md) is checkpoint52.
 The six-function [itertools port](itertools/status.md) is checkpoint53. Its selected
-native diagnostics are gone; unchanged batched remains. Enum2/map_reduce recipes
-await independent review; Luna inventories remaining held type dependencies.
+native diagnostics are gone; checkpoint54 closes batched and the full module
+TU/object pass. Enum2/map_reduce is checkpoint55 with a clean enum TU/object.
+The held type projection has finite source acceptance; borrowed lookup and
+guard/runtime obligations remain.
 Sol accepted nine canonical foundations
 in place; remaining held type/MRO defects are finite separate packets. Remaining format-parser/startup/container and bundled
 ports still block the baseline; generated AST/Clinic ports are checkpointed.

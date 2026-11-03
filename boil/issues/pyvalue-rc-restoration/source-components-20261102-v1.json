@@ -804,15 +804,15 @@
     "candidate_linked": false
   },
   "latest_diagnostic_build": {
+    "head": "f7f53c043fcbeafabeadce9e81f424a199a3acd0",
+    "objects_present": 173,
+    "error_diagnostics": 247,
+    "source_unchanged": true,
     "candidate_linked": false,
-    "error_diagnostics": 254,
-    "evidence": "build/pyvalue-merged-build-20261103-v19",
-    "head": "5b993d71b1e2a6011ac310c9eafa5711874e493b",
     "includes_held_source_files": true,
     "make_exit": 2,
-    "objects_present": 171,
-    "source_manifest_paths": 7360,
-    "source_unchanged": true
+    "source_manifest_paths": 7362,
+    "evidence": "build/pyvalue-merged-build-20261103-v21"
   },
   "mro_provider_reviewed_delta": {
     "typeobject_sha256": "d07219973716cab2749c7f9992ee268dd014815d28fd574c6d6c2d84b74dcf1d",
@@ -956,5 +956,52 @@
     "independent_review_sha256": "2387e0bd0b3a536a27031dd5879858f286ef1f187afa5b034648f6f6d0a71915",
     "coordinator_review_sha256": "38a723e947f022913590fae8057d9c661959c2900acded67c6ce7f3e97c2f793",
     "staged_patch_sha256": "acbc9ccc50c55456ba35823a327a4d12c92107cf015d30f8bb36ed612bfd01d7"
+  },
+  "itertools_batched": {
+    "base": "5b993d71b1e2a6011ac310c9eafa5711874e493b",
+    "commit": "a714cb97c1459914f10d046c0f63bd3c44884df9",
+    "paths_sha256": {
+      "Modules/itertoolsmodule.c": "7d8efaaefd32217d8c81663088d33bb1d3b12d02bd1f71516435583d48bdde38",
+      "Lib/test/test_pyvalue_itertools_batched.py": "3059a8daf62f61f68745cc7339b7d5d84f6eba60fabcb1111f06963c8f6183b2"
+    },
+    "functions": 1,
+    "obsolete_getter_uses_removed": 0,
+    "full_TU_and_object_pass": true,
+    "errors_before": 1,
+    "warnings_before": 0,
+    "errors_after": 0,
+    "warnings_after": 0,
+    "host_reference_pass": 4,
+    "host_reference_skip": 0,
+    "candidate_executed": false,
+    "runnable": false,
+    "independent_review_sha256": "13e4f188490bd3d09a661963d230310b71d3b127d0e96896c3919b91c8d1f666",
+    "coordinator_review_sha256": "0e4576553007f9a6641c2ff7abb90c3e643849dbbb8c9162a0e3fb7770cea1c6",
+    "native_receipt_sha256": "d7f4cfbf92752730dd8a4e70d0d61d079066f84c2b27cc77a79d17a0f861e4ad",
+    "object_receipt_sha256": "1cc14f0f89caa21cb195f39987d4517e28106344c2c6cfa0d979a370b4a2e5f4",
+    "staged_patch_sha256": "666a25259878e2c80d9313c61e839f4d5cd13cb40cd7c233daee31052715f0b2"
+  },
+  "enum_map_readers": {
+    "base": "a714cb97c1459914f10d046c0f63bd3c44884df9",
+    "commit": "f7f53c043fcbeafabeadce9e81f424a199a3acd0",
+    "paths_sha256": {
+      "Objects/enumobject.c": "fa905bbda0922084bb971b050438b877e6cbaf03d2eb0b0415dfe345d016a0a3",
+      "Python/bltinmodule.c": "a5673f3d73bfed2415c3016d9f1ce421c296fbf10cf66775d5f6a12e3be5ffd6",
+      "Lib/test/test_pyvalue_core_readers.py": "c87206bc7730f217c118e1a6905f183c11b9de1cdfc62d3cfd38feb5c6243901"
+    },
+    "functions": 3,
+    "enum_full_TU_and_object_pass": true,
+    "builtin_full_TU_pass": false,
+    "native_errors_before": 17,
+    "native_errors_after": 11,
+    "selected_diagnostics_after": 0,
+    "host_reference_pass": 4,
+    "host_reference_skip": 0,
+    "candidate_executed": false,
+    "runnable": false,
+    "v1_admitted": false,
+    "independent_review_sha256": "3b54f7c629005b7e1aa967062fa31091ef3188c05352e20c23a9876de049a97a",
+    "coordinator_review_sha256": "867f326ff73c58e80cd75b3df73e91dc404eb17c91e8f8ad010fe94bdde5f9f8",
+    "staged_patch_sha256": "bcd487096f67437ec74c8617aaaa27ff65ac7dcf648d7abe713933483054a472"
   }
 }

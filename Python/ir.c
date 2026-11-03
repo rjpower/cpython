@@ -1,5 +1,5 @@
 /* The executing copies of code objects, and the decoding of IR words.  See
- * boil/design/06-architecture-v2.md, section 2, and
+ * pyjit/design/compiler-and-ir.md, and
  * Include/internal/pycore_ir.h.
  *
  * The compiler emits the words (Python/assemble.c).  A code object keeps

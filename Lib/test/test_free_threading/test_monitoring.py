@@ -18,8 +18,8 @@ from unittest import TestCase
 if support.Py_GIL_DISABLED:
     raise unittest.SkipTest(
         "the free-threaded build does not support toggling sys.monitoring "
-        "or tracing while other threads run (boil/design/01-internal-ir.md, "
-        "item 27)")
+        "or tracing while other threads run "
+        "(pyjit/design/compiler-and-ir.md)")
 
 
 class InstrumentationMultiThreadedMixin:

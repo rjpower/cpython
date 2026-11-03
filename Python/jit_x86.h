@@ -1,6 +1,5 @@
-/* A small x86-64 assembler, written for tier 0, which step 1 of
- * boil/design/06-architecture-v2.md removed.  Nothing includes it now; the
- * JIT of step 8 will.
+/* A small x86-64 assembler, written for the removed tier 0.
+ * See pyjit/design/compiler-and-ir.md for the selected compiler design.
  *
  * It encodes the few instructions that tier 0 emitted into a growable buffer:
  * moves, lea, integer arithmetic, shifts and compares, scalar double

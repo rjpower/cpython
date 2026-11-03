@@ -1,4 +1,4 @@
-/* The passes over the register CFG (boil/design/07-compiler-passes.md).
+/* The passes over the register CFG (pyjit/design/compiler-and-ir.md).
  *
  * Each pass is a function over the blocks of a _PyRegCfg; the driver in
  * Python/regcfg.c runs them once each, in order, and debug builds verify

@@ -669,7 +669,7 @@ class FoldTest(unittest.TestCase):
     """Loads folded into the next word (Python/regcfg_passes.c)"""
 
     def test_attribute_sum(self):
-        # boil/design/06-architecture-v2.md, section 2.2
+        # pyjit/design/compiler-and-ir.md
         def g(o):
             return o.x + o.y
         t = nlocalsplus(g)

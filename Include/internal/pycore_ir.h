@@ -12,7 +12,7 @@ extern "C" {
 #include "pycore_feedback.h"    // _PyFbBlock, _PyFbHeader
 #include "pycore_structs.h"     // _PyIRWord
 
-/* The register IR (boil/design/06-architecture-v2.md, section 2).
+/* The register IR (pyjit/design/compiler-and-ir.md).
  *
  * The compiler emits the IR: a code object holds one 64-bit word per
  * instruction, and the interpreter runs a copy of them.

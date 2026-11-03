@@ -1,4 +1,4 @@
-/* The register CFG (boil/design/07-compiler-passes.md): conversion from
+/* The register CFG (pyjit/design/compiler-and-ir.md): conversion from
  * stack instructions, liveness, compaction and the verifier.  The passes
  * are in Python/regcfg_passes.c; Include/internal/pycore_regcfg.h
  * describes the representation.

@@ -56,7 +56,7 @@ extern "C" {
   On 64-bit builds without Py_GIL_DISABLED (Py_STACKREF_INLINE_VALUES), a
   _PyStackRef also holds exact ints that fit in int32 and exact non-NaN floats
   without a heap object, and interpreter-internal indices. The bits are laid
-  out as follows (boil/design/02-tagged-values.md, section 2.1):
+  out as follows (pyjit/design/values-and-object-protocol.md):
 
     Top 16 bits     Low 48 bits         Meaning
     0x0000          0x000000000001      NULL
@@ -295,7 +295,7 @@ PyStackRef_Box(_PyStackRef ref)
 
 #endif  // SIZEOF_VOID_P == 8 && !defined(Py_GIL_DISABLED)
 
-/* Value identity (boil/design/02-tagged-values.md, section 3)
+/* Value identity (pyjit/design/values-and-object-protocol.md)
 
    An exact int that fits in int32, or an exact float other than NaN, may be
    held inline in one place and boxed in others, and a value may be boxed
@@ -1231,8 +1231,8 @@ PyStackRef_FloatOperandValues(_PyStackRef a, _PyStackRef b, double *da, double *
 PyAPI_FUNC(_PyStackRef) _PyStackRef_BoxDouble(double value);
 
 /* The result of float arithmetic: inline unless it is NaN, which is boxed
-   (see "NaN and signed zero" in boil/design/02-tagged-values.md, section
-   3), and always boxed in builds without inline values. PyStackRef_NULL
+   (see pyjit/design/values-and-object-protocol.md), and always boxed in
+   builds without inline values. PyStackRef_NULL
    with an exception set if boxing fails. */
 static inline _PyStackRef
 PyStackRef_FromDouble(double value)

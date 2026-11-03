@@ -1,6 +1,6 @@
 """Shapes: per-type hidden classes for instances with inline values.
 
-Built with --with-shapes; see boil/design/04-shapes.md.
+Built with --with-shapes; see pyjit/design/values-and-object-protocol.md.
 """
 
 import dis

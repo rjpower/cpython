@@ -246,7 +246,7 @@ struct _dictkeysobject {
        see the DK_ENTRIES() / DK_UNICODE_ENTRIES() functions below */
 };
 
-/* Shapes, step one of boil/design/04-shapes.md, built with Py_SHAPES.
+/* Shapes, step one of pyjit/design/values-and-object-protocol.md, built with Py_SHAPES.
  *
  * Each type with inline values owns a table of shapes.  A shape stands for
  * the attributes an instance has and the order in which they were added: it

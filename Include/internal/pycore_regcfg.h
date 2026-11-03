@@ -11,7 +11,7 @@ extern "C" {
 #include "pycore_ir.h"          // IR_MAX_SLOTS
 #include "pycore_symtable.h"    // _Py_SourceLocation
 
-/* The register CFG (boil/design/07-compiler-passes.md).
+/* The register CFG (pyjit/design/compiler-and-ir.md).
  *
  * The flowgraph optimiser (Python/flowgraph.c) hands its basic blocks of
  * stack instructions to Python/regcfg.c, which converts each instruction

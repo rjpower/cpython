@@ -7,7 +7,7 @@ Reads the instruction definitions from Python/bytecodes.c and writes
 - Python/ir_targets.h, the computed-goto and tail-call tables, indexed by
   handler.
 
-Design note boil/design/06-architecture-v2.md describes the IR, and
+Design note pyjit/design/compiler-and-ir.md describes the IR, and
 Include/internal/pycore_ir.h the word layout. In short, an instruction is one
 64-bit word: a 16-bit handler index and four 12-bit fields A, B, C and D, of
 which C and D also form a 24-bit field CD. A field names a frame slot, the

@@ -18,6 +18,13 @@ Copyright © 2001 Python Software Foundation.  All rights reserved.
 
 See the end of this file for further copyright and license information.
 
+PyJIT rebuild
+-------------
+
+This checkout contains the PyJIT runtime/compiler rebuild. Start with the
+`project overview <pyjit/README.md>`_, `current status <pyjit/STATUS.md>`_ and
+`coordinator handoff <pyjit/HANDOFF.md>`_. The upstream Python information follows.
+
 .. contents::
 
 General Information

@@ -1,9 +1,9 @@
 # Porting rules and remaining work
 
 We are closing compiler and ownership gaps before the first universal-value
-register-interpreter measurement. Source checkpoint51 is `14fc009d42f`; the latest merged build describes that checkpoint plus held typeobject.
-The [latest merged build](../merged-build/status.md) has 299 repeated/cascading
-errors, 170 objects and no executable; all 7,357 inputs stayed unchanged.
+register-interpreter measurement. Source checkpoint52 is `67210b9cf67`; the latest merged build describes that checkpoint plus held typeobject.
+The [latest merged build](../merged-build/status.md) has 280 repeated/cascading
+errors, 171 objects and no executable; all 7,358 inputs stayed unchanged.
 There is no restored runtime or performance result.
 
 The [board](../../README.md) owns current assignments and accepted checkpoints.
@@ -18,8 +18,8 @@ and reviews rules; Luna analyzes errors and applies approved mechanical batches.
 | Seven bootstrap type readers | Committed after independent code/native review | Merged runtime/startup and fault qualification |
 | Four remaining Clinic wrappers | Corrected v3 committed as checkpoint45 | Candidate runtime/fault qualification after linking |
 | Shared FORMAT engine | Foundation A committed as checkpoint47 | Backend/export/public/caller closure design and dependent implementation |
-| Remaining itertools readers | Four canonical tuple-loop templates accepted; two call envelopes in design | Apply exact templates, review pairwise/zip-longest recipes, compose full TU |
-| Datetime readers | Twelve function packets independently reviewed; includes three undiagnosed varargs reads | Root full composition/include/native/test/final review |
+| Remaining itertools readers | Six templates reviewed; zip cleanup erratum sealed; Luna composition active | Full composed TU/object, copied controls, independent actual code/results review |
+| [Datetime readers](../core-consumers/datetime/status.md) | Twelve-function checkpoint52 committed, including three undiagnosed varargs reads | Linked candidate qualification |
 | Pickle arguments/state | Three-reader checkpoint46 committed | Candidate runtime/fault qualification after linking |
 | GenericAlias tuple consumers | Reviewed eight-body checkpoint49 committed | Candidate runtime/fault qualification |
 | Type attribute object bridge | Checkpoint48 committed; both full TUs/objects pass | Linked candidate behavior/fault qualification |
@@ -38,12 +38,15 @@ Exact designs and inventories:
 - [Accepted type/cache causal matrix](../../../../build/pyvalue-typecache-causal-triage-20261102-v1/README.md)
 - [Current family census](../../../../build/pyvalue-v16-error-families-20261103-v1/README.md)
 
-The current census has 299 observations at 246 sites in 52 paths; 31 warnings are
+The v16 census has 299 observations at 246 sites in 52 paths; 31 warnings are
 separate. Tuple readers contribute 178 observations, list readers 49 and
 dictionary lookup/iteration 34. Generated Clinic paths have zero errors; seven
 handwritten atexit consumer errors remain. The v17 diagnostic multiset is exact
 to v16, with only the undiagnosed type source and two test paths changed;
 [comparison](../../../../build/pyvalue-merged-build-20261103-v17/diagnostic-comparison.json).
+V18 removes nineteen datetime error observations and three header warnings, adding no
+diagnostics; all other diagnostic rows are unchanged. The source-bound census
+remains historical, with this [exact delta](../../../../build/pyvalue-merged-build-20261103-v18/diagnostic-comparison.json).
 
 The historical v12 census predates the latest type and Clinic packets. Its 332 observations map
 to 278 sites in 58 paths, with 77 warnings counted separately. All eight then-remaining

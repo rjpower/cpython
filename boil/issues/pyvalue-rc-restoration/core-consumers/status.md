@@ -59,8 +59,8 @@ The [object call bridges](../native-parsers/object-call-bridges/status.md)
 are committed. The [type attribute bridge](type-getattro/status.md) is
 checkpoint48. [GenericAlias closure](genericalias/status.md) is checkpoint49.
 The [lookup/call and scalar boundaries](type-scalar/status.md) are checkpoints50/51.
-All twelve datetime function packets are individually reviewed; root composes
-them. Four itertools templates are accepted, with two call envelopes in design.
+The twelve-function [datetime closure](datetime/status.md) is checkpoint52.
+All six itertools templates are reviewed; Luna prepares their mechanical composition.
 Sol accepted nine canonical foundations
 in place; remaining held type/MRO defects are finite separate packets. Remaining format-parser/startup/container and bundled
 ports still block the baseline; generated AST/Clinic ports are checkpointed.

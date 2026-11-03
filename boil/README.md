@@ -9,13 +9,13 @@ ported; hard source or binary compatibility with upstream is not required.
 
 The qualified interim interpreter is built from `eba351fee7d`: register IR and
 NaN-boxed frame values, with boxed heap fields. Universal PyValue restoration
-is on `boil/pyvalue-rc-universal` at `14fc009d42f`: fifty-one reviewed
+is on `boil/pyvalue-rc-universal` at `67210b9cf67`: fifty-two reviewed
 dependent source checkpoints. The remaining original held file is typeobject.c.
 There is no linked or qualified restored interpreter or timing result.
 
 **Current step:** close compiler/linker blockers under reviewed ownership rules.
-Merged v17 at checkpoint51 has 299 repeated/cascading errors, 170 objects present and no executable;
-all 7,357 source inputs stayed unchanged. Clinic producer rules now cover fixed
+Merged v18 at checkpoint52 has 280 repeated/cascading errors, 171 objects present and no executable;
+all 7,358 source inputs stayed unchanged. Clinic producer rules now cover fixed
 positional/keyword wrappers and seven constructor helpers. Three iterator
 constructors, the recording-only MRO counter foundation and thirteen native
 slot wrappers are committed. The earlier type_new boundary and ten construction
@@ -31,11 +31,10 @@ without diagnostics. Held type/cache semantics still need admission. The type
 attribute bridge is checkpoint48. Nine canonical foundations passed
 review in place. GenericAlias eight-body closure is checkpoint49. The ten-body
 method-lookup closure is checkpoint50 and five scalar boundaries are51, both
-reviewed with clean native results. Twelve datetime functions are individually
-reviewed; root composes the Luna packets. Itertools templates are in mechanical
-application and its two remaining call envelopes are in design.
-FORMAT backend/public
-API/caller closure remains mandatory queued work.
+reviewed with clean native results. The twelve-function datetime closure is
+checkpoint52, with clean full-TU/object results and seven host controls. All six
+itertools templates are reviewed; Luna prepares their mechanical composition.
+Sol designs the remaining FORMAT backend and caller closure.
 The current error census groups the remaining tuple/list/dictionary families.
 The coordinator reviews actual code/results, integrates
 accepted deltas, rebuilds and repeats. Luna completed the latest error-family

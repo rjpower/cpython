@@ -804,15 +804,15 @@
     "candidate_linked": false
   },
   "latest_diagnostic_build": {
-    "head": "14fc009d42fb8ef587bd817027b0de87fb02b443",
-    "objects_present": 170,
-    "error_diagnostics": 299,
+    "head": "67210b9cf67ed03d059e048e020debf07987fd17",
+    "objects_present": 171,
+    "error_diagnostics": 280,
     "source_unchanged": true,
     "candidate_linked": false,
     "includes_held_source_files": true,
     "make_exit": 2,
-    "source_manifest_paths": 7357,
-    "evidence": "build/pyvalue-merged-build-20261103-v17"
+    "source_manifest_paths": 7358,
+    "evidence": "build/pyvalue-merged-build-20261103-v18"
   },
   "mro_provider_reviewed_delta": {
     "typeobject_sha256": "d07219973716cab2749c7f9992ee268dd014815d28fd574c6d6c2d84b74dcf1d",
@@ -906,5 +906,29 @@
     "native_receipt_sha256": "680c83f47a976821150ba206bb731d4508423d04f7b8aaa4e783a1e71a1eb744",
     "object_receipt_sha256": "ae07fc14bdfadc70d440b130bb4b57631bb2f7df1f013018cd572ef27734ac09",
     "staged_patch_sha256": "bca142975df0380c5f67bca2a815758bb9e84307a71920f30553c9a7dd5efc6b"
+  },
+  "datetime_readers": {
+    "base": "14fc009d42fb8ef587bd817027b0de87fb02b443",
+    "commit": "67210b9cf67ed03d059e048e020debf07987fd17",
+    "paths_sha256": {
+      "Modules/_datetimemodule.c": "829cee45eac7df8ed7c6e548235cc30c26fe50a55f80dbb3dd162e2ead63bf05",
+      "Lib/test/test_pyvalue_datetime_readers.py": "a3ec38ae777a063d061e5a835796c2579cb4cfb09207cf83332cb2f3a7c7e1f8"
+    },
+    "functions": 12,
+    "obsolete_getter_uses_removed": 23,
+    "full_TU_and_object_pass": true,
+    "errors_before": 19,
+    "warnings_before": 3,
+    "errors_after": 0,
+    "warnings_after": 0,
+    "host_reference_pass": 7,
+    "host_reference_skip": 0,
+    "candidate_executed": false,
+    "runnable": false,
+    "independent_review_sha256": "b623b6c258810df971c887dbd1e70d5866f8d20a808c59b71c8cf05722219ae9",
+    "coordinator_review_sha256": "9c46d08557e554b7249e5eefd79144bd2bc9c467a61ffafb15272d18723102e7",
+    "native_receipt_sha256": "fb2a912c893eec0dac2127822ff44ba3f01d597c6bf9251d37e9a802832e6bb8",
+    "object_receipt_sha256": "b66314bd66f49aaf76766ee8ca09750024f012d4b24243bae28cef06c30f9471",
+    "staged_patch_sha256": "108e1ea9df80ee19049aec67d02cef6f01c751b00a7906b2d7f8251c012bd4f4"
   }
 }

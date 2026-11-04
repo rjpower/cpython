@@ -1605,7 +1605,7 @@ insertdict(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue value)
     assert(can_modify_dict(mp));
     assert(PyValue_IsLanguageValue(key) && PyValue_IsHeapSafe(key));
     assert(PyValue_IsLanguageValue(value) && PyValue_IsHeapSafe(value));
-    int notified = 0, classified = 0, notify_needed = 0;
+    int notified = 0, classified = 0;
     PyDict_WatchEvent event = PyDict_EVENT_ADDED;
     int status = -1;
     for (;;) {
@@ -1618,7 +1618,6 @@ insertdict(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue value)
             classified = 1;
             event = PyValue_IsNull(old_value) ?
                 PyDict_EVENT_ADDED : PyDict_EVENT_MODIFIED;
-            notify_needed = PyValue_IsNull(old_value) || !PyValue_Is(old_value, value);
         }
         if (PyValue_IsNull(old_value)) {
             if (_PyDict_HasSplitTable(mp) && value_is_exact_unicode(key)) {
@@ -1656,7 +1655,9 @@ insertdict(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue value)
             notified = 1;
             /* Keep the first lookup's event even if growth/type hooks changed
              * the dictionary. Required allocation still precedes notification. */
-            if (notify_needed && (mp->_ma_watcher_tag & DICT_WATCHER_MASK)) {
+            /* Storing the value already present still reports MODIFIED, as
+             * upstream does. */
+            if (mp->_ma_watcher_tag & DICT_WATCHER_MASK) {
                 _PyDict_NotifyEvent(event, mp, key, value);
                 if (PyErr_Occurred()) {
                     break;

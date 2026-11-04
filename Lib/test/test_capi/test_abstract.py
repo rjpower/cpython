@@ -958,13 +958,12 @@ class CAPITest(unittest.TestCase):
         self.assertEqual(contains(iter(lst), 'c'), 0)
         self.assertEqual(contains({'a': 2}, 'a'), 1)
 
-        # XXX Only for empty sequences. Should be SystemError?
-        self.assertEqual(contains([], NULL), 0)
+        self.assertRaises(SystemError, contains, [], NULL)
 
         self.assertRaises(TypeError, contains, 42, 'a')
         self.assertRaises(SystemError, contains, [1], NULL)
-        # CRASHES contains({}, NULL)
-        # CRASHES contains(set(), NULL)
+        self.assertRaises(SystemError, contains, {}, NULL)
+        self.assertRaises(SystemError, contains, set(), NULL)
         # CRASHES contains(NULL, 'a')
 
     def test_sequence_index(self):

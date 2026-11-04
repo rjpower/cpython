@@ -1049,11 +1049,18 @@ class ReferenceTestCase(unittest.TestCase):
         del keep
         self.assertEqual(marshal.dumps(referenced, version), data)
 
-        a = float('1.5')
-        b = float('2.5')
+        # Inline floats have no identity (pyvalue.md section 1.13): a repeated
+        # one is written in full each time, never flagged or referenced.
+        f = float('1.5')
+        self.assertEqual(marshal.dumps([f, f], version),
+                         b'[\x02\0\0\0' + 2 * (b'g' + struct.pack('<d', f)))
+
+        # Complex numbers are objects, so they can be shared.
+        a = complex('1.5j')
+        b = complex('2.5j')
         keep = [a, b, a, b]
-        data_a = b'g' + struct.pack('<d', a)
-        data_b = b'g' + struct.pack('<d', b)
+        data_a = b'y' + struct.pack('<dd', a.real, a.imag)
+        data_b = b'y' + struct.pack('<dd', b.real, b.imag)
         self.assertEqual(marshal.dumps([a, b], version),
                          b'[\x02\0\0\0' + data_a + data_b)
         self.assertEqual(marshal.dumps((1, 'a', interned, None), version),
@@ -1061,7 +1068,7 @@ class ReferenceTestCase(unittest.TestCase):
                          b'Z\x15marshal_interned_nameN')
         # Also if other objects are referenced.
         self.assertEqual(marshal.dumps([a, 1, 'a', interned, b, a], version),
-                         b'[\x06\0\0\0\xe7' + struct.pack('<d', a) +
+                         b'[\x06\0\0\0\xf9' + struct.pack('<dd', a.real, a.imag) +
                          b'i\x01\0\0\0Z\x01a'
                          b'Z\x15marshal_interned_name' +
                          data_b + b'r\0\0\0\0')
@@ -1104,12 +1111,12 @@ class ReferenceTestCase(unittest.TestCase):
     def test_reference_index(self):
         # Only the objects occurring more than once are numbered, in
         # the order of their first occurrence.
-        a = float('1.5')
-        b = float('2.5')
-        c = float('3.5')
-        data_a = b'g' + struct.pack('<d', a)
-        data_b = b'g' + struct.pack('<d', b)
-        data_c = b'g' + struct.pack('<d', c)
+        a = complex('1.5j')
+        b = complex('2.5j')
+        c = complex('3.5j')
+        data_a = b'y' + struct.pack('<dd', a.real, a.imag)
+        data_b = b'y' + struct.pack('<dd', b.real, b.imag)
+        data_c = b'y' + struct.pack('<dd', c.real, c.imag)
         def flagged(data):
             data = bytearray(data)
             data[0] |= self.FLAG_REF
@@ -1146,13 +1153,13 @@ class ReferenceTestCase(unittest.TestCase):
     def test_many_references(self):
         # References at every offset in the output, next to each other, far
         # from the objects they refer to and from each other.
-        a = float('1.5')
-        b = float('2.5')
-        c = float('3.5')
+        a = complex('1.5j')
+        b = complex('2.5j')
+        c = complex('3.5j')
         keep = [a, b, c]
-        data_a = b'g' + struct.pack('<d', a)
-        data_b = b'g' + struct.pack('<d', b)
-        data_c = b'g' + struct.pack('<d', c)
+        data_a = b'y' + struct.pack('<dd', a.real, a.imag)
+        data_b = b'y' + struct.pack('<dd', b.real, b.imag)
+        data_c = b'y' + struct.pack('<dd', c.real, c.imag)
         def flagged(data):
             data = bytearray(data)
             data[0] |= self.FLAG_REF

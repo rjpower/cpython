@@ -769,8 +769,11 @@ PyInit__testmultiphase_create_raise(void)
 static PyObject*
 createfunc_unreported_exception(PyObject *spec, PyModuleDef *def)
 {
+    /* Create the module first: dict operations in this runtime refuse to run
+       with an exception already set. */
+    PyObject *module = PyModule_New("foo");
     PyErr_SetString(PyExc_SystemError, "bad create function");
-    return PyModule_New("foo");
+    return module;
 }
 
 static PyModuleDef_Slot slots_create_unreported_exception[] = {

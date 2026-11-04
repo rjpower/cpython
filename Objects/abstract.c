@@ -2240,6 +2240,12 @@ PySequence_Count(PyObject *s, PyObject *o)
 int
 PySequence_Contains(PyObject *seq, PyObject *ob)
 {
+    if (ob == NULL) {
+        /* A NULL operand is a bad call even for an empty container, as
+           PyObject_RichCompare() reports upstream. */
+        PyErr_BadInternalCall();
+        return -1;
+    }
     PySequenceMethods *sqm = Py_TYPE(seq)->tp_as_sequence;
     if (sqm != NULL && sqm->sq_contains != NULL) {
         int res = (*sqm->sq_contains)(seq, ob);

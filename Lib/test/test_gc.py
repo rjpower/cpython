@@ -577,7 +577,9 @@ class GCTests(unittest.TestCase):
         self.assertEqual(len(gc.garbage), garbagelen)
 
     def test_get_referents(self):
-        alist = [1, 3, 5]
+        # Inline ints and floats are stored without an object, so they are
+        # not referents (pyvalue.md section 1.13); use string objects.
+        alist = ['a', 'c', 'e']
         got = gc.get_referents(alist)
         got.sort()
         self.assertEqual(got, alist)
@@ -587,15 +589,14 @@ class GCTests(unittest.TestCase):
         got.sort()
         self.assertEqual(got, alist)
 
-        adict = {1: 3, 5: 7}
-        expected = [1, 3, 5, 7]
+        # Unicode-keyed dicts do not traverse their keys, so use bytes keys.
+        adict = {b'a': 'c', b'e': 'g'}
+        expected = [b'a', b'e', 'c', 'g']
         got = gc.get_referents(adict)
-        got.sort()
-        self.assertEqual(got, expected)
+        self.assertCountEqual(got, expected)
 
-        got = gc.get_referents([1, 2], {3: 4}, (0, 0, 0))
-        got.sort()
-        self.assertEqual(got, [0, 0] + list(range(5)))
+        got = gc.get_referents(['b', 'c'], {b'd': 'e'}, ('a', 'a', 'a'))
+        self.assertCountEqual(got, ['a', 'a', 'a', 'b', 'c', b'd', 'e'])
 
         self.assertEqual(gc.get_referents(1, 'a', 4j), [])
 

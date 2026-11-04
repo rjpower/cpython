@@ -950,8 +950,8 @@ static inline PyObject *
 PyValue_AsObject(PyValue ref)
 {
     assert(PyValue_IsLanguageValue(ref));
-    assert(!PyErr_Occurred());
     if (PyValue_IsInline(ref)) {
+        assert(!PyErr_Occurred());
         ref = PyValue_Box(ref);
         return PyValue_IsInline(ref) ? NULL : PyValue_AsKnownObjectSteal(ref);
     }

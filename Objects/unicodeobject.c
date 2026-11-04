@@ -1689,17 +1689,11 @@ unicode_dealloc(PyObject *unicode)
             PyObject *interned = get_interned_dict(interp);
             assert(interned != NULL);
             PyObject *popped;
-            /* PyDict_Pop reports failure through PyErr_Occurred(), so it
-             * fails whenever the caller has an exception pending.  Freeing a
-             * string must keep that exception, as the release contract says:
-             * pop with no exception pending. */
-            PyObject *pending = PyErr_GetRaisedException();
             int r = PyDict_Pop(interned, unicode, &popped);
             if (r == -1) {
                 PyErr_FormatUnraisable("Exception ignored while "
                                        "removing an interned string %R",
                                        unicode);
-                PyErr_SetRaisedException(pending);
                 // We don't know what happened to the string. It's probably
                 // best to leak it:
                 // - if it was popped, there are no more references to it
@@ -1709,7 +1703,6 @@ unicode_dealloc(PyObject *unicode)
                 _PyUnicode_STATE(unicode).interned = SSTATE_INTERNED_IMMORTAL;
                 return;
             }
-            PyErr_SetRaisedException(pending);
             if (r == 0) {
                 // The interned string was not found in the interned_dict.
 #ifdef Py_DEBUG

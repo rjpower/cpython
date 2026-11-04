@@ -60,6 +60,17 @@ class ReleaseKeepsHandledException(unittest.TestCase):
                     self.check(lambda: function(a, b))
 
 
+class ReleaseWithPendingError(unittest.TestCase):
+    def test_free_interned_name_with_error_pending(self):
+        # setattr() interns the fresh name, which only the call holds.
+        # type_setattro raises a TypeError that keeps no reference to it, so
+        # the call's error path frees an interned string while the TypeError
+        # is pending. Removing it from the interned dict must not fail.
+        for i in range(3):
+            with self.assertRaises(TypeError):
+                setattr(int, ''.join(['probe_', str(i)]), 1)
+
+
 class ReleaseChangesInstrumentation(unittest.TestCase):
     def setUp(self):
         sys.monitoring.use_tool_id(TOOL, "test_pyvalue_release")

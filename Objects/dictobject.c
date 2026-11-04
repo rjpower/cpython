@@ -3152,7 +3152,7 @@ _PyDict_Pop_KnownHash(PyDictObject *mp, PyObject *key, Py_hash_t hash,
     for (;;) {
         PyValue value = PyValue_NULL;
         Py_ssize_t ix = _Py_dict_lookup(mp, query, hash, &value);
-        if (ix == DKIX_ERROR || PyErr_Occurred()) {
+        if (ix == DKIX_ERROR) {
             break;
         }
         if (PyValue_IsNull(value)) {
@@ -3165,7 +3165,7 @@ _PyDict_Pop_KnownHash(PyDictObject *mp, PyObject *key, Py_hash_t hash,
         if (result != NULL) {
             /* Box before removal: allocation failure consumes no item. */
             object = _PyValue_AsObjectAt(selected, BOX_SITE_DICT);
-            if (object == NULL || PyErr_Occurred()) {
+            if (object == NULL) {
                 break;
             }
         }
@@ -3174,9 +3174,6 @@ _PyDict_Pop_KnownHash(PyDictObject *mp, PyObject *key, Py_hash_t hash,
         if (matches && !notified && (mp->_ma_watcher_tag & DICT_WATCHER_MASK)) {
             notified = 1;
             _PyDict_NotifyEvent(PyDict_EVENT_DELETED, mp, query, PyValue_NULL);
-            if (PyErr_Occurred()) {
-                break;
-            }
             matches = dict_selection_matches(mp, keys, ix, hash,
                                               selected_key, selected);
         }
@@ -3195,19 +3192,16 @@ _PyDict_Pop_KnownHash(PyDictObject *mp, PyObject *key, Py_hash_t hash,
         selected = PyValue_NULL;
         PyValue_XCLOSE(selected_key);
         selected_key = PyValue_NULL;
-        if (PyErr_Occurred()) {
-            break;
-        }
     }
     PyValue_XCLOSE(selected);
     PyValue_XCLOSE(selected_key);
     PyValue_XCLOSE(query);
-    if (status == 1 && !PyErr_Occurred() && result != NULL) {
+    if (status == 1 && result != NULL) {
         *result = object;
         object = NULL;
     }
     Py_XDECREF(object);
-    return PyErr_Occurred() ? -1 : status;
+    return status;
 }
 
 static int

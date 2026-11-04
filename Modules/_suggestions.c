@@ -30,8 +30,13 @@ _suggestions__generate_suggestions_impl(PyObject *module,
     // Check if all elements in the list are Unicode
     Py_ssize_t size = PyList_Size(candidates);
     for (Py_ssize_t i = 0; i < size; ++i) {
-        PyObject *elem = PyList_GET_ITEM(candidates, i);
-        if (!PyUnicode_Check(elem)) {
+        PyObject *elem = PyList_GetItemRef(candidates, i);
+        if (elem == NULL) {
+            return NULL;
+        }
+        int is_str = PyUnicode_Check(elem);
+        Py_DECREF(elem);
+        if (!is_str) {
             PyErr_SetString(PyExc_TypeError, "all elements in 'candidates' must be strings");
             return NULL;
         }

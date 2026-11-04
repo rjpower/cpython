@@ -7,7 +7,7 @@
 #include "pycore_moduleobject.h"  // _PyModule_GetState()
 #include "pycore_object.h"        // _PyType_GetSubclasses()
 #include "pycore_runtime.h"       // _Py_ID()
-#include "pycore_setobject.h"     // _PySet_NextEntry()
+#include "pycore_setobject.h"     // _PySet_NextEntryRef()
 #include "pycore_value.h"        // _PyValue_RestoreException()
 #include "pycore_weakref.h"       // _PyWeakref_GET_REF()
 #include "clinic/_abc.c.h"
@@ -1056,10 +1056,13 @@ subclasscheck_check_registry(_abc_data *impl, PyObject *subclass,
     PyObject *key;
     Py_ssize_t pos = 0;
     Py_hash_t hash;
+    int rc;
 
-    while (_PySet_NextEntry(registry, &pos, &key, &hash)) {
+    while ((rc = _PySet_NextEntryRef(registry, &pos, &key, &hash)) > 0) {
         PyObject *rkey;
-        if (PyWeakref_GetRef(key, &rkey) < 0) {
+        int wr = PyWeakref_GetRef(key, &rkey);
+        Py_DECREF(key);
+        if (wr < 0) {
             // Someone inject non-weakref type in the registry.
             ret = -1;
             break;
@@ -1083,6 +1086,9 @@ subclasscheck_check_registry(_abc_data *impl, PyObject *subclass,
             ret = 1;
             break;
         }
+    }
+    if (rc < 0) {
+        ret = -1;
     }
 
     Py_DECREF(registry);

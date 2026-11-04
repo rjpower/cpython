@@ -657,10 +657,16 @@ gettmarg(time_module_state *state, PyObject *args,
 #ifdef HAVE_STRUCT_TM_TM_ZONE
     if (Py_IS_TYPE(args, state->struct_time_type)) {
         PyObject *item;
-        item = PyStructSequence_GET_ITEM(args, 9);
+        item = PyStructSequence_GetItemRef(args, 9);
+        if (item == NULL) {
+            return 0;
+        }
         if (item != Py_None) {
+            /* The string stays alive through args, which keeps the UTF-8
+               buffer valid after we drop our reference. */
             p->tm_zone = (char *)PyUnicode_AsUTF8(item);
             if (p->tm_zone == NULL) {
+                Py_DECREF(item);
                 return 0;
             }
 #if defined(__linux__) && !defined(__GLIBC__)
@@ -678,12 +684,19 @@ gettmarg(time_module_state *state, PyObject *args,
             }
 #endif
         }
-        item = PyStructSequence_GET_ITEM(args, 10);
+        Py_DECREF(item);
+        item = PyStructSequence_GetItemRef(args, 10);
+        if (item == NULL) {
+            return 0;
+        }
         if (item != Py_None) {
             p->tm_gmtoff = PyLong_AsLong(item);
-            if (PyErr_Occurred())
+            if (PyErr_Occurred()) {
+                Py_DECREF(item);
                 return 0;
+            }
         }
+        Py_DECREF(item);
     }
 #endif /* HAVE_STRUCT_TM_TM_ZONE */
     return 1;
@@ -1008,9 +1021,22 @@ static PyObject *
 time_strptime(PyObject *self, PyObject *args)
 {
     _PyTime_StrptimeFields fields;
-    if (PyTuple_GET_SIZE(args) == 2 &&
-        _PyTime_Strptime(PyTuple_GET_ITEM(args, 0),
-                         PyTuple_GET_ITEM(args, 1), &fields)) {
+    int parsed = 0;
+    if (PyTuple_GET_SIZE(args) == 2) {
+        PyObject *string = PyTuple_GetItemRef(args, 0);
+        if (string == NULL) {
+            return NULL;
+        }
+        PyObject *format = PyTuple_GetItemRef(args, 1);
+        if (format == NULL) {
+            Py_DECREF(string);
+            return NULL;
+        }
+        parsed = _PyTime_Strptime(string, format, &fields);
+        Py_DECREF(string);
+        Py_DECREF(format);
+    }
+    if (parsed) {
         time_module_state *state = get_time_state(self);
         PyObject *result = PyStructSequence_New(state->struct_time_type);
         if (result == NULL) {

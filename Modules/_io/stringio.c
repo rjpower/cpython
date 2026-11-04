@@ -960,15 +960,21 @@ _io_StringIO___setstate___impl(stringio *self, PyObject *state)
        once by __init__. So we do not take any chance and replace object's
        buffer completely. */
     {
-        PyObject *item = PyTuple_GET_ITEM(state, 0);
+        PyObject *item = PyTuple_GetItemRef(state, 0);
+        if (item == NULL) {
+            return NULL;
+        }
         if (PyUnicode_Check(item)) {
             Py_UCS4 *buf = PyUnicode_AsUCS4Copy(item);
-            if (buf == NULL)
+            if (buf == NULL) {
+                Py_DECREF(item);
                 return NULL;
+            }
             Py_ssize_t bufsize = PyUnicode_GET_LENGTH(item);
 
             if (resize_buffer(self, bufsize) < 0) {
                 PyMem_Free(buf);
+                Py_DECREF(item);
                 return NULL;
             }
             memcpy(self->buf, buf, bufsize * sizeof(Py_UCS4));
@@ -979,19 +985,25 @@ _io_StringIO___setstate___impl(stringio *self, PyObject *state)
             assert(item == Py_None);
             self->string_size = 0;
         }
+        Py_DECREF(item);
     }
 
     /* Set carefully the position value. Alternatively, we could use the seek
        method instead of modifying self->pos directly to better protect the
        object internal state against erroneous (or malicious) inputs. */
-    position_obj = PyTuple_GET_ITEM(state, 2);
+    position_obj = PyTuple_GetItemRef(state, 2);
+    if (position_obj == NULL) {
+        return NULL;
+    }
     if (!PyLong_Check(position_obj)) {
         PyErr_Format(PyExc_TypeError,
                      "third item of state must be an integer, got %.200s",
                      Py_TYPE(position_obj)->tp_name);
+        Py_DECREF(position_obj);
         return NULL;
     }
     pos = PyLong_AsSsize_t(position_obj);
+    Py_DECREF(position_obj);
     if (pos == -1 && PyErr_Occurred())
         return NULL;
     if (pos < 0) {
@@ -1002,24 +1014,31 @@ _io_StringIO___setstate___impl(stringio *self, PyObject *state)
     self->pos = pos;
 
     /* Set the dictionary of the instance variables. */
-    dict = PyTuple_GET_ITEM(state, 3);
+    dict = PyTuple_GetItemRef(state, 3);
+    if (dict == NULL) {
+        return NULL;
+    }
     if (dict != Py_None) {
         if (!PyDict_Check(dict)) {
             PyErr_Format(PyExc_TypeError,
                          "fourth item of state should be a dict, got a %.200s",
                          Py_TYPE(dict)->tp_name);
+            Py_DECREF(dict);
             return NULL;
         }
         if (self->dict) {
             /* Alternatively, we could replace the internal dictionary
                completely. However, it seems more practical to just update it. */
-            if (PyDict_Update(self->dict, dict) < 0)
+            if (PyDict_Update(self->dict, dict) < 0) {
+                Py_DECREF(dict);
                 return NULL;
+            }
         }
         else {
             self->dict = Py_NewRef(dict);
         }
     }
+    Py_DECREF(dict);
 
     Py_RETURN_NONE;
 }

@@ -12,6 +12,7 @@
 #include "pycore_ir.h"              // _PyIR_Formats
 #include "pycore_opcode_metadata.h" // IS_VALID_OPCODE, OPCODE_HAS_*, etc
 #include "pycore_opcode_utils.h"
+#include "pycore_value.h"           // PyValue_IsNull()
 
 /*[clinic input]
 module _opcode
@@ -279,7 +280,7 @@ _opcode_get_nb_ops_impl(PyObject *module)
 #undef ADD_NB_OP
 
     for(int i = 0; i <= NB_OPARG_LAST; i++) {
-        if (PyList_GET_ITEM(list, i) == NULL) {
+        if (PyValue_IsNull(PyList_GET_VALUE(list, i))) {
             Py_DECREF(list);
             PyErr_Format(PyExc_ValueError,
                          "Missing initialization for NB_OP %d",

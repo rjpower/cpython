@@ -1689,7 +1689,11 @@ _textiowrapper_writeflush(textio *self)
         Py_ssize_t pos = 0;
 
         for (Py_ssize_t i = 0; i < PyList_GET_SIZE(pending); i++) {
-            PyObject *obj = PyList_GET_ITEM(pending, i);
+            PyObject *obj = PyList_GetItemRef(pending, i);
+            if (obj == NULL) {
+                PyBytesWriter_Discard(writer);
+                return -1;
+            }
             const char *src;
             Py_ssize_t len;
             if (PyUnicode_Check(obj)) {
@@ -1703,6 +1707,7 @@ _textiowrapper_writeflush(textio *self)
                 len = PyBytes_GET_SIZE(obj);
             }
             memcpy(buf + pos, src, len);
+            Py_DECREF(obj);
             pos += len;
         }
         assert(pos == self->pending_bytes_count);

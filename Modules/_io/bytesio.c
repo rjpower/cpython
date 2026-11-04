@@ -1025,7 +1025,12 @@ _io_BytesIO___setstate___impl(bytesio *self, PyObject *state)
 
     /* Set the value of the internal buffer. If state[0] does not support the
        buffer protocol, bytesio_write will raise the appropriate TypeError. */
-    result = _io_BytesIO_write_impl(self, PyTuple_GET_ITEM(state, 0));
+    PyObject *initial = PyTuple_GetItemRef(state, 0);
+    if (initial == NULL) {
+        return NULL;
+    }
+    result = _io_BytesIO_write_impl(self, initial);
+    Py_DECREF(initial);
     if (result == NULL)
         return NULL;
     Py_DECREF(result);
@@ -1033,14 +1038,19 @@ _io_BytesIO___setstate___impl(bytesio *self, PyObject *state)
     /* Set carefully the position value. Alternatively, we could use the seek
        method instead of modifying self->pos directly to better protect the
        object internal state against erroneous (or malicious) inputs. */
-    position_obj = PyTuple_GET_ITEM(state, 1);
+    position_obj = PyTuple_GetItemRef(state, 1);
+    if (position_obj == NULL) {
+        return NULL;
+    }
     if (!PyLong_Check(position_obj)) {
         PyErr_Format(PyExc_TypeError,
                      "second item of state must be an integer, not %.200s",
                      Py_TYPE(position_obj)->tp_name);
+        Py_DECREF(position_obj);
         return NULL;
     }
     pos = PyLong_AsSsize_t(position_obj);
+    Py_DECREF(position_obj);
     if (pos == -1 && PyErr_Occurred())
         return NULL;
     if (pos < 0) {
@@ -1051,19 +1061,25 @@ _io_BytesIO___setstate___impl(bytesio *self, PyObject *state)
     self->pos = pos;
 
     /* Set the dictionary of the instance variables. */
-    dict = PyTuple_GET_ITEM(state, 2);
+    dict = PyTuple_GetItemRef(state, 2);
+    if (dict == NULL) {
+        return NULL;
+    }
     if (dict != Py_None) {
         if (!PyDict_Check(dict)) {
             PyErr_Format(PyExc_TypeError,
                          "third item of state should be a dict, got a %.200s",
                          Py_TYPE(dict)->tp_name);
+            Py_DECREF(dict);
             return NULL;
         }
         if (self->dict) {
             /* Alternatively, we could replace the internal dictionary
                completely. However, it seems more practical to just update it. */
-            if (PyDict_Update(self->dict, dict) < 0)
+            if (PyDict_Update(self->dict, dict) < 0) {
+                Py_DECREF(dict);
                 return NULL;
+            }
         }
         else {
             /* The LOAD_ATTR specializations read the dict slot lock-free
@@ -1071,6 +1087,7 @@ _io_BytesIO___setstate___impl(bytesio *self, PyObject *state)
             FT_ATOMIC_STORE_PTR_RELEASE(self->dict, Py_NewRef(dict));
         }
     }
+    Py_DECREF(dict);
 
     Py_RETURN_NONE;
 }

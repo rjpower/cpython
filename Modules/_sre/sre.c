@@ -40,7 +40,7 @@ static const char copyright[] =
 
 #include "Python.h"
 #include "pycore_critical_section.h" // Py_BEGIN_CRITICAL_SECTION
-#include "pycore_dict.h"             // _PyDict_Next()
+#include "pycore_dict.h"             // _PyDict_NextEntryRefKnownHash()
 #include "pycore_long.h"             // _PyLong_GetZero()
 #include "pycore_list.h"             // _PyList_AppendTakeRef()
 #include "pycore_moduleobject.h"     // _PyModule_GetState()
@@ -1797,8 +1797,12 @@ _sre_compile_impl(PyObject *module, PyObject *pattern, int flags,
     self->codesize = n;
 
     for (i = 0; i < n; i++) {
-        PyObject *o = PyList_GET_ITEM(code, i);
+        PyObject *o = PyList_GetItemRef(code, i);
+        if (o == NULL) {
+            break;
+        }
         unsigned long value = PyLong_AsUnsignedLong(o);
+        Py_DECREF(o);
         if (value == (unsigned long)-1 && PyErr_Occurred()) {
             break;
         }
@@ -1881,13 +1885,26 @@ _sre_template_impl(PyObject *module, PyObject *pattern, PyObject *template)
         goto bad_template;
     }
     n /= 2;
-    self = PyObject_GC_NewVar(TemplateObject, module_state->Template_Type, n);
-    if (!self)
+    PyObject *first = PyList_GetItemRef(template, 0);
+    if (first == NULL) {
         return NULL;
+    }
+    self = PyObject_GC_NewVar(TemplateObject, module_state->Template_Type, n);
+    if (!self) {
+        Py_DECREF(first);
+        return NULL;
+    }
     self->chunks = 1 + 2*n;
-    self->literal = Py_NewRef(PyList_GET_ITEM(template, 0));
+    self->literal = first;
     for (Py_ssize_t i = 0; i < n; i++) {
-        Py_ssize_t index = PyLong_AsSsize_t(PyList_GET_ITEM(template, 2*i+1));
+        PyObject *index_obj = PyList_GetItemRef(template, 2*i+1);
+        if (index_obj == NULL) {
+            Py_SET_SIZE(self, i);
+            Py_DECREF(self);
+            return NULL;
+        }
+        Py_ssize_t index = PyLong_AsSsize_t(index_obj);
+        Py_DECREF(index_obj);
         if (index == -1 && PyErr_Occurred()) {
             Py_SET_SIZE(self, i);
             Py_DECREF(self);
@@ -1899,15 +1916,20 @@ _sre_template_impl(PyObject *module, PyObject *pattern, PyObject *template)
         }
         self->items[i].index = index;
 
-        PyObject *literal = PyList_GET_ITEM(template, 2*i+2);
+        PyObject *literal = PyList_GetItemRef(template, 2*i+2);
+        if (literal == NULL) {
+            Py_SET_SIZE(self, i);
+            Py_DECREF(self);
+            return NULL;
+        }
         // Skip empty literals.
         if ((PyUnicode_Check(literal) && !PyUnicode_GET_LENGTH(literal)) ||
             (PyBytes_Check(literal) && !PyBytes_GET_SIZE(literal)))
         {
-            literal = NULL;
+            Py_CLEAR(literal);
             self->chunks--;
         }
-        self->items[i].literal = Py_XNewRef(literal);
+        self->items[i].literal = literal;
     }
     PyObject_GC_Track(self);
     return (PyObject*) self;
@@ -2556,9 +2578,14 @@ match_getindex(MatchObject* self, PyObject* index)
         i = -1;
 
         if (self->pattern->groupindex) {
-            index = PyDict_GetItemWithError(self->pattern->groupindex, index);
-            if (index && PyLong_Check(index)) {
-                i = PyLong_AsSsize_t(index);
+            PyObject *value;
+            if (PyDict_GetItemRef(self->pattern->groupindex, index,
+                                  &value) > 0)
+            {
+                if (PyLong_Check(value)) {
+                    i = PyLong_AsSsize_t(value);
+                }
+                Py_DECREF(value);
             }
         }
     }
@@ -2712,15 +2739,17 @@ _sre_SRE_Match_groupdict_impl(MatchObject *self, PyObject *default_value)
     PyObject *value;
     Py_ssize_t pos = 0;
     Py_hash_t hash;
+    int rc;
 
     result = PyDict_New();
     if (!result || !self->pattern->groupindex)
         return result;
 
     Py_BEGIN_CRITICAL_SECTION(self->pattern->groupindex);
-    while (_PyDict_Next(self->pattern->groupindex, &pos, &key, &value, &hash)) {
+    while ((rc = _PyDict_NextEntryRefKnownHash(self->pattern->groupindex, &pos,
+                                               &key, NULL, &hash)) > 0)
+    {
         int status;
-        Py_INCREF(key);
         value = match_getslice(self, key, default_value);
         if (!value) {
             Py_DECREF(key);
@@ -2734,6 +2763,9 @@ _sre_SRE_Match_groupdict_impl(MatchObject *self, PyObject *default_value)
             Py_CLEAR(result);
             goto exit;
         }
+    }
+    if (rc < 0) {
+        Py_CLEAR(result);
     }
 exit:;
     Py_END_CRITICAL_SECTION();
@@ -2900,9 +2932,7 @@ match_lastgroup_get(PyObject *op, void *Py_UNUSED(ignored))
         self->lastindex >= 0 &&
         self->lastindex < PyTuple_GET_SIZE(self->pattern->indexgroup))
     {
-        PyObject *result = PyTuple_GET_ITEM(self->pattern->indexgroup,
-                                            self->lastindex);
-        return Py_NewRef(result);
+        return PyTuple_GetItemRef(self->pattern->indexgroup, self->lastindex);
     }
     Py_RETURN_NONE;
 }
@@ -3251,10 +3281,19 @@ expand_template(TemplateObject *self, MatchObject *match)
         if (!list) {
             return NULL;
         }
-        out = &PyList_GET_ITEM(list, 0);
     }
 
-    out[count++] = Py_NewRef(self->literal);
+#define EMIT(obj) \
+    do { \
+        if (list) { \
+            PyList_SET_ITEM(list, count++, (obj)); \
+        } \
+        else { \
+            out[count++] = (obj); \
+        } \
+    } while (0)
+
+    EMIT(Py_NewRef(self->literal));
     for (Py_ssize_t i = 0; i < Py_SIZE(self); i++) {
         Py_ssize_t index = self->items[i].index;
         if (index >= match->groups) {
@@ -3266,18 +3305,27 @@ expand_template(TemplateObject *self, MatchObject *match)
             goto cleanup;
         }
         if (item != Py_None) {
-            out[count++] = Py_NewRef(item);
+            EMIT(item);
         }
-        Py_DECREF(item);
+        else {
+            Py_DECREF(item);
+        }
 
         PyObject *literal = self->items[i].literal;
         if (literal != NULL) {
-            out[count++] = Py_NewRef(literal);
+            EMIT(Py_NewRef(literal));
         }
     }
+#undef EMIT
 
     if (PyUnicode_Check(self->literal)) {
-        result = _PyUnicode_JoinArray(&_Py_STR(empty), out, count);
+        if (list) {
+            Py_SET_SIZE(list, count);
+            result = PyUnicode_Join(&_Py_STR(empty), list);
+        }
+        else {
+            result = _PyUnicode_JoinArray(&_Py_STR(empty), out, count);
+        }
     }
     else {
         Py_SET_SIZE(list, count);
@@ -3286,6 +3334,7 @@ expand_template(TemplateObject *self, MatchObject *match)
 
 cleanup:
     if (list) {
+        Py_SET_SIZE(list, count);
         Py_DECREF(list);
     }
     else {

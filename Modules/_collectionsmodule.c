@@ -2467,18 +2467,24 @@ defdict_init(PyObject *self, PyObject *args, PyObject *kwds)
     else {
         Py_ssize_t n = PyTuple_GET_SIZE(args);
         if (n > 0) {
-            newdefault = PyTuple_GET_ITEM(args, 0);
+            newdefault = PyTuple_GetItemRef(args, 0);
+            if (newdefault == NULL) {
+                return -1;
+            }
             if (!PyCallable_Check(newdefault) && newdefault != Py_None) {
                 PyErr_SetString(PyExc_TypeError,
                     "first argument must be callable or None");
+                Py_DECREF(newdefault);
                 return -1;
             }
         }
         newargs = PySequence_GetSlice(args, 1, n);
     }
-    if (newargs == NULL)
+    if (newargs == NULL) {
+        Py_XDECREF(newdefault);
         return -1;
-    dd->default_factory = Py_XNewRef(newdefault);
+    }
+    dd->default_factory = newdefault;
     result = PyDict_Type.tp_init(self, newargs, kwds);
     Py_DECREF(newargs);
     Py_XDECREF(olddefault);
@@ -2588,17 +2594,15 @@ _collections__count_elements_impl(PyObject *module, PyObject *mapping,
                 goto done;
             }
 
-            oldval = _PyDict_GetItem_KnownHash(mapping, key, hash);
-            if (oldval == NULL) {
-                if (PyErr_Occurred())
-                    goto done;
+            int found = _PyDict_GetItemRef_KnownHash(
+                (PyDictObject *)mapping, key, hash, &oldval);
+            if (found < 0) {
+                goto done;
+            }
+            if (found == 0) {
                 if (_PyDict_SetItem_KnownHash(mapping, key, one, hash) < 0)
                     goto done;
             } else {
-                /* oldval is a borrowed reference.  Keep it alive across
-                   PyNumber_Add(), which can execute arbitrary user code and
-                   mutate (or even clear) the underlying dict. */
-                Py_INCREF(oldval);
                 newval = PyNumber_Add(oldval, one);
                 Py_DECREF(oldval);
                 if (newval == NULL)
@@ -2709,8 +2713,8 @@ tuplegetter_descr_get(PyObject *self, PyObject *obj, PyObject *type)
         return NULL;
     }
 
-    result = PyTuple_GET_ITEM(obj, index);
-    return Py_NewRef(result);
+    result = PyTuple_GetItemRef(obj, index);
+    return result;
 }
 
 static int

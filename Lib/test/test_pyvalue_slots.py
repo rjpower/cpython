@@ -35,9 +35,9 @@ class PyValueSlotTests(unittest.TestCase):
         with self.assertRaises(AttributeError):
             del item.value
         for value, kind in [(None, 'object'), (True, 'object'),
-                            (-(2**31), 'int'), (2**31 - 1, 'int'),
+                            (-(2**50), 'int'), (2**50 - 1, 'int'),
                             (0.5, 'float'), (float('inf'), 'float'),
-                            (2**31, 'object'), (object(), 'object')]:
+                            (2**50, 'object'), (object(), 'object')]:
             item.value = value
             self.assertEqual(item.value, value)
             self.assertEqual(_testinternalcapi.slot_value_storage(

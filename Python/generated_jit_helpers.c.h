@@ -4300,7 +4300,7 @@
             (void)oparg;
             PyValue value;
             assert(oparg < _PY_NSMALLPOSINTS);
-            value = PyValue_FromInt32((int32_t)oparg);
+            value = PyValue_FromInlineInt(oparg);
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
@@ -4340,7 +4340,7 @@
             (void)oparg;
             PyValue value;
             assert(oparg < _PY_NSMALLPOSINTS);
-            value = PyValue_FromInt32((int32_t)oparg);
+            value = PyValue_FromInlineInt(oparg);
             if (PyValue_IsNull(value)) {
                 JUMP_TO_LABEL(error);
             }
@@ -4521,7 +4521,7 @@
             {
                 int err;
                 if (PyValue_IsInlineInt(value)) {
-                    err = PyValue_InlineInt(value) != 0;
+                    err = PyValue_InlineInt64(value) != 0;
                 }
                 else if (PyValue_IsInlineFloat(value)) {
                     err = PyValue_InlineFloat(value) != 0.0;
@@ -4715,7 +4715,7 @@
             {
                 int err;
                 if (PyValue_IsInlineInt(value)) {
-                    err = PyValue_InlineInt(value) != 0;
+                    err = PyValue_InlineInt64(value) != 0;
                 }
                 else if (PyValue_IsInlineFloat(value)) {
                     err = PyValue_InlineFloat(value) != 0.0;
@@ -5479,7 +5479,7 @@
             {
                 int err;
                 if (PyValue_IsInlineInt(value)) {
-                    err = PyValue_InlineInt(value) != 0;
+                    err = PyValue_InlineInt64(value) != 0;
                 }
                 else if (PyValue_IsInlineFloat(value)) {
                     err = PyValue_InlineFloat(value) != 0.0;
@@ -5529,20 +5529,10 @@
             {
                 value = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
                 if (PyValue_IsInlineInt(value)) {
-                    int32_t i = PyValue_InlineInt(value);
-                    if (i == INT32_MIN) {
-                        res = _PyValue_BoxInt64(-(int64_t)i);
-                    }
-                    else {
-                        res = PyValue_FromInt32(-i);
-                    }
+                    res = PyValue_FromInt64(-PyValue_InlineInt64(value));
                 }
                 else if (PyValue_IsInlineFloat(value)) {
                     res = PyValue_FromDoubleNotNaN(-PyValue_InlineFloat(value));
-                }
-                else if (PyValue_FloatCheckExact(value))
-                {
-                    res = PyValue_FromDouble(-PyValue_FloatValue(value));
                 }
                 else {
                     PyObject *res_o = PyNumber_Negative(PyValue_AsKnownObjectBorrow(value));

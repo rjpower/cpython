@@ -48,7 +48,7 @@ class BorrowedEntryTests(unittest.TestCase):
             self.assertEqual(back, obj)
 
     def test_inline_ints(self):
-        for obj in (0, 5, -7, 2**31 - 1, -2**31):
+        for obj in (0, 5, -7, 2**31 - 1, -2**31, 2**50 - 1, -2**50):
             with self.subTest(obj=obj):
                 self.check(obj, "int")
 
@@ -58,7 +58,7 @@ class BorrowedEntryTests(unittest.TestCase):
                 self.check(obj, "float")
 
     def test_objects(self):
-        for obj in (2**31, -2**31 - 1, 2**100, float("nan"), True, False,
+        for obj in (2**50, -2**50 - 1, 2**100, float("nan"), True, False,
                     Number(3), "é", None, [1], int, Item()):
             with self.subTest(obj=obj):
                 self.check(obj, "object")

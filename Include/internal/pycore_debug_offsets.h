@@ -266,6 +266,23 @@ typedef struct _Py_DebugOffsets {
         uint64_t debugger_script_path;
         uint64_t debugger_script_path_size;
     } debugger_support;
+
+    // The encoding of a PyValue word, the element of frames, tuples, lists,
+    // dicts and sets ("Encoding" in Include/internal/pycore_value.h). A word
+    // below ptr_limit is null_bits or a pointer with tag_bits as tags; one
+    // in [index_base, double_offset) is an index; one at or above int_base
+    // is an int, (int64)(word << int_shift) >> int_shift; any other is a
+    // float, whose IEEE bits are word - double_offset.
+    struct _pyvalue {
+        uint64_t size;
+        uint64_t null_bits;
+        uint64_t tag_bits;
+        uint64_t ptr_limit;
+        uint64_t index_base;
+        uint64_t double_offset;
+        uint64_t int_base;
+        uint64_t int_shift;
+    } pyvalue;
 } _Py_DebugOffsets;
 
 
@@ -423,6 +440,16 @@ typedef struct _Py_DebugOffsets {
         .debugger_pending_call = offsetof(_PyRemoteDebuggerSupport, debugger_pending_call),  \
         .debugger_script_path = offsetof(_PyRemoteDebuggerSupport, debugger_script_path),  \
         .debugger_script_path_size = _Py_MAX_SCRIPT_PATH_SIZE, \
+    }, \
+    .pyvalue = { \
+        .size = sizeof(PyValue), \
+        .null_bits = PyValue_NULL_BITS, \
+        .tag_bits = Py_TAG_BITS, \
+        .ptr_limit = Py_PTR_LIMIT, \
+        .index_base = Py_INDEX_BASE, \
+        .double_offset = Py_DOUBLE_OFFSET, \
+        .int_base = Py_INT_BASE, \
+        .int_shift = Py_INT_SHIFT, \
     }, \
 }
 

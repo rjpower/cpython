@@ -136,13 +136,13 @@
             // _POP_TOP_NUMBER
             {
                 value = r;
-                assert(PyValue_FloatCheckExact(value) || PyValue_IsCompactInt(value));
+                assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
                 if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
             }
             // _POP_TOP_NUMBER
             {
                 value = l;
-                assert(PyValue_FloatCheckExact(value) || PyValue_IsCompactInt(value));
+                assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
                 if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
@@ -178,7 +178,7 @@
             // _GUARD_TOS_INT
             {
                 value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                if (!PyValue_IsCompactInt(value)) {
+                if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -186,7 +186,7 @@
             // _GUARD_NOS_INT
             {
                 left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-                if (!PyValue_IsCompactInt(left)) {
+                if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -194,15 +194,15 @@
             // _BINARY_OP_ADD_INT
             {
                 right = value;
-                int32_t a = PyValue_CompactIntValue(left);
-                int32_t b = PyValue_CompactIntValue(right);
-                int32_t sum;
+                int64_t a = _PyValue_IntScaled(left);
+                int64_t b = _PyValue_IntScaled(right);
+                int64_t sum;
                 STAT_INC(BINARY_OP, hit);
                 if (__builtin_add_overflow(a, b, &sum)) {
-                    res = _PyValue_BoxInt64((int64_t)a + b);
+                    res = _PyValue_BoxInt64(PyValue_InlineInt64(left) + PyValue_InlineInt64(right));
                 }
                 else {
-                    res = PyValue_FromInt32(sum);
+                    res = _PyValue_FromIntScaled(sum);
                 }
                 if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
@@ -421,7 +421,7 @@
             // _GUARD_TOS_INT
             {
                 value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                if (!PyValue_IsCompactInt(value)) {
+                if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -429,7 +429,7 @@
             // _GUARD_NOS_INT
             {
                 left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-                if (!PyValue_IsCompactInt(left)) {
+                if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -438,7 +438,7 @@
             {
                 right = value;
                 STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromInt32(PyValue_CompactIntValue(left) & PyValue_CompactIntValue(right));
+                res = PyValue_FromInlineInt(PyValue_InlineInt64(left) & PyValue_InlineInt64(right));
                 if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
@@ -645,7 +645,7 @@
             // _GUARD_TOS_INT
             {
                 value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                if (!PyValue_IsCompactInt(value)) {
+                if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -653,7 +653,7 @@
             // _GUARD_NOS_INT
             {
                 left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-                if (!PyValue_IsCompactInt(left)) {
+                if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -661,23 +661,18 @@
             // _BINARY_OP_FLOOR_DIVIDE_INT
             {
                 right = value;
-                int32_t b = PyValue_CompactIntValue(right);
+                int64_t b = PyValue_InlineInt64(right);
                 if (b == 0) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                int32_t a = PyValue_CompactIntValue(left);
+                int64_t a = PyValue_InlineInt64(left);
                 STAT_INC(BINARY_OP, hit);
-                if (b == -1) {
-                    res = a == INT32_MIN ? _PyValue_BoxInt64(-(int64_t)a) : PyValue_FromInt32(-a);
+                int64_t quotient = a / b;
+                if (a % b != 0 && (a ^ b) < 0) {
+                    quotient--;
                 }
-                else {
-                    int32_t quotient = a / b;
-                    if (a % b != 0 && (a ^ b) < 0) {
-                        quotient--;
-                    }
-                    res = PyValue_FromInt32(quotient);
-                }
+                res = PyValue_FromInt64(quotient);
                 if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
@@ -1879,7 +1874,7 @@
             // _GUARD_TOS_INT
             {
                 value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                if (!PyValue_IsCompactInt(value)) {
+                if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -1887,7 +1882,7 @@
             // _GUARD_NOS_INT
             {
                 left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-                if (!PyValue_IsCompactInt(left)) {
+                if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -1895,24 +1890,22 @@
             // _BINARY_OP_LSHIFT_INT
             {
                 right = value;
-                int32_t b = PyValue_CompactIntValue(right);
+                int64_t b = PyValue_InlineInt64(right);
                 if (b < 0) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                int32_t a = PyValue_CompactIntValue(left);
+                int64_t a = PyValue_InlineInt64(left);
                 STAT_INC(BINARY_OP, hit);
-                if (b < 32) {
-                    int64_t shifted = (int64_t)((uint64_t)(int64_t)a << b);
-                    res = _PyValue_IntFitsInline(shifted)
-                    ? PyValue_FromInt32((int32_t)shifted)
-                : _PyValue_BoxInt64(shifted);
+                int64_t shifted = b < 63 ? (int64_t)((uint64_t)a << b) : 0;
+                if (a == 0) {
+                    res = PyValue_FromInlineInt(0);
                 }
-                else if (a == 0) {
-                    res = PyValue_FromInt32(0);
+                else if (b < 63 && Py_ARITHMETIC_RIGHT_SHIFT(int64_t, shifted, b) == a) {
+                    res = PyValue_FromInt64(shifted);
                 }
                 else {
-                    res = _PyValue_LshiftInt32(a, b);
+                    res = _PyValue_LshiftInt64(a, b);
                 }
                 if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
@@ -2138,13 +2131,13 @@
             // _POP_TOP_NUMBER
             {
                 value = r;
-                assert(PyValue_FloatCheckExact(value) || PyValue_IsCompactInt(value));
+                assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
                 if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
             }
             // _POP_TOP_NUMBER
             {
                 value = l;
-                assert(PyValue_FloatCheckExact(value) || PyValue_IsCompactInt(value));
+                assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
                 if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
@@ -2180,7 +2173,7 @@
             // _GUARD_TOS_INT
             {
                 value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                if (!PyValue_IsCompactInt(value)) {
+                if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -2188,7 +2181,7 @@
             // _GUARD_NOS_INT
             {
                 left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-                if (!PyValue_IsCompactInt(left)) {
+                if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -2196,15 +2189,15 @@
             // _BINARY_OP_MULTIPLY_INT
             {
                 right = value;
-                int32_t a = PyValue_CompactIntValue(left);
-                int32_t b = PyValue_CompactIntValue(right);
-                int32_t product;
+                int64_t a = _PyValue_IntScaled(left);
+                int64_t b = PyValue_InlineInt64(right);
+                int64_t product;
                 STAT_INC(BINARY_OP, hit);
                 if (__builtin_mul_overflow(a, b, &product)) {
-                    res = _PyValue_BoxInt64((int64_t)a * b);
+                    res = _PyValue_MultiplyInt64(PyValue_InlineInt64(left), b);
                 }
                 else {
-                    res = PyValue_FromInt32(product);
+                    res = _PyValue_FromIntScaled(product);
                 }
                 if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
@@ -2335,7 +2328,7 @@
             // _GUARD_TOS_INT
             {
                 value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                if (!PyValue_IsCompactInt(value)) {
+                if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -2343,7 +2336,7 @@
             // _GUARD_NOS_INT
             {
                 left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-                if (!PyValue_IsCompactInt(left)) {
+                if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -2352,7 +2345,7 @@
             {
                 right = value;
                 STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromInt32(PyValue_CompactIntValue(left) | PyValue_CompactIntValue(right));
+                res = PyValue_FromInlineInt(PyValue_InlineInt64(left) | PyValue_InlineInt64(right));
                 if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
@@ -2558,7 +2551,7 @@
             // _GUARD_TOS_INT
             {
                 value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                if (!PyValue_IsCompactInt(value)) {
+                if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -2566,7 +2559,7 @@
             // _GUARD_NOS_INT
             {
                 left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-                if (!PyValue_IsCompactInt(left)) {
+                if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -2574,21 +2567,18 @@
             // _BINARY_OP_REMAINDER_INT
             {
                 right = value;
-                int32_t b = PyValue_CompactIntValue(right);
+                int64_t b = PyValue_InlineInt64(right);
                 if (b == 0) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                int32_t a = PyValue_CompactIntValue(left);
+                int64_t a = PyValue_InlineInt64(left);
                 STAT_INC(BINARY_OP, hit);
-                int32_t remainder = 0;
-                if (b != -1) {
-                    remainder = a % b;
-                    if (remainder != 0 && (remainder ^ b) < 0) {
-                        remainder += b;
-                    }
+                int64_t remainder = a % b;
+                if (remainder != 0 && (remainder ^ b) < 0) {
+                    remainder += b;
                 }
-                res = PyValue_FromInt32(remainder);
+                res = PyValue_FromInlineInt(remainder);
                 if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
@@ -2718,7 +2708,7 @@
             // _GUARD_TOS_INT
             {
                 value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                if (!PyValue_IsCompactInt(value)) {
+                if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -2726,7 +2716,7 @@
             // _GUARD_NOS_INT
             {
                 left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-                if (!PyValue_IsCompactInt(left)) {
+                if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -2734,14 +2724,14 @@
             // _BINARY_OP_RSHIFT_INT
             {
                 right = value;
-                int32_t b = PyValue_CompactIntValue(right);
+                int64_t b = PyValue_InlineInt64(right);
                 if (b < 0) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
-                int32_t a = PyValue_CompactIntValue(left);
+                int64_t a = PyValue_InlineInt64(left);
                 STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromInt32(Py_ARITHMETIC_RIGHT_SHIFT(int32_t, a, b < 31 ? b : 31));
+                res = PyValue_FromInlineInt(Py_ARITHMETIC_RIGHT_SHIFT(int64_t, a, b < 63 ? b : 63));
                 if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
@@ -3041,7 +3031,7 @@
             // _GUARD_TOS_INT
             {
                 value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                if (!PyValue_IsCompactInt(value)) {
+                if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -3065,7 +3055,7 @@
                 list_st = nos;
                 PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
                 assert(PyList_CheckExact(list));
-                Py_ssize_t index = PyValue_CompactIntValue(sub_st);
+                Py_ssize_t index = PyValue_InlineInt64(sub_st);
                 if (index < 0) {
                     index += PyList_GET_SIZE(list);
                 }
@@ -3216,7 +3206,7 @@
             // _GUARD_TOS_INT
             {
                 value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                if (!PyValue_IsCompactInt(value)) {
+                if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -3244,7 +3234,7 @@
                 str_st = nos;
                 PyObject *str = PyValue_AsKnownObjectBorrow(str_st);
                 assert(PyUnicode_CheckExact(str));
-                Py_ssize_t index = PyValue_CompactIntValue(sub_st);
+                Py_ssize_t index = PyValue_InlineInt64(sub_st);
                 if (index < 0) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -3309,7 +3299,7 @@
             // _GUARD_TOS_INT
             {
                 value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                if (!PyValue_IsCompactInt(value)) {
+                if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -3333,7 +3323,7 @@
                 tuple_st = nos;
                 PyObject *tuple = PyValue_AsKnownObjectBorrow(tuple_st);
                 assert(PyTuple_CheckExact(tuple));
-                Py_ssize_t index = PyValue_CompactIntValue(sub_st);
+                Py_ssize_t index = PyValue_InlineInt64(sub_st);
                 if (index < 0) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -3348,7 +3338,7 @@
                 PyObject *tuple = PyValue_AsKnownObjectBorrow(tuple_st);
                 assert(PyTuple_CheckExact(tuple));
                 STAT_INC(BINARY_OP, hit);
-                Py_ssize_t index = PyValue_CompactIntValue(sub_st);
+                Py_ssize_t index = PyValue_InlineInt64(sub_st);
                 assert(0 <= index && index < PyTuple_GET_SIZE(tuple));
                 res = PyValue_NewRef(PyTuple_GET_VALUE(tuple, index));
                 assert(!PyValue_IsNull(res));
@@ -3403,7 +3393,7 @@
             // _GUARD_TOS_INT
             {
                 value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                if (!PyValue_IsCompactInt(value)) {
+                if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -3427,7 +3417,7 @@
                 str_st = nos;
                 PyObject *str = PyValue_AsKnownObjectBorrow(str_st);
                 assert(PyUnicode_CheckExact(str));
-                Py_ssize_t index = PyValue_CompactIntValue(sub_st);
+                Py_ssize_t index = PyValue_InlineInt64(sub_st);
                 if (index < 0) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -3589,13 +3579,13 @@
             // _POP_TOP_NUMBER
             {
                 value = r;
-                assert(PyValue_FloatCheckExact(value) || PyValue_IsCompactInt(value));
+                assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
                 if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
             }
             // _POP_TOP_NUMBER
             {
                 value = l;
-                assert(PyValue_FloatCheckExact(value) || PyValue_IsCompactInt(value));
+                assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
                 if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
@@ -3631,7 +3621,7 @@
             // _GUARD_TOS_INT
             {
                 value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                if (!PyValue_IsCompactInt(value)) {
+                if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -3639,7 +3629,7 @@
             // _GUARD_NOS_INT
             {
                 left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-                if (!PyValue_IsCompactInt(left)) {
+                if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -3647,15 +3637,15 @@
             // _BINARY_OP_SUBTRACT_INT
             {
                 right = value;
-                int32_t a = PyValue_CompactIntValue(left);
-                int32_t b = PyValue_CompactIntValue(right);
-                int32_t difference;
+                int64_t a = _PyValue_IntScaled(left);
+                int64_t b = _PyValue_IntScaled(right);
+                int64_t difference;
                 STAT_INC(BINARY_OP, hit);
                 if (__builtin_sub_overflow(a, b, &difference)) {
-                    res = _PyValue_BoxInt64((int64_t)a - b);
+                    res = _PyValue_BoxInt64(PyValue_InlineInt64(left) - PyValue_InlineInt64(right));
                 }
                 else {
-                    res = PyValue_FromInt32(difference);
+                    res = _PyValue_FromIntScaled(difference);
                 }
                 if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
@@ -3733,13 +3723,13 @@
             // _POP_TOP_NUMBER
             {
                 value = r;
-                assert(PyValue_FloatCheckExact(value) || PyValue_IsCompactInt(value));
+                assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
                 if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
             }
             // _POP_TOP_NUMBER
             {
                 value = l;
-                assert(PyValue_FloatCheckExact(value) || PyValue_IsCompactInt(value));
+                assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
                 if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
@@ -3927,7 +3917,7 @@
             // _GUARD_TOS_INT
             {
                 value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                if (!PyValue_IsCompactInt(value)) {
+                if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -3935,7 +3925,7 @@
             // _GUARD_NOS_INT
             {
                 left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-                if (!PyValue_IsCompactInt(left)) {
+                if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -3944,7 +3934,7 @@
             {
                 right = value;
                 STAT_INC(BINARY_OP, hit);
-                res = PyValue_FromInt32(PyValue_CompactIntValue(left) ^ PyValue_CompactIntValue(right));
+                res = PyValue_FromInlineInt(PyValue_InlineInt64(left) ^ PyValue_InlineInt64(right));
                 if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
@@ -6431,9 +6421,7 @@
                 if (len_i < 0) {
                     JUMP_TO_LABEL(error);
                 }
-                res = _PyValue_IntFitsInline(len_i)
-                ? PyValue_FromInt32((int32_t)len_i)
-            : _PyValue_BoxInt64(len_i);
+                res = PyValue_FromInt64(len_i);
                 if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
@@ -8030,7 +8018,7 @@
             // _GUARD_TOS_FLOAT
             {
                 value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                if (!PyValue_FloatCheckExact(value)) {
+                if (!PyValue_IsInlineFloat(value)) {
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
                     JUMP_TO_PREDICTED(COMPARE_OP);
@@ -8039,7 +8027,7 @@
             // _GUARD_NOS_FLOAT
             {
                 left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-                if (!PyValue_FloatCheckExact(left)) {
+                if (!PyValue_IsInlineFloat(left)) {
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
                     JUMP_TO_PREDICTED(COMPARE_OP);
@@ -8049,8 +8037,8 @@
             {
                 right = value;
                 STAT_INC(COMPARE_OP, hit);
-                double dleft = PyValue_FloatValue(left);
-                double dright = PyValue_FloatValue(right);
+                double dleft = PyValue_InlineFloat(left);
+                double dright = PyValue_InlineFloat(right);
                 int sign_ish = COMPARISON_BIT(dleft, dright);
                 l = left;
                 r = right;
@@ -8061,13 +8049,13 @@
             // _POP_TOP_FLOAT
             {
                 value = r;
-                assert(PyValue_FloatCheckExact(value));
+                assert(PyValue_IsInlineFloat(value));
                 if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyFloat_ExactDealloc);
             }
             // _POP_TOP_FLOAT
             {
                 value = l;
-                assert(PyValue_FloatCheckExact(value));
+                assert(PyValue_IsInlineFloat(value));
                 if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyFloat_ExactDealloc);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
@@ -8106,7 +8094,7 @@
             // _GUARD_TOS_INT
             {
                 value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                if (!PyValue_IsCompactInt(value)) {
+                if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
                     JUMP_TO_PREDICTED(COMPARE_OP);
@@ -8115,7 +8103,7 @@
             // _GUARD_NOS_INT
             {
                 left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-                if (!PyValue_IsCompactInt(left)) {
+                if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
                     JUMP_TO_PREDICTED(COMPARE_OP);
@@ -8125,8 +8113,8 @@
             {
                 right = value;
                 STAT_INC(COMPARE_OP, hit);
-                int32_t ileft = PyValue_CompactIntValue(left);
-                int32_t iright = PyValue_CompactIntValue(right);
+                int64_t ileft = _PyValue_IntScaled(left);
+                int64_t iright = _PyValue_IntScaled(right);
                 int sign_ish = COMPARISON_BIT(ileft, iright);
                 l = left;
                 r = right;
@@ -9641,12 +9629,7 @@
                 long value = r->start;
                 r->start = value + r->step;
                 r->len--;
-                if (_PyValue_IntFitsInline(value)) {
-                    next = PyValue_FromInt32((int32_t)value);
-                }
-                else {
-                    next = _PyValue_BoxInt64(value);
-                }
+                next = PyValue_FromInt64(value);
                 if (PyValue_IsNull(next)) {
                     JUMP_TO_LABEL(error);
                 }
@@ -11243,7 +11226,7 @@
                 value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
                 int err;
                 if (PyValue_IsInlineInt(value)) {
-                    err = PyValue_InlineInt(value) != 0;
+                    err = PyValue_InlineInt64(value) != 0;
                 }
                 else if (PyValue_IsInlineFloat(value)) {
                     err = PyValue_InlineFloat(value) != 0.0;
@@ -11357,7 +11340,7 @@
                 value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
                 int err;
                 if (PyValue_IsInlineInt(value)) {
-                    err = PyValue_InlineInt(value) != 0;
+                    err = PyValue_InlineInt64(value) != 0;
                 }
                 else if (PyValue_IsInlineFloat(value)) {
                     err = PyValue_InlineFloat(value) != 0.0;
@@ -14186,7 +14169,7 @@
             (void)oparg;
             PyValue value;
             assert(oparg < _PY_NSMALLPOSINTS);
-            value = PyValue_FromInt32((int32_t)oparg);
+            value = PyValue_FromInlineInt(oparg);
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
@@ -14215,7 +14198,7 @@
             (void)oparg;
             PyValue value;
             assert(oparg < _PY_NSMALLPOSINTS);
-            value = PyValue_FromInt32((int32_t)oparg);
+            value = PyValue_FromInlineInt(oparg);
             if (PyValue_IsNull(value)) {
                 JUMP_TO_LABEL(error);
             }
@@ -15317,7 +15300,7 @@
             {
                 int err;
                 if (PyValue_IsInlineInt(value)) {
-                    err = PyValue_InlineInt(value) != 0;
+                    err = PyValue_InlineInt64(value) != 0;
                 }
                 else if (PyValue_IsInlineFloat(value)) {
                     err = PyValue_InlineFloat(value) != 0.0;
@@ -15493,7 +15476,7 @@
                 STAT_INC(TO_BOOL, hit);
                 bool zero;
                 if (PyValue_IsInlineInt(value)) {
-                    zero = PyValue_InlineInt(value) == 0;
+                    zero = PyValue_InlineInt64(value) == 0;
                 }
                 else {
                     zero = _PyLong_IsZero((PyLongObject *)PyValue_AsKnownObjectBorrow(value));
@@ -15837,7 +15820,7 @@
             {
                 int err;
                 if (PyValue_IsInlineInt(value)) {
-                    err = PyValue_InlineInt(value) != 0;
+                    err = PyValue_InlineInt64(value) != 0;
                 }
                 else if (PyValue_IsInlineFloat(value)) {
                     err = PyValue_InlineFloat(value) != 0.0;
@@ -16013,7 +15996,7 @@
                 STAT_INC(TO_BOOL, hit);
                 bool zero;
                 if (PyValue_IsInlineInt(value)) {
-                    zero = PyValue_InlineInt(value) == 0;
+                    zero = PyValue_InlineInt64(value) == 0;
                 }
                 else {
                     zero = _PyLong_IsZero((PyLongObject *)PyValue_AsKnownObjectBorrow(value));
@@ -18218,7 +18201,7 @@
             // _GUARD_TOS_INT
             {
                 value = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-                if (!PyValue_IsCompactInt(value)) {
+                if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(STORE_SUBSCR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_SUBSCR));
                     JUMP_TO_PREDICTED(STORE_SUBSCR);
@@ -18246,7 +18229,7 @@
                 value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
                 PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
                 assert(PyList_CheckExact(list));
-                Py_ssize_t index = PyValue_CompactIntValue(sub_st);
+                Py_ssize_t index = PyValue_InlineInt64(sub_st);
                 if (!LOCK_OBJECT(list)) {
                     UPDATE_MISS_STATS(STORE_SUBSCR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_SUBSCR));
@@ -18354,7 +18337,7 @@
             {
                 int err;
                 if (PyValue_IsInlineInt(value)) {
-                    err = PyValue_InlineInt(value) != 0;
+                    err = PyValue_InlineInt64(value) != 0;
                 }
                 else if (PyValue_IsInlineFloat(value)) {
                     err = PyValue_InlineFloat(value) != 0.0;
@@ -18478,7 +18461,7 @@
                 STAT_INC(TO_BOOL, hit);
                 bool zero;
                 if (PyValue_IsInlineInt(value)) {
-                    zero = PyValue_InlineInt(value) == 0;
+                    zero = PyValue_InlineInt64(value) == 0;
                 }
                 else {
                     zero = _PyLong_IsZero((PyLongObject *)PyValue_AsKnownObjectBorrow(value));
@@ -18703,20 +18686,10 @@
             {
                 value = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
                 if (PyValue_IsInlineInt(value)) {
-                    int32_t i = PyValue_InlineInt(value);
-                    if (i == INT32_MIN) {
-                        res = _PyValue_BoxInt64(-(int64_t)i);
-                    }
-                    else {
-                        res = PyValue_FromInt32(-i);
-                    }
+                    res = PyValue_FromInt64(-PyValue_InlineInt64(value));
                 }
                 else if (PyValue_IsInlineFloat(value)) {
                     res = PyValue_FromDoubleNotNaN(-PyValue_InlineFloat(value));
-                }
-                else if (PyValue_FloatCheckExact(value))
-                {
-                    res = PyValue_FromDouble(-PyValue_FloatValue(value));
                 }
                 else {
                     PyObject *res_o = PyNumber_Negative(PyValue_AsKnownObjectBorrow(value));

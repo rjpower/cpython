@@ -2534,12 +2534,12 @@ unsafe_latin_compare(PyValue left, PyValue right, MergeState *ms)
     return res;
 }
 
-/* Bounded int compare: compare any two longs that fit in a single machine word. */
+/* Bounded int compare: compare any two inline ints. */
 static int
 unsafe_long_compare(PyValue v, PyValue w, MergeState *ms)
 {
-    assert(PyValue_IsCompactInt(v) && PyValue_IsCompactInt(w));
-    int result = PyValue_CompactIntValue(v) < PyValue_CompactIntValue(w);
+    assert(PyValue_IsInlineInt(v) && PyValue_IsInlineInt(w));
+    int result = PyValue_InlineInt64(v) < PyValue_InlineInt64(w);
     assert_compare_consistent(v, w, result);
     return result;
 }
@@ -2736,7 +2736,7 @@ list_sort_impl(PyListObject *self, PyObject *keyfunc, int reverse)
             if (keys_are_all_same_type) {
                 if (key_type == &PyLong_Type &&
                     ints_are_bounded &&
-                    !PyValue_IsCompactInt(key)) {
+                    !PyValue_IsInlineInt(key)) {
 
                     ints_are_bounded = 0;
                 }

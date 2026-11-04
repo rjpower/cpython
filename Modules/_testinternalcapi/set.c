@@ -115,7 +115,7 @@ set_value_boxing_errors(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(args))
     if (set == NULL) {
         return NULL;
     }
-    if (PySet_AddValue(set, PyValue_FromInt32(INT32_MAX)) < 0) {
+    if (PySet_AddValue(set, PyValue_FromInlineInt(INT32_MAX)) < 0) {
         Py_DECREF(set);
         return NULL;
     }
@@ -150,7 +150,7 @@ set_value_boxing_errors(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(args))
     PyValue value = PySet_PopValue(set);
     PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &failure.saved);
     valid = valid && !PyErr_Occurred() && PyValue_IsInlineInt(value) &&
-            PyValue_InlineInt(value) == INT32_MAX && PySet_GET_SIZE(set) == 0;
+            PyValue_InlineInt64(value) == INT32_MAX && PySet_GET_SIZE(set) == 0;
     PyValue_XCLOSE(value);
     Py_DECREF(set);
     if (!valid) {

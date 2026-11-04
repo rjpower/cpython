@@ -114,7 +114,7 @@ class PyValueCodeObjectTests(unittest.TestCase):
             self.assertEqual(original(), 1073741824)
         index = next(i for i, value in enumerate(original.__code__.co_consts)
                      if type(value) is int and value == 1073741824)
-        for replacement in (1 << 40, True, 'different type', object()):
+        for replacement in (1 << 50, True, 'different type', object()):
             with self.subTest(kind=type(replacement)):
                 consts = list(original.__code__.co_consts)
                 consts[index] = replacement

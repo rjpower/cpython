@@ -103,7 +103,7 @@ class PyValueCompilerConstantTests(CfgOptimizationTestCase):
         keys = []
         for value, inline in ((True, 0), (1, 1), (1.0, 0),
                               (False, 0), (0, 1), (0.0, 0),
-                              (-1, 1), (1 << 40, 0)):
+                              (-1, 1), (1 << 40, 1), (1 << 50, 0)):
             actual_inline, key = self.constant_key(value)
             self.assertEqual(actual_inline, inline)
             keys.append(key)

@@ -274,7 +274,7 @@ dummy_func(
             value = PyValue_NewRef(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
         }
 
-        // The constant is an exact int with at most one digit.
+        // The constant is an inline int.
         inst(LOAD_CONST_INLINE_INT, (-- value)) {
             value = PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg);
             assert(PyValue_IsInlineInt(value));
@@ -293,12 +293,12 @@ dummy_func(
 
         pure inst(LOAD_SMALL_INT, (-- value)) {
             assert(oparg < _PY_NSMALLPOSINTS);
-            value = PyValue_FromInt32((int32_t)oparg);
+            value = PyValue_FromInlineInt(oparg);
         }
 
         inst(LOAD_SMALL_INT_INLINE, (-- value)) {
             assert(oparg < _PY_NSMALLPOSINTS);
-            value = PyValue_FromInt32((int32_t)oparg);
+            value = PyValue_FromInlineInt(oparg);
             ERROR_IF(PyValue_IsNull(value));
         }
 
@@ -352,13 +352,13 @@ dummy_func(
         }
 
         inline_ok op(_POP_TOP_FLOAT, (value --)) {
-            assert(PyValue_FloatCheckExact(value));
+            assert(PyValue_IsInlineFloat(value));
             PyValue_CLOSE_SPECIALIZED(value, _PyFloat_ExactDealloc);
         }
 
-        // An operand of float arithmetic, a float or an int.
+        // An operand of float arithmetic, an inline float or int.
         inline_ok op(_POP_TOP_NUMBER, (value --)) {
-            assert(PyValue_FloatCheckExact(value) || PyValue_IsCompactInt(value));
+            assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
             PyValue_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
         }
 
@@ -436,25 +436,15 @@ dummy_func(
 
         macro(UNARY_NEGATIVE) = _UNARY_NEGATIVE + POP_TOP;
 
-        // Inline values are negated without a box. Only -INT32_MIN
-        // overflows; negating a float that is not NaN gives one that is not.
-        // The negation of a float object is inline too, unless it is NaN.
+        // Inline values are negated without a box. Only -Py_INT_MIN leaves
+        // the inline range; negating a float that is not NaN gives one that
+        // is not.
         inline_ok op(_UNARY_NEGATIVE, (value -- res, v)) {
             if (PyValue_IsInlineInt(value)) {
-                int32_t i = PyValue_InlineInt(value);
-                if (i == INT32_MIN) {
-                    res = _PyValue_BoxInt64(-(int64_t)i);
-                }
-                else {
-                    res = PyValue_FromInt32(-i);
-                }
+                res = PyValue_FromInt64(-PyValue_InlineInt64(value));
             }
             else if (PyValue_IsInlineFloat(value)) {
                 res = PyValue_FromDoubleNotNaN(-PyValue_InlineFloat(value));
-            }
-            else if (PyValue_FloatCheckExact(value))
-            {
-                res = PyValue_FromDouble(-PyValue_FloatValue(value));
             }
             else {
                 PyObject *res_o = PyNumber_Negative(PyValue_AsKnownObjectBorrow(value));
@@ -503,7 +493,7 @@ dummy_func(
         inline_ok op(_TO_BOOL, (value -- res)) {
             int err;
             if (PyValue_IsInlineInt(value)) {
-                err = PyValue_InlineInt(value) != 0;
+                err = PyValue_InlineInt64(value) != 0;
             }
             else if (PyValue_IsInlineFloat(value)) {
                 err = PyValue_InlineFloat(value) != 0.0;
@@ -529,7 +519,7 @@ dummy_func(
             STAT_INC(TO_BOOL, hit);
             bool zero;
             if (PyValue_IsInlineInt(value)) {
-                zero = PyValue_InlineInt(value) == 0;
+                zero = PyValue_InlineInt64(value) == 0;
             }
             else {
                 zero = _PyLong_IsZero((PyLongObject *)PyValue_AsKnownObjectBorrow(value));
@@ -656,32 +646,34 @@ dummy_func(
             BINARY_OP_EXTEND,
         };
 
-        // The int guards accept an inline int or a compact exact int, and
-        // the uops after them read either with PyValue_CompactIntValue().
+        // The int guards accept an inline int only: a boxed exact int is
+        // outside the inline range (canonical construction). The uops after
+        // them read the value with PyValue_InlineInt64() or scaled.
         inline_ok op(_GUARD_NOS_INT, (left, unused -- left, unused)) {
-            EXIT_IF(!PyValue_IsCompactInt(left));
+            EXIT_IF(!PyValue_IsInlineInt(left));
         }
 
         inline_ok op(_GUARD_TOS_INT, (value -- value)) {
-            EXIT_IF(!PyValue_IsCompactInt(value));
+            EXIT_IF(!PyValue_IsInlineInt(value));
         }
 
         inline_ok op(_GUARD_TOS_EXACT_INT, (value -- value)) {
             EXIT_IF(!PyValue_LongCheckExact(value));
         }
 
-        // Int arithmetic on int32 operands. A result that overflows int32
-        // is exact in int64 and is boxed.
+        // Int arithmetic on inline operands, on scaled values (see
+        // _PyValue_IntScaled()): int64 overflow is exactly a result outside
+        // the inline range, which is boxed.
         inline_ok pure op(_BINARY_OP_MULTIPLY_INT, (left, right -- res, l, r)) {
-            int32_t a = PyValue_CompactIntValue(left);
-            int32_t b = PyValue_CompactIntValue(right);
-            int32_t product;
+            int64_t a = _PyValue_IntScaled(left);
+            int64_t b = PyValue_InlineInt64(right);
+            int64_t product;
             STAT_INC(BINARY_OP, hit);
             if (__builtin_mul_overflow(a, b, &product)) {
-                res = _PyValue_BoxInt64((int64_t)a * b);
+                res = _PyValue_MultiplyInt64(PyValue_InlineInt64(left), b);
             }
             else {
-                res = PyValue_FromInt32(product);
+                res = _PyValue_FromIntScaled(product);
             }
             if (PyValue_IsNull(res)) {
                 ERROR_NO_POP();
@@ -692,15 +684,15 @@ dummy_func(
         }
 
         inline_ok pure op(_BINARY_OP_ADD_INT, (left, right -- res, l, r)) {
-            int32_t a = PyValue_CompactIntValue(left);
-            int32_t b = PyValue_CompactIntValue(right);
-            int32_t sum;
+            int64_t a = _PyValue_IntScaled(left);
+            int64_t b = _PyValue_IntScaled(right);
+            int64_t sum;
             STAT_INC(BINARY_OP, hit);
             if (__builtin_add_overflow(a, b, &sum)) {
-                res = _PyValue_BoxInt64((int64_t)a + b);
+                res = _PyValue_BoxInt64(PyValue_InlineInt64(left) + PyValue_InlineInt64(right));
             }
             else {
-                res = PyValue_FromInt32(sum);
+                res = _PyValue_FromIntScaled(sum);
             }
             if (PyValue_IsNull(res)) {
                 ERROR_NO_POP();
@@ -711,15 +703,15 @@ dummy_func(
         }
 
         inline_ok pure op(_BINARY_OP_SUBTRACT_INT, (left, right -- res, l, r)) {
-            int32_t a = PyValue_CompactIntValue(left);
-            int32_t b = PyValue_CompactIntValue(right);
-            int32_t difference;
+            int64_t a = _PyValue_IntScaled(left);
+            int64_t b = _PyValue_IntScaled(right);
+            int64_t difference;
             STAT_INC(BINARY_OP, hit);
             if (__builtin_sub_overflow(a, b, &difference)) {
-                res = _PyValue_BoxInt64((int64_t)a - b);
+                res = _PyValue_BoxInt64(PyValue_InlineInt64(left) - PyValue_InlineInt64(right));
             }
             else {
-                res = PyValue_FromInt32(difference);
+                res = _PyValue_FromIntScaled(difference);
             }
             if (PyValue_IsNull(res)) {
                 ERROR_NO_POP();
@@ -740,23 +732,19 @@ dummy_func(
 
         // Python's // rounds the quotient towards minus infinity and % takes
         // the sign of the divisor, where C truncates. Division by zero
-        // exits, and BINARY_OP raises. Only INT32_MIN // -1 overflows int32,
-        // and dividing by -1 is done apart because it traps in C.
+        // exits, and BINARY_OP raises. The operands are int51, so int64
+        // division does not trap; only Py_INT_MIN // -1 leaves the inline
+        // range, and PyValue_FromInt64() boxes it.
         inline_ok pure op(_BINARY_OP_FLOOR_DIVIDE_INT, (left, right -- res, l, r)) {
-            int32_t b = PyValue_CompactIntValue(right);
+            int64_t b = PyValue_InlineInt64(right);
             EXIT_IF(b == 0);
-            int32_t a = PyValue_CompactIntValue(left);
+            int64_t a = PyValue_InlineInt64(left);
             STAT_INC(BINARY_OP, hit);
-            if (b == -1) {
-                res = a == INT32_MIN ? _PyValue_BoxInt64(-(int64_t)a) : PyValue_FromInt32(-a);
+            int64_t quotient = a / b;
+            if (a % b != 0 && (a ^ b) < 0) {
+                quotient--;
             }
-            else {
-                int32_t quotient = a / b;
-                if (a % b != 0 && (a ^ b) < 0) {
-                    quotient--;
-                }
-                res = PyValue_FromInt32(quotient);
-            }
+            res = PyValue_FromInt64(quotient);
             if (PyValue_IsNull(res)) {
                 ERROR_NO_POP();
             }
@@ -765,19 +753,18 @@ dummy_func(
             INPUTS_DEAD();
         }
 
+        // The remainder is smaller than the divisor in magnitude, so it is
+        // inline.
         inline_ok pure op(_BINARY_OP_REMAINDER_INT, (left, right -- res, l, r)) {
-            int32_t b = PyValue_CompactIntValue(right);
+            int64_t b = PyValue_InlineInt64(right);
             EXIT_IF(b == 0);
-            int32_t a = PyValue_CompactIntValue(left);
+            int64_t a = PyValue_InlineInt64(left);
             STAT_INC(BINARY_OP, hit);
-            int32_t remainder = 0;
-            if (b != -1) {
-                remainder = a % b;
-                if (remainder != 0 && (remainder ^ b) < 0) {
-                    remainder += b;
-                }
+            int64_t remainder = a % b;
+            if (remainder != 0 && (remainder ^ b) < 0) {
+                remainder += b;
             }
-            res = PyValue_FromInt32(remainder);
+            res = PyValue_FromInlineInt(remainder);
             if (PyValue_IsNull(res)) {
                 ERROR_NO_POP();
             }
@@ -787,10 +774,10 @@ dummy_func(
         }
 
         // Ints behave as infinite two's complement under &, | and ^, so the
-        // result for int32 operands is the int32 result.
+        // result for int51 operands is the int51 result.
         inline_ok pure op(_BINARY_OP_AND_INT, (left, right -- res, l, r)) {
             STAT_INC(BINARY_OP, hit);
-            res = PyValue_FromInt32(PyValue_CompactIntValue(left) & PyValue_CompactIntValue(right));
+            res = PyValue_FromInlineInt(PyValue_InlineInt64(left) & PyValue_InlineInt64(right));
             if (PyValue_IsNull(res)) {
                 ERROR_NO_POP();
             }
@@ -801,7 +788,7 @@ dummy_func(
 
         inline_ok pure op(_BINARY_OP_OR_INT, (left, right -- res, l, r)) {
             STAT_INC(BINARY_OP, hit);
-            res = PyValue_FromInt32(PyValue_CompactIntValue(left) | PyValue_CompactIntValue(right));
+            res = PyValue_FromInlineInt(PyValue_InlineInt64(left) | PyValue_InlineInt64(right));
             if (PyValue_IsNull(res)) {
                 ERROR_NO_POP();
             }
@@ -812,7 +799,7 @@ dummy_func(
 
         inline_ok pure op(_BINARY_OP_XOR_INT, (left, right -- res, l, r)) {
             STAT_INC(BINARY_OP, hit);
-            res = PyValue_FromInt32(PyValue_CompactIntValue(left) ^ PyValue_CompactIntValue(right));
+            res = PyValue_FromInlineInt(PyValue_InlineInt64(left) ^ PyValue_InlineInt64(right));
             if (PyValue_IsNull(res)) {
                 ERROR_NO_POP();
             }
@@ -821,25 +808,24 @@ dummy_func(
             INPUTS_DEAD();
         }
 
-        // A negative shift count exits, and BINARY_OP raises. A shift of
-        // fewer than 32 places fits in int64; a longer one of anything but 0
+        // A negative shift count exits, and BINARY_OP raises. A shift whose
+        // result fits in int64 is made there, and PyValue_FromInt64() boxes
+        // it if it leaves the inline range; a longer shift of anything but 0
         // makes a long int.
         inline_ok pure op(_BINARY_OP_LSHIFT_INT, (left, right -- res, l, r)) {
-            int32_t b = PyValue_CompactIntValue(right);
+            int64_t b = PyValue_InlineInt64(right);
             EXIT_IF(b < 0);
-            int32_t a = PyValue_CompactIntValue(left);
+            int64_t a = PyValue_InlineInt64(left);
             STAT_INC(BINARY_OP, hit);
-            if (b < 32) {
-                int64_t shifted = (int64_t)((uint64_t)(int64_t)a << b);
-                res = _PyValue_IntFitsInline(shifted)
-                    ? PyValue_FromInt32((int32_t)shifted)
-                    : _PyValue_BoxInt64(shifted);
+            int64_t shifted = b < 63 ? (int64_t)((uint64_t)a << b) : 0;
+            if (a == 0) {
+                res = PyValue_FromInlineInt(0);
             }
-            else if (a == 0) {
-                res = PyValue_FromInt32(0);
+            else if (b < 63 && Py_ARITHMETIC_RIGHT_SHIFT(int64_t, shifted, b) == a) {
+                res = PyValue_FromInt64(shifted);
             }
             else {
-                res = _PyValue_LshiftInt32(a, b);
+                res = _PyValue_LshiftInt64(a, b);
             }
             if (PyValue_IsNull(res)) {
                 ERROR_NO_POP();
@@ -850,13 +836,13 @@ dummy_func(
         }
 
         // Python's >> rounds towards minus infinity, as an arithmetic shift
-        // does; shifting an int32 by 31 places or more leaves its sign.
+        // does; shifting an int51 by 63 places or more leaves its sign.
         inline_ok pure op(_BINARY_OP_RSHIFT_INT, (left, right -- res, l, r)) {
-            int32_t b = PyValue_CompactIntValue(right);
+            int64_t b = PyValue_InlineInt64(right);
             EXIT_IF(b < 0);
-            int32_t a = PyValue_CompactIntValue(left);
+            int64_t a = PyValue_InlineInt64(left);
             STAT_INC(BINARY_OP, hit);
-            res = PyValue_FromInt32(Py_ARITHMETIC_RIGHT_SHIFT(int32_t, a, b < 31 ? b : 31));
+            res = PyValue_FromInlineInt(Py_ARITHMETIC_RIGHT_SHIFT(int64_t, a, b < 63 ? b : 63));
             if (PyValue_IsNull(res)) {
                 ERROR_NO_POP();
             }
@@ -886,20 +872,21 @@ dummy_func(
         macro(BINARY_OP_RSHIFT_INT) =
             _GUARD_TOS_INT + _GUARD_NOS_INT + unused/5 + _BINARY_OP_RSHIFT_INT + _POP_TOP_INT + _POP_TOP_INT;
 
-        // The float guards accept an inline float or an exact float object,
-        // and the uops after them read either with PyValue_FloatValue().
+        // The float guards accept an inline float only: a boxed exact float
+        // is a NaN (canonical construction). The uops after them read the
+        // value with PyValue_InlineFloat().
         inline_ok op(_GUARD_NOS_FLOAT, (left, unused -- left, unused)) {
-            EXIT_IF(!PyValue_FloatCheckExact(left));
+            EXIT_IF(!PyValue_IsInlineFloat(left));
         }
 
         inline_ok op(_GUARD_TOS_FLOAT, (value -- value)) {
-            EXIT_IF(!PyValue_FloatCheckExact(value));
+            EXIT_IF(!PyValue_IsInlineFloat(value));
         }
 
-        // Float arithmetic takes two floats, or a float and a compact int,
-        // each inline or boxed (see PyValue_FloatOperandsCheck()). The
-        // test and the reads are one step, so that two inline floats get a
-        // path of their own. The result is inline unless it is NaN.
+        // Float arithmetic takes two inline floats, or an inline float and
+        // an inline int (see PyValue_FloatOperandsCheck()). The test and the
+        // reads are one step, so that two floats get a path of their own.
+        // The result is inline unless it is NaN.
         inline_ok pure op(_BINARY_OP_MULTIPLY_FLOAT, (left, right -- res, l, r)) {
             double a, b;
             EXIT_IF(!PyValue_FloatOperandValues(left, right, &a, &b));
@@ -1107,7 +1094,7 @@ dummy_func(
             PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
             assert(PyList_CheckExact(list));
 
-            Py_ssize_t index = PyValue_CompactIntValue(sub_st);
+            Py_ssize_t index = PyValue_InlineInt64(sub_st);
             if (index < 0) {
                 index += PyList_GET_SIZE(list);
             }
@@ -1148,7 +1135,7 @@ dummy_func(
             PyObject *str = PyValue_AsKnownObjectBorrow(str_st);
             assert(PyUnicode_CheckExact(str));
 
-            Py_ssize_t index = PyValue_CompactIntValue(sub_st);
+            Py_ssize_t index = PyValue_InlineInt64(sub_st);
             EXIT_IF(index < 0);
             EXIT_IF(PyUnicode_GET_LENGTH(str) <= index);
             uint8_t c = PyUnicode_1BYTE_DATA(str)[index];
@@ -1168,7 +1155,7 @@ dummy_func(
             PyObject *str = PyValue_AsKnownObjectBorrow(str_st);
             assert(PyUnicode_CheckExact(str));
 
-            Py_ssize_t index = PyValue_CompactIntValue(sub_st);
+            Py_ssize_t index = PyValue_InlineInt64(sub_st);
             EXIT_IF(index < 0);
             EXIT_IF(PyUnicode_GET_LENGTH(str) <= index);
             // Specialize for reading an ASCII character from any string:
@@ -1207,7 +1194,7 @@ dummy_func(
             assert(PyTuple_CheckExact(tuple));
 
             // Deopt unless 0 <= sub < PyTuple_Size(list)
-            Py_ssize_t index = PyValue_CompactIntValue(sub_st);
+            Py_ssize_t index = PyValue_InlineInt64(sub_st);
             EXIT_IF(index < 0);
             EXIT_IF(index >= PyTuple_GET_SIZE(tuple));
         }
@@ -1217,7 +1204,7 @@ dummy_func(
             assert(PyTuple_CheckExact(tuple));
 
             STAT_INC(BINARY_OP, hit);
-            Py_ssize_t index = PyValue_CompactIntValue(sub_st);
+            Py_ssize_t index = PyValue_InlineInt64(sub_st);
             assert(0 <= index && index < PyTuple_GET_SIZE(tuple));
             res = PyValue_NewRef(PyTuple_GET_VALUE(tuple, index));
             assert(!PyValue_IsNull(res));
@@ -1354,7 +1341,7 @@ dummy_func(
             PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
             assert(PyList_CheckExact(list));
 
-            Py_ssize_t index = PyValue_CompactIntValue(sub_st);
+            Py_ssize_t index = PyValue_InlineInt64(sub_st);
             DEOPT_IF(!LOCK_OBJECT(list));
             Py_ssize_t len = PyList_GET_SIZE(list);
             // Ensure index < len(list)
@@ -3200,8 +3187,8 @@ dummy_func(
 
         inline_ok op(_COMPARE_OP_FLOAT, (left, right -- res, l, r)) {
             STAT_INC(COMPARE_OP, hit);
-            double dleft = PyValue_FloatValue(left);
-            double dright = PyValue_FloatValue(right);
+            double dleft = PyValue_InlineFloat(left);
+            double dright = PyValue_InlineFloat(right);
             // 1 if NaN, 2 if <, 4 if >, 8 if ==; this matches low four bits of the oparg
             int sign_ish = COMPARISON_BIT(dleft, dright);
             l = left;
@@ -3215,8 +3202,9 @@ dummy_func(
         // Similar to COMPARE_OP_FLOAT
         inline_ok op(_COMPARE_OP_INT, (left, right -- res, l, r)) {
             STAT_INC(COMPARE_OP, hit);
-            int32_t ileft = PyValue_CompactIntValue(left);
-            int32_t iright = PyValue_CompactIntValue(right);
+            // Scaled values compare as the values do.
+            int64_t ileft = _PyValue_IntScaled(left);
+            int64_t iright = _PyValue_IntScaled(right);
             // 2 if <, 4 if >, 8 if ==; this matches the low 4 bits of the oparg
             int sign_ish = COMPARISON_BIT(ileft, iright);
             l = left;
@@ -3901,12 +3889,8 @@ dummy_func(
             long value = r->start;
             r->start = value + r->step;
             r->len--;
-            if (_PyValue_IntFitsInline(value)) {
-                next = PyValue_FromInt32((int32_t)value);
-            }
-            else {
-                next = _PyValue_BoxInt64(value);
-            }
+            // A range may cross the inline range.
+            next = PyValue_FromInt64(value);
             ERROR_IF(PyValue_IsNull(next));
         }
 
@@ -4731,10 +4715,8 @@ dummy_func(
             if (len_i < 0) {
                 ERROR_NO_POP();
             }
-            // The length is inline when it fits in int32.
-            res = _PyValue_IntFitsInline(len_i)
-                ? PyValue_FromInt32((int32_t)len_i)
-                : _PyValue_BoxInt64(len_i);
+            // The length is inline when it fits in int51.
+            res = PyValue_FromInt64(len_i);
             if (PyValue_IsNull(res)) {
                 ERROR_NO_POP();
             }

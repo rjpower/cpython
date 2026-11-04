@@ -3119,8 +3119,9 @@ _PyCode_ConstantValueKey(PyValue constant)
         key = constant_key_tuple(PyValue_FromObjectBorrow((PyObject *)Py_TYPE(op)),
                                  value, PyValue_NULL);
     }
-    else if (PyValue_FloatCheckExact(value)) {
-        double d = PyValue_FloatValue(value);
+    // An inline float, or a NaN, which is boxed.
+    else if (PyValue_IsInlineFloat(value) || (op != NULL && PyFloat_CheckExact(op))) {
+        double d = op != NULL ? PyFloat_AS_DOUBLE(op) : PyValue_InlineFloat(value);
         PyValue tag = d == 0.0 && copysign(1.0, d) < 0.0
                       ? PyValue_FromObjectBorrow(Py_None) : PyValue_NULL;
         key = constant_key_tuple(

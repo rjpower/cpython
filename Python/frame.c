@@ -105,7 +105,7 @@ is_well_formed(PyValue ref, bool in_stack)
         _PyValue_RecheckFrameHome(ref);
     }
     if (PyValue_IsInlineInt(ref)) {
-        return (_PyValue_BITS(ref) >> 32) == (Py_INT_BASE >> 32);
+        return true;  // Every word in the int region is an int.
     }
     if (PyValue_IsInlineFloat(ref)) {
         return !isnan(PyValue_InlineFloat(ref));

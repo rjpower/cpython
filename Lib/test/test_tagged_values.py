@@ -19,6 +19,9 @@ tagged_mortal_slots = getattr(_testinternalcapi, "tagged_mortal_slots", None)
 # Canonical inline values are mandatory in the supported private runtime.
 TAGGED_VALUES = getattr(_testinternalcapi, "TAGGED_VALUES", None)
 THRESHOLD = _testinternalcapi.SPECIALIZATION_THRESHOLD
+# The inline int range: int51 (pyjit/design/pyvalue.md, section 1.3).
+INLINE_MAX = 2**50 - 1
+INLINE_MIN = -2**50
 
 
 @unittest.skipIf(roundtrip is None, "build has no inline stack values")
@@ -32,13 +35,15 @@ class TaggedValuesTest(unittest.TestCase):
             self.assertEqual(math.copysign(1.0, boxed),
                              math.copysign(1.0, value))
 
-    def test_int32(self):
-        for value in (0, 1, -1, 2, 2**31 - 1, -2**31, 1 << 16, -(1 << 16)):
+    def test_int51(self):
+        for value in (0, 1, -1, 2, 2**31 - 1, -2**31, 2**31, -2**31 - 1,
+                      1 << 16, -(1 << 16), INLINE_MAX, INLINE_MIN,
+                      INLINE_MAX - 1, INLINE_MIN + 1):
             with self.subTest(value=value):
                 self.check(value)
 
     def test_int_out_of_range(self):
-        for value in (2**31, -2**31 - 1, 2**63, -2**100):
+        for value in (INLINE_MAX + 1, INLINE_MIN - 1, 2**63, -2**100):
             with self.subTest(value=value):
                 self.assertRaises(OverflowError, roundtrip, value)
 
@@ -51,11 +56,11 @@ class TaggedValuesTest(unittest.TestCase):
                 self.check(value)
 
     def test_nan_refused(self):
-        # Offset by 2**49, these would alias the inline int 1, a pointer
-        # and an index.
+        # Offset by 2**49, these would alias the inline ints 0 and
+        # -(2**49 - 1), a pointer and an index.
         nans = [struct.unpack("<d", struct.pack("<Q", bits))[0]
-                for bits in (0xFFFC_0000_0000_0001, 0xFFFE_0000_0000_1000,
-                             0xFFFF_FFFF_FFFF_FFFF)]
+                for bits in (0xFFF6_0000_0000_0000, 0xFFFC_0000_0000_0001,
+                             0xFFFE_0000_0000_1000, 0xFFFF_FFFF_FFFF_FFFF)]
         for value in (math.nan, -math.nan, *nans):
             with self.subTest(value=value):
                 self.assertRaises(ValueError, roundtrip, value)
@@ -63,7 +68,7 @@ class TaggedValuesTest(unittest.TestCase):
     def test_box_memory_error(self):
         _testcapi = import_helper.import_module("_testcapi")
         # Values that are not cached, so boxing allocates.
-        for value in (2**31 - 1, -2**31, 1.5):
+        for value in (2**31 - 1, -2**31, INLINE_MAX, INLINE_MIN, 1.5):
             with self.subTest(value=value):
                 gc.collect()  # Empty the free lists.
                 _testcapi.set_nomemory(0)
@@ -93,7 +98,7 @@ def distinct(value):
 
 @unittest.skipIf(TAGGED_VALUES is None, "build has no inline stack values")
 class IdentityTest(unittest.TestCase):
-    """An int that fits in int32 and a float other than NaN have value
+    """An int that fits in int51 and a float other than NaN have value
     identity, whether held inline or boxed, in any number of boxes."""
 
     def check_same(self, a, b):
@@ -112,14 +117,15 @@ class IdentityTest(unittest.TestCase):
         self.assertFalse(operator.is_(a, b))
         self.assertTrue(operator.is_not(a, b))
 
-    def test_int32(self):
-        for value in (0, 1, -1, 256, 257, 70000, 2**30, 2**31 - 1, -2**31):
+    def test_int51(self):
+        for value in (0, 1, -1, 256, 257, 70000, 2**30, 2**31 - 1, -2**31,
+                      2**31, -2**31 - 1, 2**40, INLINE_MAX, INLINE_MIN):
             with self.subTest(value=value):
                 self.check_same(value, distinct(value))
                 self.check_same(distinct(value), distinct(value))
 
-    def test_int_outside_int32(self):
-        for value in (2**31, -2**31 - 1, 2**63, -2**100):
+    def test_int_outside_int51(self):
+        for value in (INLINE_MAX + 1, INLINE_MIN - 1, 2**63, -2**100):
             with self.subTest(value=value):
                 self.check_different(distinct(value), distinct(value))
                 x = distinct(value)
@@ -211,7 +217,7 @@ class IdentityTest(unittest.TestCase):
         # each call boxes the value afresh.
         def f(self):
             return self
-        for value in (2**31 - 1, 70000, 2.5):
+        for value in (2**31 - 1, INLINE_MAX, 70000, 2.5):
             with self.subTest(value=value):
                 x = distinct(value)
                 hashes = set()
@@ -456,9 +462,9 @@ def add3(a, b, c):
 
 
 def make_inline(value):
-    """Return value, an int in the int32 range, as an inline int: the result
-    of specialized arithmetic on compact ints, which a Python caller receives
-    as it is."""
+    """Return value, an int in the inline range, as an inline int: the
+    result of specialized arithmetic on inline ints, which a Python caller
+    receives as it is."""
     third = value // 3
     return add3(third, third, value - 2 * third)
 
@@ -539,6 +545,26 @@ class InlineIntTest(unittest.TestCase):
             (mul, 46341, 46341, 46341**2),
             (mul, 46340, 46340, 46340**2),
             (mul, 2**31 - 1, 2**31 - 1, (2**31 - 1)**2),
+            (add, INLINE_MAX, 1, INLINE_MAX + 1),
+            (add, INLINE_MAX - 1, 1, INLINE_MAX),
+            (add, INLINE_MIN, -1, INLINE_MIN - 1),
+            (add, INLINE_MAX, INLINE_MAX, 2 * INLINE_MAX),
+            (add, INLINE_MIN, INLINE_MIN, 2 * INLINE_MIN),
+            (sub, INLINE_MIN, 1, INLINE_MIN - 1),
+            (sub, INLINE_MIN + 1, 1, INLINE_MIN),
+            (sub, INLINE_MAX, -1, INLINE_MAX + 1),
+            (sub, INLINE_MIN, INLINE_MAX, INLINE_MIN - INLINE_MAX),
+            (mul, 2**25, 2**25, 2**50),
+            (mul, -2**25, 2**25, INLINE_MIN),
+            (mul, 2**25 - 1, 2**25 + 1, 2**50 - 1),
+            (mul, INLINE_MIN, -1, 2**50),
+            (mul, INLINE_MIN, 1, INLINE_MIN),
+            (mul, INLINE_MAX, 2, 2 * INLINE_MAX),
+            (mul, INLINE_MAX, -1, -INLINE_MAX),
+            # Products beyond int64.
+            (mul, INLINE_MAX, INLINE_MAX, INLINE_MAX**2),
+            (mul, INLINE_MIN, INLINE_MIN, 2**100),
+            (mul, INLINE_MIN, INLINE_MAX, INLINE_MIN * INLINE_MAX),
         ]
         for func in (add, sub, mul):
             warm(func, 1, 2)
@@ -560,12 +586,18 @@ class InlineIntTest(unittest.TestCase):
         self.assertEqual(neg(make_inline(70000)), -70000)
         self.assertEqual(neg(make_inline(-2**31)), 2**31)
         self.assertEqual(neg(make_inline(2**31 - 1)), -2**31 + 1)
+        self.assertEqual(neg(make_inline(INLINE_MIN)), 2**50)
+        self.assertIs(type(neg(make_inline(INLINE_MIN))), int)
+        self.assertEqual(neg(make_inline(INLINE_MAX)), INLINE_MIN + 1)
+        self.assertEqual(neg(INLINE_MAX + 1), INLINE_MIN)
 
     def test_compare_and_bool(self):
         def f(a, b):
             return a < b, a == b, a >= b, bool(a), not b
         warm(f, 1, 2)
-        for a, b in ((70000, 70001), (0, -5), (2**31 - 1, -2**31)):
+        for a, b in ((70000, 70001), (0, -5), (2**31 - 1, -2**31),
+                     (INLINE_MAX, INLINE_MIN), (INLINE_MIN, INLINE_MIN + 1),
+                     (INLINE_MAX - 1, INLINE_MAX)):
             with self.subTest(a=a, b=b):
                 self.assertEqual(f(make_inline(a), make_inline(b)), f(a, b))
                 self.assertEqual(f(make_inline(a), b), f(a, b))
@@ -586,14 +618,21 @@ class InlineIntTest(unittest.TestCase):
                 self.assertEqual(get(seq, make_inline(-1)), seq[-1])
                 self.assertRaises(IndexError, get, seq, make_inline(2**31 - 1))
                 self.assertRaises(IndexError, get, seq, make_inline(-2**31))
+                # Not a truncated index: 2**32 + 5 is 5 in 32 bits.
+                for index in (INLINE_MAX, INLINE_MIN, 2**32 + 5, -2**32 - 1):
+                    self.assertRaises(IndexError, get, seq, make_inline(index))
         warm(store, lst, 1, 1)
         store(lst, make_inline(7), make_inline(70000))
         self.assertEqual(lst[7], 70000)
         self.assertRaises(IndexError, store, lst, make_inline(2**31 - 1), 1)
+        for index in (INLINE_MAX, INLINE_MIN, 2**32 + 7):
+            self.assertRaises(IndexError, store, lst, make_inline(index), 1)
+        self.assertEqual(lst[7], 70000)
 
     def test_hash(self):
         d = {}
-        for value in (0, 1, -1, 70000, -70000, 2**31 - 1, -2**31):
+        for value in (0, 1, -1, -2, 70000, -70000, 2**31 - 1, -2**31,
+                      INLINE_MAX, INLINE_MIN, INLINE_MIN + 1):
             with self.subTest(value=value):
                 x = make_inline(value)
                 self.assertEqual(hash(x), hash(distinct(value)))
@@ -864,7 +903,9 @@ class InlineFloatTest(unittest.TestCase):
 
     def test_mixed_int_float(self):
         cases = [(3, 2.0), (3.0, 2), (-2**31, 0.5), (2**31 - 1, -1.5),
-                 (0.25, 2**31 - 1), (1e308, 10), (7, 3.5), (1, 3.0)]
+                 (0.25, 2**31 - 1), (1e308, 10), (7, 3.5), (1, 3.0),
+                 (INLINE_MIN, 0.5), (INLINE_MAX, -1.5), (0.25, INLINE_MAX),
+                 (INLINE_MIN, 3.0)]
         for a, b in cases:
             with self.subTest(a=a, b=b):
                 expected = (operator.add(a, b), operator.sub(a, b),
@@ -969,7 +1010,8 @@ class InlineIntOpsTest(unittest.TestCase):
         ops = (operator.floordiv, operator.mod, operator.and_,
                operator.or_, operator.xor)
         values = (0, 1, -1, 2, -2, 3, -3, 7, -7, 2**30, -2**30, 2**31 - 1,
-                  -2**31, 2**31 - 2, -2**31 + 1, 46341)
+                  -2**31, 2**31 - 2, -2**31 + 1, 46341, INLINE_MAX,
+                  INLINE_MIN, INLINE_MAX - 1, INLINE_MIN + 1)
         for a in values:
             for b in values:
                 if b == 0:
@@ -980,6 +1022,9 @@ class InlineIntOpsTest(unittest.TestCase):
                     self.assertEqual(q * b + m, a)
         self.assertEqual(int_ops(make_inline(-2**31), make_inline(-1))[:2], (2**31, 0))
         self.assertIs(type(int_ops(make_inline(-2**31), -1)[0]), int)
+        self.assertEqual(int_ops(make_inline(INLINE_MIN), make_inline(-1))[:2],
+                         (2**50, 0))
+        self.assertIs(type(int_ops(make_inline(INLINE_MIN), -1)[0]), int)
 
     def test_division_by_zero(self):
         for a in (0, 7, -7, make_inline(70000)):
@@ -995,7 +1040,16 @@ class InlineIntOpsTest(unittest.TestCase):
         cases = [(1, 0), (1, 30), (1, 31), (-1, 31), (1, 32), (-1, 32),
                  (3, 100), (-3, 100), (0, 100), (0, 2**31 - 1),
                  (2**31 - 1, 1), (-2**31, 1), (-2**31, 31), (2**31 - 1, 31),
-                 (-2**31, 63), (5, 2**31 - 1), (-5, 2**31 - 1), (12345, 17)]
+                 (-2**31, 63), (5, 2**31 - 1), (-5, 2**31 - 1), (12345, 17),
+                 # Around the inline range and int64, where the handler
+                 # changes from inline to a box to a long int shift.
+                 (INLINE_MAX, 1), (INLINE_MIN, 1), (INLINE_MAX, 13),
+                 (INLINE_MIN, 13), (INLINE_MAX, 14), (INLINE_MIN, 14),
+                 (1, 49), (1, 50), (-1, 50), (1, 62), (-1, 62), (3, 61),
+                 (-3, 61), (2**12, 50), (2**13, 50), (-2**13, 50),
+                 (1, 63), (-1, 63), (1, 64),
+                 (INLINE_MAX, 50), (INLINE_MIN, 50), (INLINE_MIN, 63),
+                 (0, INLINE_MAX)]
         for a, b in cases:
             if a and b > 64:
                 expected = (a << b, a >> b)
@@ -1015,6 +1069,191 @@ class InlineIntOpsTest(unittest.TestCase):
         self.assertEqual(int_ops(True, 2), (0, 1, 0, 3, 3))
         self.assertEqual(int_ops(Int(7), 2)[0], "floordiv")
         self.assertEqual(shifts(True, 3), (8, 0))
+
+
+def unary_ops(a):
+    return -a, abs(a), ~a, +a
+
+
+@unittest.skipUnless(TAGGED_VALUES, "inline values are off")
+class Int51Test(unittest.TestCase):
+    """The int51 boundaries: an int in [INLINE_MIN, INLINE_MAX] is inline,
+    and each operation whose result leaves that range gives a long int, in
+    the specialized handlers and the generic ones."""
+
+    BOUNDARY = (INLINE_MIN - 1, INLINE_MIN, INLINE_MIN + 1,
+                INLINE_MAX - 1, INLINE_MAX, INLINE_MAX + 1)
+
+    @classmethod
+    def setUpClass(cls):
+        warm(add3, 1, 2, 3)
+        warm(int_ops, 7, 2)
+        warm(shifts, 7, 2)
+        warm(unary_ops, 7)
+
+    def test_round_trip(self):
+        for value in self.BOUNDARY:
+            inline = INLINE_MIN <= value <= INLINE_MAX
+            with self.subTest(value=value):
+                x = distinct(value)
+                self.assertEqual(x, value)
+                self.assertEqual(str(x), str(value))
+                if inline:
+                    self.assertEqual(roundtrip(x), value)
+                else:
+                    self.assertRaises(OverflowError, roundtrip, x)
+                # The identity of an inline int is its encoding, at least
+                # 2**49; that of a boxed int is its address, below 2**48.
+                self.assertEqual(id(x) >= 2**49, inline)
+                self.assertEqual(x is distinct(value), inline)
+                self.assertEqual(inline_locals(sys._getframe()) >= {"x"}, inline)
+                self.assertEqual(list([x])[0], value)
+                self.assertEqual((x,)[0], value)
+                self.assertEqual({x: x}[value], value)
+
+    def test_boundary_arithmetic(self):
+        cases = [
+            (lambda: abs(INLINE_MIN), 2**50),
+            (lambda: -INLINE_MIN, 2**50),
+            (lambda: INLINE_MIN // -1, 2**50),
+            (lambda: divmod(INLINE_MIN, -1), (2**50, 0)),
+            (lambda: INLINE_MIN % -1, 0),
+            (lambda: INLINE_MAX + 1, 2**50),
+            (lambda: INLINE_MAX * 2, 2**51 - 2),
+            (lambda: 1 << 50, 2**50),
+            (lambda: -1 << 50, -2**50),
+            (lambda: INLINE_MAX << 1, 2**51 - 2),
+            (lambda: ~INLINE_MIN, INLINE_MAX),
+            (lambda: ~INLINE_MAX, INLINE_MIN),
+            (lambda: INLINE_MIN - 1, -2**50 - 1),
+        ]
+        for func, expected in cases:
+            with self.subTest(expected=expected):
+                self.assertEqual(func(), expected)
+        for value in self.BOUNDARY:
+            with self.subTest(value=value):
+                expected = (-value, abs(value), ~value, +value)
+                self.assertEqual(unary_ops(value), expected)
+                if INLINE_MIN <= value <= INLINE_MAX:
+                    self.assertEqual(unary_ops(make_inline(value)), expected)
+                for other in (-1, 1, 2, 7, INLINE_MAX, INLINE_MIN):
+                    reference = (value // other, value % other,
+                                 value & other, value | other, value ^ other)
+                    self.assertEqual(int_ops(value, other), reference)
+
+    def test_range_and_len(self):
+        self.assertEqual(len(range(2**55)), 2**55)
+        def length(r):
+            return len(r)
+        self.assertEqual(warm(length, range(10)), 10)
+        for n in (INLINE_MAX, INLINE_MAX + 1, 2**55, 2**62):
+            with self.subTest(n=n):
+                self.assertEqual(length(range(n)), n)
+        def collect(start, stop):
+            return [i for i in range(start, stop)]
+        warm(collect, 0, 3)
+        self.assertEqual(collect(INLINE_MAX - 1, INLINE_MAX + 3),
+                         [INLINE_MAX - 1, INLINE_MAX, INLINE_MAX + 1,
+                          INLINE_MAX + 2])
+        self.assertEqual(collect(INLINE_MIN - 2, INLINE_MIN + 2),
+                         [INLINE_MIN - 2, INLINE_MIN - 1, INLINE_MIN,
+                          INLINE_MIN + 1])
+        self.assertEqual(list(range(INLINE_MAX + 2, INLINE_MAX - 2, -1)),
+                         [INLINE_MAX + 2, INLINE_MAX + 1, INLINE_MAX,
+                          INLINE_MAX - 1])
+
+    def test_hash_and_mixed_keys(self):
+        for value in self.BOUNDARY + (2**40, -2**40, -1, -2):
+            with self.subTest(value=value):
+                self.assertEqual(hash(value), hash(float(value)))
+                self.assertEqual(hash(value), hash(distinct(value)))
+                if INLINE_MIN <= value <= INLINE_MAX:
+                    self.assertEqual(hash(make_inline(value)), hash(value))
+        self.assertEqual(hash(2**50 - 1), hash(float(2**50 - 1)))
+        d = {2**40: "int"}
+        d[2.0**40] = "float"
+        self.assertEqual(d, {2**40: "float"})
+        self.assertIs(type(next(iter(d))), int)
+        self.assertEqual({2**40, 2.0**40, INLINE_MAX, float(INLINE_MAX)},
+                         {2**40, INLINE_MAX})
+        self.assertIn(2.0**40, {2**40})
+        self.assertIn(INLINE_MIN, {float(INLINE_MIN)})
+        self.assertEqual((INLINE_MAX, 2**40), (float(INLINE_MAX), 2.0**40))
+        self.assertEqual(hash((INLINE_MAX, 2**40)),
+                         hash((float(INLINE_MAX), 2.0**40)))
+        for a, b in ((INLINE_MAX, float(INLINE_MAX)),
+                     (INLINE_MIN, float(INLINE_MIN))):
+            self.assertTrue(a == b and not a < b and not a > b)
+            self.assertTrue(a - 1 < b < a + 1)
+
+    def test_native_formats(self):
+        import array
+        for value in self.BOUNDARY:
+            with self.subTest(value=value):
+                packed = struct.pack("q", value)
+                self.assertEqual(struct.unpack("q", packed)[0], value)
+                self.assertEqual(int.from_bytes(packed, sys.byteorder,
+                                                signed=True), value)
+                a = array.array("q", [value, value])
+                self.assertEqual(a[0], value)
+                self.assertEqual(a.tolist(), [value, value])
+                a[1] = value
+                self.assertEqual(a[1], value)
+        try:
+            import ctypes
+        except ImportError:
+            return
+        for value in self.BOUNDARY:
+            with self.subTest(ctypes=value):
+                self.assertEqual(ctypes.c_int64(value).value, value)
+
+    def test_marshal_constants(self):
+        import marshal
+        source = ("a = %d\nb = %d\nc = %d\nd = (%d, %d)\n"
+                  % (INLINE_MAX, INLINE_MIN, INLINE_MAX + 1, INLINE_MAX,
+                     2**40))
+        code = compile(source, "<int51>", "exec")
+        self.assertIn(INLINE_MAX, code.co_consts)
+        first = marshal.dumps(code)
+        self.assertEqual(first, marshal.dumps(compile(source, "<int51>", "exec")))
+        self.assertEqual(first, marshal.dumps(marshal.loads(first)))
+        namespace = {}
+        exec(marshal.loads(first), namespace)
+        self.assertEqual((namespace["a"], namespace["b"], namespace["c"]),
+                         (INLINE_MAX, INLINE_MIN, INLINE_MAX + 1))
+        self.assertIs(namespace["a"], distinct(INLINE_MAX))
+        for value in self.BOUNDARY:
+            with self.subTest(value=value):
+                self.assertEqual(marshal.loads(marshal.dumps(value)), value)
+                self.assertEqual(marshal.dumps(value),
+                                 marshal.dumps(distinct(value)))
+
+    def test_id_memo_keys(self):
+        import copy
+        shared = [object()]
+        data = {"x": shared, "y": shared, "z": [shared, (shared,)]}
+        copied = copy.deepcopy(data)
+        self.assertIsNot(copied["x"], shared)
+        self.assertIs(copied["x"], copied["y"])
+        self.assertIs(copied["z"][0], copied["x"])
+        self.assertIs(copied["z"][1][0], copied["x"])
+        o = object()
+        self.assertIs(id(o), id(o))
+        self.assertLess(id(o), 2**48)
+        memo = {id(o): o}
+        self.assertIs(memo[id(o)], o)
+
+    def test_unchanged_int_behaviour(self):
+        self.assertEqual(sys.getsizeof(2**40), sys.getsizeof(distinct(2**40)))
+        self.assertEqual(sys.getsizeof(2**40), sys.getsizeof(INLINE_MAX + 1))
+        self.assertEqual((2**40).bit_length(), 41)
+        self.assertEqual(INLINE_MAX.bit_length(), 50)
+        self.assertEqual(INLINE_MIN.bit_length(), 51)
+        self.assertEqual((2**40).to_bytes(6, "little"), b"\0\0\0\0\0\1")
+        self.assertEqual(int.__repr__(INLINE_MAX), str(2**50 - 1))
+        self.assertEqual(format(INLINE_MIN, "x"), "-4000000000000")
+        self.assertEqual(INLINE_MAX.__index__(), INLINE_MAX)
+        self.assertIs(type(INLINE_MAX), int)
 
 
 class Sliceable:
@@ -1038,7 +1277,8 @@ class InlineSliceTest(unittest.TestCase):
         warm(f, [1, 2, 3], 1, 2)
         seqs = (list(range(10)), tuple(range(10)), "abcdefghij", "\u0101" * 10,
                 b"abcdefghij", bytearray(b"abcdefghij"))
-        bounds = (0, 1, 3, -1, -3, 10, 11, -11, 2**31 - 1, -2**31)
+        bounds = (0, 1, 3, -1, -3, 10, 11, -11, 2**31 - 1, -2**31,
+                  INLINE_MAX, INLINE_MIN)
         for seq in seqs:
             for i in bounds:
                 for j in bounds:
@@ -1070,7 +1310,8 @@ class InlineSliceTest(unittest.TestCase):
             seq[i:j] = value
             return seq
         warm(store, [1, 2, 3], 1, 2, [5])
-        bounds = (0, 1, 3, -1, -4, 4, 2**31 - 1, -2**31)
+        bounds = (0, 1, 3, -1, -4, 4, 2**31 - 1, -2**31, INLINE_MAX,
+                  INLINE_MIN)
         for i in bounds:
             for j in bounds:
                 for value in ([], [7, 8], (9,), "ab", iter([1, 2, 3])):

@@ -15,7 +15,7 @@ dict_value_seed(PyObject *Py_UNUSED(module), PyObject *key)
         return NULL;
     }
     if (_PyDict_SetValue_Take2((PyDictObject *)dict, owned_key,
-                              PyValue_FromInt32(INT32_MAX)) < 0) {
+                              PyValue_FromInlineInt(INT32_MAX)) < 0) {
         Py_XDECREF(dict);
         return NULL;
     }
@@ -91,7 +91,7 @@ dict_value_pop_boxing_oom(PyObject *module, PyObject *key)
     PyValue found = PyValue_NULL;
     status = _PyDict_GetValue_KnownHash(dict, query, hash, &found);
     valid = valid && status == 1 && PyValue_IsInlineInt(found) &&
-            PyValue_InlineInt(found) == INT32_MAX && PyDict_GET_SIZE(dict) == 1;
+            PyValue_InlineInt64(found) == INT32_MAX && PyDict_GET_SIZE(dict) == 1;
     PyValue_XCLOSE(found);
     result = NULL;
     if (valid) {
@@ -270,7 +270,7 @@ dict_value_setdefault_boxing_oom(PyObject *module, PyObject *key)
     PyValue found = PyValue_NULL;
     valid = valid && _PyDict_GetValue_KnownHash(dict,
         PyValue_FromObjectBorrow(key), hash, &found) == 1 &&
-        PyValue_IsInlineInt(found) && PyValue_InlineInt(found) == INT32_MAX;
+        PyValue_IsInlineInt(found) && PyValue_InlineInt64(found) == INT32_MAX;
     PyValue_XCLOSE(found);
     if (valid) {
         status = PyDict_SetDefaultRef(dict, key, Py_None, &result);
@@ -498,7 +498,7 @@ dict_owned_entry_boxing_oom(PyObject *module, PyObject *Py_UNUSED(ignored))
 {
     PyObject *dict = PyDict_New();
     if (dict == NULL || _PyDict_SetValue_Take2((PyDictObject *)dict,
-            PyValue_FromInt32(1), PyValue_FromInt32(INT32_MAX)) < 0)
+            PyValue_FromInlineInt(1), PyValue_FromInlineInt(INT32_MAX)) < 0)
     {
         Py_XDECREF(dict);
         return NULL;
@@ -536,7 +536,7 @@ dict_owned_entry_contract(PyObject *module, PyObject *Py_UNUSED(ignored))
 {
     PyObject *dict = PyDict_New();
     if (dict == NULL || _PyDict_SetValue_Take2((PyDictObject *)dict,
-            PyValue_FromInt32(1), PyValue_FromInt32(INT32_MAX)) < 0)
+            PyValue_FromInlineInt(1), PyValue_FromInlineInt(INT32_MAX)) < 0)
     {
         Py_XDECREF(dict);
         return NULL;

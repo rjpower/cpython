@@ -3070,20 +3070,26 @@ incref_decref_delayed(PyObject *self, PyObject *op)
     Py_RETURN_NONE;
 }
 
-// Encode an exact int32 or non-NaN float as an inline stack value, check that
+// Encode an exact int51 or non-NaN float as an inline stack value, check that
 // the operations valid on any value treat it as a value, then box it.
 static PyObject *
 value_box_roundtrip(PyObject *self, PyObject *arg)
 {
     PyValue ref;
     if (PyLong_CheckExact(arg)) {
-        int32_t i;
-        if (PyLong_AsInt32(arg, &i) < 0) {
+        int64_t i;
+        if (PyLong_AsInt64(arg, &i) < 0) {
             return NULL;
         }
-        ref = PyValue_FromInt32(i);
-        if (!PyValue_IsInlineInt(ref) || PyValue_InlineInt(ref) != i
-            || !PyValue_BothInlineInt(ref, ref) || !PyValue_LongCheck(ref))
+        if (!_PyValue_IntFitsInline(i)) {
+            PyErr_SetString(PyExc_OverflowError, "int has no inline encoding");
+            return NULL;
+        }
+        ref = PyValue_FromInlineInt(i);
+        if (!PyValue_IsInlineInt(ref) || PyValue_InlineInt64(ref) != i
+            || _PyValue_FromIntScaled(_PyValue_IntScaled(ref)).bits != ref.bits
+            || !PyValue_BothInlineInt(ref, ref) || !PyValue_LongCheck(ref)
+            || !PyValue_IsLanguageValue(ref))
         {
             PyErr_SetString(PyExc_AssertionError, "bad inline int");
             return NULL;
@@ -3200,7 +3206,7 @@ static PyObject *
 pyvalue_contract(PyObject *self, PyObject *arg)
 {
     PyValue value = PyValue_PrepareOwned(Py_NewRef(arg));
-    const char *kind = PyValue_IsInlineInt(value) ? "int32" :
+    const char *kind = PyValue_IsInlineInt(value) ? "int51" :
                        PyValue_IsInlineFloat(value) ? "float64" : "object";
     PyValue duplicate = PyValue_NewRef(PyValue_Borrow(value));
     assert(PyValue_Is(value, duplicate));
@@ -3354,7 +3360,7 @@ pyvalue_as_known_object_inline(PyObject *self, PyObject *steal)
     if (take < 0) {
         return NULL;
     }
-    PyValue value = PyValue_FromInt32(5);
+    PyValue value = PyValue_FromInlineInt(5);
     if (take) {
         return PyValue_AsKnownObjectSteal(value);
     }
@@ -3938,7 +3944,7 @@ common_constant_storage(PyObject *module, PyObject *Py_UNUSED(args))
     return Py_BuildValue("(iiii)", NUM_COMMON_CONSTANTS, inline_count,
                          PyValue_IsInlineInt(minus_one),
                          PyValue_IsInlineInt(minus_one) &&
-                         PyValue_InlineInt(minus_one) == -1);
+                         PyValue_InlineInt64(minus_one) == -1);
 }
 
 static PyObject *
@@ -3984,7 +3990,7 @@ list_value_owner_closed(PyObject *capsule)
     if (probe->list != NULL) {
         PyValue value = PyList_GET_VALUE(probe->list, 0);
         probe->saw_publication = PyValue_IsInlineInt(value) &&
-                                 PyValue_InlineInt(value) == 37;
+                                 PyValue_InlineInt64(value) == 37;
     }
 }
 
@@ -4036,7 +4042,7 @@ test_list_setitem_take_value(PyObject *module, PyObject *Py_UNUSED(args))
     }
     probe.list = list;
     result = _PyList_SetItemTakeValue((PyListObject *)list, 0,
-                                      PyValue_FromInt32(37));
+                                      PyValue_FromInlineInt(37));
     assert(result == 0);
     probe.list = NULL;
     Py_DECREF(list);
@@ -4143,7 +4149,7 @@ constant_value_key(PyObject *module, PyObject *args)
         PyValue_CLOSE(key);
         return NULL;
     }
-    PyTuple_SET_VALUE(result, 0, PyValue_FromInt32(PyValue_IsInlineInt(key)));
+    PyTuple_SET_VALUE(result, 0, PyValue_FromInlineInt(PyValue_IsInlineInt(key)));
     PyTuple_SET_VALUE(result, 1, key);
     PyTuple_SET_ITEM(result, 2, legacy);
     return result;

@@ -10,7 +10,9 @@ Py_hash_t
 _PyValue_Hash(PyValue value)
 {
     if (PyValue_IsInlineInt(value)) {
-        Py_hash_t hash = PyValue_InlineInt(value);
+        /* As long_hash(): |value| < 2**50 < _PyHASH_MODULUS, so the hash is
+           the value. */
+        Py_hash_t hash = PyValue_InlineInt64(value);
         return hash == -1 ? -2 : hash;
     }
     if (PyValue_IsInlineFloat(value)) {
@@ -28,12 +30,13 @@ _PyValue_Hash(PyValue value)
 static int
 compare_inline(PyValue left, PyValue right, int op)
 {
-    /* Every int32 is represented exactly by a double. No boxed subclass or
-       NaN enters this path, so ordinary C comparisons preserve dispatch. */
+    /* Every int51 is represented exactly by a double, whose significand has
+       53 bits. No boxed subclass or NaN enters this path, so ordinary C
+       comparisons preserve dispatch. */
     double a = PyValue_IsInlineInt(left)
-               ? (double)PyValue_InlineInt(left) : PyValue_InlineFloat(left);
+               ? (double)PyValue_InlineInt64(left) : PyValue_InlineFloat(left);
     double b = PyValue_IsInlineInt(right)
-               ? (double)PyValue_InlineInt(right) : PyValue_InlineFloat(right);
+               ? (double)PyValue_InlineInt64(right) : PyValue_InlineFloat(right);
     switch (op) {
         case Py_LT: return a < b;
         case Py_LE: return a <= b;

@@ -13,7 +13,7 @@ _testinternalcapi = import_helper.import_module('_testinternalcapi')
 
 class PyValueSetTests(unittest.TestCase):
     def test_canonical_key_storage_and_numeric_equality(self):
-        values = {-(2**31), 2**31 - 1, -(2**31) - 1, 2**31,
+        values = {-(2**50), 2**50 - 1, -(2**50) - 1, 2**50,
                   0.5, math.inf, None, True}
         self.assertEqual(_testinternalcapi.set_value_storage(values), (2, 2, 4))
         self.assertEqual(_testinternalcapi.set_value_storage(frozenset(values)),

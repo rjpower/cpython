@@ -326,8 +326,10 @@ Known values:
 /* Separate the RC register-IR successor from upstream and tracing caches.
    64402: copy propagation keeps no pending load across code that may run.
    64403: no local reaches an input field of a store (STORE_FAST,
-   STORE_DEREF and their pairs), which keeps its input. */
-#define PYC_MAGIC_NUMBER 64403
+   STORE_DEREF and their pairs), which keeps its input.
+   64404: an int constant outside int32 and inside int51 is inline and
+   loads with LOAD_CONST_INLINE_INT. */
+#define PYC_MAGIC_NUMBER 64404
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

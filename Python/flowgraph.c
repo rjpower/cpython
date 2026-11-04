@@ -4000,14 +4000,14 @@ build_cellfixedoffsets(_PyCompile_CodeUnitMetadata *umd)
         }
 
         assert(PyValue_LongCheckExact(varindex));
-        int argoffset = PyValue_IsInlineInt(varindex) ? PyValue_InlineInt(varindex) :
+        int argoffset = PyValue_IsInlineInt(varindex) ? (int)PyValue_InlineInt64(varindex) :
                         PyLong_AsInt(PyValue_AsKnownObjectBorrow(varindex));
         if (argoffset == -1 && PyErr_Occurred()) {
             goto error;
         }
 
         assert(PyValue_LongCheckExact(cellindex));
-        int oldindex = PyValue_IsInlineInt(cellindex) ? PyValue_InlineInt(cellindex) :
+        int oldindex = PyValue_IsInlineInt(cellindex) ? (int)PyValue_InlineInt64(cellindex) :
                        PyLong_AsInt(PyValue_AsKnownObjectBorrow(cellindex));
         if (oldindex == -1 && PyErr_Occurred()) {
             goto error;

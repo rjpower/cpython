@@ -3257,7 +3257,7 @@ bytes_iteritem(PyObject *obj, Py_ssize_t index)
     if (index >= Py_SIZE(a)) {
         return (_PyValueIndexPair) { .value = PyValue_NULL, .index = index };
     }
-    PyValue value = PyValue_FromInt32((unsigned char)a->ob_sval[index]);
+    PyValue value = PyValue_FromInlineInt((unsigned char)a->ob_sval[index]);
     return (_PyValueIndexPair) { .value = value, .index = index + 1 };
 }
 

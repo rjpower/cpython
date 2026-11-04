@@ -19,8 +19,8 @@ class PyValueCellTests(unittest.TestCase):
         self.assertEqual(_testinternalcapi.cell_value_kind(cell), 'n')
         with self.assertRaises(ValueError):
             _ = cell.cell_contents
-        for value, kind in ((-(2**31), 'i'), (2**31 - 1, 'i'),
-                            (2**31, 'o'), (1.25, 'f'), (-0.0, 'f'),
+        for value, kind in ((-(2**50), 'i'), (2**50 - 1, 'i'),
+                            (2**50, 'o'), (1.25, 'f'), (-0.0, 'f'),
                             (float('nan'), 'o'), (True, 'o'), (None, 'o'),
                             (IntSubclass(3), 'o')):
             cell.cell_contents = value

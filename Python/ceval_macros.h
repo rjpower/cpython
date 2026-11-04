@@ -654,7 +654,7 @@ _PyValue_Truth(PyValue ref)
         return 0;
     }
     if (PyValue_IsInlineInt(ref)) {
-        return PyValue_InlineInt(ref) != 0;
+        return PyValue_InlineInt64(ref) != 0;
     }
     if (PyValue_IsInlineFloat(ref)) {
         return PyValue_InlineFloat(ref) != 0.0;

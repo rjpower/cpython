@@ -4316,7 +4316,7 @@ inline_slice_bounds(PyValue start, PyValue stop,
         return false;
     }
     if (PyValue_IsInlineInt(start)) {
-        *istart = PyValue_InlineInt(start);
+        *istart = PyValue_InlineInt64(start);
     }
     else if (PyValue_IsNone(start)) {
         *istart = 0;
@@ -4325,7 +4325,7 @@ inline_slice_bounds(PyValue start, PyValue stop,
         return false;
     }
     if (PyValue_IsInlineInt(stop)) {
-        *istop = PyValue_InlineInt(stop);
+        *istop = PyValue_InlineInt64(stop);
     }
     else if (PyValue_IsNone(stop)) {
         *istop = PY_SSIZE_T_MAX;

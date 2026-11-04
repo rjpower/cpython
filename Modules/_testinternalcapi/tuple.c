@@ -143,7 +143,7 @@ tuple_value_boxing_errors(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(args)
     _PyValueIndexPair pair = PyTuple_Type._tp_iteritem(tuple, 0);
     PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &failure.saved);
     int valid = PyValue_IsInlineInt(pair.value) && pair.index == 1 &&
-                PyValue_InlineInt(pair.value) == INT32_MAX && !PyErr_Occurred();
+                PyValue_InlineInt64(pair.value) == INT32_MAX && !PyErr_Occurred();
     PyValue_XCLOSE(pair.value);
     PyErr_Clear();
     if (!valid) {
@@ -187,7 +187,7 @@ error:
 static PyObject *
 cell_value_boxing_errors(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(args))
 {
-    PyObject *cell = PyCell_NewValue(PyValue_FromInt32(INT32_MAX));
+    PyObject *cell = PyCell_NewValue(PyValue_FromInlineInt(INT32_MAX));
     if (cell == NULL) {
         return NULL;
     }
@@ -200,7 +200,7 @@ cell_value_boxing_errors(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(args))
     PyErr_Clear();
     PyValue value = _PyCell_GetValue((PyCellObject *)cell);
     valid = valid && PyValue_IsInlineInt(value) &&
-            PyValue_InlineInt(value) == INT32_MAX;
+            PyValue_InlineInt64(value) == INT32_MAX;
     PyValue_XCLOSE(value);
     Py_DECREF(cell);
     if (!valid) {

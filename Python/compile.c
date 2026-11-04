@@ -520,16 +520,9 @@ static Py_ssize_t
 dict_add_value(PyObject *dict, PyValue key)
 {
     Py_ssize_t index = PyDict_GET_SIZE(dict);
-    PyValue proposed;
-    if (index <= INT32_MAX) {
-        proposed = PyValue_FromInt32((int32_t)index);
-    }
-    else {
-        PyObject *number = PyLong_FromSsize_t(index);
-        if (number == NULL) {
-            return ERROR;
-        }
-        proposed = PyValue_FromPyObjectSteal(number);
+    PyValue proposed = PyValue_FromInt64(index);
+    if (PyValue_IsNull(proposed)) {
+        return ERROR;
     }
     PyValue selected = PyValue_NULL;
     int status = _PyDict_SetDefaultValue(dict, key, proposed, &selected);
@@ -538,7 +531,7 @@ dict_add_value(PyObject *dict, PyValue key)
         return ERROR;
     }
     Py_ssize_t result = PyValue_IsInlineInt(selected)
-                        ? PyValue_InlineInt(selected)
+                        ? PyValue_InlineInt64(selected)
                         : PyLong_AsSsize_t(PyValue_AsKnownObjectBorrow(selected));
     PyValue_CLOSE(selected);
     return result;
@@ -637,7 +630,7 @@ dictbytype(PyObject *src, int scope_type, int flag, Py_ssize_t offset)
             goto error;
         }
         assert(PyValue_LongCheckExact(value));
-        long vi = PyValue_IsInlineInt(value) ? PyValue_InlineInt(value) :
+        long vi = PyValue_IsInlineInt(value) ? PyValue_InlineInt64(value) :
                   PyLong_AsLong(PyValue_AsKnownObjectBorrow(value));
         if (vi == -1 && PyErr_Occurred()) {
             goto error;
@@ -678,7 +671,7 @@ add_cell_names_from_symbols(PyObject *symbols, PyObject *names)
         assert(PyValue_IsObject(key));
         assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(key)));
         assert(PyValue_LongCheckExact(value));
-        long flags = PyValue_IsInlineInt(value) ? PyValue_InlineInt(value) :
+        long flags = PyValue_IsInlineInt(value) ? PyValue_InlineInt64(value) :
                      PyLong_AsLong(PyValue_AsKnownObjectBorrow(value));
         if (flags == -1 && PyErr_Occurred()) {
             goto error;
@@ -1134,7 +1127,7 @@ dict_lookup_arg(PyObject *dict, PyObject *name)
         return ERROR;
     }
     assert(PyValue_LongCheckExact(value));
-    long result = PyValue_IsInlineInt(value) ? PyValue_InlineInt(value) :
+    long result = PyValue_IsInlineInt(value) ? PyValue_InlineInt64(value) :
                   PyLong_AsLong(PyValue_AsKnownObjectBorrow(value));
     PyValue_CLOSE(value);
     return result;
@@ -1517,7 +1510,7 @@ consts_dict_keys_inorder(PyObject *dict)
     int next;
     while ((next = _PyDict_NextValue(dict, &pos, &key, &index, NULL)) > 0) {
         Py_ssize_t i = PyValue_IsInlineInt(index)
-                       ? PyValue_InlineInt(index)
+                       ? PyValue_InlineInt64(index)
                        : PyLong_AsSsize_t(PyValue_AsKnownObjectBorrow(index));
         PyValue_CLOSE(index);
         if (i < 0 || i >= size) {

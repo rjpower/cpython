@@ -7,7 +7,7 @@
 #include "pycore_symtable.h"      // PySTEntryObject
 #include "pycore_tuple.h"         // _PyTuple_GET_OBJECT()
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString
-#include "pycore_value.h"         // PyValue_InlineInt()
+#include "pycore_value.h"         // PyValue_InlineInt64()
 #include "setobject.h"
 
 #include <stddef.h>               // offsetof()
@@ -21,7 +21,7 @@ static long
 symtable_long(PyValue value)
 {
     assert(PyValue_LongCheckExact(value));
-    return PyValue_IsInlineInt(value) ? PyValue_InlineInt(value) :
+    return PyValue_IsInlineInt(value) ? PyValue_InlineInt64(value) :
            PyLong_AsLong(PyValue_AsKnownObjectBorrow(value));
 }
 
@@ -53,7 +53,7 @@ symtable_set_flags(PyObject *dict, PyObject *name, long flags)
     /* DEF_* and USE occupy the low bits; the largest scope is CELL << 12. */
     assert(0 <= flags && flags <= INT32_MAX);
     return PyDict_SetValue(dict, PyValue_FromObjectBorrow(name),
-                           PyValue_FromInt32((int32_t)flags));
+                           PyValue_FromInlineInt(flags));
 }
 
 static int
@@ -696,7 +696,7 @@ error_at_directive(PySTEntryObject *ste, PyObject *name)
             for (int j = 0; j < 4; j++) {
                 PyValue value = PyTuple_GET_VALUE(data, j + 1);
                 assert(PyValue_IsInlineInt(value));
-                coordinates[j] = PyValue_InlineInt(value);
+                coordinates[j] = (int)PyValue_InlineInt64(value);
             }
             PyErr_RangedSyntaxLocationObject(ste->ste_table->st_filename,
                                              coordinates[0],

@@ -32,7 +32,7 @@
 #include "pycore_ceval.h"         // SPECIAL___ENTER__
 #include "pycore_template.h"      // _PyTemplate_Type
 #include "pycore_tuple.h"         // _PyTuple_GET_OBJECT()
-#include "pycore_value.h"         // PyValue_InlineInt()
+#include "pycore_value.h"         // PyValue_InlineInt64()
 
 #define NEED_OPCODE_METADATA
 #include "pycore_opcode_metadata.h" // _PyOpcode_opcode_metadata, _PyOpcode_num_popped/pushed
@@ -846,7 +846,7 @@ codegen_deferred_annotations_body(compiler *c, location loc,
 
         PyValue cond_index = PyList_GET_VALUE(conditional_annotation_indices, i);
         assert(PyValue_LongCheckExact(cond_index));
-        long idx = PyValue_IsInlineInt(cond_index) ? PyValue_InlineInt(cond_index) :
+        long idx = PyValue_IsInlineInt(cond_index) ? PyValue_InlineInt64(cond_index) :
                    PyLong_AsLong(PyValue_AsKnownObjectBorrow(cond_index));
         if (idx == -1 && PyErr_Occurred()) {
             Py_DECREF(mangled);
@@ -4983,7 +4983,7 @@ codegen_push_inlined_comprehension_locals(compiler *c, location loc,
         assert(PyValue_IsObject(key));
         assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(key)));
         assert(PyValue_LongCheckExact(value));
-        long symbol = PyValue_IsInlineInt(value) ? PyValue_InlineInt(value) :
+        long symbol = PyValue_IsInlineInt(value) ? PyValue_InlineInt64(value) :
                       PyLong_AsLong(PyValue_AsKnownObjectBorrow(value));
         PyValue_CLOSE(value);
         value = PyValue_NULL;

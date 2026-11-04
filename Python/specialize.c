@@ -1831,7 +1831,7 @@ store_subscr_fail_kind(PyObject *container, PyValue sub)
     }
     if (PyObject_CheckBuffer(container)) {
         if (sub_is_int &&
-            !(PyValue_IsCompactInt(sub) && PyValue_CompactIntValue(sub) >= 0))
+            !(PyValue_IsInlineInt(sub) && PyValue_InlineInt64(sub) >= 0))
         {
             return SPEC_FAIL_OUT_OF_RANGE;
         }
@@ -1902,9 +1902,9 @@ _Py_Specialize_StoreSubscr(PyValue container_st, PyValue sub_st, _PyInstr *instr
     PyTypeObject *container_type = Py_TYPE(container);
     if (container_type == &PyList_Type) {
         if (PyValue_LongCheckExact(sub_st)) {
-            if (PyValue_IsCompactInt(sub_st)
-                && PyValue_CompactIntValue(sub_st) >= 0
-                && PyValue_CompactIntValue(sub_st) < PyList_GET_SIZE(container))
+            if (PyValue_IsInlineInt(sub_st)
+                && PyValue_InlineInt64(sub_st) >= 0
+                && PyValue_InlineInt64(sub_st) < PyList_GET_SIZE(container))
             {
                 specialize(instr, STORE_SUBSCR_LIST_INT);
                 return;
@@ -2363,7 +2363,7 @@ binary_op_fail_kind(int oparg, PyValue lhs_st, PyValue rhs_st)
         case NB_SUBSCR:
             if (lhs_type == &PyList_Type) {
                 if (rhs_type == &PyLong_Type &&
-                    (!PyValue_IsCompactInt(rhs_st) || PyValue_CompactIntValue(rhs_st) < 0)) {
+                    (!PyValue_IsInlineInt(rhs_st) || PyValue_InlineInt64(rhs_st) < 0)) {
                     return SPEC_FAIL_OUT_OF_RANGE;
                 }
                 if (rhs_type == &PySlice_Type) {
@@ -2372,7 +2372,7 @@ binary_op_fail_kind(int oparg, PyValue lhs_st, PyValue rhs_st)
             }
             if (lhs_type == &PyTuple_Type) {
                 if (rhs_type == &PyLong_Type &&
-                    (!PyValue_IsCompactInt(rhs_st) || PyValue_CompactIntValue(rhs_st) < 0)) {
+                    (!PyValue_IsInlineInt(rhs_st) || PyValue_InlineInt64(rhs_st) < 0)) {
                     return SPEC_FAIL_OUT_OF_RANGE;
                 }
                 if (rhs_type == &PySlice_Type) {
@@ -2381,7 +2381,7 @@ binary_op_fail_kind(int oparg, PyValue lhs_st, PyValue rhs_st)
             }
             if (lhs_type == &PyUnicode_Type) {
                 if (rhs_type == &PyLong_Type &&
-                    (!PyValue_IsCompactInt(rhs_st) || PyValue_CompactIntValue(rhs_st) < 0)) {
+                    (!PyValue_IsInlineInt(rhs_st) || PyValue_InlineInt64(rhs_st) < 0)) {
                     return SPEC_FAIL_OUT_OF_RANGE;
                 }
                 if (rhs_type == &PySlice_Type) {
@@ -2573,15 +2573,15 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
     _PyFbBinary *fb = fb_begin_binary(instr, lhs_type, rhs_type);
     fb->descr = NULL;
     bool producers = true;
-    bool compact_ints = producers &&
-        PyValue_IsCompactInt(lhs_st) && PyValue_IsCompactInt(rhs_st);
-    // Two floats, or a float and a compact int.
+    // The specialized forms take inline operands only.
+    bool inline_ints = producers && PyValue_BothInlineInt(lhs_st, rhs_st);
+    // Two floats, or a float and an int.
     bool floats = producers && PyValue_FloatOperandsCheck(lhs_st, rhs_st);
 
     switch (oparg) {
         case NB_ADD:
         case NB_INPLACE_ADD:
-            if (compact_ints) {
+            if (inline_ints) {
                 specialize(instr, BINARY_OP_ADD_INT);
                 return;
             }
@@ -2610,7 +2610,7 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
             break;
         case NB_MULTIPLY:
         case NB_INPLACE_MULTIPLY:
-            if (compact_ints) {
+            if (inline_ints) {
                 specialize(instr, BINARY_OP_MULTIPLY_INT);
                 return;
             }
@@ -2621,7 +2621,7 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
             break;
         case NB_SUBTRACT:
         case NB_INPLACE_SUBTRACT:
-            if (compact_ints) {
+            if (inline_ints) {
                 specialize(instr, BINARY_OP_SUBTRACT_INT);
                 return;
             }
@@ -2639,55 +2639,55 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
             break;
         case NB_FLOOR_DIVIDE:
         case NB_INPLACE_FLOOR_DIVIDE:
-            if (compact_ints && PyValue_CompactIntValue(rhs_st) != 0) {
+            if (inline_ints && PyValue_InlineInt64(rhs_st) != 0) {
                 specialize(instr, BINARY_OP_FLOOR_DIVIDE_INT);
                 return;
             }
             break;
         case NB_REMAINDER:
         case NB_INPLACE_REMAINDER:
-            if (compact_ints && PyValue_CompactIntValue(rhs_st) != 0) {
+            if (inline_ints && PyValue_InlineInt64(rhs_st) != 0) {
                 specialize(instr, BINARY_OP_REMAINDER_INT);
                 return;
             }
             break;
         case NB_AND:
         case NB_INPLACE_AND:
-            if (compact_ints) {
+            if (inline_ints) {
                 specialize(instr, BINARY_OP_AND_INT);
                 return;
             }
             break;
         case NB_OR:
         case NB_INPLACE_OR:
-            if (compact_ints) {
+            if (inline_ints) {
                 specialize(instr, BINARY_OP_OR_INT);
                 return;
             }
             break;
         case NB_XOR:
         case NB_INPLACE_XOR:
-            if (compact_ints) {
+            if (inline_ints) {
                 specialize(instr, BINARY_OP_XOR_INT);
                 return;
             }
             break;
         case NB_LSHIFT:
         case NB_INPLACE_LSHIFT:
-            if (compact_ints && PyValue_CompactIntValue(rhs_st) >= 0) {
+            if (inline_ints && PyValue_InlineInt64(rhs_st) >= 0) {
                 specialize(instr, BINARY_OP_LSHIFT_INT);
                 return;
             }
             break;
         case NB_RSHIFT:
         case NB_INPLACE_RSHIFT:
-            if (compact_ints && PyValue_CompactIntValue(rhs_st) >= 0) {
+            if (inline_ints && PyValue_InlineInt64(rhs_st) >= 0) {
                 specialize(instr, BINARY_OP_RSHIFT_INT);
                 return;
             }
             break;
         case NB_SUBSCR:
-            if (PyValue_IsCompactInt(rhs_st) && PyValue_CompactIntValue(rhs_st) >= 0) {
+            if (PyValue_IsInlineInt(rhs_st) && PyValue_InlineInt64(rhs_st) >= 0) {
                 if (lhs_type == &PyList_Type) {
                     specialize(instr, BINARY_OP_SUBSCR_LIST_INT);
                     return;
@@ -2799,11 +2799,16 @@ _Py_Specialize_CompareOp(PyValue lhs_st, PyValue rhs_st, _PyInstr *instr,
         goto failure;
     }
     if (lhs_type == &PyFloat_Type) {
-        specialized_op = COMPARE_OP_FLOAT;
-        goto success;
+        // The guards take inline floats only; a boxed float is a NaN.
+        if (PyValue_IsInlineFloat(lhs_st) && PyValue_IsInlineFloat(rhs_st)) {
+            specialized_op = COMPARE_OP_FLOAT;
+            goto success;
+        }
+        SPECIALIZATION_FAIL(COMPARE_OP, SPEC_FAIL_OTHER);
+        goto failure;
     }
     if (lhs_type == &PyLong_Type) {
-        if (PyValue_IsCompactInt(lhs_st) && PyValue_IsCompactInt(rhs_st)) {
+        if (PyValue_BothInlineInt(lhs_st, rhs_st)) {
             specialized_op = COMPARE_OP_INT;
             goto success;
         }

@@ -709,12 +709,15 @@ NON_ESCAPING_FUNCTIONS = (
     "PyValue_IsInlineInt",
     "PyValue_IsInlineFloat",
     "PyValue_BothInlineInt",
-    "PyValue_FromInt32",
-    "PyValue_InlineInt",
-    "PyValue_IsCompactInt",
-    "PyValue_CompactIntValue",
+    "PyValue_FromInlineInt",
+    "PyValue_InlineInt64",
+    "_PyValue_IntScaled",
+    "_PyValue_FromIntScaled",
     "PyValue_LongCheckExact",
+    # Allocate an int; see PyValue_Box below.
+    "PyValue_FromInt64",
     "_PyValue_BoxInt64",
+    "_PyValue_MultiplyInt64",
     "_PyValue_BoxArray",
     # Debug checks of a home store (report only, no Python).
     "_PyValue_CheckFrameHome",
@@ -723,14 +726,12 @@ NON_ESCAPING_FUNCTIONS = (
     "_PyValue_CheckTemp",
     "PyValue_FromDoubleNotNaN",
     "PyValue_InlineFloat",
-    "PyValue_FloatCheckExact",
-    "PyValue_FloatValue",
     "PyValue_FloatOperandsCheck",
     "PyValue_NumberAsDouble",
     "PyValue_FloatOperandValues",
     # Allocate an int or float; see PyValue_Box below.
     "PyValue_FromDouble",
-    "_PyValue_LshiftInt32",
+    "_PyValue_LshiftInt64",
     # Boxing allocates an int or float, which runs no Python code and
     # cannot start a collection.
     "PyValue_Box",

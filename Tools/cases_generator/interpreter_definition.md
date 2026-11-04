@@ -270,7 +270,7 @@ helpers that convert value arrays must box their elements. Code that
 converts a value by another route, or that handles inline values itself,
 should use the `inline_ok` annotation and box explicitly where needed. Accessors
 that read inline values, such as `PyValue_TYPE()` and
-`PyValue_CompactIntValue()`, are not conversions, so a uop that reads an
+`PyValue_InlineInt64()`, are not conversions, so a uop that reads an
 input only through them needs no box.
 
 An input that was checked, boxed or declared an object, and a variable assigned

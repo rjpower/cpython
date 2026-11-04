@@ -20,7 +20,18 @@ extern "C" {
 #define Py_PTR_LIMIT     ((uintptr_t)1 << 48)
 #define Py_INDEX_BASE    ((uintptr_t)1 << 48)
 #define Py_DOUBLE_OFFSET ((uintptr_t)1 << 49)
-#define Py_INT_BASE      ((uintptr_t)0xFFFE << 48)
+/* An inline int is int51: Py_INT_BASE | (v & (2**51 - 1)), where
+   Py_INT_MIN <= v <= Py_INT_MAX. The top Py_INT_SHIFT bits of its word are
+   set, and every word with them set is an inline int. */
+#define Py_INT_SHIFT     13
+#define Py_INT_BASE      (~(uintptr_t)0 << (64 - Py_INT_SHIFT))
+#define Py_INT_MIN       (-((int64_t)1 << (63 - Py_INT_SHIFT)))
+#define Py_INT_MAX       (((int64_t)1 << (63 - Py_INT_SHIFT)) - 1)
+
+static_assert(Py_INT_BASE == (uintptr_t)0xFFF8 << 48, "int51 region");
+// -inf, the largest float image, lies below the int region.
+static_assert(((uintptr_t)0xFFF0 << 48) + Py_DOUBLE_OFFSET < Py_INT_BASE,
+              "the float and int regions are disjoint");
 
 /* Consume obj and return its canonical value, which owns what obj owned.
  * An exact int or float whose value is held inline is returned inline and
@@ -84,7 +95,7 @@ PyValue_IsLanguageValue(PyValue value)
     if (value.bits < Py_DOUBLE_OFFSET) {
         return PyValue_IsObject(value);
     }
-    if ((value.bits & ~(uintptr_t)UINT32_MAX) == Py_INT_BASE) {
+    if (value.bits >= Py_INT_BASE) {
         return 1;
     }
     uint64_t bits = value.bits - Py_DOUBLE_OFFSET;

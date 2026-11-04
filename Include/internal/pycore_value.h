@@ -123,9 +123,9 @@ _PyValue_Publish(PyValue *source)
 
   Encoding
 
-  A PyValue also holds exact ints that fit in int32 and exact non-NaN floats
+  A PyValue also holds exact ints that fit in int51 and exact non-NaN floats
   without a heap object, and interpreter-internal indices. The bits are laid
-  out as follows (boil/design/02-tagged-values.md, section 2.1):
+  out as follows (pyjit/design/pyvalue.md, section 1.3):
 
     Top 16 bits     Low 48 bits         Meaning
     0x0000          0x000000000000      NULL
@@ -137,8 +137,8 @@ _PyValue_Publish(PyValue *source)
     0x0001          int48               index (Py_INDEX_BASE)
     0x0002-0x7FF2   double + 2^49       inline float, +0.0 to +inf
     0x8002-0xFFF2   double + 2^49       inline float, -0.0 to -inf
-    0xFFFE          0x0000 then int32   inline int (Py_INT_BASE)
-    other                               unused: images of NaNs, and 0xFFFF
+    0xFFF8-0xFFFF   low 51 bits of int  inline int51 (Py_INT_BASE)
+    other                               unused: images of NaNs
 
   Values below Py_PTR_LIMIT are pointer space; Py_TAG_REFCNT and
   Py_TAG_INVALID have meaning only there. Indices and inline values own
@@ -192,7 +192,7 @@ static inline bool PyValue_IsTaggedIndex(PyValue r) { return _PyValue_BITS(r) - 
 static inline bool PyValue_IsInline(PyValue r) { return _PyValue_BITS(r) >= Py_DOUBLE_OFFSET; }
 static inline bool PyValue_IsInlineInt(PyValue r) { return _PyValue_BITS(r) >= Py_INT_BASE; }
 static inline bool PyValue_IsInlineFloat(PyValue r) { return _PyValue_BITS(r) - Py_DOUBLE_OFFSET < Py_INT_BASE - Py_DOUBLE_OFFSET; }
-// Relies on 0xFFFF being unused: only two inline ints have all of these bits set.
+// Exact: the AND has the top Py_INT_SHIFT bits set only if both words do.
 static inline bool PyValue_BothInlineInt(PyValue a, PyValue b) { return (_PyValue_BITS(a) & _PyValue_BITS(b)) >= Py_INT_BASE; }
 
 /* The top 16 bits of *ref, which select the region. Reading them from memory
@@ -214,26 +214,55 @@ _PyValue_TopBitsAt(const PyValue *ref)
 static inline bool PyValue_IsPointerSpaceAt(const PyValue *ref) { return _PyValue_TopBitsAt(ref) == 0; }
 static inline bool PyValue_IsInlineAt(const PyValue *ref) { return _PyValue_TopBitsAt(ref) >= (Py_DOUBLE_OFFSET >> 48); }
 
+// Can v be held inline as an int? Every test of the inline int range uses
+// this, so that the range is defined in one place.
+static inline bool
+_PyValue_IntFitsInline(int64_t v)
+{
+    return Py_INT_MIN <= v && v <= Py_INT_MAX;
+}
+
 // The encoding of an inline int, which is also its identity (see "Value
 // identity" below).
 static inline uintptr_t
-_PyValue_Int32Bits(int32_t i)
+_PyValue_IntBits(int64_t i)
 {
-    return Py_INT_BASE | (uint32_t)i;
+    assert(_PyValue_IntFitsInline(i));
+    return Py_INT_BASE | ((uintptr_t)i & ~Py_INT_BASE);
 }
 
 static inline PyValue
-PyValue_FromInt32(int32_t i)
+PyValue_FromInlineInt(int64_t i)
 {
     OBJECT_STAT_INC(inline_ints_created);
-    return (PyValue){ _PyValue_Int32Bits(i) };
+    return (PyValue){ _PyValue_IntBits(i) };
 }
 
-static inline int32_t
-PyValue_InlineInt(PyValue r)
+/* The value of an inline int times 2**Py_INT_SHIFT: its word shifted left,
+   which drops the region bits. Scaled values add, subtract and compare as
+   the values do, and multiply by an unscaled value. Such an operation
+   overflows int64 exactly when its result leaves the inline range, so one
+   overflow test (__builtin_*_overflow, or jo in the JIT) checks the range. */
+static inline int64_t
+_PyValue_IntScaled(PyValue r)
 {
     assert(PyValue_IsInlineInt(r));
-    return (int32_t)(uint32_t)_PyValue_BITS(r);
+    return (int64_t)(_PyValue_BITS(r) << Py_INT_SHIFT);
+}
+
+// The inline int whose scaled value is s, a multiple of 2**Py_INT_SHIFT.
+static inline PyValue
+_PyValue_FromIntScaled(int64_t s)
+{
+    assert((s & (((int64_t)1 << Py_INT_SHIFT) - 1)) == 0);
+    OBJECT_STAT_INC(inline_ints_created);
+    return (PyValue){ ((uint64_t)s >> Py_INT_SHIFT) | Py_INT_BASE };
+}
+
+static inline int64_t
+PyValue_InlineInt64(PyValue r)
+{
+    return Py_ARITHMETIC_RIGHT_SHIFT(int64_t, _PyValue_IntScaled(r), Py_INT_SHIFT);
 }
 
 // The encoding of an inline float, which is also its identity.
@@ -309,14 +338,14 @@ PyValue_Box(PyValue ref)
 
 /* Value identity (boil/design/02-tagged-values.md, section 3)
 
-   An exact int that fits in int32, or an exact float other than NaN, is
+   An exact int that fits in int51, or an exact float other than NaN, is
    held inline in every home (frame slot, container element, field, cell,
    dict key or value, set key): the PyValue_FromPyObject*() constructors
    turn such an object into its inline value, and _PyValue_CheckHome()
    asserts it at each store. Only C code holds such a value boxed, in a
    PyObject * or a C local PyValue, and a value may be boxed more than once.
    The program must not be able to tell these apart, so such a value has a
-   single identity: its inline encoding, _PyValue_Int32Bits() or
+   single identity: its inline encoding, _PyValue_IntBits() or
    _PyValue_DoubleBits(), whether it is held inline or boxed. Any other
    object's identity is its address. An encoding is at least Py_DOUBLE_OFFSET
    (2**49) and an address is below Py_PTR_LIMIT (2**48), so an identity names
@@ -346,14 +375,6 @@ PyValue_Box(PyValue ref)
 
 // The identity of op: its value encoding or its address.
 PyAPI_FUNC(uintptr_t) _PyObject_ValueIdentity(PyObject *op);
-
-// Can v be held inline as an int? Every test of the inline int range uses
-// this, so that the range is defined in one place.
-static inline bool
-_PyValue_IntFitsInline(int64_t v)
-{
-    return INT32_MIN <= v && v <= INT32_MAX;
-}
 
 
 // Ownership discipline is explicit; no separate debug payload format exists.
@@ -911,79 +932,48 @@ PyValue_LongCheckExact(PyValue value)
            (PyValue_IsPointerSpace(value) && PyLong_CheckExact(PyValue_AsKnownObjectBorrow(value)));
 }
 
-/* Ints in specialized instructions. The int guards accept an inline int or
-   a reference to an exact int with at most one digit; either way the value
-   fits in int32. These accessors read both forms without converting the
-   value to a PyObject *, so the cases generator does not box their
-   argument (see "Inline values" in
-   Tools/cases_generator/interpreter_definition.md). */
-static inline bool
-PyValue_IsCompactInt(PyValue ref)
-{
-    if (PyValue_IsInlineInt(ref)) {
-        return true;
-    }
-    return PyValue_IsPointerSpace(ref)
-           && _PyLong_CheckExactAndCompact(PyValue_AsKnownObjectBorrow(ref));
-}
+/* Numbers in specialized instructions. The int and float guards accept
+   inline values only (PyValue_IsInlineInt(), PyValue_IsInlineFloat()):
+   canonical construction makes every exact int in the inline range and
+   every exact float but NaN inline, so a boxed operand is a larger int or a
+   NaN, and the specialized instruction exits for it. The accessors
+   (PyValue_InlineInt64(), PyValue_InlineFloat()) are not conversions to a
+   PyObject *, so the cases generator does not box their argument (see
+   "Inline values" in Tools/cases_generator/interpreter_definition.md). */
 
-static inline int32_t
-PyValue_CompactIntValue(PyValue ref)
-{
-    assert(PyValue_IsCompactInt(ref));
-    if (PyValue_IsInlineInt(ref)) {
-        return PyValue_InlineInt(ref);
-    }
-    return (int32_t)_PyLong_CompactValue((PyLongObject *)PyValue_AsKnownObjectBorrow(ref));
-}
-
-// The canonical value of an int64 result, or PyValue_NULL with an exception
-// set: a new int for a result outside int32 (the slow path of int
-// arithmetic), the inline value otherwise (FOR_ITER_RANGE, len()). Step 9a
-// renames it PyValue_FromInt64.
+// A new int for a value outside the inline range, or PyValue_NULL with an
+// exception set. The slow path of PyValue_FromInt64() and of int arithmetic.
 PyAPI_FUNC(PyValue) _PyValue_BoxInt64(int64_t value);
 
-// value << shift for a shift of 32 or more places, which makes a long int,
-// or PyValue_NULL with an exception set.
-PyAPI_FUNC(PyValue) _PyValue_LshiftInt32(int32_t value, int32_t shift);
-
-/* Floats in specialized instructions. The float guards accept an inline
-   float or a reference to an exact float, and PyValue_FloatValue() reads
-   either without converting the value to a PyObject *. */
-static inline bool
-PyValue_FloatCheckExact(PyValue ref)
+// The canonical value of an int64: inline if it fits, else a new int, or
+// PyValue_NULL with an exception set (FOR_ITER_RANGE, len()).
+static inline PyValue
+PyValue_FromInt64(int64_t value)
 {
-    return PyValue_IsInlineFloat(ref) ||
-           (PyValue_IsPointerSpace(ref) && PyFloat_CheckExact(PyValue_AsKnownObjectBorrow(ref)));
-}
-
-static inline double
-PyValue_FloatValue(PyValue ref)
-{
-    assert(PyValue_FloatCheckExact(ref));
-    if (PyValue_IsInlineFloat(ref)) {
-        return PyValue_InlineFloat(ref);
+    if (_PyValue_IntFitsInline(value)) {
+        return PyValue_FromInlineInt(value);
     }
-    return PyFloat_AS_DOUBLE(PyValue_AsKnownObjectBorrow(ref));
+    return _PyValue_BoxInt64(value);
 }
 
-/* Are a and b operands of specialized float arithmetic: two floats, or a
-   float and a compact int, which converts to double exactly (see
-   PyValue_IsCompactInt())? A NaN next to an int is refused, as the
-   int-float forms of BINARY_OP_EXTEND that this replaces refused it; an
-   inline float is never NaN, so that costs a test only for a box. */
+// a * b for inline ints a and b whose product leaves the inline range, as
+// a new int, or PyValue_NULL with an exception set.
+PyAPI_FUNC(PyValue) _PyValue_MultiplyInt64(int64_t a, int64_t b);
+
+// value << shift, for a nonzero value and a shift that leaves int64, or
+// PyValue_NULL with an exception set.
+PyAPI_FUNC(PyValue) _PyValue_LshiftInt64(int64_t value, int64_t shift);
+
+/* Are a and b operands of specialized float arithmetic: two inline floats,
+   or an inline float and an inline int? Every int51 converts to a double
+   exactly, and an inline float is never NaN. */
 static inline bool
 PyValue_FloatOperandsCheck(PyValue a, PyValue b)
 {
-    if (PyValue_IsInlineFloat(a) && PyValue_IsInlineFloat(b)) {
-        return true;
+    if (PyValue_IsInlineFloat(a)) {
+        return PyValue_IsInlineFloat(b) || PyValue_IsInlineInt(b);
     }
-    if (PyValue_FloatCheckExact(a)) {
-        return PyValue_FloatCheckExact(b) ||
-               (PyValue_IsCompactInt(b) && !isnan(PyValue_FloatValue(a)));
-    }
-    return PyValue_IsCompactInt(a) && PyValue_FloatCheckExact(b) &&
-           !isnan(PyValue_FloatValue(b));
+    return PyValue_IsInlineInt(a) && PyValue_IsInlineFloat(b);
 }
 
 // An operand that passed PyValue_FloatOperandsCheck(), as a double.
@@ -993,15 +983,7 @@ PyValue_NumberAsDouble(PyValue ref)
     if (PyValue_IsInlineFloat(ref)) {
         return PyValue_InlineFloat(ref);
     }
-    if (PyValue_IsInlineInt(ref)) {
-        return (double)PyValue_InlineInt(ref);
-    }
-    PyObject *op = PyValue_AsKnownObjectBorrow(ref);
-    if (PyFloat_CheckExact(op)) {
-        return PyFloat_AS_DOUBLE(op);
-    }
-    assert(_PyLong_CheckExactAndCompact(op));
-    return (double)_PyLong_CompactValue((PyLongObject *)op);
+    return (double)PyValue_InlineInt64(ref);
 }
 
 /* If PyValue_FloatOperandsCheck(a, b), store a and b as doubles in *da

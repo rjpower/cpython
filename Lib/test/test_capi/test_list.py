@@ -29,11 +29,13 @@ class CAPITest(unittest.TestCase):
         import weakref
 
         self.assertTrue(_testcapi.list_unpublished_nulls())
-        for value in (-(1 << 31), -1, 0, (1 << 31) - 1):
+        # An inline int is int51 under the top 13 bits, all set.
+        for value in (-(1 << 50), -(1 << 31), -1, 0, (1 << 31) - 1,
+                      (1 << 50) - 1):
             with self.subTest(value=value):
                 items = [value]
                 self.assertEqual(_testinternalcapi.list_value_bits(items, 0),
-                                 (0xfffe << 48) | (value & 0xffffffff))
+                                 (0xfff8 << 48) | (value & ((1 << 51) - 1)))
                 self.assertEqual(_testinternalcapi.list_get_value(items, 0), value)
         for value in (0.0, -0.0, 1.25, float('inf'), -float('inf')):
             with self.subTest(value=value):
@@ -44,7 +46,8 @@ class CAPITest(unittest.TestCase):
         class IntSubclass(int):
             pass
 
-        for value in (True, 1 << 80, float('nan'), IntSubclass(3)):
+        for value in (True, 1 << 50, -(1 << 50) - 1, 1 << 80, float('nan'),
+                      IntSubclass(3)):
             items = [value]
             self.assertLess(_testinternalcapi.list_value_bits(items, 0), 1 << 48)
             self.assertIs(_testinternalcapi.list_get_value(items, 0), value)

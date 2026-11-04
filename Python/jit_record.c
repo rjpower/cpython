@@ -8,7 +8,9 @@ int
 _PyJit_ReadInt32(PyValue ref, int32_t *value)
 {
     if (PyValue_IsInlineInt(ref)) {
-        *value = PyValue_InlineInt(ref);
+        int64_t inline_value = PyValue_InlineInt64(ref);
+        if (inline_value < INT32_MIN || inline_value > INT32_MAX) return 0;
+        *value = (int32_t)inline_value;
         return 1;
     }
     if (PyValue_IsNull(ref) || PyValue_IsInline(ref)) return 0;
@@ -20,7 +22,7 @@ _PyJit_ReadInt32(PyValue ref, int32_t *value)
      * not an exception or a request to allocate a boxed replacement. */
     int overflow = 0;
     long result = PyLong_AsLongAndOverflow(object, &overflow);
-    if (overflow || !_PyValue_IntFitsInline(result)) return 0;
+    if (overflow || result < INT32_MIN || result > INT32_MAX) return 0;
     *value = (int32_t)result;
     return 1;
 }
@@ -181,6 +183,10 @@ _PyJit_RecordAfter(_PyJitContext *ctx, _PyJitAction action, const _PyJitLirOp *o
          * reads operands. Capacity allocation is never a per-operation event. */
         if (ctx->expected_exec->jit->record_attempted) return action;
         ctx->expected_exec->jit->record_attempted = 1;
+        /* The trace backend encodes int32 results for the int32 inline
+         * range; until representation step 9b moves it to int51, no int
+         * trace is recorded. */
+        goto abandon;
         if (_PyJit_EnsureFlow(ctx) < 0) goto error;
         flow = ctx->flow_owner ? *ctx->flow_owner : NULL;
         if (flow == NULL || !record_valid(ctx)) goto abandon;
@@ -321,7 +327,7 @@ _PyJit_TracePublish(_PyJitContext *ctx, const JitFrameState *state)
     for (int h = 0; h < g->nhomes; h++) {
         uint16_t id = state->value[h];
         if (id == JIT_NO_VALUE || (id < g->nvalues && g->values[id].import_home == h)) continue;
-        slots[h] = id == JIT_NULL_VALUE ? PyValue_NULL : PyValue_FromInt32((int32_t)ctx->scratch[g->values[id].spill]);
+        slots[h] = id == JIT_NULL_VALUE ? PyValue_NULL : PyValue_FromInlineInt((int32_t)ctx->scratch[g->values[id].spill]);
     }
     ctx->next_instr = ctx->frame->ir_words + state->word;
     ctx->frame->instr_ptr = ctx->next_instr;
@@ -338,7 +344,7 @@ _PyJit_TraceCommit(_PyJitContext *ctx, const JitSsaNode *node)
     for (int k = 0; k < 2; k++) if (node->clears & (1u << k)) slots[node->input_home[k]] = PyValue_NULL;
     PyValue old = slots[node->home];
     int reentrant = !PyValue_IsNull(old) && !PyValue_IsInline(old);
-    slots[node->home] = PyValue_FromInt32((int32_t)ctx->scratch[g->values[node->value].spill]);
+    slots[node->home] = PyValue_FromInlineInt((int32_t)ctx->scratch[g->values[node->value].spill]);
     /* Same order as IR_STORE_DST. Release may reenter or invalidate code;
      * the new local is visible and all other live values are canonical. */
     PyValue_XCLOSE(old);

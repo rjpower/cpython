@@ -16,7 +16,7 @@ class PyValueTupleTests(unittest.TestCase):
             pass
 
         nan = float('nan')
-        values = (-(2**31), 2**31 - 1, -(2**31) - 1, 2**31,
+        values = (-(2**50), 2**50 - 1, -(2**50) - 1, 2**50,
                   0.0, -0.0, math.inf, nan, True, None, IntSubclass(3))
         self.assertEqual(_testinternalcapi.tuple_value_layout(values),
                          'iioofffoooo')
@@ -43,7 +43,7 @@ class PyValueTupleTests(unittest.TestCase):
         self.assertIsNone(reference())
 
     def test_hash_equality_and_subclass_comparison(self):
-        for value in (-1, -(2**31), 2**31 - 1, 0, 100000):
+        for value in (-1, -(2**31), 2**31 - 1, -(2**50), 2**50 - 1, 0, 100000):
             self.assertEqual(hash((value,)), hash((float(value),)))
             self.assertEqual((value,), (float(value),))
         self.assertEqual(hash((0.0,)), hash((-0.0,)))

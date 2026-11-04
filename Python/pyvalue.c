@@ -125,7 +125,7 @@ _PyValue_BoxInlineValue(PyValue ref)
     PyObject *box;
     if (PyValue_IsInlineInt(ref)) {
         OBJECT_STAT_INC(inline_int_boxes);
-        box = PyLong_FromLong(PyValue_InlineInt(ref));
+        box = PyLong_FromLongLong(PyValue_InlineInt64(ref));
     }
     else {
         OBJECT_STAT_INC(inline_float_boxes);
@@ -150,13 +150,13 @@ _PyObject_ValueIdentity(PyObject *op)
 {
     if (PyLong_CheckExact(op)) {
         if (_PyLong_IsCompact((PyLongObject *)op)) {
-            return _PyValue_Int32Bits((int32_t)_PyLong_CompactValue((PyLongObject *)op));
+            return _PyValue_IntBits(_PyLong_CompactValue((PyLongObject *)op));
         }
         // Exact ints do not raise here.
         int overflow;
-        long value = PyLong_AsLongAndOverflow(op, &overflow);
+        long long value = PyLong_AsLongLongAndOverflow(op, &overflow);
         if (!overflow && _PyValue_IntFitsInline(value)) {
-            return _PyValue_Int32Bits((int32_t)value);
+            return _PyValue_IntBits(value);
         }
     }
     else if (PyFloat_CheckExact(op) && !isnan(PyFloat_AS_DOUBLE(op))) {
@@ -168,18 +168,47 @@ _PyObject_ValueIdentity(PyObject *op)
 PyValue
 _PyValue_BoxInt64(int64_t value)
 {
+    assert(!_PyValue_IntFitsInline(value));
     PyObject *op = PyLong_FromLongLong(value);
     if (op == NULL) {
         return PyValue_NULL;
     }
-    return PyValue_FromPyObjectSteal(op);
+    return _PyValue_PointerSteal(op);
+}
+
+/* The operands are exact ints in the inline range, so the multiplication
+   runs no Python; only the allocation can fail. */
+PyValue
+_PyValue_MultiplyInt64(int64_t a, int64_t b)
+{
+    assert(_PyValue_IntFitsInline(a) && _PyValue_IntFitsInline(b));
+    int64_t product;
+    if (!__builtin_mul_overflow(a, b, &product)) {
+        return PyValue_FromInt64(product);
+    }
+    PyObject *x = PyLong_FromLongLong(a);
+    if (x == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *y = PyLong_FromLongLong(b);
+    if (y == NULL) {
+        Py_DECREF(x);
+        return PyValue_NULL;
+    }
+    PyObject *res = PyNumber_Multiply(x, y);
+    Py_DECREF(y);
+    Py_DECREF(x);
+    if (res == NULL) {
+        return PyValue_NULL;
+    }
+    return PyValue_FromPyObjectSteal(res);
 }
 
 PyValue
-_PyValue_LshiftInt32(int32_t value, int32_t shift)
+_PyValue_LshiftInt64(int64_t value, int64_t shift)
 {
-    assert(shift >= 0);
-    PyObject *op = PyLong_FromLong(value);
+    assert(value != 0 && shift >= 0);
+    PyObject *op = PyLong_FromLongLong(value);
     if (op == NULL) {
         return PyValue_NULL;
     }

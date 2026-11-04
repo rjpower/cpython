@@ -536,9 +536,9 @@ INPLACE_OWNERS = {"PyValue_MakeHeapSafe", "PyValue_AsKnownObjectSteal"}
 INPLACE_READERS = {
     "PyValue_DUP", "PyValue_NewRef", "PyValue_AsObject",
     "PyValue_AsKnownObjectBorrow", "PyValue_AsPyObjectNew", "PyValue_TYPE",
-    "PyValue_BoolCheck", "PyValue_CompactIntValue", "PyValue_FloatCheckExact",
-    "PyValue_FloatOperandValues", "PyValue_FloatValue", "PyValue_InlineFloat",
-    "PyValue_InlineInt", "PyValue_LongCheckExact", "_PyValue_Truth",
+    "PyValue_BoolCheck", "PyValue_FloatOperandValues", "PyValue_InlineFloat",
+    "PyValue_InlineInt64", "_PyValue_IntScaled", "PyValue_LongCheckExact",
+    "_PyValue_Truth",
     # Python/ceval.c: they read their value arguments, and the handler
     # releases them after
     "_PyEval_BinarySlice", "_PyEval_StoreName", "_PyEval_StoreSlice",

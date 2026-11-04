@@ -12,11 +12,11 @@ capi = import_helper.import_module("_testinternalcapi")
 
 class PyValueTests(unittest.TestCase):
     def test_scalar_boundary_and_identity(self):
-        for value in (-2**31, 2**31 - 1, 0, -1, 1.25, -0.0,
+        for value in (-2**50, 2**50 - 1, -2**31, 2**31 - 1, 0, -1, 1.25, -0.0,
                       math.inf, -math.inf):
             with self.subTest(value=value):
                 kind, result = capi.pyvalue_contract(value)
-                self.assertEqual(kind, "int32" if type(value) is int else "float64")
+                self.assertEqual(kind, "int51" if type(value) is int else "float64")
                 self.assertIs(type(result), type(value))
                 self.assertEqual(result, value)
                 if type(value) is float:
@@ -28,7 +28,7 @@ class PyValueTests(unittest.TestCase):
         class Float(float):
             pass
 
-        for value in (2**31, -2**31 - 1, float("nan"), True, None,
+        for value in (2**50, -2**50 - 1, float("nan"), True, None,
                       Integer(3), Float(2.5), object()):
             with self.subTest(type=type(value)):
                 kind, result = capi.pyvalue_contract(value)

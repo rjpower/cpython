@@ -618,7 +618,7 @@ native_scope_vector(PyObject *Py_UNUSED(module), PyObject *const *args,
 static PyObject *
 vector_fault_mechanism(PyObject *callable, int fault)
 {
-    PyValue values[2] = {PyValue_FromInt32(1), PyValue_FromInt32(INT32_MAX)};
+    PyValue values[2] = {PyValue_FromInlineInt(1), PyValue_FromInlineInt(INT32_MAX)};
     PyObject *result = vector_mechanism(callable, values, 2, 2, NULL, fault);
     for (int i = 1; i >= 0; i--) {
         PyValue owner = values[i];
@@ -664,7 +664,7 @@ native_scope_vector_counts(PyObject *Py_UNUSED(module), PyObject *callable)
     Py_ssize_t counts[][2] = {
         {-1, 0}, {1, 0}, {0, 1}, {PY_SSIZE_T_MAX, PY_SSIZE_T_MAX},
     };
-    PyValue input = PyValue_FromInt32(1);
+    PyValue input = PyValue_FromInlineInt(1);
     for (size_t i = 0; i < Py_ARRAY_LENGTH(counts); i++) {
         _PyNativeScope scope;
         int status = _PyNativeScope_BeginVector(

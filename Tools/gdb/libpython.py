@@ -149,9 +149,12 @@ def _PyValue_AsKnownObjectBorrow(gdbval):
     return gdb.Value(int(gdbval['bits']) & ~USED_TAGS)
 
 # Inline ints and floats (Include/internal/pycore_value.h). Pointers and
-# indices lie below VALUE_DOUBLE_OFFSET in every build.
+# indices lie below VALUE_DOUBLE_OFFSET in every build. An inline int is
+# int51: the top VALUE_INT_SHIFT bits of its word are set.
 VALUE_DOUBLE_OFFSET = 1 << 49
-VALUE_INT_BASE = 0xFFFE << 48
+VALUE_INT_SHIFT = 13
+VALUE_INT_BITS = 64 - VALUE_INT_SHIFT
+VALUE_INT_BASE = (1 << 64) - (1 << VALUE_INT_BITS)
 
 def _PyValue_InlineValue(gdbval):
     '''Return the int or float that a PyValue holds inline, or None'''
@@ -159,8 +162,9 @@ def _PyValue_InlineValue(gdbval):
     if bits < VALUE_DOUBLE_OFFSET:
         return None
     if bits >= VALUE_INT_BASE:
-        value = bits & 0xFFFFFFFF
-        return value - (1 << 32) if value >= (1 << 31) else value
+        value = bits - VALUE_INT_BASE
+        sign = 1 << (VALUE_INT_BITS - 1)
+        return value - 2 * sign if value >= sign else value
     raw = struct.pack('<Q', bits - VALUE_DOUBLE_OFFSET)
     return struct.unpack('<d', raw)[0]
 

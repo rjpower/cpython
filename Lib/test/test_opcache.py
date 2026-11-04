@@ -1406,20 +1406,40 @@ class TestSpecializer(TestBase):
             self.assert_specialized(binary_op_add_int, "BINARY_OP_ADD_INT")
             self.assert_no_opcode(binary_op_add_int, "BINARY_OP")
 
-        def binary_op_int_non_compact():
+        def binary_op_int_wide_inline():
+            # Outside int32 but inside the inline int51 range, so the int
+            # handlers take it (pyvalue.md section 1.3).
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
-                a, b = 10000000000, 1
+                a, b = 10000000000, 3
                 c = a + b
-                self.assertEqual(c, 10000000001)
+                self.assertEqual(c, 10000000003)
                 c = a - b
-                self.assertEqual(c, 9999999999)
+                self.assertEqual(c, 9999999997)
                 c = a * b
-                self.assertEqual(c, 10000000000)
+                self.assertEqual(c, 30000000000)
 
-        binary_op_int_non_compact()
-        self.assert_no_opcode(binary_op_int_non_compact, "BINARY_OP_ADD_INT")
-        self.assert_no_opcode(binary_op_int_non_compact, "BINARY_OP_SUBTRACT_INT")
-        self.assert_no_opcode(binary_op_int_non_compact, "BINARY_OP_MULTIPLY_INT")
+        binary_op_int_wide_inline()
+        if int_producers:
+            self.assert_specialized(binary_op_int_wide_inline, "BINARY_OP_ADD_INT")
+            self.assert_specialized(binary_op_int_wide_inline, "BINARY_OP_SUBTRACT_INT")
+            self.assert_specialized(binary_op_int_wide_inline, "BINARY_OP_MULTIPLY_INT")
+
+        def binary_op_int_boxed():
+            # Outside the inline int51 range, so the int is a box, which the
+            # int handlers do not take.
+            for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
+                a, b = 10000000000000000, 1
+                c = a + b
+                self.assertEqual(c, 10000000000000001)
+                c = a - b
+                self.assertEqual(c, 9999999999999999)
+                c = a * b
+                self.assertEqual(c, 10000000000000000)
+
+        binary_op_int_boxed()
+        self.assert_no_opcode(binary_op_int_boxed, "BINARY_OP_ADD_INT")
+        self.assert_no_opcode(binary_op_int_boxed, "BINARY_OP_SUBTRACT_INT")
+        self.assert_no_opcode(binary_op_int_boxed, "BINARY_OP_MULTIPLY_INT")
 
         def binary_op_add_unicode():
             for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):

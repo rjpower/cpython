@@ -193,7 +193,7 @@ partial_new(PyTypeObject *type, PyObject *args, PyObject *kw)
     /* Placeholder restrictions */
     if (new_nargs) {
         PyValue last = PyTuple_GET_VALUE(args, new_nargs);
-        if (PyValue_IsObject(last) && PyValue_AsPyObjectBorrow(last) == phold) {
+        if (PyValue_IsObject(last) && PyValue_AsKnownObjectBorrow(last) == phold) {
             PyErr_SetString(PyExc_TypeError,
                             "trailing Placeholders are not allowed");
             return NULL;
@@ -256,7 +256,7 @@ partial_new(PyTypeObject *type, PyObject *args, PyObject *kw)
     Py_ssize_t phcount = 0;
     for (Py_ssize_t i = 0; i < new_nargs - 1; i++) {
         PyValue item = PyTuple_GET_VALUE(new_args, i);
-        if (PyValue_IsObject(item) && PyValue_AsPyObjectBorrow(item) == phold) {
+        if (PyValue_IsObject(item) && PyValue_AsKnownObjectBorrow(item) == phold) {
             phcount++;
         }
     }
@@ -901,7 +901,7 @@ partial_setstate(PyObject *self, PyObject *state)
     if (nargs) {
         PyValue last = PyTuple_GET_VALUE(fnargs, nargs - 1);
         if (PyValue_IsObject(last) &&
-            PyValue_AsPyObjectBorrow(last) == pto->placeholder) {
+            PyValue_AsKnownObjectBorrow(last) == pto->placeholder) {
             PyErr_SetString(PyExc_TypeError,
                             "trailing Placeholders are not allowed");
             return NULL;
@@ -912,7 +912,7 @@ partial_setstate(PyObject *self, PyObject *state)
     for (Py_ssize_t i = 0; i < nargs - 1; i++) {
         PyValue item = PyTuple_GET_VALUE(fnargs, i);
         if (PyValue_IsObject(item) &&
-            PyValue_AsPyObjectBorrow(item) == pto->placeholder) {
+            PyValue_AsKnownObjectBorrow(item) == pto->placeholder) {
             phcount++;
         }
     }
@@ -1356,8 +1356,8 @@ lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
         if (PyValue_IsNull(value) || PyErr_Occurred()) goto error;
         if (PyValue_IsInlineInt(value) ||
             (PyValue_IsObject(value) &&
-             (Py_IS_TYPE(PyValue_AsPyObjectBorrow(value), &PyLong_Type) ||
-              Py_IS_TYPE(PyValue_AsPyObjectBorrow(value), &PyUnicode_Type)))) {
+             (Py_IS_TYPE(PyValue_AsKnownObjectBorrow(value), &PyLong_Type) ||
+              Py_IS_TYPE(PyValue_AsKnownObjectBorrow(value), &PyUnicode_Type)))) {
             key = PyValue_AsObject(value);
             {
                 PyObject *saved = PyErr_GetRaisedException();

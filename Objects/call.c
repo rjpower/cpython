@@ -1135,9 +1135,9 @@ _PyStack_UnpackDict(PyThreadState *tstate,
     nkwargs = PyList_GET_SIZE(items);
     /* Snapshot shape is checked before allocating or boxing keyword values. */
     for (Py_ssize_t i = 0; i < nkwargs; i++) {
-        PyObject *pair = PyValue_AsPyObjectBorrow(PyList_GET_VALUE(items, i));
+        PyObject *pair = PyValue_AsKnownObjectBorrow(PyList_GET_VALUE(items, i));
         PyValue key = PyTuple_GET_VALUE(pair, 0);
-        if (!PyValue_IsObject(key) || !PyUnicode_Check(PyValue_AsPyObjectBorrow(key))) {
+        if (!PyValue_IsObject(key) || !PyUnicode_Check(PyValue_AsKnownObjectBorrow(key))) {
             _PyErr_SetString(tstate, PyExc_TypeError, "keywords must be strings");
             goto error;
         }
@@ -1165,8 +1165,8 @@ _PyStack_UnpackDict(PyThreadState *tstate,
         goto error;
     }
     for (Py_ssize_t i = 0; i < nkwargs; i++) {
-        PyObject *pair = PyValue_AsPyObjectBorrow(PyList_GET_VALUE(items, i));
-        PyObject *key = PyValue_AsPyObjectBorrow(PyTuple_GET_VALUE(pair, 0));
+        PyObject *pair = PyValue_AsKnownObjectBorrow(PyList_GET_VALUE(items, i));
+        PyObject *key = PyValue_AsKnownObjectBorrow(PyTuple_GET_VALUE(pair, 0));
         PyTuple_SET_ITEM(kwnames, i, Py_NewRef(key));
         stack[nargs + i] = _PyValue_AsObjectAt(PyTuple_GET_VALUE(pair, 1), BOX_SITE_CALL_ADAPTER);
         if (stack[nargs + i] == NULL || PyErr_Occurred()) {

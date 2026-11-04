@@ -579,10 +579,10 @@ NON_ESCAPING_FUNCTIONS = (
     "PyLong_FromLong",
     "PyLong_FromSsize_t",
     "PySlice_New",
-    "PyValue_AsPyObjectBorrow",
+    "PyValue_AsKnownObjectBorrow",
     "PyValue_AsPyObjectNew",
     "PyValue_FromPyObjectNewMortal",
-    "PyValue_AsPyObjectSteal",
+    "PyValue_AsKnownObjectSteal",
     "PyValue_Borrow",
     "PyValue_BorrowAt",
     "PyValue_CLEAR",
@@ -1034,9 +1034,9 @@ def compute_properties(op: parser.CodeDef) -> Properties:
     )
 
 VALUE_TO_OBJECT = (
-    "PyValue_AsPyObjectBorrow",
+    "PyValue_AsKnownObjectBorrow",
     "PyValue_AsPyObjectNew",
-    "PyValue_AsPyObjectSteal",
+    "PyValue_AsKnownObjectSteal",
 )
 
 

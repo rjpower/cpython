@@ -675,7 +675,7 @@ list_repeat_impl(PyListObject *a, Py_ssize_t n)
         if (size > capacity / n) { Py_DECREF(result); continue; }
         for (Py_ssize_t i = 0; i < size; i++) {
             PyValue value = a->ob_item[i];
-            if (PyValue_RefcountOnObject(value)) _Py_RefcntAdd(PyValue_AsPyObjectBorrow(value), n);
+            if (PyValue_RefcountOnObject(value)) _Py_RefcntAdd(PyValue_AsKnownObjectBorrow(value), n);
             result->ob_item[i] = value;
         }
         if (size > 0) _Py_memory_repeat((char *)result->ob_item, size * n * sizeof(PyValue), size * sizeof(PyValue));
@@ -887,7 +887,7 @@ list_inplace_repeat_lock_held(PyListObject *self, Py_ssize_t n)
     for (Py_ssize_t i = 0; i < size; i++) {
         PyValue value = self->ob_item[i];
         if (PyValue_RefcountOnObject(value)) {
-            _Py_RefcntAdd(PyValue_AsPyObjectBorrow(value), n - 1);
+            _Py_RefcntAdd(PyValue_AsKnownObjectBorrow(value), n - 1);
         }
     }
     _Py_memory_repeat((char *)self->ob_item, total * sizeof(PyValue),
@@ -2462,8 +2462,8 @@ unsafe_object_compare(PyValue v, PyValue w, MergeState *ms)
     /* Only pointer keys use the cached object slot; scalar fast paths below
        handle inline representations without allocating object wrappers. */
     if (PyValue_IsInline(v) || PyValue_IsInline(w)) return _PyValue_RichCompareBool(v, w, Py_LT);
-    PyObject *left = PyValue_AsPyObjectBorrow(v);
-    PyObject *right = PyValue_AsPyObjectBorrow(w);
+    PyObject *left = PyValue_AsKnownObjectBorrow(v);
+    PyObject *right = PyValue_AsKnownObjectBorrow(w);
     if (Py_TYPE(left)->tp_richcompare != ms->key_richcompare) return _PyValue_RichCompareBool(v, w, Py_LT);
     PyObject *result = ms->key_richcompare(left, right, Py_LT);
     if (result == Py_NotImplemented) {
@@ -2500,8 +2500,8 @@ assert_compare_consistent(PyValue v, PyValue w, int res)
 static int
 unsafe_latin_compare(PyValue left, PyValue right, MergeState *ms)
 {
-    PyObject *v = PyValue_AsPyObjectBorrow(left);
-    PyObject *w = PyValue_AsPyObjectBorrow(right);
+    PyObject *v = PyValue_AsKnownObjectBorrow(left);
+    PyObject *w = PyValue_AsKnownObjectBorrow(right);
     Py_ssize_t len;
     int res;
 
@@ -2537,8 +2537,8 @@ static int
 unsafe_float_compare(PyValue v, PyValue w, MergeState *ms)
 {
     assert(PyValue_TYPE(v) == &PyFloat_Type && PyValue_TYPE(w) == &PyFloat_Type);
-    double left = PyValue_IsInlineFloat(v) ? PyValue_InlineFloat(v) : PyFloat_AS_DOUBLE(PyValue_AsPyObjectBorrow(v));
-    double right = PyValue_IsInlineFloat(w) ? PyValue_InlineFloat(w) : PyFloat_AS_DOUBLE(PyValue_AsPyObjectBorrow(w));
+    double left = PyValue_IsInlineFloat(v) ? PyValue_InlineFloat(v) : PyFloat_AS_DOUBLE(PyValue_AsKnownObjectBorrow(v));
+    double right = PyValue_IsInlineFloat(w) ? PyValue_InlineFloat(w) : PyFloat_AS_DOUBLE(PyValue_AsKnownObjectBorrow(w));
     int result = left < right;
     assert_compare_consistent(v, w, result);
     return result;
@@ -2560,11 +2560,11 @@ unsafe_tuple_compare(PyValue v, PyValue w, MergeState *ms)
     /* Modified from Objects/tupleobject.c:tuplerichcompare, assuming: */
     assert(PyValue_TYPE(v) == &PyTuple_Type);
     assert(PyValue_TYPE(w) == &PyTuple_Type);
-    assert(Py_SIZE(PyValue_AsPyObjectBorrow(v)) > 0);
-    assert(Py_SIZE(PyValue_AsPyObjectBorrow(w)) > 0);
+    assert(Py_SIZE(PyValue_AsKnownObjectBorrow(v)) > 0);
+    assert(Py_SIZE(PyValue_AsKnownObjectBorrow(w)) > 0);
 
-    vt = (PyTupleObject *)PyValue_AsPyObjectBorrow(v);
-    wt = (PyTupleObject *)PyValue_AsPyObjectBorrow(w);
+    vt = (PyTupleObject *)PyValue_AsKnownObjectBorrow(v);
+    wt = (PyTupleObject *)PyValue_AsKnownObjectBorrow(w);
 
     vlen = Py_SIZE(vt);
     wlen = Py_SIZE(wt);
@@ -2685,10 +2685,10 @@ list_sort_impl(PyListObject *self, PyObject *keyfunc, int reverse)
     if (saved_ob_size > 1) {
         /* Assume the first element is representative of the whole list. */
         int keys_are_in_tuples = (PyValue_TYPE(lo.keys[0]) == &PyTuple_Type &&
-                                  Py_SIZE(PyValue_AsPyObjectBorrow(lo.keys[0])) > 0);
+                                  Py_SIZE(PyValue_AsKnownObjectBorrow(lo.keys[0])) > 0);
 
         PyTypeObject* key_type = (keys_are_in_tuples ?
-                                  PyValue_TYPE(PyTuple_GET_VALUE(PyValue_AsPyObjectBorrow(lo.keys[0]), 0)) :
+                                  PyValue_TYPE(PyTuple_GET_VALUE(PyValue_AsKnownObjectBorrow(lo.keys[0]), 0)) :
                                   PyValue_TYPE(lo.keys[0]));
 
         int keys_are_all_same_type = 1;
@@ -2699,7 +2699,7 @@ list_sort_impl(PyListObject *self, PyObject *keyfunc, int reverse)
         for (i=0; i < saved_ob_size; i++) {
 
             if (keys_are_in_tuples &&
-                !(PyValue_TYPE(lo.keys[i]) == &PyTuple_Type && Py_SIZE(PyValue_AsPyObjectBorrow(lo.keys[i])) != 0)) {
+                !(PyValue_TYPE(lo.keys[i]) == &PyTuple_Type && Py_SIZE(PyValue_AsKnownObjectBorrow(lo.keys[i])) != 0)) {
                 keys_are_in_tuples = 0;
                 keys_are_all_same_type = 0;
                 break;
@@ -2709,7 +2709,7 @@ list_sort_impl(PyListObject *self, PyObject *keyfunc, int reverse)
              * lo.keys[i], not lo.keys[i] itself! We verify type-homogeneity
              * for lists of tuples in the if-statement directly above. */
             PyValue key = (keys_are_in_tuples ?
-                             PyTuple_GET_VALUE(PyValue_AsPyObjectBorrow(lo.keys[i]), 0) :
+                             PyTuple_GET_VALUE(PyValue_AsKnownObjectBorrow(lo.keys[i]), 0) :
                              lo.keys[i]);
 
             if (PyValue_TYPE(key) != key_type) {
@@ -2730,7 +2730,7 @@ list_sort_impl(PyListObject *self, PyObject *keyfunc, int reverse)
                 }
                 else if (key_type == &PyUnicode_Type &&
                          strings_are_latin &&
-                         PyUnicode_KIND(PyValue_AsPyObjectBorrow(key)) != PyUnicode_1BYTE_KIND) {
+                         PyUnicode_KIND(PyValue_AsKnownObjectBorrow(key)) != PyUnicode_1BYTE_KIND) {
 
                         strings_are_latin = 0;
                     }

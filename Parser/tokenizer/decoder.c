@@ -501,11 +501,11 @@ _PyTok_DecoderHasBufferedInput(struct tok_state *tok)
     PyValue buffered = PyTuple_GET_VALUE(state, 0);
     PyValue flag = PyTuple_GET_VALUE(state, 1);
     if (!PyValue_IsObject(buffered) ||
-            !PyBytes_Check(PyValue_AsPyObjectBorrow(buffered)) ||
+            !PyBytes_Check(PyValue_AsKnownObjectBorrow(buffered)) ||
             !PyValue_LongCheck(flag)) {
         goto bad_state;
     }
-    pending = PyBytes_GET_SIZE(PyValue_AsPyObjectBorrow(buffered)) != 0;
+    pending = PyBytes_GET_SIZE(PyValue_AsKnownObjectBorrow(buffered)) != 0;
     goto done;
 
 bad_state:

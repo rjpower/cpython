@@ -264,8 +264,8 @@ class TestIRCases(unittest.TestCase):
         # and may be borrowed locals.
         input = """
         inst(OP, (left, right -- res)) {
-            PyObject *l = PyValue_AsPyObjectBorrow(left);
-            PyObject *r = PyValue_AsPyObjectBorrow(right);
+            PyObject *l = PyValue_AsKnownObjectBorrow(left);
+            PyObject *r = PyValue_AsKnownObjectBorrow(right);
             PyObject *o = SPAM(l, r);
             DECREF_INPUTS();
             ERROR_IF(o == NULL);
@@ -320,8 +320,8 @@ class TestIRCases(unittest.TestCase):
             else {
                 right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr));
             }
-            PyObject *l = PyValue_AsPyObjectBorrow(left);
-            PyObject *r = PyValue_AsPyObjectBorrow(right);
+            PyObject *l = PyValue_AsKnownObjectBorrow(left);
+            PyObject *r = PyValue_AsKnownObjectBorrow(right);
             PyObject *o = SPAM(l, r);
             IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             _PyValue_CLOSE_POINTER(right);
@@ -353,14 +353,14 @@ class TestIRCases(unittest.TestCase):
     def test_borrow_mask(self):
         input = """
         inst(OP_PASS, (value -- value, res)) {
-            res = SPAM(PyValue_AsPyObjectBorrow(value));
+            res = SPAM(PyValue_AsKnownObjectBorrow(value));
         }
         inst(OP_OBJ, (value -- res)) {
-            res = SPAM(PyValue_AsPyObjectBorrow(value));
+            res = SPAM(PyValue_AsKnownObjectBorrow(value));
             PyValue_CLOSE(value);
         }
         inst(OP_FAMILY, (value -- res)) {
-            res = SPAM(PyValue_AsPyObjectBorrow(value));
+            res = SPAM(PyValue_AsKnownObjectBorrow(value));
             PyValue_CLOSE(value);
         }
         inst(OP_FAMILY_RAW, (value -- res)) {
@@ -417,19 +417,19 @@ class TestIRCases(unittest.TestCase):
         # from the top slot in a free field, or by counting.
         input = """
         inst(OP, (left, right -- res)) {
-            res = SPAM(PyValue_AsPyObjectBorrow(left),
-                       PyValue_AsPyObjectBorrow(right));
+            res = SPAM(PyValue_AsKnownObjectBorrow(left),
+                       PyValue_AsKnownObjectBorrow(right));
             DECREF_INPUTS();
         }
         inst(ATTR, (owner -- attr, null[oparg & 1])) {
-            attr = SPAM(PyValue_AsPyObjectBorrow(owner));
+            attr = SPAM(PyValue_AsKnownObjectBorrow(owner));
             DECREF_INPUTS();
             if (oparg & 1) {
                 null[0] = PyValue_NULL;
             }
         }
         no_fold inst(ALIAS, (value -- res)) {
-            res = SPAM(PyValue_AsPyObjectBorrow(value));
+            res = SPAM(PyValue_AsKnownObjectBorrow(value));
             DECREF_INPUTS();
         }
         inst(PAIR, (-- a, b)) {
@@ -461,7 +461,7 @@ class TestIRCases(unittest.TestCase):
             EXIT_IF(!PyValue_IsObject(nos));
         }
         op(_USE, (left, right -- left, res)) {
-            res = SPAM(PyValue_AsPyObjectBorrow(right));
+            res = SPAM(PyValue_AsKnownObjectBorrow(right));
             PyValue_CLOSE(right);
         }
         macro(OP) = _GUARD + _USE;
@@ -591,13 +591,13 @@ class TestIRCases(unittest.TestCase):
             ADVANCE_ADAPTIVE_COUNTER(feedback);
         }
         op(_OP, (owner -- res)) {
-            PyObject *o = PyValue_AsPyObjectBorrow(owner);
+            PyObject *o = PyValue_AsKnownObjectBorrow(owner);
             res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
             DECREF_INPUTS();
         }
         macro(OP) = _SPECIALIZE_OP + _OP;
         op(_GUARD, (type_version/2, owner -- owner)) {
-            EXIT_IF(Py_TYPE(PyValue_AsPyObjectBorrow(owner))->tp_version_tag != type_version);
+            EXIT_IF(Py_TYPE(PyValue_AsKnownObjectBorrow(owner))->tp_version_tag != type_version);
         }
         macro(OP_SPECIALIZED) = unused/1 + _GUARD + _OP;
         family(OP, INLINE_CACHE_ENTRIES_OP) = { OP_SPECIALIZED };
@@ -649,7 +649,7 @@ class TestIRCases(unittest.TestCase):
                 else {
                     owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
                 }
-                PyObject *o = PyValue_AsPyObjectBorrow(owner);
+                PyObject *o = PyValue_AsKnownObjectBorrow(owner);
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 _PyValue_CLOSE_POINTER(owner);
@@ -708,7 +708,7 @@ class TestIRCases(unittest.TestCase):
                 else {
                     owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
                 }
-                PyObject *o = PyValue_AsPyObjectBorrow(owner);
+                PyObject *o = PyValue_AsKnownObjectBorrow(owner);
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 _PyValue_CLOSE_POINTER(owner);
@@ -756,7 +756,7 @@ class TestIRCases(unittest.TestCase):
                     JUMP_TO_PREDICTED(OP);
                 }
                 owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
-                if (Py_TYPE(PyValue_AsPyObjectBorrow(owner))->tp_version_tag != type_version) {
+                if (Py_TYPE(PyValue_AsKnownObjectBorrow(owner))->tp_version_tag != type_version) {
                     IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(OP);
                     assert(_PyOpcode_Deopt[opcode] == (OP));
@@ -765,7 +765,7 @@ class TestIRCases(unittest.TestCase):
             }
             // _OP
             {
-                PyObject *o = PyValue_AsPyObjectBorrow(owner);
+                PyObject *o = PyValue_AsKnownObjectBorrow(owner);
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 _PyValue_CLOSE_POINTER(owner);
@@ -1319,7 +1319,7 @@ class TestJitHelpers(unittest.TestCase):
         for name in ("CALL_NON_PY_GENERAL", "CALL_KW_NON_PY"):
             body = generated.split(f"TARGET({name})", 1)[1].split("TARGET(", 1)[0]
             with self.subTest(name=name):
-                self.assertLess(body.index("PyValue_IsObject(callable)"), body.index("PyValue_AsPyObjectBorrow(callable)"))
+                self.assertLess(body.index("PyValue_IsObject(callable)"), body.index("PyValue_AsKnownObjectBorrow(callable)"))
                 self.assertLess(body.index("call_transaction_begin("),
                                 body.index("call_transaction_invoke("))
                 self.assertNotIn("_Py_VectorCall_ValueSteal", body)
@@ -1390,7 +1390,7 @@ class TestJitHelpers(unittest.TestCase):
         ir_generator.generate_ir([str(root / "Python/bytecodes.c")], self.analysis, output, False)
         body = output.getvalue().split("TARGET(BINARY_OP_EXTEND)", 1)[1].split("TARGET(", 1)[0]
         guard = body.index("!PyValue_IsObject(left)")
-        self.assertLess(guard, body.index("PyValue_AsPyObjectBorrow(left)"))
+        self.assertLess(guard, body.index("PyValue_AsKnownObjectBorrow(left)"))
         self.assertLess(guard, body.index("d->guard"))
         self.assertNotIn("PyValue_Box(left)", body)
         self.assertNotIn("PyValue_Box(right)", body)

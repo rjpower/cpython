@@ -3581,7 +3581,7 @@ release_dict_lock_for_dump(PyObject *obj)
 static PyObject *
 dump_object_view(PyValue value)
 {
-    return PyValue_IsObject(value) ? PyValue_AsPyObjectBorrow(value) : NULL;
+    return PyValue_IsObject(value) ? PyValue_AsKnownObjectBorrow(value) : NULL;
 }
 
 // Dump the list of extension modules of sys.modules, excluding stdlib modules

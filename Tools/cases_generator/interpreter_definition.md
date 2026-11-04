@@ -243,8 +243,8 @@ float without a heap object (see `Include/internal/pycore_value.h`). Such an
 inline value must be boxed before C code treats it as a `PyObject *`.
 
 The generator finds each scalar input whose name a uop passes, as the whole
-argument, to `PyValue_AsPyObjectBorrow`, `PyValue_AsPyObjectNew` or
-`PyValue_AsPyObjectSteal` outside an `assert()`. Before the uop's body it
+argument, to `PyValue_AsKnownObjectBorrow`, `PyValue_AsPyObjectNew` or
+`PyValue_AsKnownObjectSteal` outside an `assert()`. Before the uop's body it
 emits one of two checks for that input, marked unlikely:
 
 * In a guard, a uop that may deopt or exit but does not escape and only peeks
@@ -277,7 +277,7 @@ An input that was checked, boxed or declared an object, and a variable assigned
 from such an input or from a `PyValue_FromPyObject...()` constructor, is
 known to be a pointer. `PyValue_CLOSE`, `PyValue_XCLOSE`,
 `PyValue_CLOSE_SPECIALIZED`, `PyValue_DUP` and
-`PyValue_AsPyObjectSteal` on such a variable, and the generator's own close
+`PyValue_AsKnownObjectSteal` on such a variable, and the generator's own close
 of such an input, become the `_PyValue_..._POINTER` variants, which test
 only the reference count tag.
 

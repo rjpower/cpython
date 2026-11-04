@@ -405,7 +405,7 @@ caller(void)
     if (f == NULL || PyValue_IsNull(f->f_funcobj)) {
         Py_RETURN_NONE;
     }
-    PyObject *r = PyFunction_GetModule(PyValue_AsPyObjectBorrow(f->f_funcobj));
+    PyObject *r = PyFunction_GetModule(PyValue_AsKnownObjectBorrow(f->f_funcobj));
     if (!r) {
         PyErr_Clear();
         Py_RETURN_NONE;

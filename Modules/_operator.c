@@ -1383,7 +1383,7 @@ attrgetter_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     for (idx=0; idx<nattrs; ++idx) {
         PyValue candidate=PyTuple_GET_VALUE(args_owner,idx);
         if (!PyValue_IsObject(candidate) ||
-            !PyUnicode_Check(PyValue_AsPyObjectBorrow(candidate))) {
+            !PyUnicode_Check(PyValue_AsKnownObjectBorrow(candidate))) {
             PyErr_SetString(PyExc_TypeError,"attribute name must be a string");
             goto error;
         }
@@ -2072,7 +2072,7 @@ methodcaller_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     }
     PyValue candidate=PyTuple_GET_VALUE(args_owner,0);
     if (!PyValue_IsObject(candidate) ||
-        !PyUnicode_Check(PyValue_AsPyObjectBorrow(candidate))) {
+        !PyUnicode_Check(PyValue_AsKnownObjectBorrow(candidate))) {
         PyErr_SetString(PyExc_TypeError,"method name must be a string");
         goto error;
     }

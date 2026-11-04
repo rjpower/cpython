@@ -1297,7 +1297,7 @@ dict_public_value_retirement(PyObject *module, PyObject *const *args, Py_ssize_t
         PyErr_SetString(PyExc_TypeError, "expected dictionary object");
         return NULL;
     }
-    PyObject *dict = PyValue_AsPyObjectBorrow(source);
+    PyObject *dict = PyValue_AsKnownObjectBorrow(source);
     PyValue value = PyValue_NULL;
     int status = mode == 0 ? PyDict_GetValue(dict, query, &value)
                            : PyDict_ContainsValue(dict, query);

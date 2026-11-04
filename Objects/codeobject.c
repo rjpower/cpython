@@ -154,7 +154,7 @@ validate_code_name_tuple(PyObject *tuple)
     for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(tuple); i++) {
         PyValue value = PyTuple_GET_VALUE(tuple, i);
         if (!PyValue_IsObject(value) ||
-            !PyUnicode_CheckExact(PyValue_AsPyObjectBorrow(value))) {
+            !PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value))) {
             PyErr_SetString(PyExc_SystemError, "non-string found in code slot");
             return -1;
         }
@@ -171,13 +171,13 @@ intern_strings(PyObject *tuple)
     for (i = PyTuple_GET_SIZE(tuple); --i >= 0; ) {
         PyValue value = PyTuple_GetValue(tuple, i);
         if (!PyValue_IsObject(value) ||
-            !PyUnicode_CheckExact(PyValue_AsPyObjectBorrow(value))) {
+            !PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value))) {
             PyValue_XCLOSE(value);
             PyErr_SetString(PyExc_SystemError,
                             "non-string found in code slot");
             return -1;
         }
-        PyObject *v = PyValue_AsPyObjectSteal(value);
+        PyObject *v = PyValue_AsKnownObjectSteal(value);
         _PyUnicode_InternImmortal(interp, &v);
         replace_equivalent_constant(tuple, i, PyValue_FromPyObjectSteal(v));
     }
@@ -201,7 +201,7 @@ intern_constants(PyObject *tuple, int *modified)
             PyValue_CLOSE(held);
             continue;
         }
-        PyObject *v = PyValue_AsPyObjectBorrow(held);
+        PyObject *v = PyValue_AsKnownObjectBorrow(held);
         if (PyUnicode_CheckExact(v)) {
             if (_PyCode_ShouldInternString(v)) {
                 PyObject *w = Py_NewRef(v);
@@ -298,7 +298,7 @@ validate_and_copy_tuple(PyObject *tup)
 
     for (i = 0; i < len; i++) {
         PyValue value = PyTuple_GetValue(tup, i);
-        item = PyValue_IsObject(value) ? PyValue_AsPyObjectBorrow(value) : NULL;
+        item = PyValue_IsObject(value) ? PyValue_AsKnownObjectBorrow(value) : NULL;
         if (item == NULL || !PyUnicode_Check(item)) {
             PyErr_Format(
                 PyExc_TypeError,
@@ -310,7 +310,7 @@ validate_and_copy_tuple(PyObject *tup)
             return NULL;
         }
         if (PyUnicode_CheckExact(item)) {
-            item = PyValue_AsPyObjectSteal(value);
+            item = PyValue_AsKnownObjectSteal(value);
         }
         else {
             item = _PyUnicode_Copy(item);
@@ -3107,7 +3107,7 @@ _PyCode_ConstantValueKey(PyValue constant)
     assert(PyValue_IsLanguageValue(constant));
     PyValue value = PyValue_DUP(constant);
     PyValue key = PyValue_NULL;
-    PyObject *op = PyValue_IsObject(value) ? PyValue_AsPyObjectBorrow(value) : NULL;
+    PyObject *op = PyValue_IsObject(value) ? PyValue_AsKnownObjectBorrow(value) : NULL;
 
     if (PyValue_IsInlineInt(value) ||
         (op != NULL && (op == Py_None || op == Py_Ellipsis ||

@@ -47,7 +47,7 @@ _PyTuple_GET_OBJECT(PyObject *tuple, Py_ssize_t index)
 {
     PyValue value = PyTuple_GET_VALUE(tuple, index);
     assert(PyValue_IsObject(value));
-    return PyValue_AsPyObjectBorrow(value);
+    return PyValue_AsKnownObjectBorrow(value);
 }
 
 /* Replace item i of a result tuple that an iterator recycles, taking the

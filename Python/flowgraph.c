@@ -14,7 +14,7 @@
 #include "pycore_opcode_metadata.h" // OPCODE_HAS_ARG, etc
 #include "pycore_pystate.h"         // _PyInterpreterState_GET()
 #include "pycore_regcfg.h"          // _PyRegCfg_Build()
-#include "pycore_value.h"        // PyValue_AsPyObjectBorrow()
+#include "pycore_value.h"        // PyValue_AsKnownObjectBorrow()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 #include <stdbool.h>
@@ -1815,8 +1815,8 @@ static Py_ssize_t
 const_folding_check_complexity(PyValue value, Py_ssize_t limit)
 {
     if (PyValue_IsObject(value) &&
-        PyTuple_Check(PyValue_AsPyObjectBorrow(value))) {
-        PyObject *obj = PyValue_AsPyObjectBorrow(value);
+        PyTuple_Check(PyValue_AsKnownObjectBorrow(value))) {
+        PyObject *obj = PyValue_AsKnownObjectBorrow(value);
         Py_ssize_t i;
         limit -= PyTuple_GET_SIZE(obj);
         for (i = 0; limit >= 0 && i < PyTuple_GET_SIZE(obj); i++) {
@@ -3988,7 +3988,7 @@ build_cellfixedoffsets(_PyCompile_CodeUnitMetadata *umd)
     while ((status = _PyDict_NextValue(umd->u_cellvars, &pos,
                                       &key, &cellindex, NULL)) > 0) {
         assert(PyValue_IsObject(key));
-        assert(PyUnicode_CheckExact(PyValue_AsPyObjectBorrow(key)));
+        assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(key)));
         if (PyDict_GetValue(umd->u_varnames, key, &varindex) < 0) {
             goto error;
         }
@@ -4000,14 +4000,14 @@ build_cellfixedoffsets(_PyCompile_CodeUnitMetadata *umd)
 
         assert(PyValue_LongCheckExact(varindex));
         int argoffset = PyValue_IsInlineInt(varindex) ? PyValue_InlineInt(varindex) :
-                        PyLong_AsInt(PyValue_AsPyObjectBorrow(varindex));
+                        PyLong_AsInt(PyValue_AsKnownObjectBorrow(varindex));
         if (argoffset == -1 && PyErr_Occurred()) {
             goto error;
         }
 
         assert(PyValue_LongCheckExact(cellindex));
         int oldindex = PyValue_IsInlineInt(cellindex) ? PyValue_InlineInt(cellindex) :
-                       PyLong_AsInt(PyValue_AsPyObjectBorrow(cellindex));
+                       PyLong_AsInt(PyValue_AsKnownObjectBorrow(cellindex));
         if (oldindex == -1 && PyErr_Occurred()) {
             goto error;
         }

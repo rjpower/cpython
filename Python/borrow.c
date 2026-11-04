@@ -372,7 +372,7 @@ _PyBorrow_ValueVector(const PyValue *values, Py_ssize_t n)
     vector[-1] = NULL;
     for (Py_ssize_t i = 0; i < n; i++) {
         vector[i] = PyValue_IsInline(values[i])
-            ? NULL : PyValue_AsPyObjectBorrow(values[i]);
+            ? NULL : PyValue_AsKnownObjectBorrow(values[i]);
     }
     vector[n] = BORROW_SKIP(n + 1);
     s->top = vector + n + 1;

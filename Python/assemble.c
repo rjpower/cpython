@@ -391,10 +391,10 @@ dict_keys_inorder(PyObject *dict, Py_ssize_t offset)
     int status;
     while ((status = _PyDict_NextValue(dict, &pos, &key, &value, NULL)) > 0) {
         assert(PyValue_IsObject(key));
-        assert(PyUnicode_CheckExact(PyValue_AsPyObjectBorrow(key)));
+        assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(key)));
         assert(PyValue_LongCheckExact(value));
         Py_ssize_t i = PyValue_IsInlineInt(value) ? PyValue_InlineInt(value) :
-                       PyLong_AsSsize_t(PyValue_AsPyObjectBorrow(value));
+                       PyLong_AsSsize_t(PyValue_AsKnownObjectBorrow(value));
         if (i == -1 && PyErr_Occurred()) {
             goto error;
         }
@@ -460,11 +460,11 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
                (status = _PyDict_NextValue(umd->u_varnames, &pos,
                                             &key, &value, NULL)) > 0) {
             assert(PyValue_IsObject(key));
-            assert(PyUnicode_CheckExact(PyValue_AsPyObjectBorrow(key)));
+            assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(key)));
             assert(PyValue_LongCheckExact(value));
-            PyObject *k = PyValue_AsPyObjectBorrow(key);
+            PyObject *k = PyValue_AsKnownObjectBorrow(key);
             int offset = PyValue_IsInlineInt(value) ? PyValue_InlineInt(value) :
-                         PyLong_AsInt(PyValue_AsPyObjectBorrow(value));
+                         PyLong_AsInt(PyValue_AsKnownObjectBorrow(value));
             if (offset == -1 && PyErr_Occurred()) {
                 goto error;
             }
@@ -509,9 +509,9 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
     while ((status = _PyDict_NextValue(umd->u_cellvars, &pos,
                                       &key, &value, NULL)) > 0) {
         assert(PyValue_IsObject(key));
-        assert(PyUnicode_CheckExact(PyValue_AsPyObjectBorrow(key)));
+        assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(key)));
         assert(PyValue_LongCheckExact(value));
-        PyObject *k = PyValue_AsPyObjectBorrow(key);
+        PyObject *k = PyValue_AsKnownObjectBorrow(key);
         int has_name = PyDict_Contains(umd->u_varnames, k);
         if (has_name < 0) {
             goto error;
@@ -525,7 +525,7 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
         }
 
         cellvar_offset = PyValue_IsInlineInt(value) ? PyValue_InlineInt(value) :
-                         PyLong_AsInt(PyValue_AsPyObjectBorrow(value));
+                         PyLong_AsInt(PyValue_AsKnownObjectBorrow(value));
         if (cellvar_offset == -1 && PyErr_Occurred()) {
             goto error;
         }
@@ -547,11 +547,11 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
     while ((status = _PyDict_NextValue(umd->u_freevars, &pos,
                                       &key, &value, NULL)) > 0) {
         assert(PyValue_IsObject(key));
-        assert(PyUnicode_CheckExact(PyValue_AsPyObjectBorrow(key)));
+        assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(key)));
         assert(PyValue_LongCheckExact(value));
-        PyObject *k = PyValue_AsPyObjectBorrow(key);
+        PyObject *k = PyValue_AsKnownObjectBorrow(key);
         int offset = PyValue_IsInlineInt(value) ? PyValue_InlineInt(value) :
-                     PyLong_AsInt(PyValue_AsPyObjectBorrow(value));
+                     PyLong_AsInt(PyValue_AsKnownObjectBorrow(value));
         if (offset == -1 && PyErr_Occurred()) {
             goto error;
         }

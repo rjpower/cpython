@@ -249,7 +249,7 @@ _PyUnicode_InternedSize_Immortal(void)
 
     while (_PyDict_NextBorrowed(dict, &pos, &keyval, NULL)) {
         // The interned dict holds only str keys, which have object form.
-        PyObject *key = PyValue_AsPyObjectBorrow(keyval);
+        PyObject *key = PyValue_AsKnownObjectBorrow(keyval);
         assert(PyUnicode_CHECK_INTERNED(key) != SSTATE_INTERNED_IMMORTAL_STATIC);
         if (PyUnicode_CHECK_INTERNED(key) == SSTATE_INTERNED_IMMORTAL) {
            count++;
@@ -3156,7 +3156,7 @@ unicode_fromformat_arg(_PyUnicodeWriter *writer,
             assert(!PyValue_IsNull(value));
             // An inline value is an int or a float, never a type.
             type_raw = PyValue_IsInline(value)
-                ? NULL : PyValue_AsPyObjectBorrow(value);
+                ? NULL : PyValue_AsKnownObjectBorrow(value);
         }
         else {
             type_raw = va_arg(*vargs, PyObject *);
@@ -15100,7 +15100,7 @@ _PyUnicode_ClearInterned(PyInterpreterState *interp)
     PyValue key;
     while (_PyDict_NextBorrowed(interned, &pos, &key, NULL)) {
         // The interned dict holds only str keys, which have object form.
-        PyObject *s = PyValue_AsPyObjectBorrow(key);
+        PyObject *s = PyValue_AsKnownObjectBorrow(key);
         int shared = 0;
         switch (PyUnicode_CHECK_INTERNED(s)) {
         case SSTATE_INTERNED_IMMORTAL:

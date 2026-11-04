@@ -671,7 +671,7 @@ set_tp_bases(PyTypeObject *self, PyObject *bases, int initial)
         else {
             assert(PyTuple_GET_SIZE(bases) == 1);
             assert(PyValue_IsObject(PyTuple_GET_VALUE(bases, 0)) &&
-                   PyValue_AsPyObjectBorrow(PyTuple_GET_VALUE(bases, 0)) ==
+                   PyValue_AsKnownObjectBorrow(PyTuple_GET_VALUE(bases, 0)) ==
                        (PyObject *)self->tp_base);
             assert(self->tp_base->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN);
             assert(_Py_IsImmortal(self->tp_base));
@@ -903,7 +903,7 @@ get_subclasses_unlocked(PyTypeObject *self, PyObject *list)
     int found;
     while ((found = _PyDict_NextValue(subclasses, &pos, NULL, &ref, NULL)) > 0) {
         assert(PyValue_IsObject(ref));
-        PyTypeObject *child = type_from_ref(PyValue_AsPyObjectBorrow(ref));
+        PyTypeObject *child = type_from_ref(PyValue_AsKnownObjectBorrow(ref));
         PyValue_CLOSE(ref);
         if (child != NULL) {
             Py_ssize_t size = PyList_GET_SIZE(list);
@@ -1343,7 +1343,7 @@ next_nonzero_subclass(PyTypeObject *type)
     int found;
     while ((found = _PyDict_NextValue(subclasses, &pos, NULL, &ref, NULL)) > 0) {
         assert(PyValue_IsObject(ref));
-        PyTypeObject *child = type_from_ref(PyValue_AsPyObjectBorrow(ref));
+        PyTypeObject *child = type_from_ref(PyValue_AsKnownObjectBorrow(ref));
         PyValue_CLOSE(ref);
         if (child != NULL) {
             if (child->tp_version_tag != 0) {
@@ -1486,7 +1486,7 @@ type_mro_modified(PyTypeObject *type, PyObject *bases)
     for (i = 0; i < n; i++) {
         PyValue base_value = PyTuple_GET_VALUE(bases_owner, i);
         assert(PyValue_IsObject(base_value));
-        PyObject *base_object = PyValue_AsPyObjectBorrow(base_value);
+        PyObject *base_object = PyValue_AsKnownObjectBorrow(base_value);
         assert(PyType_Check(base_object));
         PyTypeObject *cls = (PyTypeObject *)base_object;
 
@@ -2088,7 +2088,7 @@ mro_hierarchy_for_complete_type(PyTypeObject *type, PyObject *temp)
                 res = -1;
             }
             else {
-                PyObject *child_object = PyValue_AsPyObjectBorrow(child);
+                PyObject *child_object = PyValue_AsKnownObjectBorrow(child);
                 if (!PyType_Check(child_object)) {
                     PyErr_SetString(PyExc_SystemError,
                                     "subclass list contains a non-type object");
@@ -2145,7 +2145,7 @@ type_check_new_bases(PyTypeObject *type, PyObject *new_bases, PyTypeObject **bes
     for (Py_ssize_t i = 0; i < n; i++) {
         PyValue item = PyTuple_GET_VALUE(new_bases, i);
         if (!PyValue_IsObject(item) ||
-            !PyType_Check(PyValue_AsPyObjectBorrow(item))) {
+            !PyType_Check(PyValue_AsKnownObjectBorrow(item))) {
             PyObject *receiver_owner = Py_NewRef((PyObject *)type);
             PyObject *receiver_name_owner = NULL;
             if (PyType_HasFeature(type, Py_TPFLAGS_HEAPTYPE)) {
@@ -2174,7 +2174,7 @@ type_check_new_bases(PyTypeObject *type, PyObject *new_bases, PyTypeObject **bes
             type_mutation_close(&receiver_owner);
             return -1;
         }
-        PyObject *ob = PyValue_AsPyObjectBorrow(item);
+        PyObject *ob = PyValue_AsKnownObjectBorrow(item);
         PyTypeObject *base = (PyTypeObject *)ob;
 
         if (is_subtype_with_mro(lookup_tp_mro(base), base, type) ||
@@ -2275,7 +2275,7 @@ type_set_bases_unlocked(PyTypeObject *type, PyObject *new_bases, PyTypeObject *b
         PyValue record_value = PyList_GET_VALUE(temp, i);
         assert(PyValue_IsObject(record_value));
         PyObject *record_owner = Py_NewRef(
-            PyValue_AsPyObjectBorrow(record_value));
+            PyValue_AsKnownObjectBorrow(record_value));
         assert(PyTuple_CheckExact(record_owner));
         Py_ssize_t record_size = PyTuple_GET_SIZE(record_owner);
         assert(record_size == 2 || record_size == 3);
@@ -2283,8 +2283,8 @@ type_set_bases_unlocked(PyTypeObject *type, PyObject *new_bases, PyTypeObject *b
         PyValue new_mro_value = PyTuple_GET_VALUE(record_owner, 1);
         assert(PyValue_IsObject(cls_value));
         assert(PyValue_IsObject(new_mro_value));
-        PyObject *cls_object = PyValue_AsPyObjectBorrow(cls_value);
-        PyObject *new_mro = PyValue_AsPyObjectBorrow(new_mro_value);
+        PyObject *cls_object = PyValue_AsKnownObjectBorrow(cls_value);
+        PyObject *new_mro = PyValue_AsKnownObjectBorrow(new_mro_value);
         assert(PyType_Check(cls_object));
         assert(PyTuple_CheckExact(new_mro));
         PyTypeObject *cls = (PyTypeObject *)cls_object;
@@ -2292,7 +2292,7 @@ type_set_bases_unlocked(PyTypeObject *type, PyObject *new_bases, PyTypeObject *b
         if (record_size == 3) {
             PyValue old_mro_value = PyTuple_GET_VALUE(record_owner, 2);
             assert(PyValue_IsObject(old_mro_value));
-            old_mro = PyValue_AsPyObjectBorrow(old_mro_value);
+            old_mro = PyValue_AsKnownObjectBorrow(old_mro_value);
             assert(PyTuple_CheckExact(old_mro));
         }
         /* Do not rollback if cls has a newer version of MRO.  */
@@ -3351,7 +3351,7 @@ is_subtype_with_mro(PyObject *a_mro, PyTypeObject *a, PyTypeObject *b)
     for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(a_mro); i++) {
         PyValue item = PyTuple_GET_VALUE(a_mro, i);
         if (PyValue_IsObject(item) &&
-                PyValue_AsPyObjectBorrow(item) == (PyObject *)b) {
+                PyValue_AsKnownObjectBorrow(item) == (PyObject *)b) {
             return 1;
         }
     }
@@ -3445,7 +3445,7 @@ _PyObject_LookupSpecialMethod(PyObject *attr, PyValue *method,
     if (PyErr_Occurred()) {
         goto done;
     }
-    PyObject *method_object = PyValue_AsPyObjectBorrow(*method);
+    PyObject *method_object = PyValue_AsKnownObjectBorrow(*method);
     if (_PyType_HasFeature(Py_TYPE(method_object), Py_TPFLAGS_METHOD_DESCRIPTOR)) {
         PyValue retired = *self;
         *self = PyValue_FromPyObjectSteal(self_view);
@@ -3550,7 +3550,7 @@ lookup_method_ex(PyObject *self, PyObject *attr, PyValue *out,
     if (PyErr_Occurred()) {
         goto done;
     }
-    PyObject *value = PyValue_AsPyObjectBorrow(*out);
+    PyObject *value = PyValue_AsKnownObjectBorrow(*out);
     if (_PyType_HasFeature(Py_TYPE(value), Py_TPFLAGS_METHOD_DESCRIPTOR)) {
         rc = 1;
         goto done;
@@ -3661,7 +3661,7 @@ call_method_noarg(PyObject *self, PyObject *attr)
     }
     assert(!PyValue_IsNull(cref.ref));
     assert(PyValue_IsPointerSpace(cref.ref));
-    PyObject *func = PyValue_AsPyObjectBorrow(cref.ref);
+    PyObject *func = PyValue_AsKnownObjectBorrow(cref.ref);
     result = call_unbound_noarg(unbound, func, self_owner);
 done:
     {
@@ -3700,7 +3700,7 @@ call_method(PyObject *self, PyObject *attr, PyObject *args, PyObject *kwds)
     }
     assert(!PyValue_IsNull(cref.ref));
     assert(PyValue_IsPointerSpace(cref.ref));
-    PyObject *meth = PyValue_AsPyObjectBorrow(cref.ref);
+    PyObject *meth = PyValue_AsKnownObjectBorrow(cref.ref);
     if (unbound) {
         result = _PyObject_Call_Prepend(tstate, meth, self_owner, args_owner,
                                         kwds_owner);
@@ -3750,7 +3750,7 @@ vectorcall_method(PyObject *name, PyObject *const *args, Py_ssize_t nargs)
     }
     assert(!PyValue_IsNull(cref.ref));
     assert(PyValue_IsPointerSpace(cref.ref));
-    PyObject *func = PyValue_AsPyObjectBorrow(cref.ref);
+    PyObject *func = PyValue_AsKnownObjectBorrow(cref.ref);
     result = vectorcall_unbound(tstate, unbound, func, args, nargs);
 done:
     {
@@ -3796,7 +3796,7 @@ vectorcall_maybe(PyThreadState *tstate, PyObject *name,
     }
     assert(!PyValue_IsNull(cref.ref));
     assert(PyValue_IsPointerSpace(cref.ref));
-    PyObject *func = PyValue_AsPyObjectBorrow(cref.ref);
+    PyObject *func = PyValue_AsKnownObjectBorrow(cref.ref);
     result = vectorcall_unbound(tstate, unbound, func, args, nargs);
 
 done:
@@ -3842,7 +3842,7 @@ maybe_call_special_no_args(PyObject *self, PyObject *attr, int *attr_is_none)
     }
     assert(!PyValue_IsNull(cref.ref));
     assert(PyValue_IsPointerSpace(cref.ref));
-    PyObject *func = PyValue_AsPyObjectBorrow(cref.ref);
+    PyObject *func = PyValue_AsKnownObjectBorrow(cref.ref);
     if (attr_is_none != NULL) {
         *attr_is_none = (func == Py_None);
     }
@@ -3895,7 +3895,7 @@ maybe_call_special_one_arg(PyObject *self, PyObject *attr, PyObject *arg,
     }
     assert(!PyValue_IsNull(cref.ref));
     assert(PyValue_IsPointerSpace(cref.ref));
-    PyObject *func = PyValue_AsPyObjectBorrow(cref.ref);
+    PyObject *func = PyValue_AsKnownObjectBorrow(cref.ref);
     if (attr_is_none != NULL) {
         *attr_is_none = (func == Py_None);
     }
@@ -3969,7 +3969,7 @@ tail_contains(PyObject *tuple, Py_ssize_t whence, PyObject *o)
 {
     for (Py_ssize_t j = whence + 1; j < PyTuple_GET_SIZE(tuple); j++) {
         PyValue item = PyTuple_GET_VALUE(tuple, j);
-        if (PyValue_IsObject(item) && PyValue_AsPyObjectBorrow(item) == o) {
+        if (PyValue_IsObject(item) && PyValue_AsKnownObjectBorrow(item) == o) {
             return 1;
         }
     }
@@ -4001,7 +4001,7 @@ check_duplicates(PyObject *tuple)
     for (Py_ssize_t i = 0; i < n; i++) {
         PyValue item = PyTuple_GET_VALUE(owner, i);
         if (!PyValue_IsObject(item) ||
-                !PyType_Check(PyValue_AsPyObjectBorrow(item))) {
+                !PyType_Check(PyValue_AsKnownObjectBorrow(item))) {
             error_type = Py_NewRef(PyValue_TYPE(item));
             PyErr_Format(PyExc_TypeError, "bases must be types; got '%N'",
                          error_type);
@@ -4009,7 +4009,7 @@ check_duplicates(PyObject *tuple)
         }
         for (Py_ssize_t j = i + 1; j < n; j++) {
             if (PyValue_Is(item, PyTuple_GET_VALUE(owner, j))) {
-                name = class_name(PyValue_AsPyObjectBorrow(item));
+                name = class_name(PyValue_AsKnownObjectBorrow(item));
                 if (name == NULL || PyErr_Occurred()) {
                     goto done;
                 }
@@ -4075,7 +4075,7 @@ set_mro_error(PyObject **to_merge, Py_ssize_t to_merge_size, Py_ssize_t *remain)
     for (Py_ssize_t i = 0; i < n && (size_t)off < sizeof(buf); i++) {
         PyValue candidate = PyList_GET_VALUE(keys, i);
         assert(PyValue_IsObject(candidate));
-        name = class_name(PyValue_AsPyObjectBorrow(candidate));
+        name = class_name(PyValue_AsKnownObjectBorrow(candidate));
         if (name == NULL || PyErr_Occurred()) {
             goto done;
         }
@@ -4140,7 +4140,7 @@ again:
         }
         PyValue value = PyTuple_GET_VALUE(tuple, remain[i]);
         assert(PyValue_IsObject(value));
-        PyObject *candidate = PyValue_AsPyObjectBorrow(value);
+        PyObject *candidate = PyValue_AsKnownObjectBorrow(value);
         for (Py_ssize_t j = 0; j < to_merge_size; j++) {
             if (tail_contains(to_merge[j], remain[j], candidate)) {
                 goto skip;
@@ -4201,12 +4201,12 @@ mro_implementation_unlocked(PyTypeObject *type)
     Py_ssize_t n = PyTuple_GET_SIZE(bases);
     for (Py_ssize_t i = 0; i < n; i++) {
         PyValue item = PyTuple_GET_VALUE(bases, i);
-        if (!PyValue_IsObject(item) || !PyType_Check(PyValue_AsPyObjectBorrow(item))) {
+        if (!PyValue_IsObject(item) || !PyType_Check(PyValue_AsKnownObjectBorrow(item))) {
             error_type = Py_NewRef(PyValue_TYPE(item));
             PyErr_Format(PyExc_TypeError, "bases must be types; got '%N'", error_type);
             goto done;
         }
-        PyTypeObject *base = _PyType_CAST(PyValue_AsPyObjectBorrow(item));
+        PyTypeObject *base = _PyType_CAST(PyValue_AsKnownObjectBorrow(item));
         if (lookup_tp_mro(base) == NULL) {
             PyErr_Format(PyExc_TypeError,
                          "Cannot extend an incomplete type '%.100s'", base->tp_name);
@@ -4215,7 +4215,7 @@ mro_implementation_unlocked(PyTypeObject *type)
     }
     if (n == 1) {
         PyValue item = PyTuple_GET_VALUE(bases, 0);
-        PyTypeObject *base = _PyType_CAST(PyValue_AsPyObjectBorrow(item));
+        PyTypeObject *base = _PyType_CAST(PyValue_AsKnownObjectBorrow(item));
         base_mro = Py_NewRef(lookup_tp_mro(base));
         Py_ssize_t k = PyTuple_GET_SIZE(base_mro);
         if (k == PY_SSIZE_T_MAX) {
@@ -4254,7 +4254,7 @@ mro_implementation_unlocked(PyTypeObject *type)
      * input snapshot before result allocation or C3's append callbacks. */
     for (Py_ssize_t i = 0; i < n; i++) {
         PyValue item = PyTuple_GET_VALUE(bases, i);
-        PyTypeObject *base = _PyType_CAST(PyValue_AsPyObjectBorrow(item));
+        PyTypeObject *base = _PyType_CAST(PyValue_AsKnownObjectBorrow(item));
         PyObject *mro = lookup_tp_mro(base);
         if (mro == NULL) {
             PyErr_Format(PyExc_TypeError,
@@ -4357,13 +4357,13 @@ mro_check(PyTypeObject *type, PyObject *mro)
     }
     for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(owner); i++) {
         PyValue item = PyTuple_GET_VALUE(owner, i);
-        if (!PyValue_IsObject(item) || !PyType_Check(PyValue_AsPyObjectBorrow(item))) {
+        if (!PyValue_IsObject(item) || !PyType_Check(PyValue_AsKnownObjectBorrow(item))) {
             error_type = Py_NewRef(PyValue_TYPE(item));
             PyErr_Format(PyExc_TypeError,
                          "%N.mro() returned a non-class ('%N')", type, error_type);
             goto done;
         }
-        PyTypeObject *base = _PyType_CAST(PyValue_AsPyObjectBorrow(item));
+        PyTypeObject *base = _PyType_CAST(PyValue_AsKnownObjectBorrow(item));
         PyTypeObject *solid_type = (PyTypeObject *)solid;
         if (!is_subtype_with_mro(lookup_tp_mro(solid_type), solid_type, solid_base(base))) {
             PyErr_Format(PyExc_TypeError,
@@ -4523,12 +4523,12 @@ find_best_base(PyObject *bases)
     Py_ssize_t n = PyTuple_GET_SIZE(owner);
     for (Py_ssize_t i = 0; i < n; i++) {
         PyValue item = PyTuple_GET_VALUE(owner, i);
-        if (!PyValue_IsObject(item) || !PyType_Check(PyValue_AsPyObjectBorrow(item))) {
+        if (!PyValue_IsObject(item) || !PyType_Check(PyValue_AsKnownObjectBorrow(item))) {
             error_type = Py_NewRef(PyValue_TYPE(item));
             PyErr_Format(PyExc_TypeError, "bases must be types; got '%N'", error_type);
             goto done;
         }
-        PyTypeObject *base_i = _PyType_CAST(PyValue_AsPyObjectBorrow(item));
+        PyTypeObject *base_i = _PyType_CAST(PyValue_AsKnownObjectBorrow(item));
         /* Preserve per-base rejection/readiness order. The prior solid
          * winner stays owned if readiness reparents an earlier base. */
         if (!_PyType_IsReady(base_i) &&
@@ -4551,7 +4551,7 @@ find_best_base(PyObject *bases)
         PyTypeObject *base = NULL;
         for (Py_ssize_t j = 0; j <= i; j++) {
             PyValue current = PyTuple_GET_VALUE(owner, j);
-            PyTypeObject *base_j = _PyType_CAST(PyValue_AsPyObjectBorrow(current));
+            PyTypeObject *base_j = _PyType_CAST(PyValue_AsKnownObjectBorrow(current));
             if (!_PyType_IsReady(base_j)) {
                 PyErr_Format(PyExc_TypeError,
                              "Cannot extend an incomplete type '%.100s'", base_j->tp_name);
@@ -5083,7 +5083,7 @@ type_new_visit_slots(type_new_ctx *ctx)
     for (Py_ssize_t i = 0; i < ctx->nslot; i++) {
         selected = PyTuple_GET_VALUE(slots_owner, i);
         if (!PyValue_IsObject(selected) ||
-                !PyUnicode_Check(PyValue_AsPyObjectBorrow(selected))) {
+                !PyUnicode_Check(PyValue_AsKnownObjectBorrow(selected))) {
             error_type_owner = (PyObject *)Py_NewRef(PyValue_TYPE(selected));
             if (error_type_owner == NULL || PyErr_Occurred()) {
                 goto done;
@@ -5095,7 +5095,7 @@ type_new_visit_slots(type_new_ctx *ctx)
             PyErr_SetString(PyExc_TypeError, message);
             goto done;
         }
-        PyObject *name = PyValue_AsPyObjectBorrow(selected);
+        PyObject *name = PyValue_AsKnownObjectBorrow(selected);
         int valid = valid_identifier(name);
         if (valid < 0 || PyErr_Occurred()) {
             goto done;
@@ -5169,7 +5169,7 @@ type_new_copy_slots(type_new_ctx *ctx, PyObject *dict)
     for (Py_ssize_t i = 0; i < nslot; i++) {
         PyValue value = PyTuple_GET_VALUE(slots_owner, i);
         assert(PyValue_IsObject(value));
-        PyObject *slot = PyValue_AsPyObjectBorrow(value);
+        PyObject *slot = PyValue_AsKnownObjectBorrow(value);
         if ((ctx->add_dict && _PyUnicode_Equal(slot, &_Py_ID(__dict__))) ||
             (ctx->add_weak && _PyUnicode_Equal(slot, &_Py_ID(__weakref__)))) {
             if (PyErr_Occurred()) goto done;
@@ -5209,7 +5209,7 @@ type_new_copy_slots(type_new_ctx *ctx, PyObject *dict)
     for (Py_ssize_t i = 0; i < new_nslot; i++) {
         PyValue value = PyTuple_GET_VALUE(tuple, i);
         if (!PyValue_IsObject(value) ||
-                !PyUnicode_Check(PyValue_AsPyObjectBorrow(value))) {
+                !PyUnicode_Check(PyValue_AsKnownObjectBorrow(value))) {
             PyErr_SetString(PyExc_RuntimeError, "stale __slots__ construction");
             goto done;
         }
@@ -5243,7 +5243,7 @@ type_new_slots_bases(type_new_ctx *ctx)
         for (Py_ssize_t i = 0; i < nbases; i++) {
             PyValue value = PyTuple_GET_VALUE(ctx->bases, i);
             assert(PyValue_IsObject(value));
-            PyObject *obj = PyValue_AsPyObjectBorrow(value);
+            PyObject *obj = PyValue_AsKnownObjectBorrow(value);
             assert(PyType_Check(obj));
             if (obj == (PyObject *)ctx->base) continue;
             PyTypeObject *base = _PyType_CAST(obj);
@@ -5459,11 +5459,11 @@ type_new_set_doc(PyTypeObject *type, PyObject* dict)
     int found = PyDict_GetValue(dict_owner, PyValue_FromObjectBorrow(&_Py_ID(__doc__)), &doc);
     if (found < 0 || PyErr_Occurred()) goto done;
     if (found == 0 || !PyValue_IsObject(doc) ||
-            !PyUnicode_Check(PyValue_AsPyObjectBorrow(doc))) {
+            !PyUnicode_Check(PyValue_AsKnownObjectBorrow(doc))) {
         result = 0;
         goto done;
     }
-    const char *doc_str = PyUnicode_AsUTF8(PyValue_AsPyObjectBorrow(doc));
+    const char *doc_str = PyUnicode_AsUTF8(PyValue_AsKnownObjectBorrow(doc));
     if (doc_str == NULL || PyErr_Occurred()) goto done;
     Py_ssize_t size = strlen(doc_str) + 1;
     tp_doc = PyMem_Malloc(size);
@@ -5512,12 +5512,12 @@ type_new_staticmethod(PyObject *dict, PyObject *attr)
     int found = PyDict_GetValue(dict_owner, PyValue_FromObjectBorrow(key_owner), &selected);
     if (found < 0 || PyErr_Occurred()) goto done;
     if (found == 0 || !PyValue_IsObject(selected) ||
-            !PyFunction_Check(PyValue_AsPyObjectBorrow(selected))) {
+            !PyFunction_Check(PyValue_AsKnownObjectBorrow(selected))) {
         result = 0;
         goto done;
     }
     if (PyErr_Occurred()) goto done;
-    wrapper = PyStaticMethod_New(PyValue_AsPyObjectBorrow(selected));
+    wrapper = PyStaticMethod_New(PyValue_AsKnownObjectBorrow(selected));
     if (wrapper == NULL || PyErr_Occurred()) goto done;
     result = PyDict_SetItem(dict_owner, key_owner, wrapper);
 done:
@@ -5551,12 +5551,12 @@ type_new_classmethod(PyObject *dict, PyObject *attr)
     int found = PyDict_GetValue(dict_owner, PyValue_FromObjectBorrow(key_owner), &selected);
     if (found < 0 || PyErr_Occurred()) goto done;
     if (found == 0 || !PyValue_IsObject(selected) ||
-            !PyFunction_Check(PyValue_AsPyObjectBorrow(selected))) {
+            !PyFunction_Check(PyValue_AsKnownObjectBorrow(selected))) {
         result = 0;
         goto done;
     }
     if (PyErr_Occurred()) goto done;
-    wrapper = PyClassMethod_New(PyValue_AsPyObjectBorrow(selected));
+    wrapper = PyClassMethod_New(PyValue_AsKnownObjectBorrow(selected));
     if (wrapper == NULL || PyErr_Occurred()) goto done;
     result = PyDict_SetItem(dict_owner, key_owner, wrapper);
 done:
@@ -5717,7 +5717,7 @@ type_new_set_classcell(PyTypeObject *type, PyObject *dict)
         dict_owner, PyValue_FromObjectBorrow(&_Py_ID(__classcell__)), &cell);
     if (found < 0 || PyErr_Occurred()) goto done;
     if (found == 0) { result = 0; goto done; }
-    if (!PyValue_IsObject(cell) || !PyCell_Check(PyValue_AsPyObjectBorrow(cell))) {
+    if (!PyValue_IsObject(cell) || !PyCell_Check(PyValue_AsKnownObjectBorrow(cell))) {
         selected_type_owner = (PyObject *)Py_NewRef(PyValue_TYPE(cell));
         if (selected_type_owner == NULL || PyErr_Occurred()) goto done;
         PyErr_Format(PyExc_TypeError,
@@ -5725,7 +5725,7 @@ type_new_set_classcell(PyTypeObject *type, PyObject *dict)
                      selected_type_owner);
         goto done;
     }
-    int cell_status = PyCell_Set(PyValue_AsPyObjectBorrow(cell), type_owner);
+    int cell_status = PyCell_Set(PyValue_AsKnownObjectBorrow(cell), type_owner);
     if (cell_status < 0 || PyErr_Occurred()) goto done;
     int del_status = PyDict_DelItem(dict_owner, &_Py_ID(__classcell__));
     if (del_status < 0 || PyErr_Occurred()) goto done;
@@ -5758,7 +5758,7 @@ type_new_set_classdictcell(PyObject *dict)
         dict_owner, PyValue_FromObjectBorrow(&_Py_ID(__classdictcell__)), &cell);
     if (found < 0 || PyErr_Occurred()) goto done;
     if (found == 0) { result = 0; goto done; }
-    if (!PyValue_IsObject(cell) || !PyCell_Check(PyValue_AsPyObjectBorrow(cell))) {
+    if (!PyValue_IsObject(cell) || !PyCell_Check(PyValue_AsKnownObjectBorrow(cell))) {
         selected_type_owner = (PyObject *)Py_NewRef(PyValue_TYPE(cell));
         if (selected_type_owner == NULL || PyErr_Occurred()) goto done;
         PyErr_Format(PyExc_TypeError,
@@ -5766,7 +5766,7 @@ type_new_set_classdictcell(PyObject *dict)
                      selected_type_owner);
         goto done;
     }
-    int cell_status = PyCell_Set(PyValue_AsPyObjectBorrow(cell), dict_owner);
+    int cell_status = PyCell_Set(PyValue_AsKnownObjectBorrow(cell), dict_owner);
     if (cell_status < 0 || PyErr_Occurred()) goto done;
     int del_status = PyDict_DelItem(dict_owner, &_Py_ID(__classdictcell__));
     if (del_status < 0 || PyErr_Occurred()) goto done;
@@ -6048,7 +6048,7 @@ type_new_get_bases(type_new_ctx *ctx, PyObject **type,
 
     for (Py_ssize_t i = 0; i < nbases; i++) {
         PyValue value = PyTuple_GET_VALUE(bases_owner, i);
-        if (PyValue_IsObject(value) && PyType_Check(PyValue_AsPyObjectBorrow(value))) {
+        if (PyValue_IsObject(value) && PyType_Check(PyValue_AsKnownObjectBorrow(value))) {
             continue;
         }
         base_view = _PyValue_AsObjectAt(value, BOX_SITE_ATTRIBUTE);
@@ -6166,17 +6166,17 @@ type_new(PyTypeObject *metatype, PyObject *args, PyObject *kwds)
     PyValue invalid = PyValue_NULL;
     int invalid_arg = 0;
     if (!PyValue_IsObject(name_value) ||
-            !PyUnicode_Check(PyValue_AsPyObjectBorrow(name_value))) {
+            !PyUnicode_Check(PyValue_AsKnownObjectBorrow(name_value))) {
         invalid = name_value;
         invalid_arg = 1;
     }
     else if (!PyValue_IsObject(bases_value) ||
-            !PyTuple_Check(PyValue_AsPyObjectBorrow(bases_value))) {
+            !PyTuple_Check(PyValue_AsKnownObjectBorrow(bases_value))) {
         invalid = bases_value;
         invalid_arg = 2;
     }
     else if (!PyValue_IsObject(dict_value) ||
-            !PyAnyDict_Check(PyValue_AsPyObjectBorrow(dict_value))) {
+            !PyAnyDict_Check(PyValue_AsKnownObjectBorrow(dict_value))) {
         invalid = dict_value;
         invalid_arg = 3;
     }
@@ -6189,7 +6189,7 @@ type_new(PyTypeObject *metatype, PyObject *args, PyObject *kwds)
         }
         else {
             const char *actual = PyValue_IsObject(invalid) &&
-                PyValue_AsPyObjectBorrow(invalid) == Py_None
+                PyValue_AsKnownObjectBorrow(invalid) == Py_None
                 ? "None" : error_type->tp_name;
             char message[256];
             PyOS_snprintf(message, sizeof(message),
@@ -6205,9 +6205,9 @@ type_new(PyTypeObject *metatype, PyObject *args, PyObject *kwds)
         .metatype = metatype,
         .args = args,
         .kwds = keywords,
-        .orig_dict = PyValue_AsPyObjectBorrow(dict_value),
-        .name = PyValue_AsPyObjectBorrow(name_value),
-        .bases = PyValue_AsPyObjectBorrow(bases_value),
+        .orig_dict = PyValue_AsKnownObjectBorrow(dict_value),
+        .name = PyValue_AsKnownObjectBorrow(name_value),
+        .bases = PyValue_AsKnownObjectBorrow(bases_value),
         .base = NULL,
         .slots = NULL,
         .nslot = 0,
@@ -6328,12 +6328,12 @@ check_immutable_bases(const char *type_name, PyObject *bases, int skip_first)
     }
     for (Py_ssize_t i = skip_first ? 1 : 0; i < PyTuple_GET_SIZE(owner); i++) {
         PyValue item = PyTuple_GET_VALUE(owner, i);
-        if (!PyValue_IsObject(item) || !PyType_Check(PyValue_AsPyObjectBorrow(item))) {
+        if (!PyValue_IsObject(item) || !PyType_Check(PyValue_AsKnownObjectBorrow(item))) {
             error_type = Py_NewRef(PyValue_TYPE(item));
             PyErr_Format(PyExc_TypeError, "bases must be types; got '%N'", error_type);
             goto done;
         }
-        PyTypeObject *base = _PyType_CAST(PyValue_AsPyObjectBorrow(item));
+        PyTypeObject *base = _PyType_CAST(PyValue_AsKnownObjectBorrow(item));
         if (!_PyType_HasFeature(base, Py_TPFLAGS_IMMUTABLETYPE)) {
             PyErr_Format(PyExc_TypeError,
                          "Creating immutable type %s from mutable base %N", type_name, base);
@@ -7082,13 +7082,13 @@ PyType_GetModuleByToken_DuringGC(PyTypeObject *type, const void *token)
     // we already checked above. We skip it in the loop.
     PyValue first = PyTuple_GET_VALUE(mro, 0);
     assert(PyValue_IsObject(first));
-    assert(PyValue_AsPyObjectBorrow(first) == (PyObject *)type);
+    assert(PyValue_AsKnownObjectBorrow(first) == (PyObject *)type);
 
     Py_ssize_t n = PyTuple_GET_SIZE(mro);
     for (Py_ssize_t i = 1; i < n; i++) {
         PyValue super_value = PyTuple_GET_VALUE(mro, i);
         assert(PyValue_IsObject(super_value));
-        PyObject *super_obj = PyValue_AsPyObjectBorrow(super_value);
+        PyObject *super_obj = PyValue_AsKnownObjectBorrow(super_value);
         assert(PyType_Check(super_obj));
         PyTypeObject *super = (PyTypeObject *)super_obj;
         if (!_PyType_HasFeature(super, Py_TPFLAGS_HEAPTYPE)) {
@@ -7138,7 +7138,7 @@ get_base_by_token_recursive(PyObject *bases, void *token)
     for (Py_ssize_t i = 0; i < n; i++) {
         PyValue value = PyTuple_GET_VALUE(bases, i);
         assert(PyValue_IsObject(value));
-        PyTypeObject *base = _PyType_CAST(PyValue_AsPyObjectBorrow(value));
+        PyTypeObject *base = _PyType_CAST(PyValue_AsKnownObjectBorrow(value));
         if (!_PyType_HasFeature(base, Py_TPFLAGS_HEAPTYPE)) {
             continue;
         }
@@ -7199,12 +7199,12 @@ found:
     // we already checked above. We skip it in the loop.
     PyValue first = PyTuple_GET_VALUE(mro, 0);
     assert(PyValue_IsObject(first));
-    assert(PyValue_AsPyObjectBorrow(first) == (PyObject *)type);
+    assert(PyValue_AsKnownObjectBorrow(first) == (PyObject *)type);
     Py_ssize_t n = PyTuple_GET_SIZE(mro);
     for (Py_ssize_t i = 1; i < n; i++) {
         PyValue value = PyTuple_GET_VALUE(mro, i);
         assert(PyValue_IsObject(value));
-        PyTypeObject *base = (PyTypeObject *)PyValue_AsPyObjectBorrow(value);
+        PyTypeObject *base = (PyTypeObject *)PyValue_AsKnownObjectBorrow(value);
         if (_PyType_HasFeature(base, Py_TPFLAGS_HEAPTYPE)
             && ((PyHeapTypeObject*)base)->ht_token == token) {
             type = base;
@@ -7372,10 +7372,10 @@ _PyType_TryLookupValueNoAlloc(PyTypeObject *type, PyObject *name,
      * can call arbitrary equality code even with an exact Unicode query. */
     for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(mro); i++) {
         PyValue base = PyTuple_GET_VALUE(mro, i);
-        if (!PyValue_IsObject(base) || !PyType_Check(PyValue_AsPyObjectBorrow(base))) {
+        if (!PyValue_IsObject(base) || !PyType_Check(PyValue_AsKnownObjectBorrow(base))) {
             return 0;
         }
-        PyObject *dict = lookup_tp_dict((PyTypeObject *)PyValue_AsPyObjectBorrow(base));
+        PyObject *dict = lookup_tp_dict((PyTypeObject *)PyValue_AsKnownObjectBorrow(base));
         if (dict == NULL || !PyDict_CheckExact(dict) ||
             ((PyDictObject *)dict)->ma_keys->dk_kind == DICT_KEYS_GENERAL) {
             return 0;
@@ -7672,7 +7672,7 @@ set_flags_recursive(PyTypeObject *self, unsigned long mask, unsigned long flags)
                                 "subclass list contains a non-object value");
             }
             else {
-                PyObject *child = PyValue_AsPyObjectBorrow(child_value);
+                PyObject *child = PyValue_AsKnownObjectBorrow(child_value);
                 if (!PyType_Check(child)) {
                     PyErr_SetString(PyExc_SystemError,
                                     "subclass list contains a non-type");
@@ -7824,7 +7824,7 @@ _Py_type_getattro_value(PyTypeObject *type, PyObject *name,
         goto done;
     }
     if (PyValue_IsObject(meta_attribute_ref.ref)) {
-        PyObject *meta_obj = PyValue_AsPyObjectBorrow(meta_attribute_ref.ref);
+        PyObject *meta_obj = PyValue_AsKnownObjectBorrow(meta_attribute_ref.ref);
         meta_get = Py_TYPE(meta_obj)->tp_descr_get;
         if (meta_get != NULL && PyDescr_IsData(meta_obj)) {
             PyObject *returned = meta_get(meta_obj, type_owner, metatype_owner);
@@ -7841,7 +7841,7 @@ _Py_type_getattro_value(PyTypeObject *type, PyObject *name,
     }
     if (!PyValue_IsNull(attribute_ref.ref)) {
         PyObject *attr_obj = PyValue_IsObject(attribute_ref.ref)
-            ? PyValue_AsPyObjectBorrow(attribute_ref.ref) : NULL;
+            ? PyValue_AsKnownObjectBorrow(attribute_ref.ref) : NULL;
         descrgetfunc local_get = attr_obj == NULL ? NULL : Py_TYPE(attr_obj)->tp_descr_get;
         {
             PyValue retired = meta_attribute_ref.ref;
@@ -7872,7 +7872,7 @@ _Py_type_getattro_value(PyTypeObject *type, PyObject *name,
         goto done;
     }
     if (meta_get != NULL) {
-        PyObject *meta_obj = PyValue_AsPyObjectBorrow(meta_attribute_ref.ref);
+        PyObject *meta_obj = PyValue_AsKnownObjectBorrow(meta_attribute_ref.ref);
         PyObject *returned = meta_get(meta_obj, type_owner, metatype_owner);
         if (returned != NULL) {
             result_ref.ref = PyValue_FromPyObjectSteal(returned);
@@ -8183,7 +8183,7 @@ clear_static_tp_subclasses(PyTypeObject *type, int isbuiltin)
             break;
         }
         assert(PyValue_IsObject(ref));
-        PyObject *weakref = PyValue_AsPyObjectBorrow(ref);
+        PyObject *weakref = PyValue_AsKnownObjectBorrow(ref);
         assert(PyWeakref_Check(weakref));
         PyTypeObject *subclass = type_from_ref(weakref);
         PyValue_CLOSE(ref);
@@ -9396,7 +9396,7 @@ object_getstate_default(PyObject *obj, int required)
             goto done;
         }
         if (!PyValue_IsObject(name_value) ||
-                !PyUnicode_Check(PyValue_AsPyObjectBorrow(name_value))) {
+                !PyUnicode_Check(PyValue_AsKnownObjectBorrow(name_value))) {
             diagnostic_type = Py_NewRef((PyObject *)PyValue_TYPE(name_value));
             if (PyType_HasFeature((PyTypeObject *)diagnostic_type,
                                   Py_TPFLAGS_HEAPTYPE)) {
@@ -9410,7 +9410,7 @@ object_getstate_default(PyObject *obj, int required)
             type_mutation_close(&diagnostic_type);
             goto done;
         }
-        name = PyValue_AsPyObjectSteal(name_value);
+        name = PyValue_AsKnownObjectSteal(name_value);
         name_value = PyValue_NULL;
 
         int status = PyObject_GetOptionalAttr(obj, name, &value);
@@ -9608,7 +9608,7 @@ _PyObject_GetNewArguments(PyObject *obj, PyObject **args, PyObject **kwargs)
 
     /* XXX We should perhaps allow None to be passed here. */
     if (!PyValue_IsObject(args_value) ||
-            !PyTuple_Check(PyValue_AsPyObjectBorrow(args_value))) {
+            !PyTuple_Check(PyValue_AsKnownObjectBorrow(args_value))) {
         diagnostic_type = Py_NewRef((PyObject *)PyValue_TYPE(args_value));
         if (PyType_HasFeature((PyTypeObject *)diagnostic_type,
                               Py_TPFLAGS_HEAPTYPE)) {
@@ -9625,7 +9625,7 @@ _PyObject_GetNewArguments(PyObject *obj, PyObject **args, PyObject **kwargs)
         goto done;
     }
     if (!PyValue_IsObject(kwargs_value) ||
-            !PyDict_Check(PyValue_AsPyObjectBorrow(kwargs_value))) {
+            !PyDict_Check(PyValue_AsKnownObjectBorrow(kwargs_value))) {
         diagnostic_type = Py_NewRef((PyObject *)PyValue_TYPE(kwargs_value));
         if (PyType_HasFeature((PyTypeObject *)diagnostic_type,
                               Py_TPFLAGS_HEAPTYPE)) {
@@ -9641,9 +9641,9 @@ _PyObject_GetNewArguments(PyObject *obj, PyObject **args, PyObject **kwargs)
         type_mutation_close(&diagnostic_type);
         goto done;
     }
-    local_args = PyValue_AsPyObjectSteal(args_value);
+    local_args = PyValue_AsKnownObjectSteal(args_value);
     args_value = PyValue_NULL;
-    local_kwargs = PyValue_AsPyObjectSteal(kwargs_value);
+    local_kwargs = PyValue_AsKnownObjectSteal(kwargs_value);
     kwargs_value = PyValue_NULL;
     rc = 0;
     goto done;
@@ -10866,7 +10866,7 @@ type_ready_mro(PyTypeObject *type, int initial)
         for (Py_ssize_t i = 0; i < n; i++) {
             PyValue value = PyTuple_GET_VALUE(mro, i);
             assert(PyValue_IsObject(value));
-            PyTypeObject *base = _PyType_CAST(PyValue_AsPyObjectBorrow(value));
+            PyTypeObject *base = _PyType_CAST(PyValue_AsKnownObjectBorrow(value));
             if (base->tp_flags & Py_TPFLAGS_HEAPTYPE) {
                 PyObject *base_owner = Py_NewRef((PyObject *)base);
                 PyObject *name_owner = Py_NewRef(((PyHeapTypeObject *)base)->ht_name);
@@ -10944,7 +10944,7 @@ type_ready_inherit(PyTypeObject *type)
     for (Py_ssize_t i = 1; i < PyTuple_GET_SIZE(mro); i++) {
         PyValue item = PyTuple_GET_VALUE(mro, i);
         if (PyValue_IsObject(item)) {
-            PyObject *parent = PyValue_AsPyObjectBorrow(item);
+            PyObject *parent = PyValue_AsKnownObjectBorrow(item);
             if (PyType_Check(parent)) {
                 if (inherit_slots(type, (PyTypeObject *)parent) < 0 || PyErr_Occurred()) {
                     goto done;
@@ -11021,7 +11021,7 @@ type_ready_add_subclasses(PyTypeObject *type)
     for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(bases); i++) {
         PyValue item = PyTuple_GET_VALUE(bases, i);
         if (PyValue_IsObject(item)) {
-            PyObject *base = PyValue_AsPyObjectBorrow(item);
+            PyObject *base = PyValue_AsKnownObjectBorrow(item);
             if (PyType_Check(base) &&
                     (add_subclass((PyTypeObject *)base, type) < 0 || PyErr_Occurred())) {
                 goto done;
@@ -11436,7 +11436,7 @@ add_all_subclasses(PyTypeObject *type, PyObject *bases)
     for (Py_ssize_t i = 0; i < n; i++) {
         PyValue item = PyTuple_GET_VALUE(owner, i);
         assert(PyValue_IsObject(item));
-        PyTypeObject *base = _PyType_CAST(PyValue_AsPyObjectBorrow(item));
+        PyTypeObject *base = _PyType_CAST(PyValue_AsKnownObjectBorrow(item));
         if (add_subclass(base, type) < 0 || PyErr_Occurred()) {
             result = -1;
             break;
@@ -11489,7 +11489,7 @@ get_subclasses_key(PyTypeObject *type, PyTypeObject *base, PyValue *result)
     int found;
     while ((found = _PyDict_NextValue(subclasses, &pos, &candidate, &ref, NULL)) > 0) {
         assert(PyValue_IsObject(ref));
-        PyWeakReference *weakref = (PyWeakReference *)PyValue_AsPyObjectBorrow(ref);
+        PyWeakReference *weakref = (PyWeakReference *)PyValue_AsKnownObjectBorrow(ref);
         assert(PyWeakref_Check((PyObject *)weakref));
         int match = weakref->wr_object == (PyObject *)type;
         PyValue_CLOSE(ref);
@@ -11558,7 +11558,7 @@ remove_all_subclasses(PyTypeObject *type, PyObject *bases)
     for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(owner); i++) {
         PyValue item = PyTuple_GET_VALUE(owner, i);
         if (PyValue_IsObject(item)) {
-            PyObject *base = PyValue_AsPyObjectBorrow(item);
+            PyObject *base = PyValue_AsKnownObjectBorrow(item);
             if (PyType_Check(base)) {
                 remove_subclass((PyTypeObject *)base, type);
             }
@@ -12119,7 +12119,7 @@ hackcheck_unlocked(PyObject *self, setattrofunc func, const char *what)
     for (i = PyTuple_GET_SIZE(mro) - 1; i >= 0; i--) {
         PyValue value = PyTuple_GET_VALUE(mro, i);
         assert(PyValue_IsObject(value));
-        PyTypeObject *base = _PyType_CAST(PyValue_AsPyObjectBorrow(value));
+        PyTypeObject *base = _PyType_CAST(PyValue_AsKnownObjectBorrow(value));
         if (base->tp_setattro == slot_tp_setattro) {
             /* Ignore Python classes:
                they never define their own C-level setattro. */
@@ -13359,7 +13359,7 @@ slot_tp_finalize(PyObject *self)
     int unbound = lookup_maybe_method(self_owner, &_Py_ID(__del__), &cref.ref);
     if (unbound >= 0 && !PyErr_Occurred()) {
         assert(!PyValue_IsNull(cref.ref));
-        PyObject *del = PyValue_AsPyObjectBorrow(cref.ref);
+        PyObject *del = PyValue_AsKnownObjectBorrow(cref.ref);
         report_owner = Py_NewRef(del);
         result = call_unbound_noarg(unbound, del, self_owner);
     }
@@ -13526,9 +13526,9 @@ releasebuffer_maybe_call_super_unlocked(PyObject *self, Py_buffer *buffer)
     for (i = 0;  i < n -1; i++) {
         PyValue value = PyTuple_GET_VALUE(mro, i);
         assert(PyValue_IsObject(value));
-        assert(PyValue_AsPyObjectBorrow(value) == (PyObject *)self_type ||
-               PyType_Check(PyValue_AsPyObjectBorrow(value)));
-        if ((PyObject *)(self_type) == PyValue_AsPyObjectBorrow(value))
+        assert(PyValue_AsKnownObjectBorrow(value) == (PyObject *)self_type ||
+               PyType_Check(PyValue_AsKnownObjectBorrow(value)));
+        if ((PyObject *)(self_type) == PyValue_AsKnownObjectBorrow(value))
             break;
     }
     i++;  /* skip self_type */
@@ -13538,7 +13538,7 @@ releasebuffer_maybe_call_super_unlocked(PyObject *self, Py_buffer *buffer)
     for (; i < n; i++) {
         PyValue value = PyTuple_GET_VALUE(mro, i);
         assert(PyValue_IsObject(value));
-        PyObject *obj = PyValue_AsPyObjectBorrow(value);
+        PyObject *obj = PyValue_AsKnownObjectBorrow(value);
         assert(PyType_Check(obj));
         PyTypeObject *base_type = (PyTypeObject *)obj;
         if (base_type->tp_as_buffer != NULL
@@ -14099,7 +14099,7 @@ update_one_slot(PyTypeObject *type, pytype_slotdef *p, pytype_slotdef **next_p,
             continue;
         }
         descr = PyValue_IsObject(descr_ref)
-            ? PyValue_AsPyObjectBorrow(descr_ref) : NULL;
+            ? PyValue_AsKnownObjectBorrow(descr_ref) : NULL;
         if (descr != NULL && Py_IS_TYPE(descr, &PyWrapperDescr_Type) &&
             ((PyWrapperDescrObject *)descr)->d_base->name_strobj == p->name_strobj) {
             void **tptr;
@@ -14399,7 +14399,7 @@ _PyType_InitSlotDefs(PyInterpreterState *interp)
             goto done;
         }
         assert(PyValue_IsObject(value));
-        PyObject *object = PyValue_AsPyObjectBorrow(value);
+        PyObject *object = PyValue_AsKnownObjectBorrow(value);
         assert(PyByteArray_CheckExact(object));
         uint8_t *data = (uint8_t *)PyByteArray_AS_STRING(object);
         uint8_t n = data[0];
@@ -14627,7 +14627,7 @@ recurse_down_subclasses(PyTypeObject *type, PyObject *attr_name,
     for (Py_ssize_t i = 0; i < n; i++) {
         PyValue item = PyList_GET_VALUE(children, i);
         assert(PyValue_IsObject(item));
-        PyTypeObject *child = _PyType_CAST(PyValue_AsPyObjectBorrow(item));
+        PyTypeObject *child = _PyType_CAST(PyValue_AsKnownObjectBorrow(item));
         dict = Py_XNewRef(lookup_tp_dict(child));
         int contains = 0;
         if (dict != NULL && PyDict_Check(dict)) {
@@ -14852,7 +14852,7 @@ _PySuper_LookupDescr(PyTypeObject *su_type, PyTypeObject *su_obj_type, PyObject 
         for (i = 0; i + 1 < n; i++) {
             PyValue value = PyTuple_GET_VALUE(mro_owner, i);
             assert(PyValue_IsObject(value));
-            PyObject *obj = PyValue_AsPyObjectBorrow(value);
+            PyObject *obj = PyValue_AsKnownObjectBorrow(value);
             assert(PyType_Check(obj));
             if (obj == su_type_owner) {
                 break;
@@ -14863,7 +14863,7 @@ _PySuper_LookupDescr(PyTypeObject *su_type, PyTypeObject *su_obj_type, PyObject 
             for (; i < n; i++) {
                 PyValue value = PyTuple_GET_VALUE(mro_owner, i);
                 assert(PyValue_IsObject(value));
-                PyObject *obj = PyValue_AsPyObjectBorrow(value);
+                PyObject *obj = PyValue_AsKnownObjectBorrow(value);
                 assert(PyType_Check(obj));
                 PyObject *dict_owner = Py_XNewRef(lookup_tp_dict((PyTypeObject *)obj));
                 assert(dict_owner != NULL && PyDict_Check(dict_owner));
@@ -15112,7 +15112,7 @@ super_init_without_args(_PyInterpreterFrame *cframe, PyTypeObject **type_p,
         assert(_PyCode_InstrHandler(co, 0) == MAKE_CELL ||
                _PyCode_InstrHandler(co, 0) == COPY_FREE_VARS);
         assert(PyValue_IsObject(firstref));
-        PyObject *cell = PyValue_AsPyObjectBorrow(firstref);
+        PyObject *cell = PyValue_AsKnownObjectBorrow(firstref);
         assert(PyCell_Check(cell));
         firstarg = PyCell_Get(cell);
         if (firstarg == NULL || PyErr_Occurred()) {
@@ -15136,17 +15136,17 @@ super_init_without_args(_PyInterpreterFrame *cframe, PyTypeObject **type_p,
         assert((_PyLocals_GetKind(co->co_localspluskinds, i) & CO_FAST_FREE) != 0);
         PyValue name_value = PyTuple_GET_VALUE(co->co_localsplusnames, i);
         assert(PyValue_IsObject(name_value));
-        PyObject *name = PyValue_AsPyObjectBorrow(name_value);
+        PyObject *name = PyValue_AsKnownObjectBorrow(name_value);
         assert(PyUnicode_CheckExact(name));
         if (_PyUnicode_Equal(name, &_Py_ID(__class__))) {
             PyValue cell_value = _PyFrame_GetLocalsArray(cframe)[i];
             if (!PyValue_IsObject(cell_value) || PyValue_IsNull(cell_value) ||
-                    !PyCell_Check(PyValue_AsPyObjectBorrow(cell_value))) {
+                    !PyCell_Check(PyValue_AsKnownObjectBorrow(cell_value))) {
                 PyErr_SetString(PyExc_RuntimeError,
                                 "super(): bad __class__ cell");
                 goto cleanup;
             }
-            PyObject *cell = PyValue_AsPyObjectBorrow(cell_value);
+            PyObject *cell = PyValue_AsKnownObjectBorrow(cell_value);
             type_owner = PyCell_Get(cell);
             if (type_owner == NULL || PyErr_Occurred()) {
                 if (!PyErr_Occurred()) {

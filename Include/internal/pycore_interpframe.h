@@ -9,7 +9,7 @@
 #include "pycore_interpframe_structs.h" // _PyInterpreterFrame
 #include "pycore_ir.h"            // _PyCodeExec
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_LOAD_PTR_ACQUIRE()
-#include "pycore_value.h"      // PyValue_AsPyObjectBorrow()
+#include "pycore_value.h"      // PyValue_AsKnownObjectBorrow()
 #include "pycore_stats.h"         // CALL_STAT_INC()
 
 #ifdef __cplusplus
@@ -21,7 +21,7 @@ extern "C" {
 
 static inline PyCodeObject *_PyFrame_GetCode(_PyInterpreterFrame *f) {
     assert(!PyValue_IsNull(f->f_executable));
-    PyObject *executable = PyValue_AsPyObjectBorrow(f->f_executable);
+    PyObject *executable = PyValue_AsKnownObjectBorrow(f->f_executable);
     assert(PyCode_Check(executable));
     return (PyCodeObject *)executable;
 }
@@ -94,7 +94,7 @@ _PyFrame_SafeGetCode(_PyInterpreterFrame *f)
     if (_PyMem_IsPtrFreed(ptr)) {
         return NULL;
     }
-    PyObject *executable = PyValue_AsPyObjectBorrow(f->f_executable);
+    PyObject *executable = PyValue_AsKnownObjectBorrow(f->f_executable);
     if (_PyObject_IsFreed(executable)) {
         return NULL;
     }
@@ -127,7 +127,7 @@ _PyFrame_SafeGetLasti(struct _PyInterpreterFrame *f)
 }
 
 static inline PyFunctionObject *_PyFrame_GetFunction(_PyInterpreterFrame *f) {
-    PyObject *func = PyValue_AsPyObjectBorrow(f->f_funcobj);
+    PyObject *func = PyValue_AsKnownObjectBorrow(f->f_funcobj);
     assert(PyFunction_Check(func));
     return (PyFunctionObject *)func;
 }
@@ -256,7 +256,7 @@ _PyFrame_Initialize(
     frame->base = base;
     frame->f_funcobj = func;
     frame->f_executable = PyValue_FromPyObjectNew(code);
-    PyFunctionObject *func_obj = (PyFunctionObject *)PyValue_AsPyObjectBorrow(func);
+    PyFunctionObject *func_obj = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(func);
     frame->f_builtins = func_obj->func_builtins;
     frame->f_globals = func_obj->func_globals;
     frame->f_locals = locals;
@@ -455,7 +455,7 @@ static inline _PyInterpreterFrame *
 _PyFrame_PushUnchecked(PyThreadState *tstate, PyValue func, int null_locals_from, _PyInterpreterFrame * previous)
 {
     CALL_STAT_INC(frames_pushed);
-    PyFunctionObject *func_obj = (PyFunctionObject *)PyValue_AsPyObjectBorrow(func);
+    PyFunctionObject *func_obj = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(func);
     PyCodeObject *code = (PyCodeObject *)func_obj->func_code;
     _PyInterpreterFrame *new_frame = _PyThreadState_PushFrameUnchecked(
         tstate, _PyFrame_NumSlotsForCodeObject(code));
@@ -476,7 +476,7 @@ _PyFrame_PushOverlapping(PyThreadState *tstate, PyValue func,
                          _PyInterpreterFrame *previous)
 {
     CALL_STAT_INC(frames_pushed);
-    PyFunctionObject *func_obj = (PyFunctionObject *)PyValue_AsPyObjectBorrow(func);
+    PyFunctionObject *func_obj = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(func);
     PyCodeObject *code = (PyCodeObject *)func_obj->func_code;
     assert(previous->owner == FRAME_OWNED_BY_THREAD);
     assert(base > previous->base &&

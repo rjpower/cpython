@@ -145,7 +145,7 @@ class TruncatedStringIO(object):
         return self._val
 
 
-def _PyValue_AsPyObjectBorrow(gdbval):
+def _PyValue_AsKnownObjectBorrow(gdbval):
     return gdb.Value(int(gdbval['bits']) & ~USED_TAGS)
 
 # Inline ints and floats (Include/internal/pycore_value.h). Pointers and
@@ -183,7 +183,7 @@ class PyObjectPtr(object):
         if gdbval.type.name == 'PyValue':
             if cast_to is None:
                 cast_to = gdb.lookup_type('PyObject').pointer()
-            self._gdbval = _PyValue_AsPyObjectBorrow(gdbval).cast(cast_to)
+            self._gdbval = _PyValue_AsKnownObjectBorrow(gdbval).cast(cast_to)
         elif cast_to:
             self._gdbval = gdbval.cast(cast_to)
         else:

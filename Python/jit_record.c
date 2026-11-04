@@ -23,7 +23,7 @@ _PyJit_ReadInt32(PyValue ref, int32_t *value)
     if (PyValue_IsNull(ref) || PyValue_IsInline(ref)) return 0;
     if (PyValue_IsNull(ref)) return 0;
     if (!PyValue_IsPointerSpace(ref)) return 0;
-    PyObject *object = PyValue_AsPyObjectBorrow(ref);
+    PyObject *object = PyValue_AsKnownObjectBorrow(ref);
     if (!PyLong_CheckExact(object)) return 0;
     /* Exact PyLong conversion cannot call __index__; overflow is a guard,
      * not an exception or a request to allocate a boxed replacement. */

@@ -52,7 +52,7 @@ _PyValue_Canonicalize(PyValue source)
     if (!PyValue_IsObject(source)) {
         return source;
     }
-    PyObject *obj = PyValue_AsPyObjectBorrow(source);
+    PyObject *obj = PyValue_AsKnownObjectBorrow(source);
     uintptr_t identity = _PyObject_ValueIdentity(obj);
     if (identity < Py_DOUBLE_OFFSET) {
         return source;
@@ -186,6 +186,14 @@ _PyValue_BoxInlineValue(PyValue ref)
         return ref;
     }
     return PyValue_FromPyObjectSteal(box);
+}
+
+Py_NO_INLINE void _Py_NO_RETURN
+_PyValue_FatalNotObject(PyValue ref)
+{
+    _Py_FatalErrorFormat(__func__,
+                         "PyValue_AsKnownObject*() of a value that holds no "
+                         "object: %#" PRIx64, (uint64_t)ref.bits);
 }
 
 // The identity of a reference that is not NULL or ERROR.

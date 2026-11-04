@@ -514,10 +514,21 @@ _PyValue_OwnsCountNotNull(PyValue ref)
     return (ref.bits & Py_OWNED_MASK) == 0;
 }
 
+/* Report a value that holds no object (an inline int or float, or an
+   index) passed to PyValue_AsKnownObjectBorrow() or
+   PyValue_AsKnownObjectSteal(), and abort. Out of line and cold, so that a
+   caller carries one compare and an untaken branch. */
+PyAPI_FUNC(void) _Py_NO_RETURN _PyValue_FatalNotObject(PyValue ref);
+
+/* The object that ref holds, borrowed. ref must hold an object or be
+   PyValue_NULL. Every build checks this until packet V7 measures the check
+   (pyjit/design/value-api.md, section 1.3). */
 static inline PyObject *
-PyValue_AsPyObjectBorrow(PyValue ref)
+PyValue_AsKnownObjectBorrow(PyValue ref)
 {
-    assert(PyValue_IsPointerSpace(ref));
+    if (!PyValue_IsPointerSpace(ref)) {
+        _PyValue_FatalNotObject(ref);
+    }
     return BITS_TO_PTR_MASKED(ref);
 }
 
@@ -529,10 +540,14 @@ PyValue_BorrowAt(const PyValue *ref)
     return (PyValue){ .bits = ref->bits | _PyValue_BorrowBitAt(ref) };
 }
 
+/* The object that ref holds, owned: ref's count, or a new one if ref owns
+   none. ref must hold an object, as for PyValue_AsKnownObjectBorrow(). */
 static inline PyObject *
-PyValue_AsPyObjectSteal(PyValue ref)
+PyValue_AsKnownObjectSteal(PyValue ref)
 {
-    assert(PyValue_IsPointerSpace(ref));
+    if (!PyValue_IsPointerSpace(ref)) {
+        _PyValue_FatalNotObject(ref);
+    }
     if (_PyValue_OwnsCountNotNull(ref)) {
         return BITS_TO_PTR(ref);
     }
@@ -647,7 +662,7 @@ _PyValue_OwnArray(PyValue *values, Py_ssize_t count)
 static inline PyValue
 PyValue_AsStrongReference(PyValue value)
 {
-    return PyValue_FromPyObjectSteal(PyValue_AsPyObjectSteal(value));
+    return PyValue_FromPyObjectSteal(PyValue_AsKnownObjectSteal(value));
 }
 
 static inline void
@@ -761,12 +776,12 @@ PyValue_TYPE(PyValue value) {
     if (PyValue_IsInline(value)) {
         return PyValue_IsInlineInt(value) ? &PyLong_Type : &PyFloat_Type;
     }
-    return Py_TYPE(PyValue_AsPyObjectBorrow(value));
+    return Py_TYPE(PyValue_AsKnownObjectBorrow(value));
 }
 
 // Converts a PyValue back to a PyObject *, converting the
 // value to a new reference.
-#define PyValue_AsPyObjectNew(value) Py_NewRef(PyValue_AsPyObjectBorrow(value))
+#define PyValue_AsPyObjectNew(value) Py_NewRef(PyValue_AsKnownObjectBorrow(value))
 
 // Value type checks. Indices and inline values are not objects of these types.
 
@@ -774,7 +789,7 @@ PyValue_TYPE(PyValue value) {
     static inline bool \
     PyValue_ ## T ## Check(PyValue value) { \
         return PyValue_IsPointerSpace(value) && \
-               Py ## T ## _Check(PyValue_AsPyObjectBorrow(value)); \
+               Py ## T ## _Check(PyValue_AsKnownObjectBorrow(value)); \
     }
 
 VALUE_CHECK_FUNC(Gen)
@@ -787,21 +802,21 @@ static inline bool
 PyValue_LongCheck(PyValue value)
 {
     return PyValue_IsInlineInt(value) ||
-           (PyValue_IsPointerSpace(value) && PyLong_Check(PyValue_AsPyObjectBorrow(value)));
+           (PyValue_IsPointerSpace(value) && PyLong_Check(PyValue_AsKnownObjectBorrow(value)));
 }
 
 static inline bool
 PyValue_FloatCheck(PyValue value)
 {
     return PyValue_IsInlineFloat(value) ||
-           (PyValue_IsPointerSpace(value) && PyFloat_Check(PyValue_AsPyObjectBorrow(value)));
+           (PyValue_IsPointerSpace(value) && PyFloat_Check(PyValue_AsKnownObjectBorrow(value)));
 }
 
 static inline bool
 PyValue_LongCheckExact(PyValue value)
 {
     return PyValue_IsInlineInt(value) ||
-           (PyValue_IsPointerSpace(value) && PyLong_CheckExact(PyValue_AsPyObjectBorrow(value)));
+           (PyValue_IsPointerSpace(value) && PyLong_CheckExact(PyValue_AsKnownObjectBorrow(value)));
 }
 
 /* Ints in specialized instructions. The int guards accept an inline int or
@@ -817,7 +832,7 @@ PyValue_IsCompactInt(PyValue ref)
         return true;
     }
     return PyValue_IsPointerSpace(ref)
-           && _PyLong_CheckExactAndCompact(PyValue_AsPyObjectBorrow(ref));
+           && _PyLong_CheckExactAndCompact(PyValue_AsKnownObjectBorrow(ref));
 }
 
 static inline int32_t
@@ -827,7 +842,7 @@ PyValue_CompactIntValue(PyValue ref)
     if (PyValue_IsInlineInt(ref)) {
         return PyValue_InlineInt(ref);
     }
-    return (int32_t)_PyLong_CompactValue((PyLongObject *)PyValue_AsPyObjectBorrow(ref));
+    return (int32_t)_PyLong_CompactValue((PyLongObject *)PyValue_AsKnownObjectBorrow(ref));
 }
 
 // A new int for a result outside int32 (the slow path of int arithmetic),
@@ -845,7 +860,7 @@ static inline bool
 PyValue_FloatCheckExact(PyValue ref)
 {
     return PyValue_IsInlineFloat(ref) ||
-           (PyValue_IsPointerSpace(ref) && PyFloat_CheckExact(PyValue_AsPyObjectBorrow(ref)));
+           (PyValue_IsPointerSpace(ref) && PyFloat_CheckExact(PyValue_AsKnownObjectBorrow(ref)));
 }
 
 static inline double
@@ -855,7 +870,7 @@ PyValue_FloatValue(PyValue ref)
     if (PyValue_IsInlineFloat(ref)) {
         return PyValue_InlineFloat(ref);
     }
-    return PyFloat_AS_DOUBLE(PyValue_AsPyObjectBorrow(ref));
+    return PyFloat_AS_DOUBLE(PyValue_AsKnownObjectBorrow(ref));
 }
 
 /* Are a and b operands of specialized float arithmetic: two floats, or a
@@ -887,7 +902,7 @@ PyValue_NumberAsDouble(PyValue ref)
     if (PyValue_IsInlineInt(ref)) {
         return (double)PyValue_InlineInt(ref);
     }
-    PyObject *op = PyValue_AsPyObjectBorrow(ref);
+    PyObject *op = PyValue_AsKnownObjectBorrow(ref);
     if (PyFloat_CheckExact(op)) {
         return PyFloat_AS_DOUBLE(op);
     }
@@ -942,7 +957,7 @@ PyValue_AsPyObjectNewBoxed(PyValue ref)
 {
     if (PyValue_IsInline(ref)) {
         ref = PyValue_Box(ref);
-        return PyValue_IsInline(ref) ? NULL : PyValue_AsPyObjectSteal(ref);
+        return PyValue_IsInline(ref) ? NULL : PyValue_AsKnownObjectSteal(ref);
     }
     return PyValue_AsPyObjectNew(ref);
 }

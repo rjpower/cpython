@@ -111,7 +111,7 @@ POINTER_VARIANTS = {
     "PyValue_XCLOSE": "_PyValue_XCLOSE_POINTER",
     "PyValue_CLOSE_SPECIALIZED": "_PyValue_CLOSE_SPECIALIZED_POINTER",
     "PyValue_DUP": "_PyValue_DUP_POINTER",
-    "PyValue_AsPyObjectSteal": "_PyValue_AsPyObjectStealPointer",
+    "PyValue_AsKnownObjectSteal": "_PyValue_AsPyObjectStealPointer",
 }
 
 # Calls that always return a reference in pointer space.
@@ -222,7 +222,7 @@ class Emitter:
             "PyValue_CLOSE": self.value_pointer_variant,
             "PyValue_XCLOSE": self.value_pointer_variant,
             "PyValue_DUP": self.value_pointer_variant,
-            "PyValue_AsPyObjectSteal": self.value_steal,
+            "PyValue_AsKnownObjectSteal": self.value_steal,
             "DISPATCH": self.dispatch,
             "INSTRUCTION_SIZE": self.instruction_size,
             "stack_pointer": self.stack_pointer,

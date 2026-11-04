@@ -18,7 +18,7 @@
 #include "pycore_runtime.h"       // _PyRuntime
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_unicodeobject.h" // _PyUnicode_CheckConsistency()
-#include "pycore_value.h"         // PyValue_AsPyObjectBorrow()
+#include "pycore_value.h"         // PyValue_AsKnownObjectBorrow()
 
 #include <stdbool.h>              // bool
 
@@ -1400,7 +1400,7 @@ update_indent_cache(PyEncoderObject *s,
     assert(indent_level > 0);
     // indent_cache is private to the encoder and holds only str objects, so
     // the entries are never inline values and are never removed.
-    PyObject *newline_indent = PyValue_AsPyObjectBorrow(
+    PyObject *newline_indent = PyValue_AsKnownObjectBorrow(
         PyList_GET_VALUE(indent_cache, (indent_level - 1)*2));
     newline_indent = PyUnicode_Concat(newline_indent, s->indent);
     if (newline_indent == NULL) {
@@ -1436,7 +1436,7 @@ get_item_separator(PyEncoderObject *s,
     }
     assert(indent_level * 2 < PyList_GET_SIZE(indent_cache));
     // Borrowed: the cache only holds str objects and only grows.
-    return PyValue_AsPyObjectBorrow(
+    return PyValue_AsKnownObjectBorrow(
         PyList_GET_VALUE(indent_cache, indent_level * 2 - 1));
 }
 
@@ -1445,7 +1445,7 @@ write_newline_indent(PyUnicodeWriter *writer,
                      Py_ssize_t indent_level, PyObject *indent_cache)
 {
     // Borrowed: the cache only holds str objects and only grows.
-    PyObject *newline_indent = PyValue_AsPyObjectBorrow(
+    PyObject *newline_indent = PyValue_AsKnownObjectBorrow(
         PyList_GET_VALUE(indent_cache, indent_level * 2));
     return PyUnicodeWriter_WriteStr(writer, newline_indent);
 }

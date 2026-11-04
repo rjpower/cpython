@@ -200,7 +200,7 @@ _PyTuple_MaybeUntrack(PyObject *op)
            them yet. */
         if (PyValue_IsNull(elt) ||
             (PyValue_IsObject(elt) &&
-             _PyObject_GC_MAY_BE_TRACKED(PyValue_AsPyObjectBorrow(elt))))
+             _PyObject_GC_MAY_BE_TRACKED(PyValue_AsKnownObjectBorrow(elt))))
             return;
     }
     _PyObject_GC_UNTRACK(op);
@@ -694,7 +694,7 @@ _PyTuple_Repeat(PyObject *self, Py_ssize_t n)
     if (input_size == 1) {
         PyValue value = a->ob_item[0];
         if (PyValue_RefcountOnObject(value)) {
-            _Py_RefcntAdd(PyValue_AsPyObjectBorrow(value), n);
+            _Py_RefcntAdd(PyValue_AsKnownObjectBorrow(value), n);
         }
         PyValue *end = dest + output_size;
         while (dest < end) {
@@ -705,7 +705,7 @@ _PyTuple_Repeat(PyObject *self, Py_ssize_t n)
         for (Py_ssize_t i = 0; i < input_size; i++) {
             PyValue value = a->ob_item[i];
             if (PyValue_RefcountOnObject(value)) {
-                _Py_RefcntAdd(PyValue_AsPyObjectBorrow(value), n);
+                _Py_RefcntAdd(PyValue_AsKnownObjectBorrow(value), n);
             }
             dest[i] = value;
         }

@@ -1204,11 +1204,11 @@ set_eval_frame_interp(PyObject *self, PyObject *args)
         module_state *state = get_module_state(self);
         PyValue item = PyTuple_GET_VALUE(args, 0);
         if (!PyValue_IsObject(item) ||
-            !PyList_Check(PyValue_AsPyObjectBorrow(item))) {
+            !PyList_Check(PyValue_AsKnownObjectBorrow(item))) {
             PyErr_SetString(PyExc_TypeError, "argument must be a list");
             return NULL;
         }
-        PyObject *list = PyValue_AsPyObjectBorrow(item);
+        PyObject *list = PyValue_AsKnownObjectBorrow(item);
         Py_XSETREF(state->record_list, Py_NewRef(list));
         _PyInterpreterState_SetEvalFrameFunc(_PyInterpreterState_GET(), record_eval_interp);
         _PyInterpreterState_SetEvalFrameAllowSpecialization(_PyInterpreterState_GET(), 1);
@@ -3133,7 +3133,7 @@ value_box_roundtrip(PyObject *self, PyObject *arg)
         PyErr_SetString(PyExc_AssertionError, "box is not a pointer");
         return NULL;
     }
-    return PyValue_AsPyObjectSteal(boxed);
+    return PyValue_AsKnownObjectSteal(boxed);
 }
 
 // The names of the frame's local variables that hold inline values.
@@ -3280,6 +3280,22 @@ pyvalue_err_format(PyObject *self, PyObject *args)
         return NULL;
     }
     return PyErr_Format(exception, format, PyValue_FromObjectBorrow(obj));
+}
+
+/* PyValue_AsKnownObjectBorrow(), or PyValue_AsKnownObjectSteal() if steal
+ * is true, of an inline int: a fatal error in every build. */
+static PyObject *
+pyvalue_as_known_object_inline(PyObject *self, PyObject *steal)
+{
+    int take = PyObject_IsTrue(steal);
+    if (take < 0) {
+        return NULL;
+    }
+    PyValue value = PyValue_FromInt32(5);
+    if (take) {
+        return PyValue_AsKnownObjectSteal(value);
+    }
+    return Py_NewRef(PyValue_AsKnownObjectBorrow(value));
 }
 
 static PyObject *
@@ -3884,7 +3900,7 @@ common_constant_storage(PyObject *module, PyObject *Py_UNUSED(args))
         assert(PyValue_IsHeapSafe(value));
         inline_count += PyValue_IsInline(value);
         if (PyValue_IsObject(value)) {
-            assert(_Py_IsImmortal(PyValue_AsPyObjectBorrow(value)));
+            assert(_Py_IsImmortal(PyValue_AsKnownObjectBorrow(value)));
         }
     }
     PyValue minus_one = interp->common_consts[CONSTANT_MINUS_ONE];
@@ -4048,7 +4064,7 @@ constant_value_key(PyObject *module, PyObject *args)
             PyErr_SetString(PyExc_TypeError, "failure flag must be bool");
             return NULL;
         }
-        fail = PyValue_AsPyObjectBorrow(flag) == Py_True;
+        fail = PyValue_AsKnownObjectBorrow(flag) == Py_True;
     }
     PyValue input = PyTuple_GetValue(args, 0);
     assert(!PyValue_IsNull(input));
@@ -4195,6 +4211,7 @@ static PyMethodDef module_functions[] = {
     {"pyvalue_entry_null", pyvalue_entry_null, METH_NOARGS, NULL},
     {"pyvalue_format", pyvalue_format, METH_VARARGS, NULL},
     {"pyvalue_err_format", pyvalue_err_format, METH_VARARGS, NULL},
+    {"pyvalue_as_known_object_inline", pyvalue_as_known_object_inline, METH_O, NULL},
     {"jit_method_record_index", jit_method_record_index, METH_NOARGS, NULL},
     {"jit_method_cold_call", jit_method_cold_call, METH_VARARGS, NULL},
     {"jit_method_compile", jit_method_compile, METH_O, NULL},

@@ -168,7 +168,7 @@ dump_item(PyValue item)
         printf("<inline %s>", PyValue_TYPE(item)->tp_name);
         return;
     }
-    PyObject *obj = PyValue_AsPyObjectBorrow(item);
+    PyObject *obj = PyValue_AsKnownObjectBorrow(item);
     if (obj == NULL) {
         printf("<nil>");
         return;
@@ -242,7 +242,7 @@ lltrace_instruction(_PyInterpreterFrame *frame,
 static void
 lltrace_resume_frame(_PyInterpreterFrame *frame)
 {
-    PyObject *fobj = PyValue_AsPyObjectBorrow(frame->f_funcobj);
+    PyObject *fobj = PyValue_AsKnownObjectBorrow(frame->f_funcobj);
     if (!PyValue_CodeCheck(frame->f_executable) ||
         fobj == NULL ||
         !PyFunction_Check(fobj)

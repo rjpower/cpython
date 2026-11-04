@@ -23,7 +23,7 @@ set_value_storage(PyObject *Py_UNUSED(module), PyObject *set)
         }
         if (entry->hash == -1) {
             assert(PyValue_IsObject(entry->key));
-            assert(PyValue_AsPyObjectBorrow(entry->key) == _PySet_Dummy);
+            assert(PyValue_AsKnownObjectBorrow(entry->key) == _PySet_Dummy);
             continue;
         }
         assert(PyValue_IsLanguageValue(entry->key));

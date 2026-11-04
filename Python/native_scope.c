@@ -245,7 +245,7 @@ _PyNativeScope_Objects(_PyNativeScope *scope, PyObject *const **args)
         if (scope->objects[i] == NULL) {
             PyValue argument = scope->arguments[i];
             if (!PyValue_IsInline(argument)) {
-                scope->objects[i] = PyValue_AsPyObjectBorrow(argument);
+                scope->objects[i] = PyValue_AsKnownObjectBorrow(argument);
                 continue;
             }
             scope->objects[i] = _PyValue_AsPyObjectNewBoxedAt(argument, BOX_SITE_CALL_ADAPTER);

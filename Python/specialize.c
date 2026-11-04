@@ -614,7 +614,7 @@ specialize_module_load_attr_lock_held(PyDictObject *dict, _PyInstr *instr, PyObj
     PyValue value = PyValue_NULL;
     Py_ssize_t index = _PyDict_LookupIndexAndOwnedValue(dict, name, &value);
     if (PyValue_IsObject(value) &&
-        PyLazyImport_CheckExact(PyValue_AsPyObjectBorrow(value))) {
+        PyLazyImport_CheckExact(PyValue_AsKnownObjectBorrow(value))) {
         SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_ATTR_MODULE_LAZY_VALUE);
         goto fail;
     }
@@ -665,7 +665,7 @@ _Py_Specialize_LoadSuperAttr(PyValue global_super_st, PyValue cls_st, _PyInstr *
     assert(_PyOpcode_Caches[LOAD_SUPER_ATTR] == INLINE_CACHE_ENTRIES_LOAD_SUPER_ATTR);
     fb_begin(instr);
     if (PyValue_IsInline(global_super_st) ||
-        PyValue_AsPyObjectBorrow(global_super_st) != (PyObject *)&PySuper_Type)
+        PyValue_AsKnownObjectBorrow(global_super_st) != (PyObject *)&PySuper_Type)
     {
         SPECIALIZATION_FAIL(LOAD_SUPER_ATTR, SPEC_FAIL_SUPER_SHADOWED);
         goto fail;
@@ -709,7 +709,7 @@ classify_descriptor(PyValue value, bool has_getattr)
     if (!PyValue_IsObject(value)) {
         return INLINE_VALUE;
     }
-    PyObject *descriptor = PyValue_AsPyObjectBorrow(value);
+    PyObject *descriptor = PyValue_AsKnownObjectBorrow(value);
     PyTypeObject *desc_cls = Py_TYPE(descriptor);
     if (!(desc_cls->tp_flags & Py_TPFLAGS_IMMUTABLETYPE)) {
         return MUTABLE;
@@ -781,12 +781,12 @@ analyze_descriptor_load(PyTypeObject *type, PyObject *name,
         PyValue_XCLOSE(getattr);
         bool custom = !PyValue_IsNull(getattribute) &&
             (!PyValue_IsObject(getattribute) ||
-             PyValue_AsPyObjectBorrow(getattribute) !=
+             PyValue_AsKnownObjectBorrow(getattribute) !=
                 _PyInterpreterState_GET()->callable_cache.object__getattribute__);
         if (custom) {
             *tp_version = ga_version;
             if (!has_getattr && PyValue_IsObject(getattribute) &&
-                PyFunction_Check(PyValue_AsPyObjectBorrow(getattribute))) {
+                PyFunction_Check(PyValue_AsKnownObjectBorrow(getattribute))) {
                 *descr = getattribute;
                 return GETATTRIBUTE_IS_PYTHON_FUNCTION;
             }
@@ -1061,7 +1061,7 @@ do_specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* nam
                                  bool shadow, uint32_t shared_keys_version,
                                  DescriptorClassification kind, PyValue descriptor, unsigned int tp_version)
 {
-    PyObject *descr = PyValue_IsObject(descriptor) ? PyValue_AsPyObjectBorrow(descriptor) : NULL;
+    PyObject *descr = PyValue_IsObject(descriptor) ? PyValue_AsKnownObjectBorrow(descriptor) : NULL;
     _PyFbAttr *fb = instr_entry(instr);
     PyTypeObject *type = Py_TYPE(owner);
     if (tp_version == 0) {
@@ -1273,7 +1273,7 @@ _Py_Specialize_LoadAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
         unspecialize(instr);
         return;
     }
-    PyObject *owner = PyValue_AsPyObjectBorrow(owner_st);
+    PyObject *owner = PyValue_AsKnownObjectBorrow(owner_st);
     PyTypeObject *type = Py_TYPE(owner);
     PyValue proof = PyValue_NULL;
     unsigned int version;
@@ -1327,7 +1327,7 @@ _Py_Specialize_StoreAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
         unspecialize(instr);
         return;
     }
-    PyObject *owner = PyValue_AsPyObjectBorrow(owner_st);
+    PyObject *owner = PyValue_AsKnownObjectBorrow(owner_st);
     PyTypeObject *type = Py_TYPE(owner);
     PyValue proof = PyValue_NULL;
     unsigned int version;
@@ -1354,7 +1354,7 @@ _Py_Specialize_StoreAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
     if (tp_version == 0) {
         goto fail;
     }
-    PyObject *descr_o = PyValue_IsObject(descr) ? PyValue_AsPyObjectBorrow(descr) : NULL;
+    PyObject *descr_o = PyValue_IsObject(descr) ? PyValue_AsKnownObjectBorrow(descr) : NULL;
     assert(!PyValue_IsNull(descr) || kind == ABSENT || kind == GETSET_OVERRIDDEN);
     switch(kind) {
         case OVERRIDING:
@@ -1507,7 +1507,7 @@ specialize_class_load_attr(PyObject *owner, _PyInstr *instr,
     DescriptorClassification kind = 0;
     unsigned int tp_version = 0;
     kind = analyze_descriptor_load(cls, name, &descriptor, &tp_version);
-    PyObject *descr = PyValue_IsObject(descriptor) ? PyValue_AsPyObjectBorrow(descriptor) : NULL;
+    PyObject *descr = PyValue_IsObject(descriptor) ? PyValue_AsKnownObjectBorrow(descriptor) : NULL;
     if (tp_version == 0) {
         SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OUT_OF_VERSIONS);
         PyValue_XCLOSE(descriptor);
@@ -1680,7 +1680,7 @@ specialize_load_global_lock_held(
         goto fail;
     }
     if (PyValue_IsObject(value) &&
-        PyLazyImport_CheckExact(PyValue_AsPyObjectBorrow(value))) {
+        PyLazyImport_CheckExact(PyValue_AsKnownObjectBorrow(value))) {
         SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_ATTR_MODULE_LAZY_VALUE);
         goto fail;
     }
@@ -1715,7 +1715,7 @@ specialize_load_global_lock_held(
         goto fail;
     }
     if (PyValue_IsObject(value) &&
-        PyLazyImport_CheckExact(PyValue_AsPyObjectBorrow(value))) {
+        PyLazyImport_CheckExact(PyValue_AsKnownObjectBorrow(value))) {
         SPECIALIZATION_FAIL(LOAD_GLOBAL, SPEC_FAIL_ATTR_MODULE_LAZY_VALUE);
         goto fail;
     }
@@ -1898,7 +1898,7 @@ _Py_Specialize_StoreSubscr(PyValue container_st, PyValue sub_st, _PyInstr *instr
         unspecialize(instr);
         return;
     }
-    PyObject *container = PyValue_AsPyObjectBorrow(container_st);
+    PyObject *container = PyValue_AsKnownObjectBorrow(container_st);
     PyTypeObject *container_type = Py_TYPE(container);
     if (container_type == &PyList_Type) {
         if (PyValue_LongCheckExact(sub_st)) {
@@ -2187,14 +2187,14 @@ _Py_Specialize_Call(PyValue callable_st, PyValue self_or_null_st, _PyInstr *inst
     assert(instr_opcode(instr) != INSTRUMENTED_CALL);
     bool native_or_inline = PyValue_IsInline(callable_st) ||
         (PyValue_IsObject(callable_st) &&
-         PyCFunction_Check(PyValue_AsPyObjectBorrow(callable_st)));
+         PyCFunction_Check(PyValue_AsKnownObjectBorrow(callable_st)));
     fb_begin_call_ex(instr, PyValue_TYPE(callable_st), !native_or_inline);
     if (PyValue_IsInline(callable_st)) {
         SPECIALIZATION_FAIL(CALL, SPEC_FAIL_OTHER);
         unspecialize(instr);
         return;
     }
-    PyObject *callable = PyValue_AsPyObjectBorrow(callable_st);
+    PyObject *callable = PyValue_AsKnownObjectBorrow(callable_st);
     int fail;
     if (PyCFunction_CheckExact(callable)) {
         fail = specialize_c_call(callable, instr, nargs);
@@ -2250,14 +2250,14 @@ _Py_Specialize_CallKw(PyValue callable_st, _PyInstr *instr, int nargs)
     assert(instr_opcode(instr) != INSTRUMENTED_CALL_KW);
     bool native_or_inline = PyValue_IsInline(callable_st) ||
         (PyValue_IsObject(callable_st) &&
-         PyCFunction_Check(PyValue_AsPyObjectBorrow(callable_st)));
+         PyCFunction_Check(PyValue_AsKnownObjectBorrow(callable_st)));
     fb_begin_call_ex(instr, PyValue_TYPE(callable_st), !native_or_inline);
     if (PyValue_IsInline(callable_st)) {
         SPECIALIZATION_FAIL(CALL_KW, SPEC_FAIL_OTHER);
         unspecialize(instr);
         return;
     }
-    PyObject *callable = PyValue_AsPyObjectBorrow(callable_st);
+    PyObject *callable = PyValue_AsKnownObjectBorrow(callable_st);
     int fail;
     if (PyFunction_Check(callable)) {
         fail = specialize_py_call_kw((PyFunctionObject *)callable, instr, nargs, false);
@@ -2544,9 +2544,9 @@ specialize_subscr_getitem(PyTypeObject *container_type, _PyInstr *instr)
     if (_PyType_TryLookupValueNoAlloc(container_type, &_Py_ID(__getitem__),
                                       &descriptor, &tp_version) == 1 &&
         PyValue_IsObject(descriptor) &&
-        PyFunction_Check(PyValue_AsPyObjectBorrow(descriptor)))
+        PyFunction_Check(PyValue_AsKnownObjectBorrow(descriptor)))
     {
-        PyObject *getitem = PyValue_AsPyObjectBorrow(descriptor);
+        PyObject *getitem = PyValue_AsKnownObjectBorrow(descriptor);
         PyCodeObject *code = (PyCodeObject *)PyFunction_GET_CODE(getitem);
         if (function_kind(code) == SIMPLE_FUNCTION && code->co_argcount == 2 &&
             _PyType_CacheGetItemForSpecialization(
@@ -2599,7 +2599,7 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
                     _PyFrame_GetCode(frame), _PyFrame_InstrOffset(frame, instr));
                 bool to_store = local >= 0;
                 if (to_store && PyValue_IsObject(locals[local]) &&
-                    PyValue_AsPyObjectBorrow(locals[local]) == lhs)
+                    PyValue_AsKnownObjectBorrow(locals[local]) == lhs)
                 {
                     specialize(instr, BINARY_OP_INPLACE_ADD_UNICODE);
                     return;
@@ -2740,8 +2740,8 @@ _Py_Specialize_BinaryOp(PyValue lhs_st, PyValue rhs_st, _PyInstr *instr,
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[BINARY_OP] == INLINE_CACHE_ENTRIES_BINARY_OP);
-    PyObject *lhs = PyValue_IsObject(lhs_st) ? PyValue_AsPyObjectBorrow(lhs_st) : NULL;
-    PyObject *rhs = PyValue_IsObject(rhs_st) ? PyValue_AsPyObjectBorrow(rhs_st) : NULL;
+    PyObject *lhs = PyValue_IsObject(lhs_st) ? PyValue_AsKnownObjectBorrow(lhs_st) : NULL;
+    PyObject *rhs = PyValue_IsObject(rhs_st) ? PyValue_AsKnownObjectBorrow(rhs_st) : NULL;
     specialize_binary_op(lhs, rhs, lhs_st, rhs_st, instr, oparg, locals);
 }
 
@@ -2857,7 +2857,7 @@ _Py_Specialize_UnpackSequence(PyValue seq_st, _PyInstr *instr, int oparg)
         unspecialize(instr);
         return;
     }
-    PyObject *seq = PyValue_AsPyObjectBorrow(seq_st);
+    PyObject *seq = PyValue_AsKnownObjectBorrow(seq_st);
     if (PyTuple_CheckExact(seq)) {
         if (PyTuple_GET_SIZE(seq) != oparg) {
             SPECIALIZATION_FAIL(UNPACK_SEQUENCE, SPEC_FAIL_EXPECTED_ERROR);
@@ -2962,7 +2962,7 @@ _Py_Specialize_ForIter(PyValue iter, PyValue null_or_index, _PyInstr *instr, int
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[FOR_ITER] == INLINE_CACHE_ENTRIES_FOR_ITER);
-    PyObject *iter_o = PyValue_AsPyObjectBorrow(iter);
+    PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
     PyTypeObject *tp = Py_TYPE(iter_o);
     fb_begin_unary(instr, tp);
 
@@ -3024,7 +3024,7 @@ failure:
 Py_NO_INLINE void
 _Py_Specialize_Send(PyValue receiver_st, _PyInstr *instr)
 {
-    PyObject *receiver = PyValue_AsPyObjectBorrow(receiver_st);
+    PyObject *receiver = PyValue_AsKnownObjectBorrow(receiver_st);
 
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[SEND] == INLINE_CACHE_ENTRIES_SEND);
@@ -3064,7 +3064,7 @@ _Py_Specialize_CallFunctionEx(PyValue func_st, _PyInstr *instr)
         unspecialize(instr);
         return;
     }
-    PyObject *func = PyValue_AsPyObjectBorrow(func_st);
+    PyObject *func = PyValue_AsKnownObjectBorrow(func_st);
 
     if (Py_TYPE(func) == &PyFunction_Type &&
         ((PyFunctionObject *)func)->vectorcall == _PyFunction_Vectorcall) {
@@ -3148,7 +3148,7 @@ specialize_truth(PyValue value_o, _PyInstr *instr, const uint8_t *ops)
         unspecialize(instr);
         return;
     }
-    PyObject *value = PyValue_AsPyObjectBorrow(value_o);
+    PyObject *value = PyValue_AsKnownObjectBorrow(value_o);
     uint8_t specialized_op;
     if (PyBool_Check(value)) {
         specialized_op = ops[TRUTH_BOOL];
@@ -3256,7 +3256,7 @@ _Py_Specialize_ContainsOp(PyValue item_st, PyValue value_st, _PyInstr *instr)
         unspecialize(instr);
         return;
     }
-    PyObject *value = PyValue_AsPyObjectBorrow(value_st);
+    PyObject *value = PyValue_AsKnownObjectBorrow(value_st);
     if (PyAnyDict_CheckExact(value)) {
         specialize(instr, CONTAINS_OP_DICT);
         return;

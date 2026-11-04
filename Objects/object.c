@@ -1679,7 +1679,7 @@ _PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
         goto done;
     }
     PyObject *descr = PyValue_IsObject(descriptor) ?
-        PyValue_AsPyObjectBorrow(descriptor) : NULL;
+        PyValue_AsKnownObjectBorrow(descriptor) : NULL;
     descrgetfunc get = descr == NULL ? NULL : Py_TYPE(descr)->tp_descr_get;
     bool method_descriptor = descr != NULL &&
         _PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR);
@@ -1835,7 +1835,7 @@ _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
     if (PyErr_Occurred()) {
         goto done;
     }
-    descr = PyValue_IsObject(cref.ref) ? PyValue_AsPyObjectBorrow(cref.ref) : NULL;
+    descr = PyValue_IsObject(cref.ref) ? PyValue_AsKnownObjectBorrow(cref.ref) : NULL;
 
     f = NULL;
     if (descr != NULL) {
@@ -1995,7 +1995,7 @@ _PyObject_GenericSetAttrWithDict(PyObject *obj, PyObject *name,
     if (PyErr_Occurred()) {
         goto done;
     }
-    descr = PyValue_IsObject(cref.ref) ? PyValue_AsPyObjectBorrow(cref.ref) : NULL;
+    descr = PyValue_IsObject(cref.ref) ? PyValue_AsKnownObjectBorrow(cref.ref) : NULL;
 
     if (descr != NULL) {
         f = Py_TYPE(descr)->tp_descr_set;
@@ -2832,7 +2832,7 @@ PyUnstable_Object_IsUniqueReferencedTemporary(PyObject *op)
         if (!PyValue_IsObject(ref)) {
             continue;
         }
-        if (op == PyValue_AsPyObjectBorrow(ref)) {
+        if (op == PyValue_AsKnownObjectBorrow(ref)) {
             return PyValue_IsHeapSafe(ref);
         }
     }
@@ -3113,11 +3113,11 @@ Py_ReprEnter(PyObject *obj)
         }
     }
     if (!PyValue_IsObject(guard) ||
-        !PyList_Check(PyValue_AsPyObjectBorrow(guard))) {
+        !PyList_Check(PyValue_AsKnownObjectBorrow(guard))) {
         PyErr_SetString(PyExc_SystemError, "invalid thread repr guard");
         goto done;
     }
-    list = PyValue_AsPyObjectSteal(guard);
+    list = PyValue_AsKnownObjectSteal(guard);
     guard = PyValue_NULL;
     for (Py_ssize_t i = PyList_GET_SIZE(list); --i >= 0;) {
         if (PyValue_Is(PyList_GET_VALUE(list, i), value)) {
@@ -3156,10 +3156,10 @@ Py_ReprLeave(PyObject *obj)
         goto finally;
     }
     if (!PyValue_IsObject(guard) ||
-        !PyList_Check(PyValue_AsPyObjectBorrow(guard))) {
+        !PyList_Check(PyValue_AsKnownObjectBorrow(guard))) {
         goto finally;
     }
-    list = PyValue_AsPyObjectSteal(guard);
+    list = PyValue_AsKnownObjectSteal(guard);
     guard = PyValue_NULL;
     /* Count backwards because we always expect obj to be list[-1] */
     for (Py_ssize_t i = PyList_GET_SIZE(list); --i >= 0;) {

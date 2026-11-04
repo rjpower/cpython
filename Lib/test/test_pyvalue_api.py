@@ -144,5 +144,19 @@ class ValueFormatTests(unittest.TestCase):
             _testinternalcapi.pyvalue_err_format(TypeError, "not %vT", 2.5)
 
 
+class KnownObjectCheckTests(unittest.TestCase):
+    @support.requires_subprocess()
+    def test_inline_value_is_fatal(self):
+        # The check is in release builds too (value-api.md, section 1.3).
+        for steal in (False, True):
+            with self.subTest(steal=steal):
+                code = ("import _testinternalcapi; _testinternalcapi."
+                        f"pyvalue_as_known_object_inline({steal})")
+                _, _, err = assert_python_failure("-c", code)
+                self.assertIn(b"_PyValue_FatalNotObject: PyValue_AsKnown"
+                              b"Object*() of a value that holds no object",
+                              err)
+
+
 if __name__ == "__main__":
     unittest.main()

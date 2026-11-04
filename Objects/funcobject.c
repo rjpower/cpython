@@ -173,8 +173,8 @@ PyFunction_NewWithQualName(PyObject *code, PyObject *globals, PyObject *qualname
         assert(PyTuple_Size(consts) >= 1);
         PyValue value = PyTuple_GET_VALUE(consts, 0);
         doc = PyValue_IsObject(value)
-            && PyUnicode_Check(PyValue_AsPyObjectBorrow(value))
-            ? PyValue_AsPyObjectBorrow(value) : Py_None;
+            && PyUnicode_Check(PyValue_AsKnownObjectBorrow(value))
+            ? PyValue_AsKnownObjectBorrow(value) : Py_None;
     }
     else {
         doc = Py_None;
@@ -1148,7 +1148,7 @@ func_new_impl(PyTypeObject *type, PyCodeObject *code, PyObject *globals,
         for (i = 0; i < nclosure; i++) {
             PyValue value = PyTuple_GET_VALUE(closure, i);
             if (!PyValue_IsObject(value)
-                || !PyCell_Check(PyValue_AsPyObjectBorrow(value))) {
+                || !PyCell_Check(PyValue_AsKnownObjectBorrow(value))) {
                 return PyErr_Format(PyExc_TypeError,
                     "arg 5 (closure) expected cell, found %s",
                                     PyValue_TYPE(value)->tp_name);

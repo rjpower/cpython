@@ -596,7 +596,7 @@ _modules_by_index_get(PyInterpreterState *interp, Py_ssize_t index)
         return NULL;
     }
     // The list holds only module objects and None.
-    PyObject *res = PyValue_AsPyObjectBorrow(
+    PyObject *res = PyValue_AsKnownObjectBorrow(
         PyList_GET_VALUE(MODULES_BY_INDEX(interp), index));
     return res==Py_None ? NULL : res;
 }
@@ -688,7 +688,7 @@ PyState_AddModule(PyObject* module, PyModuleDef* def)
     Py_ssize_t index = _get_module_index_from_def(def);
     if (MODULES_BY_INDEX(interp) &&
         index < PyList_GET_SIZE(MODULES_BY_INDEX(interp)) &&
-        module == PyValue_AsPyObjectBorrow(
+        module == PyValue_AsKnownObjectBorrow(
             PyList_GET_VALUE(MODULES_BY_INDEX(interp), index)))
     {
         _Py_FatalErrorFormat(__func__, "module %p already added", module);
@@ -724,7 +724,7 @@ _PyImport_ClearModulesByIndex(PyInterpreterState *interp)
 
     Py_ssize_t i;
     for (i = 0; i < PyList_GET_SIZE(MODULES_BY_INDEX(interp)); i++) {
-        PyObject *m = PyValue_AsPyObjectBorrow(
+        PyObject *m = PyValue_AsKnownObjectBorrow(
             PyList_GET_VALUE(MODULES_BY_INDEX(interp), i));
         if (PyModule_Check(m)) {
             /* cleanup the saved copy of module dicts */
@@ -2936,8 +2936,8 @@ update_code_filenames(PyCodeObject *co, PyObject *oldname, PyObject *newname)
     for (i = 0; i < n; i++) {
         PyValue value = PyTuple_GET_VALUE(constants, i);
         if (PyValue_IsObject(value) &&
-            PyCode_Check(PyValue_AsPyObjectBorrow(value))) {
-            tmp = PyValue_AsPyObjectBorrow(value);
+            PyCode_Check(PyValue_AsKnownObjectBorrow(value))) {
+            tmp = PyValue_AsKnownObjectBorrow(value);
             update_code_filenames((PyCodeObject *)tmp,
                                   oldname, newname);
         }

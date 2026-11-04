@@ -357,7 +357,7 @@ PyErr_GivenExceptionMatches(PyObject *err, PyObject *exc)
             /* Inline scalars have no exception hierarchy or object pointer.
              * Keep identity comparison pure while an error may be pending. */
             int matches = PyValue_IsObject(candidate) ?
-                PyErr_GivenExceptionMatches(err, PyValue_AsPyObjectBorrow(candidate)) :
+                PyErr_GivenExceptionMatches(err, PyValue_AsKnownObjectBorrow(candidate)) :
                 PyValue_Is(candidate, PyValue_FromObjectBorrow(err));
             if (matches) {
                 res = 1;

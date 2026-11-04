@@ -253,7 +253,7 @@ static inline int
 value_is_exact_unicode(PyValue value)
 {
     return PyValue_IsObject(value) &&
-           PyUnicode_CheckExact(PyValue_AsPyObjectBorrow(value));
+           PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value));
 }
 
 static inline PyValue
@@ -722,7 +722,7 @@ _PyDict_CheckConsistency(PyObject *op, int check_content)
                           PyValue_IsHeapSafe(entry->me_value));
 
                     if (value_is_exact_unicode(key)) {
-                        Py_hash_t hash = unicode_get_hash(PyValue_AsPyObjectBorrow(key));
+                        Py_hash_t hash = unicode_get_hash(PyValue_AsKnownObjectBorrow(key));
                         CHECK(entry->me_hash == hash);
                     }
                 }
@@ -1153,7 +1153,7 @@ compare_unicode_unicode(PyDictObject *mp, PyDictKeysObject *dk,
                         void *ep0, Py_ssize_t ix, PyValue key, Py_hash_t hash)
 {
     PyDictUnicodeEntry *ep = &((PyDictUnicodeEntry *)ep0)[ix];
-    PyObject *key_object = PyValue_AsPyObjectBorrow(key);
+    PyObject *key_object = PyValue_AsKnownObjectBorrow(key);
     PyObject *ep_key = FT_ATOMIC_LOAD_PTR_CONSUME(ep->me_key);
     assert(ep_key != NULL);
     assert(PyUnicode_CheckExact(ep_key));
@@ -1304,7 +1304,7 @@ start:
 
     if (kind != DICT_KEYS_GENERAL) {
         if (value_is_exact_unicode(key)) {
-            ix = unicodekeys_lookup_unicode(dk, PyValue_AsPyObjectBorrow(key), hash);
+            ix = unicodekeys_lookup_unicode(dk, PyValue_AsKnownObjectBorrow(key), hash);
         }
         else {
             INCREF_KEYS_FT(dk);
@@ -1448,7 +1448,7 @@ _PyDict_HasOnlyStringKeys(PyObject *dict)
             continue;
         }
         PyValue key = entries[i].me_key;
-        if (!PyValue_IsObject(key) || !PyUnicode_Check(PyValue_AsPyObjectBorrow(key))) {
+        if (!PyValue_IsObject(key) || !PyUnicode_Check(PyValue_AsKnownObjectBorrow(key))) {
             return 0;
         }
     }
@@ -1508,7 +1508,7 @@ insert_combined_dict(PyDictObject *mp, Py_hash_t hash,
     if (DK_IS_UNICODE(mp->ma_keys)) {
         assert(value_is_exact_unicode(key));
         PyDictUnicodeEntry *ep = &DK_UNICODE_ENTRIES(mp->ma_keys)[ix];
-        STORE_KEY(ep, PyValue_AsPyObjectSteal(key));
+        STORE_KEY(ep, PyValue_AsKnownObjectSteal(key));
         STORE_VALUE(ep, value);
     }
     else {
@@ -1567,7 +1567,7 @@ _PyDict_InsertSplitValue(PyDictObject *mp, PyValue key, PyValue value,
      * fresh inputs and re-probes instead of writing through that old index. */
     (void)ix;
     return _PyDict_SetValue_KnownHash((PyObject *)mp, key, value,
-                                    hash_unicode_key(PyValue_AsPyObjectBorrow(key)));
+                                    hash_unicode_key(PyValue_AsKnownObjectBorrow(key)));
 }
 
 // Replace a value at an existing entry. Steals the new value reference.
@@ -1621,7 +1621,7 @@ insertdict(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue value)
             if (_PyDict_HasSplitTable(mp) && value_is_exact_unicode(key)) {
                 if (ix == DKIX_EMPTY) {
                     ix = insert_split_key(mp->ma_keys,
-                                          PyValue_AsPyObjectBorrow(key), hash);
+                                          PyValue_AsKnownObjectBorrow(key), hash);
                     if (ix == DKIX_ERROR) {
                         break;
                     }
@@ -2061,7 +2061,7 @@ PyDict_GetValue(PyObject *op, PyValue key, PyValue *result)
         status = _PyDict_GetValue_KnownHash(op, query, hash, &value);
     }
     else if (hash == -1 && PyValue_IsObject(query)) {
-        dict_unhashable_type(op, PyValue_AsPyObjectBorrow(query));
+        dict_unhashable_type(op, PyValue_AsKnownObjectBorrow(query));
     }
     /* Hashing and cleanup can remove the inputs' last external owners. Keep
      * the selected snapshot independent until every local owner is retired. */
@@ -2380,7 +2380,7 @@ setitem_take2_lock_held(PyDictObject *mp, PyValue key, PyValue value)
     Py_hash_t hash = _PyValue_Hash(key);
     if (hash == -1 || PyErr_Occurred()) {
         if (hash == -1 && PyValue_IsObject(key)) {
-            dict_unhashable_type((PyObject *)mp, PyValue_AsPyObjectBorrow(key));
+            dict_unhashable_type((PyObject *)mp, PyValue_AsKnownObjectBorrow(key));
         }
         dict_close_value(value);
         dict_close_value(key);
@@ -2677,7 +2677,7 @@ PyDict_DelValue(PyObject *op, PyValue key)
         status = delvalue_knownhash_lock_held((PyDictObject *)op, query, hash);
     }
     else if (hash == -1 && PyValue_IsObject(query)) {
-        dict_unhashable_type(op, PyValue_AsPyObjectBorrow(query));
+        dict_unhashable_type(op, PyValue_AsKnownObjectBorrow(query));
     }
     dict_close_value(query);
     return PyErr_Occurred() ? -1 : status;
@@ -3843,7 +3843,7 @@ dict_snapshot_values(PyObject *dict, int kind)
             assert(index < count);
             if (kind == 2) {
                 PyValue pair_value = PyList_GET_VALUE(result, index);
-                PyObject *pair = PyValue_AsPyObjectBorrow(pair_value);
+                PyObject *pair = PyValue_AsKnownObjectBorrow(pair_value);
                 PyTuple_SET_VALUE(pair, 0, key);
                 PyTuple_SET_VALUE(pair, 1, value);
             }
@@ -4658,7 +4658,7 @@ dict_setdefault_value_lock_held(PyDictObject *mp, PyValue key, PyValue value,
         }
         if (_PyDict_HasSplitTable(mp) && value_is_exact_unicode(key)) {
             if (ix == DKIX_EMPTY) {
-                ix = insert_split_key(mp->ma_keys, PyValue_AsPyObjectBorrow(key), hash);
+                ix = insert_split_key(mp->ma_keys, PyValue_AsKnownObjectBorrow(key), hash);
                 if (ix == DKIX_ERROR) {
                     break;
                 }
@@ -7077,12 +7077,12 @@ _PyDict_NewKeysForClass(PyHeapTypeObject *cls)
             goto failed;
         }
         if (found && PyValue_IsObject(attrs) &&
-            PyTuple_Check(PyValue_AsPyObjectBorrow(attrs))) {
-            PyObject *tuple = PyValue_AsPyObjectBorrow(attrs);
+            PyTuple_Check(PyValue_AsKnownObjectBorrow(attrs))) {
+            PyObject *tuple = PyValue_AsKnownObjectBorrow(attrs);
             for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(tuple); i++) {
                 PyValue key = PyTuple_GetValue(tuple, i);
                 if (!PyValue_IsNull(key) && value_is_exact_unicode(key)) {
-                    PyObject *name = PyValue_AsPyObjectBorrow(key);
+                    PyObject *name = PyValue_AsKnownObjectBorrow(key);
                     Py_hash_t key_hash = PyObject_Hash(name);
                     Py_ssize_t ix = key_hash == -1 ? DKIX_ERROR :
                         insert_split_key(keys, name, key_hash);

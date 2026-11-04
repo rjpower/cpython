@@ -496,7 +496,7 @@ _PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys)
             }
             goto fail;
         }
-        PyObject *self_obj = PyValue_AsPyObjectBorrow(self.ref);
+        PyObject *self_obj = PyValue_AsKnownObjectBorrow(self.ref);
         PyObject *args[] = { self_obj, key, dummy };
         PyObject *value = NULL;
         if (!PyValue_IsNull(self.ref)) {
@@ -660,13 +660,13 @@ _PyEval_MatchClass(PyThreadState *tstate, PyObject *subject, PyObject *type,
             for (Py_ssize_t i = 0; i < nargs; i++) {
                 PyValue name_value = PyTuple_GET_VALUE(match_args, i);
                 if (!PyValue_IsObject(name_value) ||
-                    !PyUnicode_CheckExact(PyValue_AsPyObjectBorrow(name_value))) {
+                    !PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(name_value))) {
                     _PyErr_Format(tstate, PyExc_TypeError,
                                   "__match_args__ elements must be strings "
                                   "(got %s)", PyValue_TYPE(name_value)->tp_name);
                     goto fail;
                 }
-                PyObject *name = PyValue_AsPyObjectBorrow(name_value);
+                PyObject *name = PyValue_AsKnownObjectBorrow(name_value);
                 PyObject *attr = match_class_attr(tstate, subject, type, name,
                                                   seen);
                 if (attr == NULL) {
@@ -899,7 +899,7 @@ value_store_subscript(PyValue container, PyValue key, PyValue value,
                       _PyValueTemps *temps)
 {
     if (PyValue_IsObject(container)) {
-        PyObject *obj = PyValue_AsPyObjectBorrow(container);
+        PyObject *obj = PyValue_AsKnownObjectBorrow(container);
         PyMappingMethods *mapping = Py_TYPE(obj)->tp_as_mapping;
         if (mapping != NULL && mapping->mp_ass_subscript == _PyDict_StoreSubscript) {
             return PyDict_SetValue(obj, key, value);
@@ -985,7 +985,7 @@ value_binary_operation(int operation, PyValue left, PyValue right,
     /* Inputs are independent owning snapshots before either conversion can
      * allocate. The dictionary's native entry needs no scalar object view. */
     if (operation == NB_SUBSCR && PyValue_IsObject(left)) {
-        PyObject *container = PyValue_AsPyObjectBorrow(left);
+        PyObject *container = PyValue_AsKnownObjectBorrow(left);
         if (PyAnyDict_CheckExact(container)) {
             PyValue result = PyValue_NULL;
             int found = PyDict_GetValue(container, right, &result);
@@ -1036,8 +1036,8 @@ _Py_VectorCall_ValueSteal(
         VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
         goto cleanup;
     }
-    PyObject *callable_o = PyValue_AsPyObjectBorrow(callable);
-    PyObject *kwnames_o = PyValue_AsPyObjectBorrow(kwnames);
+    PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
+    PyObject *kwnames_o = PyValue_AsKnownObjectBorrow(kwnames);
     int positional_args = total_args;
     if (kwnames_o != NULL) {
         positional_args -= (int)PyTuple_GET_SIZE(kwnames_o);
@@ -1080,8 +1080,8 @@ _Py_VectorCallInstrumentation_ValueSteal(
         VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
         goto cleanup;
     }
-    PyObject* callable_o = PyValue_AsPyObjectBorrow(callable);
-    PyObject* kwnames_o = PyValue_AsPyObjectBorrow(kwnames);
+    PyObject* callable_o = PyValue_AsKnownObjectBorrow(callable);
+    PyObject* kwnames_o = PyValue_AsKnownObjectBorrow(kwnames);
     int positional_args = total_args;
     if (kwnames_o != NULL) {
         positional_args -= (int)PyTuple_GET_SIZE(kwnames_o);
@@ -1134,7 +1134,7 @@ _Py_BuiltinCallFast_Value(
         VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
         return res;
     }
-    PyObject *callable_o = PyValue_AsPyObjectBorrow(callable);
+    PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
     PyCFunction cfunc = PyCFunction_GET_FUNCTION(callable_o);
     res = _PyCFunctionFast_CAST(cfunc)(
         PyCFunction_GET_SELF(callable_o),
@@ -1159,7 +1159,7 @@ _Py_BuiltinCallFastWithKeywords_Value(
         VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
         return res;
     }
-    PyObject *callable_o = PyValue_AsPyObjectBorrow(callable);
+    PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
     PyCFunctionFastWithKeywords cfunc =
         _PyCFunctionFastWithKeywords_CAST(PyCFunction_GET_FUNCTION(callable_o));
     res = cfunc(PyCFunction_GET_SELF(callable_o), args_o, total_args, NULL);
@@ -1227,7 +1227,7 @@ _Py_CallBuiltinClass_Value(
         VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
         return res;
     }
-    PyTypeObject *tp = (PyTypeObject *)PyValue_AsPyObjectBorrow(callable);
+    PyTypeObject *tp = (PyTypeObject *)PyValue_AsKnownObjectBorrow(callable);
     res = tp->tp_vectorcall((PyObject *)tp, args_o, total_args | PY_VECTORCALL_ARGUMENTS_OFFSET, NULL);
     VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
     assert((res != NULL) ^ (PyErr_Occurred() != NULL));
@@ -1376,7 +1376,7 @@ _PyEval_GetIter(PyValue iterable, PyValue *index_or_null, int yield_from)
     if (PyValue_IsInline(iterable)) {
         return PyValue_ERROR;
     }
-    PyObject *iter_o = PyObject_GetIter(PyValue_AsPyObjectBorrow(iterable));
+    PyObject *iter_o = PyObject_GetIter(PyValue_AsKnownObjectBorrow(iterable));
     PyValue_CLOSE(iterable);
     if (iter_o == NULL) {
         return PyValue_ERROR;
@@ -1702,7 +1702,7 @@ call_transaction_expand_method(_PyCallTransaction *call, _PyInstr **next)
         !PyValue_IsNull(homes[1])) {
         return 0;
     }
-    PyMethodObject *method = (PyMethodObject *)PyValue_AsPyObjectBorrow(homes[0]);
+    PyMethodObject *method = (PyMethodObject *)PyValue_AsKnownObjectBorrow(homes[0]);
     PyValue self = PyValue_FromPyObjectNew(method->im_self);
     PyValue function = PyValue_FromPyObjectNew(method->im_func);
     PyValue obsolete = homes[0];
@@ -1769,7 +1769,7 @@ call_transaction_monitor(_PyCallTransaction *call, _PyInstr **next)
     PyValue function = PyValue_MakeHeapSafe(PyValue_Borrow(homes[0]));
     PyValue first = PyValue_NULL;
     if (call->kind == CALL_TRANSACTION_EX) {
-        PyObject *tuple = PyValue_AsPyObjectBorrow(homes[2]);
+        PyObject *tuple = PyValue_AsKnownObjectBorrow(homes[2]);
         if (PyTuple_GET_SIZE(tuple)) {
             first = PyValue_MakeHeapSafe(PyTuple_GET_VALUE(tuple, 0));
         }
@@ -1875,8 +1875,8 @@ call_transaction_native(_PyCallTransaction *call, _PyInstr **next)
     scope_started = 1;
     int status;
     if (call->kind == CALL_TRANSACTION_EX) {
-        PyObject *tuple = PyValue_AsPyObjectBorrow(homes[2]);
-        PyObject *kwargs = PyValue_AsPyObjectBorrow(homes[3]);
+        PyObject *tuple = PyValue_AsKnownObjectBorrow(homes[2]);
+        PyObject *kwargs = PyValue_AsKnownObjectBorrow(homes[3]);
         status = _PyNativeScope_BeginTupleCall(
             &scope, call->operation.tstate, callable, tuple, kwargs);
     }
@@ -1884,7 +1884,7 @@ call_transaction_native(_PyCallTransaction *call, _PyInstr **next)
         int offset = PyValue_IsNull(homes[1]) ? 2 : 1;
         int total = call->argument_count + 2 - offset;
         PyObject *names = call->kind == CALL_TRANSACTION_KEYWORDS
-            ? PyValue_AsPyObjectBorrow(homes[call->count - 1]) : NULL;
+            ? PyValue_AsKnownObjectBorrow(homes[call->count - 1]) : NULL;
         Py_ssize_t positional = total - (names == NULL ? 0 : PyTuple_GET_SIZE(names));
         if (_PyCFunction_CanCallScoped(callable)) {
             status = _PyNativeScope_BeginVector(
@@ -2503,18 +2503,18 @@ format_missing(PyThreadState *tstate, const char *kind,
     /* Deal with the joys of natural language. */
     switch (len) {
     case 1:
-        name_str = PyValue_AsPyObjectBorrow(PyList_GET_VALUE(names, 0));
+        name_str = PyValue_AsKnownObjectBorrow(PyList_GET_VALUE(names, 0));
         Py_INCREF(name_str);
         break;
     case 2:
         name_str = PyUnicode_FromFormat("%U and %U",
-                                        PyValue_AsPyObjectBorrow(PyList_GET_VALUE(names, len - 2)),
-                                        PyValue_AsPyObjectBorrow(PyList_GET_VALUE(names, len - 1)));
+                                        PyValue_AsKnownObjectBorrow(PyList_GET_VALUE(names, len - 2)),
+                                        PyValue_AsKnownObjectBorrow(PyList_GET_VALUE(names, len - 1)));
         break;
     default:
         tail = PyUnicode_FromFormat(", %U, and %U",
-                                    PyValue_AsPyObjectBorrow(PyList_GET_VALUE(names, len - 2)),
-                                    PyValue_AsPyObjectBorrow(PyList_GET_VALUE(names, len - 1)));
+                                    PyValue_AsKnownObjectBorrow(PyList_GET_VALUE(names, len - 2)),
+                                    PyValue_AsKnownObjectBorrow(PyList_GET_VALUE(names, len - 1)));
         if (tail == NULL)
             return;
         /* Chop off the last two objects in the list. This shouldn't actually
@@ -2709,7 +2709,7 @@ positional_only_passed_as_keyword(PyThreadState *tstate, PyCodeObject *co,
             if (!PyValue_IsObject(kwvalue)) {
                 continue;
             }
-            PyObject* kwname = PyValue_AsPyObjectBorrow(kwvalue);
+            PyObject* kwname = PyValue_AsKnownObjectBorrow(kwvalue);
             if (kwname == posonly_name){
                 if(PyList_Append(posonly_names, kwname) != 0) {
                     goto fail;
@@ -2840,7 +2840,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *c
             PyValue *co_varnames;
             PyValue keyword_value = PyTuple_GET_VALUE(kwnames, i);
             PyObject *keyword = PyValue_IsObject(keyword_value)
-                ? PyValue_AsPyObjectBorrow(keyword_value) : NULL;
+                ? PyValue_AsKnownObjectBorrow(keyword_value) : NULL;
             PyValue value_value = args[i+argcount];
             Py_ssize_t j;
 
@@ -2855,7 +2855,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *c
             normally interned this should almost always hit. */
             co_varnames = ((PyTupleObject *)(co->co_localsplusnames))->ob_item;
             for (j = co->co_posonlyargcount; j < total_args; j++) {
-                PyObject *varname = PyValue_AsPyObjectBorrow(co_varnames[j]);
+                PyObject *varname = PyValue_AsKnownObjectBorrow(co_varnames[j]);
                 if (varname == keyword) {
                     goto kw_found;
                 }
@@ -2863,7 +2863,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *c
 
             /* Slow fallback, just in case */
             for (j = co->co_posonlyargcount; j < total_args; j++) {
-                PyObject *varname = PyValue_AsPyObjectBorrow(co_varnames[j]);
+                PyObject *varname = PyValue_AsKnownObjectBorrow(co_varnames[j]);
                 int cmp = PyObject_RichCompareBool( keyword, varname, Py_EQ);
                 if (cmp > 0) {
                     goto kw_found;
@@ -3102,7 +3102,7 @@ eval_frame_push_and_init_code(PyThreadState *tstate, PyValue func,
     func = PyValue_MakeHeapSafe(func);
     size_t total = argcount + (kwnames == NULL ? 0 : PyTuple_GET_SIZE(kwnames));
     _PyValue_OwnArray(args, total);
-    PyFunctionObject *func_obj = (PyFunctionObject *)PyValue_AsPyObjectBorrow(func);
+    PyFunctionObject *func_obj = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(func);
     CALL_STAT_INC(frames_pushed);
     if (_PyCode_GetExec(code) == NULL) {
         goto fail;
@@ -3159,7 +3159,7 @@ _PyEvalFramePushAndInit(PyThreadState *tstate, PyValue func,
                       PyObject *kwnames, _PyInterpreterFrame *previous)
 {
     func = PyValue_MakeHeapSafe(func);
-    PyFunctionObject *function = (PyFunctionObject *)PyValue_AsPyObjectBorrow(func);
+    PyFunctionObject *function = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(func);
     PyCodeObject *code = (PyCodeObject *)Py_NewRef(function->func_code);
     _PyInterpreterFrame *frame = eval_frame_push_and_init_code(
         tstate, func, locals, args, argcount, kwnames, previous, code);
@@ -3263,7 +3263,7 @@ _PyEvalFramePushAndInit_Ex(PyThreadState *tstate, PyValue func,
     _PyInterpreterFrame *previous)
 {
     func = PyValue_MakeHeapSafe(func);
-    PyFunctionObject *function = (PyFunctionObject *)PyValue_AsPyObjectBorrow(func);
+    PyFunctionObject *function = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(func);
     PyCodeObject *code = (PyCodeObject *)Py_NewRef(function->func_code);
     _PyInterpreterFrame *frame = eval_frame_push_and_init_ex_code(
         tstate, func, locals, nargs, callargs, kwargs, previous, code);
@@ -3299,7 +3299,7 @@ call_transaction_push_python(_PyCallTransaction *call, _PyInstr **next,
         }
     }
     PyValue *homes = _PyFrame_Slots(op->frame) + call->base;
-    PyObject *callable = PyValue_AsPyObjectBorrow(homes[0]);
+    PyObject *callable = PyValue_AsKnownObjectBorrow(homes[0]);
     /* Allocation above may have changed vectorcall. Choose a new adapter
      * inside the same record; never replay method/monitor/EX preparation. */
     if (Py_TYPE(callable) != &PyFunction_Type || IS_PEP523_HOOKED(op->tstate) ||
@@ -3316,8 +3316,8 @@ call_transaction_push_python(_PyCallTransaction *call, _PyInstr **next,
     locals = NULL;
     invoked = 1;
     if (call->kind == CALL_TRANSACTION_EX) {
-        tuple = Py_NewRef(PyValue_AsPyObjectBorrow(homes[2]));
-        kwargs = Py_XNewRef(PyValue_AsPyObjectBorrow(homes[3]));
+        tuple = Py_NewRef(PyValue_AsKnownObjectBorrow(homes[2]));
+        kwargs = Py_XNewRef(PyValue_AsKnownObjectBorrow(homes[3]));
         PyObject *consumed_tuple = tuple, *consumed_kwargs = kwargs;
         tuple = kwargs = NULL;
         child = eval_frame_push_and_init_ex_code(
@@ -3329,7 +3329,7 @@ call_transaction_push_python(_PyCallTransaction *call, _PyInstr **next,
         int offset = PyValue_IsNull(homes[1]) ? 2 : 1;
         int total = call->argument_count + 2 - offset;
         if (call->kind == CALL_TRANSACTION_KEYWORDS) {
-            names = Py_NewRef(PyValue_AsPyObjectBorrow(homes[call->count - 1]));
+            names = Py_NewRef(PyValue_AsKnownObjectBorrow(homes[call->count - 1]));
         }
         for (int i = 0; i < total; i++) {
             storage[i] = PyValue_NewRef(homes[offset + i]);
@@ -3431,7 +3431,7 @@ call_transaction_invoke(_PyCallTransaction *call, _PyInstr **next,
     }
     PyValue callable = _PyFrame_Slots(call->operation.frame)[call->base];
     if (PyValue_IsObject(callable)) {
-        PyObject *object = PyValue_AsPyObjectBorrow(callable);
+        PyObject *object = PyValue_AsKnownObjectBorrow(callable);
         if (Py_TYPE(object) == &PyFunction_Type &&
             !IS_PEP523_HOOKED(call->operation.tstate) &&
             ((PyFunctionObject *)object)->vectorcall == _PyFunction_Vectorcall &&
@@ -4395,7 +4395,7 @@ borrow_or_box(PyValue ref, PyObject **box)
         return *box;
     }
     *box = NULL;
-    return PyValue_AsPyObjectBorrow(ref);
+    return PyValue_AsKnownObjectBorrow(ref);
 }
 
 static PyObject *
@@ -4427,7 +4427,7 @@ _PyEval_BinarySlice(PyValue container_st, PyValue start_st, PyValue stop_st)
     if (PyValue_IsPointerSpace(container_st) &&
         inline_slice_bounds(start_st, stop_st, &start, &stop))
     {
-        PyObject *container = PyValue_AsPyObjectBorrow(container_st);
+        PyObject *container = PyValue_AsKnownObjectBorrow(container_st);
         if (PyList_CheckExact(container)) {
             PySlice_AdjustIndices(PyList_GET_SIZE(container), &start, &stop, 1);
             return PyList_GetSlice(container, start, stop);
@@ -4470,11 +4470,11 @@ _PyEval_StoreSlice(PyValue v_st, PyValue container_st,
 {
     Py_ssize_t start, stop;
     if (PyValue_IsPointerSpace(v_st) && PyValue_IsPointerSpace(container_st) &&
-        PyList_CheckExact(PyValue_AsPyObjectBorrow(container_st)) &&
+        PyList_CheckExact(PyValue_AsKnownObjectBorrow(container_st)) &&
         inline_slice_bounds(start_st, stop_st, &start, &stop))
     {
-        return _PyList_StoreSlice(PyValue_AsPyObjectBorrow(container_st), start, stop,
-                                  PyValue_AsPyObjectBorrow(v_st));
+        return _PyList_StoreSlice(PyValue_AsKnownObjectBorrow(container_st), start, stop,
+                                  PyValue_AsKnownObjectBorrow(v_st));
     }
     PyObject *v_box, *container_box = NULL, *start_box = NULL, *stop_box = NULL;
     int err = -1;
@@ -4517,7 +4517,7 @@ _PyEval_IsInstanceValue(PyValue inst_st, PyValue cls_st)
 {
     if (PyValue_IsInline(inst_st) && PyValue_IsPointerSpace(cls_st)) {
         PyTypeObject *type = PyValue_TYPE(inst_st);
-        PyObject *cls = PyValue_AsPyObjectBorrow(cls_st);
+        PyObject *cls = PyValue_AsKnownObjectBorrow(cls_st);
         if (PyType_CheckExact(cls)) {
             return PyType_IsSubtype(type, (PyTypeObject *)cls);
         }
@@ -4527,10 +4527,10 @@ _PyEval_IsInstanceValue(PyValue inst_st, PyValue cls_st)
             for (; i < n; i++) {
                 PyValue item = PyTuple_GET_VALUE(cls, i);
                 if (!PyValue_IsObject(item) ||
-                    !PyType_CheckExact(PyValue_AsPyObjectBorrow(item))) {
+                    !PyType_CheckExact(PyValue_AsKnownObjectBorrow(item))) {
                     break;
                 }
-                if (PyType_IsSubtype(type, (PyTypeObject *)PyValue_AsPyObjectBorrow(item))) {
+                if (PyType_IsSubtype(type, (PyTypeObject *)PyValue_AsKnownObjectBorrow(item))) {
                     return 1;
                 }
             }
@@ -4901,7 +4901,7 @@ _PyEval_CheckExceptTypeValid(PyThreadState *tstate, PyObject* right)
         for (i = 0; i < length; i++) {
             PyValue exc = PyTuple_GET_VALUE(right, i);
             if (!PyValue_IsObject(exc) ||
-                !PyExceptionClass_Check(PyValue_AsPyObjectBorrow(exc))) {
+                !PyExceptionClass_Check(PyValue_AsKnownObjectBorrow(exc))) {
                 _PyErr_SetString(tstate, PyExc_TypeError,
                     CANNOT_CATCH_MSG);
                 return -1;
@@ -5192,7 +5192,7 @@ _PyEval_LoadGlobalValue(PyObject *globals, PyObject *builtins, PyObject *name,
     }
 
     PyObject *res_o = PyValue_IsObject(*writeto) ?
-        PyValue_AsPyObjectBorrow(*writeto) : NULL;
+        PyValue_AsKnownObjectBorrow(*writeto) : NULL;
     if (res_o != NULL && PyLazyImport_CheckExact(res_o)) {
         PyObject *l_v = _PyLazyImport_Reify(
             PyThreadState_GET(), res_o, name, namespace);
@@ -5274,7 +5274,7 @@ found:
 
 PyValue _PyForIter_VirtualIteratorNext(PyThreadState* tstate, _PyInterpreterFrame* frame, PyValue iter, PyValue* index_ptr)
 {
-    PyObject *iter_o = PyValue_AsPyObjectBorrow(iter);
+    PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
     PyValue index = *index_ptr;
     if (PyValue_IsTaggedIndex(index)) {
         intptr_t i = PyValue_UntagIndex(index);

@@ -621,7 +621,7 @@ static_assert(Py_TAG_REFCNT == 1, "IR_BORROW_KNOWN sets the tag from a test");
         if (PyValue_RefcountOnObject(REF)) { \
             assert(value_temps->count < value_temps->capacity); \
             value_temps->objects[value_temps->count++] = \
-                PyValue_AsPyObjectBorrow(REF); \
+                PyValue_AsKnownObjectBorrow(REF); \
             (REF) = PyValue_Borrow(REF); \
         } \
     } while (0)
@@ -659,7 +659,7 @@ _PyValue_Truth(PyValue ref)
     if (PyValue_IsInlineFloat(ref)) {
         return PyValue_InlineFloat(ref) != 0.0;
     }
-    return PyObject_IsTrue(PyValue_AsPyObjectBorrow(ref));
+    return PyObject_IsTrue(PyValue_AsKnownObjectBorrow(ref));
 }
 
 /* The handler takes the input that it read through field F: a temporary's

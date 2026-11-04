@@ -3020,8 +3020,8 @@
                 else {
                     right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr));
                 }
-                PyObject *left_o = PyValue_AsPyObjectBorrow(left);
-                PyObject *right_o = PyValue_AsPyObjectBorrow(right);
+                PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
+                PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
                 assert((oparg >> 5) <= Py_GE);
                 PyObject *res_o = PyObject_RichCompare(left_o, right_o, oparg >> 5);
                 IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
@@ -3131,8 +3131,8 @@
                 else {
                     right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr));
                 }
-                PyObject *left_o = PyValue_AsPyObjectBorrow(left);
-                PyObject *right_o = PyValue_AsPyObjectBorrow(right);
+                PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
+                PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
                 int res = PySequence_Contains(right_o, left_o);
                 if (res < 0) {
                     IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
@@ -3230,7 +3230,7 @@
             (void)oparg;
             PyCodeObject *co = _PyFrame_GetCode(frame);
             assert(PyValue_FunctionCheck(frame->f_funcobj));
-            PyFunctionObject *func = (PyFunctionObject *)PyValue_AsPyObjectBorrow(frame->f_funcobj);
+            PyFunctionObject *func = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(frame->f_funcobj);
             PyObject *closure = func->func_closure;
             assert(oparg == co->co_nfreevars);
             int offset = co->co_nlocalsplus - oparg;
@@ -3926,7 +3926,7 @@
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
             PyValue value;
-            PyCellObject *cell = (PyCellObject *)PyValue_AsPyObjectBorrow(GETLOCAL(oparg));
+            PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
             value = _PyCell_GetValue(cell);
             if (PyValue_IsNull(value)) {
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), value);
@@ -4581,7 +4581,7 @@
                     err = PyValue_InlineFloat(value) != 0.0;
                 }
                 else {
-                    err = PyObject_IsTrue(PyValue_AsPyObjectBorrow(value));
+                    err = PyObject_IsTrue(PyValue_AsKnownObjectBorrow(value));
                 }
                 IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 PyValue_CLOSE(value);
@@ -4778,7 +4778,7 @@
                     err = PyValue_InlineFloat(value) != 0.0;
                 }
                 else {
-                    err = PyObject_IsTrue(PyValue_AsPyObjectBorrow(value));
+                    err = PyObject_IsTrue(PyValue_AsKnownObjectBorrow(value));
                 }
                 IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 PyValue_CLOSE(value);
@@ -5239,7 +5239,7 @@
             (void)oparg;
             PyValue v;
             v = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
-            PyCellObject *cell = (PyCellObject *)PyValue_AsPyObjectBorrow(GETLOCAL(oparg));
+            PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
             PyValue owned = v;
             IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             _PyCell_SetValue(cell, owned);
@@ -5548,7 +5548,7 @@
                     err = PyValue_InlineFloat(value) != 0.0;
                 }
                 else {
-                    err = PyObject_IsTrue(PyValue_AsPyObjectBorrow(value));
+                    err = PyObject_IsTrue(PyValue_AsKnownObjectBorrow(value));
                 }
                 IR_SLOT(IR_FIELD_B(this_instr)) = PyValue_NULL;
                 PyValue_CLOSE(value);
@@ -5609,7 +5609,7 @@
                     res = PyValue_FromDouble(-PyValue_FloatValue(value));
                 }
                 else {
-                    PyObject *res_o = PyNumber_Negative(PyValue_AsPyObjectBorrow(value));
+                    PyObject *res_o = PyNumber_Negative(PyValue_AsKnownObjectBorrow(value));
                     res = res_o == NULL ? PyValue_NULL : PyValue_FromPyObjectSteal(res_o);
                 }
                 if (PyValue_IsNull(res)) {

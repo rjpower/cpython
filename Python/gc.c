@@ -473,7 +473,7 @@ _PyGC_VisitValue(PyValue *ref, visitproc visit, void *arg)
     if (!PyValue_RefcountOnObject(*ref) && (visit == visit_decref)) {
         return 0;
     }
-    Py_VISIT(PyValue_AsPyObjectBorrow(*ref));
+    Py_VISIT(PyValue_AsKnownObjectBorrow(*ref));
     return 0;
 }
 
@@ -1691,7 +1691,7 @@ referrersvisit(PyObject* obj, void *arg)
     for (i = 0; i < PyTuple_GET_SIZE(objs); i++) {
         // Compare identity only: a scalar stored inline cannot be a referent.
         PyValue item = PyTuple_GET_VALUE(objs, i);
-        if (PyValue_IsObject(item) && PyValue_AsPyObjectBorrow(item) == obj) {
+        if (PyValue_IsObject(item) && PyValue_AsKnownObjectBorrow(item) == obj) {
             return 1;
         }
     }

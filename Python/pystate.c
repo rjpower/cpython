@@ -23,7 +23,7 @@
 #include "pycore_pymem.h"         // _PyMem_DebugEnabled()
 #include "pycore_runtime.h"       // _PyRuntime
 #include "pycore_runtime_init.h"  // _PyRuntimeState_INIT
-#include "pycore_value.h"      // PyValue_AsPyObjectBorrow()
+#include "pycore_value.h"      // PyValue_AsKnownObjectBorrow()
 #include "pycore_stats.h"         // FT_STAT_WORLD_STOP_INC()
 #include "pycore_time.h"          // _PyTime_Init()
 #include "pycore_uniqueid.h"      // _PyObject_FinalizePerThreadRefcounts()
@@ -708,7 +708,7 @@ common_constants_clear(PyInterpreterState *interp)
         if (PyValue_IsInline(ref)) {
             continue;
         }
-        PyObject *obj = PyValue_AsPyObjectBorrow(ref);
+        PyObject *obj = PyValue_AsKnownObjectBorrow(ref);
         assert(_Py_IsImmortal(obj));
         int clear_immortal = !_Py_IsStaticImmortal(obj);
         PyValue_XCLOSE(ref);

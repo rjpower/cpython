@@ -438,7 +438,7 @@ static inline void
 gc_visit_value(PyValue value)
 {
     if (PyValue_IsObject(value) && !PyValue_RefcountOnObject(value)) {
-        PyObject *obj = PyValue_AsPyObjectBorrow(value);
+        PyObject *obj = PyValue_AsKnownObjectBorrow(value);
         if (_PyObject_GC_IS_TRACKED(obj) && !gc_is_frozen(obj)) {
             gc_add_refs(obj, 1);
         }
@@ -832,7 +832,7 @@ static int
 gc_visit_value_mark_alive(gc_mark_args_t *args, PyValue value)
 {
     if (PyValue_IsObject(value)) {
-        PyObject *op = PyValue_AsPyObjectBorrow(value);
+        PyObject *op = PyValue_AsKnownObjectBorrow(value);
         if (gc_mark_enqueue(op, args) < 0) {
             return -1;
         }
@@ -1820,7 +1820,7 @@ _PyGC_VisitValue(PyValue *ref, visitproc visit, void *arg)
     if (PyValue_RefcountOnObject(*ref) ||
         (visit != visit_decref && visit != visit_decref_unreachable))
     {
-        Py_VISIT(PyValue_AsPyObjectBorrow(*ref));
+        Py_VISIT(PyValue_AsKnownObjectBorrow(*ref));
     }
     return 0;
 }

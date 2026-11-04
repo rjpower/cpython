@@ -257,7 +257,7 @@ compiler_metadata_item(PyObject *list, Py_ssize_t index)
 {
     PyValue value = PyList_GET_VALUE(list, index);
     assert(PyValue_IsObject(value));
-    return PyValue_AsPyObjectBorrow(value);
+    return PyValue_AsKnownObjectBorrow(value);
 }
 
 int
@@ -412,8 +412,8 @@ static PyValue
 constant_from_key(PyValue key)
 {
     if (PyValue_IsObject(key) &&
-        PyTuple_CheckExact(PyValue_AsPyObjectBorrow(key))) {
-        return PyTuple_GetValue(PyValue_AsPyObjectBorrow(key), 1);
+        PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(key))) {
+        return PyTuple_GetValue(PyValue_AsKnownObjectBorrow(key), 1);
     }
     return PyValue_DUP(key);
 }
@@ -426,7 +426,7 @@ const_cache_insert(PyObject *const_cache, PyValue constant, bool recursive)
 {
     assert(PyDict_CheckExact(const_cache));
     PyValue input = PyValue_DUP(constant);
-    PyObject *o = PyValue_IsObject(input) ? PyValue_AsPyObjectBorrow(input) : NULL;
+    PyObject *o = PyValue_IsObject(input) ? PyValue_AsKnownObjectBorrow(input) : NULL;
     if (o == Py_None || o == Py_Ellipsis) {
         return input;
     }
@@ -503,7 +503,7 @@ const_cache_insert(PyObject *const_cache, PyValue constant, bool recursive)
                 Py_DECREF(merged);
                 goto error;
             }
-            replace_equivalent_constant(PyValue_AsPyObjectBorrow(key), 1,
+            replace_equivalent_constant(PyValue_AsKnownObjectBorrow(key), 1,
                                         PyValue_FromPyObjectSteal(merged));
         }
     }
@@ -539,7 +539,7 @@ dict_add_value(PyObject *dict, PyValue key)
     }
     Py_ssize_t result = PyValue_IsInlineInt(selected)
                         ? PyValue_InlineInt(selected)
-                        : PyLong_AsSsize_t(PyValue_AsPyObjectBorrow(selected));
+                        : PyLong_AsSsize_t(PyValue_AsKnownObjectBorrow(selected));
     PyValue_CLOSE(selected);
     return result;
 }
@@ -638,7 +638,7 @@ dictbytype(PyObject *src, int scope_type, int flag, Py_ssize_t offset)
         }
         assert(PyValue_LongCheckExact(value));
         long vi = PyValue_IsInlineInt(value) ? PyValue_InlineInt(value) :
-                  PyLong_AsLong(PyValue_AsPyObjectBorrow(value));
+                  PyLong_AsLong(PyValue_AsKnownObjectBorrow(value));
         if (vi == -1 && PyErr_Occurred()) {
             goto error;
         }
@@ -680,15 +680,15 @@ add_cell_names_from_symbols(PyObject *symbols, PyObject *names)
     int status;
     while ((status = _PyDict_NextValue(symbols, &pos, &key, &value, NULL)) > 0) {
         assert(PyValue_IsObject(key));
-        assert(PyUnicode_CheckExact(PyValue_AsPyObjectBorrow(key)));
+        assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(key)));
         assert(PyValue_LongCheckExact(value));
         long flags = PyValue_IsInlineInt(value) ? PyValue_InlineInt(value) :
-                     PyLong_AsLong(PyValue_AsPyObjectBorrow(value));
+                     PyLong_AsLong(PyValue_AsKnownObjectBorrow(value));
         if (flags == -1 && PyErr_Occurred()) {
             goto error;
         }
         if (SYMBOL_TO_SCOPE(flags) == CELL) {
-            if (PySet_Add(names, PyValue_AsPyObjectBorrow(key)) < 0) {
+            if (PySet_Add(names, PyValue_AsKnownObjectBorrow(key)) < 0) {
                 goto error;
             }
         }
@@ -1141,7 +1141,7 @@ dict_lookup_arg(PyObject *dict, PyObject *name)
     }
     assert(PyValue_LongCheckExact(value));
     long result = PyValue_IsInlineInt(value) ? PyValue_InlineInt(value) :
-                  PyLong_AsLong(PyValue_AsPyObjectBorrow(value));
+                  PyLong_AsLong(PyValue_AsKnownObjectBorrow(value));
     PyObject *saved = PyErr_GetRaisedException();
     PyValue_CLOSE(value);
     _PyValue_RestoreException(saved);
@@ -1526,7 +1526,7 @@ consts_dict_keys_inorder(PyObject *dict)
     while ((next = _PyDict_NextValue(dict, &pos, &key, &index, NULL)) > 0) {
         Py_ssize_t i = PyValue_IsInlineInt(index)
                        ? PyValue_InlineInt(index)
-                       : PyLong_AsSsize_t(PyValue_AsPyObjectBorrow(index));
+                       : PyLong_AsSsize_t(PyValue_AsKnownObjectBorrow(index));
         PyValue_CLOSE(index);
         if (i < 0 || i >= size) {
             PyValue_CLOSE(key);
@@ -1571,9 +1571,9 @@ intern_constant(PyObject *const_cache, PyValue constant)
     if (!PyValue_IsObject(input)) {
         return input;
     }
-    PyObject *o = PyValue_AsPyObjectBorrow(input);
+    PyObject *o = PyValue_AsKnownObjectBorrow(input);
     if (PyUnicode_CheckExact(o)) {
-        o = PyValue_AsPyObjectSteal(input);
+        o = PyValue_AsKnownObjectSteal(input);
         if (_PyCode_ShouldInternString(o)) {
             _PyUnicode_InternMortal(_PyInterpreterState_GET(), &o);
         }
@@ -1610,7 +1610,7 @@ intern_constant(PyObject *const_cache, PyValue constant)
         PyValue_CLOSE(key);
         return PyValue_NULL;
     }
-    o = PyValue_AsPyObjectBorrow(selected);
+    o = PyValue_AsKnownObjectBorrow(selected);
 
     PyObject *items;
     if (PyFrozenSet_CheckExact(o)) {
@@ -1694,7 +1694,7 @@ intern_constant(PyObject *const_cache, PyValue constant)
             return PyValue_NULL;
         }
         PyValue replacement = PyValue_FromPyObjectSteal(new);
-        replace_equivalent_constant(PyValue_AsPyObjectBorrow(key), 1,
+        replace_equivalent_constant(PyValue_AsKnownObjectBorrow(key), 1,
                                     PyValue_DUP(replacement));
         PyValue_CLOSE(selected);
         selected = replacement;

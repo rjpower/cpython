@@ -209,7 +209,7 @@ module_dict_watcher(PyDict_WatchEvent event, PyObject *dict,
     // this is adding a new key then the version will be reset anyway.
     if (event == PyDict_EVENT_MODIFIED &&
         !PyValue_IsNull(new_value) && PyValue_IsObject(new_value) &&
-        PyLazyImport_CheckExact(PyValue_AsPyObjectBorrow(new_value))) {
+        PyLazyImport_CheckExact(PyValue_AsKnownObjectBorrow(new_value))) {
         _PyDict_ClearKeysVersionLockHeld(dict);
     }
     return 0;

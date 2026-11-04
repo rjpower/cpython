@@ -117,7 +117,7 @@ is_well_formed(PyValue ref, bool in_stack)
         return true;
     }
     return !PyValue_IsMalformed(ref)
-           && Py_TYPE(PyValue_AsPyObjectBorrow(ref)) != NULL;
+           && Py_TYPE(PyValue_AsKnownObjectBorrow(ref)) != NULL;
 }
 
 void

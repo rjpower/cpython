@@ -1023,7 +1023,7 @@ _PyJit_PrepareCall(_PyJitContext *ctx, _PyIRWord *instr, PyValue callable)
     if (fb->h.kind != FB_CALL) {
         return 0;
     }
-    PyObject *function = PyValue_AsPyObjectBorrow(callable);
+    PyObject *function = PyValue_AsKnownObjectBorrow(callable);
     if (PyMethod_Check(function)) {
         function = ((PyMethodObject *)function)->im_func;
     }

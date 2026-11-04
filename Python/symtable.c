@@ -22,7 +22,7 @@ symtable_long(PyValue value)
 {
     assert(PyValue_LongCheckExact(value));
     return PyValue_IsInlineInt(value) ? PyValue_InlineInt(value) :
-           PyLong_AsLong(PyValue_AsPyObjectBorrow(value));
+           PyLong_AsLong(PyValue_AsKnownObjectBorrow(value));
 }
 
 static int
@@ -68,7 +68,7 @@ symtable_next_symbol(PyObject *dict, Py_ssize_t *pos, PyValue *key, long *flags)
         return status;
     }
     assert(PyValue_IsObject(*key));
-    assert(PyUnicode_CheckExact(PyValue_AsPyObjectBorrow(*key)));
+    assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(*key)));
     *flags = symtable_long(value);
     PyObject *saved = PyErr_GetRaisedException();
     PyValue_CLOSE(value);
@@ -90,7 +90,7 @@ symtable_list_item(PyObject *list, Py_ssize_t index)
      * The enclosing symbol table retains these lists throughout analysis. */
     PyValue value = PyList_GET_VALUE(list, index);
     assert(PyValue_IsObject(value));
-    return PyValue_AsPyObjectBorrow(value);
+    return PyValue_AsKnownObjectBorrow(value);
 }
 
 /* error strings used for warnings */
@@ -448,7 +448,7 @@ static void _dump_symtable(PySTEntryObject* ste, PyObject* prefix)
     int status;
     while ((status = symtable_next_symbol(ste->ste_symbols, &pos,
                                           &key, &flags)) > 0) {
-        PyObject *name = PyValue_AsPyObjectBorrow(key);
+        PyObject *name = PyValue_AsKnownObjectBorrow(key);
         int scope = SYMBOL_TO_SCOPE(flags);
         printf("%s  %s: ", PyUnicode_AsUTF8(prefix), PyUnicode_AsUTF8(name));
         if (flags & DEF_GLOBAL) printf(" DEF_GLOBAL");
@@ -948,7 +948,7 @@ finalize_inlined_comprehension(PySTEntryObject *ste, PySTEntryObject *comp,
     long comp_flags;
     while ((status = symtable_next_symbol(comp->ste_symbols, &pos,
                                           &key, &comp_flags)) > 0) {
-        PyObject *k = PyValue_AsPyObjectBorrow(key);
+        PyObject *k = PyValue_AsKnownObjectBorrow(key);
         int scope = SYMBOL_TO_SCOPE(comp_flags);
         if (scope == CELL) {
             if (PySet_Add(inlined_cells, k) < 0) {
@@ -1039,7 +1039,7 @@ analyze_cells(PyObject *scopes, PyObject *free, PyObject *inlined_cells)
     long scope;
 
     while ((status = symtable_next_symbol(scopes, &pos, &key, &scope)) > 0) {
-        PyObject *name = PyValue_AsPyObjectBorrow(key);
+        PyObject *name = PyValue_AsKnownObjectBorrow(key);
         if (scope != LOCAL) {
             PyValue_CLEAR(key);
             continue;
@@ -1115,7 +1115,7 @@ update_symbols(PyObject *symbols, PyObject *scopes,
 
     /* Update scope information for all symbols in this scope. */
     while ((status = symtable_next_symbol(symbols, &pos, &key, &flags)) > 0) {
-        PyObject *symbol = PyValue_AsPyObjectBorrow(key);
+        PyObject *symbol = PyValue_AsKnownObjectBorrow(key);
         long scope;
         int found = symtable_get_flags(scopes, symbol, &scope);
         if (found < 0) {
@@ -1278,7 +1278,7 @@ analyze_block(PySTEntryObject *ste, PyObject *bound, PyObject *free,
        so inlined comprehensions can add USE flags to this table. */
     while ((status = symtable_next_symbol(ste->ste_symbols, &pos,
                                           &key, &flags)) > 0) {
-        PyObject *name = PyValue_AsPyObjectBorrow(key);
+        PyObject *name = PyValue_AsKnownObjectBorrow(key);
         if (!(flags & (DEF_GLOBAL | DEF_NONLOCAL | DEF_BOUND))) {
             PyValue_CLEAR(key);
             continue;
@@ -1373,7 +1373,7 @@ analyze_block(PySTEntryObject *ste, PyObject *bound, PyObject *free,
     pos = 0;
     while ((status = symtable_next_symbol(ste->ste_symbols, &pos,
                                           &key, &flags)) > 0) {
-        PyObject *name = PyValue_AsPyObjectBorrow(key);
+        PyObject *name = PyValue_AsKnownObjectBorrow(key);
         int contains = PyDict_Contains(scopes, name);
         if (contains < 0) {
             goto error;

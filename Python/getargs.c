@@ -2333,11 +2333,11 @@ find_keyword(PyObject *kwnames, PyObject *const *kwstack, PyObject *key)
     for (i = 0; i < nkwargs; i++) {
         PyValue name = PyTuple_GET_VALUE(kwnames, i);
         if (!PyValue_IsObject(name) ||
-            !PyUnicode_Check(PyValue_AsPyObjectBorrow(name))) {
+            !PyUnicode_Check(PyValue_AsKnownObjectBorrow(name))) {
             PyErr_SetString(PyExc_TypeError, "keywords must be strings");
             return NULL;
         }
-        PyObject *kwname = PyValue_AsPyObjectBorrow(name);
+        PyObject *kwname = PyValue_AsKnownObjectBorrow(name);
 
         /* kwname == key will normally find a match in since keyword keys
            should be interned strings; if not retry below in a new loop. */
@@ -2349,11 +2349,11 @@ find_keyword(PyObject *kwnames, PyObject *const *kwstack, PyObject *key)
     for (i = 0; i < nkwargs; i++) {
         PyValue name = PyTuple_GET_VALUE(kwnames, i);
         if (!PyValue_IsObject(name) ||
-            !PyUnicode_Check(PyValue_AsPyObjectBorrow(name))) {
+            !PyUnicode_Check(PyValue_AsKnownObjectBorrow(name))) {
             PyErr_SetString(PyExc_TypeError, "keywords must be strings");
             return NULL;
         }
-        PyObject *kwname = PyValue_AsPyObjectBorrow(name);
+        PyObject *kwname = PyValue_AsKnownObjectBorrow(name);
         assert(PyUnicode_Check(kwname));
         if (_PyUnicode_Equal(kwname, key)) {
             return Py_NewRef(kwstack[i]);

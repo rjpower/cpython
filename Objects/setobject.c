@@ -77,8 +77,8 @@ set_unicode_eq(PyValue left, PyValue right)
     if (!PyValue_IsObject(left) || !PyValue_IsObject(right)) {
         return 0;
     }
-    PyObject *a = PyValue_AsPyObjectBorrow(left);
-    PyObject *b = PyValue_AsPyObjectBorrow(right);
+    PyObject *a = PyValue_AsKnownObjectBorrow(left);
+    PyObject *b = PyValue_AsKnownObjectBorrow(right);
     return PyUnicode_CheckExact(a) && PyUnicode_CheckExact(b) && unicode_eq(a, b);
 }
 
@@ -90,7 +90,7 @@ set_close_key(PyValue key, int status)
     }
     /* In the supported GIL build, a nonfinal decref cannot call a destructor
        or allocator hook. Keep the ordinary lookup cleanup cheap. */
-    if (Py_REFCNT(PyValue_AsPyObjectBorrow(key)) > 1) {
+    if (Py_REFCNT(PyValue_AsKnownObjectBorrow(key)) > 1) {
         PyValue_CLOSE(key);
         return status;
     }
@@ -416,7 +416,7 @@ _PySet_AddValueTakeRef(PySetObject *so, PyValue key)
     key = PyValue_MakeHeapSafe(key);
     Py_hash_t hash = _PyValue_Hash(key);
     if (hash == -1) {
-        set_unhashable_type(PyValue_AsPyObjectBorrow(key));
+        set_unhashable_type(PyValue_AsKnownObjectBorrow(key));
         return set_close_key(key, -1);
     }
     // We don't pre-increment here, the caller holds a strong
@@ -698,7 +698,7 @@ set_contains_value(PySetObject *so, PyValue key)
     key = PyValue_NewRef(key);
     Py_hash_t hash = _PyValue_Hash(key);
     if (hash == -1) {
-        set_unhashable_type(PyValue_AsPyObjectBorrow(key));
+        set_unhashable_type(PyValue_AsKnownObjectBorrow(key));
         return set_close_key(key, -1);
     }
     int result = set_contains_entry(so, key, hash);
@@ -711,7 +711,7 @@ set_discard_value(PySetObject *so, PyValue key)
     key = PyValue_NewRef(key);
     Py_hash_t hash = _PyValue_Hash(key);
     if (hash == -1) {
-        set_unhashable_type(PyValue_AsPyObjectBorrow(key));
+        set_unhashable_type(PyValue_AsKnownObjectBorrow(key));
         return set_close_key(key, -1);
     }
     int result = set_discard_entry(so, key, hash);
@@ -1665,7 +1665,7 @@ _PyFrozenSet_MaybeUntrack(PyObject *op)
     setentry *entry;
     while (set_next((PySetObject *)op, &pos, &entry)) {
         if (PyValue_IsObject(entry->key) &&
-            _PyObject_GC_MAY_BE_TRACKED(PyValue_AsPyObjectBorrow(entry->key))) {
+            _PyObject_GC_MAY_BE_TRACKED(PyValue_AsKnownObjectBorrow(entry->key))) {
             return;
         }
     }
@@ -3409,7 +3409,7 @@ PySet_AddValue(PyObject *anyset, PyValue key)
     }
     if (PyFrozenSet_CheckExact(anyset) && !PyObject_GC_IsTracked(anyset) &&
         PyValue_IsObject(key) &&
-        PyObject_GC_IsTracked(PyValue_AsPyObjectBorrow(key))) {
+        PyObject_GC_IsTracked(PyValue_AsKnownObjectBorrow(key))) {
         _PyObject_GC_TRACK(anyset);
     }
     return _PySet_AddValueTakeRef((PySetObject *)anyset, PyValue_NewRef(key));

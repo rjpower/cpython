@@ -52,7 +52,7 @@ framelocalsproxy_getval(_PyInterpreterFrame *frame, PyCodeObject *co, int i)
     if (PyValue_IsInline(fast[i])) {
         return _PyValue_AsPyObjectNewBoxedAt(fast[i], BOX_SITE_FRAME);
     }
-    PyObject *value = PyValue_AsPyObjectBorrow(fast[i]);
+    PyObject *value = PyValue_AsKnownObjectBorrow(fast[i]);
     PyObject *cell = NULL;
 
     if (value == NULL) {
@@ -299,10 +299,10 @@ framelocalsproxy_setitem(PyObject *self, PyObject *key, PyObject *value)
         if (kind == CO_FAST_FREE) {
             // The cell was set when the frame was created from
             // the function's closure.
-            assert(!PyValue_IsNull(oldvalue) && PyCell_Check(PyValue_AsPyObjectBorrow(oldvalue)));
-            cell = PyValue_AsPyObjectBorrow(oldvalue);
+            assert(!PyValue_IsNull(oldvalue) && PyCell_Check(PyValue_AsKnownObjectBorrow(oldvalue)));
+            cell = PyValue_AsKnownObjectBorrow(oldvalue);
         } else if (kind & CO_FAST_CELL && PyValue_IsObject(oldvalue)) {
-            PyObject *as_obj = PyValue_AsPyObjectBorrow(oldvalue);
+            PyObject *as_obj = PyValue_AsKnownObjectBorrow(oldvalue);
             if (PyCell_Check(as_obj)) {
                 cell = as_obj;
             }
@@ -314,8 +314,8 @@ framelocalsproxy_setitem(PyObject *self, PyObject *key, PyObject *value)
         } else if (PyValue_IsInline(oldvalue)) {
             // An inline value holds no reference to keep alive.
             fast[i] = PyValue_NewRef(PyValue_FromObjectBorrow(value));
-        } else if (value != PyValue_AsPyObjectBorrow(oldvalue)) {
-            PyObject *old_obj = PyValue_AsPyObjectBorrow(fast[i]);
+        } else if (value != PyValue_AsKnownObjectBorrow(oldvalue)) {
+            PyObject *old_obj = PyValue_AsKnownObjectBorrow(fast[i]);
             if (old_obj != NULL && !_Py_IsImmortal(old_obj)) {
                 if (add_overwritten_fast_local(frame, old_obj) < 0) {
                     return -1;
@@ -489,12 +489,12 @@ framelocalsproxy_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     }
     PyValue item_value = PyTuple_GET_VALUE(args, 0);
     if (!PyValue_IsObject(item_value) ||
-        !PyFrame_Check(PyValue_AsPyObjectBorrow(item_value))) {
+        !PyFrame_Check(PyValue_AsKnownObjectBorrow(item_value))) {
         PyErr_Format(PyExc_TypeError, "expect frame, not %.200s",
                      PyValue_TYPE(item_value)->tp_name);
         return NULL;
     }
-    PyObject *item = PyValue_AsPyObjectBorrow(item_value);
+    PyObject *item = PyValue_AsKnownObjectBorrow(item_value);
     PyFrameObject *frame = (PyFrameObject*)item;
 
     if (kwds != NULL && PyDict_Size(kwds) != 0) {
@@ -1971,7 +1971,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
         stack_base[depth] = PyValue_NULL;
         if (top_of_stack(start_stack) == Except) {
             /* Pop exception stack as well as the evaluation stack */
-            PyObject *exc = PyValue_AsPyObjectBorrow(popped);
+            PyObject *exc = PyValue_AsKnownObjectBorrow(popped);
             assert(PyExceptionInstance_Check(exc) || exc == Py_None);
             PyThreadState *tstate = _PyThreadState_GET();
             Py_XSETREF(tstate->exc_info->exc_value, exc == Py_None ? NULL : exc);
@@ -2382,7 +2382,7 @@ frame_get_var(_PyInterpreterFrame *frame, PyCodeObject *co, int i,
             *pvalue = value;
             return 1;
         }
-        value = PyValue_AsPyObjectBorrow(frame->base[i]);
+        value = PyValue_AsKnownObjectBorrow(frame->base[i]);
         if (kind & CO_FAST_FREE) {
             // The cell was set by COPY_FREE_VARS.
             assert(value != NULL && PyCell_Check(value));

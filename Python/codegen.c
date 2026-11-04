@@ -773,7 +773,7 @@ codegen_list_name(PyObject *list, Py_ssize_t index)
     /* These private compiler lists retain only Unicode names. */
     PyValue value = PyList_GET_VALUE(list, index);
     assert(PyValue_IsObject(value));
-    PyObject *name = PyValue_AsPyObjectBorrow(value);
+    PyObject *name = PyValue_AsKnownObjectBorrow(value);
     assert(PyUnicode_CheckExact(name));
     return name;
 }
@@ -861,7 +861,7 @@ codegen_deferred_annotations_body(compiler *c, location loc,
         PyValue cond_index = PyList_GET_VALUE(conditional_annotation_indices, i);
         assert(PyValue_LongCheckExact(cond_index));
         long idx = PyValue_IsInlineInt(cond_index) ? PyValue_InlineInt(cond_index) :
-                   PyLong_AsLong(PyValue_AsPyObjectBorrow(cond_index));
+                   PyLong_AsLong(PyValue_AsKnownObjectBorrow(cond_index));
         if (idx == -1 && PyErr_Occurred()) {
             PyObject *saved = PyErr_GetRaisedException();
             Py_DECREF(mangled);
@@ -4044,7 +4044,7 @@ load_args_for_super(compiler *c, expr_ty e) {
         return ERROR;
     }
     assert(PyValue_IsObject(key));
-    int ret = codegen_nameop(c, loc, PyValue_AsPyObjectBorrow(key), Load);
+    int ret = codegen_nameop(c, loc, PyValue_AsKnownObjectBorrow(key), Load);
     codegen_close_value(key);
     return ret < 0 || PyErr_Occurred() ? ERROR : SUCCESS;
 }
@@ -4999,10 +4999,10 @@ codegen_push_inlined_comprehension_locals(compiler *c, location loc,
     while ((status = _PyDict_NextValue(comp->ste_symbols, &pos,
                                        &key, &value, NULL)) > 0) {
         assert(PyValue_IsObject(key));
-        assert(PyUnicode_CheckExact(PyValue_AsPyObjectBorrow(key)));
+        assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(key)));
         assert(PyValue_LongCheckExact(value));
         long symbol = PyValue_IsInlineInt(value) ? PyValue_InlineInt(value) :
-                      PyLong_AsLong(PyValue_AsPyObjectBorrow(value));
+                      PyLong_AsLong(PyValue_AsKnownObjectBorrow(value));
         codegen_close_value(value);
         value = PyValue_NULL;
         if (PyErr_Occurred()) {
@@ -5011,7 +5011,7 @@ codegen_push_inlined_comprehension_locals(compiler *c, location loc,
         }
         assert(symbol >= 0);
         int ret = codegen_push_inlined_comprehension_name(
-            c, loc, PyValue_AsPyObjectBorrow(key), symbol, state);
+            c, loc, PyValue_AsKnownObjectBorrow(key), symbol, state);
         codegen_close_value(key);
         key = PyValue_NULL;
         if (ret < 0 || PyErr_Occurred()) {

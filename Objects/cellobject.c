@@ -162,7 +162,7 @@ cell_repr(PyObject *self)
         return PyUnicode_FromFormat("<cell at %p: empty>", self);
     }
     uintptr_t identity = PyValue_IsInline(ref) ? ref.bits :
-                          (uintptr_t)PyValue_AsPyObjectBorrow(ref);
+                          (uintptr_t)PyValue_AsKnownObjectBorrow(ref);
     PyObject *res = PyUnicode_FromFormat("<cell at %p: %.80s object at %p>",
                                         self, PyValue_TYPE(ref)->tp_name,
                                         (void *)identity);

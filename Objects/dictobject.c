@@ -465,9 +465,7 @@ dictkeys_decref(PyDictKeysObject *dk, bool use_qsbr)
                 PyValue_XCLOSE(value);
             }
         }
-        PyObject *saved = PyErr_GetRaisedException();
         free_keys_object(dk, use_qsbr);
-        _PyValue_RestoreException(saved);
     }
 }
 
@@ -1757,9 +1755,7 @@ dictresize(PyDictObject *mp, uint8_t log2_newsize, int unicode)
              DK_IS_UNICODE(mp->ma_keys))) {
             break;
         }
-        PyObject *saved = PyErr_GetRaisedException();
         free_keys_object(newkeys, false);
-        _PyValue_RestoreException(saved);
         if (mp->ma_used == PY_SSIZE_T_MAX) {
             PyErr_NoMemory();
             return -1;
@@ -1854,9 +1850,7 @@ dictresize(PyDictObject *mp, uint8_t log2_newsize, int unicode)
     /* No release may expose new keys with old split storage or unfinished
      * counters. After the first release, the new dictionary may change again. */
     if (oldvalues != NULL && !embedded) {
-        PyObject *saved = PyErr_GetRaisedException();
         free_values(oldvalues, shared);
-        _PyValue_RestoreException(saved);
     }
     if (oldkeys != Py_EMPTY_KEYS) {
         dictkeys_decref(oldkeys, shared);
@@ -2253,12 +2247,6 @@ _PyDict_LoadBuiltinsFromGlobals(PyObject *globals)
     _Py_INCREF_BUILTINS(builtins);
     Py_XDECREF(object);
     PyValue_XCLOSE(ref);
-    if (PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
-        _Py_DECREF_BUILTINS(builtins);
-        _PyValue_RestoreException(saved);
-        return NULL;
-    }
     return builtins;
 }
 
@@ -2819,11 +2807,10 @@ clear_lock_held(PyObject *op)
         return;
     }
     /* Empty the dict... */
-    PyObject *saved = PyErr_GetRaisedException();
     _PyDict_NotifyEvent(PyDict_EVENT_CLEARED, mp, PyValue_NULL, PyValue_NULL);
-    _PyValue_RestoreException(saved);
-    /* A watcher error's unraisable hook can run Python. Reacquire both
-     * storage pointers before inspecting or detaching the current table. */
+    /* A dict watcher, and the unraisable hook that reports its error, can
+     * run Python. Reacquire both storage pointers before inspecting or
+     * detaching the current table. */
     oldkeys = mp->ma_keys;
     oldvalues = mp->ma_values;
     if (oldkeys == Py_EMPTY_KEYS) {
@@ -2849,9 +2836,7 @@ clear_lock_held(PyObject *op)
             FT_ATOMIC_STORE_PTR_RELEASE(oldvalues->values[i], PyValue_NULL);
             PyValue_XCLOSE(tmp);
         }
-        PyObject *saved = PyErr_GetRaisedException();
         free_values(oldvalues, IS_DICT_SHARED(mp));
-        _PyValue_RestoreException(saved);
         dictkeys_decref(oldkeys, IS_DICT_SHARED(mp));
     }
     ASSERT_CONSISTENT(mp);
@@ -3574,11 +3559,7 @@ anydict_repr_impl(PyObject *self)
     return result;
 error:
     Py_ReprLeave(self);
-    {
-        PyObject *error = PyErr_GetRaisedException();
-        PyUnicodeWriter_Discard(writer);
-        _PyValue_RestoreException(error);
-    }
+    PyUnicodeWriter_Discard(writer);
     Py_XDECREF(key_object);
     Py_XDECREF(value_object);
     PyValue_XCLOSE(key);
@@ -6852,7 +6833,6 @@ shape_after_delete(PyTypeObject *tp, PyDictValues *values)
 PyDictKeysObject *
 _PyDict_NewKeysForClass(PyHeapTypeObject *cls)
 {
-    PyObject *entry_error = PyErr_GetRaisedException();
     Py_INCREF(cls);
     int log2_bytes = get_log2_bytes(NEXT_LOG2_SHARED_KEYS_MAX_SIZE);
     Py_ssize_t usable = USABLE_FRACTION((size_t)1 << NEXT_LOG2_SHARED_KEYS_MAX_SIZE);
@@ -6921,10 +6901,11 @@ failed:
 done:
     PyValue_XCLOSE(attrs);
     Py_XDECREF((PyObject *)cls);
-    /* This optional metadata constructor historically reports failure by NULL
-     * without introducing a new exception into its type-creation caller. */
-    PyErr_Clear();
-    _PyValue_RestoreException(entry_error);
+    if (keys == NULL) {
+        /* This optional metadata constructor reports failure by NULL
+         * without an exception, as upstream's does. */
+        PyErr_Clear();
+    }
     return keys;
 }
 
@@ -7374,9 +7355,7 @@ _PyObject_SetManagedDict(PyObject *obj, PyObject *new_dict)
         else {
             FT_ATOMIC_STORE_PTR_RELEASE(_PyObject_ManagedDictPointer(obj)->dict,
                 (PyDictObject *)Py_XNewRef(new_dict));
-            PyObject *saved = PyErr_GetRaisedException();
             decref_maybe_delay((PyObject *)old, true); /* Original field owner. */
-            _PyValue_RestoreException(saved);
         }
         Py_XDECREF((PyObject *)old); /* Independent validation pin. */
         break;
@@ -7391,7 +7370,6 @@ detach_dict_from_object(PyDictObject *mp, PyObject *obj)
 {
     /* obj may have refcount zero under subtype_dealloc. Its enclosing
      * deallocator, not an INCREF, owns the instance storage during this call. */
-    PyObject *entry_error = PyErr_GetRaisedException();
     PyTypeObject *type = Py_TYPE(obj);
     Py_INCREF(type);
     Py_INCREF(mp);  /* The managed pointer/external caller owns a live dict. */
@@ -7412,10 +7390,6 @@ detach_dict_from_object(PyDictObject *mp, PyObject *obj)
         if (_PyObject_GetManagedDict(obj) != mp || mp->ma_values != inline_values ||
             inline_values->capacity > capacity) {
             free_values(values, false);
-            if (PyErr_Occurred()) {
-                status = -1;
-                break;
-            }
             continue;
         }
         assert(inline_values->valid);
@@ -7437,10 +7411,6 @@ detach_dict_from_object(PyDictObject *mp, PyObject *obj)
     }
     Py_XDECREF((PyObject *)mp);
     Py_XDECREF((PyObject *)type);
-    if (PyErr_Occurred()) {
-        status = -1;
-    }
-    _PyValue_RestoreException(entry_error);
     return status;
 }
 
@@ -7449,7 +7419,9 @@ void
 PyObject_ClearManagedDict(PyObject *obj)
 {
     /* subtype_dealloc can pass a refcount-zero instance. Never INCREF it.
-     * Run new cleanup failures separately from the deallocator's entry error. */
+     * The detach below can fail (out of memory), and that failure is reported
+     * as unraisable; a deallocator must leave the current exception as it
+     * found it (gh-89373), so set the caller's exception aside first. */
     PyObject *entry_error = PyErr_GetRaisedException();
     PyTypeObject *type = Py_TYPE(obj);
     Py_INCREF(type);
@@ -7493,7 +7465,7 @@ PyObject_ClearManagedDict(PyObject *obj)
     Py_XDECREF((PyObject *)current);
     Py_XDECREF((PyObject *)dict);
     Py_XDECREF((PyObject *)type);
-    _PyValue_RestoreException(entry_error);
+    PyErr_SetRaisedException(entry_error);
 }
 
 int
@@ -7764,7 +7736,8 @@ void
 _PyDict_SendEvent(int watcher_bits, PyDict_WatchEvent event,
                   PyDictObject *mp, PyValue key, PyValue value)
 {
-    PyObject *entry_error = PyErr_GetRaisedException();
+    /* As upstream, a callback can be called with an exception pending and
+     * must leave it pending (PyDict_WatchCallback). */
     PyValue key_owner = PyValue_IsNull(key) ? PyValue_NULL :
         PyValue_MakeHeapSafe(PyValue_Borrow(key));
     PyValue value_owner = PyValue_IsNull(value) ? PyValue_NULL :
@@ -7790,7 +7763,6 @@ _PyDict_SendEvent(int watcher_bits, PyDict_WatchEvent event,
     }
     PyValue_XCLOSE(value_owner);
     PyValue_XCLOSE(key_owner);
-    _PyValue_RestoreException(entry_error);
 }
 
 #ifndef NDEBUG

@@ -12381,10 +12381,8 @@
             tstate->current_frame = frame->previous;
             assert(!_PyErr_Occurred(tstate));
             PyObject *result = PyValue_AsObject(retval);
-            PyObject *saved = PyErr_GetRaisedException();
             IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             PyValue_CLOSE(retval);
-            _PyValue_RestoreException(saved);
             #if !_Py_TAIL_CALL_INTERP
             assert(frame == &entry.frame);
             #endif

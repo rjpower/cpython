@@ -547,6 +547,9 @@ typedef struct {
 static void
 dict_entry_cursor_sentinel(PyObject *capsule)
 {
+    /* A capsule destructor runs in a deallocator, which must leave the
+     * current exception as it found it; reporting a bad capsule as
+     * unraisable would clear it. */
     PyObject *entry = PyErr_GetRaisedException();
     DictEntryFinalPin *state = PyCapsule_GetPointer(capsule, "dict-entry-cursor");
     if (state != NULL) {
@@ -556,7 +559,7 @@ dict_entry_cursor_sentinel(PyObject *capsule)
     else {
         PyErr_WriteUnraisable(capsule);
     }
-    _PyValue_RestoreException(entry);
+    PyErr_SetRaisedException(entry);
 }
 
 static void

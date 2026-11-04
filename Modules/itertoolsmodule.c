@@ -1068,13 +1068,7 @@ error:
     for (i = 0; i < captured; i++) {
         PyValue_CLEAR(snapshot[i]);
     }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired = (PyObject *)tdo;
-        tdo = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_XDECREF(tdo);
     return NULL;
 }
 
@@ -2315,22 +2309,10 @@ product_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 error:
     Py_CLEAR(item);
     Py_CLEAR(pool);
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_ssize_t *retired = indices;
-        indices = NULL;
-        PyMem_Free(retired);
-        _PyValue_RestoreException(saved);
-    }
+    PyMem_Free(indices);
     Py_CLEAR(tmpargs);
     Py_CLEAR(pools);
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired = (PyObject *)lz;
-        lz = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_XDECREF(lz);
     return NULL;
 }
 
@@ -4234,13 +4216,7 @@ error:
     Py_CLEAR(fillvalue);
     Py_CLEAR(result);
     Py_CLEAR(ittuple);
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired = (PyObject *)lz;
-        lz = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_XDECREF(lz);
     return NULL;
 }
 

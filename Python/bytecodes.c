@@ -1460,9 +1460,7 @@ dummy_func(
             tstate->current_frame = frame->previous;
             assert(!_PyErr_Occurred(tstate));
             PyObject *result = PyValue_AsObject(retval);
-            PyObject *saved = PyErr_GetRaisedException();
             DECREF_INPUTS();
-            _PyValue_RestoreException(saved);
 #if !_Py_TAIL_CALL_INTERP
             assert(frame == &entry.frame);
 #endif

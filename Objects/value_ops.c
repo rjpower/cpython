@@ -1,9 +1,10 @@
 #include "Python.h"
 #include "pycore_value_ops.h"
 
-/* The comparison and repr entry points save an exception that is set on
-   entry, which a raw dict lookup can legitimately have. Releases need no
-   save (the release contract in pycore_value.h). */
+/* As upstream's PyObject_RichCompare() and PyObject_Repr(), these entry
+   points take their status from the operation and leave any other pending
+   exception alone. Releases need no save (the release contract in
+   pycore_value.h). */
 
 Py_hash_t
 _PyValue_Hash(PyValue value)
@@ -44,22 +45,17 @@ compare_inline(PyValue left, PyValue right, int op)
     }
 }
 
-/* Both arguments must survive even if allocating the first box reenters and
-   removes the second argument from its original mutable container. */
+/* Boxing runs no Python (the release contract), so neither argument can
+   leave its container in between. A caller may have an exception pending, as
+   upstream's comparisons allow (a dict lookup in a deallocator); a failed box
+   replaces it. */
 static int
 box_operands(PyValue left, PyValue right, PyObject **a, PyObject **b)
 {
-    PyValue left_owner = PyValue_MakeHeapSafe(PyValue_Borrow(left));
-    PyValue right_owner = PyValue_MakeHeapSafe(PyValue_Borrow(right));
-    *a = PyValue_AsObject(left_owner);
-    *b = *a == NULL ? NULL : PyValue_AsObject(right_owner);
-    PyValue_CLOSE(right_owner);
-    PyValue_CLOSE(left_owner);
+    *a = PyValue_AsObject(left);
+    *b = *a == NULL ? NULL : PyValue_AsObject(right);
     if (*b == NULL) {
-        Py_XDECREF(*b);
-        Py_XDECREF(*a);
-        *a = NULL;
-        *b = NULL;
+        Py_CLEAR(*a);
         return -1;
     }
     return 0;
@@ -75,16 +71,13 @@ _PyValue_RichCompareBool(PyValue left, PyValue right, int op)
     if (PyValue_IsInline(left) && PyValue_IsInline(right)) {
         return compare_inline(left, right, op);
     }
-    PyObject *prior = PyErr_GetRaisedException();
     PyObject *a, *b;
     if (box_operands(left, right, &a, &b) < 0) {
-        _PyValue_RestoreException(prior);
         return -1;
     }
     int result = PyObject_RichCompareBool(a, b, op);
-    Py_XDECREF(b);
-    Py_XDECREF(a);
-    _PyValue_RestoreException(prior);
+    Py_DECREF(b);
+    Py_DECREF(a);
     return result;
 }
 
@@ -94,31 +87,24 @@ _PyValue_RichCompareObject(PyValue left, PyValue right, int op)
     if (PyValue_IsInline(left) && PyValue_IsInline(right)) {
         return PyBool_FromLong(compare_inline(left, right, op));
     }
-    PyObject *prior = PyErr_GetRaisedException();
     PyObject *a, *b;
     if (box_operands(left, right, &a, &b) < 0) {
-        _PyValue_RestoreException(prior);
         return NULL;
     }
     PyObject *result = PyObject_RichCompare(a, b, op);
-    Py_XDECREF(b);
-    Py_XDECREF(a);
-    _PyValue_RestoreException(prior);
+    Py_DECREF(b);
+    Py_DECREF(a);
     return result;
 }
 
 int
 _PyValue_WriteRepr(PyUnicodeWriter *writer, PyValue value)
 {
-    PyObject *prior = PyErr_GetRaisedException();
     PyObject *obj = PyValue_AsObject(value);
     if (obj == NULL) {
-        Py_XDECREF(obj);
-        _PyValue_RestoreException(prior);
         return -1;
     }
     int result = PyUnicodeWriter_WriteRepr(writer, obj);
-    Py_XDECREF(obj);
-    _PyValue_RestoreException(prior);
+    Py_DECREF(obj);
     return result;
 }

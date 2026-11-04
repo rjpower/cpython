@@ -3,7 +3,6 @@
 #include "pycore_jit_ir.h"
 #include "pycore_pystate.h"
 #include "pycore_ceval.h"
-#include "pycore_pyerrors.h"
 #include <stddef.h>
 #if _PyJIT_BASELINE_SUPPORTED
 #  include <sys/mman.h>
@@ -11,41 +10,20 @@
 #  include "jit_x86.h"
 
 static void
-restore_backend_error(PyObject *saved)
-{
-    if (saved != NULL) {
-        if (PyErr_Occurred()) {
-            _PyErr_ChainExceptions1(saved);
-        }
-        else {
-            PyErr_SetRaisedException(saved);
-        }
-    }
-}
-
-static void
 free_buffer(jit_buf *buffer)
 {
-    PyObject *saved = PyErr_GetRaisedException();
     PyMem_Free(buffer->code);
-    restore_backend_error(saved);
     _PyJit_ReleaseBytes((size_t)buffer->capacity);
-    saved = PyErr_GetRaisedException();
     PyMem_Free(buffer->labels);
-    restore_backend_error(saved);
     _PyJit_ReleaseBytes((size_t)buffer->labels_capacity * sizeof(*buffer->labels));
-    saved = PyErr_GetRaisedException();
     PyMem_Free(buffer->fixups);
-    restore_backend_error(saved);
     _PyJit_ReleaseBytes((size_t)buffer->fixups_capacity * sizeof(*buffer->fixups));
 }
 
 static void
 free_labels(int *labels, size_t bytes)
 {
-    PyObject *saved = PyErr_GetRaisedException();
     PyMem_Free(labels);
-    restore_backend_error(saved);
     _PyJit_ReleaseBytes(bytes);
 }
 

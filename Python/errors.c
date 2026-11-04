@@ -1654,7 +1654,6 @@ _PyErr_WriteUnraisableDefaultHook(PyObject *args)
     /* Arbitrary object fields may be inline. Keep every converted owner live
      * through the stderr and repr callbacks in write_unraisable_exc(). */
     PyObject *fields[5] = {NULL};
-    PyObject *saved;
     int res = -1;
     for (Py_ssize_t i = 0; i < (Py_ssize_t)Py_ARRAY_LENGTH(fields); i++) {
         fields[i] = PyStructSequence_GetItemRef(args, i);
@@ -1669,15 +1668,8 @@ _PyErr_WriteUnraisableDefaultHook(PyObject *args)
                                fields[3], fields[4]);
 
 done:
-    saved = PyErr_GetRaisedException();
     for (Py_ssize_t i = Py_ARRAY_LENGTH(fields); i > 0; i--) {
         Py_XDECREF(fields[i - 1]);
-        if (saved == NULL) {
-            saved = PyErr_GetRaisedException();
-        }
-    }
-    if (saved != NULL) {
-        _PyValue_RestoreException(saved);
     }
     if (res < 0 || PyErr_Occurred()) {
         return NULL;

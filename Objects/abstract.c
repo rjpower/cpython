@@ -2506,13 +2506,6 @@ PyMapping_Values(PyObject *o)
 
 /* isinstance(), issubclass() */
 
-static int
-abstract_close(PyObject **slot)
-{
-    Py_CLEAR(*slot);
-    return PyErr_Occurred() ? -1 : 0;
-}
-
 /* abstract_get_bases() has logically 4 return states:
  *
  * 1. getattr(cls, '__bases__') could raise an AttributeError
@@ -2563,10 +2556,6 @@ abstract_issubclass(PyObject *derived, PyObject *cls)
     int r = 0;
 
     while (1) {
-        if (PyErr_Occurred()) {
-            r = -1;
-            break;
-        }
         if (selected == cls) {
             r = 1;
             break;
@@ -2576,12 +2565,7 @@ abstract_issubclass(PyObject *derived, PyObject *cls)
             r = PyErr_Occurred() ? -1 : 0;
             break;
         }
-        PyObject *old_bases = bases;
-        bases = next_bases;
-        if (abstract_close(&old_bases) < 0) {
-            r = -1;
-            break;
-        }
+        Py_XSETREF(bases, next_bases);
         n = PyTuple_GET_SIZE(bases);
         if (n == 0) {
             break;
@@ -2596,12 +2580,7 @@ abstract_issubclass(PyObject *derived, PyObject *cls)
             }
             /* The selected child survives retirement of both the previous
              * selected object now and its containing tuple next iteration. */
-            PyObject *old_selected = selected;
-            selected = child;
-            if (abstract_close(&old_selected) < 0) {
-                r = -1;
-                break;
-            }
+            Py_SETREF(selected, child);
             continue;
         }
         assert(n >= 2);
@@ -2617,9 +2596,7 @@ abstract_issubclass(PyObject *derived, PyObject *cls)
                 break;
             }
             r = abstract_issubclass(child, cls);
-            if (abstract_close(&child) < 0) {
-                r = -1;
-            }
+            Py_DECREF(child);
             if (r != 0) {
                 break;
             }
@@ -2628,9 +2605,7 @@ abstract_issubclass(PyObject *derived, PyObject *cls)
         break;
     }
     Py_CLEAR(selected);
-    if (abstract_close(&bases) < 0) {
-        r = -1;
-    }
+    Py_XDECREF(bases);
     return r;
 }
 
@@ -2727,12 +2702,8 @@ call_special_method(PyThreadState *tstate, PyObject *cls, PyObject *name,
 done:
     Py_CLEAR(self_object);
     Py_CLEAR(method);
-    PyObject *saved = PyErr_GetRaisedException();
     PyValue_XCLOSE(self);
-    _PyValue_RestoreException(saved);
-    saved = PyErr_GetRaisedException();
     _PyThreadState_PopCValue(tstate, &cref);
-    _PyValue_RestoreException(saved);
     if (PyErr_Occurred()) {
         Py_CLEAR(*res);
         return -1;
@@ -2773,9 +2744,7 @@ object_recursive_isinstance(PyThreadState *tstate, PyObject *inst, PyObject *cls
                 break;
             }
             r = object_recursive_isinstance(tstate, inst, item);
-            if (abstract_close(&item) < 0) {
-                r = -1;
-            }
+            Py_DECREF(item);
             if (r != 0) {
                 /* either found it, or got an error */
                 break;
@@ -2790,9 +2759,7 @@ object_recursive_isinstance(PyThreadState *tstate, PyObject *inst, PyObject *cls
                                     " in __instancecheck__", inst, &res);
     if (found > 0) {
         int ok = PyObject_IsTrue(res);
-        if (abstract_close(&res) < 0) {
-            return -1;
-        }
+        Py_DECREF(res);
         return ok;
     }
     else if (found < 0) {
@@ -2862,9 +2829,7 @@ object_issubclass(PyThreadState *tstate, PyObject *derived, PyObject *cls)
                 break;
             }
             r = object_issubclass(tstate, derived, item);
-            if (abstract_close(&item) < 0) {
-                r = -1;
-            }
+            Py_DECREF(item);
             if (r != 0)
                 /* either found it, or got an error */
                 break;
@@ -2878,9 +2843,7 @@ object_issubclass(PyThreadState *tstate, PyObject *derived, PyObject *cls)
                                     " in __subclasscheck__", derived, &res);
     if (found > 0) {
         int ok = PyObject_IsTrue(res);
-        if (abstract_close(&res) < 0) {
-            return -1;
-        }
+        Py_DECREF(res);
         return ok;
     }
     else if (found < 0) {

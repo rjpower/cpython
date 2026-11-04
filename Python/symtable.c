@@ -68,14 +68,9 @@ symtable_next_symbol(PyObject *dict, Py_ssize_t *pos, PyValue *key, long *flags)
     assert(PyValue_IsObject(*key));
     assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(*key)));
     *flags = symtable_long(value);
-    PyObject *saved = PyErr_GetRaisedException();
     PyValue_CLOSE(value);
-    if (saved != NULL || PyErr_Occurred()) {
-        if (saved == NULL) {
-            saved = PyErr_GetRaisedException();
-        }
+    if (*flags == -1 && PyErr_Occurred()) {
         PyValue_CLEAR(*key);
-        _PyValue_RestoreException(saved);
         return -1;
     }
     return 1;

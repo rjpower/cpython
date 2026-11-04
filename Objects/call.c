@@ -13,22 +13,6 @@
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 
-static void
-call_free_buffer(void *buffer)
-{
-    PyObject *saved = PyErr_GetRaisedException();
-    PyMem_Free(buffer);
-    _PyValue_RestoreException(saved);
-}
-
-static void
-call_pop_value(PyThreadState *tstate, _PyCValue *value)
-{
-    PyObject *saved = PyErr_GetRaisedException();
-    _PyThreadState_PopCValue(tstate, value);
-    _PyValue_RestoreException(saved);
-}
-
 static PyObject *
 call_finish_result(PyObject *result)
 {
@@ -556,7 +540,7 @@ _PyObject_Call_Prepend(PyThreadState *tstate, PyObject *callable,
     result = _PyObject_VectorcallDictTstate(tstate, callable, stack, count + 1, kwargs);
 done:
     if (stack != small_stack) {
-        call_free_buffer(stack);
+        PyMem_Free(stack);
     }
     _PyBorrowScope_Exit(tstate, mark);
     return call_finish_result(result);
@@ -603,7 +587,7 @@ done:
             Py_CLEAR(stack[i]);
         }
         if (stack != small_stack) {
-            call_free_buffer(stack);
+            PyMem_Free(stack);
         }
     }
     return call_finish_result(result);
@@ -721,11 +705,11 @@ done:
             Py_CLEAR(built[i]);
         }
         if (built != small_stack) {
-            call_free_buffer(built);
+            PyMem_Free(built);
         }
     }
-    call_pop_value(tstate, &method);
-    call_pop_value(tstate, &self);
+    _PyThreadState_PopCValue(tstate, &method);
+    _PyThreadState_PopCValue(tstate, &self);
     _PyValueTemps_Close(&temps);
     return result;
 }
@@ -1008,8 +992,8 @@ PyObject_VectorcallMethod(PyObject *name, PyObject *const *args,
                                             nargsf - 1, kwnames);
     }
 done:
-    call_pop_value(tstate, &method);
-    call_pop_value(tstate, &self);
+    _PyThreadState_PopCValue(tstate, &method);
+    _PyThreadState_PopCValue(tstate, &self);
     _PyValueTemps_Close(&temps);
     return result;
 }
@@ -1048,8 +1032,8 @@ PyObject_CallMethodObjArgs(PyObject *obj, PyObject *name, ...)
     result = object_vacall(tstate, receiver, callable, vargs);
     va_end(vargs);
 done:
-    call_pop_value(tstate, &method);
-    call_pop_value(tstate, &self);
+    _PyThreadState_PopCValue(tstate, &method);
+    _PyThreadState_PopCValue(tstate, &self);
     _PyValueTemps_Close(&temps);
     return result;
 }
@@ -1180,7 +1164,7 @@ error:
         for (Py_ssize_t i = 0; i < nkwargs; i++) {
             Py_CLEAR(stack[nargs + i]);
         }
-        call_free_buffer(stack - 1);
+        PyMem_Free(stack - 1);
     }
     Py_CLEAR(kwnames);
     return NULL;
@@ -1201,7 +1185,7 @@ _PyStack_UnpackDict_Free(PyObject *const *stack, Py_ssize_t nargs,
 void
 _PyStack_UnpackDict_FreeNoDecRef(PyObject *const *stack, PyObject *kwnames)
 {
-    call_free_buffer((PyObject **)stack - 1);
+    PyMem_Free((PyObject **)stack - 1);
     Py_CLEAR(kwnames);
 }
 

@@ -3317,31 +3317,6 @@ pyvalue_internal_contract(PyObject *self, PyObject *unused)
         // PyValue_AsObject() asserts this.
         assert(!PyValue_IsLanguageValue(invalid[i]));
     }
-    PyObject *primary = PyObject_CallNoArgs(PyExc_ValueError);
-    if (primary == NULL) {
-        return NULL;
-    }
-    /* A free hook may raise the same saved exception, or an exception whose
-     * context already points at it. Neither may introduce a context cycle. */
-    PyErr_SetRaisedException(Py_NewRef(primary));
-    _PyValue_RestoreException(Py_NewRef(primary));
-    PyObject *restored = PyErr_GetRaisedException();
-    assert(restored == primary);
-    assert(((PyBaseExceptionObject *)primary)->context == NULL);
-    Py_DECREF(restored);
-    PyObject *secondary = PyObject_CallNoArgs(PyExc_RuntimeError);
-    if (secondary == NULL) {
-        Py_DECREF(primary);
-        return NULL;
-    }
-    PyException_SetContext(secondary, Py_NewRef(primary));
-    PyErr_SetRaisedException(secondary);
-    _PyValue_RestoreException(Py_NewRef(primary));
-    restored = PyErr_GetRaisedException();
-    assert(restored == primary);
-    assert(((PyBaseExceptionObject *)primary)->context == NULL);
-    Py_DECREF(restored);
-    Py_DECREF(primary);
     Py_RETURN_NONE;
 }
 
@@ -4178,18 +4153,14 @@ repr_guard_probe(PyObject *module, PyObject *args)
     left_entered = again == 0;
     result = Py_BuildValue("(iiiii)", first, repeated, other, again, preserved);
 done:
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        if (right_entered) {
-            Py_ReprLeave(right);
-        }
-        if (left_entered) {
-            Py_ReprLeave(left);
-        }
-        Py_DECREF(right);
-        Py_DECREF(left);
-        _PyValue_RestoreException(saved);
+    if (right_entered) {
+        Py_ReprLeave(right);
     }
+    if (left_entered) {
+        Py_ReprLeave(left);
+    }
+    Py_DECREF(right);
+    Py_DECREF(left);
     return result;
 }
 

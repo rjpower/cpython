@@ -833,11 +833,7 @@ codegen_deferred_annotations_body(compiler *c, location loc,
             return ERROR;
         }
         stmt_ty st = (stmt_ty)PyLong_AsVoidPtr(ptr);
-        PyObject *saved = PyErr_GetRaisedException();
         Py_DECREF(ptr);
-        if (saved != NULL) {
-            _PyValue_RestoreException(saved);
-        }
         if (st == NULL || PyErr_Occurred()) {
             return ERROR;
         }

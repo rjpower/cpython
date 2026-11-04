@@ -82,32 +82,6 @@ set_unicode_eq(PyValue left, PyValue right)
     return PyUnicode_CheckExact(a) && PyUnicode_CheckExact(b) && unicode_eq(a, b);
 }
 
-static int
-set_close_key(PyValue key, int status)
-{
-    if (!PyValue_RefcountOnObject(key)) {
-        return status;
-    }
-    /* In the supported GIL build, a nonfinal decref cannot call a destructor
-       or allocator hook. Keep the ordinary lookup cleanup cheap. */
-    if (Py_REFCNT(PyValue_AsKnownObjectBorrow(key)) > 1) {
-        PyValue_CLOSE(key);
-        return status;
-    }
-    PyObject *prior = PyErr_GetRaisedException();
-    PyValue_CLOSE(key);
-    int failed = PyErr_Occurred() != NULL;
-    _PyValue_RestoreException(prior);
-    return failed ? -1 : status;
-}
-
-static int
-set_close_object(PyObject *obj, int status)
-{
-    return obj == NULL ? status
-                      : set_close_key(PyValue_FromPyObjectSteal(obj), status);
-}
-
 #define SET_LOOKKEY_FOUND 1
 #define SET_LOOKKEY_NO_MATCH 0
 #define SET_LOOKKEY_ERROR (-1)
@@ -525,19 +499,15 @@ set_lookkey_threadsafe(PySetObject *so, PyObject *key, Py_hash_t hash)
 }
 #endif
 
-static int free_entries(setentry *entries, size_t size, bool use_qsbr)
+static void free_entries(setentry *entries, size_t size, bool use_qsbr)
 {
 #ifdef Py_GIL_DISABLED
     if (use_qsbr) {
         _PyMem_FreeDelayed(entries, size * sizeof(setentry));
-        return 0;
+        return;
     }
 #endif
-    PyObject *prior = PyErr_GetRaisedException();
     PyMem_Free(entries);
-    int failed = PyErr_Occurred() != NULL;
-    _PyValue_RestoreException(prior);
-    return failed ? -1 : 0;
 }
 
 /*
@@ -555,11 +525,7 @@ set_table_resize(PySetObject *so, Py_ssize_t minused)
     int is_oldtable_malloced;
     setentry small_copy[PySet_MINSIZE];
 
-retry:
     assert(minused >= 0);
-    minused = Py_MAX(minused, so->used);
-    oldmask = so->mask;
-    oldsize = (size_t)oldmask + 1;
 
     /* Find the smallest table size > minused. */
     /* XXX speed-up with intrinsics */
@@ -593,32 +559,12 @@ retry:
         }
     }
     else {
-        PyObject *prior = PyErr_GetRaisedException();
         // A zero-filled table is empty: every key is PyValue_NULL, hash 0.
         newtable = PyMem_Calloc(newsize, sizeof(setentry));
         if (newtable == NULL) {
-            if (!PyErr_Occurred()) {
-                PyErr_NoMemory();
-            }
-            if (newtable != NULL) {
-                (void)free_entries(newtable, newsize, false);
-            }
-            _PyValue_RestoreException(prior);
+            PyErr_NoMemory();
             return -1;
         }
-        _PyValue_RestoreException(prior);
-        /* An allocator hook can resize or clear the set. No old table
-           pointer obtained before allocation may survive that callback. */
-        if (newsize <= (size_t)so->used) {
-            if (free_entries(newtable, newsize, false) < 0) {
-                return -1;
-            }
-            goto retry;
-        }
-        oldtable = so->table;
-        oldmask = so->mask;
-        oldsize = (size_t)oldmask + 1;
-        is_oldtable_malloced = oldtable != so->smalltable;
     }
 
     /* Make the set empty, using the new table. */
@@ -650,7 +596,7 @@ retry:
     FT_ATOMIC_STORE_PTR_RELEASE(so->table, newtable);
 
     if (is_oldtable_malloced)
-        return free_entries(oldtable, oldsize, SET_IS_SHARED(so));
+        free_entries(oldtable, oldsize, SET_IS_SHARED(so));
     return 0;
 }
 
@@ -789,24 +735,16 @@ set_clear_internal(PyObject *self)
      * assert that the refcount on table is 1 now, i.e. that this function
      * has unique access to it, so decref side-effects can't alter it.
      */
-    PyObject *prior = PyErr_GetRaisedException();
     for (entry = table; used > 0; entry++) {
         if (set_key_active(entry->key)) {
             used--;
-            PyValue key = entry->key;
-            entry->key = PyValue_NULL;
-            PyObject *saved = PyErr_GetRaisedException();
-            PyValue_CLOSE(key);
-            _PyValue_RestoreException(saved);
+            PyValue_CLOSE(entry->key);
         }
     }
 
-    if (table_is_malloced) {
-        (void)free_entries(table, oldsize, SET_IS_SHARED(so));
-    }
-    int failed = PyErr_Occurred() != NULL;
-    _PyValue_RestoreException(prior);
-    return failed ? -1 : 0;
+    if (table_is_malloced)
+        free_entries(table, oldsize, SET_IS_SHARED(so));
+    return 0;
 }
 
 /*
@@ -853,7 +791,6 @@ set_dealloc(PyObject *self)
     setentry *entry;
     Py_ssize_t used = so->used;
     Py_ssize_t oldsize = (size_t)so->mask + 1;
-    PyObject *prior = PyErr_GetRaisedException();
 
     /* bpo-31095: UnTrack is needed before calling any callbacks */
     PyObject_GC_UnTrack(so);
@@ -862,17 +799,12 @@ set_dealloc(PyObject *self)
     for (entry = so->table; used > 0; entry++) {
         if (set_key_active(entry->key)) {
                 used--;
-                PyValue key = entry->key;
-                entry->key = PyValue_NULL;
-                PyValue_XCLOSE(key);
+                PyValue_CLOSE(entry->key);
         }
     }
     if (so->table != so->smalltable)
-        (void)free_entries(so->table, oldsize, SET_IS_SHARED(so));
-    PyObject *saved = PyErr_GetRaisedException();
+        free_entries(so->table, oldsize, SET_IS_SHARED(so));
     Py_TYPE(so)->tp_free(so);
-    _PyValue_RestoreException(saved);
-    _PyValue_RestoreException(prior);
 }
 
 /*[clinic input]
@@ -909,9 +841,7 @@ snapshot:
         goto done;
     }
     if (so->used > PyList_GET_SIZE(keys)) {
-        if (set_close_object(keys, 0) < 0) {
-            goto done;
-        }
+        Py_XDECREF(keys);
         goto snapshot;
     }
 
@@ -924,26 +854,18 @@ snapshot:
        not appear as elements when the snapshot is passed to Python repr. */
     Py_SET_SIZE(keys, idx);
     if (idx == 0) {
-        if (set_close_object(keys, 0) < 0) {
-            goto done;
-        }
+        Py_XDECREF(keys);
         result = PyUnicode_FromFormat("%s()", Py_TYPE(so)->tp_name);
         goto done;
     }
 
     /* repr(keys)[1:-1] */
     listrepr = PyObject_Repr(keys);
-    if (set_close_object(keys, listrepr == NULL ? -1 : 0) < 0) {
-        Py_XDECREF(listrepr);
-        goto done;
-    }
+    Py_DECREF(keys);
     if (listrepr == NULL)
         goto done;
     tmp = PyUnicode_Substring(listrepr, 1, PyUnicode_GET_LENGTH(listrepr)-1);
-    if (set_close_object(listrepr, tmp == NULL ? -1 : 0) < 0) {
-        Py_XDECREF(tmp);
-        goto done;
-    }
+    Py_DECREF(listrepr);
     if (tmp == NULL)
         goto done;
     listrepr = tmp;
@@ -954,10 +876,7 @@ snapshot:
                                       listrepr);
     else
         result = PyUnicode_FromFormat("{%U}", listrepr);
-    if (set_close_object(listrepr, result == NULL ? -1 : 0) < 0) {
-        Py_XDECREF(result);
-        result = NULL;
-    }
+    Py_DECREF(listrepr);
 done:
     Py_ReprLeave((PyObject*)so);
     if (result != NULL && PyErr_Occurred()) {
@@ -1082,11 +1001,8 @@ set_pop_impl(PySetObject *so)
            still-present selected key; allocation failure removes nothing. */
         if (table != so->table || index > so->mask ||
             table[index].key.bits != key.bits || table[index].hash != hash) {
-            int closed = set_close_object(boxed, 0);
+            Py_DECREF(boxed);
             PyValue_XCLOSE(key);
-            if (closed < 0) {
-                return NULL;
-            }
             continue;
         }
         PyValue stored = table[index].key;
@@ -1232,16 +1148,10 @@ static void
 setiter_dealloc(PyObject *self)
 {
     setiterobject *si = (setiterobject*)self;
-    PyObject *prior = PyErr_GetRaisedException();
     /* bpo-31095: UnTrack is needed before calling any callbacks */
     _PyObject_GC_UNTRACK(si);
-    PySetObject *so = si->si_set;
-    si->si_set = NULL;
-    Py_XDECREF((PyObject *)so);
-    PyObject *saved = PyErr_GetRaisedException();
+    Py_XDECREF(si->si_set);
     PyObject_GC_Del(si);
-    _PyValue_RestoreException(saved);
-    _PyValue_RestoreException(prior);
 }
 
 static int
@@ -1275,10 +1185,8 @@ setiter_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
 
     /* iterate the temporary into a list */
     PyObject *list = PySequence_List((PyObject*)&tmp);
-    int closed = set_close_object((PyObject *)tmp.si_set,
-                                  list == NULL ? -1 : 0);
-    if (closed < 0) {
-        Py_XDECREF(list);
+    Py_XDECREF(tmp.si_set);
+    if (list == NULL) {
         return NULL;
     }
     return Py_BuildValue("N(N)", _PyEval_GetBuiltin(&_Py_ID(iter)), list);
@@ -1349,21 +1257,14 @@ setiter_iternext(PyObject *self)
         Py_XDECREF(so);
         return NULL;
     }
-    Py_ssize_t reserved_pos = si->si_pos;
     PyObject *boxed = _PyValue_AsObjectAt(key, BOX_SITE_ITERATION);
     if (boxed == NULL) {
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(boxed);
-        boxed = NULL;
-        /* A nested next() owns its progress even when this box failed. */
-        if (si->si_set == so && si->si_pos == reserved_pos &&
-            si->len == old_len - 1) {
-            si->si_pos = old_pos;
-            si->len = old_len;
-        }
+        /* A failed box consumes no element. Boxing runs no Python, so the
+           iterator still holds the position this call took. */
+        si->si_pos = old_pos;
+        si->len = old_len;
         PyValue_CLOSE(key);
         Py_XDECREF(so);
-        _PyValue_RestoreException(saved);
         return NULL;
     }
     PyValue_CLOSE(key);
@@ -1479,13 +1380,10 @@ set_update_iterable_lock_held(PySetObject *so, PyObject *other)
             Py_XDECREF(key);
             return -1;
         }
-        if (set_close_object(key, 0) < 0) {
-            Py_XDECREF(it);
-            return -1;
-        }
+        Py_XDECREF(key);
     }
-    int closed = set_close_object(it, 0);
-    if (closed < 0 || PyErr_Occurred())
+    Py_DECREF(it);
+    if (PyErr_Occurred())
         return -1;
     return 0;
 }
@@ -2007,10 +1905,7 @@ set_intersection(PySetObject *so, PyObject *other)
                     return NULL;
                 }
             }
-            if (set_close_key(value, 0) < 0) {
-                Py_XDECREF((PyObject *)result);
-                return NULL;
-            }
+            PyValue_XCLOSE(value);
         }
         _PyObject_GC_TRACK(result);
         return (PyObject *)result;
@@ -2033,22 +1928,14 @@ set_intersection(PySetObject *so, PyObject *other)
             if (set_add_entry(result, PyValue_FromObjectBorrow(key), hash))
                 goto error;
             if (PySet_GET_SIZE(result) >= PySet_GET_SIZE(so)) {
-                int closed = set_close_object(key, 0);
-                key = NULL;
-                if (closed < 0) {
-                    goto error;
-                }
+                Py_CLEAR(key);
                 break;
             }
         }
-        int closed = set_close_object(key, 0);
-        key = NULL;
-        if (closed < 0) {
-            goto error;
-        }
+        Py_CLEAR(key);
     }
-    int closed = set_close_object(it, 0);
-    if (closed < 0 || PyErr_Occurred()) {
+    Py_DECREF(it);
+    if (PyErr_Occurred()) {
         Py_XDECREF((PyObject *)result);
         return NULL;
     }
@@ -2093,10 +1980,7 @@ set_intersection_multi_impl(PySetObject *so, PyObject * const *others,
         }
         PyObject *previous = result;
         result = newresult;
-        if (set_close_object(previous, 0) < 0) {
-            Py_XDECREF(result);
-            return NULL;
-        }
+        Py_XDECREF(previous);
     }
     return result;
 }
@@ -2110,9 +1994,7 @@ set_intersection_update(PySetObject *so, PyObject *other)
     if (tmp == NULL)
         return NULL;
     set_swap_bodies(so, (PySetObject *)tmp);
-    if (set_close_object(tmp, 0) < 0) {
-        return NULL;
-    }
+    Py_XDECREF(tmp);
     Py_RETURN_NONE;
 }
 
@@ -2137,9 +2019,7 @@ set_intersection_update_multi_impl(PySetObject *so, PyObject * const *others,
     Py_BEGIN_CRITICAL_SECTION(so);
     set_swap_bodies(so, (PySetObject *)tmp);
     Py_END_CRITICAL_SECTION();
-    if (set_close_object(tmp, 0) < 0) {
-        return NULL;
-    }
+    Py_XDECREF(tmp);
     Py_RETURN_NONE;
 }
 
@@ -2236,14 +2116,12 @@ set_isdisjoint_impl(PySetObject *so, PyObject *other)
             return NULL;
         }
         if (rv) {
-            if (set_close_object(it, 0) < 0) {
-                return NULL;
-            }
+            Py_XDECREF(it);
             Py_RETURN_FALSE;
         }
     }
-    int closed = set_close_object(it, 0);
-    if (closed < 0 || PyErr_Occurred())
+    Py_DECREF(it);
+    if (PyErr_Occurred())
         return NULL;
     Py_RETURN_TRUE;
 }
@@ -2280,15 +2158,10 @@ set_difference_update_internal(PySetObject *so, PyObject *other)
                 PyValue_XCLOSE(key);
                 return -1;
             }
-            if (set_close_key(key, 0) < 0) {
-                Py_XDECREF(other);
-                return -1;
-            }
+            PyValue_XCLOSE(key);
         }
 
-        if (set_close_object(other, 0) < 0) {
-            return -1;
-        }
+        Py_XDECREF(other);
     } else {
         PyObject *key, *it;
         it = PyObject_GetIter(other);
@@ -2301,13 +2174,10 @@ set_difference_update_internal(PySetObject *so, PyObject *other)
                 Py_XDECREF(key);
                 return -1;
             }
-            if (set_close_object(key, 0) < 0) {
-                Py_XDECREF(it);
-                return -1;
-            }
+            Py_XDECREF(key);
         }
-        int closed = set_close_object(it, 0);
-        if (closed < 0 || PyErr_Occurred())
+        Py_DECREF(it);
+        if (PyErr_Occurred())
             return -1;
     }
     /* If more than 1/4th are dummies, then resize them away. */
@@ -2409,10 +2279,7 @@ set_difference_untracked(PySetObject *so, PyObject *other)
                     return NULL;
                 }
             }
-            if (set_close_key(key, 0) < 0) {
-                Py_XDECREF(result);
-                return NULL;
-            }
+            PyValue_XCLOSE(key);
         }
         return result;
     }
@@ -2434,10 +2301,7 @@ set_difference_untracked(PySetObject *so, PyObject *other)
                 return NULL;
             }
         }
-        if (set_close_key(key, 0) < 0) {
-            Py_XDECREF(result);
-            return NULL;
-        }
+        PyValue_XCLOSE(key);
     }
     return result;
 }
@@ -2545,9 +2409,7 @@ set_symmetric_difference_update_dict(PySetObject *so, PyObject *other)
                 return -1;
             }
         }
-        if (set_close_key(key, 0) < 0) {
-            return -1;
-        }
+        PyValue_XCLOSE(key);
     }
     return status;
 }
@@ -2574,9 +2436,7 @@ set_symmetric_difference_update_set(PySetObject *so, PySetObject *other)
                 return -1;
             }
         }
-        if (set_close_key(key, 0) < 0) {
-            return -1;
-        }
+        PyValue_XCLOSE(key);
     }
     return 0;
 }
@@ -2767,14 +2627,12 @@ set_issuperset_impl(PySetObject *so, PyObject *other)
             return NULL;
         }
         if (!rv) {
-            if (set_close_object(it, 0) < 0) {
-                return NULL;
-            }
+            Py_XDECREF(it);
             Py_RETURN_FALSE;
         }
     }
-    int closed = set_close_object(it, 0);
-    if (closed < 0 || PyErr_Occurred()) {
+    Py_DECREF(it);
+    if (PyErr_Occurred()) {
         return NULL;
     }
     Py_RETURN_TRUE;
@@ -3514,16 +3372,11 @@ _PySet_NextEntryRef(PyObject *set, Py_ssize_t *pos, PyObject **key, Py_hash_t *h
     if (status != 1) {
         return status;
     }
-    Py_ssize_t reserved_pos = *pos;
     PyObject *boxed = _PyValue_AsObjectAt(value, BOX_SITE_SET);
     if (boxed == NULL) {
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(boxed);
-        if (*pos == reserved_pos) {
-            *pos = old_pos;
-        }
+        /* A failed box consumes no entry; boxing runs no Python. */
+        *pos = old_pos;
         PyValue_CLOSE(value);
-        _PyValue_RestoreException(saved);
         return -1;
     }
     PyValue_CLOSE(value);

@@ -1,7 +1,6 @@
 #include "Python.h"
 #include "pycore_jit_ir.h"
 #include "pycore_opcode_utils.h"
-#include "pycore_pyerrors.h"
 
 static int
 value(_PyJitGraph *g, int home)
@@ -388,12 +387,7 @@ _PyJit_FreeGraph(_PyJitGraph *graph)
 {
     if (graph == NULL) return;
     size_t bytes = graph->charged_bytes;
-    PyObject *saved = PyErr_GetRaisedException();
     PyMem_Free(graph);
-    if (saved != NULL) {
-        if (PyErr_Occurred()) _PyErr_ChainExceptions1(saved);
-        else PyErr_SetRaisedException(saved);
-    }
     _PyJit_ReleaseBytes(bytes);
 }
 

@@ -107,13 +107,6 @@ publication_destructor(PyObject *capsule)
     PyErr_SetRaisedException(entry_error);
 }
 
-static int
-close_destination(PyValue *destination)
-{
-    PyValue_CLEAR(*destination);
-    return PyErr_Occurred() ? -1 : 0;
-}
-
 /* This exercises the engine with an ordinary C owner and a publication flag.
  * It is deliberately not evidence of VM frame/window publication. */
 static PyObject *
@@ -179,10 +172,7 @@ scope_mechanism(PyObject *argument, int abort_result, int cleanup_error,
         return NULL;
     }
     PyObject *result = PyValue_AsObject(destination);
-    if (close_destination(&destination) < 0) {
-        Py_XDECREF(result);
-        return NULL;
-    }
+    PyValue_CLEAR(destination);
     return result;
 
 abort:
@@ -374,10 +364,7 @@ gateway_mechanism(PyObject *argument)
     _PyNativeScope_End(&scope);
     Py_CLEAR(callable);
     PyObject *result = PyValue_AsObject(destination);
-    if (close_destination(&destination) < 0) {
-        Py_XDECREF(result);
-        return NULL;
-    }
+    PyValue_CLEAR(destination);
     return result;
 
 abort:
@@ -571,10 +558,7 @@ vector_mechanism(PyObject *callable, const PyValue *values,
                             publish_state, &publication);
     _PyNativeScope_End(&scope);
     PyObject *result = PyValue_AsObject(destination);
-    if (close_destination(&destination) < 0) {
-        Py_XDECREF(result);
-        return NULL;
-    }
+    PyValue_CLEAR(destination);
     return result;
 
 abort:
@@ -620,16 +604,12 @@ native_scope_vector(PyObject *Py_UNUSED(module), PyObject *const *args,
     }
     PyObject *result = vector_mechanism(callable, values, npos, count,
                                         kwnames, 0);
-    PyObject *saved = PyErr_GetRaisedException();
     for (Py_ssize_t i = count; i-- > 0;) {
         PyValue value = values[i];
         values[i] = PyValue_NULL;
         PyValue_CLOSE(value);
-        _PyValue_RestoreException(saved);
-        saved = PyErr_GetRaisedException();
     }
     PyMem_Free(values);
-    _PyValue_RestoreException(saved);
     if (PyErr_Occurred()) {
         Py_XDECREF(result);
         return NULL;
@@ -644,15 +624,11 @@ vector_fault_mechanism(PyObject *callable, int fault)
 {
     PyValue values[2] = {PyValue_FromInt32(1), PyValue_FromInt32(INT32_MAX)};
     PyObject *result = vector_mechanism(callable, values, 2, 2, NULL, fault);
-    PyObject *saved = PyErr_GetRaisedException();
     for (int i = 1; i >= 0; i--) {
         PyValue owner = values[i];
         values[i] = PyValue_NULL;
         PyValue_XCLOSE(owner);
-        _PyValue_RestoreException(saved);
-        saved = PyErr_GetRaisedException();
     }
-    PyErr_SetRaisedException(saved);
     if (PyErr_Occurred()) {
         Py_XDECREF(result);
         return NULL;

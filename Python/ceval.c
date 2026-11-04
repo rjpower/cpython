@@ -536,15 +536,12 @@ done:
     }
     return values;
 fail:
-    ;
-    PyObject *saved = PyErr_GetRaisedException();
     _PyThreadState_PopCValue(tstate, &method);
     _PyThreadState_PopCValue(tstate, &self);
     Py_XDECREF(seen);
     Py_XDECREF(dummy);
     Py_XDECREF(values);
     Py_XDECREF(key);
-    _PyValue_RestoreException(saved);
     _PyValueTemps_Close(&method_temps);
     return NULL;
 }
@@ -762,28 +759,14 @@ _PyValueArray_ToObjectVector(PyValue *input, Py_ssize_t nargs)
     return _PyBorrow_ValueVector(input, nargs);
 }
 
-static inline PyObject *
-check_value_bridge_result(PyObject *result)
-{
-    if (result != NULL && PyErr_Occurred()) {
-        Py_DECREF(result);
-        return NULL;
-    }
-    return result;
-}
-
 static void
 clear_value_arguments(PyValue *arguments, int count)
 {
-    PyObject *saved = PyErr_GetRaisedException();
     for (int i = count - 1; i >= 0; i--) {
         PyValue value = arguments[i];
         arguments[i] = PyValue_NULL;
         PyValue_CLOSE(value);
-        _PyValue_RestoreException(saved);
-        saved = PyErr_GetRaisedException();
     }
-    _PyValue_RestoreException(saved);
 }
 
 typedef struct {
@@ -895,13 +878,9 @@ value_operation_close3(PyValue *first, PyValue *second, PyValue *third)
     if (third != NULL) {
         *third = PyValue_NULL;
     }
-    PyObject *saved = PyErr_GetRaisedException();
     for (int i = 0; i < 3; i++) {
         PyValue_XCLOSE(owners[i]);
-        _PyValue_RestoreException(saved);
-        saved = PyErr_GetRaisedException();
     }
-    _PyValue_RestoreException(saved);
 }
 
 static int
@@ -1063,7 +1042,7 @@ cleanup:
     PyValue_XCLOSE(kwnames);
     clear_value_arguments(arguments, total_args);
     PyValue_CLOSE(callable);
-    return check_value_bridge_result(res);
+    return res;
 }
 
 PyObject*
@@ -1120,7 +1099,7 @@ cleanup:
     PyValue_XCLOSE(kwnames);
     clear_value_arguments(arguments, total_args);
     PyValue_CLOSE(callable);
-    return check_value_bridge_result(res);
+    return res;
 }
 
 PyObject *
@@ -1253,7 +1232,7 @@ _Py_BuildString_ValueSteal(
     assert((res != NULL) ^ (PyErr_Occurred() != NULL));
 cleanup:
     clear_value_arguments(arguments, total_args);
-    return check_value_bridge_result(res);
+    return res;
 }
 
 PyObject *
@@ -1267,7 +1246,7 @@ _Py_BuildMap_ValueSteal(
     PyObject *res = _PyDict_FromValueItems(arguments, 2, arguments + 1, 2,
                                           half_args);
     clear_value_arguments(arguments, half_args * 2);
-    return check_value_bridge_result(res);
+    return res;
 }
 
 
@@ -1825,9 +1804,7 @@ call_transaction_retire(PyValue *retired, int count, PyValue *small)
         PyValue_CLEAR(retired[i]);
     }
     if (retired != small && retired != NULL) {
-        PyObject *saved = PyErr_GetRaisedException();
         PyMem_Free(retired);
-        _PyValue_RestoreException(saved);
     }
 }
 
@@ -3115,38 +3092,28 @@ eval_frame_push_and_init_code(PyThreadState *tstate, PyValue func,
     _PyFrame_Initialize(tstate, frame, func, locals, code, frame->base, 0, previous);
     if (initialize_locals(tstate, func_obj, code, frame->base, args, argcount, kwnames)) {
         assert(frame->owner == FRAME_OWNED_BY_THREAD);
-        PyObject *saved = PyErr_GetRaisedException();
         _PyThreadState_UpdateLastProfiledFrame(tstate, frame, tstate->current_frame);
         clear_thread_frame(tstate, frame);
-        _PyValue_RestoreException(saved);
         return NULL;
     }
     return frame;
 fail:
-    ;
+    /* _PyCode_GetExec() sets its own error; a frame push failure sets none. */
     if (!PyErr_Occurred()) {
         PyErr_NoMemory();
     }
-    PyObject *saved = PyErr_GetRaisedException();
     /* Consume the references */
     PyValue_CLOSE(func);
-    _PyValue_RestoreException(saved);
     Py_XDECREF(locals);
-    saved = PyErr_GetRaisedException();
     for (size_t i = 0; i < argcount; i++) {
         PyValue_CLOSE(args[i]);
-        _PyValue_RestoreException(saved);
-        saved = PyErr_GetRaisedException();
     }
     if (kwnames) {
         Py_ssize_t kwcount = PyTuple_GET_SIZE(kwnames);
         for (Py_ssize_t i = 0; i < kwcount; i++) {
             PyValue_CLOSE(args[i+argcount]);
-            _PyValue_RestoreException(saved);
-            saved = PyErr_GetRaisedException();
         }
     }
-    _PyValue_RestoreException(saved);
     return NULL;
 }
 
@@ -3220,33 +3187,18 @@ eval_frame_push_and_init_ex_code(PyThreadState *tstate, PyValue func,
     );
     goto done;
 fail_func:
-    ;
-    PyObject *saved = PyErr_GetRaisedException();
     PyValue_CLOSE(func);
-    _PyValue_RestoreException(saved);
     Py_XDECREF(locals);
 done:
-    saved = PyErr_GetRaisedException();
     if (object_array != NULL) {
         _PyStack_UnpackDict_Free(object_array, nargs, kwnames);
-        _PyValue_RestoreException(saved);
-        saved = PyErr_GetRaisedException();
     }
     _PyBorrowScope_Exit(tstate, mark);
     if (newargs != NULL && newargs != stack_array) {
         PyMem_Free(newargs);
-        _PyValue_RestoreException(saved);
-        saved = PyErr_GetRaisedException();
     }
     Py_DECREF(callargs);
-    _PyValue_RestoreException(saved);
     Py_XDECREF(kwargs);
-    if (new_frame != NULL && PyErr_Occurred()) {
-        saved = PyErr_GetRaisedException();
-        _PyEval_FrameClearAndPop(tstate, new_frame);
-        _PyValue_RestoreException(saved);
-        return NULL;
-    }
     return new_frame;
 }
 
@@ -3375,9 +3327,7 @@ done:
         PyValue_CLEAR(storage[call->count + i]);
     }
     if (storage != small && storage != NULL) {
-        PyObject *saved = PyErr_GetRaisedException();
         PyMem_Free(storage);
-        _PyValue_RestoreException(saved);
     }
     if (status == 0) {
         _PyCallTransaction child_call = {.operation = {
@@ -3390,12 +3340,10 @@ done:
     if (child != NULL && status < 0) {
         /* The child has not entered its recursion/monitor protocol. Restore
          * the actual parent before clearing it; do not unwind it as executed. */
-        PyObject *saved = PyErr_GetRaisedException();
         op->tstate->current_frame = op->frame;
         call_transaction_publish_pc(call);
         _PyEval_FrameClearAndPop(op->tstate, child);
         child = NULL;
-        _PyValue_RestoreException(saved);
     }
     if (child == NULL) {
         if (invoked && !PyErr_Occurred()) {

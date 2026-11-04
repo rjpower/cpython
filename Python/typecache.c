@@ -75,9 +75,7 @@ cache_free_delayed(struct type_cache *cache)
         cache->hashtable[i].value = PyValue_NULL;
         Py_XDECREF(name);
     }
-    PyObject *saved = PyErr_GetRaisedException();
     _PyMem_FreeDelayed(cache, nbytes);
-    _PyValue_RestoreException(saved);
 }
 
 static inline void **

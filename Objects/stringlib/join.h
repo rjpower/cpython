@@ -16,7 +16,6 @@ STRINGLIB(bytes_join_lock_held)(PyObject *sep, PyObject *seq)
     Py_ssize_t i, nbufs = 0;
     PyObject *item = NULL;
     Py_buffer *buffers = NULL;
-    Py_ssize_t next_release = 0;
 #define NB_STATIC_BUFFERS 10
     Py_buffer static_buffers[NB_STATIC_BUFFERS];
 #define GIL_THRESHOLD 1048576
@@ -160,20 +159,10 @@ error:
     if (item != NULL) {
         Py_CLEAR(item);
     }
-    while (next_release < nbufs) {
-        /* Mark progress before invoking the release callback. */
-        Py_ssize_t closing = next_release++;
-        PyObject *saved = PyErr_GetRaisedException();
-        PyBuffer_Release(&buffers[closing]);
-        _PyValue_RestoreException(saved);
-    }
-    if (buffers != NULL && buffers != static_buffers) {
-        Py_buffer *tmp = buffers;
-        buffers = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        PyMem_Free(tmp);
-        _PyValue_RestoreException(saved);
-    }
+    for (i = 0; i < nbufs; i++)
+        PyBuffer_Release(&buffers[i]);
+    if (buffers != NULL && buffers != static_buffers)
+        PyMem_Free(buffers);
     if (PyErr_Occurred()) {
         Py_CLEAR(res);
         return NULL;

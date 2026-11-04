@@ -4028,13 +4028,11 @@ build_cellfixedoffsets(_PyCompile_CodeUnitMetadata *umd)
     }
     return fixed;
 
-error:;
-    PyObject *saved = PyErr_GetRaisedException();
+error:
     PyValue_XCLOSE(key);
     PyValue_XCLOSE(cellindex);
     PyValue_XCLOSE(varindex);
     PyMem_Free(fixed);
-    _PyValue_RestoreException(saved);
     return NULL;
 }
 

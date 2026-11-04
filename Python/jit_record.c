@@ -3,15 +3,6 @@
 #include "pycore_long.h"
 #include "pycore_pystate.h"
 #include "pycore_ceval.h"
-#include "pycore_pyerrors.h"
-
-static void
-restore_error(PyObject *saved)
-{
-    if (saved == NULL) return;
-    if (PyErr_Occurred()) _PyErr_ChainExceptions1(saved);
-    else PyErr_SetRaisedException(saved);
-}
 
 int
 _PyJit_ReadInt32(PyValue ref, int32_t *value)
@@ -70,9 +61,7 @@ void
 _PyJit_FreeRecord(_PyJitRecord *record)
 {
     if (record == NULL) return;
-    PyObject *saved = PyErr_GetRaisedException();
     PyMem_Free(record);
-    restore_error(saved);
     _PyJit_ReleaseBytes(sizeof(*record));
 }
 
@@ -206,9 +195,7 @@ _PyJit_RecordAfter(_PyJitContext *ctx, _PyJitAction action, const _PyJitLirOp *o
             goto abandon;
         }
         if (PyErr_Occurred() || !record_valid(ctx)) {
-            PyObject *saved = PyErr_GetRaisedException();
             _PyJit_FreeRecord(record);
-            restore_error(saved);
             if (PyErr_Occurred()) goto error;
             return _PyJit_AfterHelper(ctx, action, op);
         }

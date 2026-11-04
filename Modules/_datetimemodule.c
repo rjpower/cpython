@@ -2310,13 +2310,7 @@ Done:
     Py_CLEAR(remainder);
     Py_CLEAR(num);
     Py_CLEAR(tuple);
-    {
-        PyObject *retired = current_mod;
-        current_mod = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        RELEASE_CURRENT_STATE(st, retired);
-        _PyValue_RestoreException(saved);
-    }
+    RELEASE_CURRENT_STATE(st, current_mod);
     if (PyErr_Occurred()) {
         Py_CLEAR(result);
         return NULL;

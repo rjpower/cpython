@@ -143,9 +143,7 @@ def generate(filenames, outfile):
 #define DISPATCH_INLINED(NEW_FRAME) do { \\
     assert((NEW_FRAME)->previous == frame); \\
     if (finish_value_bridges(tstate, frame, &next_instr, value_temps) < 0) { \\
-        PyObject *value_error = PyErr_GetRaisedException(); \\
         _PyEval_FrameClearAndPop(tstate, (NEW_FRAME)); \\
-        _PyValue_RestoreException(value_error); \\
         JUMP_TO_LABEL(error); \\
     } \\
     frame = (NEW_FRAME); next_instr = frame->instr_ptr; \\

@@ -117,9 +117,7 @@ slot_new_with_tracer(PyObject *module, PyObject *args)
         return NULL;
     }
     PyObject *result = PyObject_CallObject(type, constructor_args);
-    PyObject *saved = PyErr_GetRaisedException();
     int restored = PyRefTracer_SetTracer(previous, previous_data);
-    _PyValue_RestoreException(saved);
     if (restored < 0 || result == NULL || PyErr_Occurred()) {
         Py_XDECREF(result);
         return NULL;

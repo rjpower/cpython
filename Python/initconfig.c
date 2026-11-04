@@ -1552,14 +1552,8 @@ config_dict_get_wstrlist(PyObject *dict, const char *name, PyConfig *config,
         if (_PyStatus_EXCEPTION(status) || PyErr_Occurred()) {
             goto error;
         }
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            wchar_t *tmp = wstr;
-            wstr = NULL;
-            PyMem_Free(tmp);
-            _PyValue_RestoreException(saved);
-        }
-        if (PyErr_Occurred()) goto error;
+        PyMem_Free(wstr);
+        wstr = NULL;
         Py_CLEAR(item);
         if (PyErr_Occurred()) goto error;
     }
@@ -1571,30 +1565,15 @@ config_dict_get_wstrlist(PyObject *dict, const char *name, PyConfig *config,
     if (copy_result < 0 || PyErr_Occurred()) {
         goto error;
     }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        _PyWideStringList_Clear(&wstrlist);
-        _PyValue_RestoreException(saved);
-    }
-    if (PyErr_Occurred()) goto error;
+    _PyWideStringList_Clear(&wstrlist);
     Py_CLEAR(list);
     if (PyErr_Occurred()) return -1;
     return 0;
 
 error:
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        wchar_t *tmp = wstr;
-        wstr = NULL;
-        PyMem_Free(tmp);
-        _PyValue_RestoreException(saved);
-    }
+    PyMem_Free(wstr);
     Py_CLEAR(item);
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        _PyWideStringList_Clear(&wstrlist);
-        _PyValue_RestoreException(saved);
-    }
+    _PyWideStringList_Clear(&wstrlist);
     Py_CLEAR(list);
     return -1;
 }

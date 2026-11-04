@@ -7,40 +7,6 @@
 
 
 static void
-capture_cleanup_error(PyObject **saved)
-{
-    PyObject *raised = PyErr_GetRaisedException();
-    if (raised == NULL) {
-        return;
-    }
-    if (*saved == NULL) {
-        *saved = raised;
-        return;
-    }
-    PyErr_SetRaisedException(raised);
-    _PyValue_RestoreException(*saved);
-    *saved = PyErr_GetRaisedException();
-}
-
-static void
-close_value(PyValue *slot, PyObject **saved)
-{
-    PyValue value = *slot;
-    *slot = PyValue_NULL;
-    PyValue_XCLOSE(value);
-    capture_cleanup_error(saved);
-}
-
-static void
-close_object(PyObject **slot, PyObject **saved)
-{
-    PyObject *object = *slot;
-    *slot = NULL;
-    Py_XDECREF(object);
-    capture_cleanup_error(saved);
-}
-
-static void
 initialize_scope(_PyNativeScope *scope, PyThreadState *tstate)
 {
     *scope = (_PyNativeScope){
@@ -310,39 +276,34 @@ _PyNativeScope_End(_PyNativeScope *scope)
            out->state == _Py_NATIVE_RESULT_ABORTED);
     scope->ended = 1;
     out->state = _Py_NATIVE_RESULT_DRAINED;
-    PyObject *saved = PyErr_GetRaisedException();
-    close_value(&out->value, &saved);
-    close_value(&out->displaced, &saved);
+    PyValue_CLEAR(out->value);
+    PyValue_CLEAR(out->displaced);
     if (scope->mark != NULL) {
         /* Releases the boxes of inline arguments. */
         _PyBorrowScope_Exit(scope->tstate, scope->mark);
-        capture_cleanup_error(&saved);
     }
     else {
         for (Py_ssize_t i = scope->nargs; i-- > 0;) {
             if (PyValue_IsInline(scope->arguments[i])) {
-                close_object(&scope->objects[i], &saved);
+                Py_CLEAR(scope->objects[i]);
             }
             scope->objects[i] = NULL;
         }
     }
-    close_object(&scope->receiver_object, &saved);
+    Py_CLEAR(scope->receiver_object);
     if (scope->mark == NULL) {
         for (Py_ssize_t i = scope->nargs; i-- > 0;) {
-            close_value(&scope->arguments[i], &saved);
+            PyValue_CLEAR(scope->arguments[i]);
         }
     }
-    close_value(&scope->receiver, &saved);
-    PyObject *defining_class = (PyObject *)scope->defining_class;
-    scope->defining_class = NULL;
-    close_object(&defining_class, &saved);
-    close_object(&scope->kwnames, &saved);
-    close_object(&scope->kwargs, &saved);
-    close_object(&scope->callargs, &saved);
-    close_object(&scope->callable, &saved);
+    PyValue_CLEAR(scope->receiver);
+    Py_CLEAR(scope->defining_class);
+    Py_CLEAR(scope->kwnames);
+    Py_CLEAR(scope->kwargs);
+    Py_CLEAR(scope->callargs);
+    Py_CLEAR(scope->callable);
     scope->mark = NULL;
     scope->arguments = NULL;
     scope->objects = NULL;
     scope->nargs = 0;
-    PyErr_SetRaisedException(saved);
 }

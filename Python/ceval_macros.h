@@ -294,9 +294,7 @@ do { \
         assert((NEW_FRAME)->previous == frame);                  \
         if (value_temps != NULL && value_temps->count != 0 &&    \
             finish_value_bridges(tstate, frame, &next_instr, value_temps) < 0) { \
-            PyObject *value_error = PyErr_GetRaisedException(); \
             _PyEval_FrameClearAndPop(tstate, (NEW_FRAME));        \
-            _PyValue_RestoreException(value_error);              \
             JUMP_TO_LABEL(error);                               \
         }                                                       \
         frame = tstate->current_frame = (NEW_FRAME);             \
@@ -521,8 +519,7 @@ static inline void _Py_LeaveRecursiveCallPy(PyThreadState *tstate)  {
     PyObject **NAME = _PyValueArray_ToObjectVector((ARGS), (ARG_COUNT));
 
 #define VALUES_TO_PYOBJECTS_CLEANUP(NAME, RESULT) \
-    _PyBorrowScope_Exit(NAME##_tstate, NAME##_mark); \
-    (RESULT) = check_value_bridge_result(RESULT);
+    _PyBorrowScope_Exit(NAME##_tstate, NAME##_mark);
 
 #define CONVERSION_FAILED(NAME) ((NAME) == NULL)
 
@@ -862,7 +859,7 @@ _PyValue_Truth(PyValue ref)
     .tstate=tstate, .frame=frame, .flow_owner=&jit_flow}, (I), (F))
 # define JIT_RETIRE_PENDING(F) do { if (jit_flow != NULL && jit_flow->depth && jit_flow->pending[jit_flow->depth - 1].caller == (F)) _PyJit_RetirePending(jit_flow, (F)); } while (0)
 # define JIT_FREE_FLOW() do { if (jit_flow != NULL && _PyJit_FreeFlow(&jit_flow) < 0) return NULL; } while (0)
-# define JIT_FREE_FLOW_RESULT(R) do { if (jit_flow != NULL && _PyJit_FreeFlow(&jit_flow) < 0) { PyObject *err = PyErr_GetRaisedException(); Py_DECREF(R); PyErr_SetRaisedException(err); return NULL; } } while (0)
+# define JIT_FREE_FLOW_RESULT(R) do { if (jit_flow != NULL && _PyJit_FreeFlow(&jit_flow) < 0) { Py_DECREF(R); return NULL; } } while (0)
 # define JIT_SITE_ENTRY(I) do { \
     if (jit_request != NULL && jit_request->claimed_frame == frame) goto jit_step; \
     if (IR_HANDLER(*(I)) == JUMP_BACKWARD_JIT_WARM) { \

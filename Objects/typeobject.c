@@ -1268,7 +1268,6 @@ _PyTypeMutation_End(_PyTypeMutation *scope)
 static PyTypeObject *
 next_nonzero_subclass(PyTypeObject *type)
 {
-    assert(!PyErr_Occurred());
     PyObject *subclasses = lookup_tp_subclasses(type);
     if (subclasses == NULL) {
         return NULL;
@@ -1288,7 +1287,7 @@ next_nonzero_subclass(PyTypeObject *type)
             Py_DECREF(child);
         }
     }
-    assert(found == 0 && !PyErr_Occurred());
+    assert(found == 0);
     return NULL;
 }
 
@@ -1301,7 +1300,6 @@ type_modified_recursive(PyTypeObject *type)
         return;
     }
     assert(!(type->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN));
-    PyObject *saved = PyErr_GetRaisedException();
     for (;;) {
         PyTypeObject *child = next_nonzero_subclass(type);
         if (child == NULL) {
@@ -1309,14 +1307,11 @@ type_modified_recursive(PyTypeObject *type)
         }
         type_modified_recursive(child);
         Py_DECREF(child);
-        _PyValue_RestoreException(saved);
-        saved = PyErr_GetRaisedException();
         // Reacquire the current graph from its beginning after every callout.
     }
     if (type->tp_version_tag == 0) {
         // A child's callback may have completed this parent's invalidation.
         // Do not emit a second notification without an intervening admission.
-        _PyValue_RestoreException(saved);
         return;
     }
     set_version_unlocked(type, 0);
@@ -1327,8 +1322,9 @@ type_modified_recursive(PyTypeObject *type)
         FT_ATOMIC_STORE_UINT32_RELAXED(heap->_spec_cache.getitem_version, 0);
     }
     struct type_cache *retired = _PyTypeCache_Detach(type);
-    // Watcher failures retain their documented unraisable policy. Preserve a
-    // prior error independently of reporting, which can itself reenter.
+    // Watchers may run with an exception pending and must keep it; their
+    // failures are reported unraisable. Note that PyErr_FormatUnraisable is
+    // potentially re-entrant and the watcher callback might be too.
     int bits = type->tp_watched;
     for (int i = 0; bits != 0; i++, bits >>= 1) {
         assert(i < TYPE_MAX_WATCHERS);
@@ -1339,26 +1335,19 @@ type_modified_recursive(PyTypeObject *type)
                     "Exception ignored in type watcher callback #%d for %R",
                     i, type);
             }
-            _PyValue_RestoreException(saved);
-            saved = PyErr_GetRaisedException();
         }
     }
     _PyTypeCache_Retire(retired);
-    _PyValue_RestoreException(saved);
 }
 
 void
 _PyType_Modified_Unlocked(PyTypeObject *type)
 {
-    // Invalidation is allowed while unwinding an existing error. Individual
-    // writers still stop on that error instead of publishing another write.
-    PyObject *saved = PyErr_GetRaisedException();
     _PyTypeMutation scope = {0};
     if (_PyTypeMutation_Begin(&scope, type) == 0) {
         type_modified_recursive(type);
     }
     _PyTypeMutation_End(&scope);
-    _PyValue_RestoreException(saved);
 }
 
 void
@@ -2926,23 +2915,12 @@ subtype_traverse(PyObject *self, visitproc visit, void *arg)
     return 0;
 }
 
-static int
-collect_slot_error(PyObject **saved)
-{
-    int failed = PyErr_Occurred() != NULL;
-    _PyValue_RestoreException(*saved);
-    *saved = PyErr_GetRaisedException();
-    return failed;
-}
-
-static int
+static void
 clear_slots(PyTypeObject *type, PyObject *self)
 {
     Py_ssize_t i, n;
     PyMemberDef *mp;
 
-    PyObject *saved = PyErr_GetRaisedException();
-    int failed = 0;
     n = Py_SIZE(type);
     mp = _PyHeapType_GET_MEMBERS((PyHeapTypeObject *)type);
     for (i = 0; i < n; i++, mp++) {
@@ -2954,7 +2932,6 @@ clear_slots(PyTypeObject *type, PyObject *self)
             PyValue previous = *addr;
             *addr = PyValue_NULL;
             PyValue_XCLOSE(previous);
-            failed |= collect_slot_error(&saved);
         }
         else if (mp->type == Py_T_OBJECT_EX) {
             void *addr = _PyMember_GetOffset(self, mp);
@@ -2962,12 +2939,9 @@ clear_slots(PyTypeObject *type, PyObject *self)
             if (obj != NULL) {
                 *(PyObject **)addr = NULL;
                 Py_DECREF(obj);
-                failed |= collect_slot_error(&saved);
             }
         }
     }
-    PyErr_SetRaisedException(saved);
-    return failed ? -1 : 0;
 }
 
 static int
@@ -2975,8 +2949,7 @@ subtype_clear(PyObject *self)
 {
     PyTypeObject *type, *base;
     inquiry baseclear;
-    PyObject *saved = PyErr_GetRaisedException();
-    int failed = 0;
+    int status = 0;
 
     /* Find the nearest base with a different tp_clear
        and clear slots while we're at it */
@@ -2985,8 +2958,7 @@ subtype_clear(PyObject *self)
     base = type;
     while ((baseclear = base->tp_clear) == subtype_clear) {
         if (Py_SIZE(base)) {
-            failed |= clear_slots(base, self) < 0;
-            failed |= collect_slot_error(&saved);
+            clear_slots(base, self);
         }
         base = base->tp_base;
         assert(base);
@@ -2997,7 +2969,6 @@ subtype_clear(PyObject *self)
     if (type->tp_flags & Py_TPFLAGS_MANAGED_DICT) {
         if ((base->tp_flags & Py_TPFLAGS_MANAGED_DICT) == 0) {
             PyObject_ClearManagedDict(self);
-            failed |= collect_slot_error(&saved);
         }
         else {
             assert((base->tp_flags & Py_TPFLAGS_INLINE_VALUES) ==
@@ -3008,18 +2979,14 @@ subtype_clear(PyObject *self)
         PyObject **dictptr = _PyObject_ComputedDictPointer(self);
         if (dictptr && *dictptr) {
             Py_CLEAR(*dictptr);
-            failed |= collect_slot_error(&saved);
         }
     }
 
     if (baseclear) {
-        failed |= baseclear(self) < 0;
-        failed |= collect_slot_error(&saved);
+        status = baseclear(self);
     }
     Py_DECREF(type);
-    failed |= collect_slot_error(&saved);
-    PyErr_SetRaisedException(saved);
-    return failed ? -1 : 0;
+    return status;
 }
 
 static void
@@ -3141,15 +3108,13 @@ subtype_dealloc(PyObject *self)
     }
 
     /*  Clear slots up to the nearest base with a different tp_dealloc */
-    PyObject *slot_error = PyErr_GetRaisedException();
     PyTypeObject *slot_type = Py_TYPE(self);
     Py_INCREF(slot_type);
     type = slot_type;
     base = type;
     while ((basedealloc = base->tp_dealloc) == subtype_dealloc) {
         if (Py_SIZE(base)) {
-            (void)clear_slots(base, self);
-            (void)collect_slot_error(&slot_error);
+            clear_slots(base, self);
         }
         base = base->tp_base;
         assert(base);
@@ -3158,7 +3123,6 @@ subtype_dealloc(PyObject *self)
     /* If we added a dict, DECREF it, or free inline values. */
     if (type->tp_flags & Py_TPFLAGS_MANAGED_DICT) {
         PyObject_ClearManagedDict(self);
-        (void)collect_slot_error(&slot_error);
     }
     else if (type->tp_dictoffset && !base->tp_dictoffset) {
         PyObject **dictptr = _PyObject_ComputedDictPointer(self);
@@ -3167,7 +3131,6 @@ subtype_dealloc(PyObject *self)
             if (dict != NULL) {
                 *dictptr = NULL;
                 Py_DECREF(dict);
-                (void)collect_slot_error(&slot_error);
             }
         }
     }
@@ -3189,7 +3152,6 @@ subtype_dealloc(PyObject *self)
 
     assert(basedealloc);
     basedealloc(self);
-    (void)collect_slot_error(&slot_error);
 
     /* Can't reference self beyond this point. It's possible tp_del switched
        our type from a HEAPTYPE to a non-HEAPTYPE, so be careful about
@@ -3197,11 +3159,8 @@ subtype_dealloc(PyObject *self)
        allocated type. Otherwise, basedealloc should have decref'd it already */
     if (type_needs_decref) {
         _Py_DECREF_TYPE(type);
-        (void)collect_slot_error(&slot_error);
     }
     Py_DECREF(slot_type);
-    (void)collect_slot_error(&slot_error);
-    PyErr_SetRaisedException(slot_error);
 }
 
 static PyTypeObject *solid_base(PyTypeObject *type);
@@ -3907,12 +3866,7 @@ skip:
     }
     result = 0;
 done:
-    ;
-    PyObject *saved = PyErr_GetRaisedException();
-    if (remain != NULL) {
-        PyMem_Free(remain);
-    }
-    _PyValue_RestoreException(saved);
+    PyMem_Free(remain);
     return result;
 }
 
@@ -5089,7 +5043,6 @@ type_new_set_doc(PyTypeObject *type, PyObject* dict)
     PyObject *type_owner = NULL;
     PyObject *dict_owner = NULL;
     PyValue doc = PyValue_NULL;
-    char *tp_doc = NULL;
     int result = -1;
     type_owner = Py_NewRef((PyObject *)type);
     dict_owner = Py_NewRef(dict);
@@ -5102,24 +5055,17 @@ type_new_set_doc(PyTypeObject *type, PyObject* dict)
     }
     const char *doc_str = PyUnicode_AsUTF8(PyValue_AsKnownObjectBorrow(doc));
     if (doc_str == NULL) goto done;
+    // Silently truncate the docstring if it contains a null byte
     Py_ssize_t size = strlen(doc_str) + 1;
-    tp_doc = PyMem_Malloc(size);
+    char *tp_doc = PyMem_Malloc(size);
     if (tp_doc == NULL) {
         PyErr_NoMemory();
         goto done;
     }
     memcpy(tp_doc, doc_str, size);
     type->tp_doc = tp_doc;
-    tp_doc = NULL;
     result = 0;
 done:
-    if (tp_doc != NULL) {
-        PyObject *saved = PyErr_GetRaisedException();
-        char *retired = tp_doc;
-        tp_doc = NULL;
-        PyMem_Free(retired);
-        _PyValue_RestoreException(saved);
-    }
     PyValue_CLEAR(doc);
     Py_CLEAR(dict_owner);
     Py_CLEAR(type_owner);
@@ -7041,14 +6987,10 @@ _PyType_LookupValueAndVersion(PyTypeObject *type, PyObject *name, PyValue *out)
 
     // Name/error cleanup may invalidate the selected version. Retain type and
     // the owned result until those callbacks have finished.
-    PyObject *saved = PyErr_GetRaisedException();
     Py_DECREF(name);
-    _PyValue_RestoreException(saved);
     if (res < 0) {
-        saved = PyErr_GetRaisedException();
         PyValue_XCLOSE(result);
         result = PyValue_NULL;
-        _PyValue_RestoreException(saved);
         expected = 0;
     }
     unsigned int version = 0;
@@ -7581,9 +7523,7 @@ done:
     Py_CLEAR(dict);
     Py_CLEAR(descr);
     // Keep admission closed through delayed retirement of the displaced value.
-    PyObject *saved = PyErr_GetRaisedException();
     _PyObject_XDecRefDelayed(old_value);
-    _PyValue_RestoreException(saved);
     Py_CLEAR(name);
     Py_CLEAR(original_name);
     Py_CLEAR(value);
@@ -7598,11 +7538,13 @@ type_dealloc_common(PyTypeObject *type)
 {
     PyObject *bases = lookup_tp_bases(type);
     if (bases != NULL) {
+        // Nothing here runs Python, but remove_subclass() clears its own
+        // failures and with them an exception pending during deallocation.
         PyObject *exc = PyErr_GetRaisedException();
         BEGIN_TYPE_LOCK();
         remove_all_subclasses(type, bases);
         END_TYPE_LOCK();
-        _PyValue_RestoreException(exc);
+        PyErr_SetRaisedException(exc);
     }
 }
 
@@ -7610,7 +7552,7 @@ type_dealloc_common(PyTypeObject *type)
 static void
 clear_static_tp_subclasses(PyTypeObject *type, int isbuiltin)
 {
-    PyObject *subclasses = Py_XNewRef(lookup_tp_subclasses(type));
+    PyObject *subclasses = lookup_tp_subclasses(type);
     if (subclasses == NULL) {
         return;
     }
@@ -7637,74 +7579,24 @@ clear_static_tp_subclasses(PyTypeObject *type, int isbuiltin)
 
 #ifndef NDEBUG
     // For now we just do a sanity check and then clear tp_subclasses.
-    PyObject *primary = PyErr_GetRaisedException();
     Py_ssize_t pos = 0;
-    int found;
-    while (!PyErr_Occurred()) {
-        PyValue ref = PyValue_NULL;
-        found = _PyDict_NextValue(subclasses, &pos, NULL, &ref, NULL);
-        if (found <= 0) {
-            break;
-        }
+    PyValue ref;
+    while (_PyDict_NextValue(subclasses, &pos, NULL, &ref, NULL) > 0) {
         assert(PyValue_IsObject(ref));
-        PyObject *weakref = PyValue_AsKnownObjectBorrow(ref);
-        assert(PyWeakref_Check(weakref));
-        PyTypeObject *subclass = type_from_ref(weakref);
+        PyTypeObject *subclass = type_from_ref(PyValue_AsKnownObjectBorrow(ref));
         PyValue_CLOSE(ref);
-        if (PyErr_Occurred()) {
-            PyObject *error = PyErr_GetRaisedException();
-            if (subclass != NULL) {
-                PyErr_SetRaisedException(error);
-                PyObject *owner = (PyObject *)subclass;
-                Py_CLEAR(owner);
-                error = NULL;
-            }
-            if (primary == NULL) {
-                primary = error;
-            }
-            else if (error != NULL) {
-                PyErr_SetRaisedException(primary);
-                primary = NULL;
-                Py_CLEAR(error);
-                primary = PyErr_GetRaisedException();
-            }
-            break;
+        if (subclass == NULL) {
+            continue;
         }
-        if (subclass != NULL) {
-            // All static builtin subtypes should have been finalized already.
-            assert(!isbuiltin || !(subclass->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN));
-            PyObject *owner = (PyObject *)subclass;
-            Py_CLEAR(owner);
-        }
-    }
-    PyObject *diagnostic_error = PyErr_GetRaisedException();
-    if (primary == NULL) {
-        primary = diagnostic_error;
-    }
-    else if (diagnostic_error != NULL) {
-        PyErr_SetRaisedException(primary);
-        primary = NULL;
-        Py_CLEAR(diagnostic_error);
-        primary = PyErr_GetRaisedException();
+        // All static builtin subtypes should have been finalized already.
+        assert(!isbuiltin || !(subclass->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN));
+        Py_DECREF(subclass);
     }
 #else
     (void)isbuiltin;
-    PyObject *primary = PyErr_GetRaisedException();
 #endif
 
     clear_tp_subclasses(type);
-    PyObject *clear_error = PyErr_GetRaisedException();
-    if (primary == NULL) {
-        primary = clear_error;
-    }
-    else if (clear_error != NULL) {
-        PyErr_SetRaisedException(primary);
-        primary = NULL;
-        Py_CLEAR(clear_error);
-        primary = PyErr_GetRaisedException();
-    }
-    PyErr_SetRaisedException(primary);
-    Py_CLEAR(subclasses);
 }
 
 static void
@@ -10871,51 +10763,38 @@ get_subclasses_key(PyTypeObject *type, PyTypeObject *base, PyValue *result)
 static void
 remove_subclass(PyTypeObject *base, PyTypeObject *type)
 {
-    assert(Py_REFCNT(base) > 0);
-    Py_INCREF(base);
-    PyObject *saved = PyErr_GetRaisedException();
-    PyObject *primary = saved;
-    PyObject *subclasses = NULL;
-    PyValue key = PyValue_NULL;
-    PyValue ref = PyValue_NULL;
-    int found = get_subclasses_key(type, base, &key);
-    if (found <= 0 || PyErr_Occurred()) {
-        goto done;
-    }
-    subclasses = Py_XNewRef(lookup_tp_subclasses(base));
+    PyObject *subclasses = lookup_tp_subclasses(base);  // borrowed ref
     if (subclasses == NULL) {
-        goto done;
+        return;
     }
     assert(PyDict_CheckExact(subclasses));
-    found = PyDict_GetValue(subclasses, key, &ref);
-    if (found > 0 && !PyErr_Occurred()) {
-        /* Keep ref alive across this immediate delete; internal identity
-         * integer lookup/hash does not call out between the operations. */
-        if (PyDict_DelValue(subclasses, key) < 0 || PyErr_Occurred()) {
-            goto done;
-        }
+
+    /* Deleting the entry releases an identity integer and a weakref without
+       a callback, so no Python runs and the borrowed dict stays valid. */
+    PyValue key;
+    int found = get_subclasses_key(type, base, &key);
+    if (found < 0 || (found > 0 && PyDict_DelValue(subclasses, key) < 0)) {
+        /* This can happen if the type initialization errored out before
+           the base subclasses were updated (e.g. a non-str __qualname__
+           was passed in the type dict). */
+        PyErr_Clear();
     }
-    if (!PyErr_Occurred() && PyDict_GET_SIZE(subclasses) == 0 &&
-            lookup_tp_subclasses(base) == subclasses) {
-        /* The local owner makes detaching the slot nonfinal. */
+    PyValue_XCLOSE(key);
+
+    if (PyDict_GET_SIZE(subclasses) == 0) {
         clear_tp_subclasses(base);
     }
-
-done:
-    PyValue_XCLOSE(ref);
-    PyValue_XCLOSE(key);
-    Py_CLEAR(subclasses);
-    Py_DECREF(base);
-    _PyValue_RestoreException(primary);
 }
 
 static void
 remove_all_subclasses(PyTypeObject *type, PyObject *bases)
 {
     assert(bases != NULL);
-    PyObject *owner = Py_NewRef(bases);
-    for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(owner); i++) {
-        PyValue item = PyTuple_GET_VALUE(owner, i);
+    // remove_subclass() can clear the current exception
+    assert(!PyErr_Occurred());
+
+    for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(bases); i++) {
+        PyValue item = PyTuple_GET_VALUE(bases, i);
         if (PyValue_IsObject(item)) {
             PyObject *base = PyValue_AsKnownObjectBorrow(item);
             if (PyType_Check(base)) {
@@ -10923,7 +10802,7 @@ remove_all_subclasses(PyTypeObject *type, PyObject *bases)
             }
         }
     }
-    Py_CLEAR(owner);
+    assert(!PyErr_Occurred());
 }
 
 static int

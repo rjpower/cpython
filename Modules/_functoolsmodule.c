@@ -1343,7 +1343,6 @@ lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
     PyObject *kwds_owner = Py_XNewRef(kwds);
     PyObject *mark_owner = Py_NewRef(kwd_mark);
     PyObject *key = NULL;
-    PyObject *saved;
     Py_ssize_t nargs = PyTuple_GET_SIZE(args_owner);
     Py_ssize_t nkwargs = kwds_owner ? PyDict_GET_SIZE(kwds_owner) : 0;
     Py_ssize_t key_size = nargs, pos, cursor = 0, written = 0;
@@ -1425,13 +1424,6 @@ lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
             PyObject *type_owner=Py_NewRef((PyObject *)type);
             PyValue_CLEAR(value);
             if (type_owner==NULL) goto error;
-            if (PyErr_Occurred()) {
-                saved=PyErr_GetRaisedException();
-                PyObject *retired_type=type_owner; type_owner=NULL;
-                Py_XDECREF(retired_type);
-                _PyValue_RestoreException(saved);
-                goto error;
-            }
             if (PyTuple_SetItem(key,written++,type_owner)<0) goto error;
         }
         if (nkwargs) {
@@ -1443,13 +1435,6 @@ lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
                 PyObject *type_owner=Py_NewRef((PyObject *)type);
                 PyValue_CLEAR(value);
                 if (type_owner==NULL) goto error;
-                if (PyErr_Occurred()) {
-                    saved=PyErr_GetRaisedException();
-                    PyObject *retired_type=type_owner; type_owner=NULL;
-                    Py_XDECREF(retired_type);
-                    _PyValue_RestoreException(saved);
-                    goto error;
-                }
                 if (PyTuple_SetItem(key,written++,type_owner)<0) goto error;
             }
             if (status<0 || PyErr_Occurred()) goto error;

@@ -1919,10 +1919,7 @@ _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
         _PyObject_SetAttributeErrorContext(obj, name);
     }
   done:
-    ;
-    PyObject *saved = PyErr_GetRaisedException();
     _PyThreadState_PopCValue(tstate, &cref);
-    _PyValue_RestoreException(saved);
     Py_CLEAR(name);
     Py_DECREF(tp);
     if (PyErr_Occurred()) {
@@ -1957,9 +1954,7 @@ _PyObject_GenericSetAttrWithDict(PyObject *obj, PyObject *name,
 
     _Py_INCREF_TYPE(tp);
     if (!_PyType_IsReady(tp) && PyType_Ready(tp) < 0) {
-        PyObject *saved = PyErr_GetRaisedException();
         _Py_DECREF_TYPE(tp);
-        _PyValue_RestoreException(saved);
         return -1;
     }
 
@@ -2039,15 +2034,10 @@ _PyObject_GenericSetAttrWithDict(PyObject *obj, PyObject *name,
         _PyObject_SetAttributeErrorContext(obj, name);
     }
   done:
-    ;
-    PyObject *saved = PyErr_GetRaisedException();
     _PyThreadState_PopCValue(tstate, &cref);
-    _PyValue_RestoreException(saved);
     Py_CLEAR(owned_dict);
     Py_CLEAR(name);
-    saved = PyErr_GetRaisedException();
     _Py_DECREF_TYPE(tp);
-    _PyValue_RestoreException(saved);
     return res;
 }
 

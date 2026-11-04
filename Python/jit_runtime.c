@@ -95,7 +95,6 @@ _PyJit_TestCall(PyObject *function, PyObject *args, Py_ssize_t limit)
  * only artifacts, so completed returns retain normal constant lifetimes. */
 #include "pycore_ceval.h"
 #include "pycore_instruments.h"
-#include "pycore_pyerrors.h"
 #include "pycore_opcode_utils.h"
 #if _PyJIT_BASELINE_SUPPORTED
 #  include <sys/mman.h>
@@ -156,7 +155,6 @@ restore_entry(_PyCodeExec *exec, _PyJitCodeUnit *unit)
 }
 static void release_jit_state(_PyJitState *);
 static void free_state_storage(_PyJitState *);
-static void restore_jit_error(PyObject *);
 
 static uintptr_t
 jit_epoch(PyThreadState *tstate)
@@ -191,26 +189,16 @@ _PyJit_FreeUnit(_PyJitCodeUnit *unit)
     }
     size_t charged = unit->charged_bytes;
     int budgeted = unit->budgeted;
-    PyObject *saved = PyErr_GetRaisedException();
 #if _PyJIT_BASELINE_SUPPORTED
     if (unit->mapping != NULL) {
         munmap(unit->mapping, unit->mapping_size);
     }
 #endif
     PyMem_Free(unit->offsets);
-    restore_jit_error(saved);
-    saved = PyErr_GetRaisedException();
     PyMem_Free(unit->ops);
-    restore_jit_error(saved);
-    saved = PyErr_GetRaisedException();
     PyMem_Free(unit->op_offsets);
-    restore_jit_error(saved);
-    saved = PyErr_GetRaisedException();
     _PyJit_FreeGraph(unit->graph);
-    restore_jit_error(saved);
-    saved = PyErr_GetRaisedException();
     PyMem_Free(unit);
-    restore_jit_error(saved);
     if (budgeted) {
         _Py_atomic_add_ssize(&process_units, -1);
     }
@@ -282,19 +270,6 @@ typedef struct JitBuildRequest {
 static _Py_thread_local JitBuildRequest *building_request;
 
 static void
-restore_jit_error(PyObject *saved)
-{
-    if (saved != NULL) {
-        if (PyErr_Occurred()) {
-            _PyErr_ChainExceptions1(saved);
-        }
-        else {
-            PyErr_SetRaisedException(saved);
-        }
-    }
-}
-
-static void
 free_state_storage(_PyJitState *state)
 {
     int budgeted = state != NULL && state->budgeted;
@@ -309,9 +284,7 @@ release_jit_state(_PyJitState *state)
 {
     assert(state->refs > 0);
     if (--state->refs == 0) {
-        PyObject *saved = PyErr_GetRaisedException();
         free_state_storage(state);
-        restore_jit_error(saved);
     }
 }
 
@@ -358,9 +331,7 @@ _PyJit_CompileCode(PyCodeObject *code)
             if (code->_co_exec == exec && exec->jit == &initial_building) {
                 exec->jit = NULL;
             }
-            PyObject *saved = PyErr_GetRaisedException();
             free_state_storage(fresh);
-            restore_jit_error(saved);
             goto done;
         }
         exec->jit = fresh;
@@ -426,13 +397,11 @@ _PyJit_CompileCode(PyCodeObject *code)
         if (attempted && !installed && state->compile_failures < UINT32_MAX) {
             state->compile_failures++;
         }
-        PyObject *saved = PyErr_GetRaisedException();
         _PyJit_FreeUnit(unit);
         if (state != NULL) {
             release_jit_state(state);
         }
         Py_DECREF(code);
-        restore_jit_error(saved);
         building_request = request.previous;
     }
     return PyErr_Occurred() ? -1 : installed;
@@ -492,15 +461,9 @@ _PyJit_ReplaceRecorded(_PyJitContext *ctx, _PyJitRecord *record)
         _PyJit_DetachExec(exec); /* next natural compile is ordinary baseline */
     }
     if (code->_co_exec == exec && exec->jit == state) state->building = 0;
-    PyObject *saved = PyErr_GetRaisedException();
     _PyJit_FreeUnit(fresh);
-    restore_jit_error(saved);
-    saved = PyErr_GetRaisedException();
     release_jit_state(state);
-    restore_jit_error(saved);
-    saved = PyErr_GetRaisedException();
     Py_DECREF(code);
-    restore_jit_error(saved);
     building_request = request.previous;
     return PyErr_Occurred() ? -1 : 0;
 }
@@ -597,16 +560,7 @@ _PyJit_ReleaseActivation(_PyJitContext *ctx)
     ctx->cold_request = NULL;
     ctx->scratch = NULL;
     ctx->record_event = NULL;
-    PyObject *saved = PyErr_GetRaisedException();
     _PyJit_FreeUnit(unit);
-    if (saved != NULL) {
-        if (PyErr_Occurred()) {
-            _PyErr_ChainExceptions1(saved);
-        }
-        else {
-            PyErr_SetRaisedException(saved);
-        }
-    }
     return 0;
 }
 
@@ -857,12 +811,8 @@ _PyJit_FreeFlow(_PyJitFlow **owner)
     _PyJitFlow *flow = *owner;
     *owner = NULL;
     int budgeted = flow != NULL && flow->budgeted;
-    PyObject *saved = PyErr_GetRaisedException();
     if (flow != NULL) _PyJit_FreeRecord(flow->record);
-    restore_jit_error(saved);
-    saved = PyErr_GetRaisedException();
     PyMem_Free(flow);
-    restore_jit_error(saved);
     if (budgeted) {
         _Py_atomic_add_ssize(&process_bytes, -(Py_ssize_t)sizeof(*flow));
     }
@@ -910,8 +860,7 @@ natural_state(PyCodeObject *code)
         if (code->_co_exec == exec && exec->jit == &initial_building) {
             exec->jit = NULL;
         }
-        PyObject *saved = PyErr_GetRaisedException();
-        free_state_storage(fresh); restore_jit_error(saved); return NULL;
+        free_state_storage(fresh); return NULL;
     }
     exec->jit = fresh;
     if (fresh != NULL) {
@@ -965,7 +914,7 @@ automatic_compile(PyThreadState *tstate, _PyInterpreterFrame *frame, PyCodeObjec
     if (result == 0 && code->_co_exec != NULL && code->_co_exec->jit != NULL &&
         code->_co_exec->jit != &initial_building) code->_co_exec->jit->cooldown = 4096;
     done:
-    { PyObject *saved = PyErr_GetRaisedException(); Py_DECREF(code); restore_jit_error(saved); }
+    Py_DECREF(code);
     return PyErr_Occurred() ? -1 : result;
 #endif
 }

@@ -157,7 +157,11 @@ Running now:
    ([proposal](design/proposals/register-ir-v2-a5b.md), revision 3, accepted
    after two reviews; `A5B-PHASE2-BRIEF.md`). Four diffs, each post-reviewed
    and then integrated: A5b-1 types and readers (landed), A5b-2 the generator, A5b-3 the heap side, A5b-4 renames.
-   Budget 21.5 h, in its own worktree.
+   Budget 21.5 h, in its own worktree. **Paused 2026-11-04 14:05:** the
+   agent was stopped during A5b-2 (generator rewritten, tests written, gcc
+   debug built; release and clang builds, step tests and measurements left).
+   Its work is preserved uncommitted in `build/worktrees/irv2-a5b`, with
+   `irv2-a5b-notes.md` and `progress-irv2-a5b.txt`. Resume on direction.
 
 Next, in order:
 

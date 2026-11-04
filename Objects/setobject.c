@@ -311,6 +311,8 @@ set_add_entry_takeref(PySetObject *so, PyValue key, Py_hash_t hash)
     int probes;
     int cmp;
 
+    _PyValue_CheckHome(key);
+
   restart:
 
     mask = so->mask;

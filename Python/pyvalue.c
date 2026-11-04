@@ -233,7 +233,7 @@ _PyObject_ValueIdentity(PyObject *op)
         // Exact ints do not raise here.
         int overflow;
         long value = PyLong_AsLongAndOverflow(op, &overflow);
-        if (!overflow && INT32_MIN <= value && value <= INT32_MAX) {
+        if (!overflow && _PyValue_IntFitsInline(value)) {
             return _PyValue_Int32Bits((int32_t)value);
         }
     }
@@ -278,3 +278,73 @@ _PyValue_BoxDouble(double value)
     }
     return PyValue_FromPyObjectSteal(op);
 }
+
+#ifdef Py_DEBUG
+#define HOME_SITE_MAX 64
+
+static struct {
+    const char *file;
+    int line;
+    Py_ssize_t count;
+} home_sites[HOME_SITE_MAX];
+static Py_ssize_t home_total;
+
+void
+_PyValue_ReportHome(PyValue ref, const char *file, int line)
+{
+    _Py_atomic_add_ssize(&home_total, 1);
+    for (int i = 0; i < HOME_SITE_MAX; i++) {
+        if (home_sites[i].file == NULL) {
+            home_sites[i].file = file;
+            home_sites[i].line = line;
+        }
+        if (strcmp(home_sites[i].file, file) == 0 && home_sites[i].line == line) {
+            _Py_atomic_add_ssize(&home_sites[i].count, 1);
+            return;
+        }
+    }
+}
+
+Py_ssize_t
+_PyValue_HomeViolationCount(void)
+{
+    return _Py_atomic_load_ssize(&home_total);
+}
+
+PyObject *
+_PyValue_HomeViolationSites(void)
+{
+    PyObject *sites = PyDict_New();
+    if (sites == NULL) {
+        return NULL;
+    }
+    for (int i = 0; i < HOME_SITE_MAX && home_sites[i].file != NULL; i++) {
+        PyObject *key = PyUnicode_FromFormat("%s:%d", home_sites[i].file,
+                                             home_sites[i].line);
+        PyObject *count = PyLong_FromSsize_t(home_sites[i].count);
+        if (key == NULL || count == NULL
+            || PyDict_SetItem(sites, key, count) < 0)
+        {
+            Py_XDECREF(key);
+            Py_XDECREF(count);
+            Py_DECREF(sites);
+            return NULL;
+        }
+        Py_DECREF(key);
+        Py_DECREF(count);
+    }
+    return sites;
+}
+#else
+Py_ssize_t
+_PyValue_HomeViolationCount(void)
+{
+    return 0;
+}
+
+PyObject *
+_PyValue_HomeViolationSites(void)
+{
+    return PyDict_New();
+}
+#endif

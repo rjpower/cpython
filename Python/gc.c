@@ -469,6 +469,7 @@ _PyGC_VisitValue(PyValue *ref, visitproc visit, void *arg)
     // refcounts when computing the incoming references, but otherwise treat
     // them like normal.
     assert(PyValue_IsObject(*ref));
+    _PyValue_CheckHome(*ref);
     if (!PyValue_RefcountOnObject(*ref) && (visit == visit_decref)) {
         return 0;
     }

@@ -285,6 +285,7 @@ void
     assert(index >= 0 && index < self->allocated);
     assert(PyValue_IsNull(value) || PyValue_IsLanguageValue(value));
     assert(PyValue_IsHeapSafe(value));
+    _PyValue_CheckHome(value);
     self->ob_item[index] = value;
 }
 

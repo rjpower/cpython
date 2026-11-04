@@ -4412,7 +4412,7 @@
             if (tup_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            tup = PyValue_FromPyObjectStealMortal(tup_o);
+            tup = PyValue_FromPyObjectSteal(tup_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg);
             window[0] = _PyValueTemps_Publish(value_temps, &tup);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);

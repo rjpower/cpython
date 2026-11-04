@@ -2358,6 +2358,8 @@ setitem_take2_lock_held_known_hash(PyDictObject *mp, PyValue key,
     }
     assert(can_modify_dict(mp));
     assert(hash != -1);
+    _PyValue_CheckHome(key);
+    _PyValue_CheckHome(value);
     if (mp->ma_keys == Py_EMPTY_KEYS) {
         return insert_to_emptydict(mp, key, hash, value);
     }

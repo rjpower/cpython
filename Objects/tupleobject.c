@@ -136,6 +136,7 @@ void
     assert(PyValue_IsNull(tuple->ob_item[i]));
     assert(PyValue_IsLanguageValue(value) || PyValue_IsNull(value));
     tuple->ob_item[i] = PyValue_MakeHeapSafe(value);
+    _PyValue_CheckHome(tuple->ob_item[i]);
 }
 
 void

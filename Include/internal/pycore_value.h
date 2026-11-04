@@ -90,6 +90,8 @@ _PyValueTemps_Publish(_PyValueTemps *temps, PyValue *source)
 {
     if (PyValue_IsObject(*source)) {
         PyObject *obj = (PyObject *)(source->bits & ~(uintptr_t)1);
+        // A static immortal always carries the no-count tag.
+        assert((source->bits & 1) || !_Py_IsStaticImmortal(obj));
         if (Py_IS_TYPE(obj, &PyLong_Type) || Py_IS_TYPE(obj, &PyFloat_Type)) {
             return _PyValueTemps_PublishObject(temps, source);
         }
@@ -327,6 +329,14 @@ PyValue_Box(PyValue ref)
 // The identity of op: its value encoding or its address.
 PyAPI_FUNC(uintptr_t) _PyObject_ValueIdentity(PyObject *op);
 
+// Can v be held inline as an int? Every test of the inline int range uses
+// this, so that the range is defined in one place.
+static inline bool
+_PyValue_IntFitsInline(int64_t v)
+{
+    return INT32_MIN <= v && v <= INT32_MAX;
+}
+
 // Do a and b, which are different references, hold the same value?
 // Neither may be PyValue_NULL or PyValue_ERROR.
 PyAPI_FUNC(int) _PyValue_IsSameValue(PyValue a, PyValue b);
@@ -431,6 +441,50 @@ PyValue_CheckValid(PyValue ref)
 #define PyValue_CheckValid(REF) ((void)0)
 
 #endif
+
+#ifdef Py_DEBUG
+/* Canonical form of a value held in a home (a frame slot, container element,
+   field, cell, dict key or value, or set key): an exact int that fits inline
+   and an exact non-NaN float are never held as pointers, and a pointer
+   without the no-count tag is never a static immortal. This only reports:
+   it counts each violation by call site, readable through
+   _testinternalcapi.pyvalue_home_violations(). Debug builds only. */
+PyAPI_FUNC(void) _PyValue_ReportHome(PyValue ref, const char *file, int line);
+
+static inline bool
+_PyValue_IsCanonicalHome(PyValue ref)
+{
+    if (PyValue_IsNull(ref)) {
+        return true;
+    }
+    if (!PyValue_IsLanguageValue(ref)) {
+        return false;
+    }
+    if (!PyValue_IsObject(ref)) {
+        return true;
+    }
+    PyObject *obj = BITS_TO_PTR_MASKED(ref);
+    if ((ref.bits & Py_TAG_BITS) == 0) {
+        assert(!_Py_IsStaticImmortal(obj));
+    }
+    return _PyObject_ValueIdentity(obj) == (uintptr_t)obj;
+}
+
+#define _PyValue_CheckHome(REF) \
+    do { \
+        PyValue _home_ref = (REF); \
+        if (!_PyValue_IsCanonicalHome(_home_ref)) { \
+            _PyValue_ReportHome(_home_ref, __FILE__, __LINE__); \
+        } \
+    } while (0)
+#else
+#define _PyValue_CheckHome(REF) ((void)0)
+#endif
+
+// The number of violations reported, and a dict mapping "file:line" of each
+// reporting call site to its count. Both are empty in release builds.
+PyAPI_FUNC(Py_ssize_t) _PyValue_HomeViolationCount(void);
+PyAPI_FUNC(PyObject *) _PyValue_HomeViolationSites(void);
 
 /* Does this ref own a count on its object? False for references to immortal
    objects, borrowed and deferred references, indices and inline values. */

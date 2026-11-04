@@ -3187,6 +3187,21 @@ pyvalue_contract(PyObject *self, PyObject *arg)
     return Py_BuildValue("sN", kind, object);
 }
 
+/* The count of values found in a home in a non-canonical form (debug builds),
+ * and the call sites that reported them. Step 3 of the representation packet
+ * only reports; step 8 turns the check into an assertion. */
+static PyObject *
+pyvalue_home_violations(PyObject *self, PyObject *unused)
+{
+    return PyLong_FromSsize_t(_PyValue_HomeViolationCount());
+}
+
+static PyObject *
+pyvalue_home_violation_sites(PyObject *self, PyObject *unused)
+{
+    return _PyValue_HomeViolationSites();
+}
+
 static PyObject *
 pyvalue_internal_contract(PyObject *self, PyObject *unused)
 {
@@ -4085,6 +4100,8 @@ static PyMethodDef module_functions[] = {
     {"common_constant_storage", common_constant_storage, METH_NOARGS},
     {"pyvalue_contract", pyvalue_contract, METH_O, NULL},
     {"pyvalue_internal_contract", pyvalue_internal_contract, METH_NOARGS, NULL},
+    {"pyvalue_home_violations", pyvalue_home_violations, METH_NOARGS, NULL},
+    {"pyvalue_home_violation_sites", pyvalue_home_violation_sites, METH_NOARGS, NULL},
     {"jit_method_record_index", jit_method_record_index, METH_NOARGS, NULL},
     {"jit_method_cold_call", jit_method_cold_call, METH_VARARGS, NULL},
     {"jit_method_compile", jit_method_compile, METH_O, NULL},

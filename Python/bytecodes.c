@@ -2323,7 +2323,7 @@ dummy_func(
                 ERROR_NO_POP();
             }
             INPUTS_DEAD();
-            tup = PyValue_FromPyObjectStealMortal(tup_o);
+            tup = PyValue_FromPyObjectSteal(tup_o);
         }
 
         inst(BUILD_LIST, (values[oparg] -- list)) {

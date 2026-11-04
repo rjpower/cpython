@@ -15,6 +15,18 @@
 #include <stdbool.h>
 #include <stdio.h>                // fopen(), fgets(), sscanf()
 #include <errno.h>                // errno
+
+/* A PyValue holds an object address in 48 bits (Py_PTR_LIMIT), so memory the
+   process takes from the OS must lie below it. Check where the memory comes
+   from rather than per object. */
+static inline void
+check_address_limit(void *address, size_t size)
+{
+    if (address != NULL && (uintptr_t)address + size > Py_PTR_LIMIT) {
+        Py_FatalError("memory address beyond the 48 bits a PyValue can hold");
+    }
+}
+
 #ifdef WITH_MIMALLOC
 // Forward declarations of functions used in our mimalloc modifications
 static void _PyMem_mi_page_clear_qsbr(mi_page_t *page);
@@ -63,7 +75,9 @@ _PyMem_RawMalloc(void *Py_UNUSED(ctx), size_t size)
        To solve these problems, allocate an extra byte. */
     if (size == 0)
         size = 1;
-    return malloc(size);
+    void *ptr = malloc(size);
+    check_address_limit(ptr, size);
+    return ptr;
 }
 
 void *
@@ -77,7 +91,9 @@ _PyMem_RawCalloc(void *Py_UNUSED(ctx), size_t nelem, size_t elsize)
         nelem = 1;
         elsize = 1;
     }
-    return calloc(nelem, elsize);
+    void *ptr = calloc(nelem, elsize);
+    check_address_limit(ptr, nelem * elsize);
+    return ptr;
 }
 
 void *
@@ -85,7 +101,9 @@ _PyMem_RawRealloc(void *Py_UNUSED(ctx), void *ptr, size_t size)
 {
     if (size == 0)
         size = 1;
-    return realloc(ptr, size);
+    void *new_ptr = realloc(ptr, size);
+    check_address_limit(new_ptr, size);
+    return new_ptr;
 }
 
 void
@@ -2273,6 +2291,7 @@ new_arena(OMState *state)
     unused_arena_objects = arenaobj->nextarena;
     assert(arenaobj->address == 0);
     address = _PyObject_Arena.alloc(_PyObject_Arena.ctx, ARENA_SIZE);
+    check_address_limit(address, ARENA_SIZE);
 #if WITH_PYMALLOC_RADIX_TREE
     if (address != NULL) {
         if (!arena_map_mark_used(state, (uintptr_t)address, 1)) {

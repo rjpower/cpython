@@ -472,6 +472,7 @@ static inline PyValue
 PyValue_FromPyObjectSteal(PyObject *obj)
 {
     assert(obj != NULL);
+    assert((uintptr_t)obj < Py_PTR_LIMIT);
     unsigned int tag = _Py_IsImmortal(obj) ? Py_TAG_REFCNT : 0;
     PyValue ref = ((PyValue){.bits = ((uintptr_t)(obj)) | tag});
     PyValue_CheckValid(ref);
@@ -492,6 +493,7 @@ static inline PyValue
 _PyValue_FromPyObjectNew(PyObject *obj)
 {
     assert(obj != NULL);
+    assert((uintptr_t)obj < Py_PTR_LIMIT);
     if (_Py_IsImmortal(obj)) {
         return (PyValue){ .bits = (uintptr_t)obj | Py_TAG_REFCNT };
     }
@@ -518,6 +520,7 @@ static inline PyValue
 PyValue_FromPyObjectBorrow(PyObject *obj)
 {
     assert(obj != NULL);
+    assert((uintptr_t)obj < Py_PTR_LIMIT);
     return (PyValue){ .bits = (uintptr_t)obj | Py_TAG_REFCNT};
 }
 

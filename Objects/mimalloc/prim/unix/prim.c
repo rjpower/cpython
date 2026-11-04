@@ -428,6 +428,7 @@ int _mi_prim_alloc(void* hint_addr, size_t size, size_t try_alignment, bool comm
   *is_zero = true;
   int protect_flags = (commit ? (PROT_WRITE | PROT_READ) : PROT_NONE);
   *addr = unix_mmap(hint_addr, size, try_alignment, protect_flags, false, allow_large, is_large);
+  check_address_limit(*addr, size);  // CPython: object addresses must fit a PyValue
   return (*addr != NULL ? 0 : errno);
 }
 

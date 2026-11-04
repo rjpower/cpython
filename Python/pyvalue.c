@@ -11,6 +11,7 @@ PyValue_FromObjectBorrow(PyObject *obj)
     if (obj == NULL) {
         return PyValue_NULL;
     }
+    assert((uintptr_t)obj < Py_PTR_LIMIT);
     uintptr_t identity = _PyObject_ValueIdentity(obj);
     if (identity >= Py_DOUBLE_OFFSET) {
         return (PyValue){.bits = identity};

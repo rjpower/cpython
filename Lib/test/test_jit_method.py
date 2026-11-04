@@ -17,10 +17,12 @@ def setUpModule():
 
 
 @unittest.skipIf(
+    not _testinternalcapi.JIT_BASELINE_SUPPORTED or
     sysconfig.get_config_var("Py_GIL_DISABLED") or
     sysconfig.get_config_var("Py_STATS") or
     sysconfig.get_config_var("_Py_TAIL_CALL_INTERP"),
-    "semantic-step fixture requires the GIL non-stats default evaluator",
+    "semantic-step fixture requires the fork's JIT and the GIL non-stats "
+    "default evaluator",
 )
 class TestMethodHelpers(unittest.TestCase):
     def step(self, function, args=(), limit=10000):
@@ -199,6 +201,7 @@ class TestMethodHelpers(unittest.TestCase):
 
 
 @unittest.skipUnless(
+    _testinternalcapi.JIT_BASELINE_SUPPORTED and
     sys.platform == "linux" and platform.machine() == "x86_64" and
     not sysconfig.get_config_var("Py_GIL_DISABLED") and
     not sysconfig.get_config_var("Py_STATS") and
@@ -405,6 +408,7 @@ class TestNativeMethods(unittest.TestCase):
 
 
 @unittest.skipUnless(
+    _testinternalcapi.JIT_BASELINE_SUPPORTED and
     sys.platform == "linux" and platform.machine() == "x86_64" and
     not sysconfig.get_config_var("Py_GIL_DISABLED") and
     not sysconfig.get_config_var("Py_STATS") and
@@ -818,6 +822,7 @@ class TestNaturalMethods(unittest.TestCase):
 
 
 @unittest.skipUnless(
+    _testinternalcapi.JIT_BASELINE_SUPPORTED and
     sys.platform == "linux" and platform.machine() == "x86_64" and
     not sysconfig.get_config_var("Py_GIL_DISABLED") and
     not sysconfig.get_config_var("Py_STATS") and

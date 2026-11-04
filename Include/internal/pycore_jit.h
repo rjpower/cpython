@@ -154,12 +154,14 @@ struct _PyJitState {
     _PyJitCodeUnit *unit;
 };
 
-#if defined(__linux__) && defined(__x86_64__) && !defined(Py_GIL_DISABLED) && \
-    !defined(Py_STATS) && !_Py_TAIL_CALL_INTERP
-#  define _PyJIT_BASELINE_SUPPORTED 1
-#else
-#  define _PyJIT_BASELINE_SUPPORTED 0
-#endif
+/* The fork's JIT (method baseline and tracing front end) is out of the build
+   while the register IR changes (register IR v2), so that IR steps need not
+   keep it working. It returns in the JIT stage on the final IR
+   (pyjit/design/jit-e2e-system.md). To build it again, restore the
+   condition below:
+     defined(__linux__) && defined(__x86_64__) && !defined(Py_GIL_DISABLED) &&
+     !defined(Py_STATS) && !_Py_TAIL_CALL_INTERP */
+#define _PyJIT_BASELINE_SUPPORTED 0
 
 extern void _PyJit_SeedBackedges(PyCodeObject *, _PyCodeExec *);
 extern int _PyJit_AutoEligible(PyObject *);

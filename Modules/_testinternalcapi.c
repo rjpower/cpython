@@ -4480,6 +4480,11 @@ module_exec(PyObject *module)
         return 1;
     }
 
+    if (PyModule_Add(module, "JIT_BASELINE_SUPPORTED",
+                     PyBool_FromLong(_PyJIT_BASELINE_SUPPORTED)) < 0) {
+        return 1;
+    }
+
     if (PyModule_Add(module, "SPECIALIZATION_THRESHOLD",
                         PyLong_FromLong(ADAPTIVE_WARMUP_VALUE + 1)) < 0) {
         return 1;

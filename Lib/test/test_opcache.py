@@ -2607,12 +2607,14 @@ class TestFeedback(TestBase):
         def call(f):
             return f()
 
+        # Operands of two types that specialise.  Not str * int: the int is
+        # inline, and BINARY_OP_EXTEND is only nominated for two objects.
         for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD):
-            mul("ab", 3)
+            mul(2.5, 3)
             call(g)
         [(kind, state, lhs, rhs, _)] = self.feedback(mul, "BINARY_OP")
         self.assertEqual((kind, state), ("BINARY", "MONO"))
-        self.assertEqual(lhs, _testcapi.type_get_version(str))
+        self.assertEqual(lhs, _testcapi.type_get_version(float))
         self.assertEqual(rhs, _testcapi.type_get_version(int))
         [(kind, state, func_version, callable_type, _)] = self.feedback(call, "CALL")
         self.assertEqual((kind, state), ("CALL", "MONO"))

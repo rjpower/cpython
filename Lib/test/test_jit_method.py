@@ -850,7 +850,9 @@ class TestObservedLoops(unittest.TestCase):
         for n, seed in ((2400, 3), (31, -7), (1200, 19)):
             self.assertEqual(work(n, seed), seed + 2 * n * (n - 1) + 7 * n)
         info = self.optimized(work)
-        self.assertGreater(info["trace"]["boxed_imports"], 0)
+        # Every home holds an exact int in int32 range, whose canonical form
+        # is inline (pyvalue.md section 1.5), so no import reads a box.
+        self.assertEqual(info["trace"]["boxed_imports"], 0)
         self.assertTrue(_testinternalcapi.jit_method_record_index())
         print("JIT_OBSERVED_LOOP_WITNESS", info)
 

@@ -915,7 +915,8 @@ class TestIRCases(unittest.TestCase):
 
     def test_metadata(self):
         # IR-only handlers follow the opcodes in name order. An instrumented
-        # twin shares the format of its instruction.
+        # twin shares the format of its instruction, and since the twin calls
+        # a monitoring callback, that format runs code (runs_code()).
         input = """
         inst(LOAD, ( -- value)) {
             value = PyValue_DUP(GETLOCAL(oparg));
@@ -936,7 +937,7 @@ class TestIRCases(unittest.TestCase):
         ir_metadata_generator.generate_ir_metadata(
             [self.temp_input_filename], analysis, out)
         lines = [line.strip() for line in out.getvalue().splitlines()]
-        load = ("{ .flags = _PyIR_VALID | _PyIR_STORE_DST, "
+        load = ("{ .flags = _PyIR_VALID | _PyIR_STORE_DST | _PyIR_RUNS_CODE, "
                 ".roles = { _PyIR_ROLE_DST, "
                 "_PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, "
                 ".imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .ninputs = 0, "

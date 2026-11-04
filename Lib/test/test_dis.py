@@ -7,8 +7,10 @@ import functools
 import io
 import itertools
 import opcode
+import platform
 import re
 import sys
+import sysconfig
 import tempfile
 import textwrap
 import types
@@ -907,6 +909,16 @@ def loop_test():
     for i in [1, 2, 3] * 3:
         load_test(i)
 
+# With the baseline JIT (_PyJIT_BASELINE_SUPPORTED in pycore_jit.h), the
+# specializer turns a call to a Python function into CALL_JIT_WARM until the
+# callee is compiled (_Py_Specialize_Call), and dis shows that handler as CALL.
+JIT_WARMS_CALLS = (
+    sys.platform == "linux" and platform.machine() == "x86_64" and
+    not support.Py_GIL_DISABLED and
+    not sysconfig.get_config_var("Py_STATS") and
+    not sysconfig.get_config_var("_Py_TAIL_CALL_INTERP")
+)
+
 dis_loop_test_quickened_code = """\
 %3d           RESUME                   0
 
@@ -920,7 +932,7 @@ dis_loop_test_quickened_code = """\
 
 %3d           LOAD_GLOBAL_MODULE       1 (load_test + NULL)  r3 <-
               LOAD_FAST_BORROW         0 (i)  r5 <-
-              CALL_PY_GENERAL          1  r3 <- r3
+              %-24s 1  r3 <- r3
               POP_TOP               <- r3
               JUMP_BACKWARD            7 (to L1)
 
@@ -931,6 +943,7 @@ dis_loop_test_quickened_code = """\
 """ % (loop_test.__code__.co_firstlineno,
        loop_test.__code__.co_firstlineno + 1,
        loop_test.__code__.co_firstlineno + 2,
+       "CALL" if JIT_WARMS_CALLS else "CALL_PY_GENERAL",
        loop_test.__code__.co_firstlineno + 1,)
 
 def extended_arg_quick():
@@ -1312,14 +1325,16 @@ class DisTests(DisTestBase):
     @cpython_only
     @requires_specialization
     def test_load_attr_specialize(self):
+        # Not __class__: ob_type is not a value slot, so LOAD_ATTR_SLOT does
+        # not serve it and its load stays generic (Python/specialize.c).
         load_attr_quicken = """\
   0           RESUME                   0
 
-  1           LOAD_CONST               0 ('a')  r0 <-
-              LOAD_ATTR_SLOT           0 (__class__)  r0 <- r0
+  1           LOAD_NAME                0 (str)  r0 <-
+              LOAD_ATTR_CLASS          2 (upper)  r0 <- r0
               RETURN_VALUE          <- r0
 """
-        co = compile("'a'.__class__", "", "eval")
+        co = compile("str.upper", "", "eval")
         self.code_quicken(lambda: exec(co, {}, {}))
         got = self.get_disassembly(co, adaptive=True)
         self.do_disassembly_compare(got, load_attr_quicken)

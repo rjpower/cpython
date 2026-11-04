@@ -2167,8 +2167,11 @@ def generate_ir_labels(analysis: Analysis, emitter: Emitter) -> None:
 
 
 def max_bridge_bound(analysis: Analysis) -> int:
-    return max(value_bridge_bound(name, inst)
-               for name, inst in handler_instructions(analysis).items())
+    # An input with no handlers, such as labels alone, still declares a
+    # nonempty array.
+    return max((value_bridge_bound(name, inst)
+                for name, inst in handler_instructions(analysis).items()),
+               default=1)
 
 
 def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,

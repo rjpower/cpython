@@ -55,8 +55,12 @@ def trace(func, *args, opcodes=False):
     return result, events
 
 
+# The attributes are instance attributes, whose loads specialise.  A class
+# attribute holding an inline int is classified INLINE_VALUE and its load
+# stays generic (Python/specialize.c).
 class C:
-    attr = 5
+    def __init__(self):
+        self.attr = 5
 
 
 class AssemblerTest(unittest.TestCase):
@@ -360,9 +364,10 @@ class AssemblerTest(unittest.TestCase):
             lines += event == "line"
             return tracer
 
+        o = C()
         sys.settrace(tracer)
         try:
-            result = f(C())
+            result = f(o)
         finally:
             sys.settrace(None)
         self.assertEqual(result, (last, 5))
@@ -383,7 +388,7 @@ class AssemblerTest(unittest.TestCase):
         self.assertEqual(f.__code__.co_nlocals + f.__code__.co_stacksize,
                          IR_MAX_SLOTS)
         self.assertEqual(f(), [0])
-        with self.assertRaisesRegex(SystemError, "slots"):
+        with self.assertRaisesRegex(SyntaxError, "slots"):
             make(IR_MAX_SLOTS - stacksize + 1)
 
     def test_shared_feedback_entry(self):
@@ -391,8 +396,9 @@ class AssemblerTest(unittest.TestCase):
         # specialise, and those with a static operand run a NOFB form that
         # carries it in the word.
         class O:
-            attr = 5
-            other = 7
+            def __init__(self):
+                self.attr = 5
+                self.other = 7
         nsites = IR_FIELD_MAX + 10
         source = ("def f(o, n):\n"
                   + "".join(f"    x = o.attr\n" for i in range(nsites))
@@ -1092,15 +1098,19 @@ class RegCfgTest(unittest.TestCase):
 
     # a. Copy propagation
 
-    def test_load_folds_under_a_global_and_a_call(self):
+    def test_load_does_not_fold_under_a_global_or_a_call(self):
+        # A generic LOAD_GLOBAL and a call may run Python code, which may
+        # rebind x through frame.f_locals, so the load of x keeps its word
+        # and the reader takes its value from a temporary
+        # (CopyPropagationAcrossCodeTests in test_peepholer).
         def mul(x):
             return x * K
         def add(x):
             return x + one()
         for f in mul, add:
-            self.assertNotIn("LOAD_FAST_BORROW", self.names(f))
+            self.assertIn("LOAD_FAST_BORROW", self.names(f))
             op = [w for w in words(f) if w[0].startswith("BINARY_OP")][0]
-            self.assertEqual(op[2][0], 0)
+            self.assertNotEqual(op[2][0], 0)
         self.run_specialized(lambda: self.assertEqual(mul(2), 6))
         self.run_specialized(lambda: self.assertEqual(add(2), 3))
 

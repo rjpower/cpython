@@ -2050,7 +2050,6 @@ record_func(PyObject *obj, PyFrameObject *f, int what, PyObject *arg)
     if (tuple == NULL) {
         goto error;
     }
-    PyTuple_SET_ITEM(tuple, 0, what_obj);
     if (PyList_Append(obj, tuple)) {
         goto error;
     }

@@ -612,6 +612,20 @@ _PyValue_IsNumberType(PyTypeObject *type)
     return type == &PyLong_Type || type == &PyFloat_Type;
 }
 
+/* Python's `is` on two objects, either of which may be NULL: the same
+   address, or boxes of one inline value (see "Value identity"). C code that
+   tests identity on Python's behalf (operator.is_, object.__eq__, method
+   equality) uses this; Py_Is() stays pointer equality. */
+static inline int
+_PyObject_IsSame(PyObject *a, PyObject *b)
+{
+    if (a == b) {
+        return 1;
+    }
+    return a != NULL && b != NULL && _PyValue_IsNumberType(Py_TYPE(a))
+           && _PyObject_ValueIdentity(a) == _PyObject_ValueIdentity(b);
+}
+
 static inline PyValue
 PyValue_FromPyObjectSteal(PyObject *obj)
 {

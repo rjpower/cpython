@@ -7,6 +7,7 @@ import operator
 import struct
 import sys
 import traceback
+import types
 import unittest
 from test import support
 from test.support import import_helper, requires_refcounting, script_helper
@@ -202,6 +203,33 @@ class IdentityTest(unittest.TestCase):
             self.assertFalse(same(2.5, 5))
             self.assertTrue(same(x, x))
         self.check_different(x, y)
+
+    def test_object_level_identity(self):
+        # object's hash, repr and __eq__, and the equality and hash of
+        # methods bound to a value, use the value identity, as id() does:
+        # each call boxes the value afresh.
+        def f(self):
+            return self
+        for value in (2**31 - 1, 70000, 2.5):
+            with self.subTest(value=value):
+                x = distinct(value)
+                hashes = set()
+                for _ in range(5):
+                    other = [distinct(value) for _ in range(3)]
+                    hashes.add(object.__hash__(x))
+                self.assertEqual(len(hashes), 1)
+                self.assertEqual(object.__hash__(other[0]), object.__hash__(x))
+                self.assertIn(hex(id(x)), object.__repr__(x))
+                self.assertIs(object.__eq__(x, distinct(value)), True)
+                self.assertIs(object.__ne__(x, distinct(value)), False)
+                method = "bit_length" if isinstance(value, int) else "hex"
+                self.assertEqual(getattr(x, method), getattr(x, method))
+                self.assertEqual(hash(getattr(x, method)), hash(getattr(x, method)))
+                self.assertEqual(x.__add__, x.__add__)
+                self.assertEqual(hash(x.__add__), hash(x.__add__))
+                self.assertEqual(types.MethodType(f, x), types.MethodType(f, x))
+                self.assertEqual(hash(types.MethodType(f, x)),
+                                 hash(types.MethodType(f, x)))
 
 
 # A generator receives through `yield from` the value that was sent, with

@@ -12,6 +12,7 @@
 #include "pycore_object_deferred.h" // _PyObject_SetDeferredRefcount()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_value.h"         // _PyObject_IsSame()
 
 
 /*[clinic input]
@@ -1394,7 +1395,7 @@ wrapper_richcompare(PyObject *a, PyObject *b, int op)
 
     wa = (wrapperobject *)a;
     wb = (wrapperobject *)b;
-    eq = (wa->descr == wb->descr && wa->self == wb->self);
+    eq = (wa->descr == wb->descr && _PyObject_IsSame(wa->self, wb->self));
     if (eq == (op == Py_EQ)) {
         Py_RETURN_TRUE;
     }

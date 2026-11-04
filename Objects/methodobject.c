@@ -10,6 +10,7 @@
 #include "pycore_object.h"
 #include "pycore_pyerrors.h"
 #include "pycore_pystate.h"       // _PyThreadState_GET()
+#include "pycore_value.h"         // _PyObject_IsSame()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
 
@@ -330,7 +331,7 @@ meth_richcompare(PyObject *self, PyObject *other, int op)
     }
     a = (PyCFunctionObject *)self;
     b = (PyCFunctionObject *)other;
-    eq = a->m_self == b->m_self;
+    eq = _PyObject_IsSame(a->m_self, b->m_self);
     if (eq)
         eq = a->m_ml->ml_meth == b->m_ml->ml_meth;
     if (op == Py_EQ)

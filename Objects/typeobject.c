@@ -8007,11 +8007,14 @@ object_repr(PyObject *self)
         Py_XDECREF(mod);
         return NULL;
     }
+    // The address that id() reports: a box of an inline value shows the
+    // value identity.
+    void *address = (void *)_PyObject_ValueIdentity(self);
     if (mod != NULL && !_PyUnicode_Equal(mod, &_Py_ID(builtins)))
-        rtn = PyUnicode_FromFormat("<%U.%U object at %p>", mod, name, self);
+        rtn = PyUnicode_FromFormat("<%U.%U object at %p>", mod, name, address);
     else
         rtn = PyUnicode_FromFormat("<%s object at %p>",
-                                  type->tp_name, self);
+                                  type->tp_name, address);
     Py_XDECREF(mod);
     Py_DECREF(name);
     return rtn;
@@ -8039,7 +8042,7 @@ object_richcompare(PyObject *self, PyObject *other, int op)
         /* Return NotImplemented instead of False, so if two
            objects are compared, both get a chance at the
            comparison.  See issue #1393. */
-        res = Py_NewRef((self == other) ? Py_True : Py_NotImplemented);
+        res = Py_NewRef(_PyObject_IsSame(self, other) ? Py_True : Py_NotImplemented);
         break;
 
     case Py_NE:

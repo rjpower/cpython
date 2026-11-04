@@ -3,7 +3,7 @@
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_moduleobject.h"  // _PyModule_GetState()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
-#include "pycore_value.h"      // _PyObject_ValueIdentity()
+#include "pycore_value.h"      // _PyObject_IsSame()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_typeobject.h"    // _PyType_GetModuleState()
 #include "pycore_unicodeobject.h" // _PyUnicode_InternMortal()
@@ -713,8 +713,7 @@ static PyObject *
 _operator_is__impl(PyObject *module, PyObject *a, PyObject *b)
 /*[clinic end generated code: output=bcd47a402e482e1d input=5fa9b97df03c427f]*/
 {
-    int is = _PyObject_ValueIdentity(a) == _PyObject_ValueIdentity(b);
-    return Py_NewRef(is ? Py_True : Py_False);
+    return Py_NewRef(_PyObject_IsSame(a, b) ? Py_True : Py_False);
 }
 
 /*[clinic input]
@@ -727,8 +726,7 @@ static PyObject *
 _operator_is_not_impl(PyObject *module, PyObject *a, PyObject *b)
 /*[clinic end generated code: output=491a1f2f81f6c7f9 input=5a93f7e1a93535f1]*/
 {
-    int is = _PyObject_ValueIdentity(a) == _PyObject_ValueIdentity(b);
-    return Py_NewRef(is ? Py_False : Py_True);
+    return Py_NewRef(_PyObject_IsSame(a, b) ? Py_False : Py_True);
 }
 
 /*[clinic input]

@@ -5,6 +5,7 @@
 */
 #include "Python.h"
 #include "pycore_pyhash.h"        // _Py_HashSecret_t
+#include "pycore_value.h"         // _PyObject_ValueIdentity()
 
 #ifdef __APPLE__
 #  include <libkern/OSByteOrder.h>
@@ -142,6 +143,12 @@ Py_HashPointer(const void *ptr)
 Py_hash_t
 PyObject_GenericHash(PyObject *obj)
 {
+    /* All boxes of one inline value hash alike: they hash its value
+       identity, which id() returns (see "Value identity" in
+       pycore_value.h). obj may be NULL (meth_hash). */
+    if (obj != NULL && _PyValue_IsNumberType(Py_TYPE(obj))) {
+        return Py_HashPointer((void *)_PyObject_ValueIdentity(obj));
+    }
     return Py_HashPointer(obj);
 }
 

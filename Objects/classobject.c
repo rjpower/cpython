@@ -8,6 +8,7 @@
 #include "pycore_pyerrors.h"
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_symtable.h"      // _Py_Mangle()
+#include "pycore_value.h"         // _PyObject_IsSame()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
 
@@ -238,7 +239,7 @@ method_richcompare(PyObject *self, PyObject *other, int op)
     b = (PyMethodObject *)other;
     eq = PyObject_RichCompareBool(a->im_func, b->im_func, Py_EQ);
     if (eq == 1) {
-        eq = (a->im_self == b->im_self);
+        eq = _PyObject_IsSame(a->im_self, b->im_self);
     }
     else if (eq < 0)
         return NULL;

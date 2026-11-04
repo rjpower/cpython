@@ -598,13 +598,31 @@ executing copy (one allocation, ir.c:make_exec):
     MEGA. The interpreter's handlers are monomorphic. The poly tables exist
     for the JIT and for shape decisions (`specialize.c`, "Polymorphic
     feedback").
-- **The executing copy is fixed for the code object's life** (revised 2026-11-04, register IR v2 packet).
-  `_PyCode_GetExec` creates it once, and `_PyCode_ClearExec` frees it only from
-  `code_dealloc`, so `frame->ir_words` never changes while a frame runs.
-  Helpers that run reentrant code do not rebase the PC. Debug builds check
-  this at the old rebase sites, in `_PyCode_ClearExec` and, in the tail-call
-  debug build, at every dispatch. The `instr_ptr` restores rest on a separate
-  invariant and stay.
+- **The executing copy is fixed for the code object's life** (revised
+  2026-11-04, register IR v2 packet; built in A2, `335b86b71e9`).
+  `_PyCode_GetExec` creates it once, under its NULL test, and
+  `_PyCode_ClearExec` frees it only from `code_dealloc`. The static
+  init-cleanup code object starts with the static copy
+  `_PyIR_InitCleanupExec` and is never freed. A running frame holds a
+  reference to its code object, so `frame->ir_words` and
+  `frame->ir_feedback` stay equal to the copy's words and entries while the
+  frame runs. Instrumentation and specialisation rewrite handler fields of
+  the copy in place and never move it.
+  - Helpers that run reentrant code (the release of operands, results and a
+    displaced local; native calls; call preparation) take `next_instr` by
+    value, keep their `int` status and do not rebase the PC. They still check
+    that the frame is current and the saved words are in range, and raise
+    `SystemError` if not.
+  - A handler must not move `next_instr` and expect a helper to restore it.
+    The `_SPECIALIZE_CALL*` uops pass `this_instr` to the specialiser.
+  - Debug builds assert the invariant where the PC was rebased
+    (`value_operation_refresh`, `native_call_finish`, both publish-PC
+    callbacks, a pushed child frame), in `_PyCode_ClearExec`
+    (`Py_REFCNT(co) == 0`) and, in the tail-call debug build, at every
+    dispatch (A3a). `test_ir_contract.test_next_instr_by_value` checks that
+    no generated line takes `&next_instr`.
+  - The `instr_ptr` restores rest on a separate invariant (nothing writes a
+    running frame's `instr_ptr` during a call it makes) and stay.
 - **Pristine words.** The code object's words keep the generic handlers.
   `_PyCode_GenericHandler` restores them on de-instrumentation, and every
   decoder reads operands from them (`ir.c`, file header).
@@ -636,6 +654,19 @@ opcodes live in the side arrays of `_PyCoMonitoringData`, indexed by word.
 instrumentation version is stale. Per-instruction events fire once per word, so
 a folded load produces no event. This is a deliberate difference from the stack
 machine.
+
+Instrumentation is current for every running frame, as upstream keeps it.
+Setting events re-instruments every code object with a frame on a thread's
+stack (`instrument_all_executing_code_objects`), and `RESUME` instruments a
+starting frame's code, except while tracing in the default build. A walk that
+fails stops at the first code object it cannot instrument, with the error set.
+Once Python code has handled the error, the frames the walk did not reach run
+their old code until their next `RESUME`, as upstream; the interpreter records
+the failed walk's version (`interp->ceval.instrumentation_failed_version`)
+until a later walk completes. Value-operation helpers do not instrument. After
+each operation, debug builds assert that the code's version is current, or
+older than the failed walk's version, or tracing is active, or an error is set
+(`ceval.c:instrumentation_is_current`).
 
 ### 1.12 Frames and calls
 
@@ -718,12 +749,15 @@ thread data-stack chunk:
   1. `frame->instr_ptr = next_instr` (289 of 292 handlers; `no_save_ip`
      handlers such as `IR_JUMP` skip it);
   2. `next_instr += 1`;
-  3. a `_PyValueTemps` over a `value_boxes` array, the scratch space of the
-     interim value bridge, reset in all 292 handlers. Since `ca8a9d6d827` the
-     computed-goto build declares one array, sized for the largest handler,
-     and shares it; the tail-call build keeps a per-handler array.
+  3. in the 115 handlers whose contract row has BOXES only, a
+     `_PyValueTemps` over a `value_boxes` array, the scratch space of the
+     interim value bridge. Since `ca8a9d6d827` the computed-goto build
+     declares one array, sized for the largest handler, and shares it; the
+     tail-call build keeps a per-handler array. The other 177 handlers use a
+     constant NULL record (A1, `44eb4e716dd`).
 
-  `DISPATCH()` tests `value_temps->count` before fetching.
+  `DISPATCH()` tests `value_temps != NULL && value_temps->count != 0` before
+  fetching; with the constant NULL the compiler removes the test.
 - **`RESUME` skipping** (`ceval_macros.h:IR_SKIP_RESUME`). On frame entry,
   calls and generator resumption, a `RESUME` with nothing to do is skipped: the
   eval breaker equals the code's instrumentation version, and in the
@@ -1830,6 +1864,14 @@ owner asks for no intermediate performance gates).
 - **Others.** LuaJIT and V8 store the PC to the frame only when calling out
   (`savePC`, bytecode-offset spill). They keep dispatch state in fixed
   registers and generate slow paths out of line.
+- **Status (2026-11-04).** A1 (`44eb4e716dd`) removed the record from the
+  177 handlers without BOXES; A2 (`335b86b71e9`) passes `next_instr` by
+  value to all 12 helper families. Release loop 406,199 B at `54825c08a1a`,
+  323,703 B after A1, 303,064 B after both; the weighted shortest path per
+  word 48.9 → 43.3 → 45.1 instructions (A2 costs 1.8 under computed goto,
+  where GCC moves `this_instr` to the stack; its gain is for A3a). Kernel
+  time against `54825c08a1a`: A1 0.983, A2 alone 1.024, both 0.986
+  (`build/pyjit-link-wave1/irv2-a1a2-notes.md`).
 - **Proposals.** Measure each on the baseline before adopting it:
   1. Save `instr_ptr` only on escaping and error paths. The generator already
      knows which uops escape.

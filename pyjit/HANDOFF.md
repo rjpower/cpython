@@ -80,12 +80,18 @@ so pystats dispatch counts do not see it. A `pybuilddir.txt` of `none` makes a
 release build 5 to 12x slower; check it. `perf` is blocked
 (`perf_event_paranoid=4`); `tools/sampler/` has an LD_PRELOAD SIGPROF sampler.
 
-Running now: integration of register IR v2 steps A1/A2 into the shared tree
-after step 8 (`A1A2-BRIEF.md`, then the integration message: 3-way apply,
-`make regen-cases`, the A2 review's epoch fix and the step 8 review's
-generator check on stored auto-boxed inputs).
+Running now, briefs in `build/pyjit-link-wave1/`: register IR v2 A5a in the
+shared tree (`A5A-BRIEF.md`); representation 9a/9b in worktree
+`build/worktrees/repr-step9` (`STEP9-BRIEF.md`); the failures triage in
+worktree `build/worktrees/failures` (`FAILURES-BRIEF.md`). Merge 9a and the
+failures diff after A5a with a 3-way apply and `make regen-cases`.
 
 Landed on the runtime branch, newest first:
+
+- `c8637fe7c6b`, `335b86b71e9`, `44eb4e716dd`: register IR v2 A2 fixes
+  (failed instrumentation walk; generator refuses a value use of a boxed
+  input), A2 (`next_instr` by value), A1 (the value record only where a
+  handler boxes).
 
 - `f6508007b94`, `308a86c3914`, `1381d5b49c0`, `5640c46361c`: representation
   step 8 (object-level value identity; canonical construction and bit-compare
@@ -188,16 +194,15 @@ overwritten.
 
 ## Next steps
 
-1. Commit the A1/A2 integration when it reports (three diffs: `irv2-a1-int`,
-   `irv2-a2-int`, `irv2-a2-fixup`); check the marshal output against
-   `f6508007b94`.
-2. Register IR v2 A5a (notes for it: `FOLLOWUPS.md`, step 8 section; 97.7% of
-   the Publish canonicalisations come from `ir_generator.py:emit_store_input`), then representation 9a and 9b, then A5b and A3a-A3c,
-   then the format steps B2-B7
+1. Process A5a, step 9 and the failures triage as they report: post-review
+   each, then integrate A5a first, 9a/9b and the failures diff after it.
+2. Then A5b (with the constructor renames deferred from step 8), then
+   A3a-A3c, the G2 experiment, B0b and the format steps B2-B7
    ([packet](design/proposals/register-ir-v2-packet.md)).
 3. Value API V1 follow-ups (`FOLLOWUPS.md`), then V2a-0 onwards.
-4. Fix the remaining 11 failures (test_capi 2, test_pyvalue_dict_vm 4,
-   test_pyvalue_native_scope 5).
+4. The remaining 11 failures (test_capi 2, test_pyvalue_dict_vm 4,
+   test_pyvalue_native_scope 5): the triage is running; route its proposals
+   for A5a to that agent.
 
 Use the time metric; the instruction-count metric needs `perf_event_paranoid`
 lowered, which the user has not done. Do not present host controls, object files

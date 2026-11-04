@@ -1,6 +1,6 @@
 # Project status
 
-Status as of 2026-11-04 06:30 PST, from the coordinator fact sheet. Update this
+Status as of 2026-11-04 07:00 PST, from the coordinator fact sheet. Update this
 page at each landing.
 
 ## Outcome and next milestone
@@ -38,7 +38,7 @@ v2 phase A) addressed, then the qualified baseline.
 
 ## Position
 
-- Runtime branch `boil/pyvalue-rc-universal`, HEAD `f6508007b94`.
+- Runtime branch `boil/pyvalue-rc-universal`, HEAD `c8637fe7c6b`.
 - Landed 2026-11-03: native boundary P3 (`56ff66a596b`, `643c69c7244`,
   `6d39221996d`) and P4 (`2558376b321`, post-review fixes `fdd7fed3216`);
   representation steps 1 (`f129780a9a7`), 2 (`f7dfc5b961f`), 3 (`dbce7b1260d`,
@@ -77,7 +77,16 @@ v2 phase A) addressed, then the qualified baseline.
   the home checker is a debug assert. `f6508007b94` `object.__hash__`,
   `__repr__`, `__eq__` and method equality use value identity
   (`_PyObject_IsSame`). Int and float guards still accept boxes until step 9a.
-- Suites at `f6508007b94`, debug and release alike: run=51,548, failures=11.
+- Landed 2026-11-04 (continued): register IR v2 A1 (`44eb4e716dd`, the value
+  record only in the 115 handlers whose contract row has BOXES) and A2
+  (`335b86b71e9`, `next_instr` passed by value to the 12 helper families; the
+  executing copy is fixed for the code object's life), with `c8637fe7c6b`
+  (a failed re-instrumentation walk no longer trips A2's debug check; the
+  cases generator refuses a value use of an input it boxed). Release loop
+  406 KB to 303 KB. Kernel time against `54825c08a1a` (information, not a
+  gate): A1 0.983, A2 alone 1.024, both 0.986; A2's gain is for the
+  tail-call build (A3a). Compiled output unchanged.
+- Suites at `c8637fe7c6b`, debug and release alike: run=51,552, failures=11.
   Failing files: test_capi (2: test_is_unique_temporary,
   test_unicode.test_new), test_pyvalue_dict_vm (4), test_pyvalue_native_scope
   (5). `make check-value-api`: 177 units, 0 findings.
@@ -88,18 +97,18 @@ v2 phase A) addressed, then the qualified baseline.
 
 Running now:
 
-1. Integration of register IR v2 steps A1 (the value record only in handlers
-   that box, driven by the contract's BOXES effect) and A2 (no PC
-   out-parameter) after step 8, with two post-review fixes. Measured before
-   integration (29 kernels, interleaved, against `54825c08a1a`; information,
-   not a gate): A1 0.983, A2 1.024, both 0.986 of the base time.
+1. Register IR v2 A5a in the shared tree: no frame slot holds a borrow
+   (`LOAD_FAST_BORROW` into a temporary takes a count for a mortal).
+2. Representation steps 9a and 9b in their own worktree: int51 inline ints
+   in the runtime, interpreter and trace JIT; numeric guards inline-only.
+3. Triage of the 11 long-standing failures in their own worktree, against
+   upstream behaviour.
 
 Next, in order:
 
-2. Register IR v2 A5a; representation 9a/9b (int51); A5b after
-   9a; A3a-A3c (tail calls become the only backend) after 9b
-   ([packet](design/proposals/register-ir-v2-packet.md)).
-3. Value API V1 follow-ups (box-site annotations in the interpreter files,
+4. A5b after 9a and A5a; A3a-A3c (tail calls become the only backend) after
+   9b ([packet](design/proposals/register-ir-v2-packet.md)).
+5. Value API V1 follow-ups (box-site annotations in the interpreter files,
    `entry_unbox` counts, seven modules that define a bare `Py_BUILD_CORE`),
    then V2a-0 onwards.
 

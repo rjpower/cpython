@@ -29,16 +29,11 @@ extern "C" {
  * specialises.  dis reads the entries of the executing copy for
  * show_caches and adaptive.
  *
- * Each entry begins with a 16-byte header.  Kind, size and opcodes:
- *
- *     COUNTER  16  RESUME, JUMP_BACKWARD
- *     BRANCH   16  POP_JUMP_IF_NONE, _NOT_NONE
- *              24  POP_JUMP_IF_FALSE, _TRUE
- *     UNARY    24  TO_BOOL, UNPACK_SEQUENCE, FOR_ITER, GET_ITER, SEND
- *     BINARY   32  BINARY_OP, COMPARE_OP, CONTAINS_OP, STORE_SUBSCR
- *     ATTR     40  LOAD_ATTR, STORE_ATTR, LOAD_SUPER_ATTR
- *     GLOBAL   32  LOAD_GLOBAL
- *     CALL     24  CALL, CALL_KW, CALL_FUNCTION_EX
+ * Each entry begins with a 16-byte header.  The entry type of each family,
+ * and so its kind and size, is in FEEDBACK_LAYOUTS in
+ * Tools/cases_generator/ir_generator.py, from which the instruction
+ * contract's fb_kind and fb_size (Include/internal/pycore_ir.h) and the
+ * _PyFb_<family> typedefs come.  Entry 0 is a header of kind COUNTER.
  *
  * A branch keeps its 16-bit taken history, newest in bit 0, in arg.
  * POP_JUMP_IF_FALSE and _TRUE test the truth of any value and specialise
@@ -173,54 +168,9 @@ typedef struct _PyFbBlock {
     _PyFbPoly *poly;
 } _PyFbBlock;
 
-/* Generic opcode, entry type, kind. */
-#define _PyFb_FAMILIES(X) \
-    X(RESUME,               _PyFbHeader, FB_COUNTER) \
-    X(JUMP_BACKWARD,        _PyFbHeader, FB_COUNTER) \
-    X(TO_BOOL,              _PyFbUnary,  FB_UNARY) \
-    X(POP_JUMP_IF_FALSE,    _PyFbUnary,  FB_BRANCH) \
-    X(POP_JUMP_IF_TRUE,     _PyFbUnary,  FB_BRANCH) \
-    X(UNPACK_SEQUENCE,      _PyFbUnary,  FB_UNARY) \
-    X(FOR_ITER,             _PyFbUnary,  FB_UNARY) \
-    X(GET_ITER,             _PyFbUnary,  FB_UNARY) \
-    X(SEND,                 _PyFbUnary,  FB_UNARY) \
-    X(BINARY_OP,            _PyFbBinary, FB_BINARY) \
-    X(COMPARE_OP,           _PyFbBinary, FB_BINARY) \
-    X(CONTAINS_OP,          _PyFbBinary, FB_BINARY) \
-    X(STORE_SUBSCR,         _PyFbBinary, FB_BINARY) \
-    X(LOAD_ATTR,            _PyFbAttr,   FB_ATTR) \
-    X(STORE_ATTR,           _PyFbAttr,   FB_ATTR) \
-    X(LOAD_SUPER_ATTR,      _PyFbAttr,   FB_ATTR) \
-    X(LOAD_GLOBAL,          _PyFbGlobal, FB_GLOBAL) \
-    X(CALL,                 _PyFbCall,   FB_CALL) \
-    X(CALL_KW,              _PyFbCall,   FB_CALL) \
-    X(CALL_FUNCTION_EX,     _PyFbCall,   FB_CALL)
-
-/* The branches that do not specialise, whose entries keep only the history. */
-#define _PyFb_BRANCHES(X) \
-    X(POP_JUMP_IF_NONE,     _PyFbHeader, FB_BRANCH) \
-    X(POP_JUMP_IF_NOT_NONE, _PyFbHeader, FB_BRANCH)
-
-// _PyFb_LOAD_ATTR and so on: the entry type of each family, used by the
-// generated cases.
-#define _PyFb_TYPEDEF(OP, TYPE, KIND) typedef TYPE _PyFb_##OP;
-_PyFb_FAMILIES(_PyFb_TYPEDEF)
-_PyFb_BRANCHES(_PyFb_TYPEDEF)
-#undef _PyFb_TYPEDEF
-
-// Whether instructions with the generic opcode OPCODE have an entry.
-static inline int
-_PyFb_HasEntry(int opcode)
-{
-    switch (opcode) {
-#define _PyFb_CASE(OP, TYPE, KIND) case OP:
-    _PyFb_FAMILIES(_PyFb_CASE)
-#undef _PyFb_CASE
-        return 1;
-    default:
-        return 0;
-    }
-}
+/* The entry type and kind of each family (_PyFb_LOAD_ATTR and so on) are
+ * in the instruction contract: Include/internal/pycore_ir_metadata.h, from
+ * FEEDBACK_LAYOUTS in Tools/cases_generator/ir_generator.py. */
 
 /* Free the poly tables of a block whose bytecode copy is being freed. */
 static inline void

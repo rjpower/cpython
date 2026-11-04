@@ -157,9 +157,12 @@ _PyRegPass_SwapRename(_PyRegCfg *cfg)
  * when it runs rather than when the load would have.  So nothing in
  * between may change the local.  A pending load dies at a write to the
  * local, and at an op that may run Python code, which may rebind it
- * through frame.f_locals: a call, a generic LOAD_GLOBAL or LOAD_ATTR, a
- * binary op, anything whose family the generator marks _PyIR_RUNS_CODE
- * (Tools/cases_generator/ir_generator.py, runs_code()).  The load may sit
+ * through frame.f_locals (_PyIR_MayRunPython()): a call, a generic
+ * LOAD_GLOBAL or LOAD_ATTR, a binary op, anything whose family the
+ * generator marks _PyIR_RUNS_CODE (Tools/cases_generator/ir_generator.py,
+ * runs_code()), and a write that releases the old value of a local.  The
+ * verifier checks the same rule (check_folded_load() in
+ * Python/regcfg.c).  The load may sit
  * under constants, other locals, cells and the like.  A load also keeps its
  * op if the line changes before its reader, so that line events, and the
  * stack that f_lineno assignment sees at a line start, stay where they
@@ -195,18 +198,18 @@ borrow_field(const _PyRegCfg *cfg, const _PyRegOp *op, int k)
     return f;
 }
 
-/* The local op writes, besides through dst, or -1 */
+/* The local op writes, besides through dst, or -1: its oparg, if the
+ * oparg's role says the handler stores to it, clears it or moves it out */
 static int
 written_local(const _PyRegOp *op)
 {
-    switch (op->opcode) {
-        case STORE_FAST:
-        case DELETE_FAST:
-        case LOAD_FAST_AND_CLEAR:
-            return op->oparg;
-        default:
-            return -1;
+    int role = _PyIR_OpargRole(_PyRegCfg_FormatOf(op->opcode));
+    if (role == _PyIR_ROLE_LOCAL_OUT || role == _PyIR_ROLE_LOCAL_CLEAR
+        || role == _PyIR_ROLE_LOCAL_MOVE)
+    {
+        return op->oparg;
     }
+    return -1;
 }
 
 static int
@@ -222,6 +225,16 @@ reads_count(const _PyRegCfg *cfg, const _PyRegOp *op, int v)
         n += out[j] == v;
     }
     return n;
+}
+
+static int keep_across_code = 0;
+
+int
+_PyRegPass_SetKeepAcrossCode(int keep)
+{
+    int old = keep_across_code;
+    keep_across_code = keep;
+    return old;
 }
 
 int
@@ -248,8 +261,9 @@ _PyRegPass_CopyProp(_PyRegCfg *cfg)
             }
             int *in = _PyReg_IN(cfg, op);
             int written = written_local(op);
-            int runs_code = (_PyRegCfg_FormatOf(op->opcode)->flags
-                             & _PyIR_RUNS_CODE) != 0;
+            int runs_code = !keep_across_code
+                && _PyIR_MayRunPython(_PyRegCfg_FormatOf(op->opcode),
+                                      op->dst >= 0);
             int n = 0;
             for (int p = 0; p < npend; p++) {
                 _PyRegOp *load = pend[p].load;
@@ -310,16 +324,12 @@ touches_local(const _PyRegCfg *cfg, const _PyRegOp *op, int z)
     if (op->dst == z || written_local(op) == z) {
         return 1;
     }
-    switch (op->opcode) {
-        case LOAD_FAST:
-        case LOAD_FAST_BORROW:
-        case LOAD_FAST_CHECK:
-            if (op->oparg == z) {
-                return 1;
-            }
-            break;
-        default:
-            break;
+    // A handler that reads the slot its oparg names
+    int role = _PyIR_OpargRole(_PyRegCfg_FormatOf(op->opcode));
+    if ((role == _PyIR_ROLE_LOCAL_IN || role == _PyIR_ROLE_CELL)
+        && op->oparg == z)
+    {
+        return 1;
     }
     return reads_count(cfg, op, z) > 0;
 }
@@ -347,7 +357,8 @@ store_producer(_PyRegCfg *cfg, int region_start, int s)
         // other code, as STORE_FAST does
         if (op->loc.lineno != store->loc.lineno || op->target >= 0
             || op->dst >= 0 || written_local(op) >= 0
-            || OPCODE_HAS_ERROR(op->opcode) || OPCODE_HAS_ESCAPES(op->opcode)
+            || (_PyRegCfg_FormatOf(op->opcode)->effects
+                & (_PyIR_RAISES | _PyIR_ESCAPES))
             || reads_count(cfg, op, value) > 0 || touches_local(cfg, op, z))
         {
             return NULL;
@@ -486,8 +497,9 @@ pop_top_region(_PyRegCfg *cfg, int start, int end)
             continue;
         }
         _PyRegOp *prod = &cfg->ops[p];
-        if (!OPCODE_HAS_PURE(prod->opcode) || OPCODE_HAS_ERROR(prod->opcode)
-            || OPCODE_HAS_ESCAPES(prod->opcode) || prod->dst >= 0)
+        int effects = _PyRegCfg_FormatOf(prod->opcode)->effects;
+        if (!(effects & _PyIR_PURE) || (effects & (_PyIR_RAISES | _PyIR_ESCAPES))
+            || prod->dst >= 0)
         {
             continue;
         }

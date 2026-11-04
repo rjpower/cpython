@@ -79,6 +79,7 @@ from analyzer import (
     CodeSection,
     Instruction,
     Uop,
+    Part,
     Skip,
     Flush,
     StackItem,
@@ -151,6 +152,10 @@ IR_INSTRUCTION_MACROS = {
 ROLE_NONE, ROLE_IN0, ROLE_DST, ROLE_BASE, ROLE_FB, ROLE_IMM = (
     "_PyIR_ROLE_NONE", "_PyIR_ROLE_IN0", "_PyIR_ROLE_DST",
     "_PyIR_ROLE_BASE", "_PyIR_ROLE_FB", "_PyIR_ROLE_IMM")
+# The roles of an oparg that names a slot, see oparg_slot_role()
+ROLE_LOCAL_IN, ROLE_LOCAL_OUT, ROLE_LOCAL_CLEAR, ROLE_LOCAL_MOVE, ROLE_CELL = (
+    "_PyIR_ROLE_LOCAL_IN", "_PyIR_ROLE_LOCAL_OUT", "_PyIR_ROLE_LOCAL_CLEAR",
+    "_PyIR_ROLE_LOCAL_MOVE", "_PyIR_ROLE_CELL")
 LOC_NONE, LOC_A, LOC_B, LOC_C, LOC_D, LOC_CD, LOC_FBARG = (
     "_PyIR_LOC_NONE", "_PyIR_LOC_A", "_PyIR_LOC_B", "_PyIR_LOC_C",
     "_PyIR_LOC_D", "_PyIR_LOC_CD", "_PyIR_LOC_FBARG")
@@ -209,9 +214,15 @@ class IRFormat:
     slot_roles: tuple[str, ...] = ()
     imm_kind: str | None = None
     store_dst: bool = False         # dst may name a local, see
-                                    # stores_to_dst()
+                                    # stores_to_dst(); the handlers release
+                                    # the local's old value
     runs_code: bool = False         # a member may run Python code, see
                                     # runs_code()
+    # The rest of the instruction contract (pycore_ir.h, _PyIRFormat)
+    jump_always: bool = False       # see jumps_always()
+    names_target: bool = False      # see names_target_only()
+    fb_layout: str | None = None    # the entry type, see FEEDBACK_LAYOUTS
+    fb_kind: str | None = None      # its _PyFbKind
 
     def field_of(self, role: str) -> str | None:
         for name, r in zip(FIELDS, self.roles):
@@ -270,14 +281,65 @@ def uop_runs_code(uop: Uop) -> bool:
     return p.escapes or p.eval_breaker or p.switches_frame or p.returns
 
 
+# The identifiers that look like a release (RELEASE_LIKE), each known to
+# release a reference whose __del__ may run Python, or not to.  Any other
+# such identifier is an error, so that a new release helper cannot pass as
+# one that runs nothing.
+RELEASE_LIKE = re.compile(r"CLOSE|DECREF|CLEAR|SETREF|RETIRE|Close|Clear|"
+                          r"Dealloc|_READER|FINISH_VALUE")
+RELEASES = {
+    "PyValue_CLOSE", "PyValue_XCLOSE", "PyValue_CLEAR", "_PyValue_CloseStack",
+    "_PyValue_CLOSE_POINTER", "_PyValue_XCLOSE_POINTER", "DECREF_INPUTS",
+    "Py_DECREF", "Py_XDECREF", "Py_CLEAR", "Py_SETREF", "Py_XSETREF",
+    # The value and attribute transactions release the inputs they retire
+    "IR_RETIRE_PUBLISHED", "IR_RETIRE_PUBLISHED_PAIR",
+    "IR_FINISH_VALUE_OPERATION", "IR_ABORT_VALUE_READER",
+    "IR_COMPLETE_VALUE_READER", "IR_COMPLETE_ATTR_READER",
+    "_PyFrame_ClearTemporaries", "_PyEval_FrameClearAndPop", "_PyErr_Clear",
+    "JIT_RETIRE_PENDING",
+}
+NOT_RELEASES = {
+    # A release whose destructor, that of an exact type, runs no Python
+    "PyValue_CLOSE_SPECIALIZED", "_Py_DECREF_SPECIALIZED",
+    "_PyLong_ExactDealloc", "_PyFloat_ExactDealloc",
+    "_PyFloat_OrLongExactDealloc", "_PyUnicode_ExactDealloc",
+    "_PyFrame_AssertTemporariesClear",      # a debug check
+    "_PyGC_CLEAR_ARRAY",                    # expands to nothing
+    "LOAD_FAST_AND_CLEAR",                  # an opcode
+}
+
+
+def releases_object(inst: Instruction) -> bool:
+    """Whether inst releases a reference that may be an object's last, whose
+    __del__ may run Python, whether or not the escape analysis counts the
+    release as escaping (PyValue_CLEAR and the IR_* transactions it does
+    not)"""
+    found = False
+    for part in inst.parts:
+        if not isinstance(part, Uop):
+            continue
+        for tkn in part.body.tokens():
+            if tkn.kind != "IDENTIFIER" or not RELEASE_LIKE.search(tkn.text):
+                continue
+            if tkn.text in RELEASES:
+                found = True
+            elif tkn.text not in NOT_RELEASES:
+                raise analysis_error(
+                    f"{inst.name}: {tkn.text} looks like a release, which "
+                    "ir_generator.py does not know (RELEASES, NOT_RELEASES)",
+                    tkn)
+    return found
+
+
 def runs_code(inst: Instruction) -> bool:
-    """Whether inst may run Python code (uop_runs_code()), or is an
-    instrumented twin, which fires a monitoring event and so calls a Python
-    callback: INSTRUMENTED_JUMP() hides that call from the escape analysis."""
+    """Whether inst may run Python code (uop_runs_code()), releases an
+    object (releases_object()), or is an instrumented twin, which fires a
+    monitoring event and so calls a Python callback: INSTRUMENTED_JUMP()
+    hides that call from the escape analysis."""
     if inst.name.startswith("INSTRUMENTED_"):
         return True
-    return any(uop_runs_code(part) for part in inst.parts
-               if isinstance(part, Uop))
+    return releases_object(inst) or any(
+        uop_runs_code(part) for part in inst.parts if isinstance(part, Uop))
 
 
 def stack_read_later(inst: Instruction, uop: Uop) -> bool:
@@ -688,6 +750,11 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         n_inputs = 0
     roles, imm, fb = placed
     slot_roles = tuple(slots)
+    if imm in FIELD_LOCS.values():
+        k = list(FIELD_LOCS.values()).index(imm)
+        role = oparg_slot_role(members)
+        if role is not None and roles[k] == ROLE_IMM:
+            roles = roles[:k] + [role] + roles[k + 1:]
     for m, m_dst in zip(members, new_outputs):
         if (not window and m_dst is not None and m.properties.switches_frame
                 and not m.properties.returns):
@@ -714,13 +781,275 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
             if all(u[k] in ("object", "raw") for u in uses):
                 borrow_mask |= 1 << k
     store_dst = stores_to_dst(members, io, dst_offset, window)
+    fb_layout = fb_kind = None
+    if has_fb:
+        if group not in FEEDBACK_LAYOUTS:
+            raise analysis_error(
+                f"{group} has a feedback entry but no layout in "
+                "FEEDBACK_LAYOUTS (ir_generator.py)", head.where)
+        fb_layout = FEEDBACK_LAYOUTS[group]
+        branch = any(tkn.text == "FB_BRANCH" for m in members
+                     for tkn in uop_token_list(m))
+        fb_kind = "FB_BRANCH" if branch else LAYOUT_KINDS[fb_layout]
     return IRFormat(
         group=group, window=window, roles=roles, inputs=names,
         n_inputs=n_inputs, dst_offset=dst_offset, borrow_mask=borrow_mask,
         imm=imm, fb=fb, jumps=jumps and not forward, forward=forward,
         no_fold=no_fold, slot_roles=slot_roles, imm_kind=imm_kind,
         store_dst=store_dst, runs_code=any(runs_code(m) for m in members),
+        jump_always=jumps and jumps_always(head),
+        names_target=jumps and names_target_only(head),
+        fb_layout=fb_layout, fb_kind=fb_kind,
     )
+
+
+# The entry type of each family's feedback (Include/internal/pycore_feedback.h),
+# by the head of the family; the C code names it _PyFb_<head>.  This is the
+# only list: the contract's fb_kind and fb_size and the typedefs come from
+# it.  A family that has an entry must be listed.  Its kind follows from
+# the type, except that the entries of a family that records branches
+# (FB_BRANCH()) are FB_BRANCH.
+FB_HEADER = "_PyFbHeader"
+FEEDBACK_LAYOUTS = {
+    "TO_BOOL": "_PyFbUnary",
+    "POP_JUMP_IF_FALSE": "_PyFbUnary",
+    "POP_JUMP_IF_TRUE": "_PyFbUnary",
+    "POP_JUMP_IF_NONE": FB_HEADER,
+    "POP_JUMP_IF_NOT_NONE": FB_HEADER,
+    "UNPACK_SEQUENCE": "_PyFbUnary",
+    "FOR_ITER": "_PyFbUnary",
+    "GET_ITER": "_PyFbUnary",
+    "SEND": "_PyFbUnary",
+    "BINARY_OP": "_PyFbBinary",
+    "COMPARE_OP": "_PyFbBinary",
+    "CONTAINS_OP": "_PyFbBinary",
+    "STORE_SUBSCR": "_PyFbBinary",
+    "LOAD_ATTR": "_PyFbAttr",
+    "STORE_ATTR": "_PyFbAttr",
+    "LOAD_SUPER_ATTR": "_PyFbAttr",
+    "LOAD_GLOBAL": "_PyFbGlobal",
+    "CALL": "_PyFbCall",
+    "CALL_KW": "_PyFbCall",
+    "CALL_FUNCTION_EX": "_PyFbCall",
+}
+LAYOUT_KINDS = {
+    FB_HEADER: "FB_COUNTER",
+    "_PyFbUnary": "FB_UNARY",
+    "_PyFbBinary": "FB_BINARY",
+    "_PyFbAttr": "FB_ATTR",
+    "_PyFbGlobal": "FB_GLOBAL",
+    "_PyFbCall": "FB_CALL",
+}
+
+
+def uop_token_list(inst: Instruction) -> list[Token]:
+    "The tokens of the bodies of inst's uops, without comments"
+    return [t for part in inst.parts if isinstance(part, Uop)
+            for t in part.body.tokens() if t.kind != "COMMENT"]
+
+
+def jump_tokens(uop: Uop) -> list[tuple[int, list[str]]]:
+    """The JUMPBY and JUMPTO of uop: the brace depth of each, 1 at the top of
+    the body, and the tokens of its argument"""
+    result = []
+    tokens = [t for t in uop.body.tokens() if t.kind != "COMMENT"]
+    # The body's own braces, if it has them, take it to depth 1
+    depth = 0 if tokens and tokens[0].kind == "LBRACE" else 1
+    for i, tkn in enumerate(tokens):
+        if tkn.kind == "LBRACE":
+            depth += 1
+        elif tkn.kind == "RBRACE":
+            depth -= 1
+        elif tkn.text in ("JUMPBY", "JUMPTO"):
+            arg = []
+            nesting = 0
+            for t in tokens[i + 1:]:
+                if t.kind == "LPAREN":
+                    nesting += 1
+                    if nesting == 1:
+                        continue
+                elif t.kind == "RPAREN":
+                    nesting -= 1
+                    if nesting == 0:
+                        break
+                arg.append(t.text)
+            result.append((depth, arg))
+    return result
+
+
+def jumps_always(inst: Instruction) -> bool:
+    """Whether inst jumps unconditionally: a JUMPBY or JUMPTO at the top of
+    a uop's body, so that the word has one successor, its target"""
+    return any(depth == 1 and arg != ["0"]
+               for part in inst.parts if isinstance(part, Uop)
+               for depth, arg in jump_tokens(part))
+
+
+def names_target_only(inst: Instruction) -> bool:
+    """Whether inst, whose family jumps, never goes to its target: its only
+    jump is JUMPBY(0), which names the word for sys.monitoring, as
+    END_ASYNC_FOR names the END_SEND of its loop"""
+    jumps = [arg for part in inst.parts if isinstance(part, Uop)
+             for _, arg in jump_tokens(part)]
+    return bool(jumps) and all(arg == ["0"] for arg in jumps)
+
+
+# Tokens that assign to what stands before them
+ASSIGNMENTS = {"EQUALS", "TIMESEQUAL", "DIVEQUAL", "MODEQUAL", "PLUSEQUAL",
+               "MINUSEQUAL", "LSHIFTEQUAL", "RSHIFTEQUAL", "ANDEQUAL",
+               "OREQUAL", "XOREQUAL", "PLUSPLUS", "MINUSMINUS"}
+# What may stand before an & that is a binary operator, not address-of
+OPERANDS = {"IDENTIFIER", "NUMBER", "RPAREN", "RBRACKET"}
+
+
+# The uses of GETLOCAL(oparg) that oparg_slot_role() knows.  Any other use
+# is an error, so that a write the derivation does not recognise cannot pass
+# as a read.  The superinstructions address their slots as GETLOCAL(oparg1)
+# and GETLOCAL(oparg2); flowgraph.c creates none for the register IR, and
+# their packed opargs keep role IMM.
+SLOT_VALUE_READS = {        # f(GETLOCAL(oparg), ...) reads the slot's value
+    "PyValue_DUP", "PyValue_IsNull", "PyCell_NewValue",
+    "PyValue_AsKnownObjectBorrow",
+}
+SLOT_ADDRESS_READS = {      # f(&GETLOCAL(oparg)) reads the slot in place
+    "PyValue_BorrowAt",
+}
+SLOT_ADDRESS_WRITES = {     # f(&GETLOCAL(oparg), ...) may store to the slot
+    "PyValue_BoxInto", "PyValue_Publish",
+}
+
+
+def enclosing_call(tokens: list[Token], k: int) -> Token | None:
+    "The function whose argument list holds tokens[k], or None"
+    depth = 0
+    for j in range(k - 1, -1, -1):
+        kind = tokens[j].kind
+        if kind == "RPAREN":
+            depth += 1
+        elif kind == "LPAREN":
+            if depth == 0:
+                if j > 0 and tokens[j - 1].kind == "IDENTIFIER":
+                    return tokens[j - 1]
+                return None
+            depth -= 1
+        elif kind in ("SEMI", "LBRACE", "RBRACE") and depth == 0:
+            return None
+    return None
+
+
+def slot_uses(inst: Instruction) -> list[tuple[str, Token, str | None]]:
+    """The uses of GETLOCAL(oparg) in inst: ("read", token, the variable it
+    is copied to or None), ("store", ...) or ("clear", ...).  Raises
+    analysis_error for a use of any other shape."""
+    uses: list[tuple[str, Token, str | None]] = []
+    for part in inst.parts:
+        if not isinstance(part, Uop):
+            continue
+        tokens = [t for t in part.body.tokens() if t.kind != "COMMENT"]
+        for i in range(len(tokens) - 3):
+            if [t.text for t in tokens[i:i + 4]] != ["GETLOCAL", "(", "oparg", ")"]:
+                continue
+            a, b = i, i + 4         # the use is tokens[a:b]
+            # Parentheses that only group it, as in (GETLOCAL(oparg)) = v
+            while (a > 0 and b < len(tokens) and tokens[a - 1].kind == "LPAREN"
+                   and tokens[b].kind == "RPAREN"
+                   and (a < 2 or tokens[a - 2].kind != "IDENTIFIER")):
+                a -= 1
+                b += 1
+            prev = tokens[a - 1] if a > 0 else None
+            nxt = tokens[b] if b < len(tokens) else None
+            if nxt is not None and nxt.kind == "EQUALS":
+                rhs = []
+                for t in tokens[b + 1:]:
+                    if t.kind == "SEMI":
+                        break
+                    rhs.append(t.text)
+                uses.append(("clear" if rhs == ["PyValue_NULL"] else "store",
+                             tokens[i], None))
+                continue
+            if nxt is not None and nxt.kind in ASSIGNMENTS:
+                raise analysis_error(
+                    f"{inst.name}: compound assignment to GETLOCAL(oparg)",
+                    tokens[i])
+            if prev is not None and prev.kind == "AND" and (
+                    a < 2 or tokens[a - 2].kind not in OPERANDS):
+                func = enclosing_call(tokens, a - 1)
+                name = func.text if func is not None else None
+                if name in SLOT_ADDRESS_READS:
+                    uses.append(("read", tokens[i], None))
+                    continue
+                if name in SLOT_ADDRESS_WRITES:
+                    uses.append(("store", tokens[i], None))
+                    continue
+                raise analysis_error(
+                    f"{inst.name}: &GETLOCAL(oparg) passed to {name}, which "
+                    "ir_generator.py does not know as a read or a write",
+                    tokens[i])
+            if (prev is not None and prev.kind == "EQUALS"
+                    and nxt is not None and nxt.kind == "SEMI"):
+                # x = GETLOCAL(oparg); or a declaration of x
+                uses.append(("read", tokens[i], tokens[a - 2].text))
+                continue
+            if (prev is not None and prev.kind in ("LPAREN", "COMMA")
+                    and nxt is not None and nxt.kind in ("RPAREN", "COMMA")):
+                func = enclosing_call(tokens, a)
+                if func is not None and func.text in SLOT_VALUE_READS:
+                    uses.append(("read", tokens[i], None))
+                    continue
+                name = func.text if func is not None else None
+                raise analysis_error(
+                    f"{inst.name}: GETLOCAL(oparg) passed to {name}, which "
+                    "ir_generator.py does not know as a read", tokens[i])
+            raise analysis_error(
+                f"{inst.name}: a use of GETLOCAL(oparg) that ir_generator.py "
+                "does not recognise", tokens[i])
+    return uses
+
+
+def uses_cells(inst: Instruction) -> bool:
+    "Whether inst operates on a cell: it calls PyCell_* or _PyCell_*"
+    return any(t.kind == "IDENTIFIER" and t.text.startswith(("PyCell_", "_PyCell_"))
+               and t.text != "PyCell_NewValue"
+               for t in uop_token_list(inst))
+
+
+def oparg_slot_role(members: list[Instruction]) -> str | None:
+    """The role of an oparg that names a slot below co_nlocalsplus, which the
+    handlers address as GETLOCAL(oparg) (slot_uses()), or None for any other
+    oparg:
+
+    - LOCAL_OUT if a member stores a value there;
+    - LOCAL_MOVE if one clears it after copying its value to an output;
+    - LOCAL_CLEAR if one clears it otherwise, releasing the old value;
+    - CELL if they only read it and operate on cells (uses_cells());
+    - LOCAL_IN if they only read it."""
+    stores = clears = moves = reads = cells = False
+    for m in members:
+        uses = slot_uses(m)
+        outputs = {item.name for part in m.parts if isinstance(part, Uop)
+                   for item in part.stack.outputs}
+        copied_out = any(kind == "read" and target in outputs
+                         for kind, _, target in uses)
+        for kind, _, _ in uses:
+            if kind == "store":
+                stores = True
+            elif kind == "clear":
+                if copied_out:
+                    moves = True
+                else:
+                    clears = True
+            else:
+                reads = True
+                cells |= uses_cells(m)
+    if stores:
+        return ROLE_LOCAL_OUT
+    if clears:
+        return ROLE_LOCAL_CLEAR
+    if moves:
+        return ROLE_LOCAL_MOVE
+    if reads:
+        return ROLE_CELL if cells else ROLE_LOCAL_IN
+    return None
 
 
 STORE_RESULT = "store"     # moves the result to the local dst names
@@ -813,7 +1142,9 @@ def nofb_format(fmt: IRFormat) -> IRFormat:
     placed = place_fields(list(fmt.slot_roles), False, fmt.imm_kind, fmt.window)
     assert placed is not None, fmt.group
     roles, imm, fb = placed
-    return replace(fmt, roles=roles, imm=imm, fb=fb)
+    # The form runs on entry 0, which is no entry of its own
+    return replace(fmt, roles=roles, imm=imm, fb=fb, fb_layout=None,
+                   fb_kind=None)
 
 
 def compute_formats(analysis: Analysis) -> dict[str, IRFormat]:
@@ -848,11 +1179,13 @@ def base_formats(analysis: Analysis) -> dict[str, IRFormat]:
     for name in binary_op_handlers(analysis):
         formats[name] = formats[BINARY_OP_FAMILY]
     for name in sorted(transparent):
+        # INSTRUMENTED_LINE and INSTRUMENTED_INSTRUCTION call a monitoring
+        # callback before they run the word's own handler
         formats[name] = IRFormat(
             group=name, window=False, roles=[ROLE_NONE] * 4,
             inputs=[], n_inputs=0, dst_offset=None, borrow_mask=0,
             imm=LOC_NONE, fb=LOC_NONE, jumps=False,
-            transparent=True)
+            transparent=True, runs_code=runs_code(insts[name]))
     return formats
 
 
@@ -1963,6 +2296,20 @@ def slot_layout(inst: Instruction, fmt: IRFormat, mode: str | None) -> SlotLayou
                       store_dst=mode == STORE_RESULT)
 
 
+def skipped_part(name: str, part: Part) -> bool:
+    """Whether the handler of name leaves part of its instruction out: the
+    warm-up form of CALL counts calls for the JIT and does not specialise"""
+    return (name == "CALL_JIT_WARM" and isinstance(part, Uop)
+            and part.name == "_SPECIALIZE_CALL")
+
+
+def polls_at_end(name: str, inst: Instruction) -> bool:
+    """Whether the call transaction of handler name polls the eval breaker
+    when the call returns, as _CHECK_PERIODIC_AT_END does"""
+    return any(isinstance(p, Uop) and p.name == "_CHECK_PERIODIC_AT_END"
+               for p in inst.parts) or name == "CALL_KW_NON_PY"
+
+
 def uses_call_transaction(inst: Instruction) -> bool:
     return any(isinstance(part, Uop) and
                any(token.text == "IR_INVOKE_CALL" for token in part.body.tokens())
@@ -2101,8 +2448,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         base = FIELD_VARS[fmt.field_of(ROLE_BASE)]
         dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
         argc = "oparg" if inst.properties.oparg else "0"
-        periodic = int(any(isinstance(p, Uop) and p.name == "_CHECK_PERIODIC_AT_END"
-                           for p in inst.parts) or name == "CALL_KW_NON_PY")
+        periodic = int(polls_at_end(name, inst))
         out.emit(f"_PyCallTransaction call = call_transaction_begin(tstate, frame, next_instr, "
                  f"{base}, {count}, {dst}, {argc}, {kind}, "
                  f"{int(name.startswith('INSTRUMENTED_'))}, {periodic});\n")
@@ -2142,7 +2488,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     insert_braces = len([p for p in inst.parts if isinstance(p, Uop)]) > 1
     reachable = True
     for part in inst.parts:
-        if name == "CALL_JIT_WARM" and isinstance(part, Uop) and part.name == "_SPECIALIZE_CALL":
+        if skipped_part(name, part):
             continue
         try:
             reachable, stack = write_uop(part, emitter, stack, inst, insert_braces)
@@ -2212,6 +2558,302 @@ def max_bridge_bound(analysis: Analysis) -> int:
     return max((value_bridge_bound(name, inst)
                 for name, inst in handler_instructions(analysis).items()),
                default=1)
+
+
+# The columns of the instruction contract (pycore_ir.h, _PyIRFormat) that
+# describe a handler rather than its format.
+
+EXT_FIXED, EXT_OPARG, EXT_OPARG2, EXT_BIT0, EXT_BYTES = (
+    "_PyIR_EXT_FIXED", "_PyIR_EXT_OPARG", "_PyIR_EXT_OPARG2",
+    "_PyIR_EXT_BIT0", "_PyIR_EXT_BYTES")
+
+# The array sizes of the DSL, without spaces: the extent form each adds and
+# its constant.  UNPACK_EX's two halves add up to EXT_BYTES.
+ARRAY_SIZES = {
+    "oparg": (EXT_OPARG, 0),
+    "oparg-1": (EXT_OPARG, -1),
+    "oparg-2": (EXT_OPARG, -2),
+    "oparg*2": (EXT_OPARG2, 0),
+    "oparg&1": (EXT_BIT0, 0),
+    "oparg&0xFF": ("low byte", 0),
+    "oparg>>8": ("high byte", 0),
+}
+
+Extent = tuple[int, str]
+
+
+def extent(items: list[StackItem], inst: Instruction) -> Extent:
+    "The slots that items cover, as (k, form): k plus the form's oparg part"
+    k = 0
+    forms = []
+    for item in items:
+        size = item.size.replace(" ", "")
+        if not item.is_array():
+            k += 1
+        elif size.isdigit():
+            k += int(size)
+        elif size in ARRAY_SIZES:
+            form, c = ARRAY_SIZES[size]
+            k += c
+            forms.append(form)
+        else:
+            raise analysis_error(
+                f"no extent form for the array size {item.size} of "
+                f"{item.name}", inst.where)
+    if not forms:
+        return k, EXT_FIXED
+    if sorted(forms) == ["high byte", "low byte"]:
+        return k, EXT_BYTES
+    if len(forms) == 1 and forms[0] in (EXT_OPARG, EXT_OPARG2, EXT_BIT0):
+        return k, forms[0]
+    raise analysis_error(f"no extent form for {forms}", inst.where)
+
+
+def changes(uop: Uop, name: str, array: bool = False) -> bool:
+    """Whether the body of uop may change the variable name: it assigns to
+    the variable or to an element of it, increments or decrements it, or
+    takes its address, through which a callee may write it.  An array also
+    changes where the body uses its name other than to index it, since the
+    name is then a pointer to the elements."""
+    tokens = [t for t in uop.body.tokens() if t.kind != "COMMENT"]
+    for i, tkn in enumerate(tokens):
+        if tkn.text != name:
+            continue
+        prev = tokens[i - 1] if i > 0 else None
+        if prev is not None and prev.kind in ("ARROW", "PERIOD"):
+            continue    # a member of another variable
+        if prev is not None and prev.kind in ("PLUSPLUS", "MINUSMINUS"):
+            return True
+        if prev is not None and prev.kind == "AND" and (
+                i < 2 or tokens[i - 2].kind not in OPERANDS):
+            return True
+        j = i + 1
+        if array and (j >= len(tokens) or tokens[j].kind != "LBRACKET"):
+            return True
+        while j < len(tokens) and tokens[j].kind == "LBRACKET":
+            depth = 0
+            for j in range(j, len(tokens)):
+                depth += {"LBRACKET": 1, "RBRACKET": -1}.get(tokens[j].kind, 0)
+                if depth == 0:
+                    break
+            j += 1
+        if j < len(tokens) and tokens[j].kind in ASSIGNMENTS:
+            return True
+    return False
+
+
+def changed_inputs(inst: Instruction) -> set[int]:
+    """The inputs of inst, bottom first as external_io() numbers them, that a
+    uop may change (changes()) while they are on the stack.  It walks the
+    stack as external_io() does."""
+    stack: list[int] = []       # external index, top first, or -1
+    n = 0
+    changed = set()
+    for part in inst.parts:
+        if not isinstance(part, Uop):
+            continue
+        popped: list[int] = []  # top first
+        for item in reversed(part.stack.inputs):
+            if stack:
+                ext = stack.pop()
+            else:
+                ext = n
+                n += 1
+            if (ext >= 0 and item.name != "unused"
+                    and changes(part, item.name, item.is_array())):
+                changed.add(ext)
+            popped.append(ext)
+        popped.reverse()
+        for j in range(len(part.stack.outputs)):
+            i = passed_through(part, j)
+            stack.append(popped[i] if i is not None else -1)
+        if any(token.text == "IR_INVOKE_CALL" for token in part.body.tokens()):
+            break
+    return {n - 1 - ext for ext in changed}
+
+
+def through_items(inst: Instruction, inputs: list[StackItem],
+                  outputs: list[Entry]) -> list[StackItem]:
+    """The deepest inputs that keep their slot and their value: each is the
+    output at its own position, as an input that the output passes through
+    or an array that an array of the same name and size there leaves alone,
+    and no uop changes it (changed_inputs()).  The count stops at the first
+    input that does not, so that an unchanged input above a changed one, as
+    the middle of SWAP, is not counted."""
+    changed = changed_inputs(inst)
+    result = []
+    for j, (item, out) in enumerate(zip(inputs, outputs)):
+        if j in changed:
+            break
+        if out.external == j:
+            result.append(item)
+        elif (item.is_array() and out.item.is_array()
+              and item.size == out.item.size and item.name == out.item.name):
+            result.append(item)
+        else:
+            break
+    return result
+
+
+# Calls whose name says which sys.monitoring events they fire
+MONITORING_HELPERS = {
+    "IR_MONITOR_CALL": ("CALL",),
+    "monitor_stop_iteration": ("STOP_ITERATION",),
+    "monitor_reraise": ("RERAISE",),
+    "_Py_call_instrumentation_line": ("LINE",),
+    "_Py_call_instrumentation_instruction": ("INSTRUCTION",),
+}
+# An instrumented call transaction (call_transaction_monitor() and
+# call_transaction_invoke() in Python/ceval.c)
+TRANSACTION_EVENTS = ("CALL", "C_RETURN", "C_RAISE")
+EVENT_PREFIX = "PY_MONITORING_EVENT_"
+
+
+def monitoring_events(name: str, inst: Instruction) -> list[str]:
+    "The sys.monitoring events that handler name fires"
+    events: set[str] = set()
+    for tkn in uop_token_list(inst):
+        if tkn.text.startswith(EVENT_PREFIX):
+            events.add(tkn.text)
+        events.update(EVENT_PREFIX + e for e in MONITORING_HELPERS.get(tkn.text, ()))
+    if name.startswith("INSTRUMENTED_") and uses_call_transaction(inst):
+        events.update(EVENT_PREFIX + e for e in TRANSACTION_EVENTS)
+    return sorted(events)
+
+
+def twin_of(name: str, fmt: IRFormat, ids: dict[str, int]) -> str | None:
+    """The handler that instrumentation runs on a word of handler name: the
+    twin of its family, of the NOFB form for a NOFB form; a twin is its own"""
+    if name.startswith("INSTRUMENTED_"):
+        return name
+    suffix = NOFB_SUFFIX if name.endswith(NOFB_SUFFIX) else ""
+    twin = "INSTRUMENTED_" + fmt.group + suffix
+    return twin if twin in ids else None
+
+
+# Calls that construct an object: conservatively, ALLOCATES
+CONSTRUCTOR = re.compile(r"New(?!Ref)|Alloc|^PyValue_From|_PyFrame_Push|_Py_Make")
+
+# What a handler's generated code may do with its value record, value_temps
+# (the classifier of the register IR v2 packet,
+# pyjit/design/proposals/register-ir-v2-packet.md, A1).  A handler boxes
+# unless every use is known not to: the declaration, a read of the count,
+# or an argument to a function that only finishes what is there.  The
+# macros that box without naming value_temps are listed; test_ir_contract
+# checks the list against Python/ceval_macros.h.
+NON_BOXING_CALLS = {"finish_displaced_local"}
+BOXING_MACROS = {"IR_KEEP_BOX"}
+
+
+def enclosing_call_name(code: str, end: int) -> str | None:
+    "The function whose argument list holds code[end], or None"
+    depth = 0
+    for j in range(end - 1, -1, -1):
+        c = code[j]
+        if c == ")":
+            depth += 1
+        elif c == "(":
+            if depth == 0:
+                m = re.search(r"(\w+)\s*$", code[:j])
+                return m.group(1) if m else None
+            depth -= 1
+        elif c in ";{}" and depth == 0:
+            return None
+    return None
+
+
+def boxes_into_record(code: str) -> bool:
+    "Whether the generated code of a handler may box into value_temps"
+    if re.search(r"\b(?:%s)\b" % "|".join(sorted(BOXING_MACROS)), code):
+        return True
+    for m in re.finditer(r"\bvalue_temps\b", code):
+        before, after = code[:m.start()], code[m.end():]
+        if (re.match(r"\s*=\s*&value_owners\s*;", after)
+                and before.rstrip().endswith("_PyValueTemps *")):
+            continue    # the declaration
+        if (re.match(r"->count\b(?!\s*(?:\+\+|--|[-+*/|&^]?=(?!=)))", after)
+                and not re.search(r"(?:\+\+|--)\s*$", before)):
+            continue    # reads the count
+        if enclosing_call_name(code, m.start()) in NON_BOXING_CALLS:
+            continue
+        return True
+    return False
+
+
+def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat]) -> set[str]:
+    "The handlers whose generated code may box into the value record"
+    import io
+    result = set()
+    for name, inst in sorted(handler_instructions(analysis).items()):
+        if formats[name].transparent:
+            continue
+        buffer = io.StringIO()
+        out = CWriter(buffer, 0, False)
+        emitter = IREmitter(out, analysis, formats)
+        emitter.handler_format = formats[name]
+        generate_handler(name, inst, formats[name], emitter, out)
+        if boxes_into_record(buffer.getvalue()):
+            result.add(name)
+    return result
+
+
+@dataclass
+class HandlerContract:
+    "The columns of the contract that are the handler's own"
+    effects: list[str]
+    reads: Extent
+    writes: Extent
+    through: Extent
+    twin: str | None
+
+
+def handler_effects(name: str, inst: Instruction, fmt: IRFormat,
+                    boxes: bool) -> list[str]:
+    "The _PyIR_* effect bits of handler name, which runs inst"
+    p = inst.properties
+    tokens = {t.text for t in uop_token_list(inst)}
+    suspends = p.switches_frame and bool(tokens & {"FRAME_SUSPENDED", "FRAME_CREATED"})
+    pushes_frame = p.switches_frame and not p.returns and not suspends
+    specializes = fmt.fb != LOC_NONE and any(
+        isinstance(part, Uop) and "specializing" in part.annotations
+        and not skipped_part(name, part) for part in inst.parts)
+    allocates = (not p.infallible or p.escapes or boxes or pushes_frame
+                 or any(CONSTRUCTOR.search(t) for t in tokens))
+    effects = []
+    for bit, present in (
+            ("_PyIR_RAISES", not p.infallible),
+            ("_PyIR_ESCAPES", p.escapes),
+            ("_PyIR_RUNS_PYTHON", runs_code(inst)),
+            ("_PyIR_DEOPTS", p.deopts or p.side_exit),
+            ("_PyIR_SUSPENDS", suspends),
+            ("_PyIR_PUSHES_FRAME", pushes_frame),
+            ("_PyIR_POLLS", p.eval_breaker or polls_at_end(name, inst)),
+            ("_PyIR_ALLOCATES", allocates),
+            ("_PyIR_PURE", p.pure),
+            ("_PyIR_SPECIALIZES", specializes),
+            ("_PyIR_BOXES", boxes)):
+        if present:
+            effects.append(bit)
+    return effects
+
+
+def handler_contracts(analysis: Analysis,
+                      formats: dict[str, IRFormat]) -> dict[str, HandlerContract]:
+    "The handler's own columns of the contract, by handler name"
+    ids = handler_ids(analysis)
+    boxing = boxing_handlers(analysis, formats)
+    result = {}
+    for name, inst in handler_instructions(analysis).items():
+        fmt = formats[name]
+        inputs, outputs = external_io(inst)
+        result[name] = HandlerContract(
+            effects=handler_effects(name, inst, fmt, name in boxing),
+            reads=extent(inputs, inst),
+            writes=extent([e.item for e in outputs], inst),
+            through=extent(through_items(inst, inputs, outputs), inst),
+            twin=twin_of(name, fmt, ids),
+        )
+    return result
 
 
 def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,

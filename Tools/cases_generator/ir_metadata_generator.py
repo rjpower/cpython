@@ -6,13 +6,16 @@ Include/internal/pycore_ir_metadata.h, which pycore_ir.h includes:
 - the handler indices of the IR-only instructions (annotation `ir_only`),
   which follow the 256 opcodes in name order, then those of the BINARY_OP
   operations and of the NOFB forms, and IR_NUM_HANDLERS;
-- _PyIR_Formats, the format of every handler, indexed by handler, as
-  ir_generator.compute_formats() computes it for the handlers it generates;
+- _PyFb_<family>, the type of the feedback entry of each family that has
+  one (ir_generator.FEEDBACK_LAYOUTS);
+- _PyIR_Formats, the instruction contract of every handler, indexed by
+  handler: its format, as ir_generator.compute_formats() computes it for the
+  handlers it generates, and its own columns (ir_generator.handler_contracts());
 - _PyIR_OnlyNames, the names of the IR-only handlers.
 
 The tables are defined where NEED_IR_METADATA is defined (Python/ir.c) and
 declared elsewhere. Handler indices without an instruction have a zeroed
-format, without _PyIR_VALID.
+row, without _PyIR_VALID.
 """
 
 import argparse
@@ -24,11 +27,16 @@ from ir_generator import (
     BINARY_OP_FAMILY, EXEC_ONLY,
     first_ir_only_handler,
     NOFB_SUFFIX,
+    Extent,
+    HandlerContract,
     IRFormat,
     binary_op_handlers,
     binary_ops,
     compute_formats,
+    handler_contracts,
     handler_ids,
+    handler_instructions,
+    monitoring_events,
     nofb_bases,
     num_handlers,
 )
@@ -47,29 +55,47 @@ def shadow_of(name: str, analysis: Analysis) -> str:
     return name.removesuffix(NOFB_SUFFIX)
 
 
-def format_initializer(fmt: IRFormat, shadow: str, nofb: str) -> str:
+def bits(names: list[str]) -> str:
+    return " | ".join(names) if names else "0"
+
+
+def extent_initializer(e: Extent) -> str:
+    k, form = e
+    return f"{{ {k}, {form} }}"
+
+
+def format_initializer(fmt: IRFormat, shadow: str, nofb: str,
+                       contract: HandlerContract, events: list[str]) -> str:
     flags = ["_PyIR_VALID"]
-    if fmt.window:
-        flags.append("_PyIR_WINDOW")
-    if fmt.jumps:
-        flags.append("_PyIR_JUMPS")
-    if fmt.forward:
-        flags.append("_PyIR_FORWARD")
-    if fmt.no_fold:
-        flags.append("_PyIR_NO_FOLD")
-    if fmt.transparent:
-        flags.append("_PyIR_TRANSPARENT")
-    if fmt.store_dst:
-        flags.append("_PyIR_STORE_DST")
-    if fmt.runs_code:
-        flags.append("_PyIR_RUNS_CODE")
+    for present, flag in (
+            (fmt.window, "_PyIR_WINDOW"),
+            (fmt.jumps, "_PyIR_JUMPS"),
+            (fmt.forward, "_PyIR_FORWARD"),
+            (fmt.no_fold, "_PyIR_NO_FOLD"),
+            (fmt.transparent, "_PyIR_TRANSPARENT"),
+            (fmt.store_dst, "_PyIR_STORE_DST"),
+            (fmt.runs_code, "_PyIR_RUNS_CODE"),
+            (fmt.jump_always, "_PyIR_JUMP_ALWAYS"),
+            (fmt.names_target, "_PyIR_NAMES_TARGET")):
+        if present:
+            flags.append(flag)
     dst = "_PyIR_NO_DST" if fmt.dst_offset is None else str(fmt.dst_offset)
+    if fmt.fb_layout is None:
+        fb_kind, fb_size = "0", "0"
+    else:
+        fb_kind, fb_size = fmt.fb_kind, f"sizeof({fmt.fb_layout})"
+    events_init = bits([f"(1u << {e})" for e in events])
     return (
-        f"{{ .flags = {' | '.join(flags)}, "
+        f"{{ .flags = {bits(flags)}, .effects = {bits(contract.effects)}, "
         f".roles = {{ {', '.join(fmt.roles)} }}, .imm = {fmt.imm}, "
         f".fb = {fmt.fb}, .ninputs = {fmt.n_inputs}, .dst = {dst}, "
-        f".borrow_mask = {fmt.borrow_mask:#x}, .shadow = {shadow}, "
-        f".nofb = {nofb} }}"
+        f".borrow_mask = {fmt.borrow_mask:#x}, "
+        f".fb_kind = {fb_kind}, .fb_size = {fb_size}, "
+        f".reads = {extent_initializer(contract.reads)}, "
+        f".writes = {extent_initializer(contract.writes)}, "
+        f".through = {extent_initializer(contract.through)}, "
+        f".shadow = {shadow}, .nofb = {nofb}, "
+        f".twin = {contract.twin or 0}, .events = {events_init} }}"
     )
 
 
@@ -77,6 +103,8 @@ def generate_ir_metadata(
     filenames: list[str], analysis: Analysis, outfile: TextIO
 ) -> None:
     formats = compute_formats(analysis)
+    contracts = handler_contracts(analysis, formats)
+    insts = handler_instructions(analysis)
     ids = handler_ids(analysis)
     n = num_handlers(analysis)
     first = first_ir_only_handler(analysis)
@@ -104,18 +132,32 @@ def generate_ir_metadata(
                          f'"{name}");\n')
             out.emit("\n")
 
+        layouts = sorted({(fmt.group, fmt.fb_layout) for fmt in formats.values()
+                          if fmt.fb_layout is not None})
+        if layouts:
+            out.emit("/* The feedback entry of each family, which its handlers "
+                     "name */\n")
+            for group, layout in layouts:
+                out.emit(f"typedef {layout} _PyFb_{group};\n")
+            out.emit("\n")
+
         out.emit(f"PyAPI_DATA(const _PyIRFormat) _PyIR_Formats[{n}];\n")
         out.emit("#ifdef NEED_IR_METADATA\n")
         out.emit(f"const _PyIRFormat _PyIR_Formats[{n}] = {{\n")
-        # BINARY_OP has a format but no handler: its operations decode as it.
+        # BINARY_OP has a format but no handler: its operations decode as
+        # it.  Its row is that of its generic handlers.
         indices = dict(ids)
+        rows = dict(contracts)
         if BINARY_OP_FAMILY in analysis.instructions:
             indices[BINARY_OP_FAMILY] = analysis.instructions[BINARY_OP_FAMILY].opcode
+            rows[BINARY_OP_FAMILY] = contracts[binary_op_handlers(analysis)[0]]
         has_nofb = set(nofb_bases(analysis))
         for name in sorted(indices, key=lambda name: indices[name]):
             nofb = name + NOFB_SUFFIX if name in has_nofb else "0"
+            twin = rows[name].twin
+            events = monitoring_events(twin, insts[twin]) if twin else []
             init = format_initializer(formats[name], shadow_of(name, analysis),
-                                      nofb)
+                                      nofb, rows[name], events)
             out.emit(f"[{name}] = {init},\n")
         out.emit("};\n")
         out.emit("#endif\n\n")

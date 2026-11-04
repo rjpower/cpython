@@ -1982,7 +1982,7 @@ struct _PyFbFields {
 };
 extern const struct _PyFbFields _PyOpcode_FeedbackFields[256];
 #ifdef NEED_OPCODE_METADATA
-#include "pycore_feedback.h"
+#include "pycore_ir.h"            // _PyFb_<family>
 const struct _PyFbFields _PyOpcode_FeedbackFields[256] = {
     [BINARY_OP_EXTEND] = { 1, { { 2, 4, offsetof(_PyFb_BINARY_OP, descr) } } },
     [CALL_ALLOC_AND_ENTER_INIT] = { 1, { { 2, 2, offsetof(_PyFb_CALL, type_version) } } },

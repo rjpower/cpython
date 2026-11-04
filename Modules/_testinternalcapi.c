@@ -40,6 +40,7 @@
 #include "pycore_pyerrors.h"      // _PyErr_ChainExceptions1()
 #include "pycore_pylifecycle.h"   // _PyInterpreterConfig_InitFromDict()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
+#include "pycore_regcfg.h"        // _PyRegPass_SetKeepAcrossCode()
 #include "pycore_runtime_structs.h" // _PY_NSMALLPOSINTS
 #include "pycore_unicodeobject.h" // _PyUnicode_TransformDecimalAndSpaceToASCII()
 #include "pycore_value.h"         // PyValue_IsHeapSafe()
@@ -4163,7 +4164,26 @@ done:
     return result;
 }
 
+/* Compile source with copy propagation's kill at code that may run Python
+ * turned off, so that test_ir_contract can show that the verifier rejects
+ * the fold that results */
+static PyObject *
+compile_without_copyprop_kill(PyObject *self, PyObject *args)
+{
+    const char *source, *filename;
+    if (!PyArg_ParseTuple(args, "ss:compile_without_copyprop_kill",
+                          &source, &filename)) {
+        return NULL;
+    }
+    int old = _PyRegPass_SetKeepAcrossCode(1);
+    PyObject *code = Py_CompileString(source, filename, Py_file_input);
+    _PyRegPass_SetKeepAcrossCode(old);
+    return code;
+}
+
 static PyMethodDef module_functions[] = {
+    {"compile_without_copyprop_kill", compile_without_copyprop_kill,
+     METH_VARARGS, NULL},
     {"repr_guard_probe", repr_guard_probe, METH_O},
     {"constant_value_key", constant_value_key, METH_VARARGS},
     {"test_list_setitem_take_value", test_list_setitem_take_value, METH_NOARGS},

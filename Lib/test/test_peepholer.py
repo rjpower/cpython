@@ -1297,6 +1297,23 @@ class CopyPropagationAcrossCodeTests(BytecodeTestCase):
         exec("def f():\n    x = 1\n    return x + G, x\n", ns)
         self.check(ns["f"])
 
+    def test_store_releases_rebinding_value(self):
+        # STORE_FAST name releases name's old value, whose __del__ rebinds
+        # x; the subscript store after it must store the value loaded
+        # before.  Store elimination gives the load a dst that names a
+        # local, which releases it (_PyIR_STORE_DST), so a load that copy
+        # propagation folded across it would see the rebinding.
+        class D:
+            def __del__(self):
+                _rebind_caller_x()
+        def f():
+            x = 1
+            name = D()
+            attrs = {}
+            name = attrs["name"] = x
+            return attrs["name"], x
+        self.check(f)
+
     def test_global_colliding_key(self):
         # The lookup of a builtin in an exact module dict compares with a
         # key of the same hash, whose __eq__ runs.

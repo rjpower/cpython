@@ -183,6 +183,12 @@ int _PyRegPass_StoreElim(_PyRegCfg *cfg);
 int _PyRegPass_PopTop(_PyRegCfg *cfg);
 int _PyRegPass_TruthFold(_PyRegCfg *cfg);
 
+/* For tests only (_testinternalcapi.compile_without_copyprop_kill()): if
+ * keep is set, copy propagation keeps a pending load across an op that may
+ * run Python, a fold that the verifier must then reject.  Returns the old
+ * setting. */
+PyAPI_FUNC(int) _PyRegPass_SetKeepAcrossCode(int keep);
+
 /* Reserve n operands in the pool, which may move it; *index is the first. */
 int _PyRegCfg_AddOperands(_PyRegCfg *cfg, int n, int *index);
 

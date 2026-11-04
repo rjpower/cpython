@@ -85,15 +85,31 @@ extern "C" {
  * that an index finds its entry without a table. */
 #define FB_STRIDE       sizeof(_PyFbAttr)
 
-/* Field roles; input k of a register-style instruction is _PyIR_ROLE_IN0 + k. */
+/* Field roles; input k of a register-style instruction is _PyIR_ROLE_IN0 + k.
+ * A field that holds the oparg has role IMM, or one of the slot roles when
+ * the oparg names a slot below co_nlocalsplus that the handler reads or
+ * writes itself (_PyIR_RoleIsImm()). */
 enum {
     _PyIR_ROLE_NONE,
     _PyIR_ROLE_DST,
     _PyIR_ROLE_BASE,
     _PyIR_ROLE_FB,
     _PyIR_ROLE_IMM,
+    _PyIR_ROLE_LOCAL_IN,    // reads the local, which keeps its value
+    _PyIR_ROLE_LOCAL_OUT,   // writes the local, releasing its old value
+    _PyIR_ROLE_LOCAL_CLEAR, // leaves the local NULL, releasing its old
+                            // value (DELETE_FAST)
+    _PyIR_ROLE_LOCAL_MOVE,  // leaves the local NULL; its old value moves to
+                            // an output (LOAD_FAST_AND_CLEAR)
+    _PyIR_ROLE_CELL,        // reads the cell or free variable in the slot
     _PyIR_ROLE_IN0,
 };
+
+static inline int
+_PyIR_RoleIsImm(int role)
+{
+    return role >= _PyIR_ROLE_IMM && role <= _PyIR_ROLE_CELL;
+}
 
 /* Where a format keeps its oparg and its feedback index. */
 enum {
@@ -106,24 +122,94 @@ enum {
     _PyIR_LOC_FBARG,    // the oparg, in the arg field of the feedback entry
 };
 
-/* _PyIRFormat.flags */
-#define _PyIR_VALID         1   // the handler exists
-#define _PyIR_WINDOW        2   // window style
-#define _PyIR_JUMPS         4   // the oparg is the absolute target in words
-#define _PyIR_FORWARD       8   // the oparg is a forward distance in words
-#define _PyIR_NO_FOLD       16  // an output may alias a borrowed input
-#define _PyIR_TRANSPARENT   32  // runs another handler on the same fields
-#define _PyIR_STORE_DST     64  // dst may name a local: a folded STORE_FAST
-#define _PyIR_RUNS_CODE     128 // a member may run Python code, which may
-                                // rebind a local through frame.f_locals
+/* _PyIRFormat.flags: the format, shared by a family, its instrumented twins
+ * and the IR-only handlers named after a member.  What a flag says holds
+ * for a word of the format whichever of them runs. */
+#define _PyIR_VALID         0x1     // the handler exists
+#define _PyIR_WINDOW        0x2     // window style
+#define _PyIR_JUMPS         0x4     // the oparg is the absolute target in
+                                    // words, in CD
+#define _PyIR_FORWARD       0x8     // the oparg is a forward distance in
+                                    // words from the next word, in D
+#define _PyIR_NO_FOLD       0x10    // an output may alias a borrowed input
+#define _PyIR_TRANSPARENT   0x20    // runs another handler on the same fields
+#define _PyIR_STORE_DST     0x40    // dst may name a local: a folded
+                                    // STORE_FAST, which releases the local's
+                                    // old value (_PyIR_MayRunPython())
+#define _PyIR_RUNS_CODE     0x80    // a member may run Python code, which may
+                                    // rebind a local through frame.f_locals
+#define _PyIR_JUMP_ALWAYS   0x100   // a jump with one successor, its target;
+                                    // other jumps also go to the next word
+#define _PyIR_NAMES_TARGET  0x200   // the oparg names a word for monitoring
+                                    // only, which control never reaches
+                                    // (END_ASYNC_FOR names its END_SEND)
+
+/* _PyIRFormat.effects: what the handler itself may do, from the cases
+ * generator's analysis of its instruction.  For a stack opcode they agree
+ * with the HAS_*_FLAG flags of _PyOpcode_opcode_metadata. */
+#define _PyIR_RAISES        0x1     // may raise (HAS_ERROR_FLAG)
+#define _PyIR_ESCAPES       0x2     // makes an escaping call (HAS_ESCAPES_FLAG)
+#define _PyIR_RUNS_PYTHON   0x4     // may run Python code; the format's
+                                    // _PyIR_RUNS_CODE is the union over its
+                                    // handlers
+#define _PyIR_DEOPTS        0x8     // may deoptimise: to the family head, and
+                                    // in BINARY_OP's family to the handler of
+                                    // the operation that the entry records
+#define _PyIR_SUSPENDS      0x10    // suspends its frame (a generator's)
+#define _PyIR_PUSHES_FRAME  0x20    // may push a Python frame and run it
+#define _PyIR_POLLS         0x40    // polls the eval breaker
+#define _PyIR_ALLOCATES     0x80    // may allocate: conservatively, it may
+                                    // raise, escape, box, push a frame or
+                                    // call a constructor
+#define _PyIR_PURE          0x100   // annotated pure (HAS_PURE_FLAG)
+#define _PyIR_SPECIALIZES   0x200   // a generic handler whose entry's
+                                    // counter drives specialisation
+#define _PyIR_BOXES         0x400   // may box a value into the value record
+                                    // (_PyValueTemps), which it then needs
 
 #define _PyIR_NO_DST        INT8_MIN
 
-/* The format of a handler, shared by a family, its instrumented twins and
- * the IR-only handlers named after a member.  Generated in
- * pycore_ir_metadata.h by Tools/cases_generator/ir_metadata_generator.py. */
+/* A count of slots as a function of the oparg: k plus the part of the oparg
+ * that form names.  Window extents and pass-through inputs, as the stack
+ * effect of the handler's instruction has them. */
+enum {
+    _PyIR_EXT_FIXED,        // k
+    _PyIR_EXT_OPARG,        // k + oparg
+    _PyIR_EXT_OPARG2,       // k + 2 * oparg
+    _PyIR_EXT_BIT0,         // k + (oparg & 1)
+    _PyIR_EXT_BYTES,        // k + (oparg & 0xFF) + (oparg >> 8): UNPACK_EX
+};
+
+typedef struct {
+    int8_t k;
+    uint8_t form;           // _PyIR_EXT_*
+} _PyIRExtent;
+
+static inline int
+_PyIR_Extent(_PyIRExtent e, int oparg)
+{
+    switch (e.form) {
+        case _PyIR_EXT_OPARG:
+            return e.k + oparg;
+        case _PyIR_EXT_OPARG2:
+            return e.k + 2 * oparg;
+        case _PyIR_EXT_BIT0:
+            return e.k + (oparg & 1);
+        case _PyIR_EXT_BYTES:
+            return e.k + (oparg & 0xFF) + (oparg >> 8);
+        default:
+            return e.k;
+    }
+}
+
+/* The instruction contract of a handler: what a word that it runs reads,
+ * writes and may do (pyjit/design/register-ir.md section 5).  Generated in
+ * pycore_ir_metadata.h by Tools/cases_generator/ir_metadata_generator.py,
+ * indexed by handler; Python reads it through _opcode.get_ir_contract().
+ * Heap effects, guards and result facts are not in it yet. */
 typedef struct _PyIRFormat {
-    uint8_t flags;
+    uint16_t flags;         // _PyIR_VALID, ...: the format
+    uint16_t effects;       // _PyIR_RAISES, ...: the handler
     uint8_t roles[4];       // of fields A, B, C and D
     uint8_t imm;            // _PyIR_LOC_*
     uint8_t fb;             // _PyIR_LOC_*
@@ -131,12 +217,65 @@ typedef struct _PyIRFormat {
     int8_t dst;             // slot of dst less the depth before, or for
                             // window style less base; or _PyIR_NO_DST
     uint8_t borrow_mask;    // bit k: input k may name a borrowed local
+    uint8_t fb_kind;        // _PyFbKind of the entry, where fb is a field
+    uint8_t fb_size;        // the bytes of that entry's type, or 0
+    _PyIRExtent reads;      // the stack inputs, from the deepest
+    _PyIRExtent writes;     // the stack outputs, from the same slot
+    _PyIRExtent through;    // the deepest inputs that the handler leaves
+                            // in their slots with their values: it never
+                            // assigns, reassigns or takes the address of
+                            // them (passing an array on counts).  The
+                            // count stops at the first input that is not
+                            // such, so an unchanged input above a changed
+                            // one (the middle of SWAP) is not counted.
+                            // The other inputs are consumed, and a
+                            // temporary that names them is cleared
     uint16_t shadow;        // the instruction that the handler stands for
     uint16_t nofb;          // the NOFB form of a generic handler that keeps
                             // its oparg in its entry, or 0
+    uint16_t twin;          // the handler that instrumentation runs on the
+                            // word (itself for a twin), or 0
+    uint32_t events;        // bit e: twin fires sys.monitoring event e
 } _PyIRFormat;
 
 #include "pycore_ir_metadata.h"
+
+/* The role of the field of format fmt that holds the oparg: IMM or a slot
+ * role; NONE if no single field holds it. */
+static inline int
+_PyIR_OpargRole(const _PyIRFormat *fmt)
+{
+    if (fmt->imm >= _PyIR_LOC_A && fmt->imm <= _PyIR_LOC_D) {
+        return fmt->roles[fmt->imm - _PyIR_LOC_A];
+    }
+    return _PyIR_ROLE_NONE;
+}
+
+/* Whether a word of format fmt may run Python code, which may rebind any
+ * local through frame.f_locals: its format may, or it releases the old
+ * value of a local, whose __del__ may.  It does so through a dst that
+ * names a local (_PyIR_STORE_DST, where dst_local says that dst does), and
+ * through an oparg whose role is _PyIR_ROLE_LOCAL_OUT or
+ * _PyIR_ROLE_LOCAL_CLEAR. */
+static inline int
+_PyIR_MayRunPython(const _PyIRFormat *fmt, int dst_local)
+{
+    int role = _PyIR_OpargRole(fmt);
+    return (fmt->flags & _PyIR_RUNS_CODE)
+           || (dst_local && (fmt->flags & _PyIR_STORE_DST))
+           || role == _PyIR_ROLE_LOCAL_OUT
+           || role == _PyIR_ROLE_LOCAL_CLEAR;
+}
+
+/* Whether words of the generic handler opcode specialise from their entry
+ * (_PyIR_SPECIALIZES), so that instrumentation must keep their counter
+ * from triggering. */
+static inline int
+_PyFb_HasEntry(int opcode)
+{
+    return opcode >= 0 && opcode < IR_NUM_HANDLERS
+           && (_PyIR_Formats[opcode].effects & _PyIR_SPECIALIZES);
+}
 
 /* The executing copy of a code object: PyCodeObject._co_exec.  The words of
  * the code object (co_words, which co_code returns as bytes) never change;

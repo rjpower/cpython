@@ -6,6 +6,7 @@ import re
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 from test import support
 from test import test_tools
@@ -226,6 +227,11 @@ class TestIRCases(unittest.TestCase):
         self.maxDiff = None
         fd, self.temp_input_filename = tempfile.mkstemp(suffix=".c")
         os.close(fd)
+        # The families of the tests that have feedback entries
+        layouts = mock.patch.dict(ir_generator.FEEDBACK_LAYOUTS, {
+            "OP": ir_generator.FB_HEADER, "BRANCH": ir_generator.FB_HEADER})
+        layouts.start()
+        self.addCleanup(layouts.stop)
 
     def tearDown(self) -> None:
         os.remove(self.temp_input_filename)
@@ -979,27 +985,107 @@ class TestIRCases(unittest.TestCase):
         ir_metadata_generator.generate_ir_metadata(
             [self.temp_input_filename], analysis, out)
         lines = [line.strip() for line in out.getvalue().splitlines()]
+        # The oparg names the local that LOAD reads (_PyIR_ROLE_LOCAL_IN).
+        # Only the twin runs Python itself; the format does, as the twin's.
         load = ("{ .flags = _PyIR_VALID | _PyIR_STORE_DST | _PyIR_RUNS_CODE, "
+                ".effects = 0, "
                 ".roles = { _PyIR_ROLE_DST, "
-                "_PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, "
+                "_PyIR_ROLE_LOCAL_IN, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, "
                 ".imm = _PyIR_LOC_B, .fb = _PyIR_LOC_NONE, .ninputs = 0, "
-                ".dst = 0, .borrow_mask = 0x0, .shadow = LOAD, .nofb = 0 }")
+                ".dst = 0, .borrow_mask = 0x0, .fb_kind = 0, .fb_size = 0, "
+                ".reads = { 0, _PyIR_EXT_FIXED }, "
+                ".writes = { 1, _PyIR_EXT_FIXED }, "
+                ".through = { 0, _PyIR_EXT_FIXED }, .shadow = LOAD, "
+                ".nofb = 0, .twin = INSTRUMENTED_LOAD, .events = 0 }")
+        instrumented = (load.replace(".effects = 0", ".effects = _PyIR_RUNS_PYTHON")
+                            .replace("shadow = LOAD", "shadow = INSTRUMENTED_LOAD"))
         for expected in [
             "#define IR_BACON                                       256",
             "#define IR_PASS                                        257",
             "#define IR_NUM_HANDLERS                                258",
             f"[LOAD] = {load},",
-            "[INSTRUMENTED_LOAD] = "
-            f"{load.replace('LOAD,', 'INSTRUMENTED_LOAD,')},",
+            f"[INSTRUMENTED_LOAD] = {instrumented},",
             "[IR_PASS] = { .flags = _PyIR_VALID | _PyIR_TRANSPARENT, "
+            ".effects = 0, "
             ".roles = { _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE, "
             "_PyIR_ROLE_NONE }, .imm = _PyIR_LOC_NONE, .fb = _PyIR_LOC_NONE, "
             ".ninputs = 0, .dst = _PyIR_NO_DST, .borrow_mask = 0x0, "
-            ".shadow = IR_PASS, .nofb = 0 },",
+            ".fb_kind = 0, .fb_size = 0, .reads = { 0, _PyIR_EXT_FIXED }, "
+            ".writes = { 0, _PyIR_EXT_FIXED }, "
+            ".through = { 0, _PyIR_EXT_FIXED }, .shadow = IR_PASS, "
+            ".nofb = 0, .twin = 0, .events = 0 },",
             '[IR_BACON - IR_FIRST_ONLY_HANDLER] = "IR_BACON",',
             '[IR_PASS - IR_FIRST_ONLY_HANDLER] = "IR_PASS",',
         ]:
             self.assertIn(expected, lines)
+
+    def slot_role(self, effect: str, body: str) -> str | None:
+        analysis = self.analyze(f"\ninst(OP, ({effect})) {{\n{body}\n}}\n")
+        return ir_generator.oparg_slot_role([analysis.instructions["OP"]])
+
+    def test_slot_roles(self):
+        # The role of an oparg that names a local follows from the uses of
+        # GETLOCAL(oparg) in the body
+        for effect, body, role in [
+            ("-- value", "value = PyValue_DUP(GETLOCAL(oparg));",
+             "_PyIR_ROLE_LOCAL_IN"),
+            ("-- res", "PyObject *o = PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));"
+             " res = PyValue_FromPyObjectNew(o);", "_PyIR_ROLE_LOCAL_IN"),
+            ("value --", "PyValue tmp = GETLOCAL(oparg); "
+             "GETLOCAL(oparg) = value; PyValue_XCLOSE(tmp);",
+             "_PyIR_ROLE_LOCAL_OUT"),
+            ("value --", "PyValue tmp = GETLOCAL(oparg); "
+             "(GETLOCAL(oparg)) = value; PyValue_XCLOSE(tmp);",
+             "_PyIR_ROLE_LOCAL_OUT"),
+            ("value --", "PyValue_BoxInto(&GETLOCAL(oparg), value);",
+             "_PyIR_ROLE_LOCAL_OUT"),
+            ("--", "PyValue tmp = GETLOCAL(oparg); "
+             "GETLOCAL(oparg) = PyValue_NULL; PyValue_XCLOSE(tmp);",
+             "_PyIR_ROLE_LOCAL_CLEAR"),
+            ("-- value", "value = GETLOCAL(oparg); "
+             "GETLOCAL(oparg) = PyValue_NULL;", "_PyIR_ROLE_LOCAL_MOVE"),
+            ("-- value", "PyObject *c = PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));"
+             " value = PyValue_FromPyObjectSteal(PyCell_GetRef((PyCellObject *)c));",
+             "_PyIR_ROLE_CELL"),
+            ("-- value", "value = PyValue_FromPyObjectNew(SPAM(oparg));", None),
+        ]:
+            with self.subTest(body=body):
+                self.assertEqual(self.slot_role(effect, body), role)
+
+    def test_feedback_layout_required(self):
+        # A family with an entry must have its type in FEEDBACK_LAYOUTS
+        input = """
+        specializing op(_SPECIALIZE_SPAM, (counter/1, owner -- owner)) {
+            _PyFbHeader *feedback = FB_COUNTER();
+            ADVANCE_ADAPTIVE_COUNTER(feedback);
+        }
+        op(_SPAM, (owner -- res)) {
+            res = owner;
+        }
+        macro(SPAM) = _SPECIALIZE_SPAM + _SPAM;
+    """
+        with self.assertRaisesRegex(SyntaxError, "SPAM has a feedback entry "
+                                    "but no layout in FEEDBACK_LAYOUTS"):
+            self.formats(input)
+
+    def test_slot_roles_fail_closed(self):
+        # A use of GETLOCAL(oparg) of a shape that the generator does not
+        # know is an error that names the instruction and the line, not a
+        # read
+        for effect, body, message in [
+            ("value --", "PyValue_StoreAt(&GETLOCAL(oparg), value);",
+             "&GETLOCAL(oparg) passed to PyValue_StoreAt"),
+            ("--", "PyValue_CLEAR(GETLOCAL(oparg));",
+             "GETLOCAL(oparg) passed to PyValue_CLEAR"),
+            ("--", "GETLOCAL(oparg) |= 1;", "compound assignment"),
+            ("-- res", "res = SPAM(GETLOCAL(oparg) + 1);",
+             "a use of GETLOCAL(oparg)"),
+        ]:
+            with self.subTest(body=body):
+                with self.assertRaisesRegex(SyntaxError,
+                                            f"OP: {re.escape(message)}") as cm:
+                    self.slot_role(effect, body)
+                self.assertIsNotNone(cm.exception.lineno)
 
     def test_ir_only_after_pseudo(self):
         # IR-only handlers follow the pseudo-instructions, so that no number

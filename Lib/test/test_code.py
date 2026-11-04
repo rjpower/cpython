@@ -272,13 +272,14 @@ class CodeTest(unittest.TestCase):
             # A new free variable moves the evaluation stack up by one slot,
             # so every word that names a stack slot must follow it.
             import _opcode
-            formats = _opcode.get_ir_formats()
+            contract = _opcode.get_ir_contract()
             words = []
             for i in range(0, len(c.co_code), 8):
                 word = int.from_bytes(c.co_code[i:i+8], 'little')
                 handler = word & 0xFFFF
-                flags, roles, *_ = formats[handler]
-                self.assertFalse(flags & _opcode.IR_JUMPS)
+                row = contract[handler]
+                roles = row.roles
+                self.assertFalse(row.flags & _opcode.IR_JUMPS)
                 fields = [(word >> shift) & 0xFFF for shift in (16, 28, 40, 52)]
                 for k, role in enumerate(roles):
                     is_slot = role in (_opcode.IR_ROLE_DST, _opcode.IR_ROLE_BASE) \

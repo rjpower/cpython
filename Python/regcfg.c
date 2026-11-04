@@ -21,9 +21,11 @@
 
 #include "Python.h"
 
+#include "pycore_initconfig.h"        // _Py_GetEnv()
 #include "pycore_ir.h"                // _PyIR_FormatOf()
 #include "pycore_opcode_metadata.h"   // _PyOpcode_num_popped()
 #include "pycore_opcode_utils.h"      // IS_SCOPE_EXIT_OPCODE()
+#include "pycore_pystate.h"           // _Py_GetConfig()
 #include "pycore_regcfg.h"
 
 #undef SUCCESS
@@ -133,7 +135,9 @@ _PyRegCfg_AddInstr(_PyRegCfg *cfg, int opcode, int oparg,
     op->opcode = opcode;
     op->oparg = oparg;
     op->loc = loc;
-    op->target = OPCODE_HAS_JUMP(opcode) ? target : -1;
+    // The oparg names a word: the target, or for END_ASYNC_FOR the SEND
+    op->target = (_PyRegCfg_FormatOf(opcode)->flags
+                  & (_PyIR_JUMPS | _PyIR_FORWARD)) ? target : -1;
     op->except = except;
     op->dst = -1;
     op->reader = -1;
@@ -157,11 +161,12 @@ _PyRegCfg_FormatOf(int opcode)
 }
 
 /* Whether op jumps to its target.  END_ASYNC_FOR names the SEND of its
- * loop, for sys.monitoring, but does not go there. */
+ * loop, for sys.monitoring, but does not go there (_PyIR_NAMES_TARGET). */
 static inline int
 op_jumps(const _PyRegOp *op)
 {
-    return op->target >= 0 && op->opcode != END_ASYNC_FOR;
+    return op->target >= 0
+           && !(_PyRegCfg_FormatOf(op->opcode)->flags & _PyIR_NAMES_TARGET);
 }
 
 static inline int
@@ -1110,7 +1115,8 @@ _PyRegCfg_Compact(_PyRegCfg *cfg)
 
 /* The verifier.  Before compaction it checks the registers: every input
  * is defined on every path, windows hold temporaries, and only canonical
- * temporaries cross region boundaries.  After compaction it checks the
+ * temporaries cross region boundaries.  It checks folded loads against the
+ * instruction contract at every stage.  After compaction it checks the
  * slots: windows are consecutive, and the two constraints of note 06
  * section 12 hold. */
 
@@ -1129,6 +1135,51 @@ static inline int
 overlapping_call(int opcode)
 {
     return opcode == CALL;
+}
+
+/* A folded load's reader reads the local when it runs, not when the load
+ * would have, so no live op in between may write the local or run Python
+ * code, which may rebind it through frame.f_locals (G1).  "May run Python"
+ * depends on the operands (_PyIR_MayRunPython()): a word whose dst names a
+ * local releases the local's old value, and that may run __del__.  Copy
+ * propagation keeps this rule only because store elimination, which gives
+ * words such a dst, runs after it; the check makes the order a checked
+ * rule.  A reader that a later pass removed or rewrote reads nothing. */
+static int
+check_folded_load(_PyRegCfg *cfg, const char *after, int i)
+{
+    const _PyRegOp *load = &cfg->ops[i];
+    int x = load->oparg;
+    if (load->reader <= i || load->reader >= cfg->nops) {
+        return verify_error(after, load, "a folded load without a reader "
+                            "after it");
+    }
+    const _PyRegOp *reader = &cfg->ops[load->reader];
+    if (reader->opcode == _PyReg_DEAD || load->reader_k >= reader->nread
+        || _PyReg_IN(cfg, reader)[load->reader_k] != x)
+    {
+        return SUCCESS;
+    }
+    for (int j = i + 1; j < load->reader; j++) {
+        const _PyRegOp *op = &cfg->ops[j];
+        if (op->opcode == _PyReg_DEAD) {
+            continue;
+        }
+        const _PyIRFormat *fmt = _PyRegCfg_FormatOf(op->opcode);
+        int role = _PyIR_OpargRole(fmt);
+        if (op->dst == x || (op->oparg == x && (role == _PyIR_ROLE_LOCAL_OUT
+                                                || role == _PyIR_ROLE_LOCAL_CLEAR
+                                                || role == _PyIR_ROLE_LOCAL_MOVE)))
+        {
+            return verify_error(after, op, "a write to the local of a folded "
+                                "load before its reader");
+        }
+        if (_PyIR_MayRunPython(fmt, op->dst >= 0)) {
+            return verify_error(after, op, "code that may rebind the local "
+                                "of a folded load before its reader");
+        }
+    }
+    return SUCCESS;
 }
 
 int
@@ -1217,6 +1268,12 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
             if (op->dst >= 0 && !(fmt->flags & _PyIR_STORE_DST)) {
                 err = verify_error(after, op, "a local dst");
             }
+        }
+    }
+    for (int i = 0; i < cfg->nops && err == SUCCESS; i++) {
+        const _PyRegOp *op = &cfg->ops[i];
+        if (op->opcode == _PyReg_DEAD && (op->flags & _PyReg_LOAD_FOLDED)) {
+            err = check_folded_load(cfg, after, i);
         }
     }
     if (err == SUCCESS && physical) {
@@ -1400,6 +1457,29 @@ dump_wanted(void)
 
 /* The driver */
 
+/* Whether to verify the CFG after conversion, after each pass and after
+ * compaction.  A debug build always does; a release build does where
+ * PYTHONREGCFGVERIFY is set, so that the checks can run over the standard
+ * library at the speed of the optimised build (test_ir_contract).  The
+ * variable is read once, and like the other PYTHON* variables, not under
+ * -E or -I. */
+static int
+verify_wanted(void)
+{
+#ifdef Py_DEBUG
+    return 1;
+#else
+    static int wanted = -1;
+    int w = _Py_atomic_load_int_relaxed(&wanted);
+    if (w < 0) {
+        const PyConfig *config = _Py_GetConfig();
+        w = _Py_GetEnv(config->use_environment, "PYTHONREGCFGVERIFY") != NULL;
+        _Py_atomic_store_int_relaxed(&wanted, w);
+    }
+    return w;
+#endif
+}
+
 typedef int (*pass_fn)(_PyRegCfg *);
 
 static const struct {
@@ -1417,14 +1497,15 @@ static int
 run_passes(_PyRegCfg *cfg)
 {
     DUMP(cfg, "conversion");
-#ifdef Py_DEBUG
-    RETURN_IF_ERROR(_PyRegCfg_Verify(cfg, "conversion", 0));
-#endif
+    int verify = verify_wanted();
+    if (verify) {
+        RETURN_IF_ERROR(_PyRegCfg_Verify(cfg, "conversion", 0));
+    }
     for (size_t i = 0; i < Py_ARRAY_LENGTH(passes); i++) {
         RETURN_IF_ERROR(passes[i].fn(cfg));
-#ifdef Py_DEBUG
-        RETURN_IF_ERROR(_PyRegCfg_Verify(cfg, passes[i].name, 0));
-#endif
+        if (verify) {
+            RETURN_IF_ERROR(_PyRegCfg_Verify(cfg, passes[i].name, 0));
+        }
     }
     return SUCCESS;
 }
@@ -1437,8 +1518,8 @@ _PyRegCfg_Build(_PyRegCfg *cfg)
     int err = _PyRegCfg_Compact(cfg);
     DUMP(cfg, "compaction");
     RETURN_IF_ERROR(err);
-#ifdef Py_DEBUG
-    RETURN_IF_ERROR(_PyRegCfg_Verify(cfg, "compaction", 1));
-#endif
+    if (verify_wanted()) {
+        RETURN_IF_ERROR(_PyRegCfg_Verify(cfg, "compaction", 1));
+    }
     return SUCCESS;
 }

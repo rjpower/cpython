@@ -14,6 +14,16 @@
 #include "pycore_opcode_utils.h"
 #include "pycore_value.h"           // PyValue_IsNull()
 
+typedef struct {
+    PyTypeObject *ir_contract_type;     // _opcode.IRContract
+} opcode_state;
+
+static inline opcode_state *
+get_opcode_state(PyObject *module)
+{
+    return (opcode_state *)PyModule_GetState(module);
+}
+
 /*[clinic input]
 module _opcode
 [clinic start generated code]*/
@@ -370,44 +380,122 @@ _opcode_get_special_method_names_impl(PyObject *module)
     return list;
 }
 
+/* The fields of an _opcode.IRContract, in the order of _PyIRFormat, with
+ * base after shadow */
+static PyStructSequence_Field ir_contract_fields[] = {
+    {"flags", "_PyIR_VALID, ...: the format"},
+    {"effects", "_PyIR_RAISES, ...: the handler"},
+    {"roles", "the roles of fields A to D"},
+    {"imm", "where the oparg lives, an IR_LOC_* constant"},
+    {"fb", "where the feedback index lives"},
+    {"ninputs", "the inputs of a register-style handler"},
+    {"dst", "the slot of dst relative to the stack, or None"},
+    {"borrow_mask", "bit k: input k may name a borrowed local"},
+    {"fb_kind", "the kind of the feedback entry"},
+    {"fb_size", "the size of the feedback entry, or 0"},
+    {"reads", "the stack inputs, a (k, form) extent"},
+    {"writes", "the stack outputs, a (k, form) extent"},
+    {"through", "the deepest inputs left in place, a (k, form) extent"},
+    {"shadow", "the instruction that the handler stands for"},
+    {"base", "the opcode that the handler stands for"},
+    {"nofb", "the NOFB form of the handler, or None"},
+    {"twin", "the handler that instrumentation runs, or None"},
+    {"events", "bit e: the twin fires sys.monitoring event e"},
+    {NULL}
+};
+
+static PyStructSequence_Desc ir_contract_desc = {
+    "_opcode.IRContract",
+    "The instruction contract of a handler of the register IR: _PyIRFormat\n"
+    "in Include/internal/pycore_ir.h, which documents the fields.",
+    ir_contract_fields,
+    Py_ARRAY_LENGTH(ir_contract_fields) - 1,
+};
+
+static PyObject *
+handler_or_none(int h)
+{
+    return h == 0 ? Py_NewRef(Py_None) : PyLong_FromLong(h);
+}
+
+static PyObject *
+ir_contract_row(PyTypeObject *type, int h)
+{
+    const _PyIRFormat *fmt = &_PyIR_Formats[h];
+    PyObject *row = PyStructSequence_New(type);
+    if (row == NULL) {
+        return NULL;
+    }
+    PyObject *items[] = {
+        PyLong_FromLong(fmt->flags),
+        PyLong_FromLong(fmt->effects),
+        Py_BuildValue("(iiii)", fmt->roles[0], fmt->roles[1], fmt->roles[2],
+                      fmt->roles[3]),
+        PyLong_FromLong(fmt->imm),
+        PyLong_FromLong(fmt->fb),
+        PyLong_FromLong(fmt->ninputs),
+        fmt->dst == _PyIR_NO_DST ? Py_NewRef(Py_None)
+                                 : PyLong_FromLong(fmt->dst),
+        PyLong_FromLong(fmt->borrow_mask),
+        PyLong_FromLong(fmt->fb_kind),
+        PyLong_FromLong(fmt->fb_size),
+        Py_BuildValue("(ii)", fmt->reads.k, fmt->reads.form),
+        Py_BuildValue("(ii)", fmt->writes.k, fmt->writes.form),
+        Py_BuildValue("(ii)", fmt->through.k, fmt->through.form),
+        PyLong_FromLong(fmt->shadow),
+        PyLong_FromLong(_PyIR_BaseOpcode(h)),
+        handler_or_none(fmt->nofb),
+        handler_or_none(fmt->twin),
+        PyLong_FromUnsignedLong(fmt->events),
+    };
+    static_assert(Py_ARRAY_LENGTH(items)
+                  == Py_ARRAY_LENGTH(ir_contract_fields) - 1,
+                  "a value for each field");
+    int failed = 0;
+    for (Py_ssize_t i = 0; i < (Py_ssize_t)Py_ARRAY_LENGTH(items); i++) {
+        failed |= items[i] == NULL;
+        PyStructSequence_SET_ITEM(row, i, items[i]);
+    }
+    if (failed) {
+        Py_DECREF(row);
+        return NULL;
+    }
+    return row;
+}
+
 /*[clinic input]
 
-_opcode.get_ir_formats
+_opcode.get_ir_contract
 
-Return the formats of the handlers of the register IR.
+Return the instruction contract of the handlers of the register IR.
 
-Item h describes handler h: None if there is none, else (flags, roles,
-imm, fb, base), where roles holds the roles of fields A to D, imm and fb
-say where the oparg and the feedback index are, and base is the opcode
-that the handler stands for.
+Item h describes handler h: None if there is none, else an IRContract,
+whose fields are those of _PyIRFormat in Include/internal/pycore_ir.h,
+which documents them, and base, the opcode that the handler stands for.
+roles holds the roles of fields A to D; reads, writes and through are
+(k, form) extents; dst is None for a format without one; nofb and twin
+are handlers or None.
 [clinic start generated code]*/
 
 static PyObject *
-_opcode_get_ir_formats_impl(PyObject *module)
-/*[clinic end generated code: output=b91aab5e76c20e98 input=17c4e4239d07ab2f]*/
+_opcode_get_ir_contract_impl(PyObject *module)
+/*[clinic end generated code: output=a77fe2cab663997d input=187318e229d5562c]*/
 {
-    PyObject *formats = PyTuple_New(IR_NUM_HANDLERS);
-    if (formats == NULL) {
+    PyTypeObject *type = get_opcode_state(module)->ir_contract_type;
+    PyObject *contract = PyTuple_New(IR_NUM_HANDLERS);
+    if (contract == NULL) {
         return NULL;
     }
     for (int h = 0; h < IR_NUM_HANDLERS; h++) {
-        const _PyIRFormat *fmt = &_PyIR_Formats[h];
-        PyObject *item;
-        if (fmt->flags & _PyIR_VALID) {
-            item = Py_BuildValue("(i(iiii)iii)", fmt->flags, fmt->roles[0],
-                                 fmt->roles[1], fmt->roles[2], fmt->roles[3],
-                                 fmt->imm, fmt->fb, _PyIR_BaseOpcode(h));
-            if (item == NULL) {
-                Py_DECREF(formats);
-                return NULL;
-            }
+        PyObject *item = (_PyIR_Formats[h].flags & _PyIR_VALID)
+                         ? ir_contract_row(type, h) : Py_NewRef(Py_None);
+        if (item == NULL) {
+            Py_DECREF(contract);
+            return NULL;
         }
-        else {
-            item = Py_NewRef(Py_None);
-        }
-        PyTuple_SET_ITEM(formats, h, item);
+        PyTuple_SET_ITEM(contract, h, item);
     }
-    return formats;
+    return contract;
 }
 
 static PyMethodDef
@@ -426,7 +514,7 @@ opcode_functions[] =  {
     _OPCODE_GET_INTRINSIC1_DESCS_METHODDEF
     _OPCODE_GET_INTRINSIC2_DESCS_METHODDEF
     _OPCODE_GET_SPECIAL_METHOD_NAMES_METHODDEF
-    _OPCODE_GET_IR_FORMATS_METHODDEF
+    _OPCODE_GET_IR_CONTRACT_METHODDEF
     {NULL, NULL, 0, NULL}
 };
 
@@ -435,14 +523,30 @@ _opcode_exec(PyObject *m) {
     if (PyModule_AddIntMacro(m, ENABLE_SPECIALIZATION) < 0) {
         return -1;
     }
+    opcode_state *state = get_opcode_state(m);
+    state->ir_contract_type = PyStructSequence_NewType(&ir_contract_desc);
+    if (state->ir_contract_type == NULL) {
+        return -1;
+    }
+    if (PyModule_AddType(m, state->ir_contract_type) < 0) {
+        return -1;
+    }
 #define ADD_IR_CONSTANT(NAME, VALUE) \
     if (PyModule_AddIntConstant(m, NAME, VALUE) < 0) { \
         return -1; \
     }
     ADD_IR_CONSTANT("IR_FIRST_ONLY_HANDLER", IR_FIRST_ONLY_HANDLER);
+    ADD_IR_CONSTANT("IR_NUM_HANDLERS", IR_NUM_HANDLERS);
+    ADD_IR_CONSTANT("IR_ROLE_NONE", _PyIR_ROLE_NONE);
     ADD_IR_CONSTANT("IR_ROLE_DST", _PyIR_ROLE_DST);
     ADD_IR_CONSTANT("IR_ROLE_BASE", _PyIR_ROLE_BASE);
     ADD_IR_CONSTANT("IR_ROLE_FB", _PyIR_ROLE_FB);
+    ADD_IR_CONSTANT("IR_ROLE_IMM", _PyIR_ROLE_IMM);
+    ADD_IR_CONSTANT("IR_ROLE_LOCAL_IN", _PyIR_ROLE_LOCAL_IN);
+    ADD_IR_CONSTANT("IR_ROLE_LOCAL_OUT", _PyIR_ROLE_LOCAL_OUT);
+    ADD_IR_CONSTANT("IR_ROLE_LOCAL_CLEAR", _PyIR_ROLE_LOCAL_CLEAR);
+    ADD_IR_CONSTANT("IR_ROLE_LOCAL_MOVE", _PyIR_ROLE_LOCAL_MOVE);
+    ADD_IR_CONSTANT("IR_ROLE_CELL", _PyIR_ROLE_CELL);
     ADD_IR_CONSTANT("IR_ROLE_IN0", _PyIR_ROLE_IN0);
     ADD_IR_CONSTANT("IR_LOC_NONE", _PyIR_LOC_NONE);
     ADD_IR_CONSTANT("IR_LOC_A", _PyIR_LOC_A);
@@ -451,9 +555,32 @@ _opcode_exec(PyObject *m) {
     ADD_IR_CONSTANT("IR_LOC_D", _PyIR_LOC_D);
     ADD_IR_CONSTANT("IR_LOC_CD", _PyIR_LOC_CD);
     ADD_IR_CONSTANT("IR_LOC_FBARG", _PyIR_LOC_FBARG);
+    ADD_IR_CONSTANT("IR_VALID", _PyIR_VALID);
+    ADD_IR_CONSTANT("IR_WINDOW", _PyIR_WINDOW);
     ADD_IR_CONSTANT("IR_JUMPS", _PyIR_JUMPS);
     ADD_IR_CONSTANT("IR_FORWARD", _PyIR_FORWARD);
+    ADD_IR_CONSTANT("IR_NO_FOLD", _PyIR_NO_FOLD);
     ADD_IR_CONSTANT("IR_TRANSPARENT", _PyIR_TRANSPARENT);
+    ADD_IR_CONSTANT("IR_STORE_DST", _PyIR_STORE_DST);
+    ADD_IR_CONSTANT("IR_RUNS_CODE", _PyIR_RUNS_CODE);
+    ADD_IR_CONSTANT("IR_JUMP_ALWAYS", _PyIR_JUMP_ALWAYS);
+    ADD_IR_CONSTANT("IR_NAMES_TARGET", _PyIR_NAMES_TARGET);
+    ADD_IR_CONSTANT("IR_RAISES", _PyIR_RAISES);
+    ADD_IR_CONSTANT("IR_ESCAPES", _PyIR_ESCAPES);
+    ADD_IR_CONSTANT("IR_RUNS_PYTHON", _PyIR_RUNS_PYTHON);
+    ADD_IR_CONSTANT("IR_DEOPTS", _PyIR_DEOPTS);
+    ADD_IR_CONSTANT("IR_SUSPENDS", _PyIR_SUSPENDS);
+    ADD_IR_CONSTANT("IR_PUSHES_FRAME", _PyIR_PUSHES_FRAME);
+    ADD_IR_CONSTANT("IR_POLLS", _PyIR_POLLS);
+    ADD_IR_CONSTANT("IR_ALLOCATES", _PyIR_ALLOCATES);
+    ADD_IR_CONSTANT("IR_PURE", _PyIR_PURE);
+    ADD_IR_CONSTANT("IR_SPECIALIZES", _PyIR_SPECIALIZES);
+    ADD_IR_CONSTANT("IR_BOXES", _PyIR_BOXES);
+    ADD_IR_CONSTANT("IR_EXT_FIXED", _PyIR_EXT_FIXED);
+    ADD_IR_CONSTANT("IR_EXT_OPARG", _PyIR_EXT_OPARG);
+    ADD_IR_CONSTANT("IR_EXT_OPARG2", _PyIR_EXT_OPARG2);
+    ADD_IR_CONSTANT("IR_EXT_BIT0", _PyIR_EXT_BIT0);
+    ADD_IR_CONSTANT("IR_EXT_BYTES", _PyIR_EXT_BYTES);
 #undef ADD_IR_CONSTANT
     return 0;
 }
@@ -466,13 +593,36 @@ static PyModuleDef_Slot module_slots[] = {
     {0, NULL}
 };
 
+static int
+opcode_traverse(PyObject *module, visitproc visit, void *arg)
+{
+    Py_VISIT(get_opcode_state(module)->ir_contract_type);
+    return 0;
+}
+
+static int
+opcode_clear(PyObject *module)
+{
+    Py_CLEAR(get_opcode_state(module)->ir_contract_type);
+    return 0;
+}
+
+static void
+opcode_free(void *module)
+{
+    (void)opcode_clear((PyObject *)module);
+}
+
 static struct PyModuleDef opcodemodule = {
     PyModuleDef_HEAD_INIT,
     .m_name = "_opcode",
     .m_doc = "Opcode support module.",
-    .m_size = 0,
+    .m_size = sizeof(opcode_state),
     .m_methods = opcode_functions,
     .m_slots = module_slots,
+    .m_traverse = opcode_traverse,
+    .m_clear = opcode_clear,
+    .m_free = opcode_free,
 };
 
 PyMODINIT_FUNC

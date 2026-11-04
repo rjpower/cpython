@@ -19,9 +19,8 @@ EXTENDED_ARG = opmap['EXTENDED_ARG']
 
 # The code is register IR: a word per instruction, whose handler is an
 # opcode, a specialisation, or one of the handlers in _ir_opmap.  opname
-# names every handler.
-_ir_formats = _opcode.get_ir_formats()
-opname = ['<%r>' % (op,) for op in range(len(_ir_formats))]
+# names every handler; _opcode.get_ir_contract() describes each.
+opname = ['<%r>' % (op,) for op in range(_opcode.IR_NUM_HANDLERS)]
 for m in (opmap, _specialized_opmap, _ir_opmap):
     for op, i in m.items():
         opname[i] = op

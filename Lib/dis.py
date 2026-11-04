@@ -15,7 +15,6 @@ import _opcode
 from opcode import *
 from opcode import (
     __all__ as _opcodes_all,
-    _ir_formats,
     _ir_opmap,
     _nb_ops,
     _common_constants,
@@ -25,6 +24,9 @@ from opcode import (
     _specializations,
     _specialized_opmap,
 )
+
+# The instruction contract of each handler: its format and effects
+_ir_contract = _opcode.get_ir_contract()
 
 
 __all__ = ["code_info", "dis", "disassemble", "distb", "disco",
@@ -238,8 +240,8 @@ def _get_code_object(x):
 
 def _deoptop(op):
     """The opcode that handler op stands for, without specialisation"""
-    fmt = _ir_formats[op] if op < len(_ir_formats) else None
-    return op if fmt is None else fmt[4]
+    row = _ir_contract[op] if op < len(_ir_contract) else None
+    return op if row is None else row.base
 
 def _get_code_array(co, adaptive):
     return co._co_code_adaptive if adaptive else co.co_code
@@ -354,12 +356,12 @@ def _get_jump_target(op, arg, offset):
 
     Otherwise return None.
     """
-    fmt = _ir_formats[_deoptop(op)]
-    if arg is None or fmt is None:
+    row = _ir_contract[_deoptop(op)]
+    if arg is None or row is None:
         return None
-    if fmt[0] & _IR_JUMPS:
+    if row.flags & _IR_JUMPS:
         return arg
-    if fmt[0] & _IR_FORWARD:
+    if row.flags & _IR_FORWARD:
         return offset + 1 + arg
     return None
 
@@ -380,7 +382,8 @@ def _decode_word(handler, fields, fbinit=None):
     that a jump names its target, and FOR_ITER and SEND their exit as a
     distance from the next word; it is None if it is in a feedback table
     that fbinit does not hold."""
-    flags, roles, imm, fbloc, base = _ir_formats[handler]
+    row = _ir_contract[handler]
+    roles, imm, base = row.roles, row.imm, row.base
     dst = None
     srcs = []
     fb = None
@@ -415,7 +418,7 @@ def _unpack_words(code):
 def _unpack_opargs(code, fbinit=None):
     """Generate (offset, handler, arg, dst, srcs, fb) for the words of code"""
     for offset, handler, fields in _unpack_words(code):
-        if _ir_formats[handler] is None:
+        if _ir_contract[handler] is None:
             yield offset, handler, None, None, (), None
         else:
             yield (offset, handler, *_decode_word(handler, fields, fbinit))

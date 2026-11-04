@@ -222,7 +222,7 @@ def generate_feedback_fields_table(analysis: Analysis, out: CWriter) -> None:
     out.emit("};\n")
     out.emit("extern const struct _PyFbFields _PyOpcode_FeedbackFields[256];\n")
     out.emit("#ifdef NEED_OPCODE_METADATA\n")
-    out.emit('#include "pycore_feedback.h"\n')
+    out.emit('#include "pycore_ir.h"            // _PyFb_<family>\n')
     out.emit("const struct _PyFbFields _PyOpcode_FeedbackFields[256] = {\n")
     for name, (family, fields) in sorted(tables.items()):
         entries = ", ".join(

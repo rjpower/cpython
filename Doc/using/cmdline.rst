@@ -1430,6 +1430,17 @@ conflict.
 
    .. versionadded:: 3.15
 
+.. envvar:: PYTHONREGCFGVERIFY
+
+   If set to a non-empty string, the compiler checks its register CFG after
+   each optimisation pass and raises :exc:`SystemError` if the CFG breaks a
+   rule of the register IR: for example, if an instruction reads a local in
+   place after code that may rebind the local.  A :ref:`debug build
+   <debug-build>` always checks.  Python reads the variable once, at the
+   first compilation.
+
+   .. versionadded:: next
+
 Debug-mode variables
 ~~~~~~~~~~~~~~~~~~~~
 

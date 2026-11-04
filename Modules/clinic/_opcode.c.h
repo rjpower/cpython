@@ -715,26 +715,28 @@ _opcode_get_special_method_names(PyObject *module, PyObject *Py_UNUSED(ignored))
     return _opcode_get_special_method_names_impl(module);
 }
 
-PyDoc_STRVAR(_opcode_get_ir_formats__doc__,
-"get_ir_formats($module, /)\n"
+PyDoc_STRVAR(_opcode_get_ir_contract__doc__,
+"get_ir_contract($module, /)\n"
 "--\n"
 "\n"
-"Return the formats of the handlers of the register IR.\n"
+"Return the instruction contract of the handlers of the register IR.\n"
 "\n"
-"Item h describes handler h: None if there is none, else (flags, roles,\n"
-"imm, fb, base), where roles holds the roles of fields A to D, imm and fb\n"
-"say where the oparg and the feedback index are, and base is the opcode\n"
-"that the handler stands for.");
+"Item h describes handler h: None if there is none, else an IRContract,\n"
+"whose fields are those of _PyIRFormat in Include/internal/pycore_ir.h,\n"
+"which documents them, and base, the opcode that the handler stands for.\n"
+"roles holds the roles of fields A to D; reads, writes and through are\n"
+"(k, form) extents; dst is None for a format without one; nofb and twin\n"
+"are handlers or None.");
 
-#define _OPCODE_GET_IR_FORMATS_METHODDEF    \
-    {"get_ir_formats", (PyCFunction)_opcode_get_ir_formats, METH_NOARGS, _opcode_get_ir_formats__doc__},
+#define _OPCODE_GET_IR_CONTRACT_METHODDEF    \
+    {"get_ir_contract", (PyCFunction)_opcode_get_ir_contract, METH_NOARGS, _opcode_get_ir_contract__doc__},
 
 static PyObject *
-_opcode_get_ir_formats_impl(PyObject *module);
+_opcode_get_ir_contract_impl(PyObject *module);
 
 static PyObject *
-_opcode_get_ir_formats(PyObject *module, PyObject *Py_UNUSED(ignored))
+_opcode_get_ir_contract(PyObject *module, PyObject *Py_UNUSED(ignored))
 {
-    return _opcode_get_ir_formats_impl(module);
+    return _opcode_get_ir_contract_impl(module);
 }
-/*[clinic end generated code: output=80feb006a001e97b input=a9049054013a1b77]*/
+/*[clinic end generated code: output=a43bc545a85f9e2d input=a9049054013a1b77]*/

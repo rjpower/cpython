@@ -676,22 +676,6 @@ error:
 
 /* Words: choosing handlers, feedback entries, layout and encoding */
 
-static const uint8_t fb_kind[256] = {
-#define FB_KIND(OP, TYPE, KIND) [OP] = KIND,
-    _PyFb_FAMILIES(FB_KIND)
-    _PyFb_BRANCHES(FB_KIND)
-#undef FB_KIND
-};
-
-#ifndef NDEBUG
-static const uint8_t has_fb_entry[256] = {
-#define FB_HAS(OP, TYPE, KIND) [OP] = 1,
-    _PyFb_FAMILIES(FB_HAS)
-    _PyFb_BRANCHES(FB_HAS)
-#undef FB_HAS
-};
-#endif
-
 /* The farthest exit of FOR_ITER and SEND that the assembler does not relax */
 int _PyIR_MaxForward = IR_MAX_FORWARD;
 
@@ -810,8 +794,8 @@ assign_handlers(struct assembler *a, _PyRegCfg *cfg, PyObject *consts)
         if (fmt->fb == _PyIR_LOC_NONE) {
             continue;
         }
-        assert(has_fb_entry[op->opcode]);
-        assert(fb_kind[op->opcode] != FB_COUNTER);
+        // Only entry 0, which the sites past the limit share, is a counter
+        assert(fmt->fb_size != 0 && fmt->fb_kind != FB_COUNTER);
         if (a->a_nfb <= IR_FIELD_MAX) {
             op->fb = a->a_nfb++;
             continue;
@@ -884,6 +868,11 @@ encode(_PyRegCfg *cfg, _PyRegOp *op, int reachable, _PyIRWord *word)
         [_PyIR_ROLE_BASE] = slots.base,
         [_PyIR_ROLE_FB] = op->fb > 0 ? op->fb : 0,
         [_PyIR_ROLE_IMM] = oparg,
+        [_PyIR_ROLE_LOCAL_IN] = oparg,
+        [_PyIR_ROLE_LOCAL_OUT] = oparg,
+        [_PyIR_ROLE_LOCAL_CLEAR] = oparg,
+        [_PyIR_ROLE_LOCAL_MOVE] = oparg,
+        [_PyIR_ROLE_CELL] = oparg,
         [_PyIR_ROLE_IN0] = slots.in[0],
         [_PyIR_ROLE_IN0 + 1] = slots.in[1],
         [_PyIR_ROLE_IN0 + 2] = slots.in[2],
@@ -894,7 +883,7 @@ encode(_PyRegCfg *cfg, _PyRegOp *op, int reachable, _PyIRWord *word)
         int role = fmt->roles[r];
         assert(role < _PyIR_ROLE_IN0 + 4);
         int value = values[role];
-        if (role != _PyIR_ROLE_IMM && (value < 0 || value > IR_FIELD_MAX)) {
+        if (!_PyIR_RoleIsImm(role) && (value < 0 || value > IR_FIELD_MAX)) {
             // Only unreachable code names slots past the frame, since the
             // slot count is checked first.
             assert(!reachable);
@@ -969,7 +958,7 @@ assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
             }
             RETURN_IF_ERROR(encode(cfg, op, blk->reachable, &words[w]));
             if (op->fb > 0) {
-                int kind = fb_kind[op->opcode];
+                int kind = _PyIR_FormatOf(op->handler)->fb_kind;
                 int arg = 0;
                 if (kind != FB_BRANCH) {
                     arg = handler_oparg(cfg, op);

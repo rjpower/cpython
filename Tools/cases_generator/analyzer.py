@@ -585,7 +585,6 @@ NON_ESCAPING_FUNCTIONS = (
     "PyValue_AsKnownObjectSteal",
     "PyValue_Borrow",
     "PyValue_BorrowAt",
-    "PyValue_CLEAR",
     "PyValue_CLOSE_SPECIALIZED",
     "PyValue_DUP",
     "PyValue_NewRef",

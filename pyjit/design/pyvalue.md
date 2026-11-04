@@ -509,7 +509,7 @@ reflected in the gap it names.
 |---|---|---|
 | D1 | G1, G1' | G1 is fixed (`271f4e435e5`). G1' holds the remaining items. Its code fixes are in progress as a separate packet |
 | D2 | G2 | Accepted, before baseline, scheduled right after runtime bring-up. Canonical construction only in the core, with no raw constructors. `PyValue_Is` is a bit compare. Int and float guards accept inline values only. Release contract: freeing an exact int or float box, and allocator hooks, never run Python or raise. That deletes the `retired` out-parameter, the `_PyValueTemps` retire path, the save and restore in `close_object` and `close_value`, and about 912 exception save and restore sites around `Py_DECREF` in earlier ports |
-| D3 | G5 | Decided before baseline from a histogram measured on instrumented upstream CPython (in progress). Candidates: int32 (current), int51, and a CRuby-style 62-bit fixnum with flonums. The decision rule is in G5 |
+| D3 | G5 | **int51**, decided 2026-11-03 from the upstream histogram ([results](../bench/results/pyvalue-int-width-20261103.md)): 32-51-bit ints are 3-4% of int results on the kernels and pyperformance (mostly `id()` keys in memo dicts), 52-62-bit ints 0.4%, out-of-window floats under 0.001%. Implemented with D2 and D5, before baseline |
 | D4 | G6 | Direction accepted in principle: no home (frame slot or heap field) holds a borrow, bit 0 in a home means immortal, and a borrow is a distinct C type in C locals. The final form is decided jointly with G2 (operand ownership at run time) of the register IR design, after that document's review |
 | D5 | G9 | Adopt `NULL = 0`. Zero-filled memory is a valid empty slot. This deletes `init_value_slots` and the explicit NULL fills, at the cost of one more compare in `XCLOSE` and the owned test. Scheduled with D2. The `CLOSE` microbenchmark is a measurement to take, not a gate |
 | D6 | section 1.11 | ABI policy: `pyvalue.h` and every `PyValue` declaration are outside the limited API; the limited API stays in source form; abi3 binaries built against upstream are unsupported; free threading and abi3t are non-goals. Code change in progress |
@@ -745,14 +745,27 @@ immortal one. The fix is correct for the core. G1' covers what it left open.
   outside about 2^±255), over pyperformance and the in-tree benchmarks.
   **Decision rule.** Choose int51 if the 32-51 bucket is material and 52-62 is
   negligible. Evaluate the CRuby scheme only if 52-62 is material and
-  out-of-window floats are rare. Otherwise keep int32. The instrumentation is
-  in progress.
+  out-of-window floats are rare. Otherwise keep int32.
+* **Measurement (2026-11-03).** Creation events on instrumented upstream
+  `3a440b65695`, by bit length of |x| ([results and method](../bench/results/pyvalue-int-width-20261103.md)):
+
+  | Workload | Int results | Small (-5..256) | <=31 bits | 32-51 | 52-62 | >62 |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | 29 in-tree kernels | 23.5 M | 75.10% | 20.08% | 4.04% | 0.43% | 0.35% |
+  | pyperformance subset (~30) | 49.0 M | 70.78% | 25.09% | 3.30% | 0.40% | 0.43% |
+  | Test-suite slice (11 modules) | 34.1 M | 56.55% | 25.14% | 2.00% | 4.87% | 11.43% |
+
+  The 32-51 bucket is mostly 47-bit `id()` values (deepcopy, json encoder,
+  pprint memo dicts) and unsigned 32-bit words (crypto tables); upstream boxes
+  those too. The 52-62 bucket is `time.time_ns()` and `os.stat` `*_ns` fields,
+  Zobrist hashes in `go` and `_pydecimal` limits. Floats outside 2^±255 are
+  under 0.001% outside edge-case tests.
+* **Decision (D3): int51.** The CRuby scheme is not triggered.
 * **Benefit.** Removes heap traffic for the int range Python programs use
   most beyond int32. The limit becomes a measured choice.
 * **Cost and risk.** A medium refactor. Any later change to the encoding
   forces a rebuild of extensions, and of out-of-process tools (§1.13).
-* **When.** Before baseline, since by the rule above representation changes go
-  there.
+* **When.** Before baseline, with D2 and D5, after runtime bring-up.
 
 ### G6. The ownership bit shares the pointer word and is untyped
 

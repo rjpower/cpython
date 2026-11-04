@@ -433,8 +433,11 @@ class CAPITest(unittest.TestCase):
         # exception.
         call = _testcapi.dict_with_pending_exception
         # Inline ints and floats box on the way out, which must also keep
-        # the pending exception.
-        for value, other in ((object(), object()), (7, 2.5)):
+        # the pending exception. 2**31 - 1 needs two digits, so its box is
+        # allocated (7 would come from the small-int cache); 2**40 is inline
+        # once the inline range is int51.
+        for value, other in ((object(), object()), (2**31 - 1, 2.5),
+                             (2**40, -2.5)):
             self.check_dict_pending_exception(call, value, other)
 
         class Instance:

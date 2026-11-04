@@ -3787,19 +3787,15 @@ _PyListIter_NextValue(PyObject *self)
 static PyObject *
 listiter_next(PyObject *self)
 {
-    _PyListIterObject *it = (_PyListIterObject *)self;
-    Py_ssize_t index = it->it_index;
+    /* A step whose box fails still consumes its item, as upstream's dict
+       item iterator does when it cannot allocate its result tuple. The
+       iterators over lists, tuples, sets and dicts all follow this rule. */
     PyValue value = _PyListIter_NextValue(self);
     if (PyValue_IsNull(value)) {
         return NULL;
     }
     PyObject *result = _PyValue_AsObjectAt(value, BOX_SITE_ITERATION);
     PyValue_CLOSE(value);
-    if (result == NULL) {
-        /* A failed box consumes no item. Boxing runs no Python, so no other
-           next() moved the iterator in between. */
-        it->it_index = index;
-    }
     return result;
 }
 
@@ -3954,18 +3950,13 @@ _PyListRevIter_NextValue(PyObject *self)
 static PyObject *
 listreviter_next(PyObject *self)
 {
-    listreviterobject *it = (listreviterobject *)self;
-    Py_ssize_t index = it->it_index;
+    /* A failed box consumes the item (see listiter_next()). */
     PyValue value = _PyListRevIter_NextValue(self);
     if (PyValue_IsNull(value)) {
         return NULL;
     }
     PyObject *result = _PyValue_AsObjectAt(value, BOX_SITE_ITERATION);
     PyValue_CLOSE(value);
-    if (result == NULL) {
-        /* A failed box consumes no item (see listiter_next()). */
-        it->it_index = index;
-    }
     return result;
 }
 

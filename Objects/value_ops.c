@@ -45,10 +45,11 @@ compare_inline(PyValue left, PyValue right, int op)
     }
 }
 
-/* Boxing runs no Python (the release contract), so neither argument can
-   leave its container in between. A caller may have an exception pending, as
-   upstream's comparisons allow (a dict lookup in a deallocator); a failed box
-   replaces it. */
+/* A box that succeeds runs no Python (the release contract), so neither
+   argument can leave its container in between. A caller may have an
+   exception pending, as upstream's comparisons allow (a dict lookup in a
+   deallocator); a failed box replaces it, and releasing the old exception can
+   run Python, but then neither box is used. */
 static int
 box_operands(PyValue left, PyValue right, PyObject **a, PyObject **b)
 {

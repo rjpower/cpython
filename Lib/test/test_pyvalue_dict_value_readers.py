@@ -120,8 +120,10 @@ class DictCanonicalReadTests(unittest.TestCase):
         # An unrelated pending exception changes nothing: each API takes its
         # status from the operation and leaves the exception pending.
         pending = self.capi.dict_public_value_pending
-        # Inline int keys and values take the same paths as objects.
-        for value in (object(), 7, 2.5):
+        # Inline int keys and values take the same paths as objects. The
+        # boxes of 2**31 - 1 and 2**40 (inline once the range is int51) are
+        # allocated, so a box allocation runs with the exception pending.
+        for value in (object(), 2**31 - 1, 2**40, 2.5):
             for factory in (dict, frozendict):
                 mapping = factory({'key': value, 3: value})
                 with self.subTest(factory=factory, value=value):

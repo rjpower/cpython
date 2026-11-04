@@ -132,8 +132,9 @@ set_value_boxing_errors(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(args))
     int valid = boxed == NULL && PyErr_ExceptionMatches(PyExc_MemoryError);
     Py_XDECREF(boxed);
     PyErr_Clear();
+    /* The failed step consumed the key, as iterators do (listiter_next()). */
     boxed = valid ? PyIter_Next(iter) : NULL;
-    valid = valid && boxed != NULL && PyLong_AsLong(boxed) == INT32_MAX;
+    valid = valid && boxed == NULL && !PyErr_Occurred();
     Py_XDECREF(boxed);
     Py_DECREF(iter);
 
@@ -155,7 +156,8 @@ set_value_boxing_errors(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(args))
     if (!valid) {
         PyErr_Clear();
         PyErr_SetString(PyExc_AssertionError,
-                        "set boxing lost OOM, consumed a key or boxed a value pop");
+                        "set boxing lost OOM, kept an iterated key, "
+                        "consumed a popped key or boxed a value pop");
         return NULL;
     }
     Py_RETURN_NONE;

@@ -63,7 +63,7 @@ class CAPITest(unittest.TestCase):
         self.assertRaises(IndexError, _testinternalcapi.list_get_value, [], 0)
         self.assertRaises(SystemError, _testinternalcapi.list_get_value, (), 0)
 
-    def test_value_boxing_failure_preserves_error_and_progress(self):
+    def test_value_boxing_failure_keeps_list_and_consumes_item(self):
         # This int32 needs two PyLong digits, so boxing cannot use the
         # single-digit freelist or immortal small-int cache.
         value = (1 << 31) - 1
@@ -71,16 +71,28 @@ class CAPITest(unittest.TestCase):
         with self.assertRaises(MemoryError):
             _testcapi.list_get_item_oom(items, 0)
         self.assertEqual(items, [value, value - 1])
+        # A failed box consumes the item, as in the dict iterators.
         forward = iter(items)
         with self.assertRaises(MemoryError):
             _testcapi.list_next_oom(forward)
-        self.assertEqual(next(forward), value)
-        self.assertEqual(next(forward), value - 1)
+        self.assertEqual(list(forward), [value - 1])
         backward = reversed(items)
         with self.assertRaises(MemoryError):
             _testcapi.list_next_oom(backward)
-        self.assertEqual(next(backward), value - 1)
-        self.assertEqual(next(backward), value)
+        self.assertEqual(list(backward), [value])
+        # The tuple and set iterators follow the same rule.
+        forward = iter(tuple(items))
+        with self.assertRaises(MemoryError):
+            _testcapi.list_next_oom(forward)
+        self.assertEqual(list(forward), [value - 1])
+        elements = set(items)
+        forward = iter(elements)
+        with self.assertRaises(MemoryError):
+            _testcapi.list_next_oom(forward)
+        rest = list(forward)
+        self.assertEqual(len(rest), 1)
+        self.assertIn(rest[0], elements)
+        self.assertEqual(elements, set(items))
 
     def test_check(self):
         # Test PyList_Check()
@@ -170,8 +182,10 @@ class CAPITest(unittest.TestCase):
         # does, so an unrelated pending exception survives a successful call.
         get = _testcapi.list_get_item_ref_pending
         item = object()
-        # The int and float are inline and box on the way out.
-        lst = ['spam', item, 7, 2.5]
+        # The ints and the float are inline and box on the way out. Their
+        # boxes are allocated: 2**31 - 1 needs two digits, and 2**40 is
+        # inline once the inline range is int51.
+        lst = ['spam', item, 2**31 - 1, 2**40, 2.5]
         for index in range(len(lst)):
             with self.subTest(index=index):
                 result, exc = get(lst, index)

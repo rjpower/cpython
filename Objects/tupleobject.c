@@ -1209,19 +1209,13 @@ _PyTupleIter_NextValue(PyObject *self)
 static PyObject *
 tupleiter_next(PyObject *self)
 {
-    _PyTupleIterObject *it = _PyTupleIterObject_CAST(self);
-    Py_ssize_t index = FT_ATOMIC_LOAD_SSIZE_RELAXED(it->it_index);
+    /* A failed box consumes the item (see listiter_next()). */
     PyValue value = _PyTupleIter_NextValue(self);
     if (PyValue_IsNull(value)) {
         return NULL;
     }
     PyObject *item = _PyValue_AsObjectAt(value, BOX_SITE_ITERATION);
     PyValue_CLOSE(value);
-    if (item == NULL) {
-        /* A failed box consumes no item. Boxing runs no Python, so no other
-           next() moved the iterator in between. */
-        FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, index);
-    }
     return item;
 }
 

@@ -975,8 +975,10 @@ set_pop_impl(PySetObject *so)
         if (entry > limit)
             entry = so->table;
     }
-    /* Box before removing, so that a failed box removes nothing. Boxing
-       runs no Python, so the entry stays in place. */
+    /* Box before removing, so that a failed box removes nothing. A box
+       that succeeds runs no Python, so the entry is still the one found. A
+       failed box can (it may free a pending exception), but then the set is
+       not touched. */
     PyObject *key = _PyValue_AsObjectAt(entry->key, BOX_SITE_SET);
     if (key == NULL) {
         return NULL;
@@ -1221,20 +1223,12 @@ _PySetIter_NextValue(PyObject *self)
 static PyObject *
 setiter_iternext(PyObject *self)
 {
-    setiterobject *si = (setiterobject *)self;
-    Py_ssize_t old_pos = si->si_pos;
-    Py_ssize_t old_len = si->len;
+    /* A failed box consumes the element (see listiter_next()). */
     PyValue key = _PySetIter_NextValue(self);
     if (PyValue_IsNull(key)) {
         return NULL;
     }
     PyObject *boxed = _PyValue_AsObjectAt(key, BOX_SITE_ITERATION);
-    if (boxed == NULL) {
-        /* A failed box consumes no element. Boxing runs no Python, so no
-           other next() moved the iterator in between. */
-        si->si_pos = old_pos;
-        si->len = old_len;
-    }
     PyValue_CLOSE(key);
     return boxed;
 }
@@ -3328,21 +3322,18 @@ int
 _PySet_NextEntryRef(PyObject *set, Py_ssize_t *pos, PyObject **key, Py_hash_t *hash)
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(set);
-    Py_ssize_t old_pos = *pos;
     PyValue value;
     Py_hash_t saved_hash;
     int status = _PySet_NextValue(set, pos, &value, &saved_hash);
     if (status != 1) {
         return status;
     }
+    /* A failed box consumes the entry, as in the set iterator. */
     PyObject *boxed = _PyValue_AsObjectAt(value, BOX_SITE_SET);
+    PyValue_CLOSE(value);
     if (boxed == NULL) {
-        /* A failed box consumes no entry; boxing runs no Python. */
-        *pos = old_pos;
-        PyValue_CLOSE(value);
         return -1;
     }
-    PyValue_CLOSE(value);
     *key = boxed;
     *hash = saved_hash;
     return 1;

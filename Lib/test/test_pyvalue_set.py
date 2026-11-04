@@ -102,7 +102,7 @@ class PyValueSetTests(unittest.TestCase):
         gc.collect()
         self.assertIsNone(reference())
 
-    def test_object_boxing_failure_preserves_iteration_and_pop(self):
+    def test_object_boxing_failure_consumes_iteration_and_preserves_pop(self):
         _testinternalcapi.set_value_boxing_errors()
 
     def test_clear_reports_unraisable_and_keeps_pending_exception(self):

@@ -163,15 +163,15 @@ tuple_value_boxing_errors(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(args)
                         "tuple iterator lost a boxing error");
         goto error;
     }
+    /* The failed step consumed the int, as iterators do (listiter_next()). */
     item = PyIter_Next(iter);
     if (item == NULL) {
         goto error;
     }
-    long actual = PyLong_AsLong(item);
     Py_DECREF(item);
-    if (actual != INT32_MAX) {
+    if (item != Py_None) {
         PyErr_SetString(PyExc_AssertionError,
-                        "failed tuple boxing consumed an item");
+                        "failed tuple boxing did not consume its item");
         goto error;
     }
     Py_DECREF(iter);

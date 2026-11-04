@@ -3082,6 +3082,7 @@ eval_frame_push_and_init_code(PyThreadState *tstate, PyValue func,
     }
     _PyInterpreterFrame *frame = _PyThreadState_PushFrame(tstate, code->co_framesize);
     if (frame == NULL) {
+        PyErr_NoMemory();
         goto fail;
     }
     _PyFrame_Initialize(tstate, frame, func, locals, code, frame->base, 0, previous);
@@ -3093,10 +3094,6 @@ eval_frame_push_and_init_code(PyThreadState *tstate, PyValue func,
     }
     return frame;
 fail:
-    /* _PyCode_GetExec() sets its own error; a frame push failure sets none. */
-    if (!PyErr_Occurred()) {
-        PyErr_NoMemory();
-    }
     /* Consume the references */
     PyValue_CLOSE(func);
     Py_XDECREF(locals);
@@ -3217,7 +3214,6 @@ call_transaction_push_python(_PyCallTransaction *call, _PyInstr **next,
     PyValue small[16];
     PyValue *storage = small;
     int copied = 0, retired_count = 0;
-    int invoked = 0;
     /* 1: not invoked (the caller falls back), 0: pushed, -1: failed */
     int status = 1;
     PyValue function = PyValue_NULL;
@@ -3252,7 +3248,6 @@ call_transaction_push_python(_PyCallTransaction *call, _PyInstr **next,
     function = PyValue_NULL;
     PyObject *consumed_locals = locals;
     locals = NULL;
-    invoked = 1;
     if (call->kind == CALL_TRANSACTION_EX) {
         tuple = Py_NewRef(PyValue_AsKnownObjectBorrow(homes[2]));
         kwargs = Py_XNewRef(PyValue_AsKnownObjectBorrow(homes[3]));
@@ -3338,10 +3333,9 @@ done:
         child = NULL;
     }
     if (child == NULL) {
-        if (invoked && !PyErr_Occurred()) {
-            PyErr_SetString(PyExc_SystemError,
-                            "Python frame initialization failed without an error");
-        }
+        /* Either the call was not invoked (1), or it failed (-1) and the
+         * failing step above set its own error. */
+        assert(status == 1 || (status < 0 && PyErr_Occurred()));
         int failed = call_transaction_refresh(call, next);
         if (failed < 0 || status < 0) {
             return -1;

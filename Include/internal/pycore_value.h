@@ -295,7 +295,10 @@ PyAPI_FUNC(PyValue) _PyValue_BoxInlineValue(PyValue ref);
    the same value; return any other ref unchanged. On failure, set an exception
    and return ref unchanged, so the result is still inline. Scalar
    constructors, and the allocator hooks under them, run no Python (the
-   release contract below).
+   release contract below), unless they fail with an exception pending: the
+   MemoryError replaces that exception, and releasing it can run Python
+   (__del__ of a frame local its traceback held), as an upstream allocation
+   failure does.
 
    Callers pass and assign the value (x = PyValue_Box(x)) rather than its
    address, so that x can stay in a register. */

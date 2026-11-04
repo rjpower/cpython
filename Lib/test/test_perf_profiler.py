@@ -11,6 +11,7 @@ from test.support.script_helper import (
     assert_python_failure,
     assert_python_ok,
 )
+from test.support import import_helper
 from test.support.os_helper import temp_dir
 
 
@@ -283,6 +284,26 @@ class TestPerfTrampoline(unittest.TestCase):
                 import sys
                 sys.activate_stack_trampoline("perf")
                 sys.activate_stack_trampoline("perf")
+                """
+        assert_python_ok("-c", code)
+
+    def test_sys_api_switch_backend_after_watcher_cleared(self):
+        # Interpreter finalisation clears the code watchers before it stops
+        # the trampoline, which must then leave no exception pending.
+        # Switching from perf_jit (which has state) to perf stops the
+        # trampoline in the same way; clear its watcher first.
+        import_helper.import_module("_testcapi")
+        code = """if 1:
+                import sys
+                import _testcapi
+                # Find the slot the trampoline will take, then free it.
+                watcher = _testcapi.add_code_watcher(0)
+                _testcapi.clear_code_watcher(watcher)
+                sys.activate_stack_trampoline("perf_jit")
+                _testcapi.clear_code_watcher(watcher)
+                sys.activate_stack_trampoline("perf")
+                assert sys.is_stack_trampoline_active() is True
+                sys.deactivate_stack_trampoline()
                 """
         assert_python_ok("-c", code)
 

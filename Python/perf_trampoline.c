@@ -133,6 +133,7 @@ any DWARF information available for them).
 #include "pycore_ceval.h"         // _PyPerf_Callbacks
 #include "pycore_interpframe.h"   // _PyFrame_GetCode()
 #include "pycore_mmap.h"          // _PyAnnotateMemoryMap()
+#include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_runtime.h"       // _PyRuntime
 
 
@@ -208,12 +209,20 @@ enum perf_trampoline_type {
 #define code_watcher_id _PyRuntime.ceval.perf.code_watcher_id
 
 static void free_code_arenas(void);
+static int perf_trampoline_code_watcher(PyCodeEvent event, PyCodeObject *co);
 
 static void
 perf_trampoline_clear_code_watcher(void)
 {
     if (code_watcher_id >= 0) {
-        PyCode_ClearWatcher(code_watcher_id);
+        /* Interpreter finalisation clears every code watcher before it calls
+           _PyPerfTrampoline_Fini(), and the slot can have been cleared or
+           reused since we registered it.  Clear it only while it is still
+           ours, so that no ValueError is left pending. */
+        PyInterpreterState *interp = _PyInterpreterState_GET();
+        if (interp->code_watchers[code_watcher_id] == perf_trampoline_code_watcher) {
+            PyCode_ClearWatcher(code_watcher_id);
+        }
         code_watcher_id = -1;
     }
     extra_code_index = -1;

@@ -323,8 +323,9 @@ Known values:
 
 */
 
-/* Separate the RC register-IR successor from upstream and tracing caches. */
-#define PYC_MAGIC_NUMBER 64401
+/* Separate the RC register-IR successor from upstream and tracing caches.
+   64402: copy propagation keeps no pending load across code that may run. */
+#define PYC_MAGIC_NUMBER 64402
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

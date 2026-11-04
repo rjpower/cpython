@@ -153,14 +153,17 @@ _PyRegPass_SwapRename(_PyRegCfg *cfg)
 /* Copy propagation (pass a).
  *
  * A load of a local whose value an op reads through a field that may name
- * a local becomes that field: the op reads the local in place, borrowed.
- * The load may sit under other values, such as a constant, a global or a
- * call's result, as long as nothing writes the local in between, which the
- * kill on every write checks.  A load keeps its op if the line changes
- * before its reader, so that line events, and the stack that f_lineno
- * assignment sees at a line start, stay where they were.  A call in
- * between may still rebind the local through frame.f_locals; the reader
- * then sees the new value, where the stack would have kept the old one.
+ * a local becomes that field: the op reads the local in place, borrowed,
+ * when it runs rather than when the load would have.  So nothing in
+ * between may change the local.  A pending load dies at a write to the
+ * local, and at an op that may run Python code, which may rebind it
+ * through frame.f_locals: a call, a generic LOAD_GLOBAL or LOAD_ATTR, a
+ * binary op, anything whose family the generator marks _PyIR_RUNS_CODE
+ * (Tools/cases_generator/ir_generator.py, runs_code()).  The load may sit
+ * under constants, other locals, cells and the like.  A load also keeps its
+ * op if the line changes before its reader, so that line events, and the
+ * stack that f_lineno assignment sees at a line start, stay where they
+ * were.
  *
  * Only LOAD_FAST_BORROW folds: optimize_load_fast() makes a load strong
  * when its value outlives the local's reference or escapes, as into a
@@ -245,6 +248,8 @@ _PyRegPass_CopyProp(_PyRegCfg *cfg)
             }
             int *in = _PyReg_IN(cfg, op);
             int written = written_local(op);
+            int runs_code = (_PyRegCfg_FormatOf(op->opcode)->flags
+                             & _PyIR_RUNS_CODE) != 0;
             int n = 0;
             for (int p = 0; p < npend; p++) {
                 _PyRegOp *load = pend[p].load;
@@ -255,7 +260,9 @@ _PyRegPass_CopyProp(_PyRegCfg *cfg)
                 int uses = reads_count(cfg, op, v);
                 if (uses == 0) {
                     // Nothing here reads it; the local must keep its value
-                    if (load->oparg != written && load->oparg != op->dst) {
+                    if (load->oparg != written && load->oparg != op->dst
+                        && !runs_code)
+                    {
                         pend[n++] = pend[p];
                     }
                     continue;

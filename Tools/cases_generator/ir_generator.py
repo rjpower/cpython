@@ -210,6 +210,8 @@ class IRFormat:
     imm_kind: str | None = None
     store_dst: bool = False         # dst may name a local, see
                                     # stores_to_dst()
+    runs_code: bool = False         # a member may run Python code, see
+                                    # runs_code()
 
     def field_of(self, role: str) -> str | None:
         for name, r in zip(FIELDS, self.roles):
@@ -254,6 +256,28 @@ def declare_variables(inst: Instruction, out: CWriter) -> None:
                 declare_variable(var, out)
         if any(token.text == "IR_INVOKE_CALL" for token in part.body.tokens()):
             break
+
+
+def uop_runs_code(uop: Uop) -> bool:
+    """Whether uop may run Python code: an escaping call, the eval breaker,
+    or a frame switch, which pushes a frame or goes back to one.  A
+    specializer (annotation `specializing`) inspects types and rewrites the
+    handler and runs none; when it specialises, it dispatches the same word
+    again, which reads every field anew."""
+    if "specializing" in uop.annotations:
+        return False
+    p = uop.properties
+    return p.escapes or p.eval_breaker or p.switches_frame or p.returns
+
+
+def runs_code(inst: Instruction) -> bool:
+    """Whether inst may run Python code (uop_runs_code()), or is an
+    instrumented twin, which fires a monitoring event and so calls a Python
+    callback: INSTRUMENTED_JUMP() hides that call from the escape analysis."""
+    if inst.name.startswith("INSTRUMENTED_"):
+        return True
+    return any(uop_runs_code(part) for part in inst.parts
+               if isinstance(part, Uop))
 
 
 def stack_read_later(inst: Instruction, uop: Uop) -> bool:
@@ -695,7 +719,7 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         n_inputs=n_inputs, dst_offset=dst_offset, borrow_mask=borrow_mask,
         imm=imm, fb=fb, jumps=jumps and not forward, forward=forward,
         no_fold=no_fold, slot_roles=slot_roles, imm_kind=imm_kind,
-        store_dst=store_dst,
+        store_dst=store_dst, runs_code=any(runs_code(m) for m in members),
     )
 
 

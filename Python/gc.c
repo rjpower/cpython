@@ -484,6 +484,9 @@ _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visit, void *arg)
     PyValue *end = ref + _PyFrame_NumSlots(frame);
     /* all slots; _Py_VISIT_VALUE skips NULL, indices and inline values */
     for (; ref < end; ref++) {
+        if (!PyValue_IsTaggedIndex(*ref)) {
+            _PyValue_RecheckFrameHome(*ref);
+        }
         _Py_VISIT_VALUE(*ref);
     }
     return 0;

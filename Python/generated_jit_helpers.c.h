@@ -2591,7 +2591,7 @@
             }
             list = PyValue_FromPyObjectSteal(list_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg);
-            window[0] = _PyValue_Publish(&list);
+            IR_PUBLISH_TEMP(window[0], list);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
@@ -2639,7 +2639,7 @@
             int failed = map_o == NULL;
             map = failed ? PyValue_NULL : PyValue_FromPyObjectSteal(map_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg*2);
-            window[0] = _PyValue_Publish(&map);
+            IR_PUBLISH_TEMP(window[0], map);
             {
                 int operation_failed = value_operation_finish(&operation, next_instr, NULL);
                 if (operation_failed < 0) {
@@ -2703,7 +2703,7 @@
             }
             tup = PyValue_FromPyObjectSteal(tup_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg);
-            window[0] = _PyValue_Publish(&tup);
+            IR_PUBLISH_TEMP(window[0], tup);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
@@ -3187,7 +3187,7 @@
             PyValue top;
             bottom = window[0];
             top = PyValue_DUP(bottom);
-            window[1 + (oparg-1)] = _PyValue_Publish(&top);
+            IR_PUBLISH_TEMP(window[1 + (oparg-1)], top);
             DISPATCH();
         }
 
@@ -3311,11 +3311,11 @@
                 int found = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &null_or_index, &item);
                 if (found <= 0) {
                     if (found < 0) {
-                        window[1] = _PyValue_Publish(&null_or_index);
+                        IR_PUBLISH_TEMP(window[1], null_or_index);
                         JUMP_TO_LABEL(error);
                     }
                     JUMPBY(oparg + 1);
-                    window[1] = _PyValue_Publish(&null_or_index);
+                    IR_PUBLISH_TEMP(window[1], null_or_index);
                     if (!PyValue_IsNull(ir_displaced) &&
                         finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                         ctx->frame = frame; ctx->next_instr = next_instr;
@@ -3327,8 +3327,8 @@
                 }
                 next = item;
             }
-            window[1] = _PyValue_Publish(&null_or_index);
-            window[2] = _PyValue_Publish(&next);
+            IR_PUBLISH_TEMP(window[1], null_or_index);
+            IR_PUBLISH_TEMP(window[2], next);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[2]);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
@@ -5231,7 +5231,7 @@
                 value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
                 PyValue tmp = GETLOCAL(oparg);
                 GETLOCAL(oparg) = value;
-                _PyValue_CheckHome(value);
+                _PyValue_CheckFrameHome(value);
                 IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 trash = tmp;
             }
@@ -5276,7 +5276,7 @@
             uint32_t oparg2 = oparg & 15;
             PyValue tmp = GETLOCAL(oparg1);
             GETLOCAL(oparg1) = value1;
-            _PyValue_CheckHome(value1);
+            _PyValue_CheckFrameHome(value1);
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             value2 = PyValue_DUP(GETLOCAL(oparg2));
             IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), value2);
@@ -5324,12 +5324,12 @@
             uint32_t oparg2 = oparg & 15;
             PyValue tmp = GETLOCAL(oparg1);
             GETLOCAL(oparg1) = value1;
-            _PyValue_CheckHome(value1);
+            _PyValue_CheckFrameHome(value1);
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             PyValue_XCLOSE(tmp);
             tmp = GETLOCAL(oparg2);
             GETLOCAL(oparg2) = value2;
-            _PyValue_CheckHome(value2);
+            _PyValue_CheckFrameHome(value2);
             IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             PyValue_XCLOSE(tmp);
             DISPATCH();
@@ -5444,8 +5444,8 @@
             PyValue temp = bottom;
             bottom = top;
             top = temp;
-            window[0] = _PyValue_Publish(&bottom);
-            window[1 + (oparg-2)] = _PyValue_Publish(&top);
+            IR_PUBLISH_TEMP(window[0], bottom);
+            IR_PUBLISH_TEMP(window[1 + (oparg-2)], top);
             DISPATCH();
         }
 
@@ -5691,7 +5691,7 @@
                     }
                     BOX_STAT_INC(UNPACK_SEQUENCE);
                     IR_KEEP_BOX(seq);
-                    window[0] = _PyValue_Publish(&seq);
+                    IR_PUBLISH_TEMP(window[0], seq);
                 }
                 PyObject *seq_o = _PyValue_AsPyObjectStealPointer(seq);
                 window[0] = PyValue_NULL;

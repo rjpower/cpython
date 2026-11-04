@@ -305,7 +305,7 @@ dummy_func(
         op(_SWAP_FAST, (value -- trash)) {
             PyValue tmp = GETLOCAL(oparg);
             GETLOCAL(oparg) = value;
-            _PyValue_CheckHome(value);
+            _PyValue_CheckFrameHome(value);
             DEAD(value);
             trash = tmp;
         }
@@ -319,7 +319,7 @@ dummy_func(
             uint32_t oparg2 = oparg & 15;
             PyValue tmp = GETLOCAL(oparg1);
             GETLOCAL(oparg1) = value1;
-            _PyValue_CheckHome(value1);
+            _PyValue_CheckFrameHome(value1);
             DEAD(value1);
             value2 = PyValue_DUP(GETLOCAL(oparg2));
             PyValue_XCLOSE(tmp);
@@ -330,12 +330,12 @@ dummy_func(
             uint32_t oparg2 = oparg & 15;
             PyValue tmp = GETLOCAL(oparg1);
             GETLOCAL(oparg1) = value1;
-            _PyValue_CheckHome(value1);
+            _PyValue_CheckFrameHome(value1);
             DEAD(value1);
             PyValue_XCLOSE(tmp);
             tmp = GETLOCAL(oparg2);
             GETLOCAL(oparg2) = value2;
-            _PyValue_CheckHome(value2);
+            _PyValue_CheckFrameHome(value2);
             DEAD(value2);
             PyValue_XCLOSE(tmp);
         }

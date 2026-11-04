@@ -1670,6 +1670,8 @@ call_transaction_expand_method(_PyCallTransaction *call, _PyInstr *next)
      * a destructor. No pointer into the old window crosses that release. */
     homes[0] = function;
     homes[1] = self;
+    _PyValue_CheckFrameHome(homes[0]);
+    _PyValue_CheckFrameHome(homes[1]);
     call->effects = 1;
     PyValue_CLEAR(obsolete);
     return call_transaction_refresh(call, next);
@@ -2782,7 +2784,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *c
     for (j = 0; j < n; j++) {
         assert(PyValue_IsNull(localsplus[j]));
         localsplus[j] = args[j];
-        _PyValue_CheckHome(localsplus[j]);
+        _PyValue_CheckFrameHome(localsplus[j]);
     }
 
     /* Pack other positional arguments into the *args argument */
@@ -2922,7 +2924,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *c
                 goto kw_fail;
             }
             localsplus[j] = value_value;
-            _PyValue_CheckHome(localsplus[j]);
+            _PyValue_CheckFrameHome(localsplus[j]);
         }
     }
 
@@ -2959,7 +2961,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *c
             for (; i < defcount; i++) {
                 if (PyValue_IsNull(localsplus[m+i])) {
                     localsplus[m+i] = PyValue_NewRef(defs[i]);
-                    _PyValue_CheckHome(localsplus[m+i]);
+                    _PyValue_CheckFrameHome(localsplus[m+i]);
                 }
             }
         }

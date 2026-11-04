@@ -465,7 +465,14 @@ PyValue_CheckValid(PyValue ref)
    _PyValue_CheckHome() checks a store, and the count is of stores.
    _PyValue_RecheckHome() checks a value already stored (the frame check, a
    GC visit), which it may see many times: it counts apart, as a backstop
-   for a writer that has no store check. site is "file:line". */
+   for a writer that has no store check. site is "file:line".
+
+   A frame slot (a local, a cell or free variable, or a temporary) also
+   never holds a borrow: there a pointer with the no-count tag is an
+   immortal (pyjit/design/pyvalue.md D4). _PyValue_CheckFrameHome(),
+   _PyValue_RecheckFrameHome() and _PyValue_CheckTemp() check that too. A
+   heap home holds no borrow because its setter makes the value heap safe
+   (PyValue_MakeHeapSafe()); its check does not test the tag. */
 PyAPI_FUNC(void) _PyValue_ReportHome(PyValue ref, const char *site,
                                      int recheck);
 
@@ -489,28 +496,46 @@ _PyValue_IsCanonicalHome(PyValue ref)
     return _PyObject_ValueIdentity(obj) == (uintptr_t)obj;
 }
 
-#define _PyValue_CHECK_HOME(REF, RECHECK) \
+static inline bool
+_PyValue_IsFrameHome(PyValue ref)
+{
+    if (!_PyValue_IsCanonicalHome(ref)) {
+        return false;
+    }
+    return !PyValue_IsObject(ref) || (ref.bits & Py_TAG_REFCNT) == 0
+           || _Py_IsImmortal(BITS_TO_PTR_MASKED(ref));
+}
+
+#define _PyValue_CHECK_HOME(REF, TEST, RECHECK) \
     do { \
         PyValue _home_ref = (REF); \
-        if (!_PyValue_IsCanonicalHome(_home_ref)) { \
+        if (!TEST(_home_ref)) { \
             _PyValue_ReportHome(_home_ref, \
                                 __FILE__ ":" Py_STRINGIFY(__LINE__), \
                                 (RECHECK)); \
         } \
     } while (0)
-#define _PyValue_CheckHome(REF) _PyValue_CHECK_HOME(REF, 0)
-#define _PyValue_RecheckHome(REF) _PyValue_CHECK_HOME(REF, 1)
+#define _PyValue_CheckHome(REF) \
+    _PyValue_CHECK_HOME(REF, _PyValue_IsCanonicalHome, 0)
+#define _PyValue_RecheckHome(REF) \
+    _PyValue_CHECK_HOME(REF, _PyValue_IsCanonicalHome, 1)
+#define _PyValue_CheckFrameHome(REF) \
+    _PyValue_CHECK_HOME(REF, _PyValue_IsFrameHome, 0)
+#define _PyValue_RecheckFrameHome(REF) \
+    _PyValue_CHECK_HOME(REF, _PyValue_IsFrameHome, 1)
 /* A store to a frame temporary, which may also hold an index. */
 #define _PyValue_CheckTemp(REF) \
     do { \
         PyValue _temp_ref = (REF); \
         if (!PyValue_IsTaggedIndex(_temp_ref)) { \
-            _PyValue_CheckHome(_temp_ref); \
+            _PyValue_CheckFrameHome(_temp_ref); \
         } \
     } while (0)
 #else
 #define _PyValue_CheckHome(REF) ((void)0)
 #define _PyValue_RecheckHome(REF) ((void)0)
+#define _PyValue_CheckFrameHome(REF) ((void)0)
+#define _PyValue_RecheckFrameHome(REF) ((void)0)
 #define _PyValue_CheckTemp(REF) ((void)0)
 #endif
 

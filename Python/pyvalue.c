@@ -210,12 +210,13 @@ enum {
     HOME_INT_BOX,         // an exact int that fits inline, held as a pointer
     HOME_FLOAT_BOX,       // an exact non-NaN float held as a pointer
     HOME_STATIC_TAG0,     // a static immortal without the no-count tag
-    HOME_NOT_VALUE,       // an index, ERROR or a malformed pattern
+    HOME_NOT_VALUE,       // an index or a malformed pattern
+    HOME_TAGGED_MORTAL,   // in a frame slot, a mortal with the no-count tag
     HOME_KINDS
 };
 
 static const char *const home_kind_names[HOME_KINDS] = {
-    "int-box", "float-box", "static-tag0", "not-value",
+    "int-box", "float-box", "static-tag0", "not-value", "tagged-mortal",
 };
 
 /* One table per recheck flag and kind. A slot is claimed by a
@@ -238,6 +239,10 @@ home_kind(PyValue ref)
     PyObject *obj = BITS_TO_PTR_MASKED(ref);
     if ((ref.bits & Py_TAG_BITS) == 0 && _Py_IsStaticImmortal(obj)) {
         return HOME_STATIC_TAG0;
+    }
+    if (_PyObject_ValueIdentity(obj) == (uintptr_t)obj) {
+        // Canonical, so a frame check failed: a borrow
+        return HOME_TAGGED_MORTAL;
     }
     return PyFloat_CheckExact(obj) ? HOME_FLOAT_BOX : HOME_INT_BOX;
 }

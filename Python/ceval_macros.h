@@ -675,6 +675,7 @@ _PyValue_Truth(PyValue ref)
     do { \
         if (!IR_IS_LOCAL(F)) { \
             IR_SLOT(F) = _PyValue_Publish(&(V)); \
+            _PyValue_CheckTemp(IR_SLOT(F)); \
         } \
     } while (0)
 
@@ -683,6 +684,15 @@ _PyValue_Truth(PyValue ref)
     do { \
         assert(PyValue_IsNull(SLOT)); \
         (SLOT) = _PyValue_Publish(&(V)); \
+        _PyValue_CheckTemp(SLOT); \
+    } while (0)
+
+/* A handler writes V into SLOT, a temporary of its window or one that it
+ * wrote before. */
+#define IR_PUBLISH_TEMP(SLOT, V) \
+    do { \
+        (SLOT) = _PyValue_Publish(&(V)); \
+        _PyValue_CheckTemp(SLOT); \
     } while (0)
 
 /* OLD, the value that a result displaced from a local.  Releasing a last
@@ -710,7 +720,7 @@ _PyValue_Truth(PyValue ref)
             PyValue ir_old = IR_SLOT(F); \
             IR_SLOT(F) = _PyValue_Publish(&(V)); \
             assert(PyValue_IsHeapSafe(IR_SLOT(F))); \
-            _PyValue_CheckHome(IR_SLOT(F)); \
+            _PyValue_CheckFrameHome(IR_SLOT(F)); \
             IR_RETIRE_LOCAL(ir_old); \
         } \
         else { \
@@ -742,7 +752,7 @@ _PyValue_Truth(PyValue ref)
             PyValue ir_old = IR_SLOT(F); \
             IR_SLOT(F) = _PyValue_Publish(&(SLOT)); \
             assert(PyValue_IsHeapSafe(IR_SLOT(F))); \
-            _PyValue_CheckHome(IR_SLOT(F)); \
+            _PyValue_CheckFrameHome(IR_SLOT(F)); \
             (SLOT) = PyValue_NULL; \
             IR_RETIRE_LOCAL(ir_old); \
         } \

@@ -1366,7 +1366,7 @@ class IRStack(Stack):
             return True
         lay = self.layout
         if lay.window:
-            out.emit(f"{self.window_slot(memory_offset)} = _PyValue_Publish(&{var.name});\n")
+            out.emit(f"IR_PUBLISH_TEMP({self.window_slot(memory_offset)}, {var.name});\n")
             return True
         p = memory_offset.as_int()
         if p is not None and var.ir_input == p and self.owner.get(p) == "in":
@@ -1376,12 +1376,12 @@ class IRStack(Stack):
             if p in lay.borrowable:
                 out.emit(f"IR_STORE_INPUT({f}, {var.name});\n")
             else:
-                out.emit(f"IR_SLOT({f}) = _PyValue_Publish(&{var.name});\n")
+                out.emit(f"IR_PUBLISH_TEMP(IR_SLOT({f}), {var.name});\n")
             return True
         if p is not None and (lay.dst_offset is None or p < lay.dst_offset):
             if p in lay.in_fields and p not in lay.borrowable:
                 # An input that the instruction passes through, changed
-                out.emit(f"IR_SLOT({self.input_field(p)}) = _PyValue_Publish(&{var.name});\n")
+                out.emit(f"IR_PUBLISH_TEMP(IR_SLOT({self.input_field(p)}), {var.name});\n")
                 return True
             return self.keep(var, p)
         if lay.store_dst and p != lay.dst_offset:
@@ -1407,7 +1407,7 @@ class IRStack(Stack):
             out.emit(f"IR_STORE_TEMP_DST({FIELD_VARS[lay.dst]}, {var.name});\n")
             return False
         if previous == "out":
-            out.emit(f"{slot} = _PyValue_Publish(&{var.name});\n")
+            out.emit(f"IR_PUBLISH_TEMP({slot}, {var.name});\n")
         else:
             out.emit(f"IR_STORE_TEMP({slot}, {var.name});\n")
         if p is not None:

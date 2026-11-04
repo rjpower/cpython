@@ -25,6 +25,12 @@ workloads after seeing the score.
 - Report raw vectors, median, minimum, maximum and
   `100 * (max / min - 1)` spread. Five serial samples in a process are correlated,
   not independent randomized process pairs or a confidence interval.
+- Before an RSS comparison, bring every compared build's `python` and its
+  `build/lib.*/*.so` fully into the page cache (map and touch each page; check
+  with `fincore`). On this ZFS host a freshly linked binary is fully cached
+  and an older one is not, which moved file-backed RSS by about 1 MiB and B/C
+  from 1.010 to 0.930 ([re-measure](../bench/results/remeasure-20261104b.md),
+  RSS). Report RssAnon and RssFile apart when they disagree.
 - A geometric mean is a normalized workload comparison, not a weighted total
   application time. Do not infer an individual patch's effect from a union.
 - Distinguish hot PID/time-filtered sample periods, hardware counters, GC/root

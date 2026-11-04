@@ -1,6 +1,6 @@
 # Project status
 
-Status as of 2026-11-04 10:10 PST, from the coordinator fact sheet. Update this
+Status as of 2026-11-04 10:50 PST, from the coordinator fact sheet. Update this
 page at each landing.
 
 ## Outcome and next milestone
@@ -32,9 +32,28 @@ one quiet window, kernels at load at most 1.2):
 - Words executed and boxes are unchanged (0.805 words per upstream
   instruction). Peak RSS stays 28% above upstream.
 
-These numbers are not a baseline. The next milestone is a near-green suite,
-the remaining save/restore cost (step 7) and the loop's own cost (register IR
-v2 phase A) addressed, then the qualified baseline.
+[Second re-measure](bench/results/remeasure-20261104b.md) (`5de7bd62ef9`,
+after representation steps 7-9b and register IR v2 B0a, A1, A2, A5a; quiet
+window, load at most 1.8):
+
+- Kernels take 1.73x upstream (geomean; 2.27x at `c8a0b4dc54c`), 23% less
+  time; no kernel slower. pyperformance subset: 1.83x upstream (2.53x), 26%
+  less. Worst five against upstream: deepcopy_memo, deltablue, generators,
+  logging_silent, unpack_sequence.
+- Exception save/restore is gone (9.6% of the previous time, no samples now).
+  The loop's own cost is the largest bucket on all five triage kernels and
+  44% of the gap to upstream; value bridging 25% (native-call scope and
+  transaction, reader and attribute completions), other 19%.
+- Words executed unchanged (0.805 per upstream instruction): the whole gain
+  is cost per word. Release loop 407,525 to 272,546 B; weighted shortest
+  path 49.0 to 40.7 instructions per word (upstream 22.0). Boxes +3.8%, from
+  `id()` keys boxed at `CONTAINS_OP_DICT` (deepcopy_memo).
+- RSS needs every build fully in the page cache first (measurement.md); with
+  that, C and B match (B/C 1.010) and upstream uses 17% less (U/C 0.829).
+
+These numbers are not a baseline. The next milestone: the typed borrow (A5b)
+and tail calls as the only backend (A3a-A3c) for the loop and bridging
+costs, then the qualified baseline.
 
 ## Position
 
@@ -117,17 +136,16 @@ v2 phase A) addressed, then the qualified baseline.
 
 Running now:
 
-1. Re-measure against upstream at `5de7bd62ef9`, with the cost attribution
-   (brief `REMEASURE2-BRIEF.md`).
-2. Register IR v2 A5b phase 1: the typed-borrow design proposal
+1. Register IR v2 A5b phase 1: the typed-borrow design proposal
    (`A5B-BRIEF.md`), reviewed before implementation.
-3. Design-doc sync for A5a and int51.
 
 Next, in order:
 
-4. A5b implementation; then A3a-A3c (tail calls become the only backend)
+2. A5b implementation; then A3a-A3c (tail calls become the only backend;
+   `clang-21` and gcc 15.2 are installed)
    ([packet](design/proposals/register-ir-v2-packet.md)).
-5. Value API V1 follow-ups (box-site annotations in the interpreter files,
+3. Value-form dict lookups for `CONTAINS_OP_DICT` (the `id()` key boxes).
+4. Value API V1 follow-ups (box-site annotations in the interpreter files,
    `entry_unbox` counts, seven modules that define a bare `Py_BUILD_CORE`),
    then V2a-0 onwards.
 

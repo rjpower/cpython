@@ -33,9 +33,9 @@ flowchart TD
 | [Interpreter](handler-and-observer-contract.md) | bytecodes and cases generators → ceval; dispatch, frames, effects, specialization and observation |
 | [Values and objects](values-and-object-protocol.md) | Canonical scalar/object encoding, managed storage, attributes and ownership boundaries |
 | [Memory and lifetimes](gc-roots-and-lifetimes.md) | Reference counting, cyclic traversal, release/reentry and weakref/finalization contracts |
-| [PyValue](pyvalue.md) | Canonical spec for the eight-byte value: as-built encoding, comparison with other engines, prioritised gaps |
-| [Native boundary](native-boundary.md) | Canonical spec for native calls: per-thread borrow stack, parser entry points, Clinic output |
-| [Register IR](register-ir.md) | Canonical spec for the register IR as built, compared with V8 Ignition and LuaJIT |
+| [PyValue](pyvalue.md) | Accepted ([review](reviews/pyvalue-review-1.md)). Canonical spec for the eight-byte value: as-built encoding, comparison with other engines, prioritised gaps |
+| [Native boundary](native-boundary.md) | Accepted with changes ([review](reviews/native-boundary-review-1.md)). Canonical spec for native calls: per-thread borrow stack, parser entry points, Clinic output |
+| [Register IR](register-ir.md) | Accepted ([review 1](reviews/register-ir-review-1.md), [review 2](reviews/register-ir-review-2.md)). Canonical spec for the register IR as built, compared with V8 Ignition and LuaJIT |
 | [Extension API](extension-api.md) | Owning, fallible rebuilt-source bridges and gradual opaque handle adoption |
 | [Method/tracing JIT](jit-e2e-system.md) | Shared semantic helpers, typed SSA, effects, state recovery, backend and code lifetime |
 | [JIT feedback and attribute IR](jit-ir-feedback/design.md) | Receiver/descriptor/storage facts, guards and dictionary prediction |
@@ -53,12 +53,11 @@ silently discard effects or confuse a stored value kind with receiver behavior.
 ## What exists today
 
 The qualified interim images at `eba351fee7d` use register IR, NaN-boxed frame
-values and boxed heap/shape fields under RC. Universal PyValue restoration is
-being completed through reviewed source checkpoints in a separate worktree.
-The first diagnostic build has not linked; there is no restored runtime or
-measured speed claim. The [work board](../issues/README.md) owns current source
-identities, build results and assignments. JIT experiments contain
-partial implementation, but the interim images contain no new native tier.
+values and boxed heap/shape fields under RC. The universal PyValue runtime (branch `boil/pyvalue-rc-universal`) now
+links and runs in debug and release builds; the test suite is mostly passing and being
+triaged. There are no performance results for it yet. See [STATUS](../STATUS.md)
+for current numbers. JIT experiments contain partial implementation, but the
+interim images contain no new native tier.
 
 The target has one canonical core representation and one selected collector.
 Internal PyValue bits are private; opaque extension handles do not expose them.

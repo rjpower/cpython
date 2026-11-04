@@ -102,3 +102,17 @@ verbatim; new checkpoint transcripts do not belong here.
 - 2026-11-03 — Decision: [native-boundary design](design/native-boundary.md) replaces explicit `_PyArg_OwnerScope` with a per-thread borrow stack, withdraws the four frozen FORMAT templates, deletes `PySequence_Fast_ITEMS`/`GET_ITEM`; packets P1 to P4; under independent review.
 - 2026-11-03 — Designs written: [pyvalue](design/pyvalue.md) (12 gaps, under review) and [register IR](design/register-ir.md) (in progress; copy-propagation `f_locals` deviation noted on the interim build).
 - 2026-11-03 — Build state: debug (merged v23) and new release build `pyvalue-rc-release-20261103` fail only in `Python/getargs.c` for the core; no executable, no runtime test, no timing. Upstream control `3a440b65695` built and passes `test_int`.
+- 2026-11-03 — Test and C API modules: `0ab5bc42f61`; wave 2 done.
+- 2026-11-03 — Register IR G1 fixed: `c66a0b29253` stops copy propagation folding a load across code that may run Python; pyc magic 64402.
+- 2026-11-03 — PyValue tag fixes: `6a7b3769d62` (ERROR/wrap unowned, one immortality test, `__slots__` traversal), PyValue outside the limited API, stable ABI manifest.
+- 2026-11-03 — Native boundary P1 and P2: `acbdf45627d` (per-thread borrow stack, getargs, scopes).
+- 2026-11-03 — First runtime fixes: `192694b1523` (AST arena owns strong refs; CALL specialization with inline self; managed-dict slot).
+- 2026-11-03 — Eval-loop C frame cut from 35.6 KB to 5.5 KB (upstream about 360 B): `ca8a9d6d827`.
+- 2026-11-03 — Remaining modules ported (decimal, ssl, sqlite, zstd, ...): `e704ab282d9`.
+- 2026-11-03 — Bring-up fixes: `7f6501d9669`; `_PyType_Lookup` and `PySys_GetObject` deleted; type cache admission; register IR limits raise `SyntaxError`.
+- 2026-11-03 — Native boundary P3 and review-1 follow-ups: `56ff66a596b`, `643c69c7244`, `6d39221996d` (Clinic on the borrow stack, `_PyArg_OwnerScope` deleted, borrow scope tests); the first alone does not build.
+- 2026-11-03 — First link and run: debug and release builds link and run; 67 shared modules build (decimal, tkinter, ssl, sqlite, zstd headers not installed). Debug suite at 17:31: 611/619 files run, 484 OK, 30 failed, 3 env changed; 48,500 tests, 52 failures. No performance results yet.
+- 2026-11-03 — Decision: [pyvalue](design/pyvalue.md) reviewed ([review 1](design/reviews/pyvalue-review-1.md)); D1 to D8 recorded, D3 int51 chosen from the [upstream int-width histogram](bench/results/pyvalue-int-width-20261103.md).
+- 2026-11-03 — Decision: [native-boundary](design/native-boundary.md) accepted with changes after [review 1](design/reviews/native-boundary-review-1.md); P4 in progress, post-review running.
+- 2026-11-03 — Decision: [register-ir](design/register-ir.md) accepted after [review 2](design/reviews/register-ir-review-2.md) (IR-D1 to IR-D4; one limits rule; names past 4,095 lower to an intrinsic; 8-byte feedback offsets).
+- 2026-11-03 — Proposal: [PyValue representation packet](design/proposals/pyvalue-representation-packet.md) accepted after [review](design/reviews/pyvalue-representation-packet-review-1.md); 11 steps, about 42 agent-hours, after triage and P4.

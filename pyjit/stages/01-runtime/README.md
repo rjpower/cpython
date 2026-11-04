@@ -1,8 +1,7 @@
 # Stage 1: coherent runtime integration
 
 State: in progress. Owner role: coordinator, with bounded Sol design/review and
-Luna analysis/mechanical implementation packets. Current workers are stopped
-for handoff; the role list is not an active assignment list.
+Luna analysis/mechanical implementation packets. The role list is not an active assignment list.
 
 Deliver one runtime with canonical eight-byte PyValues across frames,
 containers and attributes; a register interpreter; RC with cyclic collection;
@@ -11,15 +10,15 @@ x86-64/GIL. Do not reopen the closed tracing-GC/nursery work.
 
 | Workstream | Responsibility | Current next step |
 | --- | --- | --- |
-| [Consumer ports](workstreams/consumers.md) | Core/startup and selected bundled container consumers | Reuse reviewed ownership patterns for remaining compiler families |
-| [Type system](workstreams/type-system.md) | Value-aware lookup, slots, mutation, cache and guard contracts | Checkpoint held projection and close lookup/version packets |
-| [Native boundaries](workstreams/native-boundaries.md) | Parser/converter leases, public scopes and caller migration | Review/compose backend and public/caller closure |
-| [Integration](workstreams/integration.md) | Exact composition, commits and merged build | Integrate accepted increments and repeat build/error analysis |
+| [Consumer ports](workstreams/consumers.md) | Core/startup and selected bundled container consumers | Core, stdlib, system and test modules ported; fix what suite triage finds |
+| [Type system](workstreams/type-system.md) | Value-aware lookup, slots, mutation, cache and guard contracts | Type projection committed (checkpoint57); close lookup/version packets |
+| [Native boundaries](workstreams/native-boundaries.md) | Per-thread borrow stack, getargs, Clinic | P1 to P3 landed; finish P4 and the post-review |
+| [Integration](workstreams/integration.md) | Exact composition, commits and merged build | Suite triage, then the representation packet |
 
-Exit when the selected build links, known required ownership and admission
-contracts are closed, and startup plus the first focused value/lifetime tests
-execute successfully. Stage 2 owns broader qualification and the first matched
-performance baseline. Owning temporary object views are valid; removing their
+The selected build now links and runs (debug and release; debug suite 484 of
+619 files OK at 17:31, 30 failed, 3 env changed). Exit when known required
+ownership and admission contracts are closed and the suite is near green.
+Stage 2 owns broader qualification and the first matched performance baseline. Owning temporary object views are valid; removing their
 boxing costs is later tuning.
 
 See [current status](../../STATUS.md), [handoff](../../HANDOFF.md),

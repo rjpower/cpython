@@ -14,7 +14,7 @@ flowchart LR
 
 | Stage | Deliverable | Exit evidence |
 | --- | --- | --- |
-| [1. Runtime](stages/01-runtime/README.md) | One coherent canonical-value runtime under RC | Selected build links, ownership/blocking contracts close, startup and first focused tests execute |
+| [1. Runtime](stages/01-runtime/README.md) | One coherent canonical-value runtime under RC | Selected build links and runs (done); suite near green and ownership contracts closed (open) |
 | [2. Baseline](stages/02-baseline/README.md) | A trustworthy register-interpreter starting point | Declared correctness/profile qualification and raw matched 29-workload JIT-off results |
 | [3. Method JIT](stages/03-method-jit/README.md) | Cohesive method compilation through shared optimizing IR | Whole-method/native transitions, recovery, ownership and measured workloads validated |
 | [4. Tracing](stages/04-tracing-jit/README.md) | Hot-path compilation using the same compiler core | Trace guards, exits, recovery and interactions with method code validated and measured |

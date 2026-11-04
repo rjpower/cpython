@@ -160,16 +160,8 @@ enum_next_long(enumobject *en, PyObject* next_item)
         _PyTuple_CAST(result)->ob_item[1] = replacement_item;
         // Reset the hash and GC tracking before retiring displaced owners.
         _PyTuple_Recycle(result);
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyValue_XCLOSE(old_index);
-            _PyValue_RestoreException(saved);
-        }
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyValue_XCLOSE(old_item);
-            _PyValue_RestoreException(saved);
-        }
+        PyValue_XCLOSE(old_index);
+        PyValue_XCLOSE(old_item);
     }
     else {
         PyObject *transferred_index = next_index;
@@ -180,35 +172,11 @@ enum_next_long(enumobject *en, PyObject* next_item)
     }
 
 done:
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired = next_index;
-        next_index = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired = next_item;
-        next_item = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired = iterator_owner;
-        iterator_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(next_index);
+    Py_CLEAR(next_item);
+    Py_CLEAR(iterator_owner);
     if (PyErr_Occurred()) {
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *retired = output;
-            output = NULL;
-            Py_XDECREF(retired);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(output);
     }
     return output;
 }
@@ -255,16 +223,8 @@ enum_next(PyObject *op)
         _PyTuple_CAST(result)->ob_item[1] = replacement_item;
         // Reset the hash and GC tracking before retiring displaced owners.
         _PyTuple_Recycle(result);
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyValue_XCLOSE(old_index);
-            _PyValue_RestoreException(saved);
-        }
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyValue_XCLOSE(old_item);
-            _PyValue_RestoreException(saved);
-        }
+        PyValue_XCLOSE(old_index);
+        PyValue_XCLOSE(old_item);
     }
     else {
         PyObject *transferred_index = next_index;
@@ -275,35 +235,11 @@ enum_next(PyObject *op)
     }
 
 done:
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired = next_index;
-        next_index = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired = next_item;
-        next_item = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired = iterator_owner;
-        iterator_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(next_index);
+    Py_CLEAR(next_item);
+    Py_CLEAR(iterator_owner);
     if (PyErr_Occurred()) {
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *retired = output;
-            output = NULL;
-            Py_XDECREF(retired);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(output);
     }
     return output;
 }

@@ -420,11 +420,9 @@ dict_keys_inorder(PyObject *dict, Py_ssize_t offset)
     return tuple;
 
 error:;
-    PyObject *saved = PyErr_GetRaisedException();
     PyValue_XCLOSE(key);
     PyValue_XCLOSE(value);
     Py_DECREF(tuple);
-    _PyValue_RestoreException(saved);
     return NULL;
 }
 
@@ -573,10 +571,8 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
     return status < 0 ? ERROR : SUCCESS;
 
 error:;
-    PyObject *saved = PyErr_GetRaisedException();
     PyValue_XCLOSE(key);
     PyValue_XCLOSE(value);
-    _PyValue_RestoreException(saved);
     return ERROR;
 }
 

@@ -1468,9 +1468,7 @@ dummy_func(
 #endif
             LLTRACE_RESUME_FRAME();
             if (result == NULL || PyErr_Occurred()) {
-                saved = PyErr_GetRaisedException();
                 Py_XDECREF(result);
-                _PyValue_RestoreException(saved);
                 JIT_FREE_FLOW();
                 return NULL;
             }

@@ -1593,11 +1593,7 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
             res = -1;
             goto cleanup;
         }
-        PyObject *saved_error = PyErr_GetRaisedException();
-        PyObject *tmp = name;
-        name = NULL;
-        Py_DECREF(tmp);
-        _PyValue_RestoreException(saved_error);
+        Py_CLEAR(name);
         if (PyErr_Occurred()) {
             res = -1;
             goto cleanup;
@@ -1626,11 +1622,7 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
                 goto cleanup;
             }
             if (found == 0) {
-                PyObject *saved_error = PyErr_GetRaisedException();
-                PyObject *tmp = key;
-                key = NULL;
-                Py_DECREF(tmp);
-                _PyValue_RestoreException(saved_error);
+                Py_CLEAR(key);
                 if (PyErr_Occurred()) {
                     res = -1;
                     goto cleanup;
@@ -1760,11 +1752,7 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
                     res = -1;
                     goto cleanup;
                 }
-                PyObject *saved_error = PyErr_GetRaisedException();
-                PyObject *tmp = empty;
-                empty = NULL;
-                Py_DECREF(tmp);
-                _PyValue_RestoreException(saved_error);
+                Py_CLEAR(empty);
                 if (PyErr_Occurred()) {
                     res = -1;
                     goto cleanup;
@@ -1820,104 +1808,20 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
         }
     }
   cleanup:
-    {
-        PyObject *saved_error = PyErr_GetRaisedException();
-        PyObject *tmp = name_str;
-        name_str = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved_error);
-    }
-    {
-        PyObject *saved_error = PyErr_GetRaisedException();
-        PyObject *tmp = type;
-        type = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved_error);
-    }
-    {
-        PyObject *saved_error = PyErr_GetRaisedException();
-        PyObject *tmp = name;
-        name = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved_error);
-    }
-    {
-        PyObject *saved_error = PyErr_GetRaisedException();
-        PyObject *tmp = value;
-        value = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved_error);
-    }
-    {
-        PyObject *saved_error = PyErr_GetRaisedException();
-        PyObject *tmp = key;
-        key = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved_error);
-    }
-    {
-        PyObject *saved_error = PyErr_GetRaisedException();
-        PyObject *tmp = empty;
-        empty = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved_error);
-    }
-    {
-        PyObject *saved_error = PyErr_GetRaisedException();
-        PyObject *tmp = missing_names;
-        missing_names = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved_error);
-    }
-    {
-        PyObject *saved_error = PyErr_GetRaisedException();
-        PyObject *tmp = remaining_list;
-        remaining_list = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved_error);
-    }
-    {
-        PyObject *saved_error = PyErr_GetRaisedException();
-        PyObject *tmp = field_types;
-        field_types = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved_error);
-    }
-    {
-        PyObject *saved_error = PyErr_GetRaisedException();
-        PyObject *tmp = positional_keys;
-        positional_keys = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved_error);
-    }
-    {
-        PyObject *saved_error = PyErr_GetRaisedException();
-        PyObject *tmp = attributes;
-        attributes = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved_error);
-    }
-    {
-        PyObject *saved_error = PyErr_GetRaisedException();
-        PyObject *tmp = fields;
-        fields = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved_error);
-    }
-    {
-        PyObject *saved_error = PyErr_GetRaisedException();
-        PyObject *tmp = remaining_fields;
-        remaining_fields = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved_error);
-    }
-    {
-        PyObject *saved_error = PyErr_GetRaisedException();
-        PyObject *tmp = keywords;
-        keywords = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved_error);
-    }
+    Py_CLEAR(name_str);
+    Py_CLEAR(type);
+    Py_CLEAR(name);
+    Py_CLEAR(value);
+    Py_CLEAR(key);
+    Py_CLEAR(empty);
+    Py_CLEAR(missing_names);
+    Py_CLEAR(remaining_list);
+    Py_CLEAR(field_types);
+    Py_CLEAR(positional_keys);
+    Py_CLEAR(attributes);
+    Py_CLEAR(fields);
+    Py_CLEAR(remaining_fields);
+    Py_CLEAR(keywords);
     if (PyErr_Occurred()) {
         res = -1;
     }

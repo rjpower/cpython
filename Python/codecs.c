@@ -279,30 +279,12 @@ PyObject *codec_getitem(const char *encoding, int index)
     if (PyErr_Occurred()) goto error;
     v = PyTuple_GetItemRef(codecs, index);
     if (v == NULL || PyErr_Occurred()) goto error;
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = codecs;
-        codecs = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(codecs);
     if (PyErr_Occurred()) goto error;
     return v;
 error:
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = codecs;
-        codecs = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = v;
-        v = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(codecs);
+    Py_CLEAR(v);
     return NULL;
 }
 
@@ -361,45 +343,15 @@ PyObject *codec_getstreamcodec(const char *encoding,
     else
         streamcodec = PyObject_CallOneArg(codeccls, stream);
     if (streamcodec == NULL || PyErr_Occurred()) goto error;
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = codeccls;
-        codeccls = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(codeccls);
     if (PyErr_Occurred()) goto error;
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = codecs;
-        codecs = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(codecs);
     if (PyErr_Occurred()) goto error;
     return streamcodec;
 error:
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = codeccls;
-        codeccls = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = codecs;
-        codecs = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = streamcodec;
-        streamcodec = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(codeccls);
+    Py_CLEAR(codecs);
+    Py_CLEAR(streamcodec);
     return NULL;
 }
 
@@ -503,35 +455,11 @@ _PyCodec_EncodeInternal(PyObject *object,
 
 onError:
 cleanup:
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = args;
-        args = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = encoder;
-        encoder = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = result;
-        result = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(args);
+    Py_CLEAR(encoder);
+    Py_CLEAR(result);
     if (v == NULL || PyErr_Occurred()) {
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = v;
-            v = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(v);
         return NULL;
     }
     return v;
@@ -576,35 +504,11 @@ _PyCodec_DecodeInternal(PyObject *object,
 
 onError:
 cleanup:
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = args;
-        args = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = decoder;
-        decoder = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = result;
-        result = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(args);
+    Py_CLEAR(decoder);
+    Py_CLEAR(result);
     if (v == NULL || PyErr_Occurred()) {
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = v;
-            v = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(v);
         return NULL;
     }
     return v;
@@ -701,30 +605,12 @@ PyObject *codec_getitem_checked(const char *encoding,
 
     v = PyTuple_GetItemRef(codec, index);
     if (v == NULL || PyErr_Occurred()) goto error;
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = codec;
-        codec = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(codec);
     if (PyErr_Occurred()) goto error;
     return v;
 error:
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = codec;
-        codec = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = v;
-        v = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(codec);
+    Py_CLEAR(v);
     return NULL;
 }
 

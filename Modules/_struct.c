@@ -1915,9 +1915,7 @@ s_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         }
     }
     if (PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
         Py_XDECREF(format);
-        _PyValue_RestoreException(saved);
         return NULL;
     }
     if (format == NULL && type->tp_init != s_init) {
@@ -1942,9 +1940,7 @@ s_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 
     PyStructObject *self = (PyStructObject *)type->tp_alloc(type, 0);
     if (self == NULL) {
-        PyObject *saved = PyErr_GetRaisedException();
         Py_XDECREF(format);
-        _PyValue_RestoreException(saved);
         return NULL;
     }
     self->s_format = NULL;
@@ -1964,41 +1960,29 @@ s_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         PyObject *exc = PyErr_GetRaisedException();
         Py_CLEAR(self->s_format);
         if (PyErr_Occurred()) {
-            PyObject *saved = PyErr_GetRaisedException();
             Py_DECREF(exc);
-            _PyValue_RestoreException(saved);
             goto error;
         }
         if (PyErr_WarnFormat(PyExc_DeprecationWarning, 1,
             "Invalid 'format' argument for Struct.__new__(): %S", exc))
         {
-            PyObject *saved = PyErr_GetRaisedException();
             Py_DECREF(exc);
-            _PyValue_RestoreException(saved);
             goto error;
         }
-        PyObject *saved = PyErr_GetRaisedException();
         Py_DECREF(exc);
-        _PyValue_RestoreException(saved);
         if (PyErr_Occurred()) {
             goto error;
         }
     }
-    PyObject *saved_error = PyErr_GetRaisedException();
     Py_CLEAR(format);
-    _PyValue_RestoreException(saved_error);
     if (PyErr_Occurred()) {
         goto error;
     }
     return (PyObject *)self;
 
 error:;
-    saved_error = PyErr_GetRaisedException();
     Py_XDECREF(format);
-    _PyValue_RestoreException(saved_error);
-    saved_error = PyErr_GetRaisedException();
     Py_DECREF(self);
-    _PyValue_RestoreException(saved_error);
     return NULL;
 }
 

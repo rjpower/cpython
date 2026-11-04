@@ -409,19 +409,9 @@ divide_nearest(PyObject *m, PyObject *n)
     }
 
 Done:
-    {
-        PyObject *retired = temp;
-        temp = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(temp);
     if (PyErr_Occurred()) {
-        PyObject *retired = result;
-        result = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
+        Py_CLEAR(result);
         return NULL;
     }
     return result;
@@ -2264,13 +2254,7 @@ microseconds_to_delta_ex(PyObject *pyus, PyTypeObject *type)
         goto Done;
     }
     us = PyLong_AsInt(remainder);
-    {
-        PyObject *retired = remainder;
-        remainder = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(remainder);
     if (PyErr_Occurred()) {
         goto Done;
     }
@@ -2282,13 +2266,7 @@ microseconds_to_delta_ex(PyObject *pyus, PyTypeObject *type)
     if (num == NULL || PyErr_Occurred()) {
         goto Done;
     }
-    {
-        PyObject *retired = tuple;
-        tuple = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(tuple);
     if (PyErr_Occurred()) {
         goto Done;
     }
@@ -2297,13 +2275,7 @@ microseconds_to_delta_ex(PyObject *pyus, PyTypeObject *type)
     if (tuple == NULL || PyErr_Occurred()) {
         goto Done;
     }
-    {
-        PyObject *retired = num;
-        num = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(num);
     if (PyErr_Occurred()) {
         goto Done;
     }
@@ -2313,13 +2285,7 @@ microseconds_to_delta_ex(PyObject *pyus, PyTypeObject *type)
         goto Done;
     }
     s = PyLong_AsInt(remainder);
-    {
-        PyObject *retired = remainder;
-        remainder = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(remainder);
     if (PyErr_Occurred()) {
         goto Done;
     }
@@ -2341,27 +2307,9 @@ microseconds_to_delta_ex(PyObject *pyus, PyTypeObject *type)
     }
 
 Done:
-    {
-        PyObject *retired = remainder;
-        remainder = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *retired = num;
-        num = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *retired = tuple;
-        tuple = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(remainder);
+    Py_CLEAR(num);
+    Py_CLEAR(tuple);
     {
         PyObject *retired = current_mod;
         current_mod = NULL;
@@ -2370,11 +2318,7 @@ Done:
         _PyValue_RestoreException(saved);
     }
     if (PyErr_Occurred()) {
-        PyObject *retired = result;
-        result = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
+        Py_CLEAR(result);
         return NULL;
     }
     return result;
@@ -2464,23 +2408,11 @@ multiply_truedivide_timedelta_float(PyDateTime_Delta *delta, PyObject *floatobj,
     if (temp == NULL || PyErr_Occurred()) {
         goto Done;
     }
-    {
-        PyObject *retired = factor;
-        factor = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(factor);
     if (PyErr_Occurred()) {
         goto Done;
     }
-    {
-        PyObject *retired = pyus_in;
-        pyus_in = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(pyus_in);
     if (PyErr_Occurred()) {
         goto Done;
     }
@@ -2493,23 +2425,11 @@ multiply_truedivide_timedelta_float(PyDateTime_Delta *delta, PyObject *floatobj,
     if (pyus_out == NULL || PyErr_Occurred()) {
         goto Done;
     }
-    {
-        PyObject *retired = divisor;
-        divisor = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(divisor);
     if (PyErr_Occurred()) {
         goto Done;
     }
-    {
-        PyObject *retired = temp;
-        temp = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(temp);
     if (PyErr_Occurred()) {
         goto Done;
     }
@@ -2518,66 +2438,20 @@ multiply_truedivide_timedelta_float(PyDateTime_Delta *delta, PyObject *floatobj,
     if (result == NULL || PyErr_Occurred()) {
         goto Done;
     }
-    {
-        PyObject *retired = pyus_out;
-        pyus_out = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(pyus_out);
     if (PyErr_Occurred()) {
         goto Done;
     }
 
 Done:
-    {
-        PyObject *retired = pyus_out;
-        pyus_out = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *retired = temp;
-        temp = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *retired = divisor;
-        divisor = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *retired = factor;
-        factor = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *retired = pyus_in;
-        pyus_in = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *retired = ratio;
-        ratio = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(pyus_out);
+    Py_CLEAR(temp);
+    Py_CLEAR(divisor);
+    Py_CLEAR(factor);
+    Py_CLEAR(pyus_in);
+    Py_CLEAR(ratio);
     if (PyErr_Occurred()) {
-        PyObject *retired = result;
-        result = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
+        Py_CLEAR(result);
         return NULL;
     }
     return result;
@@ -2925,23 +2799,11 @@ delta_divmod(PyObject *left, PyObject *right)
     if (divmod == NULL || PyErr_Occurred()) {
         goto Done;
     }
-    {
-        PyObject *retired = pyus_left;
-        pyus_left = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(pyus_left);
     if (PyErr_Occurred()) {
         goto Done;
     }
-    {
-        PyObject *retired = pyus_right;
-        pyus_right = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(pyus_right);
     if (PyErr_Occurred()) {
         goto Done;
     }
@@ -2954,13 +2816,7 @@ delta_divmod(PyObject *left, PyObject *right)
     if (delta == NULL || PyErr_Occurred()) {
         goto Done;
     }
-    {
-        PyObject *retired = remainder;
-        remainder = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(remainder);
     if (PyErr_Occurred()) {
         goto Done;
     }
@@ -2975,54 +2831,14 @@ delta_divmod(PyObject *left, PyObject *right)
     }
 
 Done:
-    {
-        PyObject *retired = quotient;
-        quotient = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *retired = remainder;
-        remainder = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *retired = delta;
-        delta = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *retired = divmod;
-        divmod = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *retired = pyus_right;
-        pyus_right = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *retired = pyus_left;
-        pyus_left = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(quotient);
+    Py_CLEAR(remainder);
+    Py_CLEAR(delta);
+    Py_CLEAR(divmod);
+    Py_CLEAR(pyus_right);
+    Py_CLEAR(pyus_left);
     if (PyErr_Occurred()) {
-        PyObject *retired = result;
-        result = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
+        Py_CLEAR(result);
         return NULL;
     }
     return result;
@@ -3586,48 +3402,18 @@ date_new(PyTypeObject *type, PyObject *args, PyObject *kw)
     }
 
     /* Invalid pickle state: retire selections before ordinary parsing. */
-    {
-        PyObject *retired = encoded;
-        encoded = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(encoded);
     if (PyErr_Occurred()) goto done;
-    {
-        PyObject *retired = state;
-        state = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(state);
     if (PyErr_Occurred()) goto done;
     result = datetime_date(type, args, kw);
     if (result == NULL || PyErr_Occurred()) goto done;
 
 done:
-    {
-        PyObject *retired = encoded;
-        encoded = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *retired = state;
-        state = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(encoded);
+    Py_CLEAR(state);
     if (PyErr_Occurred()) {
-        {
-            PyObject *retired = result;
-            result = NULL;
-            PyObject *saved = PyErr_GetRaisedException();
-            Py_XDECREF(retired);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(result);
         return NULL;
     }
     return result;
@@ -4119,35 +3905,11 @@ iso_calendar_date_repr(PyObject *self)
         goto done;
     }
 done:
-    {
-        PyObject *retired = weekday;
-        weekday = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *retired = week;
-        week = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *retired = year;
-        year = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(weekday);
+    Py_CLEAR(week);
+    Py_CLEAR(year);
     if (PyErr_Occurred()) {
-        {
-            PyObject *retired = result;
-            result = NULL;
-            PyObject *saved = PyErr_GetRaisedException();
-            Py_XDECREF(retired);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(result);
         return NULL;
     }
     return result;
@@ -4182,35 +3944,11 @@ iso_calendar_date_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
         goto done;
     }
 done:
-    {
-        PyObject *retired = weekday;
-        weekday = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *retired = week;
-        week = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *retired = year;
-        year = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(weekday);
+    Py_CLEAR(week);
+    Py_CLEAR(year);
     if (PyErr_Occurred()) {
-        {
-            PyObject *retired = result;
-            result = NULL;
-            PyObject *saved = PyErr_GetRaisedException();
-            Py_XDECREF(retired);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(result);
         return NULL;
     }
     return result;
@@ -4224,13 +3962,7 @@ iso_calendar_date_year(PyObject *self, void *Py_UNUSED(closure))
         return NULL;
     }
     if (PyErr_Occurred()) {
-        {
-            PyObject *retired = year;
-            year = NULL;
-            PyObject *saved = PyErr_GetRaisedException();
-            Py_XDECREF(retired);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(year);
         return NULL;
     }
     return year;
@@ -4244,13 +3976,7 @@ iso_calendar_date_week(PyObject *self, void *Py_UNUSED(closure))
         return NULL;
     }
     if (PyErr_Occurred()) {
-        {
-            PyObject *retired = week;
-            week = NULL;
-            PyObject *saved = PyErr_GetRaisedException();
-            Py_XDECREF(retired);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(week);
         return NULL;
     }
     return week;
@@ -4264,13 +3990,7 @@ iso_calendar_date_weekday(PyObject *self, void *Py_UNUSED(closure))
         return NULL;
     }
     if (PyErr_Occurred()) {
-        {
-            PyObject *retired = weekday;
-            weekday = NULL;
-            PyObject *saved = PyErr_GetRaisedException();
-            Py_XDECREF(retired);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(weekday);
         return NULL;
     }
     return weekday;
@@ -5282,65 +5002,23 @@ time_new(PyTypeObject *type, PyObject *args, PyObject *kw)
     }
 
     /* Invalid pickle state: retire selections before ordinary parsing. */
-    {
-        PyObject *retired = encoded;
-        encoded = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(encoded);
     if (PyErr_Occurred()) goto done;
-    {
-        PyObject *retired = tzinfo;
-        tzinfo = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(tzinfo);
     if (PyErr_Occurred()) {
         goto done;
     }
-    {
-        PyObject *retired = state;
-        state = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(state);
     if (PyErr_Occurred()) goto done;
     result = datetime_time(type, args, kw);
     if (result == NULL || PyErr_Occurred()) goto done;
 
 done:
-    {
-        PyObject *retired = encoded;
-        encoded = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *retired = tzinfo;
-        tzinfo = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *retired = state;
-        state = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(encoded);
+    Py_CLEAR(tzinfo);
+    Py_CLEAR(state);
     if (PyErr_Occurred()) {
-        {
-            PyObject *retired = result;
-            result = NULL;
-            PyObject *saved = PyErr_GetRaisedException();
-            Py_XDECREF(retired);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(result);
         return NULL;
     }
     return result;
@@ -6174,65 +5852,23 @@ datetime_new(PyTypeObject *type, PyObject *args, PyObject *kw)
     }
 
     /* Invalid pickle state: retire selections before ordinary parsing. */
-    {
-        PyObject *retired = encoded;
-        encoded = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(encoded);
     if (PyErr_Occurred()) goto done;
-    {
-        PyObject *retired = tzinfo;
-        tzinfo = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(tzinfo);
     if (PyErr_Occurred()) {
         goto done;
     }
-    {
-        PyObject *retired = state;
-        state = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(state);
     if (PyErr_Occurred()) goto done;
     result = datetime_datetime(type, args, kw);
     if (result == NULL || PyErr_Occurred()) goto done;
 
 done:
-    {
-        PyObject *retired = encoded;
-        encoded = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *retired = tzinfo;
-        tzinfo = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *retired = state;
-        state = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(encoded);
+    Py_CLEAR(tzinfo);
+    Py_CLEAR(state);
     if (PyErr_Occurred()) {
-        {
-            PyObject *retired = result;
-            result = NULL;
-            PyObject *saved = PyErr_GetRaisedException();
-            Py_XDECREF(retired);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(result);
         return NULL;
     }
     return result;

@@ -863,9 +863,7 @@ codegen_deferred_annotations_body(compiler *c, location loc,
         long idx = PyValue_IsInlineInt(cond_index) ? PyValue_InlineInt(cond_index) :
                    PyLong_AsLong(PyValue_AsKnownObjectBorrow(cond_index));
         if (idx == -1 && PyErr_Occurred()) {
-            PyObject *saved = PyErr_GetRaisedException();
             Py_DECREF(mangled);
-            _PyValue_RestoreException(saved);
             return ERROR;
         }
         NEW_JUMP_TARGET_LABEL(c, not_set);
@@ -874,9 +872,7 @@ codegen_deferred_annotations_body(compiler *c, location loc,
             int ret = codegen_addop_load_const_new(
                 c, LOC(st), _PyValue_AsObjectAt(cond_index, BOX_SITE_COMPILER));
             if (ret < 0) {
-                PyObject *saved = PyErr_GetRaisedException();
                 Py_DECREF(mangled);
-                _PyValue_RestoreException(saved);
                 return ERROR;
             }
             if (scope_type == COMPILE_SCOPE_CLASS) {

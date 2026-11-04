@@ -1607,19 +1607,13 @@ error_unexpected_keyword_arg(PyObject *kwargs, PyObject *kwnames,
                     goto done;
                 }
                 if (PyErr_Occurred()) {
-                    PyObject *saved = PyErr_GetRaisedException();
                     Py_DECREF(kwlist);
-                    _PyValue_RestoreException(saved);
                     goto done;
                 }
                 PyObject *suggestion = _Py_CalculateSuggestions(kwlist, keyword);
-                PyObject *saved = PyErr_GetRaisedException();
                 Py_DECREF(kwlist);
-                _PyValue_RestoreException(saved);
                 if (PyErr_Occurred()) {
-                    saved = PyErr_GetRaisedException();
                     Py_XDECREF(suggestion);
-                    _PyValue_RestoreException(saved);
                     goto done;
                 }
                 if (suggestion != NULL) {
@@ -1628,9 +1622,7 @@ error_unexpected_keyword_arg(PyObject *kwargs, PyObject *kwnames,
                                  " Did you mean '%S'?",
                                  fname == NULL ? "this function" : fname,
                                  fname == NULL ? "" : "()", keyword, suggestion);
-                    PyObject *saved = PyErr_GetRaisedException();
                     Py_DECREF(suggestion);
-                    _PyValue_RestoreException(saved);
                 }
                 else if (!PyErr_Occurred()) {
                     PyErr_Format(PyExc_TypeError,
@@ -1649,12 +1641,8 @@ error_unexpected_keyword_arg(PyObject *kwargs, PyObject *kwnames,
     PyErr_Format(PyExc_TypeError, "invalid keyword argument for %.200s%s",
                  fname == NULL ? "this function" : fname, fname == NULL ? "" : "()");
 done:;
-    PyObject *saved = PyErr_GetRaisedException();
     Py_XDECREF(keyword);
-    _PyValue_RestoreException(saved);
-    saved = PyErr_GetRaisedException();
     Py_DECREF(names);
-    _PyValue_RestoreException(saved);
 }
 
 

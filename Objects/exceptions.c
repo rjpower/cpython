@@ -177,41 +177,17 @@ BaseException_str_impl(PyBaseExceptionObject *self)
     case 1: {
         PyObject *arg = PyTuple_GetItemRef((PyObject *)self->args, 0);
         if (arg == NULL || PyErr_Occurred()) {
-            {
-                PyObject *saved = PyErr_GetRaisedException();
-                PyObject *tmp = arg;
-                arg = NULL;
-                Py_XDECREF(tmp);
-                _PyValue_RestoreException(saved);
-            }
+            Py_CLEAR(arg);
             return NULL;
         }
         PyObject *result = PyObject_Str(arg);
         if (result == NULL || PyErr_Occurred()) goto str_cleanup_error;
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = arg;
-            arg = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(arg);
         if (PyErr_Occurred()) goto str_cleanup_error;
         return result;
 str_cleanup_error:
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = arg;
-            arg = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = result;
-            result = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(arg);
+        Py_CLEAR(result);
         return NULL;
     }
     default:
@@ -232,41 +208,17 @@ BaseException_repr_impl(PyBaseExceptionObject *self)
     if (PyTuple_GET_SIZE(self->args) == 1) {
         PyObject *arg = PyTuple_GetItemRef((PyObject *)self->args, 0);
         if (arg == NULL || PyErr_Occurred()) {
-            {
-                PyObject *saved = PyErr_GetRaisedException();
-                PyObject *tmp = arg;
-                arg = NULL;
-                Py_XDECREF(tmp);
-                _PyValue_RestoreException(saved);
-            }
+            Py_CLEAR(arg);
             return NULL;
         }
         PyObject *result = PyUnicode_FromFormat("%s(%R)", name, arg);
         if (result == NULL || PyErr_Occurred()) goto repr_cleanup_error;
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = arg;
-            arg = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(arg);
         if (PyErr_Occurred()) goto repr_cleanup_error;
         return result;
 repr_cleanup_error:
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = arg;
-            arg = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = result;
-            result = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(arg);
+        Py_CLEAR(result);
         return NULL;
     }
     return PyUnicode_FromFormat("%s%R", name, self->args);
@@ -3239,41 +3191,17 @@ KeyError_str(PyObject *op)
     if (PyTuple_GET_SIZE(self->args) == 1) {
         PyObject *arg = PyTuple_GetItemRef((PyObject *)self->args, 0);
         if (arg == NULL || PyErr_Occurred()) {
-            {
-                PyObject *saved = PyErr_GetRaisedException();
-                PyObject *tmp = arg;
-                arg = NULL;
-                Py_XDECREF(tmp);
-                _PyValue_RestoreException(saved);
-            }
+            Py_CLEAR(arg);
             return NULL;
         }
         PyObject *result = PyObject_Repr(arg);
         if (result == NULL || PyErr_Occurred()) goto keyerror_cleanup_error;
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = arg;
-            arg = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(arg);
         if (PyErr_Occurred()) goto keyerror_cleanup_error;
         return result;
 keyerror_cleanup_error:
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = arg;
-            arg = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = result;
-            result = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(arg);
+        Py_CLEAR(result);
         return NULL;
     }
     return BaseException_str(op);

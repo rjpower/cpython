@@ -1513,13 +1513,7 @@ config_dict_get_wstrlist(PyObject *dict, const char *name, PyConfig *config,
         return -1;
     }
     if (PyErr_Occurred()) {
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = list;
-            list = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(list);
         return -1;
     }
 
@@ -1566,13 +1560,7 @@ config_dict_get_wstrlist(PyObject *dict, const char *name, PyConfig *config,
             _PyValue_RestoreException(saved);
         }
         if (PyErr_Occurred()) goto error;
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = item;
-            item = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(item);
         if (PyErr_Occurred()) goto error;
     }
 
@@ -1589,13 +1577,7 @@ config_dict_get_wstrlist(PyObject *dict, const char *name, PyConfig *config,
         _PyValue_RestoreException(saved);
     }
     if (PyErr_Occurred()) goto error;
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = list;
-        list = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(list);
     if (PyErr_Occurred()) return -1;
     return 0;
 
@@ -1607,25 +1589,13 @@ error:
         PyMem_Free(tmp);
         _PyValue_RestoreException(saved);
     }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = item;
-        item = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(item);
     {
         PyObject *saved = PyErr_GetRaisedException();
         _PyWideStringList_Clear(&wstrlist);
         _PyValue_RestoreException(saved);
     }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = list;
-        list = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(list);
     return -1;
 }
 

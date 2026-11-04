@@ -2879,9 +2879,7 @@ owner_echo_impl(PyTypeObject *type, PyObject *value)
 static void
 owner_fixture_close(PyObject *object)
 {
-    PyObject *saved = PyErr_GetRaisedException();
     Py_XDECREF(object);
-    _PyValue_RestoreException(saved);
 }
 
 /*[clinic input]

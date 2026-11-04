@@ -1014,9 +1014,7 @@ finalize_inlined_comprehension(PySTEntryObject *ste, PySTEntryObject *comp,
     }
     return status >= 0;
 error:;
-    PyObject *saved = PyErr_GetRaisedException();
     PyValue_CLEAR(key);
-    _PyValue_RestoreException(saved);
     return 0;
 }
 
@@ -1069,9 +1067,7 @@ analyze_cells(PyObject *scopes, PyObject *free, PyObject *inlined_cells)
     }
     return status >= 0;
 error:;
-    PyObject *saved = PyErr_GetRaisedException();
     PyValue_CLEAR(key);
-    _PyValue_RestoreException(saved);
     return 0;
 }
 
@@ -1176,11 +1172,9 @@ update_symbols(PyObject *symbols, PyObject *scopes,
     Py_DECREF(itr);
     return !PyErr_Occurred();
 error:;
-    PyObject *saved = PyErr_GetRaisedException();
     PyValue_CLEAR(key);
     Py_XDECREF(itr);
     Py_XDECREF(name);
-    _PyValue_RestoreException(saved);
     return 0;
 }
 
@@ -1408,7 +1402,6 @@ analyze_block(PySTEntryObject *ste, PyObject *bound, PyObject *free,
     Py_DECREF(temp);
     success = 1;
  error:;
-    PyObject *saved = PyErr_GetRaisedException();
     PyValue_CLEAR(key);
     Py_XDECREF(scopes);
     Py_XDECREF(local);
@@ -1416,7 +1409,6 @@ analyze_block(PySTEntryObject *ste, PyObject *bound, PyObject *free,
     Py_XDECREF(newglobal);
     Py_XDECREF(newfree);
     Py_XDECREF(inlined_cells);
-    _PyValue_RestoreException(saved);
     if (!success) {
         assert(PyErr_Occurred());
     }
@@ -1665,9 +1657,7 @@ symtable_add_def_helper(struct symtable *st, PyObject *name, int flag, struct _s
     return 1;
 
 error:;
-    PyObject *saved = PyErr_GetRaisedException();
     Py_DECREF(mangled);
-    _PyValue_RestoreException(saved);
     return 0;
 }
 

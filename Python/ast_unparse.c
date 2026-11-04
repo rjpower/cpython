@@ -830,23 +830,11 @@ append_ast_constant(PyUnicodeWriter *writer, PyObject *constant)
             APPEND_STR_IF(i > 0, ", ");
             PyObject *item = PyTuple_GetItemRef(constant, i);
             if (item == NULL || PyErr_Occurred()) {
-                {
-                    PyObject *saved = PyErr_GetRaisedException();
-                    PyObject *tmp = item;
-                    item = NULL;
-                    Py_XDECREF(tmp);
-                    _PyValue_RestoreException(saved);
-                }
+                Py_CLEAR(item);
                 return -1;
             }
             int status = append_ast_constant(writer, item);
-            {
-                PyObject *saved = PyErr_GetRaisedException();
-                PyObject *tmp = item;
-                item = NULL;
-                Py_XDECREF(tmp);
-                _PyValue_RestoreException(saved);
-            }
+            Py_CLEAR(item);
             if (status < 0 || PyErr_Occurred()) {
                 return -1;
             }

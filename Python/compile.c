@@ -650,9 +650,7 @@ dictbytype(PyObject *src, int scope_type, int flag, Py_ssize_t offset)
             }
             i++;
             if (PyDict_SetItem(dest, k, item) < 0) {
-                PyObject *saved = PyErr_GetRaisedException();
                 Py_DECREF(item);
-                _PyValue_RestoreException(saved);
                 goto error;
             }
             Py_DECREF(item);
@@ -663,12 +661,10 @@ dictbytype(PyObject *src, int scope_type, int flag, Py_ssize_t offset)
     return dest;
 
 error:;
-    PyObject *saved = PyErr_GetRaisedException();
     PyValue_XCLOSE(value);
     Py_XDECREF(k);
     Py_DECREF(sorted_keys);
     Py_DECREF(dest);
-    _PyValue_RestoreException(saved);
     return NULL;
 }
 
@@ -698,10 +694,8 @@ add_cell_names_from_symbols(PyObject *symbols, PyObject *names)
     return status < 0 ? ERROR : SUCCESS;
 
 error:;
-    PyObject *saved = PyErr_GetRaisedException();
     PyValue_XCLOSE(key);
     PyValue_XCLOSE(value);
-    _PyValue_RestoreException(saved);
     return ERROR;
 }
 
@@ -1142,9 +1136,7 @@ dict_lookup_arg(PyObject *dict, PyObject *name)
     assert(PyValue_LongCheckExact(value));
     long result = PyValue_IsInlineInt(value) ? PyValue_InlineInt(value) :
                   PyLong_AsLong(PyValue_AsKnownObjectBorrow(value));
-    PyObject *saved = PyErr_GetRaisedException();
     PyValue_CLOSE(value);
-    _PyValue_RestoreException(saved);
     return result;
 }
 

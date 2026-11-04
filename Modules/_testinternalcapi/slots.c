@@ -35,13 +35,9 @@ slot_value_storage(PyObject *module, PyObject *args)
         PyValue_IsInlineFloat(value) ? "float" : "object";
     PyObject *result = Py_BuildValue("(sK)", kind,
                                    (unsigned long long)value.bits);
-    PyObject *saved = PyErr_GetRaisedException();
     Py_DECREF(descr);
-    _PyValue_RestoreException(saved);
     if (result != NULL && PyErr_Occurred()) {
-        saved = PyErr_GetRaisedException();
         Py_DECREF(result);
-        _PyValue_RestoreException(saved);
         return NULL;
     }
     return result;
@@ -125,9 +121,7 @@ slot_new_with_tracer(PyObject *module, PyObject *args)
     int restored = PyRefTracer_SetTracer(previous, previous_data);
     _PyValue_RestoreException(saved);
     if (restored < 0 || result == NULL || PyErr_Occurred()) {
-        saved = PyErr_GetRaisedException();
         Py_XDECREF(result);
-        _PyValue_RestoreException(saved);
         return NULL;
     }
     if (state.seen != 1 || !state.valid) {

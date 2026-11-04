@@ -3460,17 +3460,13 @@ _PySys_SetFlagObj(Py_ssize_t pos, PyObject *value)
     }
 
     int res = _PySys_SetAttr(flags_str, new_flags);
-    PyObject *saved = PyErr_GetRaisedException();
     Py_DECREF(old_flags);
     Py_DECREF(new_flags);
-    _PyValue_RestoreException(saved);
     return res < 0 || PyErr_Occurred() ? -1 : 0;
 
 error:;
-    PyObject *saved_error = PyErr_GetRaisedException();
     Py_XDECREF(old_flags);
     Py_XDECREF(new_flags);
-    _PyValue_RestoreException(saved_error);
     return -1;
 }
 

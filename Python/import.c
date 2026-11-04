@@ -3560,23 +3560,11 @@ get_path_importer(PyThreadState *tstate, PyObject *path_importer_cache,
     for (j = 0; j < nhooks; j++) {
         PyObject *hook = PyList_GetItemRef(path_hooks, j);
         if (hook == NULL || PyErr_Occurred()) {
-            {
-                PyObject *saved = PyErr_GetRaisedException();
-                PyObject *tmp = hook;
-                hook = NULL;
-                Py_XDECREF(tmp);
-                _PyValue_RestoreException(saved);
-            }
+            Py_CLEAR(hook);
             goto error;
         }
         importer = PyObject_CallOneArg(hook, p);
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = hook;
-            hook = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(hook);
         if (importer != NULL) {
             if (PyErr_Occurred()) {
                 goto error;
@@ -3597,13 +3585,7 @@ get_path_importer(PyThreadState *tstate, PyObject *path_importer_cache,
         goto error;
     return importer;
 error:
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = importer;
-        importer = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(importer);
     return NULL;
 }
 

@@ -438,34 +438,10 @@ compute_abstract_methods(PyObject *self)
         }
 
 stage1_cleanup:
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = value;
-            value = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = key;
-            key = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = it;
-            it = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = pair;
-            pair = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(value);
+        Py_CLEAR(key);
+        Py_CLEAR(it);
+        Py_CLEAR(pair);
         if (failed || PyErr_Occurred()) goto error;
     }
 
@@ -502,13 +478,7 @@ stage1_cleanup:
                 failed = 1;
                 goto stage2_cleanup;
             }
-            {
-                PyObject *saved = PyErr_GetRaisedException();
-                PyObject *tmp = base_abstracts;
-                base_abstracts = NULL;
-                Py_XDECREF(tmp);
-                _PyValue_RestoreException(saved);
-            }
+            Py_CLEAR(base_abstracts);
             if (PyErr_Occurred()) {
                 failed = 1;
                 goto stage2_cleanup;
@@ -532,13 +502,7 @@ stage1_cleanup:
                 }
                 if (value != NULL) {
                     int is_abstract = _PyObject_IsAbstract(value);
-                    {
-                        PyObject *saved = PyErr_GetRaisedException();
-                        PyObject *tmp = value;
-                        value = NULL;
-                        Py_XDECREF(tmp);
-                        _PyValue_RestoreException(saved);
-                    }
+                    Py_CLEAR(value);
                     if (is_abstract < 0 || PyErr_Occurred()) {
                         failed = 1;
                         goto stage2_key_cleanup;
@@ -553,20 +517,8 @@ stage1_cleanup:
                 }
 
 stage2_key_cleanup:
-                {
-                    PyObject *saved = PyErr_GetRaisedException();
-                    PyObject *tmp = value;
-                    value = NULL;
-                    Py_XDECREF(tmp);
-                    _PyValue_RestoreException(saved);
-                }
-                {
-                    PyObject *saved = PyErr_GetRaisedException();
-                    PyObject *tmp = key;
-                    key = NULL;
-                    Py_XDECREF(tmp);
-                    _PyValue_RestoreException(saved);
-                }
+                Py_CLEAR(value);
+                Py_CLEAR(key);
                 if (failed || PyErr_Occurred()) {
                     failed = 1;
                     break;
@@ -575,41 +527,11 @@ stage2_key_cleanup:
         }
 
 stage2_cleanup:
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = value;
-            value = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = key;
-            key = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = iter;
-            iter = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = base_abstracts;
-            base_abstracts = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = base;
-            base = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(value);
+        Py_CLEAR(key);
+        Py_CLEAR(iter);
+        Py_CLEAR(base_abstracts);
+        Py_CLEAR(base);
         if (failed || PyErr_Occurred()) goto error;
     }
 
@@ -619,35 +541,11 @@ stage2_cleanup:
     ret = 0;
 
 error:
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = bases;
-        bases = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = items;
-        items = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = ns;
-        ns = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(bases);
+    Py_CLEAR(items);
+    Py_CLEAR(ns);
     if (PyErr_Occurred()) ret = -1;
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = abstracts;
-        abstracts = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(abstracts);
     if (PyErr_Occurred()) ret = -1;
     return ret;
 }

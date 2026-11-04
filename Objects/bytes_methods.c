@@ -697,9 +697,7 @@ _Py_bytes_tailmatch(const char *str, Py_ssize_t len,
                 result = tailmatch(str, len, PyValue_AsKnownObjectBorrow(item),
                                    start, end, direction);
             }
-            PyObject *saved = PyErr_GetRaisedException();
             PyValue_CLOSE(item);
-            _PyValue_RestoreException(saved);
             if (result < 0 || PyErr_Occurred()) {
                 return NULL;
             }

@@ -267,17 +267,13 @@ dict_value_xdup(PyValue value)
 static inline void
 dict_close_value(PyValue value)
 {
-    PyObject *saved = PyErr_GetRaisedException();
     PyValue_XCLOSE(value);
-    _PyValue_RestoreException(saved);
 }
 
 static inline void
 dict_xdecref_object(PyObject *object)
 {
-    PyObject *saved = PyErr_GetRaisedException();
     Py_XDECREF(object);
-    _PyValue_RestoreException(saved);
 }
 
 /* A proven Unicode key is already canonical. Transfer its existing owner

@@ -1066,10 +1066,8 @@ set_pop_impl(PySetObject *so)
         Py_hash_t hash = table[index].hash;
         PyObject *boxed = _PyValue_AsObjectAt(key, BOX_SITE_SET);
         if (boxed == NULL || PyErr_Occurred()) {
-            PyObject *saved = PyErr_GetRaisedException();
             Py_XDECREF(boxed);
             PyValue_CLOSE(key);
-            _PyValue_RestoreException(saved);
             return NULL;
         }
         /* Boxing can reenter and replace the table. Commit only against the
@@ -1363,9 +1361,7 @@ setiter_iternext(PyObject *self)
     PyValue_CLOSE(key);
     Py_XDECREF(so);
     if (PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
         Py_DECREF(boxed);
-        _PyValue_RestoreException(saved);
         return NULL;
     }
     return boxed;

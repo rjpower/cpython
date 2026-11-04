@@ -17,11 +17,7 @@
 static void
 call_close_object(PyObject **owner)
 {
-    PyObject *object = *owner;
-    *owner = NULL;
-    PyObject *saved = PyErr_GetRaisedException();
-    Py_XDECREF(object);
-    _PyValue_RestoreException(saved);
+    Py_CLEAR(*owner);
 }
 
 static void

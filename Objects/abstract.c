@@ -2509,11 +2509,7 @@ PyMapping_Values(PyObject *o)
 static int
 abstract_close(PyObject **slot)
 {
-    PyObject *saved = PyErr_GetRaisedException();
-    PyObject *owner = *slot;
-    *slot = NULL;
-    Py_XDECREF(owner);
-    _PyValue_RestoreException(saved);
+    Py_CLEAR(*slot);
     return PyErr_Occurred() ? -1 : 0;
 }
 

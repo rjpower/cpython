@@ -531,9 +531,7 @@ done:
     Py_XDECREF(key);
     _PyValueTemps_Close(&method_temps);
     if (PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
         Py_DECREF(values);
-        _PyValue_RestoreException(saved);
         return NULL;
     }
     return values;
@@ -768,9 +766,7 @@ static inline PyObject *
 check_value_bridge_result(PyObject *result)
 {
     if (result != NULL && PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
         Py_DECREF(result);
-        _PyValue_RestoreException(saved);
         return NULL;
     }
     return result;
@@ -1064,13 +1060,9 @@ _Py_VectorCall_ValueSteal(
     assert((res != NULL) ^ (PyErr_Occurred() != NULL));
 cleanup:
     ;
-    PyObject *saved = PyErr_GetRaisedException();
     PyValue_XCLOSE(kwnames);
-    _PyValue_RestoreException(saved);
     clear_value_arguments(arguments, total_args);
-    saved = PyErr_GetRaisedException();
     PyValue_CLOSE(callable);
-    _PyValue_RestoreException(saved);
     return check_value_bridge_result(res);
 }
 
@@ -1125,13 +1117,9 @@ _Py_VectorCallInstrumentation_ValueSteal(
     assert((res != NULL) ^ (PyErr_Occurred() != NULL));
 cleanup:
     ;
-    PyObject *saved = PyErr_GetRaisedException();
     PyValue_XCLOSE(kwnames);
-    _PyValue_RestoreException(saved);
     clear_value_arguments(arguments, total_args);
-    saved = PyErr_GetRaisedException();
     PyValue_CLOSE(callable);
-    _PyValue_RestoreException(saved);
     return check_value_bridge_result(res);
 }
 
@@ -1553,11 +1541,7 @@ static void
 drop_failed_value(PyValue *result)
 {
     if (result != NULL && !PyValue_IsNull(*result)) {
-        PyObject *primary = PyErr_GetRaisedException();
-        PyValue owner = *result;
-        *result = PyValue_NULL;
-        PyValue_XCLOSE(owner);
-        _PyValue_RestoreException(primary);
+        PyValue_CLEAR(*result);
     }
 }
 
@@ -1690,21 +1674,13 @@ call_transaction_refresh(_PyCallTransaction *call, _PyInstr **next)
 static void
 call_transaction_close_value(PyValue *slot)
 {
-    PyObject *saved = PyErr_GetRaisedException();
-    PyValue value = *slot;
-    *slot = PyValue_NULL;
-    PyValue_XCLOSE(value);
-    _PyValue_RestoreException(saved);
+    PyValue_CLEAR(*slot);
 }
 
 static void
 call_transaction_close_object(PyObject **slot)
 {
-    PyObject *saved = PyErr_GetRaisedException();
-    PyObject *value = *slot;
-    *slot = NULL;
-    Py_XDECREF(value);
-    _PyValue_RestoreException(saved);
+    Py_CLEAR(*slot);
 }
 
 static int
@@ -3144,9 +3120,7 @@ fail:
     /* Consume the references */
     PyValue_CLOSE(func);
     _PyValue_RestoreException(saved);
-    saved = PyErr_GetRaisedException();
     Py_XDECREF(locals);
-    _PyValue_RestoreException(saved);
     saved = PyErr_GetRaisedException();
     for (size_t i = 0; i < argcount; i++) {
         PyValue_CLOSE(args[i]);
@@ -3177,9 +3151,7 @@ _PyEvalFramePushAndInit(PyThreadState *tstate, PyValue func,
     PyCodeObject *code = (PyCodeObject *)Py_NewRef(function->func_code);
     _PyInterpreterFrame *frame = eval_frame_push_and_init_code(
         tstate, func, locals, args, argcount, kwnames, previous, code);
-    PyObject *saved = PyErr_GetRaisedException();
     Py_DECREF(code);
-    _PyValue_RestoreException(saved);
     return frame;
 }
 
@@ -3241,9 +3213,7 @@ fail_func:
     PyObject *saved = PyErr_GetRaisedException();
     PyValue_CLOSE(func);
     _PyValue_RestoreException(saved);
-    saved = PyErr_GetRaisedException();
     Py_XDECREF(locals);
-    _PyValue_RestoreException(saved);
 done:
     saved = PyErr_GetRaisedException();
     if (object_array != NULL) {
@@ -3259,9 +3229,7 @@ done:
     }
     Py_DECREF(callargs);
     _PyValue_RestoreException(saved);
-    saved = PyErr_GetRaisedException();
     Py_XDECREF(kwargs);
-    _PyValue_RestoreException(saved);
     if (new_frame != NULL && PyErr_Occurred()) {
         saved = PyErr_GetRaisedException();
         _PyEval_FrameClearAndPop(tstate, new_frame);
@@ -3281,9 +3249,7 @@ _PyEvalFramePushAndInit_Ex(PyThreadState *tstate, PyValue func,
     PyCodeObject *code = (PyCodeObject *)Py_NewRef(function->func_code);
     _PyInterpreterFrame *frame = eval_frame_push_and_init_ex_code(
         tstate, func, locals, nargs, callargs, kwargs, previous, code);
-    PyObject *saved = PyErr_GetRaisedException();
     Py_DECREF(code);
-    _PyValue_RestoreException(saved);
     return frame;
 }
 
@@ -5213,9 +5179,7 @@ _PyEval_LoadGlobalValue(PyObject *globals, PyObject *builtins, PyObject *name,
         PyValue old = *writeto;
         *writeto = l_v == NULL ? PyValue_NULL : PyValue_FromPyObjectSteal(l_v);
         *writeto = _PyValue_Publish(writeto);
-        PyObject *saved = PyErr_GetRaisedException();
         PyValue_CLOSE(old);
-        _PyValue_RestoreException(saved);
     }
     if (!PyValue_IsNull(*writeto)) {
         *writeto = _PyValue_Publish(writeto);

@@ -37,13 +37,7 @@ STRINGLIB(bytes_join_lock_held)(PyObject *sep, PyObject *seq)
             item = NULL;
             return res;
         }
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = item;
-            item = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(item);
         if (PyErr_Occurred()) goto error;
     }
 #endif
@@ -80,11 +74,7 @@ STRINGLIB(bytes_join_lock_held)(PyObject *sep, PyObject *seq)
             int status = PyObject_GetBuffer(item, &buffers[i], PyBUF_SIMPLE);
             if (status == 0) {
                 nbufs = i + 1;
-                PyObject *saved = PyErr_GetRaisedException();
-                PyObject *tmp = item;
-                item = NULL;
-                Py_XDECREF(tmp);
-                _PyValue_RestoreException(saved);
+                Py_CLEAR(item);
                 if (PyErr_Occurred()) goto error;
                 drop_gil = 0;
             }
@@ -101,27 +91,9 @@ STRINGLIB(bytes_join_lock_held)(PyObject *sep, PyObject *seq)
                              "sequence item %zd: expected a bytes-like object, "
                              "%.80s found",
                              i, type_name);
-                {
-                    PyObject *saved = PyErr_GetRaisedException();
-                    PyObject *tmp = error_name;
-                    error_name = NULL;
-                    Py_XDECREF(tmp);
-                    _PyValue_RestoreException(saved);
-                }
-                {
-                    PyObject *saved = PyErr_GetRaisedException();
-                    PyObject *tmp = error_type;
-                    error_type = NULL;
-                    Py_XDECREF(tmp);
-                    _PyValue_RestoreException(saved);
-                }
-                {
-                    PyObject *saved = PyErr_GetRaisedException();
-                    PyObject *tmp = item;
-                    item = NULL;
-                    Py_XDECREF(tmp);
-                    _PyValue_RestoreException(saved);
-                }
+                Py_CLEAR(error_name);
+                Py_CLEAR(error_type);
+                Py_CLEAR(item);
                 goto error;
             }
         }
@@ -186,11 +158,7 @@ STRINGLIB(bytes_join_lock_held)(PyObject *sep, PyObject *seq)
 
 error:
     if (item != NULL) {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = item;
-        item = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
+        Py_CLEAR(item);
     }
     while (next_release < nbufs) {
         /* Mark progress before invoking the release callback. */
@@ -207,11 +175,7 @@ error:
         _PyValue_RestoreException(saved);
     }
     if (PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = res;
-        res = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
+        Py_CLEAR(res);
         return NULL;
     }
     return res;
@@ -232,18 +196,10 @@ STRINGLIB(bytes_join)(PyObject *sep, PyObject *iterable)
 
 cleanup:
     if (seq != NULL) {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = seq;
-        seq = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
+        Py_CLEAR(seq);
     }
     if (PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = res;
-        res = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
+        Py_CLEAR(res);
         return NULL;
     }
     return res;

@@ -58,9 +58,7 @@ _PyValueTemps_Box(_PyValueTemps *temps, PyValue value)
         return NULL;
     }
     if (PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
         Py_DECREF(box);
-        _PyValue_RestoreException(saved);
         return NULL;
     }
     assert(temps != NULL && temps->count < temps->capacity);
@@ -163,9 +161,7 @@ _PyValue_BoxInlineValue(PyValue ref)
         box = PyFloat_FromDouble(PyValue_InlineFloat(ref));
     }
     if (box == NULL || PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
         Py_XDECREF(box);
-        _PyValue_RestoreException(saved);
         return ref;
     }
     return PyValue_FromPyObjectSteal(box);

@@ -795,9 +795,7 @@ init_tp_subclasses(PyTypeObject *self)
                 candidate = NULL;
             }
         }
-        PyObject *saved = PyErr_GetRaisedException();
         Py_XDECREF(candidate);
-        _PyValue_RestoreException(saved);
         if (PyErr_Occurred()) {
             break;
         }
@@ -814,9 +812,7 @@ init_tp_subclasses(PyTypeObject *self)
             break;
         }
     }
-    PyObject *saved = PyErr_GetRaisedException();
     Py_DECREF(self);
-    _PyValue_RestoreException(saved);
     return PyErr_Occurred() ? NULL : result;
 }
 
@@ -946,9 +942,7 @@ _PyType_GetSubclasses(PyTypeObject *self)
         if (status <= 0 || PyErr_Occurred()) {
             break;
         }
-        PyObject *saved = PyErr_GetRaisedException();
         Py_CLEAR(list);
-        _PyValue_RestoreException(saved);
         if (PyErr_Occurred()) {
             break;
         }
@@ -956,13 +950,9 @@ _PyType_GetSubclasses(PyTypeObject *self)
 
 done:
     ;
-    PyObject *saved = PyErr_GetRaisedException();
     Py_DECREF(self);
-    _PyValue_RestoreException(saved);
     if (PyErr_Occurred()) {
-        saved = PyErr_GetRaisedException();
         Py_CLEAR(list);
-        _PyValue_RestoreException(saved);
     }
     return list;
 }
@@ -1269,11 +1259,7 @@ set_version_unlocked(PyTypeObject *tp, unsigned int version)
 static void
 type_mutation_close(PyObject **slot)
 {
-    PyObject *saved = PyErr_GetRaisedException();
-    PyObject *owner = *slot;
-    *slot = NULL;
-    Py_XDECREF(owner);
-    _PyValue_RestoreException(saved);
+    Py_CLEAR(*slot);
 }
 
 
@@ -1318,9 +1304,7 @@ _PyTypeMutation_End(_PyTypeMutation *scope)
     PyTypeObject *type = scope->type;
     scope->type = NULL;
     scope->active = 0;
-    PyObject *saved = PyErr_GetRaisedException();
     Py_DECREF(type);
-    _PyValue_RestoreException(saved);
     // No type access or callback follows reopening this scope's admission.
     assert(interp->types.mutation_depth > 0);
     interp->types.mutation_depth--;
@@ -1372,9 +1356,7 @@ type_modified_recursive(PyTypeObject *type)
             break;
         }
         type_modified_recursive(child);
-        PyObject *error = PyErr_GetRaisedException();
         Py_DECREF(child);
-        _PyValue_RestoreException(error);
         _PyValue_RestoreException(saved);
         saved = PyErr_GetRaisedException();
         // Reacquire the current graph from its beginning after every callout.
@@ -2099,11 +2081,7 @@ mro_hierarchy_for_complete_type(PyTypeObject *type, PyObject *temp)
                     res = mro_hierarchy_for_complete_type(subclass, temp);
                 }
             }
-            PyObject *saved = PyErr_GetRaisedException();
-            PyValue retired_child = child;
-            child = PyValue_NULL;
-            PyValue_XCLOSE(retired_child);
-            _PyValue_RestoreException(saved);
+            PyValue_CLEAR(child);
             if (PyErr_Occurred()) {
                 res = -1;
             }
@@ -3435,13 +3413,7 @@ _PyObject_LookupSpecialMethod(PyObject *attr, PyValue *method,
        consumers, including WITH_EXCEPT_START; do not canonicalize them here. */
     *method = PyValue_FromPyObjectSteal(method_view);
     method_view = NULL;
-    {
-        PyValue retired = found;
-        found = PyValue_NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
-    }
+    PyValue_CLEAR(found);
     if (PyErr_Occurred()) {
         goto done;
     }
@@ -3450,9 +3422,7 @@ _PyObject_LookupSpecialMethod(PyObject *attr, PyValue *method,
         PyValue retired = *self;
         *self = PyValue_FromPyObjectSteal(self_view);
         self_view = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
         PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
         if (!PyErr_Occurred()) {
             rc = 1;
         }
@@ -3466,9 +3436,7 @@ _PyObject_LookupSpecialMethod(PyObject *attr, PyValue *method,
             PyValue retired = *method;
             *method = PyValue_FromPyObjectSteal(bound);
             bound = NULL;
-            PyObject *saved = PyErr_GetRaisedException();
             PyValue_XCLOSE(retired);
-            _PyValue_RestoreException(saved);
         }
         else {
             goto done;
@@ -3477,35 +3445,19 @@ _PyObject_LookupSpecialMethod(PyObject *attr, PyValue *method,
             goto done;
         }
     }
-    {
-        PyValue retired = *self;
-        *self = PyValue_NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
-    }
+    PyValue_CLEAR(*self);
     if (!PyErr_Occurred()) {
         rc = 1;
     }
 done:
-    {
-        PyValue retired = found;
-        found = PyValue_NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
-    }
+    PyValue_CLEAR(found);
     type_mutation_close(&bound);
     type_mutation_close(&method_view);
     type_mutation_close(&binding_type);
     type_mutation_close(&attr_owner);
     type_mutation_close(&self_view);
     if (rc < 0 || PyErr_Occurred()) {
-        PyValue retired = *method;
-        *method = PyValue_NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
+        PyValue_CLEAR(*method);
         return -1;
     }
     return rc;
@@ -3543,9 +3495,7 @@ lookup_method_ex(PyObject *self, PyObject *attr, PyValue *out,
         PyValue retired = *out;
         *out = PyValue_FromPyObjectSteal(view);
         view = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
         PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
     }
     if (PyErr_Occurred()) {
         goto done;
@@ -3576,9 +3526,7 @@ lookup_method_ex(PyObject *self, PyObject *attr, PyValue *out,
             *out = PyValue_FromPyObjectSteal(bound);
             bound = NULL;
         }
-        PyObject *saved = PyErr_GetRaisedException();
         PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
     }
     if (had_bound && !PyErr_Occurred()) {
         rc = 0;
@@ -3591,11 +3539,7 @@ done:
     type_mutation_close(&attr_owner);
     type_mutation_close(&self_owner);
     if (rc < 0 || PyErr_Occurred()) {
-        PyValue retired = *out;
-        *out = PyValue_NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
+        PyValue_CLEAR(*out);
         return -1;
     }
     return rc;
@@ -3667,9 +3611,7 @@ done:
     {
         PyValue retired = _PyThreadState_PopCValueSteal(tstate, &cref);
         cref.ref = PyValue_NULL;
-        PyObject *saved = PyErr_GetRaisedException();
         PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
     }
     type_mutation_close(&self_owner);
     if (PyErr_Occurred()) {
@@ -3712,9 +3654,7 @@ done:
     {
         PyValue retired = _PyThreadState_PopCValueSteal(tstate, &cref);
         cref.ref = PyValue_NULL;
-        PyObject *saved = PyErr_GetRaisedException();
         PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
     }
     type_mutation_close(&kwds_owner);
     type_mutation_close(&args_owner);
@@ -3756,9 +3696,7 @@ done:
     {
         PyValue retired = _PyThreadState_PopCValueSteal(tstate, &cref);
         cref.ref = PyValue_NULL;
-        PyObject *saved = PyErr_GetRaisedException();
         PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
     }
     type_mutation_close(&self_owner);
     if (PyErr_Occurred()) {
@@ -3803,9 +3741,7 @@ done:
     {
         PyValue retired = _PyThreadState_PopCValueSteal(tstate, &cref);
         cref.ref = PyValue_NULL;
-        PyObject *saved = PyErr_GetRaisedException();
         PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
     }
     type_mutation_close(&self_owner);
     if (PyErr_Occurred()) {
@@ -3854,9 +3790,7 @@ done:
     {
         PyValue retired = _PyThreadState_PopCValueSteal(tstate, &cref);
         cref.ref = PyValue_NULL;
-        PyObject *saved = PyErr_GetRaisedException();
         PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
     }
     type_mutation_close(&self_owner);
     if (PyErr_Occurred()) {
@@ -3908,9 +3842,7 @@ done:
     {
         PyValue retired = _PyThreadState_PopCValueSteal(tstate, &cref);
         cref.ref = PyValue_NULL;
-        PyObject *saved = PyErr_GetRaisedException();
         PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
     }
     type_mutation_close(&arg_owner);
     type_mutation_close(&self_owner);
@@ -5483,13 +5415,7 @@ done:
         PyMem_Free(retired);
         _PyValue_RestoreException(saved);
     }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyValue retired = doc;
-        doc = PyValue_NULL;
-        PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
-    }
+    PyValue_CLEAR(doc);
     type_mutation_close(&dict_owner);
     type_mutation_close(&type_owner);
     return PyErr_Occurred() ? -1 : result;
@@ -5522,13 +5448,7 @@ type_new_staticmethod(PyObject *dict, PyObject *attr)
     result = PyDict_SetItem(dict_owner, key_owner, wrapper);
 done:
     type_mutation_close(&wrapper);
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyValue retired = selected;
-        selected = PyValue_NULL;
-        PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
-    }
+    PyValue_CLEAR(selected);
     type_mutation_close(&key_owner);
     type_mutation_close(&dict_owner);
     return PyErr_Occurred() ? -1 : result;
@@ -5561,13 +5481,7 @@ type_new_classmethod(PyObject *dict, PyObject *attr)
     result = PyDict_SetItem(dict_owner, key_owner, wrapper);
 done:
     type_mutation_close(&wrapper);
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyValue retired = selected;
-        selected = PyValue_NULL;
-        PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
-    }
+    PyValue_CLEAR(selected);
     type_mutation_close(&key_owner);
     type_mutation_close(&dict_owner);
     return PyErr_Occurred() ? -1 : result;
@@ -5732,13 +5646,7 @@ type_new_set_classcell(PyTypeObject *type, PyObject *dict)
     result = 0;
 done:
     type_mutation_close(&selected_type_owner);
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyValue retired = cell;
-        cell = PyValue_NULL;
-        PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
-    }
+    PyValue_CLEAR(cell);
     type_mutation_close(&dict_owner);
     type_mutation_close(&type_owner);
     return PyErr_Occurred() ? -1 : result;
@@ -5773,13 +5681,7 @@ type_new_set_classdictcell(PyObject *dict)
     result = 0;
 done:
     type_mutation_close(&selected_type_owner);
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyValue retired = cell;
-        cell = PyValue_NULL;
-        PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
-    }
+    PyValue_CLEAR(cell);
     type_mutation_close(&dict_owner);
     return PyErr_Occurred() ? -1 : result;
 }
@@ -5887,13 +5789,7 @@ type_new_get_slots(type_new_ctx *ctx, PyObject *dict)
     result = 0;
 done:
     type_mutation_close(&iterable_owner);
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyValue retired = selected;
-        selected = PyValue_NULL;
-        PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
-    }
+    PyValue_CLEAR(selected);
     type_mutation_close(&dict_owner);
     if (PyErr_Occurred()) {
         result = -1;
@@ -6236,17 +6132,11 @@ type_new(PyTypeObject *metatype, PyObject *args, PyObject *kwds)
 
 done:
     ;
-    PyObject *saved = PyErr_GetRaisedException();
     Py_CLEAR(error_type);
-    _PyValue_RestoreException(saved);
     type_mutation_close(&selected_base_owner);
     type_mutation_close(&selected_metatype_owner);
-    saved = PyErr_GetRaisedException();
     Py_CLEAR(owned_bases);
-    _PyValue_RestoreException(saved);
-    saved = PyErr_GetRaisedException();
     Py_CLEAR(keywords);
-    _PyValue_RestoreException(saved);
     return type;
 }
 
@@ -7426,23 +7316,15 @@ _PyType_LookupRefAndVersion(PyTypeObject *type, PyObject *name, unsigned int *ve
     if (!PyValue_IsNull(out)) {
         result = _PyValue_AsObjectAt(out, BOX_SITE_ATTRIBUTE);
     }
-    PyObject *saved = PyErr_GetRaisedException();
     PyValue_XCLOSE(out);
-    _PyValue_RestoreException(saved);
-    saved = PyErr_GetRaisedException();
     Py_DECREF(name);
-    _PyValue_RestoreException(saved);
     unsigned int current = 0;
     if (!PyErr_Occurred() && Py_REFCNT(type) != 1) {
         current = _PyType_MatchesVersion(interp, type, expected) ? expected : 0;
     }
-    saved = PyErr_GetRaisedException();
     Py_DECREF(type);
-    _PyValue_RestoreException(saved);
     if (PyErr_Occurred()) {
-        saved = PyErr_GetRaisedException();
         Py_XDECREF(result);
-        _PyValue_RestoreException(saved);
         result = NULL;
         current = 0;
     }
@@ -7520,13 +7402,9 @@ _PyType_LookupValueAndVersion(PyTypeObject *type, PyObject *name, PyValue *out)
         version = _PyType_MatchesVersion(interp, type, expected) ? expected : 0;
     }
     // A final close cannot be followed by any type access or version lookup.
-    saved = PyErr_GetRaisedException();
     Py_DECREF(type);
-    _PyValue_RestoreException(saved);
     if (PyErr_Occurred()) {
-        saved = PyErr_GetRaisedException();
         PyValue_XCLOSE(result);
-        _PyValue_RestoreException(saved);
         return 0;
     }
     *out = result;
@@ -7628,9 +7506,7 @@ _PyType_Validate(PyTypeObject *ty, _py_validate_type validate, unsigned int *tp_
         *tp_version = 0;
         err = -1;
     }
-    PyObject *saved = PyErr_GetRaisedException();
     Py_DECREF(ty);
-    _PyValue_RestoreException(saved);
     if (PyErr_Occurred()) {
         *tp_version = 0;
         return -1;
@@ -7683,11 +7559,8 @@ set_flags_recursive(PyTypeObject *self, unsigned long mask, unsigned long flags)
             }
         }
 
-        PyValue child_owner = child_value;
+        PyValue_CLOSE(child_value);
         child_value = PyValue_NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        PyValue_CLOSE(child_owner);
-        _PyValue_RestoreException(saved);
         if (PyErr_Occurred()) {
             break;
         }
@@ -7747,13 +7620,7 @@ _Py_type_getattro_impl(PyTypeObject *type, PyObject *name, int *suppress_missing
     if (!PyValue_IsNull(ref) && !PyErr_Occurred()) {
         result = _PyValue_AsObjectAt(ref, BOX_SITE_ATTRIBUTE);
     }
-    {
-        PyValue retired = ref;
-        ref = PyValue_NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
-    }
+    PyValue_CLEAR(ref);
     type_mutation_close(&name_owner);
     type_mutation_close(&type_owner);
     if (PyErr_Occurred()) {
@@ -7843,13 +7710,7 @@ _Py_type_getattro_value(PyTypeObject *type, PyObject *name,
         PyObject *attr_obj = PyValue_IsObject(attribute_ref.ref)
             ? PyValue_AsKnownObjectBorrow(attribute_ref.ref) : NULL;
         descrgetfunc local_get = attr_obj == NULL ? NULL : Py_TYPE(attr_obj)->tp_descr_get;
-        {
-            PyValue retired = meta_attribute_ref.ref;
-            meta_attribute_ref.ref = PyValue_NULL;
-            PyObject *saved = PyErr_GetRaisedException();
-            PyValue_XCLOSE(retired);
-            _PyValue_RestoreException(saved);
-        }
+        PyValue_CLEAR(meta_attribute_ref.ref);
         if (PyErr_Occurred()) {
             goto done;
         }
@@ -7903,16 +7764,12 @@ done:
         {
             PyValue retired = _PyThreadState_PopCValueSteal(tstate, &attribute_ref);
             attribute_ref.ref = PyValue_NULL;
-            PyObject *saved = PyErr_GetRaisedException();
             PyValue_XCLOSE(retired);
-            _PyValue_RestoreException(saved);
         }
         {
             PyValue retired = _PyThreadState_PopCValueSteal(tstate, &meta_attribute_ref);
             meta_attribute_ref.ref = PyValue_NULL;
-            PyObject *saved = PyErr_GetRaisedException();
             PyValue_XCLOSE(retired);
-            _PyValue_RestoreException(saved);
         }
     }
     type_mutation_close(&diagnostic_name);
@@ -7925,11 +7782,7 @@ done:
         result_ref.ref = PyValue_NULL;
     }
     if (PyErr_Occurred()) {
-        PyValue retired = result;
-        result = PyValue_NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
+        PyValue_CLEAR(result);
         return PyValue_NULL;
     }
     if (missing) {
@@ -8122,9 +7975,7 @@ done:
     type_mutation_close(&name);
     type_mutation_close(&original_name);
     type_mutation_close(&value);
-    saved = PyErr_GetRaisedException();
     Py_DECREF(type);
-    _PyValue_RestoreException(saved);
     return _PyTypeMutation_End(&scope) < 0 ? -1 : res;
 }
 
@@ -9462,13 +9313,7 @@ object_getstate_default(PyObject *obj, int required)
     goto done;
 
 done:
-    {
-        PyValue retired = name_value;
-        name_value = PyValue_NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
-    }
+    PyValue_CLEAR(name_value);
     type_mutation_close(&name);
     type_mutation_close(&value);
     type_mutation_close(&selected_type);
@@ -9685,20 +9530,8 @@ fallback:
 done:
     type_mutation_close(&method);
     type_mutation_close(&outer);
-    {
-        PyValue retired = args_value;
-        args_value = PyValue_NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyValue retired = kwargs_value;
-        kwargs_value = PyValue_NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
-    }
+    PyValue_CLEAR(args_value);
+    PyValue_CLEAR(kwargs_value);
     type_mutation_close(&diagnostic_name);
     type_mutation_close(&diagnostic_type);
     type_mutation_close(&obj_owner);
@@ -9880,13 +9713,7 @@ state_phase:
     goto done;
 
 done:
-    {
-        PyValue retired = item_value;
-        item_value = PyValue_NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
-    }
+    PyValue_CLEAR(item_value);
     type_mutation_close(&args);
     type_mutation_close(&kwargs);
     type_mutation_close(&copyreg);
@@ -11414,12 +11241,8 @@ done:
     /* On successful revalidation the installed slot keeps this close
      * nonfinal. An error path may retire a detached map instead. */
     type_mutation_close(&subclasses);
-    PyObject *saved = PyErr_GetRaisedException();
     Py_DECREF(type);
-    _PyValue_RestoreException(saved);
-    saved = PyErr_GetRaisedException();
     Py_DECREF(base);
-    _PyValue_RestoreException(saved);
     return PyErr_Occurred() ? -1 : result;
 }
 
@@ -11537,16 +11360,10 @@ remove_subclass(PyTypeObject *base, PyTypeObject *type)
     }
 
 done:
-    saved = PyErr_GetRaisedException();
     PyValue_XCLOSE(ref);
-    _PyValue_RestoreException(saved);
-    saved = PyErr_GetRaisedException();
     PyValue_XCLOSE(key);
-    _PyValue_RestoreException(saved);
     type_mutation_close(&subclasses);
-    saved = PyErr_GetRaisedException();
     Py_DECREF(base);
-    _PyValue_RestoreException(saved);
     _PyValue_RestoreException(primary);
 }
 
@@ -13161,9 +12978,7 @@ has_dunder_getitem(PyObject *self)
     {
         PyValue retired = _PyThreadState_PopCValueSteal(tstate, &cref);
         cref.ref = PyValue_NULL;
-        PyObject *saved = PyErr_GetRaisedException();
         PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
     }
     type_mutation_close(&self_owner);
     if (PyErr_Occurred()) {
@@ -13370,9 +13185,7 @@ slot_tp_finalize(PyObject *self)
     {
         PyValue retired = _PyThreadState_PopCValueSteal(tstate, &cref);
         cref.ref = PyValue_NULL;
-        PyObject *saved = PyErr_GetRaisedException();
         PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
     }
     if (PyErr_Occurred()) {
         PyErr_FormatUnraisable("Exception ignored while "
@@ -14407,11 +14220,7 @@ _PyType_InitSlotDefs(PyInterpreterState *interp)
             uint8_t slot = data[i + 1];
             memcpy(&slotdefs_dups[slot], data, sizeof(uint8_t) * (n + 1));
         }
-        PyValue saved = value;
-        value = PyValue_NULL;
-        PyObject *error = PyErr_GetRaisedException();
-        PyValue_XCLOSE(saved);
-        _PyValue_RestoreException(error);
+        PyValue_CLEAR(value);
         if (PyErr_Occurred()) {
             goto done;
         }
@@ -14423,11 +14232,7 @@ _PyType_InitSlotDefs(PyInterpreterState *interp)
 
 done:
     if (!PyValue_IsNull(value)) {
-        PyValue saved = value;
-        value = PyValue_NULL;
-        PyObject *error = PyErr_GetRaisedException();
-        PyValue_XCLOSE(saved);
-        _PyValue_RestoreException(error);
+        PyValue_CLEAR(value);
     }
     type_mutation_close(&bytearray);
     if (PyErr_Occurred()) {

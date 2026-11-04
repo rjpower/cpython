@@ -1071,46 +1071,18 @@ itemgetter_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     PyObject_GC_Track(ig);
     result = (PyObject *)ig; ig = NULL;
 done:
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = item;
-        item = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = args_owner;
-        args_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = kwds_owner;
-        kwds_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(item);
+    Py_CLEAR(args_owner);
+    Py_CLEAR(kwds_owner);
     if (ig != NULL) {
         saved=PyErr_GetRaisedException();
         itemgetterobject *retired_ig=ig; ig=NULL;
         Py_DECREF(retired_ig);
         _PyValue_RestoreException(saved);
     }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = type_owner;
-        type_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(type_owner);
     if (PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired_result = result;
-        result = NULL;
-        Py_XDECREF(retired_result);
-        _PyValue_RestoreException(saved);
+        Py_CLEAR(result);
         return NULL;
     }
     return result;
@@ -1147,7 +1119,7 @@ static PyObject *
 itemgetter_call(PyObject *op, PyObject *args, PyObject *kw)
 {
     PyObject *op_owner = Py_NewRef(op), *args_owner = Py_NewRef(args);
-    PyObject *selected = NULL, *result = NULL, *saved;
+    PyObject *selected = NULL, *result = NULL;
     if (PyErr_Occurred()) goto done;
     assert(PyTuple_CheckExact(args_owner));
     if (!_PyArg_NoKeywords("itemgetter", kw) ||
@@ -1156,40 +1128,14 @@ itemgetter_call(PyObject *op, PyObject *args, PyObject *kw)
     if (selected == NULL || PyErr_Occurred()) goto done;
     result = itemgetter_call_impl(itemgetterobject_CAST(op_owner), selected);
     if (PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired_result = result;
-        result = NULL;
-        Py_XDECREF(retired_result);
-        _PyValue_RestoreException(saved);
+        Py_CLEAR(result);
     }
 done:
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = selected;
-        selected = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = args_owner;
-        args_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = op_owner;
-        op_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(selected);
+    Py_CLEAR(args_owner);
+    Py_CLEAR(op_owner);
     if (PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired_result = result;
-        result = NULL;
-        Py_XDECREF(retired_result);
-        _PyValue_RestoreException(saved);
+        Py_CLEAR(result);
         return NULL;
     }
     return result;
@@ -1214,7 +1160,7 @@ static PyObject *
 itemgetter_call_impl(itemgetterobject *ig, PyObject *obj)
 {
     PyObject *ig_owner=Py_NewRef((PyObject *)ig), *obj_owner=Py_NewRef(obj);
-    PyObject *result=NULL, *saved;
+    PyObject *result=NULL;
     Py_ssize_t i, nitems=ig->nitems;
     if (PyErr_Occurred()) goto done;
     if (nitems == 1) {
@@ -1231,45 +1177,19 @@ itemgetter_call_impl(itemgetterobject *ig, PyObject *obj)
     for (i=0; i<nitems; i++) {
         PyObject *item=PyTuple_GetItemRef(ig->item, i), *value=NULL;
         if (item != NULL && !PyErr_Occurred()) value=PyObject_GetItem(obj_owner,item);
-        {
-            saved = PyErr_GetRaisedException();
-            PyObject *retired = item;
-            item = NULL;
-            Py_XDECREF(retired);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(item);
         if (value==NULL || PyErr_Occurred()) {
             {
-                saved = PyErr_GetRaisedException();
-                PyObject *retired = value;
-                value = NULL;
-                Py_XDECREF(retired);
-                _PyValue_RestoreException(saved);
+                Py_CLEAR(value);
             } goto done;
         }
         if (PyTuple_SetItem(result,i,value)<0 || PyErr_Occurred()) goto done;
     }
 done:
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = obj_owner;
-        obj_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = ig_owner;
-        ig_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(obj_owner);
+    Py_CLEAR(ig_owner);
     if (PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired_result = result;
-        result = NULL;
-        Py_XDECREF(retired_result);
-        _PyValue_RestoreException(saved);
+        Py_CLEAR(result);
         return NULL;
     }
     return result;
@@ -1426,13 +1346,7 @@ attrgetter_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
             if (PyTuple_SetItem(attr,idx,chain)<0 || PyErr_Occurred()) { chain=NULL; goto error; }
             chain=NULL;
         }
-        {
-            saved = PyErr_GetRaisedException();
-            PyObject *retired = item;
-            item = NULL;
-            Py_XDECREF(retired);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(item);
         if (PyErr_Occurred()) goto error;
     }
     _operator_state *state=_PyType_GetModuleState((PyTypeObject *)type_owner);
@@ -1447,34 +1361,10 @@ attrgetter_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     result=(PyObject *)ag; ag=NULL;
     goto close_inputs;
 error:
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = chain_item;
-        chain_item = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = chain;
-        chain = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = item;
-        item = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = attr;
-        attr = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(chain_item);
+    Py_CLEAR(chain);
+    Py_CLEAR(item);
+    Py_CLEAR(attr);
     if (ag!=NULL) {
         saved=PyErr_GetRaisedException();
         attrgetterobject *retired_ag=ag; ag=NULL;
@@ -1482,33 +1372,11 @@ error:
         _PyValue_RestoreException(saved);
     }
 close_inputs:
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = args_owner;
-        args_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = kwds_owner;
-        kwds_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = type_owner;
-        type_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(args_owner);
+    Py_CLEAR(kwds_owner);
+    Py_CLEAR(type_owner);
     if (PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired_result = result;
-        result = NULL;
-        Py_XDECREF(retired_result);
-        _PyValue_RestoreException(saved);
+        Py_CLEAR(result);
         return NULL;
     }
     return result;
@@ -1553,21 +1421,9 @@ dotted_getattr(PyObject *obj, PyObject *attr)
             PyObject *name=PyTuple_GetItemRef(attr_owner,i);
             PyObject *next=NULL;
             if (name != NULL && !PyErr_Occurred()) next=PyObject_GetAttr(current,name);
-            {
-                saved = PyErr_GetRaisedException();
-                PyObject *retired = name;
-                name = NULL;
-                Py_XDECREF(retired);
-                _PyValue_RestoreException(saved);
-            }
+            Py_CLEAR(name);
             if (next==NULL || PyErr_Occurred()) {
-                {
-                    saved = PyErr_GetRaisedException();
-                    PyObject *retired = next;
-                    next = NULL;
-                    Py_XDECREF(retired);
-                    _PyValue_RestoreException(saved);
-                }
+                Py_CLEAR(next);
                 goto done;
             }
             {
@@ -1590,26 +1446,10 @@ dotted_getattr(PyObject *obj, PyObject *attr)
         result=PyObject_GetAttr(current,attr_owner);
     }
 done:
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = current;
-        current = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = attr_owner;
-        attr_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(current);
+    Py_CLEAR(attr_owner);
     if (PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired_result = result;
-        result = NULL;
-        Py_XDECREF(retired_result);
-        _PyValue_RestoreException(saved);
+        Py_CLEAR(result);
         return NULL;
     }
     return result;
@@ -1619,7 +1459,7 @@ static PyObject *
 attrgetter_call(PyObject *op, PyObject *args, PyObject *kw)
 {
     PyObject *op_owner=Py_NewRef(op), *args_owner=Py_NewRef(args);
-    PyObject *selected=NULL, *result=NULL, *saved;
+    PyObject *selected=NULL, *result=NULL;
     if (PyErr_Occurred()) goto done;
     if (!_PyArg_NoKeywords("attrgetter",kw) ||
         !_PyArg_CheckPositional("attrgetter",PyTuple_GET_SIZE(args_owner),1,1)) goto done;
@@ -1627,40 +1467,14 @@ attrgetter_call(PyObject *op, PyObject *args, PyObject *kw)
     if (selected==NULL || PyErr_Occurred()) goto done;
     result=attrgetter_call_impl(attrgetterobject_CAST(op_owner),selected);
     if (PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired_result = result;
-        result = NULL;
-        Py_XDECREF(retired_result);
-        _PyValue_RestoreException(saved);
+        Py_CLEAR(result);
     }
 done:
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = selected;
-        selected = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = args_owner;
-        args_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = op_owner;
-        op_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(selected);
+    Py_CLEAR(args_owner);
+    Py_CLEAR(op_owner);
     if (PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired_result = result;
-        result = NULL;
-        Py_XDECREF(retired_result);
-        _PyValue_RestoreException(saved);
+        Py_CLEAR(result);
         return NULL;
     }
     return result;
@@ -1684,20 +1498,14 @@ attrgetter_vectorcall(PyObject *op, PyObject *const *args,
 static PyObject *
 attrgetter_call_impl(attrgetterobject *ag, PyObject *obj)
 {
-    PyObject *result=NULL, *ag_owner=Py_NewRef((PyObject *)ag), *obj_owner=Py_NewRef(obj), *saved;
+    PyObject *result=NULL, *ag_owner=Py_NewRef((PyObject *)ag), *obj_owner=Py_NewRef(obj);
     PyObject *attrs=Py_NewRef(ag->attr);
     Py_ssize_t nattrs=ag->nattrs;
     if (PyErr_Occurred()) goto done;
     if (nattrs==1) {
         PyObject *attr=PyTuple_GetItemRef(attrs,0);
         if (attr != NULL && !PyErr_Occurred()) result=dotted_getattr(obj_owner,attr);
-        {
-            saved = PyErr_GetRaisedException();
-            PyObject *retired = attr;
-            attr = NULL;
-            Py_XDECREF(retired);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(attr);
         goto done;
     }
     assert(PyTuple_Check(attrs));
@@ -1707,52 +1515,20 @@ attrgetter_call_impl(attrgetterobject *ag, PyObject *obj)
     for (Py_ssize_t i=0;i<nattrs;i++) {
         PyObject *attr=PyTuple_GetItemRef(attrs,i), *val=NULL;
         if (attr != NULL && !PyErr_Occurred()) val=dotted_getattr(obj_owner,attr);
-        {
-            saved = PyErr_GetRaisedException();
-            PyObject *retired = attr;
-            attr = NULL;
-            Py_XDECREF(retired);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(attr);
         if (val==NULL || PyErr_Occurred()) {
             {
-                saved = PyErr_GetRaisedException();
-                PyObject *retired = val;
-                val = NULL;
-                Py_XDECREF(retired);
-                _PyValue_RestoreException(saved);
+                Py_CLEAR(val);
             } goto done;
         }
         if (PyTuple_SetItem(result,i,val)<0 || PyErr_Occurred()) goto done;
     }
 done:
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = attrs;
-        attrs = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = obj_owner;
-        obj_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = ag_owner;
-        ag_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(attrs);
+    Py_CLEAR(obj_owner);
+    Py_CLEAR(ag_owner);
     if (PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired_result = result;
-        result = NULL;
-        Py_XDECREF(retired_result);
-        _PyValue_RestoreException(saved);
+        Py_CLEAR(result);
         return NULL;
     }
     return result;
@@ -1777,59 +1553,27 @@ static PyObject *
 attrgetter_args(attrgetterobject *ag)
 {
     PyObject *ag_owner=Py_NewRef((PyObject *)ag), *attrs=Py_NewRef(ag->attr);
-    PyObject *attrsep=NULL, *attrstrings=NULL, *saved;
+    PyObject *attrsep=NULL, *attrstrings=NULL;
     if (PyErr_Occurred()) goto done;
     attrstrings=PyTuple_New(ag->nattrs);
     if (attrstrings==NULL || PyErr_Occurred()) goto done;
     for (Py_ssize_t i=0;i<ag->nattrs;i++) {
         PyObject *attr=PyTuple_GetItemRef(attrs,i), *attrstr=NULL;
         if (attr!=NULL && !PyErr_Occurred()) attrstr=dotjoinattr(attr,&attrsep);
-        {
-            saved = PyErr_GetRaisedException();
-            PyObject *retired = attr;
-            attr = NULL;
-            Py_XDECREF(retired);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(attr);
         if (attrstr==NULL || PyErr_Occurred()) {
             {
-                saved = PyErr_GetRaisedException();
-                PyObject *retired = attrstr;
-                attrstr = NULL;
-                Py_XDECREF(retired);
-                _PyValue_RestoreException(saved);
+                Py_CLEAR(attrstr);
             } goto done;
         }
         if (PyTuple_SetItem(attrstrings,i,attrstr)<0 || PyErr_Occurred()) goto done;
     }
 done:
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = attrsep;
-        attrsep = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = attrs;
-        attrs = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = ag_owner;
-        ag_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(attrsep);
+    Py_CLEAR(attrs);
+    Py_CLEAR(ag_owner);
     if (PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired_result = attrstrings;
-        attrstrings = NULL;
-        Py_XDECREF(retired_result);
-        _PyValue_RestoreException(saved);
+        Py_CLEAR(attrstrings);
         return NULL;
     }
     return attrstrings;
@@ -1859,13 +1603,7 @@ attrgetter_repr(PyObject *op)
     if (ag->nattrs==1) {
         attr=PyTuple_GetItemRef(attrs,0);
         if (attr!=NULL && !PyErr_Occurred()) attrstrings=dotjoinattr(attr,&attrsep);
-        {
-            saved = PyErr_GetRaisedException();
-            PyObject *retired = attr;
-            attr = NULL;
-            Py_XDECREF(retired);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(attr);
         if (attrstrings!=NULL && !PyErr_Occurred()) {
             repr=PyUnicode_FromFormat("%s(%R)",Py_TYPE(ag)->tp_name,attrstrings);
         }
@@ -1875,42 +1613,14 @@ attrgetter_repr(PyObject *op)
             repr=PyUnicode_FromFormat("%s%R",Py_TYPE(ag)->tp_name,attrstrings);
     }
 leave:
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = attrstrings;
-        attrstrings = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = attrsep;
-        attrsep = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = attrs;
-        attrs = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(attrstrings);
+    Py_CLEAR(attrsep);
+    Py_CLEAR(attrs);
     Py_ReprLeave(op_owner);
 done:
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = op_owner;
-        op_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(op_owner);
     if (PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired_result = repr;
-        repr = NULL;
-        Py_XDECREF(retired_result);
-        _PyValue_RestoreException(saved);
+        Py_CLEAR(repr);
         return NULL;
     }
     return repr;
@@ -2120,47 +1830,13 @@ error:
         _PyValue_RestoreException(saved);
     }
 close_inputs:
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = interned;
-        interned = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = name;
-        name = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = args_owner;
-        args_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = kwds_owner;
-        kwds_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = type_owner;
-        type_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(interned);
+    Py_CLEAR(name);
+    Py_CLEAR(args_owner);
+    Py_CLEAR(kwds_owner);
+    Py_CLEAR(type_owner);
     if (PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired_result = result;
-        result = NULL;
-        Py_XDECREF(retired_result);
-        _PyValue_RestoreException(saved);
+        Py_CLEAR(result);
         return NULL;
     }
     return result;
@@ -2206,7 +1882,7 @@ methodcaller_call(PyObject *op, PyObject *args, PyObject *kw)
 {
     PyObject *op_owner=Py_NewRef(op), *args_owner=Py_NewRef(args);
     PyObject *obj=NULL, *name=NULL, *callargs=NULL, *callkw=NULL;
-    PyObject *method=NULL, *result=NULL, *saved;
+    PyObject *method=NULL, *result=NULL;
     if (PyErr_Occurred()) goto done;
     if (!_PyArg_NoKeywords("methodcaller",kw) ||
         !_PyArg_CheckPositional("methodcaller",PyTuple_GET_SIZE(args_owner),1,1)) goto done;
@@ -2217,61 +1893,15 @@ methodcaller_call(PyObject *op, PyObject *args, PyObject *kw)
     method=PyObject_GetAttr(obj,name);
     if (method!=NULL && !PyErr_Occurred()) result=PyObject_Call(method,callargs,callkw);
 done:
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = method;
-        method = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = callkw;
-        callkw = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = callargs;
-        callargs = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = name;
-        name = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = obj;
-        obj = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = args_owner;
-        args_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = op_owner;
-        op_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(method);
+    Py_CLEAR(callkw);
+    Py_CLEAR(callargs);
+    Py_CLEAR(name);
+    Py_CLEAR(obj);
+    Py_CLEAR(args_owner);
+    Py_CLEAR(op_owner);
     if (PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired_result = result;
-        result = NULL;
-        Py_XDECREF(retired_result);
-        _PyValue_RestoreException(saved);
+        Py_CLEAR(result);
         return NULL;
     }
     return result;
@@ -2282,18 +1912,12 @@ methodcaller_repr(PyObject *op)
 {
     PyObject *op_owner=Py_NewRef(op), *name=NULL, *args=NULL, *kwds=NULL;
     PyObject *argreprs=NULL, *one=NULL, *sep=NULL, *joined=NULL, *repr=NULL;
-    PyObject *key=NULL, *value=NULL, *saved;
+    PyObject *key=NULL, *value=NULL;
     Py_ssize_t npos=0, nkw=0, total=0, i;
     if (PyErr_Occurred()) goto finish;
     int status=Py_ReprEnter(op_owner);
     if (status<0) {
-        {
-            saved = PyErr_GetRaisedException();
-            PyObject *retired = op_owner;
-            op_owner = NULL;
-            Py_XDECREF(retired);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(op_owner);
         return NULL;
     }
     if (status>0) {
@@ -2313,13 +1937,7 @@ methodcaller_repr(PyObject *op)
     for (i=0;i<npos;i++) {
         PyObject *item=PyTuple_GetItemRef(args,i);
         if (item!=NULL && !PyErr_Occurred()) one=PyObject_Repr(item);
-        {
-            saved = PyErr_GetRaisedException();
-            PyObject *retired = item;
-            item = NULL;
-            Py_XDECREF(retired);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(item);
         if (one==NULL || PyErr_Occurred()) goto cleanup;
         if (PyTuple_SetItem(argreprs,i,one)<0 || PyErr_Occurred()) { one=NULL; goto cleanup; }
         one=NULL;
@@ -2336,27 +1954,9 @@ methodcaller_repr(PyObject *op)
             one=PyUnicode_FromFormat("%U=%R",key,value);
             if (one==NULL || PyErr_Occurred()) goto cleanup;
             if (i>=total) {
-                {
-                    saved = PyErr_GetRaisedException();
-                    PyObject *retired = one;
-                    one = NULL;
-                    Py_XDECREF(retired);
-                    _PyValue_RestoreException(saved);
-                }
-                {
-                    saved = PyErr_GetRaisedException();
-                    PyObject *retired = key;
-                    key = NULL;
-                    Py_XDECREF(retired);
-                    _PyValue_RestoreException(saved);
-                }
-                {
-                    saved = PyErr_GetRaisedException();
-                    PyObject *retired = value;
-                    value = NULL;
-                    Py_XDECREF(retired);
-                    _PyValue_RestoreException(saved);
-                }
+                Py_CLEAR(one);
+                Py_CLEAR(key);
+                Py_CLEAR(value);
                 if (PyErr_Occurred()) goto cleanup;
                 i=-1;
                 break;
@@ -2364,20 +1964,8 @@ methodcaller_repr(PyObject *op)
             if (PyTuple_SetItem(argreprs,i,one)<0 || PyErr_Occurred()) { one=NULL; goto cleanup; }
             one=NULL;
             ++i;
-            {
-                saved = PyErr_GetRaisedException();
-                PyObject *retired = key;
-                key = NULL;
-                Py_XDECREF(retired);
-                _PyValue_RestoreException(saved);
-            }
-            {
-                saved = PyErr_GetRaisedException();
-                PyObject *retired = value;
-                value = NULL;
-                Py_XDECREF(retired);
-                _PyValue_RestoreException(saved);
-            }
+            Py_CLEAR(key);
+            Py_CLEAR(value);
             if (PyErr_Occurred()) goto cleanup;
         }
         if (key!=NULL || value!=NULL) goto cleanup;
@@ -2393,84 +1981,20 @@ methodcaller_repr(PyObject *op)
     if (joined==NULL || PyErr_Occurred()) goto cleanup;
     repr=PyUnicode_FromFormat("%s(%R, %U)",Py_TYPE(op_owner)->tp_name,name,joined);
 cleanup:
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = one;
-        one = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = key;
-        key = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = value;
-        value = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = joined;
-        joined = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = sep;
-        sep = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = argreprs;
-        argreprs = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = kwds;
-        kwds = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = args;
-        args = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = name;
-        name = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(one);
+    Py_CLEAR(key);
+    Py_CLEAR(value);
+    Py_CLEAR(joined);
+    Py_CLEAR(sep);
+    Py_CLEAR(argreprs);
+    Py_CLEAR(kwds);
+    Py_CLEAR(args);
+    Py_CLEAR(name);
     Py_ReprLeave(op_owner);
 finish:
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = op_owner;
-        op_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(op_owner);
     if (PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired_result = repr;
-        repr = NULL;
-        Py_XDECREF(retired_result);
-        _PyValue_RestoreException(saved);
+        Py_CLEAR(repr);
         return NULL;
     }
     return repr;
@@ -2506,79 +2030,21 @@ methodcaller_reduce(PyObject *op, PyObject *Py_UNUSED(dummy))
     PyObject *vector_args[2]={(PyObject *)Py_TYPE(op_owner),name};
     constructor=PyObject_VectorcallDict(partial,vector_args,2,kwds);
     if (PyErr_Occurred()) { saved=PyErr_GetRaisedException(); Py_CLEAR(constructor); _PyValue_RestoreException(saved); }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = partial;
-        partial = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(partial);
     if (constructor==NULL || PyErr_Occurred()) goto done;
     result=Py_BuildValue("NO",constructor,args);
     constructor=NULL;
 done:
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = selected;
-        selected = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = constructor;
-        constructor = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = partial;
-        partial = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = newargs;
-        newargs = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = kwds;
-        kwds = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = args;
-        args = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = name;
-        name = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = op_owner;
-        op_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(selected);
+    Py_CLEAR(constructor);
+    Py_CLEAR(partial);
+    Py_CLEAR(newargs);
+    Py_CLEAR(kwds);
+    Py_CLEAR(args);
+    Py_CLEAR(name);
+    Py_CLEAR(op_owner);
     if (PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired_result = result;
-        result = NULL;
-        Py_XDECREF(retired_result);
-        _PyValue_RestoreException(saved);
+        Py_CLEAR(result);
         return NULL;
     }
     return result;

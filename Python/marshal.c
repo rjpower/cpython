@@ -655,9 +655,7 @@ w_complete(PyObject *v, WFILE *p)
 static void
 marshal_close_object(PyObject *object)
 {
-    PyObject *saved = PyErr_GetRaisedException();
     Py_XDECREF(object);
-    _PyValue_RestoreException(saved);
 }
 
 static void

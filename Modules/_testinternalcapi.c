@@ -327,9 +327,7 @@ classify_stack_addresses(PyObject *self, PyObject *args)
             return NULL;
         }
         unsigned long long value = PyLong_AsUnsignedLongLong(object);
-        PyObject *saved = PyErr_GetRaisedException();
         Py_DECREF(object);
-        _PyValue_RestoreException(saved);
         if (PyErr_Occurred()) {
             Py_DECREF(labels);
             Py_DECREF(fast);
@@ -3176,9 +3174,7 @@ pyvalue_contract(PyObject *self, PyObject *arg)
     PyValue_Close(duplicate);
     PyValue_Close(value);
     if (object == NULL || PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
         Py_XDECREF(object);
-        _PyValue_RestoreException(saved);
         return NULL;
     }
     return Py_BuildValue("sN", kind, object);

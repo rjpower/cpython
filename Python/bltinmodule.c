@@ -1716,42 +1716,12 @@ map_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
     }
 
 done:
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired = args;
-        args = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired = type_owner;
-        type_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired = iters_owner;
-        iters_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired = iterator_owner;
-        iterator_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(args);
+    Py_CLEAR(type_owner);
+    Py_CLEAR(iters_owner);
+    Py_CLEAR(iterator_owner);
     if (PyErr_Occurred()) {
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *retired = output;
-            output = NULL;
-            Py_XDECREF(retired);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(output);
     }
     return output;
 }
@@ -3562,13 +3532,7 @@ _PyBuiltin_InitPythonFunctions(PyObject *dict)
     PyObject *mod = PyImport_AddModuleRef("_pybuiltins");
     if (mod == NULL || PyErr_Occurred()) {
         if (mod != NULL) {
-            {
-                PyObject *saved = PyErr_GetRaisedException();
-                PyObject *tmp = mod;
-                mod = NULL;
-                Py_XDECREF(tmp);
-                _PyValue_RestoreException(saved);
-            }
+            Py_CLEAR(mod);
         }
         return -1;
     }
@@ -3585,50 +3549,20 @@ _PyBuiltin_InitPythonFunctions(PyObject *dict)
     for (Py_ssize_t i = 0; i < n; i++) {
         PyObject *name = PyList_GetItemRef(all, i);
         if (name == NULL || PyErr_Occurred()) {
-            {
-                PyObject *saved = PyErr_GetRaisedException();
-                PyObject *tmp = name;
-                name = NULL;
-                Py_XDECREF(tmp);
-                _PyValue_RestoreException(saved);
-            }
+            Py_CLEAR(name);
             goto done;
         }
         PyObject *func = PyObject_GetAttr(mod, name);
         if (func == NULL || PyErr_Occurred()) {
-            {
-                PyObject *saved = PyErr_GetRaisedException();
-                PyObject *tmp = func;
-                func = NULL;
-                Py_XDECREF(tmp);
-                _PyValue_RestoreException(saved);
-            }
-            {
-                PyObject *saved = PyErr_GetRaisedException();
-                PyObject *tmp = name;
-                name = NULL;
-                Py_XDECREF(tmp);
-                _PyValue_RestoreException(saved);
-            }
+            Py_CLEAR(func);
+            Py_CLEAR(name);
             goto done;
         }
         int r = PyDict_SetItem(dict, name, func);
         int failed = r < 0 || PyErr_Occurred();
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = func;
-            func = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(func);
         if (PyErr_Occurred()) failed = 1;
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = name;
-            name = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(name);
         if (PyErr_Occurred()) failed = 1;
         if (failed) {
             goto done;
@@ -3637,21 +3571,9 @@ _PyBuiltin_InitPythonFunctions(PyObject *dict)
     rc = 0;
 
 done:
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = all;
-        all = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(all);
     if (PyErr_Occurred()) rc = -1;
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = mod;
-        mod = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(mod);
     if (PyErr_Occurred()) rc = -1;
     return rc;
 }

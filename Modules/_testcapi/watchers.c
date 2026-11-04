@@ -65,20 +65,14 @@ dict_watch_callback(PyDict_WatchEvent event, PyObject *dict,
         default:
             msg = PyUnicode_FromString("unknown");
     }
-    PyObject *saved = PyErr_GetRaisedException();
     Py_XDECREF(value_object);
-    _PyValue_RestoreException(saved);
-    saved = PyErr_GetRaisedException();
     Py_XDECREF(key_object);
-    _PyValue_RestoreException(saved);
     int status = -1;
     if (msg != NULL && !PyErr_Occurred()) {
         assert(PyList_Check(g_dict_watch_events));
         status = PyList_Append(g_dict_watch_events, msg);
     }
-    saved = PyErr_GetRaisedException();
     Py_XDECREF(msg);
-    _PyValue_RestoreException(saved);
     return PyErr_Occurred() ? -1 : status;
 }
 

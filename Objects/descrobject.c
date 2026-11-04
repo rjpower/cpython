@@ -605,28 +605,10 @@ wrapperdescr_call(PyObject *_descr, PyObject *args, PyObject *kwds)
     if (result == NULL || PyErr_Occurred()) goto cleanup;
 
 cleanup:
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = tail_args;
-        tail_args = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = self;
-        self = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(tail_args);
+    Py_CLEAR(self);
     if (PyErr_Occurred()) {
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = result;
-            result = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
+        Py_CLEAR(result);
         return NULL;
     }
     return result;

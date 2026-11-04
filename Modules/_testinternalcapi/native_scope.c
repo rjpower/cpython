@@ -38,9 +38,7 @@ _testinternalcapi_native_scope_flat_impl(PyObject *module, PyObject *value,
         return NULL;
     }
     PyObject *result = PyNumber_Multiply(value, factor);
-    PyObject *saved = PyErr_GetRaisedException();
     Py_DECREF(factor);
-    _PyValue_RestoreException(saved);
     return result;
 }
 
@@ -112,11 +110,7 @@ publication_destructor(PyObject *capsule)
 static int
 close_destination(PyValue *destination)
 {
-    PyObject *saved = PyErr_GetRaisedException();
-    PyValue value = *destination;
-    *destination = PyValue_NULL;
-    PyValue_XCLOSE(value);
-    _PyValue_RestoreException(saved);
+    PyValue_CLEAR(*destination);
     return PyErr_Occurred() ? -1 : 0;
 }
 
@@ -185,9 +179,7 @@ scope_mechanism(PyObject *argument, int abort_result, int cleanup_error,
     }
     PyObject *result = PyValue_AsObject(destination);
     if (close_destination(&destination) < 0) {
-        PyObject *saved = PyErr_GetRaisedException();
         Py_XDECREF(result);
-        _PyValue_RestoreException(saved);
         return NULL;
     }
     return result;
@@ -304,13 +296,9 @@ completed_call_cleanup(PyObject *capsule)
     PyObject *marker = PyUnicode_FromString("cleanup");
     if (marker != NULL) {
         PyList_Append(ledger, marker);
-        PyObject *saved = PyErr_GetRaisedException();
         Py_DECREF(marker);
-        _PyValue_RestoreException(saved);
     }
-    PyObject *saved = PyErr_GetRaisedException();
     Py_DECREF(ledger);
-    _PyValue_RestoreException(saved);
     if (!PyErr_Occurred()) {
         PyErr_SetString(PyExc_RuntimeError, "completed native call cleanup");
     }
@@ -329,9 +317,7 @@ native_scope_cleanup_argument(PyObject *Py_UNUSED(module), PyObject *ledger)
     PyObject *capsule = PyCapsule_New(ledger, "native_scope.cleanup",
                                      completed_call_cleanup);
     if (capsule == NULL) {
-        PyObject *saved = PyErr_GetRaisedException();
         Py_DECREF(ledger);
-        _PyValue_RestoreException(saved);
     }
     return capsule;
 }
@@ -350,9 +336,7 @@ native_scope_discard(PyObject *Py_UNUSED(module), PyObject *argument)
             return NULL;
         }
         int status = PyList_Append(ledger, marker);
-        PyObject *saved = PyErr_GetRaisedException();
         Py_DECREF(marker);
-        _PyValue_RestoreException(saved);
         if (status < 0 || PyErr_Occurred()) {
             return NULL;
         }
@@ -387,18 +371,14 @@ gateway_mechanism(PyObject *argument)
     }
     _PyNativeResult_Publish(&scope.result, &destination, publish_state, &state);
     int status = _PyNativeScope_End(&scope);
-    PyObject *saved = PyErr_GetRaisedException();
     Py_CLEAR(callable);
-    _PyValue_RestoreException(saved);
     if (status < 0 || PyErr_Occurred()) {
         close_destination(&destination);
         return NULL;
     }
     PyObject *result = PyValue_AsObject(destination);
     if (close_destination(&destination) < 0) {
-        saved = PyErr_GetRaisedException();
         Py_XDECREF(result);
-        _PyValue_RestoreException(saved);
         return NULL;
     }
     return result;
@@ -406,9 +386,7 @@ gateway_mechanism(PyObject *argument)
 abort:
     _PyNativeResult_Abort(&scope.result, publish_state, &state);
     _PyNativeScope_End(&scope);
-    saved = PyErr_GetRaisedException();
     Py_XDECREF(callable);
-    _PyValue_RestoreException(saved);
     close_destination(&destination);
     return NULL;
 }
@@ -601,9 +579,7 @@ vector_mechanism(PyObject *callable, const PyValue *values,
     }
     PyObject *result = PyValue_AsObject(destination);
     if (close_destination(&destination) < 0) {
-        PyObject *saved = PyErr_GetRaisedException();
         Py_XDECREF(result);
-        _PyValue_RestoreException(saved);
         return NULL;
     }
     return result;
@@ -662,9 +638,7 @@ native_scope_vector(PyObject *Py_UNUSED(module), PyObject *const *args,
     PyMem_Free(values);
     _PyValue_RestoreException(saved);
     if (PyErr_Occurred()) {
-        saved = PyErr_GetRaisedException();
         Py_XDECREF(result);
-        _PyValue_RestoreException(saved);
         return NULL;
     }
     return result;
@@ -687,9 +661,7 @@ vector_fault_mechanism(PyObject *callable, int fault)
     }
     PyErr_SetRaisedException(saved);
     if (PyErr_Occurred()) {
-        saved = PyErr_GetRaisedException();
         Py_XDECREF(result);
-        _PyValue_RestoreException(saved);
         return NULL;
     }
     return result;
@@ -881,20 +853,12 @@ native_scope_call_state(PyObject *Py_UNUSED(module), PyObject *code_object)
             base, count, destination, values,
             (unsigned long long)present, (unsigned long long)strong);
     }
-    PyObject *saved = PyErr_GetRaisedException();
     Py_XDECREF(values);
-    _PyValue_RestoreException(saved);
     for (int i = nslots; i-- > 0;) {
-        saved = PyErr_GetRaisedException();
-        PyValue owner = snapshots[i];
-        snapshots[i] = PyValue_NULL;
-        PyValue_XCLOSE(owner);
-        _PyValue_RestoreException(saved);
+        PyValue_CLEAR(snapshots[i]);
     }
     if (PyErr_Occurred()) {
-        saved = PyErr_GetRaisedException();
         Py_XDECREF(report);
-        _PyValue_RestoreException(saved);
         return NULL;
     }
     return report;

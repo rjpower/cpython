@@ -8,9 +8,7 @@
 static void
 dict_fixture_close(PyObject *object)
 {
-    PyObject *saved = PyErr_GetRaisedException();
     Py_XDECREF(object);
-    _PyValue_RestoreException(saved);
 }
 
 static PyObject *
@@ -788,9 +786,7 @@ done:
 static void
 dict_public_close_value(PyValue value)
 {
-    PyObject *saved = PyErr_GetRaisedException();
     PyValue_XCLOSE(value);
-    _PyValue_RestoreException(saved);
 }
 
 static const char *

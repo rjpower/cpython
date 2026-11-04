@@ -1359,22 +1359,12 @@ lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
              (Py_IS_TYPE(PyValue_AsKnownObjectBorrow(value), &PyLong_Type) ||
               Py_IS_TYPE(PyValue_AsKnownObjectBorrow(value), &PyUnicode_Type)))) {
             key = PyValue_AsObject(value);
-            {
-                PyObject *saved = PyErr_GetRaisedException();
-                PyValue retired = value;
-                value = PyValue_NULL;
-                PyValue_XCLOSE(retired);
-                _PyValue_RestoreException(saved);
-            }
+            PyValue_CLEAR(value);
             if (key == NULL || PyErr_Occurred()) goto error;
             goto close_inputs;
         }
         {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyValue retired = value;
-            value = PyValue_NULL;
-            PyValue_XCLOSE(retired);
-            _PyValue_RestoreException(saved);
+            PyValue_CLEAR(value);
         }if (PyErr_Occurred()) goto error;
     }
     if (!typed && nkwargs==0) {
@@ -1433,13 +1423,7 @@ lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
             if (PyValue_IsNull(value) || PyErr_Occurred()) goto error;
             PyTypeObject *type=PyValue_TYPE(value);
             PyObject *type_owner=Py_NewRef((PyObject *)type);
-            {
-                PyObject *saved = PyErr_GetRaisedException();
-                PyValue retired = value;
-                value = PyValue_NULL;
-                PyValue_XCLOSE(retired);
-                _PyValue_RestoreException(saved);
-            }
+            PyValue_CLEAR(value);
             if (type_owner==NULL) goto error;
             if (PyErr_Occurred()) {
                 saved=PyErr_GetRaisedException();
@@ -1457,13 +1441,7 @@ lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
                 if (written>=key_size) { PyErr_SetString(PyExc_RuntimeError,"keywords dict changed size during key construction"); goto error; }
                 PyTypeObject *type=PyValue_TYPE(value);
                 PyObject *type_owner=Py_NewRef((PyObject *)type);
-                {
-                    PyObject *saved = PyErr_GetRaisedException();
-                    PyValue retired = value;
-                    value = PyValue_NULL;
-                    PyValue_XCLOSE(retired);
-                    _PyValue_RestoreException(saved);
-                }
+                PyValue_CLEAR(value);
                 if (type_owner==NULL) goto error;
                 if (PyErr_Occurred()) {
                     saved=PyErr_GetRaisedException();
@@ -1482,72 +1460,18 @@ lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
         goto error;
     }
 close_inputs:
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = args_owner;
-        args_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = kwds_owner;
-        kwds_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = mark_owner;
-        mark_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(args_owner);
+    Py_CLEAR(kwds_owner);
+    Py_CLEAR(mark_owner);
     if (PyErr_Occurred()) goto error;
     return key;
 error:
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyValue retired = dict_key;
-        dict_key = PyValue_NULL;
-        PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyValue retired = value;
-        value = PyValue_NULL;
-        PyValue_XCLOSE(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = args_owner;
-        args_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = kwds_owner;
-        kwds_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = mark_owner;
-        mark_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = key;
-        key = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
+    PyValue_CLEAR(dict_key);
+    PyValue_CLEAR(value);
+    Py_CLEAR(args_owner);
+    Py_CLEAR(kwds_owner);
+    Py_CLEAR(mark_owner);
+    Py_CLEAR(key);
     return NULL;
 }
 

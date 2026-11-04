@@ -1715,9 +1715,7 @@ _PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
     if (dict != NULL) {
         Py_INCREF(dict);
         int found = PyDict_GetValue(dict, PyValue_FromObjectBorrow(name), &attr);
-        PyObject *saved = PyErr_GetRaisedException();
         Py_DECREF(dict);
-        _PyValue_RestoreException(saved);
         if (found < 0 || PyErr_Occurred()) {
             PyValue_XCLOSE(attr);
             goto done;
@@ -1768,15 +1766,9 @@ _PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
      * These canonical C outputs precede any displaced metadata release. */
     *method = _PyValue_Publish(&result);
     *self = _PyValue_Publish(&result_self);
-    PyObject *saved = PyErr_GetRaisedException();
     PyValue_XCLOSE(descriptor);
-    _PyValue_RestoreException(saved);
-    saved = PyErr_GetRaisedException();
     PyValue_XCLOSE(original_self);
-    _PyValue_RestoreException(saved);
-    saved = PyErr_GetRaisedException();
     Py_DECREF(tp);
-    _PyValue_RestoreException(saved);
     return PyErr_Occurred() ? -1 : status;
 }
 
@@ -1786,11 +1778,7 @@ _PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
 static void
 attribute_close(PyObject **slot)
 {
-    PyObject *saved = PyErr_GetRaisedException();
-    PyObject *owner = *slot;
-    *slot = NULL;
-    Py_XDECREF(owner);
-    _PyValue_RestoreException(saved);
+    Py_CLEAR(*slot);
 }
 
 PyObject *
@@ -1818,9 +1806,7 @@ _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
     Py_INCREF(tp);
     if (!_PyType_IsReady(tp)) {
         if (PyType_Ready(tp) < 0 || PyErr_Occurred()) {
-            PyObject *saved = PyErr_GetRaisedException();
             Py_DECREF(tp);
-            _PyValue_RestoreException(saved);
             return NULL;
         }
     }
@@ -1944,9 +1930,7 @@ _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
     _PyThreadState_PopCValue(tstate, &cref);
     _PyValue_RestoreException(saved);
     attribute_close(&name);
-    saved = PyErr_GetRaisedException();
     Py_DECREF(tp);
-    _PyValue_RestoreException(saved);
     if (PyErr_Occurred()) {
         attribute_close(&res);
     }
@@ -3129,13 +3113,9 @@ Py_ReprEnter(PyObject *obj)
 done:
     attribute_close(&candidate);
     attribute_close(&list);
-    PyObject *saved = PyErr_GetRaisedException();
     PyValue_XCLOSE(guard);
-    _PyValue_RestoreException(saved);
     attribute_close(&dict);
-    saved = PyErr_GetRaisedException();
     PyValue_CLOSE(value);
-    _PyValue_RestoreException(saved);
     return PyErr_Occurred() ? -1 : result;
 }
 

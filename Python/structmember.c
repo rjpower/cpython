@@ -78,9 +78,7 @@ _PyMember_SetValue(PyObject *obj, PyMemberDef *member, PyValue value)
     }
     *slot = PyValue_MakeHeapSafe(PyValue_Borrow(value));
     _PyValue_CheckHome(*slot);
-    PyObject *saved = PyErr_GetRaisedException();
     PyValue_XCLOSE(previous);
-    _PyValue_RestoreException(saved);
     return PyErr_Occurred() ? -1 : 0;
 }
 

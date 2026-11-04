@@ -514,9 +514,7 @@ bad_state:
                     "incremental decoder getstate() must return (bytes, int)");
 done:
     ;
-    PyObject *saved = PyErr_GetRaisedException();
     Py_XDECREF(state);
-    _PyValue_RestoreException(saved);
     if (PyErr_Occurred()) {
         tok->done = PyErr_ExceptionMatches(PyExc_MemoryError)
             ? E_NOMEM : E_DECODE;

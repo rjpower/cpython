@@ -34,9 +34,7 @@ intern_name(PyObject *name)
     Py_INCREF(name);
     PyUnicode_InternInPlace(&name);
     if (PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
         Py_XDECREF(name);
-        _PyValue_RestoreException(saved);
         return NULL;
     }
     return name;
@@ -61,27 +59,17 @@ type_cache_lookup(PyObject *Py_UNUSED(self), PyObject *args)
         _PyTypeCache_Lookup((PyTypeObject *)type_obj, name);
     PyObject *value = PyValue_IsNull(r.value)
         ? Py_NewRef(Py_None) : PyValue_AsObject(r.value);
-    PyObject *saved = PyErr_GetRaisedException();
     PyValue_XCLOSE(r.value);
-    _PyValue_RestoreException(saved);
-    saved = PyErr_GetRaisedException();
     Py_DECREF(name);
-    _PyValue_RestoreException(saved);
     if (value == NULL || PyErr_Occurred()) {
-        saved = PyErr_GetRaisedException();
         Py_XDECREF(value);
-        _PyValue_RestoreException(saved);
         return NULL;
     }
     PyObject *report = Py_BuildValue("(iOk)", r.cache_hit, value,
                                    (unsigned long)r.version_tag);
-    saved = PyErr_GetRaisedException();
     Py_DECREF(value);
-    _PyValue_RestoreException(saved);
     if (PyErr_Occurred()) {
-        saved = PyErr_GetRaisedException();
         Py_XDECREF(report);
-        _PyValue_RestoreException(saved);
         return NULL;
     }
     return report;
@@ -134,17 +122,11 @@ typecache_run_mutation(PyObject *Py_UNUSED(self), PyObject *const *args,
         result = PyObject_CallNoArgs(callback);
     }
 done:
-    PyObject *saved = PyErr_GetRaisedException();
     Py_DECREF(callback);
-    _PyValue_RestoreException(saved);
-    saved = PyErr_GetRaisedException();
     Py_DECREF(type);
-    _PyValue_RestoreException(saved);
     _PyTypeMutation_End(&scope);
     if (PyErr_Occurred()) {
-        saved = PyErr_GetRaisedException();
         Py_XDECREF(result);
-        _PyValue_RestoreException(saved);
         return NULL;
     }
     return result;

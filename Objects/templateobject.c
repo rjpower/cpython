@@ -126,13 +126,7 @@ template_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
                 PyExc_TypeError,
                 "Template.__new__ *args need to be of type 'str' or 'Interpolation', got %N",
                 invalid_type);
-            {
-                PyObject *saved = PyErr_GetRaisedException();
-                PyObject *tmp = invalid_type;
-                invalid_type = NULL;
-                Py_XDECREF(tmp);
-                _PyValue_RestoreException(saved);
-            }
+            Py_CLEAR(invalid_type);
             return NULL;
         }
     }
@@ -182,52 +176,16 @@ template_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 
     template = _PyTemplate_Build(strings, interpolations);
     if (template == NULL || PyErr_Occurred()) goto error;
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = strings;
-        strings = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(strings);
     if (PyErr_Occurred()) goto error;
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = interpolations;
-        interpolations = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(interpolations);
     if (PyErr_Occurred()) goto error;
     return template;
 error:
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = concat;
-        concat = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = strings;
-        strings = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = interpolations;
-        interpolations = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = template;
-        template = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(concat);
+    Py_CLEAR(strings);
+    Py_CLEAR(interpolations);
+    Py_CLEAR(template);
     return NULL;
 }
 
@@ -315,21 +273,9 @@ template_strings_concat(PyObject *left, PyObject *right)
 
     concat = PyUnicode_Concat(left_laststring, right_firststring);
     if (concat == NULL || PyErr_Occurred()) goto error;
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = left_laststring;
-        left_laststring = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(left_laststring);
     if (PyErr_Occurred()) goto error;
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = right_firststring;
-        right_firststring = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(right_firststring);
     if (PyErr_Occurred()) goto error;
 
     newstrings = PyTuple_New(left_stringslen + right_stringslen - 1);
@@ -350,34 +296,10 @@ template_strings_concat(PyObject *left, PyObject *right)
 
     return newstrings;
 error:
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = left_laststring;
-        left_laststring = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = right_firststring;
-        right_firststring = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = concat;
-        concat = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = newstrings;
-        newstrings = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(left_laststring);
+    Py_CLEAR(right_firststring);
+    Py_CLEAR(concat);
+    Py_CLEAR(newstrings);
     return NULL;
 }
 
@@ -435,20 +357,8 @@ template_values_get(PyObject *op, void *Py_UNUSED(data))
 
     return values;
 error:
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = value;
-        value = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = values;
-        values = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
+    Py_CLEAR(value);
+    Py_CLEAR(values);
     return NULL;
 }
 

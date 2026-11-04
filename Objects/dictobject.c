@@ -4725,12 +4725,13 @@ _PyDict_SetDefaultValue(PyObject *op, PyValue key, PyValue value, PyValue *resul
         *result = PyValue_NULL;
     }
     assert(PyValue_IsLanguageValue(key) && PyValue_IsLanguageValue(value));
-    if (!PyAnyDict_Check(op) || !can_modify_dict((PyDictObject *)op) || PyErr_Occurred()) {
+    if (!PyAnyDict_Check(op) || PyErr_Occurred()) {
         if (!PyErr_Occurred()) {
             PyErr_BadInternalCall();
         }
         return -1;
     }
+    assert(can_modify_dict((PyDictObject *)op));
     key = PyValue_MakeHeapSafe(PyValue_Borrow(key));
     value = PyValue_MakeHeapSafe(PyValue_Borrow(value));
     Py_hash_t hash = _PyValue_Hash(key);

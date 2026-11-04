@@ -1648,17 +1648,20 @@ config_dict_get_xoptions(PyObject *dict, const char *name, PyConfig *config,
     Py_ssize_t pos = 0;
     PyObject *key, *value;
     PyWideStringList wstrlist = _PyWideStringList_INIT;
-    while (PyDict_Next(xoptions, &pos, &key, &value)) {
+    int rc;
+    while ((rc = PyDict_NextEntryRef(xoptions, &pos, &key, &value)) > 0) {
         PyObject *item;
 
         if (value != Py_True) {
             item = PyUnicode_FromFormat("%S=%S", key, value);
-            if (item == NULL) {
-                goto error;
-            }
         }
         else {
             item = Py_NewRef(key);
+        }
+        Py_DECREF(key);
+        Py_DECREF(value);
+        if (item == NULL) {
+            goto error;
         }
 
         wchar_t *wstr = PyUnicode_AsWideCharString(item, NULL);
@@ -1673,6 +1676,9 @@ config_dict_get_xoptions(PyObject *dict, const char *name, PyConfig *config,
             PyErr_NoMemory();
             goto error;
         }
+    }
+    if (rc < 0) {
+        goto error;
     }
 
     if (_PyWideStringList_Copy(result, &wstrlist) < 0) {
@@ -4048,8 +4054,13 @@ _Py_DumpPathConfig(PyThreadState *tstate)
         PySys_WriteStderr("  sys.path = [\n");
         Py_ssize_t len = PyList_GET_SIZE(sys_path);
         for (Py_ssize_t i=0; i < len; i++) {
-            PyObject *path = PyList_GET_ITEM(sys_path, i);
+            PyObject *path = PyList_GetItemRef(sys_path, i);
+            if (path == NULL) {
+                PyErr_Clear();
+                break;
+            }
             PySys_FormatStderr("    %A,\n", path);
+            Py_DECREF(path);
         }
         PySys_WriteStderr("  ]\n");
     }
@@ -5041,13 +5052,18 @@ PyConfig_Set(const char *name, PyObject *value)
                 return -1;
             }
             for (Py_ssize_t i=0; i < PyList_GET_SIZE(value); i++) {
-                PyObject *item = PyList_GET_ITEM(value, i);
+                PyObject *item = PyList_GetItemRef(value, i);
+                if (item == NULL) {
+                    return -1;
+                }
                 if (!PyUnicode_Check(item)) {
                     PyErr_Format(PyExc_TypeError,
                                  "expected str, list item %zd has type %T",
                                  i, item);
+                    Py_DECREF(item);
                     return -1;
                 }
+                Py_DECREF(item);
             }
         }
         else {
@@ -5061,19 +5077,29 @@ PyConfig_Set(const char *name, PyObject *value)
 
             Py_ssize_t pos = 0;
             PyObject *key, *item;
-            while (PyDict_Next(value, &pos, &key, &item)) {
+            int rc;
+            while ((rc = PyDict_NextEntryRef(value, &pos, &key, &item)) > 0) {
                 if (!PyUnicode_Check(key)) {
                     PyErr_Format(PyExc_TypeError,
                                  "expected str, "
                                  "got dict key type %T", key);
+                    Py_DECREF(key);
+                    Py_DECREF(item);
                     return -1;
                 }
                 if (!PyUnicode_Check(item) && !PyBool_Check(item)) {
                     PyErr_Format(PyExc_TypeError,
                                  "expected str or bool, "
                                  "got dict value type %T", key);
+                    Py_DECREF(key);
+                    Py_DECREF(item);
                     return -1;
                 }
+                Py_DECREF(key);
+                Py_DECREF(item);
+            }
+            if (rc < 0) {
+                return -1;
             }
         }
         break;

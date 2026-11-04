@@ -27,7 +27,7 @@
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_runtime_init.h"  // _PyRuntimeState_INIT
-#include "pycore_setobject.h"     // _PySet_NextEntry()
+#include "pycore_setobject.h"     // _PySet_NextBorrowed()
 #include "pycore_value.h"      // PyValue_FromPyObjectBorrow()
 #include "pycore_stats.h"         // _PyStats_InterpInit()
 #include "pycore_sysmodule.h"     // _PySys_ClearAttrString()
@@ -853,27 +853,35 @@ pycore_init_builtins(PyThreadState *tstate)
     }
     interp->builtins = Py_NewRef(builtins_dict);
 
-    PyObject *isinstance = PyDict_GetItemWithError(builtins_dict, &_Py_ID(isinstance));
-    if (!isinstance) {
+    // No reference is retained for these four functions. The builtins dict
+    // keeps them alive, and from the copy below builtins_copy does too, so a
+    // later "del builtins.isinstance" cannot free them. The callable caches
+    // compare by identity only; all and any become immortal below.
+    PyObject *isinstance;
+    if (PyDict_GetItemRef(builtins_dict, &_Py_ID(isinstance), &isinstance) <= 0) {
         goto error;
     }
     interp->callable_cache.isinstance = isinstance;
+    Py_DECREF(isinstance);
 
-    PyObject *len = PyDict_GetItemWithError(builtins_dict, &_Py_ID(len));
-    if (!len) {
+    PyObject *len;
+    if (PyDict_GetItemRef(builtins_dict, &_Py_ID(len), &len) <= 0) {
         goto error;
     }
     interp->callable_cache.len = len;
+    Py_DECREF(len);
 
-    PyObject *all = PyDict_GetItemWithError(builtins_dict, &_Py_ID(all));
-    if (!all) {
+    PyObject *all;
+    if (PyDict_GetItemRef(builtins_dict, &_Py_ID(all), &all) <= 0) {
         goto error;
     }
+    Py_DECREF(all);
 
-    PyObject *any = PyDict_GetItemWithError(builtins_dict, &_Py_ID(any));
-    if (!any) {
+    PyObject *any;
+    if (PyDict_GetItemRef(builtins_dict, &_Py_ID(any), &any) <= 0) {
         goto error;
     }
+    Py_DECREF(any);
 
     PyObject *common_objs[NUM_COMMON_CONSTANTS] = {NULL};
     common_objs[CONSTANT_ASSERTIONERROR] = PyExc_AssertionError;
@@ -1527,12 +1535,13 @@ init_interp_main(PyThreadState *tstate)
                 Py_DECREF(path0);
                 return _PyStatus_ERR("can't initialize sys.path[0]");
             }
-            PyObject *sys_path = PyDict_GetItemWithError(sysdict, &_Py_ID(path));
-            if (sys_path == NULL) {
+            PyObject *sys_path;
+            if (PyDict_GetItemRef(sysdict, &_Py_ID(path), &sys_path) <= 0) {
                 Py_DECREF(path0);
                 return _PyStatus_ERR("can't initialize sys.path[0]");
             }
             int res = PyList_Insert(sys_path, 0, path0);
+            Py_DECREF(sys_path);
             Py_DECREF(path0);
             if (res) {
                 return _PyStatus_ERR("can't initialize sys.path[0]");
@@ -1759,8 +1768,14 @@ finalize_remove_modules(PyObject *modules, int verbose)
     if (PyDict_CheckExact(modules)) {
         Py_ssize_t pos = 0;
         PyObject *key, *value;
-        while (PyDict_Next(modules, &pos, &key, &value)) {
+        int rc;
+        while ((rc = PyDict_NextEntryRef(modules, &pos, &key, &value)) > 0) {
             CLEAR_MODULE(key, value);
+            Py_DECREF(key);
+            Py_DECREF(value);
+        }
+        if (rc < 0) {
+            PyErr_FormatUnraisable("Exception ignored while removing modules");
         }
         // The last module must not outlive its removal in this frame.
     }
@@ -1831,16 +1846,30 @@ finalize_modules_clear_weaklist(PyInterpreterState *interp,
 {
     // First clear modules imported later
     for (Py_ssize_t i = PyList_GET_SIZE(weaklist) - 1; i >= 0; i--) {
-        PyObject *tup = PyList_GET_ITEM(weaklist, i);
-        PyObject *name = PyTuple_GET_ITEM(tup, 0);
-        PyObject *mod = _PyWeakref_GET_REF(PyTuple_GET_ITEM(tup, 1));
+        PyObject *tup = PyList_GetItemRef(weaklist, i);
+        if (tup == NULL) {
+            PyErr_FormatUnraisable("Exception ignored while wiping modules");
+            continue;
+        }
+        PyObject *name = PyTuple_GetItemRef(tup, 0);
+        if (name == NULL) {
+            PyErr_FormatUnraisable("Exception ignored while wiping modules");
+            Py_DECREF(tup);
+            continue;
+        }
+        // Item 1 is the weakref made by finalize_remove_modules().
+        PyObject *mod = _PyWeakref_GET_REF(_PyTuple_GET_OBJECT(tup, 1));
         if (mod == NULL) {
+            Py_DECREF(name);
+            Py_DECREF(tup);
             continue;
         }
         assert(PyModule_Check(mod));
         PyObject *dict = _PyModule_GetDict(mod);  // borrowed reference
         if (dict == interp->builtins || dict == interp->sysdict) {
             Py_DECREF(mod);
+            Py_DECREF(name);
+            Py_DECREF(tup);
             continue;
         }
         if (verbose && PyUnicode_Check(name)) {
@@ -1848,6 +1877,8 @@ finalize_modules_clear_weaklist(PyInterpreterState *interp,
         }
         _PyModule_Clear(mod);
         Py_DECREF(mod);
+        Py_DECREF(name);
+        Py_DECREF(tup);
     }
 }
 
@@ -3520,6 +3551,14 @@ release_dict_lock_for_dump(PyObject *obj)
 #endif
 }
 
+/* The object behind a borrowed dict or set view, or NULL for an inline
+ * scalar. Allocation-free, for the fault dump below. */
+static PyObject *
+dump_object_view(PyValue value)
+{
+    return PyValue_IsObject(value) ? PyValue_AsPyObjectBorrow(value) : NULL;
+}
+
 // Dump the list of extension modules of sys.modules, excluding stdlib modules
 // (sys.stdlib_module_names), into fd file descriptor.
 //
@@ -3538,22 +3577,25 @@ _Py_DumpExtensionModules(int fd, PyInterpreterState *interp)
     }
 
     Py_ssize_t pos;
+    PyValue key_value, value_value;
     PyObject *key, *value;
 
     // Avoid PyDict_GetItemString() which calls PyUnicode_FromString(),
     // memory cannot be allocated on the heap in a signal handler.
-    // Iterate on the dict instead.
+    // Iterate on the dict instead, with borrowed views: no allocation,
+    // no exception and no reference count changes.
     PyObject *stdlib_module_names = NULL;
-    if (interp->sysdict != NULL) {
+    if (interp->sysdict != NULL && PyDict_Check(interp->sysdict)) {
         pos = 0;
         if (!acquire_dict_lock_for_dump(interp->sysdict)) {
             // If we cannot acquire the lock, just don't dump the list of extension modules.
             return;
         }
-        while (_PyDict_Next(interp->sysdict, &pos, &key, &value, NULL)) {
-            if (PyUnicode_Check(key)
+        while (_PyDict_NextBorrowed(interp->sysdict, &pos, &key_value, &value_value)) {
+            key = dump_object_view(key_value);
+            if (key != NULL && PyUnicode_Check(key)
                && PyUnicode_CompareWithASCIIString(key, "stdlib_module_names") == 0) {
-                stdlib_module_names = value;
+                stdlib_module_names = dump_object_view(value_value);
                 break;
             }
         }
@@ -3573,11 +3615,13 @@ _Py_DumpExtensionModules(int fd, PyInterpreterState *interp)
         // If we cannot acquire the lock, just don't dump the list of extension modules.
         return;
     }
-    while (_PyDict_Next(modules, &pos, &key, &value, NULL)) {
-        if (!PyUnicode_Check(key)) {
+    while (_PyDict_NextBorrowed(modules, &pos, &key_value, &value_value)) {
+        key = dump_object_view(key_value);
+        value = dump_object_view(value_value);
+        if (key == NULL || !PyUnicode_Check(key)) {
             continue;
         }
-        if (!_PyModule_IsExtension(value)) {
+        if (value == NULL || !_PyModule_IsExtension(value)) {
             continue;
         }
         // Use the module name from the sys.modules key,
@@ -3586,11 +3630,11 @@ _Py_DumpExtensionModules(int fd, PyInterpreterState *interp)
             int is_stdlib_ext = 0;
 
             Py_ssize_t i = 0;
-            PyObject *item;
-            Py_hash_t hash;
+            PyValue item_value;
             // if stdlib_module_names is not NULL, it is always a frozenset.
-            while (_PySet_NextEntry(stdlib_module_names, &i, &item, &hash)) {
-                if (!PyUnicode_Check(item)) {
+            while (_PySet_NextBorrowed(stdlib_module_names, &i, &item_value)) {
+                PyObject *item = dump_object_view(item_value);
+                if (item == NULL || !PyUnicode_Check(item)) {
                     continue;
                 }
                 Py_ssize_t len = PyUnicode_GET_LENGTH(item);

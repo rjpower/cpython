@@ -366,9 +366,13 @@ _PyRun_InteractiveOne(FILE *fp, PyObject *filename, PyCompilerFlags *flags)
                 Py_DECREF(xs);
                 goto error;
             }
-            PyObject *line = PyList_GET_ITEM(xs, n - 1);
-            PyObject_SetAttr(exc, &_Py_ID(text), line);
+            PyObject *line = PyList_GetItemRef(xs, n - 1);
             Py_DECREF(xs);
+            if (line == NULL) {
+                goto error;
+            }
+            PyObject_SetAttr(exc, &_Py_ID(text), line);
+            Py_DECREF(line);
         }
 error:
         Py_DECREF(interactive_src);

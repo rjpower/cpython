@@ -15,6 +15,10 @@ PyAPI_FUNC(int) _PySet_NextValue(
     PyValue *key,
     Py_hash_t *hash);
 
+// Borrowed iteration for core code that must not allocate, fail or touch
+// reference counts (fault dumps): 1 with a borrowed key view, 0 at the end.
+PyAPI_FUNC(int) _PySet_NextBorrowed(PyObject *set, Py_ssize_t *pos, PyValue *key);
+
 // Export for '_pickle' shared extension
 PyAPI_FUNC(int) _PySet_NextEntryRef(
     PyObject *set,

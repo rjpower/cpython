@@ -3485,6 +3485,18 @@ _PySet_NextValue(PyObject *set, Py_ssize_t *pos, PyValue *key, Py_hash_t *hash)
 }
 
 int
+_PySet_NextBorrowed(PyObject *set, Py_ssize_t *pos, PyValue *key)
+{
+    assert(PyAnySet_Check(set));
+    setentry *entry;
+    if (!set_next((PySetObject *)set, pos, &entry)) {
+        return 0;
+    }
+    *key = PyValue_Borrow(entry->key);
+    return 1;
+}
+
+int
 _PySet_NextEntryRef(PyObject *set, Py_ssize_t *pos, PyObject **key, Py_hash_t *hash)
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(set);

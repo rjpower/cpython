@@ -157,14 +157,17 @@ builtin___build_class__(PyObject *self, PyObject *const *args, Py_ssize_t nargs,
     if (meta == NULL) {
         /* if there are no bases, use type: */
         if (PyTuple_GET_SIZE(bases) == 0) {
-            meta = (PyObject *) (&PyType_Type);
+            meta = Py_NewRef((PyObject *) (&PyType_Type));
         }
         /* else get the type of the first base */
         else {
-            PyObject *base0 = PyTuple_GET_ITEM(bases, 0);
-            meta = (PyObject *)Py_TYPE(base0);
+            PyObject *base0 = PyTuple_GetItemRef(bases, 0);
+            if (base0 == NULL) {
+                goto error;
+            }
+            meta = Py_NewRef((PyObject *)Py_TYPE(base0));
+            Py_DECREF(base0);
         }
-        Py_INCREF(meta);
         isclass = 1;  /* meta is really a class */
     }
 
@@ -1491,7 +1494,13 @@ map_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 
     for (i=1 ; i<numargs ; i++) {
         /* Get iterator. */
-        it = PyObject_GetIter(PyTuple_GET_ITEM(args, i));
+        PyObject *arg = PyTuple_GetItemRef(args, i);
+        if (arg == NULL) {
+            Py_DECREF(iters);
+            return NULL;
+        }
+        it = PyObject_GetIter(arg);
+        Py_DECREF(arg);
         if (it == NULL) {
             Py_DECREF(iters);
             return NULL;
@@ -1505,9 +1514,14 @@ map_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         Py_DECREF(iters);
         return NULL;
     }
+    func = PyTuple_GetItemRef(args, 0);
+    if (func == NULL) {
+        Py_DECREF(lz);
+        Py_DECREF(iters);
+        return NULL;
+    }
     lz->iters = iters;
-    func = PyTuple_GET_ITEM(args, 0);
-    lz->func = Py_NewRef(func);
+    lz->func = func;
     lz->strict = strict;
 
     return (PyObject *)lz;
@@ -1601,7 +1615,8 @@ map_next(PyObject *self)
 
     Py_ssize_t nargs = 0;
     for (i = 0; i < niters; i++) {
-        PyObject *it = PyTuple_GET_ITEM(lz->iters, i);
+        // iters holds only iterators made by PyObject_GetIter(): never a scalar.
+        PyObject *it = _PyTuple_GET_OBJECT(lz->iters, i);
         PyObject *val = Py_TYPE(it)->tp_iternext(it);
         if (val == NULL) {
             if (lz->strict) {
@@ -1634,7 +1649,8 @@ check:
         goto exit_no_result;
     }
     for (i = 1; i < niters; i++) {
-        PyObject *it = PyTuple_GET_ITEM(lz->iters, i);
+        // iters holds only iterators made by PyObject_GetIter(): never a scalar.
+        PyObject *it = _PyTuple_GET_OBJECT(lz->iters, i);
         PyObject *val = (*Py_TYPE(it)->tp_iternext)(it);
         if (val) {
             Py_DECREF(val);
@@ -3217,8 +3233,13 @@ zip_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     if (ittuple == NULL)
         return NULL;
     for (i=0; i < tuplesize; ++i) {
-        PyObject *item = PyTuple_GET_ITEM(args, i);
+        PyObject *item = PyTuple_GetItemRef(args, i);
+        if (item == NULL) {
+            Py_DECREF(ittuple);
+            return NULL;
+        }
         PyObject *it = PyObject_GetIter(item);
+        Py_DECREF(item);
         if (it == NULL) {
             Py_DECREF(ittuple);
             return NULL;
@@ -3280,7 +3301,6 @@ zip_next(PyObject *self)
     PyObject *result = lz->result;
     PyObject *it;
     PyObject *item;
-    PyObject *olditem;
 
     if (tuplesize == 0)
         return NULL;
@@ -3288,7 +3308,7 @@ zip_next(PyObject *self)
     if (_PyObject_IsUniquelyReferenced(result)) {
         Py_INCREF(result);
         for (i=0 ; i < tuplesize ; i++) {
-            it = PyTuple_GET_ITEM(lz->ittuple, i);
+            it = _PyTuple_GET_OBJECT(lz->ittuple, i);  // iterators only
             item = (*Py_TYPE(it)->tp_iternext)(it);
             if (item == NULL) {
                 Py_DECREF(result);
@@ -3297,9 +3317,7 @@ zip_next(PyObject *self)
                 }
                 return NULL;
             }
-            olditem = PyTuple_GET_ITEM(result, i);
-            PyTuple_SET_ITEM(result, i, item);
-            Py_DECREF(olditem);
+            _PyTuple_ReplaceTakeRef(result, i, item);
         }
         // bpo-42536: The GC may have untracked this result tuple. Since we're
         // recycling it, make sure it's tracked again:
@@ -3309,7 +3327,7 @@ zip_next(PyObject *self)
         if (result == NULL)
             return NULL;
         for (i=0 ; i < tuplesize ; i++) {
-            it = PyTuple_GET_ITEM(lz->ittuple, i);
+            it = _PyTuple_GET_OBJECT(lz->ittuple, i);  // iterators only
             item = (*Py_TYPE(it)->tp_iternext)(it);
             if (item == NULL) {
                 Py_DECREF(result);
@@ -3339,7 +3357,7 @@ check:
                             i + 1, plural, i);
     }
     for (i = 1; i < tuplesize; i++) {
-        it = PyTuple_GET_ITEM(lz->ittuple, i);
+        it = _PyTuple_GET_OBJECT(lz->ittuple, i);  // iterators only
         item = (*Py_TYPE(it)->tp_iternext)(it);
         if (item) {
             Py_DECREF(item);

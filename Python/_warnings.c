@@ -122,7 +122,7 @@ init_filters(PyInterpreterState *interp)
 #undef ADD
 
     for (size_t x = 0; x < pos; x++) {
-        if (PyList_GET_ITEM(filters, x) == NULL) {
+        if (PyValue_IsNull(PyList_GET_VALUE(filters, x))) {
             Py_DECREF(filters);
             return NULL;
         }
@@ -461,71 +461,93 @@ filter_search(PyInterpreterState *interp, PyObject *category,
     /* Avoid the filters list changing while we iterate over it. */
     Py_BEGIN_CRITICAL_SECTION(filters);
     for (Py_ssize_t i = 0; i < PyList_GET_SIZE(filters); i++) {
-        PyObject *tmp_item, *action, *msg, *cat, *mod, *ln_obj;
+        PyObject *tmp_item, *action = NULL, *msg = NULL, *cat = NULL;
+        PyObject *mod = NULL, *ln_obj = NULL;
         Py_ssize_t ln;
         int is_subclass, good_msg, good_mod;
 
-        tmp_item = PyList_GET_ITEM(filters, i);
+        tmp_item = PyList_GetItemRef(filters, i);
+        if (tmp_item == NULL) {
+            result = false;
+            break;
+        }
         if (!PyTuple_Check(tmp_item) || PyTuple_GET_SIZE(tmp_item) != 5) {
             PyErr_Format(PyExc_ValueError,
                          "warnings.%s item %zd isn't a 5-tuple", list_name, i);
+            Py_DECREF(tmp_item);
             result = false;
             break;
         }
 
         /* Python code: action, msg, cat, mod, ln = item */
-        Py_INCREF(tmp_item);
-        action = PyTuple_GET_ITEM(tmp_item, 0);
-        msg = PyTuple_GET_ITEM(tmp_item, 1);
-        cat = PyTuple_GET_ITEM(tmp_item, 2);
-        mod = PyTuple_GET_ITEM(tmp_item, 3);
-        ln_obj = PyTuple_GET_ITEM(tmp_item, 4);
+        action = PyTuple_GetItemRef(tmp_item, 0);
+        msg = PyTuple_GetItemRef(tmp_item, 1);
+        cat = PyTuple_GetItemRef(tmp_item, 2);
+        mod = PyTuple_GetItemRef(tmp_item, 3);
+        ln_obj = PyTuple_GetItemRef(tmp_item, 4);
+        if (action == NULL || msg == NULL || cat == NULL || mod == NULL
+            || ln_obj == NULL)
+        {
+            goto error;
+        }
 
         if (!PyUnicode_Check(action)) {
             PyErr_Format(PyExc_TypeError,
                          "action must be a string, not '%.200s'",
                          Py_TYPE(action)->tp_name);
-            Py_DECREF(tmp_item);
-            result = false;
-            break;
+            goto error;
         }
 
         good_msg = check_matched(interp, msg, text, NULL);
         if (good_msg == -1) {
-            Py_DECREF(tmp_item);
-            result = false;
-            break;
+            goto error;
         }
 
         good_mod = check_matched(interp, mod, module, filename);
         if (good_mod == -1) {
-            Py_DECREF(tmp_item);
-            result = false;
-            break;
+            goto error;
         }
 
         is_subclass = PyObject_IsSubclass(category, cat);
         if (is_subclass == -1) {
-            Py_DECREF(tmp_item);
-            result = false;
-            break;
+            goto error;
         }
 
         ln = PyLong_AsSsize_t(ln_obj);
         if (ln == -1 && PyErr_Occurred()) {
-            Py_DECREF(tmp_item);
-            result = false;
-            break;
+            goto error;
         }
 
         if (good_msg && is_subclass && good_mod && (ln == 0 || lineno == ln)) {
             *item = tmp_item;
+            /* The tuple keeps the action string alive for the caller. */
             *matched_action = action;
+            Py_DECREF(action);
+            Py_DECREF(msg);
+            Py_DECREF(cat);
+            Py_DECREF(mod);
+            Py_DECREF(ln_obj);
             result = true;
             break;
         }
 
         Py_DECREF(tmp_item);
+        Py_DECREF(action);
+        Py_DECREF(msg);
+        Py_DECREF(cat);
+        Py_DECREF(mod);
+        Py_DECREF(ln_obj);
+        continue;
+
+error:
+        Py_DECREF(tmp_item);
+        Py_XDECREF(action);
+        Py_XDECREF(msg);
+        Py_XDECREF(cat);
+        Py_XDECREF(mod);
+        Py_XDECREF(ln_obj);
+        result = false;
+        break;
     }
     Py_END_CRITICAL_SECTION();
     return result;
@@ -960,9 +982,14 @@ is_filename_to_skip(PyObject *filename, PyTupleObject *skip_file_prefixes)
         Py_ssize_t prefixes = PyTuple_GET_SIZE(skip_file_prefixes);
         for (Py_ssize_t idx = 0; idx < prefixes; ++idx)
         {
-            PyObject *prefix = PyTuple_GET_ITEM(skip_file_prefixes, idx);
+            PyObject *prefix = PyTuple_GetItemRef((PyObject *)skip_file_prefixes,
+                                                  idx);
+            if (prefix == NULL) {
+                return false;
+            }
             Py_ssize_t found = PyUnicode_Tailmatch(filename, prefix,
                                                    0, PY_SSIZE_T_MAX, -1);
+            Py_DECREF(prefix);
             if (found == 1) {
                 return true;
             }
@@ -1025,13 +1052,19 @@ setup_context(Py_ssize_t stack_level,
         Py_ssize_t prefixes = PyTuple_GET_SIZE(skip_file_prefixes);
         for (Py_ssize_t idx = 0; idx < prefixes; ++idx)
         {
-            PyObject *prefix = PyTuple_GET_ITEM(skip_file_prefixes, idx);
+            PyObject *prefix = PyTuple_GetItemRef((PyObject *)skip_file_prefixes,
+                                                  idx);
+            if (prefix == NULL) {
+                return 0;
+            }
             if (!PyUnicode_Check(prefix)) {
                 PyErr_Format(PyExc_TypeError,
                              "Found non-str '%s' in skip_file_prefixes.",
                              Py_TYPE(prefix)->tp_name);
+                Py_DECREF(prefix);
                 return 0;
             }
+            Py_DECREF(prefix);
         }
     }
     PyInterpreterState *interp = tstate->interp;
@@ -1285,7 +1318,7 @@ get_source_line(PyInterpreterState *interp, PyObject *module_globals, int lineno
         Py_DECREF(source_list);
         return NULL;
     }
-    source_line = Py_NewRef(PyList_GET_ITEM(source_list, lineno-1));
+    source_line = PyList_GetItemRef(source_list, lineno-1);
     Py_DECREF(source_list);
     return source_line;
 }

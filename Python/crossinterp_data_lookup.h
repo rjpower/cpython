@@ -666,13 +666,18 @@ _tuple_shared(PyThreadState *tstate, PyObject *obj, xidata_fallback_t fallback,
         if (xidata_i == NULL) {
             goto error;  // PyErr_NoMemory already set
         }
-        PyObject *item = PyTuple_GET_ITEM(obj, i);
+        PyObject *item = PyTuple_GetItemRef(obj, i);
+        if (item == NULL) {
+            PyMem_RawFree(xidata_i);
+            goto error;
+        }
 
         int res = -1;
         if (!_Py_EnterRecursiveCallTstate(tstate, " while sharing a tuple")) {
             res = _PyObject_GetXIData(tstate, item, fallback, xidata_i);
             _Py_LeaveRecursiveCallTstate(tstate);
         }
+        Py_DECREF(item);
         if (res < 0) {
             PyMem_RawFree(xidata_i);
             goto error;

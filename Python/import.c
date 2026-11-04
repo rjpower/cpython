@@ -24,6 +24,7 @@
 #include "pycore_setobject.h"     // _PySet_NextEntry()
 #include "pycore_sysmodule.h"     // _PySys_ClearAttrString()
 #include "pycore_time.h"          // _PyTime_AsMicroseconds()
+#include "pycore_tuple.h"         // _PyTuple_GET_OBJECT()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 #include "pycore_value.h"         // _PyValue_RestoreException()
 #include "pycore_weakref.h"       // _PyWeakref_GET_REF()
@@ -594,7 +595,9 @@ _modules_by_index_get(PyInterpreterState *interp, Py_ssize_t index)
     if (_modules_by_index_check(interp, index) != NULL) {
         return NULL;
     }
-    PyObject *res = PyList_GET_ITEM(MODULES_BY_INDEX(interp), index);
+    // The list holds only module objects and None.
+    PyObject *res = PyValue_AsPyObjectBorrow(
+        PyList_GET_VALUE(MODULES_BY_INDEX(interp), index));
     return res==Py_None ? NULL : res;
 }
 
@@ -685,7 +688,8 @@ PyState_AddModule(PyObject* module, PyModuleDef* def)
     Py_ssize_t index = _get_module_index_from_def(def);
     if (MODULES_BY_INDEX(interp) &&
         index < PyList_GET_SIZE(MODULES_BY_INDEX(interp)) &&
-        module == PyList_GET_ITEM(MODULES_BY_INDEX(interp), index))
+        module == PyValue_AsPyObjectBorrow(
+            PyList_GET_VALUE(MODULES_BY_INDEX(interp), index)))
     {
         _Py_FatalErrorFormat(__func__, "module %p already added", module);
         return -1;
@@ -720,7 +724,8 @@ _PyImport_ClearModulesByIndex(PyInterpreterState *interp)
 
     Py_ssize_t i;
     for (i = 0; i < PyList_GET_SIZE(MODULES_BY_INDEX(interp)); i++) {
-        PyObject *m = PyList_GET_ITEM(MODULES_BY_INDEX(interp), i);
+        PyObject *m = PyValue_AsPyObjectBorrow(
+            PyList_GET_VALUE(MODULES_BY_INDEX(interp), i));
         if (PyModule_Check(m)) {
             /* cleanup the saved copy of module dicts */
             PyModuleDef *md = PyModule_GetDef(m);
@@ -4557,13 +4562,18 @@ _PyImport_LazyImportModuleLevelObject(PyThreadState *tstate,
     // Validate the entire fromlist before registering any pending imports.
     if (PyTuple_Check(fromlist)) {
         for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(fromlist); i++) {
-            PyObject *item = PyTuple_GET_ITEM(fromlist, i);
+            PyObject *item = PyTuple_GetItemRef(fromlist, i);
+            if (item == NULL) {
+                goto done;
+            }
             if (!PyUnicode_Check(item)) {
                 _PyErr_Format(tstate, PyExc_TypeError,
                               "Item in ``from list'' must be str, not %.200s",
                               Py_TYPE(item)->tp_name);
+                Py_DECREF(item);
                 goto done;
             }
+            Py_DECREF(item);
         }
     }
     res = _PyLazyImport_New(frame, builtins, abs_name, fromlist);
@@ -4578,7 +4588,8 @@ _PyImport_LazyImportModuleLevelObject(PyThreadState *tstate,
     if (PyTuple_Check(fromlist) && PyTuple_GET_SIZE(fromlist)) {
         for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(fromlist); i++) {
             if (register_from_lazy_on_parent(tstate, existing_module, abs_name,
-                                             PyTuple_GET_ITEM(fromlist, i)) < 0)
+                                             /* validated as str above */
+                                             _PyTuple_GET_OBJECT(fromlist, i)) < 0)
             {
                 goto error;
             }

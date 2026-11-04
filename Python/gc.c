@@ -1298,8 +1298,11 @@ invoke_gc_callback(PyThreadState *tstate, const char *phase,
 
     PyObject *stack[] = {phase_obj, info};
     for (Py_ssize_t i=0; i<PyList_GET_SIZE(gcstate->callbacks); i++) {
-        PyObject *r, *cb = PyList_GET_ITEM(gcstate->callbacks, i);
-        Py_INCREF(cb); /* make sure cb doesn't go away */
+        PyObject *r, *cb = PyList_GetItemRef(gcstate->callbacks, i);
+        if (cb == NULL) {
+            PyErr_FormatUnraisable("Exception ignored on invoking gc callbacks");
+            break;
+        }
         r = PyObject_Vectorcall(cb, stack, 2, NULL);
         if (r == NULL) {
             PyErr_FormatUnraisable("Exception ignored while "
@@ -1685,7 +1688,9 @@ referrersvisit(PyObject* obj, void *arg)
     PyObject *objs = arg;
     Py_ssize_t i;
     for (i = 0; i < PyTuple_GET_SIZE(objs); i++) {
-        if (PyTuple_GET_ITEM(objs, i) == obj) {
+        // Compare identity only: a scalar stored inline cannot be a referent.
+        PyValue item = PyTuple_GET_VALUE(objs, i);
+        if (PyValue_IsObject(item) && PyValue_AsPyObjectBorrow(item) == obj) {
             return 1;
         }
     }

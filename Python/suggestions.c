@@ -148,14 +148,22 @@ _Py_CalculateSuggestions(PyObject *dir,
         return PyErr_NoMemory();
     }
     for (Py_ssize_t i = 0; i < dir_size; ++i) {
-        PyObject *item = PyList_GET_ITEM(dir, i);
+        PyObject *item = PyList_GetItemRef(dir, i);
+        if (item == NULL) {
+            PyMem_Free(buffer);
+            Py_XDECREF(suggestion);
+            return NULL;
+        }
         if (_PyUnicode_Equal(name, item)) {
+            Py_DECREF(item);
             continue;
         }
         Py_ssize_t item_size;
         const char *item_str = PyUnicode_AsUTF8AndSize(item, &item_size);
         if (item_str == NULL) {
+            Py_DECREF(item);
             PyMem_Free(buffer);
+            Py_XDECREF(suggestion);
             return NULL;
         }
         // No more than 1/3 of the involved characters should need changed.
@@ -166,15 +174,19 @@ _Py_CalculateSuggestions(PyObject *dir,
             levenshtein_distance(name_str, name_size, item_str,
                                  item_size, max_distance, buffer);
         if (current_distance > max_distance) {
+            Py_DECREF(item);
             continue;
         }
         if (!suggestion || current_distance < suggestion_distance) {
-            suggestion = item;
+            Py_XSETREF(suggestion, item);
             suggestion_distance = current_distance;
+        }
+        else {
+            Py_DECREF(item);
         }
     }
     PyMem_Free(buffer);
-    return Py_XNewRef(suggestion);
+    return suggestion;
 }
 
 Py_ssize_t

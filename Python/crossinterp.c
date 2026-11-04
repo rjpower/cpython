@@ -2173,15 +2173,18 @@ _sharednsitem_copy_from_ns(struct _sharednsitem *item, PyObject *ns,
 {
     assert(item->name != NULL);
     assert(item->xidata == NULL);
-    PyObject *value = PyDict_GetItemString(ns, item->name);  // borrowed
-    if (value == NULL) {
-        if (PyErr_Occurred()) {
-            return -1;
-        }
+    PyObject *value;
+    int found = PyDict_GetItemStringRef(ns, item->name, &value);
+    if (found < 0) {
+        return -1;
+    }
+    if (found == 0) {
         // When applied, this item will be set to the default (or fail).
         return 0;
     }
-    if (_sharednsitem_set_value(item, value, fallback) < 0) {
+    int res = _sharednsitem_set_value(item, value, fallback);
+    Py_DECREF(value);
+    if (res < 0) {
         return -1;
     }
     return 0;
@@ -2397,12 +2400,18 @@ _create_sharedns(PyObject *names)
         Py_ssize_t i = 0;
         Py_ssize_t pos = 0;
         PyObject *name;
-        while(PyDict_Next(names, &pos, &name, NULL)) {
-            if (_sharednsitem_init(&items[i], name) < 0) {
+        int rc;
+        while ((rc = PyDict_NextEntryRef(names, &pos, &name, NULL)) > 0) {
+            int res = _sharednsitem_init(&items[i], name);
+            Py_DECREF(name);
+            if (res < 0) {
                 goto error;
             }
             ns->numnames += 1;
             i += 1;
+        }
+        if (rc < 0) {
+            goto error;
         }
     }
     else if (PySequence_Check(names)) {

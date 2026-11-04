@@ -67,7 +67,14 @@ PyCodec_Unregister(PyObject *search_function)
     assert(PyList_CheckExact(codec_search_path));
     FT_MUTEX_LOCK(&interp->codecs.search_path_mutex);
     for (Py_ssize_t i = 0; i < PyList_GET_SIZE(codec_search_path); i++) {
-        if (PyList_GET_ITEM(codec_search_path, i) == search_function) {
+        PyObject *item = PyList_GetItemRef(codec_search_path, i);
+        if (item == NULL) {
+            FT_MUTEX_UNLOCK(&interp->codecs.search_path_mutex);
+            return -1;
+        }
+        int match = (item == search_function);
+        Py_DECREF(item);
+        if (match) {
             // Keep the function alive until after releasing the mutex.
             Py_INCREF(search_function);
             int ret = PyList_SetSlice(codec_search_path, i, i+1, NULL);

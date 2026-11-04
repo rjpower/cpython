@@ -31,8 +31,9 @@ and backend. The stage pages distinguish selected designs from working code.
 | --- | --- |
 | Documentation root (canonical `pyjit/`) | `/home/power/code/cpython/.worktrees/python-jit`, branch `weaver/python-jit` |
 | Runtime tree (nested worktree) | `/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/pyvalue-rc-universal` |
-| Runtime branch / HEAD | `boil/pyvalue-rc-universal`, `54825c08a1a` |
-| Debug build | `build/pyvalue-rc-debug-20261102-v1` (under the `python-boil-the-ocean` worktree) |
+| Runtime branch / HEAD | `boil/pyvalue-rc-universal`, `36aa4a0345a` (see STATUS.md, Position) |
+| Shared builds at HEAD | `build/pyvalue-rc-repr-debug`, `build/pyvalue-rc-repr-release` (under the `python-boil-the-ocean` worktree) |
+| Older debug build | `build/pyvalue-rc-debug-20261102-v1` |
 | Triage debug builds | `build/pyvalue-rc-bringup-debug`, `build/pyvalue-rc-triage-rt-debug` |
 | Release build | `build/pyvalue-rc-release-20261103` (`--with-mimalloc --with-computed-gotos --with-shapes`, -O3) |
 | Upstream control | `build/upstream-release-3a440b6` (`3a440b65695`, `CC=gcc --with-mimalloc --with-computed-gotos`, -O3); passes `test_int` |
@@ -59,11 +60,11 @@ and shapes. Read the build directories for the exact commands.
 
 The runtime tree has no held modifications. Debug and release builds link and
 run. All 67 shared modules whose third-party headers exist build; the decimal,
-tkinter, ssl, sqlite and zstd headers are not installed on this host. Debug
-suite after representation step 4: run=51,496, failures=13 (test_capi 3:
-test_getitem_with_error, test_is_unique_temporary, test_unicode.test_new;
-test_pyvalue_dict_vm 4; test_pyvalue_native_scope 6). Release also fails
-test_pyvalue, a release-only abort at `PyValue_Wrap` in `_testinternalcapi.c`.
+tkinter, ssl, sqlite and zstd headers are not installed on this host. Suites
+at `36aa4a0345a`, debug and release: run=51,617, failures=2 (test_capi
+test_is_unique_temporary and test_unicode.test_new, open for IR v2 B5). The
+fork's JIT is out of the build (`_PyJIT_BASELINE_SUPPORTED` is 0) until the JIT
+stage.
 
 Checkpoint measurement
 ([checkpoint](bench/results/checkpoint-20261103.md),

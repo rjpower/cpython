@@ -57,7 +57,7 @@ costs, then the qualified baseline.
 
 ## Position
 
-- Runtime branch `boil/pyvalue-rc-universal`, HEAD `faddfd1454d`.
+- Runtime branch `boil/pyvalue-rc-universal`, HEAD `36aa4a0345a`.
 - Landed 2026-11-03: native boundary P3 (`56ff66a596b`, `643c69c7244`,
   `6d39221996d`) and P4 (`2558376b321`, post-review fixes `fdd7fed3216`);
   representation steps 1 (`f129780a9a7`), 2 (`f7dfc5b961f`), 3 (`dbce7b1260d`,
@@ -146,6 +146,14 @@ costs, then the qualified baseline.
   (`faddfd1454d`; `_PyJIT_BASELINE_SUPPORTED` is 0 everywhere, the source
   stays, `test_jit_method` skips) until the JIT stage rebuilds it on the final
   IR. User decision, so IR steps carry no JIT upkeep.
+- Landed 2026-11-04 (continued): upstream CPython's JIT remnants removed
+  (`36aa4a0345a`): `jit_publish.c`, `jit_unwind.c` and their headers, build
+  entries and configure check; the perf eh_frame builder moved into
+  `perf_jit_trampoline.c`. `sys._jit` now reports the fork's JIT
+  (`is_available` is `_PyJIT_BASELINE_SUPPORTED`, so False for now), with three
+  new tests. `regen-configure` reproduces the edited `configure`. Targeted
+  tests run=2,085, failures=2 (the known two); its own suites run=51,617,
+  failures=2.
 - Suites at `faddfd1454d`, debug and release alike: run=51,615, failures=2
   (38 more skipped than at `a6002e5854b`: the JIT tests),
   both in test_capi (test_is_unique_temporary, test_unicode.test_new): a local
@@ -164,17 +172,16 @@ Running now, in parallel (briefs in `build/pyjit-link-wave1/`):
    type changes, a script for the mechanical classes, and parallel Sonnet
    workers on the remaining compile errors. A5b-4's renames move into the
    first value-API wave. About 5 h of wall clock.
-2. Removal of upstream CPython's JIT remnants (`jit_publish.c`, `jit_unwind.c`),
-   with `sys._jit` reporting the fork's JIT (`JITREM-BRIEF.md` and addendum;
-   Sonnet; own worktree).
-3. Proposal for A3a and A3c, tail calls as the only backend, with the JIT
+2. Proposal for A3a and A3c, tail calls as the only backend, with the JIT
    out of the build and A3b dropped (`A3-BRIEF.md` and addendum).
-4. Proposal for the value API's route to R27 (no box inside the core): small
+3. Proposal for the value API's route to R27 (no box inside the core): small
    reviewed mechanism steps, then compiler-driven bulk waves on parallel
    Sonnet workers (`V2A0-BRIEF.md` and addendum).
 
-Next: critical reviews of proposals 3 and 4, then their implementation where
-files allow; the `BUILD_SLICE` value form after A5b-2 lands; value API V1
+Proposals 2 and 3 are written
+([A3](design/proposals/register-ir-v2-a3.md),
+[V2a-0](design/proposals/value-api-v2a0.md)) and under critical review.
+Next: fold the reviews, then implement where files allow; the `BUILD_SLICE` value form after A5b-2 lands; value API V1
 follow-ups.
 
 ## Design decisions

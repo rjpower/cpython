@@ -872,7 +872,6 @@ native_scope_vector_method(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(arg)
     return PyCMethod_New(&method, Py_None, NULL, &PyBaseObject_Type);
 }
 
-#ifdef Py_VALUE_INLINE_VALUES
 typedef struct {
     PyMemAllocatorEx saved;
     void *target;
@@ -1005,15 +1004,10 @@ end_failure_body(PyObject *self, PyObject *argument)
     PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &wrapper);
     return result;
 }
-#endif
 
 static PyObject *
 native_scope_end_failure(PyObject *Py_UNUSED(module), PyObject *ledger)
 {
-#ifndef Py_VALUE_INLINE_VALUES
-    PyErr_SetString(PyExc_NotImplementedError, "requires inline scalar values");
-    return NULL;
-#else
     if (!PyList_CheckExact(ledger)) {
         PyErr_SetString(PyExc_TypeError, "expected an exact ledger list");
         return NULL;
@@ -1066,7 +1060,6 @@ native_scope_end_failure(PyObject *Py_UNUSED(module), PyObject *ledger)
         return NULL;
     }
     return function;
-#endif
 }
 
 typedef struct {

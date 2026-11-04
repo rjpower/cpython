@@ -1943,6 +1943,18 @@ def uses_call_transaction(inst: Instruction) -> bool:
                for part in inst.parts)
 
 
+def value_bridge_bound(name: str, inst: Instruction) -> int:
+    """The most boxed scalars and owned results that handler name can hold.
+
+    Each fixed scalar input can be boxed once per uop, and each output can
+    create one owned result per uop. Publishing the same C variable again
+    uses its borrowed view. Window loops use their own object arrays."""
+    return 2 + (2 if name in ("STORE_ATTR_SLOT", "STORE_ATTR_INSTANCE_VALUE", "STORE_ATTR_SHAPE") else 0) + sum(
+        len(part.stack.inputs) + len(part.stack.outputs)
+        for part in inst.parts if isinstance(part, Uop)
+    )
+
+
 def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
                      emitter: IREmitter, out: CWriter) -> None:
     """The handler name, which runs inst: inst itself, or for a handler of a
@@ -1976,13 +1988,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
             out.emit("(void)jit_action; (void)jit_phase;\n")
     else:
         out.emit(f"TARGET({name}) {{\n")
-    # Each fixed scalar input can be boxed once per uop, and each output can
-    # create one owned result per uop. Publishing the same C variable again
-    # uses its borrowed view. Window loops use their own object arrays.
-    bridge_bound = 2 + (2 if name in ("STORE_ATTR_SLOT", "STORE_ATTR_INSTANCE_VALUE", "STORE_ATTR_SHAPE") else 0) + sum(
-        len(part.stack.inputs) + len(part.stack.outputs)
-        for part in inst.parts if isinstance(part, Uop)
-    )
+    bridge_bound = value_bridge_bound(name, inst)
     out.emit(f"#if _Py_TAIL_CALL_INTERP\n")
     out.emit(f"int opcode = {name};\n")
     out.emit(f"(void)(opcode);\n")
@@ -2009,8 +2015,17 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         qualifier = "" if transaction or inst.name == "BINARY_OP" or name in ("CALL", "CALL_JIT_WARM", "CALL_KW", "STORE_SUBSCR", "LOAD_GLOBAL", "LOAD_GLOBAL_NOFB", "LOAD_ATTR", "LOAD_ATTR_NOFB", "STORE_ATTR", "STORE_ATTR_NOFB") else "const "
         out.emit(f"_PyIRWord* {qualifier}this_instr = next_instr - 1;\n")
         out.emit("(void)this_instr;\n")
-    out.emit(f"PyObject *value_boxes[{bridge_bound}];\n")
-    out.emit("_PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};\n")
+    if helper:
+        out.emit(f"PyObject *value_boxes[{bridge_bound}];\n")
+        out.emit("_PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};\n")
+    else:
+        # The eval function declares one array for all handlers. A tail-called
+        # handler is its own function, so it keeps its own.
+        out.emit("#if _Py_TAIL_CALL_INTERP\n")
+        out.emit(f"PyObject *value_boxes[{bridge_bound}];\n")
+        out.emit("_PyValueTemps value_owners;\n")
+        out.emit("#endif\n")
+        out.emit(f"value_owners = (_PyValueTemps){{value_boxes, 0, {bridge_bound}, NULL}};\n")
     out.emit("_PyValueTemps *value_temps = &value_owners;\n")
     use_fb = fmt.fb != LOC_NONE and (
         uses_feedback(inst) or reads_fb_arg(inst, fmt, operation))
@@ -2151,6 +2166,11 @@ def generate_ir_labels(analysis: Analysis, emitter: Emitter) -> None:
         emitter.emit("}\n\n")
 
 
+def max_bridge_bound(analysis: Analysis) -> int:
+    return max(value_bridge_bound(name, inst)
+               for name, inst in handler_instructions(analysis).items())
+
+
 def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
                 lines: bool) -> None:
     formats = compute_formats(analysis)
@@ -2162,6 +2182,9 @@ def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
         switch (opcode)
 #endif
         {{
+            /* One scratch area serves every handler; each resets value_owners. */
+            PyObject *value_boxes[{max_bridge_bound(analysis)}];
+            _PyValueTemps value_owners;
 #endif /* _Py_TAIL_CALL_INTERP */
             {INSTRUCTION_START_MARKER}
 """)

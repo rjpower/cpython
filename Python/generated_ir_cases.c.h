@@ -9,6 +9,9 @@
         switch (opcode)
 #endif
         {
+            /* One scratch area serves every handler; each resets value_owners. */
+            PyObject *value_boxes[37];
+            _PyValueTemps value_owners;
 #endif /* _Py_TAIL_CALL_INTERP */
             /* BEGIN INSTRUCTIONS */
 
@@ -24,8 +27,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_ADD;
@@ -93,8 +99,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_ADD_FLOAT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue left;
             PyValue right;
@@ -153,8 +162,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_ADD_INT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[15];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 15, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             PyValue left;
@@ -232,8 +244,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_ADD_UNICODE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[15];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 15, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             PyValue nos;
@@ -323,8 +338,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_AND;
@@ -392,8 +410,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_AND_INT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[15];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 15, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             PyValue left;
@@ -463,8 +484,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_EXTEND);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             PyValue left;
@@ -541,8 +565,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_FLOOR_DIVIDE;
@@ -610,8 +637,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_FLOOR_DIVIDE_INT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[15];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 15, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             PyValue left;
@@ -698,8 +728,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_ADD;
@@ -767,8 +800,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_INPLACE_ADD_UNICODE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[11];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 11, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             PyValue nos;
@@ -854,8 +890,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_AND;
@@ -923,8 +962,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_FLOOR_DIVIDE;
@@ -992,8 +1034,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_LSHIFT;
@@ -1061,8 +1106,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_MATRIX_MULTIPLY;
@@ -1130,8 +1178,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_MULTIPLY;
@@ -1199,8 +1250,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_OR;
@@ -1268,8 +1322,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_POWER;
@@ -1337,8 +1394,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_REMAINDER;
@@ -1406,8 +1466,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_RSHIFT;
@@ -1475,8 +1538,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_SUBTRACT;
@@ -1544,8 +1610,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_TRUE_DIVIDE;
@@ -1613,8 +1682,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_XOR;
@@ -1682,8 +1754,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_LSHIFT;
@@ -1751,8 +1826,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_LSHIFT_INT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[15];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 15, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             PyValue left;
@@ -1841,8 +1919,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_MATRIX_MULTIPLY;
@@ -1910,8 +1991,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_MULTIPLY;
@@ -1979,8 +2063,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_MULTIPLY_FLOAT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue left;
             PyValue right;
@@ -2039,8 +2126,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_MULTIPLY_INT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[15];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 15, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             PyValue left;
@@ -2118,8 +2208,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_OR;
@@ -2187,8 +2280,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_OR_INT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[15];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 15, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             PyValue left;
@@ -2258,8 +2354,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_POWER;
@@ -2327,8 +2426,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_REMAINDER;
@@ -2396,8 +2498,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_REMAINDER_INT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[15];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 15, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             PyValue left;
@@ -2482,8 +2587,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_RSHIFT;
@@ -2551,8 +2659,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_RSHIFT_INT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[15];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 15, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             PyValue left;
@@ -2630,8 +2741,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_SUBSCR;
@@ -2699,8 +2813,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_DICT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue nos;
             PyValue dict_st;
@@ -2770,8 +2887,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_GETITEM);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[12];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 12, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue container;
             PyValue getitem;
@@ -2862,8 +2982,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_LIST_INT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[15];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 15, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             PyValue nos;
@@ -2961,8 +3084,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_LIST_SLICE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[15];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 15, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue tos;
             PyValue nos;
@@ -3053,8 +3179,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_STR_INT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[15];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 15, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             PyValue nos;
@@ -3152,8 +3281,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_TUPLE_INT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[19];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 19, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             PyValue nos;
@@ -3250,8 +3382,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_USTR_INT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[15];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 15, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             PyValue nos;
@@ -3348,8 +3483,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_SUBTRACT;
@@ -3417,8 +3555,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBTRACT_FLOAT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue left;
             PyValue right;
@@ -3477,8 +3618,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_SUBTRACT_INT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[15];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 15, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             PyValue left;
@@ -3556,8 +3700,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_TRUEDIV_FLOAT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue left;
             PyValue right;
@@ -3622,8 +3769,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_TRUE_DIVIDE;
@@ -3691,8 +3841,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_XOR;
@@ -3760,8 +3913,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP_XOR_INT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[15];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 15, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             PyValue left;
@@ -3831,8 +3987,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_SLICE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[12];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 12, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue container;
             PyValue start;
@@ -3877,8 +4036,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BUILD_INTERPOLATION);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[6];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 6, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -3946,8 +4108,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BUILD_LIST);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -3979,8 +4144,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BUILD_MAP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -4024,8 +4192,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BUILD_SET);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -4082,8 +4253,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BUILD_SLICE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -4134,8 +4308,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BUILD_STRING);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -4168,8 +4345,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BUILD_TEMPLATE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue strings;
             PyValue interpolations;
@@ -4226,8 +4406,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BUILD_TUPLE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -4259,8 +4442,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CACHE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 2, NULL};
             _PyValueTemps *value_temps = &value_owners;
             assert(0 && "Executing a cache.");
             Py_FatalError("Executing a cache.");
@@ -4279,8 +4465,11 @@
             IR_PREDICTED(CALL);
             _PyIRWord* this_instr = next_instr - 1;
             (void)this_instr;
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[18];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 18, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)IR_FIELD_C(this_instr);
@@ -4380,8 +4569,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_ALLOC_AND_ENTER_INIT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[19];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 19, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)IR_FIELD_C(this_instr);
@@ -4521,8 +4713,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_BOUND_METHOD_EXACT_ARGS);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[37];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 37, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)IR_FIELD_C(this_instr);
@@ -4682,8 +4877,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_BOUND_METHOD_GENERAL);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[19];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 19, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)IR_FIELD_C(this_instr);
@@ -4805,8 +5003,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_BUILTIN_CLASS);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[16];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 16, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -4895,8 +5096,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_BUILTIN_FAST);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[16];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 16, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -4986,8 +5190,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_BUILTIN_FAST_WITH_KEYWORDS);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[16];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 16, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -5073,8 +5280,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_BUILTIN_O);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[12];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 12, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -5185,8 +5395,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_EX_NON_PY_GENERAL);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[31];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 31, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
@@ -5282,8 +5495,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_EX_PY);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[32];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 32, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
@@ -5401,8 +5617,11 @@
             IR_PREDICTED(CALL_FUNCTION_EX);
             _PyIRWord* this_instr = next_instr - 1;
             (void)this_instr;
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[23];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 23, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_CALL_FUNCTION_EX *fb = (_PyFb_CALL_FUNCTION_EX *)IR_FB(IR_FIELD_C(this_instr));
             PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
@@ -5489,8 +5708,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_INTRINSIC_1);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[6];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 6, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -5543,8 +5765,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_INTRINSIC_2);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
@@ -5624,8 +5849,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_ISINSTANCE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[21];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 21, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
@@ -5704,8 +5932,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[18];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 18, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -5766,8 +5997,11 @@
             IR_PREDICTED(CALL_KW);
             _PyIRWord* this_instr = next_instr - 1;
             (void)this_instr;
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[23];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 23, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_CALL_KW *fb = (_PyFb_CALL_KW *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)IR_FIELD_C(this_instr);
@@ -5865,8 +6099,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_KW_BOUND_METHOD);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[24];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 24, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_CALL_KW *fb = (_PyFb_CALL_KW *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)IR_FIELD_C(this_instr);
@@ -5979,8 +6216,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_KW_NON_PY);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[15];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 15, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -6044,8 +6284,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_KW_PY);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[16];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 16, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_CALL_KW *fb = (_PyFb_CALL_KW *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)IR_FIELD_C(this_instr);
@@ -6135,8 +6378,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_LEN);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[20];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 20, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
@@ -6229,8 +6475,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_LIST_APPEND);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[24];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 24, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -6346,8 +6595,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_METHOD_DESCRIPTOR_FAST);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[16];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 16, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -6462,8 +6714,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[16];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 16, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -6579,8 +6834,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_METHOD_DESCRIPTOR_NOARGS);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[16];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 16, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -6702,8 +6960,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_METHOD_DESCRIPTOR_O);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[18];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 18, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -6838,8 +7099,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_NON_PY_GENERAL);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[12];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 12, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -6903,8 +7167,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_PY_EXACT_ARGS);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[25];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 25, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)IR_FIELD_C(this_instr);
@@ -7036,8 +7303,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_PY_GENERAL);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[13];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 13, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)IR_FIELD_C(this_instr);
@@ -7127,8 +7397,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_STR_1);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[18];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 18, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -7217,8 +7490,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_TUPLE_1);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[18];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 18, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -7307,8 +7583,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CALL_TYPE_1);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[18];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 18, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -7377,8 +7656,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CHECK_EG_MATCH);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[6];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 6, NULL};
             _PyValueTemps *value_temps = &value_owners;
             assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
             PyValue exc_value_st;
@@ -7457,8 +7739,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CHECK_EXC_MATCH);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[6];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 6, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue left;
             PyValue right;
@@ -7512,8 +7797,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CLEANUP_THROW);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
@@ -7592,8 +7880,11 @@
             IR_PREDICTED(COMPARE_OP);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_D(this_instr));
@@ -7680,8 +7971,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(COMPARE_OP_FLOAT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[15];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 15, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
@@ -7754,8 +8048,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(COMPARE_OP_INT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[15];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 15, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
@@ -7828,8 +8125,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(COMPARE_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(0);
             int oparg = (int)IR_FIELD_D(this_instr);
@@ -7916,8 +8216,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(COMPARE_OP_STR);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[15];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 15, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
@@ -8012,8 +8315,11 @@
             IR_PREDICTED(CONTAINS_OP);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[13];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 13, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_D(this_instr));
@@ -8106,8 +8412,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CONTAINS_OP_DICT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[11];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 11, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
@@ -8196,8 +8505,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CONTAINS_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[13];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 13, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(0);
             int oparg = (int)IR_FIELD_D(this_instr);
@@ -8290,8 +8602,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CONTAINS_OP_SET);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[11];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 11, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
@@ -8380,8 +8695,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CONVERT_VALUE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -8425,8 +8743,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(COPY);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 7, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -8451,8 +8772,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(COPY_FREE_VARS);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 2, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
@@ -8479,8 +8803,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(DELETE_DEREF);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 2, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
@@ -8505,8 +8832,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(DELETE_FAST);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 2, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
@@ -8535,8 +8865,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(DELETE_SUBSCR);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue container;
             PyValue sub;
@@ -8588,8 +8921,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(DICT_MERGE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[15];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 15, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -8661,8 +8997,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(DICT_UPDATE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -8734,8 +9073,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(END_ASYNC_FOR);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -8789,8 +9131,11 @@
             (void)this_instr;
             next_instr += 1;
             INSTRUCTION_STATS(END_FOR);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 3, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
@@ -8810,8 +9155,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(END_SEND);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[6];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 6, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue receiver;
             PyValue index_or_null;
@@ -8841,8 +9189,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(EXIT_INIT_CHECK);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 3, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue should_be_none;
             should_be_none = IR_SLOT(IR_FIELD_A(this_instr));
@@ -8879,8 +9230,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(EXTENDED_ARG);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 2, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
@@ -8903,8 +9257,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(FORMAT_SIMPLE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             PyValue res;
@@ -8949,8 +9306,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(FORMAT_WITH_SPEC);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             PyValue fmt_spec;
@@ -9006,8 +9366,11 @@
             IR_PREDICTED(FOR_ITER);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[11];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 11, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_FOR_ITER *fb = (_PyFb_FOR_ITER *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)IR_FIELD_D(this_instr);
@@ -9065,8 +9428,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(FOR_ITER_GEN);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[8];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 8, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
@@ -9140,8 +9506,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(FOR_ITER_LIST);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[15];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 15, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
@@ -9231,8 +9600,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(FOR_ITER_RANGE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[15];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 15, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
@@ -9310,8 +9682,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(FOR_ITER_TUPLE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[15];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 15, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
@@ -9374,8 +9749,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(FOR_ITER_VIRTUAL);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
@@ -9430,8 +9808,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(GET_AITER);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue obj;
             PyValue iter;
@@ -9495,8 +9876,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(GET_ANEXT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue aiter;
             PyValue awaitable;
@@ -9530,8 +9914,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(GET_AWAITABLE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -9573,8 +9960,11 @@
             IR_PREDICTED(GET_ITER);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 7, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_GET_ITER *fb = (_PyFb_GET_ITER *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)IR_FIELD_D(this_instr);
@@ -9621,8 +10011,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(GET_ITER_SELF);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue iterable;
             PyValue res;
@@ -9661,8 +10054,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(GET_ITER_VIRTUAL);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue iterable;
             PyValue zero;
@@ -9701,8 +10097,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(GET_LEN);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue obj;
             PyValue len;
@@ -9740,8 +10139,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(IMPORT_FROM);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -9786,8 +10188,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(IMPORT_NAME);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -9860,8 +10265,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_CALL);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[18];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 18, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -9931,8 +10339,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_CALL_FUNCTION_EX);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[15];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 15, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
@@ -9982,8 +10393,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_CALL_KW);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[23];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 23, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -10049,8 +10463,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_END_ASYNC_FOR);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -10112,8 +10529,11 @@
             (void)this_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_END_FOR);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 7, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue receiver;
             PyValue value;
@@ -10153,8 +10573,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_END_SEND);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[6];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 6, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue receiver;
             PyValue index_or_null;
@@ -10219,8 +10642,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_FOR_ITER);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 7, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
@@ -10262,8 +10688,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_INSTRUCTION);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 2, NULL};
             _PyValueTemps *value_temps = &value_owners;
             opcode = INSTRUMENTED_INSTRUCTION;
             int next_opcode = _Py_call_instrumentation_instruction(
@@ -10291,8 +10720,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_JUMP_BACKWARD);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 2, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -10321,8 +10753,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_JUMP_FORWARD);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 2, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -10341,8 +10776,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_JUMP_IF_FALSE_OR_POP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -10379,8 +10817,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_JUMP_IF_TRUE_OR_POP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -10418,8 +10859,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_LINE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 2, NULL};
             _PyValueTemps *value_temps = &value_owners;
             opcode = INSTRUMENTED_LINE;
             int original_opcode = 0;
@@ -10461,8 +10905,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_LOAD_SUPER_ATTR);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 7, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
@@ -10603,8 +11050,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_LOAD_SUPER_ATTR);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 7, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -10745,8 +11195,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_NOT_TAKEN);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 2, NULL};
             _PyValueTemps *value_temps = &value_owners;
             (void)this_instr;
             INSTRUMENTED_JUMP(prev_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
@@ -10765,8 +11218,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_POP_ITER);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue iter;
             PyValue index_or_null;
@@ -10791,8 +11247,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_POP_JUMP_IF_FALSE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -10844,8 +11303,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_POP_JUMP_IF_NONE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 3, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_NONE *fb = (_PyFb_POP_JUMP_IF_NONE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -10876,8 +11338,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_POP_JUMP_IF_NOT_NONE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 3, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_NOT_NONE *fb = (_PyFb_POP_JUMP_IF_NOT_NONE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -10908,8 +11373,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_POP_JUMP_IF_TRUE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -10961,8 +11429,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_RESUME);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 2, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
@@ -11023,8 +11494,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_RETURN_VALUE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[8];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 8, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue val;
             PyValue value;
@@ -11095,8 +11569,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_YIELD_VALUE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[8];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 8, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -11187,8 +11664,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INTERPRETER_EXIT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 3, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue retval;
             retval = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
@@ -11226,8 +11706,11 @@
             (void)this_instr;
             next_instr += 1;
             INSTRUCTION_STATS(IR_JUMP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 2, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -11246,8 +11729,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(IS_OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
@@ -11296,8 +11782,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(JUMP_BACKWARD);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 2, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -11327,8 +11816,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(JUMP_BACKWARD);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 2, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -11359,8 +11851,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(JUMP_BACKWARD_NO_INTERRUPT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 2, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -11380,8 +11875,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(JUMP_FORWARD);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 2, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -11400,8 +11898,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(JUMP_IF_FALSE_OR_POP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -11439,8 +11940,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(JUMP_IF_TRUE_OR_POP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -11478,8 +11982,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LIST_APPEND);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 7, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -11509,8 +12016,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LIST_EXTEND);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -11579,8 +12089,11 @@
             IR_PREDICTED(LOAD_ATTR);
             _PyIRWord* this_instr = next_instr - 1;
             (void)this_instr;
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 7, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
@@ -11652,8 +12165,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_CLASS);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 7, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
@@ -11718,8 +12234,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_CLASS_WITH_METACLASS_CHECK);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
@@ -11796,8 +12315,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_GETATTRIBUTE_OVERRIDDEN);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 7, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
@@ -11896,8 +12418,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_INSTANCE_VALUE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
@@ -11991,8 +12516,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_METHOD_LAZY_DICT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
@@ -12060,8 +12588,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_METHOD_NO_DICT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 7, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
@@ -12118,8 +12649,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_METHOD_WITH_VALUES);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
@@ -12187,8 +12721,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_MODULE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
@@ -12281,8 +12818,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 7, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -12354,8 +12894,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_NONDESCRIPTOR_NO_DICT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[6];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 6, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
@@ -12408,8 +12951,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[8];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 8, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
@@ -12473,8 +13019,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_PROPERTY);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 7, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
@@ -12568,8 +13117,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_SHAPE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
@@ -12655,8 +13207,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_SLOT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 7, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
@@ -12738,8 +13293,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR_WITH_HINT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 7, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
@@ -12867,8 +13425,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_BUILD_CLASS);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 3, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue bc;
             int err;
@@ -12898,8 +13459,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_COMMON_CONSTANT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 3, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -12923,8 +13487,11 @@
             IR_PREDICTED(LOAD_CONST);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 3, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -12946,8 +13513,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_CONST_INLINE_FLOAT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 3, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -12970,8 +13540,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_CONST_INLINE_INT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 3, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -12994,8 +13567,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_DEREF);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 3, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -13024,8 +13600,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FAST);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 3, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -13048,8 +13627,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FAST_AND_CLEAR);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 3, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -13072,8 +13654,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FAST_BORROW);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 3, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -13096,8 +13681,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FAST_BORROW_LOAD_FAST_BORROW);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -13125,8 +13713,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FAST_CHECK);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 3, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -13156,8 +13747,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FAST_LOAD_FAST);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -13185,8 +13779,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FROM_DICT_OR_DEREF);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -13255,8 +13852,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FROM_DICT_OR_GLOBALS);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -13315,8 +13915,11 @@
             IR_PREDICTED(LOAD_GLOBAL);
             _PyIRWord* this_instr = next_instr - 1;
             (void)this_instr;
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_B(this_instr));
@@ -13377,8 +13980,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_GLOBAL_BUILTIN);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
@@ -13456,8 +14062,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_GLOBAL_MODULE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
@@ -13518,8 +14127,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_GLOBAL);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -13580,8 +14192,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_LOCALS);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 3, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue locals;
             PyObject *l = LOCALS();
@@ -13607,8 +14222,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_NAME);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 3, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -13636,8 +14254,11 @@
             IR_PREDICTED(LOAD_SMALL_INT);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 3, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -13660,8 +14281,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_SMALL_INT_INLINE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 3, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -13687,8 +14311,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_SPECIAL);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[6];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 6, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -13740,8 +14367,11 @@
             IR_PREDICTED(LOAD_SUPER_ATTR);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[13];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 13, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
@@ -13896,8 +14526,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_SUPER_ATTR_ATTR);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[6];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 6, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
@@ -13972,8 +14605,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_SUPER_ATTR_METHOD);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[13];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 13, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
@@ -14077,8 +14713,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_SUPER_ATTR);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[13];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 13, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_SUPER_ATTR *fb = (_PyFb_LOAD_SUPER_ATTR *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -14233,8 +14872,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MAKE_CELL);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 2, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
@@ -14259,8 +14901,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MAKE_FUNCTION);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[6];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 6, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue codeobj_st;
             PyValue func;
@@ -14315,8 +14960,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MAP_ADD);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[8];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 8, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -14380,8 +15028,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MATCH_CLASS);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[12];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 12, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -14479,8 +15130,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MATCH_KEYS);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 7, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue subject;
             PyValue keys;
@@ -14525,8 +15179,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MATCH_MAPPING);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue subject;
             PyValue res;
@@ -14549,8 +15206,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MATCH_SEQUENCE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue subject;
             PyValue res;
@@ -14573,8 +15233,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(NOP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 2, NULL};
             _PyValueTemps *value_temps = &value_owners;
             DISPATCH();
         }
@@ -14590,8 +15253,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(NOT_TAKEN);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 2, NULL};
             _PyValueTemps *value_temps = &value_owners;
             DISPATCH();
         }
@@ -14607,8 +15273,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_EXCEPT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 3, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue exc_value;
             exc_value = IR_SLOT(IR_FIELD_A(this_instr));
@@ -14642,8 +15311,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_ITER);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue iter;
             PyValue index_or_null;
@@ -14668,8 +15340,11 @@
             IR_PREDICTED(POP_JUMP_IF_FALSE);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 7, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -14738,8 +15413,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE_ALWAYS_TRUE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -14807,8 +15485,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE_BOOL);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -14854,8 +15535,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE_INT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -14921,8 +15605,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE_LIST);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -14991,8 +15678,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE_NONE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -15040,8 +15730,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE_STR);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -15108,8 +15801,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_NONE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_NONE *fb = (_PyFb_POP_JUMP_IF_NONE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -15157,8 +15853,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_NOT_NONE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_NOT_NONE *fb = (_PyFb_POP_JUMP_IF_NOT_NONE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -15207,8 +15906,11 @@
             IR_PREDICTED(POP_JUMP_IF_TRUE);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 7, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -15277,8 +15979,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE_ALWAYS_TRUE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -15346,8 +16051,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE_BOOL);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -15393,8 +16101,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE_INT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -15460,8 +16171,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE_LIST);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -15530,8 +16244,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE_NONE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -15579,8 +16296,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE_STR);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -15647,8 +16367,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_TOP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 3, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
@@ -15668,8 +16391,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(PUSH_EXC_INFO);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
@@ -15712,8 +16438,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(PUSH_NULL);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 3, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue res;
             res = PyValue_NULL;
@@ -15733,8 +16462,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(RAISE_VARARGS);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 3, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -15781,8 +16513,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(RERAISE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -15823,8 +16558,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(RESERVED);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 2, NULL};
             _PyValueTemps *value_temps = &value_owners;
             assert(0 && "Executing RESERVED instruction.");
             Py_FatalError("Executing RESERVED instruction.");
@@ -15842,8 +16580,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(RESUME);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 2, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
@@ -15891,8 +16632,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(RESUME);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 2, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
@@ -15941,8 +16685,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(RETURN_GENERATOR);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 3, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
@@ -15986,8 +16733,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(RETURN_VALUE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[6];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 6, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             PyValue retval;
@@ -16038,8 +16788,11 @@
             IR_PREDICTED(SEND);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[14];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 14, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_SEND *fb = (_PyFb_SEND *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)IR_FIELD_D(this_instr);
@@ -16144,8 +16897,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SEND_ASYNC_GEN);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[14];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 14, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
@@ -16218,8 +16974,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SEND_GEN);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
@@ -16294,8 +17053,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SEND_VIRTUAL);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[14];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 14, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
@@ -16369,8 +17131,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SETUP_ANNOTATIONS);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 2, NULL};
             _PyValueTemps *value_temps = &value_owners;
             if (LOCALS() == NULL) {
                 _PyErr_Format(tstate, PyExc_SystemError,
@@ -16411,8 +17176,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SET_ADD);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 7, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -16459,8 +17227,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SET_FUNCTION_ATTRIBUTE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
@@ -16518,8 +17289,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SET_UPDATE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -16577,8 +17351,11 @@
             IR_PREDICTED(STORE_ATTR);
             _PyIRWord* this_instr = next_instr - 1;
             (void)this_instr;
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[8];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 8, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
@@ -16648,8 +17425,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_INSTANCE_VALUE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[12];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 12, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             PyValue value;
@@ -16758,8 +17538,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[8];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 8, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -16829,8 +17612,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_SHAPE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[10];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 10, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             PyValue owner;
@@ -16909,8 +17695,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_SHAPE_ADD);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[8];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 8, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             PyValue owner;
@@ -16988,8 +17777,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_SLOT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[8];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 8, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             PyValue owner;
@@ -17065,8 +17857,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_WITH_HINT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[6];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 6, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
@@ -17223,8 +18018,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_DEREF);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 3, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -17248,8 +18046,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_FAST);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -17282,8 +18083,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_FAST_LOAD_FAST);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -17314,8 +18118,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_FAST_STORE_FAST);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -17347,8 +18154,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_GLOBAL);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 3, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -17398,8 +18208,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_NAME);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 3, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -17432,8 +18245,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_SLICE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[14];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 14, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue v;
             PyValue container;
@@ -17479,8 +18295,11 @@
             IR_PREDICTED(STORE_SUBSCR);
             _PyIRWord* this_instr = next_instr - 1;
             (void)this_instr;
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 9, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_STORE_SUBSCR *fb = (_PyFb_STORE_SUBSCR *)IR_FB(IR_FIELD_D(this_instr));
             PyValue container;
@@ -17543,8 +18362,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_SUBSCR_DICT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[11];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 11, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue nos;
             PyValue value;
@@ -17617,8 +18439,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_SUBSCR_LIST_INT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[15];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 15, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             PyValue nos;
@@ -17723,8 +18548,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SWAP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[8];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 8, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -17754,8 +18582,11 @@
             IR_PREDICTED(TO_BOOL);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[6];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 6, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_TO_BOOL *fb = (_PyFb_TO_BOOL *)IR_FB(IR_FIELD_C(this_instr));
             PyValue value;
@@ -17808,8 +18639,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_ALWAYS_TRUE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[8];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 8, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_TO_BOOL *fb = (_PyFb_TO_BOOL *)IR_FB(IR_FIELD_C(this_instr));
             PyValue owner;
@@ -17860,8 +18694,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_BOOL);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             value = IR_SLOT(IR_FIELD_B(this_instr));
@@ -17885,8 +18722,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_INT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[8];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 8, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             PyValue res;
@@ -17935,8 +18775,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_LIST);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[8];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 8, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue tos;
             PyValue value;
@@ -17987,8 +18830,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_NONE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             PyValue res;
@@ -18016,8 +18862,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL_STR);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[8];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 8, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             PyValue res;
@@ -18066,8 +18915,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(UNARY_INVERT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[6];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 6, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             PyValue res;
@@ -18117,8 +18969,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(UNARY_NEGATIVE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[6];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 6, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             PyValue res;
@@ -18175,8 +19030,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(UNARY_NOT);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 4, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             PyValue res;
@@ -18204,8 +19062,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(UNPACK_EX);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 7, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -18245,8 +19106,11 @@
             IR_PREDICTED(UNPACK_SEQUENCE);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 7, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_UNPACK_SEQUENCE *fb = (_PyFb_UNPACK_SEQUENCE *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)IR_FIELD_B(this_instr);
@@ -18303,8 +19167,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(UNPACK_SEQUENCE_LIST);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[6];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 6, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -18370,8 +19237,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(UNPACK_SEQUENCE_TUPLE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[6];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 6, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -18428,8 +19298,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(UNPACK_SEQUENCE_TWO_TUPLE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 7, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -18486,8 +19359,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(WITH_EXCEPT_START);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[13];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 13, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
@@ -18565,8 +19441,11 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(YIELD_VALUE);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[6];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 6, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;

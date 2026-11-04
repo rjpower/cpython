@@ -284,8 +284,11 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PyValue left;
             PyValue right;
@@ -484,8 +487,11 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -597,8 +603,11 @@ class TestIRCases(unittest.TestCase):
             IR_PREDICTED(OP);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[6];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 6, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
@@ -647,8 +656,11 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[6];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 6, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -697,8 +709,11 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP_SPECIALIZED);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[6];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 6, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
@@ -763,8 +778,11 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_D(this_instr));
@@ -797,8 +815,11 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(0);
             int oparg = (int)IR_FIELD_D(this_instr);
@@ -879,8 +900,11 @@ class TestIRCases(unittest.TestCase):
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(IR_PASS);
+            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 2, NULL};
             _PyValueTemps *value_temps = &value_owners;
             PRE_DISPATCH_GOTO();
             DISPATCH_GOTO();

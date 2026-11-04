@@ -4248,7 +4248,8 @@ dummy_func(
             unused/1 + // Skip over the entry distance
             unused/2 +
             _CHECK_IS_NOT_PY_CALLABLE +
-            _CALL_NON_PY_GENERAL;
+            _CALL_NON_PY_GENERAL +
+            _CHECK_PERIODIC_AT_END;
 
         op(_CHECK_CALL_BOUND_METHOD_EXACT_ARGS, (callable, null, unused[oparg] -- callable, null, unused[oparg])) {
             EXIT_IF(!PyValue_IsNull(null));

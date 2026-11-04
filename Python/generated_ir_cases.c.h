@@ -7124,7 +7124,7 @@
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
             (void)window;
-            _PyCallTransaction call = call_transaction_begin(tstate, frame, next_instr, IR_FIELD_B(this_instr), (1) + (1) + (oparg), IR_FIELD_A(this_instr), oparg, CALL_TRANSACTION_VECTOR, 0, 0);
+            _PyCallTransaction call = call_transaction_begin(tstate, frame, next_instr, IR_FIELD_B(this_instr), (1) + (1) + (oparg), IR_FIELD_A(this_instr), oparg, CALL_TRANSACTION_VECTOR, 0, 1);
             PyValue callable;
             // _CHECK_IS_NOT_PY_CALLABLE
             {

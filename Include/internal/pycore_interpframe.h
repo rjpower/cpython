@@ -181,12 +181,18 @@ _PyFrame_SetReturnValue(_PyInterpreterFrame *f, PyValue v)
     PyValue_XCLOSE(old);
 }
 
-/* Release the temporaries of f from slot first on and leave them NULL */
+/* Release the temporaries of f from slot first on and leave them NULL.
+ * The slot rules of register-ir.md §1.5.4 (regcfg.c:_PyRegCfg_Compact)
+ * make slot order the stack order: a temporary takes the lowest slot above
+ * every slot held at its definition, a canonical temporary takes the slot
+ * of its stack position, window outputs stay in their window, and a folded
+ * load's reserved slot holds NULL. So clearing from the highest slot down
+ * releases the latest value first, as upstream pops its stack: the inputs
+ * a raising handler left go before the temporaries beneath them. */
 static inline void
 _PyFrame_ClearTemporaries(_PyInterpreterFrame *f, int first)
 {
-    int nslots = _PyFrame_NumSlots(f);
-    for (int i = first; i < nslots; i++) {
+    for (int i = _PyFrame_NumSlots(f); i-- > first;) {
         PyValue ref = f->base[i];
         if (!PyValue_IsNull(ref)) {
             f->base[i] = PyValue_NULL;

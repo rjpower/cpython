@@ -297,7 +297,7 @@ class PyValueDictVMTests(unittest.TestCase):
 
         class Mapping(dict):
             # Inherited native __getitem__ adds no traceback frame owning
-            # this receiver. An eager wrong close is therefore observable.
+            # this receiver, so its release order is observable.
             def __del__(self):
                 ledger.append('container')
 
@@ -312,7 +312,9 @@ class PyValueDictVMTests(unittest.TestCase):
             error.__traceback__ = None
         else:
             self.fail('read did not raise')
-        self.assertEqual(ledger, ['read', 'deeper', 'container', 'key'])
+        # The failed read's inputs go before the deeper temporary, latest
+        # first, as upstream pops its stack; the traceback held the key.
+        self.assertEqual(ledger, ['read', 'container', 'deeper', 'key'])
 
     def test_binary_result_publishes_after_operand_retirement(self):
         ledger = []
@@ -350,8 +352,10 @@ class PyValueDictVMTests(unittest.TestCase):
         self.assertIn('LOAD_GLOBAL_BUILTIN', handlers(read))
         namespace['selected'] = None
         self.assertIsNone(read())
-        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
-            read()
+        # A specialisation starts its counter at the cooldown value and each
+        # deoptimisation advances it (register-ir.md, "Specialisation").
+        for _ in range(_testinternalcapi.SPECIALIZATION_COOLDOWN + 1):
+            self.assertIsNone(read())
         self.assertIn('LOAD_GLOBAL_MODULE', handlers(read))
         namespace['selected'] = 3.25
         self.assertEqual(read(), 3.25)
@@ -359,6 +363,9 @@ class PyValueDictVMTests(unittest.TestCase):
         self.assertEqual(read(), 2147483647)
 
     def test_module_and_instance_scalar_read_guards(self):
+        # A fresh site each run: a repeated run would find the instance
+        # specialisation and keep it through the module reads.
+        @support.reset_code
         def read(owner):
             return owner.x
 
@@ -379,7 +386,8 @@ class PyValueDictVMTests(unittest.TestCase):
         owner = Owner()
         owner.x = 3.25
         owner.__dict__
-        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
+        # Each read deoptimises LOAD_ATTR_MODULE until its cooldown ends.
+        for _ in range(_testinternalcapi.SPECIALIZATION_COOLDOWN + 1):
             self.assertEqual(read(owner), 3.25)
         self.assertTrue(set(handlers(read)) & {
             'LOAD_ATTR_WITH_HINT', 'LOAD_ATTR_INSTANCE_VALUE', 'LOAD_ATTR_SHAPE'})
@@ -480,7 +488,10 @@ class PyValueDictVMTests(unittest.TestCase):
         with self.assertRaisesRegex(TypeError, 'not callable'):
             not_callable(Constant())
 
-    def test_generic_setter_body_error_keeps_owner_value_order(self):
+    def test_generic_setter_body_error_vm_and_frame_release_order(self):
+        # A native setter's error: the VM releases owner, then value. A
+        # Python setter's error: its traceback frame keeps both, and clearing
+        # that frame releases value, then owner.
         ledger = []
         failure = ValueError('setter once')
 
@@ -519,10 +530,15 @@ class PyValueDictVMTests(unittest.TestCase):
             assign()
         except ValueError as error:
             self.assertIs(error, failure)
+            # The traceback keeps the frame of __setattr__, which holds both
+            # operands after the VM has released its own.
+            self.assertEqual(ledger, ['set'])
             error.__traceback__ = None
         else:
             self.fail('setter did not raise')
-        self.assertEqual(ledger, ['set', 'owner', 'value'])
+        # Clearing that frame releases its slots last first, value before
+        # self, as upstream does (Python/frame.c:clear_slots).
+        self.assertEqual(ledger, ['set', 'value', 'owner'])
 
     def test_managed_store_handlers_publish_before_retirement(self):
         ledger = []
@@ -545,19 +561,30 @@ class PyValueDictVMTests(unittest.TestCase):
                         sys.setprofile(lambda *args: None)
                         sys.setprofile(None)
 
+        made = 0
+
         def factory(instance=False, old=False, alias=False):
+            nonlocal made
             owner = Owner()
             owner.x = owner if alias else Old(owner) if old else None
             if instance:
-                owner.spare = None
-                del owner.spare
+                # Every other owner has a second shape. A shape describes
+                # insertion order only, so adding and deleting an attribute
+                # would restore the first; a site that sees two shapes of
+                # one type uses the instance value handler.
+                made += 1
+                if made % 2:
+                    owner.spare = None
             return owner
 
+        # Fresh sites each run: a repeated run has a new Owner type.
+        @support.reset_code
         def shaped(factory, value):
             factory().x = value
             if observe:
                 ledger.append('next')
 
+        @support.reset_code
         def unshaped(factory, value):
             factory().x = value
             if observe:
@@ -566,7 +593,11 @@ class PyValueDictVMTests(unittest.TestCase):
         threshold = _testinternalcapi.SPECIALIZATION_THRESHOLD + 3
         for put, instance in ((shaped, False), (unshaped, True)):
             make = lambda: factory(instance=instance)
-            for _ in range(threshold):
+            # The second shape deoptimises the first shape's specialisation
+            # until its cooldown ends (test_shapes, optional attributes).
+            warm = (4 * _testinternalcapi.SPECIALIZATION_COOLDOWN if instance
+                    else threshold)
+            for _ in range(warm):
                 put(make, None)
             expected = ('STORE_ATTR_INSTANCE_VALUE' if instance or not support.Py_SHAPES
                         else 'STORE_ATTR_SHAPE')
@@ -590,6 +621,7 @@ class PyValueDictVMTests(unittest.TestCase):
             self.assertEqual(ledger, [('field', 3.25), ('receiver', 3.25), 'next'])
 
         if support.Py_SHAPES:
+            @support.reset_code
             def added(factory, value):
                 factory().x = value
                 if observe:

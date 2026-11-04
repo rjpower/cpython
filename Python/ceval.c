@@ -1815,15 +1815,19 @@ call_transaction_retire(PyValue *retired, int count, PyValue *small)
     }
 }
 
-/* Result publication targets the captured destination itself, including a
- * folded LOCAL or an input overlap. The producer must not move window[0]
- * afterward, even on an error edge after cleanup. */
+/* Result publication targets the captured destination itself when it is a
+ * temporary, including an input overlap, before the window retires. A
+ * folded LOCAL destination gets the result after the window retires and
+ * the periodic check passes; on failure the result is left in window[0].
+ * The producer must not move window[0] afterward, even on an error edge
+ * after cleanup. */
 static int
 call_transaction_native(_PyCallTransaction *call, _PyInstr *next)
 {
     PyValue small[8];
     PyValue *retired = small;
-    int retired_count = 0, scope_started = 0, call_status = -1;
+    PyValue local_result = PyValue_NULL;
+    int retired_count = 0, scope_started = 0, call_status = -1, to_local = 0;
     PyObject *callable = NULL, *monitor_argument = NULL;
     _PyNativeScope scope;
     call->effects = 1;
@@ -1931,8 +1935,10 @@ call_transaction_native(_PyCallTransaction *call, _PyInstr *next)
     }
     call_transaction_detach(call, retired);
     retired_count = call->count;
+    to_local = call->destination < call->operation.code->co_nlocalsplus;
     _PyNativeResult_Publish(&scope.result,
-        _PyFrame_Slots(call->operation.frame) + call->destination,
+        to_local ? &local_result
+                 : _PyFrame_Slots(call->operation.frame) + call->destination,
         call_transaction_publish_pc, call);
     call_status = 0;
     goto end_scope;
@@ -1947,6 +1953,7 @@ done:
     call_transaction_retire(retired, retired_count, small);
     int failed = call_transaction_refresh(call, next);
     if (call_status < 0) {
+        assert(PyValue_IsNull(local_result));
         return -1;
     }
     if (failed == 0 && call->periodic) {
@@ -1956,6 +1963,28 @@ done:
         if (periodic < 0) {
             failed = -1;
         }
+    }
+    if (to_local) {
+        /* Upstream closes a call's inputs, runs its periodic check and only
+         * then stores the result with STORE_FAST. So a folded local gets
+         * the result after the window retires and the check passes, as
+         * IR_STORE_DST does in the specialised handlers, and its old value
+         * goes last. If the check raised, the local keeps its old value and
+         * the result waits in window[0], where the unwinder releases it after
+         * the traceback entry and the RAISE event, as upstream pops it. */
+        if (failed < 0) {
+            PyValue *window = _PyFrame_Slots(call->operation.frame) + call->base;
+            assert(PyValue_IsNull(window[0]));
+            window[0] = local_result;
+            return -1;
+        }
+        PyValue *home = _PyFrame_Slots(call->operation.frame) + call->destination;
+        PyValue displaced = *home;
+        assert(PyValue_IsHeapSafe(local_result));
+        *home = local_result;
+        _PyValue_CheckFrameHome(*home);
+        PyValue_XCLOSE(displaced);
+        failed = call_transaction_refresh(call, next);
     }
     return failed;
 }

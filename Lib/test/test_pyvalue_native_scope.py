@@ -1,8 +1,10 @@
 """Native scope mechanisms and selected ordinary VM caller routes."""
 
+import functools
 import gc
 import struct
 import sys
+import threading
 import unittest
 
 from test import support
@@ -451,6 +453,11 @@ class NativeGenericVMTests(unittest.TestCase):
         for call in (ordinary, keyword):
             for warm in (False, True):
                 if warm:
+                    # The cold calls left the site backing off, because the
+                    # specialiser declines an inline callable (upstream
+                    # specialises it to CALL_NON_PY_GENERAL or
+                    # CALL_KW_NON_PY). Warm a fresh site.
+                    support.reset_code(call)
                     target = _testinternalcapi.native_scope_vector_method()
                     for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
                         call(target)
@@ -462,6 +469,192 @@ class NativeGenericVMTests(unittest.TestCase):
                         with self.assertRaisesRegex(TypeError, typename + '.*not callable'):
                             call(target)
                         self.assertEqual(ledger, ['second', 'first'])
+
+
+class Pending(Exception):
+    pass
+
+
+# Each site folds `x = call` into the call's local destination.
+def positional_site(target, first, second):
+    x = 'old'
+    try:
+        x = target(first, second)
+    except Pending:
+        return 'raised', x
+    return 'returned', x
+
+
+def keyword_site(target, first, second):
+    x = 'old'
+    try:
+        x = target(first, num=second)
+    except Pending:
+        return 'raised', x
+    return 'returned', x
+
+
+def star_site(target, first, second):
+    x = 'old'
+    try:
+        x = target(*(first, second))
+    except Pending:
+        return 'raised', x
+    return 'returned', x
+
+
+def single_site(target, first, second):
+    x = 'old'
+    try:
+        x = target(first)
+    except Pending:
+        return 'raised', x
+    return 'returned', x
+
+
+def python_callee(first, second=None, num=None):
+    return 0
+
+
+class CallPeriodicCheckStoreOrderTests(unittest.TestCase):
+    # Upstream closes a call's inputs, runs its periodic check
+    # (_CHECK_PERIODIC_AT_END) and only then stores the result with
+    # STORE_FAST. So a pending call run by the check sees the local's old
+    # value, and an exception from the check leaves the old value in place.
+
+    @classmethod
+    def setUpClass(cls):
+        cls.pending = import_helper.import_module('_testcapi')._pending_threadfunc
+        cls.set_async_exc = import_helper.import_module(
+            '_testlimitedcapi').threadstate_set_async_exc
+
+    def observe(self):
+        frame = sys._getframe(1)
+        self.seen.append((frame.f_code.co_name, frame.f_locals.get('x')))
+
+    def raise_pending(self):
+        raise Pending
+
+    def trips(self, site):
+        """Yield (trip, target, first, second, result) for calls that leave
+        work for their own periodic check."""
+        if site is single_site:
+            simple = _testinternalcapi.simple_pending_call
+            yield 'pending call', simple, self.observe, None, ('returned', None)
+            yield ('pending call raises', simple, self.raise_pending, None,
+                   ('raised', 'old'))
+            return
+        yield 'pending call', self.pending, self.observe, 1, ('returned', 1)
+        yield ('pending call raises', self.pending, self.raise_pending, 1,
+               ('raised', 'old'))
+        if site is not keyword_site:
+            yield ('async exception', self.set_async_exc,
+                   threading.get_ident(), Pending, ('raised', 'old'))
+
+    def check_site(self, site, handler, cold=False):
+        for trip, target, first, second, result in self.trips(site):
+            with self.subTest(handler=handler, trip=trip):
+                if cold:
+                    support.reset_code(site)
+                self.seen = []
+                self.assertEqual(site(target, first, second), result)
+                expected = []
+                if trip == 'pending call':
+                    expected = [(site.__name__, 'old')]
+                self.assertEqual(self.seen, expected)
+                # The site still holds the handler that ran the call.
+                self.assertIn(handler, executing_handlers(site))
+
+    def warm(self, site, target, first=None):
+        support.reset_code(site)
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
+            site(target, first, None)
+
+    def test_generic_handlers(self):
+        self.check_site(positional_site, 'CALL', cold=True)
+        self.check_site(star_site, 'CALL_FUNCTION_EX', cold=True)
+
+    def test_specialized_handlers(self):
+        native = functools.partial(python_callee)
+        for site, target, first, handler in (
+                (positional_site, native, None, 'CALL_NON_PY_GENERAL'),
+                (keyword_site, native, None, 'CALL_KW_NON_PY'),
+                (star_site, native, None, 'CALL_EX_NON_PY_GENERAL'),
+                # The warm-up's pending calls to int() do nothing visible.
+                (single_site, _testinternalcapi.simple_pending_call, int,
+                 'CALL_BUILTIN_O')):
+            self.warm(site, target, first)
+            self.assertIn(handler, executing_handlers(site))
+            self.check_site(site, handler)
+
+    def test_failed_check_releases_result_after_raise_event(self):
+        # Upstream's unwinder pops the result after the frame's RAISE event.
+        ledger = []
+        pending = self.pending
+        raise_pending = self.raise_pending
+
+        class Result:
+            def __del__(self):
+                ledger.append('result')
+
+        def callee(first, second):
+            result = Result()
+            # A cold CALL_KW has no periodic check, so the pending call waits
+            # for the check of the call into callee.
+            pending(raise_pending, num=1)
+            return result
+
+        monitoring = sys.monitoring
+        tool = monitoring.PROFILER_ID
+        monitoring.use_tool_id(tool, 'test_pyvalue_native_scope')
+        self.addCleanup(monitoring.free_tool_id, tool)
+        monitoring.register_callback(
+            tool, monitoring.events.RAISE,
+            lambda code, offset, exc: ledger.append(('raise', code.co_name)))
+        native = functools.partial(callee)
+        for handler in ('CALL', 'CALL_NON_PY_GENERAL'):
+            with self.subTest(handler=handler):
+                if handler == 'CALL':
+                    support.reset_code(positional_site)
+                else:
+                    self.warm(positional_site, functools.partial(python_callee))
+                code = positional_site.__code__
+                monitoring.set_local_events(tool, code, monitoring.events.RAISE)
+                try:
+                    support.reset_code(callee)
+                    ledger.clear()
+                    self.assertEqual(positional_site(native, None, None),
+                                     ('raised', 'old'))
+                    self.assertEqual(ledger,
+                                     [('raise', 'positional_site'), 'result'])
+                    self.assertIn(handler, executing_handlers(positional_site))
+                finally:
+                    monitoring.set_local_events(tool, code, 0)
+
+    def test_instrumented_handlers(self):
+        monitoring = sys.monitoring
+        tool = monitoring.PROFILER_ID
+        monitoring.use_tool_id(tool, 'test_pyvalue_native_scope')
+        self.addCleanup(monitoring.free_tool_id, tool)
+        monitoring.register_callback(tool, monitoring.events.CALL,
+                                     lambda *args: None)
+        for site, handler in ((positional_site, 'INSTRUMENTED_CALL'),
+                              (star_site, 'INSTRUMENTED_CALL_FUNCTION_EX')):
+            support.reset_code(site)
+            monitoring.set_local_events(tool, site.__code__,
+                                        monitoring.events.CALL)
+            try:
+                self.check_site(site, handler)
+            finally:
+                monitoring.set_local_events(tool, site.__code__, 0)
+
+    def test_jit_warm_handler(self):
+        # Warmed on an eligible Python callee, the site runs CALL's generic
+        # path under CALL_JIT_WARM until the callee compiles.
+        self.warm(positional_site, python_callee)
+        if 'CALL_JIT_WARM' not in executing_handlers(positional_site):
+            self.skipTest('needs the baseline JIT')
+        self.check_site(positional_site, 'CALL_JIT_WARM')
 
 
 if __name__ == "__main__":

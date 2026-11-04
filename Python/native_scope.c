@@ -1,5 +1,6 @@
 #include "Python.h"
 
+#include "pycore_borrow.h"        // _PyBorrow_ValueVector()
 #include "pycore_native_scope.h"
 #include "pycore_tuple.h"
 
@@ -81,7 +82,10 @@ _PyNativeScope_Begin(_PyNativeScope *scope, PyThreadState *tstate,
         scope->receiver = PyValue_MakeHeapSafe(PyValue_Borrow(self_or_null));
     }
     if (total_count != 0) {
-        scope->argument = PyValue_MakeHeapSafe(PyValue_Borrow(args[0]));
+        /* Borrow what the window owns, as upstream passes its stack; take an
+           owner only for a value the window itself borrows. */
+        scope->argument = PyValue_IsHeapSafe(args[0])
+            ? PyValue_Borrow(args[0]) : PyValue_MakeHeapSafe(args[0]);
     }
     return 0;
 }
@@ -120,12 +124,6 @@ begin_vector(_PyNativeScope *scope, PyThreadState *tstate,
             return -1;
         }
     }
-    if ((size_t)total_count >
-        (size_t)PY_SSIZE_T_MAX / (sizeof(PyValue) + sizeof(PyObject *)))
-    {
-        PyErr_NoMemory();
-        return -1;
-    }
     for (Py_ssize_t i = 0; i < total_count; i++) {
         if (!PyValue_IsLanguageValue(effective_args[i]) ||
             !PyValue_IsHeapSafe(effective_args[i]))
@@ -136,7 +134,7 @@ begin_vector(_PyNativeScope *scope, PyThreadState *tstate,
         }
     }
     /* These INCREFs cannot reenter. All metadata and the producer's owning
-     * window remain rooted during the first allocation and snapshot. */
+     * window remain rooted while the arguments are boxed. */
     scope->callable = Py_NewRef(callable);
     scope->kwnames = Py_XNewRef(kwnames);
     if (cfunction) {
@@ -144,29 +142,18 @@ begin_vector(_PyNativeScope *scope, PyThreadState *tstate,
         scope->defining_class = (PyTypeObject *)Py_XNewRef(
             (PyObject *)PyCFunction_GET_CLASS(callable));
     }
-    if (total_count > 1) {
-        size_t values_size = (size_t)total_count * sizeof(PyValue);
-        size_t bytes = values_size + (size_t)total_count * sizeof(PyObject *);
-        scope->storage = PyMem_Malloc(bytes);
-        if (scope->storage == NULL) {
-            PyErr_NoMemory();
-            return -1;
-        }
-        scope->arguments = scope->storage;
-        scope->objects = (PyObject **)((char *)scope->storage + values_size);
-        for (Py_ssize_t i = 0; i < total_count; i++) {
-            scope->arguments[i] = PyValue_NULL;
-            scope->objects[i] = NULL;
-        }
+    /* Boxing cannot run Python code.  On failure the partial run stays above
+       the mark and End releases it. */
+    scope->arguments = NULL;
+    scope->mark = _PyBorrowScope_Enter(tstate);
+    PyObject **objects = _PyBorrow_ValueVector(effective_args, total_count);
+    if (objects == NULL) {
+        return -1;
     }
-    /* Publish the cleanup count only after every slot is initialized. */
+    scope->objects = objects;
     scope->nargs = total_count;
     scope->positional_count = positional_count;
-    for (Py_ssize_t i = 0; i < total_count; i++) {
-        scope->arguments[i] = PyValue_MakeHeapSafe(
-            PyValue_Borrow(effective_args[i]));
-    }
-    return PyErr_Occurred() ? -1 : 0;
+    return 0;
 }
 
 int
@@ -247,10 +234,20 @@ _PyNativeScope_Objects(_PyNativeScope *scope, PyObject *const **args)
             return -1;
         }
     }
+    if (scope->mark != NULL) {
+        /* A vector scope boxed its arguments in Begin. */
+        return 0;
+    }
+    /* Pass objects borrowed; box inline values (End releases the boxes). */
     for (Py_ssize_t i = 0; i < scope->nargs; i++) {
         if (scope->objects[i] == NULL) {
-            scope->objects[i] = PyValue_AsObject(scope->arguments[i]);
-            if (scope->objects[i] == NULL || PyErr_Occurred()) {
+            PyValue argument = scope->arguments[i];
+            if (!PyValue_IsInline(argument)) {
+                scope->objects[i] = PyValue_AsPyObjectBorrow(argument);
+                continue;
+            }
+            scope->objects[i] = PyValue_AsPyObjectNewBoxed(argument);
+            if (scope->objects[i] == NULL) {
                 return -1;
             }
         }
@@ -337,12 +334,24 @@ _PyNativeScope_End(_PyNativeScope *scope)
     close_value(&out->value, &saved);
     close_value(&out->displaced, &saved);
     close_object(&out->retired, &saved);
-    for (Py_ssize_t i = scope->nargs; i-- > 0;) {
-        close_object(&scope->objects[i], &saved);
+    if (scope->mark != NULL) {
+        /* Releases the boxes of inline arguments. */
+        _PyBorrowScope_Exit(scope->tstate, scope->mark);
+        capture_cleanup_error(&saved);
+    }
+    else {
+        for (Py_ssize_t i = scope->nargs; i-- > 0;) {
+            if (PyValue_IsInline(scope->arguments[i])) {
+                close_object(&scope->objects[i], &saved);
+            }
+            scope->objects[i] = NULL;
+        }
     }
     close_object(&scope->receiver_object, &saved);
-    for (Py_ssize_t i = scope->nargs; i-- > 0;) {
-        close_value(&scope->arguments[i], &saved);
+    if (scope->mark == NULL) {
+        for (Py_ssize_t i = scope->nargs; i-- > 0;) {
+            close_value(&scope->arguments[i], &saved);
+        }
     }
     close_value(&scope->receiver, &saved);
     PyObject *defining_class = (PyObject *)scope->defining_class;
@@ -352,17 +361,10 @@ _PyNativeScope_End(_PyNativeScope *scope)
     close_object(&scope->kwargs, &saved);
     close_object(&scope->callargs, &saved);
     close_object(&scope->callable, &saved);
-    /* No callback can reuse a partially drained array. Keep its storage
-     * alive through every owner release, then detach before freeing it. */
-    void *storage = scope->storage;
-    scope->storage = NULL;
+    scope->mark = NULL;
     scope->arguments = NULL;
     scope->objects = NULL;
     scope->nargs = 0;
-    if (storage != NULL) {
-        PyMem_Free(storage);
-        capture_cleanup_error(&saved);
-    }
     PyErr_SetRaisedException(saved);
     return PyErr_Occurred() ? -1 : 0;
 }

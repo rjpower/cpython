@@ -406,6 +406,18 @@ class EmbeddingTests(EmbeddingTestsMixin, unittest.TestCase):
         self.assertIn(expected_output, out)
         self.assertEqual(err, '')
 
+    @support.cpython_only
+    def test_borrow_scope_outside_eval(self):
+        out, err = self.run_embedded_interpreter(
+            "test_borrow_scope_outside_eval")
+        self.assertEqual(err, '')
+        self.assertEqual(out.splitlines(), [
+            '1099511627776 2.5',
+            'scope released: 1',
+            'base region holds it: 1',
+            'del before teardown: True',
+        ])
+
     def test_bpo20891(self):
         """
         bpo-20891: Calling PyGILState_Ensure in a non-Python thread must not

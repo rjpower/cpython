@@ -8,6 +8,7 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
+#include "pycore_borrow.h"        // _PyBorrowMark
 #include "pycore_value.h"
 
 typedef enum {
@@ -25,7 +26,11 @@ typedef struct {
     _PyNativeResultState state;
 } _PyNativeResult;
 
-/* The caller owns the workspace, including overflow storage, through End.
+/* The caller owns the workspace through End.  Arguments that are objects
+ * are passed as borrowed pointers, as upstream passes its evaluation stack;
+ * only inline values are boxed.  A fixed scope keeps its one argument and
+ * its box in the struct.  A vector scope keeps its argument vector on the
+ * borrow stack (_PyBorrow_ValueVector), above `mark`; End exits to the mark.
  * No pointer refers to the native body's C stack. */
 typedef struct {
     PyThreadState *tstate;
@@ -33,9 +38,9 @@ typedef struct {
     PyValue argument;
     PyObject *receiver_object;
     PyObject *argument_objects[1];
-    PyValue *arguments;
+    PyValue *arguments;         // fixed scopes only
     PyObject **objects;
-    void *storage;
+    _PyBorrowMark mark;         // vector scopes only
     PyObject *callable;
     PyObject *kwnames;
     PyObject *callargs;
@@ -52,17 +57,18 @@ typedef struct {
  * release owners, call Python, or fail. End is a later reentry boundary. */
 typedef void (*_PyNativePublishState)(void *caller_state);
 
-/* Source arguments must be stable and owning through capture. This first
- * slice accepts at most one argument and no keyword tail. Scope snapshots
- * are distinct owners; publication may subsequently move the source window. */
+/* The caller keeps the source argument alive until End; publication may move
+ * it out of the window.  The scope borrows an owned argument and takes its
+ * own owner only for a borrowed one.  This first slice accepts at most one
+ * argument and no keyword tail. */
 PyAPI_FUNC(int) _PyNativeScope_Begin(
     _PyNativeScope *scope, PyThreadState *tstate,
     const PyValue *args, Py_ssize_t positional_count, Py_ssize_t total_count,
     PyValue self_or_null, PyObject *kwnames);
-/* effective_args is an already-owning stable window through capture; total
- * includes the keyword tail. Capture then owns independent snapshots. The
- * C callable and all invocation metadata are pinned before allocation.
- * Objects has no writable prefix cell and advertises no OFFSET flag. */
+/* effective_args is an owning window that stays alive and unchanged until
+ * End; total includes the keyword tail.  The vector borrows its objects and
+ * boxes inline values.  The C callable and all invocation metadata are pinned
+ * first.  Callers do not pass the OFFSET flag with the objects. */
 PyAPI_FUNC(int) _PyNativeScope_BeginVector(
     _PyNativeScope *scope, PyThreadState *tstate, PyObject *callable,
     const PyValue *effective_args, Py_ssize_t positional_count,

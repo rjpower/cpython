@@ -41,6 +41,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "Python.h"
 #include "pycore_abstract.h"      // _PyIndex_Check()
 #include "pycore_bytes_methods.h" // _Py_bytes_lower()
+#include "pycore_borrow.h"        // _PyBorrowScope_Enter()
 #include "pycore_bytesobject.h"   // _PyBytes_RepeatBuffer()
 #include "pycore_ceval.h"         // _PyEval_GetBuiltin()
 #include "pycore_value.h"
@@ -4362,6 +4363,10 @@ unicode_decode_call_errorhandler_wchar(
     Py_ssize_t newpos;
     PyObject *inputobj = NULL;
     Py_ssize_t repwlen;
+    /* A long input calls the handler once per error: scope the parse of
+       each result, so that its entries do not stay until the codec returns. */
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
 
     if (*errorHandler == NULL) {
         *errorHandler = PyCodec_LookupError(errors);
@@ -4436,6 +4441,7 @@ unicode_decode_call_errorhandler_wchar(
 
     /* we made it! */
     Py_DECREF(restuple);
+    _PyBorrowScope_Exit(tstate, mark);
     return 0;
 
   overflow:
@@ -4444,6 +4450,7 @@ unicode_decode_call_errorhandler_wchar(
 
   onError:
     Py_XDECREF(restuple);
+    _PyBorrowScope_Exit(tstate, mark);
     return -1;
 }
 #endif   /* MS_WINDOWS */
@@ -4467,6 +4474,10 @@ unicode_decode_call_errorhandler_writer(
     PyObject *inputobj = NULL;
     int need_to_grow = 0;
     const char *new_inptr;
+    /* A long input calls the handler once per error: scope the parse of
+       each result, so that its entries do not stay until the codec returns. */
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
 
     if (*errorHandler == NULL) {
         *errorHandler = PyCodec_LookupError(errors);
@@ -4541,10 +4552,12 @@ unicode_decode_call_errorhandler_writer(
 
     /* we made it! */
     Py_DECREF(restuple);
+    _PyBorrowScope_Exit(tstate, mark);
     return 0;
 
   onError:
     Py_XDECREF(restuple);
+    _PyBorrowScope_Exit(tstate, mark);
     return -1;
 }
 
@@ -7247,14 +7260,20 @@ unicode_encode_call_errorhandler(const char *errors,
         Py_DECREF(restuple);
         return NULL;
     }
+    /* One call per error in the input: scope the parse of the result, so
+       that its entries do not stay until the codec returns. */
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     if (!PyArg_ParseTuple(restuple, argparse,
                           &resunicode, newpos)) {
         Py_DECREF(restuple);
+        _PyBorrowScope_Exit(tstate, mark);
         return NULL;
     }
     if (!PyUnicode_Check(resunicode) && !PyBytes_Check(resunicode)) {
         PyErr_SetString(PyExc_TypeError, &argparse[3]);
         Py_DECREF(restuple);
+        _PyBorrowScope_Exit(tstate, mark);
         return NULL;
     }
     if (*newpos<0)
@@ -7262,10 +7281,12 @@ unicode_encode_call_errorhandler(const char *errors,
     if (*newpos<0 || *newpos>len) {
         PyErr_Format(PyExc_IndexError, "position %zd from error handler out of bounds", *newpos);
         Py_DECREF(restuple);
+        _PyBorrowScope_Exit(tstate, mark);
         return NULL;
     }
     Py_INCREF(resunicode);
     Py_DECREF(restuple);
+    _PyBorrowScope_Exit(tstate, mark);
     return resunicode;
 }
 
@@ -9565,9 +9586,14 @@ unicode_translate_call_errorhandler(const char *errors,
         Py_DECREF(restuple);
         return NULL;
     }
+    /* One call per error in the input: scope the parse of the result, so
+       that its entries do not stay until the codec returns. */
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     if (!PyArg_ParseTuple(restuple, argparse,
                           &resunicode, &i_newpos)) {
         Py_DECREF(restuple);
+        _PyBorrowScope_Exit(tstate, mark);
         return NULL;
     }
     if (i_newpos<0)
@@ -9577,10 +9603,12 @@ unicode_translate_call_errorhandler(const char *errors,
     if (*newpos<0 || *newpos>PyUnicode_GET_LENGTH(unicode)) {
         PyErr_Format(PyExc_IndexError, "position %zd from error handler out of bounds", *newpos);
         Py_DECREF(restuple);
+        _PyBorrowScope_Exit(tstate, mark);
         return NULL;
     }
     Py_INCREF(resunicode);
     Py_DECREF(restuple);
+    _PyBorrowScope_Exit(tstate, mark);
     return resunicode;
 }
 

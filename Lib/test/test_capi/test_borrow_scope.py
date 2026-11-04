@@ -1,7 +1,9 @@
 """Tests for the borrow stack behind the borrowed results of the PyArg_*
 parsers (Include/internal/pycore_borrow.h)."""
 
+import codecs
 import pickle
+import sys
 import unittest
 from test import support
 from test.support import import_helper
@@ -41,12 +43,21 @@ class BorrowScopeTests(unittest.TestCase):
                     fast, (2**40,), {"y": -2.5})
                 self.assertEqual(values, (2**40, -2.5))
 
-    def test_release_on_return(self):
-        varargs_OO = _testinternalcapi.varargs_OO
-        before = borrow_depth()
-        for i in range(10**5):
-            varargs_OO(i, 0.5)
-        self.assertEqual(borrow_depth(), before)
+    def test_release_at_call_boundaries(self):
+        # call_loop() calls from C, where no eval-loop instruction boundary
+        # runs, so only the call boundaries' scopes release: the PyCFunction
+        # trampoline, type_call() around a Clinic tp_new that parses its
+        # tuple, and _PyObject_VectorcallTstate() around a vectorcall
+        # function that has no trampoline of its own.
+        cases = [
+            (_testinternalcapi.varargs_OO, (1, 2.5)),
+            (F, (2.5,)),
+            (_testinternalcapi.ParseOnAdd((2**40,)), ()),
+        ]
+        for callable, args in cases:
+            with self.subTest(callable=callable):
+                self.assertEqual(
+                    _testinternalcapi.call_loop(callable, args, 1000), 0)
 
     def test_loop_in_c(self):
         n = 1000
@@ -127,10 +138,15 @@ class BorrowScopeTests(unittest.TestCase):
         delta, exc = parse_then_churn("OO", (1,))
         self.assertIsInstance(exc, TypeError)
         self.assertEqual(delta, 0)
-        before = borrow_depth()
-        with self.assertRaises(TypeError):
-            _testinternalcapi.varargs_OO(*range(10**6))
-        self.assertEqual(borrow_depth(), before)
+
+    def test_chunk_growth_out_of_memory(self):
+        # A run longer than a chunk needs a new chunk; when that fails the
+        # push raises MemoryError and leaves nothing on the stack.
+        delta, exc = _testinternalcapi.borrow_grow_oom(("x",) * 5000)
+        self.assertIsInstance(exc, MemoryError)
+        self.assertEqual(delta, 0)
+        self.assertEqual(parse_then_churn("OO", (2**40, 0.5)),
+                         (2, (2**40, 0.5)))
 
     def test_eval_frame_hook(self):
         def loop():
@@ -147,6 +163,39 @@ class BorrowScopeTests(unittest.TestCase):
             _testinternalcapi.set_eval_frame_parse()
         self.assertGreaterEqual(len(record), 1)
         self.assertEqual(set(record), {2**40})
+
+    @support.requires_refcounting
+    def test_native_call_arguments_borrowed(self):
+        # Native calls from bytecode pass the objects of the call window
+        # borrowed, as upstream passes its stack, and box only inline values:
+        # a temporary argument has one reference.  The loop covers the cold
+        # call path and the specialized METH_O and METH_FASTCALL paths.
+        refcounts = _testinternalcapi.argument_refcounts
+
+        def call():
+            return sys.getrefcount(object()), refcounts(object(), [], 2.5)
+
+        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
+            self.assertEqual(call(), (1, [1, 1, 1]))
+
+    def test_codec_error_handler_scope(self):
+        # A codec calls the error handler once per error and parses each
+        # result; the entries of one call must not stay for the next.
+        depths = []
+
+        def handler(exc):
+            depths.append(borrow_depth())
+            return ('?', exc.end)
+
+        codecs.register_error('test_borrow_scope.depth', handler)
+        # Codecs pass a run of bad characters to one handler call, so the
+        # bad characters are kept apart.
+        for data, op in [(b'\xffa' * 50, 'decode'), ('\xe9a' * 50, 'encode')]:
+            with self.subTest(op=op):
+                depths.clear()
+                getattr(data, op)('ascii', 'test_borrow_scope.depth')
+                self.assertEqual(len(depths), 50)
+                self.assertEqual(len(set(depths)), 1, depths)
 
     def test_pickle_newobj_scope(self):
         # load_newobj calls tp_new directly; float's tp_new parses its
@@ -167,6 +216,40 @@ class BorrowScopeTests(unittest.TestCase):
 
 class F(float):
     pass
+
+
+class FinalizationTests(unittest.TestCase):
+
+    def test_late_finalizer_parses(self):
+        # interpreter_clear() clears every thread state, then runs the
+        # finalizers of objects kept alive until its last collection.
+        assert_python_ok('-c', '''if 1:
+            from test import support
+            import _testinternalcapi
+
+            class Late:
+                def __del__(self, parse=_testinternalcapi.varargs_OO):
+                    parse(2**40, 0.5)
+
+            support.late_deletion(Late())
+        ''')
+
+    def test_daemon_thread_keeps_its_entries(self):
+        # A daemon thread still inside a call when the main thread
+        # finalizes keeps the boxes it parsed, as it keeps its frames.
+        rc, out, err = assert_python_ok('-c', '''if 1:
+            import threading, time
+            import _testinternalcapi
+
+            ready = threading.Event()
+            def run():
+                ready.set()
+                _testinternalcapi.borrow_hold_and_wait((2**40,), 2.0)
+            threading.Thread(target=run, daemon=True).start()
+            ready.wait()
+            time.sleep(0.2)
+        ''')
+        self.assertNotIn(b'freed under its thread', err)
 
 
 probe_depths = []

@@ -1345,10 +1345,7 @@ _elementtree_XMLParser___init__(PyObject *self, PyObject *args, PyObject *kwargs
     PyObject *target = Py_None;
     const char *encoding = NULL;
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, 0);
-    if (_args_items == NULL) {
-        goto exit;
-    }
+    PyObject *const _args_items[1] = {NULL};
     fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
@@ -1496,4 +1493,4 @@ skip_optional:
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=9147a5213e9f50ba input=a9049054013a1b77]*/
+/*[clinic end generated code: output=0faff5bc62812706 input=a9049054013a1b77]*/

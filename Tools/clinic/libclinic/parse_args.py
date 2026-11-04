@@ -956,8 +956,14 @@ class ParseArgsCodeGen:
 
         A tuple stores canonical PyValues, so it has no PyObject * array to
         lend.  The run holds owned references on the borrow stack until the
-        scope around the native call exits (pycore_borrow.h).
+        scope around the native call exits (pycore_borrow.h).  With no items
+        to read, a non-NULL empty array stands in for the run without a call
+        (_PyArg_UnpackKeywords() takes its fast path only for non-NULL args).
         """
+        if count == '0':
+            return libclinic.normalize_snippet("""
+                PyObject *const _args_items[1] = {{NULL}};
+                """, indent=4)
         self.codegen.add_include('pycore_borrow.h', '_PyBorrow_TupleItems()')
         return libclinic.normalize_snippet(f"""
             PyObject *const *_args_items = _PyBorrow_TupleItems(args, {count});

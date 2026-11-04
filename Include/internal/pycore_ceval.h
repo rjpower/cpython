@@ -309,9 +309,6 @@ PyAPI_FUNC(void) _PyEval_FrameClearAndPop(PyThreadState *tstate, _PyInterpreterF
 /* Where frame resumes when a generator that it resumed returns: past the
  * exit of its SEND or FOR_ITER, or for the entry frame, the next word. */
 PyAPI_FUNC(_PyInstr *) _PyEval_GeneratorReturnTarget(_PyInterpreterFrame *frame);
-PyAPI_FUNC(PyObject **) _PyObjectArray_FromValueArray(PyValue *input, Py_ssize_t nargs, PyObject **scratch);
-
-PyAPI_FUNC(void) _PyObjectArray_Free(PyObject **array, PyObject **scratch, Py_ssize_t nargs);
 
 PyAPI_FUNC(PyObject *) _PyEval_GetANext(PyObject *aiter);
 PyAPI_FUNC(void) _PyEval_LoadGlobalValue(PyObject *globals, PyObject *builtins,

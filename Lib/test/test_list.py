@@ -420,9 +420,9 @@ class ListTest(list_tests.CommonTest):
            iterable doesn't prematurely free the iterable"""
 
         def foo(x):
-            # Upstream holds only the local reference (1).  The register IR
-            # calling convention keeps extra references to the argument
-            # (3 or 4, varying with warm-up); to be measured in IR v2.
+            # Upstream holds only the local reference (1).  Native calls pass
+            # the argument borrowed, but the register IR's call window holds
+            # an owned copy of the local (2); to be removed in IR v2.
             self.assertGreaterEqual(sys.getrefcount(x), 1)
             r = 0
             for i in x:

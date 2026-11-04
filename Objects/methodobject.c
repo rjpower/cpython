@@ -583,27 +583,13 @@ _PyCFunction_CallScoped(_PyNativeScope *scope, PyObject *callable,
     }
     _PyBorrowScope_Exit(scope->tstate, mark);
     _Py_LeaveRecursiveCallTstate(scope->tstate);
-    if (result == NULL && !_PyErr_Occurred(scope->tstate)) {
-        _PyErr_Format(scope->tstate, PyExc_SystemError,
-                      "%R returned NULL without setting an exception",
-                      callable);
-#ifdef Py_DEBUG
-        Py_FatalError("a function returned NULL without setting an exception");
-#endif
+    /* The standard check of a C function's return, as every other call path
+       makes it.  A result returned with an exception set is released here. */
+    result = _Py_CheckFunctionResult(scope->tstate, callable, result, NULL);
+    if (result == NULL) {
         return -1;
     }
-    int status = _PyNativeScope_StageResult(scope, result, out);
-    if (result != NULL && status < 0) {
-        /* Preserve the standard bad-C-return diagnostic while deferring the
-         * owned result's release to the caller's abort/publication boundary. */
-        _PyErr_FormatFromCauseTstate(
-            scope->tstate, PyExc_SystemError,
-            "%R returned a result with an exception set", callable);
-#ifdef Py_DEBUG
-        Py_FatalError("a function returned a result with an exception set");
-#endif
-    }
-    return status;
+    return _PyNativeScope_StageResult(scope, result, out);
 }
 
 /* Now the actual vectorcall functions */

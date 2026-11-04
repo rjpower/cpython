@@ -752,6 +752,25 @@ PyEval_EvalFrameEx(PyFrameObject *f, int throwflag)
     return _PyEval_EvalFrame(tstate, f->f_frame, throwflag);
 }
 
+/* The object vector for VALUES_TO_PYOBJECTS (Python/ceval_macros.h), on the
+ * borrow stack in the caller's scope.  It borrows the window's objects, as
+ * upstream passes its stack.  Window slots are private evaluated operands:
+ * give every borrowed slot its own owner first, so the window stays valid if
+ * the callee replaces the local or container it was read from. */
+static PyObject **
+_PyValueArray_ToObjectVector(PyValue *input, Py_ssize_t nargs)
+{
+    for (Py_ssize_t i = 0; i < nargs; i++) {
+        if (!PyValue_IsHeapSafe(input[i])) {
+            input[i] = PyValue_MakeHeapSafe(input[i]);
+        }
+    }
+    if (PyErr_Occurred()) {
+        return NULL;
+    }
+    return _PyBorrow_ValueVector(input, nargs);
+}
+
 static inline PyObject *
 check_value_bridge_result(PyObject *result)
 {
@@ -1028,6 +1047,7 @@ _Py_VectorCall_ValueSteal(
     VALUES_TO_PYOBJECTS(arguments, total_args, args_o);
     if (CONVERSION_FAILED(args_o)) {
         res = NULL;
+        VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
         goto cleanup;
     }
     PyObject *callable_o = PyValue_AsPyObjectBorrow(callable);
@@ -1071,6 +1091,7 @@ _Py_VectorCallInstrumentation_ValueSteal(
     VALUES_TO_PYOBJECTS(arguments, total_args, args_o);
     if (CONVERSION_FAILED(args_o)) {
         res = NULL;
+        VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
         goto cleanup;
     }
     PyObject* callable_o = PyValue_AsPyObjectBorrow(callable);
@@ -1123,18 +1144,17 @@ _Py_BuiltinCallFast_Value(
     PyObject *res;
     VALUES_TO_PYOBJECTS(arguments, total_args, args_o);
     if (CONVERSION_FAILED(args_o)) {
-        return NULL;
+        res = NULL;
+        VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
+        return res;
     }
     PyObject *callable_o = PyValue_AsPyObjectBorrow(callable);
     PyCFunction cfunc = PyCFunction_GET_FUNCTION(callable_o);
-    PyThreadState *tstate = _PyThreadState_GET();
-    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     res = _PyCFunctionFast_CAST(cfunc)(
         PyCFunction_GET_SELF(callable_o),
         args_o,
         total_args
     );
-    _PyBorrowScope_Exit(tstate, mark);
     VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
     assert((res != NULL) ^ (PyErr_Occurred() != NULL));
     return res;
@@ -1149,15 +1169,14 @@ _Py_BuiltinCallFastWithKeywords_Value(
     PyObject *res;
     VALUES_TO_PYOBJECTS(arguments, total_args, args_o);
     if (CONVERSION_FAILED(args_o)) {
-        return NULL;
+        res = NULL;
+        VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
+        return res;
     }
     PyObject *callable_o = PyValue_AsPyObjectBorrow(callable);
     PyCFunctionFastWithKeywords cfunc =
         _PyCFunctionFastWithKeywords_CAST(PyCFunction_GET_FUNCTION(callable_o));
-    PyThreadState *tstate = _PyThreadState_GET();
-    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     res = cfunc(PyCFunction_GET_SELF(callable_o), args_o, total_args, NULL);
-    _PyBorrowScope_Exit(tstate, mark);
     VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
     assert((res != NULL) ^ (PyErr_Occurred() != NULL));
     return res;
@@ -1174,14 +1193,13 @@ _PyCallMethodDescriptorFast_Value(
     PyObject *res;
     VALUES_TO_PYOBJECTS(arguments, total_args, args_o);
     if (CONVERSION_FAILED(args_o)) {
-        return NULL;
+        res = NULL;
+        VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
+        return res;
     }
     assert(PyValue_Is(PyValue_FromObjectBorrow(self), arguments[0]));
 
-    PyThreadState *tstate = _PyThreadState_GET();
-    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     res = cfunc(self, (args_o + 1), total_args - 1);
-    _PyBorrowScope_Exit(tstate, mark);
     VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
     assert((res != NULL) ^ (PyErr_Occurred() != NULL));
     return res;
@@ -1198,14 +1216,13 @@ _PyCallMethodDescriptorFastWithKeywords_Value(
     PyObject *res;
     VALUES_TO_PYOBJECTS(arguments, total_args, args_o);
     if (CONVERSION_FAILED(args_o)) {
-        return NULL;
+        res = NULL;
+        VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
+        return res;
     }
     assert(PyValue_Is(PyValue_FromObjectBorrow(self), arguments[0]));
 
-    PyThreadState *tstate = _PyThreadState_GET();
-    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     res = cfunc(self, (args_o + 1), total_args-1, NULL);
-    _PyBorrowScope_Exit(tstate, mark);
     VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
     assert((res != NULL) ^ (PyErr_Occurred() != NULL));
     return res;
@@ -1220,13 +1237,12 @@ _Py_CallBuiltinClass_Value(
     PyObject *res;
     VALUES_TO_PYOBJECTS(arguments, total_args, args_o);
     if (CONVERSION_FAILED(args_o)) {
-        return NULL;
+        res = NULL;
+        VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
+        return res;
     }
     PyTypeObject *tp = (PyTypeObject *)PyValue_AsPyObjectBorrow(callable);
-    PyThreadState *tstate = _PyThreadState_GET();
-    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     res = tp->tp_vectorcall((PyObject *)tp, args_o, total_args | PY_VECTORCALL_ARGUMENTS_OFFSET, NULL);
-    _PyBorrowScope_Exit(tstate, mark);
     VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
     assert((res != NULL) ^ (PyErr_Occurred() != NULL));
     return res;
@@ -1241,6 +1257,7 @@ _Py_BuildString_ValueSteal(
     VALUES_TO_PYOBJECTS(arguments, total_args, args_o);
     if (CONVERSION_FAILED(args_o)) {
         res = NULL;
+        VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
         goto cleanup;
     }
     res = _PyUnicode_JoinArray(&_Py_STR(empty), args_o, total_args);
@@ -1315,62 +1332,6 @@ static const struct {
 const _PyInstr *_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS_PTR = (_PyInstr*)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
 
 
-PyObject **
-_PyObjectArray_FromValueArray(PyValue *input, Py_ssize_t nargs, PyObject **scratch)
-{
-    if (nargs < 0 || (size_t)nargs >= SIZE_MAX / sizeof(PyObject *) - 1) {
-        PyErr_NoMemory();
-        return NULL;
-    }
-    /* Window slots are private evaluated operands. Give every borrowed
-     * pointer an independent owner before the first allocation can reenter
-     * and replace the local/container from which it was evaluated. */
-    for (Py_ssize_t i = 0; i < nargs; i++) {
-        if (!PyValue_IsHeapSafe(input[i])) {
-            input[i] = PyValue_MakeHeapSafe(input[i]);
-        }
-    }
-    PyObject **result;
-    if (nargs > MAX_VALUE_SCRATCH) {
-        // +1 in case PY_VECTORCALL_ARGUMENTS_OFFSET is set.
-        result = PyMem_Malloc((nargs + 1) * sizeof(PyObject *));
-        if (result == NULL) {
-            PyErr_NoMemory();
-            return NULL;
-        }
-        if (PyErr_Occurred()) {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyMem_Free(result);
-            _PyValue_RestoreException(saved);
-            return NULL;
-        }
-    }
-    else {
-        result = scratch;
-    }
-    result++;
-    result[0] = NULL; /* Keep GCC happy */
-    for (Py_ssize_t i = 0; i < nargs; i++) {
-        result[i] = PyValue_AsObject(input[i]);
-        if (result[i] == NULL || PyErr_Occurred()) {
-            _PyObjectArray_Free(result - 1, scratch, i + (result[i] != NULL));
-            return NULL;
-        }
-    }
-    return result;
-}
-
-void
-_PyObjectArray_Free(PyObject **array, PyObject **scratch, Py_ssize_t nargs)
-{
-    _PyValueTemps owners = {array + 1, nargs, nargs, NULL};
-    _PyValueTemps_Close(&owners);
-    PyObject *saved = PyErr_GetRaisedException();
-    if (array != scratch) {
-        PyMem_Free(array);
-    }
-    _PyValue_RestoreException(saved);
-}
 
 /* _PyEval_EvalFrameDefault is too large to optimize for speed with PGO on MSVC.
  */
@@ -3240,13 +3201,13 @@ eval_frame_push_and_init_ex_code(PyThreadState *tstate, PyValue func,
     PyObject *kwnames = NULL;
     PyValue *newargs = NULL;
     PyObject *const *object_array = NULL;
-    PyObject **positionals = NULL;
-    PyObject *scratch[MAX_VALUE_SCRATCH + 1];
     PyValue stack_array[8] = {0};
     Py_ssize_t total = nargs;
     _PyInterpreterFrame *new_frame = NULL;
+    /* The positional objects for _PyStack_UnpackDict() live in this scope. */
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     if (has_dict) {
-        positionals = _PyObjectArray_FromValueArray(_PyTuple_ITEMS(callargs), nargs, scratch);
+        PyObject *const *positionals = _PyBorrow_TupleItems(callargs, nargs);
         if (positionals == NULL) {
             goto fail_func;
         }
@@ -3296,11 +3257,7 @@ done:
         _PyValue_RestoreException(saved);
         saved = PyErr_GetRaisedException();
     }
-    if (positionals != NULL) {
-        _PyObjectArray_Free(positionals - 1, scratch, nargs);
-        _PyValue_RestoreException(saved);
-        saved = PyErr_GetRaisedException();
-    }
+    _PyBorrowScope_Exit(tstate, mark);
     if (newargs != NULL && newargs != stack_array) {
         PyMem_Free(newargs);
         _PyValue_RestoreException(saved);

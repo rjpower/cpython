@@ -1,5 +1,6 @@
 #include "parts.h"
 
+#include "pycore_borrow.h"        // _PyBorrow_Depth()
 #include "pycore_native_scope.h"
 #include "pycore_tuple.h"
 #include "pycore_interpframe.h"
@@ -522,36 +523,33 @@ vector_mechanism(PyObject *callable, const PyValue *values,
     PyValue destination = PyValue_NULL;
     Publication publication = {.destination = &destination};
     VectorFailure failure = {0};
-    if (fault == 1) {
-        vector_arm_failure(&failure, PYMEM_DOMAIN_MEM);
+    PyThreadState *tstate = PyThreadState_Get();
+    Py_ssize_t depth = _PyBorrow_Depth(tstate);
+    if (fault) {
+        vector_arm_failure(&failure, PYMEM_DOMAIN_OBJ);
     }
     int status = _PyNativeScope_BeginVector(
-        &scope, PyThreadState_Get(), callable, values,
+        &scope, tstate, callable, values,
         positional_count, total_count, kwnames);
-    if (fault == 1) {
+    if (fault) {
         PyMem_SetAllocator(failure.domain, &failure.saved);
+        /* Capture builds the vector on the borrow stack: the OFFSET slot,
+           the vector, its skip entry and the first argument's box stay
+           above the mark until End. */
+        if (status >= 0 || !failure.consumed) {
+            PyErr_SetString(PyExc_AssertionError,
+                            "native vector boxing fault was not consumed");
+        }
+        else if (_PyBorrow_Depth(tstate) != depth + total_count + 3) {
+            PyErr_SetString(PyExc_AssertionError,
+                            "boxing fault did not leave a partial run");
+        }
+        goto abort;
     }
     if (status < 0) {
         goto abort;
     }
-    if (fault == 2) {
-        vector_arm_failure(&failure, PYMEM_DOMAIN_OBJ);
-    }
     status = _PyCFunction_CallScoped(&scope, callable, &scope.result);
-    if (fault == 2) {
-        PyMem_SetAllocator(failure.domain, &failure.saved);
-        if (status < 0 && failure.consumed &&
-            (scope.objects[0] == NULL || scope.objects[1] != NULL))
-        {
-            PyErr_SetString(PyExc_AssertionError,
-                            "boxing fault did not leave a partial view array");
-        }
-    }
-    if (fault != 0 && (status >= 0 || !failure.consumed)) {
-        PyErr_SetString(PyExc_AssertionError,
-                        "native vector allocation fault was not consumed");
-        goto abort;
-    }
     if (status != 0) {
         if (status > 0) {
             PyErr_SetString(PyExc_RuntimeError,
@@ -583,6 +581,10 @@ abort:
     _PyNativeResult_Abort(&scope.result, publish_state, &publication);
     (void)_PyNativeScope_End(&scope);
     close_destination(&destination);
+    if (_PyBorrow_Depth(tstate) != depth) {
+        PyErr_SetString(PyExc_AssertionError,
+                        "native vector End did not release its run");
+    }
     return NULL;
 }
 
@@ -637,11 +639,12 @@ native_scope_vector(PyObject *Py_UNUSED(module), PyObject *const *args,
     return result;
 }
 
+/* The first argument boxes without allocating (a cached small int); the
+   second needs a new box, which fails. */
 static PyObject *
 vector_fault_mechanism(PyObject *callable, int fault)
 {
-    PyValue values[2] = {PyValue_FromInt32(1), PyValue_NULL};
-    values[1] = PyValue_FromInt32(fault == 1 ? 2 : INT32_MAX);
+    PyValue values[2] = {PyValue_FromInt32(1), PyValue_FromInt32(INT32_MAX)};
     PyObject *result = vector_mechanism(callable, values, 2, 2, NULL, fault);
     PyObject *saved = PyErr_GetRaisedException();
     for (int i = 1; i >= 0; i--) {
@@ -662,15 +665,9 @@ vector_fault_mechanism(PyObject *callable, int fault)
 }
 
 static PyObject *
-native_scope_vector_alloc_oom(PyObject *Py_UNUSED(module), PyObject *callable)
-{
-    return vector_fault_mechanism(callable, 1);
-}
-
-static PyObject *
 native_scope_vector_box_oom(PyObject *Py_UNUSED(module), PyObject *callable)
 {
-    return vector_fault_mechanism(callable, 2);
+    return vector_fault_mechanism(callable, 1);
 }
 
 static PyObject *
@@ -809,10 +806,12 @@ native_scope_vector_target_change(PyObject *Py_UNUSED(module), PyObject *callabl
     }
     PyCFunctionObject *function = (PyCFunctionObject *)callable;
     vectorcallfunc original = function->vectorcall;
-    for (int phase = 0; phase < 2; phase++) {
+    /* Capture's only allocation is the box for the first argument; the
+       callback changes the target from inside it. */
+    {
         PyValue values[2] = {PyValue_FromInt32(INT32_MAX), PyValue_FromInt32(1)};
         VectorTargetChange change = {
-            .domain = phase == 0 ? PYMEM_DOMAIN_MEM : PYMEM_DOMAIN_OBJ,
+            .domain = PYMEM_DOMAIN_OBJ,
             .callable = function,
         };
         PyMem_GetAllocator(change.domain, &change.saved);
@@ -823,19 +822,13 @@ native_scope_vector_target_change(PyObject *Py_UNUSED(module), PyObject *callabl
             .realloc = vector_change_realloc,
             .free = vector_change_free,
         };
-        if (phase == 0) {
-            PyMem_SetAllocator(change.domain, &allocator);
-        }
+        PyMem_SetAllocator(change.domain, &allocator);
         _PyNativeScope scope;
         int status = _PyNativeScope_BeginVector(
             &scope, PyThreadState_Get(), callable, values, 2, 2, NULL);
         PyMem_SetAllocator(change.domain, &change.saved);
         if (status == 0) {
-            if (phase == 1) {
-                PyMem_SetAllocator(change.domain, &allocator);
-            }
             status = _PyCFunction_CallScoped(&scope, callable, &scope.result);
-            PyMem_SetAllocator(change.domain, &change.saved);
         }
         int correct = change.consumed && status == 1 && !PyErr_Occurred() &&
                       scope.result.state == _Py_NATIVE_RESULT_EMPTY;
@@ -1112,17 +1105,17 @@ native_vm_malloc(void *opaque, size_t size)
 {
     NativeVMProbe *probe = opaque;
     if (PyThread_get_thread_ident() == probe->thread &&
-        size == 2 * (sizeof(PyValue) + sizeof(PyObject *)) &&
         PyThreadState_GetUnchecked() == probe->tstate) {
         _PyInterpreterFrame *frame = probe->tstate->current_frame;
         if (frame != NULL && frame->owner != FRAME_OWNED_BY_INTERPRETER &&
             _PyFrame_GetCode(frame) == probe->driver_code &&
             IR_HANDLER(*frame->instr_ptr) == CALL_KW_NON_PY) {
-            /* BeginVector is the first MEM allocation in this selected
-             * no-growing handler; the source window is already strong. */
+            /* Boxing the inline first argument in BeginVector is the first
+             * OBJ allocation in this selected handler; the source window is
+             * already strong. */
             probe->fired = 1;
             probe->handler = CALL_KW_NON_PY;
-            PyMem_SetAllocator(PYMEM_DOMAIN_MEM, &probe->saved);
+            PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &probe->saved);
             probe->target->vectorcall = native_vm_override;
             if (probe->callback != Py_None) {
                 probe->callback_calls++;
@@ -1190,15 +1183,15 @@ native_scope_vm_prepare(PyObject *Py_UNUSED(module), PyObject *const *args,
         .callback = callback,
         .original = ((PyCFunctionObject *)target)->vectorcall,
     };
-    PyMem_GetAllocator(PYMEM_DOMAIN_MEM, &probe.saved);
+    PyMem_GetAllocator(PYMEM_DOMAIN_OBJ, &probe.saved);
     PyMemAllocatorEx allocator = {
         .ctx = &probe, .malloc = native_vm_malloc, .calloc = native_vm_calloc,
         .realloc = native_vm_realloc, .free = native_vm_free,
     };
     native_vm_probe = &probe;
-    PyMem_SetAllocator(PYMEM_DOMAIN_MEM, &allocator);
+    PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &allocator);
     PyObject *result = PyObject_CallNoArgs(driver);
-    PyMem_SetAllocator(PYMEM_DOMAIN_MEM, &probe.saved);
+    PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &probe.saved);
     probe.target->vectorcall = probe.original;
     native_vm_probe = NULL;
     PyObject *saved = PyErr_GetRaisedException();
@@ -1328,7 +1321,6 @@ static PyMethodDef methods[] = {
     _TESTINTERNALCAPI_NATIVE_SCOPE_FLAT_FAST_METHODDEF
     {"native_scope_vector", _PyCFunction_CAST(native_scope_vector),
      METH_FASTCALL | METH_KEYWORDS},
-    {"native_scope_vector_alloc_oom", native_scope_vector_alloc_oom, METH_O},
     {"native_scope_vector_box_oom", native_scope_vector_box_oom, METH_O},
     {"native_scope_vector_can_call", native_scope_vector_can_call, METH_O},
     {"native_scope_vector_override", native_scope_vector_override, METH_NOARGS},

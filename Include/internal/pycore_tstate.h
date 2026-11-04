@@ -40,10 +40,6 @@ typedef struct {
                                 // entered; NULL outside any eval loop
     _PyBorrowChunk *chunk;      // initially the empty chunk in borrow.c
     _PyBorrowChunk *spare;      // one cached chunk
-#ifdef Py_DEBUG
-    int cleared;                // set by _PyBorrowStack_Clear(): no more
-                                // pushes
-#endif
 } _PyBorrowStack;
 
 

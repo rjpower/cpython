@@ -6,6 +6,7 @@
 #undef NDEBUG
 
 #include <Python.h>
+#include "pycore_borrow.h"        // _PyBorrow_Depth()
 #include "pycore_initconfig.h"    // _PyConfig_InitCompatConfig()
 #include "pycore_runtime.h"       // _PyRuntime
 #include "pycore_lock.h"          // PyEvent
@@ -484,6 +485,67 @@ static void bpo20891_thread(void *eventp)
 
     PyGILState_Release(state);
     _PyEvent_Notify(event);
+}
+
+/* Parsing from main, outside any eval loop (borrow stack tests 10 and 19).
+   An explicit scope keeps the parsed objects alive after their tuple dies
+   and releases them at its end.  A parse outside any scope stays in the
+   thread's base region until Py_FinalizeEx(), which releases it before
+   modules are torn down. */
+static int test_borrow_scope_outside_eval(void)
+{
+    _testembed_initialize();
+    PyThreadState *tstate = PyThreadState_Get();
+    Py_ssize_t base = _PyBorrow_Depth(tstate);
+
+    PyObject *pair = Py_BuildValue("(Ld)", (long long)1 << 40, 2.5);
+    if (pair == NULL) {
+        PyErr_Print();
+        return 1;
+    }
+    PyObject *a, *b;
+    int ok;
+    Py_BEGIN_BORROW_SCOPE
+    ok = PyArg_ParseTuple(pair, "OO", &a, &b);
+    Py_DECREF(pair);
+    if (ok) {
+        PyGC_Collect();
+        for (int i = 0; i < 1000; i++) {
+            Py_XDECREF(PyFloat_FromDouble(i));
+            Py_XDECREF(PyLong_FromLongLong(((long long)1 << 41) + i));
+        }
+        printf("%lld %.1f\n", PyLong_AsLongLong(a), PyFloat_AsDouble(b));
+    }
+    Py_END_BORROW_SCOPE
+    if (!ok) {
+        PyErr_Print();
+        return 1;
+    }
+    printf("scope released: %d\n", _PyBorrow_Depth(tstate) == base);
+
+    if (PyRun_SimpleString(
+            "import sys\n"
+            "class Late:\n"
+            "    def __del__(self):\n"
+            "        print('del before teardown:', sys.modules.get('sys') is sys)\n"
+            "late = (Late(),)\n") < 0)
+    {
+        return 1;
+    }
+    PyObject *main_dict = PyModule_GetDict(PyImport_AddModule("__main__"));
+    PyObject *late, *object;
+    if (PyDict_GetItemStringRef(main_dict, "late", &late) <= 0 ||
+        !PyArg_ParseTuple(late, "O", &object) ||
+        PyDict_DelItemString(main_dict, "late") < 0)
+    {
+        PyErr_Print();
+        return 1;
+    }
+    Py_DECREF(late);
+    printf("base region holds it: %d\n", _PyBorrow_Depth(tstate) == base + 1);
+    fflush(stdout);
+    Py_Finalize();
+    return 0;
 }
 
 static int test_bpo20891(void)
@@ -3143,6 +3205,7 @@ struct TestCase
 static struct TestCase TestCases[] = {
     // Python initialization
     {"test_repeated_init_exec", test_repeated_init_exec},
+    {"test_borrow_scope_outside_eval", test_borrow_scope_outside_eval},
     {"test_interpreter_clear_and_delete", test_interpreter_clear_and_delete},
     {"test_repeated_simple_init", test_repeated_simple_init},
     {"test_forced_io_encoding", test_forced_io_encoding},

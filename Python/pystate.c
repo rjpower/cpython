@@ -839,6 +839,9 @@ interpreter_clear(PyInterpreterState *interp, PyThreadState *tstate)
 
 
     if (tstate->interp == interp) {
+        // Finalizers run after PyThreadState_Clear() above may have parsed
+        // outside any borrow scope.
+        _PyBorrowStack_ReleaseAll(tstate);
         /* We are now safe to fix tstate->_status.cleared. */
         // XXX Do this (much) earlier?
         tstate->_status.cleared = 1;
@@ -1408,6 +1411,7 @@ free_threadstate(_PyThreadStateImpl *tstate)
 #ifdef Py_STATS
     _PyStats_ThreadFini(tstate);
 #endif
+    _PyBorrowStack_Fini(&tstate->base);
     // The initial thread state of the interpreter is allocated
     // as part of the interpreter state so should not be freed.
     if (tstate == &interp->_initial_thread) {
@@ -1758,7 +1762,7 @@ PyThreadState_Clear(PyThreadState *tstate)
     Py_CLEAR(((_PyThreadStateImpl *)tstate)->lazy_imports);
 
     // Finalizers above may also have pushed borrow entries.
-    _PyBorrowStack_Clear(tstate);
+    _PyBorrowStack_ReleaseAll(tstate);
 
 #ifdef Py_GIL_DISABLED
     // Each thread should clear own freelists in free-threading builds.

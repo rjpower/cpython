@@ -136,13 +136,6 @@ class NativeScopeVectorMechanismTests(unittest.TestCase):
         self.assertEqual(_testinternalcapi.native_scope_vector(
             _testinternalcapi.native_scope_flat, 5), 5)
 
-    def test_capture_oom(self):
-        with self.assertRaises(MemoryError):
-            _testinternalcapi.native_scope_vector_alloc_oom(
-                _testinternalcapi.native_scope_flat_fast)
-        self.assertEqual(_testinternalcapi.native_scope_vector(
-            _testinternalcapi.native_scope_flat_fast, 1, 2), 3)
-
     @unittest.skipIf(support.Py_GIL_DISABLED or struct.calcsize("P") != 8,
                      "requires inline scalar values")
     def test_partial_box_oom(self):

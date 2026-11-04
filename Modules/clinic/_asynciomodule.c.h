@@ -68,10 +68,7 @@ _asyncio_Future___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
     PyObject *loop = Py_None;
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, 0);
-    if (_args_items == NULL) {
-        goto exit;
-    }
+    PyObject *const _args_items[1] = {NULL};
     fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
@@ -2114,4 +2111,4 @@ exit:
 
 #define _ASYNCIO_TASK__FUT_WAITER_GETSETDEF {"_fut_waiter", (getter)_asyncio_Task__fut_waiter_get, (setter)NULL, NULL},
 
-/*[clinic end generated code: output=c229471642e3446a input=a9049054013a1b77]*/
+/*[clinic end generated code: output=f3b941ee5bf623bb input=a9049054013a1b77]*/

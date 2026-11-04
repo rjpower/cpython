@@ -8,7 +8,6 @@ preserve
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 
 static PyObject *
@@ -61,10 +60,7 @@ PyCField_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     PyObject *bit_size_obj = Py_None;
     PyObject *bit_offset_obj = Py_None;
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, 0);
-    if (_args_items == NULL) {
-        goto exit;
-    }
+    PyObject *const _args_items[1] = {NULL};
     fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 6, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
@@ -132,4 +128,4 @@ skip_optional_kwonly:
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=a91dd651ce181f2a input=a9049054013a1b77]*/
+/*[clinic end generated code: output=7a1505aa1b6e2182 input=a9049054013a1b77]*/

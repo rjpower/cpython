@@ -5,7 +5,7 @@
    chunks, so a tuple run is one contiguous array.  A mark is the stack top
    when a scope opened; release pops entries down to it, retiring chunks it
    empties on the way.  Chunks come from the raw allocator, so a thread state
-   can be cleared from any thread. */
+   can be freed from any thread. */
 
 #include "Python.h"
 #include "pycore_borrow.h"
@@ -30,6 +30,13 @@ static _PyBorrowChunk empty_chunk = {
 /* The run returned for an empty tuple.  It is never read. */
 static PyObject *const empty_run[1] = {NULL};
 
+/* An argument vector (_PyBorrow_ValueVector) holds pointers that the stack
+   does not own.  A skip entry above the vector records how many slots to step
+   over.  It is a count tagged with the low bit, which no object pointer has. */
+#define BORROW_SKIP(n) ((PyObject *)(((uintptr_t)(n) << 1) | 1))
+#define BORROW_IS_SKIP(o) (((uintptr_t)(o) & 1) != 0)
+#define BORROW_SKIP_COUNT(o) ((Py_ssize_t)((uintptr_t)(o) >> 1))
+
 static inline _PyBorrowStack *
 borrow_stack(PyThreadState *tstate)
 {
@@ -45,6 +52,7 @@ _PyBorrowStack_Init(_PyBorrowStack *s)
     s->spare = NULL;
 }
 
+#ifdef Py_DEBUG
 /* Number of entries below p, or -1 if p is not a position on the stack at or
    below the top. */
 static Py_ssize_t
@@ -59,6 +67,7 @@ borrow_depth(const _PyBorrowStack *s, PyObject **p)
     }
     return -1;
 }
+#endif
 
 Py_ssize_t
 _PyBorrow_Depth(PyThreadState *tstate)
@@ -86,21 +95,45 @@ _PyBorrowStack_ReleaseAll(PyThreadState *tstate)
 }
 
 void
-_PyBorrowStack_Clear(PyThreadState *tstate)
+_PyBorrowStack_Fini(PyThreadState *tstate)
 {
     _PyBorrowStack *s = borrow_stack(tstate);
-    if (borrow_thread_has_frame(tstate)) {
-        /* Leave the entries and their chunks, as PyThreadState_Clear()
-           leaves the frames. */
-        return;
+    /* A thread state that failed allocation before init is zero-filled. */
+    _PyBorrowChunk *chunk = s->chunk;
+    /* The entries were released while the thread state could still run
+       code: by PyThreadState_Clear(), and for the finalizing thread by
+       interpreter_clear().  A thread stopped in mid-evaluation keeps its
+       entries, as it keeps its frames, and they are not released here. */
+    assert(chunk == NULL || borrow_thread_has_frame(tstate) ||
+           _PyBorrow_Depth(tstate) == 0);
+    while (chunk != NULL && chunk != &empty_chunk) {
+        _PyBorrowChunk *previous = chunk->previous;
+        PyMem_RawFree(chunk);
+        chunk = previous;
     }
-    borrow_release(s, empty_chunk.slots);
-    assert(s->chunk == &empty_chunk);
     PyMem_RawFree(s->spare);
-    s->spare = NULL;
-#ifdef Py_DEBUG
-    s->cleared = 1;
-#endif
+    _PyBorrowStack_Init(s);
+}
+
+int
+_PyBorrowStack_Visit(PyThreadState *tstate, visitproc visit, void *arg)
+{
+    _PyBorrowStack *s = borrow_stack(tstate);
+    PyObject **top = s->top;
+    for (const _PyBorrowChunk *c = s->chunk; c != NULL; c = c->previous) {
+        /* Downward, as release walks, to find each vector's skip entry
+           before its slots. */
+        for (PyObject **q = top; q > c->slots;) {
+            PyObject *o = *--q;
+            if (BORROW_IS_SKIP(o)) {
+                q -= BORROW_SKIP_COUNT(o);
+                continue;
+            }
+            Py_VISIT(o);
+        }
+        top = c->previous_top;
+    }
+    return 0;
 }
 
 void
@@ -115,10 +148,6 @@ _PyBorrow_RequestRelease(PyThreadState *tstate)
 static int
 borrow_grow(_PyBorrowStack *s, Py_ssize_t n)
 {
-#ifdef Py_DEBUG
-    /* Pushing on a cleared thread state would leak the new chunk. */
-    assert(!s->cleared);
-#endif
     _PyBorrowChunk *chunk = s->spare;
     if (chunk != NULL && chunk->end - chunk->slots >= n) {
         s->spare = NULL;
@@ -176,6 +205,12 @@ borrow_release(_PyBorrowStack *s, _PyBorrowMark mark)
             continue;
         }
         PyObject *o = *--s->top;
+        if (BORROW_IS_SKIP(o)) {
+            /* A vector lies wholly in one chunk and holds no mark. */
+            assert(s->top - BORROW_SKIP_COUNT(o) >= s->chunk->slots);
+            s->top -= BORROW_SKIP_COUNT(o);
+            continue;
+        }
         Py_XDECREF(o);
     }
 }
@@ -295,6 +330,51 @@ _PyBorrow_TupleItems(PyObject *tuple, Py_ssize_t n)
     }
     BORROW_CHECK_SIZE(tstate, s);
     return run;
+}
+
+PyObject **
+_PyBorrow_ValueVector(const PyValue *values, Py_ssize_t n)
+{
+    assert(n >= 0);
+    assert(!PyErr_Occurred());
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyBorrowStack *s = borrow_stack(tstate);
+    Py_ssize_t boxes = 0;
+    for (Py_ssize_t i = 0; i < n; i++) {
+        assert(PyValue_IsLanguageValue(values[i]));
+        assert(PyValue_IsHeapSafe(values[i]));
+        boxes += PyValue_IsInline(values[i]);
+    }
+    /* The OFFSET slot, the vector, its skip entry and the boxes share one
+       chunk, so filling them cannot fail on growth. */
+    Py_ssize_t size = n + 2 + boxes;
+    if (s->end - s->top < size && borrow_grow(s, size) < 0) {
+        return NULL;
+    }
+    /* Every caller exits its own scope after the call, so a release request
+       would only cost an atomic OR now and a pending-call check later. */
+    PyObject **vector = s->top + 1;
+    vector[-1] = NULL;
+    for (Py_ssize_t i = 0; i < n; i++) {
+        vector[i] = PyValue_IsInline(values[i])
+            ? NULL : PyValue_AsPyObjectBorrow(values[i]);
+    }
+    vector[n] = BORROW_SKIP(n + 1);
+    s->top = vector + n + 1;
+    /* Boxing an int or float cannot run Python code, so nothing else pushes
+       while the boxes are filled. */
+    for (Py_ssize_t i = 0; i < n; i++) {
+        if (PyValue_IsInline(values[i])) {
+            PyObject *box = PyValue_AsPyObjectNewBoxed(values[i]);
+            if (box == NULL) {
+                return NULL;
+            }
+            *s->top++ = box;
+            vector[i] = box;
+        }
+    }
+    BORROW_CHECK_SIZE(tstate, s);
+    return vector;
 }
 
 

@@ -1692,9 +1692,31 @@ find_keyword_str(PyObject *kwnames, PyObject *const *kwstack, const char *key)
 
 #define IS_END_OF_FORMAT(c) (c == '\0' || c == ';' || c == ':')
 
+/* How many of the first n format units take positional arguments: the index
+   of '$' if it comes first, otherwise n.  Only the first nargs units are
+   scanned, so a call that passes few arguments pays little.  The conversion
+   loop reports a malformed format, so stop at the first problem. */
+static int
+keywords_positional_limit(const char *format, int n)
+{
+    for (int i = 0; i < n; i++) {
+        if (*format == '|') {
+            format++;
+        }
+        if (*format == '$') {
+            return i;
+        }
+        if (IS_END_OF_FORMAT(*format) || skipitem(&format, NULL, 0) != NULL) {
+            break;
+        }
+    }
+    return n;
+}
+
 /* Parse nargs positional arguments from args, or from the items of tuple
    when it is not NULL.  The tuple's items are pushed on the borrow stack
-   after the total arity check, so the run is bounded by the keyword list. */
+   after the total arity check, and only as many as the format's positional
+   maximum: the '$' check in the loop raises before any later item is read. */
 static int
 vgetargskeywords_impl(PyObject *const *args, PyObject *tuple, Py_ssize_t nargs,
                       PyObject *kwargs, PyObject *kwnames,
@@ -1782,7 +1804,9 @@ vgetargskeywords_impl(PyObject *const *args, PyObject *tuple, Py_ssize_t nargs,
         return cleanreturn(0, &freelist);
     }
     if (tuple != NULL) {
-        args = _PyBorrow_TupleItems(tuple, nargs);
+        /* nargs <= len, an int, after the arity check above. */
+        args = _PyBorrow_TupleItems(
+            tuple, keywords_positional_limit(format, (int)nargs));
         if (args == NULL) {
             return cleanreturn(0, &freelist);
         }

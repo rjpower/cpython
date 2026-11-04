@@ -54,6 +54,7 @@
    as garbage. */
 
 #include "Python.h"
+#include "pycore_borrow.h"        // _PyBorrowStack_Visit()
 #include "pycore_gc_trace.h"
 #include "pycore_initconfig.h"    // _PyStatus_ERR()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
@@ -1092,13 +1093,9 @@ _PyGC_TraceVisitThreadState(PyThreadState *p, visitproc visit, void *arg)
     Py_VISIT(ts->asyncio_running_loop);
     Py_VISIT(ts->asyncio_running_task);
     Py_VISIT(ts->lazy_imports);
-    /* The borrow stack owns its entries (Python/borrow.c). */
-    PyObject **top = ts->borrow.top;
-    for (_PyBorrowChunk *c = ts->borrow.chunk; c != NULL; c = c->previous) {
-        for (PyObject **q = c->slots; q < top; q++) {
-            Py_VISIT(*q);
-        }
-        top = c->previous_top;
+    int err = _PyBorrowStack_Visit(p, visit, arg);
+    if (err) {
+        return err;
     }
     /* Objects the trashcan deferred: their reference count is already zero
      * but they still own their members until the chain is destroyed. */

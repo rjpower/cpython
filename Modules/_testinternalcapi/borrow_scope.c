@@ -298,13 +298,28 @@ parse_reentrant(PyObject *Py_UNUSED(module), PyObject *args)
 
 /* A type whose nb_add parses an internal tuple with "O" and optionally calls
    a Python function.  BINARY_OP calls nb_add directly, with no native call
-   boundary, so the parse leaves its entry above the eval floor. */
+   boundary, so the parse leaves its entry above the eval floor.  Calling an
+   instance parses the same way through its own vectorcall function, which
+   has no trampoline: only the caller's call-protocol scope releases it. */
 
 typedef struct {
     PyObject_HEAD
     PyObject *items;
     PyObject *callback;
+    vectorcallfunc vectorcall;
 } ParseOnAddObject;
+
+static PyObject *
+parse_on_add_vectorcall(PyObject *op, PyObject *const *args, size_t nargsf,
+                        PyObject *kwnames)
+{
+    ParseOnAddObject *self = (ParseOnAddObject *)op;
+    PyObject *item;
+    if (!PyArg_ParseTuple(self->items, "O", &item)) {
+        return NULL;
+    }
+    return Py_NewRef(item);
+}
 
 static PyObject *
 parse_on_add_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
@@ -320,6 +335,7 @@ parse_on_add_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     }
     self->items = Py_NewRef(items);
     self->callback = Py_NewRef(callback);
+    self->vectorcall = parse_on_add_vectorcall;
     return (PyObject *)self;
 }
 
@@ -355,9 +371,17 @@ parse_on_add_add(PyObject *left, PyObject *right)
     return Py_NewRef(item);
 }
 
+static PyMemberDef parse_on_add_members[] = {
+    {"__vectorcalloffset__", Py_T_PYSSIZET,
+     offsetof(ParseOnAddObject, vectorcall), Py_READONLY},
+    {NULL},
+};
+
 static PyType_Slot parse_on_add_slots[] = {
     {Py_tp_new, parse_on_add_new},
     {Py_tp_dealloc, parse_on_add_dealloc},
+    {Py_tp_call, PyVectorcall_Call},
+    {Py_tp_members, parse_on_add_members},
     {Py_nb_add, parse_on_add_add},
     {0, NULL},
 };
@@ -365,7 +389,8 @@ static PyType_Slot parse_on_add_slots[] = {
 static PyType_Spec parse_on_add_spec = {
     .name = "_testinternalcapi.ParseOnAdd",
     .basicsize = sizeof(ParseOnAddObject),
-    .flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_IMMUTABLETYPE,
+    .flags = (Py_TPFLAGS_DEFAULT | Py_TPFLAGS_IMMUTABLETYPE |
+              Py_TPFLAGS_HAVE_VECTORCALL),
     .slots = parse_on_add_slots,
 };
 
@@ -420,6 +445,151 @@ set_eval_frame_parse(PyObject *Py_UNUSED(module), PyObject *const *args,
 }
 
 
+/* call_loop(callable, args, n): call callable(*args) n times through
+   PyObject_Call() and n times through PyObject_Vectorcall(), and return the
+   number of entries left on the stack just before returning.  Only the call
+   boundaries' scopes can release entries here: no eval-loop instruction
+   boundary runs in this C loop. */
+static PyObject *
+call_loop(PyObject *Py_UNUSED(module), PyObject *const *args, Py_ssize_t nargs)
+{
+    if (nargs != 3 || !PyTuple_Check(args[1]) ||
+        PyTuple_GET_SIZE(args[1]) > MAX_OUTPUTS)
+    {
+        PyErr_SetString(PyExc_TypeError,
+                        "call_loop(callable, args: tuple, n: int)");
+        return NULL;
+    }
+    PyObject *callable = args[0], *tuple = args[1];
+    Py_ssize_t n = PyLong_AsSsize_t(args[2]);
+    if (n == -1 && PyErr_Occurred()) {
+        return NULL;
+    }
+    Py_ssize_t size = PyTuple_GET_SIZE(tuple);
+    PyObject *vector[MAX_OUTPUTS];
+    for (Py_ssize_t i = 0; i < size; i++) {
+        vector[i] = PyTuple_GetItemRef(tuple, i);
+        if (vector[i] == NULL) {
+            while (--i >= 0) {
+                Py_DECREF(vector[i]);
+            }
+            return NULL;
+        }
+    }
+    Py_ssize_t before = current_depth();
+    PyObject *result = NULL;
+    for (Py_ssize_t i = 0; i < 2 * n; i++) {
+        PyObject *res = i < n
+            ? PyObject_Call(callable, tuple, NULL)
+            : PyObject_Vectorcall(callable, vector, size, NULL);
+        if (res == NULL) {
+            goto done;
+        }
+        Py_DECREF(res);
+    }
+    result = PyLong_FromSsize_t(current_depth() - before);
+done:
+    for (Py_ssize_t i = 0; i < size; i++) {
+        Py_DECREF(vector[i]);
+    }
+    return result;
+}
+
+/* A raw allocator that fails every allocation: the borrow stack's chunks
+   come from the raw domain. */
+static PyMemAllocatorEx saved_raw;
+
+static void *
+fail_raw_malloc(void *ctx, size_t size)
+{
+    return NULL;
+}
+
+static void *
+fail_raw_calloc(void *ctx, size_t nelem, size_t elsize)
+{
+    return NULL;
+}
+
+static void *
+fail_raw_realloc(void *ctx, void *ptr, size_t size)
+{
+    return NULL;
+}
+
+static void
+fail_raw_free(void *ctx, void *ptr)
+{
+    saved_raw.free(saved_raw.ctx, ptr);
+}
+
+/* borrow_grow_oom(args): push all of args as one run while the raw allocator
+   fails.  A run longer than a chunk needs a new chunk, so this fails.  Return
+   (delta, exception) as parse_then_churn() does. */
+static PyObject *
+borrow_grow_oom(PyObject *Py_UNUSED(module), PyObject *tuple)
+{
+    if (!PyTuple_Check(tuple)) {
+        PyErr_SetString(PyExc_TypeError, "a tuple is required");
+        return NULL;
+    }
+    PyMemAllocatorEx failing = {
+        .malloc = fail_raw_malloc,
+        .calloc = fail_raw_calloc,
+        .realloc = fail_raw_realloc,
+        .free = fail_raw_free,
+    };
+    Py_ssize_t before = current_depth();
+    PyMem_GetAllocator(PYMEM_DOMAIN_RAW, &saved_raw);
+    PyMem_SetAllocator(PYMEM_DOMAIN_RAW, &failing);
+    PyObject *const *run = _PyBorrow_TupleItems(tuple, PyTuple_GET_SIZE(tuple));
+    PyMem_SetAllocator(PYMEM_DOMAIN_RAW, &saved_raw);
+    if (run != NULL) {
+        PyErr_SetString(PyExc_AssertionError, "the run did not need a chunk");
+        return NULL;
+    }
+    return report(before, 0, "", NULL);
+}
+
+/* borrow_hold_and_wait(args, seconds): parse args with "O", then release the
+   GIL and check the borrowed object's type every 10 ms for `seconds`.  Run
+   in a daemon thread while the main thread finalizes: the box must stay
+   alive while its thread is still inside the call. */
+static PyObject *
+borrow_hold_and_wait(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *items, *object;
+    double seconds;
+    if (!PyArg_ParseTuple(args, "O!d", &PyTuple_Type, &items, &seconds) ||
+        !PyArg_ParseTuple(items, "O", &object))
+    {
+        return NULL;
+    }
+    /* A held lock: each timed acquire is a portable 10 ms sleep. */
+    PyThread_type_lock lock = PyThread_allocate_lock();
+    if (lock == NULL) {
+        return PyErr_NoMemory();
+    }
+    PyThread_acquire_lock(lock, WAIT_LOCK);
+    PyTypeObject *type = Py_TYPE(object);
+    int alive = 1;
+    Py_BEGIN_ALLOW_THREADS
+    for (double waited = 0; waited < seconds && alive; waited += 0.01) {
+        /* Racy by design: the reader holds no GIL, as in a real
+           Py_BEGIN_ALLOW_THREADS section that reads its parsed input. */
+        alive = Py_TYPE(object) == type;
+        (void)PyThread_acquire_lock_timed(lock, 10 * 1000, 0);
+    }
+    if (!alive) {
+        fprintf(stderr, "borrowed object freed under its thread\n");
+        abort();
+    }
+    Py_END_ALLOW_THREADS
+    PyThread_release_lock(lock);
+    PyThread_free_lock(lock);
+    Py_RETURN_NONE;
+}
+
 /* Exit a scope with a mark above the top.  Debug builds fail fatally. */
 static PyObject *
 borrow_bad_exit(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(args))
@@ -435,6 +605,29 @@ borrow_bad_exit(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(args))
 #endif
 }
 
+/* METH_FASTCALL: the reference count of each argument, read before
+   anything else is allocated. */
+static PyObject *
+argument_refcounts(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+{
+    Py_ssize_t counts[8];
+    if (nargs > (Py_ssize_t)Py_ARRAY_LENGTH(counts)) {
+        PyErr_SetString(PyExc_TypeError, "at most 8 arguments");
+        return NULL;
+    }
+    for (Py_ssize_t i = 0; i < nargs; i++) {
+        counts[i] = Py_REFCNT(args[i]);
+    }
+    PyObject *result = PyList_New(0);
+    for (Py_ssize_t i = 0; result != NULL && i < nargs; i++) {
+        PyObject *count = PyLong_FromSsize_t(counts[i]);
+        if (count == NULL || PyList_Append(result, count) < 0) {
+            Py_CLEAR(result);
+        }
+        Py_XDECREF(count);
+    }
+    return result;
+}
 
 static PyMethodDef methods[] = {
     {"borrow_depth", borrow_depth, METH_NOARGS},
@@ -446,6 +639,10 @@ static PyMethodDef methods[] = {
     {"parse_reentrant", parse_reentrant, METH_VARARGS},
     {"set_eval_frame_parse", _PyCFunction_CAST(set_eval_frame_parse), METH_FASTCALL},
     {"borrow_bad_exit", borrow_bad_exit, METH_NOARGS},
+    {"call_loop", _PyCFunction_CAST(call_loop), METH_FASTCALL},
+    {"borrow_grow_oom", borrow_grow_oom, METH_O},
+    {"borrow_hold_and_wait", borrow_hold_and_wait, METH_VARARGS},
+    {"argument_refcounts", _PyCFunction_CAST(argument_refcounts), METH_FASTCALL},
     {NULL},
 };
 

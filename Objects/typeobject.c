@@ -30,7 +30,7 @@
 #include "pycore_typeobject.h"    // _PyTypes_InitTypes()
 #include "pycore_unicodeobject.h" // _PyUnicode_Copy
 #include "pycore_unionobject.h"   // _Py_union_type_or
-#include "pycore_value.h"         // _PyValue_RestoreException()
+#include "pycore_value.h"         // PyValue_CLEAR()
 #include "pycore_weakref.h"       // _PyWeakref_GET_REF()
 #include "pycore_cell.h"          // PyCell_GetRef()
 #include "pycore_stats.h"

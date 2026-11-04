@@ -12,7 +12,6 @@
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_pystats.h"       // _Py_StatsOn()
 #include "pycore_sysmodule.h"     // _PySys_SetIntMaxStrDigits()
-#include "pycore_value.h"         // _PyValue_RestoreException()
 
 #include "osdefs.h"               // DELIM
 

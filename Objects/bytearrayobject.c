@@ -7,7 +7,6 @@
 #include "pycore_ceval.h"         // _PyEval_GetBuiltin()
 #include "pycore_critical_section.h"
 #include "pycore_object.h"        // _PyObject_GC_UNTRACK()
-#include "pycore_value.h"         // _PyValue_RestoreException()
 #include "pycore_strhex.h"        // _Py_strhex_with_sep()
 #include "pycore_long.h"          // _PyLong_FromUnsignedChar()
 #include "pycore_pyatomic_ft_wrappers.h"

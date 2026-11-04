@@ -142,7 +142,7 @@ class DictOwnedMigrationTests(unittest.TestCase):
         mapping.clear()
         self.assertEqual(retained, [(1, 2147483647), (3.25, 2.5), ('object', [])])
 
-    def test_owned_entry_failure_and_reentry_contracts(self):
+    def test_owned_entry_failure_contracts(self):
         self.capi.dict_owned_entry_contract()
         self.capi.dict_owned_entry_boxing_oom()
 

@@ -7,7 +7,6 @@
 
 #include "Python.h"
 #include "pycore_object.h"        // _PyObject_IsFreed()
-#include "pycore_value.h"         // _PyValue_RestoreException()
 
 
 // Used for clone_with_conv_f1 and clone_with_conv_v2

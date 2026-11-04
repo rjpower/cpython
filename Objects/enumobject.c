@@ -7,7 +7,7 @@
 #include "pycore_object.h"        // _PyObject_GC_TRACK()
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString
 #include "pycore_tuple.h"         // _PyTuple_Recycle()
-#include "pycore_value.h"         // _PyValue_RestoreException()
+#include "pycore_value.h"         // PyValue_XCLOSE()
 
 #include "clinic/enumobject.c.h"
 

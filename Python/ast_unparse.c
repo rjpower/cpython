@@ -2,7 +2,6 @@
 #include "pycore_ast.h"           // expr_ty
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_runtime.h"       // _Py_ID()
-#include "pycore_value.h"         // _PyValue_RestoreException()
 #include <stdbool.h>
 
 /* This limited unparser is used to convert annotations back to strings

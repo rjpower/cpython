@@ -16,7 +16,6 @@
 #include "pycore_setobject.h"        // _PySet_NextEntryRef()
 #include "pycore_tuple.h"            // _PyTuple_FromPairSteal
 #include "pycore_unicodeobject.h"    // _PyUnicode_InternImmortal()
-#include "pycore_value.h"            // _PyValue_RestoreException()
 
 #include "marshal.h"                 // Py_MARSHAL_VERSION
 

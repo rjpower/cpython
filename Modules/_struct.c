@@ -8,7 +8,6 @@
 #endif
 
 #include "Python.h"
-#include "pycore_value.h"         // _PyValue_RestoreException()
 #include "pycore_bytesobject.h"   // _PyBytesWriter
 #include "pycore_lock.h"          // _PyOnceFlag_CallOnce()
 #include "pycore_long.h"          // _PyLong_AsByteArray()

@@ -74,49 +74,6 @@ _PyValueTemps_CloseNonempty(_PyValueTemps *temps)
     }
 }
 
-void
-_PyValue_RestoreException(PyObject *saved)
-{
-    PyObject *cleanup_error = PyErr_GetRaisedException();
-    if (saved == NULL) {
-        PyErr_SetRaisedException(cleanup_error);
-        return;
-    }
-    if (cleanup_error != NULL) {
-        /* Do not replace an existing context or create a cycle if a hook
-         * raises a reused exception object. Walk without allocating. */
-        PyObject *slow = cleanup_error;
-        PyObject *fast = cleanup_error;
-        int safe = ((PyBaseExceptionObject *)saved)->context == NULL;
-        while (safe && fast != NULL) {
-            if (slow == saved || fast == saved) {
-                safe = 0;
-                break;
-            }
-            slow = ((PyBaseExceptionObject *)slow)->context;
-            fast = ((PyBaseExceptionObject *)fast)->context;
-            if (fast == saved) {
-                safe = 0;
-                break;
-            }
-            if (fast != NULL) {
-                fast = ((PyBaseExceptionObject *)fast)->context;
-            }
-            if (fast != NULL && fast == slow) {
-                safe = 0;
-            }
-        }
-        if (safe) {
-            PyException_SetContext(saved, cleanup_error);
-        }
-        else {
-            Py_DECREF(cleanup_error);
-        }
-    }
-    PyErr_SetRaisedException(saved);
-}
-
-
 // The tag bits (Py_TAG_BITS) of an object pointer must be clear.
 static_assert(_Alignof(PyObject) >= 8, "PyObject must be 8-byte aligned");
 

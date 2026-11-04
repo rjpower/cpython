@@ -12,7 +12,6 @@
 #include "pycore_object_deferred.h" // _PyObject_SetDeferredRefcount()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
-#include "pycore_value.h"         // _PyValue_RestoreException()
 
 
 /*[clinic input]

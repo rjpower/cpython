@@ -15,7 +15,7 @@
 #include "pycore_object.h"
 #include "pycore_pyerrors.h"      // struct _PyErr_SetRaisedException
 #include "pycore_tuple.h"         // _PyTuple_FromPair
-#include "pycore_value.h"         // _PyValue_RestoreException()
+#include "pycore_value.h"         // PyValue_IsNone()
 #include "pycore_unicodeobject.h" // _PyUnicode_Equal()
 
 #include "osdefs.h"               // SEP

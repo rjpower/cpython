@@ -5,7 +5,7 @@
 #include "pycore_runtime.h"       // _Py_STR()
 #include "pycore_template.h"
 #include "pycore_tuple.h"         // _PyTuple_GET_OBJECT()
-#include "pycore_value.h"         // PyValue_TYPE(), _PyValue_RestoreException()
+#include "pycore_value.h"         // PyValue_TYPE()
 
 typedef struct {
     PyObject_HEAD

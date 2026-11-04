@@ -44,7 +44,6 @@ _PyValue_MayDealloc(PyValue owner)
 }
 
 PyAPI_FUNC(void) _PyValueTemps_CloseNonempty(_PyValueTemps *temps);
-PyAPI_FUNC(void) _PyValue_RestoreException(PyObject *saved);
 PyAPI_FUNC(PyObject *) _PyValueTemps_Box(_PyValueTemps *temps, PyValue value);
 
 static inline PyObject *

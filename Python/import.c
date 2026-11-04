@@ -26,7 +26,7 @@
 #include "pycore_time.h"          // _PyTime_AsMicroseconds()
 #include "pycore_tuple.h"         // _PyTuple_GET_OBJECT()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
-#include "pycore_value.h"         // _PyValue_RestoreException()
+#include "pycore_value.h"         // PyValue_AsKnownObjectBorrow()
 #include "pycore_weakref.h"       // _PyWeakref_GET_REF()
 
 #include "marshal.h"              // PyMarshal_ReadObjectFromString()

@@ -696,19 +696,12 @@ PyInterpreterState_New(void)
 }
 
 
-static int
-common_const_is_initialized(PyValue ref)
-{
-    return ref.bits != 0 && !PyValue_IsNull(ref);
-}
-
-
 static void
 common_constants_clear(PyInterpreterState *interp)
 {
     for (int i = 0; i < NUM_COMMON_CONSTANTS; i++) {
         PyValue ref = interp->common_consts[i];
-        if (!common_const_is_initialized(ref)) {
+        if (PyValue_IsNull(ref)) {
             continue;
         }
         interp->common_consts[i] = PyValue_NULL;

@@ -593,7 +593,8 @@ retry:
     }
     else {
         PyObject *prior = PyErr_GetRaisedException();
-        newtable = PyMem_NEW(setentry, newsize);
+        // A zero-filled table is empty: every key is PyValue_NULL, hash 0.
+        newtable = PyMem_Calloc(newsize, sizeof(setentry));
         if (newtable == NULL || PyErr_Occurred()) {
             if (!PyErr_Occurred()) {
                 PyErr_NoMemory();
@@ -621,7 +622,9 @@ retry:
 
     /* Make the set empty, using the new table. */
     assert(newtable != oldtable);
-    set_zero_table(newtable, newsize);
+    if (newtable == so->smalltable) {
+        set_zero_table(newtable, newsize);
+    }
     FT_ATOMIC_STORE_PTR_RELEASE(so->table, NULL);
     FT_ATOMIC_STORE_SSIZE_RELEASE(so->mask, newsize - 1);
 
@@ -1599,10 +1602,10 @@ make_new_set_untracked(PyTypeObject *type, PyObject *iterable)
     if (so == NULL)
         return NULL;
 
+    /* _PyType_AllocNoTrack() zero-filled the small table: it is empty. */
     so->fill = 0;
     so->used = 0;
     so->mask = PySet_MINSIZE - 1;
-    set_zero_table(so->smalltable, PySet_MINSIZE);
     so->table = so->smalltable;
     so->hash = -1;
     so->finger = 0;

@@ -602,11 +602,15 @@ gen_try_set_executing(PyGenObject *gen)
     ((int)(((const _PyCodeExec *)frame->ir_words) - 1)->nlocalsplus)
 #define IR_IS_LOCAL(F) ((int)(F) < IR_NLOCALSPLUS())
 
-/* REF, read through field F and known to be a pointer, borrowed if F names
- * a local. */
+/* REF, read through field F and known to be in pointer space, borrowed if F
+ * names a local.  Setting the tag on PyValue_NULL would make it 1, so a
+ * local must be bound: a local reaches a field only through a folded
+ * LOAD_FAST_BORROW (_PyRegPass_CopyProp), which reads a bound local.  A
+ * temporary may be NULL (STORE_GLOBAL's input for `del`) and stays NULL. */
 static_assert(Py_TAG_REFCNT == 1, "IR_BORROW_KNOWN sets the tag from a test");
 #  define IR_BORROW_KNOWN(REF, F) \
-    ((PyValue){ .bits = (REF).bits | (uintptr_t)IR_IS_LOCAL(F) })
+    (assert(!IR_IS_LOCAL(F) || !PyValue_IsNull(REF)), \
+     (PyValue){ .bits = (REF).bits | (uintptr_t)IR_IS_LOCAL(F) })
 
 /* An object bridge belongs to the handler, while both local and temporary
  * homes retain their canonical value. */

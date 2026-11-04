@@ -2880,27 +2880,6 @@ _PyType_NewManagedObject(PyTypeObject *type)
     return obj;
 }
 
-static void
-init_value_slots(PyObject *obj, PyTypeObject *type, Py_ssize_t nitems)
-{
-    /* Zero-filled memory is not the absent-value encoding. Initialize
-       declared value fields before the instance can become observable. */
-    for (PyTypeObject *base = type; base != NULL; base = base->tp_base) {
-        for (PyMemberDef *mp = base->tp_members;
-             mp != NULL && mp->name != NULL; mp++) {
-            if (mp->type == _Py_T_VALUE || mp->type == _Py_T_VALUE_EX) {
-                assert(!(mp->flags & Py_RELATIVE_OFFSET));
-                char *addr = (char *)obj + mp->offset;
-                if (mp->flags & _Py_AFTER_ITEMS) {
-                    addr += _Py_SIZE_ROUND_UP(nitems * type->tp_itemsize,
-                                             SIZEOF_VOID_P);
-                }
-                *(PyValue *)addr = PyValue_NULL;
-            }
-        }
-    }
-}
-
 PyObject *
 _PyType_AllocNoTrack(PyTypeObject *type, Py_ssize_t nitems)
 {
@@ -2931,7 +2910,8 @@ _PyType_AllocNoTrack(PyTypeObject *type, Py_ssize_t nitems)
         _PyObject_GC_Link(obj);
     }
     // Zero out the object after the PyObject header. The header fields are
-    // initialized by _PyObject_Init[Var]().
+    // initialized by _PyObject_Init[Var](). Zero-filled value fields, items
+    // and slots are PyValue_NULL.
     memset((char *)obj + sizeof(PyObject), 0, size - sizeof(PyObject));
 
     /* Both managed inline accessors and CREATE observers need the type.
@@ -2942,9 +2922,6 @@ _PyType_AllocNoTrack(PyTypeObject *type, Py_ssize_t nitems)
            size write. Its after-items member reads need the actual size. */
         Py_SET_SIZE((PyVarObject *)obj, nitems);
     }
-    /* _PyObject_Init can notify the reference tracer. Use the explicit
-       allocation size here, before the variable object header is initialized. */
-    init_value_slots(obj, type, nitems);
     if (type->tp_flags & Py_TPFLAGS_INLINE_VALUES) {
         _PyObject_InitInlineValues(obj, type);
     }

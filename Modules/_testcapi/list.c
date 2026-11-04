@@ -160,10 +160,11 @@ list_unpublished_nulls(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(args))
     PyObject *obj = PyList_New(3);
     if (obj == NULL) return NULL;
     int valid = 1;
+    // PyValue_NULL is zero.
     for (Py_ssize_t i = 0; i < 3; i++) {
-        valid &= ((PyListObject *)obj)->ob_item[i].bits == 1;
+        valid &= ((PyListObject *)obj)->ob_item[i].bits == 0;
         PyValue value = PyList_GetValue(obj, i);
-        valid &= value.bits == 1 && !PyErr_Occurred();
+        valid &= value.bits == 0 && !PyErr_Occurred();
         PyObject *object = PyList_GetItemRef(obj, i);
         valid &= object == NULL && !PyErr_Occurred();
         Py_XDECREF(object);

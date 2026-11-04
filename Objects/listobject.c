@@ -184,14 +184,12 @@ PyList_New(Py_ssize_t size)
         op->ob_item = NULL;
     }
     else {
-        op->ob_item = PyMem_New(PyValue, size);
+        // Zero-filled items are PyValue_NULL.
+        op->ob_item = PyMem_Calloc(size, sizeof(PyValue));
         if (op->ob_item == NULL) {
             Py_DECREF(op);
             return PyErr_NoMemory();
         }
-    }
-    for (Py_ssize_t i = 0; i < size; i++) {
-        op->ob_item[i] = PyValue_NULL;
     }
     Py_SET_SIZE(op, size);
     op->allocated = size;

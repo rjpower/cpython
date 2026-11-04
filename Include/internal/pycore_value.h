@@ -142,7 +142,7 @@ _PyValueTemps_Publish(_PyValueTemps *temps, PyValue *source)
   out as follows (boil/design/02-tagged-values.md, section 2.1):
 
     Top 16 bits     Low 48 bits         Meaning
-    0x0000          0x000000000001      NULL
+    0x0000          0x000000000000      NULL
     0x0000          0x000000000002      ERROR
     0x0000          ptr, bit 0 = 0      owned reference
     0x0000          ptr, bit 0 = 1      borrowed, immortal or deferred reference
@@ -157,6 +157,10 @@ _PyValueTemps_Publish(_PyValueTemps *temps, PyValue *source)
   Py_TAG_INVALID have meaning only there. Indices and inline values own
   nothing, so CLOSE, DUP and Borrow leave them unchanged. NaN results are
   always boxed, because some NaN images overlap the other regions.
+
+  NULL is zero, so zero-filled memory holds NULL values: memory from a
+  zeroing allocator needs no further initialization. The bits 1 and 3 are
+  never produced.
 
   An index is the position of a virtual iterator in the FOR_ITER family
   (null_or_index) or the saved lasti during exception unwinding. It never
@@ -179,8 +183,14 @@ _PyValueTemps_Publish(_PyValueTemps *temps, PyValue *source)
 
 #  define _PyValue_BITS(REF) ((REF).bits)
 
-// A reference owns a count on its object only if all of these bits are 0.
+// A reference owns a count on its object only if all of these bits are 0
+// and it is not PyValue_NULL.
 #define Py_OWNED_MASK    (((uintptr_t)0xFFFF << 48) | Py_TAG_BITS)
+
+#define PyValue_NULL_BITS 0
+static const PyValue PyValue_NULL = { .bits = PyValue_NULL_BITS };
+
+#define PyValue_IsNull(ref) ((ref).bits == PyValue_NULL_BITS)
 
 static inline bool PyValue_IsPointerSpace(PyValue r) { return _PyValue_BITS(r) < Py_PTR_LIMIT; }
 static inline bool PyValue_IsTaggedIndex(PyValue r) { return _PyValue_BITS(r) - Py_INDEX_BASE < Py_DOUBLE_OFFSET - Py_INDEX_BASE; }
@@ -210,12 +220,13 @@ static inline bool PyValue_IsPointerSpaceAt(const PyValue *ref) { return _PyValu
 static inline bool PyValue_IsInlineAt(const PyValue *ref) { return _PyValue_TopBitsAt(ref) >= (Py_DOUBLE_OFFSET >> 48); }
 
 // The bit that PyValue_Borrow() sets: Py_TAG_REFCNT on object values only.
-// PyValue_NULL already has it; PyValue_ERROR and debug-wrap pointers
-// (Py_TAG_INVALID) and non-pointer values stay unchanged.
+// PyValue_NULL, PyValue_ERROR and debug-wrap pointers (Py_TAG_INVALID) and
+// non-pointer values stay unchanged.
 static inline uintptr_t
 _PyValue_BorrowBitAt(const PyValue *ref)
 {
-    return (uintptr_t)(PyValue_IsPointerSpaceAt(ref) && (ref->bits & Py_TAG_INVALID) == 0);
+    return (uintptr_t)(PyValue_IsPointerSpaceAt(ref) && !PyValue_IsNull(*ref)
+                       && (ref->bits & Py_TAG_INVALID) == 0);
 }
 
 // The encoding of an inline int, which is also its identity (see "Value
@@ -397,10 +408,6 @@ PyValue_IsValid(PyValue ref)
 #define BITS_TO_PTR(REF) ((PyObject *)((REF).bits))
 #define BITS_TO_PTR_MASKED(REF) ((PyObject *)(((REF).bits) & (~Py_TAG_REFCNT)))
 
-#define PyValue_NULL_BITS Py_TAG_REFCNT
-static const PyValue PyValue_NULL = { .bits = PyValue_NULL_BITS };
-
-#define PyValue_IsNull(ref) ((ref).bits == PyValue_NULL_BITS)
 #define PyValue_True ((PyValue){.bits = ((uintptr_t)&_Py_TrueStruct) | Py_TAG_REFCNT })
 #define PyValue_False ((PyValue){.bits = ((uintptr_t)&_Py_FalseStruct) | Py_TAG_REFCNT })
 #define PyValue_None ((PyValue){.bits = ((uintptr_t)&_Py_NoneStruct) | Py_TAG_REFCNT })
@@ -420,7 +427,11 @@ static const PyValue PyValue_NULL = { .bits = PyValue_NULL_BITS };
 static inline void
 PyValue_CheckValid(PyValue ref)
 {
-    assert(ref.bits != 0);
+    if (PyValue_IsNull(ref)) {
+        return;
+    }
+    // The tag bits alone, without an address: never produced.
+    assert(ref.bits != Py_TAG_REFCNT && ref.bits != Py_TAG_BITS);
     assert(PyValue_IsPointerSpace(ref));
     int tag = ref.bits & Py_TAG_BITS;
     PyObject *obj = BITS_TO_PTR_MASKED(ref);
@@ -487,11 +498,21 @@ _PyValue_IsCanonicalHome(PyValue ref)
 PyAPI_FUNC(Py_ssize_t) _PyValue_HomeViolationCount(void);
 PyAPI_FUNC(PyObject *) _PyValue_HomeViolationSites(void);
 
-/* Does this ref own a count on its object? False for references to immortal
-   objects, borrowed and deferred references, indices and inline values. */
+/* Does this ref own a count on its object? False for PyValue_NULL,
+   references to immortal objects, borrowed and deferred references, indices
+   and inline values. */
 static inline int
 PyValue_RefcountOnObject(PyValue ref)
 {
+    return !PyValue_IsNull(ref) && (ref.bits & Py_OWNED_MASK) == 0;
+}
+
+/* PyValue_RefcountOnObject() of a ref that is not PyValue_NULL, which
+   needs one test fewer. */
+static inline int
+_PyValue_OwnsCountNotNull(PyValue ref)
+{
+    assert(!PyValue_IsNull(ref));
     return (ref.bits & Py_OWNED_MASK) == 0;
 }
 
@@ -513,9 +534,8 @@ PyValue_BorrowAt(const PyValue *ref)
 static inline PyObject *
 PyValue_AsPyObjectSteal(PyValue ref)
 {
-    assert(!PyValue_IsNull(ref));
     assert(PyValue_IsPointerSpace(ref));
-    if (PyValue_RefcountOnObject(ref)) {
+    if (_PyValue_OwnsCountNotNull(ref)) {
         return BITS_TO_PTR(ref);
     }
     else {
@@ -582,8 +602,7 @@ PyValue_FromPyObjectBorrow(PyObject *obj)
 static inline PyValue
 PyValue_DUP(PyValue ref)
 {
-    assert(!PyValue_IsNull(ref));
-    if (PyValue_RefcountOnObject(ref)) {
+    if (_PyValue_OwnsCountNotNull(ref)) {
         _Py_INCREF_MORTAL(BITS_TO_PTR(ref));
     }
     return ref;
@@ -601,7 +620,7 @@ PyValue_DupImmortal(PyValue ref)
 static inline bool
 PyValue_IsHeapSafe(PyValue ref)
 {
-    return (ref.bits & Py_TAG_BITS) != Py_TAG_REFCNT || ref.bits == PyValue_NULL_BITS ||
+    return (ref.bits & Py_TAG_BITS) != Py_TAG_REFCNT ||
            !PyValue_IsPointerSpace(ref) || _Py_IsImmortal(BITS_TO_PTR_MASKED(ref));
 }
 
@@ -636,8 +655,7 @@ PyValue_AsStrongReference(PyValue value)
 static inline void
 PyValue_CLOSE(PyValue ref)
 {
-    assert(!PyValue_IsNull(ref));
-    if (PyValue_RefcountOnObject(ref)) {
+    if (_PyValue_OwnsCountNotNull(ref)) {
         Py_DECREF_MORTAL(BITS_TO_PTR(ref));
     }
 }
@@ -645,8 +663,7 @@ PyValue_CLOSE(PyValue ref)
 static inline void
 PyValue_CLOSE_SPECIALIZED(PyValue ref, destructor destruct)
 {
-    assert(!PyValue_IsNull(ref));
-    if (PyValue_RefcountOnObject(ref)) {
+    if (_PyValue_OwnsCountNotNull(ref)) {
         Py_DECREF_MORTAL_SPECIALIZED(BITS_TO_PTR(ref), destruct);
     }
 }
@@ -654,9 +671,7 @@ PyValue_CLOSE_SPECIALIZED(PyValue ref, destructor destruct)
 static inline void
 PyValue_XCLOSE(PyValue ref)
 {
-    assert(ref.bits != 0);
     if (PyValue_RefcountOnObject(ref)) {
-        assert(!PyValue_IsNull(ref));
         Py_DECREF_MORTAL(BITS_TO_PTR(ref));
     }
 }
@@ -683,21 +698,22 @@ PyValue_XCLOSE(PyValue ref)
 /* Close, dup or steal a reference known to be in pointer space, which
    includes PyValue_NULL: the cases generator knows this of a value that
    passed a guard, was boxed or was built from an object (see "Inline values"
-   in Tools/cases_generator/interpreter_definition.md). There a reference owns
-   a count unless a tag bit is set, so these test Py_TAG_BITS alone instead
-   of Py_OWNED_MASK. */
+   in Tools/cases_generator/interpreter_definition.md). There a reference
+   other than PyValue_NULL owns a count unless a tag bit is set, so these
+   test Py_TAG_BITS alone instead of Py_OWNED_MASK. */
 static inline int
 _PyValue_PointerOwnsCount(PyValue ref)
 {
     assert(PyValue_IsPointerSpace(ref));
+    assert(!PyValue_IsNull(ref));
     return (ref.bits & Py_TAG_BITS) == 0;
 }
 
-// PyValue_NULL owns no count, so this also serves as XCLOSE.
+// PyValue_NULL has no tag bits set, so XCLOSE tests for it first.
 static inline void
 _PyValue_XCLOSE_POINTER(PyValue ref)
 {
-    if (_PyValue_PointerOwnsCount(ref)) {
+    if (!PyValue_IsNull(ref) && _PyValue_PointerOwnsCount(ref)) {
         Py_DECREF_MORTAL(BITS_TO_PTR(ref));
     }
 }
@@ -705,14 +721,14 @@ _PyValue_XCLOSE_POINTER(PyValue ref)
 static inline void
 _PyValue_CLOSE_POINTER(PyValue ref)
 {
-    assert(!PyValue_IsNull(ref));
-    _PyValue_XCLOSE_POINTER(ref);
+    if (_PyValue_PointerOwnsCount(ref)) {
+        Py_DECREF_MORTAL(BITS_TO_PTR(ref));
+    }
 }
 
 static inline void
 _PyValue_CLOSE_SPECIALIZED_POINTER(PyValue ref, destructor destruct)
 {
-    assert(!PyValue_IsNull(ref));
     if (_PyValue_PointerOwnsCount(ref)) {
         Py_DECREF_MORTAL_SPECIALIZED(BITS_TO_PTR(ref), destruct);
     }
@@ -721,7 +737,6 @@ _PyValue_CLOSE_SPECIALIZED_POINTER(PyValue ref, destructor destruct)
 static inline PyValue
 _PyValue_DUP_POINTER(PyValue ref)
 {
-    assert(!PyValue_IsNull(ref));
     if (_PyValue_PointerOwnsCount(ref)) {
         _Py_INCREF_MORTAL(BITS_TO_PTR(ref));
     }
@@ -731,7 +746,6 @@ _PyValue_DUP_POINTER(PyValue ref)
 static inline PyObject *
 _PyValue_AsPyObjectStealPointer(PyValue ref)
 {
-    assert(!PyValue_IsNull(ref));
     if (_PyValue_PointerOwnsCount(ref)) {
         return BITS_TO_PTR(ref);
     }

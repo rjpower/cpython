@@ -13,17 +13,14 @@
 
 #include <stdlib.h>              // abort()
 
-#define EMPTY_ENTRY { .name = NULL, .value = { .bits = PyValue_NULL_BITS } }
 // No entry of the shared empty sentinel is read: available and used are zero.
+// Its entries are zero, which is an empty name and PyValue_NULL.
 static struct type_cache empty_cache = {
     .mask = _Py_TYPECACHE_MINSIZE - 1,
     .version_tag = 0,
     .available = 0,
     .used = 0,
-    .hashtable = {EMPTY_ENTRY, EMPTY_ENTRY, EMPTY_ENTRY, EMPTY_ENTRY,
-                  EMPTY_ENTRY, EMPTY_ENTRY, EMPTY_ENTRY, EMPTY_ENTRY},
 };
-#undef EMPTY_ENTRY
 
 void _Py_NO_RETURN
 _PyType_AbortClosedLookup(void)
@@ -59,10 +56,6 @@ cache_allocate(uint32_t size)
     }
     cache->mask = size - 1;
     cache->available = size - (size >> 2);
-    for (uint32_t i = 0; i < size; i++) {
-        // Zero bits are not the canonical null value.
-        cache->hashtable[i].value = PyValue_NULL;
-    }
     return cache;
 }
 

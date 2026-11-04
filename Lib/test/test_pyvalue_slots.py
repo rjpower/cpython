@@ -22,7 +22,7 @@ class PyValueSlotTests(unittest.TestCase):
 
         item = _testinternalcapi.slot_new_with_tracer(Item, ())
         self.assertEqual(_testinternalcapi.slot_value_storage(item, 'value'),
-                         ('empty', 1))
+                         ('empty', 0))
 
     def test_empty_none_delete_and_canonical_numbers(self):
         class Item:
@@ -30,7 +30,7 @@ class PyValueSlotTests(unittest.TestCase):
 
         item = Item()
         self.assertEqual(_testinternalcapi.slot_value_storage(item, 'value'),
-                         ('empty', 1))
+                         ('empty', 0))
         self.assertFalse(hasattr(item, 'value'))
         with self.assertRaises(AttributeError):
             del item.value
@@ -44,7 +44,7 @@ class PyValueSlotTests(unittest.TestCase):
                 item, 'value')[0], kind)
             del item.value
             self.assertEqual(_testinternalcapi.slot_value_storage(
-                item, 'value'), ('empty', 1))
+                item, 'value'), ('empty', 0))
 
     def test_managed_values_initialized_before_reference_tracer(self):
         class Managed:
@@ -67,7 +67,7 @@ class PyValueSlotTests(unittest.TestCase):
         for _ in range(4):
             item = _testinternalcapi.slot_new_with_tracer(Child, ())
             self.assertEqual(_testinternalcapi.slot_value_storage(item, 'value'),
-                             ('empty', 1))
+                             ('empty', 0))
             item.number = 37
             item.value = 1.5
             self.assertEqual((item.number, item.value), (37, 1.5))
@@ -82,7 +82,7 @@ class PyValueSlotTests(unittest.TestCase):
         child = Child()
         for name in ('first', 'second'):
             self.assertEqual(_testinternalcapi.slot_value_storage(child, name),
-                             ('empty', 1))
+                             ('empty', 0))
         child.first, child.second = 1234567, 0.5
         self.assertEqual((child.first, child.second), (1234567, 0.5))
 
@@ -92,7 +92,7 @@ class PyValueSlotTests(unittest.TestCase):
         for size in (0, 1, 9):
             item = _testinternalcapi.slot_new_with_tracer(Tuple, (range(size),))
             self.assertEqual(_testinternalcapi.slot_value_storage(item, 'value'),
-                             ('empty', 1))
+                             ('empty', 0))
             item.value = 1234567
             self.assertEqual(tuple(item), tuple(range(size)))
             self.assertEqual(item.value, 1234567)
@@ -277,7 +277,7 @@ class PyValueSlotTests(unittest.TestCase):
         item.value = 0.5
         _testinternalcapi.slot_clear(item)
         self.assertEqual(_testinternalcapi.slot_value_storage(item, 'value'),
-                         ('empty', 1))
+                         ('empty', 0))
         self.assertFalse(hasattr(item, 'value'))
 
 

@@ -1,6 +1,7 @@
 #include "parts.h"
 #include "pycore_descrobject.h"
 #include "pycore_dict.h"
+#include "pycore_tuple.h"
 #include "pycore_value.h"
 
 static PyObject *
@@ -138,15 +139,141 @@ slot_new_with_tracer(PyObject *module, PyObject *args)
     return result;
 }
 
+static int
+append_bits(PyObject *list, PyValue value)
+{
+    PyObject *bits = PyLong_FromUnsignedLongLong(value.bits);
+    if (bits == NULL) {
+        return -1;
+    }
+    int res = PyList_Append(list, bits);
+    Py_DECREF(bits);
+    return res;
+}
+
+/* Allocate an instance of type with PyType_GenericAlloc(), as the tp_alloc
+   call of a C constructor does, and return (bits, instance): the bits of
+   its tuple items and value members before anything wrote them, which are
+   zero-filled. The items of a tuple subclass are then filled with 0 to
+   nitems - 1 through PyTuple_SET_ITEM(), which requires empty items. */
+static PyObject *
+generic_alloc_value_bits(PyObject *module, PyObject *args)
+{
+    PyTypeObject *type;
+    Py_ssize_t nitems;
+    if (!PyArg_ParseTuple(args, "O!n:generic_alloc_value_bits",
+                          &PyType_Type, &type, &nitems)) {
+        return NULL;
+    }
+    if (nitems < 0 || (nitems != 0 && !PyType_IsSubtype(type, &PyTuple_Type))) {
+        PyErr_SetString(PyExc_ValueError, "only a tuple subclass has items");
+        return NULL;
+    }
+    PyObject *bits = PyList_New(0);
+    if (bits == NULL) {
+        return NULL;
+    }
+    PyObject *obj = PyType_GenericAlloc(type, nitems);
+    if (obj == NULL) {
+        goto error;
+    }
+    for (Py_ssize_t i = 0; i < nitems; i++) {
+        if (append_bits(bits, _PyTuple_CAST(obj)->ob_item[i]) < 0) {
+            goto error;
+        }
+    }
+    for (PyTypeObject *base = type; base != NULL; base = base->tp_base) {
+        for (PyMemberDef *mp = base->tp_members;
+             mp != NULL && mp->name != NULL; mp++) {
+            if (mp->type == _Py_T_VALUE || mp->type == _Py_T_VALUE_EX) {
+                PyValue value = *(PyValue *)_PyMember_GetOffset(obj, mp);
+                if (append_bits(bits, value) < 0) {
+                    goto error;
+                }
+            }
+        }
+    }
+    if (PyTuple_Check(obj)) {
+        _PyTuple_RESET_HASH_CACHE(obj);
+        for (Py_ssize_t i = 0; i < nitems; i++) {
+            PyObject *item = PyLong_FromSsize_t(i);
+            if (item == NULL) {
+                goto error;
+            }
+            PyTuple_SET_ITEM(obj, i, item);
+        }
+    }
+    PyObject *result = PyTuple_Pack(2, bits, obj);
+    Py_DECREF(bits);
+    Py_DECREF(obj);
+    return result;
+
+error:
+    Py_DECREF(bits);
+    Py_XDECREF(obj);
+    return NULL;
+}
+
+/* An extension type that allocates its instances with PyObject_Calloc()
+   and leaves its value members zero-filled, which is empty. */
+typedef struct {
+    PyObject_HEAD
+    PyValue value;
+    PyValue optional;
+} CallocValuesObject;
+
+static PyObject *
+calloc_values_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    if (PyTuple_GET_SIZE(args) || (kwargs != NULL && PyDict_GET_SIZE(kwargs))) {
+        PyErr_SetString(PyExc_TypeError, "CallocValues takes no arguments");
+        return NULL;
+    }
+    PyObject *self = PyObject_Calloc(1, type->tp_basicsize);
+    if (self == NULL) {
+        return PyErr_NoMemory();
+    }
+    return PyObject_Init(self, type);
+}
+
+static void
+calloc_values_dealloc(PyObject *op)
+{
+    CallocValuesObject *self = (CallocValuesObject *)op;
+    PyValue_CLEAR(self->value);
+    PyValue_CLEAR(self->optional);
+    PyObject_Free(self);
+}
+
+static PyMemberDef calloc_values_members[] = {
+    {"value", _Py_T_VALUE_EX, offsetof(CallocValuesObject, value), 0},
+    {"optional", _Py_T_VALUE, offsetof(CallocValuesObject, optional), 0},
+    {NULL},
+};
+
+static PyTypeObject calloc_values_type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testinternalcapi.CallocValues",
+    .tp_basicsize = sizeof(CallocValuesObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_new = calloc_values_new,
+    .tp_dealloc = calloc_values_dealloc,
+    .tp_members = calloc_values_members,
+};
+
 static PyMethodDef methods[] = {
     {"slot_value_storage", slot_value_storage, METH_VARARGS},
     {"slot_clear", slot_clear, METH_O},
     {"slot_new_with_tracer", slot_new_with_tracer, METH_VARARGS},
+    {"generic_alloc_value_bits", generic_alloc_value_bits, METH_VARARGS},
     {NULL},
 };
 
 int
 _PyTestInternalCapi_Init_Slots(PyObject *module)
 {
+    if (PyModule_AddType(module, &calloc_values_type) < 0) {
+        return -1;
+    }
     return PyModule_AddFunctions(module, methods);
 }

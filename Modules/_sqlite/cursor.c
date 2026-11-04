@@ -346,7 +346,7 @@ _pysqlite_fetch_one_row(pysqlite_Cursor* self)
     int i, numcols;
     PyObject* row;
     int coltype;
-    PyObject* converter;
+    PyObject* converter = NULL;
     PyObject* converted;
     Py_ssize_t nbytes;
     char buf[200];
@@ -367,10 +367,13 @@ _pysqlite_fetch_one_row(pysqlite_Cursor* self)
                 && self->row_cast_map != NULL
                 && i < PyList_GET_SIZE(self->row_cast_map))
         {
-            converter = PyList_GET_ITEM(self->row_cast_map, i);
+            converter = PyList_GetItemRef(self->row_cast_map, i);
+            if (converter == NULL) {
+                goto error;
+            }
         }
         else {
-            converter = Py_None;
+            converter = Py_NewRef(Py_None);
         }
 
         /*
@@ -456,6 +459,7 @@ _pysqlite_fetch_one_row(pysqlite_Cursor* self)
             }
         }
 
+        Py_CLEAR(converter);
         if (!converted) {
             goto error;
         }
@@ -468,6 +472,7 @@ _pysqlite_fetch_one_row(pysqlite_Cursor* self)
     return row;
 
 error:
+    Py_XDECREF(converter);
     Py_DECREF(row);
     return NULL;
 }
@@ -698,8 +703,7 @@ bind_parameters(pysqlite_state *state, pysqlite_Statement *self,
             }
 
             if (PyTuple_CheckExact(parameters)) {
-                PyObject *item = PyTuple_GET_ITEM(parameters, i);
-                current_param = Py_NewRef(item);
+                current_param = PyTuple_GetItemRef(parameters, i);
             } else if (PyList_CheckExact(parameters)) {
                 current_param = PyList_GetItemRef(parameters, i);
             } else {

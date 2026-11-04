@@ -139,17 +139,18 @@ _zstd_set_c_parameters(ZstdCompressor *self, PyObject *options)
 
     Py_ssize_t pos = 0;
     PyObject *key, *value;
-    while (PyDict_Next(options, &pos, &key, &value)) {
+    int rc;
+    while ((rc = PyDict_NextEntryRef(options, &pos, &key, &value)) > 0) {
         /* Check key type */
         if (Py_TYPE(key) == mod_state->DParameter_type) {
             PyErr_SetString(PyExc_TypeError,
                 "compression options dictionary key must not be a "
                 "DecompressionParameter attribute");
+            Py_DECREF(key);
+            Py_DECREF(value);
             return -1;
         }
 
-        Py_INCREF(key);
-        Py_INCREF(value);
         int key_v = PyLong_AsInt(key);
         Py_DECREF(key);
         if (key_v == -1 && PyErr_Occurred()) {
@@ -189,6 +190,9 @@ _zstd_set_c_parameters(ZstdCompressor *self, PyObject *options)
             set_parameter_error(1, key_v, value_v);
             return -1;
         }
+    }
+    if (rc < 0) {
+        return -1;
     }
     return 0;
 }

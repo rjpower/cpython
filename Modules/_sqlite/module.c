@@ -69,8 +69,13 @@ pysqlite_connect(PyObject *module, PyObject *const *args, Py_ssize_t nargsf,
     }
     if (kwnames != NULL) {
         for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(kwnames); i++) {
-            PyObject *item = PyTuple_GET_ITEM(kwnames, i);  // borrowed ref.
-            if (PyUnicode_EqualToUTF8(item, "factory")) {
+            PyObject *item = PyTuple_GetItemRef(kwnames, i);
+            if (item == NULL) {
+                return NULL;
+            }
+            int is_factory = PyUnicode_EqualToUTF8(item, "factory");
+            Py_DECREF(item);
+            if (is_factory) {
                 factory = args[nargs + i];
                 break;
             }

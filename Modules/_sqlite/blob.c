@@ -104,9 +104,15 @@ void
 pysqlite_close_all_blobs(pysqlite_Connection *self)
 {
     for (Py_ssize_t i = 0; i < PyList_GET_SIZE(self->blobs); i++) {
-        PyObject *weakref = PyList_GET_ITEM(self->blobs, i);
+        PyObject *weakref = PyList_GetItemRef(self->blobs, i);
+        if (weakref == NULL) {
+            PyErr_Clear();
+            continue;
+        }
         PyObject *blob;
-        if (!PyWeakref_GetRef(weakref, &blob)) {
+        int alive = PyWeakref_GetRef(weakref, &blob);
+        Py_DECREF(weakref);
+        if (!alive) {
             continue;
         }
         close_blob((pysqlite_Blob *)blob);

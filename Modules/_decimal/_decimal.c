@@ -494,8 +494,12 @@ list_as_flags(decimal_state *state, PyObject *list)
     n = PyList_Size(list);
     flags = 0;
     for (j = 0; j < n; j++) {
-        item = PyList_GetItem(list, j);
+        item = PyList_GetItemRef(list, j);
+        if (item == NULL) {
+            return DEC_ERR_OCCURRED;
+        }
         x = exception_as_flag(state, item);
+        Py_DECREF(item);
         if (x & DEC_ERRORS) {
             return x;
         }
@@ -548,17 +552,18 @@ dict_as_flags(decimal_state *state, PyObject *val)
     }
 
     for (cm = state->signal_map; cm->name != NULL; cm++) {
-        b = PyDict_GetItemWithError(val, cm->ex);
-        if (b == NULL) {
-            if (PyErr_Occurred()) {
-                return DEC_ERR_OCCURRED;
-            }
+        int found = PyDict_GetItemRef(val, cm->ex, &b);
+        if (found < 0) {
+            return DEC_ERR_OCCURRED;
+        }
+        if (found == 0) {
             PyErr_SetString(PyExc_KeyError,
                 "invalid signal dict");
             return DEC_INVALID_SIGNALS;
         }
 
         x = PyObject_IsTrue(b);
+        Py_DECREF(b);
         if (x < 0) {
             return DEC_ERR_OCCURRED;
         }
@@ -1862,16 +1867,21 @@ current_context_from_dict(decimal_state *modstate)
     }
 
     PyObject *tl_context;
-    tl_context = PyDict_GetItemWithError(dict, modstate->tls_context_key);
-    if (tl_context != NULL) {
-        /* We already have a thread local context. */
-        CONTEXT_CHECK(modstate, tl_context);
+    int found = PyDict_GetItemRef(dict, modstate->tls_context_key,
+                                  &tl_context);
+    if (found < 0) {
+        return NULL;
     }
-    else {
-        if (PyErr_Occurred()) {
+    if (found) {
+        /* We already have a thread local context. */
+        if (!PyDecContext_Check(modstate, tl_context)) {
+            Py_DECREF(tl_context);
+            PyErr_SetString(PyExc_TypeError,
+                "argument must be a context");
             return NULL;
         }
-
+    }
+    else {
         /* Set up a new thread local context. */
         tl_context = context_copy(modstate, modstate->default_context_template);
         if (tl_context == NULL) {
@@ -1883,7 +1893,6 @@ current_context_from_dict(decimal_state *modstate)
             Py_DECREF(tl_context);
             return NULL;
         }
-        Py_DECREF(tl_context);
     }
 
     /* Cache the context of the current thread, assuming that it
@@ -1891,6 +1900,7 @@ current_context_from_dict(decimal_state *modstate)
     Py_XSETREF(modstate->cached_context,
                (PyDecContextObject *)Py_NewRef(tl_context));
     modstate->cached_context->tstate = tstate;
+    Py_DECREF(tl_context);
 
     /* Borrowed reference with refcount==1 */
     return tl_context;
@@ -2703,24 +2713,31 @@ PyDecType_FromFloatExact(PyTypeObject *type, PyObject *v,
     if (n_d == NULL) {
         return NULL;
     }
-    n = PyTuple_GET_ITEM(n_d, 0);
-    d = PyTuple_GET_ITEM(n_d, 1);
+    n = PyTuple_GetItemRef(n_d, 0);
+    d = PyTuple_GetItemRef(n_d, 1);
+    Py_DECREF(n_d);
+    if (n == NULL || d == NULL) {
+        Py_XDECREF(n);
+        Py_XDECREF(d);
+        return NULL;
+    }
 
     tmp = state->_py_long_bit_length(d, NULL);
+    Py_DECREF(d);
     if (tmp == NULL) {
-        Py_DECREF(n_d);
+        Py_DECREF(n);
         return NULL;
     }
     k = PyLong_AsSsize_t(tmp);
     Py_DECREF(tmp);
     if (k == -1 && PyErr_Occurred()) {
-        Py_DECREF(n_d);
+        Py_DECREF(n);
         return NULL;
     }
     k--;
 
     dec = PyDecType_FromLongExact(type, n, context);
-    Py_DECREF(n_d);
+    Py_DECREF(n);
     if (dec == NULL) {
         return NULL;
     }
@@ -2830,7 +2847,7 @@ sequence_as_tuple(PyObject *v, PyObject *ex, const char *mesg)
 static char *
 dectuple_as_str(PyObject *dectuple)
 {
-    PyObject *digits = NULL, *tmp;
+    PyObject *digits = NULL, *tmp = NULL;
     char *decstring = NULL;
     char sign_special[6];
     char *cp;
@@ -2849,7 +2866,10 @@ dectuple_as_str(PyObject *dectuple)
     }
 
     /* sign */
-    tmp = PyTuple_GET_ITEM(dectuple, 0);
+    tmp = PyTuple_GetItemRef(dectuple, 0);
+    if (tmp == NULL) {
+        goto error;
+    }
     if (!PyLong_Check(tmp)) {
         PyErr_SetString(PyExc_ValueError,
             "sign must be an integer with the value 0 or 1");
@@ -2868,7 +2888,10 @@ dectuple_as_str(PyObject *dectuple)
     sign_special[1] = '\0';
 
     /* exponent or encoding for a special number */
-    tmp = PyTuple_GET_ITEM(dectuple, 2);
+    Py_SETREF(tmp, PyTuple_GetItemRef(dectuple, 2));
+    if (tmp == NULL) {
+        goto error;
+    }
     if (PyUnicode_Check(tmp)) {
         /* special */
         if (PyUnicode_CompareWithASCIIString(tmp, "F") == 0) {
@@ -2902,7 +2925,11 @@ dectuple_as_str(PyObject *dectuple)
     }
 
     /* coefficient */
-    digits = sequence_as_tuple(PyTuple_GET_ITEM(dectuple, 1), PyExc_ValueError,
+    Py_SETREF(tmp, PyTuple_GetItemRef(dectuple, 1));
+    if (tmp == NULL) {
+        goto error;
+    }
+    digits = sequence_as_tuple(tmp, PyExc_ValueError,
                                "coefficient must be a tuple of digits");
     if (digits == NULL) {
         goto error;
@@ -2930,7 +2957,10 @@ dectuple_as_str(PyObject *dectuple)
         *cp++ = '0';
     }
     for (i = 0; i < tsize; i++) {
-        tmp = PyTuple_GET_ITEM(digits, i);
+        Py_XSETREF(tmp, PyTuple_GetItemRef(digits, i));
+        if (tmp == NULL) {
+            goto error;
+        }
         if (!PyLong_Check(tmp)) {
             PyErr_SetString(PyExc_ValueError,
                 "coefficient must be a tuple of digits");
@@ -2965,11 +2995,13 @@ dectuple_as_str(PyObject *dectuple)
         }
     }
 
+    Py_XDECREF(tmp);
     Py_XDECREF(digits);
     return decstring;
 
 
 error:
+    Py_XDECREF(tmp);
     Py_XDECREF(digits);
     if (decstring) PyMem_Free(decstring);
     return NULL;
@@ -3735,15 +3767,15 @@ dict_get_item_string(PyObject *dict, const char *key, PyObject **valueobj, const
     if (keyobj == NULL) {
         return -1;
     }
-    PyObject *value = PyDict_GetItemWithError(dict, keyobj);
+    PyObject *value;
+    int found = PyDict_GetItemRef(dict, keyobj, &value);
     Py_DECREF(keyobj);
-    if (value == NULL) {
-        if (PyErr_Occurred()) {
-            return -1;
-        }
-        return 0;
+    if (found <= 0) {
+        return found;
     }
-    value = PyUnicode_AsUTF8String(value);
+    PyObject *encoded = PyUnicode_AsUTF8String(value);
+    Py_DECREF(value);
+    value = encoded;
     if (value == NULL) {
         return -1;
     }

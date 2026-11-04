@@ -500,17 +500,18 @@ fill_and_set_sslerror(_sslmodulestate *state,
         key = Py_BuildValue("ii", lib, reason);
         if (key == NULL)
             goto fail;
-        reason_obj = PyDict_GetItemWithError(state->err_codes_to_names, key);
+        int found = PyDict_GetItemRef(state->err_codes_to_names, key,
+                                      &reason_obj);
         Py_DECREF(key);
-        if (reason_obj == NULL && PyErr_Occurred()) {
+        if (found < 0) {
             goto fail;
         }
         key = PyLong_FromLong(lib);
         if (key == NULL)
             goto fail;
-        lib_obj = PyDict_GetItemWithError(state->lib_codes_to_names, key);
+        found = PyDict_GetItemRef(state->lib_codes_to_names, key, &lib_obj);
         Py_DECREF(key);
-        if (lib_obj == NULL && PyErr_Occurred()) {
+        if (found < 0) {
             goto fail;
         }
         if (errstr == NULL) {
@@ -611,12 +612,12 @@ fill_and_set_sslerror(_sslmodulestate *state,
         goto fail;
 
     if (reason_obj == NULL)
-        reason_obj = Py_None;
+        reason_obj = Py_NewRef(Py_None);
     if (PyObject_SetAttr(err_value, state->str_reason, reason_obj))
         goto fail;
 
     if (lib_obj == NULL)
-        lib_obj = Py_None;
+        lib_obj = Py_NewRef(Py_None);
     if (PyObject_SetAttr(err_value, state->str_library, lib_obj))
         goto fail;
 
@@ -632,6 +633,8 @@ fill_and_set_sslerror(_sslmodulestate *state,
     PyErr_SetObject(type, err_value);
 fail:
     Py_XDECREF(err_value);
+    Py_XDECREF(reason_obj);
+    Py_XDECREF(lib_obj);
     Py_XDECREF(verify_code_obj);
     Py_XDECREF(verify_obj);
     PyUnicodeWriter_Discard(writer);

@@ -961,27 +961,44 @@ dedup_environment_keys(PyObject *keys)
     // into the result list. If they are equal, do nothing because we always
     // want to keep the last inserted one.
     for (Py_ssize_t i = 0; i < PyList_GET_SIZE(keys); i++) {
-        PyObject *key = PyList_GET_ITEM(keys, i);
+        PyObject *key = PyList_GetItemRef(keys, i);
+        if (key == NULL) {
+            Py_DECREF(result);
+            return NULL;
+        }
 
         // The last key will always be kept.
         if (i + 1 == PyList_GET_SIZE(keys)) {
-            if (PyList_Append(result, key) < 0) {
+            int err = PyList_Append(result, key);
+            Py_DECREF(key);
+            if (err < 0) {
                 Py_DECREF(result);
                 return NULL;
             }
             continue;
         }
 
-        PyObject *next_key = PyList_GET_ITEM(keys, i + 1);
+        PyObject *next_key = PyList_GetItemRef(keys, i + 1);
+        if (next_key == NULL) {
+            Py_DECREF(key);
+            Py_DECREF(result);
+            return NULL;
+        }
         int compare_result;
-        if (compare_string_ordinal(key, next_key, &compare_result) < 0) {
+        int err = compare_string_ordinal(key, next_key, &compare_result);
+        Py_DECREF(next_key);
+        if (err < 0) {
+            Py_DECREF(key);
             Py_DECREF(result);
             return NULL;
         }
         if (compare_result == CSTR_EQUAL) {
+            Py_DECREF(key);
             continue;
         }
-        if (PyList_Append(result, key) < 0) {
+        err = PyList_Append(result, key);
+        Py_DECREF(key);
+        if (err < 0) {
             Py_DECREF(result);
             return NULL;
         }
@@ -1016,15 +1033,22 @@ normalize_environment(PyObject *environment)
     }
 
     for (int i = 0; i < PyList_GET_SIZE(normalized_keys); i++) {
-        PyObject *key = PyList_GET_ITEM(normalized_keys, i);
+        PyObject *key = PyList_GetItemRef(normalized_keys, i);
+        if (key == NULL) {
+            Py_DECREF(normalized_keys);
+            Py_DECREF(result);
+            return NULL;
+        }
         PyObject *value = PyObject_GetItem(environment, key);
         if (value == NULL) {
+            Py_DECREF(key);
             Py_DECREF(normalized_keys);
             Py_DECREF(result);
             return NULL;
         }
 
         int ret = PyObject_SetItem(result, key, value);
+        Py_DECREF(key);
         Py_DECREF(value);
         if (ret < 0) {
             Py_DECREF(normalized_keys);
@@ -1088,20 +1112,27 @@ getenvironment(PyObject* environment)
 
     totalsize = 1; /* trailing null character */
     for (i = 0; i < envsize; i++) {
-        PyObject* key = PyList_GET_ITEM(keys, i);
-        PyObject* value = PyList_GET_ITEM(values, i);
+        PyObject* key = PyList_GetItemRef(keys, i);
+        if (key == NULL) {
+            goto error;
+        }
+        PyObject* value = PyList_GetItemRef(values, i);
+        if (value == NULL) {
+            Py_DECREF(key);
+            goto error;
+        }
         Py_ssize_t size;
 
         if (! PyUnicode_Check(key) || ! PyUnicode_Check(value)) {
             PyErr_SetString(PyExc_TypeError,
                 "environment can only contain strings");
-            goto error;
+            goto item_error;
         }
         if (PyUnicode_FindChar(key, '\0', 0, PyUnicode_GET_LENGTH(key), 1) != -1 ||
             PyUnicode_FindChar(value, '\0', 0, PyUnicode_GET_LENGTH(value), 1) != -1)
         {
             PyErr_SetString(PyExc_ValueError, "embedded null character");
-            goto error;
+            goto item_error;
         }
         /* Search from index 1 because on Windows starting '=' is allowed for
            defining hidden environment variables. */
@@ -1109,14 +1140,14 @@ getenvironment(PyObject* environment)
             PyUnicode_FindChar(key, '=', 1, PyUnicode_GET_LENGTH(key), 1) != -1)
         {
             PyErr_SetString(PyExc_ValueError, "illegal environment variable name");
-            goto error;
+            goto item_error;
         }
 
         size = PyUnicode_AsWideChar(key, NULL, 0);
         assert(size > 1);
         if (totalsize > PY_SSIZE_T_MAX - size) {
             PyErr_SetString(PyExc_OverflowError, "environment too long");
-            goto error;
+            goto item_error;
         }
         totalsize += size;    /* including '=' */
 
@@ -1124,9 +1155,17 @@ getenvironment(PyObject* environment)
         assert(size > 0);
         if (totalsize > PY_SSIZE_T_MAX - size) {
             PyErr_SetString(PyExc_OverflowError, "environment too long");
-            goto error;
+            goto item_error;
         }
         totalsize += size;  /* including trailing '\0' */
+        Py_DECREF(key);
+        Py_DECREF(value);
+        continue;
+
+    item_error:
+        Py_DECREF(key);
+        Py_DECREF(value);
+        goto error;
     }
 
     buffer = PyMem_NEW(wchar_t, totalsize);
@@ -1138,8 +1177,15 @@ getenvironment(PyObject* environment)
     end = buffer + totalsize;
 
     for (i = 0; i < envsize; i++) {
-        PyObject* key = PyList_GET_ITEM(keys, i);
-        PyObject* value = PyList_GET_ITEM(values, i);
+        PyObject* key = PyList_GetItemRef(keys, i);
+        if (key == NULL) {
+            goto buffer_error;
+        }
+        PyObject* value = PyList_GetItemRef(values, i);
+        if (value == NULL) {
+            Py_DECREF(key);
+            goto buffer_error;
+        }
         Py_ssize_t size = PyUnicode_AsWideChar(key, p, end - p);
         assert(1 <= size && size < end - p);
         p += size;
@@ -1147,11 +1193,19 @@ getenvironment(PyObject* environment)
         size = PyUnicode_AsWideChar(value, p, end - p);
         assert(0 <= size && size < end - p);
         p += size + 1;
+        Py_DECREF(key);
+        Py_DECREF(value);
     }
 
     /* add trailing null character */
     *p++ = L'\0';
     assert(p == end);
+
+    goto cleanup;
+
+buffer_error:
+    PyMem_Free(buffer);
+    buffer = NULL;
 
 cleanup:
 error:
@@ -1197,7 +1251,16 @@ gethandlelist(PyObject *mapping, const char *name, Py_ssize_t *size)
     }
 
     for (i = 0; i < PySequence_Fast_GET_SIZE(value_fast); i++) {
-        ret[i] = PYNUM_TO_HANDLE(PySequence_Fast_GET_ITEM(value_fast, i));
+        PyObject *item = PyTuple_Check(value_fast)
+                         ? PyTuple_GetItemRef(value_fast, i)
+                         : PyList_GetItemRef(value_fast, i);
+        if (item == NULL) {
+            PyMem_Free(ret);
+            ret = NULL;
+            goto cleanup;
+        }
+        ret[i] = PYNUM_TO_HANDLE(item);
+        Py_DECREF(item);
         if (ret[i] == (HANDLE)-1 && PyErr_Occurred()) {
             PyMem_Free(ret);
             ret = NULL;

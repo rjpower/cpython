@@ -102,8 +102,7 @@ static PyObject *
 pysqlite_row_item(PyObject *op, Py_ssize_t idx)
 {
     pysqlite_Row *self = _pysqlite_Row_CAST(op);
-    PyObject *item = PyTuple_GetItem(self->data, idx);
-    return Py_XNewRef(item);
+    return PyTuple_GetItemRef(self->data, idx);
 }
 
 static int
@@ -147,8 +146,7 @@ pysqlite_row_subscript(PyObject *op, PyObject *idx)
         if (_idx < 0)
            _idx += PyTuple_GET_SIZE(self->data);
 
-        PyObject *item = PyTuple_GetItem(self->data, _idx);
-        return Py_XNewRef(item);
+        return PyTuple_GetItemRef(self->data, _idx);
     } else if (PyUnicode_Check(idx)) {
         if (Py_IsNone(self->description)) {
             PyErr_Format(PyExc_IndexError, "No item with key %R", idx);
@@ -157,17 +155,23 @@ pysqlite_row_subscript(PyObject *op, PyObject *idx)
         Py_ssize_t nitems = PyTuple_GET_SIZE(self->description);
 
         for (Py_ssize_t i = 0; i < nitems; i++) {
-            PyObject *obj;
-            obj = PyTuple_GET_ITEM(self->description, i);
-            obj = PyTuple_GET_ITEM(obj, 0);
+            PyObject *descr = PyTuple_GetItemRef(self->description, i);
+            if (descr == NULL) {
+                return NULL;
+            }
+            PyObject *obj = PyTuple_GetItemRef(descr, 0);
+            Py_DECREF(descr);
+            if (obj == NULL) {
+                return NULL;
+            }
             int eq = equal_ignore_case(idx, obj);
+            Py_DECREF(obj);
             if (eq < 0) {
                 return NULL;
             }
             if (eq) {
                 /* found item */
-                PyObject *item = PyTuple_GetItem(self->data, i);
-                return Py_XNewRef(item);
+                return PyTuple_GetItemRef(self->data, i);
             }
         }
 
@@ -210,9 +214,20 @@ pysqlite_row_keys_impl(pysqlite_Row *self)
 
     Py_ssize_t nitems = PyTuple_GET_SIZE(self->description);
     for (Py_ssize_t i = 0; i < nitems; i++) {
-        PyObject *descr = PyTuple_GET_ITEM(self->description, i);
-        PyObject *name = PyTuple_GET_ITEM(descr, 0);
-        if (PyList_Append(list, name) < 0) {
+        PyObject *descr = PyTuple_GetItemRef(self->description, i);
+        if (descr == NULL) {
+            Py_DECREF(list);
+            return NULL;
+        }
+        PyObject *name = PyTuple_GetItemRef(descr, 0);
+        Py_DECREF(descr);
+        if (name == NULL) {
+            Py_DECREF(list);
+            return NULL;
+        }
+        int rc = PyList_Append(list, name);
+        Py_DECREF(name);
+        if (rc < 0) {
             Py_DECREF(list);
             return NULL;
         }

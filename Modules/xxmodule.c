@@ -67,12 +67,10 @@ Xxo_getattro(PyObject *op, PyObject *name)
 {
     XxoObject *self = XxoObject_CAST(op);
     if (self->x_attr != NULL) {
-        PyObject *v = PyDict_GetItemWithError(self->x_attr, name);
-        if (v != NULL) {
-            return Py_NewRef(v);
-        }
-        else if (PyErr_Occurred()) {
-            return NULL;
+        PyObject *v;
+        int rc = PyDict_GetItemRef(self->x_attr, name, &v);
+        if (rc != 0) {
+            return v;
         }
     }
     return PyObject_GenericGetAttr(op, name);
@@ -190,12 +188,14 @@ xx_bug(PyObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "O:bug", &list))
         return NULL;
 
-    item = PyList_GetItem(list, 0);
-    /* Py_INCREF(item); */
+    item = PyList_GetItemRef(list, 0);
+    if (item == NULL) {
+        return NULL;
+    }
     PyList_SetItem(list, 1, PyLong_FromLong(0L));
     PyObject_Print(item, stdout, 0);
     printf("\n");
-    /* Py_DECREF(item); */
+    Py_DECREF(item);
 
     return Py_NewRef(Py_None);
 }

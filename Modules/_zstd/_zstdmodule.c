@@ -32,20 +32,32 @@ _Py_parse_zstd_dict(const _zstd_state *state, PyObject *dict, int *ptype)
     }
 
     /* Check (ZstdDict, type) */
-    if (PyTuple_CheckExact(dict) && PyTuple_GET_SIZE(dict) == 2
-        && PyObject_TypeCheck(PyTuple_GET_ITEM(dict, 0), state->ZstdDict_type)
-        && PyLong_Check(PyTuple_GET_ITEM(dict, 1)))
-    {
-        int type = PyLong_AsInt(PyTuple_GET_ITEM(dict, 1));
-        if (type == -1 && PyErr_Occurred()) {
+    if (PyTuple_CheckExact(dict) && PyTuple_GET_SIZE(dict) == 2) {
+        PyObject *zd = PyTuple_GetItemRef(dict, 0);
+        PyObject *type_obj = PyTuple_GetItemRef(dict, 1);
+        if (zd == NULL || type_obj == NULL) {
+            Py_XDECREF(zd);
+            Py_XDECREF(type_obj);
             return NULL;
         }
-        if (type == DICT_TYPE_DIGESTED
-            || type == DICT_TYPE_UNDIGESTED
-            || type == DICT_TYPE_PREFIX)
-        {
-            *ptype = type;
-            return (ZstdDict*)PyTuple_GET_ITEM(dict, 0);
+        int is_zdict = PyObject_TypeCheck(zd, state->ZstdDict_type)
+                       && PyLong_Check(type_obj);
+        int type = is_zdict ? PyLong_AsInt(type_obj) : 0;
+        Py_DECREF(type_obj);
+        /* The caller's tuple still owns zd, so the borrow outlives this
+           reference. */
+        Py_DECREF(zd);
+        if (is_zdict) {
+            if (type == -1 && PyErr_Occurred()) {
+                return NULL;
+            }
+            if (type == DICT_TYPE_DIGESTED
+                || type == DICT_TYPE_UNDIGESTED
+                || type == DICT_TYPE_PREFIX)
+            {
+                *ptype = type;
+                return (ZstdDict*)zd;
+            }
         }
     }
 
@@ -230,7 +242,12 @@ calculate_samples_stats(PyBytesObject *samples_bytes, PyObject *samples_sizes,
 
     sizes_sum = PyBytes_GET_SIZE(samples_bytes);
     for (i = 0; i < chunks_number; i++) {
-        size_t size = PyLong_AsSize_t(PyTuple_GET_ITEM(samples_sizes, i));
+        PyObject *size_obj = PyTuple_GetItemRef(samples_sizes, i);
+        if (size_obj == NULL) {
+            return -1;
+        }
+        size_t size = PyLong_AsSize_t(size_obj);
+        Py_DECREF(size_obj);
         (*chunk_sizes)[i] = size;
         if (size == (size_t)-1 && PyErr_Occurred()) {
             if (PyErr_ExceptionMatches(PyExc_OverflowError)) {

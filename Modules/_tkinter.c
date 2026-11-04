@@ -1079,7 +1079,12 @@ TupleAsObj(PyObject *value, int wrapped)
       return NULL;
     }
     for (Py_ssize_t i = 0; i < size; i++) {
-        Tcl_Obj *item = AsObj(PyTuple_GET_ITEM(value, i));
+        PyObject *v = PyTuple_GetItemRef(value, i);
+        if (v == NULL) {
+            goto exit;
+        }
+        Tcl_Obj *item = AsObj(v);
+        Py_DECREF(v);
         if (item == NULL) {
             goto exit;
         }
@@ -1565,12 +1570,19 @@ Tkapp_CallArgs(PyObject *args, Tcl_Obj** objStore, Tcl_Size *pobjc)
         }
 
         for (i = 0; i < objc; i++) {
-            PyObject *v = PySequence_Fast_GET_ITEM(args, i);
+            PyObject *v = PyTuple_Check(args) ? PyTuple_GetItemRef(args, i)
+                                              : PyList_GetItemRef(args, i);
+            if (v == NULL) {
+                objc = i;
+                goto finally;
+            }
             if (v == Py_None) {
+                Py_DECREF(v);
                 objc = i;
                 break;
             }
             objv[i] = AsObj(v);
+            Py_DECREF(v);
             if (!objv[i]) {
                 /* Reset objc, so it attempts to clear
                    objects only up to i. */
@@ -1716,13 +1728,21 @@ _tkinter_tkapp_call_impl(TkappObject *self, PyObject *args)
     Tcl_Obj **objv = NULL;
     Tcl_Size objc;
     PyObject *res = NULL;
+    PyObject *single = NULL;
     int flags = TCL_EVAL_DIRECT | TCL_EVAL_GLOBAL;
 
     /* If args is a single tuple, replace with contents of tuple */
     if (PyTuple_GET_SIZE(args) == 1) {
-        PyObject *item = PyTuple_GET_ITEM(args, 0);
-        if (PyTuple_Check(item))
-            args = item;
+        PyObject *item = PyTuple_GetItemRef(args, 0);
+        if (item == NULL) {
+            return NULL;
+        }
+        if (PyTuple_Check(item)) {
+            single = args = item;
+        }
+        else {
+            Py_DECREF(item);
+        }
     }
     if (self->threaded && self->thread_id != Tcl_GetCurrentThread()) {
         /* We cannot call the command directly. Instead, we must
@@ -1730,11 +1750,14 @@ _tkinter_tkapp_call_impl(TkappObject *self, PyObject *args)
         Tkapp_CallEvent *ev;
         Tcl_Condition cond = NULL;
         PyObject *exc = NULL;  // init to make static analyzers happy
-        if (!WaitForMainloop(self))
+        if (!WaitForMainloop(self)) {
+            Py_XDECREF(single);
             return NULL;
+        }
         ev = (Tkapp_CallEvent*)attemptckalloc(sizeof(Tkapp_CallEvent));
         if (ev == NULL) {
             PyErr_NoMemory();
+            Py_XDECREF(single);
             return NULL;
         }
         ev->ev.proc = Tkapp_CallProc;
@@ -1762,8 +1785,10 @@ _tkinter_tkapp_call_impl(TkappObject *self, PyObject *args)
 
         int i;
         objv = Tkapp_CallArgs(args, objStore, &objc);
-        if (!objv)
+        if (!objv) {
+            Py_XDECREF(single);
             return NULL;
+        }
 
         ENTER_TCL
 
@@ -1780,6 +1805,7 @@ _tkinter_tkapp_call_impl(TkappObject *self, PyObject *args)
 
         Tkapp_CallDeallocArgs(objv, objStore, objc);
     }
+    Py_XDECREF(single);
     return res;
 }
 
@@ -3421,16 +3447,26 @@ _flatten1(FlattenContext* context, PyObject* item, int depth)
             return 0;
         /* copy items to output tuple */
         for (i = 0; i < size; i++) {
-            PyObject *o = PySequence_Fast_GET_ITEM(item, i);
+            PyObject *o = PyTuple_Check(item) ? PyTuple_GetItemRef(item, i)
+                                              : PyList_GetItemRef(item, i);
+            if (o == NULL)
+                return 0;
             if (PyList_Check(o) || PyTuple_Check(o)) {
-                if (!_flatten1(context, o, depth + 1))
+                int ok = _flatten1(context, o, depth + 1);
+                Py_DECREF(o);
+                if (!ok)
                     return 0;
             } else if (o != Py_None) {
                 if (context->size + 1 > context->maxsize &&
-                    !_bump(context, 1))
+                    !_bump(context, 1)) {
+                    Py_DECREF(o);
                     return 0;
+                }
                 PyTuple_SET_ITEM(context->tuple,
-                                 context->size++, Py_NewRef(o));
+                                 context->size++, o);
+            }
+            else {
+                Py_DECREF(o);
             }
         }
     } else {

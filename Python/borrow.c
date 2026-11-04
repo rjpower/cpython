@@ -206,9 +206,13 @@ borrow_release(_PyBorrowStack *s, _PyBorrowMark mark)
         }
         PyObject *o = *--s->top;
         if (BORROW_IS_SKIP(o)) {
-            /* A vector lies wholly in one chunk and holds no mark. */
-            assert(s->top - BORROW_SKIP_COUNT(o) >= s->chunk->slots);
-            s->top -= BORROW_SKIP_COUNT(o);
+            /* A vector lies wholly in one chunk and holds no mark: stepping
+               over it never passes a mark in this chunk. */
+            PyObject **vector = s->top - BORROW_SKIP_COUNT(o);
+            assert(vector >= s->chunk->slots);
+            assert(!(s->chunk->slots <= mark && mark <= s->top) ||
+                   vector >= mark);
+            s->top = vector;
             continue;
         }
         Py_XDECREF(o);
@@ -317,8 +321,9 @@ _PyBorrow_TupleItems(PyObject *tuple, Py_ssize_t n)
         return NULL;
     }
     _PyBorrow_RequestRelease(tstate);
-    /* Boxing an exact int or float and taking a new reference cannot run
-       Python code, so nothing else pushes while the run is filled. */
+    /* Boxing allocates, and an object allocator hook may run code; as in
+       _PyBorrow_ValueVector, what that code calls leaves the top where it
+       was, so the run stays contiguous. */
     PyObject **run = s->top;
     for (Py_ssize_t i = 0; i < n; i++) {
         PyObject *item = PyValue_AsPyObjectNewBoxed(PyTuple_GET_VALUE(tuple, i));
@@ -361,14 +366,17 @@ _PyBorrow_ValueVector(const PyValue *values, Py_ssize_t n)
     }
     vector[n] = BORROW_SKIP(n + 1);
     s->top = vector + n + 1;
-    /* Boxing an int or float cannot run Python code, so nothing else pushes
-       while the boxes are filled. */
+    /* Boxing allocates, and an object allocator hook (PyMem_SetAllocator)
+       may run any code, including Python code.  What that code calls exits
+       its own scope or activation, so the top comes back and the reserved
+       room is still there.  The hook must not push outside a scope. */
     for (Py_ssize_t i = 0; i < n; i++) {
         if (PyValue_IsInline(values[i])) {
             PyObject *box = PyValue_AsPyObjectNewBoxed(values[i]);
             if (box == NULL) {
                 return NULL;
             }
+            assert(s->top < s->end);
             *s->top++ = box;
             vector[i] = box;
         }

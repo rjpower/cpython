@@ -760,14 +760,7 @@ PyEval_EvalFrameEx(PyFrameObject *f, int throwflag)
 static PyObject **
 _PyValueArray_ToObjectVector(PyValue *input, Py_ssize_t nargs)
 {
-    for (Py_ssize_t i = 0; i < nargs; i++) {
-        if (!PyValue_IsHeapSafe(input[i])) {
-            input[i] = PyValue_MakeHeapSafe(input[i]);
-        }
-    }
-    if (PyErr_Occurred()) {
-        return NULL;
-    }
+    _PyValue_OwnArray(input, nargs);
     return _PyBorrow_ValueVector(input, nargs);
 }
 
@@ -2485,15 +2478,22 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
     _Py_EnsureTstateNotNULL(tstate);
     _PyBorrowStack *borrow = &((_PyThreadStateImpl *)tstate)->borrow;
     PyObject **outer_floor = borrow->eval_floor;
+    /* Entries below this activation's floor can only have requested a
+       release before it started, so the only request of theirs that its
+       instruction boundaries can consume is one pending now. */
+    int outer_request = _Py_eval_breaker_bit_is_set(tstate,
+                                                    _PY_BORROW_RELEASE_BIT);
     PyObject **floor = borrow->top;
     borrow->eval_floor = floor;
     PyObject *result = _PyEval_EvalFrameLoop(tstate, frame, throwflag);
     assert(borrow->eval_floor == floor);
     _PyBorrowScope_Exit(tstate, floor);
     borrow->eval_floor = outer_floor;
-    if (outer_floor != NULL && borrow->top != outer_floor) {
-        /* This activation consumed the release request of entries that
-           belong to the outer one; renew it. */
+    if (outer_request && outer_floor != NULL && borrow->top != outer_floor) {
+        /* Renew the request that this activation may have consumed.  Entries
+           that requested nothing stay unrequested: a live argument vector
+           sits above the outer floor during every callback from a builtin,
+           and its own scope releases it. */
         _PyBorrow_RequestRelease(tstate);
     }
     return result;

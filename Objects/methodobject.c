@@ -544,8 +544,10 @@ _PyCFunction_CallScoped(_PyNativeScope *scope, PyObject *callable,
         _Py_LeaveRecursiveCallTstate(scope->tstate);
         return -1;
     }
-    /* Boxing can reenter. Read the target only after it completes, and do
-     * not invoke it with receiver/class metadata from a different callable. */
+    /* Boxing allocates (in Begin for a vector scope, above for a fixed one),
+     * and an object allocator hook may run code that changes the target.
+     * Read the target only after boxing, and do not invoke it with
+     * receiver/class metadata from a different callable. */
     if (scope->vector && !_PyCFunction_CanCallScoped(callable)) {
         _Py_LeaveRecursiveCallTstate(scope->tstate);
         return 1;

@@ -8,6 +8,7 @@
 #include "pycore_ceval.h"         // _PyEval_EvalFrameDefault()
 #include "pycore_interp.h"        // _PyInterpreterState_SetEvalFrameFunc()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
+#include "pycore_value.h"         // PyValue_MakeHeapSafe()
 
 
 static Py_ssize_t
@@ -523,15 +524,35 @@ fail_raw_free(void *ctx, void *ptr)
     saved_raw.free(saved_raw.ctx, ptr);
 }
 
-/* borrow_grow_oom(args): push all of args as one run while the raw allocator
-   fails.  A run longer than a chunk needs a new chunk, so this fails.  Return
-   (delta, exception) as parse_then_churn() does. */
+/* borrow_grow_oom(args, vector=False): in a scope, push all of args while
+   the raw allocator fails, as one tuple run, or with vector true as an
+   argument vector (_PyBorrow_ValueVector).  More entries than a chunk holds
+   need a new chunk, so the push fails.  Return (delta, exception) as
+   parse_then_churn() does, with delta read before the scope exits. */
 static PyObject *
-borrow_grow_oom(PyObject *Py_UNUSED(module), PyObject *tuple)
+borrow_grow_oom(PyObject *Py_UNUSED(module), PyObject *const *args,
+                Py_ssize_t nargs)
 {
-    if (!PyTuple_Check(tuple)) {
-        PyErr_SetString(PyExc_TypeError, "a tuple is required");
+    if (nargs < 1 || nargs > 2 || !PyTuple_Check(args[0])) {
+        PyErr_SetString(PyExc_TypeError,
+                        "borrow_grow_oom(args: tuple, vector=False)");
         return NULL;
+    }
+    int vector = nargs == 2 ? PyObject_IsTrue(args[1]) : 0;
+    if (vector < 0) {
+        return NULL;
+    }
+    PyObject *tuple = args[0];
+    Py_ssize_t n = PyTuple_GET_SIZE(tuple);
+    PyValue *values = NULL;
+    if (vector) {
+        values = PyMem_New(PyValue, n);
+        if (values == NULL) {
+            return PyErr_NoMemory();
+        }
+        for (Py_ssize_t i = 0; i < n; i++) {
+            values[i] = PyValue_MakeHeapSafe(PyTuple_GET_VALUE(tuple, i));
+        }
     }
     PyMemAllocatorEx failing = {
         .malloc = fail_raw_malloc,
@@ -539,16 +560,42 @@ borrow_grow_oom(PyObject *Py_UNUSED(module), PyObject *tuple)
         .realloc = fail_raw_realloc,
         .free = fail_raw_free,
     };
+    PyThreadState *tstate = _PyThreadState_GET();
     Py_ssize_t before = current_depth();
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     PyMem_GetAllocator(PYMEM_DOMAIN_RAW, &saved_raw);
     PyMem_SetAllocator(PYMEM_DOMAIN_RAW, &failing);
-    PyObject *const *run = _PyBorrow_TupleItems(tuple, PyTuple_GET_SIZE(tuple));
+    const void *pushed = vector
+        ? (const void *)_PyBorrow_ValueVector(values, n)
+        : (const void *)_PyBorrow_TupleItems(tuple, n);
     PyMem_SetAllocator(PYMEM_DOMAIN_RAW, &saved_raw);
-    if (run != NULL) {
-        PyErr_SetString(PyExc_AssertionError, "the run did not need a chunk");
-        return NULL;
+    PyObject *result;
+    if (pushed != NULL) {
+        _PyBorrowScope_Exit(tstate, mark);
+        PyErr_SetString(PyExc_AssertionError, "the push did not need a chunk");
+        result = NULL;
     }
-    return report(before, 0, "", NULL);
+    else {
+        result = report(before, 0, "", NULL);
+        _PyBorrowScope_Exit(tstate, mark);
+    }
+    /* The tuple still owns every item, so closing frees nothing. */
+    for (Py_ssize_t i = 0; values != NULL && i < n; i++) {
+        PyValue_CLOSE(values[i]);
+    }
+    PyMem_Free(values);
+    return result;
+}
+
+/* borrow_release_requested(*args): whether this thread's eval breaker asks
+   for a borrow release.  It ignores its arguments, so map() can call it. */
+static PyObject *
+borrow_release_requested(PyObject *Py_UNUSED(module),
+                         PyObject *const *Py_UNUSED(args),
+                         Py_ssize_t Py_UNUSED(nargs))
+{
+    return PyBool_FromLong(_Py_eval_breaker_bit_is_set(
+        _PyThreadState_GET(), _PY_BORROW_RELEASE_BIT));
 }
 
 /* borrow_hold_and_wait(args, seconds): parse args with "O", then release the
@@ -640,7 +687,8 @@ static PyMethodDef methods[] = {
     {"set_eval_frame_parse", _PyCFunction_CAST(set_eval_frame_parse), METH_FASTCALL},
     {"borrow_bad_exit", borrow_bad_exit, METH_NOARGS},
     {"call_loop", _PyCFunction_CAST(call_loop), METH_FASTCALL},
-    {"borrow_grow_oom", borrow_grow_oom, METH_O},
+    {"borrow_grow_oom", _PyCFunction_CAST(borrow_grow_oom), METH_FASTCALL},
+    {"borrow_release_requested", _PyCFunction_CAST(borrow_release_requested), METH_FASTCALL},
     {"borrow_hold_and_wait", borrow_hold_and_wait, METH_VARARGS},
     {"argument_refcounts", _PyCFunction_CAST(argument_refcounts), METH_FASTCALL},
     {NULL},

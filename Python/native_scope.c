@@ -142,8 +142,9 @@ begin_vector(_PyNativeScope *scope, PyThreadState *tstate,
         scope->defining_class = (PyTypeObject *)Py_XNewRef(
             (PyObject *)PyCFunction_GET_CLASS(callable));
     }
-    /* Boxing cannot run Python code.  On failure the partial run stays above
-       the mark and End releases it. */
+    /* Boxing may run an object allocator hook's code, which leaves the stack
+       top where it was (_PyBorrow_ValueVector).  On failure the partial run
+       stays above the mark and End releases it. */
     scope->arguments = NULL;
     scope->mark = _PyBorrowScope_Enter(tstate);
     PyObject **objects = _PyBorrow_ValueVector(effective_args, total_count);

@@ -140,13 +140,32 @@ class BorrowScopeTests(unittest.TestCase):
         self.assertEqual(delta, 0)
 
     def test_chunk_growth_out_of_memory(self):
-        # A run longer than a chunk needs a new chunk; when that fails the
-        # push raises MemoryError and leaves nothing on the stack.
-        delta, exc = _testinternalcapi.borrow_grow_oom(("x",) * 5000)
-        self.assertIsInstance(exc, MemoryError)
-        self.assertEqual(delta, 0)
-        self.assertEqual(parse_then_churn("OO", (2**40, 0.5)),
-                         (2, (2**40, 0.5)))
+        # A run or an argument vector longer than a chunk needs a new chunk;
+        # when that fails the push raises MemoryError and leaves nothing on
+        # the stack.  The inline values give the vector boxes to reserve.
+        for vector in (False, True):
+            with self.subTest(vector=vector):
+                delta, exc = _testinternalcapi.borrow_grow_oom(
+                    ("x", *INLINE) * 1000, vector)
+                self.assertIsInstance(exc, MemoryError)
+                self.assertEqual(delta, 0)
+                self.assertEqual(parse_then_churn("OO", (2**40, 0.5)),
+                                 (2, (2**40, 0.5)))
+
+    def test_callback_exit_requests_no_release(self):
+        # A builtin on the native-call vector path keeps its argument vector
+        # above the eval floor while it calls back into Python.  Nothing in
+        # it asked for a release, so the callback's activation must not
+        # request one when it exits.  The generator resumes after
+        # "yield from", where RESUME checks no eval breaker, so each read
+        # sees what the previous resumption's exit left.
+        requested = _testinternalcapi.borrow_release_requested
+
+        def probe():
+            yield from map(requested, range(100))
+
+        self.assertEqual(list(probe()), [False] * 100)  # type call
+        self.assertEqual(sum(probe()), 0)  # METH_FASTCALL builtin
 
     def test_eval_frame_hook(self):
         def loop():

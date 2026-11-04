@@ -330,6 +330,10 @@ _PyCode_GetExec(PyCodeObject *co)
 void
 _PyCode_ClearExec(PyCodeObject *co)
 {
+    /* Only code_dealloc frees the executing copy: a running frame holds a
+     * reference to its code object, so frame->ir_words never changes while
+     * the frame runs (pyjit/design/register-ir.md 1.10). */
+    assert(Py_REFCNT(co) == 0);
     _PyCodeExec *exec = co->_co_exec;
     if (exec == NULL || exec == &_PyIR_InitCleanupExec) {
         return;

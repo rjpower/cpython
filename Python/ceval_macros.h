@@ -128,7 +128,7 @@
         do { \
             if (value_temps != NULL && value_temps->count != 0) { \
                 int value_had_error = PyErr_Occurred() != NULL; \
-                if (finish_value_bridges(tstate, frame, &next_instr, value_temps) < 0 && !value_had_error) { \
+                if (finish_value_bridges(tstate, frame, next_instr, value_temps) < 0 && !value_had_error) { \
                     next_instr = frame->instr_ptr + 1; \
                     Py_MUSTTAIL return (_TAIL_CALL_error)(TAIL_CALL_ARGS); \
                 } \
@@ -155,7 +155,7 @@
 #  define JUMP_TO_LABEL(name) do { \
         if (value_temps != NULL && value_temps->count != 0) { \
             int value_had_error = PyErr_Occurred() != NULL; \
-            if (finish_value_bridges(tstate, frame, &next_instr, value_temps) < 0 && !value_had_error) { \
+            if (finish_value_bridges(tstate, frame, next_instr, value_temps) < 0 && !value_had_error) { \
                 next_instr = frame->instr_ptr + 1; goto error; \
             } \
         } \
@@ -173,7 +173,7 @@
 #  define JUMP_TO_LABEL(name) do { \
         if (value_temps != NULL && value_temps->count != 0) { \
             int value_had_error = PyErr_Occurred() != NULL; \
-            if (finish_value_bridges(tstate, frame, &next_instr, value_temps) < 0 && !value_had_error) { \
+            if (finish_value_bridges(tstate, frame, next_instr, value_temps) < 0 && !value_had_error) { \
                 next_instr = frame->instr_ptr + 1; goto error; \
             } \
         } \
@@ -272,7 +272,7 @@ do { \
 #define DISPATCH() \
     { \
         if (value_temps != NULL && value_temps->count != 0 && \
-            finish_value_bridges(tstate, frame, &next_instr, value_temps) < 0) { \
+            finish_value_bridges(tstate, frame, next_instr, value_temps) < 0) { \
             next_instr = frame->instr_ptr + 1; JUMP_TO_LABEL(error); \
         } \
         NEXTOPARG(); \
@@ -293,7 +293,7 @@ do { \
         assert(!IS_PEP523_HOOKED(tstate));                       \
         assert((NEW_FRAME)->previous == frame);                  \
         if (value_temps != NULL && value_temps->count != 0 &&    \
-            finish_value_bridges(tstate, frame, &next_instr, value_temps) < 0) { \
+            finish_value_bridges(tstate, frame, next_instr, value_temps) < 0) { \
             _PyEval_FrameClearAndPop(tstate, (NEW_FRAME));        \
             JUMP_TO_LABEL(error);                               \
         }                                                       \

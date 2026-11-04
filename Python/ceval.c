@@ -1517,8 +1517,41 @@ drop_failed_value(PyValue *result)
     }
 }
 
+#ifndef NDEBUG
+/* Whether the instrumentation of code, which a running frame of tstate
+ * executes, is as the eval loop keeps it.  Setting events re-instruments
+ * every code object with a frame on a thread's stack
+ * (instrument_all_executing_code_objects), and a frame's RESUME
+ * re-instruments its code when it starts, except while tracing in the
+ * default build (_MAYBE_INSTRUMENT).  A failure to instrument stops with the
+ * error set. */
 static int
-value_operation_refresh(_PyValueOperation *operation, _PyInstr **next,
+instrumentation_is_current(PyThreadState *tstate, PyCodeObject *code)
+{
+    uintptr_t epoch = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) &
+                      ~_PY_EVAL_EVENTS_MASK;
+    if (FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(code->_co_instrumentation_version) == epoch ||
+        PyErr_Occurred()) {
+        return 1;
+    }
+#ifdef Py_GIL_DISABLED
+    return 0;
+#else
+    return tstate->tracing != 0;
+#endif
+}
+#endif
+
+/* After the operation, check that the frame is still its own and restore
+ * the frame's instr_ptr.  The operation can run Python, and so can the
+ * release of its operands, of its results and of a displaced local
+ * (__del__, weakref callbacks).  Python can change the instrumentation,
+ * which rewrites handler fields in place and which dispatch reads, but the
+ * executing copy is fixed for the code object's life
+ * (pyjit/design/register-ir.md 1.10): frame->ir_words and the handler's
+ * next_instr, NEXT, stay valid, and the checks here only assert it. */
+static int
+value_operation_refresh(_PyValueOperation *operation, _PyInstr *next,
                         PyValue *failed_result)
 {
     PyThreadState *tstate = operation->tstate;
@@ -1526,55 +1559,35 @@ value_operation_refresh(_PyValueOperation *operation, _PyInstr **next,
     PyCodeObject *code = operation->code;
     Py_ssize_t word = operation->next_word;
     Py_ssize_t current = operation->current_word;
-    /* The status is the refresh's own (a changed frame or executable, a
-     * failed reinstrumentation); each caller reports its operation's. */
-    int status = 0;
-refresh_after_cleanup:
-    /* The operation can run Python, and so can the release of its operands,
-     * of its results and of a displaced local (__del__, weakref callbacks).
-     * Python can change instrumentation or replace the executing copy. Do
-     * not decode the next handler until those have finished. */
     if (tstate->current_frame != frame || _PyFrame_GetCode(frame) != code) {
         value_revalidation_error("value bridge changed the active frame");
         drop_failed_value(failed_result);
         return -1;
     }
-    uintptr_t epoch = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) &
-                      ~_PY_EVAL_EVENTS_MASK;
-    if (code->_co_instrumentation_version != epoch &&
-        _Py_Instrument(code, tstate->interp) < 0) {
-        status = -1;
-    }
+    assert(instrumentation_is_current(tstate, code));
     _PyCodeExec *exec = code->_co_exec;
-    if (tstate->current_frame != frame || _PyFrame_GetCode(frame) != code ||
-        exec == NULL || word < 0 || word > exec->nwords ||
+    if (exec == NULL || word < 0 || word > exec->nwords ||
         current < 0 || current >= exec->nwords) {
-        /* Keep a pending instrumentation or operation error. */
+        /* Keep a pending operation error. */
         if (!PyErr_Occurred()) {
             PyErr_SetString(PyExc_SystemError, "value bridge changed executing words");
         }
         drop_failed_value(failed_result);
         return -1;
     }
-    frame->ir_words = exec->words;
-    frame->ir_feedback = exec->entries;
+    assert(frame->ir_words == exec->words);
+    assert(frame->ir_feedback == exec->entries);
+    assert(next == exec->words + word);
+    (void)next;
     frame->instr_ptr = exec->words + current;
-    *next = exec->words + word;
-    if (status < 0 && failed_result != NULL &&
-        !PyValue_IsNull(*failed_result)) {
-        /* Instrumentation itself can fail after receiver cleanup. Retire
-         * the C-only result, then refresh after its possible callbacks too. */
-        drop_failed_value(failed_result);
-        goto refresh_after_cleanup;
-    }
-    return status;
+    return 0;
 }
 
 /* Release owners[0] to owners[count - 1] in order, then the handler's input
  * boxes, then refresh: releasing an owner can run Python. */
 static int
 finish_value_bridges_ex(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                       _PyInstr **next, _PyValueTemps *temps,
+                       _PyInstr *next, _PyValueTemps *temps,
                        PyValue *owners, int count, PyValue *failed_result)
 {
     if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
@@ -1584,7 +1597,7 @@ finish_value_bridges_ex(PyThreadState *tstate, _PyInterpreterFrame *frame,
         _PyValueTemps_Close(temps);
         return 0;
     }
-    _PyValueOperation operation = value_operation_begin(tstate, frame, *next);
+    _PyValueOperation operation = value_operation_begin(tstate, frame, next);
     for (int i = 0; i < count; i++) {
         PyValue_XCLOSE(owners[i]);
     }
@@ -1593,11 +1606,11 @@ finish_value_bridges_ex(PyThreadState *tstate, _PyInterpreterFrame *frame,
 }
 
 static int
-value_operation_finish(_PyValueOperation *operation, _PyInstr **next,
+value_operation_finish(_PyValueOperation *operation, _PyInstr *next,
                        _PyValueTemps *temps)
 {
-    /* The operation can run Python even when it created no private boxes.
-     * Refresh from pre-call scalar PCs even when the owner record is empty. */
+    /* The operation can run Python even when it created no private boxes:
+     * check the frame even when the owner record is empty. */
     _PyValueTemps_Close(temps);
     return value_operation_refresh(operation, next, NULL);
 }
@@ -1623,30 +1636,21 @@ call_transaction_begin(PyThreadState *tstate, _PyInterpreterFrame *frame,
 }
 
 static int
-call_transaction_refresh(_PyCallTransaction *call, _PyInstr **next)
+call_transaction_refresh(_PyCallTransaction *call, _PyInstr *next)
 {
     _PyValueOperation *op = &call->operation;
-    int status;
-    do {
-        status = value_operation_refresh(op, next, NULL);
-        if (op->tstate->current_frame != op->frame ||
-            _PyFrame_GetCode(op->frame) != op->code) {
-            value_revalidation_error(
-                "call preparation changed the active frame");
-            return -1;
-        }
-        /* Check the refresh's decode against the current executing copy
-         * and instrumentation before the handler uses it. */
-    } while (op->code->_co_exec != NULL &&
-             (op->frame->ir_words != op->code->_co_exec->words ||
-              (status == 0 && op->code->_co_instrumentation_version !=
-              (_Py_atomic_load_uintptr_relaxed(&op->tstate->eval_breaker) &
-               ~_PY_EVAL_EVENTS_MASK))));
+    int status = value_operation_refresh(op, next, NULL);
+    if (op->tstate->current_frame != op->frame ||
+        _PyFrame_GetCode(op->frame) != op->code) {
+        value_revalidation_error(
+            "call preparation changed the active frame");
+        return -1;
+    }
     return status;
 }
 
 static int
-call_transaction_expand_method(_PyCallTransaction *call, _PyInstr **next)
+call_transaction_expand_method(_PyCallTransaction *call, _PyInstr *next)
 {
     call->prepared = 1;
     PyValue *homes = _PyFrame_Slots(call->operation.frame) + call->base;
@@ -1668,7 +1672,7 @@ call_transaction_expand_method(_PyCallTransaction *call, _PyInstr **next)
 }
 
 static int
-call_transaction_prepare_tuple(_PyCallTransaction *call, _PyInstr **next)
+call_transaction_prepare_tuple(_PyCallTransaction *call, _PyInstr *next)
 {
     assert(call->kind == CALL_TRANSACTION_EX);
     call->prepared = 1;
@@ -1720,7 +1724,7 @@ done:
 }
 
 static int
-call_transaction_monitor(_PyCallTransaction *call, _PyInstr **next)
+call_transaction_monitor(_PyCallTransaction *call, _PyInstr *next)
 {
     assert(!call->monitored);
     PyValue *homes = _PyFrame_Slots(call->operation.frame) + call->base;
@@ -1775,8 +1779,8 @@ call_transaction_publish_pc(void *opaque)
     _PyCodeExec *exec = op->code->_co_exec;
     assert(exec != NULL && op->current_word >= 0 &&
            op->current_word < exec->nwords);
-    op->frame->ir_words = exec->words;
-    op->frame->ir_feedback = exec->entries;
+    assert(op->frame->ir_words == exec->words);
+    assert(op->frame->ir_feedback == exec->entries);
     op->frame->instr_ptr = exec->words + op->current_word;
 }
 
@@ -1805,7 +1809,7 @@ call_transaction_retire(PyValue *retired, int count, PyValue *small)
  * folded LOCAL or an input overlap. The producer must not move window[0]
  * afterward, even on an error edge after cleanup. */
 static int
-call_transaction_native(_PyCallTransaction *call, _PyInstr **next)
+call_transaction_native(_PyCallTransaction *call, _PyInstr *next)
 {
     PyValue small[8];
     PyValue *retired = small;
@@ -1946,11 +1950,11 @@ done:
     return failed;
 }
 
-static int call_transaction_invoke(_PyCallTransaction *, _PyInstr **,
+static int call_transaction_invoke(_PyCallTransaction *, _PyInstr *,
                                     _PyInterpreterFrame **);
 
 static int
-value_reader_complete(_PyValueOperation *operation, _PyInstr **next,
+value_reader_complete(_PyValueOperation *operation, _PyInstr *next,
                       _PyValueTemps *temps, PyValue *result,
                       PyValue *first, PyValue *second)
 {
@@ -1988,7 +1992,7 @@ value_reader_complete(_PyValueOperation *operation, _PyInstr **next,
 
 static int
 finish_value_bridges(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                     _PyInstr **next, _PyValueTemps *temps)
+                     _PyInstr *next, _PyValueTemps *temps)
 {
     if (temps == NULL || temps->count == 0) {
         return 0;
@@ -1997,7 +2001,7 @@ finish_value_bridges(PyThreadState *tstate, _PyInterpreterFrame *frame,
 }
 
 static int
-value_attribute_complete(_PyValueOperation *operation, _PyInstr **next,
+value_attribute_complete(_PyValueOperation *operation, _PyInstr *next,
                          _PyValueTemps *temps, PyValue *result,
                          PyValue *self, PyValue *receiver, int method)
 {
@@ -2030,7 +2034,7 @@ value_attribute_complete(_PyValueOperation *operation, _PyInstr **next,
 
 static int
 retire_published_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                        _PyInstr **next, _PyValueTemps *temps,
+                        _PyInstr *next, _PyValueTemps *temps,
                         PyValue *first, PyValue *second, PyValue *failed_result)
 {
     PyValue owners[2] = {*first, second == NULL ? PyValue_NULL : *second};
@@ -2048,7 +2052,7 @@ retire_published_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
  * then its input boxes, and refresh: the release can run Python. */
 static int
 finish_displaced_local(PyThreadState *tstate, _PyInterpreterFrame *frame,
-                       _PyInstr **next, _PyValueTemps *temps,
+                       _PyInstr *next, _PyValueTemps *temps,
                        PyValue displaced)
 {
     return finish_value_bridges_ex(tstate, frame, next, temps, &displaced, 1,
@@ -2091,8 +2095,8 @@ native_call_publish_pc(void *opaque)
     _PyCodeExec *exec = state->code->_co_exec;
     assert(exec != NULL && state->current_word >= 0 &&
            state->current_word < exec->nwords);
-    frame->ir_words = exec->words;
-    frame->ir_feedback = exec->entries;
+    assert(frame->ir_words == exec->words);
+    assert(frame->ir_feedback == exec->entries);
     frame->instr_ptr = exec->words + state->current_word;
 }
 
@@ -2110,7 +2114,7 @@ native_call_publish_result(void *opaque)
 
 static int
 native_call_finish(_PyNativeCallPublication *state, _PyNativeScope *scope,
-                   PyValue *argument, PyValue *callable, _PyInstr **next)
+                   PyValue *argument, PyValue *callable, _PyInstr *next)
 {
     _PyNativeScope_End(scope);
     if (argument != NULL) {
@@ -2123,30 +2127,24 @@ native_call_finish(_PyNativeCallPublication *state, _PyNativeScope *scope,
         value_revalidation_error("native cleanup changed the active frame");
         return -1;
     }
-    uintptr_t epoch = _Py_atomic_load_uintptr_relaxed(&state->tstate->eval_breaker) &
-                      ~_PY_EVAL_EVENTS_MASK;
-    /* As in value_operation_refresh, the status is the refresh's own. */
-    int status = 0;
-    if (state->code->_co_instrumentation_version != epoch &&
-        _Py_Instrument(state->code, state->tstate->interp) < 0) {
-        status = -1;
-    }
+    /* As in value_operation_refresh, the executing copy is fixed. */
+    assert(instrumentation_is_current(state->tstate, state->code));
     _PyCodeExec *exec = state->code->_co_exec;
-    if (state->tstate->current_frame != frame ||
-        _PyFrame_GetCode(frame) != state->code || exec == NULL ||
+    if (exec == NULL ||
         state->current_word < 0 || state->current_word >= exec->nwords ||
         state->next_word < 0 || state->next_word > exec->nwords) {
-        /* Keep a pending instrumentation or call error. */
+        /* Keep a pending call error. */
         if (!PyErr_Occurred()) {
             PyErr_SetString(PyExc_SystemError, "native cleanup changed executing words");
         }
         return -1;
     }
-    frame->ir_words = exec->words;
-    frame->ir_feedback = exec->entries;
+    assert(frame->ir_words == exec->words);
+    assert(frame->ir_feedback == exec->entries);
+    assert(next == exec->words + state->next_word);
+    (void)next;
     frame->instr_ptr = exec->words + state->current_word;
-    *next = exec->words + state->next_word;
-    return status;
+    return 0;
 }
 
 #include "generated_jit_helpers.c.h"
@@ -3214,7 +3212,7 @@ _PyEvalFramePushAndInit_Ex(PyThreadState *tstate, PyValue func,
 /* Parent inputs are never offered to a consuming binder. Copies can fail
  * and retire while the parent's actual IN_CALL homes remain owning. */
 static int
-call_transaction_push_python(_PyCallTransaction *call, _PyInstr **next,
+call_transaction_push_python(_PyCallTransaction *call, _PyInstr *next,
                              _PyInterpreterFrame **out)
 {
     PyValue small[16];
@@ -3322,14 +3320,15 @@ done:
     if (storage != small && storage != NULL) {
         PyMem_Free(storage);
     }
-    if (status == 0) {
-        _PyCallTransaction child_call = {.operation = {
-            op->tstate, child, _PyFrame_GetCode(child), 0, 0, {-1, -1}, -1}};
-        _PyInstr *entry;
-        if (call_transaction_refresh(&child_call, &entry) < 0) {
-            status = -1;
-        }
+    /* The releases above ran with the child current.  The child has not
+     * started, so it needs no refresh: its words are fixed, and its RESUME
+     * brings its instrumentation up to date, as for every frame that starts. */
+    if (status == 0 && op->tstate->current_frame != child) {
+        value_revalidation_error("value bridge changed the active frame");
+        status = -1;
     }
+    assert(status < 0 ||
+           child->ir_words == _PyFrame_GetCode(child)->_co_exec->words);
     if (child != NULL && status < 0) {
         /* The child has not entered its recursion/monitor protocol. Restore
          * the actual parent before clearing it; do not unwind it as executed. */
@@ -3352,7 +3351,7 @@ done:
 }
 
 static int
-call_transaction_invoke(_PyCallTransaction *call, _PyInstr **next,
+call_transaction_invoke(_PyCallTransaction *call, _PyInstr *next,
                         _PyInterpreterFrame **child)
 {
     *child = NULL;

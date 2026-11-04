@@ -125,7 +125,7 @@ def generate(filenames, outfile):
 #undef DISPATCH_INLINED
 #define JIT_FINISH(KIND, PHASE) do { \\
     Py_ssize_t value_raising_word = (KIND) == _PyJIT_RAISE ? this_instr - frame->ir_words : 0; \\
-    int value_failed = finish_value_bridges(tstate, frame, &next_instr, value_temps); \\
+    int value_failed = finish_value_bridges(tstate, frame, next_instr, value_temps); \\
     ctx->frame = frame; ctx->next_instr = next_instr; \\
     ctx->raising_instr = (KIND) == _PyJIT_RAISE ? frame->ir_words + value_raising_word : NULL; ctx->phase = (PHASE); \\
     if (value_failed < 0 && (KIND) != _PyJIT_RAISE) { \\
@@ -144,7 +144,7 @@ def generate(filenames, outfile):
 #define JUMP_TO_LABEL(LABEL) JIT_FINISH(_PyJIT_RAISE, JIT_PHASE_##LABEL)
 #define DISPATCH_INLINED(NEW_FRAME) do { \\
     assert((NEW_FRAME)->previous == frame); \\
-    if (finish_value_bridges(tstate, frame, &next_instr, value_temps) < 0) { \\
+    if (finish_value_bridges(tstate, frame, next_instr, value_temps) < 0) { \\
         _PyEval_FrameClearAndPop(tstate, (NEW_FRAME)); \\
         JUMP_TO_LABEL(error); \\
     } \\

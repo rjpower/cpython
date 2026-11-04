@@ -339,7 +339,7 @@ class TestIRCases(unittest.TestCase):
             res = PyValue_FromPyObjectSteal(o);
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -517,7 +517,7 @@ class TestIRCases(unittest.TestCase):
             window[0] = _PyValue_Publish(&res);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -658,7 +658,7 @@ class TestIRCases(unittest.TestCase):
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -717,7 +717,7 @@ class TestIRCases(unittest.TestCase):
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -770,7 +770,7 @@ class TestIRCases(unittest.TestCase):
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -827,7 +827,7 @@ class TestIRCases(unittest.TestCase):
             IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -866,7 +866,7 @@ class TestIRCases(unittest.TestCase):
             IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -1549,7 +1549,12 @@ class TestJitHelpers(unittest.TestCase):
         cleanup = runtime.split("native_call_finish(", 1)[1].split('#include "generated_jit_helpers.c.h"', 1)[0]
         self.assertLess(cleanup.index("_PyNativeScope_End"), cleanup.index("PyValue_CLEAR(*argument)"))
         self.assertLess(cleanup.index("PyValue_CLEAR(*argument)"), cleanup.index("PyValue_CLEAR(*callable)"))
-        self.assertLess(cleanup.index("PyValue_CLEAR(*callable)"), cleanup.index("_Py_Instrument"))
+        # The cleanup can run Python, and setting events there re-instruments
+        # every executing code object; the debug check of the version comes
+        # after the cleanup, and nothing instruments here
+        self.assertLess(cleanup.index("PyValue_CLEAR(*callable)"),
+                        cleanup.index("instrumentation_is_current"))
+        self.assertNotIn("_Py_Instrument(", cleanup)
 
     def test_final_local_retirement_follows_all_publications(self):
         root = Path(__file__).resolve().parents[2]

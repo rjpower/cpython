@@ -4160,9 +4160,12 @@ dummy_func(
             if (IR_HANDLER(*this_instr) != CALL_JIT_WARM) {
                 _PyFbHeader *feedback = FB_COUNTER();
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
+                    /* The specialisation is an effect of the call
+                     * transaction, which then finishes the call generically
+                     * on this word: DISPATCH_SAME_OPARG() goes to its
+                     * fallback, and next_instr stays the next word. */
                     IR_BEGIN_CALL_EFFECTS();
-                    _Py_Specialize_Call(callable, self_or_null, next_instr, oparg + !PyValue_IsNull(self_or_null));
+                    _Py_Specialize_Call(callable, self_or_null, this_instr, oparg + !PyValue_IsNull(self_or_null));
                     IR_REFRESH_CALL();
                     DISPATCH_SAME_OPARG();
                 }
@@ -4600,7 +4603,7 @@ dummy_func(
             }
             if (status < 0) {
                 _PyNativeResult_Abort(&scope.result, native_call_publish_pc, &publication);
-                (void)native_call_finish(&publication, &scope, NULL, NULL, &next_instr);
+                (void)native_call_finish(&publication, &scope, NULL, NULL, next_instr);
                 ERROR_NO_POP();
             }
             PyValue c = callable;
@@ -4610,7 +4613,7 @@ dummy_func(
                                     native_call_publish_result, &publication);
             res = pending;
             SYNC_SP();
-            int failed = native_call_finish(&publication, &scope, &s, &c, &next_instr);
+            int failed = native_call_finish(&publication, &scope, &s, &c, next_instr);
             if (failed < 0) {
                 ERROR_NO_POP();
             }
@@ -5114,9 +5117,9 @@ dummy_func(
             #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
             if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                next_instr = this_instr;
+                /* As in _SPECIALIZE_CALL */
                 IR_BEGIN_CALL_EFFECTS();
-                _Py_Specialize_CallKw(callable, next_instr, oparg + !PyValue_IsNull(self_or_null));
+                _Py_Specialize_CallKw(callable, this_instr, oparg + !PyValue_IsNull(self_or_null));
                 IR_REFRESH_CALL();
                 DISPATCH_SAME_OPARG();
             }
@@ -5177,9 +5180,9 @@ dummy_func(
         #if ENABLE_SPECIALIZATION
             _PyFbHeader *feedback = FB_COUNTER();
             if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                next_instr = this_instr;
+                /* As in _SPECIALIZE_CALL */
                 IR_BEGIN_CALL_EFFECTS();
-                _Py_Specialize_CallFunctionEx(func, next_instr);
+                _Py_Specialize_CallFunctionEx(func, this_instr);
                 IR_REFRESH_CALL();
                 DISPATCH_SAME_OPARG();
             }

@@ -1633,7 +1633,7 @@ class IREmitter(Emitter):
         self.emit("}\n")
         self.emit("if (retire_needed) {\n")
         second_ptr = "NULL" if second is None else "&" + second.text
-        self.emit(f"int retire_failed = retire_published_values(tstate, frame, &next_instr, {self.temps}, &{first.text}, {second_ptr}, {failure_result});\n")
+        self.emit(f"int retire_failed = retire_published_values(tstate, frame, next_instr, {self.temps}, &{first.text}, {second_ptr}, {failure_result});\n")
         self.emit("if (retire_failed < 0) { JUMP_TO_LABEL(error); }\n")
         self.emit("this_instr = frame->instr_ptr;\n")
         if not self.helper:
@@ -1688,7 +1688,7 @@ class IREmitter(Emitter):
         assert next(tkn_iter).kind == "SEMI"
         state, result, self_value, receiver, method = names
         self.out.start_line()
-        self.emit(f"if (value_attribute_complete(&{state}, &next_instr, {self.temps}, &{result}, &{self_value}, &{receiver}, {method}) < 0) {{\n")
+        self.emit(f"if (value_attribute_complete(&{state}, next_instr, {self.temps}, &{result}, &{self_value}, &{receiver}, {method}) < 0) {{\n")
         self.reader_error()
         self.emit("}\n")
         self.reader_reload()
@@ -1747,7 +1747,7 @@ class IREmitter(Emitter):
         displaced, with the input boxes, then revalidate: the release can
         run __del__ or a weakref callback, which can run any Python."""
         self.emit("if (!PyValue_IsNull(ir_displaced) &&\n")
-        self.emit("    finish_displaced_local(tstate, frame, &next_instr, "
+        self.emit("    finish_displaced_local(tstate, frame, next_instr, "
                   f"{self.temps}, ir_displaced) < 0) {{\n")
         if not self.helper:
             self.emit("next_instr = frame->instr_ptr + 1;\n")
@@ -1779,7 +1779,7 @@ class IREmitter(Emitter):
         }[tkn.text]
         storage.flush(self.out)
         self.out.start_line()
-        self.emit(f"if ({helper}(&call, &next_instr) < 0) {{\n")
+        self.emit(f"if ({helper}(&call, next_instr) < 0) {{\n")
         self.reader_error()
         self.emit("}\n")
         self.call_reload(inst)
@@ -1798,7 +1798,7 @@ class IREmitter(Emitter):
         assert next(tkn_iter).kind == "RPAREN"
         assert next(tkn_iter).kind == "SEMI"
         self.out.start_line()
-        self.emit("if (call_transaction_refresh(&call, &next_instr) < 0) {\n")
+        self.emit("if (call_transaction_refresh(&call, next_instr) < 0) {\n")
         self.reader_error()
         self.emit("}\n")
         self.call_reload(inst)
@@ -1808,7 +1808,7 @@ class IREmitter(Emitter):
         if self.has_record:
             self.emit("assert(value_temps->count == 0);\n")
         self.emit("_PyInterpreterFrame *call_child;\n")
-        self.emit("if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {\n")
+        self.emit("if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {\n")
         self.reader_error()
         self.emit("}\n")
         self.emit("if (call_child != NULL) {\n")
@@ -1852,7 +1852,7 @@ class IREmitter(Emitter):
         # The DSL output is deliberately undefined here. Failed providers
         # restored their inputs; no NULL result may overwrite those homes.
         self.out.start_line()
-        self.emit(f"if (value_reader_complete(&{state}, &next_instr, {self.temps}, &{result}, &{first}, &{second}) < 0) {{\n")
+        self.emit(f"if (value_reader_complete(&{state}, next_instr, {self.temps}, &{result}, &{first}, &{second}) < 0) {{\n")
         self.reader_error()
         self.emit("}\n")
         self.reader_reload()
@@ -1866,7 +1866,7 @@ class IREmitter(Emitter):
         assert next(tkn_iter).kind == "SEMI"
         # Never flush the undefined result on this edge: its destination
         # may be one of the just-restored input temporary homes.
-        self.emit(f"(void)value_operation_finish(&{state.text}, &next_instr, {self.temps});\n")
+        self.emit(f"(void)value_operation_finish(&{state.text}, next_instr, {self.temps});\n")
         self.reader_error()
         return False
 
@@ -1879,7 +1879,7 @@ class IREmitter(Emitter):
         assert next(tkn_iter).kind == "SEMI"
         storage.flush(self.out)
         self.emit("{\n")
-        self.emit(f"int operation_failed = value_operation_finish(&{state.text}, &next_instr, {self.temps});\n")
+        self.emit(f"int operation_failed = value_operation_finish(&{state.text}, next_instr, {self.temps});\n")
         self.emit("if (operation_failed < 0) {\n")
         if self.helper:
             # The current word was refreshed without decoding an old pointer.
@@ -2489,7 +2489,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         out.emit("if (JIT_CALL_NEEDS_PREPARE(this_instr)) {\n")
         out.emit("call.effects = 1;\n")
         out.emit("int jit_prepare = JIT_PREPARE_CALL(this_instr, window[0]);\n")
-        out.emit("if (call_transaction_refresh(&call, &next_instr) < 0 || jit_prepare < 0) {\n")
+        out.emit("if (call_transaction_refresh(&call, next_instr) < 0 || jit_prepare < 0) {\n")
         emitter.reader_error()
         out.emit("}\n")
         emitter.call_reload(inst)

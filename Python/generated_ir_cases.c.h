@@ -75,10 +75,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -88,7 +88,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -153,7 +153,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -237,7 +237,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -333,7 +333,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -398,10 +398,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -411,7 +411,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -487,7 +487,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -570,7 +570,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -635,10 +635,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -648,7 +648,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -741,7 +741,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -806,10 +806,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -819,7 +819,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -911,7 +911,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -976,10 +976,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -989,7 +989,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -1054,10 +1054,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -1067,7 +1067,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -1132,10 +1132,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -1145,7 +1145,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -1210,10 +1210,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -1223,7 +1223,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -1288,10 +1288,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -1301,7 +1301,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -1366,10 +1366,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -1379,7 +1379,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -1444,10 +1444,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -1457,7 +1457,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -1522,10 +1522,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -1535,7 +1535,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -1600,10 +1600,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -1613,7 +1613,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -1678,10 +1678,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -1691,7 +1691,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -1756,10 +1756,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -1769,7 +1769,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -1834,10 +1834,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -1847,7 +1847,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -1912,10 +1912,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -1925,7 +1925,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -2020,7 +2020,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -2085,10 +2085,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -2098,7 +2098,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -2163,10 +2163,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -2176,7 +2176,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -2241,7 +2241,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -2325,7 +2325,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -2390,10 +2390,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -2403,7 +2403,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -2479,7 +2479,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -2544,10 +2544,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -2557,7 +2557,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -2622,10 +2622,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -2635,7 +2635,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -2726,7 +2726,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -2791,10 +2791,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -2804,7 +2804,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -2888,7 +2888,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -2953,10 +2953,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -2966,7 +2966,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -3033,10 +3033,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_dict, &held_sub);
                     value_operation_close3(&held_sub, &held_dict, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_sub, &held_dict) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_sub, &held_dict) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -3046,7 +3046,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -3143,7 +3143,7 @@
                 LLTRACE_RESUME_FRAME();
             }
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -3236,7 +3236,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -3333,7 +3333,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -3437,7 +3437,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -3540,7 +3540,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -3643,7 +3643,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -3708,10 +3708,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -3721,7 +3721,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -3786,7 +3786,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -3870,7 +3870,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -3941,7 +3941,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -4006,10 +4006,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -4019,7 +4019,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -4084,10 +4084,10 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -4097,7 +4097,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -4173,7 +4173,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -4224,7 +4224,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -4304,7 +4304,7 @@
             window[0] = _PyValue_Publish(&interpolation);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -4342,7 +4342,7 @@
             window[0] = _PyValue_Publish(&list);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -4378,7 +4378,7 @@
             IR_CLEAR_SLOTS(&window[1], -1 + oparg*2);
             window[0] = _PyValue_Publish(&map);
             {
-                int operation_failed = value_operation_finish(&operation, &next_instr, NULL);
+                int operation_failed = value_operation_finish(&operation, next_instr, NULL);
                 if (operation_failed < 0) {
                     JUMP_TO_LABEL(error);
                 }
@@ -4392,7 +4392,7 @@
             }
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -4455,7 +4455,7 @@
             window[0] = _PyValue_Publish(&set);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -4516,7 +4516,7 @@
             window[0] = _PyValue_Publish(&slice);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -4555,7 +4555,7 @@
             window[0] = _PyValue_Publish(&str);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -4622,7 +4622,7 @@
             template = PyValue_FromPyObjectSteal(template_o);
             IR_STORE_DST(IR_FIELD_A(this_instr), template);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -4660,7 +4660,7 @@
             window[0] = _PyValue_Publish(&tup);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -4711,7 +4711,7 @@
             if (JIT_CALL_NEEDS_PREPARE(this_instr)) {
                 call.effects = 1;
                 int jit_prepare = JIT_PREPARE_CALL(this_instr, window[0]);
-                if (call_transaction_refresh(&call, &next_instr) < 0 || jit_prepare < 0) {
+                if (call_transaction_refresh(&call, next_instr) < 0 || jit_prepare < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -4730,10 +4730,9 @@
                 if (IR_HANDLER(*this_instr) != CALL_JIT_WARM) {
                     _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                     if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                        next_instr = this_instr;
                         call.effects = 1;
-                        _Py_Specialize_Call(callable, self_or_null, next_instr, oparg + !PyValue_IsNull(self_or_null));
-                        if (call_transaction_refresh(&call, &next_instr) < 0) {
+                        _Py_Specialize_Call(callable, self_or_null, this_instr, oparg + !PyValue_IsNull(self_or_null));
+                        if (call_transaction_refresh(&call, next_instr) < 0) {
                             JUMP_TO_LABEL(error);
                         }
                         this_instr = frame->instr_ptr;
@@ -4751,7 +4750,7 @@
             }
             // _MAYBE_EXPAND_METHOD
             {
-                if (call_transaction_expand_method(&call, &next_instr) < 0) {
+                if (call_transaction_expand_method(&call, next_instr) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -4765,7 +4764,7 @@
             // _DO_CALL
             {
                 _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 if (call_child != NULL) {
@@ -4776,7 +4775,7 @@
             }
             call_transaction_fallback_CALL:;
             _PyInterpreterFrame *call_child;
-            if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+            if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                 JUMP_TO_LABEL(error);
             }
             if (call_child != NULL) {
@@ -4925,7 +4924,7 @@
                 LLTRACE_RESUME_FRAME();
             }
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -5096,7 +5095,7 @@
                 LLTRACE_RESUME_FRAME();
             }
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -5178,7 +5177,7 @@
             // _EXPAND_METHOD
             {
                 self_or_null = null;
-                if (call_transaction_expand_method(&call, &next_instr) < 0) {
+                if (call_transaction_expand_method(&call, next_instr) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -5204,7 +5203,7 @@
             // _PY_FRAME_GENERAL
             {
                 _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 if (call_child != NULL) {
@@ -5215,7 +5214,7 @@
             }
             call_transaction_fallback_CALL_BOUND_METHOD_GENERAL:;
             _PyInterpreterFrame *call_child;
-            if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+            if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                 JUMP_TO_LABEL(error);
             }
             if (call_child != NULL) {
@@ -5313,7 +5312,7 @@
             }
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -5409,7 +5408,7 @@
             }
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -5501,7 +5500,7 @@
             }
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -5590,7 +5589,7 @@
                 }
                 if (status < 0) {
                     _PyNativeResult_Abort(&scope.result, native_call_publish_pc, &publication);
-                    (void)native_call_finish(&publication, &scope, NULL, NULL, &next_instr);
+                    (void)native_call_finish(&publication, &scope, NULL, NULL, next_instr);
                     JUMP_TO_LABEL(error);
                 }
                 PyValue c = callable;
@@ -5600,7 +5599,7 @@
                                     native_call_publish_result, &publication);
                 res = pending;
                 window[0] = _PyValue_Publish(&res);
-                int failed = native_call_finish(&publication, &scope, &s, &c, &next_instr);
+                int failed = native_call_finish(&publication, &scope, &s, &c, next_instr);
                 if (failed < 0) {
                     JUMP_TO_LABEL(error);
                 }
@@ -5618,7 +5617,7 @@
             }
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -5669,7 +5668,7 @@
                 kwargs = window[3];
                 callargs = window[2];
                 func = func_st;
-                if (call_transaction_prepare_tuple(&call, &next_instr) < 0) {
+                if (call_transaction_prepare_tuple(&call, next_instr) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -5700,7 +5699,7 @@
             // _CALL_FUNCTION_EX_NON_PY_GENERAL
             {
                 _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 if (call_child != NULL) {
@@ -5711,7 +5710,7 @@
             }
             call_transaction_fallback_CALL_EX_NON_PY_GENERAL:;
             _PyInterpreterFrame *call_child;
-            if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+            if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                 JUMP_TO_LABEL(error);
             }
             if (call_child != NULL) {
@@ -5780,7 +5779,7 @@
                 kwargs = window[3];
                 callargs = window[2];
                 func = func_st;
-                if (call_transaction_prepare_tuple(&call, &next_instr) < 0) {
+                if (call_transaction_prepare_tuple(&call, next_instr) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -5817,7 +5816,7 @@
             // _PY_FRAME_EX
             {
                 _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 if (call_child != NULL) {
@@ -5828,7 +5827,7 @@
             }
             call_transaction_fallback_CALL_EX_PY:;
             _PyInterpreterFrame *call_child;
-            if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+            if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                 JUMP_TO_LABEL(error);
             }
             if (call_child != NULL) {
@@ -5868,10 +5867,9 @@
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
                     call.effects = 1;
-                    _Py_Specialize_CallFunctionEx(func, next_instr);
-                    if (call_transaction_refresh(&call, &next_instr) < 0) {
+                    _Py_Specialize_CallFunctionEx(func, this_instr);
+                    if (call_transaction_refresh(&call, next_instr) < 0) {
                         JUMP_TO_LABEL(error);
                     }
                     this_instr = frame->instr_ptr;
@@ -5890,7 +5888,7 @@
             {
                 kwargs = window[3];
                 callargs = window[2];
-                if (call_transaction_prepare_tuple(&call, &next_instr) < 0) {
+                if (call_transaction_prepare_tuple(&call, next_instr) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -5905,7 +5903,7 @@
             // _DO_CALL_FUNCTION_EX
             {
                 _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 if (call_child != NULL) {
@@ -5916,7 +5914,7 @@
             }
             call_transaction_fallback_CALL_FUNCTION_EX:;
             _PyInterpreterFrame *call_child;
-            if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+            if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                 JUMP_TO_LABEL(error);
             }
             if (call_child != NULL) {
@@ -5982,7 +5980,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -6072,7 +6070,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -6157,7 +6155,7 @@
             window[0] = _PyValue_Publish(&res);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -6187,7 +6185,7 @@
             if (JIT_CALL_NEEDS_PREPARE(this_instr)) {
                 call.effects = 1;
                 int jit_prepare = JIT_PREPARE_CALL(this_instr, window[0]);
-                if (call_transaction_refresh(&call, &next_instr) < 0 || jit_prepare < 0) {
+                if (call_transaction_refresh(&call, next_instr) < 0 || jit_prepare < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -6201,7 +6199,7 @@
             {
                 self_or_null = window[1];
                 callable = window[0];
-                if (call_transaction_expand_method(&call, &next_instr) < 0) {
+                if (call_transaction_expand_method(&call, next_instr) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -6214,7 +6212,7 @@
             // _DO_CALL
             {
                 _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 if (call_child != NULL) {
@@ -6251,7 +6249,7 @@
             if (JIT_CALL_NEEDS_PREPARE(this_instr)) {
                 call.effects = 1;
                 int jit_prepare = JIT_PREPARE_CALL(this_instr, window[0]);
-                if (call_transaction_refresh(&call, &next_instr) < 0 || jit_prepare < 0) {
+                if (call_transaction_refresh(&call, next_instr) < 0 || jit_prepare < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -6269,10 +6267,9 @@
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
                     call.effects = 1;
-                    _Py_Specialize_CallKw(callable, next_instr, oparg + !PyValue_IsNull(self_or_null));
-                    if (call_transaction_refresh(&call, &next_instr) < 0) {
+                    _Py_Specialize_CallKw(callable, this_instr, oparg + !PyValue_IsNull(self_or_null));
+                    if (call_transaction_refresh(&call, next_instr) < 0) {
                         JUMP_TO_LABEL(error);
                     }
                     this_instr = frame->instr_ptr;
@@ -6289,7 +6286,7 @@
             }
             // _MAYBE_EXPAND_METHOD_KW
             {
-                if (call_transaction_expand_method(&call, &next_instr) < 0) {
+                if (call_transaction_expand_method(&call, next_instr) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -6303,7 +6300,7 @@
             // _DO_CALL_KW
             {
                 _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 if (call_child != NULL) {
@@ -6314,7 +6311,7 @@
             }
             call_transaction_fallback_CALL_KW:;
             _PyInterpreterFrame *call_child;
-            if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+            if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                 JUMP_TO_LABEL(error);
             }
             if (call_child != NULL) {
@@ -6399,7 +6396,7 @@
             // _EXPAND_METHOD_KW
             {
                 self_or_null = null;
-                if (call_transaction_expand_method(&call, &next_instr) < 0) {
+                if (call_transaction_expand_method(&call, next_instr) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -6416,7 +6413,7 @@
             // _PY_FRAME_KW
             {
                 _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 if (call_child != NULL) {
@@ -6427,7 +6424,7 @@
             }
             call_transaction_fallback_CALL_KW_BOUND_METHOD:;
             _PyInterpreterFrame *call_child;
-            if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+            if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                 JUMP_TO_LABEL(error);
             }
             if (call_child != NULL) {
@@ -6480,7 +6477,7 @@
             // _CALL_KW_NON_PY
             {
                 _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 if (call_child != NULL) {
@@ -6491,7 +6488,7 @@
             }
             call_transaction_fallback_CALL_KW_NON_PY:;
             _PyInterpreterFrame *call_child;
-            if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+            if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                 JUMP_TO_LABEL(error);
             }
             if (call_child != NULL) {
@@ -6570,7 +6567,7 @@
             // _PY_FRAME_KW
             {
                 _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 if (call_child != NULL) {
@@ -6581,7 +6578,7 @@
             }
             call_transaction_fallback_CALL_KW_PY:;
             _PyInterpreterFrame *call_child;
-            if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+            if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                 JUMP_TO_LABEL(error);
             }
             if (call_child != NULL) {
@@ -6688,7 +6685,7 @@
             }
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -6810,7 +6807,7 @@
             }
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -6935,7 +6932,7 @@
             }
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -7061,7 +7058,7 @@
             }
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -7195,7 +7192,7 @@
             }
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -7342,7 +7339,7 @@
             }
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -7392,7 +7389,7 @@
             // _CALL_NON_PY_GENERAL
             {
                 _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 if (call_child != NULL) {
@@ -7403,7 +7400,7 @@
             }
             call_transaction_fallback_CALL_NON_PY_GENERAL:;
             _PyInterpreterFrame *call_child;
-            if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+            if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                 JUMP_TO_LABEL(error);
             }
             if (call_child != NULL) {
@@ -7544,7 +7541,7 @@
                 LLTRACE_RESUME_FRAME();
             }
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -7620,7 +7617,7 @@
             // _PY_FRAME_GENERAL
             {
                 _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 if (call_child != NULL) {
@@ -7631,7 +7628,7 @@
             }
             call_transaction_fallback_CALL_PY_GENERAL:;
             _PyInterpreterFrame *call_child;
-            if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+            if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                 JUMP_TO_LABEL(error);
             }
             if (call_child != NULL) {
@@ -7734,7 +7731,7 @@
             }
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -7834,7 +7831,7 @@
             }
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -7909,7 +7906,7 @@
             }
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -7998,7 +7995,7 @@
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), rest);
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr) + 1), match);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -8063,7 +8060,7 @@
             b = res ? PyValue_True : PyValue_False;
             IR_STORE_DST(IR_FIELD_A(this_instr), b);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -8152,7 +8149,7 @@
             window[1] = _PyValue_Publish(&null_out);
             window[2] = _PyValue_Publish(&value);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -8250,7 +8247,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -8329,7 +8326,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -8408,7 +8405,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -8505,7 +8502,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -8605,7 +8602,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -8709,7 +8706,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), b);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -8808,7 +8805,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), b);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -8911,7 +8908,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), b);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -9010,7 +9007,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), b);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -9064,7 +9061,7 @@
             result = PyValue_FromPyObjectSteal(result_o);
             IR_STORE_DST(IR_FIELD_A(this_instr), result);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -9670,7 +9667,7 @@
             res = PyValue_FromPyObjectSteal(res_o);
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -9728,7 +9725,7 @@
                     JUMPBY(oparg + 1);
                     window[1] = _PyValue_Publish(&null_or_index);
                     if (!PyValue_IsNull(ir_displaced) &&
-                        finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                        finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                         next_instr = frame->instr_ptr + 1;
                         JUMP_TO_LABEL(error);
                     }
@@ -9740,7 +9737,7 @@
             window[2] = _PyValue_Publish(&next);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[2]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -9820,7 +9817,7 @@
                 LLTRACE_RESUME_FRAME();
             }
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -9882,7 +9879,7 @@
                     JUMPBY(oparg + 1);
                     window[1] = _PyValue_Publish(&null_or_index);
                     if (!PyValue_IsNull(ir_displaced) &&
-                        finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                        finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                         next_instr = frame->instr_ptr + 1;
                         JUMP_TO_LABEL(error);
                     }
@@ -9901,7 +9898,7 @@
             window[2] = _PyValue_Publish(&next);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[2]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -9958,7 +9955,7 @@
                 if (r->len <= 0) {
                     JUMPBY(oparg + 1);
                     if (!PyValue_IsNull(ir_displaced) &&
-                        finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                        finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                         next_instr = frame->instr_ptr + 1;
                         JUMP_TO_LABEL(error);
                     }
@@ -9989,7 +9986,7 @@
             window[2] = _PyValue_Publish(&next);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[2]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -10042,7 +10039,7 @@
                     JUMPBY(oparg + 1);
                     window[1] = _PyValue_Publish(&null_or_index);
                     if (!PyValue_IsNull(ir_displaced) &&
-                        finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                        finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                         next_instr = frame->instr_ptr + 1;
                         JUMP_TO_LABEL(error);
                     }
@@ -10062,7 +10059,7 @@
             window[2] = _PyValue_Publish(&next);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[2]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -10114,7 +10111,7 @@
                     }
                     JUMPBY(oparg + 1);
                     if (!PyValue_IsNull(ir_displaced) &&
-                        finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                        finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                         next_instr = frame->instr_ptr + 1;
                         JUMP_TO_LABEL(error);
                     }
@@ -10127,7 +10124,7 @@
             window[2] = _PyValue_Publish(&next);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[2]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -10201,7 +10198,7 @@
             iter = PyValue_FromPyObjectSteal(iter_o);
             IR_STORE_DST(IR_FIELD_A(this_instr), iter);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -10246,7 +10243,7 @@
             awaitable = PyValue_FromPyObjectSteal(awaitable_o);
             IR_STORE_DST(IR_FIELD_A(this_instr), awaitable);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -10297,7 +10294,7 @@
             iter = PyValue_FromPyObjectSteal(iter_o);
             IR_STORE_DST(IR_FIELD_A(this_instr), iter);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -10472,7 +10469,7 @@
             len = PyValue_FromPyObjectSteal(len_o);
             IR_STORE_DST(IR_FIELD_A(this_instr), len);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -10528,7 +10525,7 @@
             res = PyValue_FromPyObjectSteal(res_o);
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -10613,7 +10610,7 @@
             window[0] = _PyValue_Publish(&res);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -10649,7 +10646,7 @@
             {
                 self_or_null = window[1];
                 callable = window[0];
-                if (call_transaction_expand_method(&call, &next_instr) < 0) {
+                if (call_transaction_expand_method(&call, next_instr) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -10666,7 +10663,7 @@
                 func = callable;
                 window[0] = _PyValue_Publish(&func);
                 window[1] = _PyValue_Publish(&maybe_self);
-                if (call_transaction_monitor(&call, &next_instr) < 0) {
+                if (call_transaction_monitor(&call, next_instr) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -10680,7 +10677,7 @@
             // _DO_CALL
             {
                 _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 if (call_child != NULL) {
@@ -10717,7 +10714,7 @@
                 kwargs = window[3];
                 callargs = window[2];
                 func = window[0];
-                if (call_transaction_prepare_tuple(&call, &next_instr) < 0) {
+                if (call_transaction_prepare_tuple(&call, next_instr) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -10731,7 +10728,7 @@
             // _DO_CALL_FUNCTION_EX
             {
                 _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 if (call_child != NULL) {
@@ -10769,7 +10766,7 @@
             {
                 self_or_null = window[1];
                 callable = window[0];
-                if (call_transaction_expand_method(&call, &next_instr) < 0) {
+                if (call_transaction_expand_method(&call, next_instr) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -10784,7 +10781,7 @@
                 args = &window[2];
                 window[0] = _PyValue_Publish(&callable);
                 window[1] = _PyValue_Publish(&self_or_null);
-                if (call_transaction_monitor(&call, &next_instr) < 0) {
+                if (call_transaction_monitor(&call, next_instr) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -10798,7 +10795,7 @@
             // _DO_CALL_KW
             {
                 _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 if (call_child != NULL) {
@@ -11023,7 +11020,7 @@
                 JUMPBY(oparg + 1);
                 window[1] = _PyValue_Publish(&null_or_index);
                 if (!PyValue_IsNull(ir_displaced) &&
-                    finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                    finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                     next_instr = frame->instr_ptr + 1;
                     JUMP_TO_LABEL(error);
                 }
@@ -11035,7 +11032,7 @@
             window[2] = _PyValue_Publish(&next);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[2]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -11382,7 +11379,7 @@
             window[0] = _PyValue_Publish(&attr);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -11535,7 +11532,7 @@
             window[0] = _PyValue_Publish(&attr);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -12085,7 +12082,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), b);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -12433,10 +12430,10 @@
                     drop_failed_value(&pending);
                     drop_failed_value(&pending_self);
                     value_operation_close3(&receiver, NULL, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_attribute_complete(&operation, &next_instr, value_temps, &pending, &pending_self, &receiver, method) < 0) {
+                if (value_attribute_complete(&operation, next_instr, value_temps, &pending, &pending_self, &receiver, method) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -12448,7 +12445,7 @@
                 IR_STORE_DST(IR_FIELD_A(this_instr), attr);
             }
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -12519,7 +12516,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), attr);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -12602,7 +12599,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), attr);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -12707,7 +12704,7 @@
                 LLTRACE_RESUME_FRAME();
             }
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -12790,7 +12787,7 @@
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
                     if (retire_needed) {
-                        int retire_failed = retire_published_values(tstate, frame, &next_instr, NULL, &receiver, NULL, (IR_IS_LOCAL(IR_FIELD_A(this_instr)) ? &attr : NULL));
+                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, &receiver, NULL, (IR_IS_LOCAL(IR_FIELD_A(this_instr)) ? &attr : NULL));
                         if (retire_failed < 0) { JUMP_TO_LABEL(error); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -12807,7 +12804,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), attr);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -12881,7 +12878,7 @@
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), attr);
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr) + 1), self);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -12944,7 +12941,7 @@
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), attr);
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr) + 1), self);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -13018,7 +13015,7 @@
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), attr);
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr) + 1), self);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -13100,7 +13097,7 @@
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
                     if (retire_needed) {
-                        int retire_failed = retire_published_values(tstate, frame, &next_instr, NULL, &receiver, NULL, (IR_IS_LOCAL(IR_FIELD_A(this_instr)) ? &attr : NULL));
+                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, &receiver, NULL, (IR_IS_LOCAL(IR_FIELD_A(this_instr)) ? &attr : NULL));
                         if (retire_failed < 0) { JUMP_TO_LABEL(error); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -13117,7 +13114,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), attr);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -13184,10 +13181,10 @@
                     drop_failed_value(&pending);
                     drop_failed_value(&pending_self);
                     value_operation_close3(&receiver, NULL, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     JUMP_TO_LABEL(error);
                 }
-                if (value_attribute_complete(&operation, &next_instr, value_temps, &pending, &pending_self, &receiver, method) < 0) {
+                if (value_attribute_complete(&operation, next_instr, value_temps, &pending, &pending_self, &receiver, method) < 0) {
                     JUMP_TO_LABEL(error);
                 }
                 this_instr = frame->instr_ptr;
@@ -13199,7 +13196,7 @@
                 IR_STORE_DST(IR_FIELD_A(this_instr), attr);
             }
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -13258,7 +13255,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), attr);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -13328,7 +13325,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), attr);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -13428,7 +13425,7 @@
                 LLTRACE_RESUME_FRAME();
             }
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -13503,7 +13500,7 @@
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
                     if (retire_needed) {
-                        int retire_failed = retire_published_values(tstate, frame, &next_instr, NULL, &receiver, NULL, (IR_IS_LOCAL(IR_FIELD_A(this_instr)) ? &attr : NULL));
+                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, &receiver, NULL, (IR_IS_LOCAL(IR_FIELD_A(this_instr)) ? &attr : NULL));
                         if (retire_failed < 0) { JUMP_TO_LABEL(error); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -13520,7 +13517,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), attr);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -13591,7 +13588,7 @@
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
                     if (retire_needed) {
-                        int retire_failed = retire_published_values(tstate, frame, &next_instr, NULL, &receiver, NULL, (IR_IS_LOCAL(IR_FIELD_A(this_instr)) ? &attr : NULL));
+                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, &receiver, NULL, (IR_IS_LOCAL(IR_FIELD_A(this_instr)) ? &attr : NULL));
                         if (retire_failed < 0) { JUMP_TO_LABEL(error); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -13608,7 +13605,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), attr);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -13725,7 +13722,7 @@
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
                     if (retire_needed) {
-                        int retire_failed = retire_published_values(tstate, frame, &next_instr, NULL, &receiver, NULL, (IR_IS_LOCAL(IR_FIELD_A(this_instr)) ? &attr : NULL));
+                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, &receiver, NULL, (IR_IS_LOCAL(IR_FIELD_A(this_instr)) ? &attr : NULL));
                         if (retire_failed < 0) { JUMP_TO_LABEL(error); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -13742,7 +13739,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), attr);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -13778,7 +13775,7 @@
             bc = PyValue_FromPyObjectSteal(bc_o);
             IR_STORE_DST(IR_FIELD_A(this_instr), bc);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -13807,7 +13804,7 @@
             value = PyValue_DUP(tstate->interp->common_consts[oparg]);
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -13836,7 +13833,7 @@
             value = PyValue_NewRef(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -13865,7 +13862,7 @@
             assert(PyValue_IsInlineFloat(value));
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -13894,7 +13891,7 @@
             assert(PyValue_IsInlineInt(value));
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -13929,7 +13926,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -13958,7 +13955,7 @@
             value = PyValue_DUP(GETLOCAL(oparg));
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -13987,7 +13984,7 @@
             GETLOCAL(oparg) = PyValue_NULL;
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -14016,7 +14013,7 @@
             value = PyValue_BorrowAt(&GETLOCAL(oparg));
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -14050,7 +14047,7 @@
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), value1);
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr) + 1), value2);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -14086,7 +14083,7 @@
             value = PyValue_DUP(value_s);
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -14120,7 +14117,7 @@
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), value1);
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr) + 1), value2);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -14199,7 +14196,7 @@
             value = selected;
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -14267,7 +14264,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), v);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -14314,7 +14311,7 @@
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 _PyEval_LoadGlobalValue(GLOBALS(), BUILTINS(), name, res);
                 {
-                    int operation_failed = value_operation_finish(&operation, &next_instr, NULL);
+                    int operation_failed = value_operation_finish(&operation, next_instr, NULL);
                     if (operation_failed < 0) {
                         JUMP_TO_LABEL(error);
                     }
@@ -14514,7 +14511,7 @@
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 _PyEval_LoadGlobalValue(GLOBALS(), BUILTINS(), name, res);
                 {
-                    int operation_failed = value_operation_finish(&operation, &next_instr, NULL);
+                    int operation_failed = value_operation_finish(&operation, next_instr, NULL);
                     if (operation_failed < 0) {
                         JUMP_TO_LABEL(error);
                     }
@@ -14561,7 +14558,7 @@
             locals = PyValue_FromPyObjectNew(l);
             IR_STORE_DST(IR_FIELD_A(this_instr), locals);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -14594,7 +14591,7 @@
             v = PyValue_FromPyObjectSteal(v_o);
             IR_STORE_DST(IR_FIELD_A(this_instr), v);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -14624,7 +14621,7 @@
             value = PyValue_FromInt32((int32_t)oparg);
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -14656,7 +14653,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -14880,7 +14877,7 @@
             window[0] = _PyValue_Publish(&attr);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -14965,7 +14962,7 @@
             window[0] = _PyValue_Publish(&attr_st);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -15080,7 +15077,7 @@
             window[0] = _PyValue_Publish(&attr);
             window[1] = _PyValue_Publish(&self_or_null);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -15248,7 +15245,7 @@
             window[0] = _PyValue_Publish(&attr);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -15338,7 +15335,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), func);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -15520,7 +15517,7 @@
             }
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -15577,7 +15574,7 @@
             values_or_none = PyValue_FromPyObjectSteal(values_or_none_o);
             IR_STORE_DST(IR_FIELD_A(this_instr), values_or_none);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -15606,7 +15603,7 @@
             res = match ? PyValue_True : PyValue_False;
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -15635,7 +15632,7 @@
             res = match ? PyValue_True : PyValue_False;
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -16762,7 +16759,7 @@
             window[0] = _PyValue_Publish(&prev_exc);
             window[1] = _PyValue_Publish(&new_exc);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -16788,7 +16785,7 @@
             res = PyValue_NULL;
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -17719,7 +17716,7 @@
                 }
                 value_operation_close3(&receiver, &held_value, NULL);
                 {
-                    int operation_failed = value_operation_finish(&operation, &next_instr, value_temps);
+                    int operation_failed = value_operation_finish(&operation, next_instr, value_temps);
                     if (operation_failed < 0) {
                         JUMP_TO_LABEL(error);
                     }
@@ -17846,7 +17843,7 @@
                         retire_needed = _PyValue_MayDealloc(receiver);
                     }
                     if (retire_needed) {
-                        int retire_failed = retire_published_values(tstate, frame, &next_instr, NULL, &old_value, &receiver, NULL);
+                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, &old_value, &receiver, NULL);
                         if (retire_failed < 0) { JUMP_TO_LABEL(error); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -17919,7 +17916,7 @@
                 }
                 value_operation_close3(&receiver, &held_value, NULL);
                 {
-                    int operation_failed = value_operation_finish(&operation, &next_instr, value_temps);
+                    int operation_failed = value_operation_finish(&operation, next_instr, value_temps);
                     if (operation_failed < 0) {
                         JUMP_TO_LABEL(error);
                     }
@@ -17999,7 +17996,7 @@
                         retire_needed = _PyValue_MayDealloc(receiver);
                     }
                     if (retire_needed) {
-                        int retire_failed = retire_published_values(tstate, frame, &next_instr, NULL, &old_value, &receiver, NULL);
+                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, &old_value, &receiver, NULL);
                         if (retire_failed < 0) { JUMP_TO_LABEL(error); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -18080,7 +18077,7 @@
                         PyValue_XCLOSE(receiver); receiver = PyValue_NULL;
                     }
                     if (retire_needed) {
-                        int retire_failed = retire_published_values(tstate, frame, &next_instr, NULL, &receiver, NULL, NULL);
+                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, &receiver, NULL, NULL);
                         if (retire_failed < 0) { JUMP_TO_LABEL(error); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -18153,7 +18150,7 @@
                         retire_needed = _PyValue_MayDealloc(receiver);
                     }
                     if (retire_needed) {
-                        int retire_failed = retire_published_values(tstate, frame, &next_instr, NULL, &old_value, &receiver, NULL);
+                        int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, &old_value, &receiver, NULL);
                         if (retire_failed < 0) { JUMP_TO_LABEL(error); }
                         this_instr = frame->instr_ptr;
                         ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -18283,7 +18280,7 @@
                         value_operation_close3(&release_value, &watched_dict, &receiver);
                     }
                     {
-                        int operation_failed = value_operation_finish(&operation, &next_instr, NULL);
+                        int operation_failed = value_operation_finish(&operation, next_instr, NULL);
                         if (operation_failed < 0) {
                             JUMP_TO_LABEL(error);
                         }
@@ -18308,7 +18305,7 @@
                             retire_needed = _PyValue_MayDealloc(receiver);
                         }
                         if (retire_needed) {
-                            int retire_failed = retire_published_values(tstate, frame, &next_instr, NULL, &old_value, &receiver, NULL);
+                            int retire_failed = retire_published_values(tstate, frame, next_instr, NULL, &old_value, &receiver, NULL);
                             if (retire_failed < 0) { JUMP_TO_LABEL(error); }
                             this_instr = frame->instr_ptr;
                             ir_word = FT_ATOMIC_LOAD_UINT64_RELAXED(*this_instr);
@@ -18413,7 +18410,7 @@
             PyValue_XCLOSE(tmp);
             IR_STORE_DST(IR_FIELD_A(this_instr), value2);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -18639,7 +18636,7 @@
                     value_temps);
                 value_operation_close3(&held_sub, &held_container, &held_value);
                 {
-                    int operation_failed = value_operation_finish(&operation, &next_instr, value_temps);
+                    int operation_failed = value_operation_finish(&operation, next_instr, value_temps);
                     if (operation_failed < 0) {
                         JUMP_TO_LABEL(error);
                     }
@@ -18712,7 +18709,7 @@
                 int err = _PyDict_SetValue_Take2((PyDictObject *)dict, key, stored);
                 value_operation_close3(&retained_dict, NULL, NULL);
                 {
-                    int operation_failed = value_operation_finish(&operation, &next_instr, NULL);
+                    int operation_failed = value_operation_finish(&operation, next_instr, NULL);
                     if (operation_failed < 0) {
                         JUMP_TO_LABEL(error);
                     }
@@ -19220,7 +19217,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -19283,7 +19280,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -19317,7 +19314,7 @@
             res = truth ? PyValue_False : PyValue_True;
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -19695,7 +19692,7 @@
             window[5] = _PyValue_Publish(&res);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[5]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }

@@ -43,7 +43,7 @@
 #undef DISPATCH_INLINED
 #define JIT_FINISH(KIND, PHASE) do { \
     Py_ssize_t value_raising_word = (KIND) == _PyJIT_RAISE ? this_instr - frame->ir_words : 0; \
-    int value_failed = finish_value_bridges(tstate, frame, &next_instr, value_temps); \
+    int value_failed = finish_value_bridges(tstate, frame, next_instr, value_temps); \
     ctx->frame = frame; ctx->next_instr = next_instr; \
     ctx->raising_instr = (KIND) == _PyJIT_RAISE ? frame->ir_words + value_raising_word : NULL; ctx->phase = (PHASE); \
     if (value_failed < 0 && (KIND) != _PyJIT_RAISE) { \
@@ -62,7 +62,7 @@
 #define JUMP_TO_LABEL(LABEL) JIT_FINISH(_PyJIT_RAISE, JIT_PHASE_##LABEL)
 #define DISPATCH_INLINED(NEW_FRAME) do { \
     assert((NEW_FRAME)->previous == frame); \
-    if (finish_value_bridges(tstate, frame, &next_instr, value_temps) < 0) { \
+    if (finish_value_bridges(tstate, frame, next_instr, value_temps) < 0) { \
         _PyEval_FrameClearAndPop(tstate, (NEW_FRAME)); \
         JUMP_TO_LABEL(error); \
     } \
@@ -135,13 +135,13 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -153,7 +153,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -227,13 +227,13 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -245,7 +245,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -319,13 +319,13 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -337,7 +337,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -411,13 +411,13 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -429,7 +429,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -503,13 +503,13 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -521,7 +521,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -595,13 +595,13 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -613,7 +613,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -687,13 +687,13 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -705,7 +705,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -779,13 +779,13 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -797,7 +797,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -871,13 +871,13 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -889,7 +889,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -963,13 +963,13 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -981,7 +981,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -1055,13 +1055,13 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -1073,7 +1073,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -1147,13 +1147,13 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -1165,7 +1165,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -1239,13 +1239,13 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -1257,7 +1257,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -1331,13 +1331,13 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -1349,7 +1349,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -1423,13 +1423,13 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -1441,7 +1441,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -1515,13 +1515,13 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -1533,7 +1533,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -1607,13 +1607,13 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -1625,7 +1625,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -1699,13 +1699,13 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -1717,7 +1717,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -1791,13 +1791,13 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -1809,7 +1809,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -1883,13 +1883,13 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -1901,7 +1901,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -1975,13 +1975,13 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -1993,7 +1993,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -2067,13 +2067,13 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -2085,7 +2085,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -2159,13 +2159,13 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -2177,7 +2177,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -2251,13 +2251,13 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -2269,7 +2269,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -2343,13 +2343,13 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -2361,7 +2361,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -2435,13 +2435,13 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -2453,7 +2453,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -2527,13 +2527,13 @@
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
                     value_operation_close3(&held_right, &held_left, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_reader_complete(&operation, &next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
+                if (value_reader_complete(&operation, next_instr, value_temps, &pending, &held_right, &held_left) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -2545,7 +2545,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -2594,7 +2594,7 @@
             window[0] = _PyValue_Publish(&list);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -2641,7 +2641,7 @@
             IR_CLEAR_SLOTS(&window[1], -1 + oparg*2);
             window[0] = _PyValue_Publish(&map);
             {
-                int operation_failed = value_operation_finish(&operation, &next_instr, NULL);
+                int operation_failed = value_operation_finish(&operation, next_instr, NULL);
                 if (operation_failed < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
@@ -2657,7 +2657,7 @@
             }
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -2706,7 +2706,7 @@
             window[0] = _PyValue_Publish(&tup);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -2749,7 +2749,7 @@
             if (JIT_CALL_NEEDS_PREPARE(this_instr)) {
                 call.effects = 1;
                 int jit_prepare = JIT_PREPARE_CALL(this_instr, window[0]);
-                if (call_transaction_refresh(&call, &next_instr) < 0 || jit_prepare < 0) {
+                if (call_transaction_refresh(&call, next_instr) < 0 || jit_prepare < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -2770,10 +2770,9 @@
                 if (IR_HANDLER(*this_instr) != CALL_JIT_WARM) {
                     _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                     if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                        next_instr = this_instr;
                         call.effects = 1;
-                        _Py_Specialize_Call(callable, self_or_null, next_instr, oparg + !PyValue_IsNull(self_or_null));
-                        if (call_transaction_refresh(&call, &next_instr) < 0) {
+                        _Py_Specialize_Call(callable, self_or_null, this_instr, oparg + !PyValue_IsNull(self_or_null));
+                        if (call_transaction_refresh(&call, next_instr) < 0) {
                             ctx->frame = frame; ctx->next_instr = next_instr;
                             ctx->raising_instr = frame->instr_ptr;
                             ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -2795,7 +2794,7 @@
             }
             // _MAYBE_EXPAND_METHOD
             {
-                if (call_transaction_expand_method(&call, &next_instr) < 0) {
+                if (call_transaction_expand_method(&call, next_instr) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -2811,7 +2810,7 @@
             // _DO_CALL
             {
                 _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -2861,7 +2860,7 @@
             if (JIT_CALL_NEEDS_PREPARE(this_instr)) {
                 call.effects = 1;
                 int jit_prepare = JIT_PREPARE_CALL(this_instr, window[0]);
-                if (call_transaction_refresh(&call, &next_instr) < 0 || jit_prepare < 0) {
+                if (call_transaction_refresh(&call, next_instr) < 0 || jit_prepare < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -2881,10 +2880,9 @@
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
-                    next_instr = this_instr;
                     call.effects = 1;
-                    _Py_Specialize_CallKw(callable, next_instr, oparg + !PyValue_IsNull(self_or_null));
-                    if (call_transaction_refresh(&call, &next_instr) < 0) {
+                    _Py_Specialize_CallKw(callable, this_instr, oparg + !PyValue_IsNull(self_or_null));
+                    if (call_transaction_refresh(&call, next_instr) < 0) {
                         ctx->frame = frame; ctx->next_instr = next_instr;
                         ctx->raising_instr = frame->instr_ptr;
                         ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -2905,7 +2903,7 @@
             }
             // _MAYBE_EXPAND_METHOD_KW
             {
-                if (call_transaction_expand_method(&call, &next_instr) < 0) {
+                if (call_transaction_expand_method(&call, next_instr) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -2921,7 +2919,7 @@
             // _DO_CALL_KW
             {
                 _PyInterpreterFrame *call_child;
-                if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {
+                if (call_transaction_invoke(&call, next_instr, &call_child) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -3036,7 +3034,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -3150,7 +3148,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), b);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -3319,7 +3317,7 @@
                     JUMPBY(oparg + 1);
                     window[1] = _PyValue_Publish(&null_or_index);
                     if (!PyValue_IsNull(ir_displaced) &&
-                        finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                        finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                         ctx->frame = frame; ctx->next_instr = next_instr;
                         ctx->raising_instr = frame->instr_ptr;
                         ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -3333,7 +3331,7 @@
             window[2] = _PyValue_Publish(&next);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[2]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -3592,13 +3590,13 @@
                     drop_failed_value(&pending);
                     drop_failed_value(&pending_self);
                     value_operation_close3(&receiver, NULL, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_attribute_complete(&operation, &next_instr, value_temps, &pending, &pending_self, &receiver, method) < 0) {
+                if (value_attribute_complete(&operation, next_instr, value_temps, &pending, &pending_self, &receiver, method) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -3612,7 +3610,7 @@
                 IR_STORE_DST(IR_FIELD_A(this_instr), attr);
             }
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -3689,13 +3687,13 @@
                     drop_failed_value(&pending);
                     drop_failed_value(&pending_self);
                     value_operation_close3(&receiver, NULL, NULL);
-                    (void)value_operation_finish(&operation, &next_instr, value_temps);
+                    (void)value_operation_finish(&operation, next_instr, value_temps);
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
                     return _PyJIT_RAISE;
                 }
-                if (value_attribute_complete(&operation, &next_instr, value_temps, &pending, &pending_self, &receiver, method) < 0) {
+                if (value_attribute_complete(&operation, next_instr, value_temps, &pending, &pending_self, &receiver, method) < 0) {
                     ctx->frame = frame; ctx->next_instr = next_instr;
                     ctx->raising_instr = frame->instr_ptr;
                     ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -3709,7 +3707,7 @@
                 IR_STORE_DST(IR_FIELD_A(this_instr), attr);
             }
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -3749,7 +3747,7 @@
             value = PyValue_DUP(tstate->interp->common_consts[oparg]);
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -3788,7 +3786,7 @@
             value = PyValue_NewRef(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -3828,7 +3826,7 @@
             assert(PyValue_IsInlineFloat(value));
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -3868,7 +3866,7 @@
             assert(PyValue_IsInlineInt(value));
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -3914,7 +3912,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -3954,7 +3952,7 @@
             value = PyValue_DUP(GETLOCAL(oparg));
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -3994,7 +3992,7 @@
             value = PyValue_BorrowAt(&GETLOCAL(oparg));
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -4039,7 +4037,7 @@
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), value1);
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr) + 1), value2);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -4086,7 +4084,7 @@
             value = PyValue_DUP(value_s);
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -4131,7 +4129,7 @@
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), value1);
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr) + 1), value2);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -4191,7 +4189,7 @@
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 _PyEval_LoadGlobalValue(GLOBALS(), BUILTINS(), name, res);
                 {
-                    int operation_failed = value_operation_finish(&operation, &next_instr, NULL);
+                    int operation_failed = value_operation_finish(&operation, next_instr, NULL);
                     if (operation_failed < 0) {
                         ctx->frame = frame; ctx->next_instr = next_instr;
                         ctx->raising_instr = frame->instr_ptr;
@@ -4266,7 +4264,7 @@
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 _PyEval_LoadGlobalValue(GLOBALS(), BUILTINS(), name, res);
                 {
-                    int operation_failed = value_operation_finish(&operation, &next_instr, NULL);
+                    int operation_failed = value_operation_finish(&operation, next_instr, NULL);
                     if (operation_failed < 0) {
                         ctx->frame = frame; ctx->next_instr = next_instr;
                         ctx->raising_instr = frame->instr_ptr;
@@ -4321,7 +4319,7 @@
             value = PyValue_FromInt32((int32_t)oparg);
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -4364,7 +4362,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -4821,7 +4819,7 @@
             res = PyValue_NULL;
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -5069,7 +5067,7 @@
                 }
                 value_operation_close3(&receiver, &held_value, NULL);
                 {
-                    int operation_failed = value_operation_finish(&operation, &next_instr, value_temps);
+                    int operation_failed = value_operation_finish(&operation, next_instr, value_temps);
                     if (operation_failed < 0) {
                         ctx->frame = frame; ctx->next_instr = next_instr;
                         ctx->raising_instr = frame->instr_ptr;
@@ -5152,7 +5150,7 @@
                 }
                 value_operation_close3(&receiver, &held_value, NULL);
                 {
-                    int operation_failed = value_operation_finish(&operation, &next_instr, value_temps);
+                    int operation_failed = value_operation_finish(&operation, next_instr, value_temps);
                     if (operation_failed < 0) {
                         ctx->frame = frame; ctx->next_instr = next_instr;
                         ctx->raising_instr = frame->instr_ptr;
@@ -5285,7 +5283,7 @@
             PyValue_XCLOSE(tmp);
             IR_STORE_DST(IR_FIELD_A(this_instr), value2);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -5396,7 +5394,7 @@
                     value_temps);
                 value_operation_close3(&held_sub, &held_container, &held_value);
                 {
-                    int operation_failed = value_operation_finish(&operation, &next_instr, value_temps);
+                    int operation_failed = value_operation_finish(&operation, next_instr, value_temps);
                     if (operation_failed < 0) {
                         ctx->frame = frame; ctx->next_instr = next_instr;
                         ctx->raising_instr = frame->instr_ptr;
@@ -5581,7 +5579,7 @@
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;
@@ -5626,7 +5624,7 @@
             res = truth ? PyValue_False : PyValue_True;
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 ctx->frame = frame; ctx->next_instr = next_instr;
                 ctx->raising_instr = frame->instr_ptr;
                 ctx->phase = _PyJIT_ERROR_LOG_PENDING;

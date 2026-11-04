@@ -57,7 +57,7 @@ Related pages: [PyValue representation](pyvalue.md) (encoding, D1–D8),
 | R19 | `d_wrapped` keeps its meaning; `d_wrapped_value` is the new value field | Coordinator, 2026-11-03, after review 2. §2.4 |
 | R20 | Calls: `tp_value_vectorcall` holds a type object's own value vectorcall; dispatch keeps the `Py_TPFLAGS_HAVE_VECTORCALL` test; `PyFunction_SetVectorcall` clears the value vectorcall | Coordinator, 2026-11-03, after review 2. §2.1, §3 |
 | R21 | Sweep order: mechanism packets sweep no callers; one sweep packet, VS, edits each file once for every family whose mechanism has landed and marks families as their last caller goes. Recommended over per-family sweeps, which revisit files | Coordinator, 2026-11-03, after review 2. §9 |
-| R22 | `PyValue_Box`: the cases generator emits an owned `PyValue_AsObject` local for families not yet converted, so `PyValue_Box` is deleted in V2a-1 | Coordinator, 2026-11-03, after review 2. §1.3, §9 V2a-1 |
+| R22 | `PyValue_Box`: the cases generator emits an owned `PyValue_AsObject` local for families not yet converted, so `PyValue_Box` is deleted in V2a-1. Under A5b (in implementation) that local is a `PyObject *x_o` owned by `value_temps` | Coordinator, 2026-11-03, after review 2; A5b note 2026-11-04. §1.3, §9 V2a-1 |
 | R23 | The V4 sweep tool has an ownership table per function, rules for every assignment to a retyped local, and per-function AST dumps | Coordinator, 2026-11-03, after review 2. §9 |
 | R24 | Cost model: no claim about when kernels reach upstream; the measured box-site split by packet; the checkpoint gap is a per-word cost that the value API does not address; the checkpoint precedes V1 | Coordinator, 2026-11-03, after review 2. §6.2, §9 |
 | R25 | Counts from review 2's scripts (`build/pyjit-link-wave1/valueapi-r2-*.py`): 267 format calls need a value form; `PyLong_From*` 288, `FromLong` 147, `FromSsize_t` 73 | Coordinator, 2026-11-03, after review 2. §4, §7.7 |
@@ -182,15 +182,17 @@ its type with `PyValue_TYPE` and raises the upstream `TypeError` itself
 
 | Direction | Primitive | Contract | Today |
 |---|---|---|---|
-| Entry, borrowed | `PyValue_FromObjectBorrow(o)` | Canonical: an exact int in the inline range or an exact non-NaN float becomes inline; otherwise a no-count reference. NULL gives `PyValue_NULL`. The pointer case is inline in `pycore_value.h` (type load, two compares, tag); only int and float call out | Out of line (`Python/pyvalue.c:9`), calling `_PyObject_ValueIdentity` (`:227`). `PyValue_FromPyObjectBorrow` (raw, 13 uses) merges into it |
-| Entry, typed | `_PyValue_FromObjectKnown(o)` | For a pointer that cannot be an exact int or float (a str, type, function, iterator, container). Tags it with no type load. Debug builds assert the precondition | New in V1 (R3) |
-| Entry, owned | `PyValue_FromObjectSteal(o)` | Canonical; consumes `o`; frees an int or float box at once (D2 release contract) | `PyValue_FromPyObjectSteal` (155 uses) canonicalises since representation step 8; renamed in A5b |
+| Entry, borrowed | `PyValue_FromObjectBorrow(o)` | Canonical: an exact int in the inline range or an exact non-NaN float becomes inline; otherwise a no-count reference. NULL gives `PyValue_NULL`. The pointer case is inline in `pycore_value.h` (type load, two compares, tag); only int and float call out | Out of line (`Python/pyvalue.c:9`), calling `_PyObject_ValueIdentity` (`:227`). `PyValue_FromPyObjectBorrow` (raw, 9 hand-written and 2 generated uses) and `_PyValue_FromObjectBorrowInline` merge into it. **A5b, in implementation:** it is inline in the core and exported for modules, returns a `PyValueBorrow`, and tags only an immortal object. Its result becomes an owner only through `DUP`/`XDUP` ([proposal](proposals/register-ir-v2-a5b.md) §2.4) |
+| Entry, typed | `_PyValue_FromObjectKnown(o)` | For a pointer that cannot be an exact int or float (a str, type, function, iterator, container). Tags it with no type load. Debug builds assert the precondition. A5b: returns a `PyValueBorrow` and tags only an immortal object | New in V1 (R3) |
+| Entry, owned | `PyValue_FromObjectSteal(o)` | Canonical; consumes `o`; frees an int or float box at once (D2 release contract) | `PyValue_FromPyObjectSteal` (161 uses) canonicalises since representation step 8; renamed in A5b |
 | Exit, owned | `PyValue_AsObject(v)` | New reference; boxes an inline value; NULL with MemoryError. In the core it does not test `PyErr_Occurred` or `IsLanguageValue` (pyvalue.md G4 item 3). `IsLanguageValue` stays as a debug assert. A pending exception is allowed, as for any upstream API that allocates: a failed box replaces it (revised 2026-11-04, representation step 7a) | Done in V1 (`48bb4d6d1d3`): `PyValue_AsPyObjectNewBoxed` merged into it |
 | Exit, borrowed (call adapter) | `_PyBorrow_ValueVector`, `_PyBorrow_Keep` | Valid until the scope exits ([native-boundary.md](native-boundary.md) §2) | Exist |
 | Value known to hold an object | `PyValue_AsKnownObjectBorrow(v)`, `PyValue_AsKnownObjectSteal(v)` | Masks the tag. Precondition: `v` holds an object or is NULL. Release builds test it during V1–V7 and call a cold `_PyValue_FatalNotObject` on an inline value. V7 measures the test and decides whether it stays | `PyValue_AsPyObjectBorrow`/`Steal`, 892 uses including generated code; renamed in V1 (R1) |
 
-`PyValue_FromPyObjectNew` (53 uses) is deleted:
-`PyValue_NewRef(PyValue_FromObjectBorrow(o))` costs the same.
+`PyValue_FromPyObjectNew` (53 uses: 35 hand-written and 18 generated, plus 2 of
+`_PyValue_FromPyObjectNew`) is deleted:
+`PyValue_DUP(PyValue_FromObjectBorrow(o))` costs the same. (A5b renames
+`NewRef` to `XDUP`; see §1.5.)
 `PyValue_Box` (98 uses in `generated_ir_cases.c.h`, 5 in
 `generated_jit_helpers.c.h`, 2 by hand) is deleted in V2a-1 (R8, R22). Its
 generated uses span every family: super attributes, `MATCH_CLASS`, dict and
@@ -198,7 +200,9 @@ set merges, `SEND`, imports, formatting, `CONTAINS_OP`, exception matching,
 intrinsics, templates and unpacking. From V2a-1 the cases generator emits an
 owned `PyValue_AsObject` local, released after the call, for every family not
 yet converted, and the packet that converts a family removes its locals. D2
-removes the non-canonical form `PyValue_Box` produces.
+removes the non-canonical form `PyValue_Box` produces. In A5b (in
+implementation) that local is a `PyObject *x_o` owned by `value_temps`
+([proposal](proposals/register-ir-v2-a5b.md) §4.5).
 
 **Identity across the boundary (R9, permanent).** An inline int or float that
 crosses to the object form gets a fresh box each time, except an int in
@@ -270,23 +274,26 @@ a `_testcapi` test that pins the round trips above, so a change is deliberate.
    (`PyList_GetItemRef` → `PyList_GetValue`, `PySet_Add` → `PySet_AddValue`,
    `_PyList_AppendTakeRef` → `_PyList_AppendTakeValue`).
 3. **Borrowed results:** inline unchecked accessors are upper case
-   (`PyTuple_GET_VALUE`); functions returning a borrowed view end in `Borrowed`.
+   (`PyTuple_GET_VALUE`). A function that returns a borrowed view returns a
+   `PyValueBorrow` and takes no `Borrowed` suffix; the type says it (V4, after
+   A5b, in implementation).
 4. **Representation operations** in `pycore_value.h` keep their names
    (`PyValue_Is`, `PyValue_DUP`); G6 already merges the duplicate pairs.
 
 | Today | Becomes | Uses | When |
 |---|---|---|---|
-| `PyValue_FromPyObjectSteal` | `PyValue_FromObjectSteal` | 155 | A5b's pair merges (deferred from step 8, where it would have collided with the A1/A2 generated files); it canonicalizes since step 8 |
-| `PyValue_FromPyObjectBorrow` | merged into `PyValue_FromObjectBorrow` | 13 | A5b (deferred from step 8); it canonicalizes since step 8 |
+| `PyValue_FromPyObjectSteal` | `PyValue_FromObjectSteal` | 161 (95 hand-written, 66 generated) | A5b's pair merges (deferred from step 8, where it would have collided with the A1/A2 generated files); it canonicalizes since step 8 |
+| `PyValue_FromPyObjectBorrow` | merged into `PyValue_FromObjectBorrow` | 11 (9 hand-written, 2 generated) | A5b (deferred from step 8); it canonicalizes since step 8 |
 | `…NewMortal`, `…StealMortal` | deleted | 1, 14 | done, step 8 (`308a86c3914`) |
-| `PyValue_FromPyObjectNew` | deleted | 53 | A5b (deferred from step 8); it canonicalizes since step 8 |
+| `PyValue_FromPyObjectNew` | `PyValue_DUP(PyValue_FromObjectBorrow(o))` | 53 | A5b (deferred from step 8); it canonicalizes since step 8 |
+| `PyValue_NewRef`, `PyValue_Close` | `PyValue_XDUP`, `PyValue_XCLOSE` | 59 (41 hand-written), 9 | A5b-4, after the heap side (G6's merged pairs; [proposal](proposals/register-ir-v2-a5b.md) §7) |
 | `PyValue_AsPyObjectBorrow`, `PyValue_AsPyObjectSteal` | `PyValue_AsKnownObjectBorrow`, `…Steal`, checked | 892 | V1 |
 | `PyValue_AsPyObjectNewBoxed` | merged into `PyValue_AsObject` | 13 | V1 |
 | `PyValue_Box` | deleted | 105 | V2a-1 |
 | `_PyValue_RichCompareObject` (returns `PyObject *`) | `_PyValue_RichCompare` returning `PyValue` | 5 | V2a-1 |
 | `_PyObject_GetAttrValue(PyObject *, …)` | `_PyValue_GetAttr(PyValue, …)` | 3 | V2c |
 | `_Py_type_getattro_value` | the type's value `getattro` slot | — | V2c |
-| `_PyDict_NextBorrowed`, `_PySet_NextBorrowed` | `_PyDict_NextValueBorrowed`, `_PySet_NextValueBorrowed` | 7, 4 | V4 |
+| `_PyDict_NextBorrowed`, `_PySet_NextBorrowed` | return `PyValueBorrow` and lose the `Borrowed` suffix (rule 3); the names are chosen in V4, because `PyDict_NextValue` is taken | 7, 4 | V4 |
 | `PyList_GET_VALUE`, `PyStructSequence_GET_VALUE` (out-of-line functions) | inline, per rule 3 | 40, 5 | V4 |
 | `PyCell_GetValue` (NULL for empty or error) | `int PyCell_GetValue(PyObject *, PyValue *out)` | 2 | V4 |
 | `_PyListIter_NextValue`, `_PyDictIter_NextValue`, `_PySetIter_NextValue`, `_PyTupleIter_NextValue` | the types' value `iternext` slots | — | V2b |
@@ -917,8 +924,8 @@ flowchart LR
 | **V2c** | `getattro`, `setattro`, `descr_get`, `descr_set` with value receivers; generic attribute pair; getset value getters; the 20 identity tests | V2b | `(5).real` boxes nothing | `test_descr`, `test_class`, `test_property`, `test_builtin`, `test_capi.test_object`, `test_opcache` | ≈6 |
 | **V3a** | Per-instance value vectorcall, `tp_value_vectorcall_offset` and `tp_value_vectorcall`; the `Py_TPFLAGS_HAVE_VECTORCALL` test; `PyFunction_SetVectorcall`; the offset rule and prepend (§3); `im_self`, `m_self`, wrapper `self` homes; `METH_VALUE`; Clinic value emission and regeneration of core Clinic output; core `PyArg_Parse*` sites to Clinic; monitoring arguments; the call adapter on the borrow stack | V2c; native-boundary P4. Not IR v2 | Clinic headers call no thunk | `test_call`, `test_clinic`, `test_monitoring`, `test_sys_settrace`, `test_descr`, `test_inspect`, `test_functools`; a Python metaclass overriding `__call__`; a `PyFunction_SetVectorcall` replacement that runs | ≈10 |
 | **V3b** | Interpreter call handlers use the value vectorcall; delete `VALUES_TO_PYOBJECTS` and the seven `_Value` call helpers | V3a; IR v2 (call handler shapes, IR-D1 G4) | Call handlers box nothing for core callables | `test_call`, `test_generated_cases`, `test_monitoring`, `test_optimizer` | ≈6 |
-| **V4** | Container value forms primary; renames of §1.5; object getters and setters become thunks; the sweep tool below, with its ownership table and first-hour M/J measurement | V2b | M/J split reported; container value forms complete | `test_list`, `test_tuple`, `test_dict`, `test_set`, `test_structseq`, `test_capi.test_list`, `.test_dict`, `.test_tuple`, `.test_set` | ≈6 |
-| **V5** | §7.4 hot and warm fields become `PyValue` homes, with traverse, clear, dealloc, `_Py_T_VALUE` members, `__reduce__` and the home checker | V2a-1 | Field-store box count near zero on the benchmarks | `test_range`, `test_slice`, `test_exceptions`, `test_asyncgen`, `test_iter`, `test_context`, `test_ordered_dict`, `test_tstring`, `test_pickle`, `test_gc` | ≈8 |
+| **V4** | Container value forms primary; renames of §1.5; object getters and setters become thunks; the sweep tool below, with its ownership table and first-hour M/J measurement. **Heap homes adopt `PyValueField`** (A5b, in implementation, leaves the field type to V4): a load returns a `PyValueBorrow` and a store takes a `PyValue`, which closes the copy-of-home gap ([proposal](proposals/register-ir-v2-a5b.md) §2.3). Rule 3 drops the `Borrowed` suffix | V2b | M/J split reported; container value forms complete | `test_list`, `test_tuple`, `test_dict`, `test_set`, `test_structseq`, `test_capi.test_list`, `.test_dict`, `.test_tuple`, `.test_set` | ≈6 |
+| **V5** | §7.4 hot and warm fields become `PyValue` homes, with traverse, clear, dealloc, `_Py_T_VALUE` members, `__reduce__` and the home checker. The new homes use `PyValueField` (see V4) | V2a-1 | Field-store box count near zero on the benchmarks | `test_range`, `test_slice`, `test_exceptions`, `test_asyncgen`, `test_iter`, `test_context`, `test_ordered_dict`, `test_tstring`, `test_pickle`, `test_gc` | ≈8 |
 | **VS** | Sweep each core file once for every family whose mechanism has landed: the calls of §7.1 and the families of §7.7. M sites by the tool, J sites by agents. Mark each family when its last core caller is swept, `PyObject_IsTrue`, `_PyNumber_Index` and `PyArg_*` included. Batches by directory: `Objects/`, `Python/`, then `Parser/` and the compiler (C6) | V3a, V4 | Every family with a landed mechanism marked | full suite per batch | ≈30 plus the judgement list |
 | **V6** | Port `Modules/` accelerators in box-count order; each adds `Py_VALUE_CORE` | VS | Each ported module calls no thunk | each module's tests | per module |
 | **V7** | Families whose mechanism landed after VS reached them (V3b, V5), generator fixes; every object function with a value form is marked; measure the release check of `PyValue_AsKnownObject*` and decide whether it stays | All above | No `Py_VALUE_CORE` unit calls a marked function | full suite | ≈4 |

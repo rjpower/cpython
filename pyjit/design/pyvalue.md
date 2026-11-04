@@ -220,7 +220,34 @@ the value (`IR_INPLACE_OWN`, `IR_INPLACE_HEAP_SAFE`,
 `PyValue_AsKnownObjectBorrow` (which may not reach a function that takes over
 or releases it), the generator keeps the input out of `borrow_mask` or refuses
 to generate the handler. A pointer that leaves through another expression is
-for the typed borrow (G6, step A5b) to catch.
+not covered by the typed borrow (G6, step A5b): it is a `PyObject *`, not a
+`PyValueBorrow`. The generator's checked list of readers covers it
+([A5b §4.7](proposals/register-ir-v2-a5b.md)).
+
+**A5b, in implementation (target design, nothing landed).** Step A5b adds a
+second one-word type, `PyValueBorrow`, that holds its owner's exact bits.
+`PyValue_Borrow(v)` becomes the view from an owner to a borrow and sets no
+bit. The tagging form becomes the private `_PyValue_BorrowTagged`, then goes.
+Invariants (the proposal's §2.2):
+
+* B1: a borrow never carries a tag of its own.
+* H1: tagged implies immortal, in a word of either type, until the
+  interpreter enters `finalize_interp_clear`.
+* H2: a static immortal is always tagged.
+* L1: a `PyValueBorrow` lives only in a C local. That includes a record on
+  the C stack that lives for one handler activation. Heap fields, arrays,
+  globals, statics and A3a's activation record are homes and hold owned
+  values only.
+
+Readers take `PyValueBorrow`, and a same-name macro converts an owner at the
+call. Stores, closes and steals take `PyValue` only. `DUP`/`XDUP` is the one
+conversion from borrow to owner that takes a count. The compiler enforces that
+a `PyValueBorrow` never becomes a `PyValue`. It does not enforce that a
+`PyValue` owns a count (`PyValue x = *home;` is a second owner-typed copy), how
+long a borrow lives, casts, or derived `PyObject *` borrows
+([A5b §2.3](proposals/register-ir-v2-a5b.md)). A5b then removes
+`MakeHeapSafe`, `IsHeapSafe`, `OwnArray`, `BorrowAt` and `AsStrongReference`;
+the table and text above describe the current runtime.
 
 For examples, see `_PyMember_SetValue` (`Python/structmember.c`),
 `PyTuple_SetValue` (`Objects/tupleobject.c`), `_PyCell_SwapValue`
@@ -543,7 +570,7 @@ reflected in the gap it names.
 | D1 | G1, G1' | G1 is fixed (`271f4e435e5`). G1' holds the remaining items. Its code fixes are in progress as a separate packet |
 | D2 | G2 | Accepted, before baseline, scheduled right after runtime bring-up. Canonical construction only in the core, with no raw constructors. `PyValue_Is` is a bit compare. Int and float guards accept inline values only. Release contract: freeing an exact int or float box, and allocator hooks, never run Python or raise. That deletes the `retired` out-parameter, the `_PyValueTemps` retire path, the save and restore in `close_object` and `close_value`, and about 912 exception save and restore sites around `Py_DECREF` in earlier ports. Status: landed in steps 5-8, and the int and float guards in step 9a (`bf0639df819`) |
 | D3 | G5 | **int51**, decided 2026-11-03 from the upstream histogram ([results](../bench/results/pyvalue-int-width-20261103.md)): 32-51-bit ints are 3-4% of int results on the kernels and pyperformance (mostly `id()` keys in memo dicts), 52-62-bit ints 0.4%, out-of-window floats under 0.001%. Implemented with D2 and D5, before baseline, in representation steps 9a and 9b (`bf0639df819`, `80bb9c84701`) |
-| D4 | G6 | Direction accepted in principle: no home (frame slot or heap field) holds a borrow, bit 0 in a home means immortal, and a borrow is a distinct C type in C locals. The final form is decided jointly with G2 (operand ownership at run time) of the register IR design, after that document's review. Status: the frame side landed in register IR v2 step A5a (`3c7ac067f7f`, `d60d3be46d6`, `3e28e1755bd`); the heap side and the typed borrow are step A5b |
+| D4 | G6 | Direction accepted in principle: no home (frame slot or heap field) holds a borrow, bit 0 in a home means immortal, and a borrow is a distinct C type in C locals. The final form is decided jointly with G2 (operand ownership at run time) of the register IR design, after that document's review. Status: the frame side landed in register IR v2 step A5a (`3c7ac067f7f`, `d60d3be46d6`, `3e28e1755bd`); the heap side and the typed borrow are step A5b. A5b is accepted and in implementation, with nothing landed: the borrow is the C type `PyValueBorrow` (`PyValue_Borrow` is the view from an owner), under invariants B1, H1, H2 and L1; see [the A5b proposal](proposals/register-ir-v2-a5b.md) |
 | D5 | G9 | Adopt `NULL = 0`. Zero-filled memory is a valid empty slot. This deletes `init_value_slots` and the explicit NULL fills, at the cost of one more compare in `XCLOSE` and the owned test. Scheduled with D2. The `CLOSE` microbenchmark is a measurement to take, not a gate |
 | D6 | section 1.11 | ABI policy: `PyValue` is internal. `pyvalue.h` and `PyTuple_GET_VALUE` move to `Include/internal` in value-API packet V1, and external code gets no `PyValue` declaration until a public value API is designed ([value-api.md](value-api.md) VA11, R10; coordinator, 2026-11-03, after value-API review 1). The limited API stays in source form; abi3 binaries built against upstream are unsupported; free threading and abi3t are non-goals. Code change in progress |
 | D7 | G13 | Superseded (2026-11-03) by the user's value-native decision: value slots exist; [value-api.md](value-api.md) VA5 specifies them |
@@ -827,8 +854,13 @@ immortal one. The fix is correct for the core. G1' covers what it left open.
     correct accounting for a reference that owns no count, and upstream CPython's
     `_PyGC_VisitStackRef` (absent from this tree) does the same. The hazard is the stored borrow
     itself, which can outlive its object. It is not a GC leak.
-  * `traverse_slots` calls `visit` directly instead of `_Py_VISIT_VALUE`
-    (§1.9). It is correct only while the heap-safe invariant holds.
+  * `traverse_slots` now uses `_Py_VISIT_VALUE` (§1.9), under
+    `assert(PyValue_IsHeapSafe(*slot))`. It is correct only while the
+    heap-safe invariant holds. A5b turns the assert into the home check.
+  * The owner type `PyValue` has a third meaning. Besides an owned reference
+    and an immortal object, the debug `PyValue_Wrap` returns a bare non-object
+    pointer in a `PyValue` (`Py_TAG_INVALID`, G3). A5b does not change this
+    ([A5b §11](proposals/register-ir-v2-a5b.md), N4).
   * There are two closes with different semantics (`PyValue_Close` uses
     `Py_DECREF`; `PyValue_CLOSE` uses `Py_DECREF_MORTAL`).
   * There are two duplications with different semantics (`PyValue_DUP` keeps
@@ -852,9 +884,24 @@ immortal one. The fix is correct for the core. G1' covers what it left open.
   * Debug asserts: "tagged implies immortal" in `_PyGC_VisitValue` (heap), and
     heap safety on local stores in `IR_STORE_DST`. List the producers of
     borrows that reach homes and drive them to zero.
-  * Use `_Py_VISIT_VALUE` in `traverse_slots`.
+  * Use `_Py_VISIT_VALUE` in `traverse_slots` (done).
   * The final form is decided jointly with the register IR design's G2
     (operand ownership at run time), after that document's review.
+* **A5b form (accepted, in implementation).** The distinct C type is
+  `PyValueBorrow`, and `PyValue_Borrow` is the view from an owner. The
+  invariants are B1 (a borrow carries no tag of its own), H1 (tagged implies
+  immortal, until the interpreter enters `finalize_interp_clear`), H2 (a
+  static immortal is always tagged) and L1 (a borrow lives only in a C local,
+  including a stack record that lives for one handler activation). The
+  compiler stops a borrow from becoming an owner, but it does not stop a
+  copy of a home from being typed as an owner, and it does not check how long
+  a borrow lives (the proposal's §2.3). Derived `PyObject *` pointers are
+  outside the type; the generator's checked list covers them. The full fix
+  for heap homes is a field type, `PyValueField` (value-api V4 and V5). The
+  bit-0 mask in `PyValue_Is` stays in A5b. **Target form:** tag only static
+  immortals, so that a word's bit 0 is a function of the object for its whole
+  life, `Is` becomes `==`, and H1 holds through finalization. See
+  [the proposal](proposals/register-ir-v2-a5b.md) (§2, §6, Q1).
 * **Benefit.** Errors move from run time to debug checks or compile time.
 * **Cost and risk.** The typed borrow touches every core signature that takes
   a borrowed value. It changes the masks in `PyValue_Is` and
@@ -869,9 +916,10 @@ immortal one. The fix is correct for the core. G1' covers what it left open.
   and bit 0 in a frame slot means immortal. `LOAD_FAST_BORROW` into a
   temporary takes a count for a mortal object. An in-place read of a local is
   a borrow in a handler's C variable, untagged. `_PyValue_CheckFrameHome`
-  rejects a mortal with bit 0 in a frame slot. The typed borrow, heap asserts,
-  `traverse_slots` and the removal of `MakeHeapSafe` from setters remain for
-  A5b.
+  rejects a mortal with bit 0 in a frame slot. `traverse_slots` now uses
+  `_Py_VISIT_VALUE`. The typed borrow, heap asserts and the removal of
+  `MakeHeapSafe` from setters remain for A5b, which is accepted and in
+  implementation (nothing landed).
 
 ### G7. Per-element tagging versus storage strategies (non-goal)
 

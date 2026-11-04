@@ -404,7 +404,7 @@ the JIT included, enters and leaves through C-ABI functions.
 |---|---|---|
 | A1, A2 | rep. 7 | Step 7 edits the bridge helpers whose signatures A2 changes, and `ceval_macros.h`'s dispatch macros, which A1 changes |
 | A5a (D4, frame homes) | rep. 8 | D4 needs canonical construction: a value stored in a home must be canonical before its tag means only "immortal or not". It shares `pycore_value.h` with 9a, in different functions; any order with 9a and 9b |
-| A5b (D4, typed borrow) | rep. 9a and A5a | The typed borrow changes the core signatures that take a borrowed value, which overlap 9a's renames (`PyValue_FromInt32` in 13 files, `PyValue_InlineInt` in 18). Any order with 9b; landing before A3 means A3a rewrites handler bodies already in the typed form |
+| A5b (D4, typed borrow) | rep. 9a and A5a | The typed borrow changes the core signatures that take a borrowed value, which overlap 9a's renames (`PyValue_FromInt32` in 13 files, `PyValue_InlineInt` in 18). Any order with 9b. A5b lands before A3, and A3a rebases on A5b's `TAKE` and `OWNER` lines in the `held_*` and `receiver` locals of `bytecodes.c`; the two diffs do overlap ([A5b proposal](register-ir-v2-a5b.md) §8.2) |
 | A3a + A3b + A3c, one landing | rep. 9b (and A2) | A3a's slot-addressed rewrites edit `bytecodes.c` handler bodies that 9a rewrites; A3b edits `jit_runtime.c`, which 9b rewrites. Landing them together means no representation step has to pass on two backends (coordinator decision on finding 8) |
 | G2: A4 and B3 prototypes, off-tree | A3 | A4 needs the parameter list. Only the winner lands: A4 right after A3, or B3 after B2 as a format step |
 | B0a | rep. 6c | A new generated table and consumers in `assemble.c`, `regcfg*.c`, `ir.c`, `specialize.c` and `dis`; no format change. Overlap: 9a reviews `assemble.c` (4 sites) and `specialize.c` (14) for int32 assumptions. The edits are small; whichever lands second rebases |
@@ -435,7 +435,7 @@ now, B0b after A3, and B1 at any time.
 | A1 | The record only in handlers that box | G9.3 | 0 | `vt` against `ni`: 45.4/8.6 from 48.9/12.1 on the lower bound; loop −18% | 2 |
 | A2 | Delete the PC out-parameter (12 families); asserts at the deleted sites, the writer and dispatch; instrumentation refresh becomes an assert | C1 | 0 | none alone under computed goto; under tail calls 6.8 → 5.4 stack refs | 3 |
 | A5a | D4 for frame homes: no slot holds a borrow; frame and home checks | IR-D3, D4 | 0 | with step 8, on the inline-scalar path: `LOAD_FAST_BORROW` 44 → 28, loop −10% (`rep`). The object path gains an incref on the load and a decref in the consumer, on 3.8–8.5% of words; §8 measures it | 5 |
-| A5b | D4's typed borrow; debug asserts; producers to zero; `traverse_slots`; `MakeHeapSafe` out of setters; pair merges | D4 | 0 | storing a borrow becomes a compile error; the `MakeHeapSafe` test leaves each heap store | 13 |
+| A5b | D4's typed borrow (`PyValueBorrow`); debug asserts; producers to zero; `MakeHeapSafe` out of setters; pair merges. In implementation ([proposal](register-ir-v2-a5b.md)) | D4 | 0 | storing a borrow becomes a compile error on GCC and `clang-21`; the `MakeHeapSafe` test leaves each heap store | 21.5 |
 | A3a | Tail-call build with one activation record and no address-taken locals, GCC 15 and Clang 21 | §1.13, G9.6 | 0 | measured 0.870× with nothing else changed; stack refs 12.1 → 1.5 with A1 and A2 | 18 |
 | A3b | JIT entry and exit as C-ABI functions; the JIT's executing-copy re-checks go | §1.13 | 0 | – | 9.5 |
 | A3c | Delete the computed-goto and switch backends; every build configuration on `musttail` | finding 7 | 0 | one decode, one dispatch form | 2.5 |
@@ -646,12 +646,22 @@ applies it at every counted site.
 
 ### Step A5b. D4's typed borrow
 
+**Status: accepted and in implementation; nothing has landed.** The detailed
+design, steps and estimate are in
+[the A5b proposal](register-ir-v2-a5b.md), which supersedes the counts and
+hours below. In short: four sub-steps (A5b-1 types and readers, A5b-2 the
+generator, A5b-3 the heap side, A5b-4 merges and renames) and a suite run,
+21.5 h in all, with the negative units and the suites run on both GCC and
+`clang-21`.
+
 - **The change.** pyvalue.md D4's remaining items. The typed form is not
   deferred.
-  - **A distinct borrow C type** for borrows in C locals (its name is settled
-    in the step). Read APIs accept it. Store, close and setter APIs take only
-    `PyValue`, so storing or closing a borrow does not compile. The only
-    conversion to `PyValue` takes a count.
+  - **A distinct borrow C type**, `PyValueBorrow`, for borrows in C locals;
+    `PyValue_Borrow` is the view from an owner. Read APIs accept it. Store,
+    close and setter APIs take only `PyValue`, so storing or closing a borrow
+    does not compile. The only conversion to `PyValue` takes a count
+    (`DUP`/`XDUP`). The generator emits a view and an owner per borrowable
+    field, with `TAKE` and `OWNER` (proposal §4.2).
   - **Debug asserts.** "Tagged implies immortal" in `_PyGC_VisitValue`
     (heap homes), and heap safety on stores of temporaries. `IR_STORE_DST`
     already asserts it for locals (`ceval_macros.h:714`).
@@ -659,11 +669,17 @@ applies it at every counted site.
     that reaches a home and remove each. A5a handles the frame side; this
     step handles the heap side.
   - **`_Py_VISIT_VALUE` in `traverse_slots`** (`Objects/typeobject.c:2971`).
+    Already done (`typeobject.c:2808–2809`); A5b changes only its assert.
   - **`MakeHeapSafe` leaves the setters.** Once no borrow can reach a setter,
-    heap stores need no conversion. There are 155 uses in 23 files outside
-    the generated ones: `dictobject.c` 48, `bytecodes.c` 40, `ceval.c` 14,
-    `tupleobject.c` 7, and 46 in 19 others. The step removes those in
-    setters and keeps those that convert a C-local borrow.
+    heap stores need no conversion. There are 150 uses in 24 files outside
+    the generated ones (proposal §5.2): `dictobject.c` 46, `bytecodes.c` 40,
+    `ceval.c` 14, `tupleobject.c` 7, and 43 in 20 others. They split by what
+    each use does:
+    89 become `DUP` (a C-local borrow converted to an owner), 27 become the
+    DSL's `TAKE`, 13 become `OWNER`, 1 is a field retyped (the native scope's
+    `argument` becomes an owned `argument_box`), and 20 are deleted (setters
+    that promote their own argument, call-window values, `_PyFrame_Copy` and
+    definitions).
   - **Pair merges.** One name per meaning for `DUP`/`NewRef` and
     `CLOSE`/`Close`.
 - **Why after 9a.** The typed borrow changes every core signature that takes
@@ -674,8 +690,10 @@ applies it at every counted site.
   `bytecodes.c`, `ceval.c`, `ir_generator.py`, `typeobject.c` and the GC
   visitor.
 - **Test.** The step-0 set with the new asserts in the debug suite;
-  `test_gc`, `test_dict`, `test_set`, `test_tuple`, `test_tagged_values`. A
-  store of a borrow is checked once by hand to fail to compile.
+  `test_gc`, `test_dict`, `test_set`, `test_tuple`, `test_tagged_values`. The
+  negative units (a borrow stored, closed or stolen) must fail to compile on
+  both GCC and `clang-21`, each with its expected diagnostic; the suites run
+  on both compilers.
 - **Risk.** Medium. The change is wide but mechanical, and the compiler
   finds most errors.
 
@@ -746,6 +764,8 @@ applies it at every counted site.
 
   - The remaining `&res` and `&left` become slot-addressed helpers
     (`&slots[F]`), as G9.6 says. This edits handler bodies in `bytecodes.c`.
+    Their parameters are `const PyValue *` for slots and `PyValueBorrow` for
+    values they only read.
   - `tcframes.py` checks the rule (the target below).
 - **Rules for the record.**
   - **Explicit access.** A handler loads the record pointer from the thread
@@ -763,9 +783,24 @@ applies it at every counted site.
     Debug builds assert an empty box count there. The entry frame, the JIT
     fields and the floor persist across handlers, so they are separate
     members of the struct.
-  - **Ownership.** The record holds owned values only, as the box area does
-    today (`PyValue_MakeHeapSafe` and `PyValue_NewRef` when boxing,
-    generated file lines 65–66 and 13959–13961). Under D4 it is a home.
+  - **Ownership.** The record holds owned `PyValue` words only, as the box
+    area does today (`PyValue_MakeHeapSafe` and `PyValue_NewRef` when boxing,
+    generated file lines 65–66 and 13959–13961). Under D4 it outlives
+    handlers, so it is a home and holds no `PyValueBorrow` (L1). A record on
+    the C stack that lives for one handler activation is a C local and may
+    hold a borrow. The rule governs `PyValue` words: the native scope's object
+    pointers (`objects`, `argument_objects[0]`) are views that `End` releases
+    within the same activation.
+  - **The native scope inherits no borrow.** A5b-3 deletes
+    `_PyNativeScope.argument`; `Begin` puts the borrowed object, or a box,
+    into `objects[0]`, and an owned `PyObject *argument_box` records the box.
+    The scope then holds no `PyValueBorrow`, so it may enter the scratch
+    union ([A5b proposal](register-ir-v2-a5b.md) §8.2).
+  - **Rebase on A5b.** `held_*`, `release_value`, `retained_dict` and
+    `receiver` are the lines A5b rewrites. After A5b they are owned values:
+    `TAKE` results, and `OWNER` results that are NULL for a local. A3a
+    rebases on those lines and needs no change to its ownership rule for
+    them.
   - **Never scanned.** Handlers leave stale copies in it; `attr` is still
     there after `IR_STORE_DST`. The collector does not traverse it. Its
     values are kept alive by their counts, as C locals are today.
@@ -1221,7 +1256,7 @@ This is a judgement, not a measurement.
 | A1 | 2 | the classifier exists; one emitter | Opus |
 | A2 | 3 | parameter deletion in 12 families, 10 emitters, 7 macro and body sites; asserts at the deleted sites, the writer and dispatch; the version assert | Sonnet, Opus review |
 | A5a | 5 | five macros, 23 helper uses, count cost, the `bytecodes.c` audit, frame and home checks, the `f_locals` test | Opus |
-| A5b | 13 | the borrow type and the core signatures that take a borrow; D4's asserts; the producer list; `traverse_slots`; `MakeHeapSafe` in setters (155 uses in 23 files); pair merges | Opus |
+| A5b | 21.5 | the borrow type and the core signatures that take a borrow; D4's asserts; the producer list; `MakeHeapSafe` (150 uses in 24 files); pair merges; both compilers ([proposal](register-ir-v2-a5b.md) §8) | Opus |
 | A3a | 18 | `_PyEvalActivation` with the entry frame, JIT fields and floor; box area and generated scratch union; 75 handlers and one label; frame parameter; one decode; three conventions in `configure`; two compilers; debug and stats tail-call builds; frame check | Opus |
 | A3b | 9.5 | JIT entry, resume, step and consume as C-ABI functions; the dead re-checks; JIT suite on both compilers | Opus |
 | A3c | 2.5 | delete two backends, the memory decode and `--with-computed-gotos`; three configurations on two compilers | Sonnet |
@@ -1241,7 +1276,8 @@ This is a judgement, not a measurement.
 Against revision 2's 97: A3a +4 (R2-1, R2-2), A5 +12 (R2-3: 6 → 5 + 13), A2
 +0.5 and A3b +0.5 (R2-4), A3c +0.5 (R2-7), G2 +1 (landing the winner, R2-6),
 B5 +0.5 (R2-5), M +0.5. Review 2 judged 100–115; the difference is A5b, which
-it did not size.
+it did not size. These totals use A5b at 13 h; the accepted A5b proposal
+estimates 21.5 h, and the totals have not been recomputed.
 
 Each step is one commit, except A3, which is three commits landed together.
 Each is reviewed with a release-mode compile and keeps the suite's pass set.

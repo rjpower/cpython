@@ -9,6 +9,7 @@ feedback layouts and with sys.monitoring.
 """
 
 import dis
+import io
 import opcode
 import os
 import re
@@ -487,13 +488,52 @@ class AnalyzerTests(unittest.TestCase):
             ("assert(value_temps->count == 0);", False),
             ("finish_displaced_local(tstate, value_temps, ir_displaced);", False),
             ("IR_KEEP_BOX(left);", True),
-            ("value_reader_complete(&s, &next_instr, value_temps, &r);", True),
+            ("value_reader_complete(&s, next_instr, value_temps, &r);", False),
+            ("value_binary_operation(op, l, r, value_temps);", True),
             ("spam(value_temps);", True),
             ("value_temps->count++;", True),
             ("_PyValueTemps *t = value_temps;", True),
         ]:
             with self.subTest(code=code):
                 self.assertEqual(boxes(decl + code), expected)
+
+    def test_value_record(self):
+        # A handler sets up a value record, value_temps, only if the
+        # contract says it boxes (BOXES).  Elsewhere value_temps is a NULL
+        # constant, so its dispatch finishes no bridges; the generated JIT
+        # helpers follow the same rule.
+        with test_tools.imports_under_tool("cases_generator"):
+            import jit_helpers_generator
+        source = os.path.join(test_tools.basepath, "Python", "bytecodes.c")
+        gen = self.ir_generator
+        out = io.StringIO()
+        gen.generate_ir([source], self.analysis, out, False)
+        text = out.getvalue().split(gen.INSTRUCTION_START_MARKER)[1]
+        text = text.split(gen.INSTRUCTION_END_MARKER)[0]
+        handlers = dict(re.findall(
+            r"\bTARGET\((\w+)\) \{(.*?)(?=\bTARGET\(\w+\) \{|\Z)", text, re.S))
+        self.assertEqual(handlers.keys(), self.insts.keys())
+        out = io.StringIO()
+        jit_helpers_generator.generate([source], out)
+        text = out.getvalue().split("#undef JIT_FINISH")[0]
+        helpers = dict(re.findall(
+            r"static _PyJitAction jit_helper_(\w+)\((.*?)(?=static _PyJitAction|\Z)",
+            text, re.S))
+        self.assertTrue(helpers)
+        record = "_PyValueTemps *value_temps = &value_owners;"
+        null = "_PyValueTemps *const value_temps = NULL;"
+        for kind, bodies in (("handler", handlers), ("helper", helpers)):
+            for name, body in bodies.items():
+                boxes = bool(CONTRACT[self.ids[name]].effects & _opcode.IR_BOXES)
+                with self.subTest(kind=kind, handler=name):
+                    self.assertEqual(record in body, boxes)
+                    if not boxes:
+                        self.assertNotIn("value_owners", body)
+                        self.assertNotIn("value_boxes", body)
+                        uses = {line.strip() for line in body.splitlines()
+                                if re.search(r"\bvalue_temps\b", line)}
+                        self.assertIn(null, uses)
+                        self.assertLessEqual(uses, {null, "(void)value_temps;"})
 
     def test_stack_items(self):
         # The extents count the instruction's own stack items, for every

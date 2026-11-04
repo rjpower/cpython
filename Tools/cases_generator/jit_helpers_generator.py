@@ -12,8 +12,9 @@ from analyzer import analyze_files
 from cwriter import CWriter
 from generators_common import DEFAULT_INPUT, ROOT, write_header
 from ir_generator import (
-    EXEC_ONLY, IREmitter, compute_formats, generate_handler, handler_ids,
-    handler_instructions, is_specialization, num_handlers, uop_tokens,
+    EXEC_ONLY, IREmitter, boxing_handlers, compute_formats, generate_handler,
+    handler_ids, handler_instructions, is_specialization, num_handlers,
+    uop_tokens,
 )
 
 # These family members are emitted by assemble.c choose_handler into pristine
@@ -73,6 +74,7 @@ class HelperEmitter(IREmitter):
 def generate(filenames, outfile):
     analysis = analyze_files(filenames)
     formats = compute_formats(analysis)
+    boxing = boxing_handlers(analysis, formats)
     ids = handler_ids(analysis)
     instructions = handler_instructions(analysis)
     # Metadata also describes the generic BINARY_OP semantic base, although
@@ -160,7 +162,8 @@ def generate(filenames, outfile):
         reasons[name] = reason
         if reason is None:
             emitter.handler_format = formats[name]
-            generate_handler(name, inst, formats[name], emitter, out)
+            generate_handler(name, inst, formats[name], emitter, out,
+                             name in boxing)
     outfile.write('''
 #undef JIT_FINISH
 #undef JIT_PHASE_error

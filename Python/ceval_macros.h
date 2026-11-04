@@ -118,7 +118,7 @@
  * registers that the handlers pass on. */
 #   define TAIL_CALL_LOAD_FRAME() \
         _PyInterpreterFrame *frame = tstate->current_frame; \
-        _PyValueTemps *value_temps = NULL
+        _PyValueTemps *const value_temps = NULL
 
 #   define DISPATCH_GOTO() \
         do { \
@@ -615,6 +615,7 @@ static_assert(Py_TAG_REFCNT == 1, "IR_BORROW_KNOWN sets the tag from a test");
  * keeps the canonical value.  An immortal box needs no owner. */
 #define IR_KEEP_BOX(REF) \
     do { \
+        assert(value_temps != NULL); \
         if (PyValue_RefcountOnObject(REF)) { \
             assert(value_temps->count < value_temps->capacity); \
             value_temps->objects[value_temps->count++] = \

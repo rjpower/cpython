@@ -2177,7 +2177,10 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     _PyIRWord ir_word = 0;  /* Its word, from which the handler takes its fields */
 #endif
     _PyEntryFrame entry;
-    _PyValueTemps *value_temps = NULL;
+    /* A handler that boxes inline inputs for an object API (the contract's
+     * BOXES) declares its own value record; everywhere else, labels
+     * included, there is none, and the dispatch macros finish no bridges. */
+    _PyValueTemps *const value_temps = NULL;
 #if !_Py_TAIL_CALL_INTERP && !defined(Py_STATS) && !defined(Py_GIL_DISABLED)
     _PyJitTestRequest *jit_request = NULL;
     _PyJitContext jit_context = {0};

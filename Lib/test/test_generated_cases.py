@@ -493,18 +493,14 @@ class TestIRCases(unittest.TestCase):
             int opcode = OP;
             (void)(opcode);
             _PyInterpreterFrame *frame = tstate->current_frame;
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
-            #if _Py_TAIL_CALL_INTERP
-            PyObject *value_boxes[5];
-            _PyValueTemps value_owners;
-            #endif
-            value_owners = (_PyValueTemps){value_boxes, 0, 5};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             int oparg = (int)IR_FIELD_C(this_instr);
@@ -521,7 +517,7 @@ class TestIRCases(unittest.TestCase):
             window[0] = _PyValue_Publish(&res);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -733,18 +729,14 @@ class TestIRCases(unittest.TestCase):
             int opcode = OP_SPECIALIZED;
             (void)(opcode);
             _PyInterpreterFrame *frame = tstate->current_frame;
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP_SPECIALIZED);
-            #if _Py_TAIL_CALL_INTERP
-            PyObject *value_boxes[6];
-            _PyValueTemps value_owners;
-            #endif
-            value_owners = (_PyValueTemps){value_boxes, 0, 6};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_FIELD_C(this_instr));
@@ -778,7 +770,7 @@ class TestIRCases(unittest.TestCase):
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -808,18 +800,14 @@ class TestIRCases(unittest.TestCase):
             int opcode = OP;
             (void)(opcode);
             _PyInterpreterFrame *frame = tstate->current_frame;
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
-            #if _Py_TAIL_CALL_INTERP
-            PyObject *value_boxes[5];
-            _PyValueTemps value_owners;
-            #endif
-            value_owners = (_PyValueTemps){value_boxes, 0, 5};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_FIELD_D(this_instr));
@@ -839,7 +827,7 @@ class TestIRCases(unittest.TestCase):
             IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -851,18 +839,14 @@ class TestIRCases(unittest.TestCase):
             int opcode = OP_NOFB;
             (void)(opcode);
             _PyInterpreterFrame *frame = tstate->current_frame;
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
-            #if _Py_TAIL_CALL_INTERP
-            PyObject *value_boxes[5];
-            _PyValueTemps value_owners;
-            #endif
-            value_owners = (_PyValueTemps){value_boxes, 0, 5};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(0);
@@ -882,7 +866,7 @@ class TestIRCases(unittest.TestCase):
             IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, &next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -942,18 +926,14 @@ class TestIRCases(unittest.TestCase):
             int opcode = IR_PASS;
             (void)(opcode);
             _PyInterpreterFrame *frame = tstate->current_frame;
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(IR_PASS);
-            #if _Py_TAIL_CALL_INTERP
-            PyObject *value_boxes[2];
-            _PyValueTemps value_owners;
-            #endif
-            value_owners = (_PyValueTemps){value_boxes, 0, 2};
-            _PyValueTemps *value_temps = &value_owners;
             PRE_DISPATCH_GOTO();
             DISPATCH_GOTO();
         }
@@ -1479,7 +1459,7 @@ class TestJitHelpers(unittest.TestCase):
         ir_generator.generate_ir([str(root / "Python/bytecodes.c")], self.analysis, output, False)
         generated = output.getvalue()
         for body in re.split(r"\bTARGET\([A-Z_0-9]+\)", generated)[1:]:
-            if "IR_PREDICTED(" in body:
+            if "IR_PREDICTED(" in body and "value_owners" in body:
                 self.assertLess(body.index("IR_PREDICTED("),
                                 body.index("_PyValueTemps value_owners"))
         for name in ("CALL", "CALL_KW", "INSTRUMENTED_CALL", "INSTRUMENTED_CALL_KW"):
@@ -1594,14 +1574,20 @@ class TestJitHelpers(unittest.TestCase):
         for name in ("RETURN_VALUE", "RETURN_GENERATOR", "RESUME_JIT", "JUMP_BACKWARD_JIT_WARM"):
             self.assertFalse(formats[name].store_dst)
         instructions = ir_generator.handler_instructions(self.analysis)
+        boxing = ir_generator.boxing_handlers(self.analysis, formats)
         bodies = dict(re.findall(r"TARGET\((\w+)\)(.*?)(?=\bTARGET\(|\Z)", generated, re.S))
         for name, body in bodies.items():
             with self.subTest(capacity=name):
                 private_bound = 1 + sum(len(part.stack.inputs) + len(part.stack.outputs)
                                         for part in instructions[name].parts
                                         if isinstance(part, ir_generator.Uop))
-                capacity = int(re.search(r"PyObject \*value_boxes\[(\d+)\]", body)[1])
-                self.assertGreaterEqual(capacity, private_bound + 1)
+                if name in boxing:
+                    capacity = int(re.search(r"PyObject \*value_boxes\[(\d+)\]", body)[1])
+                    self.assertGreaterEqual(capacity, private_bound + 1)
+                    self.assertLessEqual(
+                        capacity, ir_generator.max_bridge_bound(self.analysis, boxing))
+                else:
+                    self.assertNotIn("value_boxes", body)
                 last_publication = max(body.rfind("IR_STORE_DST("), body.rfind("IR_MOVE_TO_DST("))
                 if last_publication >= 0:
                     self.assertGreater(body.rfind("finish_displaced_local("), last_publication)

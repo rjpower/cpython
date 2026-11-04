@@ -1575,6 +1575,14 @@ class IREmitter(Emitter):
         # The format of the handler being emitted, which for a NOFB form
         # is not its instruction's
         self.handler_format: IRFormat | None = None
+        # Whether the handler being emitted has a value record, value_temps:
+        # only a handler whose contract has BOXES does (boxing_handlers)
+        self.has_record = True
+
+    @property
+    def temps(self) -> str:
+        "The record argument of a function that finishes the handler's boxes"
+        return "value_temps" if self.has_record else "NULL"
 
     def format_of(self, inst: Instruction) -> IRFormat:
         if self.handler_format is not None:
@@ -1616,7 +1624,8 @@ class IREmitter(Emitter):
             dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
             failure_result = f"(IR_IS_LOCAL({dst}) ? &attr : NULL)"
         self.emit("{\n")
-        self.emit(f"int retire_needed = _PyValue_MayDealloc({first.text}) || value_temps->count != 0;\n")
+        boxes = " || value_temps->count != 0" if self.has_record else ""
+        self.emit(f"int retire_needed = _PyValue_MayDealloc({first.text}){boxes};\n")
         self.emit("if (!retire_needed) {\n")
         self.emit(f"PyValue_XCLOSE({first.text}); {first.text} = PyValue_NULL;\n")
         if second is not None:
@@ -1624,7 +1633,7 @@ class IREmitter(Emitter):
         self.emit("}\n")
         self.emit("if (retire_needed) {\n")
         second_ptr = "NULL" if second is None else "&" + second.text
-        self.emit(f"int retire_failed = retire_published_values(tstate, frame, &next_instr, value_temps, &{first.text}, {second_ptr}, {failure_result});\n")
+        self.emit(f"int retire_failed = retire_published_values(tstate, frame, &next_instr, {self.temps}, &{first.text}, {second_ptr}, {failure_result});\n")
         self.emit("if (retire_failed < 0) { JUMP_TO_LABEL(error); }\n")
         self.emit("this_instr = frame->instr_ptr;\n")
         if not self.helper:
@@ -1679,7 +1688,7 @@ class IREmitter(Emitter):
         assert next(tkn_iter).kind == "SEMI"
         state, result, self_value, receiver, method = names
         self.out.start_line()
-        self.emit(f"if (value_attribute_complete(&{state}, &next_instr, value_temps, &{result}, &{self_value}, &{receiver}, {method}) < 0) {{\n")
+        self.emit(f"if (value_attribute_complete(&{state}, &next_instr, {self.temps}, &{result}, &{self_value}, &{receiver}, {method}) < 0) {{\n")
         self.reader_error()
         self.emit("}\n")
         self.reader_reload()
@@ -1739,7 +1748,7 @@ class IREmitter(Emitter):
         run __del__ or a weakref callback, which can run any Python."""
         self.emit("if (!PyValue_IsNull(ir_displaced) &&\n")
         self.emit("    finish_displaced_local(tstate, frame, &next_instr, "
-                  "value_temps, ir_displaced) < 0) {\n")
+                  f"{self.temps}, ir_displaced) < 0) {{\n")
         if not self.helper:
             self.emit("next_instr = frame->instr_ptr + 1;\n")
         self.reader_error()
@@ -1796,7 +1805,8 @@ class IREmitter(Emitter):
         return True
 
     def call_completion(self):
-        self.emit("assert(value_temps->count == 0);\n")
+        if self.has_record:
+            self.emit("assert(value_temps->count == 0);\n")
         self.emit("_PyInterpreterFrame *call_child;\n")
         self.emit("if (call_transaction_invoke(&call, &next_instr, &call_child) < 0) {\n")
         self.reader_error()
@@ -1842,7 +1852,7 @@ class IREmitter(Emitter):
         # The DSL output is deliberately undefined here. Failed providers
         # restored their inputs; no NULL result may overwrite those homes.
         self.out.start_line()
-        self.emit(f"if (value_reader_complete(&{state}, &next_instr, value_temps, &{result}, &{first}, &{second}) < 0) {{\n")
+        self.emit(f"if (value_reader_complete(&{state}, &next_instr, {self.temps}, &{result}, &{first}, &{second}) < 0) {{\n")
         self.reader_error()
         self.emit("}\n")
         self.reader_reload()
@@ -1856,7 +1866,7 @@ class IREmitter(Emitter):
         assert next(tkn_iter).kind == "SEMI"
         # Never flush the undefined result on this edge: its destination
         # may be one of the just-restored input temporary homes.
-        self.emit(f"(void)value_operation_finish(&{state.text}, &next_instr, value_temps);\n")
+        self.emit(f"(void)value_operation_finish(&{state.text}, &next_instr, {self.temps});\n")
         self.reader_error()
         return False
 
@@ -1869,7 +1879,7 @@ class IREmitter(Emitter):
         assert next(tkn_iter).kind == "SEMI"
         storage.flush(self.out)
         self.emit("{\n")
-        self.emit(f"int operation_failed = value_operation_finish(&{state.text}, &next_instr, value_temps);\n")
+        self.emit(f"int operation_failed = value_operation_finish(&{state.text}, &next_instr, {self.temps});\n")
         self.emit("if (operation_failed < 0) {\n")
         if self.helper:
             # The current word was refreshed without decoding an old pointer.
@@ -2332,10 +2342,16 @@ def value_bridge_bound(name: str, inst: Instruction) -> int:
 
 
 def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
-                     emitter: IREmitter, out: CWriter) -> None:
+                     emitter: IREmitter, out: CWriter, record: bool) -> None:
     """The handler name, which runs inst: inst itself, or for a handler of a
-    BINARY_OP operation, BINARY_OP with that operation."""
+    BINARY_OP operation, BINARY_OP with that operation.
+
+    With record, the handler sets up a value record, value_temps, for the
+    boxes it makes of inline inputs.  Without it, value_temps is NULL, so
+    the dispatch macros finish no bridges: only a handler that boxes
+    (boxing_handlers, the contract's BOXES) needs one."""
     operation = None
+    emitter.has_record = record
     nofb = name == inst.name + NOFB_SUFFIX
     if name != inst.name and not nofb and name not in EXEC_ONLY:
         operation = "NB_" + name.removeprefix(BINARY_OP_FAMILY + "_")
@@ -2369,6 +2385,10 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     out.emit(f"int opcode = {name};\n")
     out.emit(f"(void)(opcode);\n")
     out.emit("_PyInterpreterFrame *frame = tstate->current_frame;\n")
+    if not record and not helper:
+        # A tail-called handler is a function of its own
+        out.emit("_PyValueTemps *const value_temps = NULL;\n")
+        out.emit("(void)value_temps;\n")
     out.emit(f"#endif\n")
     if inst.properties.needs_prev:
         out.emit(f"_PyIRWord* const prev_instr = frame->instr_ptr;\n")
@@ -2391,7 +2411,13 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         qualifier = "" if transaction or inst.name == "BINARY_OP" or name in ("CALL", "CALL_JIT_WARM", "CALL_KW", "STORE_SUBSCR", "LOAD_GLOBAL", "LOAD_GLOBAL_NOFB", "LOAD_ATTR", "LOAD_ATTR_NOFB", "STORE_ATTR", "STORE_ATTR_NOFB") else "const "
         out.emit(f"_PyIRWord* {qualifier}this_instr = next_instr - 1;\n")
         out.emit("(void)this_instr;\n")
-    if helper:
+    if not record:
+        # No record: the eval function's value_temps is NULL, and a helper,
+        # a function of its own, declares its own
+        if helper:
+            out.emit("_PyValueTemps *const value_temps = NULL;\n")
+            out.emit("(void)value_temps;\n")
+    elif helper:
         out.emit(f"PyObject *value_boxes[{bridge_bound}];\n")
         out.emit("_PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};\n")
     else:
@@ -2402,7 +2428,8 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         out.emit("_PyValueTemps value_owners;\n")
         out.emit("#endif\n")
         out.emit(f"value_owners = (_PyValueTemps){{value_boxes, 0, {bridge_bound}}};\n")
-    out.emit("_PyValueTemps *value_temps = &value_owners;\n")
+    if record:
+        out.emit("_PyValueTemps *value_temps = &value_owners;\n")
     if fmt.store_dst:
         # The old value of a local that dst names, released after the
         # result is stored (release_displaced)
@@ -2528,13 +2555,14 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
 
 
 def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],
-                      outfile: TextIO, lines: bool) -> None:
+                      boxing: set[str], outfile: TextIO, lines: bool) -> None:
     out = CWriter(outfile, 2, lines)
     emitter = IREmitter(out, analysis, formats)
     out.emit("\n")
     for name, inst in sorted(handler_instructions(analysis).items()):
         emitter.handler_format = formats[name]
-        generate_handler(name, inst, formats[name], emitter, out)
+        generate_handler(name, inst, formats[name], emitter, out,
+                         name in boxing)
         emitter.handler_format = None
 
 
@@ -2552,11 +2580,13 @@ def generate_ir_labels(analysis: Analysis, emitter: Emitter) -> None:
         emitter.emit("}\n\n")
 
 
-def max_bridge_bound(analysis: Analysis) -> int:
-    # An input with no handlers, such as labels alone, still declares a
-    # nonempty array.
+def max_bridge_bound(analysis: Analysis, boxing: set[str]) -> int:
+    "The capacity of the eval function's box array, which the handlers that box share"
+    # An input in which no handler boxes, such as labels alone, still
+    # declares a nonempty array.
     return max((value_bridge_bound(name, inst)
-                for name, inst in handler_instructions(analysis).items()),
+                for name, inst in handler_instructions(analysis).items()
+                if name in boxing),
                default=1)
 
 
@@ -2738,10 +2768,13 @@ CONSTRUCTOR = re.compile(r"New(?!Ref)|Alloc|^PyValue_From|_PyFrame_Push|_Py_Make
 # (the classifier of the register IR v2 packet,
 # pyjit/design/proposals/register-ir-v2-packet.md, A1).  A handler boxes
 # unless every use is known not to: the declaration, a read of the count,
-# or an argument to a function that only finishes what is there.  The
-# macros that box without naming value_temps are listed; test_ir_contract
-# checks the list against Python/ceval_macros.h.
-NON_BOXING_CALLS = {"finish_displaced_local"}
+# or an argument to a function that only finishes what is there: it
+# releases the boxes and adds none, so a handler that boxes nothing passes
+# it NULL.  The macros that box without naming value_temps are listed;
+# test_ir_contract checks the list against Python/ceval_macros.h.
+NON_BOXING_CALLS = {"finish_displaced_local", "retire_published_values",
+                    "value_attribute_complete", "value_operation_finish",
+                    "value_reader_complete"}
 BOXING_MACROS = {"IR_KEEP_BOX"}
 
 
@@ -2791,7 +2824,8 @@ def boxing_handlers(analysis: Analysis, formats: dict[str, IRFormat]) -> set[str
         out = CWriter(buffer, 0, False)
         emitter = IREmitter(out, analysis, formats)
         emitter.handler_format = formats[name]
-        generate_handler(name, inst, formats[name], emitter, out)
+        # Classify the handler as emitted with a record
+        generate_handler(name, inst, formats[name], emitter, out, True)
         if boxes_into_record(buffer.getvalue()):
             result.add(name)
     return result
@@ -2859,6 +2893,7 @@ def handler_contracts(analysis: Analysis,
 def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
                 lines: bool) -> None:
     formats = compute_formats(analysis)
+    boxing = boxing_handlers(analysis, formats)
     write_header(__file__, filenames, outfile)
     outfile.write(f"""
 #if !_Py_TAIL_CALL_INTERP
@@ -2867,13 +2902,14 @@ def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
         switch (opcode)
 #endif
         {{
-            /* One scratch area serves every handler; each resets value_owners. */
-            PyObject *value_boxes[{max_bridge_bound(analysis)}];
+            /* One scratch area serves every handler that boxes; each resets
+               value_owners. */
+            PyObject *value_boxes[{max_bridge_bound(analysis, boxing)}];
             _PyValueTemps value_owners;
 #endif /* _Py_TAIL_CALL_INTERP */
             {INSTRUCTION_START_MARKER}
 """)
-    generate_ir_cases(analysis, formats, outfile, lines)
+    generate_ir_cases(analysis, formats, boxing, outfile, lines)
     outfile.write(f"""
             {INSTRUCTION_END_MARKER}
 #if !_Py_TAIL_CALL_INTERP

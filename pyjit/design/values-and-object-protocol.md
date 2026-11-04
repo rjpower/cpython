@@ -14,6 +14,8 @@ pointer identity, language identity and comparison are different operations.
 PyValue is private core representation. Rebuilt object APIs and opaque extension
 handles have explicit [boundary contracts](extension-api.md); they do not expose
 core bits or cast a tagged array into PyObject pointers.
+The [value API](value-api.md) specifies the internal value-form API and the
+`PyObject *` compatibility layer over it.
 
 ## Ownership and storage
 

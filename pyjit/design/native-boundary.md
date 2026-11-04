@@ -63,6 +63,14 @@ are withdrawn. This record replaces the parser paragraphs of
 owner engine". That rule was right for container getters and is kept for
 them (see the growth bound below).
 
+Under the [value API](value-api.md) (VA6), the borrow stack is the
+compatibility adapter for object-form natives and for nothing else in the call
+path. When the interpreter or value-native C code calls a builtin without a
+value form, an extension `tp_call` or an extension vectorcall, it builds the
+object vector on the stack inside a scope (`_PyBorrow_ValueVector`, P4).
+Value-form natives take `PyValue` arguments and push nothing. Slot adapters
+box into C locals and do not use the stack.
+
 ### Why
 
 1. **The lifetime is the native frame, and the runtime already brackets it.**

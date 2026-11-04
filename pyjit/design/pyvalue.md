@@ -513,7 +513,7 @@ reflected in the gap it names.
 | D4 | G6 | Direction accepted in principle: no home (frame slot or heap field) holds a borrow, bit 0 in a home means immortal, and a borrow is a distinct C type in C locals. The final form is decided jointly with G2 (operand ownership at run time) of the register IR design, after that document's review |
 | D5 | G9 | Adopt `NULL = 0`. Zero-filled memory is a valid empty slot. This deletes `init_value_slots` and the explicit NULL fills, at the cost of one more compare in `XCLOSE` and the owned test. Scheduled with D2. The `CLOSE` microbenchmark is a measurement to take, not a gate |
 | D6 | section 1.11 | ABI policy: `pyvalue.h` and every `PyValue` declaration are outside the limited API; the limited API stays in source form; abi3 binaries built against upstream are unsupported; free threading and abi3t are non-goals. Code change in progress |
-| D7 | G13 | Add the type-slot boundary gap. Decide after baseline measurements: value-form slots for core types, or a measured decision not to |
+| D7 | G13 | Superseded (2026-11-03) by the user's value-native decision: value slots exist; [value-api.md](value-api.md) VA5 specifies them |
 | D8 | G7, G8 | G7 is a non-goal with a revisit trigger. G8 (`_PySlotKind`) is deleted as part of the G11 cleanup |
 
 ### G1. `PyValue_NewRef` broke the singleton encoding (fixed)
@@ -687,10 +687,11 @@ immortal one. The fix is correct for the core. G1' covers what it left open.
   3. Make release-build `PyValue_AsObject` skip the `IsLanguageValue` test
      inside the core, keeping it at the extension boundary and as a debug
      assert.
-  4. After baseline, use the counters to move hot core consumers (`Objects/`
-     readers of tuples and lists) to value getters. Hand the call ABI to the
-     [native boundary](native-boundary.md) work, which owns it. The type-slot
-     boundary is G13.
+  4. Core consumers move to value forms family by family under the
+     [value API](value-api.md) (packets V2 to V4); the counters of item 1
+     order the families. Calls use the value vectorcall there (V3), with the
+     [native boundary](native-boundary.md)'s borrow stack as the adapter for
+     object-form natives. The type-slot boundary is G13.
 * **Benefit.** Removes fixed costs from every builtin call and dict lookup.
 * **Measurements.** Per-site box counters; microbenchmarks against upstream for
   `list.append`, `dict[k]` and `hash(tuple)`.
@@ -921,12 +922,14 @@ guard, define kinds as value facts (int, float, object), not storage forms.
   that a slot returns is allocated and then freed at publication. §1.10 lists
   `tp_iternext`, `sq_item` and generic subscripts as a cost. This is wider than
   the vectorcall boundary in G4, and no other gap covers it.
-* **Proposal.** Decide after the baseline measurements, from the G4 counters:
-  either value-form slots for the core types (range, list, tuple and dict
-  iterators; list and tuple subscripts), or a measured decision not to have
-  them. Coordinate with the [native boundary](native-boundary.md) page, which
-  owns the call ABI.
-* **When.** After baseline.
+* **Decision (2026-11-03).** Value slots exist. Every type has a value slot
+  table paired with its object slots; core types implement the value side,
+  extension types keep object slots and are reached through an adapter in the
+  value dispatcher. The [value API](value-api.md) §2 (VA5) specifies the
+  table, inheritance and Python-class slots. The G4 counters order the slot
+  families; they no longer decide whether value slots exist.
+* **When.** Packets V2a to V2c of the value API, after the checkpoint
+  baseline.
 
 ### Summary: where the design falls short of fixed forms
 

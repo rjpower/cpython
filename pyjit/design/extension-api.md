@@ -2,6 +2,14 @@
 
 The preferred direction is an opaque, HPy-compatible extension API backed by canonical internal PyValue, plus a slower interpreter-specific bridge for rebuilt Python.h source. The opaque backend is unimplemented; the bridge has partially implemented, source-reviewed components and no qualified runtime. Universal-value restoration remains incomplete. Hard binary compatibility with old CPython extensions is not a goal.
 
+The [value API](value-api.md) makes `PyValue` the internal API and the
+`PyObject *` API a compatibility layer of thunks over it. Rebuilt `Python.h`
+extensions are users of that layer and pay a box at each exit of an inline
+value. The opaque HPy-compatible API on this page is the future public value
+API. The value API fixes its conventions (borrowed arguments, owned results,
+Dup and Close, NULL on error) so that a handle can be a `PyValue` word, as a
+`JSValueRef` is a `JSValue` in JavaScriptCore on 64-bit platforms.
+
 The user explicitly authorizes rebuilding and porting all extensions. Use
 judgment to make migration possible and incremental; preserving old source or
 binary compatibility is not an acceptance gate. Provide owned, fallible bridges

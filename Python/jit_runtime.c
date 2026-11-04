@@ -108,6 +108,12 @@ static Py_ssize_t process_units;
 static Py_ssize_t process_bytes;
 static int automatic_building;
 static int bootstrap_cooldown;
+/* Hot-call and backedge admission is off by default. The baseline runs every
+ * word through its generic helper and ignores interpreter quickening, so an
+ * admitted method runs several times slower than the specialising
+ * interpreter. Tests enable it; explicit compilation does not need it. It is
+ * process-wide, like the build lock and bootstrap cooldown above. */
+static int natural_admission;
 
 static int
 reserve_bytes(size_t bytes)
@@ -1005,6 +1011,10 @@ _PyJit_PrepareCall(_PyJitContext *ctx, _PyIRWord *instr, PyValue callable)
     if (caller_code->_co_exec != caller_exec || caller_exec == NULL ||
         caller_exec->words != ctx->frame->ir_words || IR_HANDLER(*instr) != CALL_JIT_WARM ||
         PyValue_IsInline(callable)) return 0;
+    if (!natural_admission) {
+        _PyIR_SetHandler(instr, _PyCode_GenericHandler(caller_code, (int)word));
+        return 0;
+    }
     int index = _PyCode_InstrFbIndex(caller_code, (int)word);
     if (index <= 0 || index >= caller_code->co_nfeedback) {
         return 0;
@@ -1070,11 +1080,14 @@ _PyJit_WarmBackedge(PyThreadState *tstate, _PyInterpreterFrame *frame)
     return 0;
 #else
     PyCodeObject *code = _PyFrame_GetCode(frame);
-    _PyJitState *state = natural_state(code);
-    if (state == NULL) {
-        return PyErr_Occurred() ? -1 : 0;
+    _PyJitState *state = NULL;
+    if (natural_admission) {
+        state = natural_state(code);
+        if (state == NULL) {
+            return PyErr_Occurred() ? -1 : 0;
+        }
     }
-    if (state->coverage < 0 || state->disabled) {
+    if (state == NULL || state->coverage < 0 || state->disabled) {
         _PyCodeExec *exec = code->_co_exec;
         for (uint32_t i = 0; i < exec->nwords; i++) {
             if (IR_HANDLER(exec->words[i]) == JUMP_BACKWARD_JIT_WARM)
@@ -1106,6 +1119,9 @@ _PyJit_AutoEligible(PyObject *function)
 #if !_PyJIT_BASELINE_SUPPORTED
     return 0;
 #else
+    if (!natural_admission) {
+        return 0;
+    }
     if (PyMethod_Check(function)) {
         function = ((PyMethodObject *)function)->im_func;
     }
@@ -1130,7 +1146,8 @@ void
 _PyJit_SeedBackedges(PyCodeObject *code, _PyCodeExec *exec)
 {
 #if _PyJIT_BASELINE_SUPPORTED
-    if (exec == NULL || code->co_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)) {
+    if (!natural_admission || exec == NULL ||
+        code->co_flags & (CO_GENERATOR | CO_COROUTINE | CO_ASYNC_GENERATOR)) {
         return;
     }
     if (exec->jit != NULL && exec->jit != &initial_building &&
@@ -1144,6 +1161,16 @@ _PyJit_SeedBackedges(PyCodeObject *code, _PyCodeExec *exec)
             _PyIR_SetHandler(exec->words + i, JUMP_BACKWARD_JIT_WARM);
     }
 #endif
+}
+
+/* Returns the previous setting. Enabling affects execution copies created
+ * afterwards; disabling makes already warmed sites fall back on next use. */
+int
+_PyJit_SetNaturalAdmission(int enabled)
+{
+    int previous = natural_admission;
+    natural_admission = enabled != 0;
+    return previous;
 }
 
 

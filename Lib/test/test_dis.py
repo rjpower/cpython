@@ -7,10 +7,8 @@ import functools
 import io
 import itertools
 import opcode
-import platform
 import re
 import sys
-import sysconfig
 import tempfile
 import textwrap
 import types
@@ -909,16 +907,6 @@ def loop_test():
     for i in [1, 2, 3] * 3:
         load_test(i)
 
-# With the baseline JIT (_PyJIT_BASELINE_SUPPORTED in pycore_jit.h), the
-# specializer turns a call to a Python function into CALL_JIT_WARM until the
-# callee is compiled (_Py_Specialize_Call), and dis shows that handler as CALL.
-JIT_WARMS_CALLS = (
-    sys.platform == "linux" and platform.machine() == "x86_64" and
-    not support.Py_GIL_DISABLED and
-    not sysconfig.get_config_var("Py_STATS") and
-    not sysconfig.get_config_var("_Py_TAIL_CALL_INTERP")
-)
-
 dis_loop_test_quickened_code = """\
 %3d           RESUME                   0
 
@@ -932,7 +920,7 @@ dis_loop_test_quickened_code = """\
 
 %3d           LOAD_GLOBAL_MODULE       1 (load_test + NULL)  r3 <-
               LOAD_FAST_BORROW         0 (i)  r5 <-
-              %-24s 1  r3 <- r3
+              CALL_PY_GENERAL          1  r3 <- r3
               POP_TOP               <- r3
               JUMP_BACKWARD            7 (to L1)
 
@@ -943,7 +931,6 @@ dis_loop_test_quickened_code = """\
 """ % (loop_test.__code__.co_firstlineno,
        loop_test.__code__.co_firstlineno + 1,
        loop_test.__code__.co_firstlineno + 2,
-       "CALL" if JIT_WARMS_CALLS else "CALL_PY_GENERAL",
        loop_test.__code__.co_firstlineno + 1,)
 
 def extended_arg_quick():

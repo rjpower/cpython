@@ -10,6 +10,12 @@ from test.support import import_helper
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 
 
+def setUpModule():
+    # Hot-call and backedge method admission is off by default.
+    previous = _testinternalcapi.jit_method_natural(True)
+    unittest.addModuleCleanup(_testinternalcapi.jit_method_natural, previous)
+
+
 @unittest.skipIf(
     sysconfig.get_config_var("Py_GIL_DISABLED") or
     sysconfig.get_config_var("Py_STATS") or

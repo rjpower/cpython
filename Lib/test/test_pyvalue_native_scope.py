@@ -12,6 +12,12 @@ from test.support import import_helper
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 
 
+def setUpModule():
+    # Hot-call and backedge method admission is off by default.
+    previous = _testinternalcapi.jit_method_natural(True)
+    unittest.addModuleCleanup(_testinternalcapi.jit_method_natural, previous)
+
+
 def executing_handlers(function):
     return [word[0] for word in
             _testinternalcapi.get_ir(function.__code__, True)]

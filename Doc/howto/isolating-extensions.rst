@@ -384,7 +384,7 @@ Unfortunately, :c:data:`Py_Version` was only added in Python 3.11.
 As a replacement, use:
 
 * :c:macro:`PY_VERSION_HEX`, if not using the stable ABI, or
-* :py:data:`sys.version_info` (via :c:func:`PySys_GetObject` and
+* :py:data:`sys.version_info` (via :c:func:`PySys_GetAttrString` and
   :c:func:`PyArg_ParseTuple`).
 
 

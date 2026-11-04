@@ -156,9 +156,9 @@ class CAPITest(unittest.TestCase):
         self.assertRaises(exctype, getitem, {1: 2}, 1)
         # CRASHES getitem(NULL, 1)
 
-    def test_list_getitem(self):
+    def test_list_get_value(self):
         # Test PyList_GetValue() through an owning object bridge.
-        self.check_list_get_item(_testlimitedcapi.list_getitem, SystemError)
+        self.check_list_get_item(_testcapi.list_get_value, SystemError)
 
     def test_list_get_item_ref(self):
         # Test PyList_GetItemRef()

@@ -89,8 +89,8 @@ tuple_setitem(PyObject *Py_UNUSED(module), PyObject *args)
             return NULL;
         }
         for (Py_ssize_t n = 0; n < size; n++) {
-            PyValue item = PyTuple_GetValue(obj, n);
-            if (PyErr_Occurred() || PyTuple_SetValue(newtuple, n, item) == -1) {
+            PyObject *item = PyTuple_GetItemRef(obj, n);
+            if (item == NULL || PyTuple_SetItem(newtuple, n, item) == -1) {
                 Py_DECREF(newtuple);
                 return NULL;
             }

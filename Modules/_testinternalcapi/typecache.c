@@ -1,7 +1,7 @@
 // Test wrappers for the per-type lookup cache (pycore_typecache.h).
 //
 // Insertion is exercised indirectly through normal attribute access (which
-// calls _PyType_Lookup); only Lookup and Invalidate need direct wrappers.
+// calls _PyType_LookupRef); only Lookup and Invalidate need direct wrappers.
 // The existing PyArg_ParseTuple input route remains a separate unported
 // dependency; compiling these wrappers does not execute that parser route.
 

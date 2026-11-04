@@ -552,10 +552,14 @@ _PyRun_SimpleFile(FILE *fp, PyObject *filename, int closeit,
 
   done:
     if (set_file_name) {
+        /* A script that raised (SystemExit included) leaves its exception
+           set; dict operations refuse to run with a pending exception. */
+        PyObject *exc = PyErr_GetRaisedException();
         if (PyDict_PopString(dict, "__file__", NULL) < 0) {
             pyrun_error("failed to delete __main__.__file__");
             Py_CLEAR(res);
         }
+        _PyErr_ChainExceptions1(exc);
     }
     Py_XDECREF(main_module);
     return res;

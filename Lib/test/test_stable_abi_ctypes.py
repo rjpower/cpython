@@ -681,7 +681,6 @@ SYMBOL_NAMES = (
     "PySys_FormatStdout",
     "PySys_GetAttr",
     "PySys_GetAttrString",
-    "PySys_GetObject",
     "PySys_GetOptionalAttr",
     "PySys_GetOptionalAttrString",
     "PySys_GetXOptions",

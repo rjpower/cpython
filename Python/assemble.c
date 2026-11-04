@@ -709,11 +709,14 @@ int _PyIR_MaxForward = IR_MAX_FORWARD;
 #define RELAXED_FOR_ITER_WORDS 4
 #define RELAXED_SEND_WORDS 3
 
+/* A code object past a register IR field limit: source can reach these, so
+ * they are a SyntaxError, as for other compiler limits. */
 static int
 too_large(const char *what, int value)
 {
-    PyErr_Format(PyExc_SystemError,
-                 "%s %d does not fit in the register IR", what, value);
+    PyErr_Format(PyExc_SyntaxError,
+                 "code object too large: %s %d exceeds the register IR limit",
+                 what, value);
     return ERROR;
 }
 
@@ -726,7 +729,9 @@ choose_handler(_PyRegOp *op, PyObject *consts)
     int oparg = op->oparg;
     if (opcode == BINARY_OP) {
         if (oparg > NB_OPARG_LAST) {
-            return too_large("BINARY_OP operation", oparg);
+            PyErr_Format(PyExc_SystemError,
+                         "invalid BINARY_OP operation %d", oparg);
+            return ERROR;
         }
         return _PyIR_BINARY_OP_FIRST + oparg;
     }
@@ -935,9 +940,9 @@ assemble_words(struct assembler *a, _PyRegCfg *cfg, PyObject *consts,
                int nlocalsplus, int stacksize)
 {
     if (nlocalsplus + stacksize > IR_MAX_SLOTS) {
-        PyErr_Format(PyExc_SystemError,
-                     "the code needs %d slots for its locals, cells, free "
-                     "variables and stack, and the register IR has at most %d",
+        PyErr_Format(PyExc_SyntaxError,
+                     "too many local variables and temporaries in function "
+                     "(needs %d slots, limit %d)",
                      nlocalsplus + stacksize, IR_MAX_SLOTS);
         return ERROR;
     }

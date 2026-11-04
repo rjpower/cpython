@@ -148,27 +148,6 @@ PySys_GetOptionalAttrString(const char *name, PyObject **value)
     return PyDict_GetItemStringRef(sysdict, name, value);
 }
 
-PyObject *
-PySys_GetObject(const char *name)
-{
-    PyThreadState *tstate = _PyThreadState_GET();
-    PyObject *sysdict = tstate->interp->sysdict;
-    if (sysdict == NULL) {
-        return NULL;
-    }
-    PyObject *exc = _PyErr_GetRaisedException(tstate);
-    PyObject *value;
-    (void) PyDict_GetItemStringRef(sysdict, name, &value);
-    /* XXX Suppress a new exception if it was raised and restore
-     * the old one. */
-    if (_PyErr_Occurred(tstate)) {
-        PyErr_FormatUnraisable("Exception ignored in PySys_GetObject()");
-    }
-    _PyErr_SetRaisedException(tstate, exc);
-    Py_XDECREF(value);  // return a borrowed reference
-    return value;
-}
-
 static int
 sys_set_object(PyInterpreterState *interp, PyObject *key, PyObject *v)
 {

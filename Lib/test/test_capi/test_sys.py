@@ -83,24 +83,6 @@ class CAPITest(unittest.TestCase):
 
     @support.cpython_only
     @unittest.skipIf(_testlimitedcapi is None, 'need _testlimitedcapi module')
-    def test_sys_getobject(self):
-        # Test PySys_GetObject()
-        getobject = _testlimitedcapi.sys_getobject
-
-        self.assertIs(getobject(b'stdout'), sys.stdout)
-        with support.swap_attr(sys, '\U0001f40d', 42):
-            self.assertEqual(getobject('\U0001f40d'.encode()), 42)
-
-        self.assertIs(getobject(b'nonexistent'), AttributeError)
-        with support.catch_unraisable_exception() as cm:
-            self.assertIs(getobject(b'\xff'), AttributeError)
-            self.assertEqual(cm.unraisable.exc_type, UnicodeDecodeError)
-            self.assertRegex(str(cm.unraisable.exc_value),
-                             "'utf-8' codec can't decode")
-        # CRASHES getobject(NULL)
-
-    @support.cpython_only
-    @unittest.skipIf(_testlimitedcapi is None, 'need _testlimitedcapi module')
     def test_sys_setobject(self):
         # Test PySys_SetObject()
         setobject = _testlimitedcapi.sys_setobject

@@ -70,21 +70,6 @@ sys_getoptionalattrstring(PyObject *Py_UNUSED(module), PyObject *arg)
 }
 
 static PyObject *
-sys_getobject(PyObject *Py_UNUSED(module), PyObject *arg)
-{
-    const char *name;
-    Py_ssize_t size;
-    if (!PyArg_Parse(arg, "z#", &name, &size)) {
-        return NULL;
-    }
-    PyObject *result = PySys_GetObject(name);
-    if (result == NULL) {
-        result = PyExc_AttributeError;
-    }
-    return Py_NewRef(result);
-}
-
-static PyObject *
 sys_setobject(PyObject *Py_UNUSED(module), PyObject *args)
 {
     const char *name;
@@ -110,7 +95,6 @@ static PyMethodDef test_methods[] = {
     {"sys_getattrstring", sys_getattrstring, METH_O},
     {"sys_getoptionalattr", sys_getoptionalattr, METH_O},
     {"sys_getoptionalattrstring", sys_getoptionalattrstring, METH_O},
-    {"sys_getobject", sys_getobject, METH_O},
     {"sys_setobject", sys_setobject, METH_VARARGS},
     {"sys_getxoptions", sys_getxoptions, METH_NOARGS},
     {NULL},

@@ -1330,8 +1330,6 @@
     added = '3.2'
 [function.PySys_FormatStdout]
     added = '3.2'
-[function.PySys_GetObject]
-    added = '3.2'
 [function.PySys_HasWarnOptions]
     added = '3.2'
     abi_only = true

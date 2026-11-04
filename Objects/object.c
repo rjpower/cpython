@@ -1674,7 +1674,8 @@ _PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
         }
         goto done;
     }
-    if (_PyType_LookupValueUncached(tp, name, &descriptor) < 0) {
+    (void)_PyType_LookupValueAndVersion(tp, name, &descriptor);
+    if (PyErr_Occurred()) {
         goto done;
     }
     PyObject *descr = PyValue_IsObject(descriptor) ?
@@ -1830,8 +1831,8 @@ _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
     _PyCValue cref;
     _PyThreadState_PushCValue(tstate, &cref);
 
-    if (_PyType_LookupValueUncached(tp, name, &cref.ref) < 0 ||
-        PyErr_Occurred()) {
+    (void)_PyType_LookupValueAndVersion(tp, name, &cref.ref);
+    if (PyErr_Occurred()) {
         goto done;
     }
     descr = PyValue_IsObject(cref.ref) ? PyValue_AsPyObjectBorrow(cref.ref) : NULL;
@@ -1990,7 +1991,8 @@ _PyObject_GenericSetAttrWithDict(PyObject *obj, PyObject *name,
     _PyCValue cref;
     _PyThreadState_PushCValue(tstate, &cref);
 
-    if (_PyType_LookupValueUncached(tp, name, &cref.ref) < 0 || PyErr_Occurred()) {
+    (void)_PyType_LookupValueAndVersion(tp, name, &cref.ref);
+    if (PyErr_Occurred()) {
         goto done;
     }
     descr = PyValue_IsObject(cref.ref) ? PyValue_AsPyObjectBorrow(cref.ref) : NULL;

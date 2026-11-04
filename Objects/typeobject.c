@@ -403,6 +403,7 @@ managed_static_type_state_clear(PyInterpreterState *interp, PyTypeObject *self,
 
     assert(state->type != NULL);
     state->type = NULL;
+    state->ready = 0;
     assert(state->tp_weaklist == NULL);  // It was already cleared out.
 
     (void)_Py_atomic_add_int64(
@@ -4821,15 +4822,14 @@ get_builtin_base_with_dict(PyTypeObject *type)
     return NULL;
 }
 
+/* Return a new reference to the __dict__ data descriptor, or NULL. */
 static PyObject *
 get_dict_descriptor(PyTypeObject *type)
 {
-    PyObject *descr;
-
-    descr = _PyType_Lookup(type, &_Py_ID(__dict__));
-    if (descr == NULL || !PyDescr_IsData(descr))
-        return NULL;
-
+    PyObject *descr = _PyType_LookupRef(type, &_Py_ID(__dict__));
+    if (descr != NULL && !PyDescr_IsData(descr)) {
+        Py_CLEAR(descr);
+    }
     return descr;
 }
 
@@ -4856,10 +4856,13 @@ subtype_dict(PyObject *obj, void *context)
         }
         func = Py_TYPE(descr)->tp_descr_get;
         if (func == NULL) {
+            Py_DECREF(descr);
             raise_dict_descr_error(obj);
             return NULL;
         }
-        return func(descr, obj, (PyObject *)(Py_TYPE(obj)));
+        PyObject *dict = func(descr, obj, (PyObject *)(Py_TYPE(obj)));
+        Py_DECREF(descr);
+        return dict;
     }
     return PyObject_GenericGetDict(obj, context);
 }
@@ -4905,10 +4908,13 @@ subtype_setdict(PyObject *obj, PyObject *value, void *context)
         }
         func = Py_TYPE(descr)->tp_descr_set;
         if (func == NULL) {
+            Py_DECREF(descr);
             raise_dict_descr_error(obj);
             return -1;
         }
-        return func(descr, obj, value);
+        int res = func(descr, obj, value);
+        Py_DECREF(descr);
+        return res;
     }
     return _PyObject_SetDict(obj, value);
 }
@@ -7373,23 +7379,6 @@ done:
 }
 
 int
-_PyType_LookupValueUncached(PyTypeObject *type, PyObject *name, PyValue *out)
-{
-    (void)_PyType_GetVersionForCurrentState(_PyInterpreterState_GET(), type);
-    *out = PyValue_NULL;
-    if (PyErr_Occurred()) {
-        return -1;
-    }
-    int found = find_name_in_mro(type, name, out);
-    if (PyErr_Occurred()) {
-        return -1;
-    }
-    /* Type lookup historically suppresses some MRO lookup failures. Do
-     * not turn that existing no-error result into an error without PyErr. */
-    return found < 0 ? 0 : found;
-}
-
-int
 _PyType_TryLookupValueNoAlloc(PyTypeObject *type, PyObject *name,
                              PyValue *out, unsigned int *version)
 {
@@ -7583,16 +7572,6 @@ PyObject *
 _PyType_LookupRef(PyTypeObject *type, PyObject *name)
 {
     return _PyType_LookupRefAndVersion(type, name, NULL);
-}
-
-/* Internal API to look for a name through the MRO.
-   This returns a borrowed reference, and doesn't set an exception! */
-PyObject *
-_PyType_Lookup(PyTypeObject *type, PyObject *name)
-{
-    PyObject *res = _PyType_LookupRefAndVersion(type, name, NULL);
-    Py_XDECREF(res);
-    return res;
 }
 
 int
@@ -7872,8 +7851,9 @@ _Py_type_getattro_value(PyTypeObject *type, PyObject *name,
     _PyThreadState_PushCValue(tstate, &meta_attribute_ref);
     _PyThreadState_PushCValue(tstate, &attribute_ref);
     active = 1;
-    if (_PyType_LookupValueUncached((PyTypeObject *)metatype_owner, name_owner,
-                                   &meta_attribute_ref.ref) < 0 || PyErr_Occurred()) {
+    (void)_PyType_LookupValueAndVersion((PyTypeObject *)metatype_owner, name_owner,
+                                        &meta_attribute_ref.ref);
+    if (PyErr_Occurred()) {
         goto done;
     }
     if (PyValue_IsObject(meta_attribute_ref.ref)) {
@@ -7887,8 +7867,9 @@ _Py_type_getattro_value(PyTypeObject *type, PyObject *name,
             goto done;
         }
     }
-    if (_PyType_LookupValueUncached((PyTypeObject *)type_owner, name_owner,
-                                   &attribute_ref.ref) < 0 || PyErr_Occurred()) {
+    (void)_PyType_LookupValueAndVersion((PyTypeObject *)type_owner, name_owner,
+                                        &attribute_ref.ref);
+    if (PyErr_Occurred()) {
         goto done;
     }
     if (!PyValue_IsNull(attribute_ref.ref)) {
@@ -11389,6 +11370,10 @@ init_static_type(PyInterpreterState *interp, PyTypeObject *self,
         }
     }
     else {
+    else {
+        /* Admits the type to this interpreter's lookup cache. */
+        managed_static_type_state_get(interp, self)->ready = 1;
+    }
         assert(!initial);
         assert(self->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN);
         assert(self->tp_version_tag != 0);

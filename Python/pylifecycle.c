@@ -908,17 +908,21 @@ pycore_init_builtins(PyThreadState *tstate)
         interp->common_consts[i] = PyValue_FromObjectBorrow(common_objs[i]);
     }
 
-    PyObject *list_append = _PyType_Lookup(&PyList_Type, &_Py_ID(append));
+    /* The static types' dicts keep these descriptors alive; the cache
+       borrows them. */
+    PyObject *list_append = _PyType_LookupRef(&PyList_Type, &_Py_ID(append));
     if (list_append == NULL) {
         goto error;
     }
     interp->callable_cache.list_append = list_append;
+    Py_DECREF(list_append);
 
-    PyObject *object__getattribute__ = _PyType_Lookup(&PyBaseObject_Type, &_Py_ID(__getattribute__));
+    PyObject *object__getattribute__ = _PyType_LookupRef(&PyBaseObject_Type, &_Py_ID(__getattribute__));
     if (object__getattribute__ == NULL) {
         goto error;
     }
     interp->callable_cache.object__getattribute__ = object__getattribute__;
+    Py_DECREF(object__getattribute__);
 
     if (_PyType_InitSlotDefs(interp) < 0) {
         return _PyStatus_ERR("failed to init slotdefs");

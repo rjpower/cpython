@@ -2260,9 +2260,6 @@ PySys_FormatStdout:void:::
 PySys_FormatStdout:const char*:format::
 PySys_FormatStdout::...::
 
-PySys_GetObject:PyObject*::0:
-PySys_GetObject:const char*:name::
-
 PySys_GetXOptions:PyObject*::0:
 
 PySys_SetObject:int:::

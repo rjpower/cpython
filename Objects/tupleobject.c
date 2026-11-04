@@ -389,7 +389,11 @@ tuple_repr(PyObject *self)
             }
         }
 
-        if (_PyValue_WriteRepr(writer, v->ob_item[i]) < 0) {
+        /* A slot of a tuple from PyTuple_New() can still be NULL. */
+        PyValue item = v->ob_item[i];
+        int result = PyValue_IsNull(item) ? PyUnicodeWriter_WriteRepr(writer, NULL)
+                                          : _PyValue_WriteRepr(writer, item);
+        if (result < 0) {
             goto error;
         }
     }

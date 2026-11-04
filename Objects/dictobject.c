@@ -1628,8 +1628,10 @@ insertdict(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue value)
                     if (ix == DKIX_ERROR) {
                         break;
                     }
+                    /* Adding a shared key notifies type watchers, which can
+                       run Python code, so look the key up again. */
                     if (ix >= 0) {
-                        continue;  /* Reacquire after type watchers/cleanup. */
+                        continue;
                     }
                     if (insertion_resize(mp, 1) < 0) {
                         break;
@@ -1640,10 +1642,14 @@ insertdict(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue value)
             else if (_PyDict_HasSplitTable(mp) ||
                      (DK_IS_UNICODE(mp->ma_keys) && !value_is_exact_unicode(key)) ||
                      mp->ma_keys->dk_usable <= 0) {
+                /* Growth moves the entries and runs no Python code, so the
+                   miss stays valid: insert into an empty slot without a
+                   second lookup, which would call __eq__ again. */
                 if (insertion_resize(mp, value_is_exact_unicode(key)) < 0) {
                     break;
                 }
-                continue;
+                assert(!_PyDict_HasSplitTable(mp));
+                assert(mp->ma_keys->dk_usable > 0);
             }
         }
         if (!notified) {
@@ -1655,7 +1661,9 @@ insertdict(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue value)
                 if (PyErr_Occurred()) {
                     break;
                 }
-                continue;  /* Includes unraisable-hook and payload cleanup. */
+                /* Dict watchers can run Python code that mutates the
+                   dictionary, so look the key up again. */
+                continue;
             }
         }
         if (!PyValue_IsNull(old_value)) {
@@ -4779,6 +4787,9 @@ dict_setdefault_object_owned(PyObject *op, PyObject *key, PyObject *default_valu
     PyValue output = PyValue_NULL;
     DictDefaultSelection selection = {.key = PyValue_NULL};
     Py_hash_t hash = _PyValue_Hash(query);
+    if (hash == -1) {
+        dict_unhashable_type(op, key);
+    }
     int status = -1;
     while (hash != -1 && !PyErr_Occurred()) {
         status = dict_setdefault_value_lock_held((PyDictObject *)op, query, fallback,

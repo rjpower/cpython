@@ -2687,9 +2687,10 @@ suggest_missing_self(PyFunctionObject *func, PyCodeObject *co,
     }
     /* If the current function matches on the type, it's likely worth adding the hint. */
     PyTypeObject *self_cls = Py_TYPE(first_argument);
-    PyFunctionObject *possibly_current_function =
-        (PyFunctionObject *)_PyType_Lookup(self_cls, co->co_name);
-    return possibly_current_function == func;
+    PyObject *possibly_current_function = _PyType_LookupRef(self_cls, co->co_name);
+    int res = possibly_current_function == (PyObject *)func;
+    Py_XDECREF(possibly_current_function);
+    return res;
 }
 
 static int
@@ -5320,10 +5321,11 @@ PyValue _PyForIter_VirtualIteratorNext(PyThreadState* tstate, _PyInterpreterFram
 static inline int
 type_has_special_method(PyTypeObject *cls, PyObject *name)
 {
-    // _PyType_Lookup() does not set an exception and returns a borrowed ref
     assert(!PyErr_Occurred());
-    PyObject *r = _PyType_Lookup(cls, name);
-    return r != NULL && Py_TYPE(r)->tp_descr_get != NULL;
+    PyObject *r = _PyType_LookupRef(cls, name);
+    int res = r != NULL && Py_TYPE(r)->tp_descr_get != NULL;
+    Py_XDECREF(r);
+    return res;
 }
 
 int

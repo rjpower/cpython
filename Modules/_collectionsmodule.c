@@ -2564,9 +2564,9 @@ _collections__count_elements_impl(PyObject *module, PyObject *mapping,
      * have not been overridden.
      */
     mapping_get = _PyType_LookupRef(Py_TYPE(mapping), &_Py_ID(get));
-    dict_get = _PyType_Lookup(&PyDict_Type, &_Py_ID(get));
+    dict_get = _PyType_LookupRef(&PyDict_Type, &_Py_ID(get));
     mapping_setitem = _PyType_LookupRef(Py_TYPE(mapping), &_Py_ID(__setitem__));
-    dict_setitem = _PyType_Lookup(&PyDict_Type, &_Py_ID(__setitem__));
+    dict_setitem = _PyType_LookupRef(&PyDict_Type, &_Py_ID(__setitem__));
 
     if (mapping_get != NULL && mapping_get == dict_get &&
         mapping_setitem != NULL && mapping_setitem == dict_setitem &&
@@ -2644,7 +2644,9 @@ _collections__count_elements_impl(PyObject *module, PyObject *mapping,
 
 done:
     Py_XDECREF(mapping_get);
+    Py_XDECREF(dict_get);
     Py_XDECREF(mapping_setitem);
+    Py_XDECREF(dict_setitem);
     Py_DECREF(it);
     Py_XDECREF(key);
     Py_XDECREF(newval);

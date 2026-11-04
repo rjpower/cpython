@@ -324,12 +324,7 @@ accessible to C code.  They all work with the current interpreter thread's
 
    .. versionadded:: 3.15
 
-.. c:function:: PyObject *PySys_GetObject(const char *name)
-
-   Similar to :c:func:`PySys_GetAttrString`, but return a :term:`borrowed
-   reference` and return ``NULL`` *without* setting exception on failure.
-
-   Preserves exception that was set before the call.
+``PySys_GetObject()`` (borrowed reference) has been removed; use :c:func:`PySys_GetAttrString`.
 
 .. c:function:: int PySys_SetObject(const char *name, PyObject *v)
 

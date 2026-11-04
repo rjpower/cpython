@@ -37,22 +37,6 @@ list_size(PyObject *Py_UNUSED(module), PyObject *obj)
 }
 
 static PyObject *
-list_getitem(PyObject *Py_UNUSED(module), PyObject *args)
-{
-    PyObject *obj;
-    Py_ssize_t i;
-    if (!PyArg_ParseTuple(args, "On", &obj, &i)) {
-        return NULL;
-    }
-    NULLABLE(obj);
-    PyValue value = PyList_GetValue(obj, i);
-    if (!PyValue_IsLanguageValue(value)) return NULL;
-    PyObject *result = PyValue_AsObject(value);
-    PyValue_Close(value);
-    return result;
-}
-
-static PyObject *
 list_get_item_ref(PyObject *Py_UNUSED(module), PyObject *args)
 {
     PyObject *obj;
@@ -157,7 +141,6 @@ static PyMethodDef test_methods[] = {
     {"list_check_exact", list_check_exact, METH_O},
     {"list_new", list_new, METH_O},
     {"list_size", list_size, METH_O},
-    {"list_getitem", list_getitem, METH_VARARGS},
     {"list_get_item_ref", list_get_item_ref, METH_VARARGS},
     {"list_setitem", list_setitem, METH_VARARGS},
     {"list_insert", list_insert, METH_VARARGS},

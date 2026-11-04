@@ -1890,19 +1890,21 @@ store_subscr_fail_kind(PyObject *container, PyValue sub)
         }
         return SPEC_FAIL_OTHER;
     }
-    PyObject *descriptor = _PyType_Lookup(container_type, &_Py_ID(__setitem__));
+    PyObject *descriptor = _PyType_LookupRef(container_type, &_Py_ID(__setitem__));
+    int fail_kind = SPEC_FAIL_OTHER;
     if (descriptor && Py_TYPE(descriptor) == &PyFunction_Type) {
         PyFunctionObject *func = (PyFunctionObject *)descriptor;
         PyCodeObject *code = (PyCodeObject *)func->func_code;
         int kind = function_kind(code);
         if (kind == SIMPLE_FUNCTION) {
-            return SPEC_FAIL_SUBSCR_PY_SIMPLE;
+            fail_kind = SPEC_FAIL_SUBSCR_PY_SIMPLE;
         }
         else {
-            return SPEC_FAIL_SUBSCR_PY_OTHER;
+            fail_kind = SPEC_FAIL_SUBSCR_PY_OTHER;
         }
     }
-    return SPEC_FAIL_OTHER;
+    Py_XDECREF(descriptor);
+    return fail_kind;
 }
 #endif
 

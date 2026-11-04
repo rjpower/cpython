@@ -141,63 +141,67 @@ heap objects and converted when a `PyValue` is built:
 | Site | Behaviour |
 |---|---|
 | `PyValue_FromObjectBorrow` (`Python/pyvalue.c`) | Canonical borrow. Calls `_PyObject_ValueIdentity`, which tests the exact type and, for a non-compact int, calls `PyLong_AsLongAndOverflow` |
-| `PyValue_PrepareOwned(obj, &retired)` (`Python/pyvalue.c`) | Consumes an owned object. For an inline-capable scalar it returns the immediate and hands the box back in `*retired`, to be released after publication |
-| `_PyValue_Prepare`, `_PyValueTemps_Publish` (`pyvalue.c`, `pycore_value.h`) | Frame publication. The generated register handlers write homes through `IR_STORE_DST`, `IR_STORE_TEMP`, `IR_STORE_INPUT` and `IR_MOVE_TO_DST` (`Python/ceval_macros.h`). Each tests for exact int or float and keeps a retired box in `_PyValueTemps` until handler cleanup |
+| `PyValue_PrepareOwned(obj)` (`Python/pyvalue.c`) | Consumes an owned object; `NULL` maps to `PyValue_NULL`. Calls `PyValue_FromPyObjectSteal`, so an inline-capable scalar returns the immediate and its box is freed at once |
+| `_PyValue_Publish`, `_PyValue_Canonicalize` (`pycore_value.h`, `pyvalue.c`) | Frame publication. The generated register handlers write homes through `IR_STORE_DST`, `IR_STORE_TEMP`, `IR_STORE_INPUT` and `IR_MOVE_TO_DST` (`Python/ceval_macros.h`). Each tests for exact int or float and canonicalises through `_PyValue_Canonicalize`, which frees an owned box at once |
 | `PyValue_FromInt32`, `PyValue_FromDouble`, `LOAD_CONST_INLINE_INT/FLOAT` | Produce inline values directly |
 | Object-form container setters (`PyTuple_SET_ITEM`, `PyTuple_SetItem`, `PyList_SetItem`, `PyList_Append`, `PyDict_SetItem`, `PyStructSequence_SetItem`, `PyMember_SetOne`) | Canonicalize through `PrepareOwned` or `FromObjectBorrow` |
 
-These constructors do not canonicalize. They are legal for transient values
-and become canonical only when routed through a publication path:
-`PyValue_FromPyObjectSteal` (about 157 call sites), `PyValue_FromPyObjectNew`
-(about 53) and `PyValue_FromPyObjectBorrow` (about 13). Value-form setters (`PyTuple_SET_VALUE`,
+`PyValue_FromPyObjectSteal`, `PyValue_FromPyObjectNew` and
+`PyValue_FromPyObjectBorrow` canonicalize (`pycore_value.h`). An exact int that
+fits inline, or an exact non-NaN float, becomes the inline value. `Steal` frees
+the box at once (`pyvalue.c:_PyValue_FromNumberSteal`); `New` and `Borrow`
+leave it to its owner. The raw pointer constructor is
+`_PyValue_PointerSteal`. It is for boxes (`PyValue_Box`) and for the
+constructors themselves. Value-form setters (`PyTuple_SET_VALUE`,
 `PyDict_SetValue`, `_PyMember_SetValue`, `_PyCell_SwapValue`) trust the
 canonical form of their input. They do promote a borrow to an owner through
 `PyValue_MakeHeapSafe` (`tupleobject.c:PyTuple_SetValue`,
-`_PyTuple_FromValueStealOnSuccess`). They assert `PyValue_IsLanguageValue` in
-debug builds, but nothing checks canonical form. No canonical-form predicate
-exists.
+`_PyTuple_FromValueStealOnSuccess`). In debug builds each home store calls
+`_PyValue_CheckHome`, which asserts canonical form (`_PyValue_IsCanonicalHome`,
+`pycore_value.h`). The frame store macros and the list, tuple, dict and set
+writers call it. With `_PYTHON_VALUE_HOME_REPORT` set it reports instead of
+asserting.
 
-The header states the rule as "may be held inline in one place and boxed in
-others" (`pycore_value.h`, "Value identity"). The container headers say
-"canonical". Section 3, G2, covers the gap between the two.
+The header states the rule as a single identity for a value, inline or boxed
+(`pycore_value.h`, "Value identity"). Only C code holds a box.
 
 ### 1.6 Ownership operations
 
 | Operation | Contract | Where |
 |---|---|---|
-| `PyValue_FromPyObjectSteal(o)` | Consumes one strong reference. Immortal objects get bit 0 from `ob_flags`. Does not canonicalize | `pycore_value.h` |
-| `PyValue_FromPyObjectNew(o)` | INCREFs a mortal object; tags an immortal one. Tests immortality by the refcount (`_Py_IsImmortal`), not `ob_flags` (G1'). Does not canonicalize | `pycore_value.h:_PyValue_FromPyObjectNew` |
-| `PyValue_FromPyObjectBorrow(o)` | Sets bit 0; no INCREF; does not canonicalize | `pycore_value.h` |
-| `PyValue_FromObjectBorrow(o)` | Public. Canonical borrow; `NULL` maps to `PyValue_NULL` | `pyvalue.c` |
-| `PyValue_PrepareOwned(o, &retired)` | Public. Pure: consumes `o` without releasing it. Publish first, then `Py_XDECREF(retired)` | `pyvalue.c` |
-| `PyValue_Borrow(v)` / `PyValue_BorrowAt(p)` | Sets bit 0 in pointer space; leaves scalars unchanged. `Borrow(PyValue_ERROR)` gives `3`, which is neither ERROR, NULL nor an object (G1') | `pyvalue.h`, `pycore_value.h` |
+| `PyValue_FromPyObjectSteal(o)` | Consumes one strong reference. Canonicalizes an exact int or float. Immortal objects get bit 0 from `ob_flags` | `pycore_value.h` |
+| `PyValue_FromPyObjectNew(o)` | INCREFs a mortal object; tags an immortal one. Tests immortality by the refcount (`_Py_IsImmortal`), not `ob_flags` (G1'). Canonicalizes | `pycore_value.h:_PyValue_FromPyObjectNew` |
+| `PyValue_FromPyObjectBorrow(o)` | Sets bit 0; no INCREF; canonicalizes | `pycore_value.h` |
+| `PyValue_FromObjectBorrow(o)` | Exported (`PyAPI_FUNC`). Canonical borrow; `NULL` maps to `PyValue_NULL` | `pycore_pyvalue.h`, `pyvalue.c` |
+| `PyValue_PrepareOwned(o)` | Exported. Consumes `o` and returns its canonical value; frees the box of an inline-capable scalar at once | `pyvalue.c` |
+| `PyValue_Borrow(v)` / `PyValue_BorrowAt(p)` | Sets bit 0 on an object; leaves inline values and NULL unchanged | `pycore_pyvalue.h`, `pycore_value.h` |
 | `PyValue_DUP(v)` | INCREFs only if `v` owns a count, and returns the same bits. A DUP of a borrow is still a borrow | `pycore_value.h` |
-| `PyValue_NewRef(v)` | Public. `Py_INCREF`s a mortal object and clears bit 0, which promotes a borrow to an owner. Tags an immortal object with bit 0 (the G1 fix, `271f4e435e5`; the refcount test is G1') | `pyvalue.h` |
+| `PyValue_NewRef(v)` | `Py_INCREF`s a mortal object and clears bit 0, which promotes a borrow to an owner. Tags an immortal object with bit 0 (the G1 fix, `271f4e435e5`; the refcount test is G1') | `pycore_pyvalue.h` |
 | `PyValue_CLOSE` / `PyValue_XCLOSE` | Internal. `Py_DECREF_MORTAL` if `RefcountOnObject`; no immortality check in release builds | `pycore_value.h` |
-| `PyValue_Close(v)` | Public. `Py_DECREF` (immortality-aware) if the value is an object with bit 0 clear | `pyvalue.h` |
+| `PyValue_Close(v)` | `Py_DECREF` (immortality-aware) if the value is an object with bit 0 clear | `pycore_pyvalue.h` |
 | `_PyValue_CLOSE_POINTER` etc. | Generator-selected variants that test only bit 0 (`_PyValue_PointerOwnsCount`), for inputs proven to be pointers. They also treat ERROR and `Wrap` values as owned (G3) | `pycore_value.h` |
 | `PyValue_IsHeapSafe` / `PyValue_MakeHeapSafe` | A borrowed mortal is promoted with `Py_INCREF`. Telling borrowed from immortal loads the object (`_Py_IsImmortal`) | `pycore_value.h` |
 | `_PyValue_OwnArray` | `MakeHeapSafe` over an argument window | `pycore_value.h` |
 | `PyValue_Box(v)` | Inline value to owned box; on failure returns `v` unchanged with an exception set | `pycore_value.h`, `pyvalue.c:_PyValue_BoxInlineValue` |
-| `PyValue_AsObject(v)` | Public. New object reference, boxing a scalar. Raises `SystemError` for NULL, ERROR or an index | `pyvalue.c` |
-| `PyValue_AsPyObjectBorrow(v)` | Masks bit 0. Debug-asserts pointer space only; an inline value gives a garbage pointer in release builds | `pycore_value.h` |
-| `PyValue_AsPyObjectSteal(v)` | Transfers ownership, INCREFing if `v` owned no count. Has the same release-build hole as `AsPyObjectBorrow` | `pycore_value.h` |
-| `_PyValueTemps` | Handler-scoped owners for private scalar boxes and one displaced local. Released LIFO after publication (`_PyValueTemps_CloseNonempty`) | `pycore_value.h`, `pyvalue.c` |
+| `PyValue_AsObject(v)` | Inline. New object reference, boxing an inline value; NULL with `MemoryError` if the box fails. A pending exception is allowed. Debug builds assert `IsLanguageValue` | `pycore_value.h` |
+| `PyValue_AsKnownObjectBorrow(v)` | Masks bit 0. `v` must hold an object or be NULL; every build calls the cold `_PyValue_FatalNotObject` on an inline value (value API V1) | `pycore_value.h` |
+| `PyValue_AsKnownObjectSteal(v)` | Transfers ownership, INCREFing if `v` owned no count. The same check as `AsKnownObjectBorrow` | `pycore_value.h` |
+| `_PyValueTemps` | Handler-scoped owners for the boxes of inline inputs passed to C code that takes objects. Each box is an exact int or float. Released LIFO at handler cleanup (`_PyValueTemps_CloseNonempty`) | `pycore_value.h`, `pyvalue.c` |
 
 Store discipline, used by every heap setter that was checked:
 
 1. Prepare the new value without side effects (`PrepareOwned`,
    `MakeHeapSafe(Borrow(v))`).
 2. Read the old slot, then write the new value.
-3. Release the old owner and any retired box.
+3. Release the old owner.
 4. Revalidate anything a callback could change.
 
 For examples, see `_PyMember_SetValue` (`Python/structmember.c`),
 `PyTuple_SetValue` (`Objects/tupleobject.c`), `_PyCell_SwapValue`
 (`pycore_cell.h`) and `IR_STORE_DST` (`ceval_macros.h`). Many value-API
-releases are wrapped in `PyErr_GetRaisedException`/`_PyValue_RestoreException`
-(`Objects/value_ops.c:close_object`, `close_value`; `_PyMember_SetValue`),
-because "allocator hooks may raise during release".
+releases need no exception save and restore: freeing an exact int or float box
+runs no Python and leaves the current exception unchanged (`pycore_value.h`,
+"Value identity", release contract).
 
 ### 1.7 Identity, equality and hashing
 
@@ -278,10 +282,10 @@ initialise value fields explicitly. `_PyType_AllocNoTrack` walks the
 
 ```mermaid
 flowchart LR
-    R["C result (PyObject *)"] --> P["Prepare: canonical value + retired box"]
+    R["C result (PyObject *)"] --> P["Prepare: canonical value, box freed"]
     P --> W["Write home; keep displaced owner"]
     W --> S[Publish frame/PC/live state]
-    S --> C["Release displaced owner, then retired boxes (LIFO)"]
+    S --> C["Release displaced owner"]
     C --> V[Revalidate after callbacks]
 ```
 
@@ -309,7 +313,7 @@ write `PyValue_NULL`, then close.
 | Boundary | What happens per value | Where |
 |---|---|---|
 | Native call (vectorcall, builtins) | `_PyObjectArray_FromValueArray`. First `MakeHeapSafe` on each argument, then `PyValue_AsObject` for each. That runs `IsLanguageValue`, INCREFs a pointer or allocates a box for a scalar, and checks `PyErr_Occurred`. Cleanup (`_PyObjectArray_Free`) DECREFs each element through `_PyValueTemps`, with an exception save and restore. More than 10 arguments use `PyMem_Malloc` | `Python/ceval.c`, `ceval_macros.h:VALUES_TO_PYOBJECTS` |
-| Native result | Returned `PyObject *` becomes a `PyValue` (`FromPyObjectSteal`); publication canonicalizes and frees an int or float box after the store | `ceval.c`, `_PyValueTemps_Publish` |
+| Native result | Returned `PyObject *` becomes a `PyValue` (`FromPyObjectSteal`); publication canonicalizes and frees an int or float box at once | `ceval.c`, `_PyValue_Publish` |
 | Generated handler inputs | The cases generator boxes each scalar input passed whole to `PyValue_AsPyObject*` (or exits in a guard). Array inputs are not checked | `Tools/cases_generator/interpreter_definition.md`, "Inline values" |
 | Owning object getters | `PyTuple_GetItemRef`, `PyList_GetItemRef`, `PyStructSequence_GetItemRef`, `PyMember_GetOne` allocate a fresh box for each inline element read | `tupleobject.c`, `listobject.c`, `structseq.c`, `structmember.c` |
 | `tp_iternext`, `sq_item`, generic subscripts | Box (`list_item` uses `PyValue_AsObject`); the interpreter's value iterators (`_PyListIter_NextValue`, `_PyTupleIter_NextValue`) do not | `listobject.c`, `pycore_list.h` |
@@ -509,7 +513,7 @@ reflected in the gap it names.
 | # | Gap | Decision |
 |---|---|---|
 | D1 | G1, G1' | G1 is fixed (`271f4e435e5`). G1' holds the remaining items. Its code fixes are in progress as a separate packet |
-| D2 | G2 | Accepted, before baseline, scheduled right after runtime bring-up. Canonical construction only in the core, with no raw constructors. `PyValue_Is` is a bit compare. Int and float guards accept inline values only. Release contract: freeing an exact int or float box, and allocator hooks, never run Python or raise. That deletes the `retired` out-parameter, the `_PyValueTemps` retire path, the save and restore in `close_object` and `close_value`, and about 912 exception save and restore sites around `Py_DECREF` in earlier ports |
+| D2 | G2 | Accepted, before baseline, scheduled right after runtime bring-up. Canonical construction only in the core, with no raw constructors. `PyValue_Is` is a bit compare. Int and float guards accept inline values only. Release contract: freeing an exact int or float box, and allocator hooks, never run Python or raise. That deletes the `retired` out-parameter, the `_PyValueTemps` retire path, the save and restore in `close_object` and `close_value`, and about 912 exception save and restore sites around `Py_DECREF` in earlier ports. Status: landed in steps 5-8 except the int and float guards, which are step 9a |
 | D3 | G5 | **int51**, decided 2026-11-03 from the upstream histogram ([results](../bench/results/pyvalue-int-width-20261103.md)): 32-51-bit ints are 3-4% of int results on the kernels and pyperformance (mostly `id()` keys in memo dicts), 52-62-bit ints 0.4%, out-of-window floats under 0.001%. Implemented with D2 and D5, before baseline |
 | D4 | G6 | Direction accepted in principle: no home (frame slot or heap field) holds a borrow, bit 0 in a home means immortal, and a borrow is a distinct C type in C locals. The final form is decided jointly with G2 (operand ownership at run time) of the register IR design, after that document's review |
 | D5 | G9 | Adopt `NULL = 0`. Zero-filled memory is a valid empty slot. This deletes `init_value_slots` and the explicit NULL fills, at the cost of one more compare in `XCLOSE` and the owned test. Scheduled with D2. The `CLOSE` microbenchmark is a measurement to take, not a gate |
@@ -542,7 +546,7 @@ immortal one. The fix is correct for the core. G1' covers what it left open.
   |---|---|---|
   | `PyValue_NewRef` is in a public header and calls `_Py_IsImmortal`, which `Include/refcount.h` hides under `_Py_OPAQUE_PYOBJECT`. `Include/Python.h` includes `pyvalue.h` unconditionally | Compile error for an extension that defines `Py_TARGET_ABI3T` (`Include/pyabi.h`) | Bug, introduced by the G1 fix |
   | Two immortality tests. `FromPyObjectSteal` reads `ob_flags`; `_PyValue_FromPyObjectNew`, `NewRef` and `IsHeapSafe` read the refcount sign. A count that saturates makes an object immortal without the flag | Two encodings of one object | Low, inherited from upstream |
-  | `BUILD_TUPLE` uses `PyValue_FromPyObjectStealMortal` (`bytecodes.c`), and `_PyTuple_FromValueStealOnSuccess(…, 0)` returns the static empty tuple (`tupleobject.c`) | An untagged static immortal. Debug builds assert; release `CLOSE` runs `DECREF_MORTAL` on it | Latent. Upstream folds `BUILD_TUPLE 0` into `LOAD_CONST ()` |
+  | `BUILD_TUPLE` used `PyValue_FromPyObjectStealMortal`, and `_PyTuple_FromValueStealOnSuccess(…, 0)` returns the static empty tuple (`tupleobject.c`) | An untagged static immortal. Debug builds assert; release `CLOSE` runs `DECREF_MORTAL` on it | Fixed in step 8: the `Mortal` variants are deleted and `BUILD_TUPLE` calls `PyValue_FromPyObjectSteal`, which tags an immortal object (`_PyValue_PointerSteal`, `pycore_value.h`) |
   | `PyValue_Borrow(PyValue_ERROR)` | `3`, which is neither ERROR, NULL nor an object | Low |
   | `IR_STORE_DST` and `IR_MOVE_TO_DST` store the value as given (`ceval_macros.h`) | A borrowed operand passed through to a local would become a stored borrow | Not shown to occur |
 
@@ -556,7 +560,7 @@ immortal one. The fix is correct for the core. G1' covers what it left open.
   5. Add a debug `PyValue_IsHeapSafe` assert on local destinations in
      `IR_STORE_DST` and `IR_MOVE_TO_DST`.
   6. Add a debug check that no tag-0 value points to a static immortal, on
-     every close and in `_PyValueTemps_Publish`.
+     every close and in `_PyValue_Publish`.
 * **Others.** JSC, SpiderMonkey and LuaJIT give each immediate exactly one
   encoding.
 * **Cost and risk.** One flag load in `NewRef`. None otherwise.
@@ -572,7 +576,7 @@ immortal one. The fix is correct for the core. G1' covers what it left open.
     probe of a dict collision chain against a different key (`compare_generic`).
   * Int and float guards accept both inline values and boxed compact objects
     (`PyValue_IsCompactInt`, `PyValue_FloatOperandsCheck`).
-  * Every frame publication tests the result's type (`_PyValueTemps_Publish`
+  * Every frame publication tests the result's type (`_PyValue_Publish`
     loads the type of every pointer result), and for a multi-digit int calls
     `PyLong_AsLongAndOverflow` (`_PyObject_ValueIdentity`).
   * Value-form setters trust the canonical form of what they are given.
@@ -580,13 +584,13 @@ immortal one. The fix is correct for the core. G1' covers what it left open.
     (`value_ops.c:close_object`, `close_value`), and
     `_PyValue_RestoreException` walks the exception context chain to avoid a
     cycle (`pyvalue.c`).
-* **Evidence.** The header says a value "may be held inline in one place and
-  boxed in others" (`pycore_value.h`, "Value identity"). The non-canonical
-  constructors have about 220 call sites (§1.5).
-  `genericaliasobject.c:tuple_index` compares a raw
-  `PyValue_FromPyObjectBorrow` against tuple elements and depends on the
-  fallback. No `IsCanonical` predicate exists, and no setter asserts canonical
-  form.
+* **Evidence.** At review, the header said a value "may be held inline in one
+  place and boxed in others" (`pycore_value.h`, "Value identity"). The raw
+  constructors had about 220 call sites (§1.5).
+  `genericaliasobject.c:tuple_index` compared a raw
+  `PyValue_FromPyObjectBorrow` against tuple elements and depended on the
+  fallback. No `IsCanonical` predicate existed, and no setter asserted
+  canonical form.
 * **Others.** JSC, SpiderMonkey and LuaJIT have exactly one encoding per
   number, so identity and type tests are bit operations. PyPy defines
   identity by value precisely because it boxes and unboxes freely; it pays
@@ -634,6 +638,18 @@ immortal one. The fix is correct for the core. G1' covers what it left open.
   the change. Microbenchmarks: the `IS_OP` false path, and dict misses on
   collision chains. These record the effect; they do not gate it.
 * **When.** Before baseline, scheduled right after runtime bring-up.
+* **Status.** Items 1, 2, 3, 5 and 6 landed in representation steps 5-8.
+  Steps 5-7 removed the `retired` out-parameter, the retire path and the
+  exception save and restore (`close_object`, `close_value`,
+  `_PyValue_RestoreException`). Step 8 (`5640c46361c`..`f6508007b94`; chiefly
+  `1381d5b49c0` and `308a86c3914`) made the three constructors canonical,
+  deleted the `Mortal` variants and `POINTER_CONSTRUCTORS`, made `PyValue_Is`
+  a bit compare, deleted `_PyValue_IsSameValue` and `value_identity`, and added
+  `_PyValue_CheckHome` (a debug assert at the frame store macros and the dict,
+  list and set writers). A counter over the full suite before the deletion saw
+  3,587,230,710 fallback calls and 0 true results. Item 4 remains: int and
+  float guards still accept boxes (`PyValue_IsCompactInt`, the boxed arm of
+  `PyValue_FloatOperandsCheck`). It is representation step 9a.
 
 ### G3. The owned-reference test does not exclude ERROR or wrapped pointers
 

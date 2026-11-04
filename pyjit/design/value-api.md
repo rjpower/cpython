@@ -184,7 +184,7 @@ its type with `PyValue_TYPE` and raises the upstream `TypeError` itself
 |---|---|---|---|
 | Entry, borrowed | `PyValue_FromObjectBorrow(o)` | Canonical: an exact int in the inline range or an exact non-NaN float becomes inline; otherwise a no-count reference. NULL gives `PyValue_NULL`. The pointer case is inline in `pycore_value.h` (type load, two compares, tag); only int and float call out | Out of line (`Python/pyvalue.c:9`), calling `_PyObject_ValueIdentity` (`:227`). `PyValue_FromPyObjectBorrow` (raw, 13 uses) merges into it |
 | Entry, typed | `_PyValue_FromObjectKnown(o)` | For a pointer that cannot be an exact int or float (a str, type, function, iterator, container). Tags it with no type load. Debug builds assert the precondition | New in V1 (R3) |
-| Entry, owned | `PyValue_FromObjectSteal(o)` | Canonical; consumes `o`; frees an int or float box at once (D2 release contract) | `PyValue_FromPyObjectSteal` (155 uses) canonicalises at representation step 8 and is renamed there |
+| Entry, owned | `PyValue_FromObjectSteal(o)` | Canonical; consumes `o`; frees an int or float box at once (D2 release contract) | `PyValue_FromPyObjectSteal` (155 uses) canonicalises since representation step 8; renamed in A5b |
 | Exit, owned | `PyValue_AsObject(v)` | New reference; boxes an inline value; NULL with MemoryError. In the core it does not test `PyErr_Occurred` or `IsLanguageValue` (pyvalue.md G4 item 3). `IsLanguageValue` stays as a debug assert. A pending exception is allowed, as for any upstream API that allocates: a failed box replaces it (revised 2026-11-04, representation step 7a) | Done in V1 (`48bb4d6d1d3`): `PyValue_AsPyObjectNewBoxed` merged into it |
 | Exit, borrowed (call adapter) | `_PyBorrow_ValueVector`, `_PyBorrow_Keep` | Valid until the scope exits ([native-boundary.md](native-boundary.md) §2) | Exist |
 | Value known to hold an object | `PyValue_AsKnownObjectBorrow(v)`, `PyValue_AsKnownObjectSteal(v)` | Masks the tag. Precondition: `v` holds an object or is NULL. Release builds test it during V1–V7 and call a cold `_PyValue_FatalNotObject` on an inline value. V7 measures the test and decides whether it stays | `PyValue_AsPyObjectBorrow`/`Steal`, 892 uses including generated code; renamed in V1 (R1) |
@@ -273,9 +273,10 @@ a `_testcapi` test that pins the round trips above, so a change is deliberate.
 
 | Today | Becomes | Uses | When |
 |---|---|---|---|
-| `PyValue_FromPyObjectSteal` | `PyValue_FromObjectSteal` | 155 | representation step 8 |
-| `PyValue_FromPyObjectBorrow` | merged into `PyValue_FromObjectBorrow` | 13 | step 8 |
-| `PyValue_FromPyObjectNew`, `…NewMortal`, `…StealMortal` | deleted | 53, 1, 14 | step 8 |
+| `PyValue_FromPyObjectSteal` | `PyValue_FromObjectSteal` | 155 | A5b's pair merges (deferred from step 8, where it would have collided with the A1/A2 generated files); it canonicalizes since step 8 |
+| `PyValue_FromPyObjectBorrow` | merged into `PyValue_FromObjectBorrow` | 13 | A5b (deferred from step 8); it canonicalizes since step 8 |
+| `…NewMortal`, `…StealMortal` | deleted | 1, 14 | done, step 8 (`308a86c3914`) |
+| `PyValue_FromPyObjectNew` | deleted | 53 | A5b (deferred from step 8); it canonicalizes since step 8 |
 | `PyValue_AsPyObjectBorrow`, `PyValue_AsPyObjectSteal` | `PyValue_AsKnownObjectBorrow`, `…Steal`, checked | 892 | V1 |
 | `PyValue_AsPyObjectNewBoxed` | merged into `PyValue_AsObject` | 13 | V1 |
 | `PyValue_Box` | deleted | 105 | V2a-1 |

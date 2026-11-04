@@ -277,7 +277,7 @@ locals, cells, free variables         | temporaries (canonical first, then compa
 - **Values.** A slot holds a `PyValue`: a tagged 64-bit value that can hold an
   inline int or float, or an object pointer with a borrow bit (`Py_TAG_REFCNT`).
   On every store the handlers *publish* boxed int and float objects in canonical
-  inline form (`pycore_value.h:_PyValueTemps_Publish`).
+  inline form (`pycore_value.h:_PyValue_Publish`).
 
 #### State at a word boundary
 
@@ -368,7 +368,7 @@ across edges and stay as the conversion made them (`regcfg_passes.c` header).
 runs before store elimination. `RUNS_CODE` is a property of the format, but
 whether a word may run Python code also depends on its operands. A
 `STORE_DST` word whose dst names a local releases the local's old value
-(`IR_STORE_DST` calls `_PyValueTemps_RetireLocal`), and that can run
+(`IR_STORE_DST` calls `IR_RETIRE_LOCAL`), and that can run
 `__del__`, which can rebind any local through `frame.f_locals`. `LOAD_CONST`,
 `LOAD_SMALL_INT_INLINE`, `LOAD_FAST_BORROW`, `LOAD_DEREF` and `PUSH_NULL` are
 `STORE_DST` formats without `RUNS_CODE`. While copy propagation runs, every

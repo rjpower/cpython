@@ -459,6 +459,58 @@ class TestIRCases(unittest.TestCase):
                                     "may borrow a local in place on some paths"):
             self.ir_output(input)
 
+    def test_inplace_inputs_untracked_copies(self):
+        # The emitter follows a value that borrows a local in place only
+        # into stack variables, and its object only into assignments.  An
+        # input copied elsewhere, or whose object reaches a function that
+        # takes it over or releases it, is kept: no local reaches its field.
+        input = """
+        inst(OP_COPY_CLOSE, (value -- res)) {
+            PyValue a;
+            a = value;
+            DEAD(value);
+            res = PyValue_FromPyObjectSteal(SPAM(PyValue_AsKnownObjectBorrow(a)));
+            PyValue_CLOSE(a);
+        }
+        inst(OP_COPY_STORE, (value -- res)) {
+            PyValue v2 = PyValue_None;
+            v2 = value;
+            DEAD(value);
+            res = v2;
+        }
+        inst(OP_OBJECT_STEAL, (value -- res)) {
+            PyObject *o = PyValue_AsKnownObjectBorrow(value);
+            DEAD(value);
+            res = PyValue_FromPyObjectSteal(o);
+        }
+        inst(OP_OBJECT_COPY_RELEASE, (value --)) {
+            PyObject *o = PyValue_AsKnownObjectBorrow(value);
+            PyObject *p;
+            p = o;
+            DEAD(value);
+            Py_DECREF(p);
+        }
+        inst(OP_OBJECT_NESTED_STEAL, (value -- res)) {
+            res = PyValue_FromPyObjectSteal(PyValue_AsKnownObjectBorrow(value));
+            DEAD(value);
+        }
+        inst(OP_OBJECT_TARGET, (value, item --)) {
+            int err = SPAM_TakeRef((PyObject *)PyValue_AsKnownObjectBorrow(value),
+                                   PyValue_AsKnownObjectSteal(item));
+            PyValue_CLOSE(value);
+            ERROR_IF(err);
+        }
+    """
+        formats = self.formats(input)
+        for name in ("OP_COPY_CLOSE", "OP_COPY_STORE", "OP_OBJECT_STEAL",
+                     "OP_OBJECT_COPY_RELEASE", "OP_OBJECT_NESTED_STEAL"):
+            self.assertEqual(formats[name].borrow_mask, 0, name)
+        # The target of a function that takes its other arguments is read
+        self.assertEqual(formats["OP_OBJECT_TARGET"].borrow_mask, 3)
+        output = self.handler(self.ir_output(input), "OP_OBJECT_TARGET")
+        self.assertIn("if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) "
+                      "_PyValue_CLOSE_POINTER(value);", output)
+
     def test_consumed_inputs(self):
         # A handler takes the inputs that it consumes: the slot of a
         # temporary becomes NULL, and a local keeps its value.  No handler

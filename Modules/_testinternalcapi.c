@@ -3160,6 +3160,40 @@ inline_locals(PyObject *self, PyObject *frame)
     return names;
 }
 
+// The slots of the frame (locals and temporaries) that hold a mortal
+// object with the no-count tag: a borrow, which no frame slot may hold
+// (pyjit/design/pyvalue.md D4).
+static PyObject *
+tagged_mortal_slots(PyObject *self, PyObject *frame)
+{
+    if (!PyFrame_Check(frame)) {
+        PyErr_SetString(PyExc_TypeError, "argument must be a frame");
+        return NULL;
+    }
+    _PyInterpreterFrame *f = ((PyFrameObject *)frame)->f_frame;
+    PyValue *slots = _PyFrame_Slots(f);
+    PyObject *found = PyList_New(0);
+    if (found == NULL) {
+        return NULL;
+    }
+    for (int i = 0; i < _PyFrame_NumSlots(f); i++) {
+        PyValue v = slots[i];
+        if (!PyValue_IsObject(v) || (v.bits & Py_TAG_REFCNT) == 0
+            || _Py_IsImmortal(PyValue_AsKnownObjectBorrow(v)))
+        {
+            continue;
+        }
+        PyObject *index = PyLong_FromLong(i);
+        if (index == NULL || PyList_Append(found, index) < 0) {
+            Py_XDECREF(index);
+            Py_DECREF(found);
+            return NULL;
+        }
+        Py_DECREF(index);
+    }
+    return found;
+}
+
 /* Exercise the public owning bridge, including canonicalization of an owned
  * object result, which releases a scalar box at once. */
 static PyObject *
@@ -4350,6 +4384,7 @@ static PyMethodDef module_functions[] = {
     {"incref_decref_delayed", incref_decref_delayed, METH_O},
     {"value_box_roundtrip", value_box_roundtrip, METH_O},
     {"inline_locals", inline_locals, METH_O},
+    {"tagged_mortal_slots", tagged_mortal_slots, METH_O},
     GET_NEXT_DICT_KEYS_VERSION_METHODDEF
 #ifdef __EMSCRIPTEN__
     {"emscripten_set_up_async_input_device", emscripten_set_up_async_input_device, METH_NOARGS},

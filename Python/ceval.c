@@ -849,6 +849,7 @@ value_operation_restore2(_PyValueOperation *operation,
         int slot = operation->input_slots[i];
         if (slot >= nlocals) {
             slots[slot] = *owners[i];
+            _PyValue_CheckTemp(slots[slot]);
             *owners[i] = PyValue_NULL;
         }
     }
@@ -935,6 +936,7 @@ value_operation_restore1(_PyValueOperation *operation, PyValue *owner)
     }
     if (slot >= operation->code->co_nlocalsplus) {
         _PyFrame_Slots(frame)[slot] = *owner;
+        _PyValue_CheckTemp(_PyFrame_Slots(frame)[slot]);
         *owner = PyValue_NULL;
     }
     return 0;
@@ -1992,6 +1994,7 @@ value_reader_complete(_PyValueOperation *operation, _PyInstr *next,
     *result = _PyValue_Publish(result);
     if (!local) {
         _PyFrame_Slots(frame)[slot] = *result;
+        _PyValue_CheckTemp(_PyFrame_Slots(frame)[slot]);
     }
     value_operation_close3(first, second, NULL);
     _PyValueTemps_Close(temps);
@@ -2035,6 +2038,8 @@ value_attribute_complete(_PyValueOperation *operation, _PyInstr *next,
     *self = _PyValue_Publish(self);
     _PyFrame_Slots(frame)[slot] = *result;
     _PyFrame_Slots(frame)[slot + 1] = *self;
+    _PyValue_CheckTemp(_PyFrame_Slots(frame)[slot]);
+    _PyValue_CheckTemp(_PyFrame_Slots(frame)[slot + 1]);
     value_operation_close3(receiver, NULL, NULL);
     _PyValueTemps_Close(temps);
     return value_operation_refresh(operation, next, NULL);

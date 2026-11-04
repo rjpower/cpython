@@ -15,6 +15,7 @@ from test.support import import_helper, requires_refcounting, script_helper
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
 roundtrip = getattr(_testinternalcapi, "value_box_roundtrip", None)
 inline_locals = getattr(_testinternalcapi, "inline_locals", None)
+tagged_mortal_slots = getattr(_testinternalcapi, "tagged_mortal_slots", None)
 # Canonical inline values are mandatory in the supported private runtime.
 TAGGED_VALUES = getattr(_testinternalcapi, "TAGGED_VALUES", None)
 THRESHOLD = _testinternalcapi.SPECIALIZATION_THRESHOLD
@@ -412,6 +413,31 @@ class FrameSlotTest(unittest.TestCase):
         self.assertFalse(deleted)
         del obj
         self.assertTrue(Witness.deleted)
+
+    @unittest.skipIf(tagged_mortal_slots is None,
+                     "needs _testinternalcapi.tagged_mortal_slots")
+    def test_call_window_holds_no_borrow(self):
+        # While a call's later arguments are evaluated, the caller's window
+        # holds the earlier ones: a local's object, and the receiver of a
+        # method call (LOAD_ATTR_METHOD_*), each with a count of its own.
+        class Box:
+            def take(self, obj, found):
+                return found
+
+        def probe():
+            return tagged_mortal_slots(sys._getframe(1))
+
+        def call_function(obj):
+            x = obj
+            return Box.take(None, x, probe())
+
+        def call_method(box, obj):
+            return box.take(obj, probe())
+
+        for _ in range(THRESHOLD * 2):
+            self.assertEqual(call_function(object()), [])
+            self.assertEqual(call_method(Box(), object()), [])
+        self.assertIn("LOAD_ATTR_METHOD_WITH_VALUES", opnames(call_method))
 
 
 def warm(func, *args, **kwargs):

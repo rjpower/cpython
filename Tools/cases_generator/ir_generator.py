@@ -517,12 +517,19 @@ def classify_inputs(inst: Instruction, n_inputs: int) -> list[str]:
 # - read it, as an argument of a function that only reads its value
 #   arguments (INPLACE_READERS, the PyValue_Is* tests), through `.bits`,
 #   or in `(void)name`;
-# - copy it to a variable, which then borrows the same local.
+# - copy it to a stack input or output of the uop, which then borrows the
+#   same local (IREmitter.note_pointer_assignment() follows only those);
+# - read its object with PyValue_AsKnownObjectBorrow(), which has no count
+#   either: that object, or a variable that it is assigned to, must not be
+#   an argument that a function takes over or releases (consumed_argument()).
 # Any other use, a store or a function that may keep it, keeps the input:
 # the format does not let a local reach its field (compute_format(),
 # kept_inputs()), and the generator refuses such a use of a value that
 # still may borrow a local (IREmitter.check_inplace_input()).  So a handler
-# cannot keep or release a local's reference without a count.
+# cannot keep or release a local's reference without a count, through the
+# value or through those copies.  An object pointer that reaches another
+# variable through an expression (a field, an array, a conditional) is not
+# followed: A5b's typed borrow covers that.
 INPLACE_RELEASES = {"PyValue_CLOSE", "PyValue_XCLOSE",
                     "PyValue_CLOSE_SPECIALIZED"}
 INPLACE_OWNERS = {"PyValue_MakeHeapSafe", "PyValue_AsKnownObjectSteal"}
@@ -543,12 +550,72 @@ INPLACE_READERS = {
 }
 
 
+INPLACE_OBJECT_READERS = {"PyValue_AsKnownObjectBorrow"}
+# Functions that take over or release a PyObject * argument: those named
+# "Steal" take every argument, those named "Take" and the SET_ITEM setters
+# every argument but the first, their target
+OBJECT_RELEASES = {"Py_DECREF", "Py_XDECREF", "Py_CLEAR", "Py_SETREF",
+                   "Py_XSETREF", "Py_DecRef", "Py_XDecRef"}
+
+
+def call_argument(tokens: list[Token], i: int) -> tuple[str | None, int]:
+    """The function whose argument list holds tokens[i] directly, and the
+    position of that argument; None if tokens[i] is not in one"""
+    depth = 0
+    position = 0
+    for j in range(i - 1, -1, -1):
+        text = tokens[j].text
+        if text == ")":
+            depth += 1
+        elif text == "(":
+            if depth == 0:
+                if j > 0 and tokens[j - 1].kind == "IDENTIFIER":
+                    return tokens[j - 1].text, position
+                return None, 0
+            depth -= 1
+        elif text == "," and depth == 0:
+            position += 1
+        elif text in (";", "{", "}") and depth == 0:
+            return None, 0
+    return None, 0
+
+
+def consumed_argument(tokens: list[Token], i: int) -> bool:
+    "Whether a function takes over or releases its argument at tokens[i]"
+    callee, position = call_argument(tokens, i)
+    if callee is None:
+        return False
+    if "Steal" in callee or callee in OBJECT_RELEASES:
+        return True
+    if "Take" in callee or callee.endswith("_SET_ITEM"):
+        return position > 0
+    return False
+
+
+def assigned_name(tokens: list[Token], start: int, end: int) -> str | None:
+    """The variable that `name = (cast) tokens[start..end];` assigns, as a
+    statement or a declaration (the cast is optional), or None"""
+    if end + 1 >= len(tokens) or tokens[end + 1].text != ";":
+        return None
+    j = start - 1
+    if j >= 0 and tokens[j].text == ")":
+        while j >= 0 and tokens[j].text != "(":
+            j -= 1
+        j -= 1
+    if j < 1 or tokens[j].text != "=" or tokens[j - 1].kind != "IDENTIFIER":
+        return None
+    return tokens[j - 1].text
+
+
 def inplace_input_use(uop: CodeSection, name: str) -> Token | None:
     """The first use of name, which may borrow a local in place, in the
     body of uop that is not one of those above, or None.  Uses inside
     assert() vanish from release builds and are not checked."""
     tokens = list(uop.body.tokens())
+    stack_names = ({item.name for item in uop.stack.inputs + uop.stack.outputs}
+                   if isinstance(uop, Uop) else set())
     names = {name}
+    objects: set[str] = set()  # Variables that hold its object, uncounted
     i = 0
     while i < len(tokens):
         tkn = tokens[i]
@@ -563,6 +630,15 @@ def inplace_input_use(uop: CodeSection, name: str) -> Token | None:
                         break
             i += 1
             continue
+        if (tkn.kind == "IDENTIFIER" and tkn.text in objects
+                and not (i > 0 and tokens[i - 1].text in (".", "->"))):
+            if consumed_argument(tokens, i):
+                return tkn
+            copy = assigned_name(tokens, i, i)
+            if copy is not None:
+                objects.add(copy)
+            i += 1
+            continue
         if (tkn.kind != "IDENTIFIER" or tkn.text not in names
                 or (i > 0 and tokens[i - 1].text in (".", "->"))):
             i += 1
@@ -572,6 +648,9 @@ def inplace_input_use(uop: CodeSection, name: str) -> Token | None:
         if (prev == "=" and nxt == ";" and i >= 2
                 and tokens[i - 2].kind == "IDENTIFIER"
                 and (i < 3 or tokens[i - 3].text in (";", "{", "}"))):
+            if tokens[i - 2].text not in stack_names:
+                # The emitter follows copies to stack variables only
+                return tkn
             names.add(tokens[i - 2].text)  # A copy, which borrows too
         elif prev == ")" and nxt == ";" and i >= 3 \
                 and tokens[i - 2].text == "void" and tokens[i - 3].text == "(":
@@ -586,6 +665,13 @@ def inplace_input_use(uop: CodeSection, name: str) -> Token | None:
                     or callee in INPLACE_READERS
                     or callee.startswith("PyValue_Is")):
                 return tkn
+            if callee in INPLACE_OBJECT_READERS and whole:
+                # Its object, which has no count either
+                if consumed_argument(tokens, i - 2):
+                    return tkn
+                holder = assigned_name(tokens, i - 2, i + 1)
+                if holder is not None:
+                    objects.add(holder)
         elif nxt == "." and i + 3 < len(tokens) and tokens[i + 2].text == "bits" \
                 and tokens[i + 3].text not in ASSIGNMENT_OPS:
             pass
@@ -2216,6 +2302,11 @@ class IREmitter(Emitter):
         for var in storage.inputs + storage.outputs:
             if var.name == tkns[0].text:
                 var.ir_inplace = source.ir_inplace
+                return
+        # inplace_input_use() keeps such an input out of borrow_mask
+        raise analysis_error(
+            f"'{tkns[0].text}', not a stack variable, would borrow a local "
+            f"in place through '{tkns[2].text}'", tkns[0])
 
     def consume_killed(self, storage: Storage) -> None:
         """Clear the slots of the inputs that the handler has taken: a dead

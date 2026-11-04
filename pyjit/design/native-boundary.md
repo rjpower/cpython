@@ -328,6 +328,13 @@ extern int _PyBorrowStack_Visit(PyThreadState *tstate, visitproc visit,
                                 void *arg);
 ```
 
+The borrow stack has a partner per activation: the eval loop's activation
+record, `_PyEvalActivation` (see the
+[register IR v2 packet](proposals/register-ir-v2-packet.md), step A3a). Both
+hold owned references. The record's boxes live for one handler. The stack's
+entries live for one scope. The thread state points to the innermost record
+as it points to the innermost floor, and stack switching saves both (§3).
+
 `_PyBorrow_RequestRelease` is exported because the inline
 `_PyEval_EvalFrame` calls it. `_PyBorrow_TupleItems` takes the tuple and
 `count`, as in decision 8 (Python/borrow.c:_PyBorrow_TupleItems). The stack
@@ -601,7 +608,10 @@ recursion depth).
 
 **Stack switching.** Code that switches C stacks inside one thread state
 (greenlet, gevent, eventlet) gives each C stack its own `_PyBorrowStack`,
-including its `eval_floor`, and swaps it as it swaps `datastack_*`. The runtime
+including its `eval_floor`, and swaps it as it swaps `datastack_*`. It also
+saves and restores the thread state's activation-record pointer
+(`_PyEvalActivation`, §2) together with `current_frame` and the borrow stack.
+The runtime
 provides internal save and restore functions for this, and greenlet goes on the
 port list with this requirement. Without it, greenlet A's trampoline Exit would
 release greenlet B's live entries, and B's later Exit would find `top` below

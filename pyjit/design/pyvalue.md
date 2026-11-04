@@ -811,8 +811,11 @@ immortal one. The fix is correct for the core. G1' covers what it left open.
 * **Cost and risk.** The typed borrow touches every core signature that takes
   a borrowed value. It changes the masks in `PyValue_Is` and
   `AsPyObjectBorrow` only if bit 2 is kept.
-* **When.** The debug asserts and the `traverse_slots` fix before baseline. The
-  typed form after the joint decision.
+* **When.** D4 lands in two steps of the
+  [register IR v2 packet](proposals/register-ir-v2-packet.md) (revised
+  2026-11-04). Frame homes, in step A5a, follow representation step 8. The
+  typed form, the debug asserts and the `traverse_slots` fix, in step A5b,
+  follow step 9a.
 
 ### G7. Per-element tagging versus storage strategies (non-goal)
 

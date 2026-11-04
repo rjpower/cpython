@@ -14,6 +14,14 @@ second.
 
 **Accepted after review 2 (2026-11-03).**
 
+**Revised 2026-11-04.** The coordinator accepted the
+[register IR v2 packet](proposals/register-ir-v2-packet.md) (revision 3;
+[review 1](reviews/register-ir-v2-packet-review-1.md),
+[review 2](reviews/register-ir-v2-packet-review-2.md)). Its edits to this
+document carry the note "(revised 2026-11-04, register IR v2 packet)" or sit in
+a paragraph that says so. Code counts that the packet recounted are now the
+counts at `48bb4d6d1d3`.
+
 **Source.** The working tree `build/worktrees/pyvalue-rc-universal`
 (branch `boil/pyvalue-rc-universal`) at HEAD `ca8a9d6d827` (2026-11-03). None
 of the files cited here had uncommitted changes when they were read. Since the
@@ -42,7 +50,9 @@ with that build and with the upstream release build
 Facts about the other VMs come from their public designs (V8
 `src/interpreter/bytecodes.h`, LuaJIT `src/lj_bc.h` and the bytecode wiki
 page, JSC `BytecodeList.rb` and LLInt, Lua 5.4 `lopcodes.h`), not from code
-in this repository. They have not been re-verified for this note.
+in this repository. They have not been re-verified for this note, except the
+dispatch-state and save-PC facts in §2.1, which review 1 of the v2 packet
+checked against the primary sources.
 
 ---
 
@@ -236,9 +246,10 @@ locals, cells, free variables         | temporaries (canonical first, then compa
   in-place read of a local sets the tag in the handler's C local
   (`IR_LOAD_BORROWED`, `IR_BORROW_KNOWN`). `IR_IS_LOCAL` and the macros built
   on it (`IR_LOAD_BORROWED`, `IR_CONSUME_INPUT`, `IR_STORE_DST`,
-  `IR_DROP_BORROW`) appear on 890 lines of the generated handlers; with
-  `IR_STORE_INPUT`, `IR_STORE_TEMP_DST`, `IR_MOVE_TO_DST` and
-  `IR_BORROW_KNOWN`, on 1,040.
+  `IR_DROP_BORROW`), with `IR_STORE_INPUT`, `IR_STORE_TEMP_DST`,
+  `IR_MOVE_TO_DST` and `IR_BORROW_KNOWN`, appear on 1,040 lines in 211
+  handlers of the generated file (recounted at `48bb4d6d1d3`; the earlier
+  count was 890 lines without the store and move macros).
 
   A JIT must preserve the slot class at every word boundary: a temporary
   that the next word consumes must hold a value, and every other temporary
@@ -402,8 +413,9 @@ each stage when `PYTHONREGCFGDUMP` is set (`regcfg.c:dump`).
 
 `assemble.c:assemble_words` works in five steps:
 
-1. **Checks the frame.** It raises `SystemError` if
-   `nlocalsplus + ntemps > IR_MAX_SLOTS`. Compaction may already have failed
+1. **Checks the frame.** It raises `SyntaxError` if
+   `nlocalsplus + ntemps > IR_MAX_SLOTS` (`assemble.c:943`; corrected
+   2026-11-04, register IR v2 packet). Compaction may already have failed
    with "too many temporaries" (`regcfg.c:occ_take`).
 2. **Chooses handlers** (`choose_handler`):
    - `BINARY_OP` becomes `_PyIR_BINARY_OP_FIRST + op`;
@@ -416,8 +428,8 @@ each stage when `PYTHONREGCFGDUMP` is set (`regcfg.c:dump`).
    handler whose static operand lives in its entry switches to its NOFB form.
 4. **Lays out the words** (`layout`). It iterates until no `FOR_ITER` or `SEND`
    exit is further than `_PyIR_MaxForward` words. Each relaxed loop grows to 4
-   or 3 words with `IR_JUMP` trampolines. It raises `SystemError` past 2^24
-   words.
+   or 3 words with `IR_JUMP` trampolines. It raises `SyntaxError` past 2^24
+   words (`too_large`, `assemble.c:716`; corrected 2026-11-04).
 5. **Encodes** (`encode`). Each role's value goes into its field. For a jump,
    the oparg is the absolute target word (`handler_oparg`). A slot field in
    unreachable code that does not fit becomes 0.
@@ -433,7 +445,7 @@ Static frequencies are percentages of all 4.57M words in the Lib corpus (§2.3).
 
 | Group | Handlers (generic, with notable specialisations) | Style | Notes |
 |---|---|---|---|
-| Moves | `LOAD_FAST_BORROW` (4.9%), `LOAD_FAST`, `LOAD_FAST_CHECK`, `LOAD_FAST_AND_CLEAR`, `STORE_FAST` (0.9%), `DELETE_FAST`, `COPY` (1.3%), `SWAP` (1.3%), `POP_TOP` (7.5%), `PUSH_NULL` (2.6%) | register / window | Most moves of locals fold away. The rest feed windows (calls, `with`, comprehensions), cross blocks, or drop a result (`POP_TOP` after `CALL`: 218,006 static pairs). |
+| Moves | `LOAD_FAST_BORROW` (4.9%), `LOAD_FAST`, `LOAD_FAST_CHECK`, `LOAD_FAST_AND_CLEAR`, `STORE_FAST` (0.9%), `DELETE_FAST`, `COPY` (1.3%), `SWAP` (1.3%), `POP_TOP` (7.5%), `PUSH_NULL` (2.6%) | register / window | Most moves of locals fold away. The rest feed windows (calls, `with`, comprehensions), cross blocks, or drop a result (`POP_TOP` after `CALL`: 229,553 static pairs, counting every `CALL*` family, intrinsics and `CALL_FUNCTION_EX` included). |
 | Constants | `LOAD_CONST` (9.8%), `LOAD_CONST_INLINE_INT/FLOAT`, `LOAD_SMALL_INT_INLINE` (3.0%), `LOAD_COMMON_CONSTANT` (5.1%) | register | Every constant takes a word and a temporary; no handler takes a constant operand (§1.7). |
 | Arithmetic | `BINARY_OP_<op>` × 27 (one per `NB_*`, `NB_ADD`…`NB_SUBSCR` = 0–26), `BINARY_OP_ADD_INT`, `_FLOAT`, `_UNICODE`, `_EXTEND`, …, `UNARY_*`, `CALL_INTRINSIC_1/2` | register | Specialisations deoptimise to the per-operation handler that the entry records (`IR_DEOPT_BINARY_OP`). |
 | Compare and test | `COMPARE_OP` (+ `_INT`, `_FLOAT`, `_STR`), `CONTAINS_OP` (+ `_DICT`, `_SET`), `IS_OP`, `TO_BOOL` (only for `not not x`) | register | Each produces a value in a temporary; a branch is a separate word. |
@@ -462,7 +474,7 @@ Static frequencies are percentages of all 4.57M words in the Lib corpus (§2.3).
 - `LOAD_COMMON_CONSTANT dst, i` loads `None`, `True`, `False`, `()` and a few
   others by index (`Lib/opcode.py:_common_constants`).
 - **No handler takes a constant operand.** Every constant costs a word, a
-  dispatch and a temporary slot. Constant loads are 855,432 of 4,574,431 static
+  dispatch and a temporary slot. Constant loads are 855,432 of 4,584,034 static
   words (18.7%). A constant-operand experiment was tried and rejected (§3, G6).
 
 ### 1.8 Control flow and jump encoding
@@ -586,6 +598,13 @@ executing copy (one allocation, ir.c:make_exec):
     MEGA. The interpreter's handlers are monomorphic. The poly tables exist
     for the JIT and for shape decisions (`specialize.c`, "Polymorphic
     feedback").
+- **The executing copy is fixed for the code object's life** (revised 2026-11-04, register IR v2 packet).
+  `_PyCode_GetExec` creates it once, and `_PyCode_ClearExec` frees it only from
+  `code_dealloc`, so `frame->ir_words` never changes while a frame runs.
+  Helpers that run reentrant code do not rebase the PC. Debug builds check
+  this at the old rebase sites, in `_PyCode_ClearExec` and, in the tail-call
+  debug build, at every dispatch. The `instr_ptr` restores rest on a separate
+  invariant and stay.
 - **Pristine words.** The code object's words keep the generic handlers.
   `_PyCode_GenericHandler` restores them on de-instrumentation, and every
   decoder reads operands from them (`ir.c`, file header).
@@ -667,7 +686,7 @@ thread data-stack chunk:
 
 - **Two backends.** Both are generated from one source by
   `Tools/cases_generator/ir_generator.py` into
-  `Python/generated_ir_cases.c.h` (18,772 lines, 292 `TARGET`s) and
+  `Python/generated_ir_cases.c.h` (20,710 lines, 292 `TARGET`s) and
   `Python/ir_targets.h`:
   - **Computed goto** (GCC, the qualified interim build):
     `DISPATCH_GOTO() = goto *opcode_targets[opcode]`.
@@ -675,11 +694,26 @@ thread data-stack chunk:
     function `(slots, tstate, next_instr, ir_word)`, and dispatch is
     `return instruction_funcptr_handler_table[opcode](...)`. A handler loads
     the frame from `tstate->current_frame` (`TAIL_CALL_LOAD_FRAME`).
+  - **The tail-call backend does not build at HEAD** (revised 2026-11-04, register IR v2 packet). The handlers are
+    included before the helpers they call, and `ceval_macros.h` stops with
+    `#error` unless the compiler has `preserve_none`. GCC 15.2 has `musttail`
+    and `no_callee_saved_registers` but not `preserve_none`; Clang 21 has
+    `preserve_none`. With two edits each builds, and each fails the same 9 test
+    files as computed goto in one diagnostic run, with the JIT compiled out.
+  - **The baseline JIT is compiled out under tail calls**, because its entry
+    state is loop-local (`pycore_jit.h:157`).
+  - **After IR v2's step A3, one backend.** The interpreter has tail-call
+    handlers only. A compiler with neither `preserve_none` nor
+    `no_callee_saved_registers` uses plain `musttail`, and a compiler without
+    `musttail` is unsupported. After step A3c the project's release, debug and
+    stats configurations all build with `musttail`, on GCC 15 and Clang 21,
+    and `--with-computed-gotos` goes.
 - **Fetch and decode** (`ceval_macros.h:NEXTOPARG`). `ir_word = *next_instr`,
   and `opcode = ir_word & 0xFFFF`. Under the GIL with computed goto,
   `IR_FIELD_A()` and the other field macros re-read each field from the word in
-  memory with a 16-bit load. The source says decoding from `ir_word` made GCC
-  spill `next_instr`. The tail-call and free-threaded builds decode `ir_word`.
+  memory with a 16-bit load. Under computed goto, `next_instr` stays in memory
+  with or without the escapes; under tail calls, the escapes are what keep it
+  there (revised 2026-11-04, register IR v2 packet). The tail-call and free-threaded builds decode `ir_word`.
 - **Prologue of every handler.** The generated code shows three steps:
   1. `frame->instr_ptr = next_instr` (289 of 292 handlers; `no_save_ip`
      handlers such as `IR_JUMP` skip it);
@@ -710,11 +744,11 @@ thread data-stack chunk:
 
 | Limit | Value | Where enforced | Why | Lib measurement |
 |---|---|---|---|---|
-| Slots per frame (locals + cells + free + temporaries) | 4,095 (fields 0–4,094) | `assemble.c:assemble_words`, `SystemError` | 12-bit slot field | max 803 (one code object > 256); p50 7, p99 25, p99.9 39 |
+| Slots per frame (locals + cells + free + temporaries) | 4,095 (fields 0–4,094) | `assemble.c:assemble_words`, `SyntaxError` | 12-bit slot field | max 803 (one code object > 256); p50 7, p99 25, p99.9 39 |
 | Feedback entries with own index | 4,095 per code object (v2: 4,095 units of 8 bytes, G5) | `assemble.c:assign_handlers` | 12-bit fb field | max 1,180 (entry 0 excluded); 127 code objects > 255; none > 4,095 entries (one passes 4,095 units) |
 | Past the entry limit | share entry 0, never specialise, NOFB form | `assign_handlers` | keeps the word fixed | never reached in Lib |
-| Words per code object | 2^24 − 1 | `assemble.c:layout`, `SystemError` | absolute 24-bit jump targets | max 7,764 words |
-| Constant and name indices | 2^24 − 1 in CD; 12 bits where a narrow field holds them | `assemble.c:encode`, `SystemError` | field width | max 4,048 constants; max 368 names |
+| Words per code object | 2^24 − 1 | `assemble.c:layout`, `SyntaxError` | absolute 24-bit jump targets | max 7,764 words |
+| Constant and name indices | 2^24 − 1 in CD; 12 bits where a narrow field holds them | `assemble.c:encode`, `SyntaxError` | field width | max 4,048 constants; max 368 names |
 | `FOR_ITER` and `SEND` exit | 2,047 words forward, then relaxation into 3–4 words | `assemble.c:layout` | 12-bit D | no stdlib loop is relaxed (note 06 §2.1) |
 | `BINARY_OP` operations | `NB_OPARG_LAST` | `assemble.c:choose_handler` | one handler per operation | – |
 | Handler indices | 65,535 | 16-bit field | – | 305 used |
@@ -732,17 +766,22 @@ The policy for code past each limit, today and in IR v2:
 
 | Limit | Today | IR v2 |
 |---|---|---|
-| Slots (4,095) | `SystemError` | `SyntaxError` naming the limit (G10); generated maximum 2,856 |
+| Slots (4,095) | `SyntaxError`, except compaction's "too many temporaries" (`SystemError`) | `SyntaxError` naming the limit, including compaction's (G10); generated maximum 2,856 |
 | Feedback entries (4,095, or 4,095 entries of 8 bytes, G5) | later sites share entry 0; NOFB forms | later sites share entry 0; no NOFB forms, except compare sites, which lower to `CALL_INTRINSIC_2` (G10) |
 | Names in a 12-bit field | not applicable (names in entries or CD) | Lowered to an intrinsic call with the name in a slot (O4, decided); one generated code object |
-| Words (2^24 − 1), constants in CD | `SystemError` | `SyntaxError`; generated maximum 432,946 words and 13,964 constants, far below 2^24 |
+| Words (2^24 − 1), constants in CD | `SyntaxError` (`assemble.c:716–720`, `too_large`) | `SyntaxError`, unchanged; generated maximum 432,946 words and 13,964 constants, far below 2^24 |
 | `FOR_ITER`/`SEND` exit (2,047) | relaxation | relaxation, under the signed-distance rule (§4.3) |
 
-The slot limit was meant to raise `SyntaxError` (note 06 §2.3, step 6b). It
-still raises `SystemError`, from compaction (`regcfg.c:occ_take`, "too many
-temporaries") or from the assembler. On the interim build, a function with
-5,000 locals fails with `SystemError: the code needs 5001 slots for its locals,
-cells, free variables and stack, and the register IR has at most 4095`.
+The slot limit was meant to raise `SyntaxError` (note 06 §2.3, step 6b).
+(revised 2026-11-04, register IR v2 packet): at `48bb4d6d1d3` limit errors already raise `SyntaxError`, from the
+assembler (`assemble.c:716–720`, `too_large`). A function with 5,000 locals
+fails with a `SyntaxError` that names the 4,095-slot limit. The one limit that
+still raises `SystemError` is compaction's "too many temporaries"
+(`regcfg.c`, `slot_error`, called at line 820). IR v2 step B1 changes it to
+`SyntaxError` and tests it through a test-only limit knob. Both "two live
+temporaries" checks, the allocator's (`regcfg.c:823`) and the verifier's
+(`regcfg.c:1279`), stay `SystemError`: they are compiler invariants, not
+limits.
 
 ### 1.15 Worked example
 
@@ -884,6 +923,30 @@ its taken side. §4.3 decides this.
     decodes the next instruction's operands during dispatch.
   - There is no per-site feedback in the bytecode; the trace recorder observes
     types.
+- **Dispatch state and save-PC** (revised 2026-11-04, register IR v2 packet). Review 1 checked these against
+  LuaJIT v2.1 (`src/vm_x64.dasc`, `lj_bc.h`) and V8 main
+  (`src/codegen/x64/register-x64.h`, `src/interpreter/interpreter-assembler.cc`,
+  `bytecodes.h`).
+  - **Fixed registers.** V8 keeps the accumulator in `rax`, the bytecode
+    offset in `r9`, the bytecode array in `r12` and the dispatch table in
+    `r15`. LuaJIT on x64 POSIX keeps `BASE` in `rdx` (not callee-saved, "refetched
+    anyway"), and `KBASE` in `r15`, `PC` in `rbx` and `DISPATCH` in `r14`, each
+    "must be C callee-save". On x86 and Windows x64 they are `edx`, `edi`,
+    `esi` and `ebx`.
+  - **State across calls into C.** V8's registers are frame slots off the
+    interpreted frame pointer, and it reloads the bytecode array after every
+    call "in case the debugger has been activated". LuaJIT keeps `PC`, `KBASE`
+    and `DISPATCH` in C callee-saved registers.
+  - **Operand decode.** LuaJIT's `ins_NEXT` decodes A, D and OP before
+    `jmp [DISPATCH+OP*8]`. V8 loads operands from the bytecode array by offset.
+  - **Saving the PC.** V8 calls `SaveBytecodeOffset` in `CallPrologue`, unless
+    the call is `MakesCallAlongCriticalPath`. LuaJIT handlers store
+    `mov SAVE_PC, PC` to a C-stack slot before the calls that need it.
+  - **Dispatch table.** V8 holds it in `r15`. LuaJIT's `DISPATCH` register
+    addresses one dynamic table and a static copy, and is also the base for
+    `global_State` and `jit_State`.
+  - **Compare and branch.** LuaJIT's `ISLT` consumes the following `JMP`
+    (`add PC, 4`, then `PC_RD`). V8 has no fused bytecode.
 - **JSC LLInt.**
   - Bytecode has narrow (8-bit), `wide16` and `wide32` forms, selected by
     prefixes.
@@ -928,7 +991,7 @@ added by review 1, **I** marks a feature that matters for the interpreter and
 | Immutable pristine code alongside the executing copy | yes (bytecode is not patched) | no | – | **present**, words duplicated | Medium. It doubles word memory for executed code. |
 | Base-relative call window, callee overlaps | no (register list, args copied into the callee frame) | yes | Lua yes | **partial** (exact-args Python calls only; generator callers and other paths copy) | Yes. Calls dominate (10.4% of words). |
 | Receiver kind in the call instruction | yes | n/a | – | **missing** (`PUSH_NULL` is a word: 2.6%) | Medium. |
-| Result-discarding call | `CallUndefinedReceiver` + nothing to store | `CALL` with B=1 (no results) | – | **missing** (`CALL` → `POP_TOP`: 218,006 static pairs) | Medium. |
+| Result-discarding call | `CallUndefinedReceiver` + nothing to store | `CALL` with B=1 (no results) | – | **missing** (`CALL` → `POP_TOP`: 229,553 static pairs, every `CALL*` family) | Medium. |
 | Loop header / hot counter | `JumpLoop` (depth arms OSR; budget per function) | `LOOP`, `FORL`, `ITERL`; hot counters hashed by PC (per loop) | JSC `loop_hint` (counter per code block) | **partial**: no header; `JUMP_BACKWARD_JIT_WARM` with one counter per code object, like V8 and JSC | Per-code heat suffices for a method JIT; per-loop counters are a tracing-JIT need (G7). J |
 | Interrupt and periodic check | budget on jumps and returns | hook dispatch table | – | **present** (eval-breaker load per back edge) | – |
 | Counted numeric loop | no | `FORI`/`FORL` | Lua `FORPREP`/`FORLOOP` | **partial** (`FOR_ITER_RANGE` specialisation) | Medium. `range` loops are common. |
@@ -958,7 +1021,7 @@ Static counts over the same 2,071 source files and 99,831 code objects:
 
 | | This IR (interim `eba351fee7d`) | Upstream `3a440b6` |
 |---|---|---|
-| Instructions | 4,574,431 words | 5,131,332 (not counting `CACHE` units; includes 22,875 `EXTENDED_ARG`) |
+| Instructions | 4,584,034 words | 5,131,332 (not counting `CACHE` units; includes 22,875 `EXTENDED_ARG`) |
 | Code bytes | 36,595,448 (8.0 B per instruction) | 25,588,246 with inline caches (5.0 B per instruction) |
 | Feedback init table in the code object | 6,294,632 B (1,573,658 entries × 4 B) | – |
 | Executing state if every function ran | words 36.6 MB again, plus 1,573,658 × 40 B = 62.9 MB of entries | in place |
@@ -1015,8 +1078,8 @@ What this means for word width:
   handler numbers. §3, G8 discusses this.
 
 Unpacking, which G4 uses: Lib has 9,871 static `UNPACK_SEQUENCE` words, and
-7,250 of them (73.4%) unpack two values; 9,842 (99.7%) unpack at most seven. In 8,894 the next *n* words are
-`STORE_FAST`s (20,397 stores). In 8,057 (81.6% of all unpacks) those stores
+7,250 of them (73.4%) unpack two values; 9,842 (99.7%) unpack at most seven. In 8,887 the next *n* words are
+`STORE_FAST`s (20,397 stores). In 8,050 (81.6% of all unpacks) those stores
 name consecutive locals in element order.
 
 ### 2.4 Dynamic counts on the internal kernels
@@ -1097,6 +1160,47 @@ as `FOR_ITER`'s iterator) counts as both. The NULL column is an upper bound:
   about 2.5–4 slot memory operations per word for it. Those operations hit the
   frame's cache lines, so each is cheap next to a dispatch, but the NULL
   stores alone nearly match the writes (G9).
+- **Words the v2 steps remove** (revised 2026-11-04, register IR v2 packet). The table gives, per kernel, the
+  words of the current IR (C) against upstream instructions (U), the share of
+  C that each of steps B5, B6 and B7 removes if the compiler applies it at every
+  counted site, and C/U after each step. The source is
+  `build/pyjit-link-wave1/irv2/steps.py` over `irv2/dyn-v2/`, with the
+  window-fed constants from review `mydyn2.txt`.
+
+  | Kernel | U instructions | C words | B5 | B6 | B7 | C/U now | after B5 | after B6 | after B7 |
+  |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+  | chaos | 10,532,435 | 7,321,871 | 0.7% | 2.3% | 4.2% | 0.70 | 0.69 | 0.67 | 0.65 |
+  | comprehensions | 3,223 | 2,417 | 2.4% | 0.8% | 0.8% | 0.75 | 0.73 | 0.73 | 0.72 |
+  | coroutines | 3,884,596 | 3,277,628 | 7.4% | 7.4% | 7.4% | 0.84 | 0.78 | 0.72 | 0.66 |
+  | deltablue | 726,098 | 545,927 | 4.0% | 6.0% | 0.1% | 0.75 | 0.72 | 0.68 | 0.68 |
+  | fannkuch | 70,923,145 | 53,069,157 | 3.5% | 5.4% | 20.5% | 0.75 | 0.72 | 0.68 | 0.53 |
+  | float | 12,199,935 | 7,899,942 | 1.3% | 3.8% | 0.0% | 0.65 | 0.64 | 0.61 | 0.61 |
+  | generators | 6,806,866 | 6,106,863 | 0.0% | 0.0% | 2.2% | 0.90 | 0.90 | 0.90 | 0.88 |
+  | go | 28,667,983 | 18,762,468 | 2.2% | 7.1% | 2.5% | 0.65 | 0.64 | 0.59 | 0.58 |
+  | nbody | 28,581,241 | 19,300,999 | 7.8% | 0.0% | 8.8% | 0.68 | 0.62 | 0.62 | 0.56 |
+  | nqueens | 14,592,232 | 11,850,310 | 0.7% | 2.0% | 4.5% | 0.81 | 0.81 | 0.79 | 0.75 |
+  | raytrace | 41,877,624 | 29,606,956 | 3.7% | 0.9% | 0.5% | 0.71 | 0.68 | 0.67 | 0.67 |
+  | richards | 9,784,097 | 5,789,061 | 0.7% | 1.5% | 0.5% | 0.59 | 0.59 | 0.58 | 0.58 |
+  | spectral_norm | 19,045,221 | 17,011,597 | 8.1% | 0.0% | 0.0% | 0.89 | 0.82 | 0.82 | 0.82 |
+  | unpack_sequence | 5,679 | 9,667 | 91.1% | 0.0% | 0.0% | 1.70 | 0.15 | 0.15 | 0.15 |
+  | **Geometric mean** | | | | | | **0.78** | **0.64** | **0.62** | **0.59** |
+  | Without unpack_sequence | | | | | | 0.74 | 0.71 | 0.69 | 0.66 |
+
+  - **B5** counts the `POP_TOP` of the result of the `CALL*` just before it
+    (not the intrinsics), `PUSH_NULL`, the `STORE_FAST`s of an unpack into
+    consecutive locals, and the `LOAD_FAST_BORROW` of the unpacked sequence or
+    appended value.
+  - **B6** counts compares whose result is the condition of the next
+    conditional jump. It does not count loop inversion.
+  - **Loop-head shapes** (loop inversion is deferred, §4.3). Compare heads:
+    fannkuch 260,650 (0.5%), chaos 5,030, go 133. Constant-then-compare heads
+    (`while r != 1:`): fannkuch 260,650. Truth-test heads, which would need a
+    plain backward jump: fannkuch 1,731,245 (3.3%), richards 106,950 (1.8%),
+    nqueens 40,319.
+  - **B7** counts inline scalar constants loaded inside a loop, less those a call
+    or build window reads, which keep their load. For fannkuch the window-fed
+    constants are 4,086,019 `BUILD_SLICE` inputs, and for go 45,854. The
+    figures are still an upper bound on the compiler's coverage.
 - **Augmented subscripts.** Augmented subscripts carry stack-machine residue.
   `v[0] -= d` compiles to `LOAD_SMALL_INT`, `LOAD_FAST_BORROW` and `COPY`
   before the `BINARY_OP []`, `BINARY_OP -=` and `STORE_SUBSCR` that do the
@@ -1171,9 +1275,9 @@ it names.
 
 | # | Gaps | Decision |
 |---|---|---|
-| IR-D1 | G2, G3, G4, G5, G6, G10, §1.8 | The format changes are designed together as **one encoding revision, IR v2**: the operand-class bit (G2), the fused compare-and-jump (G3), calls without a result destination, omitting `PUSH_NULL` and unpacking into locals with a source field (G4), the feedback layout and index encoding (G5, G10), constants as hidden slots named by operands (G6), one jump-target rule and the conditional back-edge decision (§4.3). §4 gives the bit budget and the format list. Implementation comes after the PyValue representation packet (pyvalue.md D2, D5 and D3 int51, all decided) and before the JIT-off baseline. Its interpreter effect is measured as one step. |
+| IR-D1 | G2, G3, G4, G5, G6, G10, §1.8 | The format changes are designed together as **one encoding revision, IR v2**: the operand-class bit (G2), the fused compare-and-jump (G3), calls without a result destination, omitting `PUSH_NULL` and unpacking into locals with a source field (G4), the feedback layout and index encoding (G5, G10), constants as hidden slots named by operands (G6), one jump-target rule and the conditional back-edge decision (§4.3). §4 gives the bit budget and the format list. Implementation comes after the PyValue representation packet (pyvalue.md D2, D5 and D3 int51, all decided) and before the JIT-off baseline. Its interpreter effect is measured as one step. **Revised 2026-11-04, register IR v2 packet:** the revision lands as a sequence of steps, not one change. Steps B2 to B7 follow the tail-call landing (A3), and each bumps `PYC_MAGIC_NUMBER`. Handlers are renumbered densely in B2, B4, B5 and B6, and in B3 if it wins G2. Counts are recorded per step; elapsed time is measured after A5a, A3c and B7, and for G2. The contract table answers the churn argument: the decoders read it. Proposal and reviews: [packet](proposals/register-ir-v2-packet.md), [review 1](reviews/register-ir-v2-packet-review-1.md), [review 2](reviews/register-ir-v2-packet-review-2.md). |
 | IR-D2 | §5, G1 | The **instruction contract** (operand roles, slot reads and writes including those hidden in immediates, and effects: may run Python with its operand dependence, may raise, may deoptimise, releases the old dst, feedback kind, heap reads and writes, allocation, guards, result facts, monitoring events, pass-through inputs and targets) is generated by the cases generator into one exported table. It is the single source for the JIT front end and the compiler passes, and is built as part of IR v2. |
-| IR-D3 | G2, §1.4 | **Ownership is two facts.** The slot class (local or temporary) is static and lives in the instruction. The value tag says only "immortal or not". Decided jointly with [pyvalue.md](pyvalue.md) G6 and D4: no home (frame slot or heap field) ever holds a borrow; borrows exist only in C locals. |
+| IR-D3 | G2, §1.4 | **Ownership is two facts.** The slot class (local or temporary) is static. The value tag says only "immortal or not". Decided jointly with [pyvalue.md](pyvalue.md) G6 and D4: no home (frame slot or heap field) ever holds a borrow; borrows exist only in C locals. **Revised 2026-11-04, register IR v2 packet:** whether the slot class is encoded in the instruction (class bits, B3) or kept in dispatch state (A4) is G2's decision. D4 lands in two steps whichever way G2 goes: frame homes after representation step 8 (A5a), and after 9a the typed borrow, D4's debug asserts, the producer list, `traverse_slots` and the removal of `MakeHeapSafe` from setters (A5b). |
 | IR-D4 | §1.4, §6, §7 | The state at a word boundary, liveness export and OSR entry are **open decisions for the JIT stage**. §7 lists them with their options and costs; §6 lists the interfaces the JIT needs. |
 
 The gaps below are ordered by priority. Each one states the problem, the
@@ -1221,8 +1325,8 @@ owner asks for no intermediate performance gates).
   also sets the borrow tag on in-place reads, which merges the slot class with
   the value tag (§1.4).
 - **Evidence.**
-  - 890 lines of `generated_ir_cases.c.h` use these macros (1,040 counting
-    the store and move macros).
+  - 1,040 lines in 211 handlers of `generated_ir_cases.c.h` use these macros,
+    counting the store and move macros (recounted at `48bb4d6d1d3`).
   - Note 06 §12.3: with `IR_IS_LOCAL` stubbed to 0, GCC's loop had 2,021
     frame-pointer references instead of 3,736. That is a static count, not a
     time.
@@ -1255,7 +1359,12 @@ owner asks for no intermediate performance gates).
     non-slot fields are zero.
   - **Readers that must mask with `0xFFF`.** Each of these reads or rewrites
     the handler half-word today with a 16-bit mask (paths relative to the
-    source tree):
+    source tree). (revised 2026-11-04, register IR v2 packet): five literal `0xFFFF` masks remain at `48bb4d6d1d3`:
+    `pycore_ir.h:71` (`IR_HANDLER`), `pycore_ir.h:272` (`_PyIR_SetHandler`),
+    `specialize.c:311`, `Lib/dis.py:413` and
+    `Modules/_remote_debugging/code_objects.c:495`, which reads another
+    process's memory. Every other reader goes through `IR_HANDLER`, with about
+    70 uses in 17 files. The list below is the set of readers to check.
     - `Include/internal/pycore_ir.h:IR_HANDLER`, the macro behind almost
       every C reader, and `_PyIR_SetHandler` (it must keep bits 12–15; the
       word constructor `IR_WORD` must set them);
@@ -1275,12 +1384,14 @@ owner asks for no intermediate performance gates).
       `Objects/codeobject.c:_PyCode_Validate` and `check_words`;
       `Modules/_testinternalcapi.c:get_ir`;
     - tools: `Lib/dis.py:_unpack_words` (`word & 0xFFFF`), which
-      `_decode_word` and the `bench/ir` scripts use.
+      `_decode_word` and the `bench/ir` scripts use;
+    - out of process: `Modules/_remote_debugging/code_objects.c`.
   - **Consequence of D4.** A temporary must then hold an owned (or immortal)
     reference. `LOAD_FAST_BORROW` into a temporary, which today copies a
     local into a call window without a count, would take a count for a
     mortal object. Folding, source fields (G4) and constant slots (G6)
-    reduce such copies; the remaining cost must be measured with v2. The
+    reduce such copies; the remaining cost must be measured with v2. Statically,
+    Lib has 232,433 such words (recounted at `48bb4d6d1d3`). The
     count is the `LOAD_FAST_BORROW` words that write a temporary, taken
     dynamically per kernel. `dynamic_counts.py` now reports it
     (`load_fast_borrow_to_temp`): 7.5% of words on fannkuch, 8.5% on nbody,
@@ -1296,6 +1407,17 @@ owner asks for no intermediate performance gates).
   tail-call build, a local in the computed-goto loop), or load it once per
   handler. The decision rule below
   says what follows from the result.
+  - **Revised 2026-11-04, register IR v2 packet.**
+    - The control (A4) passes `nlocalsplus` to the class test explicitly.
+      Helpers outside the handlers read it from the executing copy's header.
+    - A4 and B3 are prototyped off-tree on the tail-call build (after A3), and
+      only the winner lands.
+    - Count the static operand roles before deciding. If the contract fixes
+      the destinations of the hottest producers as temporaries (the packet's
+      open question 9), the class test leaves those handlers without a bit or
+      a parameter.
+    - D4 lands in two steps whichever way G2 goes: A5a for frame homes after
+      representation step 8, A5b for the typed borrow after 9a (IR-D3).
   - **Decision rule.** Run the control and the temporary bits on the matched
     elapsed comparison. If keeping `nlocalsplus` in dispatch state recovers
     the cost, the bits are not needed: the JIT knows `nlocalsplus` at compile
@@ -1311,6 +1433,8 @@ owner asks for no intermediate performance gates).
   - The handler limit falls from 65,535 to 4,095, which is 13 times the
     handler count.
 - **When.** IR v2, before baseline (IR-D1). Run the control first.
+  Revised 2026-11-04, register IR v2 packet: the control and the bits are
+  prototyped off-tree after A3, and the winner lands as A4 or B3.
 
 ### G3. Compare and branch are separate words
 
@@ -1331,8 +1455,10 @@ owner asks for no intermediate performance gates).
   `{A: lhs, B: rhs, C: fb, D: signed 12-bit relative target}`, following
   the one jump-target rule (§4.3). All fusable pairs in Lib lie within
   ±2,047 words. Where a target does not fit, the compiler emits the existing
-  pair: it declines the optimisation and adds no second encoding. A backward
-  target is allowed, and its taken side polls the eval breaker (§4.3).
+  pair: it declines the optimisation and adds no second encoding. **Revised
+  2026-11-04, register IR v2 packet:** fused forms are forward only in v2. The
+  backward target and its eval-breaker poll are deferred with loop inversion
+  (§4.3).
   - One feedback entry serves both the compare and the branch: 32 bytes, the
     BINARY layout with the taken history in the reserved `misses` half-word
     (G5).
@@ -1351,10 +1477,12 @@ owner asks for no intermediate performance gates).
     fire `BRANCH_LEFT`/`BRANCH_RIGHT`: 3. Total 11, with no NOFB forms if G10
     gives every site an entry. If the sense must be in the handler instead,
     the count doubles to 22.
-  - Evaluator text: the evaluator averages about 0.76 KB
-    of `ceval.o` text per target (223 KB over 292 targets; hot
-    handlers are smaller). 11 handlers add roughly 8 KB, about 3.8%. Measure
-    it with v2.
+  - Evaluator text: the evaluator averages about 1.40 KB
+    per target (407,484 B of evaluator over 292 targets; hot
+    handlers are smaller). 11 handlers add roughly 15 KB (11 × 1.40 KB), about
+    3.8% of the evaluator (15.4 KB / 407,484 B). Measure it with v2.
+    Revised 2026-11-04, register IR v2 packet; the 15 KB is derived, not
+    measured.
   - A flowgraph or regcfg pass, and the line-event rules (compare and jump
     are on the same line today).
   - Per-instruction monitoring sees one word fewer. That is consistent with
@@ -1366,7 +1494,8 @@ owner asks for no intermediate performance gates).
 - **Problem.** Calls and unpacking take more words than the work requires:
   - `PUSH_NULL` is 2.6% of static words, and up to 7.4% of dispatches
     (coroutines, §2.4).
-  - `CALL` → `POP_TOP` occurs 218,006 times statically, and is up to 4.0% of
+  - `CALL` → `POP_TOP` occurs 229,553 times statically (every `CALL*`
+    family), and is up to 4.0% of
     dispatches (deltablue) and 1.8% on go and raytrace.
   - Locals passed as arguments are copied into the window by
     `LOAD_FAST_BORROW` (83,110 static `LOAD_FAST_BORROW → CALL` pairs).
@@ -1398,7 +1527,7 @@ owner asks for no intermediate performance gates).
      (`IR_STORE_DST` asserts NULL-or-equal on temporaries). It is a
      dispatched no-op that still saves `instr_ptr` and sets up the value
      scratch. The compiler omits it when its dst is a temporary, and the
-     verifier proves the slot dead (NULL) there. `LOAD_GLOBAL`'s NULL bit is
+     verifier proves the slot dead (NULL) there. `LOAD_GLOBAL`'s NULL bit (set at 93,334 static sites) is
      treated the same way: the window's second slot is already NULL, so the
      bit becomes a no-op. Since no `PUSH_NULL` names a local, the handler
      goes. No new form is needed, unlike the "push NULL" bit the first version
@@ -1557,8 +1686,9 @@ owner asks for no intermediate performance gates).
   loads.
   - **Table, owner and cap.** The assembler writes a constant-slot table into
     the code object, next to the feedback initialiser table: one entry per
-    slot, the slot index and the 8-byte inline value, which marshal stores
-    with the code. The frame push (`pycore_interpframe.h:_PyFrame_Initialize`
+    slot, the slot index and the `co_consts` index of its value
+    (revised 2026-11-04, register IR v2 packet: the executing copy builds the
+    values, so no value is stored in the table). The frame push (`pycore_interpframe.h:_PyFrame_Initialize`
     and its callers) fills the slots, for generator code objects too:
     `RETURN_GENERATOR` copies the whole frame (`_PyFrame_Copy`), so a
     generator's constant slots arrive filled. The assembler adds constants in
@@ -1584,7 +1714,10 @@ owner asks for no intermediate performance gates).
   - Entry cost: one store per constant slot, paid once per call of a function
     with a loop.
   - `f_locals`, `dis` and frame introspection must hide the slots.
-- **When.** IR v2, before baseline (IR-D1), with G2.
+- **Window-fed constants keep their loads** (revised 2026-11-04, register IR v2 packet): they are 27% of
+  fannkuch's loop constants (§2.4).
+- **When.** IR v2, before baseline (IR-D1), with G2. Revised 2026-11-04,
+  register IR v2 packet: step B7, after representation step 9a.
 
 ### G7. Heat and OSR: per code object for the method JIT, per loop for tracing
 
@@ -1665,8 +1798,17 @@ owner asks for no intermediate performance gates).
   - in the tail-call build, a frame load from `tstate` in each handler;
   - in the computed-goto build, operand fields re-read from memory.
 
-  The evaluator text is twice upstream's: 223 KB against 107 KB for
-  `ceval.o`.
+  Revised 2026-11-04, register IR v2 packet. The problem list also has:
+  - `next_instr` passed by address to 12 helper families (290 generated sites
+    in 185 handlers, plus `finish_value_bridges` in every handler);
+  - `frame`, `slots` and `tstate` kept in stack homes;
+  - the `_PyValueTemps` record in every handler (all 292);
+  - the canary that `-fstack-protector-strong` adds to a handler with an
+    address-taken local.
+
+  The evaluator text is more than five times upstream's: `ceval.o` text is
+  595,778 B against 107,446 B (5.5×), and the evaluator function is 407,484 B
+  against 58,419 B (7.0×) (recounted at `48bb4d6d1d3`).
 - **Evidence.**
   - The generated code (§1.13).
   - **C frame size (measured).** Each handler declared its own `value_boxes`
@@ -1674,8 +1816,8 @@ owner asks for no intermediate performance gates).
     `_PyEval_EvalFrameDefault`'s C frame was about 35.6 KB. One
     Python-to-C-to-Python recursion level then overran the stack check's
     safety margin. `ca8a9d6d827` shares one array across handlers, which cut
-    the frame to about 5.5 KB. Upstream's is about 360 B. The remaining
-    5.5 KB is per-handler address-taken `PyValue` locals (`&res`, `&left`,
+    the frame to about 5.5 KB; it is 3,304 B at `48bb4d6d1d3`. Upstream's is
+    about 360 B. The remaining 3,304 B is per-handler address-taken `PyValue` locals (`&res`, `&left`,
     `window`, …) in about 300 handlers: taking an address forces a local to
     memory, and GCC does not share the slots of different handlers. The cost
     is stack depth per Python call level (about 15 times upstream's), cache
@@ -1693,8 +1835,9 @@ owner asks for no intermediate performance gates).
      knows which uops escape.
   2. Stop recording branch history in specialised branch handlers, or record
      it only while the JIT is warming.
-  3. Drop the `value_temps` scratch from handlers that cannot box. This belongs
-     to the universal-value work (pyvalue.md D2 deletes the retire path).
+  3. Drop the `value_temps` scratch from handlers that cannot box. Revised
+     2026-11-04, register IR v2 packet: this is IR v2 step A1, driven by the
+     contract table's "boxes inputs" column (§5).
   4. Measure the NULL store per consumed temporary (§1.4): up to 0.66–1.21 per
      executed word on the kernels (§2.4). It is the price of having no stack
      pointer. Measure its time by compiling it out in a diagnostic build that
@@ -1710,8 +1853,25 @@ owner asks for no intermediate performance gates).
      `&res` and `&left`. Track the evaluator's C frame size as a metric, with
      upstream's 360 B as the reference; the tail-call build, whose handlers
      are separate functions, must keep its frames small too.
+
+     Revised 2026-11-04, register IR v2 packet. One activation record,
+     `_PyEvalActivation`, about 850 B, is the activation's one structure. It
+     holds the entry frame, the JIT state, the outer borrow floor, the box area
+     (37 boxes) and a generated per-handler scratch.
+     - Rules: the pointer is passed explicitly; handler fields are dead at
+       dispatch; it holds owned values only; it is never scanned; stack
+       switching saves the pointer.
+     - No handler or label takes the address of a C local. `&slots[F]` is
+       compatible with this: it points into the frame's slot array, which
+       lives in frame memory, not in a C local.
+     - The target is "no address-taken locals; frame at most N bytes",
+       checked by a script on every supported compiler.
 - **When.** After baseline. This is interpreter tuning against a measured
-  profile, not a format change.
+  profile, not a format change. Revised 2026-11-04, register IR v2 packet:
+  state transport and the activation record (steps A1 to A3) move before
+  baseline. The measured tail-call gain justifies them: a tail-call link of
+  HEAD runs 0.870× the computed-goto build on 12 kernels (review 1). The 39%
+  loop share of the gap does not.
 
 ### G10. Second encodings and stale descriptions
 
@@ -1770,9 +1930,13 @@ places. Each is cheap to fix.
     Keep the relaxation as the tested escape.
   - **When.** Cheap; any time.
 - **Limit errors.**
-  - **Problem.** Too many slots, words or opargs raise `SystemError`.
-  - **Proposal.** Raise `SyntaxError` at the code object's first line, with
-    the measured limit in the message, as note 06 §2.3 planned.
+  - **Problem.** Revised 2026-11-04, register IR v2 packet: limit errors
+    already raise `SyntaxError`, except `regcfg.c`'s "too many temporaries",
+    which raises `SystemError`.
+  - **Proposal.** Step B1 changes that one error to `SyntaxError` and tests
+    it through a test-only limit knob. Both "two live temporaries" checks, the
+    allocator's (`regcfg.c:823`) and the verifier's (1279), stay `SystemError`
+    as invariants.
   - **When.** Before baseline; this is cheap.
 - **Stale text that misleads future agents.**
   - **Problem.** Two descriptions no longer match the code:
@@ -1783,6 +1947,10 @@ places. Each is cheap to fix.
       `_PyFb_FAMILIES` list is what the contract table (§5) replaces.
     (Note 06 §13.1's copy-propagation kill is true again since
     `c66a0b29253`.)
+  - **Status.** Revised 2026-11-04, register IR v2 packet: the docstring,
+    `_PyFb_FAMILIES`' `RESUME` and `JUMP_BACKWARD` entries and `IR_MAX_FORWARD`
+    (2,047, `pycore_ir.h:69`, with no stated reason) are still stale at
+    `48bb4d6d1d3`.
   - **Proposal.** Correct the docstring now; the feedback list goes with v2.
   - **When.** Before baseline.
 
@@ -1832,12 +2000,17 @@ places. Each is cheap to fix.
 ### Summary
 
 IR v2 batches every format change into one encoding revision (IR-D1); the
-interpreter effect is measured once, after it lands.
+interpreter effect is measured once, after it lands. Revised 2026-11-04: the
+revision lands as the step sequence in the [register IR v2
+packet](proposals/register-ir-v2-packet.md) ([review
+1](reviews/register-ir-v2-packet-review-1.md), [review
+2](reviews/register-ir-v2-packet-review-2.md)), with elapsed time measured after
+A5a, A3c and B7.
 
 | # | Gap | When | Cost |
 |---|---|---|---|
 | G1 | Folded loads read locals after reentrant code: wrong results | **Done** (`c66a0b29253`); verifier check with the contract table | Small |
-| G10 | `SystemError` limits; stale docstring | **Before baseline** (those parts) | Small |
+| G10 | One `SystemError` limit (compaction's); stale docstring | **Before baseline** (those parts) | Small |
 | §5 | Instruction contract table (IR-D2) | **IR v2, before baseline** | Moderate |
 | G2 | Run-time slot-class test on every input | **IR v2**; run the no-format control first | Moderate |
 | G3 | No compare-and-branch fusion | **IR v2** | Moderate |
@@ -1846,7 +2019,7 @@ interpreter effect is measured once, after it lands.
 | G6 | No constant operands (constant slots) | **IR v2** | Moderate |
 | G10 | NOFB second encoding or a hard site limit; relaxation limit | **IR v2** | Small |
 | G12 | `NOT_TAKEN` words | **IR v2** | Small |
-| G9 | Per-dispatch fixed costs, NULL stores, evaluator text size; C frame 5.5 KB against upstream's 360 B | v2 handlers avoid address-taken locals; the rest after baseline, measured | Varies |
+| G9 | Per-dispatch fixed costs, NULL stores, evaluator text size; C frame 3,304 B against upstream's 360 B | v2 handlers avoid address-taken locals; state transport and the activation record move before baseline (steps A1 to A3); the rest after baseline, measured | Varies |
 | G7 | Heat and OSR | Method JIT: per-code heat and OSR at the hot back edge; tracing JIT: per-loop counters | Small |
 | G8 | Word width | Keep 64 bits in v2 (§4.1) | – |
 | G11 | Release-build verifier, FT C-held values, `dis` markers | Qualification | Small |
@@ -1861,6 +2034,16 @@ time would churn all of those four or five times, and the JIT would start on a
 moving format. IR-D1 batches them. This section is the proposal for review; it
 is implemented after the PyValue representation packet and before the JIT-off
 baseline.
+
+Revised 2026-11-04, register IR v2 packet ([packet](proposals/register-ir-v2-packet.md),
+[review 1](reviews/register-ir-v2-packet-review-1.md),
+[review 2](reviews/register-ir-v2-packet-review-2.md)). The format steps land
+as a sequence, B2 to B7, after the tail-call landing (A3). Each bumps its own
+magic number. Numbering is dense and regenerated in every step that adds or
+removes handlers: B2, B4, B5 and B6, and B3 if it wins G2. The churn argument
+for one revision is answered by the contract table (§5): the decoders read it.
+Counts are recorded per step. Elapsed time is measured after A5a, A3c and B7,
+and for G2.
 
 ### 4.1 Bit budget of the 64-bit word
 
@@ -1912,7 +2095,7 @@ every slot field gets a temporary bit in the handler half-word.
 | `UNPACK_EX` | `{BASE, –, CD counts}` | `{BASE, SRC, CD counts}` | G4.4 |
 | `LIST_APPEND`, `SET_ADD`, `MAP_ADD` | `{BASE, depth}` | `{BASE, –, SRC [, SRC2]}`: BASE is the container alone, depth is gone | G4.3 |
 | `COMPARE_OP`, `CONTAINS_OP`, `IS_OP` + conditional jump | two words | `JUMP_IF_<cmp> {lhs, rhs, FB, signed D}` when the pair is adjacent and in range | G3 |
-| Conditional jumps | `{cond, FB, CD absolute}` | unchanged; may target backward only in the fused form (§4.3) | §4.3 |
+| Conditional jumps | `{cond, FB, CD absolute}` | unchanged; forward only, as are fused forms (§4.3) | §4.3 |
 | `NOT_TAKEN` | a word after every conditional jump | removed | G12 |
 | `FOR_ITER`, `SEND` | forward distance in D, `IR_MAX_FORWARD` 2,047 | signed distance in D under the one rule; limit 2,047 each way | §4.3 |
 | `JUMP_BACKWARD` | `{–, –, CD target}` | `{FB?, –, CD target}`; field A reserved for a loop counter | G7 |
@@ -1929,12 +2112,15 @@ every slot field gets a temporary bit in the handler half-word.
   decoder, and the contract table records which field holds the target.
 - **Fallback.** A form whose target does not fit declines: the compiler emits
   the unfused pair (G3), or relaxes `FOR_ITER`/`SEND` with `IR_JUMP` as today.
-- **Conditional back edges.** Allowed, in the fused compare-and-jump only.
-  The taken side of a backward fused jump polls the eval breaker, as
-  `JUMP_BACKWARD` does (`_CHECK_PERIODIC`); the forward forms do not. This
-  enables loop inversion: the example loop's not-taken path drops from 4
-  dispatches to 3 (§1.15). Plain `POP_JUMP_IF_*` stay forward-only, so the
-  flowgraph's normalisation (`normalize_jumps_in_block`) stays for them.
+- **Conditional back edges.** Revised 2026-11-04, register IR v2 packet:
+  deferred. Fused forms are forward only in v2, and so is every other
+  conditional jump. Loop inversion waits with them. The loop heads it could
+  remove a back edge from are in §2.4; truth-test heads would need a plain
+  backward jump, which the design excludes. The flowgraph's normalisation
+  (`normalize_jumps_in_block`) stays. The first version allowed a backward
+  fused jump whose taken side polls the eval breaker as `JUMP_BACKWARD` does
+  (`_CHECK_PERIODIC`); that would have cut the example loop's not-taken path
+  from 4 dispatches to 3 (§1.15).
 
 ### 4.4 Decode cost and what v2 does not change
 
@@ -1974,8 +2160,10 @@ field and a metamethod column ("may call Lua").
 operands bound by the format. The contract makes that binding explicit.
 
 **The table.** `Tools/cases_generator` generates one row per handler into
-`pycore_ir_metadata.h`, exported to Python through `_opcode` for `dis`, tests
-and tools. It replaces `_PyFb_FAMILIES`, `_PyJitHomeEffect` and the passes'
+`pycore_ir_metadata.h`. Revised 2026-11-04, register IR v2 packet: the contract
+is `_PyIR_Formats` extended, and Python reads it through
+`_opcode.get_ir_contract()`, grown from `get_ir_formats()`, for `dis`, tests
+and tools. There is no generated Python copy (O1, decided). It replaces `_PyFb_FAMILIES`, `_PyJitHomeEffect` and the passes'
 own effect tests.
 
 | Column | Contents |
@@ -1985,13 +2173,13 @@ own effect tests.
 | Slots written | dst, window outputs (extent as a function of the oparg) |
 | Consumed or read in place | per input: consumed (a temporary is NULLed) or read in place |
 | May raise | from `HAS_ERROR` |
-| May run Python | the format's `RUNS_CODE`, **and** operand-dependent: "releases the old value of a local" when a `DST`, `LOCAL_OUT` or window output names a local, because the release can run `__del__`; and "the eval-breaker poll on a backward fused jump", whose taken side runs signal handlers, pending calls and the scheduled GC, which are Python code, so it depends on the sign of D in the same way |
+| May run Python | the format's `RUNS_CODE`, **and** operand-dependent: "releases the old value of a local" when a `DST`, `LOCAL_OUT` or window output names a local, because the release can run `__del__` |
 | Releases old dst | whether a write to a local releases the previous value (all stores do today) |
 | May deoptimise | and to which handler (the family head, or the per-operation `BINARY_OP` handler the entry records) |
 | May jump | and where the target is (CD absolute or 12-bit signed, §4.3) |
 | May suspend | `YIELD_VALUE`, `SEND` forms, `RETURN_GENERATOR` |
 | May push a frame | Python calls, `SEND_GEN`, `FOR_ITER_GEN` |
-| Polls the eval breaker | `JUMP_BACKWARD`, `RESUME`, calls; the fused backward jump |
+| Polls the eval breaker | `JUMP_BACKWARD`, `RESUME`, calls |
 | Writes feedback | feedback kind and the entry layout it uses |
 | Heap reads | the abstract locations read: attribute (by name or slot), item, global dict, builtin dict, cell contents, `f_locals`, none |
 | Heap writes | the abstract locations written, from the same set |
@@ -2000,6 +2188,7 @@ own effect tests.
 | Result facts | per output, the type or representation it is known to have (exact `int`, `bool`, `float`, `str`; a non-NULL object; an inline value) |
 | Deopt before side effect | an invariant, not a free choice: every guard runs before the handler's first side effect (a heap write, an escaping call, a consume), so a deoptimisation restarts the same word; the generator checks it |
 | Monitoring events | the `sys.monitoring` events the handler fires, and in which instrumented twin |
+| Boxes inputs | whether the handler needs the value record (step A1); added 2026-11-04, register IR v2 packet |
 | Passed through | inputs that stay in place and are also outputs (`COPY`'s source, `FOR_ITER`'s iterator) |
 | Targets | for an instruction with two successors, both: `FOR_ITER` (the exit, which lands on `END_FOR`, and the following word), `SEND` (the exit and the following word); each with its encoding (CD or signed D) |
 
@@ -2011,7 +2200,7 @@ rest need an annotation or a new check, both built with v2:
 | Column | Existing source | To add |
 |---|---|---|
 | Roles, slots read and written, consumed or in place | `_PyIR_Formats`, stack effects, `borrow_mask` | slot roles hidden in `IMM` |
-| May raise, may run Python, may deoptimise, may jump, polls | analyzer `Properties`: `error_*`, `escapes`, `deopts`, `jumps`, `eval_breaker` | operand dependence (releases, backward poll) |
+| May raise, may run Python, may deoptimise, may jump, polls | analyzer `Properties`: `error_*`, `escapes`, `deopts`, `jumps`, `eval_breaker` | operand dependence (releases) |
 | May suspend, may push a frame | `always_exits`, `switches_frame`, `returns` | a `suspends` annotation |
 | Passed through | the `peek` flag on stack items | – |
 | Targets | `jumps` and the jump location in the format | the second successor, from the shadow instruction |
@@ -2066,7 +2255,7 @@ Each has a proposed owner and the stage it blocks.
 
 | # | Decision | Options and costs | Owner | Blocks |
 |---|---|---|---|---|
-| O1 | Where the contract table lives | generated into `pycore_ir_metadata.h` and exported through `_opcode` (IR-D2 decided the source; the export shape is open) | IR v2 workstream | IR v2 |
+| O1 | Where the contract table lives | generated into `pycore_ir_metadata.h` and exported through `_opcode.get_ir_contract()`, with no generated Python copy (decided 2026-11-04, register IR v2 packet) | IR v2 workstream | IR v2 |
 | O2 | State at a word boundary and liveness export (IR-D4) | (a) emit liveness per block entry and exception edge into the code object: a few bytes per block, always paid; (b) recompute from the contract table when the JIT compiles: no memory, compile time per function; (c) both, emitted only for code that reaches the JIT | JIT workstream | method JIT |
 | O3 | OSR entry (IR-D4) | (a) at any back edge whose counter trips, with the slots as the frame state and liveness from O2; (b) only at loop headers marked by the compiler (needs a header word or table, G7); (c) no OSR, function entry only: simplest, misses long-running loops | JIT workstream | method JIT |
 | O4 | Feedback-site and name limits | G10 option (c): operands in the word, compare operations' entries assigned first, later sites share entry 0; names past 4,095 in one code object compile to an intrinsic call with the name in a slot (decided 2026-11-03); and the fb field is an 8-byte offset with priority-ordered assignment (decided 2026-11-03, G5); compare sites past the limit lower to `CALL_INTRINSIC_2`, and the generated-corpus maximum of compare sites is a required measurement before `COMPARE_OP_NOFB` goes | coordinator, with the IR v2 workstream | IR v2 |

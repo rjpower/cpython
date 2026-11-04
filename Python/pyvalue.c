@@ -288,6 +288,8 @@ static struct {
     Py_ssize_t count;
 } home_sites[HOME_SITE_MAX];
 static Py_ssize_t home_total;
+// Violations from call sites that did not fit in the table.
+static Py_ssize_t home_dropped;
 
 void
 _PyValue_ReportHome(PyValue ref, const char *file, int line)
@@ -303,6 +305,7 @@ _PyValue_ReportHome(PyValue ref, const char *file, int line)
             return;
         }
     }
+    _Py_atomic_add_ssize(&home_dropped, 1);
 }
 
 Py_ssize_t
@@ -331,6 +334,17 @@ _PyValue_HomeViolationSites(void)
             return NULL;
         }
         Py_DECREF(key);
+        Py_DECREF(count);
+    }
+    if (home_dropped != 0) {
+        PyObject *count = PyLong_FromSsize_t(home_dropped);
+        if (count == NULL
+            || PyDict_SetItemString(sites, "<dropped: table full>", count) < 0)
+        {
+            Py_XDECREF(count);
+            Py_DECREF(sites);
+            return NULL;
+        }
         Py_DECREF(count);
     }
     return sites;

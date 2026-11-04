@@ -3248,30 +3248,12 @@ _PyCode_ConstantKey(PyObject *op)
 PyStatus
 _PyCode_Init(PyInterpreterState *interp)
 {
-#ifdef Py_GIL_DISABLED
-    struct _py_code_state *state = &interp->code_state;
-    state->constants = _Py_hashtable_new_full(&hash_const, &compare_constants,
-                                              &destroy_key, NULL, NULL);
-    if (state->constants == NULL) {
-        return _PyStatus_NO_MEMORY();
-    }
-#endif
     return _PyStatus_OK();
 }
 
 void
 _PyCode_Fini(PyInterpreterState *interp)
 {
-#ifdef Py_GIL_DISABLED
-    // Free interned constants
-    struct _py_code_state *state = &interp->code_state;
-    if (state->constants) {
-        _Py_hashtable_foreach(state->constants, &clear_containers, NULL);
-        _Py_hashtable_destroy(state->constants);
-        state->constants = NULL;
-    }
-    _PyIndexPool_Fini(&interp->tlbc_indices);
-#endif
 }
 
 #ifdef Py_GIL_DISABLED

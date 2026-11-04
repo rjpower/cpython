@@ -29,7 +29,7 @@ _PyJit_ReadInt32(PyValue ref, int32_t *value)
      * not an exception or a request to allocate a boxed replacement. */
     int overflow = 0;
     long result = PyLong_AsLongAndOverflow(object, &overflow);
-    if (overflow || result < INT32_MIN || result > INT32_MAX) return 0;
+    if (overflow || !_PyValue_IntFitsInline(result)) return 0;
     *value = (int32_t)result;
     return 1;
 }

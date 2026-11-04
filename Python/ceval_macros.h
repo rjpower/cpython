@@ -685,6 +685,8 @@ _PyValue_Truth(PyValue ref)
         if (IR_IS_LOCAL(F)) { \
             PyValue ir_old = IR_SLOT(F); \
             IR_SLOT(F) = _PyValueTemps_Publish(value_temps, &(V)); \
+            assert(PyValue_IsHeapSafe(IR_SLOT(F))); \
+            _PyValue_CheckHome(IR_SLOT(F)); \
             _PyValueTemps_RetireLocal(value_temps, ir_old); \
         } \
         else { \
@@ -712,6 +714,8 @@ _PyValue_Truth(PyValue ref)
         if (IR_IS_LOCAL(F)) { \
             PyValue ir_old = IR_SLOT(F); \
             IR_SLOT(F) = _PyValueTemps_Publish(value_temps, &(SLOT)); \
+            assert(PyValue_IsHeapSafe(IR_SLOT(F))); \
+            _PyValue_CheckHome(IR_SLOT(F)); \
             (SLOT) = PyValue_NULL; \
             _PyValueTemps_RetireLocal(value_temps, ir_old); \
         } \

@@ -236,7 +236,7 @@ _PyJit_OptimizeGraph(_PyJitGraph *g)
                 int64_t a = left->immediate, b = right->immediate;
                 int64_t result = n->kind == JIT_SSA_ADD ? a+b : n->kind == JIT_SSA_SUB ? a-b :
                     n->kind == JIT_SSA_MUL ? a*b : (int32_t)((uint32_t)a & (uint32_t)b);
-                if (result >= INT32_MIN && result <= INT32_MAX) {
+                if (_PyValue_IntFitsInline(result)) {
                     n->kind = JIT_SSA_CONST;
                     n->immediate = (int32_t)result;
                     n->left = n->right = JIT_NO_VALUE;

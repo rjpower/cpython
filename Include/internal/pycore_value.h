@@ -464,8 +464,9 @@ _PyValue_IsCanonicalHome(PyValue ref)
         return true;
     }
     PyObject *obj = BITS_TO_PTR_MASKED(ref);
-    if ((ref.bits & Py_TAG_BITS) == 0) {
-        assert(!_Py_IsStaticImmortal(obj));
+    // A static immortal always carries the no-count tag.
+    if ((ref.bits & Py_TAG_BITS) == 0 && _Py_IsStaticImmortal(obj)) {
+        return false;
     }
     return _PyObject_ValueIdentity(obj) == (uintptr_t)obj;
 }

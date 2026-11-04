@@ -825,7 +825,7 @@ dummy_func(
             STAT_INC(BINARY_OP, hit);
             if (b < 32) {
                 int64_t shifted = (int64_t)((uint64_t)(int64_t)a << b);
-                res = (int32_t)shifted == shifted
+                res = _PyValue_IntFitsInline(shifted)
                     ? PyValue_FromInt32((int32_t)shifted)
                     : _PyValue_BoxInt64(shifted);
             }
@@ -3888,7 +3888,7 @@ dummy_func(
             long value = r->start;
             r->start = value + r->step;
             r->len--;
-            if ((int32_t)value == value) {
+            if (_PyValue_IntFitsInline(value)) {
                 next = PyValue_FromInt32((int32_t)value);
             }
             else {
@@ -4716,7 +4716,7 @@ dummy_func(
                 ERROR_NO_POP();
             }
             // The length is inline when it fits in int32.
-            res = len_i <= INT32_MAX
+            res = _PyValue_IntFitsInline(len_i)
                 ? PyValue_FromInt32((int32_t)len_i)
                 : _PyValue_BoxInt64(len_i);
             if (PyValue_IsNull(res)) {

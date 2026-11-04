@@ -1,0 +1,685 @@
+{
+ "python": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python",
+ "kernels": {
+  "richards": {
+   "loops": [
+    2,
+    6
+   ],
+   "total": 26229.25,
+   "sites": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b653": 1.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x321f7b": 8.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x1aa321": 26210.25,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32213b": 10.0
+   }
+  },
+  "go": {
+   "loops": [
+    1,
+    3
+   ],
+   "total": 229237.0,
+   "sites": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48f51d /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x1c8853": 14165.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x377a7d /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3ad88a": 961.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48efde": 847.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3ac4f4": 200.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b113": 13965.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b653": 58630.5,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x324971": 200.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x321f39": 7373.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3779e3 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3acc42": 243.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32172f /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x12332a": 26.5,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x37547c /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3ad88a": 102460.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x321f7b": 7171.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3779e3 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3ad88a": 1204.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x1802a3": 21601.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x1aa321": 98.5,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32213b": 91.5
+   }
+  },
+  "nbody": {
+   "loops": [
+    1,
+    3
+   ],
+   "total": 400041.0,
+   "sites": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48efde": 0.5,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b653": 0.5,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x321f39": 200020.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x321f7b": 200020.0
+   }
+  },
+  "float": {
+   "loops": [
+    1,
+    3
+   ],
+   "total": 300002.0,
+   "sites": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48f51d /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x1c8853": 300000.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48efde": 0.5,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b653": 0.5,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x321f7b": 1.0
+   }
+  },
+  "spectral_norm": {
+   "loops": [
+    1,
+    3
+   ],
+   "total": 676302.0,
+   "sites": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48efde": 0.5,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b653": 40.5,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x321f7b": 1.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x17f0a7": 676260.0
+   }
+  },
+  "raytrace": {
+   "loops": [
+    1,
+    3
+   ],
+   "total": 1336856.0,
+   "sites": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48f51d /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x1c8853": 128392.5,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b3dc": 16.5,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x377a7d /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3ad88a": 205692.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48ec95": 0.5,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48efde": 12.5,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b653": 41672.5,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b273": 130666.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x35e1d9": 40000.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32172f /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x123501": 50000.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x35e3ae": 40000.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x321f39": 227667.5,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32172f /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x12332a": 10.5,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x321f7b": 227668.5,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3779e3 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3ad88a": 205692.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x1aa321": 9362.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32213b": 3.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/build/lib.linux-x86_64-3.16/array.boilvalrc1-316-x86_64-linux-gnu.so 0xdc15": 30000.0
+   }
+  },
+  "deltablue": {
+   "loops": [
+    30,
+    90
+   ],
+   "total": 2426.55,
+   "sites": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x377a7d /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3ad88a": 1.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48efde": 1221.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b653": 9.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x321f39": 33.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x321f7b": 532.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3779e3 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3ad88a": 1.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x1aa321": 312.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32213b": 317.55
+   }
+  },
+  "chaos": {
+   "loops": [
+    2,
+    6
+   ],
+   "total": 483627.0,
+   "sites": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48f51d /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x1c8853": 25000.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x377a7d /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3ad88a": 10000.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x321fa6": 93.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48efde": 25031.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x377a7d /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3acc42": 74076.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3ac4f4": 10000.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b653": 130002.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x324971": 10000.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3779e3 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3acc42": 74076.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x321f39": 50000.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32172f /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x12332a": 10000.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x321f7b": 55349.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3779e3 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3ad88a": 10000.0
+   }
+  },
+  "nqueens": {
+   "loops": [
+    1,
+    3
+   ],
+   "total": 541065.0,
+   "sites": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x321fa6": 40319.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48efde": 2.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b653": 40322.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x35e1d9": 40319.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x35e3ae": 40319.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x321f7b": 40319.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3901bf /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3ac603": 339464.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x37a0ec": 1.0
+   }
+  },
+  "fannkuch": {
+   "loops": [
+    1,
+    3
+   ],
+   "total": 5956610.0,
+   "sites": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x35f9b4": 1731245.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48efde": 2.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b113": 1870587.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b653": 2.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x180187": 623529.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x37a0ec": 1731245.0
+   }
+  },
+  "generators": {
+   "loops": [
+    2,
+    6
+   ],
+   "total": 100000.0,
+   "sites": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x33a490": 100000.0
+   }
+  },
+  "comprehensions": {
+   "loops": [
+    6000,
+    18000
+   ],
+   "total": 180.0,
+   "sites": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b3dc": 108.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3a90ac /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3ad88a": 36.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x321fa6": 18.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x321f7b": 18.0
+   }
+  },
+  "coroutines": {
+   "loops": [
+    4,
+    12
+   ],
+   "total": 2.0,
+   "sites": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x1430bb": 1.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x33a490": 1.0
+   }
+  },
+  "unpack_sequence": {
+   "loops": [
+    4000,
+    12000
+   ],
+   "total": 0,
+   "sites": {}
+  },
+  "deepcopy": {
+   "loops": [
+    300,
+    900
+   ],
+   "total": 424.0,
+   "sites": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48f51d /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x1c8853": 240.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b653": 4.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x2155f6": 90.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x17f0a7": 90.0
+   }
+  },
+  "deepcopy_reduce": {
+   "loops": [
+    20000,
+    60000
+   ],
+   "total": 1.0,
+   "sites": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48f51d /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x1c8853": 1.0
+   }
+  },
+  "deepcopy_memo": {
+   "loops": [
+    4000,
+    12000
+   ],
+   "total": 100.0,
+   "sites": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48f51d /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x1c8853": 100.0
+   }
+  },
+  "json_dumps": {
+   "loops": [
+    10,
+    30
+   ],
+   "total": 17002.0,
+   "sites": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48efde": 4001.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32172f /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x406781": 4001.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x1a7fe0": 9000.0
+   }
+  },
+  "json_loads": {
+   "loops": [
+    200,
+    600
+   ],
+   "total": 240.0,
+   "sites": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48ec95": 120.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48efde": 60.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32172f /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x406781": 60.0
+   }
+  },
+  "pickle": {
+   "loops": [
+    400,
+    1200
+   ],
+   "total": 820.0,
+   "sites": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/build/lib.linux-x86_64-3.16/_pickle.boilvalrc1-316-x86_64-linux-gnu.so 0x1a995": 20.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x181b5a": 400.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b273": 60.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x1a7fe0": 340.0
+   }
+  },
+  "unpickle": {
+   "loops": [
+    300,
+    900
+   ],
+   "total": 0,
+   "sites": {}
+  },
+  "regex_compile": {
+   "loops": [
+    1,
+    3
+   ],
+   "total": 1154647.0,
+   "sites": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3310d0 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x355d8c": 8892.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48f51d /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x1c8853": 106964.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b3dc": 7414.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x377a7d /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3ad88a": 4931.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x375e17 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3ad88a": 2034.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x331a06 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x34c758": 564.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x384005 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3ad88a": 34.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48efde": 2797.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x181b5a": 96801.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b653": 24671.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b273": 82730.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x35e1d9": 353036.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3a24cc /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3ad88a": 2650.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x35e3ae": 348916.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x321f39": 6257.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32172f /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x12332a": 2797.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x321f7b": 29528.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x1a5179": 6054.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x37a0ec": 15923.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x331d45 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x381e66": 6604.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x33198c /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x34c758": 564.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x384005 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3acc42": 34.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x331082 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x355d8c": 6832.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x33a490": 37620.0
+   }
+  },
+  "logging_format": {
+   "loops": [
+    1000,
+    3000
+   ],
+   "total": 90.009,
+   "sites": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b3dc": 10.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48efde": 20.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b113": 10.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b653": 0.0045,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32172f /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x123501": 10.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32172f /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x12332a": 20.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x321f7b": 20.0045
+   }
+  },
+  "logging_silent": {
+   "loops": [
+    60000,
+    180000
+   ],
+   "total": 0,
+   "sites": {}
+  },
+  "logging_simple": {
+   "loops": [
+    1000,
+    3000
+   ],
+   "total": 90.04950000000001,
+   "sites": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b3dc": 10.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48efde": 20.001,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x377a7d /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3acc42": 0.0005,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b113": 10.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b653": 0.023,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32172f /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x123501": 10.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3779e3 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3acc42": 0.0005,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32172f /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x12332a": 20.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x321f7b": 20.024,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x1aa321": 0.0005
+   }
+  },
+  "xml_etree_generate": {
+   "loops": [
+    1,
+    3
+   ],
+   "total": 152061.0,
+   "sites": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x2585ff": 100000.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48efde": 0.5,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b653": 520.5,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3982b8 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3ad88a": 10.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x321f7b": 500.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x33a490": 51030.0
+   }
+  },
+  "xml_etree_iterparse": {
+   "loops": [
+    1,
+    3
+   ],
+   "total": 361.0,
+   "sites": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b3dc": 220.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48ec95": 10.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48efde": 0.5,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b653": 0.5,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32bed8 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x344c8b": 20.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x2c50bf": 50.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x587f35": 20.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32172f /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x538e78": 10.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x1a5179": 10.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x1a7fe0": 20.0
+   }
+  },
+  "xml_etree_parse": {
+   "loops": [
+    1,
+    3
+   ],
+   "total": 31.0,
+   "sites": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48efde": 0.5,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b653": 0.5,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32172f /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x538e78": 30.0
+   }
+  },
+  "xml_etree_process": {
+   "loops": [
+    1,
+    3
+   ],
+   "total": 108.0,
+   "sites": {
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3982b8 /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3ad88a": 102.0,
+    "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x321f7b": 6.0
+   }
+  }
+ },
+ "symbols": {
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3310d0": [
+   "PyValue_Box at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:307 (discriminator 2)",
+   "(inlined by) PyValue_AsPyObjectNewBoxed at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:931 (discriminator 2)",
+   "(inlined by) borrow_or_box at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:4414 (discriminator 2)",
+   "(inlined by) _PyEval_BinarySlice at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:4469 (discriminator 2)"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x355d8c": [
+   "_PyEval_EvalFrameLoop at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/generated_ir_cases.c.h:4000"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48f51d": [
+   "PyValue_Box at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:307 (discriminator 2)",
+   "(inlined by) PyValue_AsPyObjectNewBoxed at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:931 (discriminator 2)",
+   "(inlined by) _PyNativeScope_Objects at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/native_scope.c:249 (discriminator 2)"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x1c8853": [
+   "_PyCFunction_CallScoped at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Objects/methodobject.c:543"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32191b": [
+   "PyValue_Box at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:307 (discriminator 2)",
+   "(inlined by) PyValue_AsPyObjectNewBoxed at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:931 (discriminator 2)",
+   "(inlined by) _PyBorrow_ValueVector at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/borrow.c:368 (discriminator 2)"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b3dc": [
+   "_PyCallMethodDescriptorFast_Value at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:1194 (discriminator 2)"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48dd29": [
+   "PyValue_Box at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:307 (discriminator 2)",
+   "(inlined by) PyValue_AsPyObjectNewBoxed at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:931 (discriminator 2)",
+   "(inlined by) PyValue_AsObject at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/patched-src/pyvalue.c:131 (discriminator 2)"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48df1e": [
+   "PyValue_Box at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:307 (discriminator 2)",
+   "(inlined by) PyValue_AsPyObjectNewBoxed at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:931 (discriminator 2)",
+   "(inlined by) PyValue_AsObject at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/patched-src/pyvalue.c:131 (discriminator 2)",
+   "(inlined by) _PyValueTemps_Box at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/patched-src/pyvalue.c:181 (discriminator 2)"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x35f9b4": [
+   "_PyValueTemps_Object at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:77",
+   "(inlined by) _PyEval_EvalFrameLoop at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/generated_ir_cases.c.h:4259"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3a90ac": [
+   "PyValue_Box at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:307 (discriminator 2)",
+   "(inlined by) _PyEval_EvalFrameLoop at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/generated_ir_cases.c.h:14962 (discriminator 2)"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3ad88a": [
+   "_PyEval_EvalFrameDefault at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:2490",
+   "(inlined by) _PyEval_EvalFrame at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_ceval.h:125",
+   "(inlined by) _PyEval_Vector at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:3511",
+   "(inlined by) PyEval_EvalCode at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:732"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x377a7d": [
+   "PyValue_Box at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:307 (discriminator 2)",
+   "(inlined by) _PyEval_EvalFrameLoop at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/generated_ir_cases.c.h:7906 (discriminator 2)"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x321fa6": [
+   "value_binary_operation at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:1028"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x375e17": [
+   "PyValue_Box at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:307 (discriminator 2)",
+   "(inlined by) _PyEval_EvalFrameLoop at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/generated_ir_cases.c.h:18922 (discriminator 2)"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x331a06": [
+   "PyValue_Box at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:307 (discriminator 2)",
+   "(inlined by) PyValue_AsPyObjectNewBoxed at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:931 (discriminator 2)",
+   "(inlined by) borrow_or_box at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:4414 (discriminator 2)",
+   "(inlined by) _PyEval_StoreSlice at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:4513 (discriminator 2)"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x34c758": [
+   "_PyEval_EvalFrameLoop at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/generated_ir_cases.c.h:18261"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x384005": [
+   "PyValue_Box at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:307 (discriminator 2)",
+   "(inlined by) _PyEval_EvalFrameLoop at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/generated_ir_cases.c.h:8883 (discriminator 2)"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x2585ff": [
+   "unicode_format_getnextarg at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Objects/unicode_format.c:107",
+   "(inlined by) unicode_format_arg_format at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Objects/unicode_format.c:706",
+   "(inlined by) unicode_format_arg at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Objects/unicode_format.c:1012",
+   "(inlined by) PyUnicode_Format at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Objects/unicode_format.c:1100"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48ec95": [
+   "begin_vector at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/native_scope.c:149",
+   "(inlined by) _PyNativeScope_BeginVector at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/native_scope.c:165"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x48efde": [
+   "begin_vector at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/native_scope.c:149",
+   "(inlined by) _PyNativeScope_BeginObjectVector at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/native_scope.c:174"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3acc42": [
+   "_PyEval_EvalFrameDefault at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:2490",
+   "(inlined by) _PyEval_EvalFrame at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_ceval.h:125",
+   "(inlined by) _PyEval_Vector at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:3511"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3ac4f4": [
+   "_PyValueTemps_Object at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:77",
+   "(inlined by) _PyEval_EvalFrameLoop at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/generated_ir_cases.c.h:6899"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b113": [
+   "_Py_BuiltinCallFast_Value at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:1145 (discriminator 2)"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x181b5a": [
+   "list_get_item_ref at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Objects/listobject.c:250 (discriminator 1)",
+   "(inlined by) PyList_GetItemRef at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Objects/listobject.c:308 (discriminator 1)"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b653": [
+   "_Py_CallBuiltinClass_Value at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:1238 (discriminator 2)"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32b273": [
+   "_Py_BuiltinCallFastWithKeywords_Value at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:1170 (discriminator 2)"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x324971": [
+   "_PyValueTemps_Object at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:77",
+   "(inlined by) value_load_attribute at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:982"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x35e1d9": [
+   "_PyValueTemps_Object at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:77",
+   "(inlined by) value_store_subscript at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:923",
+   "(inlined by) _PyEval_EvalFrameLoop at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/generated_ir_cases.c.h:18326"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x180187": [
+   "list_pop_impl at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Objects/listobject.c:1298",
+   "(inlined by) list_pop at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Objects/clinic/listobject.c.h:252"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32172f": [
+   "PyValue_Box at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:307 (discriminator 2)",
+   "(inlined by) PyValue_AsPyObjectNewBoxed at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:931 (discriminator 2)",
+   "(inlined by) _PyBorrow_TupleItems at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/borrow.c:324 (discriminator 2)"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x123501": [
+   "_PyVectorcall_Call at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Objects/call.c:298"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3982b8": [
+   "PyValue_Box at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:307 (discriminator 2)",
+   "(inlined by) _PyEval_EvalFrameLoop at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/generated_ir_cases.c.h:7438 (discriminator 2)"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3a24cc": [
+   "PyValue_Box at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:307 (discriminator 2)",
+   "(inlined by) _PyEval_EvalFrameLoop at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/generated_ir_cases.c.h:8446 (discriminator 2)"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x1430bb": [
+   "StopIteration_init at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Objects/exceptions.c:815"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x35e3ae": [
+   "_PyValueTemps_Object at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:77",
+   "(inlined by) value_store_subscript at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:927",
+   "(inlined by) _PyEval_EvalFrameLoop at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/generated_ir_cases.c.h:18326"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3779e3": [
+   "PyValue_Box at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:307 (discriminator 2)",
+   "(inlined by) _PyEval_EvalFrameLoop at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/generated_ir_cases.c.h:7917 (discriminator 2)"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x2155f6": [
+   "tupleiter_next at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Objects/tupleobject.c:1232"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32bed8": [
+   "PyValue_Box at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:307 (discriminator 2)",
+   "(inlined by) PyValue_AsPyObjectNewBoxed at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:931 (discriminator 2)",
+   "(inlined by) _PyEval_StoreName at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:1423 (discriminator 2)"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x344c8b": [
+   "_PyEval_EvalFrameLoop at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/generated_ir_cases.c.h:18214"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x321f39": [
+   "_PyValueTemps_Object at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:77",
+   "(inlined by) value_binary_operation at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:1019"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x2c50bf": [
+   "filter_search at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/_warnings.c:487"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x587f35": [
+   "compute_abstract_methods at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Modules/_abc.c:419",
+   "(inlined by) _abc__abc_init at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Modules/_abc.c:673"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x12332a": [
+   "_PyObject_Call_Prepend at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Objects/call.c:547"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x37547c": [
+   "PyValue_Box at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:307 (discriminator 2)",
+   "(inlined by) _PyEval_EvalFrameLoop at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/generated_ir_cases.c.h:18159 (discriminator 2)"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x321f7b": [
+   "_PyValueTemps_Object at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:77",
+   "(inlined by) value_binary_operation at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:1023"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3901bf": [
+   "PyValue_Box at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:307 (discriminator 2)",
+   "(inlined by) _PyEval_EvalFrameLoop at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/generated_ir_cases.c.h:17176 (discriminator 2)"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x3ac603": [
+   "_PyEval_EvalFrameDefault at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:2490"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x406781": [
+   "vgetargskeywords_impl at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/getargs.c:1808"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x538e78": [
+   "_io_BufferedReader___init__ at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Modules/_io/clinic/bufferedio.c.h:909"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x1a5179": [
+   "dict_getitemref_owned at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Objects/dictobject.c:2205"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x37a0ec": [
+   "_PyValueTemps_Object at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:77",
+   "(inlined by) _PyEval_EvalFrameLoop at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/generated_ir_cases.c.h:4267"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x17f0a7": [
+   "listiter_next at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Objects/listobject.c:3820"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x331d45": [
+   "PyValue_Box at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:307 (discriminator 2)",
+   "(inlined by) PyValue_AsPyObjectNewBoxed at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:931 (discriminator 2)",
+   "(inlined by) borrow_or_box at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:4414 (discriminator 2)",
+   "(inlined by) _PyEval_IsInstanceValue at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:4564 (discriminator 2)"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x381e66": [
+   "_PyEval_EvalFrameLoop at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/generated_ir_cases.c.h:5887"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x1802a3": [
+   "list_pop_impl at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Objects/listobject.c:1298",
+   "(inlined by) list_pop at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Objects/clinic/listobject.c.h:252"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x33198c": [
+   "PyValue_Box at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:307 (discriminator 2)",
+   "(inlined by) PyValue_AsPyObjectNewBoxed at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:931 (discriminator 2)",
+   "(inlined by) borrow_or_box at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:4414 (discriminator 2)",
+   "(inlined by) _PyEval_StoreSlice at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:4509 (discriminator 2)"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x1a7fe0": [
+   "_PyDict_NextEntryRefKnownHash at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Objects/dictobject.c:3127"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x331082": [
+   "PyValue_Box at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:307 (discriminator 2)",
+   "(inlined by) PyValue_AsPyObjectNewBoxed at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:931 (discriminator 2)",
+   "(inlined by) borrow_or_box at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:4414 (discriminator 2)",
+   "(inlined by) _PyEval_BinarySlice at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:4473 (discriminator 2)"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x1aa321": [
+   "_PyObject_TryGetInstanceAttribute at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Objects/dictobject.c:7461"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x33a490": [
+   "_PyEval_EvalFrameLoop at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/generated_ir_cases.c.h:11653"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/python 0x32213b": [
+   "_PyValueTemps_Object at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Include/internal/pycore_value.h:77",
+   "(inlined by) value_store_attribute at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Python/ceval.c:944"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/build/lib.linux-x86_64-3.16/_pickle.boilvalrc1-316-x86_64-linux-gnu.so 0x1a995": [
+   "store_tuple_elements at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Modules/_pickle.c:3067"
+  ],
+  "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-boxcallers-dbce7b1260d/build/lib.linux-x86_64-3.16/array.boilvalrc1-316-x86_64-linux-gnu.so 0xdc15": [
+   "array_new at /home/power/code/cpython/.worktrees/python-boil-the-ocean/build/checkpoint-stats-dbce7b1260d/../worktrees/checkpoint-dbce7b1260d/Modules/arraymodule.c:3019"
+  ]
+ }
+}

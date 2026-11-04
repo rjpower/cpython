@@ -1,0 +1,66 @@
+{
+ "schema": "boil-bench/1",
+ "build": {
+  "label": "I",
+  "path": "/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/rc-integrated-release-20261101/python",
+  "version": "3.16.0a1+dev (heads/weaver/python-boil-the-ocean-dirty:eba351fee7d, Nov  1 2026, 10:56:42) [GCC 15.2.0]",
+  "git": [
+   "CPython",
+   "heads/weaver/python-boil-the-ocean-dirty",
+   "eba351fee7d"
+  ],
+  "hash_seed": 0
+ },
+ "machine": {
+  "hostname": "bento-cat",
+  "kernel": "7.0.0-43-generic",
+  "cpus": 16,
+  "cpu": "AMD Ryzen 7 3800X 8-Core Processor",
+  "memory": "65726112 kB"
+ },
+ "results": {
+  "rss": {
+   "startup": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 11368,
+    "values": [
+     13588,
+     11356,
+     11368
+    ],
+    "loops": 1,
+    "runs": 3
+   },
+   "imports": {
+    "group": "memory",
+    "unit": "KiB peak RSS",
+    "value": 13544,
+    "values": [
+     22236,
+     13544,
+     13540
+    ],
+    "loops": 1,
+    "runs": 3
+   }
+  }
+ },
+ "runs": {
+  "rss": {
+   "timestamp": "2026-11-03T19:22:33-08:00",
+   "commit": {
+    "sha": "ea408d02efdf39371d660f27ab9e91f7a154ddb4",
+    "dirty": true
+   },
+   "load_1min": {
+    "max": 9.3681640625,
+    "samples": [
+     9.3681640625,
+     9.3681640625,
+     9.3681640625
+    ]
+   }
+  }
+ }
+}

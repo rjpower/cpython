@@ -37,7 +37,7 @@ typedef struct _block {
 } block;
 
 /* The arena manages two kinds of memory, blocks of raw memory
-   and a list of PyObject* pointers.  PyObjects are decrefed
+   and an array of PyObject* pointers.  PyObjects are decrefed
    when the arena is freed.
 */
 
@@ -55,15 +55,17 @@ struct _arena {
      */
     block *a_cur;
 
-    /* A Python list object containing references to all the PyObject
-       pointers associated with this arena.  They will be DECREFed
-       when the arena is freed.
+    /* Strong references to all the PyObject pointers associated with
+       this arena.  They will be DECREFed when the arena is freed.  Not a
+       list: a list stores an exact int or float as an inline value, which
+       would release the box that the AST keeps pointing to.
     */
-    PyObject *a_objects;
+    PyObject **a_objects;
+    Py_ssize_t a_nobjects;
+    Py_ssize_t a_objects_size;
 
-    /* The arena is PyMem_Malloc() memory, which the tracing collector does
-       not scan, so a_objects is registered as a root while the arena
-       lives. */
+    /* a_objects is PyMem_Malloc() memory, which the tracing collector does
+       not scan, so it is registered as a root while the arena lives. */
     _PyGCRoot a_root;
 
 #if defined(Py_DEBUG)
@@ -140,13 +142,10 @@ _PyArena_New(void)
         PyMem_Free((void *)arena);
         return (PyArena*)PyErr_NoMemory();
     }
-    arena->a_objects = PyList_New(0);
-    if (!arena->a_objects) {
-        block_free(arena->a_head);
-        PyMem_Free((void *)arena);
-        return (PyArena*)PyErr_NoMemory();
-    }
-    _PyGC_AddRoot(&arena->a_root, &arena->a_objects, 1);
+    arena->a_objects = NULL;
+    arena->a_nobjects = 0;
+    arena->a_objects_size = 0;
+    _PyGC_AddRoot(&arena->a_root, NULL, 0);
 #if defined(Py_DEBUG)
     arena->total_allocs = 0;
     arena->total_size = 0;
@@ -167,17 +166,15 @@ _PyArena_Free(PyArena *arena)
         "alloc=%zu size=%zu blocks=%zu block_size=%zu big=%zu objects=%zu\n",
         arena->total_allocs, arena->total_size, arena->total_blocks,
         arena->total_block_size, arena->total_big_blocks,
-        PyList_Size(arena->a_objects));
+        arena->a_nobjects);
     */
 #endif
     block_free(arena->a_head);
-    /* This property normally holds, except when the code being compiled
-       is sys.getobjects(0), in which case there will be two references.
-    assert(arena->a_objects->ob_refcnt == 1);
-    */
-
     _PyGC_RemoveRoot(&arena->a_root);
-    Py_DECREF(arena->a_objects);
+    for (Py_ssize_t i = 0; i < arena->a_nobjects; i++) {
+        Py_DECREF(arena->a_objects[i]);
+    }
+    PyMem_Free(arena->a_objects);
     PyMem_Free(arena);
 }
 
@@ -207,9 +204,19 @@ _PyArena_Malloc(PyArena *arena, size_t size)
 int
 _PyArena_AddPyObject(PyArena *arena, PyObject *obj)
 {
-    int r = PyList_Append(arena->a_objects, obj);
-    if (r >= 0) {
-        Py_DECREF(obj);
+    if (arena->a_nobjects == arena->a_objects_size) {
+        Py_ssize_t size = arena->a_objects_size ? arena->a_objects_size * 2 : 16;
+        PyObject **objects = PyMem_Realloc(arena->a_objects,
+                                           size * sizeof(PyObject *));
+        if (objects == NULL) {
+            PyErr_NoMemory();
+            return -1;
+        }
+        arena->a_objects = objects;
+        arena->a_objects_size = size;
+        arena->a_root.objs = objects;
     }
-    return r;
+    arena->a_objects[arena->a_nobjects++] = obj;
+    arena->a_root.n = arena->a_nobjects;
+    return 0;
 }

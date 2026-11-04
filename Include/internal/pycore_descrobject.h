@@ -22,7 +22,8 @@ typedef propertyobject _PyPropertyObject;
 
 extern PyTypeObject _PyMethodWrapper_Type;
 
-extern void *_PyMember_GetOffset(PyObject *, PyMemberDef *);
+// Export for '_testinternalcapi' shared extension
+PyAPI_FUNC(void *) _PyMember_GetOffset(PyObject *, PyMemberDef *);
 
 /* Value-field descriptors only. Get returns an independent owner; Set borrows
    its input and publishes a strong field before releasing the prior owner. */

@@ -2037,7 +2037,7 @@ generic:
 }
 
 static int
-specialize_method_descriptor(PyMethodDescrObject *descr, PyObject *self_or_null,
+specialize_method_descriptor(PyMethodDescrObject *descr, PyValue self_or_null,
                              _PyInstr *instr, int nargs)
 {
     switch (descr->d_method->ml_flags & _Py_METH_CALL_FLAGS) {
@@ -2058,8 +2058,8 @@ specialize_method_descriptor(PyMethodDescrObject *descr, PyObject *self_or_null,
             PyObject *list_append = interp->callable_cache.list_append;
             int oparg = instr_oparg(instr);
             if ((PyObject *)descr == list_append && oparg == 1) {
-                assert(self_or_null != NULL);
-                if (PyList_CheckExact(self_or_null)) {
+                assert(!PyValue_IsNull(self_or_null));
+                if (PyValue_TYPE(self_or_null) == &PyList_Type) {
                     specialize(instr, CALL_LIST_APPEND);
                     return 0;
                 }
@@ -2224,9 +2224,8 @@ _Py_Specialize_Call(PyValue callable_st, PyValue self_or_null_st, _PyInstr *inst
         fail = specialize_class_call(callable, instr, nargs);
     }
     else if (Py_IS_TYPE(callable, &PyMethodDescr_Type)) {
-        PyObject *self_or_null = PyValue_AsPyObjectBorrow(self_or_null_st);
         fail = specialize_method_descriptor((PyMethodDescrObject *)callable,
-                                            self_or_null, instr, nargs);
+                                            self_or_null_st, instr, nargs);
     }
     else if (PyMethod_Check(callable)) {
         PyObject *func = ((PyMethodObject *)callable)->im_func;

@@ -7757,7 +7757,11 @@ ensure_nonmanaged_dict(PyObject *obj, PyObject **dictptr)
         if (dict == NULL) {
             return NULL;
         }
-        PyObject **current = _PyObject_ComputedDictPointer(obj);
+        /* The generic setattr also stores a managed dict without inline
+           values through here. */
+        PyObject **current = (Py_TYPE(obj)->tp_flags & Py_TPFLAGS_MANAGED_DICT) ?
+            (PyObject **)&_PyObject_ManagedDictPointer(obj)->dict :
+            _PyObject_ComputedDictPointer(obj);
         if (current == NULL) {
             dict_xdecref_object(dict);
             PyErr_SetString(PyExc_AttributeError, "This object has no __dict__");

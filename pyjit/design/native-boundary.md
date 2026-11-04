@@ -383,13 +383,16 @@ Implementation rules for `Python/borrow.c`:
   Bit 7 is free and lies inside `_PY_EVAL_EVENTS_MASK`, so `check_periodics`
   sees it. The bit is per thread, but the parked entries belong to one
   activation. When an activation exits and restores the outer floor, it
-  re-arms the bit if `top` is above that floor
-  (Python/ceval.c:_PyEval_EvalFrameDefault). Without this, a nested
-  activation's first check clears the bit and strands the outer activation's
-  entries until it exits. The P4 post-review found that a live argument vector
-  keeps `top` above the outer floor, so every Python callback from a builtin
-  re-arms the bit for nothing; this is being fixed, by re-arming only when the
-  bit was set when the nested activation started.
+  re-arms the bit if it was set when the activation started and `top` is
+  still above that floor (Python/ceval.c:_PyEval_EvalFrameDefault). Without
+  this, a nested activation's first check clears the bit and strands the
+  outer activation's entries until it exits. Entries below the nested floor
+  can only have requested a release before the activation started, so that is
+  the only request it can consume; entries pushed during it are released at
+  its exit. The first rule re-armed whenever `top` was above the floor, which
+  a live argument vector always is, so every Python callback from a builtin
+  ran `_Py_HandlePending` for nothing (P4 post-review; fixed in
+  `fdd7fed3216`, test `test_callback_exit_requests_no_release`).
 - **Where the release runs.** `_Py_HandlePending` releases to `eval_floor`
   after the GC step and before the GIL-drop and async-exception steps. It
   tests the bit after pending calls and GC have run, because both can push and
@@ -521,7 +524,7 @@ _PyBorrowScope_Exit(tstate, mark);
 
 | File | Function | Change |
 |---|---|---|
-| Python/ceval.c | `_PyEval_EvalFrameDefault` (entry frame push and pop) | Save `borrow.eval_floor`, set it to `top`, run the loop, `Exit` to the floor, restore, and re-arm `_PY_BORROW_RELEASE_BIT` if `top` is above the restored outer floor. The floor belongs here, not in the inline wrapper, so a PEP 523 hook's own C code (the perf trampoline at Python/perf_trampoline.c:470, `record_eval`, third-party evaluators) is outside the floor (§2 "The release invariant"). Covers `_PyEval_Vector` and generators and coroutines resumed from C (`gen_send_ex2`). **As built:** the save, set, Exit, restore and re-arm sit in `_PyEval_EvalFrameDefault` (Python/ceval.c). |
+| Python/ceval.c | `_PyEval_EvalFrameDefault` (entry frame push and pop) | Save `borrow.eval_floor`, set it to `top`, run the loop, `Exit` to the floor, restore, and re-arm `_PY_BORROW_RELEASE_BIT` if it was set at entry and `top` is above the restored outer floor. The floor belongs here, not in the inline wrapper, so a PEP 523 hook's own C code (the perf trampoline at Python/perf_trampoline.c:470, `record_eval`, third-party evaluators) is outside the floor (§2 "The release invariant"). Covers `_PyEval_Vector` and generators and coroutines resumed from C (`gen_send_ex2`). **As built:** the save, set, Exit, restore and re-arm sit in `_PyEval_EvalFrameDefault` (Python/ceval.c). |
 | Python/ceval_gil.c | `_Py_HandlePending` | After GC and before the GIL-drop and async-exception steps: if `_PY_BORROW_RELEASE_BIT` is set (read again after pending calls and GC), clear it and `_PyBorrowScope_Exit(tstate, borrow.eval_floor)`. Releases entries parked by slot code that bytecode handlers call directly (`nb_*`, `tp_richcompare`, `tp_iter`, `tp_getattro`, descriptors), by C trace and profile functions (`PyEval_SetTrace`) that run inside instrumented instructions, and by pending calls that ran in the same call. The only callers are `check_periodics` and `check_periodics_at_end` (Python/ceval_macros.h:533, 543), reached from the eval loop and from the call-transaction end (Python/ceval.c:2010). Every caller is at an instruction boundary, where all native code that this activation called has returned (the invariant in §2). That code already runs GC and signal handlers, so a release that runs deallocators adds no new kind of reentry. |
 | Python/ceval.c | `_Py_BuiltinCallFast_Value`, `_Py_BuiltinCallFastWithKeywords_Value`, `_PyCallMethodDescriptorFast_Value`, `_PyCallMethodDescriptorFastWithKeywords_Value`, `_Py_CallBuiltinClass_Value` | Enter/Exit around the body call. These are the hot builtin-call paths; without scopes any push costs an atomic pair plus `_Py_HandlePending`. |
 | Python/bytecodes.c | `_CALL_METHOD_DESCRIPTOR_O` (:4847) and `_CALL_METHOD_DESCRIPTOR_NOARGS` (:4961), which call `_PyCFunction_TrampolineCall` directly | Enter/Exit around the call. The other bytecodes.c CALL sites (:4552, :4648, :4686, :4908, :5016) go through the helpers above. |
@@ -921,7 +924,7 @@ packet-order concern in review item 7 does not arise.
 | P1 | Borrow stack core + getargs.c (§4) | < 2 h | Landed with P2 in `acbdf45627d` |
 | P2 | Entry points (§3) and the public `PyBorrowScope` | ~1 h; landed together with P1 | Landed with P1; the ceval.c, bytecodes.c and vectorcall-dispatch sites landed in `56ff66a596b` |
 | P3 | Delete OwnerScope; Clinic producer and regeneration; 9 handwritten files | ~2 h | Landed: `56ff66a596b` (Clinic and owner-scope deletion), `643c69c7244` and `6d39221996d` (regenerated output) |
-| P4 | After link: interpreter argument windows move onto the stack; delete `_PyObjectArray_FromValueArray/_Free` and `MAX_VALUE_SCRATCH`; measure | ~2 h | Landed as `2558376b321`: borrowed argument vector (`_PyBorrow_ValueVector`), `mark` in the native scope, `ReleaseAll`/`Fini` lifecycle, `_PyBorrowStack_Visit`; cost table under decision 6. The release-bit re-arm fix is open |
+| P4 | After link: interpreter argument windows move onto the stack; delete `_PyObjectArray_FromValueArray/_Free` and `MAX_VALUE_SCRATCH`; measure | ~2 h | Landed as `2558376b321`: borrowed argument vector (`_PyBorrow_ValueVector`), `mark` in the native scope, `ReleaseAll`/`Fini` lifecycle, `_PyBorrowStack_Visit`; cost table under decision 6. Post-review fixes, including the release-bit re-arm, in `fdd7fed3216` |
 
 ## 6. Tests (once the runtime links)
 
@@ -1011,9 +1014,10 @@ in source.
    `_PyBorrow_RequestRelease` (exported) are in Python/borrow.c. The empty
    chunk is the file-static `empty_chunk`.
 3. **Re-arm on eval exit.** `_PyEval_EvalFrameDefault` re-arms
-   `_PY_BORROW_RELEASE_BIT` through `_PyBorrow_RequestRelease` when `top` is
-   above the restored outer floor (Python/ceval.c). This is review item 3,
-   landed. It over-fires with a live argument vector; the fix is under "Eval-breaker bit" in §2.
+   `_PY_BORROW_RELEASE_BIT` through `_PyBorrow_RequestRelease` when the bit
+   was set at activation start and `top` is above the restored outer floor
+   (Python/ceval.c). This is review item 3, landed; the start-of-activation
+   condition is `fdd7fed3216` ("Eval-breaker bit" in §2).
 4. **Release order.** `_Py_HandlePending` releases after the GC step and before
    the GIL-drop and async-exception steps, and tests the bit again at that
    point (Python/ceval_gil.c).
@@ -1042,7 +1046,7 @@ Review items, by state:
 
 | State | Items |
 |---|---|
-| Landed | 1, 3 (re-arm; over-fires with a live vector, fix under way), 4, 5, 6, 7 (resolved), 8, 9 (P4), 11 |
+| Landed | 1, 3 (re-arm; start-of-activation condition in `fdd7fed3216`), 4, 5, 6, 7 (resolved), 8, 9 (P4), 11 |
 | Specified here, not built | 2 (stack switching) |
 | Documented here | 10, 12 |
 

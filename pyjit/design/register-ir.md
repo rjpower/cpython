@@ -1572,7 +1572,7 @@ owner asks for no intermediate performance gates).
 
      | Field layout | Handlers | Free fields | Decision |
      |---|---|---|---|
-     | `{DST, BASE, IMM argc, FB}` | `CALL`, `CALL_KW` and forms (28) | none | keep copies; the callee overlaps the window |
+     | `{DST, BASE, IMM argc, FB}` | `CALL`, `CALL_KW` and forms (28) | none | keep copies; the callee overlaps the window. Open for B5 (2026-11-04): under D4 the copy owns a count, so a local passed to a native call reads `sys.getrefcount` 2 against upstream's 1, which C code sees through `PyUnstable_Object_IsUniqueReferencedTemporary` (two `test_capi` failures). B5 either gives native calls a form that reads locals in place or states why the count stays (pyvalue.md §1.13) |
      | `{BASE, IMM, –, –}` | `COPY`, `LIST_APPEND`, `LIST_EXTEND`, `SET_ADD`, `SET_UPDATE`, `MAP_ADD`, `DICT_MERGE`, `DICT_UPDATE`, `LOAD_SPECIAL`, … (12) | C, D | `LIST_APPEND`, `SET_ADD` and `MAP_ADD` take their value (and key) from source fields C and D, so a comprehension appending a local needs no copy; the rest keep their window. With a source field the value is not in the window, so BASE names the container alone (window extent 1) and B, the depth, is zero; the verifier checks it |
      | `{DST, BASE, FB, IMM}` | `FOR_ITER`, `SEND` and forms (11) | none | keep |
      | `{DST, BASE, IMM count, –}` | `BUILD_*` (10) | D | keep: the inputs are an array |

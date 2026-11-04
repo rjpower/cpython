@@ -1291,16 +1291,25 @@ PyObject *_ctypes_callproc(ctypes_state *st,
         PyObject *arg;
         int err;
 
-        arg = PyTuple_GET_ITEM(argtuple, i);            /* borrowed ref */
+        arg = PyTuple_GetItemRef(argtuple, i);
+        if (arg == NULL) {
+            goto cleanup;
+        }
         /* For cdecl functions, we allow more actual arguments
            than the length of the argtypes tuple.
            This is checked in _ctypes::PyCFuncPtr_Call
         */
         if (argtypes && argtype_count > i) {
             PyObject *v;
-            converter = PyTuple_GET_ITEM(argtypes, i);
+            converter = PyTuple_GetItemRef(argtypes, i);
+            if (converter == NULL) {
+                Py_DECREF(arg);
+                goto cleanup;
+            }
             v = PyObject_CallOneArg(converter, arg);
+            Py_DECREF(converter);
             if (v == NULL) {
+                Py_DECREF(arg);
                 _ctypes_extend_error(st->PyExc_ArgError, "argument %zd: ", i+1);
                 goto cleanup;
             }
@@ -1308,16 +1317,19 @@ PyObject *_ctypes_callproc(ctypes_state *st,
             err = ConvParam(st, v, i+1, pa);
             Py_DECREF(v);
             if (-1 == err) {
+                Py_DECREF(arg);
                 _ctypes_extend_error(st->PyExc_ArgError, "argument %zd: ", i+1);
                 goto cleanup;
             }
         } else {
             err = ConvParam(st, arg, i+1, pa);
             if (-1 == err) {
+                Py_DECREF(arg);
                 _ctypes_extend_error(st->PyExc_ArgError, "argument %zd: ", i+1);
                 goto cleanup; /* leaking ? */
             }
         }
+        Py_DECREF(arg);
     }
 
     if (restype == Py_None) {

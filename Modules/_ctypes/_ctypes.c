@@ -1296,7 +1296,7 @@ PyCPointerType_init(PyObject *self, PyObject *args, PyObject *kwds)
     PyObject *proto;
     PyObject *typedict;
 
-    typedict = PyTuple_GetItem(args, 2);
+    typedict = PyTuple_GetItemRef(args, 2);
     if (!typedict) {
         return -1;
     }
@@ -1308,6 +1308,7 @@ PyCPointerType_init(PyObject *self, PyObject *args, PyObject *kwds)
     ctypes_state *st = get_module_state_by_def(Py_TYPE(self));
     StgInfo *stginfo = PyStgInfo_Init(st, (PyTypeObject *)self);
     if (!stginfo) {
+        Py_DECREF(typedict);
         return -1;
     }
     stginfo->size = sizeof(void *);
@@ -1317,7 +1318,9 @@ PyCPointerType_init(PyObject *self, PyObject *args, PyObject *kwds)
     stginfo->paramfunc = PyCPointerType_paramfunc;
     stginfo->flags |= TYPEFLAG_ISPOINTER;
 
-    if (PyDict_GetItemRef(typedict, &_Py_ID(_type_), &proto) < 0) {
+    int rc = PyDict_GetItemRef(typedict, &_Py_ID(_type_), &proto);
+    Py_DECREF(typedict);
+    if (rc < 0) {
         return -1;
     }
     if (proto) {
@@ -2240,17 +2243,23 @@ static PyObject *CreateSwappedType(ctypes_state *st, PyTypeObject *type,
                                    PyObject *proto, struct fielddesc *fmt)
 {
     PyTypeObject *result;
-    PyObject *name = PyTuple_GET_ITEM(args, 0);
+    PyObject *name = PyTuple_GetItemRef(args, 0);
+    if (name == NULL) {
+        return NULL;
+    }
     PyObject *newname;
     PyObject *swapped_args;
     Py_ssize_t i;
 
     swapped_args = PyTuple_New(PyTuple_GET_SIZE(args));
-    if (!swapped_args)
+    if (!swapped_args) {
+        Py_DECREF(name);
         return NULL;
+    }
 
     assert(st->swapped_suffix != NULL);
     newname = PyUnicode_Concat(name, st->swapped_suffix);
+    Py_DECREF(name);
     if (newname == NULL) {
         Py_DECREF(swapped_args);
         return NULL;
@@ -2258,8 +2267,11 @@ static PyObject *CreateSwappedType(ctypes_state *st, PyTypeObject *type,
 
     PyTuple_SET_ITEM(swapped_args, 0, newname);
     for (i=1; i<PyTuple_GET_SIZE(args); ++i) {
-        PyObject *v = PyTuple_GET_ITEM(args, i);
-        Py_INCREF(v);
+        PyObject *v = PyTuple_GetItemRef(args, i);
+        if (v == NULL) {
+            Py_DECREF(swapped_args);
+            return NULL;
+        }
         PyTuple_SET_ITEM(swapped_args, i, v);
     }
 
@@ -2657,7 +2669,12 @@ converters_from_argtypes(ctypes_state *st, PyObject *ob)
 
     for (i = 0; i < nArgs; ++i) {
         PyObject *cnv;
-        PyObject *tp = PyTuple_GET_ITEM(ob, i);
+        PyObject *tp = PyTuple_GetItemRef(ob, i);
+        if (tp == NULL) {
+            Py_DECREF(converters);
+            Py_DECREF(ob);
+            return NULL;
+        }
 /*
  *      The following checks, relating to bpo-16575 and bpo-16576, have been
  *      disabled. The reason is that, although there is a definite problem with
@@ -2711,7 +2728,9 @@ converters_from_argtypes(ctypes_state *st, PyObject *ob)
         }
  */
 
-        if (PyObject_GetOptionalAttr(tp, &_Py_ID(from_param), &cnv) <= 0) {
+        int found = PyObject_GetOptionalAttr(tp, &_Py_ID(from_param), &cnv);
+        Py_DECREF(tp);
+        if (found <= 0) {
             Py_DECREF(converters);
             Py_DECREF(ob);
             if (!PyErr_Occurred()) {
@@ -3913,7 +3932,7 @@ _validate_paramflags(ctypes_state *st, PyTypeObject *type, PyObject *paramflags,
 
     StgInfo *info;
     if (PyStgInfo_FromType(st, (PyObject *)type, &info) < 0) {
-        return -1;
+        return 0;
     }
     if (!info) {
         PyErr_SetString(PyExc_TypeError,
@@ -3942,7 +3961,10 @@ _validate_paramflags(ctypes_state *st, PyTypeObject *type, PyObject *paramflags,
     }
 
     for (i = 0; i < len; ++i) {
-        PyObject *item = PyTuple_GET_ITEM(paramflags, i);
+        PyObject *item = PyTuple_GetItemRef(paramflags, i);
+        if (item == NULL) {
+            return 0;
+        }
         int flag;
         PyObject *name = Py_None;
         PyObject *defval;
@@ -3950,11 +3972,12 @@ _validate_paramflags(ctypes_state *st, PyTypeObject *type, PyObject *paramflags,
         if (!PyArg_ParseTuple(item, "i|OO", &flag, &name, &defval) ||
             !(name == Py_None || PyUnicode_Check(name)))
         {
+            Py_DECREF(item);
             PyErr_SetString(PyExc_TypeError,
                    "paramflags must be a sequence of (int [,string [,value]]) tuples");
             return 0;
         }
-        typ = PyTuple_GET_ITEM(argtypes, i);
+        Py_DECREF(item);
         switch (flag & (PARAMFLAG_FIN | PARAMFLAG_FOUT | PARAMFLAG_FLCID)) {
         case 0:
         case PARAMFLAG_FIN:
@@ -3962,8 +3985,15 @@ _validate_paramflags(ctypes_state *st, PyTypeObject *type, PyObject *paramflags,
         case PARAMFLAG_FIN | PARAMFLAG_FOUT:
             break;
         case PARAMFLAG_FOUT:
-            if (!_check_outarg_type(st, typ, i+1))
+            typ = PyTuple_GetItemRef(argtypes, i);
+            if (typ == NULL) {
                 return 0;
+            }
+            int ok = _check_outarg_type(st, typ, i+1);
+            Py_DECREF(typ);
+            if (!ok) {
+                return 0;
+            }
             break;
         default:
             PyErr_Format(PyExc_TypeError,
@@ -4190,18 +4220,28 @@ PyCFuncPtr_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     if (PyTuple_GET_SIZE(args) == 0)
         return GenericPyCData_new(type, args, kwds);
 
-    if (1 <= PyTuple_GET_SIZE(args) && PyTuple_Check(PyTuple_GET_ITEM(args, 0)))
+    PyObject *arg0 = PyTuple_GetItemRef(args, 0);
+    if (arg0 == NULL) {
+        return NULL;
+    }
+    int arg0_is_tuple = PyTuple_Check(arg0);
+    int arg0_is_long = PyLong_Check(arg0);
+    void *ptr = NULL;
+    if (1 == PyTuple_GET_SIZE(args) && arg0_is_long) {
+        ptr = PyLong_AsVoidPtr(arg0);
+    }
+    Py_DECREF(arg0);
+
+    if (arg0_is_tuple)
         return PyCFuncPtr_FromDll(type, args, kwds);
 
 #ifdef MS_WIN32
-    if (2 <= PyTuple_GET_SIZE(args) && PyLong_Check(PyTuple_GET_ITEM(args, 0)))
+    if (2 <= PyTuple_GET_SIZE(args) && arg0_is_long)
         return PyCFuncPtr_FromVtblIndex(type, args, kwds);
 #endif
 
-    if (1 == PyTuple_GET_SIZE(args)
-        && (PyLong_Check(PyTuple_GET_ITEM(args, 0)))) {
+    if (1 == PyTuple_GET_SIZE(args) && arg0_is_long) {
         CDataObject *ob;
-        void *ptr = PyLong_AsVoidPtr(PyTuple_GET_ITEM(args, 0));
         if (ptr == NULL && PyErr_Occurred())
             return NULL;
         ob = (CDataObject *)GenericPyCData_new(type, args, kwds);
@@ -4309,9 +4349,12 @@ _get_arg(int *pindex, PyObject *name, PyObject *defval, PyObject *inargs, PyObje
     PyObject *v;
 
     if (*pindex < PyTuple_GET_SIZE(inargs)) {
-        v = PyTuple_GET_ITEM(inargs, *pindex);
+        v = PyTuple_GetItemRef(inargs, *pindex);
+        if (v == NULL) {
+            return NULL;
+        }
         ++*pindex;
-        return Py_NewRef(v);
+        return v;
     }
     if (kwds && name) {
         if (PyDict_GetItemRef(kwds, name, &v) < 0) {
@@ -4360,6 +4403,10 @@ _build_callargs(ctypes_state *st, PyCFuncPtrObject *self, PyObject *argtypes,
 {
     PyObject *paramflags = self->paramflags;
     PyObject *callargs;
+    PyObject *item = NULL;
+    PyObject *name = NULL;
+    PyObject *defval = NULL;
+    PyObject *argtype = NULL;
     Py_ssize_t i, len;
     int inargs_index = 0;
     /* It's a little bit difficult to determine how many arguments the
@@ -4392,29 +4439,45 @@ _build_callargs(ctypes_state *st, PyCFuncPtrObject *self, PyObject *argtypes,
     }
 #endif
     for (i = 0; i < len; ++i) {
-        PyObject *item = PyTuple_GET_ITEM(paramflags, i);
         PyObject *ob;
         unsigned int flag;
-        PyObject *name = NULL;
-        PyObject *defval = NULL;
 
+        item = PyTuple_GetItemRef(paramflags, i);
+        if (item == NULL) {
+            goto error;
+        }
         /* This way seems to be ~2 us faster than the PyArg_ParseTuple
            calls below. */
         /* We HAVE already checked that the tuple can be parsed with "i|ZO", so... */
         Py_ssize_t tsize = PyTuple_GET_SIZE(item);
-        flag = PyLong_AsUnsignedLongMask(PyTuple_GET_ITEM(item, 0));
-        name = tsize > 1 ? PyTuple_GET_ITEM(item, 1) : NULL;
-        defval = tsize > 2 ? PyTuple_GET_ITEM(item, 2) : NULL;
+        PyObject *flagobj = PyTuple_GetItemRef(item, 0);
+        if (flagobj == NULL) {
+            goto error;
+        }
+        flag = PyLong_AsUnsignedLongMask(flagobj);
+        Py_DECREF(flagobj);
+        if (tsize > 1) {
+            name = PyTuple_GetItemRef(item, 1);
+            if (name == NULL) {
+                goto error;
+            }
+        }
+        if (tsize > 2) {
+            defval = PyTuple_GetItemRef(item, 2);
+            if (defval == NULL) {
+                goto error;
+            }
+        }
 
         switch (flag & (PARAMFLAG_FIN | PARAMFLAG_FOUT | PARAMFLAG_FLCID)) {
         case PARAMFLAG_FIN | PARAMFLAG_FLCID:
             /* ['in', 'lcid'] parameter.  Always taken from defval,
              if given, else the integer 0. */
             if (defval == NULL) {
-                defval = _PyLong_GetZero();
+                defval = Py_NewRef(_PyLong_GetZero());
             }
-            Py_INCREF(defval);
             PyTuple_SET_ITEM(callargs, i, defval);
+            defval = NULL;
             break;
         case (PARAMFLAG_FIN | PARAMFLAG_FOUT):
             *pinoutmask |= (1 << i); /* mark as inout arg */
@@ -4440,13 +4503,17 @@ _build_callargs(ctypes_state *st, PyCFuncPtrObject *self, PyObject *argtypes,
                 /* XXX Using mutable objects as defval will
                    make the function non-threadsafe, unless we
                    copy the object in each invocation */
-                Py_INCREF(defval);
                 PyTuple_SET_ITEM(callargs, i, defval);
+                defval = NULL;
                 *poutmask |= (1 << i); /* mark as out arg */
                 (*pnumretvals)++;
                 break;
             }
-            ob = PyTuple_GET_ITEM(argtypes, i);
+            argtype = PyTuple_GetItemRef(argtypes, i);
+            if (argtype == NULL) {
+                goto error;
+            }
+            ob = argtype;
             StgInfo *info;
             if (PyStgInfo_FromType(st, ob, &info) < 0) {
                 goto error;
@@ -4492,6 +4559,10 @@ _build_callargs(ctypes_state *st, PyCFuncPtrObject *self, PyObject *argtypes,
             goto error;
             break;
         }
+        Py_CLEAR(item);
+        Py_CLEAR(name);
+        Py_CLEAR(defval);
+        Py_CLEAR(argtype);
     }
 
     /* We have counted the arguments we have consumed in 'inargs_index'.  This
@@ -4514,6 +4585,10 @@ _build_callargs(ctypes_state *st, PyCFuncPtrObject *self, PyObject *argtypes,
      */
     return callargs;
   error:
+    Py_XDECREF(item);
+    Py_XDECREF(name);
+    Py_XDECREF(defval);
+    Py_XDECREF(argtype);
     Py_DECREF(callargs);
     return NULL;
 }
@@ -4556,8 +4631,12 @@ _build_result(PyObject *result, PyObject *callargs,
     for (bit = 1, i = 0; i < 32; ++i, bit <<= 1) {
         PyObject *v;
         if (bit & inoutmask) {
-            v = PyTuple_GET_ITEM(callargs, i);
-            Py_INCREF(v);
+            v = PyTuple_GetItemRef(callargs, i);
+            if (v == NULL) {
+                Py_XDECREF(tup);
+                Py_DECREF(callargs);
+                return NULL;
+            }
             if (numretvals == 1) {
                 Py_DECREF(callargs);
                 return v;
@@ -4566,8 +4645,14 @@ _build_result(PyObject *result, PyObject *callargs,
             index++;
         } else if (bit & outmask) {
 
-            v = PyTuple_GET_ITEM(callargs, i);
-            v = PyObject_CallMethodNoArgs(v, &_Py_ID(__ctypes_from_outparam__));
+            PyObject *outarg = PyTuple_GetItemRef(callargs, i);
+            if (outarg == NULL) {
+                Py_XDECREF(tup);
+                Py_DECREF(callargs);
+                return NULL;
+            }
+            v = PyObject_CallMethodNoArgs(outarg, &_Py_ID(__ctypes_from_outparam__));
+            Py_DECREF(outarg);
             if (v == NULL || numretvals == 1) {
                 Py_XDECREF(tup);
                 Py_DECREF(callargs);
@@ -4631,13 +4716,14 @@ PyCFuncPtr_call(PyObject *op, PyObject *inargs, PyObject *kwds)
     if (self->index) {
         /* It's a COM method */
         CDataObject *this;
-        this = (CDataObject *)PyTuple_GetItem(inargs, 0); /* borrowed ref! */
+        this = (CDataObject *)PyTuple_GetItemRef(inargs, 0);
         if (!this) {
             PyErr_SetString(PyExc_ValueError,
                             "native com method call without 'this' parameter");
             goto finally;
         }
         if (!CDataObject_Check(st, this)) {
+            Py_DECREF(this);
             PyErr_SetString(PyExc_TypeError,
                             "Expected a COM this pointer as first argument");
             goto finally;
@@ -4645,11 +4731,14 @@ PyCFuncPtr_call(PyObject *op, PyObject *inargs, PyObject *kwds)
         /* there should be more checks? No, in Python */
         /* First arg is a pointer to an interface instance */
         if (!this->b_ptr || *(void **)this->b_ptr == NULL) {
+            Py_DECREF(this);
             PyErr_SetString(PyExc_ValueError,
                             "NULL COM pointer access");
             goto finally;
         }
         piunk = *(IUnknown **)this->b_ptr;
+        /* inargs keeps the object, and so piunk, alive for the call. */
+        Py_DECREF(this);
         if (NULL == piunk->lpVtbl) {
             PyErr_SetString(PyExc_ValueError,
                             "COM method call without VTable");
@@ -4868,12 +4957,12 @@ _init_pos_args(PyObject *self, PyTypeObject *type,
     PyObject *attrdict = PyType_GetDict(type);
     assert(attrdict);
 
-    fields = PyDict_GetItemWithError((PyObject *)attrdict, &_Py_ID(_fields_));
+    int found = PyDict_GetItemRef(attrdict, &_Py_ID(_fields_), &fields);
     Py_CLEAR(attrdict);
-    if (fields == NULL) {
-        if (PyErr_Occurred()) {
-            return -1;
-        }
+    if (found < 0) {
+        return -1;
+    }
+    if (found == 0) {
         return index;
     }
 
@@ -4883,14 +4972,23 @@ _init_pos_args(PyObject *self, PyTypeObject *type,
         PyObject *pair = PySequence_GetItem(fields, i - index);
         PyObject *name, *val;
         int res;
-        if (!pair)
+        if (!pair) {
+            Py_DECREF(fields);
             return -1;
+        }
         name = PySequence_GetItem(pair, 0);
         if (!name) {
             Py_DECREF(pair);
+            Py_DECREF(fields);
             return -1;
         }
-        val = PyTuple_GET_ITEM(args, i);
+        val = PyTuple_GetItemRef(args, i);
+        if (val == NULL) {
+            Py_DECREF(pair);
+            Py_DECREF(name);
+            Py_DECREF(fields);
+            return -1;
+        }
         if (kwds) {
             res = PyDict_Contains(kwds, name);
             if (res != 0) {
@@ -4901,6 +4999,8 @@ _init_pos_args(PyObject *self, PyTypeObject *type,
                 }
                 Py_DECREF(pair);
                 Py_DECREF(name);
+                Py_DECREF(val);
+                Py_DECREF(fields);
                 return -1;
             }
         }
@@ -4908,9 +5008,13 @@ _init_pos_args(PyObject *self, PyTypeObject *type,
         res = PyObject_SetAttr(self, name, val);
         Py_DECREF(pair);
         Py_DECREF(name);
-        if (res == -1)
+        Py_DECREF(val);
+        if (res == -1) {
+            Py_DECREF(fields);
             return -1;
+        }
     }
+    Py_DECREF(fields);
     return info->length;
 }
 
@@ -4940,10 +5044,16 @@ Struct_init(PyObject *self, PyObject *args, PyObject *kwds)
     if (kwds) {
         PyObject *key, *value;
         Py_ssize_t pos = 0;
-        while(PyDict_Next(kwds, &pos, &key, &value)) {
-            if (-1 == PyObject_SetAttr(self, key, value))
+        int rc;
+        while ((rc = PyDict_NextEntryRef(kwds, &pos, &key, &value)) > 0) {
+            int err = PyObject_SetAttr(self, key, value);
+            Py_DECREF(key);
+            Py_DECREF(value);
+            if (err == -1)
                 return -1;
         }
+        if (rc < 0)
+            return -1;
     }
     return 0;
 }
@@ -5009,9 +5119,13 @@ Array_init(PyObject *self, PyObject *args, PyObject *kw)
         int result = 0;
         Py_BEGIN_CRITICAL_SECTION(self);
         for (i = 0; result >= 0 && i < n; ++i) {
-            PyObject *v = PyTuple_GET_ITEM(args, i);
-            assert(v != NULL);
+            PyObject *v = PyTuple_GetItemRef(args, i);
+            if (v == NULL) {
+                result = -1;
+                break;
+            }
             result = Array_ass_item_impl(self, i, v);
+            Py_DECREF(v);
         }
         Py_END_CRITICAL_SECTION();
         return result;
@@ -5019,8 +5133,12 @@ Array_init(PyObject *self, PyObject *args, PyObject *kw)
 
     for (i = 0; i < n; ++i) {
         PyObject *v;
-        v = PyTuple_GET_ITEM(args, i);
-        if (-1 == PySequence_SetItem(self, i, v))
+        v = PyTuple_GetItemRef(args, i);
+        if (v == NULL)
+            return -1;
+        int err = PySequence_SetItem(self, i, v);
+        Py_DECREF(v);
+        if (err == -1)
             return -1;
     }
     return 0;

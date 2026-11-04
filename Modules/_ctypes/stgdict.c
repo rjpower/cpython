@@ -10,6 +10,7 @@
 
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_dict.h"          // _PyDict_SizeOf()
+#include "pycore_tuple.h"         // _PyTuple_GET_OBJECT()
 #include <ffi.h>
 #ifdef MS_WIN32
 #  include <malloc.h>
@@ -100,23 +101,30 @@ MakeFields(PyObject *type, CFieldObject *descr,
     ctypes_state *st = get_module_state_by_class(Py_TYPE(descr));
     PyTypeObject *cfield_tp = st->PyCField_Type;
     for (i = 0; i < PySequence_Fast_GET_SIZE(fieldlist); ++i) {
-        PyObject *pair = PySequence_Fast_GET_ITEM(fieldlist, i); /* borrowed */
+        PyObject *pair = PySequence_GetItem(fieldlist, i);
+        if (pair == NULL) {
+            Py_DECREF(fieldlist);
+            return -1;
+        }
         PyObject *fname, *ftype, *bits;
         CFieldObject *fdescr;
         CFieldObject *new_descr;
         /* Convert to PyArg_UnpackTuple... */
         if (!PyArg_ParseTuple(pair, "OO|O", &fname, &ftype, &bits)) {
+            Py_DECREF(pair);
             Py_DECREF(fieldlist);
             return -1;
         }
         fdescr = (CFieldObject *)PyObject_GetAttr(descr->proto, fname);
         if (fdescr == NULL) {
+            Py_DECREF(pair);
             Py_DECREF(fieldlist);
             return -1;
         }
         if (!Py_IS_TYPE(fdescr, cfield_tp)) {
             PyErr_SetString(PyExc_TypeError, "unexpected type");
             Py_DECREF(fdescr);
+            Py_DECREF(pair);
             Py_DECREF(fieldlist);
             return -1;
         }
@@ -126,14 +134,17 @@ MakeFields(PyObject *type, CFieldObject *descr,
                                 offset + fdescr->byte_offset);
             Py_DECREF(fdescr);
             if (rc == -1) {
+                Py_DECREF(pair);
                 Py_DECREF(fieldlist);
                 return -1;
             }
+            Py_DECREF(pair);
             continue;
         }
         new_descr = (CFieldObject *)cfield_tp->tp_alloc(cfield_tp, 0);
         if (new_descr == NULL) {
             Py_DECREF(fdescr);
+            Py_DECREF(pair);
             Py_DECREF(fieldlist);
             return -1;
         }
@@ -152,11 +163,13 @@ MakeFields(PyObject *type, CFieldObject *descr,
         Py_DECREF(fdescr);
 
         if (-1 == PyObject_SetAttr(type, fname, (PyObject *)new_descr)) {
+            Py_DECREF(pair);
             Py_DECREF(fieldlist);
             Py_DECREF(new_descr);
             return -1;
         }
         Py_DECREF(new_descr);
+        Py_DECREF(pair);
     }
     Py_DECREF(fieldlist);
     return 0;
@@ -185,9 +198,14 @@ MakeAnonFields(PyObject *type)
     ctypes_state *st = get_module_state_by_def(Py_TYPE(type));
     PyTypeObject *cfield_tp = st->PyCField_Type;
     for (i = 0; i < PySequence_Fast_GET_SIZE(anon_names); ++i) {
-        PyObject *fname = PySequence_Fast_GET_ITEM(anon_names, i); /* borrowed */
+        PyObject *fname = PySequence_GetItem(anon_names, i);
+        if (fname == NULL) {
+            Py_DECREF(anon_names);
+            return -1;
+        }
         CFieldObject *descr = (CFieldObject *)PyObject_GetAttr(type, fname);
         if (descr == NULL) {
+            Py_DECREF(fname);
             Py_DECREF(anon_names);
             return -1;
         }
@@ -196,6 +214,7 @@ MakeAnonFields(PyObject *type)
                          "'%U' is specified in _anonymous_ but not in "
                          "_fields_",
                          fname);
+            Py_DECREF(fname);
             Py_DECREF(anon_names);
             Py_DECREF(descr);
             return -1;
@@ -207,10 +226,12 @@ MakeAnonFields(PyObject *type)
                              ((CFieldObject *)descr)->index,
                              ((CFieldObject *)descr)->byte_offset)) {
             Py_DECREF(descr);
+            Py_DECREF(fname);
             Py_DECREF(anon_names);
             return -1;
         }
         Py_DECREF(descr);
+        Py_DECREF(fname);
     }
 
     Py_DECREF(anon_names);
@@ -399,14 +420,20 @@ PyCStructUnionType_update_stginfo(PyObject *type, PyObject *fields, int isStruct
     }
 
     for (Py_ssize_t i = 0; i < len; ++i) {
-        PyObject *prop_obj = PyTuple_GET_ITEM(layout_fields, i);
-        assert(prop_obj);
+        PyObject *prop_obj = PyTuple_GetItemRef(layout_fields, i);
+        if (prop_obj == NULL) {
+            goto error;
+        }
         if (!PyType_IsSubtype(Py_TYPE(prop_obj), st->PyCField_Type)) {
             PyErr_Format(PyExc_TypeError,
                          "fields must be of type CField, got %T", prop_obj);
+            Py_DECREF(prop_obj);
             goto error;
 
         }
+        /* The checked CField stays alive in layout_fields, which this
+           function holds and which is immutable, so use prop_obj as a borrow. */
+        Py_DECREF(prop_obj);
         CFieldObject *prop = (CFieldObject *)prop_obj; // borrow from prop_obj
 
         if (prop->index != i) {
@@ -571,7 +598,7 @@ _replace_array_elements(ctypes_state *st, PyObject *layout_fields,
 
     /* first pass to see how much memory to allocate */
     for (Py_ssize_t i = 0; i < len; ++i) {
-        PyObject *prop_obj = PyTuple_GET_ITEM(layout_fields, i); // borrowed
+        PyObject *prop_obj = _PyTuple_GET_OBJECT(layout_fields, i); // borrowed
         assert(prop_obj);
         assert(PyType_IsSubtype(Py_TYPE(prop_obj), st->PyCField_Type));
         CFieldObject *prop = (CFieldObject *)prop_obj; // borrowed
@@ -649,7 +676,7 @@ _replace_array_elements(ctypes_state *st, PyObject *layout_fields,
 
     /* second pass to actually set the type pointers */
     for (Py_ssize_t i = 0; i < len; ++i) {
-        PyObject *prop_obj = PyTuple_GET_ITEM(layout_fields, i); // borrowed
+        PyObject *prop_obj = _PyTuple_GET_OBJECT(layout_fields, i); // borrowed
         assert(prop_obj);
         assert(PyType_IsSubtype(Py_TYPE(prop_obj), st->PyCField_Type));
         CFieldObject *prop = (CFieldObject *)prop_obj; // borrowed

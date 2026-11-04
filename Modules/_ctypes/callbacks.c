@@ -143,18 +143,22 @@ static void _CallPythonObject(ctypes_state *st,
     nargs = PyTuple_GET_SIZE(converters);
     assert(nargs <= CTYPES_MAX_ARGCOUNT);
     PyObject **args = alloca(nargs * sizeof(PyObject *));
-    PyObject **cnvs = PySequence_Fast_ITEMS(converters);
     for (i = 0; i < nargs; i++) {
-        PyObject *cnv = cnvs[i]; // borrowed ref
+        PyObject *cnv = PyTuple_GetItemRef(converters, i);
+        if (cnv == NULL) {
+            goto Error;
+        }
 
         StgInfo *info;
         if (PyStgInfo_FromType(st, cnv, &info) < 0) {
+            Py_DECREF(cnv);
             goto Error;
         }
 
         if (info && info->getfunc && !_ctypes_simple_instance(st, cnv)) {
             PyObject *v = info->getfunc(*pArgs, info->size);
             if (!v) {
+                Py_DECREF(cnv);
                 goto Error;
             }
             args[i] = v;
@@ -168,28 +172,33 @@ static void _CallPythonObject(ctypes_state *st,
             /* Hm, shouldn't we use PyCData_AtAddress() or something like that instead? */
             CDataObject *obj = (CDataObject *)_PyObject_CallNoArgs(cnv);
             if (!obj) {
+                Py_DECREF(cnv);
                 goto Error;
             }
             if (!CDataObject_Check(st, obj)) {
                 PyErr_Format(PyExc_TypeError,
                              "%R returned unexpected result of type %T", cnv, obj);
                 Py_DECREF(obj);
+                Py_DECREF(cnv);
                 goto Error;
             }
             memcpy(obj->b_ptr, *pArgs, info->size);
             args[i] = (PyObject *)obj;
 #ifdef MS_WIN32
             if (TryAddRef(cnv, obj) < 0) {
+                Py_DECREF(cnv);
                 goto Error;
             }
 #endif
         } else {
             PyErr_Format(PyExc_TypeError,
                          "cannot build parameter of type %R", cnv);
+            Py_DECREF(cnv);
             goto Error;
         }
         /* XXX error handling! */
         pArgs++;
+        Py_DECREF(cnv);
     }
 
     if (flags & (FUNCFLAG_USE_ERRNO | FUNCFLAG_USE_LASTERROR)) {
@@ -438,10 +447,13 @@ CThunkObject *_ctypes_alloc_callback(ctypes_state *st,
     }
 
     p->flags = flags;
-    PyObject **cnvs = PySequence_Fast_ITEMS(converters);
     for (i = 0; i < nargs; ++i) {
-        PyObject *cnv = cnvs[i]; // borrowed ref
+        PyObject *cnv = PyTuple_GetItemRef(converters, i);
+        if (cnv == NULL) {
+            goto error;
+        }
         p->atypes[i] = _ctypes_get_ffi_type(st, cnv);
+        Py_DECREF(cnv);
     }
     p->atypes[i] = NULL;
 

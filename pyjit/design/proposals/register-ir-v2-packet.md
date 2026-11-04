@@ -1,9 +1,12 @@
 # Proposal: register IR v2 packet (IR-D1, IR-D2, IR-D3/D4, G2–G6, G9, G10, G12)
 
-Status: proposal, revision 2, 2026-11-04. Reviewed in
-[review 1](../reviews/register-ir-v2-packet-review-1.md) (`d5fed44bd29`). The
-coordinator's decisions on findings 3, 4, 6, 7 and 8 are built in. Every other
-finding has a disposition below.
+Status: **accepted**, revision 3, 2026-11-04. Reviewed in
+[review 1](../reviews/register-ir-v2-packet-review-1.md) (`d5fed44bd29`) and
+[review 2](../reviews/register-ir-v2-packet-review-2.md) (`adf13411fa4`,
+accept with changes). The coordinator's decisions on review 1's findings 3, 4,
+6, 7 and 8 and on review 2's R2-1 to R2-7 are built in. Every finding has a
+disposition below. The coordinator accepted revision 3 without a third
+review: it applies review 2's listed changes and no others.
 
 Design reference: [register-ir.md](../register-ir.md) §3 (IR-D1 to IR-D3,
 G2–G12), §4 (bit budget and format list) and §5 (instruction contract).
@@ -60,13 +63,30 @@ allocation (G5 item 2), heat and OSR (G7), and the JIT-stage decisions
 | 19 | minor | §11 edits | **Accepted.** §11 is rewritten with every item the review lists. |
 | 20 | minor | `finish_value_bridges` is a twelfth escaping helper | **Accepted.** It is in C1 and A2. |
 
+## Changes after review 2
+
+Review 2 found review 1's findings 3, 5 and 9 partly resolved. R2-3, R2-1 and
+R2-5 complete them.
+
+| # | Severity | Finding | Disposition |
+|---|---|---|---|
+| R2-1 | major | The activation record is mis-sized and holds only some by-address locals (completes finding 5) | **Accepted (coordinator).** The box area is the largest handler's capacity, 37 boxes (296 B), emitted by the generator as a constant. The rule: no handler takes the address of a C local; a callee that needs a pointer gets one into the record. Every remaining site is listed with its disposition (A3a). The record is about 850 B per activation (A3a). A3a is re-estimated at 18 h. |
+| R2-2 | major | The record should be the activation's one structure, with stated rules | **Accepted (coordinator).** `_PyEvalActivation` holds the entry frame, the JIT state, the outer borrow floor and its request, the box area and the handler scratch. Rules: the pointer is passed explicitly; handler fields are dead at dispatch; it holds owned values only; it is never scanned; stack switching saves the pointer. The "a collector could scan" line is deleted. |
+| R2-3 | major | A5 implements half of D4 (completes finding 3) | **Accepted (coordinator): split.** A5a, after representation step 8, removes the borrow tags from frame homes, with `frame.c`'s frame check and the home checker rejecting a tagged mortal. A5b, after 9a, adds the distinct borrow C type, D4's debug asserts, the producer list driven to zero, `traverse_slots`, the removal of `MakeHeapSafe` from setters, and the pair merges. The typed form is not deferred. The 44 → 28 figure is labelled as the inline-scalar path. |
+| R2-4 | minor | A2's assert is not where a violation would show first | **Accepted.** Each deleted write becomes an equality assert at its site. `_PyCode_ClearExec` asserts that it runs only from dealloc. The debug tail-call build checks the invariant at every dispatch. The `instr_ptr` restores stay, and the reason is given. The version assert allows a set error. The JIT's `code->_co_exec == exec` re-checks are deleted in A3b. |
+| R2-5 | minor | B5 removes a handler, so it renumbers (completes finding 9) | **Accepted.** B5 renumbers, so the steps that renumber are B2, B4, B5 and B6. |
+| R2-6 | minor | A4 lands and may then be reverted | **Accepted (coordinator).** A4 and B3 are prototyped off-tree on A3, decided by G2's rule after open question 9 is counted, and only the winner lands. |
+| R2-7 | minor | Smaller corrections | **Accepted.** 2.42× is described as a newer build on a different harness, not a correction of 2.6× (2.51 on the same 12 kernels). B1 names both "two live temporaries" checks. A3c names every build configuration. The free-threaded remarks are dropped. C8's 5.2× is labelled `vt` + `rep`, which includes A2's `ni`. The B0a/9a overlap in `assemble.c` and `specialize.c` is named (§3). |
+
 ## Summary
 
 - **Measured: tail calls alone cut the time by 13%.** These timings are from
   review 1 (§1.1): 5 interleaved rounds; each sample the best of 3 runs of
   `run(1)`; the median over rounds; load 1.1–3.7. On 12 kernels:
-  - computed goto at HEAD runs **2.42× upstream**. This is the corrected
-    baseline for this packet, replacing the triage's 2.6× on build F;
+  - computed goto at HEAD runs **2.42× upstream**. This is the baseline for
+    this packet. It is a newer build on a different harness, not a
+    correction of the triage's 2.60×, which was build F's geometric mean on
+    29 kernels (2.51 on these 12);
   - a tail-call link of HEAD with no other change runs **0.870×** computed
     goto under GCC (0.80–0.92 per kernel; repeat 0.872) and 0.877× under
     Clang 21, which is 2.10× upstream;
@@ -85,19 +105,22 @@ allocation (G5 item 2), heat and OSR (G7), and the JIT-stage decisions
     step 8) and loop structure (bridges, transactions, the class test).
 - **Who owns which cost.**
   - Structure: state transport, the record, the prologue. Phase A.
-  - Format: the class test, the `NOT_TAKEN` skip. Steps A4 or B3, and B2.
-  - Representation: borrow tags and publish tests. Step A5 (D4) and
-    representation step 8.
+  - Format: the class test, the `NOT_TAKEN` skip. The G2 winner (A4 or B3),
+    and B2.
+  - Representation: borrow tags and publish tests. Steps A5a and A5b (D4)
+    and representation step 8.
   - The encoding's word savings are about 11%: 0.74 → 0.66 words per upstream
     instruction on 13 kernels.
 - **Order.**
-  - A1 and A2 follow representation step 7, and A5 (D4) follows step 8.
-  - A3 (tail calls, the JIT entry, deletion of computed goto) is one landing
-    after 9b.
-  - A4, the G2 control, comes after A3.
+  - A1 and A2 follow representation step 7. A5a (D4 for frame homes)
+    follows step 8, and A5b (the typed borrow) follows 9a.
+  - A3 (tail calls with one activation record, the JIT entry, deletion of
+    computed goto) is one landing after 9b.
+  - G2 is decided off-tree on A3, between A4 and B3, and only the winner
+    lands.
   - The contract table (B0a) can start now. The format steps B2–B7 follow
     A3, so they change one backend.
-- **Estimate:** about 97 agent-hours (§10).
+- **Estimate:** about 117 agent-hours (§10).
 
 ---
 
@@ -169,7 +192,6 @@ the checkpoint. On the 14 kernels used here it is 0.78.
     reference to its code object.
   - `exec->words` points into the same allocation and is never reassigned.
     Instrumentation and specialisation rewrite handler fields in place.
-  - The free-threaded build shares one copy (`pycore_ir.h:140–152`).
   - **What follows.** The only two writes through the helpers' `_PyInstr **`
     parameters store `exec->words + word` (`ceval.c:1587`) and
     `exec->words + state->next_word` (`ceval.c:2175`). Both offsets were
@@ -328,11 +350,11 @@ frame load 1, `instr_ptr` 1, other 3.
 | C1 | `next_instr` passed by address | structure | 290 generated sites in 185 handlers, to 11 helpers (`finish_displaced_local` 165, `value_operation_finish` 38, `value_reader_complete` 28, `call_transaction_invoke` 26, `retire_published_values` 10, `call_transaction_expand_method` 7, `call_transaction_refresh` 6, `call_transaction_prepare_tuple` 4, `value_attribute_complete` 2, `native_call_finish` 2, `call_transaction_monitor` 2). The twelfth helper, `finish_value_bridges`, is reached from `DISPATCH` (`ceval_macros.h:272–281`), the three `JUMP_TO_LABEL`s and `DISPATCH_INLINED`, so it is in all 292 | One fixed DWARF home (`-0xc90(%rbp)`); tail call 6.8 → 5.4 stack refs with `ni` | A2 (delete the parameter), effective under A3 |
 | C2 | One 407 KB function | structure | 292 | 4,772 calls against 611; 471 indirect jumps against 257; C frame 3,304 B against 360 B; under tail calls, stack refs fall to 1.5 with A1 and A2 | A3 |
 | C3 | The value record in every handler | structure | 292, of which 177 never box | `vt`: 48.9/12.1 → 45.4/8.6; loop −18% | A1 |
-| C4 | The slot-class test reads the code header | **format** | 1,040 lines in 211 handlers | 1.2 header loads per word, each behind `frame->ir_words` | A4 (`nlocalsplus` as state) or B3 (class bits); open question 9 (static roles) |
-| C5 | Borrow tags and publish canonicalisation on the fast path | **representation** | Publish: 67 handlers; borrow macros: 590 lines generated | `rep`: 48.9 → 42.6 instructions; loop −10%; `LOAD_FAST_BORROW` 44 → 28 | A5 (D4) and representation step 8 |
+| C4 | The slot-class test reads the code header | **format** | 1,040 lines in 211 handlers | 1.2 header loads per word, each behind `frame->ir_words` | the G2 winner: A4 (`nlocalsplus` as state) or B3 (class bits); open question 9 (static roles) first |
+| C5 | Borrow tags and publish canonicalisation on the fast path | **representation** | Publish: 67 handlers; borrow macros: 590 lines generated | `rep`: 48.9 → 42.6 instructions; loop −10%; `LOAD_FAST_BORROW` 44 → 28 on the inline-scalar path | A5a and A5b (D4) and representation step 8 |
 | C6 | Fixed prologue: `instr_ptr`, frame load (tail call), canary, `endbr64`, frame pointer | structure | 289 (`instr_ptr`); 276 of 298 tail-call functions have a canary | 9 prologue instructions in `tcvt` `LOAD_FAST_BORROW` | A3a (frame parameter; no address-taken locals, so no canary); `instr_ptr` at escapes only is G9 item 1, after baseline |
 | C7 | The `NOT_TAKEN` skip on every conditional fall-through | **format** | conditional jumps | 0–8.9% of words | B2 |
-| C8 | Code size | all | all | mean 1,358 B per handler against 243 B; loop 7.0× upstream; 5.2× with A1, step 8 and D4 | A1, A3, A5, step 8 |
+| C8 | Code size | all | all | mean 1,358 B per handler against 243 B; loop 7.0× upstream; 5.2× in `vt` + `rep` (A1, A2's `ni`, step 8 and D4) | A1, A2, A3, A5a, step 8 |
 
 ---
 
@@ -381,10 +403,11 @@ the JIT included, enters and leaves through C-ABI functions.
 | IR v2 step | Starts after | Why |
 |---|---|---|
 | A1, A2 | rep. 7 | Step 7 edits the bridge helpers whose signatures A2 changes, and `ceval_macros.h`'s dispatch macros, which A1 changes |
-| A5 (D4) | rep. 8 | D4 needs canonical construction: a value stored in a home must be canonical before its tag means only "immortal or not". It shares `pycore_value.h` with 9a, in different functions; any order with 9a and 9b |
+| A5a (D4, frame homes) | rep. 8 | D4 needs canonical construction: a value stored in a home must be canonical before its tag means only "immortal or not". It shares `pycore_value.h` with 9a, in different functions; any order with 9a and 9b |
+| A5b (D4, typed borrow) | rep. 9a and A5a | The typed borrow changes the core signatures that take a borrowed value, which overlap 9a's renames (`PyValue_FromInt32` in 13 files, `PyValue_InlineInt` in 18). Any order with 9b; landing before A3 means A3a rewrites handler bodies already in the typed form |
 | A3a + A3b + A3c, one landing | rep. 9b (and A2) | A3a's slot-addressed rewrites edit `bytecodes.c` handler bodies that 9a rewrites; A3b edits `jit_runtime.c`, which 9b rewrites. Landing them together means no representation step has to pass on two backends (coordinator decision on finding 8) |
-| A4 | A3 | It needs the parameter list |
-| B0a | rep. 6c | A new generated table and consumers in `assemble.c`, `regcfg*.c`, `ir.c`, `specialize.c` and `dis`; no format change |
+| G2: A4 and B3 prototypes, off-tree | A3 | A4 needs the parameter list. Only the winner lands: A4 right after A3, or B3 after B2 as a format step |
+| B0a | rep. 6c | A new generated table and consumers in `assemble.c`, `regcfg*.c`, `ir.c`, `specialize.c` and `dis`; no format change. Overlap: 9a reviews `assemble.c` (4 sites) and `specialize.c` (14) for int32 assumptions. The edits are small; whichever lands second rebases |
 | B0b | A3 | The JIT front end, after 9b's rewrite and A3b's entry change |
 | B1 | any time | Independent |
 | B2–B7 | A3 | IR-D1 puts them after 9b. After A3c there is one backend, so each format step edits one dispatch form. B6's `_INT` forms compare int51 values, and B7's slots hold inline values, whose range int51 sets |
@@ -392,7 +415,8 @@ the JIT included, enters and leaves through C-ABI functions.
 Forced orders inside the packet:
 - **B2 first among the format steps:** `NOT_TAKEN` and the dead handlers.
 - **B4 before B6:** the fused entry is G5's 32-byte layout.
-- **A4 before B3:** G2's rule.
+- **G2 decided before A4 or B3 lands:** only the winner lands (R2-6).
+- **A5a before A5b:** A5b's checks assume homes hold no borrow.
 - **A2 before A3** is natural, not forced. A3a builds without it, but its
   target (no address-taken state) includes `next_instr`.
 - **B7 needs no class step.** Today's run-time test already treats hidden
@@ -402,30 +426,30 @@ Forced orders inside the packet:
 
 ## 4. Steps
 
-Landing order: A1, A2 → A5 → A3 (a, b, c together) → A4 → B2 → B3 (if
-needed) → B4 → B5 → B6 → B7, with B0a in parallel from now, B0b after A3, and
-B1 at any time.
+Landing order: A1, A2 → A5a → A5b → A3 (a, b, c together) → the G2 winner
+(A4 here, or B3 after B2) → B2 → B4 → B5 → B6 → B7, with B0a in parallel from
+now, B0b after A3, and B1 at any time.
 
 | Step | Content | Gaps | Words executed | Per-word or code effect | Agent-h |
 |---|---|---|---|---|---:|
 | A1 | The record only in handlers that box | G9.3 | 0 | `vt` against `ni`: 45.4/8.6 from 48.9/12.1 on the lower bound; loop −18% | 2 |
-| A2 | Delete the PC out-parameter (12 families); instrumentation refresh becomes an assert | C1 | 0 | none alone under computed goto; under tail calls 6.8 → 5.4 stack refs | 2.5 |
-| A5 | D4: no home holds a borrow | IR-D3, D4 | 0 | with step 8: `LOAD_FAST_BORROW` 44 → 28, loop −10% (`rep`); plus one count pair per `LOAD_FAST_BORROW` into a temporary (3.8–8.5% of words) | 6 |
-| A3a | Tail-call build with no stack state, GCC 15 and Clang 21 | §1.13, G9.6 | 0 | measured 0.870× with nothing else changed; stack refs 12.1 → 1.5 with A1 and A2 | 14 |
-| A3b | JIT entry and exit as C-ABI functions | §1.13 | 0 | – | 9 |
-| A3c | Delete the computed-goto and switch backends | finding 7 | 0 | one decode, one dispatch form | 2 |
+| A2 | Delete the PC out-parameter (12 families); asserts at the deleted sites, the writer and dispatch; instrumentation refresh becomes an assert | C1 | 0 | none alone under computed goto; under tail calls 6.8 → 5.4 stack refs | 3 |
+| A5a | D4 for frame homes: no slot holds a borrow; frame and home checks | IR-D3, D4 | 0 | with step 8, on the inline-scalar path: `LOAD_FAST_BORROW` 44 → 28, loop −10% (`rep`). The object path gains an incref on the load and a decref in the consumer, on 3.8–8.5% of words; §8 measures it | 5 |
+| A5b | D4's typed borrow; debug asserts; producers to zero; `traverse_slots`; `MakeHeapSafe` out of setters; pair merges | D4 | 0 | storing a borrow becomes a compile error; the `MakeHeapSafe` test leaves each heap store | 13 |
+| A3a | Tail-call build with one activation record and no address-taken locals, GCC 15 and Clang 21 | §1.13, G9.6 | 0 | measured 0.870× with nothing else changed; stack refs 12.1 → 1.5 with A1 and A2 | 18 |
+| A3b | JIT entry and exit as C-ABI functions; the JIT's executing-copy re-checks go | §1.13 | 0 | – | 9.5 |
+| A3c | Delete the computed-goto and switch backends; every build configuration on `musttail` | finding 7 | 0 | one decode, one dispatch form | 2.5 |
 | – | Both suites on the A3 branch until A3c | finding 8 | – | – | 2 |
-| A4 | G2 control: `nlocalsplus` in dispatch state | G2 | 0 | −1.2 header loads | 3.5 |
+| G2 | A4 (`nlocalsplus` in dispatch state) and B3 (class bits) prototyped off-tree; the winner lands | G2 | 0 | −1.2 header loads | 9.5 |
 | B0a | Contract table; C consumers; `dis` | IR-D2, G1 | 0 | 0 | 11 |
 | B0b | JIT front end reads the table | IR-D2 | 0 | 0 | 3 |
 | B1 | Last limit `SyntaxError`; docstring; `IR_MAX_FORWARD` | G10 | 0 | 0 | 1.5 |
 | B2 | No `NOT_TAKEN`; dead handlers out; dense numbering; magic | G12 | 0 | a load and a compare less on 0–8.9% of words | 3 |
-| B3 | Class bits (prototype always; lands only if A4 loses); magic | G2 | 0 | −1.2 header loads | 5 |
 | B4 | Feedback layout and index; NOFB out; renumber; magic | G5.1, G10 | 0 | feedback memory −22%; −6 handlers | 9 |
-| B5 | Call and unpack forms; magic | G4 | −0.7% to −8.1% (unpack_sequence −91%) | unpack store loop | 7 |
+| B5 | Call and unpack forms; `PUSH_NULL` out; renumber; magic | G4 | −0.7% to −8.1% (unpack_sequence −91%) | unpack store loop | 7.5 |
 | B6 | Fused compare-and-jump, forward only; jump rule; renumber; magic | G3, §4.3 | 0 to −7.4% | one dispatch, slot write, read and NULL store less per pair | 7 |
 | B7 | Inline scalar constants as hidden slots; magic | G6 | 0 to −20.5% | entry stores in looping functions | 6.5 |
-| M | Measurements (§8) | – | – | – | 3 |
+| M | Measurements (§8) | – | – | – | 3.5 |
 
 ### 4.1 Expected words executed
 
@@ -528,11 +552,36 @@ applies it at every counted site.
     `native_call_finish` becomes a debug assert that the code's
     instrumentation version is current. `instrument_all_executing_code_objects`
     already re-instruments every executing code object when events change.
-  - If the debug suite fires the assert, the refresh stays and the case is
-    recorded. No dispatch-time check is added.
-- **New invariant**, asserted after each reentrant call in debug builds:
-  `frame->ir_words == _PyFrame_GetCode(frame)->_co_exec->words`. register-ir.md
-  §1.10 states it (§11).
+  - The assert reads "the version is current, or an error is set".
+    `instrument_all_executing_code_objects` stops at its first failure
+    (`instrumentation.c:2040–2042`) and leaves later code objects stale, with
+    the exception set, which then propagates as today.
+  - If the debug suite fires the assert with no error set, the refresh stays
+    and the case is recorded. No dispatch-time check is added.
+- **The invariant**, stated in register-ir.md §1.10 (§11):
+  `frame->ir_words == _PyFrame_GetCode(frame)->_co_exec->words` while the
+  frame runs. `value_operation_begin` already asserts it before each
+  operation (`ceval.c:832`, also 2105). A2 adds debug checks where a
+  violation would show first:
+  - **At the deleted sites.** Each deleted write and refresh
+    (`ceval.c:1584–1587`, 1816, 2125, 2172–2175) becomes an equality assert.
+    That is where the old code would have repaired a moved PC.
+  - **On the writer side.** `_PyCode_ClearExec` (`ir.c:331–337`) asserts that
+    the code object is being deallocated. `_co_exec` has three writers:
+    `codeobject.c:573` (NULL at creation), `ir.c:323` (created once, under the
+    NULL test) and `ir.c:337` (cleared).
+  - **At dispatch**, in the debug tail-call build (A3a): `PRE_DISPATCH_GOTO`
+    checks it beside `frame == tstate->current_frame`. This covers the paths
+    where no helper ran: a caller resumed after an inlined callee returns or
+    yields, or after an exception unwinds into it.
+- **The `instr_ptr` restores stay.** `frame->instr_ptr = exec->words +
+  current` at the same sites restores the index saved when the operation
+  began. It rests on a different invariant: that nothing writes a running
+  frame's `instr_ptr` during a call the frame makes. A2 does not establish
+  that, and the store is on a cold path.
+- **The JIT's re-checks become dead.** The `code->_co_exec == exec` tests in
+  `jit_runtime.c:358–403` and `jit_record.c:84` cannot fail. 9b rewrites those
+  files, so A3b deletes the tests.
 - **Test.**
   - The step-0 set.
   - The step-5 tests: a `__del__` or native call that calls
@@ -542,10 +591,10 @@ applies it at every counted site.
   - A generator test that no emitted line takes `&next_instr`.
 - **Risk.** Low.
 
-### Step A5. D4: no home holds a borrow
+### Step A5a. D4 for frame homes: no slot holds a borrow
 
 - **Decided, not optional.** IR-D3 and pyvalue.md D4 decided this. It lands
-  whichever of A4 or B3 wins: D4 concerns value tags, not slot classes.
+  whichever way G2 goes: D4 concerns value tags, not slot classes.
 - **The change.**
   - A frame slot never holds a borrow. `LOAD_FAST_BORROW` into a temporary
     takes a count for a mortal object; inline values and immortals take
@@ -555,25 +604,82 @@ applies it at every counted site.
   - An in-place read of a local produces a borrow only in the handler's C
     local: `PyValue_BorrowAt` returns the slot bits, and `IR_BORROW_KNOWN`,
     `IR_LOAD_BORROWED` and `IR_DROP_BORROW` lose their class-dependent tag.
-  - The value tag means only "immortal or not".
+  - In a frame slot, the value tag means only "immortal or not". Heap homes
+    already hold no borrow, because the setters call `MakeHeapSafe`; A5b
+    removes that.
+- **In-place inputs lose their safety net.** After A5a, a borrowed local has
+  the bits of an owned value. Today the tag makes a `PyValue_CLOSE` of an
+  in-place input a no-op; after A5a, that close would release the local.
+  - The generator emits no release for an in-place input, which it knows
+    from `borrow_mask`.
+  - The step audits every hand-written handler body in `bytecodes.c` that
+    closes an input.
+  - Until A5b's typed borrow makes such a close a compile error, the frame
+    and home checks below and the debug refcount checks catch it at run time.
+- **Checks.** `_PyValue_CheckFrame` (`Python/frame.c:124`), which walks every
+  slot in debug builds, and the home checker `_PyValue_CheckHome` (an assert
+  from representation step 8) reject a mortal object with bit 0 set in any
+  slot. This is the check that finds a missed producer where it happens.
 - **Files.** `ceval_macros.h` (the five borrow macros), `pycore_value.h` (23
-  borrow-tag uses), `ir_generator.py` (4), `bytecodes.c` (3), and
-  `stack.py` and `analyzer.py` (1 each). The generated files are
-  regenerated: 590 and 91 lines.
+  borrow-tag uses, and the home checker), `ir_generator.py` (4),
+  `bytecodes.c` (3, plus the audit), `stack.py` and `analyzer.py` (1 each),
+  and `Python/frame.c`. The generated files are regenerated: 590 and 91
+  lines.
 - **Cost and benefit.**
-  - One count pair per `LOAD_FAST_BORROW` into a temporary, on 3.8–8.5% of
-    words (`load_fast_borrow_to_temp`, register-ir.md G2).
-  - With step 8's publish change, the review's `rep` approximation takes
-    `LOAD_FAST_BORROW` from 44 to 28 instructions and the loop down 10%.
+  - One count pair per `LOAD_FAST_BORROW` into a temporary of a mortal
+    object. `LOAD_FAST_BORROW` into a temporary is 3.8–8.5% of words
+    (`load_fast_borrow_to_temp`, register-ir.md G2).
+  - On the inline-scalar path, with step 8's publish change, the review's
+    `rep` approximation takes `LOAD_FAST_BORROW` from 44 to 28 instructions
+    and the loop down 10%. `rep` takes no count, so the object path's incref
+    and decref are not in those figures. §8 measures object paths after A5a.
 - **Test.**
   - The step-0 set; `test_tagged_values`.
   - `test_sys` (`getrefcount` around calls), `test_gc`, `test_weakref`,
     `test_finalization` (lifetimes of values held by temporaries).
   - `test_generators` and `test_frame` (frame copies), `test_peepholer`.
+  - New: a trace function rebinds a local through `f_locals` between its copy
+    into a call window and the call. The callee must still see the original
+    object.
 - **Risk.** Medium. It changes when references are taken on the hottest
   path.
 
-### Step A3a. Tail-call build with no stack state
+### Step A5b. D4's typed borrow
+
+- **The change.** pyvalue.md D4's remaining items. The typed form is not
+  deferred.
+  - **A distinct borrow C type** for borrows in C locals (its name is settled
+    in the step). Read APIs accept it. Store, close and setter APIs take only
+    `PyValue`, so storing or closing a borrow does not compile. The only
+    conversion to `PyValue` takes a count.
+  - **Debug asserts.** "Tagged implies immortal" in `_PyGC_VisitValue`
+    (heap homes), and heap safety on stores of temporaries. `IR_STORE_DST`
+    already asserts it for locals (`ceval_macros.h:714`).
+  - **The producer list, driven to zero.** List every producer of a borrow
+    that reaches a home and remove each. A5a handles the frame side; this
+    step handles the heap side.
+  - **`_Py_VISIT_VALUE` in `traverse_slots`** (`Objects/typeobject.c:2971`).
+  - **`MakeHeapSafe` leaves the setters.** Once no borrow can reach a setter,
+    heap stores need no conversion. There are 155 uses in 23 files outside
+    the generated ones: `dictobject.c` 48, `bytecodes.c` 40, `ceval.c` 14,
+    `tupleobject.c` 7, and 46 in 19 others. The step removes those in
+    setters and keeps those that convert a C-local borrow.
+  - **Pair merges.** One name per meaning for `DUP`/`NewRef` and
+    `CLOSE`/`Close`.
+- **Why after 9a.** The typed borrow changes every core signature that takes
+  a borrowed value. That overlaps 9a's renames: `PyValue_FromInt32` in 13
+  files and `PyValue_InlineInt` in 18.
+- **Files.** `pycore_value.h`, `pyvalue.c`, `value_ops.c`, the setters in
+  `Objects/` (dict, tuple, list, set, cell, structseq), `structmember.c`,
+  `bytecodes.c`, `ceval.c`, `ir_generator.py`, `typeobject.c` and the GC
+  visitor.
+- **Test.** The step-0 set with the new asserts in the debug suite;
+  `test_gc`, `test_dict`, `test_set`, `test_tuple`, `test_tagged_values`. A
+  store of a borrow is checked once by hand to fail to compile.
+- **Risk.** Medium. The change is wide but mechanical, and the compiler
+  finds most errors.
+
+### Step A3a. Tail-call build with one activation record
 
 - **Build.** `Py_PRESERVE_NONE_CC` is chosen in this order:
   - `preserve_none` when `__has_attribute(preserve_none)` (Clang, and GCC
@@ -591,33 +697,100 @@ applies it at every counted site.
   - Under Clang twelve are available.
   - `TAIL_CALL_LOAD_FRAME` goes. Handlers that change frames pass the new
     frame.
-- **No address-taken locals in any handler.**
-  - One activation record holds the box area (three boxes) and every
-    transaction record that handlers now pass by address:
-    | Record | Handlers |
-    |---|---:|
-    | `operation` (`_PyValueOperation`) | 38 |
-    | `pending` | 29 |
-    | `held_left`, `held_right` | 27 each |
-    | `call`, `call_child` | 15 each |
-    | `receiver` | 15 |
-    | `callable` | 12 |
-    | `publication`, `scope` | 1 each |
-  - Handlers never nest within one activation, so one record per activation
-    serves them. The record lives in the entry function's frame and is
-    reached through `tstate` (pushed and popped at eval entry and exit), so
-    nested evaluations get their own. A per-thread buffer would not survive
-    nesting.
-  - Values held there sit in one known place per activation. G11's open risk
-    is that the free-threaded collector cannot see values held only in C
-    variables. A collector could scan this record, but A3a does not add that
-    scan; it stays with free-threaded qualification.
+- **One activation record, `_PyEvalActivation`.** It is the activation's one
+  structure. `_PyEval_EvalFrameDefault` owns it as a local and links it once
+  from the thread state (`_PyThreadStateImpl`, beside `borrow`), restoring
+  the previous link on exit. It absorbs per-activation state that lives in
+  two places today:
+  - in the loop's C frame: `_PyEntryFrame entry` (`ceval.c:2206`), the JIT
+    locals (`ceval.c:2209–2214`) and, under computed goto, the shared box
+    area (`value_boxes[37]`, generated file lines 12–14);
+  - in `_PyEval_EvalFrameDefault`: the saved outer `borrow->eval_floor` and
+    its pending release request (`ceval.c:2461–2476`).
+- **Size: about 850 B.** Struct sizes are from DWARF in the release
+  `ceval.o`. The handler part is from a scan of the generated handlers.
+
+  | Part | Bytes |
+  |---|---:|
+  | Box area: the largest handler capacity, 37 boxes (handlers range from 2 to 37) | 296 |
+  | Handler scratch: a generated union of per-handler layouts; the largest is `CALL_BUILTIN_O` (`_PyNativeScope` 152 B, `_PyNativeCallPublication` 56 B, three values) | 232 |
+  | Entry frame (`_PyEntryFrame`) | 120 |
+  | JIT context (`_PyJitContext` 136 B) and the other JIT fields | about 170 |
+  | Outer floor, its request, the previous link | 24 |
+
+  - The generator emits the box capacity and the scratch size as constants.
+  - The record is C stack per nested evaluation. Today the computed-goto
+    loop's frame, which holds the same state, is 3,304 B.
+- **The rule: no handler or label takes the address of a C local.** A callee
+  that needs a pointer gets one into the scratch, or is changed to take and
+  return values.
+  - At HEAD, 75 handlers pass a local to an out-of-line function. That
+    count covers only callees that are not `static inline`. Counting
+    `static inline` callees such as `_PyValue_Publish` (67 handlers) as well
+    gives about 140, review 2's figure.
+  - Locals used on a handler's fast path are copied into the scratch for
+    the call and back after it, so the fast path keeps them in registers.
+    Locals that exist only for the call live in the scratch.
+
+  | Locals | Callee | Handlers | Disposition |
+  |---|---|---:|---|
+  | `operation` (38), `pending` (29), `held_left`, `held_right` (27 each), `call`, `call_child` (15 each), `receiver` (15), `callable` (12), `publication`, `scope` (1 each) | the transaction helpers | 63 | live in the scratch; they span several helper calls |
+  | `held_dict`, `held_sub`, `held_value`, `held_container`, `release_value`, `retained_dict`, `watched_dict` | `value_operation_close3`, `value_operation_restore2`, `value_reader_complete` | 6 | in the scratch, beside the operation they belong to |
+  | `attr` (five `LOAD_ATTR_*`), `old_value` (four `STORE_ATTR_*`) | `retire_published_values`, on the cold local-destination path | 9 | copied. These are the hottest such handlers: 15–30% of entries on chaos, deltablue, float, go, raytrace and richards |
+  | `invoked` | `value_load_attribute`, `value_store_attribute` | 4 | in the scratch |
+  | `c`, `s` | `native_call_finish` | 1 | in the scratch (`CALL_BUILTIN_O`) |
+  | `item`, `null_or_index` | `_PyForIter_VirtualIteratorNext` | 3 | copied (`FOR_ITER`, `INSTRUMENTED_FOR_ITER`, `SEND`) |
+  | `err` | `_PyMapping_GetOptionalItem2` | 4 | in the scratch |
+  | `temp`; `dupkey`; `match_o`, `rest_o`; `index_or_null`; `v`; `retval_o` | `PyUnicode_Append`, `_PyDict_MergeUniq`, `_PyEval_ExceptionGroupMatch`, `_PyEval_GetIter`, `_PyEval_LoadGlobalValue`, `_PyAsyncGenASend_Send` | 1 each | copied. Upstream's handlers take the same addresses; the runtime APIs keep their signatures |
+  | `exc_slot`, `handler`, `lasti` | `get_exception_handler` | label `exception_unwind` | in the scratch |
+
   - The remaining `&res` and `&left` become slot-addressed helpers
     (`&slots[F]`), as G9.6 says. This edits handler bodies in `bytecodes.c`.
+  - `tcframes.py` checks the rule (the target below).
+- **Rules for the record.**
+  - **Explicit access.** A handler loads the record pointer from the thread
+    state once, on the path that uses it, and passes it to its helpers as an
+    argument, as `value_temps` is passed today. No helper reads the thread
+    state's record itself. A C function called from a handler does not start
+    a new activation; if it found the record through the thread state and
+    boxed into it, it would overwrite the live handler's boxes.
+  - **One per activation.** Every path that runs Python code (`__del__`,
+    trace and monitoring callbacks, `gen.send` from C, PEP 523 hooks) enters
+    `_PyEval_EvalFrameDefault`, which pushes its own record. A suspending
+    generator or coroutine crosses a dispatch, so it carries no handler
+    state.
+  - **Lifetime.** The box area and the scratch are dead at every dispatch.
+    Debug builds assert an empty box count there. The entry frame, the JIT
+    fields and the floor persist across handlers, so they are separate
+    members of the struct.
+  - **Ownership.** The record holds owned values only, as the box area does
+    today (`PyValue_MakeHeapSafe` and `PyValue_NewRef` when boxing,
+    generated file lines 65–66 and 13959–13961). Under D4 it is a home.
+  - **Never scanned.** Handlers leave stale copies in it; `attr` is still
+    there after `IR_STORE_DST`. The collector does not traverse it. Its
+    values are kept alive by their counts, as C locals are today.
+  - **Stack switching.** The record is on the C stack, like the entry frame
+    that `tstate->current_frame` reaches. Stack-switching extensions such as
+    greenlet must save and restore the record pointer with `current_frame`.
+    The ports notes say so (§11).
+  - **Aliasing.** Record fields have the same type as frame slots, so the
+    compiler must assume a slot store can change them. Handlers take the
+    pointer `restrict`-qualified, or copy fields into locals between calls.
+- **The box area stays apart from the borrow stack.** Both are per
+  activation, reached from the thread state, and hold owned references. But
+  a handler's boxes die at its dispatch, while the borrow stack's entries die
+  at scope exit, and value-api.md VA4 keeps slot adapters off that stack.
+  native-boundary.md §2 gains a note on the record (§11).
+- **Cost of the indirection.** One dependent load from the thread state (in
+  a register under A3a) on each path that uses the record. Today such a
+  handler pays for a frame and a canary instead: 9 prologue instructions in
+  `tcvt`'s `LOAD_FAST_BORROW`. Under Clang the pointer could be a parameter
+  at no cost; under GCC the sixth register is held for G2. §8 counts the
+  record-using entries.
 - **One field decode.** Every handler decodes from `ir_word`. The `IR_FIELD_*`
   memory re-read goes with A3c.
-- **Target.** No handler has an address-taken local, and every handler's
-  frame is at most N bytes. `tcframes.py` checks this on both compilers. N
+- **Target.** No handler or label has an address-taken local, and every
+  handler's frame is at most N bytes. `tcframes.py` checks this on both compilers. N
   is the value measured when A3a lands and may only fall.
   - Today the median frame is 160 B and the largest 512 B under GCC; under
     Clang the median is 144 B and the largest 464 B.
@@ -628,7 +801,8 @@ applies it at every counted site.
   - The full suite on GCC 15 and Clang 21, with the same failure set as
     computed goto, `test_jit_method` aside until A3b.
   - A debug tail-call build: `PRE_DISPATCH_GOTO` asserts
-    `frame == tstate->current_frame`.
+    `frame == tstate->current_frame`, A2's executing-copy invariant, and an
+    empty box count.
   - A `Py_STATS` tail-call build: `lastopcode` is a seventh argument, on the
     stack under GCC.
   - `test_sys` and `test_call` recursion tests, `test_perf_profiler`,
@@ -644,7 +818,10 @@ applies it at every counted site.
 ### Step A3b. JIT entry and exit as C-ABI functions
 
 - **The change.**
-  - The loop-local JIT state (§0.2) moves into the activation record.
+  - The loop-local JIT state (§0.2) moves into the activation record's JIT
+    fields.
+  - The JIT's `code->_co_exec == exec` re-checks (`jit_runtime.c:358–403`,
+    `jit_record.c:84`) go, because A2's invariant makes them dead.
   - `jit_enter`, `jit_resume`, `jit_step` and `jit_consume_action` become
     ordinary C functions that the `JIT_SITE_ENTRY` handlers call.
   - Compiled code enters and leaves only through C-ABI functions, because
@@ -663,16 +840,28 @@ applies it at every counted site.
     goto form, the loop's labels) and the switch fallback
     (`ceval_macros.h:170–188`).
   - Delete the `IR_FIELD_*` memory decode.
+  - `configure` drops `--with-computed-gotos`.
   - The tail-call build becomes the qualified and measured build.
+- **Build configurations.** The project runs three. After A3c each builds
+  with `musttail` on GCC 15 and Clang 21:
+  - release: `--with-mimalloc --with-shapes`, -O3. Today it also passes
+    `--with-computed-gotos`, which goes;
+  - debug: `--with-pydebug`, with A3a's dispatch checks;
+  - stats: `--enable-pystats`, with `lastopcode` as a stack argument under
+    GCC.
+
+  The upstream control build is upstream's own and does not change.
 - **Why delete it.** A platform that needs another backend must be named,
   with the measurement that forces it. None is known.
-- **Test.** The full suite on both compilers, and the docs build.
+- **Test.** The full suite in all three configurations on both compilers,
+  and the docs build.
 - **Risk.** Low, once A3a and A3b pass.
 
-### Step A4. G2 control: `nlocalsplus` in dispatch state (experiment)
+### Step G2. A4 against B3, off-tree; only the winner lands
 
-- **The change.** The class test takes `nlocalsplus` explicitly:
-  `IR_IS_LOCAL(F)` becomes a test against a value the caller supplies.
+- **A4: `nlocalsplus` in dispatch state.** The class test takes `nlocalsplus`
+  explicitly: `IR_IS_LOCAL(F)` becomes a test against a value the caller
+  supplies.
   - Handlers get it as a parameter, the sixth under GCC, set wherever the
     frame changes.
   - Out-of-line code reads it from the executing copy's header, as today.
@@ -681,12 +870,17 @@ applies it at every counted site.
     (`ceval.c:841`), which reads `co_nlocalsplus` itself.
   - The revision-1 variant (`nlp`) failed with 65 errors because it did not
     separate these.
-- **Decision.** A matched elapsed comparison against B3's prototype, on a
-  quiet machine (G2's rule).
-  - If A4 recovers the cost, A4 stays and the bits are not built.
-  - Otherwise B3 lands and A4 is reverted.
-  - Open question 9 (static operand roles) should be counted first.
-- **Risk.** Low to medium. Under GCC it costs the last argument register.
+- **B3: class bits**, as in step B3.
+- **Procedure.**
+  - Count open question 9 (static operand roles) first. If it removes the
+    class test from the hottest handlers, the comparison is between smaller
+    forms.
+  - Build both prototypes off-tree on A3.
+  - Decide by a matched elapsed comparison on a quiet machine (G2's rule).
+  - Land only the winner: A4 directly after A3, since it changes no format;
+    or B3 after B2, as a format step with its magic bump. The loser is not
+    landed, so no form lands and is then replaced.
+- **Risk.** Low to medium. A4 costs GCC's last argument register.
 
 ### Step B0a. The instruction contract table
 
@@ -716,9 +910,11 @@ the table. Heap effects, guards and result facts are added here, as
   `slot_error`) raises `SyntaxError` naming the limit.
   - No Lib source reaches it, so it is tested through a test-only knob,
     `_PyIR_MaxSlots`, as `_PyIR_MaxForward` is for relaxation.
-  - The other `slot_error` calls (`regcfg.c:841`, 883, 887, 962) and the
-    verifier's "two live temporaries in one slot" (`regcfg.c:1279`) stay
-    `SystemError`: they are compiler invariants, not limits.
+  - These stay `SystemError`, because they are compiler invariants, not
+    limits:
+    - the allocator's own "two live temporaries in slot" (`regcfg.c:823`);
+    - the other `slot_error` calls (`regcfg.c:841`, 883, 887, 962);
+    - the verifier's "two live temporaries in one slot" (`regcfg.c:1279`).
 - **The docstring.** Correct the `ir_generator.py` docstring (lines 55–63).
 - **`IR_MAX_FORWARD`.** State its reason, or set it with B6's signed rule.
 - **Risk.** Low.
@@ -740,10 +936,10 @@ the table. Heap effects, guards and result facts are added here, as
   fannkuch 6.8%, go 5.5%).
 - **Risk.** Low to medium.
 
-### Step B3. Class bits (prototype always; lands only if A4 loses)
+### Step B3. Class bits (lands after B2 only if it wins G2)
 
-- **The prototype.** G2's rule needs it for the comparison whichever way the
-  decision goes.
+- **The prototype.** It is built off-tree with A4 for the G2 decision. It
+  lands only if it wins.
 - **The change.**
   - The handler uses bits 0–11 and the class bits 12–15.
   - The five literal masks become 0xFFF, the remote-debugging reader
@@ -775,9 +971,10 @@ the table. Heap effects, guards and result facts are added here, as
 
 - **The change.** As G4 items 1, 2 and 4, and item 3 for `LIST_APPEND`,
   `SET_ADD` and `MAP_ADD`.
-  - The `LOAD_GLOBAL` NULL bit goes with `PUSH_NULL`.
+  - The `LOAD_GLOBAL` NULL bit goes with `PUSH_NULL`, and the `PUSH_NULL`
+    handler goes (G4 item 2).
   - Unpacks past 8 elements collect in an out-of-line helper.
-  - Bump the magic number.
+  - The handler set changes, so renumber densely and bump the magic number.
 - **Test.**
   - `test_unpack`, `test_unpack_ex`, the comprehension tests,
     `test_extcall`, `test_call`.
@@ -954,13 +1151,15 @@ The tail-call functions:
 | What | Script | When |
 |---|---|---|
 | Re-split of the loop gap at HEAD by self-symbol category | `pyjit/tools/sampler/` | before A1; after A3c; after B7 |
-| Object-value paths for the ten hottest handlers | `hmin.py` with the object branch forced | before A1; after A5; after A3c |
+| Object-value paths for the ten hottest handlers, with A5a's incref and decref | `hmin.py` with the object branch forced | before A1; after A5a; after A3c |
 | Words executed per class | `dynamic_counts.py`, `irv2/dyn_v2.py`, `irv2/steps.py` | before A1; after B2, B5, B6, B7 |
-| Inline-scalar lower bound per word | `labels.py`, `hmin.py`, `weighmin.py`, `hcat.py` | after A1, A2, A5, A3c, B7 |
-| Handler bytes, loop text, frames, canaries (both compilers) | `hsize.py`, `tcframes.py`, `size` | the same points |
+| Inline-scalar lower bound per word | `labels.py`, `hmin.py`, `weighmin.py`, `hcat.py` | after A1, A2, A5a, A5b, A3c, B7 |
+| Handler bytes, loop text, frames, canaries, address-taken locals (both compilers) | `hsize.py`, `tcframes.py`, `size` | the same points |
+| Entries to handlers that use the activation record, per kernel | stats build | after A3a |
+| Activation record size, and C stack per nested evaluation | DWARF, `tcframes.py` | after A3a |
 | Static Lib counts | `static_counts.py`, `irv2/static_pairs.py` | after each format step |
 | Generated-corpus `compare_sites` maximum | `static_counts.py` | before B4 (required) |
-| Matched elapsed comparison, interleaved, load stated | review `interleave.sh` or `pyjit/bench/run.py` | after A5; after A3c; A4 against B3; after B7 |
+| Matched elapsed comparison, interleaved, load stated | review `interleave.sh` or `pyjit/bench/run.py` | after A5a; after A3c; A4 against B3 (G2); after B7 |
 
 Weights must come from a stats build that counts handlers above 255. The
 stats counter skips them today (§1.2), so the first stats build after A3a
@@ -991,11 +1190,16 @@ should count them.
 | Risk | Step | Detection |
 |---|---|---|
 | A handler classified "never boxes" boxes | A1 | `IR_KEEP_BOX` assert; debug suite |
-| The executing copy is replaced after all (a missed writer) | A2 | the `ir_words` assert after each reentrant call |
-| An executing code object misses re-instrumentation | A2 | the version assert; step-5 monitoring tests |
-| A reference leak or early release from D4 | A5 | debug refcount checks; `test_gc`, `test_weakref`, `test_finalization` |
+| The executing copy is replaced after all (a missed writer) | A2 | asserts at the deleted sites, in `_PyCode_ClearExec`, and at dispatch in the debug tail-call build |
+| An executing code object misses re-instrumentation | A2 | the version assert (current, or an error set); step-5 monitoring tests |
+| A missed producer leaves a borrow in a frame slot | A5a | the frame and home checks reject a tagged mortal in any slot |
+| A hand-written close releases an in-place input | A5a | the `bytecodes.c` audit; debug refcount checks; a compile error after A5b |
+| A reference leak or early release from D4 | A5a, A5b | debug refcount checks; `test_gc`, `test_weakref`, `test_finalization`; the `f_locals` rebinding test |
+| A borrow reaches a heap home after `MakeHeapSafe` leaves the setters | A5b | the typed borrow (compile time); "tagged implies immortal" in `_PyGC_VisitValue` |
 | A miscompile under an unstable calling convention | A3a | full suite on two compilers; debug frame assert; `tcframes.py` |
 | Stack-walking tools assume one evaluator frame | A3a | `test_perf_profiler`, `test_external_inspection`; `test_gdb` on a host with gdb |
+| A helper boxes into a live handler's record | A3a | the explicit-access rule; the empty-box assert at dispatch |
+| A stack-switching extension loses the record pointer | A3a | the ports notes; the greenlet port's tests |
 | JIT entry broken by moving its state | A3b | JIT modules, admission forced |
 | Small handlers get slower under tail calls (`straight`) | A3 | the matched comparison after A3c; frame-pointer and prologue counts |
 | A stale `.pyc` loaded across format steps | B2–B7 | a magic bump in every step |
@@ -1015,28 +1219,33 @@ This is a judgement, not a measurement.
 | Step | Agent-h | Basis | Model |
 |---|---:|---|---|
 | A1 | 2 | the classifier exists; one emitter | Opus |
-| A2 | 2.5 | parameter deletion in 12 families, 10 emitters, 7 macro and body sites; two asserts | Sonnet, Opus review |
-| A5 (D4) | 6 | five macros, 23 helper uses, count cost, lifetime tests | Opus |
-| A3a | 14 | activation record for boxes and transactions (about 140 handlers); frame parameter; one decode; three conventions in `configure`; two compilers; debug and stats tail-call builds; frame check | Opus |
-| A3b | 9 | JIT entry, resume, step and consume as C-ABI functions; JIT suite on both compilers | Opus |
-| A3c | 2 | delete two backends and the memory decode | Sonnet |
-| Dual CI on the A3 branch | 2 | both suites per A3 commit until A3c | Sonnet |
-| A4 | 3.5 | explicit `nlocalsplus` in the class test, helpers outside handlers, stats build | Sonnet |
+| A2 | 3 | parameter deletion in 12 families, 10 emitters, 7 macro and body sites; asserts at the deleted sites, the writer and dispatch; the version assert | Sonnet, Opus review |
+| A5a | 5 | five macros, 23 helper uses, count cost, the `bytecodes.c` audit, frame and home checks, the `f_locals` test | Opus |
+| A5b | 13 | the borrow type and the core signatures that take a borrow; D4's asserts; the producer list; `traverse_slots`; `MakeHeapSafe` in setters (155 uses in 23 files); pair merges | Opus |
+| A3a | 18 | `_PyEvalActivation` with the entry frame, JIT fields and floor; box area and generated scratch union; 75 handlers and one label; frame parameter; one decode; three conventions in `configure`; two compilers; debug and stats tail-call builds; frame check | Opus |
+| A3b | 9.5 | JIT entry, resume, step and consume as C-ABI functions; the dead re-checks; JIT suite on both compilers | Opus |
+| A3c | 2.5 | delete two backends, the memory decode and `--with-computed-gotos`; three configurations on two compilers | Sonnet |
+| Dual CI on the A3 branch | 2 | both backends' suites per A3 commit until A3c | Sonnet |
+| G2 | 9.5 | A4 prototype 3; B3 prototype 4.5; landing the winner 2 | Opus |
 | B0a | 11 | about 10 columns, three consumers replaced, verifier, `get_ir_contract` | Opus |
 | B0b | 3 | JIT front end | Opus |
 | B1 | 1.5 | one `SyntaxError`, a test knob, the docstring | Sonnet |
 | B2 | 3 | monitoring twins, renumbering, magic | Opus |
-| B3 | 5 | prototype needed for G2's comparison in every case; lands only if A4 loses | Opus |
 | B4 | 9 | per-kind sizes, priority assignment, 14 intrinsics, a second head, corpus measurement | Opus |
-| B5 | 7 | four forms, unpack collector | Opus |
+| B5 | 7.5 | four forms, unpack collector, renumbering | Opus |
 | B6 | 7 | 11 handlers, jump rule | Opus |
 | B7 | 6.5 | constant table, frame push, `code.replace`, copy, pickle | Opus |
-| M | 3 | sampler re-split, object paths, three matched comparisons | Sonnet |
-| **Total** | **about 97** | phase A 41, phase B 53, measurements 3 | |
+| M | 3.5 | sampler re-split, object paths, record-using entries, three matched comparisons and G2's | Sonnet |
+| **Total** | **about 117** | phase A with G2 64.5, phase B 48.5, measurements 3.5 | |
+
+Against revision 2's 97: A3a +4 (R2-1, R2-2), A5 +12 (R2-3: 6 → 5 + 13), A2
++0.5 and A3b +0.5 (R2-4), A3c +0.5 (R2-7), G2 +1 (landing the winner, R2-6),
+B5 +0.5 (R2-5), M +0.5. Review 2 judged 100–115; the difference is A5b, which
+it did not size.
 
 Each step is one commit, except A3, which is three commits landed together.
 Each is reviewed with a release-mode compile and keeps the suite's pass set.
-Phase A's A1, A2 and A5 can run while representation steps 8–9b land; A3
+A1, A2, A5a and A5b can run while representation steps 8–9b land; A3
 follows 9b.
 
 ---
@@ -1068,12 +1277,17 @@ follows 9b.
 3. **§1.10.** Add the invariant: the executing copy is created once and
    freed only with the code object, so `frame->ir_words` never changes while
    the frame runs. Helpers that run reentrant code do not rebase the PC.
+   Debug builds check it at the old rebase sites, in `_PyCode_ClearExec`,
+   and at dispatch in the tail-call debug build. The `instr_ptr` restores
+   rest on a separate invariant and stay.
 4. **IR-D3 and G2.**
    - IR-D3's "the slot class … lives in the instruction" becomes "the slot
      class is static; whether it is encoded in the instruction (class bits)
      or kept in dispatch state is G2's decision".
-   - Add: D4 (no home holds a borrow) is its own step after representation
-     step 8, whichever way G2 goes.
+   - Add: D4 lands in two steps whichever way G2 goes. Frame homes come
+     after representation step 8 (A5a). The typed borrow, D4's debug
+     asserts, the producer list, `traverse_slots` and the removal of
+     `MakeHeapSafe` from setters come after 9a (A5b).
 5. **G9.**
    - Problem list: add `next_instr` passed by address to 12 helper families
      (290 generated sites in 185 handlers, plus `finish_value_bridges` in
@@ -1084,15 +1298,22 @@ follows 9b.
    - Timing: state transport and the record move before baseline, justified
      by the measured tail-call gain (0.870× on 12 kernels, review 1), not by
      the 39% share.
-6. **G9 item 6.** Address-taken transaction state lives in an activation
-   record. The target is "no address-taken locals; frame at most N bytes",
-   checked by a script on every supported compiler.
+6. **G9 item 6.** One activation record, `_PyEvalActivation`, about 850 B,
+   is the activation's one structure. It holds the entry frame, the JIT
+   state, the outer borrow floor, the box area (37 boxes) and a generated
+   per-handler scratch.
+   - Rules: the pointer is passed explicitly; handler fields are dead at
+     dispatch; owned values only; never scanned; stack switching saves the
+     pointer.
+   - No handler or label takes the address of a C local.
+   - The target is "no address-taken locals; frame at most N bytes",
+     checked by a script on every supported compiler.
 7. **G2.**
    - Five literal masks, `_remote_debugging` included, plus `IR_HANDLER`'s
      about 70 uses.
    - The control passes `nlocalsplus` to the class test explicitly; helpers
      outside the handlers read it from the executing copy.
-   - The decision rule needs a B3 prototype in every case.
+   - A4 and B3 are prototyped off-tree after A3, and only the winner lands.
    - Count static operand roles before deciding.
 8. **G3 and §4.3.**
    - Fused forms are forward only in v2.
@@ -1108,24 +1329,41 @@ follows 9b.
    - Window-fed constants keep their loads: 27% of fannkuch's loop constants.
 10. **§4 and IR-D1.**
     - The format steps land as a sequence (B2–B7) after A3, each with its own
-      magic number and dense renumbering where handlers change.
+      magic number, and dense renumbering where handlers change (B2, B4, B5
+      and B6, and B3 if it wins G2).
     - The churn argument for one revision is answered by the contract table:
       the decoders read it.
-    - Counts are recorded per step; elapsed time is measured after A5, A3c
-      and B7.
+    - Counts are recorded per step; elapsed time is measured after A5a, A3c
+      and B7, and for G2.
 11. **§5 and O1.** The contract is `_PyIR_Formats` extended, exported through
     `_opcode.get_ir_contract()`, with no generated Python copy (O1 decided).
     Add the column "boxes inputs".
 12. **§1.14 and G10.**
     - Limit errors already raise `SyntaxError`, except `regcfg.c`'s "too many
       temporaries", which v2 changes and tests through a limit knob.
-    - "Two live temporaries" stays `SystemError`, as an invariant.
+    - Both "two live temporaries" checks, the allocator's (`regcfg.c:823`)
+      and the verifier's (1279), stay `SystemError`, as invariants.
     - The docstring, `_PyFb_FAMILIES`' `RESUME`/`JUMP_BACKWARD` and
       `IR_MAX_FORWARD` are still stale at `48bb4d6d1d3`.
 13. **§2.4.** Record §4.1's removed-word counts, the loop-head shapes and the
     window-fed constants.
 14. **§2.1.** Replace the V8 and LuaJIT register and save-PC facts with §2's
     corrected rows, and drop "not re-verified" for them.
+15. **§1.13 build configurations.** After A3c, the project's release, debug
+    and stats configurations all build with `musttail`, on GCC 15 and Clang
+    21; `--with-computed-gotos` goes.
+
+Edits to other documents, for the coordinator:
+
+- **native-boundary.md §2.** Name the activation record beside the borrow
+  stack: both per activation and both holding owned references, with
+  handler-lifetime boxes against scope-lifetime borrows.
+- **The ports notes.** Stack-switching extensions (greenlet) save and
+  restore the thread state's activation-record pointer with
+  `current_frame`.
+- **pyvalue.md D4.** Its "When" line becomes: frame homes in IR v2 step A5a
+  after representation step 8; the typed form, asserts and `traverse_slots`
+  in A5b after 9a.
 
 ---
 

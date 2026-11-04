@@ -57,6 +57,11 @@ encoding.
 
 ### 1.3 Bit layout
 
+Only the files that [value-api.md §1.6](value-api.md) (R26) lists may know this
+layout: the value headers, `pyvalue.c`, the JIT, the out-of-process readers
+and the encoding's tests. Other code uses the accessors of §1.4, and public
+headers carry a word only as an opaque type.
+
 | Top 16 bits | Low 48 bits | Region | Meaning |
 |---|---|---|---|
 | `0x0000` | `0` | sentinel | `PyValue_NULL`: absent, empty slot, end of iteration. Zero-filled memory is a valid empty slot |

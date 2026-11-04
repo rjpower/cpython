@@ -61,6 +61,7 @@ Related pages: [PyValue representation](pyvalue.md) (encoding, D1–D8),
 | R23 | The V4 sweep tool has an ownership table per function, rules for every assignment to a retyped local, and per-function AST dumps | Coordinator, 2026-11-03, after review 2. §9 |
 | R24 | Cost model: no claim about when kernels reach upstream; the measured box-site split by packet; the checkpoint gap is a per-word cost that the value API does not address; the checkpoint precedes V1 | Coordinator, 2026-11-03, after review 2. §6.2, §9 |
 | R25 | Counts from review 2's scripts (`build/pyjit-link-wave1/valueapi-r2-*.py`): 267 format calls need a value form; `PyLong_From*` 288, `FromLong` 147, `FromSsize_t` 73 | Coordinator, 2026-11-03, after review 2. §4, §7.7 |
+| R26 | Representation boundary: only the value headers, `pyvalue.c`, the JIT, the out-of-process readers and the encoding tests know the word's encoding. Public headers carry it as an opaque word: no inline decoding, five frozen public fields, exported operations. No encoding in an extension ABI. Enforced by `raw-bits` and `public-value` (A5b-3) | User direction, 2026-11-04. §1.6 |
 
 ## Challenges to the brief
 
@@ -298,6 +299,67 @@ a `_testcapi` test that pins the round trips above, so a change is deliberate.
 | `PyCell_GetValue` (NULL for empty or error) | `int PyCell_GetValue(PyObject *, PyValue *out)` | 2 | V4 |
 | `_PyListIter_NextValue`, `_PyDictIter_NextValue`, `_PySetIter_NextValue`, `_PyTupleIter_NextValue` | the types' value `iternext` slots | — | V2b |
 | `_Py_BuiltinCallFast_Value` and 6 other `_Value` call helpers (`pycore_ceval.h`) | deleted by the value vectorcall | — | V3b |
+
+### 1.6 The representation boundary (R26)
+
+The word's encoding is private to a few files, so that the representation can
+change by editing them, as int51 (representation steps 9a and 9b) did. Code
+elsewhere uses accessors. Three rules:
+
+1. **Who may know the encoding.** Reading or writing `.bits`, building a word
+   from bits or a pointer, and naming the encoding constants (`Py_INT_BASE`,
+   `Py_INT_SHIFT`, `Py_TAG_*` and the NaN-box masks) are allowed only in:
+   - the value headers: `pycore_pyvalue.h`, `pycore_value.h` and
+     `pycore_value_api.h`, plus `Python/pyvalue.c`;
+   - the JIT (`Python/jit_*.c`, `jit_x86.h`), which emits tag tests;
+   - out-of-process readers, which get the layout through `_Py_DebugOffsets`
+     and its version: `pycore_debug_offsets.h`, `Modules/_remote_debugging/`
+     and `Tools/gdb/libpython.py`;
+   - the encoding's own tests in `_testinternalcapi`;
+   - the generated-code exceptions that A5b's `raw-bits` rule already lists
+     (`_PyIR_AdoptTemp`, `pycore_typecache.h`, `structmember.c`, the
+     `STORE_ATTR_*` offset stores).
+
+   At `a6002e5854b` there are 21 other sites:
+   - **Exact-word compares**, 12 in `setobject.c` and `dictobject.c`. They
+     get an exact-word equality accessor, which is not `PyValue_Is`
+     (`PyValue_Is` masks bit 0 until A5b's target form).
+   - **Debug dumps in `dictobject.c`**, 3. They get the word as a
+     `uintptr_t`, for hashing and debug output only.
+   - **Set's dummy key** (`setobject.c:66`). It becomes a named sentinel in
+     the value header.
+   - **Others**, 5:
+     - `cellobject.c:164` (identity hash);
+     - `flowgraph.c:1368` (hash key);
+     - `ceval.c:2282` (a poison word);
+     - `Modules/_testcapi/list.c:127, 129`, which tests the public API
+       and so uses only public operations.
+2. **Public headers carry the word opaquely.** In `Include/` outside
+   `internal/`:
+   - `PyValue` and `PyValueBorrow` appear only as parameter, result and field
+     types.
+   - No inline function or macro decodes a word or builds one. An inline
+     accessor may copy a word out of a public field (V4's `PyList_GET_VALUE`).
+   - Every other operation is an exported function. At `a6002e5854b` there
+     are 22 such functions and no inline decoding.
+   - The public layouts that hold a word are frozen at five:
+     `PyListObject.ob_item`, `PyTupleObject.ob_item`, `PyCellObject.ob_ref`,
+     `setentry.key` and `_PyValueIndexPair.value`. Adding one needs a
+     decision. V4 decides whether these layouts move to internal headers.
+3. **No encoding in an extension ABI.**
+   - `Py_VALUE_CORE` units, the core and in-tree modules (V6), may use the
+     internal accessors, because they are rebuilt with the interpreter.
+   - A value API for third-party extensions uses exported functions over the
+     opaque word, or handles that an implementation maps to words (HPy's
+     universal mode, §8). It never uses the bit layout.
+
+**Enforcement.**
+- A5b-3 widens `check_value_api.py`'s `raw-bits` rule from construction to
+  every `.bits` access and every encoding constant outside rule 1's list.
+- It adds a `public-value` rule for rule 2, covering inline decoding in a
+  public header and a word field outside the frozen five.
+- Both rules get self-tests.
+- A5b-3 also converts the 21 sites.
 
 ## 2. Value slots (VA5, R2)
 

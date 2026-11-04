@@ -49,6 +49,7 @@ review instead, the text says so. "Hand" means hand-written C and headers;
 | R2-S2 | A3a's record rule governs `PyValue` words. The scope's object pointers are views that `End` releases within the same activation. §8.2 is now what A3a inherits | §8.2 |
 | R2-S3 | The proven-inline rule is dropped: the release stays. Recorded as a follow-up with its mechanism | §4.2, §10.2 Q8 |
 | R2-S4 | §8.2's call sites corrected. `native_scope_box_oom` installs its failing allocator before `Begin`, which A5b-3 now fixes | §8.1, §8.2 |
+| R26 (coordinator, after acceptance) | value-api.md §1.6 adds the representation boundary. In A5b-3, `raw-bits` widens to every `.bits` access and every encoding constant outside §1.6's list. A new `public-value` rule rejects inline decoding in public headers and any word field beyond the five frozen ones. A5b-3 also converts the 21 sites §1.6 lists, through an exact-word equality accessor, a word-as-`uintptr_t` accessor for hashing and debug output, and a named set-dummy sentinel. +1 h | §5.6, §8.1 |
 | Notes | Adopted: the consume comes at the first `TAKE` or `OWNER`; the H1 carve-out starts on entry to `finalize_interp_clear`, not at `SetFinalizing`; each reader macro follows its declaration, and out-of-line definitions write `(Name)`; the C++ `BAD` units also fail; Clang's one warning on the probe's good unit is the probe's own unused static | §4.2, §5.5, §3.1 |
 
 ## 0. Decisions

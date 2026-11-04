@@ -6,7 +6,7 @@ built, compares it with other dynamic-language runtimes, and lists the gaps
 we should close. It is the reference for value, container and C-boundary work.
 
 Source of truth: the universal-value worktree
-`build/worktrees/pyvalue-rc-universal` at `f6508007b94` (2026-11-04), which
+`build/worktrees/pyvalue-rc-universal` at `5de7bd62ef9` (2026-11-04), which
 contains the G1 fix `271f4e435e5`. Section 1 was read from source at that
 commit, not observed. Where this page and the code disagree, the code
 wins; fix this page. Design review 1
@@ -40,13 +40,15 @@ encoding.
 
 | Constant | Value | Defined in |
 |---|---|---|
-| `Py_TAG_REFCNT` | `1` (bit 0: reference owns no count) | `pycore_value.h` |
+| `Py_TAG_REFCNT` | `1` (bit 0: reference owns no count; in a frame slot it means immortal) | `pycore_value.h` |
 | `Py_TAG_INVALID` | `2` (bit 1: debug `PyValue_Wrap`) | `pycore_value.h` |
 | `Py_TAG_BITS` | `3` | `pycore_value.h` |
 | `Py_PTR_LIMIT` | `1 << 48` | `pycore_pyvalue.h` |
 | `Py_INDEX_BASE` | `1 << 48` | `pycore_pyvalue.h` |
 | `Py_DOUBLE_OFFSET` | `1 << 49` | `pycore_pyvalue.h` |
-| `Py_INT_BASE` | `0xFFFE << 48` | `pycore_pyvalue.h` |
+| `Py_INT_BASE` | `~0 << 51` (`0xFFF8 << 48`) | `pycore_pyvalue.h` |
+| `Py_INT_SHIFT` | `13` (64 - 51) | `pycore_pyvalue.h` |
+| `Py_INT_MIN`, `Py_INT_MAX` | `-(1 << 50)`, `(1 << 50) - 1` | `pycore_pyvalue.h` |
 | `Py_OWNED_MASK` | `(0xFFFF << 48) \| Py_TAG_BITS` | `pycore_value.h` |
 | `PyValue_NULL_BITS` | `0` | `pycore_value.h` |
 
@@ -59,16 +61,15 @@ encoding.
 |---|---|---|---|
 | `0x0000` | `0` | sentinel | `PyValue_NULL`: absent, empty slot, end of iteration. Zero-filled memory is a valid empty slot |
 | `0x0000` | address, bits 1..0 = `00` | pointer | Owned strong reference |
-| `0x0000` | address, bits 1..0 = `01` | pointer | No count owned: borrowed, immortal, or (free-threaded only) deferred |
+| `0x0000` | address, bits 1..0 = `01` | pointer | No count owned: an immortal object, or a borrow in a C variable. A frame slot or heap home holds no borrow, so there bit 0 means immortal |
 | `0x0000` | address, bits 1..0 = `10` | pointer | Debug builds only: `PyValue_Wrap()` of a non-object pointer |
 | `0x0000` | `0x1`, `0x2`, `0x3` | none | Never produced: the tag bits without an address |
 | `0x0001` | int48, two's complement | index | Interpreter-internal index, -1 to 2^47-1 |
 | `0x0002` to `0x7FF2` | | inline float | IEEE bits + 2^49: +0.0 (`0x0002_0000_0000_0000`) to +inf (`0x7FF2_0000_0000_0000`) |
 | `0x7FF2_..._0001` to `0x8001` | | unused | Images of positive NaNs |
 | `0x8002` to `0xFFF2` | | inline float | -0.0 (`0x8002_0000_0000_0000`) to -inf (`0xFFF2_0000_0000_0000`) |
-| `0xFFF2_..._0001` to `0xFFFD` | | unused | Images of negative NaNs |
-| `0xFFFE` | `0x0000` then int32 | inline int | `Py_INT_BASE \| (uint32_t)i` |
-| `0xFFFE` with bits 32-47 non-zero, and `0xFFFF` | | unused | Never produced. `PyValue_IsInlineInt` would accept them |
+| `0xFFF2_..._0001` to `0xFFF7` | | unused | Images of negative NaNs |
+| `0xFFF8` to `0xFFFF` | | inline int | int51: `Py_INT_BASE \| (v & (2^51 - 1))`, -2^50 <= v < 2^50. Every word in the region is an int |
 
 Negative NaN images, after the +2^49 offset, wrap modulo 2^64 through the
 int, pointer and index regions. That is why no NaN is ever inline: an
@@ -83,11 +84,11 @@ flowchart TD
     W -- yes --> WR[debug Wrap: not an object]
     W -- no --> O{"bit 0 set ?"}
     O -- no --> OWN[owned object reference]
-    O -- yes --> NC[no count: borrowed or immortal]
+    O -- yes --> NC[no count: immortal, or a borrow in a C variable]
     P -- no --> I{"bits < 2^49 ?"}
     I -- yes --> IDX[internal index]
-    I -- no --> N{"bits >= 0xFFFE << 48 ?"}
-    N -- yes --> INT[inline int32]
+    I -- no --> N{"bits >= 0xFFF8 << 48 ?"}
+    N -- yes --> INT[inline int51]
     N -- no --> FL["inline float: bits - 2^49"]
 ```
 
@@ -102,21 +103,23 @@ flowchart TD
 | `PyValue_IsInline` | `bits >= 2^49` | `pycore_value.h` |
 | `PyValue_IsInlineInt` | `bits >= Py_INT_BASE` | `pycore_value.h` |
 | `PyValue_IsInlineFloat` | `bits - 2^49 < Py_INT_BASE - 2^49` | `pycore_value.h` |
-| `PyValue_BothInlineInt(a, b)` | `(a & b) >= Py_INT_BASE` (relies on `0xFFFF` being unused) | `pycore_value.h` |
+| `PyValue_BothInlineInt(a, b)` | `(a & b) >= Py_INT_BASE`; exact: the AND has the top 13 bits set only if both words do | `pycore_value.h` |
 | `PyValue_IsInlineAt(p)` | Loads the top 16 bits from memory (`cmpw $imm, 6(p)`) | `pycore_value.h:_PyValue_TopBitsAt` |
-| `PyValue_IsLanguageValue` | Object, or exact int pattern `(bits & ~0xFFFFFFFF) == 0xFFFE << 48`, or a decoded double that is not NaN | `pycore_pyvalue.h` |
+| `PyValue_IsLanguageValue` | Object, or `bits >= Py_INT_BASE`, or a decoded double that is not NaN | `pycore_pyvalue.h` |
 | `PyValue_RefcountOnObject` | `!IsNull && (bits & Py_OWNED_MASK) == 0`; `_PyValue_OwnsCountNotNull` drops the NULL test | `pycore_value.h` |
 | `PyValue_IsNone/IsTrue/IsFalse` | Exact compare with `&singleton \| 1` | `pycore_value.h` |
 | `PyValue_TYPE` | Inline int gives `&PyLong_Type`, inline float `&PyFloat_Type`, otherwise `Py_TYPE` | `pycore_value.h` |
-| `PyValue_IsCompactInt` / `PyValue_CompactIntValue` | Inline int, or a boxed exact one-digit int | `pycore_value.h` |
-| `PyValue_FloatOperandValues` | Both inline floats first, then boxed exact floats and compact ints (a NaN beside an int is refused) | `pycore_value.h` |
+| `PyValue_InlineInt64` | The value of an inline int, `(int64_t)(bits << Py_INT_SHIFT) >> Py_INT_SHIFT` | `pycore_value.h` |
+| `_PyValue_IntScaled(v)` / `_PyValue_FromIntScaled(s)` | `(int64_t)(bits << 13)`, the value times 2^13; `((uint64_t)s >> 13) \| Py_INT_BASE`. A scaled add, subtract, or multiply by an unscaled value overflows int64 exactly when the result leaves int51 | `pycore_value.h` |
+| `PyValue_FloatOperandsCheck` / `PyValue_FloatOperandValues` | Two inline floats, or an inline float and an inline int. Anything else, a box or a NaN included, exits | `pycore_value.h` |
 
-Encoding: `PyValue_FromInt32` (cannot fail), `PyValue_FromDoubleNotNaN`, and
-`PyValue_FromDouble`, which boxes a NaN through `_PyValue_BoxDouble` and so can
-fail. `PyValue_TagIndex`, `PyValue_UntagIndex` and
+Encoding: `PyValue_FromInlineInt(int64_t)` (asserts the range, cannot fail),
+`PyValue_FromInt64` (inline if `_PyValue_IntFitsInline`, else a new `PyLong`;
+can fail), `PyValue_FromDoubleNotNaN`, and `PyValue_FromDouble`, which boxes a
+NaN through `_PyValue_BoxDouble` and so can fail. `PyValue_TagIndex`, `PyValue_UntagIndex` and
 `PyValue_IncrementTaggedIndexNoOverflow` handle indices.
 `_PyValue_IntFitsInline` is the one test of the inline int range, and
-`_PyValue_Int32Bits` and `_PyValue_DoubleBits` give the encoding, which is also
+`_PyValue_IntBits` and `_PyValue_DoubleBits` give the encoding, which is also
 the value identity.
 
 ### 1.5 Canonical forms
@@ -126,8 +129,8 @@ container element, field, cell, dict key or value, or set key).
 
 | Python value | Canonical form |
 |---|---|
-| Exact `int` with -2^31 <= v < 2^31 | Inline int. This includes two-digit `PyLong`s (2^30 <= abs(v) < 2^31) |
-| Exact `int` outside int32 | Boxed `PyLongObject`, owned pointer |
+| Exact `int` with -2^50 <= v < 2^50 | Inline int51 |
+| Exact `int` outside int51 | Boxed `PyLongObject`, owned pointer |
 | `int` subclass, `bool` | Boxed. `True` and `False` are immortal singletons with bit 0 set (`PyValue_True`, `PyValue_False`) |
 | Exact `float`, not NaN (includes -0.0, ±inf, subnormals) | Inline float |
 | NaN, any payload or sign | Boxed `PyFloatObject`; keeps object identity |
@@ -144,7 +147,7 @@ heap objects and converted when a `PyValue` is built:
 | `PyValue_FromObjectBorrow` (`Python/pyvalue.c`) | Canonical borrow. Calls `_PyObject_ValueIdentity`, which tests the exact type and, for a non-compact int, calls `PyLong_AsLongAndOverflow` |
 | `PyValue_PrepareOwned(obj)` (`Python/pyvalue.c`) | Consumes an owned object; `NULL` maps to `PyValue_NULL`. Calls `PyValue_FromPyObjectSteal`, so an inline-capable scalar returns the immediate and its box is freed at once |
 | `_PyValue_Publish`, `_PyValue_Canonicalize` (`pycore_value.h`, `pyvalue.c`) | Frame publication. The generated register handlers write homes through `IR_STORE_DST`, `IR_STORE_TEMP`, `IR_STORE_INPUT` and `IR_MOVE_TO_DST` (`Python/ceval_macros.h`). Each calls `_PyValue_Publish`, which tests for exact int or float and canonicalises through `_PyValue_Canonicalize`. That frees an owned box at once; a borrowed box stays in the source, and only the returned value is inline |
-| `PyValue_FromInt32`, `PyValue_FromDouble`, `LOAD_CONST_INLINE_INT/FLOAT` | Produce inline values directly |
+| `PyValue_FromInlineInt`, `PyValue_FromInt64` (inline when it fits), `PyValue_FromDouble`, `LOAD_CONST_INLINE_INT/FLOAT` | Produce inline values directly |
 | Object-form container setters (`PyTuple_SET_ITEM`, `PyTuple_SetItem`, `PyList_SetItem`, `PyList_Append`, `PyDict_SetItem`, `PyStructSequence_SetItem`, `PyMember_SetOne`) | Canonicalize through `PrepareOwned` or `FromObjectBorrow` |
 
 `PyValue_FromPyObjectSteal`, `PyValue_FromPyObjectNew` and
@@ -161,7 +164,10 @@ canonical form of their input. They do promote a borrow to an owner through
 `_PyValue_CheckHome`, which is a fatal error on a non-canonical value
 (`_PyValue_IsCanonicalHome`, `pycore_value.h`; `_PyValue_ReportHome`,
 `pyvalue.c`). The frame store macros and the list, tuple, dict and set
-writers call it. `_PyValue_RecheckHome` checks a value already stored. With
+writers call it. For a frame slot, `_PyValue_CheckFrameHome` also rejects a
+mortal object with bit 0 set (`_PyValue_CheckTemp` for a temporary, which may
+hold an index). Window consumers recheck their window in debug builds
+(`_PyValue_RecheckWindow`); release builds take no window counts. `_PyValue_RecheckHome` checks a value already stored. With
 `_PYTHON_VALUE_HOME_REPORT` set the check counts by call site instead of
 stopping.
 
@@ -177,8 +183,8 @@ The header states the rule as a single identity for a value, inline or boxed
 | `PyValue_FromPyObjectBorrow(o)` | Sets bit 0; no INCREF; canonicalizes | `pycore_value.h` |
 | `PyValue_FromObjectBorrow(o)` | Exported (`PyAPI_FUNC`). Canonical borrow; `NULL` maps to `PyValue_NULL` | `pycore_pyvalue.h`, `pyvalue.c` |
 | `PyValue_PrepareOwned(o)` | Exported. Consumes `o` and returns its canonical value; frees the box of an inline-capable scalar at once | `pyvalue.c` |
-| `PyValue_Borrow(v)` / `PyValue_BorrowAt(p)` | Sets bit 0 on an object; leaves inline values and NULL unchanged | `pycore_pyvalue.h`, `pycore_value.h` |
-| `PyValue_DUP(v)` | INCREFs only if `v` owns a count, and returns the same bits. A DUP of a borrow is still a borrow | `pycore_value.h` |
+| `PyValue_Borrow(v)` / `PyValue_BorrowAt(p)` | `Borrow` sets bit 0 on an object; it leaves inline values and NULL unchanged. `BorrowAt` returns the bits of `*p` as they are, because a frame slot never holds a borrow. The result lives in a C variable: the code must not release it or store it, and a store takes a count first (`PyValue_DUP`) | `pycore_pyvalue.h`, `pycore_value.h` |
+| `PyValue_DUP(v)` | INCREFs only if `v` owns a count, and returns the same bits. A DUP of a borrow is still a borrow. `LOAD_FAST_BORROW` DUPs a local, so a mortal object gets a count in the temporary | `pycore_value.h` |
 | `PyValue_NewRef(v)` | `Py_INCREF`s a mortal object and clears bit 0, which promotes a borrow to an owner. Tags an immortal object with bit 0 (the G1 fix, `271f4e435e5`; the refcount test is G1') | `pycore_pyvalue.h` |
 | `PyValue_CLOSE` / `PyValue_XCLOSE` | Internal. `Py_DECREF_MORTAL` if the value owns a count. `XCLOSE` accepts `PyValue_NULL` (`RefcountOnObject`); `CLOSE` does not | `pycore_value.h` |
 | `PyValue_Close(v)` | `Py_DECREF` (immortality-aware) if the value is an object with bit 0 clear | `pycore_pyvalue.h` |
@@ -199,6 +205,23 @@ Store discipline, used by every heap setter that was checked:
 3. Release the old owner.
 4. Revalidate anything a callback could change.
 
+**Frame slots and borrows.** A frame slot (local, cell, free variable or
+temporary) holds no borrow, and a pointer with bit 0 set in one is an
+immortal object. A temporary owns its value: `LOAD_FAST_BORROW` takes a count
+for a mortal object. A handler may read a local in place instead, as an
+untagged borrow in a C variable (`IR_SLOT(F)`; `IR_LOAD_BORROWED(F)` expands
+to the same expression). The cases generator
+(`Tools/cases_generator/ir_generator.py`) records such inputs in the
+instruction's `borrow_mask`. It releases an in-place input only if its field
+names a temporary (`IR_IS_LOCAL`), and takes a count where the handler keeps
+the value (`IR_INPLACE_OWN`, `IR_INPLACE_HEAP_SAFE`,
+`IR_INPLACE_OBJECT_STEAL`). For any other use of the value, of its copies
+(which may go only to stack variables), or of its object read by
+`PyValue_AsKnownObjectBorrow` (which may not reach a function that takes over
+or releases it), the generator keeps the input out of `borrow_mask` or refuses
+to generate the handler. A pointer that leaves through another expression is
+for the typed borrow (G6, step A5b) to catch.
+
 For examples, see `_PyMember_SetValue` (`Python/structmember.c`),
 `PyTuple_SetValue` (`Objects/tupleobject.c`), `_PyCell_SwapValue`
 (`pycore_cell.h`) and `IR_STORE_DST` (`ceval_macros.h`). Many value-API
@@ -208,8 +231,8 @@ runs no Python and leaves the current exception unchanged (`pycore_value.h`,
 
 ### 1.7 Identity, equality and hashing
 
-**Identity.** An exact int32 int and an exact non-NaN float have a value
-identity: their inline encoding, whether held inline or boxed
+**Identity.** An exact int that fits int51 and an exact non-NaN float have a
+value identity: their inline encoding, whether held inline or boxed
 (`Python/pyvalue.c:_PyObject_ValueIdentity`). Every other object's identity is
 its address. Encodings are at least 2^49 and addresses are below 2^48, so one
 identity names one value.
@@ -224,14 +247,14 @@ identity names one value.
 | `object.__hash__`, `object.__repr__`, `object.__eq__`, method equality and hash | The value identity (`PyObject_GenericHash`, `_PyObject_IsSame`) | `pyhash.c`, `typeobject.c`, `methodobject.c`, `descrobject.c`, `classobject.c` |
 | C `Py_Is`, `==` on `PyObject *` | Pointer equality. Two boxes of one inline value are different objects to C | n/a |
 
-Consequences: `x is y` is True for equal int32 ints or equal-bit floats however
+Consequences: `x is y` is True for equal int51 ints or equal-bit floats however
 they were computed. `0.0 is -0.0` is False. NaNs keep CPython identity, so
 `nan in [nan]` and NaN dict keys behave as in CPython. `id()` of an inline
 value is at least 2^49 and does not change when the value is boxed.
 
 **Equality.** `_PyValue_RichCompareBool` (`Objects/value_ops.c`) applies the
 container identity shortcut, then compares two inline operands as doubles in
-`compare_inline`. Every int32 converts to a double exactly. Other operands are
+`compare_inline`. Every int51 converts to a double exactly (53-bit significand). Other operands are
 boxed (`box_operands`) and passed to `PyObject_RichCompareBool`. List sort
 reads inline floats directly (`unsafe_float_compare`), and
 `unsafe_object_compare` falls back to the value compare for inline operands
@@ -239,7 +262,7 @@ reads inline floats directly (`unsafe_float_compare`), and
 
 **Hashing.** `_PyValue_Hash` (`Objects/value_ops.c`) hashes an inline int as
 its value, mapping -1 to -2, and an inline float as
-`_Py_HashDouble(Py_None, d)`. For int32 values this equals `long_hash`, and
+`_Py_HashDouble(Py_None, d)`. For int51 values, |v| < 2^50 < 2^61 - 1, so the hash is the value and equals `long_hash`, and
 `float_hash` ignores the instance unless the value is NaN, so boxed and inline
 forms hash alike, and equal int/float values hash alike. Tuples hash elements
 with `_PyValue_Hash` (`tupleobject.c:tuple_hash`). Dict lookup
@@ -249,7 +272,7 @@ hashes, then calls `_PyValue_RichCompareBool`. Unicode-keyed tables keep
 
 **Invariants.** Any change to the inline int or float range must keep three
 rules. Hash equals the Python value, so `_PyValue_Hash` agrees with `long_hash`
-and `float_hash`. Comparison stays exact: int32 and int51 fit in a double's
+and `float_hash`. Comparison stays exact: int51 fits in a double's
 mantissa, while a 62-bit scheme needs a separate exact path and a
 `_PyHASH_MODULUS` reduction in the hash. Exact-bit tests (`IsNone`, `IsTrue`,
 `IsFalse`) are valid only against *static* immortals. An object made immortal
@@ -311,8 +334,8 @@ write `PyValue_NULL`, then close.
 
 | Boundary | What happens per value | Where |
 |---|---|---|
-| Native call (vectorcall, builtins) | `VALUES_TO_PYOBJECTS` opens a borrow scope (`_PyBorrowScope_Enter`) and `_PyValueArray_ToObjectVector` calls `_PyValue_OwnArray` on the window, then `_PyBorrow_ValueVector`, which pushes an object vector onto the thread's borrow stack. A scalar argument gets a box there. `VALUES_TO_PYOBJECTS_CLEANUP` exits the scope and releases the entries newest first without touching the error indicator | `Python/ceval.c`, `ceval_macros.h:VALUES_TO_PYOBJECTS`, `pycore_borrow.h` |
-| Native result | Returned `PyObject *` becomes a `PyValue` (`FromPyObjectSteal`); publication canonicalizes and frees an int or float box at once | `ceval.c`, `_PyValue_Publish` |
+| Native call (vectorcall, builtins) | `VALUES_TO_PYOBJECTS` opens a borrow scope (`_PyBorrowScope_Enter`) and `_PyValueArray_ToObjectVector` rechecks the window in debug builds (`_PyValue_RecheckWindow`; the window owns its values) and calls `_PyBorrow_ValueVector`, which pushes an object vector onto the thread's borrow stack. A scalar argument gets a box there. `VALUES_TO_PYOBJECTS_CLEANUP` exits the scope and releases the entries newest first without touching the error indicator | `Python/ceval.c`, `ceval_macros.h:VALUES_TO_PYOBJECTS`, `pycore_borrow.h` |
+| Native result | Returned `PyObject *` becomes a `PyValue` (`FromPyObjectSteal`); publication canonicalizes and frees an int or float box at once. A generic native call stores a result bound for a local only after the window retires and the end-of-call periodic check passes; if the check raises, the result waits in the window and the unwinder releases it (`ceval.c:call_transaction_native`) | `ceval.c`, `_PyValue_Publish` |
 | Generated handler inputs | The cases generator boxes each scalar input passed whole to `PyValue_AsPyObject*` (or exits in a guard). Array inputs are not checked | `Tools/cases_generator/interpreter_definition.md`, "Inline values" |
 | Owning object getters | `PyTuple_GetItemRef`, `PyList_GetItemRef`, `PyStructSequence_GetItemRef`, `PyMember_GetOne` allocate a fresh box for each inline element read | `tupleobject.c`, `listobject.c`, `structseq.c`, `structmember.c` |
 | `tp_iternext`, `sq_item`, generic subscripts | Box (`list_item` uses `PyValue_AsObject`); the interpreter's value iterators (`_PyListIter_NextValue`, `_PyTupleIter_NextValue`) do not | `listobject.c`, `pycore_list.h` |
@@ -329,7 +352,7 @@ borrow-scope entry and exit, plus one allocation per scalar argument. Every obje
 element adds an allocation and a free. No measurement exists yet. The stats
 counters `inline_ints_created`, `inline_floats_created`, `inline_int_boxes`
 and `inline_float_boxes` (`Include/cpython/pystats.h`) count boxing but not
-the site or int32 overflow.
+the site or int51 overflow.
 
 ### 1.11 C API surface
 
@@ -382,7 +405,7 @@ backend exists.
 | Pointers | Must be below 2^48. Debug builds assert it in the constructors (`(uintptr_t)obj < Py_PTR_LIMIT` in `PyValue_FromObjectBorrow`, `_PyValue_PointerSteal` and others); release builds do not check |
 | Alignment | `static_assert(_Alignof(PyObject) >= 8)` (`pyvalue.c`); bit 2 is free |
 | Endianness | `_PyValue_TopBitsAt` assumes little-endian for its fast path; other byte orders use a shift |
-| Inline int range | -2^31 to 2^31-1 |
+| Inline int range | -2^50 to 2^50-1 (int51) |
 | Inline floats | All non-NaN doubles |
 | Index range | -1 to 2^47-1 |
 | Qualified OS/ISA | Linux x86-64 ([runtime architecture](runtime-architecture.md)). Other platforms and free-threaded builds are outside the supported private ABI (`pycore_value.h`, "Encoding") |
@@ -395,20 +418,28 @@ this list.
 | Behaviour | Difference | Where |
 |---|---|---|
 | `gc.get_referents(container)` | Omits inline elements. Upstream returns them, and memory profilers (pympler, objgraph) rely on that | `Modules/gcmodule.c:referentsvisit` through `_Py_VISIT_VALUE` |
-| `sys.getrefcount(x)` | Reports the count of the box made for the call, not of a shared object | `Python/sysmodule.c:sys_getrefcount_impl` |
+| `sys.getrefcount(x)` | Reports the count of the box made for the call, not of a shared object. A local passed to a call reads one more than upstream, because `LOAD_FAST_BORROW` takes a count for the window | `Python/sysmodule.c:sys_getrefcount_impl` |
 | `id(x)` | Not an address for inline values (section 1.7). `ctypes.cast(id(x), py_object)` is not valid for them | `Python/bltinmodule.c:builtin_id_impl` |
-| `x is y` | True for equal computed int32 ints and equal-bit floats | section 1.7 |
+| `x is y` | True for equal computed int51 ints and equal-bit floats | section 1.7 |
 
 `marshal` and `.pyc` output need no change. A fresh box has refcount 1 and is
 never marked `FLAG_REF`, and `w_ref` no longer depends on that shortcut, so
-output is deterministic (`Python/marshal.c:w_ref`).
+output is deterministic (`Python/marshal.c:w_ref`). A repeated inline int is
+therefore written in full each time, not as a back-reference. For an int51
+value outside int32 that costs 6 bytes per repetition, 8 from 2^45
+(`TYPE_LONG` against `TYPE_REF`). The assembler emits `LOAD_CONST_INLINE_INT`
+for such constants (`assemble.c`), and the magic number is 64404.
 
-Out-of-process tools: `_Py_DebugOffsets` exports no encoding constants
-(`Include/internal/pycore_debug_offsets.h`). The in-tree `_remote_debugging`
-module knows PyValue (`Modules/_remote_debugging/asyncio.c:remote_value_object_addr`), but py-spy, austin
-and memray would misread frames, tuples and dicts. Add `Py_INT_BASE`,
-`Py_DOUBLE_OFFSET`, `Py_PTR_LIMIT` and the tag mask to the debug offsets, in
-the same change as any G5 decision.
+Out-of-process tools: `_Py_DebugOffsets.pyvalue` exports the encoding (size,
+NULL bits, tag bits, pointer limit, index base, double offset, int base, int
+shift; `Include/internal/pycore_debug_offsets.h`). The struct has no layout
+version beyond `PY_VERSION_HEX`; the in-tree reader checks its size
+(`PY_REMOTE_DEBUG_OFFSETS_TOTAL_SIZE`, 960, in
+`Modules/_remote_debugging/debug_offsets_validation.h`). The in-tree
+`_remote_debugging` module knows PyValue
+(`Modules/_remote_debugging/asyncio.c:remote_value_object_addr`), but py-spy,
+austin and memray would misread frames, tuples and dicts until they read these
+offsets.
 
 ## 2. Comparison with other runtimes
 
@@ -416,7 +447,7 @@ the same change as any G5 decision.
 
 **JavaScriptCore** (`JSCJSValue.h`) uses the same numeric layout as ours.
 Doubles are stored with an offset of 2^49 (`DoubleEncodeOffset`), int32 is
-`0xFFFE << 48 | uint32`, and cell pointers have top 16 bits zero. `null`,
+`0xFFFE << 48 | uint32` (ours is int51 in `0xFFF8 << 48` and up), and cell pointers have top 16 bits zero. `null`,
 `undefined`, `true` and `false` are small immediates in pointer space
 (`0x02`, `0x0a`, `0x07`, `0x06`). Every double is inline. JSC does not
 convert every NaN to one pattern. Hardware NaNs are trusted, and only
@@ -455,7 +486,7 @@ bignum. It chose the other trade-off. Fixnums are 62-bit with a low-bit tag.
 "Flonums" rotate the exponent so that doubles from about 1e-77 to 1e77 sit
 inline; every other double is boxed. **OCaml** (63-bit ints with a low tag
 bit) and Chez Scheme are further fixnum precedents. This is the real
-alternative to int32 in G5.
+alternative to int51 in G5.
 
 **PyPy** does not tag pointers by default; RPython's `taggedpointers` is off.
 Ints and floats are boxed objects, and the JIT removes boxes inside traces.
@@ -482,17 +513,17 @@ feature matters for Python.
 |---|---|---|---|
 | Unboxed doubles in the value word | JSC, LuaJIT, SpiderMonkey (V8 and PyPy box) | **Present**, except NaN | Yes: float-heavy code avoids allocation everywhere, not only in JIT traces |
 | NaN policy | Canonicalise or purify NaNs and keep them inline | **Present, different**: box every NaN | Yes. Python NaN identity (`nan in [nan]`, NaN dict keys) depends on object identity. Boxing keeps CPython semantics at the cost of one `ucomisd; jp` per float result |
-| Inline small ints | JSC int32, V8 Smi31/32, SpiderMonkey int32, LuaJIT dual-number int32 | **Present**: int32 | Yes, but Python overflow goes to a heap bignum, whereas JS and Lua overflow to an inline double. The int32 limit costs more in Python (G5) |
-| Wider inline ints | CRuby 62-bit fixnums, OCaml 63-bit ints; none of the JS engines (JS semantics are double); PyPy int strategies use full 64-bit | **Missing** | Probably. Masks such as `0xFFFFFFFF`, large sums, sizes and millisecond timestamps exceed int32. Unmeasured |
+| Inline small ints | JSC int32, V8 Smi31/32, SpiderMonkey int32, LuaJIT dual-number int32 | **Present**: int51 | Yes, but Python overflow goes to a heap bignum, whereas JS and Lua overflow to an inline double. The inline limit costs more in Python (G5) |
+| Wider inline ints | CRuby 62-bit fixnums, OCaml 63-bit ints; none of the JS engines (JS semantics are double); PyPy int strategies use full 64-bit | **Present**: int51 (D3); 52-62-bit values (`go`'s Zobrist hashes, `time_ns()`) stay boxed | Yes for the 32-51-bit range: masks such as `0xFFFFFFFF`, large sums, sizes and `id()` keys. 52-62-bit values measured at 0.4% of int results (G5) |
 | Inline bignums | None of these runtimes | Missing | Low: Python ints beyond 64 bits are rare in hot paths |
 | Ownership bit in the value | None (all trace) | **Present** (bit 0) | Required by reference counting, but no other engine shares the hazards (G6) |
 | Immediate null/bool | JSC, SpiderMonkey, LuaJIT tags | Partial: immortal heap singletons with bit 0 | Neutral. A singleton test is one compare, provided the encoding is unique (G1) |
 | Pointer width | LuaJIT and SpiderMonkey 47, JSC 48, V8 32 (compressed) | 48, unchecked | Pointer compression would halve containers but needs a cage and conflicts with C extensions holding raw pointers. Not a fit while C extensions keep raw `PyObject *` |
-| Value-based identity for numbers | JS (no identity), PyPy by value | **Present** for int32 and non-NaN float | Yes. Needed so that `is` and `id()` cannot reveal inline versus boxed |
+| Value-based identity for numbers | JS (no identity), PyPy by value | **Present** for int51 and non-NaN float | Yes. Needed so that `is` and `id()` cannot reveal inline versus boxed |
 | Field representation tracking | V8 maps; PyPy mapdict unboxing | **Partial**: `_PySlotKind` has only `_Py_SLOT_BOXED` | Less than in V8. Our fields already hold inline numbers without a box. `_PySlotKind` is deleted in G11 |
 | Homogeneous array kinds or strategies | V8 elements kinds, JSC indexing types, PyPy strategies | **Missing** | Partly. Per-element tagging already avoids boxes, but there is no per-container fact for the JIT, `sum` or `sort` to use. Non-goal (G7) |
 | Debug checking of value invariants | JSC and SpiderMonkey value asserts; V8 heap verifier | Partial: some setter asserts; no canonical or heap-safety checker | Yes, because canonical and ownership rules are by convention (G2, G6) |
-| JIT unboxed arithmetic | All five | **Partial**: int32 add/sub/mul/and with `jo` guards in `jit_backend_x86.c`; float SSE emitters in `jit_x86.h` unused | Yes, for the JIT stage |
+| JIT unboxed arithmetic | All five | **Partial**: int51 add, subtract, multiply, AND and compare on the scaled int64 with `jo` guards; float SSE emitters unused | Yes, for the JIT stage |
 | Cheap boundary to native code | V8 and JSC handles; PyPy cpyext is slow | **Partial**: a box or INCREF/DECREF per argument | Yes. Most Python programs spend time in C builtins (G4) |
 
 ## 3. Gaps, risks and recommendations
@@ -510,9 +541,9 @@ reflected in the gap it names.
 | # | Gap | Decision |
 |---|---|---|
 | D1 | G1, G1' | G1 is fixed (`271f4e435e5`). G1' holds the remaining items. Its code fixes are in progress as a separate packet |
-| D2 | G2 | Accepted, before baseline, scheduled right after runtime bring-up. Canonical construction only in the core, with no raw constructors. `PyValue_Is` is a bit compare. Int and float guards accept inline values only. Release contract: freeing an exact int or float box, and allocator hooks, never run Python or raise. That deletes the `retired` out-parameter, the `_PyValueTemps` retire path, the save and restore in `close_object` and `close_value`, and about 912 exception save and restore sites around `Py_DECREF` in earlier ports. Status: landed in steps 5-8 except the int and float guards, which are step 9a |
-| D3 | G5 | **int51**, decided 2026-11-03 from the upstream histogram ([results](../bench/results/pyvalue-int-width-20261103.md)): 32-51-bit ints are 3-4% of int results on the kernels and pyperformance (mostly `id()` keys in memo dicts), 52-62-bit ints 0.4%, out-of-window floats under 0.001%. Implemented with D2 and D5, before baseline |
-| D4 | G6 | Direction accepted in principle: no home (frame slot or heap field) holds a borrow, bit 0 in a home means immortal, and a borrow is a distinct C type in C locals. The final form is decided jointly with G2 (operand ownership at run time) of the register IR design, after that document's review |
+| D2 | G2 | Accepted, before baseline, scheduled right after runtime bring-up. Canonical construction only in the core, with no raw constructors. `PyValue_Is` is a bit compare. Int and float guards accept inline values only. Release contract: freeing an exact int or float box, and allocator hooks, never run Python or raise. That deletes the `retired` out-parameter, the `_PyValueTemps` retire path, the save and restore in `close_object` and `close_value`, and about 912 exception save and restore sites around `Py_DECREF` in earlier ports. Status: landed in steps 5-8, and the int and float guards in step 9a (`bf0639df819`) |
+| D3 | G5 | **int51**, decided 2026-11-03 from the upstream histogram ([results](../bench/results/pyvalue-int-width-20261103.md)): 32-51-bit ints are 3-4% of int results on the kernels and pyperformance (mostly `id()` keys in memo dicts), 52-62-bit ints 0.4%, out-of-window floats under 0.001%. Implemented with D2 and D5, before baseline, in representation steps 9a and 9b (`bf0639df819`, `80bb9c84701`) |
+| D4 | G6 | Direction accepted in principle: no home (frame slot or heap field) holds a borrow, bit 0 in a home means immortal, and a borrow is a distinct C type in C locals. The final form is decided jointly with G2 (operand ownership at run time) of the register IR design, after that document's review. Status: the frame side landed in register IR v2 step A5a (`3c7ac067f7f`, `d60d3be46d6`, `3e28e1755bd`); the heap side and the typed borrow are step A5b |
 | D5 | G9 | Adopt `NULL = 0`. Zero-filled memory is a valid empty slot. This deletes `init_value_slots` and the explicit NULL fills, at the cost of one more compare in `XCLOSE` and the owned test. Scheduled with D2. The `CLOSE` microbenchmark is a measurement to take, not a gate |
 | D6 | section 1.11 | ABI policy: `PyValue` is internal. `pyvalue.h` and `PyTuple_GET_VALUE` move to `Include/internal` in value-API packet V1, and external code gets no `PyValue` declaration until a public value API is designed ([value-api.md](value-api.md) VA11, R10; coordinator, 2026-11-03, after value-API review 1). The limited API stays in source form; abi3 binaries built against upstream are unsupported; free threading and abi3t are non-goals. Code change in progress |
 | D7 | G13 | Superseded (2026-11-03) by the user's value-native decision: value slots exist; [value-api.md](value-api.md) VA5 specifies them |
@@ -571,8 +602,6 @@ immortal one. The fix is correct for the core. G1' covers what it left open.
     which recomputes `_PyObject_ValueIdentity`, including type loads) whenever
     the bits differ. That covers every false `is` (including `IS_OP`) and every
     probe of a dict collision chain against a different key (`compare_generic`).
-  * Int and float guards accept both inline values and boxed compact objects
-    (`PyValue_IsCompactInt`, `PyValue_FloatOperandsCheck`).
   * Every frame publication tests the result's type (`_PyValue_Publish`
     loads the type of every pointer result), and for a multi-digit int calls
     `PyLong_AsLongAndOverflow` (`_PyObject_ValueIdentity`).
@@ -644,9 +673,10 @@ immortal one. The fix is correct for the core. G1' covers what it left open.
   a bit compare, deleted `_PyValue_IsSameValue` and `value_identity`, and added
   `_PyValue_CheckHome` (a debug assert at the frame store macros and the dict,
   list and set writers). A counter over the full suite before the deletion saw
-  3,587,230,710 fallback calls and 0 true results. Item 4 remains: int and
-  float guards still accept boxes (`PyValue_IsCompactInt`, the boxed arm of
-  `PyValue_FloatOperandsCheck`). It is representation step 9a.
+  3,587,230,710 fallback calls and 0 true results. Item 4 is done by
+  representation step 9a (`bf0639df819`): the guards accept inline values
+  only, and `PyValue_IsCompactInt`, `PyValue_CompactIntValue` and the boxed
+  arm of `PyValue_FloatOperandsCheck` are gone.
 
 ### G3. The owned-reference test does not exclude ERROR or wrapped pointers
 
@@ -694,7 +724,7 @@ immortal one. The fix is correct for the core. G1' covers what it left open.
   extensions.
 * **Proposal.**
   1. Before baseline, add stats counters by site class (call argument,
-     `GetItemRef`, `AsObject`, int32 overflow) so the baseline measures
+     `GetItemRef`, `AsObject`, int51 overflow) so the baseline measures
      boxing.
   2. The release contract (exception save and restore around releases) moved to
      G2, item 5. G4 depends on it.
@@ -732,7 +762,7 @@ immortal one. The fix is correct for the core. G1' covers what it left open.
   engines and LuaJIT have no bignum on the overflow path, so their int32 limit
   has no heap cost to compare.
 * **Candidates.**
-  * **int32** (current).
+  * **int32** (the encoding before representation step 9a).
   * **int51**, in `0xFFF8 << 48` to `2^64 - 1`, which is unused today. All
     non-NaN doubles end at `0xFFF2_0000_0000_0000`, so the pointer, index and
     float regions do not change.
@@ -745,8 +775,8 @@ immortal one. The fix is correct for the core. G1' covers what it left open.
       `BothInlineInt` AND trick holds without the "0xFFFF unused" caveat.
     * Hash stays the value, since 2^50 < 2^61 - 1, and comparison stays exact.
     * Cost: about three more ALU operations per add than int32 (an estimate,
-      not measured), `int32_t` signatures at about 72 `PyValue_FromInt32`
-      sites, the JIT int32 emitters, and the encoding baked into `pyvalue.h`.
+      not measured), `int32_t` signatures at 58 `PyValue_FromInt32` uses in 14
+      files, the JIT int32 emitters, and the encoding baked into `pyvalue.h`.
     * It still misses `time.time_ns()` (about 2^60.6), 64-bit masks and
       hashing (FNV, xorshift64), and `hash()` results.
   * **CRuby-style 62-bit fixnum with ranged flonums.** Covers those values.
@@ -781,6 +811,10 @@ immortal one. The fix is correct for the core. G1' covers what it left open.
 * **Cost and risk.** A medium refactor. Any later change to the encoding
   forces a rebuild of extensions, and of out-of-process tools (§1.13).
 * **When.** Before baseline, with D2 and D5, after runtime bring-up.
+* **Status (2026-11-04): implemented** by representation steps 9a and 9b
+  (`bf0639df819`, `80bb9c84701`; `build/pyjit-link-wave1/repr-step9-notes.md`).
+  The inline int is int51, the numeric guards are inline-only, and the
+  trace JIT carries scaled int64 scalars. The magic number is 64404.
 
 ### G6. The ownership bit shares the pointer word and is untyped
 
@@ -810,7 +844,7 @@ immortal one. The fix is correct for the core. G1' covers what it left open.
   * Borrows live only in C locals, as a distinct C type that store APIs
     reject. That removes `MakeHeapSafe` from setters and makes the free bit 2
     unnecessary. The register IR already knows which operands are borrowed
-    (`IR_IS_LOCAL(F)` in `IR_LOAD_BORROWED`). If bit 2 is kept anyway, `Borrow`
+    (`IR_IS_LOCAL(F)`). If bit 2 is kept anyway, `Borrow`
     must leave a tagged immortal unchanged, or `PyValue_IsNone` breaks on a
     borrowed `None`.
   * Merge or rename the `DUP`/`NewRef` and `CLOSE`/`Close` pairs: one name per
@@ -830,6 +864,14 @@ immortal one. The fix is correct for the core. G1' covers what it left open.
   2026-11-04). Frame homes, in step A5a, follow representation step 8. The
   typed form, the debug asserts and the `traverse_slots` fix, in step A5b,
   follow step 9a.
+* **Status (2026-11-04).** Frame homes: done in register IR v2 step A5a
+  (`3c7ac067f7f`, `d60d3be46d6`, `3e28e1755bd`). No frame slot holds a borrow,
+  and bit 0 in a frame slot means immortal. `LOAD_FAST_BORROW` into a
+  temporary takes a count for a mortal object. An in-place read of a local is
+  a borrow in a handler's C variable, untagged. `_PyValue_CheckFrameHome`
+  rejects a mortal with bit 0 in a frame slot. The typed borrow, heap asserts,
+  `traverse_slots` and the removal of `MakeHeapSafe` from setters remain for
+  A5b.
 
 ### G7. Per-element tagging versus storage strategies (non-goal)
 
@@ -919,15 +961,15 @@ guard, define kinds as value facts (int, float, object), not storage forms.
 ### G12. JIT interaction
 
 * **Present.** Frame homes are canonical at publication, so deoptimisation
-  writes inline bits straight into the frame. The trace backend does int32
-  add, subtract, multiply and AND with `jo` guards. It encodes results with
-  `+ Py_INT_BASE` and skips releasing an old inline value by testing the
-  slot's top 16 bits (`jit_backend_x86.c`).
+  writes inline bits straight into the frame. The trace backend does int51
+  add, subtract, multiply, AND and compare on the scaled int64 (`v << 13`)
+  with `jo` guards; multiply unscales one operand with `sar 13`. Its inline
+  commit encodes with `shr 13; or Py_INT_BASE` and skips releasing an old
+  inline value by testing the slot's top 16 bits (`jit_backend_x86.c`).
+  Scalars are inline ints only: a box is an opaque home.
 * **Gaps.**
   * Float arithmetic is not unboxed (the SSE emitters are unused).
   * A float result needs a NaN exit, because NaN must be boxed.
-  * Guards must accept boxed compact ints unless G2 lands.
-  * Int width (G5) decides the shape of every emitted integer operation.
 * **When.** G2 and G5 are both decided before baseline, so both precede the
   method JIT.
 
@@ -955,6 +997,6 @@ guard, define kinds as value facts (int, float, object), not storage forms.
 | One encoding per value | Boxed and inline forms of the same number are both legal; static immortals can lack bit 0 on some paths | G1', G2 |
 | One operation per meaning | Two closes, two duplications, and two borrow constructors with different canonical behaviour | G2, G6 |
 | One build profile | Dead free-threaded, 32-bit and Windows branches | G11 |
-| Measured limits | int32 chosen for its overflow instruction, without frequency data; no boxing counters by site; 48-bit addresses assumed, not checked | G4, G5, G10 |
+| Measured limits | int51 chosen from an upstream histogram (G5); no boxing counters by site; 48-bit addresses assumed, not checked | G4, G5, G10 |
 | Private representation | Encoding is inlined into rebuilt extensions through `pyvalue.h`; the limited API must exclude it | §1.11, G5 |
 | No reserved empty states | Zero bits are invalid and NULL is 1 | G9 |

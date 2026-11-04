@@ -226,6 +226,9 @@ a `_testcapi` test that pins the round trips above, so a change is deliberate.
   argument says so with `Take` in its name. If D4 introduces a distinct C type
   for borrows (pyvalue.md G6, register IR IR-D3), argument positions take that
   type and results stay `PyValue`.
+  Since register IR v2 step A5a (`3e28e1755bd`) no frame slot holds a borrow:
+  `PyValue_BorrowAt` returns the slot's bits untagged, and the typed borrow
+  (step A5b) is not yet built.
 * **Error.** A `PyValue` result signals an error with `PyValue_NULL` and an
   exception set. After D5, `PyValue_NULL` is 0, so the test is one compare,
   and a thunk passes NULL through unchanged.
@@ -959,7 +962,7 @@ Dependencies on other plans:
 * **Representation packet.** V2a-1 needs canonical construction (step 8), so a
   value slot never meets a boxed small int, the release contract and
   restore-helper removal (steps 5–7), so `value_ops.c` is rewritten once, and
-  int51 (step 9a), so `int`'s value slots are written once. D5 (NULL = 0) is
+  int51 (step 9a, landed in `bf0639df819`), so `int`'s value slots are written once. D5 (NULL = 0) is
   not a semantic dependency.
 * **Register IR v2.** Only V3b waits for it. V2a–V3a change helpers that the
   handlers call. The typed borrow (IR-D3, D4) changes argument types (§1.4).

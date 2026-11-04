@@ -136,7 +136,20 @@ Each field plays one **role**. The format of the handler fixes the roles
 - `ninputs`, the number of register-style inputs;
 - `dst`, the offset of dst from the stack depth before the instruction (or from
   `base` for window style);
-- `borrow_mask`, the inputs that a folded local load may name;
+- `borrow_mask`, the inputs that a folded local load may name. A field that
+  names a local is borrowable only if no uop of the instruction may keep the
+  input (store it, or pass it to a function not known to only read it).
+  Stores (`STORE_FAST`, `STORE_DEREF` and their pairs) take an owned
+  temporary. The generator releases an in-place input only if its field names
+  a temporary (`if (!IR_IS_LOCAL(F))`), and gives it a count where the
+  handler keeps it (`IR_INPLACE_OWN`, `IR_INPLACE_HEAP_SAFE`,
+  `IR_INPLACE_OBJECT_STEAL`). It keeps out of `borrow_mask`, or refuses, any
+  other use of the value itself, of its copies (which may go only to stack
+  variables), and of its object read by `PyValue_AsKnownObjectBorrow` (which
+  may not reach a function that takes over or releases it). It also refuses
+  any merge where paths disagree on whether a value borrows a local. A
+  pointer that leaves through any other expression is for the typed borrow
+  (pyvalue.md G6, step A5b) to catch;
 - `shadow`, the stack instruction that the handler stands for;
 - `nofb`, the NOFB form of the handler;
 - flags: `WINDOW`, `JUMPS` (oparg is an absolute target), `FORWARD` (oparg is a
@@ -235,28 +248,32 @@ locals, cells, free variables         | temporaries (canonical first, then compa
      compares the field with `nlocalsplus`, which it loads from the
      `_PyCodeExec` header just before the words
      (`ceval_macros.h:IR_NLOCALSPLUS`).
-  2. **Value tag**: whether the reference in hand owns a count. After
-     `6a7b3769d62` a pointer-space reference owns a count only if all its tag
-     bits are clear (`Py_OWNED_MASK` includes `Py_TAG_BITS`), and the borrow
-     bit is set only on object values that are not `Py_TAG_INVALID`
-     (`pycore_value.h:_PyValue_BorrowBitAt`).
+  2. **Value tag**: whether the reference in hand owns a count. A
+     pointer-space reference owns a count only if all its tag bits are clear
+     (`Py_OWNED_MASK` includes `Py_TAG_BITS`). Since step A5a no frame slot
+     holds a borrow, so bit 0 in a frame slot means only "immortal".
 
-  The two do not coincide. A temporary can hold a borrow-tagged value:
-  `LOAD_FAST_BORROW` into a temporary sets the tag (`PyValue_BorrowAt`). An
-  in-place read of a local sets the tag in the handler's C local
-  (`IR_LOAD_BORROWED`, `IR_BORROW_KNOWN`). `IR_IS_LOCAL` and the macros built
-  on it (`IR_LOAD_BORROWED`, `IR_CONSUME_INPUT`, `IR_STORE_DST`,
-  `IR_DROP_BORROW`), with `IR_STORE_INPUT`, `IR_STORE_TEMP_DST`,
-  `IR_MOVE_TO_DST` and `IR_BORROW_KNOWN`, appear on 1,040 lines in 211
-  handlers of the generated file (recounted at `48bb4d6d1d3`; the earlier
-  count was 890 lines without the store and move macros).
+  The two now agree on the tag, and still differ on the transfer.
+  `LOAD_FAST_BORROW` into a temporary takes a count for a mortal object
+  (`PyValue_DUP`), so the temporary owns its value. An in-place read of a
+  local is an untagged borrow in the handler's C variable
+  (`IR_LOAD_BORROWED(F)`, which is `IR_SLOT(F)`; `PyValue_BorrowAt` returns the
+  slot's bits). In debug builds `_PyValue_CheckFrameHome` rejects a mortal
+  with bit 0 in a frame slot, and window consumers recheck their window
+  (`_PyValue_RecheckWindow`); release builds take no window counts.
+  `IR_IS_LOCAL` and the macros built on it (`IR_CONSUME_INPUT`,
+  `IR_STORE_DST`, `IR_INPLACE_OWN`, `IR_INPLACE_HEAP_SAFE`,
+  `IR_INPLACE_OBJECT_STEAL`), with `IR_STORE_INPUT`, `IR_STORE_TEMP_DST` and
+  `IR_MOVE_TO_DST`, appear on 1,040 lines in 211 handlers of the generated
+  file (recounted at `48bb4d6d1d3`, before A5a removed `IR_BORROW_KNOWN` and
+  `IR_DROP_BORROW`; not recounted since).
 
   A JIT must preserve the slot class at every word boundary: a temporary
   that the next word consumes must hold a value, and every other temporary
   must be NULL. It must preserve the value tag wherever a value is stored to
   a home, because the tag says whether the store transfers a count. Decision
-  IR-D3 (§3) makes the slot class static, in the instruction, and limits the
-  tag in a home to "immortal".
+  IR-D3 (§3) makes the slot class static, in the instruction. A5a already
+  limits the tag in a frame slot to "immortal".
 - **Why NULL, and what it costs.** There is no stack pointer. The GC
   traversal of frames, frame walkers and the unwinder
   therefore cannot tell a dead temporary from a live one except by its
@@ -275,7 +292,7 @@ locals, cells, free variables         | temporaries (canonical first, then compa
 - **Windows.** The inputs of a window are consecutive slots. Compaction keeps
   them that way, and the verifier checks it (`regcfg.c:_PyRegCfg_Verify`).
 - **Values.** A slot holds a `PyValue`: a tagged 64-bit value that can hold an
-  inline int or float, or an object pointer with a borrow bit (`Py_TAG_REFCNT`).
+  inline int or float, or an object pointer whose bit 0 (`Py_TAG_REFCNT`) means "immortal".
   On every store the handlers *publish* boxed int and float objects in canonical
   inline form (`pycore_value.h:_PyValue_Publish`).
 
@@ -288,7 +305,7 @@ entry, a debugger or a generator resume must reproduce it:
 |---|---|---|
 | Slots below `co_nlocalsplus` | the frame variables, each a value or NULL (unbound) | `pycore_ir.h` |
 | Temporaries | a value exactly where a later word reads it before any write; NULL everywhere else | NULL invariant; `_PyFrame_AssertTemporariesClear` at return |
-| Value tags in slots | as built: owned or borrowed, by tag bit; after IR-D3: owned or immortal only | `pycore_value.h` |
+| Value tags in slots | owned or immortal only (since A5a, `3e28e1755bd`) | `pycore_value.h` |
 | Constant slots (G6) | from frame entry onward, each holds its constant; OSR entry, a JIT exit and generator resume must preserve them; the verifier treats them as written once | G6 |
 | `frame->instr_ptr` | valid at every observation point (a call out, a raise, a monitoring event, a deoptimisation); built, 289 of 292 handlers store it on entry, and G9.1 would store it only on escaping and error paths, in which case a JIT exit sets it before it leaves | §1.13 |
 | `frame->return_slot` | for a frame with a pending call or a suspended `SEND`/`YIELD_VALUE`, the caller's slot that receives the result | §1.12 |
@@ -522,7 +539,8 @@ Static frequencies are percentages of all 4.57M words in the Lib corpus (§2.3).
 - **Unwinding** (`bytecodes.c`, label `exception_unwind`):
   1. `ceval.h:get_exception_handler` finds the entry, by binary search over the
      table once it is longer than 40 bytes.
-  2. `_PyFrame_ClearTemporaries` clears from `exc_slot − lasti` upwards. This
+  2. `_PyFrame_ClearTemporaries` clears from the highest slot down to
+     `exc_slot − lasti`, the order in which upstream pops the stack. This
      relies on the compaction property that live temporaries lie below the
      handler.
   3. The unwinder stores lasti and the exception and jumps to the handler word.
@@ -1311,7 +1329,7 @@ it names.
 |---|---|---|
 | IR-D1 | G2, G3, G4, G5, G6, G10, §1.8 | The format changes are designed together as **one encoding revision, IR v2**: the operand-class bit (G2), the fused compare-and-jump (G3), calls without a result destination, omitting `PUSH_NULL` and unpacking into locals with a source field (G4), the feedback layout and index encoding (G5, G10), constants as hidden slots named by operands (G6), one jump-target rule and the conditional back-edge decision (§4.3). §4 gives the bit budget and the format list. Implementation comes after the PyValue representation packet (pyvalue.md D2, D5 and D3 int51, all decided) and before the JIT-off baseline. Its interpreter effect is measured as one step. **Revised 2026-11-04, register IR v2 packet:** the revision lands as a sequence of steps, not one change. Steps B2 to B7 follow the tail-call landing (A3), and each bumps `PYC_MAGIC_NUMBER`. Handlers are renumbered densely in B2, B4, B5 and B6, and in B3 if it wins G2. Counts are recorded per step; elapsed time is measured after A5a, A3c and B7, and for G2. The contract table answers the churn argument: the decoders read it. Proposal and reviews: [packet](proposals/register-ir-v2-packet.md), [review 1](reviews/register-ir-v2-packet-review-1.md), [review 2](reviews/register-ir-v2-packet-review-2.md). |
 | IR-D2 | §5, G1 | The **instruction contract** (operand roles, slot reads and writes including those hidden in immediates, and effects: may run Python with its operand dependence, may raise, may deoptimise, releases the old dst, feedback kind, heap reads and writes, allocation, guards, result facts, monitoring events, pass-through inputs and targets) is generated by the cases generator into one exported table. It is the single source for the JIT front end and the compiler passes, and is built as part of IR v2. |
-| IR-D3 | G2, §1.4 | **Ownership is two facts.** The slot class (local or temporary) is static. The value tag says only "immortal or not". Decided jointly with [pyvalue.md](pyvalue.md) G6 and D4: no home (frame slot or heap field) ever holds a borrow; borrows exist only in C locals. **Revised 2026-11-04, register IR v2 packet:** whether the slot class is encoded in the instruction (class bits, B3) or kept in dispatch state (A4) is G2's decision. D4 lands in two steps whichever way G2 goes: frame homes after representation step 8 (A5a), and after 9a the typed borrow, D4's debug asserts, the producer list, `traverse_slots` and the removal of `MakeHeapSafe` from setters (A5b). |
+| IR-D3 | G2, §1.4 | **Ownership is two facts.** The slot class (local or temporary) is static. The value tag says only "immortal or not". Decided jointly with [pyvalue.md](pyvalue.md) G6 and D4: no home (frame slot or heap field) ever holds a borrow; borrows exist only in C locals. **Revised 2026-11-04, register IR v2 packet:** whether the slot class is encoded in the instruction (class bits, B3) or kept in dispatch state (A4) is G2's decision. D4 lands in two steps whichever way G2 goes: frame homes after representation step 8 (A5a), and after 9a the typed borrow, D4's debug asserts, the producer list, `traverse_slots` and the removal of `MakeHeapSafe` from setters (A5b). **Status (2026-11-04):** A5a is done (`3c7ac067f7f`, `d60d3be46d6`, `3e28e1755bd`). No frame slot holds a borrow, bit 0 in a frame slot means immortal, `LOAD_FAST_BORROW` into a temporary takes a count, and an in-place read of a local is an untagged borrow in a handler's C variable. A5b is open. |
 | IR-D4 | §1.4, §6, §7 | The state at a word boundary, liveness export and OSR entry are **open decisions for the JIT stage**. §7 lists them with their options and costs; §6 lists the interfaces the JIT needs. |
 
 The gaps below are ordered by priority. Each one states the problem, the
@@ -1355,8 +1373,8 @@ owner asks for no intermediate performance gates).
 - **Problem.** Every handler input asks "frame variable or transfer
   temporary?" with `IR_IS_LOCAL(F)`. The test is
   `F < ((_PyCodeExec *)frame->ir_words - 1)->nlocalsplus`: a chain of
-  dependent loads unless the C compiler keeps the value live. The same test
-  also sets the borrow tag on in-place reads, which merges the slot class with
+  dependent loads unless the C compiler keeps the value live. Before A5a the same test
+  also set the borrow tag on in-place reads, which merged the slot class with
   the value tag (§1.4).
 - **Evidence.**
   - 1,040 lines in 211 handlers of `generated_ir_cases.c.h` use these macros,
@@ -1572,7 +1590,7 @@ owner asks for no intermediate performance gates).
 
      | Field layout | Handlers | Free fields | Decision |
      |---|---|---|---|
-     | `{DST, BASE, IMM argc, FB}` | `CALL`, `CALL_KW` and forms (28) | none | keep copies; the callee overlaps the window. Open for B5 (2026-11-04): under D4 the copy owns a count, so a local passed to a native call reads `sys.getrefcount` 2 against upstream's 1, which C code sees through `PyUnstable_Object_IsUniqueReferencedTemporary` (two `test_capi` failures). B5 either gives native calls a form that reads locals in place or states why the count stays (pyvalue.md §1.13) |
+     | `{DST, BASE, IMM argc, FB}` | `CALL`, `CALL_KW` and forms (28) | none | keep copies; the callee overlaps the window. Open for B5 (2026-11-04): under D4 the copy owns a count, so a local passed to a native call reads `sys.getrefcount` 2 against upstream's 1, which C code sees through `PyUnstable_Object_IsUniqueReferencedTemporary` (two `test_capi` failures). B5 either gives native calls a form that reads locals in place or states why the count stays (pyvalue.md §1.13). After A5a, `LOAD_FAST_BORROW` takes the count, not the call window; the reading is unchanged |
      | `{BASE, IMM, –, –}` | `COPY`, `LIST_APPEND`, `LIST_EXTEND`, `SET_ADD`, `SET_UPDATE`, `MAP_ADD`, `DICT_MERGE`, `DICT_UPDATE`, `LOAD_SPECIAL`, … (12) | C, D | `LIST_APPEND`, `SET_ADD` and `MAP_ADD` take their value (and key) from source fields C and D, so a comprehension appending a local needs no copy; the rest keep their window. With a source field the value is not in the window, so BASE names the container alone (window extent 1) and B, the depth, is zero; the verifier checks it |
      | `{DST, BASE, FB, IMM}` | `FOR_ITER`, `SEND` and forms (11) | none | keep |
      | `{DST, BASE, IMM count, –}` | `BUILD_*` (10) | D | keep: the inputs are an array |

@@ -3161,12 +3161,11 @@ inline_locals(PyObject *self, PyObject *frame)
 }
 
 /* Exercise the public owning bridge, including canonicalization of an owned
- * object result and the separately retired scalar owner. */
+ * object result, which releases a scalar box at once. */
 static PyObject *
 pyvalue_contract(PyObject *self, PyObject *arg)
 {
-    PyObject *retired;
-    PyValue value = PyValue_PrepareOwned(Py_NewRef(arg), &retired);
+    PyValue value = PyValue_PrepareOwned(Py_NewRef(arg));
     const char *kind = PyValue_IsInlineInt(value) ? "int32" :
                        PyValue_IsInlineFloat(value) ? "float64" : "object";
     PyValue duplicate = PyValue_NewRef(PyValue_Borrow(value));
@@ -3175,11 +3174,8 @@ pyvalue_contract(PyObject *self, PyObject *arg)
     PyObject *object = PyValue_AsObject(duplicate);
     PyValue_Close(duplicate);
     PyValue_Close(value);
-    PyObject *saved = PyErr_GetRaisedException();
-    Py_XDECREF(retired);
-    _PyValue_RestoreException(saved);
     if (object == NULL || PyErr_Occurred()) {
-        saved = PyErr_GetRaisedException();
+        PyObject *saved = PyErr_GetRaisedException();
         Py_XDECREF(object);
         _PyValue_RestoreException(saved);
         return NULL;
@@ -3205,10 +3201,8 @@ pyvalue_home_violation_sites(PyObject *self, PyObject *unused)
 static PyObject *
 pyvalue_internal_contract(PyObject *self, PyObject *unused)
 {
-    PyObject *retired = (PyObject *)1;
-    PyValue absent = PyValue_PrepareOwned(NULL, &retired);
+    PyValue absent = PyValue_PrepareOwned(NULL);
     assert(PyValue_IsNull(absent));
-    assert(retired == NULL);
     PyValue invalid[] = {
         PyValue_NULL, PyValue_ERROR, PyValue_TagIndex(7),
         PyValue_Wrap((void *)0x1000),

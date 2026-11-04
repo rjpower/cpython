@@ -3427,11 +3427,7 @@ sys_set_flag(PyObject *flags, Py_ssize_t pos, PyObject *value)
     assert(pos >= 0 && pos < (Py_ssize_t)(Py_ARRAY_LENGTH(flags_fields) - 1));
     /* Both callers construct a fresh flags object, filling each slot once. */
     assert(PyValue_IsNull(PyStructSequence_GET_VALUE(flags, pos)));
-    PyObject *retired = NULL;
-    PyValue prepared = PyValue_PrepareOwned(Py_NewRef(value), &retired);
-    PyStructSequence_SET_VALUE(flags, pos, prepared);
-    /* The caller retains value, so this release cannot be final. */
-    Py_XDECREF(retired);
+    PyStructSequence_SET_VALUE(flags, pos, PyValue_PrepareOwned(Py_NewRef(value)));
 }
 
 

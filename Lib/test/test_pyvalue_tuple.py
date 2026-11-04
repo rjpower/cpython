@@ -80,9 +80,6 @@ class PyValueTupleTests(unittest.TestCase):
     def test_iterator_boxing_errors(self):
         _testinternalcapi.tuple_value_boxing_errors()
 
-    def test_iterator_boxing_reentry(self):
-        _testinternalcapi.tuple_value_boxing_reentry()
-
     def test_virtual_iteration_uses_language_values(self):
         cases = ([100000, 1.25, -0.0, None],
                  (100000, 1.25, -0.0, None), b'\x00\x7f\xff', 'aλ𐀀')

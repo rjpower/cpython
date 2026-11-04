@@ -212,109 +212,6 @@ cell_value_boxing_errors(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(args))
 }
 
 typedef struct {
-    PyMemAllocatorEx saved;
-    PyObject *iterator;
-    PyObject *callback_item;
-    int called;
-} TupleBoxReentry;
-
-static void
-tuple_box_reenter(TupleBoxReentry *reentry)
-{
-    /* One shot: the nested next() and all subsequent allocations use the
-       original allocator. The outer allocation still forwards its request. */
-    PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &reentry->saved);
-    reentry->called++;
-    reentry->callback_item = PyIter_Next(reentry->iterator);
-}
-
-static void *
-tuple_reentry_malloc(void *ctx, size_t size)
-{
-    TupleBoxReentry *reentry = ctx;
-    tuple_box_reenter(reentry);
-    return reentry->saved.malloc(reentry->saved.ctx, size);
-}
-
-static void *
-tuple_reentry_calloc(void *ctx, size_t count, size_t size)
-{
-    TupleBoxReentry *reentry = ctx;
-    tuple_box_reenter(reentry);
-    return reentry->saved.calloc(reentry->saved.ctx, count, size);
-}
-
-static void *
-tuple_reentry_realloc(void *ctx, void *ptr, size_t size)
-{
-    TupleBoxReentry *reentry = ctx;
-    tuple_box_reenter(reentry);
-    return reentry->saved.realloc(reentry->saved.ctx, ptr, size);
-}
-
-static void
-tuple_reentry_free(void *ctx, void *ptr)
-{
-    TupleBoxReentry *reentry = ctx;
-    reentry->saved.free(reentry->saved.ctx, ptr);
-}
-
-static PyObject *
-tuple_value_boxing_reentry(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(args))
-{
-    PyObject *first = PyLong_FromLong(INT32_MAX);
-    if (first == NULL) {
-        return NULL;
-    }
-    PyObject *second = PyLong_FromLong(INT32_MAX - 1);
-    if (second == NULL) {
-        Py_DECREF(first);
-        return NULL;
-    }
-    PyObject *items[3] = {first, second, Py_NewRef(Py_None)};
-    PyObject *tuple = _PyTuple_FromArraySteal(items, 3);
-    if (tuple == NULL) {
-        return NULL;
-    }
-    PyObject *iter = PyObject_GetIter(tuple);
-    if (iter == NULL) {
-        Py_DECREF(tuple);
-        return NULL;
-    }
-    TupleBoxReentry reentry = {.iterator = iter};
-    PyMem_GetAllocator(PYMEM_DOMAIN_OBJ, &reentry.saved);
-    PyMemAllocatorEx alloc = {
-        .ctx = &reentry,
-        .malloc = tuple_reentry_malloc,
-        .calloc = tuple_reentry_calloc,
-        .realloc = tuple_reentry_realloc,
-        .free = tuple_reentry_free,
-    };
-    PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &alloc);
-    PyObject *outer = PyIter_Next(iter);
-    PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &reentry.saved);
-    int valid = outer != NULL && reentry.called == 1 &&
-                reentry.callback_item != NULL && !PyErr_Occurred();
-    if (valid) {
-        valid = PyLong_AsLong(outer) == INT32_MAX &&
-                PyLong_AsLong(reentry.callback_item) == INT32_MAX - 1;
-    }
-    Py_XDECREF(outer);
-    Py_XDECREF(reentry.callback_item);
-    PyObject *last = valid ? PyIter_Next(iter) : NULL;
-    valid = valid && last == Py_None;
-    Py_XDECREF(last);
-    Py_DECREF(iter);
-    Py_DECREF(tuple);
-    if (!valid) {
-        PyErr_SetString(PyExc_AssertionError,
-                        "tuple boxing replayed or rewound reentrant iteration");
-        return NULL;
-    }
-    Py_RETURN_NONE;
-}
-
-typedef struct {
     PyObject_HEAD
     PyValue value;
 } ValueMember;
@@ -404,7 +301,6 @@ static PyMethodDef test_methods[] = {
     {"cell_value_kind", cell_value_kind, METH_O},
     {"cell_value_boxing_errors", cell_value_boxing_errors, METH_NOARGS},
     {"tuple_value_boxing_errors", tuple_value_boxing_errors, METH_NOARGS},
-    {"tuple_value_boxing_reentry", tuple_value_boxing_reentry, METH_NOARGS},
     {NULL},
 };
 

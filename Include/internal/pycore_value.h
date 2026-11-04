@@ -15,22 +15,24 @@ extern "C" {
 
 #include <stdbool.h>              // bool
 
-/* Scoped object-result publication. Preparation is pure; release follows
- * publication, so an allocator callback sees valid canonical homes. */
-PyAPI_FUNC(PyValue) _PyValue_Prepare(PyValue source, PyObject **retired);
+/* The canonical form of source, with the same ownership: an exact int or
+ * float whose value can be held inline becomes that inline value, and a box
+ * that source owned is released at once (see "Release contract" below).
+ * Any other value is returned unchanged. */
+PyAPI_FUNC(PyValue) _PyValue_Canonicalize(PyValue source);
 
-/* A handler's private scalar object bridges. The generated bound counts its
- * fixed scalar input/output occurrences; variable windows use owned object
- * arrays or publish each transferred element directly. One displaced local
- * owner may wait only through final pure publication, then is appended last
- * so LIFO cleanup retires it before the private scalar bridges. */
+/* A handler's boxes of inline inputs, which it passes to C code that takes
+ * objects; it releases them when it finishes. The generated bound counts its
+ * fixed scalar input occurrences; variable windows use owned object arrays.
+ * Each box is an exact int or float, so releasing it runs no Python. */
 typedef struct _PyValueTemps {
     PyObject **objects;
     Py_ssize_t count;
     Py_ssize_t capacity;
-    PyObject *pending_local;
 } _PyValueTemps;
 
+/* Can releasing owner deallocate its object? Releasing a scalar, a borrow,
+ * an immortal or an owner that is not the last cannot run Python. */
 static inline int
 _PyValue_MayDealloc(PyValue owner)
 {
@@ -40,31 +42,7 @@ _PyValue_MayDealloc(PyValue owner)
     return 0;
 }
 
-static inline void
-_PyValueTemps_RetireLocal(_PyValueTemps *temps, PyValue owner)
-{
-    if (_PyValue_MayDealloc(owner)) {
-        assert(temps != NULL && temps->pending_local == NULL);
-        temps->pending_local = (PyObject *)owner.bits;
-        return;
-    }
-    /* Scalars, borrows, immortals and non-last owners cannot deallocate. */
-    PyValue_Close(owner);
-}
-
-static inline void
-_PyValueTemps_CommitLocal(_PyValueTemps *temps)
-{
-    if (temps->pending_local != NULL) {
-        assert(temps->count < temps->capacity);
-        temps->objects[temps->count++] = temps->pending_local;
-        temps->pending_local = NULL;
-    }
-}
-
-PyAPI_FUNC(PyValue) _PyValueTemps_PublishObject(
-    _PyValueTemps *temps, PyValue *source);
-PyAPI_FUNC(int) _PyValueTemps_CloseNonempty(_PyValueTemps *temps);
+PyAPI_FUNC(void) _PyValueTemps_CloseNonempty(_PyValueTemps *temps);
 PyAPI_FUNC(void) _PyValue_RestoreException(PyObject *saved);
 PyAPI_FUNC(PyObject *) _PyValueTemps_Box(_PyValueTemps *temps, PyValue value);
 
@@ -77,23 +55,31 @@ _PyValueTemps_Object(_PyValueTemps *temps, PyValue value)
     return _PyValueTemps_Box(temps, value);
 }
 
-static inline int
+static inline void
 _PyValueTemps_Close(_PyValueTemps *temps)
 {
-    assert(temps == NULL || temps->pending_local == NULL);
-    return temps != NULL && temps->count != 0
-        ? _PyValueTemps_CloseNonempty(temps) : 0;
+    if (temps != NULL && temps->count != 0) {
+        _PyValueTemps_CloseNonempty(temps);
+    }
 }
 
+/* The canonical form of *source, for a home.  If *source owns a box whose
+ * value is inline, the box is released at once and *source becomes that
+ * inline value too.  A borrowed box stays in *source: its owner (an input
+ * box in _PyValueTemps, for example) keeps it alive for the C code that
+ * still reads it as an object. */
 static inline PyValue
-_PyValueTemps_Publish(_PyValueTemps *temps, PyValue *source)
+_PyValue_Publish(PyValue *source)
 {
     if (PyValue_IsObject(*source)) {
         PyObject *obj = (PyObject *)(source->bits & ~(uintptr_t)1);
         // A static immortal always carries the no-count tag.
         assert((source->bits & 1) || !_Py_IsStaticImmortal(obj));
         if (Py_IS_TYPE(obj, &PyLong_Type) || Py_IS_TYPE(obj, &PyFloat_Type)) {
-            return _PyValueTemps_PublishObject(temps, source);
+            if (source->bits & 1) {  // A borrow: the no-count tag
+                return _PyValue_Canonicalize(*source);
+            }
+            *source = _PyValue_Canonicalize(*source);
         }
     }
     return *source;
@@ -335,6 +321,18 @@ PyValue_Box(PyValue ref)
    is boxed. 0.0 and -0.0 differ in bits, so `0.0 is -0.0` is False. NaN is
    never inline and keeps object identity. Bools and int subclasses keep
    object identity. Py_Is() stays pointer equality: C code sees only boxes.
+
+   Release contract. Freeing an exact int or float box never runs Python and
+   never changes the current exception. Such a box has no finalizer, and
+   allocator hooks (PyMem_SetAllocator(), for allocation as well as free) and
+   reference tracers (PyRefTracer_SetTracer()) never run Python, never raise
+   and never change the current exception. So a box that becomes an inline
+   value is freed at once (_PyValue_Canonicalize()), with no exception save
+   and restore around the release. Debug builds check the contract around
+   every allocator and tracer call (_PyReleaseCheck in pycore_object.h).
+   Releasing any other object can run Python (__del__, weakref callbacks,
+   dict watchers); its deallocator leaves the current exception as it found
+   it, as Objects/object.c checks (gh-89373).
  */
 
 // The identity of op: its value encoding or its address.

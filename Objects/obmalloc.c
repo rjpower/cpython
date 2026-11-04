@@ -1292,6 +1292,10 @@ _PyObject_VirtualFree(void *obj, size_t size)
 /* the "raw" allocator */
 /***********************/
 
+/* Each entry point below checks the release contract around the installed
+   hook in debug builds: a hook never runs Python and never changes the
+   current exception (_PyReleaseCheck in pycore_object.h). */
+
 void *
 PyMem_RawMalloc(size_t size)
 {
@@ -1303,7 +1307,10 @@ PyMem_RawMalloc(size_t size)
      */
     if (size > (size_t)PY_SSIZE_T_MAX)
         return NULL;
-    return _PyMem_Raw.malloc(_PyMem_Raw.ctx, size);
+    _PyReleaseCheck_BEGIN(check);
+    void *ptr = _PyMem_Raw.malloc(_PyMem_Raw.ctx, size);
+    _PyReleaseCheck_END(check, NULL);
+    return ptr;
 }
 
 void *
@@ -1312,7 +1319,10 @@ PyMem_RawCalloc(size_t nelem, size_t elsize)
     /* see PyMem_RawMalloc() */
     if (elsize != 0 && nelem > (size_t)PY_SSIZE_T_MAX / elsize)
         return NULL;
-    return _PyMem_Raw.calloc(_PyMem_Raw.ctx, nelem, elsize);
+    _PyReleaseCheck_BEGIN(check);
+    void *ptr = _PyMem_Raw.calloc(_PyMem_Raw.ctx, nelem, elsize);
+    _PyReleaseCheck_END(check, NULL);
+    return ptr;
 }
 
 void*
@@ -1321,12 +1331,17 @@ PyMem_RawRealloc(void *ptr, size_t new_size)
     /* see PyMem_RawMalloc() */
     if (new_size > (size_t)PY_SSIZE_T_MAX)
         return NULL;
-    return _PyMem_Raw.realloc(_PyMem_Raw.ctx, ptr, new_size);
+    _PyReleaseCheck_BEGIN(check);
+    void *result = _PyMem_Raw.realloc(_PyMem_Raw.ctx, ptr, new_size);
+    _PyReleaseCheck_END(check, ptr);
+    return result;
 }
 
 void PyMem_RawFree(void *ptr)
 {
+    _PyReleaseCheck_BEGIN(check);
     _PyMem_Raw.free(_PyMem_Raw.ctx, ptr);
+    _PyReleaseCheck_END(check, ptr);
 }
 
 
@@ -1345,7 +1360,10 @@ PyMem_Malloc(size_t size)
     OBJECT_STAT_INC_COND(allocations4k, size >= 512 && size < 4094);
     OBJECT_STAT_INC_COND(allocations_big, size >= 4094);
     OBJECT_STAT_INC(allocations);
-    return _PyMem.malloc(_PyMem.ctx, size);
+    _PyReleaseCheck_BEGIN(check);
+    void *ptr = _PyMem.malloc(_PyMem.ctx, size);
+    _PyReleaseCheck_END(check, NULL);
+    return ptr;
 }
 
 void *
@@ -1358,7 +1376,10 @@ PyMem_Calloc(size_t nelem, size_t elsize)
     OBJECT_STAT_INC_COND(allocations4k, elsize >= 512 && elsize < 4094);
     OBJECT_STAT_INC_COND(allocations_big, elsize >= 4094);
     OBJECT_STAT_INC(allocations);
-    return _PyMem.calloc(_PyMem.ctx, nelem, elsize);
+    _PyReleaseCheck_BEGIN(check);
+    void *ptr = _PyMem.calloc(_PyMem.ctx, nelem, elsize);
+    _PyReleaseCheck_END(check, NULL);
+    return ptr;
 }
 
 void *
@@ -1367,14 +1388,19 @@ PyMem_Realloc(void *ptr, size_t new_size)
     /* see PyMem_RawMalloc() */
     if (new_size > (size_t)PY_SSIZE_T_MAX)
         return NULL;
-    return _PyMem.realloc(_PyMem.ctx, ptr, new_size);
+    _PyReleaseCheck_BEGIN(check);
+    void *result = _PyMem.realloc(_PyMem.ctx, ptr, new_size);
+    _PyReleaseCheck_END(check, ptr);
+    return result;
 }
 
 void
 PyMem_Free(void *ptr)
 {
     OBJECT_STAT_INC(frees);
+    _PyReleaseCheck_BEGIN(check);
     _PyMem.free(_PyMem.ctx, ptr);
+    _PyReleaseCheck_END(check, ptr);
 }
 
 
@@ -1798,7 +1824,10 @@ PyObject_Malloc(size_t size)
     OBJECT_STAT_INC_COND(allocations4k, size >= 512 && size < 4094);
     OBJECT_STAT_INC_COND(allocations_big, size >= 4094);
     OBJECT_STAT_INC(allocations);
-    return _PyObject.malloc(_PyObject.ctx, size);
+    _PyReleaseCheck_BEGIN(check);
+    void *ptr = _PyObject.malloc(_PyObject.ctx, size);
+    _PyReleaseCheck_END(check, NULL);
+    return ptr;
 }
 
 void *
@@ -1811,7 +1840,10 @@ PyObject_Calloc(size_t nelem, size_t elsize)
     OBJECT_STAT_INC_COND(allocations4k, elsize >= 512 && elsize < 4094);
     OBJECT_STAT_INC_COND(allocations_big, elsize >= 4094);
     OBJECT_STAT_INC(allocations);
-    return _PyObject.calloc(_PyObject.ctx, nelem, elsize);
+    _PyReleaseCheck_BEGIN(check);
+    void *ptr = _PyObject.calloc(_PyObject.ctx, nelem, elsize);
+    _PyReleaseCheck_END(check, NULL);
+    return ptr;
 }
 
 void *
@@ -1820,14 +1852,19 @@ PyObject_Realloc(void *ptr, size_t new_size)
     /* see PyMem_RawMalloc() */
     if (new_size > (size_t)PY_SSIZE_T_MAX)
         return NULL;
-    return _PyObject.realloc(_PyObject.ctx, ptr, new_size);
+    _PyReleaseCheck_BEGIN(check);
+    void *result = _PyObject.realloc(_PyObject.ctx, ptr, new_size);
+    _PyReleaseCheck_END(check, ptr);
+    return result;
 }
 
 void
 PyObject_Free(void *ptr)
 {
     OBJECT_STAT_INC(frees);
+    _PyReleaseCheck_BEGIN(check);
     _PyObject.free(_PyObject.ctx, ptr);
+    _PyReleaseCheck_END(check, ptr);
 }
 
 

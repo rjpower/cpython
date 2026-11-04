@@ -160,9 +160,7 @@ scope_mechanism(PyObject *argument, int abort_result, int cleanup_error,
         _PyNativeResult_Abort(&scope.result, publish_state, &state);
     }
     else {
-        PyObject *retired;
-        destination = PyValue_PrepareOwned(capsule, &retired);
-        assert(retired == NULL);
+        destination = PyValue_PrepareOwned(capsule);
         if (_PyNativeScope_StageResult(&scope, Py_NewRef(objects[0]),
                                        &scope.result) < 0)
         {
@@ -559,18 +557,14 @@ vector_mechanism(PyObject *callable, const PyValue *values,
     }
     _PyNativeResult_Publish(&scope.result, &destination,
                             publish_state, &publication);
-    PyObject *retired = _PyNativeScope_TakeRetiredResult(&scope);
     status = _PyNativeScope_End(&scope);
-    PyObject *saved = PyErr_GetRaisedException();
-    Py_XDECREF(retired);
-    _PyValue_RestoreException(saved);
     if (status < 0 || PyErr_Occurred()) {
         close_destination(&destination);
         return NULL;
     }
     PyObject *result = PyValue_AsObject(destination);
     if (close_destination(&destination) < 0) {
-        saved = PyErr_GetRaisedException();
+        PyObject *saved = PyErr_GetRaisedException();
         Py_XDECREF(result);
         _PyValue_RestoreException(saved);
         return NULL;
@@ -751,109 +745,6 @@ native_scope_vector_counts(PyObject *Py_UNUSED(module), PyObject *callable)
     Py_RETURN_NONE;
 }
 
-typedef struct {
-    PyMemAllocatorEx saved;
-    PyMemAllocatorDomain domain;
-    PyCFunctionObject *callable;
-    int consumed;
-} VectorTargetChange;
-
-static void
-vector_change_target(VectorTargetChange *change)
-{
-    change->consumed = 1;
-    PyMem_SetAllocator(change->domain, &change->saved);
-    change->callable->vectorcall = vector_override;
-}
-
-static void *
-vector_change_malloc(void *opaque, size_t size)
-{
-    VectorTargetChange *change = opaque;
-    vector_change_target(change);
-    return change->saved.malloc(change->saved.ctx, size);
-}
-
-static void *
-vector_change_calloc(void *opaque, size_t count, size_t size)
-{
-    VectorTargetChange *change = opaque;
-    vector_change_target(change);
-    return change->saved.calloc(change->saved.ctx, count, size);
-}
-
-static void *
-vector_change_realloc(void *opaque, void *pointer, size_t size)
-{
-    VectorTargetChange *change = opaque;
-    vector_change_target(change);
-    return change->saved.realloc(change->saved.ctx, pointer, size);
-}
-
-static void
-vector_change_free(void *opaque, void *pointer)
-{
-    VectorTargetChange *change = opaque;
-    change->saved.free(change->saved.ctx, pointer);
-}
-
-static PyObject *
-native_scope_vector_target_change(PyObject *Py_UNUSED(module), PyObject *callable)
-{
-    if (!_PyCFunction_CanCallScoped(callable)) {
-        PyErr_SetString(PyExc_TypeError, "a standard C callable is required");
-        return NULL;
-    }
-    PyCFunctionObject *function = (PyCFunctionObject *)callable;
-    vectorcallfunc original = function->vectorcall;
-    /* Capture's only allocation is the box for the first argument; the
-       callback changes the target from inside it. */
-    {
-        PyValue values[2] = {PyValue_FromInt32(INT32_MAX), PyValue_FromInt32(1)};
-        VectorTargetChange change = {
-            .domain = PYMEM_DOMAIN_OBJ,
-            .callable = function,
-        };
-        PyMem_GetAllocator(change.domain, &change.saved);
-        PyMemAllocatorEx allocator = {
-            .ctx = &change,
-            .malloc = vector_change_malloc,
-            .calloc = vector_change_calloc,
-            .realloc = vector_change_realloc,
-            .free = vector_change_free,
-        };
-        PyMem_SetAllocator(change.domain, &allocator);
-        _PyNativeScope scope;
-        int status = _PyNativeScope_BeginVector(
-            &scope, PyThreadState_Get(), callable, values, 2, 2, NULL);
-        PyMem_SetAllocator(change.domain, &change.saved);
-        if (status == 0) {
-            status = _PyCFunction_CallScoped(&scope, callable, &scope.result);
-        }
-        int correct = change.consumed && status == 1 && !PyErr_Occurred() &&
-                      scope.result.state == _Py_NATIVE_RESULT_EMPTY;
-        function->vectorcall = original;
-        PyValue destination = PyValue_NULL;
-        Publication publication = {.destination = &destination};
-        _PyNativeResult_Abort(&scope.result, publish_state, &publication);
-        (void)_PyNativeScope_End(&scope);
-        PyObject *saved = PyErr_GetRaisedException();
-        PyValue_CLOSE(values[1]);
-        _PyValue_RestoreException(saved);
-        saved = PyErr_GetRaisedException();
-        PyValue_CLOSE(values[0]);
-        _PyValue_RestoreException(saved);
-        if (!correct || PyErr_Occurred()) {
-            if (!PyErr_Occurred()) {
-                PyErr_SetString(PyExc_AssertionError,
-                                "changed vector target was invoked");
-            }
-            return NULL;
-        }
-    }
-    Py_RETURN_NONE;
-}
-
 static PyObject *
 vector_method(PyObject *self, PyTypeObject *defining_class,
                PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
@@ -870,340 +761,6 @@ native_scope_vector_method(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(arg)
         METH_METHOD | METH_FASTCALL | METH_KEYWORDS,
     };
     return PyCMethod_New(&method, Py_None, NULL, &PyBaseObject_Type);
-}
-
-typedef struct {
-    PyMemAllocatorEx saved;
-    void *target;
-    /* Borrowed from the immutable bound-self tuple, which also owns this
-     * record's capsule. There is no hidden owning ledger edge. */
-    PyObject *ledger;
-    int armed;
-} EndFailure;
-
-static void *
-end_malloc(void *opaque, size_t size)
-{
-    EndFailure *failure = opaque;
-    return failure->saved.malloc(failure->saved.ctx, size);
-}
-
-static void *
-end_calloc(void *opaque, size_t count, size_t size)
-{
-    EndFailure *failure = opaque;
-    return failure->saved.calloc(failure->saved.ctx, count, size);
-}
-
-static void *
-end_realloc(void *opaque, void *pointer, size_t size)
-{
-    EndFailure *failure = opaque;
-    return failure->saved.realloc(failure->saved.ctx, pointer, size);
-}
-
-static void
-end_free(void *opaque, void *pointer)
-{
-    EndFailure *failure = opaque;
-    if (!failure->armed || pointer != failure->target) {
-        failure->saved.free(failure->saved.ctx, pointer);
-        return;
-    }
-    /* The receiver/callable pins the heap record across body return and End.
-     * Restore the allocator before forwarding or doing anything reentrant. */
-    PyMemAllocatorEx saved = failure->saved;
-    PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &saved);
-    failure->armed = 0;
-    failure->target = NULL;
-    PyObject *entry_error = PyErr_GetRaisedException();
-    saved.free(saved.ctx, pointer);
-    PyObject *marker = PyErr_Occurred() ? NULL :
-        PyUnicode_FromString("end cleanup");
-    if (marker != NULL) {
-        PyList_Append(failure->ledger, marker);
-        PyObject *error = PyErr_GetRaisedException();
-        Py_DECREF(marker);
-        _PyValue_RestoreException(error);
-    }
-    if (!PyErr_Occurred()) {
-        PyErr_SetString(PyExc_RuntimeError, "native scope End cleanup");
-    }
-    PyErr_FormatUnraisable("Exception ignored by native scope retired-box fixture");
-    PyErr_SetRaisedException(entry_error);
-}
-
-static void
-end_failure_destroy(PyObject *capsule)
-{
-    PyObject *entry_error = PyErr_GetRaisedException();
-    EndFailure *failure = PyCapsule_GetPointer(capsule,
-                                              "native_scope.end_failure");
-    assert(failure != NULL);
-    /* An unconsumed hook must never retain a pointer to a freed record. */
-    if (failure->armed) {
-        PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &failure->saved);
-    }
-    PyMem_Free(failure);
-    if (PyErr_Occurred()) {
-        PyErr_FormatUnraisable("Exception ignored by native scope record fixture");
-    }
-    PyErr_SetRaisedException(entry_error);
-}
-
-static PyObject *
-end_failure_body(PyObject *self, PyObject *argument)
-{
-    if (argument == Py_None) {
-        return PyLong_FromLong(INT32_MAX);
-    }
-    if (argument != Py_True) {
-        PyErr_SetString(PyExc_TypeError, "expected True or None");
-        return NULL;
-    }
-    PyObject *capsule = _PyTuple_GET_OBJECT(self, 0);
-    EndFailure *failure = PyCapsule_GetPointer(capsule,
-                                              "native_scope.end_failure");
-    if (failure == NULL) {
-        return NULL;
-    }
-    assert(!failure->armed);
-    PyObject *marker = PyUnicode_FromString("body");
-    if (marker == NULL) {
-        return NULL;
-    }
-    int status = PyList_Append(failure->ledger, marker);
-    PyObject *saved = PyErr_GetRaisedException();
-    Py_DECREF(marker);
-    _PyValue_RestoreException(saved);
-    if (status < 0 || PyErr_Occurred()) {
-        return NULL;
-    }
-    /* Two digits bypass the one-digit free list. The exact public OBJ free
-     * pointer is observed without peeking through debug allocator prefixes. */
-    PyObject *result = PyLong_FromLong(INT32_MAX);
-    if (result == NULL) {
-        return NULL;
-    }
-    if (PyErr_Occurred()) {
-        saved = PyErr_GetRaisedException();
-        Py_DECREF(result);
-        _PyValue_RestoreException(saved);
-        return NULL;
-    }
-    PyMem_GetAllocator(PYMEM_DOMAIN_OBJ, &failure->saved);
-    failure->target = result;
-    failure->armed = 1;
-    PyMemAllocatorEx wrapper = {
-        .ctx = failure,
-        .malloc = end_malloc,
-        .calloc = end_calloc,
-        .realloc = end_realloc,
-        .free = end_free,
-    };
-    PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &wrapper);
-    return result;
-}
-
-static PyObject *
-native_scope_end_failure(PyObject *Py_UNUSED(module), PyObject *ledger)
-{
-    if (!PyList_CheckExact(ledger)) {
-        PyErr_SetString(PyExc_TypeError, "expected an exact ledger list");
-        return NULL;
-    }
-    EndFailure *failure = PyMem_Calloc(1, sizeof(*failure));
-    if (failure == NULL) {
-        return PyErr_NoMemory();
-    }
-    if (PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyMem_Free(failure);
-        _PyValue_RestoreException(saved);
-        return NULL;
-    }
-    failure->ledger = ledger;
-    PyObject *capsule = PyCapsule_New(failure, "native_scope.end_failure",
-                                     end_failure_destroy);
-    if (capsule == NULL) {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyMem_Free(failure);
-        _PyValue_RestoreException(saved);
-        return NULL;
-    }
-    if (PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_DECREF(capsule);
-        _PyValue_RestoreException(saved);
-        return NULL;
-    }
-    PyObject *receiver = _PyTuple_FromPair(capsule, ledger);
-    PyObject *saved = PyErr_GetRaisedException();
-    Py_DECREF(capsule);
-    _PyValue_RestoreException(saved);
-    if (receiver == NULL || PyErr_Occurred()) {
-        saved = PyErr_GetRaisedException();
-        Py_XDECREF(receiver);
-        _PyValue_RestoreException(saved);
-        return NULL;
-    }
-    static PyMethodDef method = {"native_scope_end_failure_body",
-                                 end_failure_body, METH_O};
-    PyObject *function = PyCFunction_New(&method, receiver);
-    saved = PyErr_GetRaisedException();
-    Py_DECREF(receiver);
-    _PyValue_RestoreException(saved);
-    if (function != NULL && PyErr_Occurred()) {
-        saved = PyErr_GetRaisedException();
-        Py_DECREF(function);
-        _PyValue_RestoreException(saved);
-        return NULL;
-    }
-    return function;
-}
-
-typedef struct {
-    PyMemAllocatorEx saved;
-    PyThreadState *tstate;
-    unsigned long thread;
-    PyCodeObject *driver_code;
-    PyCFunctionObject *target;
-    PyObject *callback;
-    vectorcallfunc original;
-    int fired;
-    int handler;
-    int target_calls;
-    int callback_calls;
-} NativeVMProbe;
-
-/* GIL-only, stack-scoped test request. Foreign-thread allocations only
- * forward; an override copies its target before any call can release GIL. */
-static NativeVMProbe *native_vm_probe;
-
-static PyObject *
-native_vm_override(PyObject *callable, PyObject *const *args,
-                   size_t nargsf, PyObject *kwnames)
-{
-    NativeVMProbe *probe = native_vm_probe;
-    assert(probe != NULL && callable == (PyObject *)probe->target);
-    vectorcallfunc original = probe->original;
-    if (PyThread_get_thread_ident() == probe->thread) {
-        probe->target_calls++;
-    }
-    return original(callable, args, nargsf, kwnames);
-}
-
-static void *
-native_vm_malloc(void *opaque, size_t size)
-{
-    NativeVMProbe *probe = opaque;
-    if (PyThread_get_thread_ident() == probe->thread &&
-        PyThreadState_GetUnchecked() == probe->tstate) {
-        _PyInterpreterFrame *frame = probe->tstate->current_frame;
-        if (frame != NULL && frame->owner != FRAME_OWNED_BY_INTERPRETER &&
-            _PyFrame_GetCode(frame) == probe->driver_code &&
-            IR_HANDLER(*frame->instr_ptr) == CALL_KW_NON_PY) {
-            /* Boxing the inline first argument in BeginVector is the first
-             * OBJ allocation in this selected handler; the source window is
-             * already strong. */
-            probe->fired = 1;
-            probe->handler = CALL_KW_NON_PY;
-            PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &probe->saved);
-            probe->target->vectorcall = native_vm_override;
-            if (probe->callback != Py_None) {
-                probe->callback_calls++;
-                PyObject *result = PyObject_CallNoArgs(probe->callback);
-                PyObject *saved = PyErr_GetRaisedException();
-                Py_XDECREF(result);
-                _PyValue_RestoreException(saved);
-            }
-        }
-    }
-    return probe->saved.malloc(probe->saved.ctx, size);
-}
-
-static void *
-native_vm_calloc(void *opaque, size_t count, size_t size)
-{
-    NativeVMProbe *probe = opaque;
-    return probe->saved.calloc(probe->saved.ctx, count, size);
-}
-
-static void *
-native_vm_realloc(void *opaque, void *pointer, size_t size)
-{
-    NativeVMProbe *probe = opaque;
-    return probe->saved.realloc(probe->saved.ctx, pointer, size);
-}
-
-static void
-native_vm_free(void *opaque, void *pointer)
-{
-    NativeVMProbe *probe = opaque;
-    probe->saved.free(probe->saved.ctx, pointer);
-}
-
-static PyObject *
-native_scope_vm_prepare(PyObject *Py_UNUSED(module), PyObject *const *args,
-                        Py_ssize_t nargs, PyObject *kwnames)
-{
-    if (nargs != 2 || kwnames == NULL || PyTuple_GET_SIZE(kwnames) != 1) {
-        PyErr_SetString(PyExc_TypeError, "expected driver, target, callback= keyword");
-        return NULL;
-    }
-    PyValue name = PyTuple_GET_VALUE(kwnames, 0);
-    if (!PyValue_IsObject(name) ||
-        !PyUnicode_Check(PyValue_AsPyObjectBorrow(name)) ||
-        PyUnicode_CompareWithASCIIString(PyValue_AsPyObjectBorrow(name), "callback") != 0 ||
-        !PyFunction_Check(args[0]) ||
-        !_PyCFunction_CanCallScoped(args[1]) ||
-        (args[2] != Py_None && !PyCallable_Check(args[2]))) {
-        PyErr_SetString(PyExc_TypeError, "expected driver, standard C target, callback or None");
-        return NULL;
-    }
-    if (native_vm_probe != NULL) {
-        PyErr_SetString(PyExc_RuntimeError, "native VM probe is already active");
-        return NULL;
-    }
-    PyObject *driver = Py_NewRef(args[0]);
-    PyObject *target = Py_NewRef(args[1]);
-    PyObject *callback = Py_NewRef(args[2]);
-    NativeVMProbe probe = {
-        .tstate = PyThreadState_Get(),
-        .thread = PyThread_get_thread_ident(),
-        .driver_code = (PyCodeObject *)PyFunction_GET_CODE(driver),
-        .target = (PyCFunctionObject *)target,
-        .callback = callback,
-        .original = ((PyCFunctionObject *)target)->vectorcall,
-    };
-    PyMem_GetAllocator(PYMEM_DOMAIN_OBJ, &probe.saved);
-    PyMemAllocatorEx allocator = {
-        .ctx = &probe, .malloc = native_vm_malloc, .calloc = native_vm_calloc,
-        .realloc = native_vm_realloc, .free = native_vm_free,
-    };
-    native_vm_probe = &probe;
-    PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &allocator);
-    PyObject *result = PyObject_CallNoArgs(driver);
-    PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &probe.saved);
-    probe.target->vectorcall = probe.original;
-    native_vm_probe = NULL;
-    PyObject *saved = PyErr_GetRaisedException();
-    Py_DECREF(callback);
-    _PyValue_RestoreException(saved);
-    saved = PyErr_GetRaisedException();
-    Py_DECREF(target);
-    _PyValue_RestoreException(saved);
-    saved = PyErr_GetRaisedException();
-    Py_DECREF(driver);
-    _PyValue_RestoreException(saved);
-    if (result == NULL || PyErr_Occurred()) {
-        saved = PyErr_GetRaisedException();
-        Py_XDECREF(result);
-        _PyValue_RestoreException(saved);
-        return NULL;
-    }
-    return Py_BuildValue("(Niiii)", result, probe.fired, probe.handler,
-                         probe.target_calls, probe.callback_calls);
 }
 
 /* Snapshot actual frame homes before allocating the report. This does not
@@ -1308,7 +865,6 @@ native_scope_call_state(PyObject *Py_UNUSED(module), PyObject *code_object)
 
 static PyMethodDef methods[] = {
     {"native_scope_call_state", native_scope_call_state, METH_O},
-    {"native_scope_vm_prepare", _PyCFunction_CAST(native_scope_vm_prepare), METH_FASTCALL | METH_KEYWORDS},
     _TESTINTERNALCAPI_NATIVE_SCOPE_FLAT_METHODDEF
     _TESTINTERNALCAPI_NATIVE_SCOPE_FLAT_NOARGS_METHODDEF
     _TESTINTERNALCAPI_NATIVE_SCOPE_FLAT_FAST_METHODDEF
@@ -1319,7 +875,6 @@ static PyMethodDef methods[] = {
     {"native_scope_vector_override", native_scope_vector_override, METH_NOARGS},
     {"native_scope_vector_prior_error", native_scope_vector_prior_error, METH_O},
     {"native_scope_vector_counts", native_scope_vector_counts, METH_O},
-    {"native_scope_vector_target_change", native_scope_vector_target_change, METH_O},
     {"native_scope_vector_method", native_scope_vector_method, METH_NOARGS},
     {"native_scope_publish", native_scope_publish, METH_O},
     {"native_scope_abort", native_scope_abort, METH_O},
@@ -1335,7 +890,6 @@ static PyMethodDef methods[] = {
     {"native_scope_gateway_o", native_scope_gateway_o, METH_O},
     {"native_scope_gateway_noargs", native_scope_gateway_noargs, METH_NOARGS},
     {"native_scope_box_oom", native_scope_box_oom, METH_O},
-    {"native_scope_end_failure", native_scope_end_failure, METH_O},
     {NULL},
 };
 

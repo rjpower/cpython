@@ -18,10 +18,12 @@ extern "C" {
 #define Py_DOUBLE_OFFSET ((uintptr_t)1 << 49)
 #define Py_INT_BASE      ((uintptr_t)0xFFFE << 48)
 
-/* Pure preparation consumes obj without releasing it. For an inline scalar,
- * *retired receives that owner; otherwise the returned value owns it. Publish
- * the value and valid live state before releasing *retired. */
-PyAPI_FUNC(PyValue) PyValue_PrepareOwned(PyObject *obj, PyObject **retired);
+/* Consume obj and return its canonical value, which owns what obj owned.
+ * An exact int or float whose value is held inline is returned inline and
+ * its box is released at once; that release runs no Python and leaves the
+ * current exception unchanged ("Release contract" in
+ * Include/internal/pycore_value.h). NULL gives PyValue_NULL. */
+PyAPI_FUNC(PyValue) PyValue_PrepareOwned(PyObject *obj);
 
 /* Borrowed canonical input. The source owner must stay live until an explicit
  * owning promotion or the last use; an immediate does not retain that owner. */

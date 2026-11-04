@@ -312,7 +312,7 @@ PyAPI_FUNC(_PyInstr *) _PyEval_GeneratorReturnTarget(_PyInterpreterFrame *frame)
 
 PyAPI_FUNC(PyObject *) _PyEval_GetANext(PyObject *aiter);
 PyAPI_FUNC(void) _PyEval_LoadGlobalValue(PyObject *globals, PyObject *builtins,
-    PyObject *name, PyValue *writeto, _PyValueTemps *temps);
+    PyObject *name, PyValue *writeto);
 PyAPI_FUNC(PyObject *) _PyEval_GetAwaitable(PyObject *iterable, int oparg);
 PyAPI_FUNC(PyObject *) _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *name);
 PyAPI_FUNC(int)

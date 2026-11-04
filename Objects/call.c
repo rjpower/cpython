@@ -674,7 +674,7 @@ callmethod(PyThreadState *tstate, PyObject *obj, PyObject *name,
            const char *format, va_list va)
 {
     PyObject *boxes[4];
-    _PyValueTemps temps = {boxes, 0, 4, NULL};
+    _PyValueTemps temps = {boxes, 0, 4};
     _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     PyObject *small_stack[_PY_FASTCALL_SMALL_STACK];
     PyObject **built = NULL;
@@ -684,7 +684,7 @@ callmethod(PyThreadState *tstate, PyObject *obj, PyObject *name,
     _PyThreadState_PushCValue(tstate, &self);
     _PyThreadState_PushCValue(tstate, &method);
     self.ref = PyValue_FromPyObjectBorrow(obj);
-    if (_PyObject_GetMethodValue(tstate, &self.ref, name, &method.ref, obj, &temps) < 0 ||
+    if (_PyObject_GetMethodValue(tstate, &self.ref, name, &method.ref, obj) < 0 ||
             PyErr_Occurred()) {
         goto done;
     }
@@ -983,13 +983,13 @@ PyObject_VectorcallMethod(PyObject *name, PyObject *const *args,
     assert(name != NULL && args != NULL && PyVectorcall_NARGS(nargsf) >= 1);
     PyThreadState *tstate = _PyThreadState_GET();
     PyObject *boxes[4];
-    _PyValueTemps temps = {boxes, 0, 4, NULL};
+    _PyValueTemps temps = {boxes, 0, 4};
     PyObject *result = NULL;
     _PyCValue self, method;
     _PyThreadState_PushCValue(tstate, &self);
     _PyThreadState_PushCValue(tstate, &method);
     self.ref = PyValue_FromPyObjectBorrow(args[0]);
-    if (_PyObject_GetMethodValue(tstate, &self.ref, name, &method.ref, args[0], &temps) < 0 ||
+    if (_PyObject_GetMethodValue(tstate, &self.ref, name, &method.ref, args[0]) < 0 ||
             PyErr_Occurred()) {
         goto done;
     }
@@ -1029,13 +1029,13 @@ PyObject_CallMethodObjArgs(PyObject *obj, PyObject *name, ...)
         return null_error(tstate);
     }
     PyObject *boxes[4];
-    _PyValueTemps temps = {boxes, 0, 4, NULL};
+    _PyValueTemps temps = {boxes, 0, 4};
     PyObject *result = NULL;
     _PyCValue self, method;
     _PyThreadState_PushCValue(tstate, &self);
     _PyThreadState_PushCValue(tstate, &method);
     self.ref = PyValue_FromPyObjectBorrow(obj);
-    if (_PyObject_GetMethodValue(tstate, &self.ref, name, &method.ref, obj, &temps) < 0 ||
+    if (_PyObject_GetMethodValue(tstate, &self.ref, name, &method.ref, obj) < 0 ||
             PyErr_Occurred()) {
         goto done;
     }

@@ -426,10 +426,7 @@ _PySet_AddValueTakeRef(PySetObject *so, PyValue key)
 int
 _PySet_AddTakeRef(PySetObject *so, PyObject *key)
 {
-    PyObject *retired;
-    PyValue value = PyValue_PrepareOwned(key, &retired);
-    int result = _PySet_AddValueTakeRef(so, value);
-    return set_close_object(retired, result);
+    return _PySet_AddValueTakeRef(so, PyValue_PrepareOwned(key));
 }
 
 /*

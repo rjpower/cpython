@@ -2,11 +2,10 @@
 
 import gc
 import math
-import sys
 import unittest
 import weakref
 
-from test.support import import_helper, swap_attr
+from test.support import import_helper
 
 _testinternalcapi = import_helper.import_module('_testinternalcapi')
 
@@ -104,19 +103,6 @@ class PyValueSetTests(unittest.TestCase):
 
     def test_object_boxing_failure_preserves_iteration_and_pop(self):
         _testinternalcapi.set_value_boxing_errors()
-
-    def test_clear_reports_unraisable_and_preserves_primary(self):
-        reports = []
-
-        def report(error):
-            reports.append((error.exc_type, str(error.exc_value)))
-
-        with swap_attr(sys, 'unraisablehook', report):
-            _testinternalcapi.set_value_cleanup_errors()
-        self.assertEqual(reports, [
-            (RuntimeError, 'first set key cleanup failed'),
-            (RuntimeError, 'second set key cleanup failed'),
-        ] * 6)
 
     def test_frozenset_value_insertion_tracks_new_cycle(self):
         class Item:

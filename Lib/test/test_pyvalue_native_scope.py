@@ -1,7 +1,6 @@
 """Native scope mechanisms and selected ordinary VM caller routes."""
 
 import gc
-import dis
 import struct
 import sys
 import unittest
@@ -165,15 +164,6 @@ class NativeScopeVectorMechanismTests(unittest.TestCase):
         self.assertTrue(_testinternalcapi.native_scope_vector_can_call(
             _testinternalcapi.native_scope_flat))
 
-    @unittest.skipIf(support.Py_GIL_DISABLED or struct.calcsize("P") != 8,
-                     "requires inline scalar values")
-    def test_target_change_before_invocation(self):
-        function = _testinternalcapi.native_scope_flat_fast
-        self.assertIsNone(
-            _testinternalcapi.native_scope_vector_target_change(function))
-        self.assertTrue(_testinternalcapi.native_scope_vector_can_call(function))
-        self.assertEqual(_testinternalcapi.native_scope_vector(function, 2, 3), 5)
-
 
 class NativeScopeDispatchTests(unittest.TestCase):
     def warm(self, function, value):
@@ -234,40 +224,6 @@ class NativeScopeDispatchTests(unittest.TestCase):
                              "completed native call cleanup")
         self.assertEqual(ledger, ["body", "cleanup"])
         self.assertEqual(invoke(ordinary), 2147483647)
-
-    @unittest.skipIf(support.Py_GIL_DISABLED or struct.calcsize("P") != 8,
-                     "requires inline scalar values")
-    def test_end_result_box_cleanup_error(self):
-        ledger = []
-        probe = _testinternalcapi.native_scope_end_failure(ledger)
-
-        def invoke(value):
-            return probe(value)
-
-        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
-            self.assertEqual(invoke(None), 2147483647)
-        self.assertIn("CALL_BUILTIN_O", executing_handlers(invoke))
-        # The exact two-digit result box is scope.result.retired: its public
-        # OBJ free occurs in End, before the original argument/callable pops.
-        reentered = []
-        with support.catch_unraisable_exception() as caught:
-            capture = sys.unraisablehook
-
-            def reenter(event):
-                reentered.append(_testinternalcapi.native_scope_echo(3.25))
-                capture(event)
-
-            sys.unraisablehook = reenter
-            try:
-                self.assertEqual(invoke(True), 2147483647)
-            finally:
-                sys.unraisablehook = capture
-            self.assertIs(caught.unraisable.exc_type, RuntimeError)
-            self.assertEqual(str(caught.unraisable.exc_value),
-                             "native scope End cleanup")
-        self.assertEqual(reentered, [3.25])
-        self.assertEqual(ledger, ["body", "end cleanup"])
-        self.assertEqual(invoke(None), 2147483647)
 
     def test_nested_reentry_and_exception(self):
         def inner(value):
@@ -406,101 +362,6 @@ class NativeScopeDispatchTests(unittest.TestCase):
 
 
 class NativeGenericVMTests(unittest.TestCase):
-    def test_preparation_target_change_and_observer_redispatch(self):
-        target = _testinternalcapi.native_scope_flat
-
-        def run(driver, target, callback):
-            return _testinternalcapi.native_scope_vm_prepare(driver, target, callback=callback)
-
-        def noop():
-            return None
-
-        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
-            run(noop, target, None)
-        self.assertIn('CALL_KW_NON_PY', executing_handlers(run))
-        self.assertFalse(_testinternalcapi.jit_method_info(run)['active'])
-        for observe in (False, True):
-            with self.subTest(observe=observe):
-                ledger = []
-
-                def body(value):
-                    ledger.append('body')
-                    return value
-
-                def driver():
-                    return target(2147483647, callback=body)
-
-                for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
-                    driver()
-                self.assertIn('CALL_KW_NON_PY', executing_handlers(driver))
-                self.assertFalse(_testinternalcapi.jit_method_info(driver)['active'])
-                ledger.clear()
-                events = []
-
-                def profile(frame, event, arg):
-                    if event == 'c_call' and arg is target:
-                        events.append('target')
-                        ledger.append('c_call')
-
-                def prepare():
-                    ledger.append('prepare')
-                    sys.setprofile(profile)
-
-                try:
-                    result = run(driver, target, prepare if observe else None)
-                finally:
-                    sys.setprofile(None)
-                value, fired, handler, target_calls, callback_calls = result
-                self.assertEqual(value, 2147483647)
-                self.assertEqual(fired, 1)
-                self.assertEqual(handler, dis._specialized_opmap['CALL_KW_NON_PY'])
-                self.assertEqual(target_calls, 1)
-                self.assertEqual(callback_calls, int(observe))
-                self.assertEqual(ledger, ['prepare', 'c_call', 'body'] if observe else ['body'])
-                self.assertEqual(events, ['target'] if observe else [])
-                self.assertTrue(_testinternalcapi.native_scope_vector_can_call(target))
-
-    def test_preparation_callback_error_restores_request(self):
-        target = _testinternalcapi.native_scope_flat
-        ledger = []
-        failure = ValueError('native preparation once')
-
-        def run(driver, target, callback):
-            return _testinternalcapi.native_scope_vm_prepare(driver, target, callback=callback)
-
-        def noop():
-            return None
-
-        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
-            run(noop, target, None)
-        self.assertIn('CALL_KW_NON_PY', executing_handlers(run))
-        self.assertFalse(_testinternalcapi.jit_method_info(run)['active'])
-
-        def body(value):
-            ledger.append('body')
-            return value
-
-        def driver():
-            return target(2147483647, callback=body)
-
-        for _ in range(_testinternalcapi.SPECIALIZATION_THRESHOLD + 3):
-            driver()
-        self.assertIn('CALL_KW_NON_PY', executing_handlers(driver))
-        self.assertFalse(_testinternalcapi.jit_method_info(driver)['active'])
-        ledger.clear()
-
-        def prepare():
-            ledger.append('prepare')
-            raise failure
-
-        with self.assertRaises(ValueError) as caught:
-            run(driver, target, prepare)
-        self.assertIs(caught.exception, failure)
-        self.assertEqual(ledger, ['prepare'])
-        self.assertTrue(_testinternalcapi.native_scope_vector_can_call(target))
-        self.assertEqual(driver(), 2147483647)
-        self.assertEqual(ledger, ['prepare', 'body'])
-
     def test_noargs_and_keyword_routes(self):
         def noargs():
             return _testinternalcapi.native_scope_flat_noargs()

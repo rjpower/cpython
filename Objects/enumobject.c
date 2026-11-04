@@ -139,8 +139,6 @@ enum_next_long(enumobject *en, PyObject* next_item)
     PyObject *iterator_owner = Py_NewRef(en);
     PyObject *result = en->en_result;
     PyObject *next_index = NULL;
-    PyObject *retired_index = NULL;
-    PyObject *retired_item = NULL;
     PyObject *output = NULL;
 
     Py_BEGIN_CRITICAL_SECTION(en);
@@ -152,9 +150,9 @@ enum_next_long(enumobject *en, PyObject* next_item)
 
     if (_PyObject_IsUniquelyReferenced(result)) {
         output = Py_NewRef(result);
-        PyValue replacement_index = PyValue_PrepareOwned(next_index, &retired_index);
+        PyValue replacement_index = PyValue_PrepareOwned(next_index);
         next_index = NULL;
-        PyValue replacement_item = PyValue_PrepareOwned(next_item, &retired_item);
+        PyValue replacement_item = PyValue_PrepareOwned(next_item);
         next_item = NULL;
         PyValue old_index = _PyTuple_CAST(result)->ob_item[0];
         PyValue old_item = _PyTuple_CAST(result)->ob_item[1];
@@ -193,20 +191,6 @@ done:
         PyObject *saved = PyErr_GetRaisedException();
         PyObject *retired = next_item;
         next_item = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired = retired_index;
-        retired_index = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired = retired_item;
-        retired_item = NULL;
         Py_XDECREF(retired);
         _PyValue_RestoreException(saved);
     }
@@ -237,8 +221,6 @@ enum_next(PyObject *op)
     PyObject *result = en->en_result;
     PyObject *next_index = NULL;
     PyObject *next_item = NULL;
-    PyObject *retired_index = NULL;
-    PyObject *retired_item = NULL;
     PyObject *output = NULL;
 
     PyObject *it = en->en_sit;
@@ -263,9 +245,9 @@ enum_next(PyObject *op)
 
     if (_PyObject_IsUniquelyReferenced(result)) {
         output = Py_NewRef(result);
-        PyValue replacement_index = PyValue_PrepareOwned(next_index, &retired_index);
+        PyValue replacement_index = PyValue_PrepareOwned(next_index);
         next_index = NULL;
-        PyValue replacement_item = PyValue_PrepareOwned(next_item, &retired_item);
+        PyValue replacement_item = PyValue_PrepareOwned(next_item);
         next_item = NULL;
         PyValue old_index = _PyTuple_CAST(result)->ob_item[0];
         PyValue old_item = _PyTuple_CAST(result)->ob_item[1];
@@ -304,20 +286,6 @@ done:
         PyObject *saved = PyErr_GetRaisedException();
         PyObject *retired = next_item;
         next_item = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired = retired_index;
-        retired_index = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired = retired_item;
-        retired_item = NULL;
         Py_XDECREF(retired);
         _PyValue_RestoreException(saved);
     }

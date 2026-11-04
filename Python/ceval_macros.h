@@ -612,11 +612,18 @@ static_assert(Py_TAG_REFCNT == 1, "IR_BORROW_KNOWN sets the tag from a test");
     (assert(!IR_IS_LOCAL(F) || !PyValue_IsNull(REF)), \
      (PyValue){ .bits = (REF).bits | (uintptr_t)IR_IS_LOCAL(F) })
 
-/* An object bridge belongs to the handler, while both local and temporary
- * homes retain their canonical value. */
-#define IR_KEEP_BOX(REF, F) \
+/* REF is a box that the handler made of an inline input for an object
+ * API: value_temps owns it until the handler finishes and REF borrows it,
+ * so the C code can keep reading it as an object, while the input's home
+ * keeps the canonical value.  An immortal box needs no owner. */
+#define IR_KEEP_BOX(REF) \
     do { \
-        (void)_PyValueTemps_Publish(value_temps, &(REF)); \
+        if (PyValue_RefcountOnObject(REF)) { \
+            assert(value_temps->count < value_temps->capacity); \
+            value_temps->objects[value_temps->count++] = \
+                PyValue_AsPyObjectBorrow(REF); \
+            (REF) = PyValue_Borrow(REF); \
+        } \
     } while (0)
 
 /* Before a deopt, drop REF, an object input read through field F, if F
@@ -669,7 +676,7 @@ _PyValue_Truth(PyValue ref)
 #define IR_STORE_INPUT(F, V) \
     do { \
         if (!IR_IS_LOCAL(F)) { \
-            IR_SLOT(F) = _PyValueTemps_Publish(value_temps, &(V)); \
+            IR_SLOT(F) = _PyValue_Publish(&(V)); \
         } \
     } while (0)
 
@@ -677,26 +684,41 @@ _PyValue_Truth(PyValue ref)
 #define IR_STORE_TEMP(SLOT, V) \
     do { \
         assert(PyValue_IsNull(SLOT)); \
-        (SLOT) = _PyValueTemps_Publish(value_temps, &(V)); \
+        (SLOT) = _PyValue_Publish(&(V)); \
+    } while (0)
+
+/* OLD, the value that a result displaced from a local.  Releasing a last
+ * reference can run __del__, so that value waits in ir_displaced until the
+ * handler finishes (release_displaced in the generator); any other value
+ * cannot deallocate and is released at once. */
+#define IR_RETIRE_LOCAL(OLD) \
+    do { \
+        if (_PyValue_MayDealloc(OLD)) { \
+            assert(PyValue_IsNull(ir_displaced)); \
+            ir_displaced = (OLD); \
+        } \
+        else { \
+            PyValue_Close(OLD); \
+        } \
     } while (0)
 
 /* The result V goes to dst field F, which may name a local (a folded
  * STORE_FAST, _PyIR_STORE_DST): the local's old value is released after
- * it, as STORE_FAST does.  A temporary's slot holds NULL, or V when the
- * handler wrote it there before (IR_STORE_TEMP_DST). */
+ * it, as STORE_FAST does (IR_RETIRE_LOCAL).  A temporary's slot holds
+ * NULL, or V when the handler wrote it there before (IR_STORE_TEMP_DST). */
 #define IR_STORE_DST(F, V) \
     do { \
         if (IR_IS_LOCAL(F)) { \
             PyValue ir_old = IR_SLOT(F); \
-            IR_SLOT(F) = _PyValueTemps_Publish(value_temps, &(V)); \
+            IR_SLOT(F) = _PyValue_Publish(&(V)); \
             assert(PyValue_IsHeapSafe(IR_SLOT(F))); \
             _PyValue_CheckHome(IR_SLOT(F)); \
-            _PyValueTemps_RetireLocal(value_temps, ir_old); \
+            IR_RETIRE_LOCAL(ir_old); \
         } \
         else { \
             assert(PyValue_IsNull(IR_SLOT(F)) \
                    || PyValue_Is(IR_SLOT(F), (V))); \
-            IR_SLOT(F) = _PyValueTemps_Publish(value_temps, &(V)); \
+            IR_SLOT(F) = _PyValue_Publish(&(V)); \
         } \
     } while (0)
 
@@ -707,21 +729,22 @@ _PyValue_Truth(PyValue ref)
         if (!IR_IS_LOCAL(F)) { \
             assert(PyValue_IsNull(IR_SLOT(F)) \
                    || PyValue_Is(IR_SLOT(F), (V))); \
-            IR_SLOT(F) = _PyValueTemps_Publish(value_temps, &(V)); \
+            IR_SLOT(F) = _PyValue_Publish(&(V)); \
         } \
     } while (0)
 
 /* A window-style handler whose dst field F may name a local moves its
- * result from SLOT of its window there, releasing the local's old value. */
+ * result from SLOT of its window there, releasing the local's old value
+ * as IR_STORE_DST does. */
 #define IR_MOVE_TO_DST(F, SLOT) \
     do { \
         if (IR_IS_LOCAL(F)) { \
             PyValue ir_old = IR_SLOT(F); \
-            IR_SLOT(F) = _PyValueTemps_Publish(value_temps, &(SLOT)); \
+            IR_SLOT(F) = _PyValue_Publish(&(SLOT)); \
             assert(PyValue_IsHeapSafe(IR_SLOT(F))); \
             _PyValue_CheckHome(IR_SLOT(F)); \
             (SLOT) = PyValue_NULL; \
-            _PyValueTemps_RetireLocal(value_temps, ir_old); \
+            IR_RETIRE_LOCAL(ir_old); \
         } \
     } while (0)
 
@@ -793,7 +816,7 @@ _PyValue_Truth(PyValue ref)
 /* After a frame switch, V goes to the slot of the frame that control came
  * back to (frame->return_slot). */
 #define IR_STORE_RETURN(V) \
-    _PyFrame_SetReturnValue(frame, _PyValueTemps_Publish(value_temps, &(V)))
+    _PyFrame_SetReturnValue(frame, _PyValue_Publish(&(V)))
 
 /* The oparg and feedback entry of another instruction of the frame. */
 #define _PyIR_Oparg(FRAME, INSTR) \

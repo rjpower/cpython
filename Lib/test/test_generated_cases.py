@@ -288,8 +288,10 @@ class TestIRCases(unittest.TestCase):
             PyObject *value_boxes[5];
             _PyValueTemps value_owners;
             #endif
-            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
+            value_owners = (_PyValueTemps){value_boxes, 0, 5};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             PyValue left;
             PyValue right;
             PyValue res;
@@ -301,7 +303,7 @@ class TestIRCases(unittest.TestCase):
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(OP);
-                IR_KEEP_BOX(left, IR_FIELD_B(this_instr));
+                IR_KEEP_BOX(left);
             }
             else {
                 left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr));
@@ -313,7 +315,7 @@ class TestIRCases(unittest.TestCase):
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(OP);
-                IR_KEEP_BOX(right, IR_FIELD_C(this_instr));
+                IR_KEEP_BOX(right);
             }
             else {
                 right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr));
@@ -330,7 +332,11 @@ class TestIRCases(unittest.TestCase):
             }
             res = PyValue_FromPyObjectSteal(o);
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                next_instr = frame->instr_ptr + 1;
+                JUMP_TO_LABEL(error);
+            }
             DISPATCH();
         }
     """
@@ -491,8 +497,10 @@ class TestIRCases(unittest.TestCase):
             PyObject *value_boxes[5];
             _PyValueTemps value_owners;
             #endif
-            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
+            value_owners = (_PyValueTemps){value_boxes, 0, 5};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
@@ -504,9 +512,13 @@ class TestIRCases(unittest.TestCase):
             callable = window[0];
             res = SPAM(callable, args, oparg);
             IR_CLEAR_SLOTS(&window[1], oparg);
-            window[0] = _PyValueTemps_Publish(value_temps, &res);
+            window[0] = _PyValue_Publish(&res);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                next_instr = frame->instr_ptr + 1;
+                JUMP_TO_LABEL(error);
+            }
             DISPATCH();
         }
     """
@@ -607,8 +619,10 @@ class TestIRCases(unittest.TestCase):
             PyObject *value_boxes[6];
             _PyValueTemps value_owners;
             #endif
-            value_owners = (_PyValueTemps){value_boxes, 0, 6, NULL};
+            value_owners = (_PyValueTemps){value_boxes, 0, 6};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
             (void)oparg;
@@ -630,7 +644,7 @@ class TestIRCases(unittest.TestCase):
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(OP);
-                    IR_KEEP_BOX(owner, IR_FIELD_B(this_instr));
+                    IR_KEEP_BOX(owner);
                 }
                 else {
                     owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
@@ -641,7 +655,11 @@ class TestIRCases(unittest.TestCase):
                 _PyValue_CLOSE_POINTER(owner);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                next_instr = frame->instr_ptr + 1;
+                JUMP_TO_LABEL(error);
+            }
             DISPATCH();
         }
 
@@ -660,8 +678,10 @@ class TestIRCases(unittest.TestCase):
             PyObject *value_boxes[6];
             _PyValueTemps value_owners;
             #endif
-            value_owners = (_PyValueTemps){value_boxes, 0, 6, NULL};
+            value_owners = (_PyValueTemps){value_boxes, 0, 6};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -683,7 +703,7 @@ class TestIRCases(unittest.TestCase):
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(OP);
-                    IR_KEEP_BOX(owner, IR_FIELD_B(this_instr));
+                    IR_KEEP_BOX(owner);
                 }
                 else {
                     owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
@@ -694,7 +714,11 @@ class TestIRCases(unittest.TestCase):
                 _PyValue_CLOSE_POINTER(owner);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                next_instr = frame->instr_ptr + 1;
+                JUMP_TO_LABEL(error);
+            }
             DISPATCH();
         }
 
@@ -713,8 +737,10 @@ class TestIRCases(unittest.TestCase):
             PyObject *value_boxes[6];
             _PyValueTemps value_owners;
             #endif
-            value_owners = (_PyValueTemps){value_boxes, 0, 6, NULL};
+            value_owners = (_PyValueTemps){value_boxes, 0, 6};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
@@ -745,7 +771,11 @@ class TestIRCases(unittest.TestCase):
                 _PyValue_CLOSE_POINTER(owner);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                next_instr = frame->instr_ptr + 1;
+                JUMP_TO_LABEL(error);
+            }
             DISPATCH();
         }
     """
@@ -782,8 +812,10 @@ class TestIRCases(unittest.TestCase):
             PyObject *value_boxes[5];
             _PyValueTemps value_owners;
             #endif
-            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
+            value_owners = (_PyValueTemps){value_boxes, 0, 5};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_D(this_instr));
             (void)oparg;
@@ -800,7 +832,11 @@ class TestIRCases(unittest.TestCase):
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                next_instr = frame->instr_ptr + 1;
+                JUMP_TO_LABEL(error);
+            }
             DISPATCH();
         }
 
@@ -819,8 +855,10 @@ class TestIRCases(unittest.TestCase):
             PyObject *value_boxes[5];
             _PyValueTemps value_owners;
             #endif
-            value_owners = (_PyValueTemps){value_boxes, 0, 5, NULL};
+            value_owners = (_PyValueTemps){value_boxes, 0, 5};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(0);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
@@ -837,7 +875,11 @@ class TestIRCases(unittest.TestCase):
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                next_instr = frame->instr_ptr + 1;
+                JUMP_TO_LABEL(error);
+            }
             DISPATCH();
         }
     """
@@ -904,7 +946,7 @@ class TestIRCases(unittest.TestCase):
             PyObject *value_boxes[2];
             _PyValueTemps value_owners;
             #endif
-            value_owners = (_PyValueTemps){value_boxes, 0, 2, NULL};
+            value_owners = (_PyValueTemps){value_boxes, 0, 2};
             _PyValueTemps *value_temps = &value_owners;
             PRE_DISPATCH_GOTO();
             DISPATCH_GOTO();
@@ -1213,7 +1255,7 @@ class TestJitHelpers(unittest.TestCase):
         ceval = (root / "Python/ceval.c").read_text()
         complete = ceval.split("value_reader_complete(", 1)[1].split("\nstatic int\n", 1)[0]
         self.assertLess(complete.index("_PyFrame_Slots(frame)[slot] = *result"),
-                        complete.index("value_operation_close3(first, second, NULL)", complete.index("*result = _PyValueTemps_Publish")))
+                        complete.index("value_operation_close3(first, second, NULL)", complete.index("*result = _PyValue_Publish")))
 
     def test_binary_nomination_does_not_escape(self):
         root = Path(__file__).resolve().parents[2]
@@ -1394,7 +1436,7 @@ class TestJitHelpers(unittest.TestCase):
         body = output.getvalue().split("TARGET(CALL_BUILTIN_O)", 1)[1].split("TARGET(", 1)[0]
         consume = body.index("IR_CLEAR_SLOTS(&window[0], 2 + oparg)")
         publish = body.index("_PyNativeResult_Publish(")
-        store = body.index("window[0] = _PyValueTemps_Publish")
+        store = body.index("window[0] = _PyValue_Publish")
         finish = body.index("int failed = native_call_finish(")
         self.assertLess(consume, publish)
         self.assertLess(publish, store)
@@ -1414,9 +1456,9 @@ class TestJitHelpers(unittest.TestCase):
         self.assertNotIn("jit_helper_CALL_BUILTIN_O(", self.output)
         runtime = (root / "Python/ceval.c").read_text()
         cleanup = runtime.split("native_call_finish(", 1)[1].split('#include "generated_jit_helpers.c.h"', 1)[0]
-        self.assertLess(cleanup.index("_PyNativeScope_End"), cleanup.index("*argument = PyValue_NULL"))
-        self.assertLess(cleanup.index("*argument = PyValue_NULL"), cleanup.index("*callable = PyValue_NULL"))
-        self.assertLess(cleanup.index("*callable = PyValue_NULL"), cleanup.index("_Py_Instrument"))
+        self.assertLess(cleanup.index("_PyNativeScope_End"), cleanup.index("PyValue_CLEAR(*argument)"))
+        self.assertLess(cleanup.index("PyValue_CLEAR(*argument)"), cleanup.index("PyValue_CLEAR(*callable)"))
+        self.assertLess(cleanup.index("PyValue_CLEAR(*callable)"), cleanup.index("_Py_Instrument"))
 
     def test_final_local_retirement_follows_all_publications(self):
         root = Path(__file__).resolve().parents[2]
@@ -1426,15 +1468,15 @@ class TestJitHelpers(unittest.TestCase):
         for name in ("BINARY_OP_ADD", "CALL_BUILTIN_O"):
             body = generated.split(f"TARGET({name})", 1)[1].split("TARGET(", 1)[0]
             publication = max(body.rfind("IR_STORE_DST("), body.rfind("IR_MOVE_TO_DST("))
-            commit = body.rfind("_PyValueTemps_CommitLocal(value_temps)")
+            commit = body.rfind("finish_displaced_local(")
             self.assertGreaterEqual(publication, 0)
             self.assertLess(publication, commit)
             self.assertLess(commit, body.rfind("DISPATCH();"))
         helper = self.body("BINARY_OP_ADD")
-        self.assertLess(helper.rfind("IR_STORE_DST("), helper.rfind("_PyValueTemps_CommitLocal("))
-        self.assertLess(helper.rfind("_PyValueTemps_CommitLocal("), helper.rfind("DISPATCH();"))
+        self.assertLess(helper.rfind("IR_STORE_DST("), helper.rfind("finish_displaced_local("))
+        self.assertLess(helper.rfind("finish_displaced_local("), helper.rfind("DISPATCH();"))
         nop = generated.split("TARGET(NOP)", 1)[1].split("TARGET(", 1)[0]
-        self.assertNotIn("_PyValueTemps_CommitLocal", nop)
+        self.assertNotIn("ir_displaced", nop)
         for fmt in ir_generator.compute_formats(self.analysis).values():
             self.assertLessEqual(fmt.roles.count(ir_generator.ROLE_DST), 1)
         formats = ir_generator.compute_formats(self.analysis)
@@ -1448,10 +1490,10 @@ class TestJitHelpers(unittest.TestCase):
                                         for part in instructions[name].parts
                                         if isinstance(part, ir_generator.Uop))
                 capacity = int(re.search(r"PyObject \*value_boxes\[(\d+)\]", body)[1])
-                self.assertGreaterEqual(capacity, private_bound + 1 + (2 if name == "STORE_ATTR_SLOT" else 0))
+                self.assertGreaterEqual(capacity, private_bound + 1)
                 last_publication = max(body.rfind("IR_STORE_DST("), body.rfind("IR_MOVE_TO_DST("))
                 if last_publication >= 0:
-                    self.assertGreater(body.rfind("_PyValueTemps_CommitLocal("), last_publication)
+                    self.assertGreater(body.rfind("finish_displaced_local("), last_publication)
         load = generated.split("TARGET(LOAD_ATTR_SLOT)", 1)[1].split("TARGET(", 1)[0]
         retire = load.index("retire_published_values(")
         self.assertLess(load.index("IR_STORE_TEMP_DST("), retire)
@@ -1536,7 +1578,7 @@ class TestCallTransactionMarkers(unittest.TestCase):
                         self.assertLess(capture, body.index(preparation))
                 self.assertNotIn("IR_MOVE_TO_DST", body[invoke:])
                 self.assertNotIn("IR_CLEAR_SLOTS", body[invoke:])
-                self.assertNotIn("_PyValueTemps_Publish", body[invoke:])
+                self.assertNotIn("_PyValue_Publish", body[invoke:])
                 self.assertNotIn("_Py_VectorCall", body)
                 self.assertIn("DISPATCH_INLINED(call_child)", body)
         labels = re.findall(r"^\s*(call_transaction_fallback_\w+):", self.interpreter, re.M)

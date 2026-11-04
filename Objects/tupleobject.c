@@ -142,10 +142,7 @@ void
 void
 (PyTuple_SET_ITEM)(PyObject *op, Py_ssize_t i, PyObject *item)
 {
-    PyObject *retired;
-    PyValue value = PyValue_PrepareOwned(item, &retired);
-    PyTuple_SET_VALUE(op, i, value);
-    Py_XDECREF(retired);
+    PyTuple_SET_VALUE(op, i, PyValue_PrepareOwned(item));
 }
 
 int
@@ -171,11 +168,7 @@ PyTuple_SetValue(PyObject *op, Py_ssize_t i, PyValue value)
 int
 PyTuple_SetItem(PyObject *op, Py_ssize_t i, PyObject *item)
 {
-    PyObject *retired;
-    PyValue value = PyValue_PrepareOwned(item, &retired);
-    int result = PyTuple_SetValue(op, i, value);
-    Py_XDECREF(retired);
-    return result;
+    return PyTuple_SetValue(op, i, PyValue_PrepareOwned(item));
 }
 
 void
@@ -183,11 +176,9 @@ _PyTuple_ReplaceTakeRef(PyObject *op, Py_ssize_t i, PyObject *item)
 {
     assert(PyTuple_CheckExact(op));
     assert(0 <= i && i < Py_SIZE(op));
-    PyObject *retired;
-    PyValue value = PyValue_PrepareOwned(item, &retired);
+    PyValue value = PyValue_PrepareOwned(item);
     PyValue old = _PyTuple_CAST(op)->ob_item[i];
     _PyTuple_CAST(op)->ob_item[i] = PyValue_MakeHeapSafe(value);
-    Py_XDECREF(retired);
     PyValue_XCLOSE(old);
 }
 
@@ -282,14 +273,11 @@ _PyTuple_FromPairSteal(PyObject *first, PyObject *second)
         Py_DECREF(second);
         return NULL;
     }
-    PyObject *first_retired, *second_retired;
-    op->ob_item[0] = PyValue_PrepareOwned(first, &first_retired);
-    op->ob_item[1] = PyValue_PrepareOwned(second, &second_retired);
+    op->ob_item[0] = PyValue_PrepareOwned(first);
+    op->ob_item[1] = PyValue_PrepareOwned(second);
     if (maybe_tracked(op->ob_item[0]) || maybe_tracked(op->ob_item[1])) {
         _PyObject_GC_TRACK(op);
     }
-    Py_XDECREF(first_retired);
-    Py_XDECREF(second_retired);
     return (PyObject *)op;
 }
 

@@ -11452,10 +11452,8 @@ get_subclasses_key(PyTypeObject *type, PyTypeObject *base, PyValue *result)
     PyObject *key = PyLong_FromVoidPtr((void *)type);
     if (key != NULL) {
         if (!PyErr_Occurred()) {
-            PyObject *retired = NULL;
-            *result = PyValue_PrepareOwned(key, &retired);
+            *result = PyValue_PrepareOwned(key);
             key = NULL;
-            type_mutation_close(&retired);
         }
         type_mutation_close(&key);
         if (!PyErr_Occurred()) {

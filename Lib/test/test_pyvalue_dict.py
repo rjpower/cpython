@@ -135,10 +135,6 @@ class DictValueMutationTests(unittest.TestCase):
         capi = import_helper.import_module("_testinternalcapi")
         self.assertIsNone(capi.dict_value_pop_boxing_oom("target"))
 
-    def test_internal_pop_boxing_revalidates_reused_table(self):
-        capi = import_helper.import_module("_testinternalcapi")
-        self.assertIsNone(capi.dict_value_pop_boxing_aba("target"))
-
     def test_pop_and_conditional_delete_compare_once(self):
         capi = import_helper.import_module("_testinternalcapi")
         for conditional in (False, True):

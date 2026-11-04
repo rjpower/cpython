@@ -256,17 +256,6 @@ _PyNativeScope_Objects(_PyNativeScope *scope, PyObject *const **args)
     return 0;
 }
 
-PyObject *
-_PyNativeScope_TakeRetiredResult(_PyNativeScope *scope)
-{
-    assert(!scope->ended);
-    assert(scope->result.state == _Py_NATIVE_RESULT_STAGED ||
-           scope->result.state == _Py_NATIVE_RESULT_PUBLISHED);
-    PyObject *retired = scope->result.retired;
-    scope->result.retired = NULL;
-    return retired;
-}
-
 int
 _PyNativeScope_StageResult(_PyNativeScope *scope, PyObject *owned_result,
                            _PyNativeResult *out)
@@ -281,9 +270,10 @@ _PyNativeScope_StageResult(_PyNativeScope *scope, PyObject *owned_result,
         }
         return -1;
     }
-    /* Preparation transfers ownership without releasing a scalar box. Even
-     * an invalid object-with-error return stays live until caller abort. */
-    out->value = PyValue_PrepareOwned(owned_result, &out->retired);
+    /* Preparation releases a scalar box at once (the release contract in
+     * pycore_value.h). Any other result, even an invalid object-with-error
+     * return, stays live until caller abort. */
+    out->value = PyValue_PrepareOwned(owned_result);
     out->state = _Py_NATIVE_RESULT_STAGED;
     return PyErr_Occurred() ? -1 : 0;
 }
@@ -334,7 +324,6 @@ _PyNativeScope_End(_PyNativeScope *scope)
     PyObject *saved = PyErr_GetRaisedException();
     close_value(&out->value, &saved);
     close_value(&out->displaced, &saved);
-    close_object(&out->retired, &saved);
     if (scope->mark != NULL) {
         /* Releases the boxes of inline arguments. */
         _PyBorrowScope_Exit(scope->tstate, scope->mark);

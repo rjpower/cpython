@@ -101,12 +101,10 @@ PyStructSequence_SetItem(PyObject *op, Py_ssize_t index, PyObject *value)
     assert(n_fields >= 0);
     assert(index < n_fields);
 #endif
-    PyObject *retired = NULL;
-    PyValue prepared = value == NULL ? PyValue_NULL : PyValue_PrepareOwned(value, &retired);
+    PyValue prepared = PyValue_PrepareOwned(value);
     assert(PyValue_IsNull(prepared) || PyValue_IsLanguageValue(prepared));
     assert(PyValue_IsHeapSafe(prepared));
     tuple->ob_item[index] = prepared;
-    Py_XDECREF(retired);
 }
 
 PyValue

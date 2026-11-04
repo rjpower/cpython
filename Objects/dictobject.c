@@ -285,10 +285,7 @@ static inline PyValue
 dict_take_unicode_key(PyObject *key)
 {
     assert(PyUnicode_CheckExact(key));
-    PyObject *retired = NULL;
-    PyValue value = PyValue_PrepareOwned(key, &retired);
-    assert(retired == NULL);
-    return value;
+    return PyValue_PrepareOwned(key);
 }
 
 /*
@@ -2451,27 +2448,18 @@ _PyDict_SetValue_KnownHash(PyObject *op, PyValue key, PyValue value, Py_hash_t h
 int
 _PyDict_SetItem_Take2(PyDictObject *mp, PyObject *key, PyObject *value)
 {
-    PyObject *retired_key, *retired_value;
-    PyValue key_value = PyValue_PrepareOwned(key, &retired_key);
-    PyValue value_value = PyValue_PrepareOwned(value, &retired_value);
-    int status = _PyDict_SetValue_Take2(mp, key_value, value_value);
-    /* Container publication (or failure) precedes retirement of scalar boxes. */
-    dict_xdecref_object(retired_value);
-    dict_xdecref_object(retired_key);
-    return PyErr_Occurred() ? -1 : status;
+    PyValue key_value = PyValue_PrepareOwned(key);
+    PyValue value_value = PyValue_PrepareOwned(value);
+    return _PyDict_SetValue_Take2(mp, key_value, value_value);
 }
 
 int
 _PyDict_SetItem_Take2_KnownHash(PyDictObject *mp, PyObject *key,
                               PyObject *value, Py_hash_t hash)
 {
-    PyObject *retired_key, *retired_value;
-    PyValue key_value = PyValue_PrepareOwned(key, &retired_key);
-    PyValue value_value = PyValue_PrepareOwned(value, &retired_value);
-    int status = _PyDict_SetValue_Take2_KnownHash(mp, key_value, value_value, hash);
-    dict_xdecref_object(retired_value);
-    dict_xdecref_object(retired_key);
-    return PyErr_Occurred() ? -1 : status;
+    PyValue key_value = PyValue_PrepareOwned(key);
+    PyValue value_value = PyValue_PrepareOwned(value);
+    return _PyDict_SetValue_Take2_KnownHash(mp, key_value, value_value, hash);
 }
 
 /* CAUTION: PyDict_SetItem() must guarantee that it won't resize the

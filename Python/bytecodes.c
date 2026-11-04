@@ -2070,7 +2070,7 @@ dummy_func(
             PyValue_CLOSE(mod_or_class_dict);
             ERROR_IF(err < 0);
             if (v_o == NULL) {
-                _PyEval_LoadGlobalValue(GLOBALS(), BUILTINS(), name, &v, value_temps);
+                _PyEval_LoadGlobalValue(GLOBALS(), BUILTINS(), name, &v);
                 ERROR_IF(PyValue_IsNull(v));
             }
             else {
@@ -2108,7 +2108,7 @@ dummy_func(
         op(_LOAD_GLOBAL, ( -- res[1])) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
             _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-            _PyEval_LoadGlobalValue(GLOBALS(), BUILTINS(), name, res, value_temps);
+            _PyEval_LoadGlobalValue(GLOBALS(), BUILTINS(), name, res);
             IR_FINISH_VALUE_OPERATION(operation);
             ERROR_IF(PyValue_IsNull(*res));
         }

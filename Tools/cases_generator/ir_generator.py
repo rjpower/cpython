@@ -1028,7 +1028,7 @@ class IRStack(Stack):
             return True
         lay = self.layout
         if lay.window:
-            out.emit(f"{self.window_slot(memory_offset)} = _PyValueTemps_Publish(value_temps, &{var.name});\n")
+            out.emit(f"{self.window_slot(memory_offset)} = _PyValue_Publish(&{var.name});\n")
             return True
         p = memory_offset.as_int()
         if p is not None and var.ir_input == p and self.owner.get(p) == "in":
@@ -1038,12 +1038,12 @@ class IRStack(Stack):
             if p in lay.borrowable:
                 out.emit(f"IR_STORE_INPUT({f}, {var.name});\n")
             else:
-                out.emit(f"IR_SLOT({f}) = _PyValueTemps_Publish(value_temps, &{var.name});\n")
+                out.emit(f"IR_SLOT({f}) = _PyValue_Publish(&{var.name});\n")
             return True
         if p is not None and (lay.dst_offset is None or p < lay.dst_offset):
             if p in lay.in_fields and p not in lay.borrowable:
                 # An input that the instruction passes through, changed
-                out.emit(f"IR_SLOT({self.input_field(p)}) = _PyValueTemps_Publish(value_temps, &{var.name});\n")
+                out.emit(f"IR_SLOT({self.input_field(p)}) = _PyValue_Publish(&{var.name});\n")
                 return True
             return self.keep(var, p)
         if lay.store_dst and p != lay.dst_offset:
@@ -1068,7 +1068,7 @@ class IRStack(Stack):
             out.emit(f"IR_STORE_TEMP_DST({FIELD_VARS[lay.dst]}, {var.name});\n")
             return False
         if previous == "out":
-            out.emit(f"{slot} = _PyValueTemps_Publish(value_temps, &{var.name});\n")
+            out.emit(f"{slot} = _PyValue_Publish(&{var.name});\n")
         else:
             out.emit(f"IR_STORE_TEMP({slot}, {var.name});\n")
         if p is not None:
@@ -1386,6 +1386,26 @@ class IREmitter(Emitter):
         else:
             self.emit("JUMP_TO_LABEL(error);\n")
 
+    def emit_store_input(self, var: Local, storage: Storage) -> None:
+        """An input that emit_object_inputs boxed goes back to its slot.
+        value_temps owns the box and var borrows it, so the C code can still
+        read var as an object after the slot gets the canonical value."""
+        self.out.start_line()
+        self.emit(f"IR_KEEP_BOX({var.name});\n")
+        super().emit_store_input(var, storage)
+
+    def release_displaced(self):
+        """Release the local value that IR_STORE_DST or IR_MOVE_TO_DST
+        displaced, with the input boxes, then revalidate: the release can
+        run __del__ or a weakref callback, which can run any Python."""
+        self.emit("if (!PyValue_IsNull(ir_displaced) &&\n")
+        self.emit("    finish_displaced_local(tstate, frame, &next_instr, "
+                  "value_temps, ir_displaced) < 0) {\n")
+        if not self.helper:
+            self.emit("next_instr = frame->instr_ptr + 1;\n")
+        self.reader_error()
+        self.emit("}\n")
+
     def reader_reload(self):
         self.emit("this_instr = frame->instr_ptr;\n")
         if not self.helper:
@@ -1676,7 +1696,7 @@ class IREmitter(Emitter):
         storage.stack.final = True
         storage.stack.flush(self.out)
         if inst is not None and self.format_of(inst).store_dst:
-            self.emit("_PyValueTemps_CommitLocal(value_temps);\n")
+            self.release_displaced()
         self.emit(tkn)
         return False
 
@@ -1856,7 +1876,7 @@ class IREmitter(Emitter):
                     self.emit("}\n")
                     if inst is not None:
                         self.emit(f"BOX_STAT_INC({inst.name});\n")
-                    self.emit(f"IR_KEEP_BOX({var.name}, {f});\n")
+                    self.emit(f"IR_KEEP_BOX({var.name});\n")
                     self.emit("}\n")
                     self.emit("else {\n")
                     self.emit(f"{var.name} = IR_BORROW_KNOWN({var.name}, {f});\n")
@@ -1944,12 +1964,15 @@ def uses_call_transaction(inst: Instruction) -> bool:
 
 
 def value_bridge_bound(name: str, inst: Instruction) -> int:
-    """The most boxed scalars and owned results that handler name can hold.
+    """The most input boxes that handler name can hold in value_temps.
 
-    Each fixed scalar input can be boxed once per uop, and each output can
-    create one owned result per uop. Publishing the same C variable again
-    uses its borrowed view. Window loops use their own object arrays."""
-    return 2 + (2 if name in ("STORE_ATTR_SLOT", "STORE_ATTR_INSTANCE_VALUE", "STORE_ATTR_SHAPE") else 0) + sum(
+    Publication frees a result's box at once (the release contract), so
+    only inputs that a handler boxes for an object API stay until the
+    handler finishes.  An array input can box several values (BUILD_SLICE
+    boxes three, RAISE_VARARGS two), so the bound keeps a slot per output
+    as well as per input, and two more.  Window loops use their own object
+    arrays."""
+    return 2 + sum(
         len(part.stack.inputs) + len(part.stack.outputs)
         for part in inst.parts if isinstance(part, Uop)
     )
@@ -2017,7 +2040,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         out.emit("(void)this_instr;\n")
     if helper:
         out.emit(f"PyObject *value_boxes[{bridge_bound}];\n")
-        out.emit("_PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};\n")
+        out.emit("_PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};\n")
     else:
         # The eval function declares one array for all handlers. A tail-called
         # handler is its own function, so it keeps its own.
@@ -2025,8 +2048,13 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         out.emit(f"PyObject *value_boxes[{bridge_bound}];\n")
         out.emit("_PyValueTemps value_owners;\n")
         out.emit("#endif\n")
-        out.emit(f"value_owners = (_PyValueTemps){{value_boxes, 0, {bridge_bound}, NULL}};\n")
+        out.emit(f"value_owners = (_PyValueTemps){{value_boxes, 0, {bridge_bound}}};\n")
     out.emit("_PyValueTemps *value_temps = &value_owners;\n")
+    if fmt.store_dst:
+        # The old value of a local that dst names, released after the
+        # result is stored (release_displaced)
+        out.emit("PyValue ir_displaced = PyValue_NULL;\n")
+        out.emit("(void)ir_displaced;\n")
     use_fb = fmt.fb != LOC_NONE and (
         uses_feedback(inst) or reads_fb_arg(inst, fmt, operation))
     emitter.call_has_feedback = (use_fb and name != "CALL_JIT_WARM"
@@ -2127,7 +2155,7 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
             dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
             out.emit(f"IR_MOVE_TO_DST({dst}, window[{fmt.dst_offset}]);\n")
         if fmt.store_dst:
-            out.emit("_PyValueTemps_CommitLocal(value_temps);\n")
+            emitter.release_displaced()
         if name in ("RETURN_VALUE", "RETURN_GENERATOR") and not helper:
             out.emit("JIT_MAYBE_RESUME(1);\n")
         if name in ("RESUME_JIT", "JUMP_BACKWARD_JIT_WARM") and not helper:

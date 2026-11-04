@@ -20,20 +20,12 @@ PyValue_FromObjectBorrow(PyObject *obj)
 }
 
 PyValue
-PyValue_PrepareOwned(PyObject *obj, PyObject **retired)
+PyValue_PrepareOwned(PyObject *obj)
 {
-    assert(retired != NULL);
     if (obj == NULL) {
-        *retired = NULL;
         return PyValue_NULL;
     }
-    PyValue value = PyValue_FromObjectBorrow(obj);
-    if (PyValue_IsInline(value)) {
-        *retired = obj;
-        return value;
-    }
-    *retired = NULL;
-    return PyValue_FromPyObjectSteal(obj);
+    return _PyValue_Canonicalize(PyValue_FromPyObjectSteal(obj));
 }
 
 PyObject *
@@ -53,41 +45,25 @@ PyValue_AsObject(PyValue value)
     return object;
 }
 
-/* The source may be an owned object result or a borrowed frame input. The
- * returned canonical value has the same ownership; only an owned primitive
- * box becomes a separate release obligation. This operation cannot reenter. */
 PyValue
-_PyValue_Prepare(PyValue source, PyObject **retired)
+_PyValue_Canonicalize(PyValue source)
 {
-    *retired = NULL;
-    if (!PyValue_IsPointerSpace(source) || (source.bits & Py_TAG_INVALID) ||
-        PyValue_IsNull(source)) {
+    if (!PyValue_IsObject(source)) {
         return source;
     }
     PyObject *obj = PyValue_AsPyObjectBorrow(source);
-    PyValue value = PyValue_FromObjectBorrow(obj);
-    if (!PyValue_IsInline(value)) {
+    uintptr_t identity = _PyObject_ValueIdentity(obj);
+    if (identity < Py_DOUBLE_OFFSET) {
         return source;
     }
     if (PyValue_RefcountOnObject(source)) {
-        *retired = obj;
+        /* The release contract: freeing an exact int or float box runs no
+           Python and leaves the current exception unchanged. */
+        _PyReleaseCheck_BEGIN(check);
+        Py_DECREF(obj);
+        _PyReleaseCheck_END(check, NULL);
     }
-    return value;
-}
-
-PyValue
-_PyValueTemps_PublishObject(_PyValueTemps *temps, PyValue *source)
-{
-    PyObject *retired;
-    PyValue value = _PyValue_Prepare(*source, &retired);
-    if (retired != NULL) {
-        assert(temps != NULL && temps->count < temps->capacity);
-        temps->objects[temps->count++] = retired;
-        /* The C view may still be used after an early publication. The
-         * scoped bridge owns its box until the handler has finished. */
-        *source = PyValue_Borrow(*source);
-    }
-    return value;
+    return (PyValue){.bits = identity};
 }
 
 PyObject *
@@ -108,33 +84,16 @@ _PyValueTemps_Box(_PyValueTemps *temps, PyValue value)
     return box;
 }
 
-int
+/* The boxes are exact ints and floats: their release runs no Python and
+ * leaves the current exception unchanged (the release contract). */
+void
 _PyValueTemps_CloseNonempty(_PyValueTemps *temps)
 {
-    assert(temps == NULL || temps->pending_local == NULL);
-    if (temps == NULL || temps->count == 0) {
-        return PyErr_Occurred() ? -1 : 0;
-    }
-    PyObject *saved = PyErr_GetRaisedException();
     while (temps->count != 0) {
         PyObject *obj = temps->objects[--temps->count];
-        /* Detach each owner before a callback-capable allocator release. */
-        temps->objects[temps->count] = NULL;
+        assert(PyLong_CheckExact(obj) || PyFloat_CheckExact(obj));
         Py_DECREF(obj);
-        PyObject *raised = PyErr_GetRaisedException();
-        if (raised != NULL) {
-            if (saved == NULL) {
-                saved = raised;
-            }
-            else {
-                PyErr_SetRaisedException(raised);
-                _PyValue_RestoreException(saved);
-                saved = PyErr_GetRaisedException();
-            }
-        }
     }
-    PyErr_SetRaisedException(saved);
-    return PyErr_Occurred() ? -1 : 0;
 }
 
 void

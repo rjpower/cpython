@@ -290,10 +290,7 @@ void
 void
 (PyList_SET_ITEM)(PyObject *op, Py_ssize_t index, PyObject *object)
 {
-    PyObject *retired = NULL;
-    PyValue value = object == NULL ? PyValue_NULL : PyValue_PrepareOwned(object, &retired);
-    PyList_SET_VALUE(op, index, value);
-    Py_XDECREF(retired);
+    PyList_SET_VALUE(op, index, PyValue_PrepareOwned(object));
 }
 
 PyObject *
@@ -343,11 +340,8 @@ PyList_SetItem(PyObject *op, Py_ssize_t i, PyObject *newitem)
         PyErr_BadInternalCall();
         return -1;
     }
-    PyObject *retired = NULL;
-    PyValue value = PyValue_PrepareOwned(newitem, &retired);
-    int result = _PyList_SetItemTakeValue((PyListObject *)op, i, value);
-    Py_XDECREF(retired);
-    return result;
+    return _PyList_SetItemTakeValue((PyListObject *)op, i,
+                                    PyValue_PrepareOwned(newitem));
 }
 
 static void ptr_wise_atomic_memmove(PyListObject *a, PyValue *dest,
@@ -377,20 +371,17 @@ static int
 ins1(PyListObject *self, Py_ssize_t where, PyObject *v)
 {
     if (v == NULL) { PyErr_BadInternalCall(); return -1; }
-    PyObject *retired = NULL;
-    PyValue value = PyValue_PrepareOwned(Py_NewRef(v), &retired);
+    PyValue value = PyValue_PrepareOwned(Py_NewRef(v));
     Py_ssize_t n = Py_SIZE(self);
     assert((size_t)n + 1 < PY_SSIZE_T_MAX);
     if (list_resize(self, n + 1) < 0) {
         PyValue_CLOSE(value);
-        Py_XDECREF(retired);
         return -1;
     }
     if (where < 0) { where += n; if (where < 0) where = 0; }
     if (where > n) where = n;
     if (where < n) list_shift_items_right_lock_held(self, where, n);
     self->ob_item[where] = value;
-    Py_XDECREF(retired);
     return 0;
 }
 
@@ -428,11 +419,7 @@ _PyList_AppendTakeValue(PyListObject *self, PyValue value)
 int
 _PyList_AppendTakeRef(PyListObject *self, PyObject *object)
 {
-    PyObject *retired = NULL;
-    PyValue value = PyValue_PrepareOwned(object, &retired);
-    int result = _PyList_AppendTakeValue(self, value);
-    Py_XDECREF(retired);
-    return result;
+    return _PyList_AppendTakeValue(self, PyValue_PrepareOwned(object));
 }
 
 /* internal, used by _PyList_AppendTakeRef */
@@ -944,7 +931,6 @@ list_ass_item_impl(PyListObject *a, Py_ssize_t i, PyObject *v)
         return -1;
     }
     PyValue old = a->ob_item[i];
-    PyObject *retired = NULL;
     if (v == NULL) {
         Py_ssize_t size = Py_SIZE(a);
         if (i < size - 1) list_shift_items_left_lock_held(a, i, size - 1);
@@ -952,10 +938,8 @@ list_ass_item_impl(PyListObject *a, Py_ssize_t i, PyObject *v)
         list_resize(a, size - 1);
     }
     else {
-        PyValue value = PyValue_PrepareOwned(Py_NewRef(v), &retired);
-        a->ob_item[i] = value;
+        a->ob_item[i] = PyValue_PrepareOwned(Py_NewRef(v));
     }
-    Py_XDECREF(retired);
     PyValue_CLOSE(old);
     return 0;
 }
@@ -2678,9 +2662,7 @@ list_sort_impl(PyListObject *self, PyObject *keyfunc, int reverse)
             PyObject *argument = PyValue_AsObject(saved_ob_item[i]);
             PyObject *object = argument == NULL ? NULL : PyObject_CallOneArg(keyfunc, argument);
             Py_XDECREF(argument);
-            PyObject *retired = NULL;
-            keys[i] = object == NULL ? PyValue_NULL : PyValue_PrepareOwned(object, &retired);
-            Py_XDECREF(retired);
+            keys[i] = PyValue_PrepareOwned(object);
             if (PyValue_IsNull(keys[i])) {
                 for (i=i-1 ; i>=0 ; i--)
                     PyValue_CLOSE(keys[i]);

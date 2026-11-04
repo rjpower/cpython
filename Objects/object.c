@@ -1652,8 +1652,7 @@ _PyObject_NextNotImplemented(PyObject *self)
 // On error, returns -1, clears `*self`, and sets an exception.
 int
 _PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
-                        PyObject *name, PyValue *method, PyObject *obj,
-                        _PyValueTemps *temps)
+                        PyObject *name, PyValue *method, PyObject *obj)
 {
     assert(PyValue_IsNull(*method));
     PyValue descriptor = PyValue_NULL;
@@ -1766,8 +1765,8 @@ _PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
  done:
     /* Caller owns the original receiver until both output homes publish.
      * These canonical C outputs precede any displaced metadata release. */
-    *method = _PyValueTemps_Publish(temps, &result);
-    *self = _PyValueTemps_Publish(temps, &result_self);
+    *method = _PyValue_Publish(&result);
+    *self = _PyValue_Publish(&result_self);
     PyObject *saved = PyErr_GetRaisedException();
     PyValue_XCLOSE(descriptor);
     _PyValue_RestoreException(saved);

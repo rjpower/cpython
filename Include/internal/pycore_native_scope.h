@@ -22,7 +22,6 @@ typedef enum {
 typedef struct {
     PyValue value;
     PyValue displaced;
-    PyObject *retired;
     _PyNativeResultState state;
 } _PyNativeResult;
 
@@ -99,9 +98,6 @@ PyAPI_FUNC(void) _PyNativeResult_Abort(
  * status leaves a published result caller-owned. Reload/revalidate cached
  * frame/IR/feedback state after End even when it succeeds. */
 PyAPI_FUNC(int) _PyNativeScope_End(_PyNativeScope *scope);
-/* Pure move, valid after staging/publication and before End. The caller
- * retains this owner until its route's original result-conversion point. */
-PyAPI_FUNC(PyObject *) _PyNativeScope_TakeRetiredResult(_PyNativeScope *scope);
 
 /* Pure eligibility: supported flags AND their standard vectorcall target. */
 PyAPI_FUNC(int) _PyCFunction_CanCallScoped(PyObject *callable);

@@ -108,12 +108,58 @@ PyAPI_FUNC(void) _Py_NO_RETURN _Py_FatalRefcountErrorFunc(
 #define _Py_FatalRefcountError(message) \
     _Py_FatalRefcountErrorFunc(__func__, (message))
 
+/* The release contract (see "Release contract" in pycore_value.h):
+   allocator hooks and reference tracers never run Python, never raise and
+   leave the current exception unchanged. Debug builds check the calling
+   thread's current exception and current frame around each call.
+   _PyReleaseCheck_END takes the block that the call freed, or NULL, so that
+   it does not read a thread state that the call itself freed. A thread
+   without an attached thread state (raw allocations) is not checked. */
+#ifdef Py_DEBUG
+typedef struct {
+    PyThreadState *tstate;
+    PyObject *exception;
+    struct _PyInterpreterFrame *frame;
+} _PyReleaseCheck;
+
+static inline _PyReleaseCheck
+_PyReleaseCheck_Begin(void)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    if (tstate == NULL) {
+        return (_PyReleaseCheck){NULL, NULL, NULL};
+    }
+    return (_PyReleaseCheck){tstate, tstate->current_exception,
+                             tstate->current_frame};
+}
+
+static inline void
+_PyReleaseCheck_End(_PyReleaseCheck check, const void *freed)
+{
+    if (check.tstate != NULL && (const void *)check.tstate != freed
+        && _PyThreadState_GET() == check.tstate)
+    {
+        assert(check.tstate->current_exception == check.exception);
+        assert(check.tstate->current_frame == check.frame);
+    }
+}
+
+#  define _PyReleaseCheck_BEGIN(NAME) \
+    _PyReleaseCheck NAME = _PyReleaseCheck_Begin()
+#  define _PyReleaseCheck_END(NAME, FREED) _PyReleaseCheck_End((NAME), (FREED))
+#else
+#  define _PyReleaseCheck_BEGIN(NAME) ((void)0)
+#  define _PyReleaseCheck_END(NAME, FREED) ((void)0)
+#endif
+
 #define _PyReftracerTrack(obj, operation) \
     do { \
         struct _reftracer_runtime_state *tracer = &_PyRuntime.ref_tracer; \
         if (tracer->tracer_func != NULL) { \
             void *data = tracer->tracer_data; \
+            _PyReleaseCheck_BEGIN(reftracer_check); \
             tracer->tracer_func((obj), (operation), data); \
+            _PyReleaseCheck_END(reftracer_check, NULL); \
         } \
     } while(0)
 
@@ -903,9 +949,8 @@ PyAPI_FUNC(PyObject *) _PyType_LookupRefAndVersion(PyTypeObject *, PyObject *,
 extern unsigned int
 _PyType_LookupValueAndVersion(PyTypeObject *type, PyObject *name, PyValue *out);
 
-struct _PyValueTemps;
 extern int _PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
-    PyObject *name, PyValue *method, PyObject *obj_view, struct _PyValueTemps *temps);
+    PyObject *name, PyValue *method, PyObject *obj_view);
 
 // Like PyObject_GetAttr but returns a PyValue. For types, this can
 // return a deferred reference to reduce reference count contention.

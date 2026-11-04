@@ -1,24 +1,9 @@
 #include "Python.h"
 #include "pycore_value_ops.h"
 
-/* Allocator hooks may raise during release. Preserve the operation's error;
-   callers inspect a newly raised cleanup error before restoring their entry
-   exception. The latter can legitimately be set during a raw dict lookup. */
-static void
-close_object(PyObject *obj)
-{
-    PyObject *saved = PyErr_GetRaisedException();
-    Py_XDECREF(obj);
-    _PyValue_RestoreException(saved);
-}
-
-static void
-close_value(PyValue value)
-{
-    PyObject *saved = PyErr_GetRaisedException();
-    PyValue_CLOSE(value);
-    _PyValue_RestoreException(saved);
-}
+/* The comparison and repr entry points save an exception that is set on
+   entry, which a raw dict lookup can legitimately have. Releases need no
+   save (the release contract in pycore_value.h). */
 
 Py_hash_t
 _PyValue_Hash(PyValue value)
@@ -31,13 +16,12 @@ _PyValue_Hash(PyValue value)
         /* Inline floats exclude NaN, the only case using the object identity. */
         return _Py_HashDouble(Py_None, PyValue_InlineFloat(value));
     }
-    PyObject *prior = PyErr_GetRaisedException();
+    /* As PyObject_Hash() itself, with an owner in case __hash__ removes the
+       value from the container that it was read from. */
     PyValue owner = PyValue_MakeHeapSafe(PyValue_Borrow(value));
     Py_hash_t hash = PyObject_Hash(PyValue_AsPyObjectBorrow(owner));
-    close_value(owner);
-    int failed = hash == -1 || PyErr_Occurred();
-    _PyValue_RestoreException(prior);
-    return failed ? -1 : hash;
+    PyValue_CLOSE(owner);
+    return hash;
 }
 
 static int
@@ -70,11 +54,11 @@ box_operands(PyValue left, PyValue right, PyObject **a, PyObject **b)
     *a = PyValue_AsObject(left_owner);
     *b = *a == NULL || PyErr_Occurred()
          ? NULL : PyValue_AsObject(right_owner);
-    close_value(right_owner);
-    close_value(left_owner);
+    PyValue_CLOSE(right_owner);
+    PyValue_CLOSE(left_owner);
     if (*b == NULL || PyErr_Occurred()) {
-        close_object(*b);
-        close_object(*a);
+        Py_XDECREF(*b);
+        Py_XDECREF(*a);
         *a = NULL;
         *b = NULL;
         return -1;
@@ -99,8 +83,8 @@ _PyValue_RichCompareBool(PyValue left, PyValue right, int op)
         return -1;
     }
     int result = PyObject_RichCompareBool(a, b, op);
-    close_object(b);
-    close_object(a);
+    Py_XDECREF(b);
+    Py_XDECREF(a);
     int failed = result < 0 || PyErr_Occurred();
     _PyValue_RestoreException(prior);
     return failed ? -1 : result;
@@ -119,10 +103,10 @@ _PyValue_RichCompareObject(PyValue left, PyValue right, int op)
         return NULL;
     }
     PyObject *result = PyObject_RichCompare(a, b, op);
-    close_object(b);
-    close_object(a);
+    Py_XDECREF(b);
+    Py_XDECREF(a);
     if (PyErr_Occurred()) {
-        close_object(result);
+        Py_XDECREF(result);
         result = NULL;
     }
     _PyValue_RestoreException(prior);
@@ -135,12 +119,12 @@ _PyValue_WriteRepr(PyUnicodeWriter *writer, PyValue value)
     PyObject *prior = PyErr_GetRaisedException();
     PyObject *obj = PyValue_AsObject(value);
     if (obj == NULL || PyErr_Occurred()) {
-        close_object(obj);
+        Py_XDECREF(obj);
         _PyValue_RestoreException(prior);
         return -1;
     }
     int result = PyUnicodeWriter_WriteRepr(writer, obj);
-    close_object(obj);
+    Py_XDECREF(obj);
     int failed = result < 0 || PyErr_Occurred();
     _PyValue_RestoreException(prior);
     return failed ? -1 : result;

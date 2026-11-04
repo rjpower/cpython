@@ -93,8 +93,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_ADD;
             (void)oparg;
@@ -152,7 +154,13 @@
                 res = pending;
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -177,8 +185,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_AND;
             (void)oparg;
@@ -236,7 +246,13 @@
                 res = pending;
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -261,8 +277,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_FLOOR_DIVIDE;
             (void)oparg;
@@ -320,7 +338,13 @@
                 res = pending;
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -345,8 +369,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_ADD;
             (void)oparg;
@@ -404,7 +430,13 @@
                 res = pending;
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -429,8 +461,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_AND;
             (void)oparg;
@@ -488,7 +522,13 @@
                 res = pending;
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -513,8 +553,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_FLOOR_DIVIDE;
             (void)oparg;
@@ -572,7 +614,13 @@
                 res = pending;
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -597,8 +645,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_LSHIFT;
             (void)oparg;
@@ -656,7 +706,13 @@
                 res = pending;
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -681,8 +737,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_MATRIX_MULTIPLY;
             (void)oparg;
@@ -740,7 +798,13 @@
                 res = pending;
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -765,8 +829,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_MULTIPLY;
             (void)oparg;
@@ -824,7 +890,13 @@
                 res = pending;
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -849,8 +921,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_OR;
             (void)oparg;
@@ -908,7 +982,13 @@
                 res = pending;
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -933,8 +1013,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_POWER;
             (void)oparg;
@@ -992,7 +1074,13 @@
                 res = pending;
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -1017,8 +1105,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_REMAINDER;
             (void)oparg;
@@ -1076,7 +1166,13 @@
                 res = pending;
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -1101,8 +1197,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_RSHIFT;
             (void)oparg;
@@ -1160,7 +1258,13 @@
                 res = pending;
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -1185,8 +1289,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_SUBTRACT;
             (void)oparg;
@@ -1244,7 +1350,13 @@
                 res = pending;
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -1269,8 +1381,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_TRUE_DIVIDE;
             (void)oparg;
@@ -1328,7 +1442,13 @@
                 res = pending;
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -1353,8 +1473,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_XOR;
             (void)oparg;
@@ -1412,7 +1534,13 @@
                 res = pending;
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -1437,8 +1565,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_LSHIFT;
             (void)oparg;
@@ -1496,7 +1626,13 @@
                 res = pending;
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -1521,8 +1657,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_MATRIX_MULTIPLY;
             (void)oparg;
@@ -1580,7 +1718,13 @@
                 res = pending;
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -1605,8 +1749,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_MULTIPLY;
             (void)oparg;
@@ -1664,7 +1810,13 @@
                 res = pending;
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -1689,8 +1841,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_OR;
             (void)oparg;
@@ -1748,7 +1902,13 @@
                 res = pending;
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -1773,8 +1933,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_POWER;
             (void)oparg;
@@ -1832,7 +1994,13 @@
                 res = pending;
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -1857,8 +2025,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_REMAINDER;
             (void)oparg;
@@ -1916,7 +2086,13 @@
                 res = pending;
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -1941,8 +2117,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_RSHIFT;
             (void)oparg;
@@ -2000,7 +2178,13 @@
                 res = pending;
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -2025,8 +2209,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_SUBSCR;
             (void)oparg;
@@ -2084,7 +2270,13 @@
                 res = pending;
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -2109,8 +2301,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_SUBTRACT;
             (void)oparg;
@@ -2168,7 +2362,13 @@
                 res = pending;
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -2193,8 +2393,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_TRUE_DIVIDE;
             (void)oparg;
@@ -2252,7 +2454,13 @@
                 res = pending;
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -2277,8 +2485,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BINARY_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_XOR;
             (void)oparg;
@@ -2336,7 +2546,13 @@
                 res = pending;
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -2361,8 +2577,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BUILD_LIST);
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
@@ -2376,9 +2594,15 @@
             }
             list = PyValue_FromPyObjectStealMortal(list_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg);
-            window[0] = _PyValueTemps_Publish(value_temps, &list);
+            window[0] = _PyValue_Publish(&list);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -2403,8 +2627,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BUILD_MAP);
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
@@ -2417,7 +2643,7 @@
             int failed = map_o == NULL;
             map = failed ? PyValue_NULL : PyValue_FromPyObjectStealMortal(map_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg*2);
-            window[0] = _PyValueTemps_Publish(value_temps, &map);
+            window[0] = _PyValue_Publish(&map);
             {
                 int operation_failed = value_operation_finish(&operation, &next_instr, value_temps);
                 if (operation_failed < 0) {
@@ -2434,7 +2660,13 @@
                 JUMP_TO_LABEL(error);
             }
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -2459,8 +2691,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(BUILD_TUPLE);
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
@@ -2474,9 +2708,15 @@
             }
             tup = PyValue_FromPyObjectSteal(tup_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg);
-            window[0] = _PyValueTemps_Publish(value_temps, &tup);
+            window[0] = _PyValue_Publish(&tup);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -2501,8 +2741,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(CALL);
             PyObject *value_boxes[18];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_CALL *fb = (_PyFb_CALL *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -2613,8 +2855,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(CALL_KW);
             PyObject *value_boxes[23];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_CALL_KW *fb = (_PyFb_CALL_KW *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -2723,8 +2967,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(COMPARE_OP);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_D(this_instr));
             (void)oparg;
@@ -2757,7 +3003,7 @@
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(COMPARE_OP);
-                    IR_KEEP_BOX(left, IR_FIELD_B(this_instr));
+                    IR_KEEP_BOX(left);
                 }
                 else {
                     left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr));
@@ -2769,7 +3015,7 @@
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(COMPARE_OP);
-                    IR_KEEP_BOX(right, IR_FIELD_C(this_instr));
+                    IR_KEEP_BOX(right);
                 }
                 else {
                     right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr));
@@ -2798,7 +3044,13 @@
                 }
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -2823,8 +3075,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(CONTAINS_OP);
             PyObject *value_boxes[13];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_D(this_instr));
             (void)oparg;
@@ -2860,7 +3114,7 @@
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CONTAINS_OP);
-                    IR_KEEP_BOX(left, IR_FIELD_B(this_instr));
+                    IR_KEEP_BOX(left);
                 }
                 else {
                     left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr));
@@ -2872,7 +3126,7 @@
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CONTAINS_OP);
-                    IR_KEEP_BOX(right, IR_FIELD_C(this_instr));
+                    IR_KEEP_BOX(right);
                 }
                 else {
                     right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr));
@@ -2904,7 +3158,13 @@
                 _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), b);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -2929,7 +3189,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(COPY);
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -2939,7 +3199,7 @@
             PyValue top;
             bottom = window[0];
             top = PyValue_DUP(bottom);
-            window[1 + (oparg-1)] = _PyValueTemps_Publish(value_temps, &top);
+            window[1 + (oparg-1)] = _PyValue_Publish(&top);
             DISPATCH();
         }
 
@@ -2964,7 +3224,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(COPY_FREE_VARS);
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
@@ -3000,7 +3260,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(END_FOR);
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
@@ -3030,8 +3290,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(FOR_ITER);
             PyObject *value_boxes[11];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_FOR_ITER *fb = (_PyFb_FOR_ITER *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
@@ -3063,20 +3325,32 @@
                 PyValue item = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &null_or_index);
                 if (!PyValue_IsValid(item)) {
                     if (PyValue_IsError(item)) {
-                        window[1] = _PyValueTemps_Publish(value_temps, &null_or_index);
+                        window[1] = _PyValue_Publish(&null_or_index);
                         JUMP_TO_LABEL(error);
                     }
                     JUMPBY(oparg + 1);
-                    window[1] = _PyValueTemps_Publish(value_temps, &null_or_index);
-                    _PyValueTemps_CommitLocal(value_temps);
+                    window[1] = _PyValue_Publish(&null_or_index);
+                    if (!PyValue_IsNull(ir_displaced) &&
+                        finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                        ctx->frame = frame; ctx->next_instr = next_instr;
+                        ctx->raising_instr = frame->instr_ptr;
+                        ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                        return _PyJIT_RAISE;
+                    }
                     DISPATCH();
                 }
                 next = item;
             }
-            window[1] = _PyValueTemps_Publish(value_temps, &null_or_index);
-            window[2] = _PyValueTemps_Publish(value_temps, &next);
+            window[1] = _PyValue_Publish(&null_or_index);
+            window[2] = _PyValue_Publish(&next);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[2]);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -3101,7 +3375,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(GET_ITER);
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_GET_ITER *fb = (_PyFb_GET_ITER *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)IR_FIELD_D(this_instr);
@@ -3160,7 +3434,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(IR_JUMP);
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -3189,7 +3463,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(JUMP_BACKWARD);
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -3229,7 +3503,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(JUMP_BACKWARD_NO_INTERRUPT);
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -3259,7 +3533,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(JUMP_FORWARD);
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -3288,8 +3562,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR);
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
             (void)oparg;
@@ -3352,7 +3628,13 @@
             if (IR_IS_LOCAL(IR_FIELD_A(this_instr))) {
                 IR_STORE_DST(IR_FIELD_A(this_instr), attr);
             }
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -3377,8 +3659,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_ATTR);
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
@@ -3441,7 +3725,13 @@
             if (IR_IS_LOCAL(IR_FIELD_A(this_instr))) {
                 IR_STORE_DST(IR_FIELD_A(this_instr), attr);
             }
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -3466,15 +3756,23 @@
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_COMMON_CONSTANT);
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
             PyValue value;
             assert(oparg < NUM_COMMON_CONSTANTS);
             value = PyValue_DUP(tstate->interp->common_consts[oparg]);
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -3499,14 +3797,22 @@
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_CONST);
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
             PyValue value;
             value = PyValue_NewRef(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -3531,15 +3837,23 @@
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_CONST_INLINE_FLOAT);
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
             PyValue value;
             value = PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg);
             assert(PyValue_IsInlineFloat(value));
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -3564,15 +3878,23 @@
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_CONST_INLINE_INT);
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
             PyValue value;
             value = PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg);
             assert(PyValue_IsInlineInt(value));
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -3597,8 +3919,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_DEREF);
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
             PyValue value;
@@ -3611,7 +3935,13 @@
                 JUMP_TO_LABEL(error);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -3636,15 +3966,23 @@
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FAST);
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
             PyValue value;
             assert(!PyValue_IsNull(GETLOCAL(oparg)));
             value = PyValue_DUP(GETLOCAL(oparg));
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -3669,15 +4007,23 @@
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FAST_BORROW);
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
             PyValue value;
             assert(!PyValue_IsNull(GETLOCAL(oparg)));
             value = PyValue_BorrowAt(&GETLOCAL(oparg));
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -3702,8 +4048,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FAST_BORROW_LOAD_FAST_BORROW);
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
             assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
@@ -3715,7 +4063,13 @@
             value2 = PyValue_BorrowAt(&GETLOCAL((uintptr_t)oparg2));
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), value1);
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr) + 1), value2);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -3740,8 +4094,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FAST_CHECK);
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
             PyValue value;
@@ -3755,7 +4111,13 @@
             }
             value = PyValue_DUP(value_s);
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -3780,8 +4142,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_FAST_LOAD_FAST);
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
             assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
@@ -3793,7 +4157,13 @@
             value2 = PyValue_DUP(GETLOCAL(oparg2));
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), value1);
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr) + 1), value2);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -3818,7 +4188,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_GLOBAL);
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_B(this_instr));
@@ -3847,7 +4217,7 @@
                 res = &IR_SLOT(IR_FIELD_A(this_instr));
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                _PyEval_LoadGlobalValue(GLOBALS(), BUILTINS(), name, res, value_temps);
+                _PyEval_LoadGlobalValue(GLOBALS(), BUILTINS(), name, res);
                 {
                     int operation_failed = value_operation_finish(&operation, &next_instr, value_temps);
                     if (operation_failed < 0) {
@@ -3894,7 +4264,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_GLOBAL);
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_LOAD_GLOBAL *fb = (_PyFb_LOAD_GLOBAL *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -3923,7 +4293,7 @@
                 res = &IR_SLOT(IR_FIELD_A(this_instr));
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                _PyEval_LoadGlobalValue(GLOBALS(), BUILTINS(), name, res, value_temps);
+                _PyEval_LoadGlobalValue(GLOBALS(), BUILTINS(), name, res);
                 {
                     int operation_failed = value_operation_finish(&operation, &next_instr, value_temps);
                     if (operation_failed < 0) {
@@ -3970,15 +4340,23 @@
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_SMALL_INT);
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
             PyValue value;
             assert(oparg < _PY_NSMALLPOSINTS);
             value = PyValue_FromInt32((int32_t)oparg);
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -4003,8 +4381,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(LOAD_SMALL_INT_INLINE);
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
             PyValue value;
@@ -4014,7 +4394,13 @@
                 JUMP_TO_LABEL(error);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -4039,7 +4425,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(MAKE_CELL);
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
@@ -4074,7 +4460,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(NOP);
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             DISPATCH();
         }
@@ -4100,7 +4486,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(NOT_TAKEN);
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             DISPATCH();
         }
@@ -4126,7 +4512,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(POP_ITER);
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             PyValue iter;
             PyValue index_or_null;
@@ -4160,7 +4546,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_FALSE);
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -4241,7 +4627,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_NONE);
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_NONE *fb = (_PyFb_POP_JUMP_IF_NONE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -4299,7 +4685,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_NOT_NONE);
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_NOT_NONE *fb = (_PyFb_POP_JUMP_IF_NOT_NONE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -4357,7 +4743,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(POP_JUMP_IF_TRUE);
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -4438,7 +4824,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(POP_TOP);
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
@@ -4468,12 +4854,20 @@
             next_instr += 1;
             INSTRUCTION_STATS(PUSH_NULL);
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             PyValue res;
             res = PyValue_NULL;
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -4499,7 +4893,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(RAISE_VARARGS);
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -4556,7 +4950,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(RESUME);
             PyObject *value_boxes[2];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_A(this_instr);
             (void)oparg;
@@ -4614,7 +5008,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(RETURN_VALUE);
             PyObject *value_boxes[6];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             PyValue value;
             PyValue retval;
@@ -4673,7 +5067,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR);
             PyObject *value_boxes[8];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
@@ -4756,7 +5150,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR);
             PyObject *value_boxes[8];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
@@ -4839,7 +5233,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(STORE_DEREF);
             PyObject *value_boxes[3];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -4873,7 +5267,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(STORE_FAST);
             PyObject *value_boxes[5];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -4916,8 +5310,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(STORE_FAST_LOAD_FAST);
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
             PyValue value1;
@@ -4932,7 +5328,13 @@
             IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), value2);
             PyValue_XCLOSE(tmp);
             IR_STORE_DST(IR_FIELD_A(this_instr), value2);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -4957,7 +5359,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(STORE_FAST_STORE_FAST);
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
@@ -4999,7 +5401,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(STORE_SUBSCR);
             PyObject *value_boxes[9];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_STORE_SUBSCR *fb = (_PyFb_STORE_SUBSCR *)IR_FB(IR_FIELD_D(this_instr));
             PyValue container;
@@ -5075,7 +5477,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(SWAP);
             PyObject *value_boxes[8];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
@@ -5088,8 +5490,8 @@
             PyValue temp = bottom;
             bottom = top;
             top = temp;
-            window[0] = _PyValueTemps_Publish(value_temps, &bottom);
-            window[1 + (oparg-2)] = _PyValueTemps_Publish(value_temps, &top);
+            window[0] = _PyValue_Publish(&bottom);
+            window[1 + (oparg-2)] = _PyValue_Publish(&top);
             DISPATCH();
         }
 
@@ -5114,7 +5516,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(TO_BOOL);
             PyObject *value_boxes[6];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_TO_BOOL *fb = (_PyFb_TO_BOOL *)IR_FB(IR_FIELD_C(this_instr));
             PyValue value;
@@ -5180,8 +5582,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(UNARY_NEGATIVE);
             PyObject *value_boxes[6];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             PyValue value;
             PyValue res;
             PyValue v;
@@ -5222,7 +5626,13 @@
                 PyValue_XCLOSE(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -5247,8 +5657,10 @@
             next_instr += 1;
             INSTRUCTION_STATS(UNARY_NOT);
             PyObject *value_boxes[4];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
+            PyValue ir_displaced = PyValue_NULL;
+            (void)ir_displaced;
             PyValue value;
             PyValue res;
             value = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
@@ -5260,7 +5672,13 @@
             }
             res = truth ? PyValue_False : PyValue_True;
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
-            _PyValueTemps_CommitLocal(value_temps);
+            if (!PyValue_IsNull(ir_displaced) &&
+                finish_displaced_local(tstate, frame, &next_instr, value_temps, ir_displaced) < 0) {
+                ctx->frame = frame; ctx->next_instr = next_instr;
+                ctx->raising_instr = frame->instr_ptr;
+                ctx->phase = _PyJIT_ERROR_LOG_PENDING;
+                return _PyJIT_RAISE;
+            }
             DISPATCH();
         }
 
@@ -5285,7 +5703,7 @@
             next_instr += 1;
             INSTRUCTION_STATS(UNPACK_SEQUENCE);
             PyObject *value_boxes[7];
-            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes), NULL};
+            _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_UNPACK_SEQUENCE *fb = (_PyFb_UNPACK_SEQUENCE *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)IR_FIELD_B(this_instr);
@@ -5321,7 +5739,8 @@
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(UNPACK_SEQUENCE);
-                    window[0] = _PyValueTemps_Publish(value_temps, &seq);
+                    IR_KEEP_BOX(seq);
+                    window[0] = _PyValue_Publish(&seq);
                 }
                 PyObject *seq_o = _PyValue_AsPyObjectStealPointer(seq);
                 window[0] = PyValue_NULL;

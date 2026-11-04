@@ -209,7 +209,6 @@ batched_next(PyObject *op)
     PyObject *iterator_owner = NULL;
     PyObject *it_owner = NULL;
     PyObject *item = NULL;
-    PyObject *retired_item = NULL;
     PyObject *retired_iterator = NULL;
     PyObject *suppressed_error = NULL;
     PyObject *result = NULL;
@@ -235,20 +234,10 @@ batched_next(PyObject *op)
         if (PyErr_Occurred()) {
             goto terminal;
         }
-        PyValue replacement = PyValue_PrepareOwned(item, &retired_item);
+        PyValue replacement = PyValue_PrepareOwned(item);
         item = NULL;
         assert(PyValue_IsNull(items[i]));
         items[i] = replacement;
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *retired = retired_item;
-            retired_item = NULL;
-            Py_XDECREF(retired);
-            _PyValue_RestoreException(saved);
-        }
-        if (PyErr_Occurred()) {
-            goto terminal;
-        }
     }
     output = result;
     result = NULL;
@@ -321,13 +310,6 @@ done:
         PyObject *saved = PyErr_GetRaisedException();
         PyObject *retired = suppressed_error;
         suppressed_error = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired = retired_item;
-        retired_item = NULL;
         Py_XDECREF(retired);
         _PyValue_RestoreException(saved);
     }

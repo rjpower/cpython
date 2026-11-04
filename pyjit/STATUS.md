@@ -1,6 +1,6 @@
 # Project status
 
-Status as of 2026-11-04 04:10 PST, from the coordinator fact sheet. Update this
+Status as of 2026-11-04 06:30 PST, from the coordinator fact sheet. Update this
 page at each landing.
 
 ## Outcome and next milestone
@@ -38,7 +38,7 @@ v2 phase A) addressed, then the qualified baseline.
 
 ## Position
 
-- Runtime branch `boil/pyvalue-rc-universal`, HEAD `54825c08a1a`.
+- Runtime branch `boil/pyvalue-rc-universal`, HEAD `f6508007b94`.
 - Landed 2026-11-03: native boundary P3 (`56ff66a596b`, `643c69c7244`,
   `6d39221996d`) and P4 (`2558376b321`, post-review fixes `fdd7fed3216`);
   representation steps 1 (`f129780a9a7`), 2 (`f7dfc5b961f`), 3 (`dbce7b1260d`,
@@ -66,7 +66,18 @@ v2 phase A) addressed, then the qualified baseline.
   Register IR v2 step B0a (`54825c08a1a`): the generated instruction contract
   table; the passes, assembler, `dis` and verifier read it; compiled output
   unchanged.
-- Suites at `54825c08a1a`, debug and release alike: run=51,538, failures=11.
+- Landed 2026-11-04 (continued): representation step 8. `5640c46361c` step 7
+  review fixes (an iterator step whose box fails consumes the item; a pop
+  boxes before it removes). `1381d5b49c0` the home checker counts stores, at
+  the frame store macros and the dict, list and set writers. `308a86c3914`
+  canonical construction (an exact int that fits inline or an exact non-NaN
+  float is always stored inline; `Mortal` variants and the generator's
+  `POINTER_CONSTRUCTORS` deleted) and `PyValue_Is` as a bit compare (the
+  deleted fallback had 0 true results in 3.59 billion calls over the suite);
+  the home checker is a debug assert. `f6508007b94` `object.__hash__`,
+  `__repr__`, `__eq__` and method equality use value identity
+  (`_PyObject_IsSame`). Int and float guards still accept boxes until step 9a.
+- Suites at `f6508007b94`, debug and release alike: run=51,548, failures=11.
   Failing files: test_capi (2: test_is_unique_temporary,
   test_unicode.test_new), test_pyvalue_dict_vm (4), test_pyvalue_native_scope
   (5). `make check-value-api`: 177 units, 0 findings.
@@ -77,18 +88,18 @@ v2 phase A) addressed, then the qualified baseline.
 
 Running now:
 
-1. Representation step 8: the step 7 review follow-ups, a home checker that
-   counts stores, canonical construction and bit-compare `is`.
-2. Register IR v2 steps A1 (the value record only in handlers that box,
-   driven by the contract's BOXES effect) and A2 (no PC out-parameter), in
-   their own worktree.
+1. Integration of register IR v2 steps A1 (the value record only in handlers
+   that box, driven by the contract's BOXES effect) and A2 (no PC
+   out-parameter) after step 8, with two post-review fixes. Measured before
+   integration (29 kernels, interleaved, against `54825c08a1a`; information,
+   not a gate): A1 0.983, A2 1.024, both 0.986 of the base time.
 
 Next, in order:
 
-3. Register IR v2 A5a after step 8; representation 9a/9b (int51); A5b after
+2. Register IR v2 A5a; representation 9a/9b (int51); A5b after
    9a; A3a-A3c (tail calls become the only backend) after 9b
    ([packet](design/proposals/register-ir-v2-packet.md)).
-4. Value API V1 follow-ups (box-site annotations in the interpreter files,
+3. Value API V1 follow-ups (box-site annotations in the interpreter files,
    `entry_unbox` counts, seven modules that define a bare `Py_BUILD_CORE`),
    then V2a-0 onwards.
 

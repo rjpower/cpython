@@ -80,12 +80,16 @@ so pystats dispatch counts do not see it. A `pybuilddir.txt` of `none` makes a
 release build 5 to 12x slower; check it. `perf` is blocked
 (`perf_event_paranoid=4`); `tools/sampler/` has an LD_PRELOAD SIGPROF sampler.
 
-Running now: representation step 8 in the shared tree (brief
-`build/pyjit-link-wave1/STEP8-BRIEF.md`) and register IR v2 steps A1/A2 in
-their own worktree `build/worktrees/irv2-a1a2` (`A1A2-BRIEF.md`).
+Running now: integration of register IR v2 steps A1/A2 into the shared tree
+after step 8 (`A1A2-BRIEF.md`, then the integration message: 3-way apply,
+`make regen-cases`, the A2 review's epoch fix and the step 8 review's
+generator check on stored auto-boxed inputs).
 
 Landed on the runtime branch, newest first:
 
+- `f6508007b94`, `308a86c3914`, `1381d5b49c0`, `5640c46361c`: representation
+  step 8 (object-level value identity; canonical construction and bit-compare
+  `is`; store-counting home checker; step 7 review fixes).
 - `54825c08a1a`: register IR v2 step B0a, the instruction contract table.
 - `1a9d0a6fbbe`, `78908a19694`, `13ae4cfddda`, `1a5600cc9f5`, `ab07912b7cb`:
   representation step 7 (perf watcher fix, restore helper deleted, defences,
@@ -184,9 +188,11 @@ overwritten.
 
 ## Next steps
 
-1. Process step 8 and A1/A2 when they report (running); integrate A1/A2
-   after step 8 with a 3-way apply and `make regen-cases`.
-2. Register IR v2 A5a, then representation 9a and 9b, then A5b and A3a-A3c,
+1. Commit the A1/A2 integration when it reports (three diffs: `irv2-a1-int`,
+   `irv2-a2-int`, `irv2-a2-fixup`); check the marshal output against
+   `f6508007b94`.
+2. Register IR v2 A5a (notes for it: `FOLLOWUPS.md`, step 8 section; 97.7% of
+   the Publish canonicalisations come from `ir_generator.py:emit_store_input`), then representation 9a and 9b, then A5b and A3a-A3c,
    then the format steps B2-B7
    ([packet](design/proposals/register-ir-v2-packet.md)).
 3. Value API V1 follow-ups (`FOLLOWUPS.md`), then V2a-0 onwards.

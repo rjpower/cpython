@@ -72,12 +72,12 @@
           pass
    */
 
-// Target both flavors of the Stable ABI.
-// Both are set to version 3.15, which adds PyModExport
-// (When using a build tool, check if it has an option to set these
-//  so they do not need to be defined in the source.)
-#define Py_LIMITED_API 0x030f0000   // abi3 (GIL-enabled builds)
-#define Py_TARGET_ABI3T 0x030f0000  // abi3t (free-threaded builds)
+// Target the Stable ABI at version 3.15, which adds PyModExport.
+// (When using a build tool, check if it has an option to set this
+//  so it does not need to be defined in the source.)
+// This runtime has no free-threaded build, so abi3t (Py_TARGET_ABI3T) is
+// not targeted: pyvalue.h rejects Py_GIL_DISABLED.
+#define Py_LIMITED_API 0x030f0000   // abi3
 
 
 #include "Python.h"
@@ -304,12 +304,13 @@ Xxo_getattro(PyObject *self, PyObject *name)
     Py_END_CRITICAL_SECTION();
 
     if (x_attr != NULL) {
-        PyObject *v = PyDict_GetItemWithError(x_attr, name);
-        if (v != NULL) {
-            return Py_NewRef(v);
-        }
-        else if (PyErr_Occurred()) {
+        PyObject *v;
+        int rc = PyDict_GetItemRef(x_attr, name, &v);
+        if (rc < 0) {
             return NULL;
+        }
+        if (rc > 0) {
+            return v;
         }
     }
     // Fall back to generic implementation (this handles special attributes,

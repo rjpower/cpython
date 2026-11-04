@@ -64,65 +64,6 @@ dict_size(PyObject *self, PyObject *obj)
 }
 
 static PyObject *
-dict_getitem(PyObject *self, PyObject *args)
-{
-    PyObject *mapping, *key;
-    if (!PyArg_ParseTuple(args, "OO", &mapping, &key)) {
-        return NULL;
-    }
-    NULLABLE(mapping);
-    NULLABLE(key);
-    PyObject *value = PyDict_GetItem(mapping, key);
-    if (value == NULL) {
-        if (PyErr_Occurred()) {
-            return NULL;
-        }
-        return Py_NewRef(PyExc_KeyError);
-    }
-    return Py_NewRef(value);
-}
-
-static PyObject *
-dict_getitemstring(PyObject *self, PyObject *args)
-{
-    PyObject *mapping;
-    const char *key;
-    Py_ssize_t size;
-    if (!PyArg_ParseTuple(args, "Oz#", &mapping, &key, &size)) {
-        return NULL;
-    }
-    NULLABLE(mapping);
-    PyObject *value = PyDict_GetItemString(mapping, key);
-    if (value == NULL) {
-        if (PyErr_Occurred()) {
-            return NULL;
-        }
-        return Py_NewRef(PyExc_KeyError);
-    }
-    return Py_NewRef(value);
-}
-
-static PyObject *
-dict_getitemwitherror(PyObject *self, PyObject *args)
-{
-    PyObject *mapping, *key;
-    if (!PyArg_ParseTuple(args, "OO", &mapping, &key)) {
-        return NULL;
-    }
-    NULLABLE(mapping);
-    NULLABLE(key);
-    PyObject *value = PyDict_GetItemWithError(mapping, key);
-    if (value == NULL) {
-        if (PyErr_Occurred()) {
-            return NULL;
-        }
-        return Py_NewRef(PyExc_KeyError);
-    }
-    return Py_NewRef(value);
-}
-
-
-static PyObject *
 dict_setitem(PyObject *self, PyObject *args)
 {
     PyObject *mapping, *key, *value;
@@ -196,27 +137,6 @@ dict_items(PyObject *self, PyObject *obj)
 }
 
 static PyObject *
-dict_next(PyObject *self, PyObject *args)
-{
-    PyObject *mapping, *key = UNINITIALIZED_PTR, *value = UNINITIALIZED_PTR;
-    Py_ssize_t pos;
-    if (!PyArg_ParseTuple(args, "On", &mapping, &pos)) {
-        return NULL;
-    }
-    NULLABLE(mapping);
-    int rc = PyDict_Next(mapping, &pos, &key, &value);
-    if (rc != 0) {
-        return Py_BuildValue("inOO", rc, pos, key, value);
-    }
-    assert(key == UNINITIALIZED_PTR);
-    assert(value == UNINITIALIZED_PTR);
-    if (PyErr_Occurred()) {
-        return NULL;
-    }
-    Py_RETURN_NONE;
-}
-
-static PyObject *
 dict_merge(PyObject *self, PyObject *args)
 {
     PyObject *mapping, *mapping2;
@@ -263,9 +183,6 @@ static PyMethodDef test_methods[] = {
     {"dict_clear", dict_clear, METH_O},
     {"dict_copy", dict_copy, METH_O},
     {"dict_size", dict_size, METH_O},
-    {"dict_getitem", dict_getitem, METH_VARARGS},
-    {"dict_getitemwitherror", dict_getitemwitherror, METH_VARARGS},
-    {"dict_getitemstring", dict_getitemstring, METH_VARARGS},
     {"dict_contains", dict_contains, METH_VARARGS},
     {"dict_setitem", dict_setitem, METH_VARARGS},
     {"dict_setitemstring", dict_setitemstring, METH_VARARGS},
@@ -274,7 +191,6 @@ static PyMethodDef test_methods[] = {
     {"dict_keys", dict_keys, METH_O},
     {"dict_values", dict_values, METH_O},
     {"dict_items", dict_items, METH_O},
-    {"dict_next", dict_next, METH_VARARGS},
     {"dict_merge", dict_merge, METH_VARARGS},
     {"dict_update", dict_update, METH_VARARGS},
     {"dict_mergefromseq2", dict_mergefromseq2, METH_VARARGS},

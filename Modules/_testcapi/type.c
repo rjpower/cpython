@@ -25,7 +25,7 @@ test_get_type_dict(PyObject *self, PyObject *Py_UNUSED(ignored))
     // Assert ints have a `to_bytes` method
     PyObject *long_dict = PyType_GetDict(&PyLong_Type);
     assert(long_dict);
-    assert(PyDict_GetItemString(long_dict, "to_bytes")); // borrowed ref
+    assert(PyDict_ContainsString(long_dict, "to_bytes") == 1);
     Py_DECREF(long_dict);
 
     // Make a new type, add an attribute to it and assert it's there
@@ -35,7 +35,7 @@ test_get_type_dict(PyObject *self, PyObject *Py_UNUSED(ignored))
         HeapTypeNameType, "new_attr", Py_NewRef(Py_None)) >= 0);
     PyObject *type_dict = PyType_GetDict((PyTypeObject*)HeapTypeNameType);
     assert(type_dict);
-    assert(PyDict_GetItemString(type_dict, "new_attr")); // borrowed ref
+    assert(PyDict_ContainsString(type_dict, "new_attr") == 1);
     Py_DECREF(HeapTypeNameType);
     Py_DECREF(type_dict);
     Py_RETURN_NONE;

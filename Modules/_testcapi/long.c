@@ -221,9 +221,13 @@ pylongwriter_create(PyObject *module, PyObject *args)
     }
 
     for (Py_ssize_t i = 0; i < ndigits; i++) {
-        PyObject *item = PyList_GET_ITEM(list, i);
+        PyObject *item = PyList_GetItemRef(list, i);
+        if (item == NULL) {
+            goto error;
+        }
 
         long num = PyLong_AsLong(item);
+        Py_DECREF(item);
         if (num == -1 && PyErr_Occurred()) {
             goto error;
         }

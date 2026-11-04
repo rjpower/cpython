@@ -1800,6 +1800,38 @@ gen_get_code(PyObject *self, PyObject *gen)
     return (PyObject *)PyGen_GetCode((PyGenObject *)gen);
 }
 
+/* Return a new array holding a strong reference to each item of tuple. */
+static PyObject **
+tuple_to_owned_array(PyObject *tuple)
+{
+    Py_ssize_t n = PyTuple_Size(tuple);
+    PyObject **array = PyMem_Calloc(n, sizeof(PyObject *));
+    if (array == NULL) {
+        PyErr_NoMemory();
+        return NULL;
+    }
+    for (Py_ssize_t i = 0; i < n; i++) {
+        array[i] = PyTuple_GetItemRef(tuple, i);
+        if (array[i] == NULL) {
+            for (Py_ssize_t j = 0; j < i; j++) {
+                Py_DECREF(array[j]);
+            }
+            PyMem_Free(array);
+            return NULL;
+        }
+    }
+    return array;
+}
+
+static void
+free_owned_array(PyObject **array, Py_ssize_t n)
+{
+    for (Py_ssize_t i = 0; i < n; i++) {
+        Py_XDECREF(array[i]);
+    }
+    PyMem_Free(array);
+}
+
 static PyObject *
 eval_eval_code_ex(PyObject *mod, PyObject *pos_args)
 {
@@ -1813,7 +1845,12 @@ eval_eval_code_ex(PyObject *mod, PyObject *pos_args)
     PyObject *kw_defaults = NULL;
     PyObject *closure = NULL;
 
+    PyObject **c_args = NULL;
+    Py_ssize_t c_args_len = 0;
     PyObject **c_kwargs = NULL;
+    Py_ssize_t c_kwargs_len = 0;
+    PyObject **c_defaults = NULL;
+    Py_ssize_t c_defaults_len = 0;
 
     if (!PyArg_ParseTuple(pos_args,
                           "OO|OO!O!O!OO:eval_code_ex",
@@ -1835,18 +1872,18 @@ eval_eval_code_ex(PyObject *mod, PyObject *pos_args)
     NULLABLE(kw_defaults);
     NULLABLE(closure);
 
-    PyObject **c_args = NULL;
-    Py_ssize_t c_args_len = 0;
     if (args) {
-        c_args = &PyTuple_GET_ITEM(args, 0);
+        c_args = tuple_to_owned_array(args);
+        if (c_args == NULL) {
+            goto exit;
+        }
         c_args_len = PyTuple_Size(args);
     }
 
-    Py_ssize_t c_kwargs_len = 0;
     if (kwargs) {
-        c_kwargs_len = PyDict_Size(kwargs);
-        if (c_kwargs_len > 0) {
-            c_kwargs = PyMem_NEW(PyObject*, 2 * c_kwargs_len);
+        Py_ssize_t n = PyDict_Size(kwargs);
+        if (n > 0) {
+            c_kwargs = PyMem_Calloc(2 * n, sizeof(PyObject *));
             if (!c_kwargs) {
                 PyErr_NoMemory();
                 goto exit;
@@ -1854,18 +1891,25 @@ eval_eval_code_ex(PyObject *mod, PyObject *pos_args)
 
             Py_ssize_t i = 0;
             Py_ssize_t pos = 0;
-            while (PyDict_Next(kwargs, &pos, &c_kwargs[i], &c_kwargs[i + 1])) {
+            int rc = 1;
+            while (i < 2 * n
+                   && (rc = PyDict_NextEntryRef(kwargs, &pos, &c_kwargs[i],
+                                                &c_kwargs[i + 1])) > 0)
+            {
                 i += 2;
             }
             c_kwargs_len = i / 2;
-            /* XXX This is broken if the caller deletes dict items! */
+            if (rc < 0) {
+                goto exit;
+            }
         }
     }
 
-    PyObject **c_defaults = NULL;
-    Py_ssize_t c_defaults_len = 0;
     if (defaults) {
-        c_defaults = &PyTuple_GET_ITEM(defaults, 0);
+        c_defaults = tuple_to_owned_array(defaults);
+        if (c_defaults == NULL) {
+            goto exit;
+        }
         c_defaults_len = PyTuple_Size(defaults);
     }
 
@@ -1884,9 +1928,9 @@ eval_eval_code_ex(PyObject *mod, PyObject *pos_args)
     );
 
 exit:
-    if (c_kwargs) {
-        PyMem_DEL(c_kwargs);
-    }
+    free_owned_array(c_args, c_args_len);
+    free_owned_array(c_kwargs, 2 * c_kwargs_len);
+    free_owned_array(c_defaults, c_defaults_len);
 
     return result;
 }

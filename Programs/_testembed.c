@@ -2244,13 +2244,14 @@ static int hook_check_initialized_on_site_import(
     const char *event, PyObject *args, void *userData)
 {
     if (strcmp(event, "import") == 0 && args != NULL) {
-        PyObject *name = PyTuple_GetItem(args, 0);
+        PyObject *name = PyTuple_GetItemRef(args, 0);
         if (name != NULL && PyUnicode_Check(name)
             && PyUnicode_CompareWithASCIIString(name, "site") == 0
             && _initialized_during_site_import == -1)
         {
             _initialized_during_site_import = Py_IsInitialized();
         }
+        Py_XDECREF(name);
     }
     return 0;
 }

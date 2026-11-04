@@ -10,18 +10,6 @@ tuple_get_size(PyObject *Py_UNUSED(module), PyObject *obj)
 }
 
 static PyObject *
-tuple_get_item(PyObject *Py_UNUSED(module), PyObject *args)
-{
-    PyObject *obj;
-    Py_ssize_t i;
-    if (!PyArg_ParseTuple(args, "On", &obj, &i)) {
-        return NULL;
-    }
-    NULLABLE(obj);
-    return Py_XNewRef(PyTuple_GET_ITEM(obj, i));
-}
-
-static PyObject *
 tuple_copy(PyObject *tuple)
 {
     Py_ssize_t size = PyTuple_GET_SIZE(tuple);
@@ -30,7 +18,12 @@ tuple_copy(PyObject *tuple)
         return NULL;
     }
     for (Py_ssize_t n = 0; n < size; n++) {
-        PyTuple_SET_ITEM(newtuple, n, Py_XNewRef(PyTuple_GET_ITEM(tuple, n)));
+        // Items may be NULL in an unfinished tuple; copy the raw value.
+        PyValue item = PyTuple_GetValue(tuple, n);
+        if (PyErr_Occurred() || PyTuple_SetValue(newtuple, n, item) < 0) {
+            Py_DECREF(newtuple);
+            return NULL;
+        }
     }
     return newtuple;
 }
@@ -44,25 +37,24 @@ tuple_set_item(PyObject *Py_UNUSED(module), PyObject *args)
         return NULL;
     }
     NULLABLE(value);
-    if (PyTuple_CheckExact(obj)) {
-        newtuple = tuple_copy(obj);
-        if (!newtuple) {
+    // PyTuple_SET_ITEM() only fills an empty slot of a new tuple.
+    Py_ssize_t size = PyTuple_GET_SIZE(obj);
+    newtuple = PyTuple_New(size);
+    if (!newtuple) {
+        return NULL;
+    }
+    for (Py_ssize_t n = 0; n < size; n++) {
+        if (n == i) {
+            continue;
+        }
+        PyValue item = PyTuple_GetValue(obj, n);
+        if (PyErr_Occurred() || PyTuple_SetValue(newtuple, n, item) < 0) {
+            Py_DECREF(newtuple);
             return NULL;
         }
-
-        PyObject *val = PyTuple_GET_ITEM(newtuple, i);
-        PyTuple_SET_ITEM(newtuple, i, Py_XNewRef(value));
-        Py_DECREF(val);
-        return newtuple;
     }
-    else {
-        NULLABLE(obj);
-
-        PyObject *val = PyTuple_GET_ITEM(obj, i);
-        PyTuple_SET_ITEM(obj, i, Py_XNewRef(value));
-        Py_DECREF(val);
-        return Py_XNewRef(obj);
-    }
+    PyTuple_SET_ITEM(newtuple, i, Py_XNewRef(value));
+    return newtuple;
 }
 
 static PyObject *
@@ -100,7 +92,8 @@ _check_tuple_item_is_NULL(PyObject *Py_UNUSED(module), PyObject *args)
     if (!PyArg_ParseTuple(args, "On", &obj, &i)) {
         return NULL;
     }
-    return PyLong_FromLong(PyTuple_GET_ITEM(obj, i) == NULL);
+    // An empty slot is the only non-language value a tuple can hold.
+    return PyLong_FromLong(!PyValue_IsLanguageValue(PyTuple_GET_VALUE(obj, i)));
 }
 
 
@@ -117,23 +110,38 @@ tuple_fromarray(PyObject* Py_UNUSED(module), PyObject *args)
         return NULL;
     }
 
-    PyObject **items;
+    // Items of a tuple may be stored inline, so build an array of objects.
+    PyObject **items = NULL;
     if (src != Py_None) {
-        items = &PyTuple_GET_ITEM(src, 0);
         if (size == UNINITIALIZED_SIZE) {
             size = PyTuple_GET_SIZE(src);
         }
+        if (size > 0) {
+            items = PyMem_Calloc(size, sizeof(PyObject *));
+            if (items == NULL) {
+                return PyErr_NoMemory();
+            }
+        }
     }
-    else {
-        items = NULL;
+    PyObject *res = NULL;
+    for (Py_ssize_t i = 0; items != NULL && i < size; i++) {
+        items[i] = PyTuple_GetItemRef(src, i);
+        if (items[i] == NULL) {
+            goto done;
+        }
     }
-    return PyTuple_FromArray(items, size);
+    res = PyTuple_FromArray(items, size);
+done:
+    for (Py_ssize_t i = 0; items != NULL && i < size; i++) {
+        Py_XDECREF(items[i]);
+    }
+    PyMem_Free(items);
+    return res;
 }
 
 
 static PyMethodDef test_methods[] = {
     {"tuple_get_size", tuple_get_size, METH_O},
-    {"tuple_get_item", tuple_get_item, METH_VARARGS},
     {"tuple_set_item", tuple_set_item, METH_VARARGS},
     {"_tuple_resize", _tuple_resize, METH_VARARGS},
     {"_check_tuple_item_is_NULL", _check_tuple_item_is_NULL, METH_VARARGS},

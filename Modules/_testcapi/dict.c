@@ -66,19 +66,6 @@ dict_getitemstringref(PyObject *self, PyObject *args)
 }
 
 static PyObject *
-dict_setdefault(PyObject *self, PyObject *args)
-{
-    PyObject *mapping, *key, *defaultobj;
-    if (!PyArg_ParseTuple(args, "OOO", &mapping, &key, &defaultobj)) {
-        return NULL;
-    }
-    NULLABLE(mapping);
-    NULLABLE(key);
-    NULLABLE(defaultobj);
-    return PyDict_SetDefault(mapping, key, defaultobj);
-}
-
-static PyObject *
 dict_setdefaultref(PyObject *self, PyObject *args)
 {
     PyObject *obj, *key, *default_value, *result = UNINITIALIZED_PTR;
@@ -101,6 +88,30 @@ dict_setdefaultref(PyObject *self, PyObject *args)
             Py_FatalError("PyDict_SetDefaultRef() returned invalid code");
             Py_UNREACHABLE();
     }
+}
+
+static PyObject *
+dict_next(PyObject *self, PyObject *args)
+{
+    PyObject *mapping, *key = UNINITIALIZED_PTR, *value = UNINITIALIZED_PTR;
+    Py_ssize_t pos;
+    if (!PyArg_ParseTuple(args, "On", &mapping, &pos)) {
+        return NULL;
+    }
+    NULLABLE(mapping);
+    int rc = PyDict_NextEntryRef(mapping, &pos, &key, &value);
+    if (rc < 0) {
+        return NULL;
+    }
+    if (rc == 0) {
+        assert(key == NULL);
+        assert(value == NULL);
+        Py_RETURN_NONE;
+    }
+    PyObject *res = Py_BuildValue("inOO", rc, pos, key, value);
+    Py_DECREF(key);
+    Py_DECREF(value);
+    return res;
 }
 
 static PyObject *
@@ -205,27 +216,29 @@ test_dict_inner(PyObject *self, int count)
         Py_DECREF(v);
     }
 
-    k = v = UNINITIALIZED_PTR;
-    while (PyDict_Next(dict, &pos, &k, &v)) {
+    int rc;
+    while ((rc = PyDict_NextEntryRef(dict, &pos, &k, &v)) > 0) {
         PyObject *o;
         iterations++;
 
-        assert(k != UNINITIALIZED_PTR);
-        assert(v != UNINITIALIZED_PTR);
         i = PyLong_AS_LONG(v) + 1;
         o = PyLong_FromLong(i);
         if (o == NULL) {
+            Py_DECREF(k);
+            Py_DECREF(v);
             goto error;
         }
-        if (PyDict_SetItem(dict, k, o) < 0) {
-            Py_DECREF(o);
-            goto error;
-        }
+        int err = PyDict_SetItem(dict, k, o);
         Py_DECREF(o);
-        k = v = UNINITIALIZED_PTR;
+        Py_DECREF(k);
+        Py_DECREF(v);
+        if (err < 0) {
+            goto error;
+        }
     }
-    assert(k == UNINITIALIZED_PTR);
-    assert(v == UNINITIALIZED_PTR);
+    if (rc < 0) {
+        goto error;
+    }
 
     Py_DECREF(dict);
 
@@ -299,8 +312,8 @@ static PyMethodDef test_methods[] = {
     {"dict_containsstring", dict_containsstring, METH_VARARGS},
     {"dict_getitemref", dict_getitemref, METH_VARARGS},
     {"dict_getitemstringref", dict_getitemstringref, METH_VARARGS},
-    {"dict_setdefault", dict_setdefault, METH_VARARGS},
     {"dict_setdefaultref", dict_setdefaultref, METH_VARARGS},
+    {"dict_next", dict_next, METH_VARARGS},
     {"dict_pop", dict_pop, METH_VARARGS},
     {"dict_pop_null", dict_pop_null, METH_VARARGS},
     {"dict_popstring", dict_popstring, METH_VARARGS},

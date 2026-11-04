@@ -16,6 +16,7 @@ parse_tuple_and_keywords(PyObject *self, PyObject *args)
 #define MAX_PARAMS 8
     double buffers[MAX_PARAMS][4]; /* double ensures alignment where necessary */
     char *keywords[MAX_PARAMS + 1]; /* space for NULL at end */
+    PyObject *keyword_objs[MAX_PARAMS] = {NULL}; /* keep keywords alive */
 
     PyObject *return_value = NULL;
 
@@ -45,7 +46,13 @@ parse_tuple_and_keywords(PyObject *self, PyObject *args)
     }
 
     for (Py_ssize_t i = 0; i < size; i++) {
-        PyObject *o = PySequence_Fast_GET_ITEM(sub_keywords, i);
+        PyObject *o = PyList_CheckExact(sub_keywords)
+            ? PyList_GetItemRef(sub_keywords, i)
+            : PyTuple_GetItemRef(sub_keywords, i);
+        if (o == NULL) {
+            goto exit;
+        }
+        keyword_objs[i] = o;
         if (PyUnicode_Check(o)) {
             keywords[i] = (char *)PyUnicode_AsUTF8(o);
             if (keywords[i] == NULL) {
@@ -100,6 +107,9 @@ parse_tuple_and_keywords(PyObject *self, PyObject *args)
     }
 
 exit:
+    for (Py_ssize_t i = 0; i < MAX_PARAMS; i++) {
+        Py_XDECREF(keyword_objs[i]);
+    }
     return return_value;
 }
 

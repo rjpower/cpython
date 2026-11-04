@@ -88,13 +88,15 @@ Xxo_getattro(PyObject *op, PyObject *name)
 {
     XxoObject *self = XxoObject_CAST(op);
     if (self->x_attr != NULL) {
-        PyObject *v = PyDict_GetItemWithError(self->x_attr, name);
+        /* PyDict_GetItemRef() is not in the 3.5 stable ABI. */
+        PyObject *v = PyObject_GetItem(self->x_attr, name);
         if (v != NULL) {
-            return Py_NewRef(v);
+            return v;
         }
-        else if (PyErr_Occurred()) {
+        if (!PyErr_ExceptionMatches(PyExc_KeyError)) {
             return NULL;
         }
+        PyErr_Clear();
     }
     return PyObject_GenericGetAttr(op, name);
 }

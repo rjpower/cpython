@@ -1307,11 +1307,13 @@ _testinternalcapi_optimize_cfg_impl(PyObject *module, PyObject *instructions,
 
 static int
 get_nonnegative_int_from_dict(PyObject *dict, const char *key) {
-    PyObject *obj = PyDict_GetItemString(dict, key);
-    if (obj == NULL) {
+    PyObject *obj;
+    if (PyDict_GetItemStringRef(dict, key, &obj) <= 0) {
         return -1;
     }
-    return PyLong_AsLong(obj);
+    int value = PyLong_AsLong(obj);
+    Py_DECREF(obj);
+    return value;
 }
 
 /*[clinic input]
@@ -1334,22 +1336,40 @@ _testinternalcapi_assemble_code_object_impl(PyObject *module,
 
 {
     assert(PyDict_Check(metadata));
-    _PyCompile_CodeUnitMetadata umd;
+    _PyCompile_CodeUnitMetadata umd = {0};
+    PyObject *result = NULL;
 
-    umd.u_name = PyDict_GetItemString(metadata, "name");
-    umd.u_qualname = PyDict_GetItemString(metadata, "qualname");
+    // Hold a strong reference to each entry used by umd.
+    if (PyDict_GetItemStringRef(metadata, "name", &umd.u_name) < 0) {
+        goto done;
+    }
+    if (PyDict_GetItemStringRef(metadata, "qualname", &umd.u_qualname) < 0) {
+        goto done;
+    }
+    if (PyDict_GetItemStringRef(metadata, "consts", &umd.u_consts) < 0) {
+        goto done;
+    }
+    if (PyDict_GetItemStringRef(metadata, "names", &umd.u_names) < 0) {
+        goto done;
+    }
+    if (PyDict_GetItemStringRef(metadata, "varnames", &umd.u_varnames) < 0) {
+        goto done;
+    }
+    if (PyDict_GetItemStringRef(metadata, "cellvars", &umd.u_cellvars) < 0) {
+        goto done;
+    }
+    if (PyDict_GetItemStringRef(metadata, "freevars", &umd.u_freevars) < 0) {
+        goto done;
+    }
+    if (PyDict_GetItemStringRef(metadata, "fasthidden", &umd.u_fasthidden) < 0) {
+        goto done;
+    }
 
     assert(PyUnicode_Check(umd.u_name));
     assert(PyUnicode_Check(umd.u_qualname));
 
-    umd.u_consts = PyDict_GetItemString(metadata, "consts");
-    umd.u_names = PyDict_GetItemString(metadata, "names");
-    umd.u_varnames = PyDict_GetItemString(metadata, "varnames");
-    umd.u_cellvars = PyDict_GetItemString(metadata, "cellvars");
-    umd.u_freevars = PyDict_GetItemString(metadata, "freevars");
-    umd.u_fasthidden = PyDict_GetItemString(metadata, "fasthidden");
     if (umd.u_fasthidden == Py_None) {
-        umd.u_fasthidden = NULL;
+        Py_CLEAR(umd.u_fasthidden);
     }
 
     assert(PyDict_Check(umd.u_consts));
@@ -1369,7 +1389,18 @@ _testinternalcapi_assemble_code_object_impl(PyObject *module,
     assert(umd.u_kwonlyargcount >= 0);
     assert(umd.u_firstlineno >= 0);
 
-    return (PyObject*)_PyCompile_Assemble(&umd, filename, instructions);
+    result = (PyObject*)_PyCompile_Assemble(&umd, filename, instructions);
+
+done:
+    Py_XDECREF(umd.u_name);
+    Py_XDECREF(umd.u_qualname);
+    Py_XDECREF(umd.u_consts);
+    Py_XDECREF(umd.u_names);
+    Py_XDECREF(umd.u_varnames);
+    Py_XDECREF(umd.u_cellvars);
+    Py_XDECREF(umd.u_freevars);
+    Py_XDECREF(umd.u_fasthidden);
+    return result;
 }
 
 
@@ -2231,14 +2262,17 @@ dict_getitem_knownhash(PyObject *self, PyObject *args)
                           &mp, &key, &hash)) {
         return NULL;
     }
-
-    result = _PyDict_GetItem_KnownHash(mp, key, (Py_hash_t)hash);
-    if (result == NULL && !PyErr_Occurred()) {
-        _PyErr_SetKeyError(key);
+    if (!PyAnyDict_Check(mp)) {
+        PyErr_BadInternalCall();
         return NULL;
     }
 
-    return Py_XNewRef(result);
+    int rc = _PyDict_GetItemRef_KnownHash((PyDictObject *)mp, key,
+                                          (Py_hash_t)hash, &result);
+    if (rc == 0) {
+        _PyErr_SetKeyError(key);
+    }
+    return result;
 }
 
 

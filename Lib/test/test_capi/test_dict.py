@@ -141,47 +141,6 @@ class CAPITest(unittest.TestCase):
             self.assertRaises(SystemError, size, test_type())
         self.assertRaises(SystemError, size, NULL)
 
-    def test_dict_getitem(self):
-        # Test PyDict_GetItem()
-        getitem = _testlimitedcapi.dict_getitem
-        for dict_type in ANYDICT_TYPES:
-            dct = dict_type({'a': 1, '\U0001f40d': 2})
-            self.assertEqual(getitem(dct, 'a'), 1)
-            self.assertIs(getitem(dct, 'b'), KeyError)
-            self.assertEqual(getitem(dct, '\U0001f40d'), 2)
-
-        with support.catch_unraisable_exception() as cm:
-            self.assertIs(getitem({}, []), KeyError)  # unhashable
-            self.assertEqual(cm.unraisable.exc_type, TypeError)
-            self.assertEqual(str(cm.unraisable.exc_value),
-                             "unhashable type: 'list'")
-
-        for test_type in NOT_ANYDICT_TYPES + OTHER_TYPES:
-            self.assertIs(getitem(test_type(), 'a'), KeyError)
-
-        # CRASHES getitem({}, NULL)
-        # CRASHES getitem(NULL, 'a')
-
-    def test_dict_getitemstring(self):
-        # Test PyDict_GetItemString()
-        getitemstring = _testlimitedcapi.dict_getitemstring
-        for dict_type in ANYDICT_TYPES:
-            dct = dict_type({'a': 1, '\U0001f40d': 2})
-            self.assertEqual(getitemstring(dct, b'a'), 1)
-            self.assertIs(getitemstring(dct, b'b'), KeyError)
-            self.assertEqual(getitemstring(dct, '\U0001f40d'.encode()), 2)
-
-        with support.catch_unraisable_exception() as cm:
-            self.assertIs(getitemstring({}, INVALID_UTF8), KeyError)
-            self.assertEqual(cm.unraisable.exc_type, UnicodeDecodeError)
-            self.assertRegex(str(cm.unraisable.exc_value),
-                             "'utf-8' codec can't decode")
-
-        for test_type in NOT_ANYDICT_TYPES + OTHER_TYPES:
-            self.assertIs(getitemstring(test_type(), b'a'), KeyError)
-        # CRASHES getitemstring({}, NULL)
-        # CRASHES getitemstring(NULL, b'a')
-
     def test_dict_getitemref(self):
         # Test PyDict_GetItemRef()
         getitem = _testcapi.dict_getitemref
@@ -211,21 +170,6 @@ class CAPITest(unittest.TestCase):
             self.assertRaises(SystemError, getitemstring, test_type(), b'a')
         # CRASHES getitemstring({}, NULL)
         # CRASHES getitemstring(NULL, b'a')
-
-    def test_dict_getitemwitherror(self):
-        # Test PyDict_GetItemWithError()
-        getitem = _testlimitedcapi.dict_getitemwitherror
-        for dict_type in ANYDICT_TYPES:
-            dct = dict_type({'a': 1, '\U0001f40d': 2})
-            self.assertEqual(getitem(dct, 'a'), 1)
-            self.assertIs(getitem(dct, 'b'), KeyError)
-            self.assertEqual(getitem(dct, '\U0001f40d'), 2)
-
-        self.assertRaises(TypeError, getitem, {}, [])  # unhashable
-        for test_type in NOT_ANYDICT_TYPES + OTHER_TYPES:
-            self.assertRaises(SystemError, getitem, [], 'a')
-        # CRASHES getitem({}, NULL)
-        # CRASHES getitem(NULL, 'a')
 
     def test_dict_contains(self):
         # Test PyDict_Contains()
@@ -349,26 +293,6 @@ class CAPITest(unittest.TestCase):
         # CRASHES delitemstring({}, NULL)
         # CRASHES delitemstring(NULL, b'a')
 
-    def test_dict_setdefault(self):
-        # Test PyDict_SetDefault()
-        setdefault = _testcapi.dict_setdefault
-        for dict_type in DICT_TYPES:
-            dct = dict_type()
-            self.assertEqual(setdefault(dct, 'a', 5), 5)
-            self.assertEqual(dct, {'a': 5})
-            self.assertEqual(setdefault(dct, 'a', 8), 5)
-            self.assertEqual(dct, {'a': 5})
-
-        self.assertRaises(TypeError, setdefault, {}, [], 5)  # unhashable
-        for test_type in FROZENDICT_TYPES:
-            with self.frozendict_does_not_support('assignment'):
-                setdefault(test_type(), 'a', 5)
-        for test_type in MAPPING_TYPES + OTHER_TYPES:
-            self.assertRaises(SystemError, setdefault, test_type(), 'a', 5)
-        # CRASHES setdefault({}, NULL, 5)
-        # CRASHES setdefault({}, 'a', NULL)
-        # CRASHES setdefault(NULL, 'a', 5)
-
     def test_dict_setdefaultref(self):
         # Test PyDict_SetDefaultRef()
         setdefault = _testcapi.dict_setdefaultref
@@ -415,8 +339,8 @@ class CAPITest(unittest.TestCase):
             self.assertRaises(SystemError, _testlimitedcapi.dict_items, mapping)
 
     def test_dict_next(self):
-        # Test PyDict_Next()
-        dict_next = _testlimitedcapi.dict_next
+        # Test PyDict_NextEntryRef()
+        dict_next = _testcapi.dict_next
         self.assertIsNone(dict_next({}, 0))
         for dict_type in ANYDICT_TYPES:
             dct = dict_type({'a': 1, 'b': 2, 'c': 3})
@@ -434,7 +358,7 @@ class CAPITest(unittest.TestCase):
         for test_type in NOT_ANYDICT_TYPES + OTHER_TYPES:
             dct = test_type()
             pos = 0
-            self.assertEqual(dict_next(dct, pos), None)
+            self.assertRaises(SystemError, dict_next, dct, pos)
 
         # CRASHES dict_next(NULL, 0)
 

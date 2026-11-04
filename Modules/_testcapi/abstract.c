@@ -166,19 +166,6 @@ sequence_fast_get_size(PyObject *self, PyObject *obj)
 
 
 static PyObject *
-sequence_fast_get_item(PyObject *self, PyObject *args)
-{
-    PyObject *obj;
-    Py_ssize_t index;
-    if (!PyArg_ParseTuple(args, "On", &obj, &index)) {
-        return NULL;
-    }
-    NULLABLE(obj);
-    return PySequence_Fast_GET_ITEM(obj, index);
-}
-
-
-static PyObject *
 object_setattr_null_exc(PyObject *self, PyObject *args)
 {
     PyObject *obj, *name, *exc;
@@ -226,7 +213,6 @@ static PyMethodDef test_methods[] = {
     {"PyIter_NextItem", pyiter_nextitem, METH_O},
 
     {"sequence_fast_get_size", sequence_fast_get_size, METH_O},
-    {"sequence_fast_get_item", sequence_fast_get_item, METH_VARARGS},
     {"object_setattr_null_exc", object_setattr_null_exc, METH_VARARGS},
     {"object_setattrstring_null_exc", object_setattrstring_null_exc, METH_VARARGS},
     {NULL},

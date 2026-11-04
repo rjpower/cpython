@@ -33,21 +33,24 @@ err_restore(PyObject *self, PyObject *args) {
     PyObject *type = NULL, *value = NULL, *traceback = NULL;
     switch(PyTuple_Size(args)) {
         case 3:
-            traceback = PyTuple_GetItem(args, 2);
-            Py_INCREF(traceback);
+            traceback = PyTuple_GetItemRef(args, 2);
             _Py_FALLTHROUGH;
         case 2:
-            value = PyTuple_GetItem(args, 1);
-            Py_INCREF(value);
+            value = PyTuple_GetItemRef(args, 1);
             _Py_FALLTHROUGH;
         case 1:
-            type = PyTuple_GetItem(args, 0);
-            Py_INCREF(type);
+            type = PyTuple_GetItemRef(args, 0);
             break;
         default:
             PyErr_SetString(PyExc_TypeError,
                         "wrong number of arguments");
             return NULL;
+    }
+    if (PyErr_Occurred()) {
+        Py_XDECREF(type);
+        Py_XDECREF(value);
+        Py_XDECREF(traceback);
+        return NULL;
     }
     PyErr_Restore(type, value, traceback);
     assert(PyErr_Occurred());

@@ -221,25 +221,36 @@ call_with_nomemory(PyObject *self, PyObject *args)
                         "call_with_nomemory() requires at least 3 arguments");
         return NULL;
     }
-    int start = PyLong_AsInt(PyTuple_GET_ITEM(args, 0));
+    PyObject *res = NULL;
+    PyObject *start_obj = PyTuple_GetItemRef(args, 0);
+    PyObject *stop_obj = PyTuple_GetItemRef(args, 1);
+    PyObject *func = PyTuple_GetItemRef(args, 2);
+    PyObject *callargs = NULL;
+    if (start_obj == NULL || stop_obj == NULL || func == NULL) {
+        goto done;
+    }
+    int start = PyLong_AsInt(start_obj);
     if (start == -1 && PyErr_Occurred()) {
-        return NULL;
+        goto done;
     }
-    int stop = PyLong_AsInt(PyTuple_GET_ITEM(args, 1));
+    int stop = PyLong_AsInt(stop_obj);
     if (stop == -1 && PyErr_Occurred()) {
-        return NULL;
+        goto done;
     }
-    PyObject *func = PyTuple_GET_ITEM(args, 2);
     /* PyObject_Call() with a prebuilt tuple does not allocate,
      * unlike PyObject_Vectorcall() for a callee without vectorcall. */
-    PyObject *callargs = PyTuple_GetSlice(args, 3, nargs);
+    callargs = PyTuple_GetSlice(args, 3, nargs);
     if (callargs == NULL) {
-        return NULL;
+        goto done;
     }
     fm_set_nomemory(start, stop);
-    PyObject *res = PyObject_Call(func, callargs, NULL);
+    res = PyObject_Call(func, callargs, NULL);
     fm_remove_hooks();
-    Py_DECREF(callargs);
+done:
+    Py_XDECREF(start_obj);
+    Py_XDECREF(stop_obj);
+    Py_XDECREF(func);
+    Py_XDECREF(callargs);
     return res;
 }
 

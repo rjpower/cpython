@@ -93,12 +93,13 @@ Example_getattro(PyObject *op, PyObject *name)
 {
     ExampleObject *self = ExampleObject_CAST(op);
     if (self->x_attr != NULL) {
-        PyObject *v = PyDict_GetItemWithError(self->x_attr, name);
-        if (v != NULL) {
-            return Py_NewRef(v);
-        }
-        else if (PyErr_Occurred()) {
+        PyObject *v;
+        int rc = PyDict_GetItemRef(self->x_attr, name, &v);
+        if (rc < 0) {
             return NULL;
+        }
+        if (rc > 0) {
+            return v;
         }
     }
     return PyObject_GenericGetAttr((PyObject *)self, name);
@@ -257,11 +258,16 @@ _StateAccessType_increment_count_noclinic(PyObject *self,
         }
     }
     if (kwnames && PyTuple_Check(kwnames)) {
-        if (PyTuple_GET_SIZE(kwnames) > 1 ||
-            PyUnicode_CompareWithASCIIString(
-                PyTuple_GET_ITEM(kwnames, 0),
-                "twice"
-            )) {
+        int bad = PyTuple_GET_SIZE(kwnames) > 1;
+        if (!bad) {
+            PyObject *kwname = PyTuple_GetItemRef(kwnames, 0);
+            if (kwname == NULL) {
+                return NULL;
+            }
+            bad = PyUnicode_CompareWithASCIIString(kwname, "twice");
+            Py_DECREF(kwname);
+        }
+        if (bad) {
             PyErr_SetString(
                 PyExc_TypeError,
                 "decrement_count only takes 'twice' keyword argument"

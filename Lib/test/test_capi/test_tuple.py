@@ -184,7 +184,7 @@ class CAPITest(unittest.TestCase):
         self.assertEqual(size(TupleSubclass((1, 2))), 2)
 
     def test_tuple_getitem(self):
-        # Test PyTuple_GetItem()
+        # Test PyTuple_GetItemRef()
         getitem = _testlimitedcapi.tuple_getitem
 
         tup = ([1], [2], [3])
@@ -203,20 +203,6 @@ class CAPITest(unittest.TestCase):
         self.assertRaises(SystemError, getitem, 42, 1)
 
         # CRASHES getitem(NULL, 0)
-
-    def test_tuple_get_item(self):
-        # Test PyTuple_GET_ITEM()
-        get_item = _testcapi.tuple_get_item
-
-        tup = ([1], [2], [3])
-        self.assertEqual(get_item(tup, 0), [1])
-        self.assertEqual(get_item(tup, 2), [3])
-
-        tup2 = TupleSubclass(([1], [2], [3]))
-        self.assertEqual(get_item(tup2, 0), [1])
-        self.assertEqual(get_item(tup2, 2), [3])
-
-        # CRASHES get_item(NULL, 0)
 
     def test_tuple_getslice(self):
         # Test PyTuple_GetSlice()
@@ -283,7 +269,7 @@ class CAPITest(unittest.TestCase):
         # CRASHES setitem(NULL, 0, [])
 
     def test_tuple_set_item(self):
-        # Test PyTuple_SET_ITEM()
+        # Test PyTuple_SET_ITEM() on a new tuple
         set_item = _testcapi.tuple_set_item
         checknull = _testcapi._check_tuple_item_is_NULL
 
@@ -293,10 +279,6 @@ class CAPITest(unittest.TestCase):
 
         tup2 = set_item(tup, 1, NULL)
         self.assertTrue(checknull(tup2, 1))
-
-        tup2 = TupleSubclass(([1], [2]))
-        self.assertIs(set_item(tup2, 0, []), tup2)
-        self.assertEqual(tup2, ([], [2]))
 
         # CRASHES set_item(tup, -1, [])
         # CRASHES set_item(tup, len(tup), [])

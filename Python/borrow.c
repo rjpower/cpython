@@ -15,6 +15,7 @@
 #include "pycore_traceback.h"     // _Py_DumpStack()
 #include "pycore_tuple.h"         // PyTuple_GET_VALUE()
 #include "pycore_value.h"         // PyValue_AsPyObjectNewBoxed()
+#include "pycore_value_api.h"     // _PyValue_AsPyObjectNewBoxedAt()
 
 #define BORROW_CHUNK_SLOTS 1024
 
@@ -306,6 +307,15 @@ _PyBorrow_Keep(PyObject *owned)
     return owned;
 }
 
+/* A box for the call adapter. A caller that names another site class, such
+   as the argument parser, keeps it (pycore_value_api.h). */
+static inline PyObject *
+borrow_box(PyValue value)
+{
+    return _PyValue_AsPyObjectNewBoxedAt(
+        value, _PyValue_BoxSiteOr(BOX_SITE_CALL_ADAPTER));
+}
+
 PyObject *const *
 _PyBorrow_TupleItems(PyObject *tuple, Py_ssize_t n)
 {
@@ -326,7 +336,7 @@ _PyBorrow_TupleItems(PyObject *tuple, Py_ssize_t n)
        was, so the run stays contiguous. */
     PyObject **run = s->top;
     for (Py_ssize_t i = 0; i < n; i++) {
-        PyObject *item = PyValue_AsPyObjectNewBoxed(PyTuple_GET_VALUE(tuple, i));
+        PyObject *item = borrow_box(PyTuple_GET_VALUE(tuple, i));
         if (item == NULL) {
             return NULL;
         }
@@ -372,7 +382,7 @@ _PyBorrow_ValueVector(const PyValue *values, Py_ssize_t n)
        room is still there.  The hook must not push outside a scope. */
     for (Py_ssize_t i = 0; i < n; i++) {
         if (PyValue_IsInline(values[i])) {
-            PyObject *box = PyValue_AsPyObjectNewBoxed(values[i]);
+            PyObject *box = borrow_box(values[i]);
             if (box == NULL) {
                 return NULL;
             }

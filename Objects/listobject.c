@@ -15,6 +15,7 @@
 #include "pycore_value_ops.h"      // _Py_TryIncrefCompareValue()
 #include "pycore_tuple.h"         // _PyTuple_FromArraySteal()
 #include "pycore_typeobject.h"    // _Py_TYPE_VERSION_LIST
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include <stddef.h>
 
 /*[clinic input]
@@ -245,7 +246,7 @@ list_get_item_ref(PyListObject *op, Py_ssize_t i)
 {
     if (!valid_index(i, Py_SIZE(op))) return NULL;
     PyValue value = op->ob_item[i];
-    return PyValue_IsNull(value) ? NULL : PyValue_AsObject(value);
+    return PyValue_IsNull(value) ? NULL : _PyValue_AsObjectAt(value, BOX_SITE_LIST);
 }
 
 PyValue
@@ -538,7 +539,7 @@ list_item(PyObject *aa, Py_ssize_t i)
         PyErr_SetObject(PyExc_IndexError, &_Py_STR(list_err));
         return NULL;
     }
-    return PyValue_AsObject(a->ob_item[i]);
+    return _PyValue_AsObjectAt(a->ob_item[i], BOX_SITE_LIST);
 }
 
 static PyObject *
@@ -1277,7 +1278,7 @@ list_pop_impl(PyListObject *self, Py_ssize_t index)
         }
         PyValue *items = self->ob_item;
         PyValue value = PyValue_DUP(items[index]);
-        PyObject *result = PyValue_AsObject(value);
+        PyObject *result = _PyValue_AsObjectAt(value, BOX_SITE_LIST);
         if (result == NULL) { PyValue_CLOSE(value); return NULL; }
         /* A boxing allocator may mutate/reallocate the list. Reacquire the
            selected element instead of deleting a different value. */
@@ -2659,7 +2660,7 @@ list_sort_impl(PyListObject *self, PyObject *keyfunc, int reverse)
         }
 
         for (i = 0; i < saved_ob_size ; i++) {
-            PyObject *argument = PyValue_AsObject(saved_ob_item[i]);
+            PyObject *argument = _PyValue_AsObjectAt(saved_ob_item[i], BOX_SITE_LIST);
             PyObject *object = argument == NULL ? NULL : PyObject_CallOneArg(keyfunc, argument);
             Py_XDECREF(argument);
             keys[i] = PyValue_PrepareOwned(object);
@@ -3797,7 +3798,7 @@ listiter_next(PyObject *self)
     Py_XINCREF(seq);
     PyValue value = _PyListIter_NextValue(self);
     if (PyValue_IsNull(value)) { Py_XDECREF(seq); return NULL; }
-    PyObject *result = PyValue_AsObject(value);
+    PyObject *result = _PyValue_AsObjectAt(value, BOX_SITE_ITERATION);
     if (result == NULL && it->it_seq == seq && it->it_index == index + 1) it->it_index = index;
     PyValue_CLOSE(value);
     Py_DECREF(seq);
@@ -3961,7 +3962,7 @@ listreviter_next(PyObject *self)
     Py_XINCREF(seq);
     PyValue value = _PyListRevIter_NextValue(self);
     if (PyValue_IsNull(value)) { Py_XDECREF(seq); return NULL; }
-    PyObject *result = PyValue_AsObject(value);
+    PyObject *result = _PyValue_AsObjectAt(value, BOX_SITE_ITERATION);
     if (result == NULL && it->it_seq == seq && it->it_index == index - 1) it->it_index = index;
     PyValue_CLOSE(value);
     Py_DECREF(seq);

@@ -40,6 +40,7 @@
 #include "pycore_pyatomic_ft_wrappers.h"  // FT_ATOMIC_LOAD_SSIZE_RELAXED()
 #include "pycore_pyerrors.h"            // _PyErr_SetKeyError()
 #include "pycore_setobject.h"           // _PySet_NextEntry() definition
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "pycore_weakref.h"             // FT_CLEAR_WEAKREFS()
 #include "pycore_value_ops.h"
 
@@ -1063,7 +1064,7 @@ set_pop_impl(PySetObject *so)
         setentry *table = so->table;
         PyValue key = PyValue_DUP(table[index].key);
         Py_hash_t hash = table[index].hash;
-        PyObject *boxed = PyValue_AsObject(key);
+        PyObject *boxed = _PyValue_AsObjectAt(key, BOX_SITE_SET);
         if (boxed == NULL || PyErr_Occurred()) {
             PyObject *saved = PyErr_GetRaisedException();
             Py_XDECREF(boxed);
@@ -1343,7 +1344,7 @@ setiter_iternext(PyObject *self)
         return NULL;
     }
     Py_ssize_t reserved_pos = si->si_pos;
-    PyObject *boxed = PyValue_AsObject(key);
+    PyObject *boxed = _PyValue_AsObjectAt(key, BOX_SITE_ITERATION);
     if (boxed == NULL || PyErr_Occurred()) {
         PyObject *saved = PyErr_GetRaisedException();
         Py_XDECREF(boxed);
@@ -3510,7 +3511,7 @@ _PySet_NextEntryRef(PyObject *set, Py_ssize_t *pos, PyObject **key, Py_hash_t *h
         return status;
     }
     Py_ssize_t reserved_pos = *pos;
-    PyObject *boxed = PyValue_AsObject(value);
+    PyObject *boxed = _PyValue_AsObjectAt(value, BOX_SITE_SET);
     if (boxed == NULL || PyErr_Occurred()) {
         PyObject *saved = PyErr_GetRaisedException();
         Py_XDECREF(boxed);

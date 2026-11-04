@@ -45,6 +45,33 @@
 
 #define EVAL_CALL_KINDS 10
 
+/* Classes of the sites that box an inline value or that canonical entry
+   unboxes (pyjit/design/value-api.md, section 6.1). A site names its class
+   with _PyValue_AsObjectAt() or another At form of
+   Include/internal/pycore_value_api.h; a box made outside such a call is
+   unattributed. Compatibility exits are split by family. */
+#define BOX_SITE_UNATTRIBUTED 0
+#define BOX_SITE_NUMBER 1
+#define BOX_SITE_COMPARE 2
+#define BOX_SITE_REPR 3
+#define BOX_SITE_SEQUENCE 4
+#define BOX_SITE_ITERATION 5
+#define BOX_SITE_ATTRIBUTE 6
+#define BOX_SITE_CALL 7
+#define BOX_SITE_LIST 8
+#define BOX_SITE_TUPLE 9
+#define BOX_SITE_DICT 10
+#define BOX_SITE_SET 11
+#define BOX_SITE_CELL 12          // cells and struct sequences
+#define BOX_SITE_CALL_ADAPTER 13  // _PyBorrow_ValueVector, _PyBorrow_TupleItems
+#define BOX_SITE_PARSER 14        // argument parser output (getargs.c)
+#define BOX_SITE_INTERPRETER 15   // interpreter handlers
+#define BOX_SITE_FIELD 16         // object fields
+#define BOX_SITE_FRAME 17         // frame locals
+#define BOX_SITE_COMPILER 18      // compiler constants
+
+#define BOX_SITE_KINDS 19
+
 typedef struct _specialization_stats {
     uint64_t success;
     uint64_t failure;
@@ -108,6 +135,11 @@ typedef struct _object_stats {
     uint64_t inline_int_boxes;
     uint64_t inline_float_boxes;
     uint64_t inline_array_boxes;
+    /* Boxes by site class (BOX_SITE_*), which add up to inline_int_boxes +
+       inline_float_boxes, and exact int and float objects that canonical
+       entry made inline, by the same classes. */
+    uint64_t box[BOX_SITE_KINDS];
+    uint64_t entry_unbox[BOX_SITE_KINDS];
     /* Temporary value used during GC */
     uint64_t object_visits;
 } ObjectStats;

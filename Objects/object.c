@@ -34,6 +34,7 @@
 #include "pycore_typevarobject.h" // _PyTypeAlias_Type
 #include "pycore_value.h"      // PyValue_FromPyObjectSteal
 #include "pycore_unionobject.h"   // _PyUnion_Type
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 
 #ifdef Py_LIMITED_API
@@ -1926,7 +1927,7 @@ _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
     if (!PyValue_IsNull(cref.ref)) {
         /* The selected class value may be inline. Keep its canonical
          * owner through fallible creation and cleanup of the object view. */
-        res = PyValue_AsObject(cref.ref);
+        res = _PyValue_AsObjectAt(cref.ref, BOX_SITE_ATTRIBUTE);
         goto done;
     }
 

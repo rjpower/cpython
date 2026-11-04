@@ -3,6 +3,7 @@
 #include "pycore_borrow.h"        // _PyBorrow_ValueVector()
 #include "pycore_native_scope.h"
 #include "pycore_tuple.h"
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 
 static void
@@ -230,7 +231,7 @@ _PyNativeScope_Objects(_PyNativeScope *scope, PyObject *const **args)
         return -1;
     }
     if (!PyValue_IsNull(scope->receiver) && scope->receiver_object == NULL) {
-        scope->receiver_object = PyValue_AsObject(scope->receiver);
+        scope->receiver_object = _PyValue_AsObjectAt(scope->receiver, BOX_SITE_CALL_ADAPTER);
         if (scope->receiver_object == NULL) {
             return -1;
         }
@@ -247,7 +248,7 @@ _PyNativeScope_Objects(_PyNativeScope *scope, PyObject *const **args)
                 scope->objects[i] = PyValue_AsPyObjectBorrow(argument);
                 continue;
             }
-            scope->objects[i] = PyValue_AsPyObjectNewBoxed(argument);
+            scope->objects[i] = _PyValue_AsPyObjectNewBoxedAt(argument, BOX_SITE_CALL_ADAPTER);
             if (scope->objects[i] == NULL) {
                 return -1;
             }

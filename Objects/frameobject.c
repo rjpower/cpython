@@ -15,6 +15,7 @@
 #include "pycore_opcode_metadata.h" // _PyOpcode_Caches
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_unicodeobject.h" // _PyUnicode_Equal()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
 #include "frameobject.h"          // PyFrameLocalsProxyObject
@@ -49,7 +50,7 @@ framelocalsproxy_getval(_PyInterpreterFrame *frame, PyCodeObject *co, int i)
     _PyLocals_Kind kind = _PyLocals_GetKind(co->co_localspluskinds, i);
 
     if (PyValue_IsInline(fast[i])) {
-        return PyValue_AsPyObjectNewBoxed(fast[i]);
+        return _PyValue_AsPyObjectNewBoxedAt(fast[i], BOX_SITE_FRAME);
     }
     PyObject *value = PyValue_AsPyObjectBorrow(fast[i]);
     PyObject *cell = NULL;
@@ -2374,7 +2375,7 @@ frame_get_var(_PyInterpreterFrame *frame, PyCodeObject *co, int i,
     PyObject *value = NULL;
     {
         if (PyValue_IsInline(frame->base[i])) {
-            value = PyValue_AsPyObjectNewBoxed(frame->base[i]);
+            value = _PyValue_AsPyObjectNewBoxedAt(frame->base[i], BOX_SITE_FRAME);
             if (value == NULL) {
                 return -1;
             }

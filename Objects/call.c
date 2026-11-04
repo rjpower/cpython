@@ -10,6 +10,7 @@
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_tuple.h"         // _PyTuple_GET_OBJECT()
 #include "pycore_value.h"         // Owning object bridges and cleanup
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 
 /* Retire invocation-local owners without replacing the primary error. */
@@ -688,11 +689,11 @@ callmethod(PyThreadState *tstate, PyObject *obj, PyObject *name,
             PyErr_Occurred()) {
         goto done;
     }
-    PyObject *callable = _PyValueTemps_Object(&temps, method.ref);
+    PyObject *callable = _PyValueTemps_ObjectAt(&temps, method.ref, BOX_SITE_CALL);
     if (callable == NULL || PyErr_Occurred()) {
         goto done;
     }
-    PyObject *receiver = PyValue_IsNull(self.ref) ? NULL : _PyValueTemps_Object(&temps, self.ref);
+    PyObject *receiver = PyValue_IsNull(self.ref) ? NULL : _PyValueTemps_ObjectAt(&temps, self.ref, BOX_SITE_CALL);
     if (PyErr_Occurred()) {
         goto done;
     }
@@ -993,11 +994,11 @@ PyObject_VectorcallMethod(PyObject *name, PyObject *const *args,
             PyErr_Occurred()) {
         goto done;
     }
-    PyObject *callable = _PyValueTemps_Object(&temps, method.ref);
+    PyObject *callable = _PyValueTemps_ObjectAt(&temps, method.ref, BOX_SITE_CALL);
     if (callable == NULL || PyErr_Occurred()) {
         goto done;
     }
-    PyObject *receiver = PyValue_IsNull(self.ref) ? NULL : _PyValueTemps_Object(&temps, self.ref);
+    PyObject *receiver = PyValue_IsNull(self.ref) ? NULL : _PyValueTemps_ObjectAt(&temps, self.ref, BOX_SITE_CALL);
     if (PyErr_Occurred()) {
         goto done;
     }
@@ -1039,11 +1040,11 @@ PyObject_CallMethodObjArgs(PyObject *obj, PyObject *name, ...)
             PyErr_Occurred()) {
         goto done;
     }
-    PyObject *callable = _PyValueTemps_Object(&temps, method.ref);
+    PyObject *callable = _PyValueTemps_ObjectAt(&temps, method.ref, BOX_SITE_CALL);
     if (callable == NULL || PyErr_Occurred()) {
         goto done;
     }
-    PyObject *receiver = PyValue_IsNull(self.ref) ? NULL : _PyValueTemps_Object(&temps, self.ref);
+    PyObject *receiver = PyValue_IsNull(self.ref) ? NULL : _PyValueTemps_ObjectAt(&temps, self.ref, BOX_SITE_CALL);
     if (PyErr_Occurred()) {
         goto done;
     }
@@ -1167,7 +1168,7 @@ _PyStack_UnpackDict(PyThreadState *tstate,
         PyObject *pair = PyValue_AsPyObjectBorrow(PyList_GET_VALUE(items, i));
         PyObject *key = PyValue_AsPyObjectBorrow(PyTuple_GET_VALUE(pair, 0));
         PyTuple_SET_ITEM(kwnames, i, Py_NewRef(key));
-        stack[nargs + i] = PyValue_AsObject(PyTuple_GET_VALUE(pair, 1));
+        stack[nargs + i] = _PyValue_AsObjectAt(PyTuple_GET_VALUE(pair, 1), BOX_SITE_CALL_ADAPTER);
         if (stack[nargs + i] == NULL || PyErr_Occurred()) {
             goto error;
         }

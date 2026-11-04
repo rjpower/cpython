@@ -13,6 +13,7 @@
 #include "pycore_value.h"         // canonical argument snapshots
 #include "pycore_pyerrors.h"      // _Py_CalculateSuggestions()
 #include "pycore_unicodeobject.h" // _PyUnicode_InternImmortal
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 /* Export Stable ABIs (abi only) */
 PyAPI_FUNC(int) _PyArg_Parse_SizeT(PyObject *, const char *, ...);
@@ -384,7 +385,7 @@ vgetargs1_impl(PyObject *compat_args, PyObject *tuple,
 
     if (tuple != NULL) {
         assert(!compat);
-        stack = _PyBorrow_TupleItems(tuple, nargs);
+        stack = _PyBorrow_TupleItemsAt(tuple, nargs, BOX_SITE_PARSER);
         if (stack == NULL) {
             return cleanreturn(0, &freelist);
         }
@@ -596,7 +597,7 @@ converttuple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
     }
 
     len = PyTuple_GET_SIZE(arg);
-    PyObject *const *items = len == n ? _PyBorrow_TupleItems(arg, n) : NULL;
+    PyObject *const *items = len == n ? _PyBorrow_TupleItemsAt(arg, n, BOX_SITE_PARSER) : NULL;
     if (!istuple) {
         Py_DECREF(arg);            /* the run owns the elements */
     }
@@ -1805,8 +1806,8 @@ vgetargskeywords_impl(PyObject *const *args, PyObject *tuple, Py_ssize_t nargs,
     }
     if (tuple != NULL) {
         /* nargs <= len, an int, after the arity check above. */
-        args = _PyBorrow_TupleItems(
-            tuple, keywords_positional_limit(format, (int)nargs));
+        args = _PyBorrow_TupleItemsAt(
+            tuple, keywords_positional_limit(format, (int)nargs), BOX_SITE_PARSER);
         if (args == NULL) {
             return cleanreturn(0, &freelist);
         }
@@ -2463,7 +2464,7 @@ vgetargskeywordsfast_impl(PyObject *const *args, PyObject *tuple,
         return cleanreturn(0, &freelist);
     }
     if (tuple != NULL) {
-        args = _PyBorrow_TupleItems(tuple, nargs);
+        args = _PyBorrow_TupleItemsAt(tuple, nargs, BOX_SITE_PARSER);
         if (args == NULL) {
             return cleanreturn(0, &freelist);
         }
@@ -3033,7 +3034,7 @@ PyArg_UnpackTuple(PyObject *args, const char *name, Py_ssize_t min, Py_ssize_t m
     if (!_PyArg_CheckPositional(name, nargs, min, max)) {
         return 0;
     }
-    stack = _PyBorrow_TupleItems(args, nargs);
+    stack = _PyBorrow_TupleItemsAt(args, nargs, BOX_SITE_PARSER);
     if (stack == NULL) {
         return 0;
     }

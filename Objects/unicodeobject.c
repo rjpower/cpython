@@ -62,6 +62,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "pycore_unicodectype.h"  // _PyUnicode_IsXidStart
 #include "pycore_unicodeobject.h" // struct _Py_unicode_state
 #include "pycore_unicodeobject_generated.h"  // _PyUnicode_InitStaticStrings()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 #include "stringlib/eq.h"         // unicode_eq()
 #include <stddef.h>               // ptrdiff_t
@@ -2708,6 +2709,20 @@ unicode_fromformat_write_wcstr(_PyUnicodeWriter *writer, const wchar_t *str,
 #define F_SIZE 3
 #define F_PTRDIFF 4
 #define F_INTMAX 5
+/* The argument is a PyValue: %vR, %vS, %vA, %vT, %vN, %#vT and %#vN take a
+   value where %R, %S, %A, %T, %N, %#T and %#N take an object
+   (pyjit/design/value-api.md, section 4). */
+#define F_VALUE 6
+
+/* A new reference to the object for the PyValue argument of %vR, %vS or
+   %vA, boxing an inline value. */
+static PyObject *
+unicode_fromformat_value_object(va_list *vargs)
+{
+    PyValue value = va_arg(*vargs, PyValue);
+    assert(!PyValue_IsNull(value));
+    return _PyValue_AsObjectAt(value, BOX_SITE_REPR);
+}
 
 static const char*
 unicode_fromformat_arg(_PyUnicodeWriter *writer,
@@ -2814,11 +2829,19 @@ unicode_fromformat_arg(_PyUnicodeWriter *writer,
         sizemod = F_INTMAX;
         ++f;
     }
+    else if (*f == 'v') {
+        sizemod = F_VALUE;
+        ++f;
+    }
     if (f[0] != '\0' && f[1] == '\0')
         writer->overallocate = 0;
 
     switch (*f) {
     case 'd': case 'i': case 'o': case 'u': case 'x': case 'X':
+        if (sizemod == F_VALUE) goto invalid_format;
+        break;
+    case 'R': case 'S': case 'A': case 'T': case 'N':
+        if (sizemod && sizemod != F_VALUE) goto invalid_format;
         break;
     case 'c': case 'p':
         if (sizemod || width >= 0 || precision >= 0) goto invalid_format;
@@ -3014,10 +3037,20 @@ unicode_fromformat_arg(_PyUnicodeWriter *writer,
 
     case 'S':
     {
-        PyObject *obj = va_arg(*vargs, PyObject *);
         PyObject *str;
-        assert(obj);
-        str = PyObject_Str(obj);
+        if (sizemod == F_VALUE) {
+            PyObject *obj = unicode_fromformat_value_object(vargs);
+            if (obj == NULL) {
+                return NULL;
+            }
+            str = PyObject_Str(obj);
+            Py_DECREF(obj);
+        }
+        else {
+            PyObject *obj = va_arg(*vargs, PyObject *);
+            assert(obj);
+            str = PyObject_Str(obj);
+        }
         if (!str)
             return NULL;
         if (unicode_fromformat_write_str(writer, str, width, precision, flags) == -1) {
@@ -3030,10 +3063,20 @@ unicode_fromformat_arg(_PyUnicodeWriter *writer,
 
     case 'R':
     {
-        PyObject *obj = va_arg(*vargs, PyObject *);
         PyObject *repr;
-        assert(obj);
-        repr = PyObject_Repr(obj);
+        if (sizemod == F_VALUE) {
+            PyObject *obj = unicode_fromformat_value_object(vargs);
+            if (obj == NULL) {
+                return NULL;
+            }
+            repr = PyObject_Repr(obj);
+            Py_DECREF(obj);
+        }
+        else {
+            PyObject *obj = va_arg(*vargs, PyObject *);
+            assert(obj);
+            repr = PyObject_Repr(obj);
+        }
         if (!repr)
             return NULL;
         if (unicode_fromformat_write_str(writer, repr, width, precision, flags) == -1) {
@@ -3046,10 +3089,20 @@ unicode_fromformat_arg(_PyUnicodeWriter *writer,
 
     case 'A':
     {
-        PyObject *obj = va_arg(*vargs, PyObject *);
         PyObject *ascii;
-        assert(obj);
-        ascii = PyObject_ASCII(obj);
+        if (sizemod == F_VALUE) {
+            PyObject *obj = unicode_fromformat_value_object(vargs);
+            if (obj == NULL) {
+                return NULL;
+            }
+            ascii = PyObject_ASCII(obj);
+            Py_DECREF(obj);
+        }
+        else {
+            PyObject *obj = va_arg(*vargs, PyObject *);
+            assert(obj);
+            ascii = PyObject_ASCII(obj);
+        }
         if (!ascii)
             return NULL;
         if (unicode_fromformat_write_str(writer, ascii, width, precision, flags) == -1) {
@@ -3062,8 +3115,17 @@ unicode_fromformat_arg(_PyUnicodeWriter *writer,
 
     case 'T':
     {
-        PyObject *obj = va_arg(*vargs, PyObject *);
-        PyTypeObject *type = (PyTypeObject *)Py_NewRef(Py_TYPE(obj));
+        PyTypeObject *type;
+        if (sizemod == F_VALUE) {
+            PyValue value = va_arg(*vargs, PyValue);
+            assert(!PyValue_IsNull(value));
+            // The type of an inline value is int or float: no box.
+            type = (PyTypeObject *)Py_NewRef(PyValue_TYPE(value));
+        }
+        else {
+            PyObject *obj = va_arg(*vargs, PyObject *);
+            type = (PyTypeObject *)Py_NewRef(Py_TYPE(obj));
+        }
 
         PyObject *type_name;
         if (flags & F_ALT) {
@@ -3088,10 +3150,20 @@ unicode_fromformat_arg(_PyUnicodeWriter *writer,
 
     case 'N':
     {
-        PyObject *type_raw = va_arg(*vargs, PyObject *);
-        assert(type_raw != NULL);
+        PyObject *type_raw;
+        if (sizemod == F_VALUE) {
+            PyValue value = va_arg(*vargs, PyValue);
+            assert(!PyValue_IsNull(value));
+            // An inline value is an int or a float, never a type.
+            type_raw = PyValue_IsInline(value)
+                ? NULL : PyValue_AsPyObjectBorrow(value);
+        }
+        else {
+            type_raw = va_arg(*vargs, PyObject *);
+            assert(type_raw != NULL);
+        }
 
-        if (!PyType_Check(type_raw)) {
+        if (type_raw == NULL || !PyType_Check(type_raw)) {
             PyErr_SetString(PyExc_TypeError, "%N argument must be a type");
             return NULL;
         }

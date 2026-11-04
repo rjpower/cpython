@@ -891,6 +891,9 @@
     <ClInclude Include="..\Include\internal\pycore_value.h">
       <Filter>Include\internal</Filter>
     </ClInclude>
+    <ClInclude Include="..\Include\internal\pycore_value_api.h">
+      <Filter>Include\internal</Filter>
+    </ClInclude>
     <ClInclude Include="..\Include\internal\pycore_template.h">
       <Filter>Include\internal</Filter>
     </ClInclude>

@@ -274,6 +274,34 @@ extern "C" {
 #define _Py_DEPRECATED_EXTERNALLY(version) Py_DEPRECATED(version)
 #endif
 
+/* Value-native units (pyjit/design/value-api.md, section 4).
+ *
+ * A unit built with PY_CORE_CFLAGS (Py_BUILD_CORE without
+ * Py_BUILD_CORE_BUILTIN or Py_BUILD_CORE_MODULE) is value-native, and so is
+ * a ported module that defines Py_VALUE_CORE before including Python.h.
+ * There, Py_VALUE_COMPAT(REPLACEMENT) placed before the declaration of an
+ * object-form function makes every call of it a build error naming its value
+ * form; elsewhere it expands to nothing:
+ *
+ *    Py_VALUE_COMPAT(_PyValue_Add) PyAPI_FUNC(PyObject *) PyNumber_Add(...);
+ *
+ * There is no weaker fallback: a compiler without the unavailable attribute
+ * cannot build value-native units. */
+#if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_BUILTIN) \
+    && !defined(Py_BUILD_CORE_MODULE) && !defined(Py_VALUE_CORE)
+#  define Py_VALUE_CORE 1
+#endif
+#if defined(Py_VALUE_CORE)
+#  if defined(__clang__) || (defined(__GNUC__) && __GNUC__ >= 12)
+#    define Py_VALUE_COMPAT(REPLACEMENT) \
+         __attribute__((unavailable("compatibility API; use " #REPLACEMENT)))
+#  else
+#    error "value-native units need __attribute__((unavailable)): Clang or GCC 12+"
+#  endif
+#else
+#  define Py_VALUE_COMPAT(REPLACEMENT)
+#endif
+
 
 #if defined(__clang__)
 #define _Py_COMP_DIAG_PUSH _Pragma("clang diagnostic push")

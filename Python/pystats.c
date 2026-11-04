@@ -237,6 +237,44 @@ print_object_stats(FILE *out, ObjectStats *stats)
     fprintf(out, "Object inline array boxes: %" PRIu64 "\n", stats->inline_array_boxes);
 }
 
+static const char *const box_site_names[BOX_SITE_KINDS] = {
+    [BOX_SITE_UNATTRIBUTED] = "unattributed",
+    [BOX_SITE_NUMBER] = "number",
+    [BOX_SITE_COMPARE] = "compare",
+    [BOX_SITE_REPR] = "repr",
+    [BOX_SITE_SEQUENCE] = "sequence",
+    [BOX_SITE_ITERATION] = "iteration",
+    [BOX_SITE_ATTRIBUTE] = "attribute",
+    [BOX_SITE_CALL] = "call",
+    [BOX_SITE_LIST] = "list",
+    [BOX_SITE_TUPLE] = "tuple",
+    [BOX_SITE_DICT] = "dict",
+    [BOX_SITE_SET] = "set",
+    [BOX_SITE_CELL] = "cell/structseq",
+    [BOX_SITE_CALL_ADAPTER] = "call adapter",
+    [BOX_SITE_PARSER] = "parser",
+    [BOX_SITE_INTERPRETER] = "interpreter",
+    [BOX_SITE_FIELD] = "field",
+    [BOX_SITE_FRAME] = "frame",
+    [BOX_SITE_COMPILER] = "compiler",
+};
+
+/* The box table (pyjit/design/value-api.md, section 6.1): one line per site
+   class, so that every dump has the same rows. */
+static void
+print_box_stats(FILE *out, ObjectStats *stats)
+{
+    for (int i = 0; i < BOX_SITE_KINDS; i++) {
+        assert(box_site_names[i] != NULL);
+        fprintf(out, "Boxing by site (%s): %" PRIu64 "\n",
+                box_site_names[i], stats->box[i]);
+    }
+    for (int i = 0; i < BOX_SITE_KINDS; i++) {
+        fprintf(out, "Entry unboxing by site (%s): %" PRIu64 "\n",
+                box_site_names[i], stats->entry_unbox[i]);
+    }
+}
+
 static void
 print_gc_stats(FILE *out, GCStats *stats)
 {
@@ -277,6 +315,7 @@ print_stats(FILE *out, PyStats *stats)
     print_spec_stats(out, stats->opcode_stats);
     print_call_stats(out, &stats->call_stats);
     print_object_stats(out, &stats->object_stats);
+    print_box_stats(out, &stats->object_stats);
     print_gc_stats(out, stats->gc_stats);
 #ifdef Py_GIL_DISABLED
     print_ft_stats(out, &stats->ft_stats);
@@ -360,6 +399,10 @@ merge_object_stats(ObjectStats *dest, const ObjectStats *src)
     dest->inline_int_boxes += src->inline_int_boxes;
     dest->inline_float_boxes += src->inline_float_boxes;
     dest->inline_array_boxes += src->inline_array_boxes;
+    for (int i = 0; i < BOX_SITE_KINDS; i++) {
+        dest->box[i] += src->box[i];
+        dest->entry_unbox[i] += src->entry_unbox[i];
+    }
     dest->object_visits += src->object_visits;
 }
 

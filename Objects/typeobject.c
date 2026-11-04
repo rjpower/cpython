@@ -1,5 +1,9 @@
 /* Type object implementation */
 
+/* This file holds the slot machinery, so it is an adapter unit:
+   Tools/build/check_value_api.py does not list its slot-field reads. */
+#define Py_VALUE_ADAPTER 1
+
 #include "Python.h"
 #include "pycore_abstract.h"      // _PySequence_IterSearch()
 #include "pycore_borrow.h"        // _PyBorrowScope_Enter()
@@ -30,6 +34,7 @@
 #include "pycore_weakref.h"       // _PyWeakref_GET_REF()
 #include "pycore_cell.h"          // PyCell_GetRef()
 #include "pycore_stats.h"
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "opcode.h"               // MAKE_CELL
 
 #include <stddef.h>               // ptrdiff_t
@@ -3410,7 +3415,7 @@ _PyObject_LookupSpecialMethod(PyObject *attr, PyValue *method,
         return -1;
     }
     attr_owner = Py_NewRef(attr);
-    self_view = PyValue_AsObject(*self);
+    self_view = _PyValue_AsObjectAt(*self, BOX_SITE_ATTRIBUTE);
     if (self_view == NULL || PyErr_Occurred()) {
         goto done;
     }
@@ -3422,7 +3427,7 @@ _PyObject_LookupSpecialMethod(PyObject *attr, PyValue *method,
         rc = 0;
         goto done;
     }
-    method_view = PyValue_AsObject(found);
+    method_view = _PyValue_AsObjectAt(found, BOX_SITE_ATTRIBUTE);
     if (method_view == NULL || PyErr_Occurred()) {
         goto done;
     }
@@ -3530,7 +3535,7 @@ lookup_method_ex(PyObject *self, PyObject *attr, PyValue *out,
         }
         goto done;
     }
-    view = PyValue_AsObject(*out);
+    view = _PyValue_AsObjectAt(*out, BOX_SITE_ATTRIBUTE);
     if (view == NULL || PyErr_Occurred()) {
         goto done;
     }
@@ -5864,7 +5869,7 @@ type_new_get_slots(type_new_ctx *ctx, PyObject *dict)
         result = 0;
         goto done;
     }
-    iterable_owner = PyValue_AsObject(selected);
+    iterable_owner = _PyValue_AsObjectAt(selected, BOX_SITE_ATTRIBUTE);
     if (iterable_owner == NULL || PyErr_Occurred()) goto done;
     if (PyUnicode_Check(iterable_owner)) {
         new_slots = PyTuple_Pack(1, iterable_owner);
@@ -6046,7 +6051,7 @@ type_new_get_bases(type_new_ctx *ctx, PyObject **type,
         if (PyValue_IsObject(value) && PyType_Check(PyValue_AsPyObjectBorrow(value))) {
             continue;
         }
-        base_view = PyValue_AsObject(value);
+        base_view = _PyValue_AsObjectAt(value, BOX_SITE_ATTRIBUTE);
         if (base_view == NULL || PyErr_Occurred()) goto done;
         int has_mro_entries = PyObject_HasAttrWithError(base_view, &_Py_ID(__mro_entries__));
         type_mutation_close(&base_view);
@@ -7419,7 +7424,7 @@ _PyType_LookupRefAndVersion(PyTypeObject *type, PyObject *name, unsigned int *ve
     unsigned int expected = _PyType_LookupValueAndVersion(type, name, &out);
     PyObject *result = NULL;
     if (!PyValue_IsNull(out)) {
-        result = PyValue_AsObject(out);
+        result = _PyValue_AsObjectAt(out, BOX_SITE_ATTRIBUTE);
     }
     PyObject *saved = PyErr_GetRaisedException();
     PyValue_XCLOSE(out);
@@ -7740,7 +7745,7 @@ _Py_type_getattro_impl(PyTypeObject *type, PyObject *name, int *suppress_missing
     ref = _Py_type_getattro_value((PyTypeObject *)type_owner,
                                  name_owner, suppress_missing_attribute);
     if (!PyValue_IsNull(ref) && !PyErr_Occurred()) {
-        result = PyValue_AsObject(ref);
+        result = _PyValue_AsObjectAt(ref, BOX_SITE_ATTRIBUTE);
     }
     {
         PyValue retired = ref;
@@ -15119,7 +15124,7 @@ super_init_without_args(_PyInterpreterFrame *cframe, PyTypeObject **type_p,
     }
     else {
         // The argument may be an inline value, which this boxes.
-        firstarg = PyValue_AsPyObjectNewBoxed(firstref);
+        firstarg = _PyValue_AsPyObjectNewBoxedAt(firstref, BOX_SITE_FRAME);
         if (firstarg == NULL || PyErr_Occurred()) {
             goto cleanup;
         }

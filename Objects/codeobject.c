@@ -17,6 +17,7 @@
 #include "pycore_unicodeobject.h" // _PyUnicode_InternImmortal()
 #include "pycore_uniqueid.h"      // _PyObject_AssignUniqueId()
 #include "pycore_value.h"         // _PyCode_ConstantValueKey()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
 #include "clinic/codeobject.c.h"
@@ -3202,7 +3203,7 @@ _PyCode_ConstantValueKey(PyValue constant)
             if (PyValue_IsNull(keys[i])) {
                 goto slice_done;
             }
-            items[i] = PyValue_AsObject(keys[i]);
+            items[i] = _PyValue_AsObjectAt(keys[i], BOX_SITE_COMPILER);
             if (items[i] == NULL) {
                 goto slice_done;
             }
@@ -3239,7 +3240,7 @@ _PyCode_ConstantKey(PyObject *op)
     if (PyValue_IsNull(key)) {
         return NULL;
     }
-    PyObject *result = PyValue_AsObject(key);
+    PyObject *result = _PyValue_AsObjectAt(key, BOX_SITE_COMPILER);
     PyValue_CLOSE(key);
     return result;
 }

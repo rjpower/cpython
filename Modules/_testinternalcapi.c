@@ -43,6 +43,7 @@
 #include "pycore_runtime_structs.h" // _PY_NSMALLPOSINTS
 #include "pycore_unicodeobject.h" // _PyUnicode_TransformDecimalAndSpaceToASCII()
 #include "pycore_value.h"         // PyValue_IsHeapSafe()
+#include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
 #include "pycore_tuple.h"       // _PyTuple_GET_OBJECT()
 
 #include "clinic/_testinternalcapi.c.h"
@@ -3198,6 +3199,89 @@ pyvalue_home_violation_sites(PyObject *self, PyObject *unused)
     return _PyValue_HomeViolationSites();
 }
 
+/* Value API packet V1 (pyjit/design/value-api.md): entry primitives and
+ * value format conversions. */
+
+static const char *
+pyvalue_kind(PyValue value)
+{
+    if (PyValue_IsInlineInt(value)) {
+        return "int";
+    }
+    return PyValue_IsInlineFloat(value) ? "float" : "object";
+}
+
+/* (kind, round trip, same bits): the value that the inline borrowed entry
+ * makes of obj, the object it boxes back to, and whether its bits equal
+ * those of the out-of-line PyValue_FromObjectBorrow(). */
+static PyObject *
+pyvalue_from_object_borrow_inline(PyObject *self, PyObject *obj)
+{
+    PyValue value = _PyValue_FromObjectBorrowInline(obj);
+    PyValue expected = PyValue_FromObjectBorrow(obj);
+    PyObject *back = PyValue_AsObject(value);
+    if (back == NULL) {
+        return NULL;
+    }
+    return Py_BuildValue("(sNO)", pyvalue_kind(value), back,
+                         value.bits == expected.bits ? Py_True : Py_False);
+}
+
+/* The round trip of obj through the typed entry, which must give a
+ * no-count reference to obj itself. Debug builds abort when obj is an exact
+ * int or float. */
+static PyObject *
+pyvalue_from_object_known(PyObject *self, PyObject *obj)
+{
+    PyValue value = _PyValue_FromObjectKnown(obj);
+    if (value.bits != ((uintptr_t)obj | Py_TAG_REFCNT)) {
+        PyErr_SetString(PyExc_AssertionError, "not a no-count reference");
+        return NULL;
+    }
+    return PyValue_AsObject(value);
+}
+
+static PyObject *
+pyvalue_entry_null(PyObject *self, PyObject *unused)
+{
+    if (!PyValue_IsNull(_PyValue_FromObjectKnown(NULL))
+        || !PyValue_IsNull(_PyValue_FromObjectBorrowInline(NULL)))
+    {
+        PyErr_SetString(PyExc_AssertionError, "NULL entry is not NULL");
+        return NULL;
+    }
+    Py_RETURN_NONE;
+}
+
+/* PyUnicode_FromFormat(format, value) for the canonical value of obj, or
+ * PyUnicode_FromFormat(format, value, other) when other is given. */
+static PyObject *
+pyvalue_format(PyObject *self, PyObject *args)
+{
+    const char *format;
+    PyObject *obj, *other = NULL;
+    if (!PyArg_ParseTuple(args, "sO|O", &format, &obj, &other)) {
+        return NULL;
+    }
+    PyValue value = PyValue_FromObjectBorrow(obj);
+    if (other == NULL) {
+        return PyUnicode_FromFormat(format, value);
+    }
+    return PyUnicode_FromFormat(format, value, other);
+}
+
+/* PyErr_Format(exception, format, value) for the canonical value of obj. */
+static PyObject *
+pyvalue_err_format(PyObject *self, PyObject *args)
+{
+    PyObject *exception, *obj;
+    const char *format;
+    if (!PyArg_ParseTuple(args, "OsO", &exception, &format, &obj)) {
+        return NULL;
+    }
+    return PyErr_Format(exception, format, PyValue_FromObjectBorrow(obj));
+}
+
 static PyObject *
 pyvalue_internal_contract(PyObject *self, PyObject *unused)
 {
@@ -4106,6 +4190,11 @@ static PyMethodDef module_functions[] = {
     {"pyvalue_internal_contract", pyvalue_internal_contract, METH_NOARGS, NULL},
     {"pyvalue_home_violations", pyvalue_home_violations, METH_NOARGS, NULL},
     {"pyvalue_home_violation_sites", pyvalue_home_violation_sites, METH_NOARGS, NULL},
+    {"pyvalue_from_object_borrow_inline", pyvalue_from_object_borrow_inline, METH_O, NULL},
+    {"pyvalue_from_object_known", pyvalue_from_object_known, METH_O, NULL},
+    {"pyvalue_entry_null", pyvalue_entry_null, METH_NOARGS, NULL},
+    {"pyvalue_format", pyvalue_format, METH_VARARGS, NULL},
+    {"pyvalue_err_format", pyvalue_err_format, METH_VARARGS, NULL},
     {"jit_method_record_index", jit_method_record_index, METH_NOARGS, NULL},
     {"jit_method_cold_call", jit_method_cold_call, METH_VARARGS, NULL},
     {"jit_method_compile", jit_method_compile, METH_O, NULL},

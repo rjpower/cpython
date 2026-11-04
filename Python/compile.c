@@ -30,6 +30,7 @@
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString()
 #include "pycore_value.h"
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 #include "cpython/code.h"
 
@@ -1503,7 +1504,7 @@ _PyCompile_ConstCacheMergeOne(PyObject *const_cache, PyObject **obj)
     if (PyValue_IsNull(value)) {
         return ERROR;
     }
-    PyObject *replacement = PyValue_AsObject(value);
+    PyObject *replacement = _PyValue_AsObjectAt(value, BOX_SITE_COMPILER);
     PyValue_CLOSE(value);
     if (replacement == NULL) {
         return ERROR;
@@ -1675,7 +1676,7 @@ intern_constant(PyObject *const_cache, PyValue constant)
             int i;
             for (i = 0; i < 3; i++) {
                 PyValue item = PyTuple_GetValue(items, i);
-                fields[i] = PyValue_AsObject(item);
+                fields[i] = _PyValue_AsObjectAt(item, BOX_SITE_COMPILER);
                 PyValue_CLOSE(item);
                 if (fields[i] == NULL) {
                     break;

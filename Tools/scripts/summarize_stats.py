@@ -255,6 +255,8 @@ class OpcodeStats:
             elif key in (
                 "execution_count",
                 "specializable",
+                # The instruction's boxes (BOX_STAT_INC), not an outcome.
+                "boxes",
             ) or key.startswith("pair"):
                 continue
             else:
@@ -431,6 +433,18 @@ class Stats:
                 label = label[0].upper() + label[1:]
                 result[label] = (value, den)
         return result
+
+    def get_box_stats(self) -> list[tuple[str, int, int]]:
+        """(site class, boxes, entry unboxes) in the order of the dump."""
+        boxes = "Boxing by site ("
+        unboxes = "Entry unboxing by site ("
+        sites = {}
+        for key, value in self._data.items():
+            if key.startswith(boxes):
+                sites.setdefault(key[len(boxes) : -1], [0, 0])[0] = value
+            elif key.startswith(unboxes):
+                sites.setdefault(key[len(unboxes) : -1], [0, 0])[1] = value
+        return [(site, box, unbox) for site, (box, unbox) in sites.items()]
 
     def get_gc_stats(self) -> list[dict[str, int]]:
         gc_stats: list[dict[str, int]] = []
@@ -995,6 +1009,37 @@ def object_stats_section() -> Section:
     )
 
 
+def box_stats_section() -> Section:
+    def calc_box_table(stats: Stats) -> Rows:
+        box_stats = stats.get_box_stats()
+        total = sum(box for _, box, _ in box_stats)
+        return [
+            (site, Count(box), Ratio(box, total), Count(unbox))
+            for site, box, unbox in box_stats
+            if box or unbox
+        ]
+
+    return Section(
+        "Boxing by site",
+        "Boxes of inline values by site class",
+        [
+            Table(
+                ("Site class", "Boxes:", "Ratio:", "Entry unboxes:"),
+                calc_box_table,
+                JoinMode.CHANGE,
+            )
+        ],
+        doc="""
+        Boxes made for an inline int or float, by the class of the site that
+        needed an object (pyjit/design/value-api.md, section 6.1). The boxes
+        add up to "Inline int boxes" + "Inline float boxes" in the object
+        stats; "unattributed" boxes come from sites that name no class yet.
+        "Entry unboxes" counts exact int and float objects that canonical
+        entry turned into inline values. Classes with no counts are omitted.
+        """,
+    )
+
+
 def gc_stats_section() -> Section:
     def calc_gc_stats(stats: Stats) -> Rows:
         gc_stats = stats.get_gc_stats()
@@ -1069,6 +1114,7 @@ LAYOUT = [
     specialization_effectiveness_section(),
     call_stats_section(),
     object_stats_section(),
+    box_stats_section(),
     gc_stats_section(),
     rare_event_section(),
     meta_stats_section(),

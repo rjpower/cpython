@@ -15,6 +15,7 @@
 #include "pycore_pystate.h"         // _PyInterpreterState_GET()
 #include "pycore_regcfg.h"          // _PyRegCfg_Build()
 #include "pycore_value.h"        // PyValue_AsPyObjectBorrow()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 #include <stdbool.h>
 
@@ -1345,8 +1346,8 @@ get_const_value(int opcode, int oparg, PyObject *co_consts)
     }
     if (opcode == LOAD_COMMON_CONSTANT) {
         assert(oparg < NUM_COMMON_CONSTANTS);
-        return PyValue_AsObject(
-            _PyInterpreterState_GET()->common_consts[oparg]);
+        return _PyValue_AsObjectAt(
+            _PyInterpreterState_GET()->common_consts[oparg], BOX_SITE_COMPILER);
     }
 
     if (constant == NULL) {

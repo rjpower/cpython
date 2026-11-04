@@ -4,6 +4,7 @@
 #include "pycore_object.h"
 #include "pycore_pyerrors.h"
 #include "pycore_value.h"
+#include "pycore_value_api.h"     // _PyValue_SwapBoxSite()
 
 PyValue
 PyValue_FromObjectBorrow(PyObject *obj)
@@ -142,11 +143,33 @@ _PyValue_RestoreException(PyObject *saved)
 // The tag bits (Py_TAG_BITS) of an object pointer must be clear.
 static_assert(_Alignof(PyObject) >= 8, "PyObject must be 8-byte aligned");
 
+#ifdef Py_STATS
+/* The site class of the current thread's boxes, set by the At forms of
+   pycore_value_api.h for the duration of a boxing call. */
+static _Py_thread_local int box_site = BOX_SITE_UNATTRIBUTED;
+
+int
+_PyValue_SwapBoxSite(int site)
+{
+    assert(0 <= site && site < BOX_SITE_KINDS);
+    int previous = box_site;
+    box_site = site;
+    return previous;
+}
+
+int
+_PyValue_BoxSiteOr(int fallback)
+{
+    return box_site != BOX_SITE_UNATTRIBUTED ? box_site : fallback;
+}
+#endif
+
 // Out of line, so that the test before each call is all that hot paths carry.
 Py_NO_INLINE PyValue
 _PyValue_BoxInlineValue(PyValue ref)
 {
     assert(PyValue_IsInline(ref));
+    OBJECT_STAT_INC(box[box_site]);
     PyObject *box;
     if (PyValue_IsInlineInt(ref)) {
         OBJECT_STAT_INC(inline_int_boxes);

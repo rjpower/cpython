@@ -36,6 +36,7 @@
 
 #define NEED_OPCODE_METADATA
 #include "pycore_opcode_metadata.h" // _PyOpcode_opcode_metadata, _PyOpcode_num_popped/pushed
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #undef NEED_OPCODE_METADATA
 
 #include <stdbool.h>
@@ -871,7 +872,7 @@ codegen_deferred_annotations_body(compiler *c, location loc,
 
         if (idx != -1) {
             int ret = codegen_addop_load_const_new(
-                c, LOC(st), PyValue_AsObject(cond_index));
+                c, LOC(st), _PyValue_AsObjectAt(cond_index, BOX_SITE_COMPILER));
             if (ret < 0) {
                 PyObject *saved = PyErr_GetRaisedException();
                 Py_DECREF(mangled);

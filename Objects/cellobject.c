@@ -5,6 +5,7 @@
 #include "pycore_modsupport.h"    // _PyArg_NoKeywords()
 #include "pycore_object.h"
 #include "pycore_tuple.h"
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "pycore_value_ops.h"
 
 #define _PyCell_CAST(op) _Py_CAST(PyCellObject*, (op))
@@ -78,7 +79,7 @@ PyCell_Get(PyObject *op)
     if (PyValue_IsNull(value)) {
         return NULL;
     }
-    PyObject *result = PyValue_AsObject(value);
+    PyObject *result = _PyValue_AsObjectAt(value, BOX_SITE_CELL);
     PyValue_CLOSE(value);
     return result;
 }
@@ -194,7 +195,7 @@ cell_get_contents(PyObject *self, void *closure)
         PyErr_SetString(PyExc_ValueError, "Cell is empty");
         return NULL;
     }
-    PyObject *result = PyValue_AsObject(value);
+    PyObject *result = _PyValue_AsObjectAt(value, BOX_SITE_CELL);
     PyValue_CLOSE(value);
     return result;
 }

@@ -1,5 +1,9 @@
 /* Abstract Object Interface (many thanks to Jim Fulton) */
 
+/* This file holds the slot dispatchers, so it is an adapter unit:
+   Tools/build/check_value_api.py does not list its slot-field reads. */
+#define Py_VALUE_ADAPTER 1
+
 #include "Python.h"
 #include "pycore_abstract.h"      // _PyIndex_Check()
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
@@ -15,6 +19,7 @@
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_tuple.h"         // _PyTuple_FromArraySteal()
 #include "pycore_unionobject.h"   // _PyUnion_Check()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 #include <stddef.h>               // offsetof()
 
@@ -2706,10 +2711,10 @@ call_special_method(PyThreadState *tstate, PyObject *cls, PyObject *name,
         found = -1;
         goto done;
     }
-    method = PyValue_AsObject(cref.ref);
+    method = _PyValue_AsObjectAt(cref.ref, BOX_SITE_CALL);
     if (method != NULL && !PyErr_Occurred()) {
         if (!PyValue_IsNull(self)) {
-            self_object = PyValue_AsObject(self);
+            self_object = _PyValue_AsObjectAt(self, BOX_SITE_CALL);
         }
         if ((PyValue_IsNull(self) || self_object != NULL) && !PyErr_Occurred()) {
             PyObject *args[2] = {self_object, arg};

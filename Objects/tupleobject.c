@@ -11,6 +11,7 @@
 #include "pycore_value.h"         // PyValue ownership
 #include "pycore_value_ops.h"
 #include "pycore_tuple.h"         // _PyTupleIterObject
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 
 /*[clinic input]
@@ -123,7 +124,7 @@ PyTuple_GetItemRef(PyObject *op, Py_ssize_t i)
     if (PyValue_IsNull(value)) {
         return NULL;
     }
-    PyObject *result = PyValue_AsObject(value);
+    PyObject *result = _PyValue_AsObjectAt(value, BOX_SITE_TUPLE);
     PyValue_CLOSE(value);
     return result;
 }
@@ -493,7 +494,7 @@ tuple_item(PyObject *op, Py_ssize_t i)
         PyErr_SetString(PyExc_IndexError, "tuple index out of range");
         return NULL;
     }
-    return PyValue_AsObject(a->ob_item[i]);
+    return _PyValue_AsObjectAt(a->ob_item[i], BOX_SITE_TUPLE);
 }
 
 PyObject *
@@ -1217,7 +1218,7 @@ tupleiter_next(PyObject *self)
     }
     /* NextValue reserves before boxing, so a callback's next() sees the next
        item. A failed box can undo only our own untouched reservation. */
-    PyObject *item = PyValue_AsObject(value);
+    PyObject *item = _PyValue_AsObjectAt(value, BOX_SITE_ITERATION);
     PyValue_CLOSE(value);
     if (item == NULL && it->it_seq == seq &&
         FT_ATOMIC_LOAD_SSIZE_RELAXED(it->it_index) == index + 1) {

@@ -66,6 +66,26 @@ TEST_TEMPLATE = """
     """
 
 
+def run_test_code_stats(
+    test_code,
+    args=[],
+    env_vars=None,
+):
+    """Run test code and return the stats it dumps, as a dict."""
+    code = textwrap.dedent(TEST_TEMPLATE)
+    code = code.replace('_TEST_CODE_', textwrap.dedent(test_code))
+    script_args = args + ['-c', code]
+    env_vars = env_vars or {}
+    res, _ = script_helper.run_python_until_end(*script_args, **env_vars)
+    stderr = res.err.decode("ascii", "backslashreplace")
+    stats = {}
+    for line in stderr.split('\n'):
+        label, sep, value = line.rpartition(':')
+        if sep:
+            stats[label.strip()] = value.strip()
+    return stats
+
+
 def run_test_code(
     test_code,
     args=[],
@@ -73,17 +93,8 @@ def run_test_code(
 ):
     """Run test code and return the value of the "set_class" stats counter.
     """
-    code = textwrap.dedent(TEST_TEMPLATE)
-    code = code.replace('_TEST_CODE_', textwrap.dedent(test_code))
-    script_args = args + ['-c', code]
-    env_vars = env_vars or {}
-    res, _ = script_helper.run_python_until_end(*script_args, **env_vars)
-    stderr = res.err.decode("ascii", "backslashreplace")
-    for line in stderr.split('\n'):
-        if 'Rare event (set_class)' in line:
-            label, _, value = line.partition(':')
-            return value.strip()
-    return ''
+    stats = run_test_code_stats(test_code, args, env_vars)
+    return stats.get('Rare event (set_class)', '')
 
 
 @unittest.skipUnless(HAVE_PYSTATS, "requires pystats build option")
@@ -209,6 +220,29 @@ class TestPyStats(unittest.TestCase):
         # Clearing stats will clear for all threads
         stat_count = run_test_code(code)
         self.assertEqual(stat_count, '0')
+
+    def test_box_table(self):
+        """Check that the dump has a box count for every site class.
+        """
+        code = """
+        def func_start():
+            items = [1000]
+            items.pop()
+        """
+        stats = run_test_code_stats(code, args=['-X', 'pystats'])
+        sites = ['unattributed', 'number', 'compare', 'repr', 'sequence',
+                 'iteration', 'attribute', 'call', 'list', 'tuple', 'dict',
+                 'set', 'cell/structseq', 'call adapter', 'parser',
+                 'interpreter', 'field', 'frame', 'compiler']
+        boxes = {site: int(stats[f'Boxing by site ({site})'])
+                 for site in sites}
+        for site in sites:
+            self.assertIn(f'Entry unboxing by site ({site})', stats)
+        # list.pop() boxes the inline int it removes.
+        self.assertGreaterEqual(boxes['list'], 1)
+        self.assertEqual(sum(boxes.values()),
+                         int(stats['Object inline int boxes'])
+                         + int(stats['Object inline float boxes']))
 
 
 if __name__ == "__main__":

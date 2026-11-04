@@ -15,6 +15,7 @@
 #include "pycore_value_ops.h"
 #include "pycore_tuple.h"         // _PyTuple_RESET_HASH_CACHE()
 #include "pycore_typeobject.h"    // _PyStaticType_FiniBuiltin()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 static const char visible_length_key[] = "n_sequence_fields";
 static const char real_length_key[] = "n_fields";
@@ -128,7 +129,7 @@ PyStructSequence_GetItemRef(PyObject *op, Py_ssize_t index)
 {
     assert(index >= 0 && index < REAL_SIZE(op));
     PyValue value = ((PyStructSequence *)op)->ob_item[index];
-    return PyValue_IsNull(value) ? NULL : PyValue_AsObject(value);
+    return PyValue_IsNull(value) ? NULL : _PyValue_AsObjectAt(value, BOX_SITE_CELL);
 }
 
 
@@ -389,7 +390,7 @@ structseq_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
 
     for (i = n_visible_fields; i < n_fields; i++) {
         const char *n = Py_TYPE(self)->tp_members[i-n_unnamed_fields].name;
-        PyObject *value = PyValue_AsObject(self->ob_item[i]);
+        PyObject *value = _PyValue_AsObjectAt(self->ob_item[i], BOX_SITE_CELL);
         if (value == NULL) goto error;
         int stored = PyDict_SetItemString(dict, n, value);
         Py_DECREF(value);

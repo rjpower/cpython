@@ -8,6 +8,7 @@
 #include "pycore_object.h"        // _Py_TryIncrefCompare(), FT_ATOMIC_*()
 #include "pycore_critical_section.h"
 #include "pycore_value.h"
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 
 static inline PyObject *
@@ -102,7 +103,7 @@ PyMember_GetOne(const char *obj_addr, PyMemberDef *l)
         if (PyValue_IsNull(value)) {
             return NULL;
         }
-        v = PyValue_AsObject(value);
+        v = _PyValue_AsObjectAt(value, BOX_SITE_FIELD);
         PyValue_CLOSE(value);
         break;
     }

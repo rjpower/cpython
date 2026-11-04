@@ -132,6 +132,7 @@ As a consequence of this, split keys have a maximum size of 16.
 #include "pycore_value_ops.h"
 #include "pycore_tuple.h"         // _PyTuple_Recycle()
 #include "pycore_unicodeobject.h" // _PyUnicode_InternImmortal()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 #include "stringlib/eq.h"                // unicode_eq()
 #include <stdbool.h>
@@ -2199,7 +2200,7 @@ dict_getitemref_owned(PyObject *op, PyObject *key, Py_hash_t hash,
     }
     status = _PyDict_GetValue_KnownHash(op, query, hash, &value);
     if (status == 1) {
-        object = PyValue_AsObject(value);
+        object = _PyValue_AsObjectAt(value, BOX_SITE_DICT);
         if (object == NULL) {
             status = -1;
         }
@@ -2312,7 +2313,7 @@ _PyDict_LoadBuiltinsFromGlobals(PyObject *globals)
         return Py_NewRef(PyEval_GetBuiltins());
     }
     /* Keep the owned canonical snapshot live while scalar boxing can reenter. */
-    PyObject *object = PyValue_AsObject(ref);
+    PyObject *object = _PyValue_AsObjectAt(ref, BOX_SITE_DICT);
     if (object == NULL) {
         dict_close_value(ref);
         return NULL;
@@ -2616,7 +2617,7 @@ dict_selection_matches(PyDictObject *mp, PyDictKeysObject *saved_keys,
 static void
 dict_value_keyerror(PyValue key)
 {
-    PyObject *object = PyValue_AsObject(key);
+    PyObject *object = _PyValue_AsObjectAt(key, BOX_SITE_DICT);
     if (object != NULL && !PyErr_Occurred()) {
         _PyErr_SetKeyError(object);
     }
@@ -2740,7 +2741,7 @@ delitemif_lock_held(PyObject *op, PyObject *key,
     selected = PyValue_DUP(value);
     selected_key = PyValue_MakeHeapSafe(dict_entry_key(mp, ix));
     PyDictKeysObject *keys = mp->ma_keys;
-    object = PyValue_AsObject(selected);
+    object = _PyValue_AsObjectAt(selected, BOX_SITE_DICT);
     if (object == NULL || PyErr_Occurred()) {
         goto done;
     }
@@ -3106,13 +3107,13 @@ _PyDict_NextEntryRefKnownHash(PyObject *op, Py_ssize_t *position,
     Py_ssize_t reserved_position = *position;
     PyObject *key_object = NULL, *value_object = NULL;
     if (status > 0 && out_key != NULL) {
-        key_object = PyValue_AsObject(key);
+        key_object = _PyValue_AsObjectAt(key, BOX_SITE_DICT);
         if (key_object == NULL) {
             status = -1;
         }
     }
     if (status > 0 && out_value != NULL) {
-        value_object = PyValue_AsObject(value);
+        value_object = _PyValue_AsObjectAt(value, BOX_SITE_DICT);
         if (value_object == NULL) {
             status = -1;
         }
@@ -3181,7 +3182,7 @@ _PyDict_Pop_KnownHash(PyDictObject *mp, PyObject *key, Py_hash_t hash,
         PyDictKeysObject *keys = mp->ma_keys;
         if (result != NULL) {
             /* Box before removal: allocation failure consumes no item. */
-            object = PyValue_AsObject(selected);
+            object = _PyValue_AsObjectAt(selected, BOX_SITE_DICT);
             if (object == NULL || PyErr_Occurred()) {
                 break;
             }
@@ -3629,11 +3630,11 @@ anydict_repr_impl(PyObject *self)
     Py_ssize_t pos = 0;
     int first = 1, found;
     while ((found = _PyDict_NextValue(self, &pos, &key, &value, NULL)) > 0) {
-        key_object = PyValue_AsObject(key);
+        key_object = _PyValue_AsObjectAt(key, BOX_SITE_REPR);
         if (key_object == NULL) {
             goto error;
         }
-        value_object = PyValue_AsObject(value);
+        value_object = _PyValue_AsObjectAt(value, BOX_SITE_REPR);
         if (value_object == NULL) {
             goto error;
         }
@@ -3753,7 +3754,7 @@ _PyDict_Subscript(PyObject *self, PyObject *key)
         goto done;
     }
     if (found) {
-        result = PyValue_AsObject(value);
+        result = _PyValue_AsObjectAt(value, BOX_SITE_DICT);
         goto done;
     }
     if (!PyAnyDict_CheckExact(self)) {
@@ -4177,7 +4178,7 @@ dict_dict_merge(PyDictObject *mp, PyDictObject *other, int override, PyObject **
             }
             else if (present) {
                 if (dupkey != NULL) {
-                    *dupkey = PyValue_AsObject(key);
+                    *dupkey = _PyValue_AsObjectAt(key, BOX_SITE_DICT);
                     status = *dupkey == NULL ? -1 : -2;
                 }
             }
@@ -4796,7 +4797,7 @@ dict_setdefault_object_owned(PyObject *op, PyObject *key, PyObject *default_valu
             default_value = NULL;
             break;
         }
-        object = PyValue_AsObject(output);
+        object = _PyValue_AsObjectAt(output, BOX_SITE_DICT);
         if (object == NULL || PyErr_Occurred()) {
             status = -1;
             break;
@@ -5818,7 +5819,7 @@ dictiter_object_next(PyObject *self)
     if (!PyValue_IsNull(value)) {
         reservation.reserved_pos = di->di_pos;
         reservation.reserved_len = di->len;
-        result = PyValue_AsObject(value);
+        result = _PyValue_AsObjectAt(value, BOX_SITE_ITERATION);
         if (result == NULL) {
             dictiter_rollback(di, &reservation);
         }
@@ -7446,7 +7447,7 @@ _PyObject_TryGetInstanceAttribute(PyObject *obj, PyObject *name, PyObject **attr
         return handled < 0;
     }
     if (!PyValue_IsNull(value)) {
-        *attr = PyValue_AsObject(value);
+        *attr = _PyValue_AsObjectAt(value, BOX_SITE_ATTRIBUTE);
         dict_close_value(value);
         if (PyErr_Occurred()) {
             dict_xdecref_object(*attr);

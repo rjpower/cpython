@@ -2185,10 +2185,18 @@ math_dist_impl(PyObject *module, PyObject *p, PyObject *q)
         }
     }
     for (i=0 ; i<n ; i++) {
-        item = PyTuple_GET_ITEM(p, i);
-        ASSIGN_DOUBLE(px, item, error_exit);
-        item = PyTuple_GET_ITEM(q, i);
-        ASSIGN_DOUBLE(qx, item, error_exit);
+        item = PyTuple_GetItemRef(p, i);
+        if (item == NULL) {
+            goto error_exit;
+        }
+        ASSIGN_DOUBLE(px, item, error_with_item);
+        Py_DECREF(item);
+        item = PyTuple_GetItemRef(q, i);
+        if (item == NULL) {
+            goto error_exit;
+        }
+        ASSIGN_DOUBLE(qx, item, error_with_item);
+        Py_DECREF(item);
         x = fabs(px - qx);
         diffs[i] = x;
         found_nan |= isnan(x);
@@ -2208,6 +2216,8 @@ math_dist_impl(PyObject *module, PyObject *p, PyObject *q)
     }
     return PyFloat_FromDouble(result);
 
+  error_with_item:
+    Py_DECREF(item);
   error_exit:
     if (diffs != diffs_on_stack) {
         PyMem_Free(diffs);

@@ -994,6 +994,12 @@ load_data(zoneinfo_state *state, PyZoneInfo_ZoneInfo *self, PyObject *file_obj)
 {
     int rv = 0;
     PyObject *data_tuple = NULL;
+    PyObject *trans_idx_list = NULL;
+    PyObject *trans_utc = NULL;
+    PyObject *utcoff_list = NULL;
+    PyObject *isdst_list = NULL;
+    PyObject *abbr = NULL;
+    PyObject *tz_str = NULL;
 
     long *utcoff = NULL;
     long *dstoff = NULL;
@@ -1023,32 +1029,32 @@ load_data(zoneinfo_state *state, PyZoneInfo_ZoneInfo *self, PyObject *file_obj)
     }
 
     // Unpack the data tuple
-    PyObject *trans_idx_list = PyTuple_GetItem(data_tuple, 0);
+    trans_idx_list = PyTuple_GetItemRef(data_tuple, 0);
     if (trans_idx_list == NULL) {
         goto error;
     }
 
-    PyObject *trans_utc = PyTuple_GetItem(data_tuple, 1);
+    trans_utc = PyTuple_GetItemRef(data_tuple, 1);
     if (trans_utc == NULL) {
         goto error;
     }
 
-    PyObject *utcoff_list = PyTuple_GetItem(data_tuple, 2);
+    utcoff_list = PyTuple_GetItemRef(data_tuple, 2);
     if (utcoff_list == NULL) {
         goto error;
     }
 
-    PyObject *isdst_list = PyTuple_GetItem(data_tuple, 3);
+    isdst_list = PyTuple_GetItemRef(data_tuple, 3);
     if (isdst_list == NULL) {
         goto error;
     }
 
-    PyObject *abbr = PyTuple_GetItem(data_tuple, 4);
+    abbr = PyTuple_GetItemRef(data_tuple, 4);
     if (abbr == NULL) {
         goto error;
     }
 
-    PyObject *tz_str = PyTuple_GetItem(data_tuple, 5);
+    tz_str = PyTuple_GetItemRef(data_tuple, 5);
     if (tz_str == NULL) {
         goto error;
     }
@@ -1081,21 +1087,23 @@ load_data(zoneinfo_state *state, PyZoneInfo_ZoneInfo *self, PyObject *file_obj)
     }
 
     for (size_t i = 0; i < self->num_transitions; ++i) {
-        PyObject *num = PyTuple_GetItem(trans_utc, i);
+        PyObject *num = PyTuple_GetItemRef(trans_utc, i);
         if (num == NULL) {
             goto error;
         }
         self->trans_list_utc[i] = PyLong_AsLongLong(num);
+        Py_DECREF(num);
         if (self->trans_list_utc[i] == -1 && PyErr_Occurred()) {
             goto error;
         }
 
-        num = PyTuple_GetItem(trans_idx_list, i);
+        num = PyTuple_GetItemRef(trans_idx_list, i);
         if (num == NULL) {
             goto error;
         }
 
         Py_ssize_t cur_trans_idx = PyLong_AsSsize_t(num);
+        Py_DECREF(num);
         if (cur_trans_idx == -1 && PyErr_Occurred()) {
             goto error;
         }
@@ -1120,22 +1128,24 @@ load_data(zoneinfo_state *state, PyZoneInfo_ZoneInfo *self, PyObject *file_obj)
         goto error;
     }
     for (size_t i = 0; i < self->num_ttinfos; ++i) {
-        PyObject *num = PyTuple_GetItem(utcoff_list, i);
+        PyObject *num = PyTuple_GetItemRef(utcoff_list, i);
         if (num == NULL) {
             goto error;
         }
 
         utcoff[i] = PyLong_AsLong(num);
+        Py_DECREF(num);
         if (utcoff[i] == -1 && PyErr_Occurred()) {
             goto error;
         }
 
-        num = PyTuple_GetItem(isdst_list, i);
+        num = PyTuple_GetItemRef(isdst_list, i);
         if (num == NULL) {
             goto error;
         }
 
         int isdst_with_error = PyObject_IsTrue(num);
+        Py_DECREF(num);
         if (isdst_with_error == -1) {
             goto error;
         }
@@ -1169,7 +1179,7 @@ load_data(zoneinfo_state *state, PyZoneInfo_ZoneInfo *self, PyObject *file_obj)
         goto error;
     }
     for (size_t i = 0; i < self->num_ttinfos; ++i) {
-        PyObject *tzname = PyTuple_GetItem(abbr, i);
+        PyObject *tzname = PyTuple_GetItemRef(abbr, i);
         if (tzname == NULL) {
             goto error;
         }
@@ -1177,6 +1187,7 @@ load_data(zoneinfo_state *state, PyZoneInfo_ZoneInfo *self, PyObject *file_obj)
         ttinfos_allocated++;
         int rc = build_ttinfo(state, utcoff[i], dstoff[i], tzname,
                               &(self->_ttinfos[i]));
+        Py_DECREF(tzname);
         if (rc) {
             goto error;
         }
@@ -1315,6 +1326,12 @@ error:
     rv = -1;
 cleanup:
     Py_XDECREF(data_tuple);
+    Py_XDECREF(trans_idx_list);
+    Py_XDECREF(trans_utc);
+    Py_XDECREF(utcoff_list);
+    Py_XDECREF(isdst_list);
+    Py_XDECREF(abbr);
+    Py_XDECREF(tz_str);
 
     if (utcoff != NULL) {
         PyMem_Free(utcoff);

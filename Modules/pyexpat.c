@@ -1542,7 +1542,13 @@ pyexpat_encoding_create(const char *name, PyObject *mapping)
         return NULL;
     }
     for (int i = 0; i < 256; i++) {
-        int j = PyLong_AsInt(PyTuple_GET_ITEM(mapping, i));
+        PyObject *item = PyTuple_GetItemRef(mapping, i);
+        if (item == NULL) {
+            PyMem_Free(info);
+            return NULL;
+        }
+        int j = PyLong_AsInt(item);
+        Py_DECREF(item);
         if (j == -1 && PyErr_Occurred()) {
             PyMem_Free(info);
             return NULL;

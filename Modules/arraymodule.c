@@ -1830,9 +1830,15 @@ array_array_fromlist_impl(arrayobject *self, PyObject *list)
         if (array_resize(self, old_size + n) == -1)
             return NULL;
         for (i = 0; i < n; i++) {
-            PyObject *v = PyList_GET_ITEM(list, i);
-            if ((*self->ob_descr->setitem)(self,
-                            Py_SIZE(self) - n + i, v) != 0) {
+            PyObject *v = PyList_GetItemRef(list, i);
+            if (v == NULL) {
+                array_resize(self, old_size);
+                return NULL;
+            }
+            int res = (*self->ob_descr->setitem)(self,
+                            Py_SIZE(self) - n + i, v);
+            Py_DECREF(v);
+            if (res != 0) {
                 array_resize(self, old_size);
                 return NULL;
             }

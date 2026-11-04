@@ -18,6 +18,7 @@
 #include "pycore_runtime.h"       // _PyRuntime
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_unicodeobject.h" // _PyUnicode_CheckConsistency()
+#include "pycore_value.h"         // PyValue_AsPyObjectBorrow()
 
 #include <stdbool.h>              // bool
 
@@ -1397,7 +1398,10 @@ update_indent_cache(PyEncoderObject *s,
 {
     assert(indent_level * 2 == PyList_GET_SIZE(indent_cache) + 1);
     assert(indent_level > 0);
-    PyObject *newline_indent = PyList_GET_ITEM(indent_cache, (indent_level - 1)*2);
+    // indent_cache is private to the encoder and holds only str objects, so
+    // the entries are never inline values and are never removed.
+    PyObject *newline_indent = PyValue_AsPyObjectBorrow(
+        PyList_GET_VALUE(indent_cache, (indent_level - 1)*2));
     newline_indent = PyUnicode_Concat(newline_indent, s->indent);
     if (newline_indent == NULL) {
         return -1;
@@ -1431,14 +1435,18 @@ get_item_separator(PyEncoderObject *s,
         }
     }
     assert(indent_level * 2 < PyList_GET_SIZE(indent_cache));
-    return PyList_GET_ITEM(indent_cache, indent_level * 2 - 1);
+    // Borrowed: the cache only holds str objects and only grows.
+    return PyValue_AsPyObjectBorrow(
+        PyList_GET_VALUE(indent_cache, indent_level * 2 - 1));
 }
 
 static int
 write_newline_indent(PyUnicodeWriter *writer,
                      Py_ssize_t indent_level, PyObject *indent_cache)
 {
-    PyObject *newline_indent = PyList_GET_ITEM(indent_cache, indent_level * 2);
+    // Borrowed: the cache only holds str objects and only grows.
+    PyObject *newline_indent = PyValue_AsPyObjectBorrow(
+        PyList_GET_VALUE(indent_cache, indent_level * 2));
     return PyUnicodeWriter_WriteStr(writer, newline_indent);
 }
 
@@ -1743,25 +1751,35 @@ _encoder_iterate_mapping_lock_held(PyEncoderObject *s, PyUnicodeWriter *writer,
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(items);
     PyObject *key, *value;
     for (Py_ssize_t  i = 0; i < PyList_GET_SIZE(items); i++) {
-        PyObject *item = PyList_GET_ITEM(items, i);
         // gh-142831: encoder_encode_key_value() can invoke user code
-        // that mutates the items list, invalidating this borrowed ref.
-        Py_INCREF(item);
+        // that mutates the items list, so hold a strong reference.
+        PyObject *item = PyList_GetItemRef(items, i);
+        if (item == NULL) {
+            return -1;
+        }
         if (!PyTuple_Check(item) || PyTuple_GET_SIZE(item) != 2) {
             PyErr_SetString(PyExc_ValueError, "items must return 2-tuples");
             Py_DECREF(item);
             return -1;
         }
 
-        key = PyTuple_GET_ITEM(item, 0);
-        value = PyTuple_GET_ITEM(item, 1);
-        if (encoder_encode_key_value(s, writer, first, dct, key, value,
-                                     indent_level, indent_cache,
-                                     separator) < 0) {
+        key = PyTuple_GetItemRef(item, 0);
+        value = PyTuple_GetItemRef(item, 1);
+        if (key == NULL || value == NULL) {
+            Py_XDECREF(key);
+            Py_XDECREF(value);
             Py_DECREF(item);
             return -1;
         }
+        int rv = encoder_encode_key_value(s, writer, first, dct, key, value,
+                                          indent_level, indent_cache,
+                                          separator);
+        Py_DECREF(key);
+        Py_DECREF(value);
         Py_DECREF(item);
+        if (rv < 0) {
+            return -1;
+        }
     }
 
     return 0;
@@ -1775,22 +1793,20 @@ _encoder_iterate_dict_lock_held(PyEncoderObject *s, PyUnicodeWriter *writer,
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(dct);
     PyObject *key, *value;
     Py_ssize_t pos = 0;
-    while (PyDict_Next(dct, &pos, &key, &value)) {
-        // gh-145244: encoder_encode_key_value() can invoke user code
-        // that mutates the dict, invalidating these borrowed refs.
-        Py_INCREF(key);
-        Py_INCREF(value);
-        if (encoder_encode_key_value(s, writer, first, dct, key, value,
-                                    indent_level, indent_cache,
-                                    separator) < 0) {
-            Py_DECREF(key);
-            Py_DECREF(value);
-            return -1;
-        }
+    int rc;
+    // gh-145244: encoder_encode_key_value() can invoke user code
+    // that mutates the dict; the owning iterator snapshots each entry.
+    while ((rc = PyDict_NextEntryRef(dct, &pos, &key, &value)) > 0) {
+        int rv = encoder_encode_key_value(s, writer, first, dct, key, value,
+                                          indent_level, indent_cache,
+                                          separator);
         Py_DECREF(key);
         Py_DECREF(value);
+        if (rv < 0) {
+            return -1;
+        }
     }
-    return 0;
+    return rc < 0 ? -1 : 0;
 }
 
 static int
@@ -1891,10 +1907,14 @@ _encoder_iterate_fast_seq_lock_held(PyEncoderObject *s, PyUnicodeWriter *writer,
     Py_ssize_t indent_level, PyObject *indent_cache, PyObject *separator)
 {
     for (Py_ssize_t i = 0; i < PySequence_Fast_GET_SIZE(s_fast); i++) {
-        PyObject *obj = PySequence_Fast_GET_ITEM(s_fast, i);
         // gh-142831: encoder_listencode_obj() can invoke user code
-        // that mutates the sequence, invalidating this borrowed ref.
-        Py_INCREF(obj);
+        // that mutates the sequence, so hold a strong reference.
+        PyObject *obj = PyList_Check(s_fast)
+            ? PyList_GetItemRef(s_fast, i)
+            : PyTuple_GetItemRef(s_fast, i);
+        if (obj == NULL) {
+            return -1;
+        }
         if (i) {
             if (PyUnicodeWriter_WriteStr(writer, separator) < 0) {
                 Py_DECREF(obj);

@@ -192,6 +192,14 @@ elementtree_free(void *m)
 
 /* helpers */
 
+/* Item of a PySequence_Fast() result (a list or a tuple) as a new reference. */
+static PyObject *
+fast_seq_get_item_ref(PyObject *seq, Py_ssize_t i)
+{
+    return PyList_Check(seq) ? PyList_GetItemRef(seq, i)
+                             : PyTuple_GetItemRef(seq, i);
+}
+
 LOCAL(PyObject*)
 list_join(PyObject* list)
 {
@@ -952,11 +960,19 @@ deepcopy(elementtreestate *st, PyObject *object, PyObject *memo)
             PyObject *key, *value;
             Py_ssize_t pos = 0;
             int simple = 1;
-            while (PyDict_Next(object, &pos, &key, &value)) {
-                if (!PyUnicode_CheckExact(key) || !PyUnicode_CheckExact(value)) {
+            int rc;
+            while ((rc = PyDict_NextEntryRef(object, &pos, &key, &value)) > 0) {
+                int is_simple = PyUnicode_CheckExact(key)
+                                && PyUnicode_CheckExact(value);
+                Py_DECREF(key);
+                Py_DECREF(value);
+                if (!is_simple) {
                     simple = 0;
                     break;
                 }
+            }
+            if (rc < 0) {
+                return NULL;
             }
             if (simple) {
                 return PyDict_Copy(object);
@@ -1123,14 +1139,20 @@ element_setstate_from_attributes(elementtreestate *st,
 
         /* Copy children */
         for (i = 0; i < nchildren; i++) {
-            PyObject *child = PyList_GET_ITEM(children, i);
-            if (!Element_Check(st, child)) {
-                raise_type_error(child);
+            PyObject *child = PyList_GetItemRef(children, i);
+            if (child == NULL) {
                 self->extra->length = i;
                 dealloc_extra(oldextra);
                 return NULL;
             }
-            self->extra->children[i] = Py_NewRef(child);
+            if (!Element_Check(st, child)) {
+                raise_type_error(child);
+                Py_DECREF(child);
+                self->extra->length = i;
+                dealloc_extra(oldextra);
+                return NULL;
+            }
+            self->extra->children[i] = child;
         }
 
         assert(!self->extra->length);
@@ -1269,7 +1291,11 @@ _elementtree_Element_extend_impl(ElementObject *self, PyTypeObject *cls,
 
     elementtreestate *st = get_elementtree_state_by_cls(cls);
     for (i = 0; i < PySequence_Fast_GET_SIZE(seq); i++) {
-        PyObject* element = Py_NewRef(PySequence_Fast_GET_ITEM(seq, i));
+        PyObject* element = fast_seq_get_item_ref(seq, i);
+        if (element == NULL) {
+            Py_DECREF(seq);
+            return NULL;
+        }
         if (element_add_subelement(st, self, element) < 0) {
             Py_DECREF(seq);
             Py_DECREF(element);
@@ -2080,12 +2106,18 @@ element_ass_subscr(PyObject *op, PyObject *item, PyObject *value)
         PyTypeObject *tp = Py_TYPE(self);
         elementtreestate *st = get_elementtree_state_by_type(tp);
         for (i = 0; i < newlen; i++) {
-            PyObject *element = PySequence_Fast_GET_ITEM(seq, i);
-            if (!Element_Check(st, element)) {
-                raise_type_error(element);
+            PyObject *element = fast_seq_get_item_ref(seq, i);
+            if (element == NULL) {
                 Py_DECREF(seq);
                 return -1;
             }
+            if (!Element_Check(st, element)) {
+                raise_type_error(element);
+                Py_DECREF(element);
+                Py_DECREF(seq);
+                return -1;
+            }
+            Py_DECREF(element);
         }
 
         if (slicelen > 0) {
@@ -2115,8 +2147,11 @@ element_ass_subscr(PyObject *op, PyObject *item, PyObject *value)
         /* replace the slice */
         for (cur = start, i = 0; i < newlen;
              cur += step, i++) {
-            PyObject* element = PySequence_Fast_GET_ITEM(seq, i);
-            self->extra->children[cur] = Py_NewRef(element);
+            /* Every item was checked to be an element above, and nothing
+               has run Python since, so this cannot fail. */
+            PyObject* element = fast_seq_get_item_ref(seq, i);
+            assert(element != NULL);
+            self->extra->children[cur] = element;
         }
 
         self->extra->length += newlen - slicelen;
@@ -2907,13 +2942,17 @@ treebuilder_handle_end(TreeBuilderObject* self, PyObject* tag)
         return NULL;
     }
 
+    PyObject *new_this = PyList_GetItemRef(self->stack, self->index - 1);
+    if (new_this == NULL) {
+        return NULL;
+    }
     PyObject *last = self->last;
     PyObject *last_for_tail = self->last_for_tail;
     PyObject *this = self->this;
     self->last = Py_NewRef(this);
     self->last_for_tail = Py_NewRef(this);
     self->index--;
-    self->this = Py_NewRef(PyList_GET_ITEM(self->stack, self->index));
+    self->this = new_this;
     Py_DECREF(last);
     Py_XDECREF(last_for_tail);
 
@@ -4298,12 +4337,17 @@ _elementtree_XMLParser__setevents_impl(XMLParserObject *self,
     }
 
     for (i = 0; i < PySequence_Fast_GET_SIZE(events_seq); ++i) {
-        PyObject *event_name_obj = PySequence_Fast_GET_ITEM(events_seq, i);
+        PyObject *event_name_obj = fast_seq_get_item_ref(events_seq, i);
+        if (event_name_obj == NULL) {
+            Py_DECREF(events_seq);
+            return NULL;
+        }
         if (!PyUnicode_Check(event_name_obj)) {
             goto unknown_event;
         }
         const char *event_name = PyUnicode_AsUTF8(event_name_obj);
         if (event_name == NULL) {
+            Py_DECREF(event_name_obj);
             Py_DECREF(events_seq);
             return NULL;
         }
@@ -4324,6 +4368,7 @@ _elementtree_XMLParser__setevents_impl(XMLParserObject *self,
             PyErr_Format(PyExc_TypeError,
                          "the target does not support %R events",
                          event_name_obj);
+            Py_DECREF(event_name_obj);
             Py_DECREF(events_seq);
             return NULL;
         }
@@ -4361,9 +4406,11 @@ _elementtree_XMLParser__setevents_impl(XMLParserObject *self,
         } else {
 unknown_event:
             PyErr_Format(PyExc_ValueError, "unknown event %R", event_name_obj);
+            Py_DECREF(event_name_obj);
             Py_DECREF(events_seq);
             return NULL;
         }
+        Py_DECREF(event_name_obj);
     }
 
     Py_DECREF(events_seq);

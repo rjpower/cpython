@@ -472,13 +472,23 @@ _random_Random_setstate_impl(RandomObject *self, PyObject *state)
     }
 
     for (i=0; i<N ; i++) {
-        element = PyLong_AsUnsignedLong(PyTuple_GET_ITEM(state, i));
+        PyObject *item = PyTuple_GetItemRef(state, i);
+        if (item == NULL) {
+            return NULL;
+        }
+        element = PyLong_AsUnsignedLong(item);
+        Py_DECREF(item);
         if (element == (unsigned long)-1 && PyErr_Occurred())
             return NULL;
         new_state[i] = (uint32_t)element;
     }
 
-    index = PyLong_AsLong(PyTuple_GET_ITEM(state, i));
+    PyObject *index_obj = PyTuple_GetItemRef(state, i);
+    if (index_obj == NULL) {
+        return NULL;
+    }
+    index = PyLong_AsLong(index_obj);
+    Py_DECREF(index_obj);
     if (index == -1 && PyErr_Occurred())
         return NULL;
     if (index < 0 || index > N) {

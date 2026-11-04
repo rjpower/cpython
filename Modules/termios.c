@@ -220,8 +220,12 @@ termios_tcsetattr_impl(PyObject *module, int fd, int when, PyObject *term)
 
     speed_t ispeed, ospeed;
 #define SET_FROM_LIST(TYPE, VAR, LIST, N) do {  \
-    PyObject *item = PyList_GetItem(LIST, N);  \
+    PyObject *item = PyList_GetItemRef(LIST, N);  \
+    if (item == NULL) {                         \
+        return NULL;                            \
+    }                                           \
     long num = PyLong_AsLong(item);             \
+    Py_DECREF(item);                            \
     if (num == -1 && PyErr_Occurred()) {        \
         return NULL;                            \
     }                                           \
@@ -236,24 +240,34 @@ termios_tcsetattr_impl(PyObject *module, int fd, int when, PyObject *term)
     SET_FROM_LIST(speed_t, ospeed, term, 5);
 #undef SET_FROM_LIST
 
-    PyObject *cc = PyList_GetItem(term, 6);
+    PyObject *cc = PyList_GetItemRef(term, 6);
+    if (cc == NULL) {
+        return NULL;
+    }
     if (!PyList_Check(cc) || PyList_Size(cc) != NCCS) {
         PyErr_Format(PyExc_TypeError,
             "tcsetattr: attributes[6] must be %d element list",
                  NCCS);
+        Py_DECREF(cc);
         return NULL;
     }
 
     int i;
     PyObject *v;
     for (i = 0; i < NCCS; i++) {
-        v = PyList_GetItem(cc, i);
+        v = PyList_GetItemRef(cc, i);
+        if (v == NULL) {
+            Py_DECREF(cc);
+            return NULL;
+        }
 
         if (PyBytes_Check(v) && PyBytes_Size(v) == 1)
             mode.c_cc[i] = (cc_t) * PyBytes_AsString(v);
         else if (PyLong_Check(v)) {
             long num = PyLong_AsLong(v);
             if (num == -1 && PyErr_Occurred()) {
+                Py_DECREF(v);
+                Py_DECREF(cc);
                 return NULL;
             }
             mode.c_cc[i] = (cc_t)num;
@@ -261,9 +275,13 @@ termios_tcsetattr_impl(PyObject *module, int fd, int when, PyObject *term)
         else {
             PyErr_SetString(PyExc_TypeError,
      "tcsetattr: elements of attributes must be bytes objects of length 1 or integers");
-                        return NULL;
-                }
+            Py_DECREF(v);
+            Py_DECREF(cc);
+            return NULL;
+        }
+        Py_DECREF(v);
     }
+    Py_DECREF(cc);
 
     if (cfsetispeed(&mode, (speed_t) ispeed) == -1)
         return PyErr_SetFromErrno(state->TermiosError);

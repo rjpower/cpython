@@ -566,8 +566,13 @@ try_full_cache_hit(
 
     Py_ssize_t cached_size = PyList_GET_SIZE(entry->frame_list);
     for (Py_ssize_t i = 1; i < cached_size; i++) {
-        PyObject *cached_frame = PyList_GET_ITEM(entry->frame_list, i);
-        if (PyList_Append(ctx->frame_info, cached_frame) < 0) {
+        PyObject *cached_frame = PyList_GetItemRef(entry->frame_list, i);
+        if (cached_frame == NULL) {
+            return -1;
+        }
+        int rc = PyList_Append(ctx->frame_info, cached_frame);
+        Py_DECREF(cached_frame);
+        if (rc < 0) {
             return -1;
         }
     }

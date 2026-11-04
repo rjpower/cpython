@@ -171,7 +171,7 @@ py2rlim(PyObject *obj, rlim_t *out)
 static int
 py2rlimit(PyObject *limits, struct rlimit *rl_out)
 {
-    PyObject *curobj, *maxobj;
+    PyObject *curobj = NULL, *maxobj = NULL;
     limits = PySequence_Tuple(limits);
     if (!limits)
         /* Here limits is a borrowed reference */
@@ -182,18 +182,23 @@ py2rlimit(PyObject *limits, struct rlimit *rl_out)
                         "expected a tuple of 2 integers");
         goto error;
     }
-    curobj = PyTuple_GetItem(limits, 0);  // borrowed
-    maxobj = PyTuple_GetItem(limits, 1);  // borrowed
-    if (py2rlim(curobj, &rl_out->rlim_cur) < 0 ||
+    curobj = PyTuple_GetItemRef(limits, 0);
+    maxobj = PyTuple_GetItemRef(limits, 1);
+    if (curobj == NULL || maxobj == NULL ||
+        py2rlim(curobj, &rl_out->rlim_cur) < 0 ||
         py2rlim(maxobj, &rl_out->rlim_max) < 0)
     {
         goto error;
     }
 
+    Py_DECREF(curobj);
+    Py_DECREF(maxobj);
     Py_DECREF(limits);
     return 0;
 
 error:
+    Py_XDECREF(curobj);
+    Py_XDECREF(maxobj);
     Py_DECREF(limits);
     return -1;
 }

@@ -849,6 +849,23 @@ error:
     return NULL;
 }
 
+/* Read integer field i of a LocationInfo (struct sequence or tuple) into
+ * *out, using LOCATION_NOT_AVAILABLE if it cannot be converted.
+ * Returns -1 with an exception set if the item cannot be read. */
+static int
+location_field(PyObject *location, Py_ssize_t i, int32_t *out)
+{
+    PyObject *item = PyTuple_Check(location) ?
+        PyTuple_GetItemRef(location, i) :
+        PyStructSequence_GetItemRef(location, i);
+    if (item == NULL) {
+        return -1;
+    }
+    PYLONG_TO_INT32_OR_DEFAULT(item, *out, LOCATION_NOT_AVAILABLE);
+    Py_DECREF(item);
+    return 0;
+}
+
 /* Build a frame stack from Python frame list by interning all strings and frames.
  * Returns 0 on success, -1 on error. */
 static int
@@ -859,45 +876,49 @@ build_frame_stack(BinaryWriter *writer, PyObject *frame_list,
     *curr_depth = (stack_depth < MAX_STACK_DEPTH) ? stack_depth : MAX_STACK_DEPTH;
 
     for (Py_ssize_t k = 0; k < (Py_ssize_t)*curr_depth; k++) {
-        /* Use unchecked accessors since we control the data structures */
-        PyObject *frame_info = PyList_GET_ITEM(frame_list, k);
-
-        /* Get filename, location, funcname, opcode from FrameInfo using unchecked access */
-        PyObject *filename = PyStructSequence_GET_ITEM(frame_info, 0);
-        PyObject *location = PyStructSequence_GET_ITEM(frame_info, 1);
-        PyObject *funcname = PyStructSequence_GET_ITEM(frame_info, 2);
-        PyObject *opcode_obj = PyStructSequence_GET_ITEM(frame_info, 3);
-
-        /* Extract location fields (can be None for synthetic frames) */
+        int result = -1;
+        PyObject *frame_info = PyList_GetItemRef(frame_list, k);
+        PyObject *filename = NULL;
+        PyObject *location = NULL;
+        PyObject *funcname = NULL;
+        PyObject *opcode_obj = NULL;
         int32_t lineno = LOCATION_NOT_AVAILABLE;
         int32_t end_lineno = LOCATION_NOT_AVAILABLE;
         int32_t column = LOCATION_NOT_AVAILABLE;
         int32_t end_column = LOCATION_NOT_AVAILABLE;
+        uint8_t opcode = OPCODE_NONE;
+        uint32_t filename_idx, funcname_idx, frame_idx;
+        FrameEntry frame_entry;
+        if (frame_info == NULL) {
+            return -1;
+        }
 
+        /* Get filename, location, funcname, opcode from FrameInfo */
+        filename = PyStructSequence_GetItemRef(frame_info, 0);
+        location = PyStructSequence_GetItemRef(frame_info, 1);
+        funcname = PyStructSequence_GetItemRef(frame_info, 2);
+        opcode_obj = PyStructSequence_GetItemRef(frame_info, 3);
+        if (filename == NULL || location == NULL || funcname == NULL ||
+            opcode_obj == NULL)
+        {
+            goto done;
+        }
+
+        /* Extract location fields (can be None for synthetic frames) */
         if (location != Py_None) {
             /* LocationInfo is a struct sequence or tuple with:
              * (lineno, end_lineno, column, end_column) */
-            PyObject *lineno_obj = PyTuple_Check(location) ?
-                PyTuple_GET_ITEM(location, 0) :
-                PyStructSequence_GET_ITEM(location, 0);
-            PyObject *end_lineno_obj = PyTuple_Check(location) ?
-                PyTuple_GET_ITEM(location, 1) :
-                PyStructSequence_GET_ITEM(location, 1);
-            PyObject *column_obj = PyTuple_Check(location) ?
-                PyTuple_GET_ITEM(location, 2) :
-                PyStructSequence_GET_ITEM(location, 2);
-            PyObject *end_column_obj = PyTuple_Check(location) ?
-                PyTuple_GET_ITEM(location, 3) :
-                PyStructSequence_GET_ITEM(location, 3);
-
-            PYLONG_TO_INT32_OR_DEFAULT(lineno_obj, lineno, LOCATION_NOT_AVAILABLE);
-            PYLONG_TO_INT32_OR_DEFAULT(end_lineno_obj, end_lineno, LOCATION_NOT_AVAILABLE);
-            PYLONG_TO_INT32_OR_DEFAULT(column_obj, column, LOCATION_NOT_AVAILABLE);
-            PYLONG_TO_INT32_OR_DEFAULT(end_column_obj, end_column, LOCATION_NOT_AVAILABLE);
+            if (location_field(location, 0, &lineno) < 0 ||
+                location_field(location, 1, &end_lineno) < 0 ||
+                location_field(location, 2, &column) < 0 ||
+                location_field(location, 3, &end_column) < 0)
+            {
+                goto done;
+            }
         }
+        Py_CLEAR(location);
 
         /* Extract opcode (can be None) */
-        uint8_t opcode = OPCODE_NONE;
         if (opcode_obj != Py_None) {
             long opcode_long = PyLong_AsLong(opcode_obj);
             if (UNLIKELY(PyErr_Occurred() != NULL)) {
@@ -907,21 +928,17 @@ build_frame_stack(BinaryWriter *writer, PyObject *frame_list,
                 opcode = (uint8_t)opcode_long;
             }
         }
+        Py_CLEAR(opcode_obj);
 
-        /* Intern filename */
-        uint32_t filename_idx;
-        if (writer_intern_string(writer, filename, &filename_idx) < 0) {
-            return -1;
-        }
-
-        /* Intern funcname */
-        uint32_t funcname_idx;
-        if (writer_intern_string(writer, funcname, &funcname_idx) < 0) {
-            return -1;
+        /* Intern filename and funcname */
+        if (writer_intern_string(writer, filename, &filename_idx) < 0 ||
+            writer_intern_string(writer, funcname, &funcname_idx) < 0)
+        {
+            goto done;
         }
 
         /* Intern frame with full location info */
-        FrameEntry frame_entry = {
+        frame_entry = (FrameEntry){
             .filename_idx = filename_idx,
             .funcname_idx = funcname_idx,
             .lineno = lineno,
@@ -930,12 +947,22 @@ build_frame_stack(BinaryWriter *writer, PyObject *frame_list,
             .end_column = end_column,
             .opcode = opcode
         };
-        uint32_t frame_idx;
         if (writer_intern_frame(writer, &frame_entry, &frame_idx) < 0) {
-            return -1;
+            goto done;
         }
 
         curr_stack[k] = frame_idx;
+        result = 0;
+
+done:
+        Py_XDECREF(opcode_obj);
+        Py_XDECREF(funcname);
+        Py_XDECREF(location);
+        Py_XDECREF(filename);
+        Py_DECREF(frame_info);
+        if (result < 0) {
+            return -1;
+        }
     }
     return 0;
 }
@@ -952,15 +979,21 @@ process_thread_sample(BinaryWriter *writer, PyObject *thread_info,
         return -1;
     }
 
-    PyObject *thread_id_obj = PyStructSequence_GET_ITEM(thread_info, 0);
-    PyObject *status_obj = PyStructSequence_GET_ITEM(thread_info, 1);
-    PyObject *frame_list = PyStructSequence_GET_ITEM(thread_info, 2);
-
+    PyObject *thread_id_obj = PyStructSequence_GetItemRef(thread_info, 0);
+    if (thread_id_obj == NULL) {
+        return -1;
+    }
     uint64_t thread_id = PyLong_AsUnsignedLongLong(thread_id_obj);
+    Py_DECREF(thread_id_obj);
     if (thread_id == (uint64_t)-1 && PyErr_Occurred()) {
         return -1;
     }
+    PyObject *status_obj = PyStructSequence_GetItemRef(thread_info, 1);
+    if (status_obj == NULL) {
+        return -1;
+    }
     long status_long = PyLong_AsLong(status_obj);
+    Py_DECREF(status_obj);
     if (status_long == -1 && PyErr_Occurred()) {
         return -1;
     }
@@ -978,7 +1011,13 @@ process_thread_sample(BinaryWriter *writer, PyObject *thread_info,
     /* Process frames and build current stack */
     uint32_t curr_stack[MAX_STACK_DEPTH];
     size_t curr_depth;
-    if (build_frame_stack(writer, frame_list, curr_stack, &curr_depth) < 0) {
+    PyObject *frame_list = PyStructSequence_GetItemRef(thread_info, 2);
+    if (frame_list == NULL) {
+        return -1;
+    }
+    int built = build_frame_stack(writer, frame_list, curr_stack, &curr_depth);
+    Py_DECREF(frame_list);
+    if (built < 0) {
         return -1;
     }
 
@@ -1044,13 +1083,24 @@ binary_writer_write_sample(BinaryWriter *writer, PyObject *stack_frames, uint64_
 
     Py_ssize_t num_interpreters = PyList_GET_SIZE(stack_frames);
     for (Py_ssize_t i = 0; i < num_interpreters; i++) {
-        PyObject *interp_info = PyList_GET_ITEM(stack_frames, i);
+        PyObject *interp_info = PyList_GetItemRef(stack_frames, i);
+        if (interp_info == NULL) {
+            return -1;
+        }
 
-        PyObject *interp_id_obj = PyStructSequence_GET_ITEM(interp_info, 0);
-        PyObject *threads = PyStructSequence_GET_ITEM(interp_info, 1);
+        PyObject *interp_id_obj = PyStructSequence_GetItemRef(interp_info, 0);
+        PyObject *threads = PyStructSequence_GetItemRef(interp_info, 1);
+        Py_DECREF(interp_info);
+        if (interp_id_obj == NULL || threads == NULL) {
+            Py_XDECREF(interp_id_obj);
+            Py_XDECREF(threads);
+            return -1;
+        }
 
         unsigned long long interp_id_long = PyLong_AsUnsignedLongLong(interp_id_obj);
+        Py_DECREF(interp_id_obj);
         if (interp_id_long == (unsigned long long)-1 && PyErr_Occurred()) {
+            Py_DECREF(threads);
             return -1;
         }
         /* Bounds check: interpreter_id is stored as uint32_t in binary format */
@@ -1059,17 +1109,26 @@ binary_writer_write_sample(BinaryWriter *writer, PyObject *stack_frames, uint64_
             PyErr_Format(PyExc_OverflowError,
                 "interpreter_id %llu exceeds maximum value %u",
                 interp_id_long, UINT32_MAX);
+            Py_DECREF(threads);
             return -1;
         }
         uint32_t interpreter_id = (uint32_t)interp_id_long;
 
         Py_ssize_t num_threads = PyList_GET_SIZE(threads);
         for (Py_ssize_t j = 0; j < num_threads; j++) {
-            PyObject *thread_info = PyList_GET_ITEM(threads, j);
-            if (process_thread_sample(writer, thread_info, interpreter_id, timestamp_us) < 0) {
+            PyObject *thread_info = PyList_GetItemRef(threads, j);
+            if (thread_info == NULL) {
+                Py_DECREF(threads);
+                return -1;
+            }
+            int rc = process_thread_sample(writer, thread_info, interpreter_id, timestamp_us);
+            Py_DECREF(thread_info);
+            if (rc < 0) {
+                Py_DECREF(threads);
                 return -1;
             }
         }
+        Py_DECREF(threads);
     }
 
     return 0;

@@ -109,24 +109,41 @@ frame_cache_invalidate_stale(RemoteUnwinderObject *unwinder, PyObject *result)
 
     Py_ssize_t num_interps = PyList_GET_SIZE(result);
     for (Py_ssize_t i = 0; i < num_interps && num_seen < FRAME_CACHE_MAX_THREADS; i++) {
-        PyObject *interp_info = PyList_GET_ITEM(result, i);
-        PyObject *threads = PyStructSequence_GetItem(interp_info, 1);
+        PyObject *interp_info = PyList_GetItemRef(result, i);
+        if (interp_info == NULL) {
+            PyErr_Clear();
+            continue;
+        }
+        PyObject *threads = PyStructSequence_GetItemRef(interp_info, 1);
+        Py_DECREF(interp_info);
         if (!threads || !PyList_Check(threads)) {
+            Py_XDECREF(threads);
+            PyErr_Clear();
             continue;
         }
         Py_ssize_t num_threads = PyList_GET_SIZE(threads);
         for (Py_ssize_t j = 0; j < num_threads && num_seen < FRAME_CACHE_MAX_THREADS; j++) {
-            PyObject *thread_info = PyList_GET_ITEM(threads, j);
-            PyObject *tid_obj = PyStructSequence_GetItem(thread_info, 0);
+            PyObject *thread_info = PyList_GetItemRef(threads, j);
+            if (thread_info == NULL) {
+                PyErr_Clear();
+                continue;
+            }
+            PyObject *tid_obj = PyStructSequence_GetItemRef(thread_info, 0);
+            Py_DECREF(thread_info);
             if (tid_obj) {
                 uint64_t tid = PyLong_AsUnsignedLongLong(tid_obj);
+                Py_DECREF(tid_obj);
                 if (!PyErr_Occurred()) {
                     seen_threads[num_seen++] = tid;
                 } else {
                     PyErr_Clear();
                 }
             }
+            else {
+                PyErr_Clear();
+            }
         }
+        Py_DECREF(threads);
     }
 
     // Invalidate entries not in seen list

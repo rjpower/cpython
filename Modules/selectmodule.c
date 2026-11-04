@@ -161,10 +161,9 @@ seq2set(PyObject *seq, fd_set *set, pylist fd2obj[FD_SETSIZE + 1])
         SOCKET v;
 
         /* any intervening fileno() calls could decr this refcnt */
-        if (!(o = PySequence_Fast_GET_ITEM(fast_seq, i)))
+        if (!(o = PySequence_GetItem(fast_seq, i)))
             goto finally;
 
-        Py_INCREF(o);
         v = PyObject_AsFileDescriptor( o );
         if (v == -1) goto finally;
 
@@ -453,6 +452,7 @@ update_ufd_array(pollObject *self)
 {
     Py_ssize_t i, pos;
     PyObject *key, *value;
+    int rc;
     struct pollfd *old_ufds = self->ufds;
 
     self->ufd_len = PyDict_GET_SIZE(self->dict);
@@ -464,12 +464,17 @@ update_ufd_array(pollObject *self)
     }
 
     i = pos = 0;
-    while (PyDict_Next(self->dict, &pos, &key, &value)) {
+    while ((rc = PyDict_NextEntryRef(self->dict, &pos, &key, &value)) > 0) {
         assert(i < self->ufd_len);
         /* Never overflow */
         self->ufds[i].fd = (int)PyLong_AsLong(key);
         self->ufds[i].events = (short)(unsigned short)PyLong_AsLong(value);
+        Py_DECREF(key);
+        Py_DECREF(value);
         i++;
+    }
+    if (rc < 0) {
+        return 0;
     }
     assert(i == self->ufd_len);
     self->ufd_uptodate = 1;
@@ -2403,14 +2408,19 @@ select_kqueue_control_impl(kqueue_queue_Object *self, PyObject *changelist,
         }
         _selectstate *state = _selectstate_by_type(Py_TYPE(self));
         for (i = 0; i < nchanges; ++i) {
-            ei = PySequence_Fast_GET_ITEM(seq, i);
+            ei = PySequence_GetItem(seq, i);
+            if (ei == NULL) {
+                goto error;
+            }
             if (!kqueue_event_Check(ei, state)) {
                 PyErr_SetString(PyExc_TypeError,
                     "changelist must be an iterable of "
                     "select.kevent objects");
+                Py_DECREF(ei);
                 goto error;
             }
             chl[i] = ((kqueue_event_Object *)ei)->e;
+            Py_DECREF(ei);
         }
         Py_CLEAR(seq);
     }

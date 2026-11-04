@@ -1505,8 +1505,15 @@ complexstr_new_impl(PyTypeObject *type, PyObject *cells, PyObject *attr,
     }
     curses_cell_t *out = _PyCursesComplexStrObject_CAST(res)->cells;
     for (Py_ssize_t i = 0; i < n; i++) {
-        PyObject *item = PySequence_Fast_GET_ITEM(seq, i);  // borrowed
-        if (curses_pack_cell(state, item, &out[i]) < 0) {
+        PyObject *item = PySequence_GetItem(seq, i);
+        if (item == NULL) {
+            Py_DECREF(res);
+            Py_DECREF(seq);
+            return NULL;
+        }
+        int rc = curses_pack_cell(state, item, &out[i]);
+        Py_DECREF(item);
+        if (rc < 0) {
             Py_DECREF(res);
             Py_DECREF(seq);
             return NULL;
@@ -5058,8 +5065,13 @@ curses_use_call(curses_use_data *data)
     }
     PyTuple_SET_ITEM(callargs, 0, Py_NewRef(data->obj));
     for (Py_ssize_t i = 0; i < n; i++) {
-        PyTuple_SET_ITEM(callargs, i + 1,
-                         Py_NewRef(PyTuple_GET_ITEM(data->extra, i)));
+        PyObject *arg = PyTuple_GetItemRef(data->extra, i);
+        if (arg == NULL) {
+            Py_DECREF(callargs);
+            data->result = NULL;
+            return;
+        }
+        PyTuple_SET_ITEM(callargs, i + 1, arg);
     }
     data->result = PyObject_Call(data->func, callargs, data->kwargs);
     Py_DECREF(callargs);
@@ -5075,13 +5087,22 @@ curses_use_parse(PyObject *args, PyObject **func, PyObject **extra)
                         "use() missing required argument 'func'");
         return -1;
     }
-    *func = PyTuple_GET_ITEM(args, 0);
-    if (!PyCallable_Check(*func)) {
+    PyObject *callable = PyTuple_GetItemRef(args, 0);
+    if (callable == NULL) {
+        return -1;
+    }
+    if (!PyCallable_Check(callable)) {
+        Py_DECREF(callable);
         PyErr_SetString(PyExc_TypeError, "use(): func must be callable");
         return -1;
     }
     *extra = PyTuple_GetSlice(args, 1, nargs);
-    return *extra == NULL ? -1 : 0;
+    if (*extra == NULL) {
+        Py_DECREF(callable);
+        return -1;
+    }
+    *func = callable;
+    return 0;
 }
 #endif
 
@@ -5108,6 +5129,7 @@ PyCursesWindow_use(PyObject *self, PyObject *args, PyObject *kwargs)
     }
     curses_use_data data = {self, func, extra, kwargs, NULL};
     use_window(wo->win, curses_use_window_cb, &data);
+    Py_DECREF(func);
     Py_DECREF(extra);
     return data.result;
 }
@@ -5512,6 +5534,7 @@ PyCursesScreen_use(PyObject *self, PyObject *args, PyObject *kwargs)
     }
     PyObject *module = PyType_GetModule(Py_TYPE(self));
     if (module == NULL) {
+        Py_DECREF(func);
         Py_DECREF(extra);
         return NULL;
     }
@@ -5520,6 +5543,7 @@ PyCursesScreen_use(PyObject *self, PyObject *args, PyObject *kwargs)
     state->topscreen = Py_NewRef(self);
     use_screen(so->screen, curses_use_screen_cb, &data);
     Py_SETREF(state->topscreen, prev);
+    Py_DECREF(func);
     Py_DECREF(extra);
     if (data.result == NULL) {
         PyObject *exc = PyErr_GetRaisedException();

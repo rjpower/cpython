@@ -124,19 +124,25 @@ _is_fdescfs_mounted_on_dev_fd(void)
 #endif
 
 
-/* Returns 1 if there is a problem with fd_sequence, 0 otherwise. */
+/* Returns 1 if there is a problem with fd_sequence, 0 if it is fine and -1
+   with an exception set if an item could not be read. */
 static int
 _sanity_check_python_fd_sequence(PyObject *fd_sequence)
 {
     Py_ssize_t seq_idx;
     long prev_fd = -1;
     for (seq_idx = 0; seq_idx < PyTuple_GET_SIZE(fd_sequence); ++seq_idx) {
-        PyObject* py_fd = PyTuple_GET_ITEM(fd_sequence, seq_idx);
+        PyObject* py_fd = PyTuple_GetItemRef(fd_sequence, seq_idx);
         long iter_fd;
+        if (py_fd == NULL) {
+            return -1;
+        }
         if (!PyLong_Check(py_fd)) {
+            Py_DECREF(py_fd);
             return 1;
         }
         iter_fd = PyLong_AsLong(py_fd);
+        Py_DECREF(py_fd);
         if (iter_fd < 0 || iter_fd <= prev_fd || iter_fd > INT_MAX) {
             /* Negative, overflow, unsorted, too big for a fd. */
             return 1;
@@ -269,8 +275,12 @@ convert_fds_to_keep_to_c(PyObject *py_fds_to_keep, int *c_fds_to_keep)
 
     len = PyTuple_GET_SIZE(py_fds_to_keep);
     for (i = 0; i < len; ++i) {
-        PyObject* fdobj = PyTuple_GET_ITEM(py_fds_to_keep, i);
+        PyObject* fdobj = PyTuple_GetItemRef(py_fds_to_keep, i);
+        if (fdobj == NULL) {
+            return -1;
+        }
         long fd = PyLong_AsLong(fdobj);
+        Py_DECREF(fdobj);
         if (fd == -1 && PyErr_Occurred()) {
             return -1;
         }
@@ -1058,7 +1068,11 @@ subprocess_fork_exec_impl(PyObject *module, PyObject *process_args,
         PyErr_SetString(PyExc_ValueError, "errpipe_write must be >= 3");
         return NULL;
     }
-    if (_sanity_check_python_fd_sequence(py_fds_to_keep)) {
+    int bad_fds = _sanity_check_python_fd_sequence(py_fds_to_keep);
+    if (bad_fds < 0) {
+        return NULL;
+    }
+    if (bad_fds) {
         PyErr_SetString(PyExc_ValueError, "bad value(s) in fds_to_keep");
         return NULL;
     }
@@ -1087,20 +1101,22 @@ subprocess_fork_exec_impl(PyObject *module, PyObject *process_args,
         if (converted_args == NULL)
             goto cleanup;
         for (Py_ssize_t arg_num = 0; arg_num < num_args; ++arg_num) {
-            PyObject *borrowed_arg, *converted_arg;
+            PyObject *arg, *converted_arg;
             if (PySequence_Fast_GET_SIZE(fast_args) != num_args) {
                 PyErr_SetString(PyExc_RuntimeError, "args changed during iteration");
                 goto cleanup;
             }
-            borrowed_arg = PySequence_Fast_GET_ITEM(fast_args, arg_num);
-            /* borrowed_arg is only borrowed; its __fspath__() may run Python
-               that drops fast_args' last reference to it. */
-            Py_INCREF(borrowed_arg);
-            if (PyUnicode_FSConverter(borrowed_arg, &converted_arg) == 0) {
-                Py_DECREF(borrowed_arg);
+            /* Own arg: its __fspath__() may run Python that drops
+               fast_args' last reference to it. */
+            arg = PySequence_GetItem(fast_args, arg_num);
+            if (arg == NULL) {
                 goto cleanup;
             }
-            Py_DECREF(borrowed_arg);
+            if (PyUnicode_FSConverter(arg, &converted_arg) == 0) {
+                Py_DECREF(arg);
+                goto cleanup;
+            }
+            Py_DECREF(arg);
             PyTuple_SET_ITEM(converted_args, arg_num, converted_arg);
         }
 

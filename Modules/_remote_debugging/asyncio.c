@@ -116,6 +116,18 @@ ensure_async_debug_offsets(RemoteUnwinderObject *unwinder)
  * SET ITERATION FUNCTIONS
  * ============================================================================ */
 
+/* A set entry key read from remote memory is a PyValue word, not a PyObject
+ * pointer. Return the remote object address, or 0 if the word is empty or
+ * holds no object (inline int/float, index): the low tag bit is masked. */
+static uintptr_t
+remote_value_object_addr(PyValue key)
+{
+    if (!PyValue_IsObject(key)) {
+        return 0;
+    }
+    return (uintptr_t)CLEAR_PTR_TAG(key.bits);
+}
+
 static int
 iterate_set_entries(
     RemoteUnwinderObject *unwinder,
@@ -153,7 +165,7 @@ iterate_set_entries(
             return -1;
         }
 
-        uintptr_t key_addr = (uintptr_t)entry.key;
+        uintptr_t key_addr = remote_value_object_addr(entry.key);
         if (key_addr != 0 && entry.hash != -1) {
             if (parse_task(unwinder, key_addr, awaited_by) < 0) {
                 return -1;
@@ -329,13 +341,19 @@ get_awaited_coro_address(
     if (return_slot >= 2) {
         uintptr_t slots_addr = gi_iframe_addr
             + (uintptr_t)unwinder->debug_offsets.interpreter_frame.owned_slots;
-        err = read_py_ptr(
-            unwinder,
-            slots_addr + sizeof(void*) * (return_slot - 2),
-            next_coro);
-        if (err) {
+        // The slot holds a PyValue word: only an object has a remote address.
+        PyValue slot;
+        err = _Py_RemoteDebug_PagedReadRemoteMemory(
+            &unwinder->handle,
+            slots_addr + sizeof(PyValue) * (return_slot - 2),
+            sizeof(slot),
+            &slot);
+        if (err < 0) {
             set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to read gi_await address");
             return -1;
+        }
+        if (PyValue_IsObject(slot)) {
+            *next_coro = CLEAR_PTR_TAG(slot.bits);
         }
     }
 
@@ -655,8 +673,14 @@ process_single_task_node(
     Py_DECREF(result_item);
 
     // Get back current_awaited_by reference for parse_task_awaited_by
-    current_awaited_by = PyStructSequence_GetItem(result_item, 3);
-    if (parse_task_awaited_by(unwinder, task_addr, current_awaited_by) < 0) {
+    current_awaited_by = PyStructSequence_GetItemRef(result_item, 3);
+    if (current_awaited_by == NULL) {
+        set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to get awaited_by in single task node");
+        return -1;
+    }
+    int rc = parse_task_awaited_by(unwinder, task_addr, current_awaited_by);
+    Py_DECREF(current_awaited_by);
+    if (rc < 0) {
         set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to parse awaited_by in single task node");
         // No cleanup needed here since all references were transferred to result_item
         // and result_item was already added to result list and decreffed
@@ -680,31 +704,52 @@ process_task_waiters(
     PyObject *result
 ) {
     for (Py_ssize_t i = 0; i < PyList_GET_SIZE(result); i++) {
-        PyObject *task_info = PyList_GET_ITEM(result, i);
-        PyObject *waiters = PyStructSequence_GET_ITEM(task_info, 3);
+        PyObject *task_info = PyList_GetItemRef(result, i);
+        if (task_info == NULL) {
+            return -1;
+        }
+        PyObject *waiters = PyStructSequence_GetItemRef(task_info, 3);
+        Py_DECREF(task_info);
+        if (waiters == NULL) {
+            return -1;
+        }
         for (Py_ssize_t j = 0; j < PyList_GET_SIZE(waiters); j++) {
             if (PyList_GET_SIZE(result) >= MAX_TASK_WAITER_WALK_TASKS) {
                 PyErr_SetString(PyExc_RuntimeError,
                     "Too many task waiters (possible infinite loop)");
                 set_exception_cause(unwinder, PyExc_RuntimeError,
                     "Task waiter walk size limit exceeded");
+                Py_DECREF(waiters);
                 return -1;
             }
-            PyObject *waiter = PyList_GET_ITEM(waiters, j);
+            PyObject *waiter = PyList_GetItemRef(waiters, j);
+            if (waiter == NULL) {
+                Py_DECREF(waiters);
+                return -1;
+            }
             // CoroInfo item 1 holds the waiter task address stored by parse_task().
-            PyObject *task_id = PyStructSequence_GET_ITEM(waiter, 1);
+            PyObject *task_id = PyStructSequence_GetItemRef(waiter, 1);
+            Py_DECREF(waiter);
+            if (task_id == NULL) {
+                Py_DECREF(waiters);
+                return -1;
+            }
             void *task_ptr = PyLong_AsVoidPtr(task_id);
+            Py_DECREF(task_id);
             if (task_ptr == NULL && PyErr_Occurred()) {
                 set_exception_cause(unwinder, PyExc_RuntimeError,
                                     "Failed to parse waiter task ID");
+                Py_DECREF(waiters);
                 return -1;
             }
             if (process_single_task_node(
                     unwinder, (uintptr_t)task_ptr, NULL, result) < 0)
             {
+                Py_DECREF(waiters);
                 return -1;
             }
         }
+        Py_DECREF(waiters);
     }
 
     return 0;
@@ -978,37 +1023,54 @@ process_running_task_chain(
     }
 
     // Get the chain from the current frame to this task
-    PyObject *coro_chain = PyStructSequence_GET_ITEM(task_info, 2);
-    assert(coro_chain != NULL);
+    PyObject *coro_chain = PyStructSequence_GetItemRef(task_info, 2);
+    if (coro_chain == NULL) {
+        return -1;
+    }
+    PyObject *coro_info = NULL;
+    PyObject *frame_chain = NULL;
     if (PyList_GET_SIZE(coro_chain) != 1) {
         PyErr_Format(PyExc_RuntimeError,
             "Expected single-item coro chain, got %zd items",
             PyList_GET_SIZE(coro_chain));
         set_exception_cause(unwinder, PyExc_RuntimeError, "Coro chain is not a single item");
-        return -1;
+        goto error;
     }
-    PyObject *coro_info = PyList_GET_ITEM(coro_chain, 0);
-    assert(coro_info != NULL);
-    PyObject *frame_chain = PyStructSequence_GET_ITEM(coro_info, 0);
-    assert(frame_chain != NULL);
+    coro_info = PyList_GetItemRef(coro_chain, 0);
+    if (coro_info == NULL) {
+        goto error;
+    }
+    frame_chain = PyStructSequence_GetItemRef(coro_info, 0);
+    if (frame_chain == NULL) {
+        goto error;
+    }
 
     // Clear the coro_chain
     if (PyList_Clear(frame_chain) < 0) {
         set_exception_cause(unwinder, PyExc_RuntimeError, "Failed to clear coroutine chain");
-        return -1;
+        goto error;
     }
 
     // Add the chain from the current frame to this task
     if (parse_async_frame_chain(unwinder, frame_chain, thread_state_addr, running_task_frame) < 0) {
-        return -1;
+        goto error;
     }
 
     // Now find all tasks that are waiting for this task and process them
     if (process_task_waiters(unwinder, result) < 0) {
-        return -1;
+        goto error;
     }
 
+    Py_DECREF(frame_chain);
+    Py_DECREF(coro_info);
+    Py_DECREF(coro_chain);
     return 0;
+
+error:
+    Py_XDECREF(frame_chain);
+    Py_XDECREF(coro_info);
+    Py_DECREF(coro_chain);
+    return -1;
 }
 
 int

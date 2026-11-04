@@ -245,7 +245,7 @@ multibytecodec_encerror(const MultibyteCodec *codec,
                         MultibyteEncodeBuffer *buf,
                         PyObject *errors, Py_ssize_t e)
 {
-    PyObject *retobj = NULL, *retstr = NULL, *tobj;
+    PyObject *retobj = NULL, *retstr = NULL, *tobj = NULL, *posobj = NULL;
     Py_ssize_t retstrsize, newpos;
     Py_ssize_t esize, start, end;
     const char *reason;
@@ -341,9 +341,15 @@ multibytecodec_encerror(const MultibyteCodec *codec,
     if (retobj == NULL)
         goto errorexit;
 
-    if (!PyTuple_Check(retobj) || PyTuple_GET_SIZE(retobj) != 2 ||
-        (!PyUnicode_Check((tobj = PyTuple_GET_ITEM(retobj, 0))) && !PyBytes_Check(tobj)) ||
-        !PyLong_Check(PyTuple_GET_ITEM(retobj, 1))) {
+    if (PyTuple_Check(retobj) && PyTuple_GET_SIZE(retobj) == 2) {
+        tobj = PyTuple_GetItemRef(retobj, 0);
+        posobj = PyTuple_GetItemRef(retobj, 1);
+        if (tobj == NULL || posobj == NULL)
+            goto errorexit;
+    }
+    if (tobj == NULL ||
+        (!PyUnicode_Check(tobj) && !PyBytes_Check(tobj)) ||
+        !PyLong_Check(posobj)) {
         PyErr_SetString(PyExc_TypeError,
                         "encoding error handler must return "
                         "(str, int) tuple");
@@ -371,7 +377,7 @@ multibytecodec_encerror(const MultibyteCodec *codec,
         buf->outbuf += retstrsize;
     }
 
-    newpos = PyLong_AsSsize_t(PyTuple_GET_ITEM(retobj, 1));
+    newpos = PyLong_AsSsize_t(posobj);
     if (newpos < 0 && !PyErr_Occurred())
         newpos += (Py_ssize_t)buf->inlen;
     if (newpos < 0 || newpos > buf->inlen) {
@@ -385,11 +391,15 @@ multibytecodec_encerror(const MultibyteCodec *codec,
 
     Py_DECREF(retobj);
     Py_DECREF(retstr);
+    Py_DECREF(tobj);
+    Py_DECREF(posobj);
     return 0;
 
 errorexit:
     Py_XDECREF(retobj);
     Py_XDECREF(retstr);
+    Py_XDECREF(tobj);
+    Py_XDECREF(posobj);
     return -1;
 }
 
@@ -399,7 +409,7 @@ multibytecodec_decerror(const MultibyteCodec *codec,
                         MultibyteDecodeBuffer *buf,
                         PyObject *errors, Py_ssize_t e)
 {
-    PyObject *retobj = NULL, *retuni = NULL;
+    PyObject *retobj = NULL, *retuni = NULL, *posobj = NULL;
     Py_ssize_t newpos;
     const char *reason;
     Py_ssize_t esize, start, end;
@@ -466,9 +476,14 @@ multibytecodec_decerror(const MultibyteCodec *codec,
     if (retobj == NULL)
         goto errorexit;
 
-    if (!PyTuple_Check(retobj) || PyTuple_GET_SIZE(retobj) != 2 ||
-        !PyUnicode_Check((retuni = PyTuple_GET_ITEM(retobj, 0))) ||
-        !PyLong_Check(PyTuple_GET_ITEM(retobj, 1))) {
+    if (PyTuple_Check(retobj) && PyTuple_GET_SIZE(retobj) == 2) {
+        retuni = PyTuple_GetItemRef(retobj, 0);
+        posobj = PyTuple_GetItemRef(retobj, 1);
+        if (retuni == NULL || posobj == NULL)
+            goto errorexit;
+    }
+    if (retuni == NULL || !PyUnicode_Check(retuni) ||
+        !PyLong_Check(posobj)) {
         PyErr_SetString(PyExc_TypeError,
                         "decoding error handler must return "
                         "(str, int) tuple");
@@ -478,7 +493,7 @@ multibytecodec_decerror(const MultibyteCodec *codec,
     if (_PyUnicodeWriter_WriteStr(&buf->writer, retuni) < 0)
         goto errorexit;
 
-    newpos = PyLong_AsSsize_t(PyTuple_GET_ITEM(retobj, 1));
+    newpos = PyLong_AsSsize_t(posobj);
     if (newpos < 0 && !PyErr_Occurred())
         newpos += (Py_ssize_t)(buf->inbuf_end - buf->inbuf_top);
     if (newpos < 0 || buf->inbuf_top + newpos > buf->inbuf_end) {
@@ -490,10 +505,14 @@ multibytecodec_decerror(const MultibyteCodec *codec,
     }
     buf->inbuf = buf->inbuf_top + newpos;
     Py_DECREF(retobj);
+    Py_DECREF(retuni);
+    Py_DECREF(posobj);
     return 0;
 
 errorexit:
     Py_XDECREF(retobj);
+    Py_XDECREF(retuni);
+    Py_XDECREF(posobj);
     return -1;
 }
 

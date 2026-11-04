@@ -31,7 +31,7 @@ and backend. The stage pages distinguish selected designs from working code.
 | --- | --- |
 | Documentation root (canonical `pyjit/`) | `/home/power/code/cpython/.worktrees/python-jit`, branch `weaver/python-jit` |
 | Runtime tree (nested worktree) | `/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/pyvalue-rc-universal` |
-| Runtime branch / HEAD | `boil/pyvalue-rc-universal`, `48bb4d6d1d3` |
+| Runtime branch / HEAD | `boil/pyvalue-rc-universal`, `c8a0b4dc54c` |
 | Debug build | `build/pyvalue-rc-debug-20261102-v1` (under the `python-boil-the-ocean` worktree) |
 | Triage debug builds | `build/pyvalue-rc-bringup-debug`, `build/pyvalue-rc-triage-rt-debug` |
 | Release build | `build/pyvalue-rc-release-20261103` (`--with-mimalloc --with-computed-gotos --with-shapes`, -O3) |
@@ -80,13 +80,18 @@ so pystats dispatch counts do not see it. A `pybuilddir.txt` of `none` makes a
 release build 5 to 12x slower; check it. `perf` is blocked
 (`perf_event_paranoid=4`); `tools/sampler/` has an LD_PRELOAD SIGPROF sampler.
 
-Running now: the step 5 review fixes and representation steps 6a to 6c
-(scripted save/restore sweeps; brief `build/pyjit-link-wave1/STEP6-BRIEF.md`),
-and the register IR v2 implementation proposal (design only; brief
-`IRV2-PROPOSAL-BRIEF.md`, output `design/proposals/register-ir-v2-packet.md`).
+Running now: the official re-measure (brief
+`build/pyjit-link-wave1/REMEASURE-BRIEF.md`; other agents hold builds until it
+writes `TIMING DONE`), representation step 7 (`STEP7-BRIEF.md`) and register
+IR v2 step B0a in its own worktree `build/worktrees/irv2-b0a`
+(`B0A-BRIEF.md`).
 
-Landed today on the runtime branch, newest first:
+Landed on the runtime branch, newest first:
 
+- `c8a0b4dc54c`: `PyDict_Pop` takes its status from the operation.
+- `fbe866fae0a`, `f9bd0364fd9`, `cedd72de803`: representation steps 6c, 6b,
+  6a (save/restore sites 766 to 117).
+- `c4b01b23a54`: step 5 review fixes.
 - `48bb4d6d1d3`: value API V1, `PyValue_ERROR` removed; `PyValue_AsObject` is
   the inline boxing converter.
 - `946f622e1d1`: value API V1, `pyvalue.h` moved to `Include/internal`.
@@ -165,7 +170,7 @@ The designs below and the value API page are accepted.
 - Proposal: [pyvalue-representation-packet.md](design/proposals/pyvalue-representation-packet.md)
   and its [review](design/reviews/pyvalue-representation-packet-review-1.md).
   Accepted plan for D2, D3, D5, G1', G3, G10 and G11: 11 steps, about 42
-  agent-hours. Steps 1 to 5 landed; 6a to 6c are running.
+  agent-hours. Steps 1 to 6c landed; 7 is running.
 - [value-api.md](design/value-api.md): values are the internal API and
   `PyObject *` is the compatibility layer. Reviews 1 and 2 and revisions 2 and 3
   (`74236263ef1`) done; accepted for packet V1, which landed (`f3a20271f26` to
@@ -177,14 +182,14 @@ overwritten.
 
 ## Next steps
 
-1. Finish the step 5 review fixes and steps 6a to 6c (running).
-2. Review the IR v2 proposal (running), then implement it in the order it
-   settles against steps 7 to 9b.
-3. Representation steps 7, 8, 9a and 9b.
-4. Official re-measure of kernels and the pyperformance subset on a quiet
-   machine after 6c, then the qualified baseline.
-5. Value API V1 follow-ups (`FOLLOWUPS.md`), then V2a-0 onwards.
-6. Fix the remaining 12 failures (test_capi 3, test_pyvalue_dict_vm 4,
+1. Process the re-measure, step 7 and B0a when they report (running).
+2. Representation step 8, then 9a and 9b.
+3. Register IR v2 in the packet's order
+   ([packet](design/proposals/register-ir-v2-packet.md), accepted): A1/A2
+   after step 7, A5a after 8, A5b after 9a, A3a-A3c after 9b, then the format
+   steps B2-B7.
+4. Value API V1 follow-ups (`FOLLOWUPS.md`), then V2a-0 onwards.
+5. Fix the remaining 12 failures (test_capi 3, test_pyvalue_dict_vm 4,
    test_pyvalue_native_scope 5).
 
 Use the time metric; the instruction-count metric needs `perf_event_paranoid`

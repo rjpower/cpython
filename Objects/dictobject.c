@@ -986,6 +986,7 @@ clone_combined_dict_keys(PyDictObject *orig)
             if (!PyValue_IsNull(entry->me_value)) {
                 entry->me_value = PyValue_DUP(entry->me_value);
             }
+            _PyValue_CheckHome(entry->me_value);
         }
         else {
             PyDictKeyEntry *entry = &DK_ENTRIES(keys)[i];
@@ -995,6 +996,8 @@ clone_combined_dict_keys(PyDictObject *orig)
             if (!PyValue_IsNull(entry->me_value)) {
                 entry->me_value = PyValue_DUP(entry->me_value);
             }
+            _PyValue_CheckHome(entry->me_key);
+            _PyValue_CheckHome(entry->me_value);
         }
     }
 #ifdef Py_REF_DEBUG
@@ -1457,6 +1460,8 @@ insert_combined_dict(PyDictObject *mp, Py_hash_t hash,
     assert(mp->ma_keys->dk_usable > 0);
     assert(PyValue_IsLanguageValue(key) && PyValue_IsHeapSafe(key));
     assert(PyValue_IsLanguageValue(value) && PyValue_IsHeapSafe(value));
+    _PyValue_CheckHome(key);
+    _PyValue_CheckHome(value);
     FT_ATOMIC_STORE_UINT32_RELAXED(mp->ma_keys->dk_version, 0);
     Py_ssize_t hashpos = find_empty_slot(mp->ma_keys, hash);
     Py_ssize_t ix = mp->ma_keys->dk_nentries;
@@ -1538,6 +1543,7 @@ replace_value(PyDictObject *mp, PyValue key, Py_ssize_t ix,
     assert(can_modify_dict(mp));
     assert(PyValue_IsLanguageValue(old_value));
     assert(PyValue_IsLanguageValue(value) && PyValue_IsHeapSafe(value));
+    _PyValue_CheckHome(value);
     if (_PyDict_HasSplitTable(mp)) {
         STORE_SPLIT_VALUE(mp, ix, value);
     }
@@ -1631,6 +1637,7 @@ insertdict(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue value)
         }
         else if (_PyDict_HasSplitTable(mp)) {
             assert(ix >= 0);
+            _PyValue_CheckHome(value);
             STORE_SPLIT_VALUE(mp, ix, value);
             value = PyValue_NULL;
             _PyDictValues_AddToInsertionOrder(mp->ma_values, ix);
@@ -2240,8 +2247,6 @@ setitem_take2_lock_held_known_hash(PyDictObject *mp, PyValue key,
     }
     assert(can_modify_dict(mp));
     assert(hash != -1);
-    _PyValue_CheckHome(key);
-    _PyValue_CheckHome(value);
     if (mp->ma_keys == Py_EMPTY_KEYS) {
         return insert_to_emptydict(mp, key, hash, value);
     }
@@ -4106,6 +4111,7 @@ copy_values(PyDictValues *destination, const PyDictValues *source)
         PyValue value = source->values[i];
         destination->values[i] = PyValue_IsNull(value) ? PyValue_NULL :
             PyValue_DUP(value);
+        _PyValue_CheckHome(destination->values[i]);
     }
 }
 
@@ -4388,6 +4394,7 @@ dict_setdefault_value_lock_held(PyDictObject *mp, PyValue key, PyValue value,
         }
         output = result == NULL ? PyValue_NULL : PyValue_DUP(value);
         if (_PyDict_HasSplitTable(mp)) {
+            _PyValue_CheckHome(value);
             STORE_SPLIT_VALUE(mp, ix, value);
             value = PyValue_NULL;
             _PyDictValues_AddToInsertionOrder(mp->ma_values, ix);
@@ -6907,6 +6914,7 @@ store_instance_attr_lock_held(PyObject *obj, PyObject *name, PyValue value)
         }
         values->values[ix] = PyValue_IsNull(value) ? PyValue_NULL :
             PyValue_MakeHeapSafe(PyValue_Borrow(value));
+        _PyValue_CheckHome(values->values[ix]);
         if (PyValue_IsNull(old_value)) {
             _PyDictValues_AddToInsertionOrder(values, ix);
             _PyDictValues_ShapeAfterAdd(Py_TYPE(obj), values, ix);

@@ -718,6 +718,9 @@ NON_ESCAPING_FUNCTIONS = (
     "PyValue_LongCheckExact",
     "_PyValue_BoxInt64",
     "_PyValue_BoxArray",
+    # Debug checks of a home store (report only, no Python).
+    "_PyValue_CheckHome",
+    "_PyValue_CheckTemp",
     "PyValue_FromDoubleNotNaN",
     "PyValue_InlineFloat",
     "PyValue_FloatCheckExact",

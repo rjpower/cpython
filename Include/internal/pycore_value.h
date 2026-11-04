@@ -452,9 +452,15 @@ PyValue_CheckValid(PyValue ref)
    field, cell, dict key or value, or set key): an exact int that fits inline
    and an exact non-NaN float are never held as pointers, and a pointer
    without the no-count tag is never a static immortal. This only reports:
-   it counts each violation by call site, readable through
-   _testinternalcapi.pyvalue_home_violations(). Debug builds only. */
-PyAPI_FUNC(void) _PyValue_ReportHome(PyValue ref, const char *file, int line);
+   it counts each violation by call site and kind, readable through
+   _testinternalcapi.pyvalue_home_violations(). Debug builds only.
+
+   _PyValue_CheckHome() checks a store, and the count is of stores.
+   _PyValue_RecheckHome() checks a value already stored (the frame check, a
+   GC visit), which it may see many times: it counts apart, as a backstop
+   for a writer that has no store check. site is "file:line". */
+PyAPI_FUNC(void) _PyValue_ReportHome(PyValue ref, const char *site,
+                                     int recheck);
 
 static inline bool
 _PyValue_IsCanonicalHome(PyValue ref)
@@ -476,19 +482,35 @@ _PyValue_IsCanonicalHome(PyValue ref)
     return _PyObject_ValueIdentity(obj) == (uintptr_t)obj;
 }
 
-#define _PyValue_CheckHome(REF) \
+#define _PyValue_CHECK_HOME(REF, RECHECK) \
     do { \
         PyValue _home_ref = (REF); \
         if (!_PyValue_IsCanonicalHome(_home_ref)) { \
-            _PyValue_ReportHome(_home_ref, __FILE__, __LINE__); \
+            _PyValue_ReportHome(_home_ref, \
+                                __FILE__ ":" Py_STRINGIFY(__LINE__), \
+                                (RECHECK)); \
+        } \
+    } while (0)
+#define _PyValue_CheckHome(REF) _PyValue_CHECK_HOME(REF, 0)
+#define _PyValue_RecheckHome(REF) _PyValue_CHECK_HOME(REF, 1)
+/* A store to a frame temporary, which may also hold an index. */
+#define _PyValue_CheckTemp(REF) \
+    do { \
+        PyValue _temp_ref = (REF); \
+        if (!PyValue_IsTaggedIndex(_temp_ref)) { \
+            _PyValue_CheckHome(_temp_ref); \
         } \
     } while (0)
 #else
 #define _PyValue_CheckHome(REF) ((void)0)
+#define _PyValue_RecheckHome(REF) ((void)0)
+#define _PyValue_CheckTemp(REF) ((void)0)
 #endif
 
-// The number of violations reported, and a dict mapping "file:line" of each
-// reporting call site to its count. Both are empty in release builds.
+// The number of store violations reported (rechecks are not counted), and a
+// dict mapping "file:line kind" of each reporting call site and violation
+// kind to its count; recheck sites start with "recheck ". Both are empty in
+// release builds.
 PyAPI_FUNC(Py_ssize_t) _PyValue_HomeViolationCount(void);
 PyAPI_FUNC(PyObject *) _PyValue_HomeViolationSites(void);
 

@@ -716,6 +716,7 @@ _PyValue_Truth(PyValue ref)
             assert(PyValue_IsNull(IR_SLOT(F)) \
                    || PyValue_Is(IR_SLOT(F), (V))); \
             IR_SLOT(F) = _PyValue_Publish(&(V)); \
+            _PyValue_CheckTemp(IR_SLOT(F)); \
         } \
     } while (0)
 
@@ -727,6 +728,7 @@ _PyValue_Truth(PyValue ref)
             assert(PyValue_IsNull(IR_SLOT(F)) \
                    || PyValue_Is(IR_SLOT(F), (V))); \
             IR_SLOT(F) = _PyValue_Publish(&(V)); \
+            _PyValue_CheckTemp(IR_SLOT(F)); \
         } \
     } while (0)
 

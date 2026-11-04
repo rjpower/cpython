@@ -201,28 +201,67 @@ _PyValue_BoxDouble(double value)
 }
 
 #ifdef Py_DEBUG
-#define HOME_SITE_MAX 64
+#define HOME_SITE_MAX 256
 
+/* The kinds of violation, which the report names. */
+enum {
+    HOME_INT_BOX,         // an exact int that fits inline, held as a pointer
+    HOME_FLOAT_BOX,       // an exact non-NaN float held as a pointer
+    HOME_STATIC_TAG0,     // a static immortal without the no-count tag
+    HOME_NOT_VALUE,       // an index, ERROR or a malformed pattern
+    HOME_KINDS
+};
+
+static const char *const home_kind_names[HOME_KINDS] = {
+    "int-box", "float-box", "static-tag0", "not-value",
+};
+
+/* One table per recheck flag and kind. A slot is claimed by a
+   compare-exchange on its site, so two threads (per-interpreter GILs)
+   cannot interleave a claim. */
 static struct {
-    const char *file;
-    int line;
+    const char *site;
     Py_ssize_t count;
-} home_sites[HOME_SITE_MAX];
+} home_sites[2][HOME_KINDS][HOME_SITE_MAX];
 static Py_ssize_t home_total;
-// Violations from call sites that did not fit in the table.
+// Violations from call sites that did not fit in their table.
 static Py_ssize_t home_dropped;
 
-void
-_PyValue_ReportHome(PyValue ref, const char *file, int line)
+static int
+home_kind(PyValue ref)
 {
-    _Py_atomic_add_ssize(&home_total, 1);
+    if (!PyValue_IsLanguageValue(ref)) {
+        return HOME_NOT_VALUE;
+    }
+    PyObject *obj = BITS_TO_PTR_MASKED(ref);
+    if ((ref.bits & Py_TAG_BITS) == 0 && _Py_IsStaticImmortal(obj)) {
+        return HOME_STATIC_TAG0;
+    }
+    return PyFloat_CheckExact(obj) ? HOME_FLOAT_BOX : HOME_INT_BOX;
+}
+
+void
+_PyValue_ReportHome(PyValue ref, const char *site, int recheck)
+{
+    if (!recheck) {
+        _Py_atomic_add_ssize(&home_total, 1);
+    }
+    recheck = recheck != 0;
+    int kind = home_kind(ref);
     for (int i = 0; i < HOME_SITE_MAX; i++) {
-        if (home_sites[i].file == NULL) {
-            home_sites[i].file = file;
-            home_sites[i].line = line;
+        const char *claimed = _Py_atomic_load_ptr(&home_sites[recheck][kind][i].site);
+        if (claimed == NULL) {
+            void *expected = NULL;
+            if (_Py_atomic_compare_exchange_ptr(&home_sites[recheck][kind][i].site,
+                                                &expected, (void *)site)) {
+                claimed = site;
+            }
+            else {
+                claimed = expected;
+            }
         }
-        if (strcmp(home_sites[i].file, file) == 0 && home_sites[i].line == line) {
-            _Py_atomic_add_ssize(&home_sites[i].count, 1);
+        if (claimed == site || strcmp(claimed, site) == 0) {
+            _Py_atomic_add_ssize(&home_sites[recheck][kind][i].count, 1);
             return;
         }
     }
@@ -235,6 +274,32 @@ _PyValue_HomeViolationCount(void)
     return _Py_atomic_load_ssize(&home_total);
 }
 
+static int
+add_home_sites(PyObject *sites, int recheck, int kind)
+{
+    for (int i = 0; i < HOME_SITE_MAX; i++) {
+        const char *site = _Py_atomic_load_ptr(&home_sites[recheck][kind][i].site);
+        if (site == NULL) {
+            return 0;
+        }
+        PyObject *key = PyUnicode_FromFormat("%s%s %s",
+                                             recheck ? "recheck " : "", site,
+                                             home_kind_names[kind]);
+        PyObject *count = PyLong_FromSsize_t(
+            _Py_atomic_load_ssize(&home_sites[recheck][kind][i].count));
+        if (key == NULL || count == NULL
+            || PyDict_SetItem(sites, key, count) < 0)
+        {
+            Py_XDECREF(key);
+            Py_XDECREF(count);
+            return -1;
+        }
+        Py_DECREF(key);
+        Py_DECREF(count);
+    }
+    return 0;
+}
+
 PyObject *
 _PyValue_HomeViolationSites(void)
 {
@@ -242,23 +307,17 @@ _PyValue_HomeViolationSites(void)
     if (sites == NULL) {
         return NULL;
     }
-    for (int i = 0; i < HOME_SITE_MAX && home_sites[i].file != NULL; i++) {
-        PyObject *key = PyUnicode_FromFormat("%s:%d", home_sites[i].file,
-                                             home_sites[i].line);
-        PyObject *count = PyLong_FromSsize_t(home_sites[i].count);
-        if (key == NULL || count == NULL
-            || PyDict_SetItem(sites, key, count) < 0)
-        {
-            Py_XDECREF(key);
-            Py_XDECREF(count);
-            Py_DECREF(sites);
-            return NULL;
+    for (int recheck = 0; recheck < 2; recheck++) {
+        for (int kind = 0; kind < HOME_KINDS; kind++) {
+            if (add_home_sites(sites, recheck, kind) < 0) {
+                Py_DECREF(sites);
+                return NULL;
+            }
         }
-        Py_DECREF(key);
-        Py_DECREF(count);
     }
-    if (home_dropped != 0) {
-        PyObject *count = PyLong_FromSsize_t(home_dropped);
+    Py_ssize_t dropped = _Py_atomic_load_ssize(&home_dropped);
+    if (dropped != 0) {
+        PyObject *count = PyLong_FromSsize_t(dropped);
         if (count == NULL
             || PyDict_SetItemString(sites, "<dropped: table full>", count) < 0)
         {

@@ -162,6 +162,7 @@ PyTuple_SetValue(PyObject *op, Py_ssize_t i, PyValue value)
     }
     PyValue old = _PyTuple_CAST(op)->ob_item[i];
     _PyTuple_CAST(op)->ob_item[i] = PyValue_MakeHeapSafe(value);
+    _PyValue_CheckHome(_PyTuple_CAST(op)->ob_item[i]);
     PyValue_XCLOSE(old);
     return 0;
 }
@@ -180,6 +181,7 @@ _PyTuple_ReplaceTakeRef(PyObject *op, Py_ssize_t i, PyObject *item)
     PyValue value = PyValue_PrepareOwned(item);
     PyValue old = _PyTuple_CAST(op)->ob_item[i];
     _PyTuple_CAST(op)->ob_item[i] = PyValue_MakeHeapSafe(value);
+    _PyValue_CheckHome(_PyTuple_CAST(op)->ob_item[i]);
     PyValue_XCLOSE(old);
 }
 
@@ -511,6 +513,7 @@ _PyTuple_FromValueArray(const PyValue *src, Py_ssize_t n)
     for (Py_ssize_t i = 0; i < n; i++) {
         assert(PyValue_IsLanguageValue(src[i]));
         tuple->ob_item[i] = PyValue_MakeHeapSafe(PyValue_Borrow(src[i]));
+        _PyValue_CheckHome(tuple->ob_item[i]);
         track |= maybe_tracked(tuple->ob_item[i]);
     }
     if (track) {
@@ -554,6 +557,7 @@ _PyTuple_FromValueStealOnSuccess(const PyValue *src, Py_ssize_t n)
     for (Py_ssize_t i = 0; i < n; i++) {
         assert(PyValue_IsLanguageValue(src[i]));
         tuple->ob_item[i] = PyValue_MakeHeapSafe(src[i]);
+        _PyValue_CheckHome(tuple->ob_item[i]);
         track |= maybe_tracked(tuple->ob_item[i]);
     }
     if (track) {

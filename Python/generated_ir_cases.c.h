@@ -19080,6 +19080,7 @@
                 value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
                 PyValue tmp = GETLOCAL(oparg);
                 GETLOCAL(oparg) = value;
+                _PyValue_CheckHome(value);
                 IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 trash = tmp;
             }
@@ -19119,6 +19120,7 @@
             uint32_t oparg2 = oparg & 15;
             PyValue tmp = GETLOCAL(oparg1);
             GETLOCAL(oparg1) = value1;
+            _PyValue_CheckHome(value1);
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             value2 = PyValue_DUP(GETLOCAL(oparg2));
             IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), value2);
@@ -19159,10 +19161,12 @@
             uint32_t oparg2 = oparg & 15;
             PyValue tmp = GETLOCAL(oparg1);
             GETLOCAL(oparg1) = value1;
+            _PyValue_CheckHome(value1);
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             PyValue_XCLOSE(tmp);
             tmp = GETLOCAL(oparg2);
             GETLOCAL(oparg2) = value2;
+            _PyValue_CheckHome(value2);
             IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
             PyValue_XCLOSE(tmp);
             DISPATCH();

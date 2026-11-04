@@ -177,6 +177,7 @@ _PyFrame_SetReturnValue(_PyInterpreterFrame *f, PyValue v)
 #endif
     PyValue old = f->base[f->return_slot];
     f->base[f->return_slot] = v;
+    _PyValue_CheckHome(v);
     PyValue_XCLOSE(old);
 }
 

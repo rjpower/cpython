@@ -929,6 +929,7 @@ set_merge_lock_held(PySetObject *so, PyObject *otherset)
         for (i = other->mask + 1; i > 0 ; i--, other_entry++) {
             key = other_entry->key;
             if (set_key_active(key)) {
+                _PyValue_CheckHome(key);
                 set_insert_clean(newtable, newmask, PyValue_DUP(key),
                                  other_entry->hash);
             }

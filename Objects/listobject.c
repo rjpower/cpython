@@ -331,6 +331,7 @@ _PyList_SetItemTakeValue(PyListObject *self, Py_ssize_t i, PyValue value)
     }
     PyValue old = self->ob_item[i];
     self->ob_item[i] = value;
+    _PyValue_CheckHome(value);
     PyValue_XCLOSE(old);
     return 0;
 }
@@ -385,6 +386,7 @@ ins1(PyListObject *self, Py_ssize_t where, PyObject *v)
     if (where > n) where = n;
     if (where < n) list_shift_items_right_lock_held(self, where, n);
     self->ob_item[where] = value;
+    _PyValue_CheckHome(value);
     return 0;
 }
 
@@ -415,6 +417,7 @@ _PyList_AppendTakeValue(PyListObject *self, PyValue value)
         return -1;
     }
     self->ob_item[n] = value;
+    _PyValue_CheckHome(value);
     Py_SET_SIZE(self, n + 1);
     return 0;
 }
@@ -824,6 +827,7 @@ list_ass_slice_lock_held(PyListObject *a, Py_ssize_t ilow, Py_ssize_t ihigh, PyO
     for (k = 0; k < n; k++, ilow++) {
         PyValue w = vitem[k];
         item[ilow] = PyValue_DUP(w);
+        _PyValue_CheckHome(item[ilow]);
     }
     if (d < 0) (void)list_resize(a, Py_SIZE(a));
     for (k = norig - 1; k >= 0; --k)
@@ -942,6 +946,7 @@ list_ass_item_impl(PyListObject *a, Py_ssize_t i, PyObject *v)
     }
     else {
         a->ob_item[i] = PyValue_PrepareOwned(Py_NewRef(v));
+        _PyValue_CheckHome(a->ob_item[i]);
     }
     PyValue_CLOSE(old);
     return 0;
@@ -1051,6 +1056,7 @@ list_extend_fast_values(PyListObject *self, PyObject *iterable)
     for (Py_ssize_t i = 0; i < n; i++) {
         PyValue value = src[i];
         dest[i] = PyValue_DUP(value);
+        _PyValue_CheckHome(dest[i]);
     }
     return 0;
 }
@@ -2968,6 +2974,7 @@ _PyList_FromValueStealOnSuccess(const PyValue *src, Py_ssize_t n)
     for (Py_ssize_t i = 0; i < n; i++) {
         assert(PyValue_IsLanguageValue(src[i]));
         result->ob_item[i] = PyValue_MakeHeapSafe(src[i]);
+        _PyValue_CheckHome(result->ob_item[i]);
     }
     return (PyObject *)result;
 }

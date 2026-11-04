@@ -2670,12 +2670,8 @@ call_special_method(PyThreadState *tstate, PyObject *cls, PyObject *name,
     _PyThreadState_PushCValue(tstate, &cref);
     PyValue self = PyValue_FromPyObjectNew(cls);
     PyObject *method = NULL, *self_object = NULL;
-    int found = -1;
-    if (PyErr_Occurred()) {
-        goto done;
-    }
-    found = _PyObject_LookupSpecialMethod(name, &cref.ref, &self);
-    if (found <= 0 || PyErr_Occurred()) {
+    int found = _PyObject_LookupSpecialMethod(name, &cref.ref, &self);
+    if (found <= 0) {
         goto done;
     }
     if (_Py_EnterRecursiveCallTstate(tstate, where)) {
@@ -2683,11 +2679,11 @@ call_special_method(PyThreadState *tstate, PyObject *cls, PyObject *name,
         goto done;
     }
     method = _PyValue_AsObjectAt(cref.ref, BOX_SITE_CALL);
-    if (method != NULL && !PyErr_Occurred()) {
+    if (method != NULL) {
         if (!PyValue_IsNull(self)) {
             self_object = _PyValue_AsObjectAt(self, BOX_SITE_CALL);
         }
-        if ((PyValue_IsNull(self) || self_object != NULL) && !PyErr_Occurred()) {
+        if (PyValue_IsNull(self) || self_object != NULL) {
             PyObject *args[2] = {self_object, arg};
             /* A noncallable scalar is diagnosed by the normal call API. */
             *res = self_object != NULL
@@ -2704,10 +2700,6 @@ done:
     Py_CLEAR(method);
     PyValue_XCLOSE(self);
     _PyThreadState_PopCValue(tstate, &cref);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(*res);
-        return -1;
-    }
     return found;
 }
 

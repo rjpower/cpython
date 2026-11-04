@@ -12387,8 +12387,7 @@
             assert(frame == &entry.frame);
             #endif
             LLTRACE_RESUME_FRAME();
-            if (result == NULL || PyErr_Occurred()) {
-                Py_XDECREF(result);
+            if (result == NULL) {
                 JIT_FREE_FLOW();
                 return NULL;
             }
@@ -18978,7 +18977,7 @@
                     IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                     int err = PyDict_SetValue((PyObject *)dict,
                         PyValue_FromObjectBorrow(name), release_value);
-                    if (err < 0 || PyErr_Occurred()) {
+                    if (err < 0) {
                         (void)value_operation_restore2(&operation, &release_value, &receiver);
                         value_operation_close3(&watched_dict, &release_value, &receiver);
                     }

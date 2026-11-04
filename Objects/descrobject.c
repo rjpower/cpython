@@ -570,7 +570,7 @@ wrapperdescr_call(PyObject *_descr, PyObject *args, PyObject *kwds)
 {
     PyWrapperDescrObject *descr = (PyWrapperDescrObject *)_descr;
     Py_ssize_t argc;
-    PyObject *self = NULL, *tail_args = NULL, *result = NULL;
+    PyObject *self, *result;
 
     /* Make sure that the first argument is acceptable as 'self' */
     assert(PyTuple_Check(args));
@@ -584,11 +584,11 @@ wrapperdescr_call(PyObject *_descr, PyObject *args, PyObject *kwds)
         return NULL;
     }
     self = PyTuple_GetItemRef(args, 0);
-    if (self == NULL) goto cleanup;
-    int is_subclass = _PyObject_RealIsSubclass((PyObject *)Py_TYPE(self),
-                                              (PyObject *)PyDescr_TYPE(descr));
-    if (PyErr_Occurred()) goto cleanup;
-    if (!is_subclass) {
+    if (self == NULL) {
+        return NULL;
+    }
+    if (!_PyObject_RealIsSubclass((PyObject *)Py_TYPE(self),
+                                  (PyObject *)PyDescr_TYPE(descr))) {
         PyErr_Format(PyExc_TypeError,
                      "descriptor '%V' "
                      "requires a '%.100s' object "
@@ -596,21 +596,18 @@ wrapperdescr_call(PyObject *_descr, PyObject *args, PyObject *kwds)
                      descr_name((PyDescrObject *)descr), "?",
                      PyDescr_TYPE(descr)->tp_name,
                      Py_TYPE(self)->tp_name);
-        goto cleanup;
-    }
-
-    tail_args = PyTuple_GetSlice(args, 1, argc);
-    if (tail_args == NULL) goto cleanup;
-    result = wrapperdescr_raw_call(descr, self, tail_args, kwds);
-    if (result == NULL) goto cleanup;
-
-cleanup:
-    Py_CLEAR(tail_args);
-    Py_CLEAR(self);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
+        Py_DECREF(self);
         return NULL;
     }
+
+    args = PyTuple_GetSlice(args, 1, argc);
+    if (args == NULL) {
+        Py_DECREF(self);
+        return NULL;
+    }
+    result = wrapperdescr_raw_call(descr, self, args, kwds);
+    Py_DECREF(args);
+    Py_DECREF(self);
     return result;
 }
 

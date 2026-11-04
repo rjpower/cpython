@@ -59,23 +59,19 @@ cache_allocate(uint32_t size)
     return cache;
 }
 
-// The table is detached and privately owned. Publish each empty slot before
-// retiring its name; callbacks cannot rediscover or retire this table again.
+// The cache owns strong references to its interned names. Releasing an
+// interned string runs no Python, so nothing can reach the table meanwhile.
 static void
 cache_free_delayed(struct type_cache *cache)
 {
     if (cache == NULL || cache == &empty_cache) {
         return;
     }
-    size_t nbytes = cache_nbytes(cache);
-    uint32_t size = cache_size(cache);
-    for (uint32_t i = 0; i < size; i++) {
-        PyObject *name = cache->hashtable[i].name;
-        cache->hashtable[i].name = NULL;
-        cache->hashtable[i].value = PyValue_NULL;
-        Py_XDECREF(name);
+    for (uint32_t i = 0; i < cache_size(cache); i++) {
+        Py_XDECREF(cache->hashtable[i].name);
     }
-    _PyMem_FreeDelayed(cache, nbytes);
+    // Delay the freeing of old cache for concurrent lock-free readers
+    _PyMem_FreeDelayed(cache, cache_nbytes(cache));
 }
 
 static inline void **
@@ -130,31 +126,20 @@ cache_insert(struct type_cache *cache, PyObject *name, PyValue value)
     }
 }
 
-// Never carry the installed table across allocation. The requested size is
-// only a hint: reentrant work may have replaced, filled or invalidated it.
+// Allocation, copying and retiring the old table run no Python (the release
+// contract), so the table installed when the caller checked is still installed.
 static void
-cache_resize(PyInterpreterState *interp, PyTypeObject *type,
-             uint32_t size, unsigned int expected)
+cache_resize(PyTypeObject *type, uint32_t size, unsigned int expected)
 {
     struct type_cache *replacement = cache_allocate(size);
     if (replacement == NULL) {
         return;
     }
-    if (PyErr_Occurred() || !_PyType_MatchesVersion(interp, type, expected)) {
-        cache_free_delayed(replacement);
-        return;
-    }
     struct type_cache *current = cache_get(type);
-    int valid = current != NULL && current != &empty_cache &&
-        current->version_tag == expected;
-    if (valid && (current->available != 0 ||
-                  current->used >= size - (size >> 2))) {
-        cache_free_delayed(replacement);
-        return;
-    }
-    // From admission to publication, copying only increments names and cannot
-    // call out. A stale table's borrowed values are never read.
-    if (valid) {
+    // Copying only increments names. A stale table's borrowed values are
+    // never read.
+    if (current != NULL && current != &empty_cache &&
+        current->version_tag == expected) {
         for (uint32_t i = 0; i < cache_size(current); i++) {
             if (current->hashtable[i].name != NULL) {
                 cache_insert(replacement, current->hashtable[i].name,
@@ -165,20 +150,7 @@ cache_resize(PyInterpreterState *interp, PyTypeObject *type,
     replacement->version_tag = expected;
     cache_set(type, replacement);
     OBJECT_STAT_INC(type_cache_resizes);
-    // Neither pointer may be reused after retirement callbacks.
     cache_free_delayed(current);
-}
-
-// Best-effort maintenance must not export its own failures. Discarded error
-// owners can themselves call out, so drain them before restoring the entry error.
-static void
-cache_restore_entry_error(PyObject *saved)
-{
-    while (PyErr_Occurred()) {
-        PyObject *error = PyErr_GetRaisedException();
-        Py_DECREF(error);
-    }
-    PyErr_SetRaisedException(saved);
 }
 
 void
@@ -189,7 +161,6 @@ _PyTypeCache_Insert(PyTypeObject *type, PyObject *name, PyValue value,
     if (!_PyType_MatchesVersion(interp, type, expected_version)) {
         return;
     }
-    PyObject *saved = PyErr_GetRaisedException();
     struct type_cache *cache = cache_get(type);
     if (cache == NULL || cache == &empty_cache ||
         cache->version_tag != expected_version || cache->available == 0) {
@@ -198,25 +169,19 @@ _PyTypeCache_Insert(PyTypeObject *type, PyObject *name, PyValue value,
             cache->version_tag == expected_version) {
             size = cache_size(cache) * 2;
         }
-        // No installed-table pointer survives the allocator or free hooks.
-        cache = NULL;
         if (size > _Py_TYPECACHE_MAXSIZE) {
             OBJECT_STAT_INC(type_cache_too_big);
-            goto done;
+            return;
         }
-        cache_resize(interp, type, size, expected_version);
-        if (PyErr_Occurred() ||
-            !_PyType_MatchesVersion(interp, type, expected_version)) {
-            goto done;
-        }
+        cache_resize(type, size, expected_version);
         cache = cache_get(type);
+        if (cache == NULL || cache->version_tag != expected_version ||
+            cache->available == 0) {
+            // out of memory, don't cache the value
+            return;
+        }
     }
-    if (cache != NULL && cache != &empty_cache && cache->available != 0 &&
-        cache->version_tag == expected_version) {
-        cache_insert(cache, name, value);
-    }
-done:
-    cache_restore_entry_error(saved);
+    cache_insert(cache, name, value);
 }
 
 struct _PyTypeCacheLookupResult

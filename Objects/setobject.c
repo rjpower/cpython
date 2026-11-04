@@ -835,28 +835,15 @@ set_repr_impl(PySetObject *so)
 
     // gh-129967: avoid PySequence_List because it might re-lock the object
     // lock or the GIL and allow something to clear the set from underneath us.
-snapshot:
     keys = PyList_New(so->used);
     if (keys == NULL) {
         goto done;
-    }
-    if (so->used > PyList_GET_SIZE(keys)) {
-        Py_XDECREF(keys);
-        goto snapshot;
     }
 
     Py_ssize_t pos = 0, idx = 0;
     setentry *entry;
     while (set_next(so, &pos, &entry)) {
         PyList_SET_VALUE(keys, idx++, PyValue_DUP(entry->key));
-    }
-    /* Allocation may have removed keys. The unfilled NULL1 capacity must
-       not appear as elements when the snapshot is passed to Python repr. */
-    Py_SET_SIZE(keys, idx);
-    if (idx == 0) {
-        Py_XDECREF(keys);
-        result = PyUnicode_FromFormat("%s()", Py_TYPE(so)->tp_name);
-        goto done;
     }
 
     /* repr(keys)[1:-1] */
@@ -879,10 +866,6 @@ snapshot:
     Py_DECREF(listrepr);
 done:
     Py_ReprLeave((PyObject*)so);
-    if (result != NULL && PyErr_Occurred()) {
-        Py_XDECREF(result);
-        result = NULL;
-    }
     return result;
 }
 
@@ -979,41 +962,32 @@ static PyObject *
 set_pop_impl(PySetObject *so)
 /*[clinic end generated code: output=4d65180f1271871b input=9296c84921125060]*/
 {
-    for (;;) {
-        if (so->used == 0) {
-            PyErr_SetString(PyExc_KeyError, "pop from an empty set");
-            return NULL;
-        }
-        Py_ssize_t index = so->finger & so->mask;
-        while (!set_key_active(so->table[index].key)) {
-            index = (index + 1) & so->mask;
-        }
-        setentry *table = so->table;
-        PyValue key = PyValue_DUP(table[index].key);
-        Py_hash_t hash = table[index].hash;
-        PyObject *boxed = _PyValue_AsObjectAt(key, BOX_SITE_SET);
-        if (boxed == NULL || PyErr_Occurred()) {
-            Py_XDECREF(boxed);
-            PyValue_CLOSE(key);
-            return NULL;
-        }
-        /* Boxing can reenter and replace the table. Commit only against the
-           still-present selected key; allocation failure removes nothing. */
-        if (table != so->table || index > so->mask ||
-            table[index].key.bits != key.bits || table[index].hash != hash) {
-            Py_DECREF(boxed);
-            PyValue_XCLOSE(key);
-            continue;
-        }
-        PyValue stored = table[index].key;
-        table[index].hash = -1;
-        table[index].key = dummy;
-        so->used--;
-        so->finger = index + 1;
-        PyValue_CLOSE(stored);
-        PyValue_CLOSE(key);
-        return boxed;
+    /* Make sure the search finger is in bounds */
+    setentry *entry = so->table + (so->finger & so->mask);
+    setentry *limit = so->table + so->mask;
+
+    if (so->used == 0) {
+        PyErr_SetString(PyExc_KeyError, "pop from an empty set");
+        return NULL;
     }
+    while (!set_key_active(entry->key)) {
+        entry++;
+        if (entry > limit)
+            entry = so->table;
+    }
+    /* Box before removing, so that a failed box removes nothing. Boxing
+       runs no Python, so the entry stays in place. */
+    PyObject *key = _PyValue_AsObjectAt(entry->key, BOX_SITE_SET);
+    if (key == NULL) {
+        return NULL;
+    }
+    PyValue stored = entry->key;
+    FT_ATOMIC_STORE_SSIZE_RELAXED(entry->hash, -1);
+    FT_ATOMIC_STORE_SSIZE_RELAXED(so->used, so->used - 1);
+    FT_ATOMIC_STORE_PTR_RELEASE(entry->key, dummy);
+    so->finger = entry - so->table + 1;   /* next place to start */
+    PyValue_CLOSE(stored);
+    return key;
 }
 
 static PyValue
@@ -1248,31 +1222,20 @@ static PyObject *
 setiter_iternext(PyObject *self)
 {
     setiterobject *si = (setiterobject *)self;
-    PySetObject *so = si->si_set;
-    Py_XINCREF(so);
     Py_ssize_t old_pos = si->si_pos;
     Py_ssize_t old_len = si->len;
     PyValue key = _PySetIter_NextValue(self);
     if (PyValue_IsNull(key)) {
-        Py_XDECREF(so);
         return NULL;
     }
     PyObject *boxed = _PyValue_AsObjectAt(key, BOX_SITE_ITERATION);
     if (boxed == NULL) {
-        /* A failed box consumes no element. Boxing runs no Python, so the
-           iterator still holds the position this call took. */
+        /* A failed box consumes no element. Boxing runs no Python, so no
+           other next() moved the iterator in between. */
         si->si_pos = old_pos;
         si->len = old_len;
-        PyValue_CLOSE(key);
-        Py_XDECREF(so);
-        return NULL;
     }
     PyValue_CLOSE(key);
-    Py_XDECREF(so);
-    if (PyErr_Occurred()) {
-        Py_DECREF(boxed);
-        return NULL;
-    }
     return boxed;
 }
 

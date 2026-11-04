@@ -709,15 +709,11 @@ class Obj2ModVisitor(PickleVisitor):
             self.emit("%s val;" % ctype, depth+2)
             self.emit("PyObject *tmp2 = PyList_GetItemRef(tmp, i);", depth+2)
             self.emit("if (tmp2 == NULL) goto failed;", depth+2)
-            self.emit("if (PyErr_Occurred()) {", depth+2)
-            self.emit("Py_DECREF(tmp2);", depth+3)
-            self.emit("goto failed;", depth+3)
-            self.emit("}", depth+2)
             with self.recursive_call(name, depth+2, failed_item="tmp2"):
                 self.emit("res = obj2ast_%s(state, tmp2, &val, \"%s\", arena);" %
                           (field.type, field.name), depth+2, reflow=False)
             self.emit("Py_DECREF(tmp2);", depth+2)
-            self.emit("if (res != 0 || PyErr_Occurred()) goto failed;", depth+2)
+            self.emit("if (res != 0) goto failed;", depth+2)
             self.emit("if (len != PyList_GET_SIZE(tmp)) {", depth+2)
             self.emit("PyErr_SetString(PyExc_RuntimeError, \"%s field \\\"%s\\\" "
                       "changed size during iteration\");" %
@@ -1034,8 +1030,7 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
         if (PyErr_WarnFormat(
                 PyExc_DeprecationWarning, 1,
                 "Instantiating abstract AST node class %T is deprecated. "
-                "This will become an error in Python 3.20", self) < 0 ||
-            PyErr_Occurred()) {
+                "This will become an error in Python 3.20", self) < 0) {
             return -1;
         }
     }
@@ -1049,10 +1044,6 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
     PyObject *field_types = NULL, *remaining_list = NULL, *missing_names = NULL;
     PyObject *name = NULL, *type = NULL, *empty = NULL, *name_str = NULL;
     PyObject *const *positional = NULL;
-
-    if (PyErr_Occurred()) {
-        goto cleanup;
-    }
 
     fields = PyObject_GetAttr((PyObject*)Py_TYPE(self), state->_fields);
     if (fields == NULL) {
@@ -1099,14 +1090,10 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
             goto cleanup;
         }
         Py_CLEAR(name);
-        if (PyErr_Occurred()) {
-            res = -1;
-            goto cleanup;
-        }
     }
     if (keywords != NULL) {
         positional_keys = PyDict_Keys(keywords);
-        if (positional_keys == NULL || PyErr_Occurred()) {
+        if (positional_keys == NULL) {
             res = -1;
             goto cleanup;
         }
@@ -1128,10 +1115,6 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
             }
             if (found == 0) {
                 Py_CLEAR(key);
-                if (PyErr_Occurred()) {
-                    res = -1;
-                    goto cleanup;
-                }
                 continue;
             }
             int contains = PySequence_Contains(fields, key);
@@ -1141,7 +1124,7 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
             }
             else if (contains == 1) {
                 int p = PySet_Discard(remaining_fields, key);
-                if (p < 0 || PyErr_Occurred()) {
+                if (p < 0) {
                     res = -1;
                     goto cleanup;
                 }
@@ -1157,13 +1140,13 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
                 // Lazily initialize "attributes"
                 if (attributes == NULL) {
                     attributes = PyObject_GetAttr((PyObject*)Py_TYPE(self), state->_attributes);
-                    if (attributes == NULL || PyErr_Occurred()) {
+                    if (attributes == NULL) {
                         res = -1;
                         goto cleanup;
                     }
                 }
                 contains = PySequence_Contains(attributes, key);
-                if (contains < 0 || PyErr_Occurred()) {
+                if (contains < 0) {
                     res = -1;
                     goto cleanup;
                 }
@@ -1176,7 +1159,7 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
                 }
             }
             res = PyObject_SetAttr(self, key, value);
-            if (res < 0 || PyErr_Occurred()) {
+            if (res < 0) {
                 res = -1;
                 goto cleanup;
             }
@@ -1185,13 +1168,13 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
         }
     }
     size = PySet_Size(remaining_fields);
-    if (size < 0 || PyErr_Occurred()) {
+    if (size < 0) {
         res = -1;
         goto cleanup;
     }
     if (size > 0) {
         if (PyObject_GetOptionalAttr((PyObject*)Py_TYPE(self), &_Py_ID(_field_types),
-                                     &field_types) < 0 || PyErr_Occurred()) {
+                                     &field_types) < 0) {
             res = -1;
             goto cleanup;
         }
@@ -1246,10 +1229,6 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
                     goto cleanup;
                 }
                 Py_CLEAR(empty);
-                if (PyErr_Occurred()) {
-                    res = -1;
-                    goto cleanup;
-                }
             }
             else if (type == state->expr_context_type) {
                 // special case for expr_context: default to Load()
@@ -1271,10 +1250,6 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
             Py_CLEAR(name);
         }
         Py_ssize_t num_missing = PySet_GET_SIZE(missing_names);
-        if (PyErr_Occurred()) {
-            res = -1;
-            goto cleanup;
-        }
         if (num_missing > 0) {
             name_str = format_missing(missing_names, fields);
             if (name_str == NULL) {
@@ -1303,9 +1278,6 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
     Py_CLEAR(fields);
     Py_CLEAR(remaining_fields);
     Py_CLEAR(keywords);
-    if (PyErr_Occurred()) {
-        res = -1;
-    }
     return res;
 }
 

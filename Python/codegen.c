@@ -834,7 +834,7 @@ codegen_deferred_annotations_body(compiler *c, location loc,
         }
         stmt_ty st = (stmt_ty)PyLong_AsVoidPtr(ptr);
         Py_DECREF(ptr);
-        if (st == NULL || PyErr_Occurred()) {
+        if (st == NULL) {
             return ERROR;
         }
         PyObject *mangled = _PyCompile_Mangle(c, st->v.AnnAssign.target->v.Name.id);
@@ -4028,7 +4028,7 @@ load_args_for_super(compiler *c, expr_ty e) {
     assert(PyValue_IsObject(key));
     int ret = codegen_nameop(c, loc, PyValue_AsKnownObjectBorrow(key), Load);
     PyValue_CLOSE(key);
-    return ret < 0 || PyErr_Occurred() ? ERROR : SUCCESS;
+    return ret < 0 ? ERROR : SUCCESS;
 }
 
 // If an attribute access spans multiple lines, update the current start
@@ -4987,16 +4987,16 @@ codegen_push_inlined_comprehension_locals(compiler *c, location loc,
                       PyLong_AsLong(PyValue_AsKnownObjectBorrow(value));
         PyValue_CLOSE(value);
         value = PyValue_NULL;
-        if (PyErr_Occurred()) {
+        assert(symbol >= 0 || PyErr_Occurred());
+        if (symbol < 0) {
             PyValue_CLOSE(key);
             return ERROR;
         }
-        assert(symbol >= 0);
         int ret = codegen_push_inlined_comprehension_name(
             c, loc, PyValue_AsKnownObjectBorrow(key), symbol, state);
         PyValue_CLOSE(key);
         key = PyValue_NULL;
-        if (ret < 0 || PyErr_Occurred()) {
+        if (ret < 0) {
             return ERROR;
         }
     }

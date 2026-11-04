@@ -396,24 +396,15 @@ divmod(int x, int y, int *r)
 static PyObject *
 divide_nearest(PyObject *m, PyObject *n)
 {
-    PyObject *temp = NULL;
-    PyObject *result = NULL;
+    PyObject *result;
+    PyObject *temp;
 
     temp = _PyLong_DivmodNear(m, n);
-    if (temp == NULL) {
-        goto Done;
-    }
-    result = PyTuple_GetItemRef(temp, 0);
-    if (result == NULL) {
-        goto Done;
-    }
-
-Done:
-    Py_CLEAR(temp);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
+    if (temp == NULL)
         return NULL;
-    }
+    result = PyTuple_GetItemRef(temp, 0);
+    Py_DECREF(temp);
+
     return result;
 }
 
@@ -2232,16 +2223,12 @@ microseconds_to_delta_ex(PyObject *pyus, PyTypeObject *type)
 
     PyObject *tuple = NULL;
     PyObject *num = NULL;
-    PyObject *remainder = NULL;
     PyObject *result = NULL;
 
-    PyObject *current_mod = NULL;
+    PyObject *current_mod;
     datetime_state *st = GET_CURRENT_STATE(current_mod);
     if (st == NULL) {
         return NULL;
-    }
-    if (PyErr_Occurred()) {
-        goto Done;
     }
 
     tuple = checked_divmod(pyus, CONST_US_PER_SECOND(st));
@@ -2249,72 +2236,57 @@ microseconds_to_delta_ex(PyObject *pyus, PyTypeObject *type)
         goto Done;
     }
 
-    remainder = PyTuple_GetItemRef(tuple, 1);  /* us */
-    if (remainder == NULL) {
+    num = PyTuple_GetItemRef(tuple, 1);         /* us */
+    if (num == NULL) {
         goto Done;
     }
-    us = PyLong_AsInt(remainder);
-    Py_CLEAR(remainder);
-    if (PyErr_Occurred()) {
+    us = PyLong_AsInt(num);
+    Py_CLEAR(num);
+    if (us == -1 && PyErr_Occurred()) {
         goto Done;
     }
     if (!(0 <= us && us < 1000000)) {
         goto BadDivmod;
     }
 
-    num = PyTuple_GetItemRef(tuple, 0);  /* leftover seconds */
-    if (num == NULL) {
-        goto Done;
-    }
+    num = PyTuple_GetItemRef(tuple, 0);         /* leftover seconds */
     Py_CLEAR(tuple);
-    if (PyErr_Occurred()) {
+    if (num == NULL) {
         goto Done;
     }
 
     tuple = checked_divmod(num, CONST_SEC_PER_DAY(st));
-    if (tuple == NULL) {
+    if (tuple == NULL)
         goto Done;
-    }
     Py_CLEAR(num);
-    if (PyErr_Occurred()) {
-        goto Done;
-    }
 
-    remainder = PyTuple_GetItemRef(tuple, 1);  /* seconds */
-    if (remainder == NULL) {
+    num = PyTuple_GetItemRef(tuple, 1);         /* seconds */
+    if (num == NULL) {
         goto Done;
     }
-    s = PyLong_AsInt(remainder);
-    Py_CLEAR(remainder);
-    if (PyErr_Occurred()) {
+    s = PyLong_AsInt(num);
+    Py_CLEAR(num);
+    if (s == -1 && PyErr_Occurred()) {
         goto Done;
     }
     if (!(0 <= s && s < 24*3600)) {
         goto BadDivmod;
     }
 
-    num = PyTuple_GetItemRef(tuple, 0);  /* leftover days */
+    num = PyTuple_GetItemRef(tuple, 0);         /* leftover days */
     if (num == NULL) {
         goto Done;
     }
     d = PyLong_AsInt(num);
-    if (PyErr_Occurred()) {
+    if (d == -1 && PyErr_Occurred()) {
         goto Done;
     }
     result = new_delta_ex(d, s, us, 0, type);
-    if (result == NULL) {
-        goto Done;
-    }
 
 Done:
-    Py_CLEAR(remainder);
-    Py_CLEAR(num);
-    Py_CLEAR(tuple);
+    Py_XDECREF(tuple);
+    Py_XDECREF(num);
     RELEASE_CURRENT_STATE(st, current_mod);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-        return NULL;
-    }
     return result;
 
 BadDivmod:
@@ -2379,75 +2351,40 @@ static PyObject *
 multiply_truedivide_timedelta_float(PyDateTime_Delta *delta, PyObject *floatobj, int op)
 {
     PyObject *result = NULL;
-    PyObject *pyus_in = NULL;
-    PyObject *ratio = NULL;
-    PyObject *factor = NULL;
-    PyObject *divisor = NULL;
-    PyObject *temp = NULL;
-    PyObject *pyus_out = NULL;
+    PyObject *pyus_in = NULL, *temp, *pyus_out;
+    PyObject *ratio = NULL, *factor;
 
     pyus_in = delta_to_microseconds(delta);
-    if (pyus_in == NULL) {
-        goto Done;
-    }
+    if (pyus_in == NULL)
+        return NULL;
     ratio = get_float_as_integer_ratio(floatobj);
     if (ratio == NULL) {
-        goto Done;
+        goto error;
     }
     factor = PyTuple_GetItemRef(ratio, op);
-    if (factor == NULL) {
-        goto Done;
-    }
+    if (factor == NULL)
+        goto error;
     temp = PyNumber_Multiply(pyus_in, factor);
-    if (temp == NULL) {
-        goto Done;
+    Py_DECREF(factor);
+    Py_SETREF(pyus_in, NULL);
+    if (temp == NULL)
+        goto error;
+    factor = PyTuple_GetItemRef(ratio, !op);
+    if (factor == NULL) {
+        Py_DECREF(temp);
+        goto error;
     }
-    Py_CLEAR(factor);
-    if (PyErr_Occurred()) {
-        goto Done;
-    }
-    Py_CLEAR(pyus_in);
-    if (PyErr_Occurred()) {
-        goto Done;
-    }
-
-    divisor = PyTuple_GetItemRef(ratio, !op);
-    if (divisor == NULL) {
-        goto Done;
-    }
-    pyus_out = divide_nearest(temp, divisor);
-    if (pyus_out == NULL) {
-        goto Done;
-    }
-    Py_CLEAR(divisor);
-    if (PyErr_Occurred()) {
-        goto Done;
-    }
-    Py_CLEAR(temp);
-    if (PyErr_Occurred()) {
-        goto Done;
-    }
-
+    pyus_out = divide_nearest(temp, factor);
+    Py_DECREF(factor);
+    Py_DECREF(temp);
+    if (pyus_out == NULL)
+        goto error;
     result = microseconds_to_delta(pyus_out);
-    if (result == NULL) {
-        goto Done;
-    }
-    Py_CLEAR(pyus_out);
-    if (PyErr_Occurred()) {
-        goto Done;
-    }
+    Py_DECREF(pyus_out);
+ error:
+    Py_XDECREF(pyus_in);
+    Py_XDECREF(ratio);
 
-Done:
-    Py_CLEAR(pyus_out);
-    Py_CLEAR(temp);
-    Py_CLEAR(divisor);
-    Py_CLEAR(factor);
-    Py_CLEAR(pyus_in);
-    Py_CLEAR(ratio);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-        return NULL;
-    }
     return result;
 }
 
@@ -2769,72 +2706,53 @@ delta_remainder(PyObject *left, PyObject *right)
 static PyObject *
 delta_divmod(PyObject *left, PyObject *right)
 {
-    PyObject *pyus_left = NULL;
-    PyObject *pyus_right = NULL;
-    PyObject *divmod = NULL;
-    PyObject *remainder = NULL;
-    PyObject *quotient = NULL;
-    PyObject *delta = NULL;
-    PyObject *result = NULL;
+    PyObject *pyus_left;
+    PyObject *pyus_right;
+    PyObject *divmod;
+    PyObject *item;
+    PyObject *delta;
+    PyObject *result;
 
-    if (!PyDelta_Check(left) || !PyDelta_Check(right)) {
+    if (!PyDelta_Check(left) || !PyDelta_Check(right))
         Py_RETURN_NOTIMPLEMENTED;
-    }
 
     pyus_left = delta_to_microseconds((PyDateTime_Delta *)left);
-    if (pyus_left == NULL || PyErr_Occurred()) {
-        goto Done;
-    }
+    if (pyus_left == NULL)
+        return NULL;
+
     pyus_right = delta_to_microseconds((PyDateTime_Delta *)right);
     if (pyus_right == NULL) {
-        goto Done;
-    }
-    divmod = checked_divmod(pyus_left, pyus_right);
-    if (divmod == NULL) {
-        goto Done;
-    }
-    Py_CLEAR(pyus_left);
-    if (PyErr_Occurred()) {
-        goto Done;
-    }
-    Py_CLEAR(pyus_right);
-    if (PyErr_Occurred()) {
-        goto Done;
-    }
-
-    remainder = PyTuple_GetItemRef(divmod, 1);
-    if (remainder == NULL) {
-        goto Done;
-    }
-    delta = microseconds_to_delta(remainder);
-    if (delta == NULL) {
-        goto Done;
-    }
-    Py_CLEAR(remainder);
-    if (PyErr_Occurred()) {
-        goto Done;
-    }
-
-    quotient = PyTuple_GetItemRef(divmod, 0);
-    if (quotient == NULL) {
-        goto Done;
-    }
-    result = _PyTuple_FromPair(quotient, delta);
-    if (result == NULL) {
-        goto Done;
-    }
-
-Done:
-    Py_CLEAR(quotient);
-    Py_CLEAR(remainder);
-    Py_CLEAR(delta);
-    Py_CLEAR(divmod);
-    Py_CLEAR(pyus_right);
-    Py_CLEAR(pyus_left);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
+        Py_DECREF(pyus_left);
         return NULL;
     }
+
+    divmod = checked_divmod(pyus_left, pyus_right);
+    Py_DECREF(pyus_left);
+    Py_DECREF(pyus_right);
+    if (divmod == NULL)
+        return NULL;
+
+    item = PyTuple_GetItemRef(divmod, 1);
+    if (item == NULL) {
+        Py_DECREF(divmod);
+        return NULL;
+    }
+    delta = microseconds_to_delta(item);
+    Py_DECREF(item);
+    if (delta == NULL) {
+        Py_DECREF(divmod);
+        return NULL;
+    }
+    item = PyTuple_GetItemRef(divmod, 0);
+    if (item == NULL) {
+        Py_DECREF(delta);
+        Py_DECREF(divmod);
+        return NULL;
+    }
+    result = _PyTuple_FromPair(item, delta);
+    Py_DECREF(item);
+    Py_DECREF(delta);
+    Py_DECREF(divmod);
     return result;
 }
 
@@ -3369,7 +3287,6 @@ date_new(PyTypeObject *type, PyObject *args, PyObject *kw)
             MONTH_IS_SANE(PyBytes_AS_STRING(state)[2]))
         {
             result = date_from_pickle(type, state);
-            if (result == NULL) goto done;
             goto done;
         }
     }
@@ -3388,28 +3305,19 @@ date_new(PyTypeObject *type, PyObject *args, PyObject *kw)
                 }
                 goto done;
             }
-            if (PyErr_Occurred()) goto done;
             result = date_from_pickle(type, encoded);
-            if (result == NULL) goto done;
             goto done;
         }
     }
 
     /* Invalid pickle state: retire selections before ordinary parsing. */
     Py_CLEAR(encoded);
-    if (PyErr_Occurred()) goto done;
     Py_CLEAR(state);
-    if (PyErr_Occurred()) goto done;
     result = datetime_date(type, args, kw);
-    if (result == NULL) goto done;
 
 done:
     Py_CLEAR(encoded);
     Py_CLEAR(state);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-        return NULL;
-    }
     return result;
 }
 
@@ -3895,17 +3803,10 @@ iso_calendar_date_repr(PyObject *self)
 
     result = PyUnicode_FromFormat("%.200s(year=%S, week=%S, weekday=%S)",
                                   Py_TYPE(self)->tp_name, year, week, weekday);
-    if (result == NULL) {
-        goto done;
-    }
 done:
     Py_CLEAR(weekday);
     Py_CLEAR(week);
     Py_CLEAR(year);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-        return NULL;
-    }
     return result;
 }
 
@@ -3934,17 +3835,10 @@ iso_calendar_date_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
     result = Py_BuildValue(
         "O((OOO))", &PyTuple_Type, year, week, weekday
     );
-    if (result == NULL) {
-        goto done;
-    }
 done:
     Py_CLEAR(weekday);
     Py_CLEAR(week);
     Py_CLEAR(year);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-        return NULL;
-    }
     return result;
 }
 
@@ -3953,10 +3847,6 @@ iso_calendar_date_year(PyObject *self, void *Py_UNUSED(closure))
 {
     PyObject *year = PyTuple_GetItemRef(self, 0);
     if (year == NULL) {
-        return NULL;
-    }
-    if (PyErr_Occurred()) {
-        Py_CLEAR(year);
         return NULL;
     }
     return year;
@@ -3969,10 +3859,6 @@ iso_calendar_date_week(PyObject *self, void *Py_UNUSED(closure))
     if (week == NULL) {
         return NULL;
     }
-    if (PyErr_Occurred()) {
-        Py_CLEAR(week);
-        return NULL;
-    }
     return week;
 }
 
@@ -3981,10 +3867,6 @@ iso_calendar_date_weekday(PyObject *self, void *Py_UNUSED(closure))
 {
     PyObject *weekday = PyTuple_GetItemRef(self, 2);
     if (weekday == NULL) {
-        return NULL;
-    }
-    if (PyErr_Occurred()) {
-        Py_CLEAR(weekday);
         return NULL;
     }
     return weekday;
@@ -4961,7 +4843,7 @@ time_new(PyTypeObject *type, PyObject *args, PyObject *kw)
     else {
         tzinfo = Py_NewRef(Py_None);
     }
-    if (tzinfo == NULL || PyErr_Occurred()) {
+    if (tzinfo == NULL) {
         goto done;
     }
     if (PyBytes_Check(state)) {
@@ -4969,7 +4851,6 @@ time_new(PyTypeObject *type, PyObject *args, PyObject *kw)
             (0x7F & ((unsigned char) (PyBytes_AS_STRING(state)[0]))) < 24)
         {
             result = time_from_pickle(type, state, tzinfo);
-            if (result == NULL) goto done;
             goto done;
         }
     }
@@ -4988,33 +4869,21 @@ time_new(PyTypeObject *type, PyObject *args, PyObject *kw)
                 }
                 goto done;
             }
-            if (PyErr_Occurred()) goto done;
             result = time_from_pickle(type, encoded, tzinfo);
-            if (result == NULL) goto done;
             goto done;
         }
     }
 
     /* Invalid pickle state: retire selections before ordinary parsing. */
     Py_CLEAR(encoded);
-    if (PyErr_Occurred()) goto done;
     Py_CLEAR(tzinfo);
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     Py_CLEAR(state);
-    if (PyErr_Occurred()) goto done;
     result = datetime_time(type, args, kw);
-    if (result == NULL) goto done;
 
 done:
     Py_CLEAR(encoded);
     Py_CLEAR(tzinfo);
     Py_CLEAR(state);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-        return NULL;
-    }
     return result;
 }
 
@@ -5811,7 +5680,7 @@ datetime_new(PyTypeObject *type, PyObject *args, PyObject *kw)
     else {
         tzinfo = Py_NewRef(Py_None);
     }
-    if (tzinfo == NULL || PyErr_Occurred()) {
+    if (tzinfo == NULL) {
         goto done;
     }
     if (PyBytes_Check(state)) {
@@ -5819,7 +5688,6 @@ datetime_new(PyTypeObject *type, PyObject *args, PyObject *kw)
             MONTH_IS_SANE(PyBytes_AS_STRING(state)[2] & 0x7F))
         {
             result = datetime_from_pickle(type, state, tzinfo);
-            if (result == NULL) goto done;
             goto done;
         }
     }
@@ -5838,33 +5706,21 @@ datetime_new(PyTypeObject *type, PyObject *args, PyObject *kw)
                 }
                 goto done;
             }
-            if (PyErr_Occurred()) goto done;
             result = datetime_from_pickle(type, encoded, tzinfo);
-            if (result == NULL) goto done;
             goto done;
         }
     }
 
     /* Invalid pickle state: retire selections before ordinary parsing. */
     Py_CLEAR(encoded);
-    if (PyErr_Occurred()) goto done;
     Py_CLEAR(tzinfo);
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     Py_CLEAR(state);
-    if (PyErr_Occurred()) goto done;
     result = datetime_datetime(type, args, kw);
-    if (result == NULL) goto done;
 
 done:
     Py_CLEAR(encoded);
     Py_CLEAR(tzinfo);
     Py_CLEAR(state);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-        return NULL;
-    }
     return result;
 }
 

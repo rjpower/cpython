@@ -144,7 +144,7 @@ enum_next_long(enumobject *en, PyObject* next_item)
     Py_BEGIN_CRITICAL_SECTION(en);
     next_index = increment_longindex_lock_held(en);
     Py_END_CRITICAL_SECTION();
-    if (next_index == NULL || PyErr_Occurred()) {
+    if (next_index == NULL) {
         goto done;
     }
 
@@ -175,9 +175,6 @@ done:
     Py_CLEAR(next_index);
     Py_CLEAR(next_item);
     Py_CLEAR(iterator_owner);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(output);
-    }
     return output;
 }
 
@@ -193,7 +190,7 @@ enum_next(PyObject *op)
 
     PyObject *it = en->en_sit;
     next_item = (*Py_TYPE(it)->tp_iternext)(it);
-    if (next_item == NULL || PyErr_Occurred()) {
+    if (next_item == NULL) {
         goto done;
     }
 
@@ -238,9 +235,6 @@ done:
     Py_CLEAR(next_index);
     Py_CLEAR(next_item);
     Py_CLEAR(iterator_owner);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(output);
-    }
     return output;
 }
 

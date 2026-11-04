@@ -1914,10 +1914,6 @@ s_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
             return NULL;
         }
     }
-    if (PyErr_Occurred()) {
-        Py_XDECREF(format);
-        return NULL;
-    }
     if (format == NULL && type->tp_init != s_init) {
         Py_ssize_t nargs = PyTuple_GET_SIZE(args) + (kwds ? PyDict_GET_SIZE(kwds) : 0);
         if (nargs > 1) {
@@ -1948,42 +1944,28 @@ s_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     self->s_size = -1;
     self->s_len = -1;
     self->init_called = false;
-    if (PyErr_Occurred()) {
-        goto error;
-    }
     if (format && set_format(self, format) < 0) {
         if (type->tp_init == s_init) {
             /* No custom __init__() method, so __new__() should do
              * all the work. */
-            goto error;
+            Py_DECREF(format);
+            Py_DECREF(self);
+            return NULL;
         }
         PyObject *exc = PyErr_GetRaisedException();
         Py_CLEAR(self->s_format);
-        if (PyErr_Occurred()) {
-            Py_DECREF(exc);
-            goto error;
-        }
         if (PyErr_WarnFormat(PyExc_DeprecationWarning, 1,
             "Invalid 'format' argument for Struct.__new__(): %S", exc))
         {
             Py_DECREF(exc);
-            goto error;
+            Py_DECREF(format);
+            Py_DECREF(self);
+            return NULL;
         }
         Py_DECREF(exc);
-        if (PyErr_Occurred()) {
-            goto error;
-        }
     }
-    Py_CLEAR(format);
-    if (PyErr_Occurred()) {
-        goto error;
-    }
-    return (PyObject *)self;
-
-error:;
     Py_XDECREF(format);
-    Py_DECREF(self);
-    return NULL;
+    return (PyObject *)self;
 }
 
 static bool

@@ -698,7 +698,7 @@ _Py_bytes_tailmatch(const char *str, Py_ssize_t len,
                                    start, end, direction);
             }
             PyValue_CLOSE(item);
-            if (result < 0 || PyErr_Occurred()) {
+            if (result < 0) {
                 return NULL;
             }
             if (result) {
@@ -708,8 +708,8 @@ _Py_bytes_tailmatch(const char *str, Py_ssize_t len,
         Py_RETURN_FALSE;
     }
     int result = tailmatch(str, len, subobj, start, end, direction);
-    if (result < 0 || PyErr_Occurred()) {
-        if (result < 0 && PyErr_ExceptionMatches(PyExc_TypeError)) {
+    if (result == -1) {
+        if (PyErr_ExceptionMatches(PyExc_TypeError)) {
             PyErr_Format(PyExc_TypeError,
                          "%s first arg must be bytes or a tuple of bytes, "
                          "not %s",

@@ -1465,8 +1465,7 @@ dummy_func(
             assert(frame == &entry.frame);
 #endif
             LLTRACE_RESUME_FRAME();
-            if (result == NULL || PyErr_Occurred()) {
-                Py_XDECREF(result);
+            if (result == NULL) {
                 JIT_FREE_FLOW();
                 return NULL;
             }
@@ -3087,7 +3086,7 @@ dummy_func(
                 SYNC_SP();
                 int err = PyDict_SetValue((PyObject *)dict,
                     PyValue_FromObjectBorrow(name), release_value);
-                if (err < 0 || PyErr_Occurred()) {
+                if (err < 0) {
                     /* ERROR_NO_POP kept these temporary owners until the
                      * ordinary full-frame unwind, including deeper temps. */
                     IR_RESTORE_VALUE_INPUTS(operation, release_value, receiver);

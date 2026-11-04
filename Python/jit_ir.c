@@ -82,7 +82,7 @@ _PyJit_BuildGraph(const _PyJitRecord *record)
     }
     for (int h = 0; h < JIT_GRAPH_HOMES; h++) g->imports[h] = g->carried[h] = JIT_NO_VALUE;
     uint16_t homes[JIT_GRAPH_HOMES];
-    if (PyErr_Occurred() || imports(g, homes, record->events[0].before, g->header, 1) < 0) goto fail;
+    if (imports(g, homes, record->events[0].before, g->header, 1) < 0) goto fail;
     g->nimports = g->nnodes;
     for (int h = 0; h < g->nhomes; h++) g->boxed_imports += record->events[0].before[h].kind == JIT_HOME_BOXED;
     int effect = 0, arithmetic = 0;
@@ -406,15 +406,14 @@ _PyJit_LowerGraph(_PyJitCodeUnit *unit)
     size_t count = (size_t)unit->nwords + g->nnodes;
     size_t bytes = count * sizeof(*unit->ops);
     size_t old_bytes = (size_t)unit->nops * sizeof(*unit->ops);
-    /* Realloc may temporarily retain both allocations inside an allocator
-     * hook. Reserve the full replacement, not merely its eventual growth. */
+    /* Realloc may hold both allocations at once. Reserve the full
+     * replacement, not merely its eventual growth. */
     if (!_PyJit_ReserveBytes(bytes)) return -1;
     _PyJitLirOp *ops = PyMem_Realloc(unit->ops, count * sizeof(*ops));
     if (ops == NULL) { _PyJit_ReleaseBytes(bytes); return -1; }
     unit->ops = ops;
     unit->charged_bytes += bytes - old_bytes;
     _PyJit_ReleaseBytes(old_bytes);
-    if (PyErr_Occurred()) return -1;
     for (int i = 0; i < g->nnodes; i++) {
         JitSsaNode *n = &g->nodes[i];
         if (n->word >= unit->nwords || n->successor >= unit->nwords) return -1;

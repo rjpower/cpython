@@ -36,10 +36,6 @@ slot_value_storage(PyObject *module, PyObject *args)
     PyObject *result = Py_BuildValue("(sK)", kind,
                                    (unsigned long long)value.bits);
     Py_DECREF(descr);
-    if (result != NULL && PyErr_Occurred()) {
-        Py_DECREF(result);
-        return NULL;
-    }
     return result;
 }
 
@@ -118,7 +114,7 @@ slot_new_with_tracer(PyObject *module, PyObject *args)
     }
     PyObject *result = PyObject_CallObject(type, constructor_args);
     int restored = PyRefTracer_SetTracer(previous, previous_data);
-    if (restored < 0 || result == NULL || PyErr_Occurred()) {
+    if (restored < 0 || result == NULL) {
         Py_XDECREF(result);
         return NULL;
     }

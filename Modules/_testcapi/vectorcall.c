@@ -268,8 +268,7 @@ _testcapi_has_vectorcall_flag_impl(PyObject *module, PyTypeObject *type)
 static PyObject *
 callmethod_objargs(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    if (PyErr_Occurred() ||
-        !_PyArg_CheckPositional("callmethod_objargs", nargs, 3, 3)) {
+    if (!_PyArg_CheckPositional("callmethod_objargs", nargs, 3, 3)) {
         return NULL;
     }
     if (!PyUnicode_Check(args[1])) {
@@ -282,8 +281,7 @@ callmethod_objargs(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 static PyObject *
 method_noargs(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    if (PyErr_Occurred() ||
-        !_PyArg_CheckPositional("method_noargs", nargs, 2, 2)) {
+    if (!_PyArg_CheckPositional("method_noargs", nargs, 2, 2)) {
         return NULL;
     }
     if (!PyUnicode_Check(args[1])) {
@@ -296,8 +294,7 @@ method_noargs(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 static PyObject *
 callmethod_format(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    if (PyErr_Occurred() ||
-        !_PyArg_CheckPositional("callmethod_format", nargs, 3, 3)) {
+    if (!_PyArg_CheckPositional("callmethod_format", nargs, 3, 3)) {
         return NULL;
     }
     if (!PyUnicode_Check(args[1])) {
@@ -318,8 +315,7 @@ callmethod_format(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 static PyObject *
 callfunction_format(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    if (PyErr_Occurred() ||
-        !_PyArg_CheckPositional("callfunction_format", nargs, 2, 2)) {
+    if (!_PyArg_CheckPositional("callfunction_format", nargs, 2, 2)) {
         return NULL;
     }
     if (!PyTuple_Check(args[1])) {

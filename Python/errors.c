@@ -1671,7 +1671,7 @@ done:
     for (Py_ssize_t i = Py_ARRAY_LENGTH(fields); i > 0; i--) {
         Py_XDECREF(fields[i - 1]);
     }
-    if (res < 0 || PyErr_Occurred()) {
+    if (res < 0) {
         return NULL;
     }
     Py_RETURN_NONE;

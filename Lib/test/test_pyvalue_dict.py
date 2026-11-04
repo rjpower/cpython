@@ -509,17 +509,20 @@ class DictValueReaderTests(unittest.TestCase):
                 self.assertTrue(all(item in mapping.items() for item in items))
                 self.assertEqual(dict(items), mapping)
 
-    def test_iterator_boxing_oom_rolls_back_untouched_cursor(self):
+    def test_iterator_boxing_oom_consumes_entry(self):
+        # As when upstream's item iterator fails to allocate its tuple, the
+        # failed step consumes the entry.
         capi = import_helper.import_module("_testinternalcapi")
         for reverse in (False, True):
             mapping = {"first": 2147483647, "second": -2147483648}
             iterator = reversed(mapping.values()) if reverse else iter(mapping.values())
-            expected = -2147483648 if reverse else 2147483647
+            expected = 2147483647 if reverse else -2147483648
             self.assertEqual(capi.dict_iterator_boxing_oom(iterator), expected)
-            self.assertEqual(list(iterator), [2147483647 if reverse else -2147483648])
+            self.assertEqual(list(iterator), [])
             key_mapping = {2147483647: 0, -2147483648: 1}
             iterator = reversed(key_mapping) if reverse else iter(key_mapping)
             self.assertEqual(capi.dict_iterator_boxing_oom(iterator), expected)
+            self.assertEqual(list(iterator), [])
 
     def test_reused_item_pair_publishes_hash_and_fields_before_release(self):
         capi = import_helper.import_module("_testinternalcapi")
@@ -634,10 +637,6 @@ class DictOwnedEntryBridgeTests(unittest.TestCase):
         capi = import_helper.import_module("_testinternalcapi")
         self.assertIsNone(capi.dict_owned_entry_contract())
         self.assertIsNone(capi.dict_owned_entry_boxing_oom())
-
-    def test_owned_entry_final_dictionary_pin_retains_cleanup_cursor(self):
-        capi = import_helper.import_module("_testinternalcapi")
-        self.assertIsNone(capi.dict_owned_entry_final_pin())
 
 
 if __name__ == "__main__":

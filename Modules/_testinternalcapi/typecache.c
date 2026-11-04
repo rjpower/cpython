@@ -33,10 +33,6 @@ intern_name(PyObject *name)
     }
     Py_INCREF(name);
     PyUnicode_InternInPlace(&name);
-    if (PyErr_Occurred()) {
-        Py_XDECREF(name);
-        return NULL;
-    }
     return name;
 }
 
@@ -57,22 +53,16 @@ type_cache_lookup(PyObject *Py_UNUSED(self), PyObject *args)
     }
     struct _PyTypeCacheLookupResult r =
         _PyTypeCache_Lookup((PyTypeObject *)type_obj, name);
+    Py_DECREF(name);
     PyObject *value = PyValue_IsNull(r.value)
         ? Py_NewRef(Py_None) : PyValue_AsObject(r.value);
     PyValue_XCLOSE(r.value);
-    Py_DECREF(name);
-    if (value == NULL || PyErr_Occurred()) {
-        Py_XDECREF(value);
+    if (value == NULL) {
         return NULL;
     }
-    PyObject *report = Py_BuildValue("(iOk)", r.cache_hit, value,
-                                   (unsigned long)r.version_tag);
-    Py_DECREF(value);
-    if (PyErr_Occurred()) {
-        Py_XDECREF(report);
-        return NULL;
-    }
-    return report;
+    return Py_BuildValue("(iNk)",
+                         r.cache_hit, value,
+                         (unsigned long)r.version_tag);
 }
 
 static PyObject *
@@ -95,9 +85,6 @@ static PyObject *
 typecache_run_mutation(PyObject *Py_UNUSED(self), PyObject *const *args,
                        Py_ssize_t nargs)
 {
-    if (PyErr_Occurred()) {
-        return NULL;
-    }
     if (nargs != 2) {
         PyErr_SetString(PyExc_TypeError, "expected a type and a callback");
         return NULL;
@@ -118,17 +105,11 @@ typecache_run_mutation(PyObject *Py_UNUSED(self), PyObject *const *args,
         goto done;
     }
     PyType_Modified(type);
-    if (!PyErr_Occurred()) {
-        result = PyObject_CallNoArgs(callback);
-    }
+    result = PyObject_CallNoArgs(callback);
 done:
     Py_DECREF(callback);
     Py_DECREF(type);
     _PyTypeMutation_End(&scope);
-    if (PyErr_Occurred()) {
-        Py_XDECREF(result);
-        return NULL;
-    }
     return result;
 }
 

@@ -1339,125 +1339,65 @@ static PyObject *
 lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
                    PyObject *kwds, int typed)
 {
-    PyObject *args_owner = Py_NewRef(args);
-    PyObject *kwds_owner = Py_XNewRef(kwds);
-    PyObject *mark_owner = Py_NewRef(kwd_mark);
-    PyObject *key = NULL;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args_owner);
-    Py_ssize_t nkwargs = kwds_owner ? PyDict_GET_SIZE(kwds_owner) : 0;
-    Py_ssize_t key_size = nargs, pos, cursor = 0, written = 0;
-    PyValue value = PyValue_NULL, dict_key = PyValue_NULL;
-    int status;
+    PyObject *key;
+    PyValue keyword, value;
+    Py_ssize_t key_size, pos, key_pos, kwds_size;
 
-    if (PyErr_Occurred()) goto error;
-    if (!typed && nkwargs == 0 && nargs == 1) {
-        value = PyTuple_GetValue(args_owner, 0);
-        if (PyValue_IsNull(value) || PyErr_Occurred()) goto error;
-        if (PyValue_IsInlineInt(value) ||
-            (PyValue_IsObject(value) &&
-             (Py_IS_TYPE(PyValue_AsKnownObjectBorrow(value), &PyLong_Type) ||
-              Py_IS_TYPE(PyValue_AsKnownObjectBorrow(value), &PyUnicode_Type)))) {
-            key = PyValue_AsObject(value);
-            PyValue_CLEAR(value);
-            if (key == NULL || PyErr_Occurred()) goto error;
-            goto close_inputs;
+    kwds_size = kwds ? PyDict_GET_SIZE(kwds) : 0;
+
+    /* short path, key will match args anyway, which is a tuple */
+    if (!typed && !kwds_size) {
+        if (PyTuple_GET_SIZE(args) == 1) {
+            value = PyTuple_GET_VALUE(args, 0);
+            if (PyValue_IsInlineInt(value) ||
+                (PyValue_IsObject(value) &&
+                 (PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value)) ||
+                  PyLong_CheckExact(PyValue_AsKnownObjectBorrow(value))))) {
+                /* For common scalar keys, save space by
+                   dropping the enclosing args tuple  */
+                return PyValue_AsObject(value);
+            }
         }
-        {
-            PyValue_CLEAR(value);
-        }if (PyErr_Occurred()) goto error;
+        return Py_NewRef(args);
     }
-    if (!typed && nkwargs==0) {
-        key=Py_NewRef(args_owner);
-        if (PyErr_Occurred()) goto error;
-        goto close_inputs;
-    }
-    if (nkwargs) {
-        if (nkwargs > (PY_SSIZE_T_MAX - key_size - 1) / 2) { PyErr_NoMemory(); goto error; }
-        key_size += nkwargs * 2 + 1;
-    }
-    if (typed) {
-        if (nargs > PY_SSIZE_T_MAX - key_size || nkwargs > PY_SSIZE_T_MAX - key_size - nargs) {
-            PyErr_NoMemory(); goto error;
-        }
-        key_size += nargs + nkwargs;
-    }
+
+    key_size = PyTuple_GET_SIZE(args);
+    if (kwds_size)
+        key_size += kwds_size * 2 + 1;
+    if (typed)
+        key_size += PyTuple_GET_SIZE(args) + kwds_size;
+
     key = PyTuple_New(key_size);
-    if (key == NULL || PyErr_Occurred()) goto error;
-    if (kwds_owner && PyDict_GET_SIZE(kwds_owner) != nkwargs) {
-        PyErr_SetString(PyExc_RuntimeError,"keywords dict changed size during key construction");
-        goto error;
+    if (key == NULL)
+        return NULL;
+
+    key_pos = 0;
+    for (pos = 0; pos < PyTuple_GET_SIZE(args); ++pos) {
+        PyTuple_SET_VALUE(key, key_pos++, PyTuple_GetValue(args, pos));
     }
-    for (pos=0; pos<nargs; pos++) {
-        if (written >= key_size) { PyErr_SetString(PyExc_RuntimeError,"keywords dict changed size during key construction"); goto error; }
-        value=PyTuple_GetValue(args_owner,pos);
-        if (PyValue_IsNull(value) || PyErr_Occurred()) goto error;
-        if (PyTuple_SetValue(key,written++,value)<0) { value=PyValue_NULL; goto error; }
-        value=PyValue_NULL;
-    }
-    if (nkwargs) {
-        if (written>=key_size) { PyErr_SetString(PyExc_RuntimeError,"keywords dict changed size during key construction"); goto error; }
-        if (PyTuple_SetItem(key,written++,Py_NewRef(mark_owner))<0 || PyErr_Occurred()) goto error;
-        cursor=0;
-        while ((status=_PyDict_NextValue(kwds_owner,&cursor,&dict_key,&value,NULL))>0) {
-            if (PyErr_Occurred()) goto error;
-            if (written > key_size - 2) {
-                PyErr_SetString(PyExc_RuntimeError,"keywords dict changed size during key construction");
-                goto error;
-            }
-            if (PyTuple_SetValue(key,written++,dict_key)<0) { dict_key=PyValue_NULL; goto error; }
-            dict_key=PyValue_NULL;
-            if (PyTuple_SetValue(key,written++,value)<0 || PyErr_Occurred()) { value=PyValue_NULL; goto error; }
-            value=PyValue_NULL;
+    if (kwds_size) {
+        PyTuple_SET_ITEM(key, key_pos++, Py_NewRef(kwd_mark));
+        for (pos = 0; _PyDict_NextValue(kwds, &pos, &keyword, &value, NULL) > 0;) {
+            PyTuple_SET_VALUE(key, key_pos++, keyword);
+            PyTuple_SET_VALUE(key, key_pos++, value);
         }
-        if (status<0 || PyErr_Occurred()) goto error;
-        if (PyDict_GET_SIZE(kwds_owner)!=nkwargs) {
-            PyErr_SetString(PyExc_RuntimeError,"keywords dict changed size during key construction");
-            goto error;
-        }
+        assert(key_pos == PyTuple_GET_SIZE(args) + kwds_size * 2 + 1);
     }
     if (typed) {
-        for (pos=0; pos<nargs; pos++) {
-            if (written>=key_size) { PyErr_SetString(PyExc_RuntimeError,"keywords dict changed size during key construction"); goto error; }
-            value=PyTuple_GetValue(args_owner,pos);
-            if (PyValue_IsNull(value) || PyErr_Occurred()) goto error;
-            PyTypeObject *type=PyValue_TYPE(value);
-            PyObject *type_owner=Py_NewRef((PyObject *)type);
-            PyValue_CLEAR(value);
-            if (type_owner==NULL) goto error;
-            if (PyTuple_SetItem(key,written++,type_owner)<0) goto error;
+        for (pos = 0; pos < PyTuple_GET_SIZE(args); ++pos) {
+            PyObject *item = (PyObject *)PyValue_TYPE(PyTuple_GET_VALUE(args, pos));
+            PyTuple_SET_ITEM(key, key_pos++, Py_NewRef(item));
         }
-        if (nkwargs) {
-            cursor=0;
-            while ((status=_PyDict_NextValue(kwds_owner,&cursor,NULL,&value,NULL))>0) {
-                if (PyErr_Occurred()) goto error;
-                if (written>=key_size) { PyErr_SetString(PyExc_RuntimeError,"keywords dict changed size during key construction"); goto error; }
-                PyTypeObject *type=PyValue_TYPE(value);
-                PyObject *type_owner=Py_NewRef((PyObject *)type);
-                PyValue_CLEAR(value);
-                if (type_owner==NULL) goto error;
-                if (PyTuple_SetItem(key,written++,type_owner)<0) goto error;
+        if (kwds_size) {
+            for (pos = 0; _PyDict_NextValue(kwds, &pos, NULL, &value, NULL) > 0;) {
+                PyObject *item = Py_NewRef((PyObject *)PyValue_TYPE(value));
+                PyValue_CLOSE(value);
+                PyTuple_SET_ITEM(key, key_pos++, item);
             }
-            if (status<0 || PyErr_Occurred()) goto error;
         }
     }
-    if (written!=key_size) {
-        PyErr_SetString(PyExc_RuntimeError,"keywords dict changed size during key construction");
-        goto error;
-    }
-close_inputs:
-    Py_CLEAR(args_owner);
-    Py_CLEAR(kwds_owner);
-    Py_CLEAR(mark_owner);
-    if (PyErr_Occurred()) goto error;
+    assert(key_pos == key_size);
     return key;
-error:
-    PyValue_CLEAR(dict_key);
-    PyValue_CLEAR(value);
-    Py_CLEAR(args_owner);
-    Py_CLEAR(kwds_owner);
-    Py_CLEAR(mark_owner);
-    Py_CLEAR(key);
-    return NULL;
 }
 
 static PyObject *

@@ -14,15 +14,6 @@
 
 
 static PyObject *
-call_finish_result(PyObject *result)
-{
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-    }
-    return result;
-}
-
-static PyObject *
 null_error(PyThreadState *tstate)
 {
     if (!_PyErr_Occurred(tstate)) {
@@ -152,7 +143,7 @@ done:
     if (owned_stack != NULL) {
         _PyStack_UnpackDict_Free(owned_stack, nargs, kwnames);
     }
-    return _Py_CheckFunctionResult(tstate, callable, call_finish_result(result), NULL);
+    return _Py_CheckFunctionResult(tstate, callable, result, NULL);
 }
 
 
@@ -211,11 +202,8 @@ _PyObject_MakeTpCall(PyThreadState *tstate, PyObject *callable,
     PyObject *argstuple = NULL;
     PyObject *kwdict = NULL;
     PyObject *result = NULL;
-    if (PyErr_Occurred()) {
-        goto done;
-    }
-    /* Preserve the cheap noncallable rejection before preparation. */
-    if (Py_TYPE(callable)->tp_call == NULL) {
+    ternaryfunc call = Py_TYPE(callable)->tp_call;
+    if (call == NULL) {
         object_is_not_callable(tstate, callable);
         goto done;
     }
@@ -233,11 +221,6 @@ _PyObject_MakeTpCall(PyThreadState *tstate, PyObject *callable,
             goto done;
         }
     }
-    ternaryfunc call = Py_TYPE(callable)->tp_call;
-    if (call == NULL) {
-        object_is_not_callable(tstate, callable);
-        goto done;
-    }
     if (_Py_EnterRecursiveCallTstate(tstate, " while calling a Python object") == 0) {
         _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
         result = _PyCFunctionWithKeywords_TrampolineCall(
@@ -248,7 +231,7 @@ _PyObject_MakeTpCall(PyThreadState *tstate, PyObject *callable,
 done:
     Py_CLEAR(kwdict);
     Py_CLEAR(argstuple);
-    return _Py_CheckFunctionResult(tstate, callable, call_finish_result(result), NULL);
+    return _Py_CheckFunctionResult(tstate, callable, result, NULL);
 }
 
 
@@ -318,7 +301,7 @@ done:
         _PyStack_UnpackDict_Free(stack, nargs, kwnames);
     }
     _PyBorrowScope_Exit(tstate, mark);
-    return _Py_CheckFunctionResult(tstate, callable, call_finish_result(result), NULL);
+    return _Py_CheckFunctionResult(tstate, callable, result, NULL);
 }
 
 
@@ -396,7 +379,7 @@ _PyObject_Call(PyThreadState *tstate, PyObject *callable,
 
         _Py_LeaveRecursiveCallTstate(tstate);
 
-        return _Py_CheckFunctionResult(tstate, callable, call_finish_result(result), NULL);
+        return _Py_CheckFunctionResult(tstate, callable, result, NULL);
     }
 }
 
@@ -529,9 +512,7 @@ _PyObject_Call_Prepend(PyThreadState *tstate, PyObject *callable,
     if (count + 1 > (Py_ssize_t)Py_ARRAY_LENGTH(small_stack)) {
         stack = PyMem_Malloc(((size_t)count + 1) * sizeof(*stack));
         if (stack == NULL) {
-            if (!PyErr_Occurred()) {
-                PyErr_NoMemory();
-            }
+            PyErr_NoMemory();
             goto done;
         }
     }
@@ -543,7 +524,7 @@ done:
         PyMem_Free(stack);
     }
     _PyBorrowScope_Exit(tstate, mark);
-    return call_finish_result(result);
+    return result;
 }
 
 
@@ -565,7 +546,7 @@ _PyObject_CallFunctionVa(PyThreadState *tstate, PyObject *callable,
                                        format, va, &nargs);
     _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     PyObject *result = NULL;
-    if (stack == NULL || PyErr_Occurred()) {
+    if (stack == NULL) {
         goto done;
     }
     EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_API, callable);
@@ -590,7 +571,7 @@ done:
             PyMem_Free(stack);
         }
     }
-    return call_finish_result(result);
+    return result;
 }
 
 
@@ -1104,9 +1085,6 @@ _PyStack_UnpackDict(PyThreadState *tstate,
     PyObject *kwnames = NULL;
     PyObject **stack = NULL;
     Py_ssize_t nkwargs = 0;
-    if (PyErr_Occurred()) {
-        goto error;
-    }
     items = PyDict_Items(kwargs);
     if (items == NULL) {
         goto error;
@@ -1127,20 +1105,16 @@ _PyStack_UnpackDict(PyThreadState *tstate,
         goto error;
     }
     stack = PyMem_Calloc(1 + nargs + nkwargs, sizeof(*stack));
-    if (stack != NULL) {
-        stack++;
-    }
-    if (stack == NULL || PyErr_Occurred()) {
-        if (!PyErr_Occurred()) {
-            _PyErr_NoMemory(tstate);
-        }
+    if (stack == NULL) {
+        _PyErr_NoMemory(tstate);
         goto error;
     }
+    stack++;
     for (Py_ssize_t i = 0; i < nargs; i++) {
         stack[i] = args[i];
     }
     kwnames = PyTuple_New(nkwargs);
-    if (kwnames == NULL || PyErr_Occurred()) {
+    if (kwnames == NULL) {
         goto error;
     }
     for (Py_ssize_t i = 0; i < nkwargs; i++) {
@@ -1153,9 +1127,6 @@ _PyStack_UnpackDict(PyThreadState *tstate,
         }
     }
     Py_CLEAR(items);
-    if (PyErr_Occurred()) {
-        goto error;
-    }
     *p_kwnames = kwnames;
     return stack;
 error:

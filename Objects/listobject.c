@@ -2931,21 +2931,13 @@ PyList_AsTuple(PyObject *v)
 {
     if (v == NULL || !PyList_Check(v)) { PyErr_BadInternalCall(); return NULL; }
     PyListObject *self = (PyListObject *)v;
-    for (;;) {
-        Py_ssize_t size = Py_SIZE(self);
-        PyObject *result = PyTuple_New(size);
-        if (result == NULL) return NULL;
-        if (Py_SIZE(self) != size) {
-            Py_DECREF(result);
-            continue;
-        }
-        /* Fetch the array only after tuple allocation can no longer run a
-           callback that clears or reallocates the source list. */
-        for (Py_ssize_t i = 0; i < size; i++) {
-            PyTuple_SET_VALUE(result, i, PyValue_DUP(self->ob_item[i]));
-        }
-        return result;
+    Py_ssize_t size = Py_SIZE(self);
+    PyObject *result = PyTuple_New(size);
+    if (result == NULL) return NULL;
+    for (Py_ssize_t i = 0; i < size; i++) {
+        PyTuple_SET_VALUE(result, i, PyValue_DUP(self->ob_item[i]));
     }
+    return result;
 }
 
 PyObject *
@@ -2954,8 +2946,9 @@ _PyList_AsTupleAndClear(PyListObject *self)
     assert(self != NULL);
     PyValue *items = self->ob_item;
     Py_ssize_t size = Py_SIZE(self);
-    /* Allocation/release callbacks may append to self. The old buffer must
-       no longer be reachable through it before any such callback. */
+    /* Detach the buffer first, as upstream does: releasing the items when
+       the tuple cannot be created can run __del__, which must not find
+       them in self. */
     self->ob_item = NULL;
     self->allocated = 0;
     Py_SET_SIZE(self, 0);
@@ -3796,14 +3789,17 @@ listiter_next(PyObject *self)
 {
     _PyListIterObject *it = (_PyListIterObject *)self;
     Py_ssize_t index = it->it_index;
-    PyListObject *seq = it->it_seq;
-    Py_XINCREF(seq);
     PyValue value = _PyListIter_NextValue(self);
-    if (PyValue_IsNull(value)) { Py_XDECREF(seq); return NULL; }
+    if (PyValue_IsNull(value)) {
+        return NULL;
+    }
     PyObject *result = _PyValue_AsObjectAt(value, BOX_SITE_ITERATION);
-    if (result == NULL && it->it_seq == seq && it->it_index == index + 1) it->it_index = index;
     PyValue_CLOSE(value);
-    Py_DECREF(seq);
+    if (result == NULL) {
+        /* A failed box consumes no item. Boxing runs no Python, so no other
+           next() moved the iterator in between. */
+        it->it_index = index;
+    }
     return result;
 }
 
@@ -3960,14 +3956,16 @@ listreviter_next(PyObject *self)
 {
     listreviterobject *it = (listreviterobject *)self;
     Py_ssize_t index = it->it_index;
-    PyListObject *seq = it->it_seq;
-    Py_XINCREF(seq);
     PyValue value = _PyListRevIter_NextValue(self);
-    if (PyValue_IsNull(value)) { Py_XDECREF(seq); return NULL; }
+    if (PyValue_IsNull(value)) {
+        return NULL;
+    }
     PyObject *result = _PyValue_AsObjectAt(value, BOX_SITE_ITERATION);
-    if (result == NULL && it->it_seq == seq && it->it_index == index - 1) it->it_index = index;
     PyValue_CLOSE(value);
-    Py_DECREF(seq);
+    if (result == NULL) {
+        /* A failed box consumes no item (see listiter_next()). */
+        it->it_index = index;
+    }
     return result;
 }
 

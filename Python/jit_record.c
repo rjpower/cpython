@@ -136,7 +136,6 @@ _PyJit_RecordAfter(_PyJitContext *ctx, _PyJitAction action, const _PyJitLirOp *o
             flow->record = NULL;
             ctx->record_event = NULL;
             _PyJit_FreeRecord(record);
-            if (PyErr_Occurred()) goto error;
             action = _PyJit_AfterHelper(ctx, action, op);
             if (action != _PyJIT_CONTINUE && action != _PyJIT_BRANCH) return action;
         }
@@ -149,7 +148,6 @@ _PyJit_RecordAfter(_PyJitContext *ctx, _PyJitAction action, const _PyJitLirOp *o
         ctx->record_event = NULL;
         _PyJit_FreeRecord(record);
         record = NULL;
-        if (PyErr_Occurred()) goto error;
         if (same_frame && _PyJit_ReplaceRecorded(ctx, NULL) < 0) goto error;
         if (!record_valid(ctx)) return _PyJit_AfterHelper(ctx, action, op);
     }
@@ -172,9 +170,8 @@ _PyJit_RecordAfter(_PyJitContext *ctx, _PyJitAction action, const _PyJitLirOp *o
             ctx->record_event = NULL;
             _PyJit_FreeRecord(record);
             record = NULL;
-            if (PyErr_Occurred()) goto error;
-            /* Replacement and record release can both reenter. The old
-             * activation must retire before following any exec borrow. */
+            /* Replacement detaches the old unit. The old activation must
+             * retire before following any exec borrow. */
             return _PyJit_AfterHelper(ctx, action, op);
         }
     }
@@ -191,13 +188,7 @@ _PyJit_RecordAfter(_PyJitContext *ctx, _PyJitAction action, const _PyJitLirOp *o
         record = PyMem_Calloc(1, sizeof(*record));
         if (record == NULL) {
             _PyJit_ReleaseBytes(sizeof(*record));
-            if (PyErr_Occurred()) goto error;
             goto abandon;
-        }
-        if (PyErr_Occurred() || !record_valid(ctx)) {
-            _PyJit_FreeRecord(record);
-            if (PyErr_Occurred()) goto error;
-            return _PyJit_AfterHelper(ctx, action, op);
         }
         record->frame = ctx->frame;
         record->header = ctx->unit->record_header;
@@ -357,8 +348,9 @@ _PyJit_TraceCommit(_PyJitContext *ctx, const JitSsaNode *node)
     if (action != _PyJIT_CONTINUE) return action;
     if (reentrant) {
         /* Publication preceded the owner release. Reimport the actual
-         * canonical facts after any allocator callback; equal numeric facts
-         * permit continuation while the homes retain their current identity. */
+         * canonical facts after its __del__ or weakref callbacks; equal numeric
+         * facts permit continuation while the homes retain their current
+         * identity. */
         const JitFrameState *after = &g->states[node->after];
         slots = _PyFrame_Slots(ctx->frame);
         for (int h = 0; h < g->nhomes; h++) {

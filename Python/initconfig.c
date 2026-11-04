@@ -1512,69 +1512,56 @@ config_dict_get_wstrlist(PyObject *dict, const char *name, PyConfig *config,
     if (list == NULL) {
         return -1;
     }
-    if (PyErr_Occurred()) {
-        Py_CLEAR(list);
+
+    int is_list = PyList_CheckExact(list);
+    if (!is_list && !PyTuple_CheckExact(list)) {
+        Py_DECREF(list);
+        config_dict_invalid_type(name);
         return -1;
     }
 
     PyWideStringList wstrlist = _PyWideStringList_INIT;
-    PyObject *item = NULL;
-    wchar_t *wstr = NULL;
-    int is_list = PyList_CheckExact(list);
-    if (!is_list && !PyTuple_CheckExact(list)) {
-        config_dict_invalid_type(name);
-        goto error;
-    }
-
     Py_ssize_t len = is_list ? PyList_GET_SIZE(list) : PyTuple_GET_SIZE(list);
     for (Py_ssize_t i=0; i < len; i++) {
-        item = is_list ? PyList_GetItemRef(list, i) : PyTuple_GetItemRef(list, i);
-        if (item == NULL || PyErr_Occurred()) {
+        PyObject *item = is_list ? PyList_GetItemRef(list, i) : PyTuple_GetItemRef(list, i);
+        if (item == NULL) {
             goto error;
         }
 
         if (item == Py_None) {
+            Py_DECREF(item);
             config_dict_invalid_value(name);
             goto error;
         }
         else if (!PyUnicode_Check(item)) {
+            Py_DECREF(item);
             config_dict_invalid_type(name);
             goto error;
         }
-        wstr = PyUnicode_AsWideCharString(item, NULL);
-        if (wstr == NULL || PyErr_Occurred()) {
+        wchar_t *wstr = PyUnicode_AsWideCharString(item, NULL);
+        Py_DECREF(item);
+        if (wstr == NULL) {
             goto error;
         }
         PyStatus status = PyWideStringList_Append(&wstrlist, wstr);
-        if (_PyStatus_EXCEPTION(status) && !PyErr_Occurred()) {
+        PyMem_Free(wstr);
+        if (_PyStatus_EXCEPTION(status)) {
             PyErr_NoMemory();
-        }
-        if (_PyStatus_EXCEPTION(status) || PyErr_Occurred()) {
             goto error;
         }
-        PyMem_Free(wstr);
-        wstr = NULL;
-        Py_CLEAR(item);
-        if (PyErr_Occurred()) goto error;
     }
 
-    int copy_result = _PyWideStringList_Copy(result, &wstrlist);
-    if (copy_result < 0 && !PyErr_Occurred()) {
+    if (_PyWideStringList_Copy(result, &wstrlist) < 0) {
         PyErr_NoMemory();
-    }
-    if (copy_result < 0 || PyErr_Occurred()) {
         goto error;
     }
     _PyWideStringList_Clear(&wstrlist);
-    Py_CLEAR(list);
-    if (PyErr_Occurred()) return -1;
+    Py_DECREF(list);
     return 0;
 
 error:
-    PyMem_Free(wstr);
-    Py_CLEAR(item);
     _PyWideStringList_Clear(&wstrlist);
-    Py_CLEAR(list);
+    Py_DECREF(list);
     return -1;
 }
 

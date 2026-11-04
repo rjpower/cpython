@@ -4,7 +4,7 @@
 #include "pycore_critical_section.h"  // Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_long.h"              // _PyLong_GetZero()
 #include "pycore_moduleobject.h"      // _PyModule_GetState()
-#include "pycore_value.h"              // PyValue_XCLOSE()
+#include "pycore_value.h"              // PyValue_CLOSE()
 #include "pycore_typeobject.h"        // _PyType_GetModuleState()
 #include "pycore_object.h"            // _PyObject_GC_TRACK()
 #include "pycore_tuple.h"             // _PyTuple_ITEMS()
@@ -206,94 +206,60 @@ batched_next(PyObject *op)
     batchedobject *bo = batchedobject_CAST(op);
     Py_ssize_t i;
     Py_ssize_t n = FT_ATOMIC_LOAD_SSIZE_RELAXED(bo->batch_size);
-    PyObject *iterator_owner = NULL;
-    PyObject *it_owner = NULL;
-    PyObject *item = NULL;
-    PyObject *retired_iterator = NULL;
-    PyObject *suppressed_error = NULL;
-    PyObject *result = NULL;
-    PyObject *output = NULL;
-    int strict_failure = 0;
+    PyObject *it = bo->it;
+    PyObject *item;
+    PyObject *result;
 
-    if (n < 0 || PyErr_Occurred()) {
+    if (n < 0) {
         return NULL;
     }
-    iterator_owner = Py_NewRef(op);
-    it_owner = Py_NewRef(bo->it);
     result = PyTuple_New(n);
     if (result == NULL) {
-        goto done;
+        return NULL;
     }
-    iternextfunc iternext = *Py_TYPE(it_owner)->tp_iternext;
+    iternextfunc iternext = *Py_TYPE(it)->tp_iternext;
     PyValue *items = _PyTuple_ITEMS(result);
-    for (i = 0; i < n; i++) {
-        item = iternext(it_owner);
+    for (i=0 ; i < n ; i++) {
+        item = iternext(it);
         if (item == NULL) {
             goto null_item;
         }
-        if (PyErr_Occurred()) {
-            goto terminal;
-        }
-        PyValue replacement = PyValue_PrepareOwned(item);
-        item = NULL;
-        assert(PyValue_IsNull(items[i]));
-        items[i] = replacement;
+        items[i] = PyValue_PrepareOwned(item);
     }
-    output = result;
-    result = NULL;
-    goto done;
+    return result;
 
-null_item:
+ null_item:
     if (PyErr_Occurred()) {
         if (!PyErr_ExceptionMatches(PyExc_StopIteration)) {
-            goto terminal;
+            /* Input raised an exception other than StopIteration */
+            FT_ATOMIC_STORE_SSIZE_RELAXED(bo->batch_size, -1);
+#ifndef Py_GIL_DISABLED
+            Py_CLEAR(bo->it);
+#endif
+            Py_DECREF(result);
+            return NULL;
         }
-        suppressed_error = PyErr_GetRaisedException();
-        Py_CLEAR(suppressed_error);
-        if (PyErr_Occurred()) {
-            goto terminal;
-        }
+        PyErr_Clear();
     }
     if (i == 0) {
-        goto terminal;
+        FT_ATOMIC_STORE_SSIZE_RELAXED(bo->batch_size, -1);
+#ifndef Py_GIL_DISABLED
+        Py_CLEAR(bo->it);
+#endif
+        Py_DECREF(result);
+        return NULL;
     }
     if (bo->strict) {
-        strict_failure = 1;
-        goto terminal;
-    }
-    int resize_status = _PyTuple_Resize(&result, i);
-    if (resize_status < 0) {
-        goto done;
-    }
-    output = result;
-    result = NULL;
-    goto done;
-
-terminal:
-    FT_ATOMIC_STORE_SSIZE_RELAXED(bo->batch_size, -1);
+        FT_ATOMIC_STORE_SSIZE_RELAXED(bo->batch_size, -1);
 #ifndef Py_GIL_DISABLED
-    retired_iterator = bo->it;
-    bo->it = NULL;
-    Py_CLEAR(retired_iterator);
+        Py_CLEAR(bo->it);
 #endif
-    {
-        Py_CLEAR(it_owner);
-    }
-    Py_CLEAR(result);
-    if (strict_failure && !PyErr_Occurred()) {
+        Py_DECREF(result);
         PyErr_SetString(PyExc_ValueError, "batched(): incomplete batch");
+        return NULL;
     }
-done:
-    Py_CLEAR(suppressed_error);
-    Py_CLEAR(item);
-    Py_CLEAR(retired_iterator);
-    Py_CLEAR(result);
-    Py_CLEAR(it_owner);
-    Py_CLEAR(iterator_owner);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(output);
-    }
-    return output;
+    _PyTuple_Resize(&result, i);
+    return result;
 }
 
 static PyType_Slot batched_slots[] = {
@@ -394,101 +360,57 @@ static PyObject *
 pairwise_next(PyObject *op)
 {
     pairwiseobject *po = pairwiseobject_CAST(op);
-    PyObject *iterator_owner = NULL;
-    PyObject *first_it_owner = NULL;
-    PyObject *second_it_owner = NULL;
-    PyObject *old_owner = NULL;
-    PyObject *new_owner = NULL;
-    PyObject *retired_state = NULL;
-    PyObject *output = NULL;
-    PyObject *result;
-    PyValue last_old = PyValue_NULL;
-    PyValue last_new = PyValue_NULL;
+    PyObject *it = po->it;
+    PyObject *old = po->old;
+    PyObject *new, *result;
 
-    if (po->it == NULL) {
+    if (it == NULL) {
         return NULL;
     }
-    iterator_owner = Py_NewRef(op);
-    first_it_owner = Py_NewRef(po->it);
-    old_owner = Py_XNewRef(po->old);
-    if (old_owner == NULL) {
-        old_owner = (*Py_TYPE(first_it_owner)->tp_iternext)(first_it_owner);
-        retired_state = po->old;
-        po->old = Py_XNewRef(old_owner);
-        Py_CLEAR(retired_state);
-        if (old_owner == NULL) {
-            retired_state = po->it;
-            po->it = NULL;
-            Py_CLEAR(retired_state);
-            Py_CLEAR(first_it_owner);
-            goto done;
+    if (old == NULL) {
+        old = (*Py_TYPE(it)->tp_iternext)(it);
+        Py_XSETREF(po->old, old);
+        if (old == NULL) {
+            Py_CLEAR(po->it);
+            return NULL;
         }
-        if (PyErr_Occurred()) {
-            goto done;
+        it = po->it;
+        if (it == NULL) {
+            Py_CLEAR(po->old);
+            return NULL;
         }
-        if (po->it == NULL) {
-            retired_state = po->old;
-            po->old = NULL;
-            Py_CLEAR(retired_state);
-            goto done;
-        }
-        second_it_owner = Py_NewRef(po->it);
     }
-    PyObject *selected_it = second_it_owner != NULL ? second_it_owner : first_it_owner;
-    new_owner = (*Py_TYPE(selected_it)->tp_iternext)(selected_it);
-    if (new_owner == NULL) {
-        retired_state = po->it;
-        po->it = NULL;
-        Py_CLEAR(retired_state);
-        Py_CLEAR(second_it_owner);
-        Py_CLEAR(first_it_owner);
-        retired_state = po->old;
-        po->old = NULL;
-        Py_CLEAR(retired_state);
-        goto done;
-    }
-    Py_CLEAR(second_it_owner);
-    Py_CLEAR(first_it_owner);
-    if (PyErr_Occurred()) {
-        goto done;
+    Py_INCREF(old);
+    new = (*Py_TYPE(it)->tp_iternext)(it);
+    if (new == NULL) {
+        Py_CLEAR(po->it);
+        Py_CLEAR(po->old);
+        Py_DECREF(old);
+        return NULL;
     }
 
     result = po->result;
     if (_PyObject_IsUniquelyReferenced(result)) {
-        output = Py_NewRef(result);
-        PyValue replacement_old = PyValue_MakeHeapSafe(PyValue_FromObjectBorrow(old_owner));
-        PyValue replacement_new = PyValue_MakeHeapSafe(PyValue_FromObjectBorrow(new_owner));
-        last_old = _PyTuple_CAST(result)->ob_item[0];
-        last_new = _PyTuple_CAST(result)->ob_item[1];
-        _PyTuple_CAST(result)->ob_item[0] = replacement_old;
-        _PyTuple_CAST(result)->ob_item[1] = replacement_new;
-        PyValue_CLEAR(last_old);
-        PyValue_CLEAR(last_new);
+        Py_INCREF(result);
+        PyValue last_old = _PyTuple_CAST(result)->ob_item[0];
+        PyValue last_new = _PyTuple_CAST(result)->ob_item[1];
+        _PyTuple_CAST(result)->ob_item[0] =
+            PyValue_MakeHeapSafe(PyValue_FromObjectBorrow(old));
+        _PyTuple_CAST(result)->ob_item[1] =
+            PyValue_MakeHeapSafe(PyValue_FromObjectBorrow(new));
+        PyValue_CLOSE(last_old);
+        PyValue_CLOSE(last_new);
+        // bpo-42536: The GC may have untracked this result tuple. Since we're
+        // recycling it, make sure it's tracked again:
         _PyTuple_Recycle(result);
     }
     else {
-        output = _PyTuple_FromPair(old_owner, new_owner);
+        result = _PyTuple_FromPair(old, new);
     }
 
-    /* The existing path advances old even when result allocation fails. */
-    retired_state = po->old;
-    po->old = new_owner;
-    new_owner = NULL;
-    Py_CLEAR(retired_state);
-
-done:
-    PyValue_CLEAR(last_old);
-    PyValue_CLEAR(last_new);
-    Py_CLEAR(retired_state);
-    Py_CLEAR(new_owner);
-    Py_CLEAR(old_owner);
-    Py_CLEAR(second_it_owner);
-    Py_CLEAR(first_it_owner);
-    Py_CLEAR(iterator_owner);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(output);
-    }
-    return output;
+    Py_XSETREF(po->old, new);
+    Py_DECREF(old);
+    return result;
 }
 
 static PyType_Slot pairwise_slots[] = {
@@ -979,96 +901,46 @@ itertools_teedataobject_impl(PyTypeObject *type, PyObject *it,
                              PyObject *values, PyObject *next)
 /*[clinic end generated code: output=3343ceb07e08df5e input=be60f2fabd2b72ba]*/
 {
-    teedataobject *tdo = NULL;
-    PyObject *item = NULL;
-    PyValue snapshot[LINKCELLS];
-    Py_ssize_t captured = 0;
-    Py_ssize_t len;
-    Py_ssize_t i;
+    teedataobject *tdo;
+    Py_ssize_t i, len;
 
     itertools_state *state = get_module_state_by_cls(type);
     assert(type == state->teedataobject_type);
 
     tdo = (teedataobject *)teedataobject_newinternal(state, it);
-    if (tdo == NULL || PyErr_Occurred()) {
-        goto error;
-    }
+    if (!tdo)
+        return NULL;
 
     len = PyList_GET_SIZE(values);
-    if (len > LINKCELLS) {
-        PyErr_SetString(PyExc_ValueError, "Invalid arguments");
-        goto error;
-    }
-
-    for (i = 0; i < LINKCELLS; i++) {
-        snapshot[i] = PyValue_NULL;
-    }
-    for (i = 0; i < len; i++) {
-        PyValue value = PyList_GetValue(values, i);
-        if (PyValue_IsNull(value)) {
-            if (!PyErr_Occurred()) {
-                PyErr_SetString(PyExc_SystemError,
-                                "list item is missing during tee state capture");
-            }
-            goto error;
+    if (len > LINKCELLS)
+        goto err;
+    for (i=0; i<len; i++) {
+        PyObject *value = PyList_GetItemRef(values, i);
+        if (value == NULL) {
+            Py_DECREF(tdo);
+            return NULL;
         }
-        snapshot[captured++] = value;
-        if (PyErr_Occurred()) {
-            goto error;
-        }
-    }
-
-    for (i = 0; i < captured; i++) {
-        item = PyValue_AsObject(snapshot[i]);
-        if (item == NULL) {
-            if (item == NULL && !PyErr_Occurred()) {
-                PyErr_SetString(PyExc_SystemError,
-                                "tee state value could not be boxed");
-            }
-            goto error;
-        }
-        tdo->values[i] = item;
-        item = NULL;
-        tdo->numread = (int)i + 1;
-        if (PyErr_Occurred()) {
-            goto error;
-        }
-    }
-
-    for (i = 0; i < captured; i++) {
-        PyValue_CLEAR(snapshot[i]);
-    }
-    captured = 0;
-    if (PyErr_Occurred()) {
-        goto error;
+        tdo->values[i] = value;
+        /* len <= LINKCELLS < INT_MAX */
+        tdo->numread = Py_SAFE_DOWNCAST(i + 1, Py_ssize_t, int);
     }
 
     if (len == LINKCELLS) {
         if (next != Py_None) {
-            if (!Py_IS_TYPE(next, state->teedataobject_type)) {
-                PyErr_SetString(PyExc_ValueError, "Invalid arguments");
-                goto error;
-            }
+            if (!Py_IS_TYPE(next, state->teedataobject_type))
+                goto err;
             assert(tdo->nextlink == NULL);
             tdo->nextlink = Py_NewRef(next);
-            if (PyErr_Occurred()) {
-                goto error;
-            }
         }
     } else {
-        if (next != Py_None) {
-            PyErr_SetString(PyExc_ValueError, "Invalid arguments");
-            goto error; /* shouldn't have a next if we are not full */
-        }
+        if (next != Py_None)
+            goto err; /* shouldn't have a next if we are not full */
     }
     return (PyObject*)tdo;
 
-error:
-    Py_CLEAR(item);
-    for (i = 0; i < captured; i++) {
-        PyValue_CLEAR(snapshot[i]);
-    }
+err:
     Py_XDECREF(tdo);
+    PyErr_SetString(PyExc_ValueError, "Invalid arguments");
     return NULL;
 }
 
@@ -2211,32 +2083,27 @@ struct productobject {
 static PyObject *
 product_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
-    productobject *lz = NULL;
+    productobject *lz;
     Py_ssize_t nargs, npools, repeat=1;
     PyObject *pools = NULL;
-    PyObject *item = NULL;
-    PyObject *pool = NULL;
-    PyObject *tmpargs = NULL;
     Py_ssize_t *indices = NULL;
     Py_ssize_t i;
-    int parse_status;
 
     if (kwds != NULL) {
         char *kwlist[] = {"repeat", 0};
-        tmpargs = PyTuple_New(0);
-        if (tmpargs == NULL) {
-            goto error;
+        PyObject *tmpargs = PyTuple_New(0);
+        if (tmpargs == NULL)
+            return NULL;
+        if (!PyArg_ParseTupleAndKeywords(tmpargs, kwds, "|n:product",
+                                         kwlist, &repeat)) {
+            Py_DECREF(tmpargs);
+            return NULL;
         }
-        parse_status = PyArg_ParseTupleAndKeywords(tmpargs, kwds, "|n:product",
-                                                   kwlist, &repeat);
-        Py_CLEAR(tmpargs);
-        if (!parse_status || PyErr_Occurred()) {
-            goto error;
-        }
+        Py_DECREF(tmpargs);
         if (repeat < 0) {
             PyErr_SetString(PyExc_ValueError,
                             "repeat argument cannot be negative");
-            goto error;
+            return NULL;
         }
     }
 
@@ -2263,29 +2130,20 @@ product_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         goto error;
 
     for (i=0; i < nargs ; ++i) {
-        item = PyTuple_GetItemRef(args, i);
+        PyObject *item = PyTuple_GetItemRef(args, i);
         if (item == NULL)
             goto error;
-
-        pool = PySequence_Tuple(item);
-        Py_CLEAR(item);
-        if (pool == NULL || PyErr_Occurred())
-            goto error;
-
-        PyTuple_SET_ITEM(pools, i, pool);
-        pool = NULL;
-        if (PyErr_Occurred())
-            goto error;
-        indices[i] = 0;
-    }
-    for ( ; i < npools; ++i) {
-        pool = PyTuple_GetItemRef(pools, i - nargs);
+        PyObject *pool = PySequence_Tuple(item);
+        Py_DECREF(item);
         if (pool == NULL)
             goto error;
         PyTuple_SET_ITEM(pools, i, pool);
-        pool = NULL;
-        if (PyErr_Occurred())
-            goto error;
+        indices[i] = 0;
+    }
+    for ( ; i < npools; ++i) {
+        PyObject *pool = _PyTuple_GET_OBJECT(pools, i - nargs);
+        Py_INCREF(pool);
+        PyTuple_SET_ITEM(pools, i, pool);
         indices[i] = 0;
     }
 
@@ -2295,24 +2153,16 @@ product_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         goto error;
 
     lz->pools = pools;
-    pools = NULL;
     lz->indices = indices;
-    indices = NULL;
     lz->result = NULL;
     lz->stopped = 0;
-
-    if (PyErr_Occurred())
-        goto error;
 
     return (PyObject *)lz;
 
 error:
-    Py_CLEAR(item);
-    Py_CLEAR(pool);
-    PyMem_Free(indices);
-    Py_CLEAR(tmpargs);
-    Py_CLEAR(pools);
-    Py_XDECREF(lz);
+    if (indices != NULL)
+        PyMem_Free(indices);
+    Py_XDECREF(pools);
     return NULL;
 }
 
@@ -2362,33 +2212,22 @@ product_next_impl(productobject *self)
     productobject *lz = self;
     PyObject *pool;
     PyValue elem;
+    PyValue oldelem;
     PyObject *pools = lz->pools;
     PyObject *result = lz->result;
     Py_ssize_t npools = PyTuple_GET_SIZE(pools);
     Py_ssize_t i;
 
-    PyObject *iterator_owner = NULL;
-    PyObject *pools_owner = NULL;
-    PyObject *result_owner = NULL;
-    PyObject *copy_source = NULL;
-    PyObject *retired_field = NULL;
-    PyObject *output = NULL;
-
     if (lz->stopped)
         return NULL;
-
-    iterator_owner = Py_NewRef((PyObject *)self);
-    pools_owner = Py_NewRef(pools);
 
     if (result == NULL) {
         /* On the first pass, return an initial tuple filled with the
            first element from each pool. */
         result = PyTuple_New(npools);
-        result_owner = result;
-        if (result == NULL || PyErr_Occurred())
+        if (result == NULL)
             goto empty;
-        retired_field = lz->result;
-        lz->result = Py_NewRef(result);
+        lz->result = result;
         for (i=0; i < npools; i++) {
             pool = _PyTuple_GET_OBJECT(pools, i);
             if (PyTuple_GET_SIZE(pool) == 0)
@@ -2401,26 +2240,20 @@ product_next_impl(productobject *self)
 
         /* Copy the previous result tuple or re-use it if available */
         if (!_PyObject_IsUniquelyReferenced(result)) {
-            copy_source = Py_NewRef(result);
-            result = _PyTuple_FromValueArray(_PyTuple_ITEMS(copy_source), npools);
-            result_owner = result;
-            if (result == NULL || PyErr_Occurred())
+            PyObject *old_result = result;
+            result = _PyTuple_FromValueArray(_PyTuple_ITEMS(old_result), npools);
+            if (result == NULL)
                 goto empty;
-            retired_field = lz->result;
-            lz->result = Py_NewRef(result);
-            Py_CLEAR(retired_field);
-            Py_CLEAR(copy_source);
-            if (PyErr_Occurred())
-                goto empty;
+            lz->result = result;
+            Py_DECREF(old_result);
         }
         // bpo-42536: The GC may have untracked this result tuple. Since we're
         // recycling it, make sure it's tracked again:
         else {
-            result_owner = Py_NewRef(result);
             _PyTuple_Recycle(result);
         }
-        /* The tuple has the iterator field owner and our local owner. */
-        assert (npools==0 || Py_REFCNT(result) == 2);
+        /* Now, we've got the only copy so we can update it in-place */
+        assert (npools==0 || Py_REFCNT(result) == 1);
 
         /* Update the pool indices right-to-left.  Only advance to the
            next pool when the previous one rolls-over */
@@ -2431,21 +2264,15 @@ product_next_impl(productobject *self)
                 /* Roll-over and advance to next pool */
                 indices[i] = 0;
                 elem = PyTuple_GET_VALUE(pool, 0);
-                {
-                    PyValue replacement = PyValue_MakeHeapSafe(elem);
-                    PyValue retired = _PyTuple_CAST(result)->ob_item[i];
-                    _PyTuple_CAST(result)->ob_item[i] = replacement;
-                    PyValue_XCLOSE(retired);
-                }
+                oldelem = _PyTuple_CAST(result)->ob_item[i];
+                _PyTuple_CAST(result)->ob_item[i] = PyValue_MakeHeapSafe(elem);
+                PyValue_CLOSE(oldelem);
             } else {
                 /* No rollover. Just increment and stop here. */
                 elem = PyTuple_GET_VALUE(pool, indices[i]);
-                {
-                    PyValue replacement = PyValue_MakeHeapSafe(elem);
-                    PyValue retired = _PyTuple_CAST(result)->ob_item[i];
-                    _PyTuple_CAST(result)->ob_item[i] = replacement;
-                    PyValue_XCLOSE(retired);
-                }
+                oldelem = _PyTuple_CAST(result)->ob_item[i];
+                _PyTuple_CAST(result)->ob_item[i] = PyValue_MakeHeapSafe(elem);
+                PyValue_CLOSE(oldelem);
                 break;
             }
         }
@@ -2456,21 +2283,11 @@ product_next_impl(productobject *self)
             goto empty;
     }
 
-    output = Py_NewRef(result);
-    goto done;
+    return Py_NewRef(result);
 
 empty:
     lz->stopped = 1;
-done:
-    Py_CLEAR(retired_field);
-    Py_CLEAR(copy_source);
-    Py_CLEAR(result_owner);
-    Py_CLEAR(pools_owner);
-    Py_CLEAR(iterator_owner);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(output);
-    }
-    return output;
+    return NULL;
 }
 
 static PyMethodDef product_methods[] = {
@@ -2626,6 +2443,7 @@ combinations_next_impl(combinationsobject *self)
 {
     combinationsobject *co = self;
     PyValue elem;
+    PyValue oldelem;
     PyObject *pool = co->pool;
     Py_ssize_t *indices = co->indices;
     PyObject *result = co->result;
@@ -2633,27 +2451,15 @@ combinations_next_impl(combinationsobject *self)
     Py_ssize_t r = co->r;
     Py_ssize_t i, j, index;
 
-    PyObject *iterator_owner = NULL;
-    PyObject *pools_owner = NULL;
-    PyObject *result_owner = NULL;
-    PyObject *copy_source = NULL;
-    PyObject *retired_field = NULL;
-    PyObject *output = NULL;
-
     if (co->stopped)
         return NULL;
-
-    iterator_owner = Py_NewRef((PyObject *)self);
-    pools_owner = Py_NewRef(pool);
 
     if (result == NULL) {
         /* On the first pass, initialize result tuple using the indices */
         result = PyTuple_New(r);
-        result_owner = result;
-        if (result == NULL || PyErr_Occurred())
+        if (result == NULL)
             goto empty;
-        retired_field = co->result;
-        co->result = Py_NewRef(result);
+        co->result = result;
         for (i=0; i<r ; i++) {
             index = indices[i];
             elem = PyTuple_GET_VALUE(pool, index);
@@ -2662,29 +2468,23 @@ combinations_next_impl(combinationsobject *self)
     } else {
         /* Copy the previous result tuple or re-use it if available */
         if (!_PyObject_IsUniquelyReferenced(result)) {
-            copy_source = Py_NewRef(result);
-            result = _PyTuple_FromValueArray(_PyTuple_ITEMS(copy_source), r);
-            result_owner = result;
-            if (result == NULL || PyErr_Occurred())
+            PyObject *old_result = result;
+            result = _PyTuple_FromValueArray(_PyTuple_ITEMS(old_result), r);
+            if (result == NULL)
                 goto empty;
-            retired_field = co->result;
-            co->result = Py_NewRef(result);
-            Py_CLEAR(retired_field);
-            Py_CLEAR(copy_source);
-            if (PyErr_Occurred())
-                goto empty;
+            co->result = result;
+            Py_DECREF(old_result);
         }
         // bpo-42536: The GC may have untracked this result tuple. Since we're
         // recycling it, make sure it's tracked again:
         else {
-            result_owner = Py_NewRef(result);
             _PyTuple_Recycle(result);
         }
         /* Now, we've got the only copy so we can update it in-place
          * CPython's empty tuple is a singleton and cached in
          * PyTuple's freelist.
          */
-        assert(r == 0 || Py_REFCNT(result) == 2);
+        assert(r == 0 || Py_REFCNT(result) == 1);
 
         /* Scan indices right-to-left until finding one that is not
            at its maximum (i + n - r). */
@@ -2709,30 +2509,17 @@ combinations_next_impl(combinationsobject *self)
         for ( ; i<r ; i++) {
             index = indices[i];
             elem = PyTuple_GET_VALUE(pool, index);
-            {
-                PyValue replacement = PyValue_MakeHeapSafe(elem);
-                PyValue retired = _PyTuple_CAST(result)->ob_item[i];
-                _PyTuple_CAST(result)->ob_item[i] = replacement;
-                PyValue_XCLOSE(retired);
-            }
+            oldelem = _PyTuple_CAST(result)->ob_item[i];
+            _PyTuple_CAST(result)->ob_item[i] = PyValue_MakeHeapSafe(elem);
+            PyValue_CLOSE(oldelem);
         }
     }
 
-    output = Py_NewRef(result);
-    goto done;
+    return Py_NewRef(result);
 
 empty:
     co->stopped = 1;
-done:
-    Py_CLEAR(retired_field);
-    Py_CLEAR(copy_source);
-    Py_CLEAR(result_owner);
-    Py_CLEAR(pools_owner);
-    Py_CLEAR(iterator_owner);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(output);
-    }
-    return output;
+    return NULL;
 }
 
 static PyMethodDef combinations_methods[] = {
@@ -2902,6 +2689,7 @@ cwr_next_impl(cwrobject *self)
 {
     cwrobject *co = self;
     PyValue elem;
+    PyValue oldelem;
     PyObject *pool = co->pool;
     Py_ssize_t *indices = co->indices;
     PyObject *result = co->result;
@@ -2909,27 +2697,15 @@ cwr_next_impl(cwrobject *self)
     Py_ssize_t r = co->r;
     Py_ssize_t i, index;
 
-    PyObject *iterator_owner = NULL;
-    PyObject *pools_owner = NULL;
-    PyObject *result_owner = NULL;
-    PyObject *copy_source = NULL;
-    PyObject *retired_field = NULL;
-    PyObject *output = NULL;
-
     if (co->stopped)
         return NULL;
-
-    iterator_owner = Py_NewRef((PyObject *)self);
-    pools_owner = Py_NewRef(pool);
 
     if (result == NULL) {
         /* On the first pass, initialize result tuple with pool[0] */
         result = PyTuple_New(r);
-        result_owner = result;
-        if (result == NULL || PyErr_Occurred())
+        if (result == NULL)
             goto empty;
-        retired_field = co->result;
-        co->result = Py_NewRef(result);
+        co->result = result;
         if (n > 0) {
             elem = PyTuple_GET_VALUE(pool, 0);
             for (i=0; i<r ; i++) {
@@ -2940,27 +2716,21 @@ cwr_next_impl(cwrobject *self)
     } else {
         /* Copy the previous result tuple or re-use it if available */
         if (!_PyObject_IsUniquelyReferenced(result)) {
-            copy_source = Py_NewRef(result);
-            result = _PyTuple_FromValueArray(_PyTuple_ITEMS(copy_source), r);
-            result_owner = result;
-            if (result == NULL || PyErr_Occurred())
+            PyObject *old_result = result;
+            result = _PyTuple_FromValueArray(_PyTuple_ITEMS(old_result), r);
+            if (result == NULL)
                 goto empty;
-            retired_field = co->result;
-            co->result = Py_NewRef(result);
-            Py_CLEAR(retired_field);
-            Py_CLEAR(copy_source);
-            if (PyErr_Occurred())
-                goto empty;
+            co->result = result;
+            Py_DECREF(old_result);
         }
         // bpo-42536: The GC may have untracked this result tuple. Since we're
         // recycling it, make sure it's tracked again:
         else {
-            result_owner = Py_NewRef(result);
             _PyTuple_Recycle(result);
         }
-        /* The tuple has the iterator field owner and our local owner.
-           The empty tuple is a singleton. */
-        assert(r == 0 || Py_REFCNT(result) == 2);
+        /* Now, we've got the only copy so we can update it in-place CPython's
+           empty tuple is a singleton and cached in PyTuple's freelist. */
+        assert(r == 0 || Py_REFCNT(result) == 1);
 
        /* Scan indices right-to-left until finding one that is not
         * at its maximum (n-1). */
@@ -2979,30 +2749,17 @@ cwr_next_impl(cwrobject *self)
         elem = PyTuple_GET_VALUE(pool, index);
         for ( ; i<r ; i++) {
             indices[i] = index;
-            {
-                PyValue replacement = PyValue_MakeHeapSafe(elem);
-                PyValue retired = _PyTuple_CAST(result)->ob_item[i];
-                _PyTuple_CAST(result)->ob_item[i] = replacement;
-                PyValue_XCLOSE(retired);
-            }
+            oldelem = _PyTuple_CAST(result)->ob_item[i];
+            _PyTuple_CAST(result)->ob_item[i] = PyValue_MakeHeapSafe(elem);
+            PyValue_CLOSE(oldelem);
         }
     }
 
-    output = Py_NewRef(result);
-    goto done;
+    return Py_NewRef(result);
 
 empty:
     co->stopped = 1;
-done:
-    Py_CLEAR(retired_field);
-    Py_CLEAR(copy_source);
-    Py_CLEAR(result_owner);
-    Py_CLEAR(pools_owner);
-    Py_CLEAR(iterator_owner);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(output);
-    }
-    return output;
+    return NULL;
 }
 
 static PyMethodDef cwr_methods[] = {
@@ -3195,6 +2952,7 @@ permutations_next_impl(permutationsobject *self)
 {
     permutationsobject *po = self;
     PyValue elem;
+    PyValue oldelem;
     PyObject *pool = po->pool;
     Py_ssize_t *indices = po->indices;
     Py_ssize_t *cycles = po->cycles;
@@ -3203,27 +2961,15 @@ permutations_next_impl(permutationsobject *self)
     Py_ssize_t r = po->r;
     Py_ssize_t i, j, k, index;
 
-    PyObject *iterator_owner = NULL;
-    PyObject *pools_owner = NULL;
-    PyObject *result_owner = NULL;
-    PyObject *copy_source = NULL;
-    PyObject *retired_field = NULL;
-    PyObject *output = NULL;
-
     if (po->stopped)
         return NULL;
-
-    iterator_owner = Py_NewRef((PyObject *)self);
-    pools_owner = Py_NewRef(pool);
 
     if (result == NULL) {
         /* On the first pass, initialize result tuple using the indices */
         result = PyTuple_New(r);
-        result_owner = result;
-        if (result == NULL || PyErr_Occurred())
+        if (result == NULL)
             goto empty;
-        retired_field = po->result;
-        po->result = Py_NewRef(result);
+        po->result = result;
         for (i=0; i<r ; i++) {
             index = indices[i];
             elem = PyTuple_GET_VALUE(pool, index);
@@ -3235,26 +2981,20 @@ permutations_next_impl(permutationsobject *self)
 
         /* Copy the previous result tuple or re-use it if available */
         if (!_PyObject_IsUniquelyReferenced(result)) {
-            copy_source = Py_NewRef(result);
-            result = _PyTuple_FromValueArray(_PyTuple_ITEMS(copy_source), r);
-            result_owner = result;
-            if (result == NULL || PyErr_Occurred())
+            PyObject *old_result = result;
+            result = _PyTuple_FromValueArray(_PyTuple_ITEMS(old_result), r);
+            if (result == NULL)
                 goto empty;
-            retired_field = po->result;
-            po->result = Py_NewRef(result);
-            Py_CLEAR(retired_field);
-            Py_CLEAR(copy_source);
-            if (PyErr_Occurred())
-                goto empty;
+            po->result = result;
+            Py_DECREF(old_result);
         }
         // bpo-42536: The GC may have untracked this result tuple. Since we're
         // recycling it, make sure it's tracked again:
         else {
-            result_owner = Py_NewRef(result);
             _PyTuple_Recycle(result);
         }
-        /* The tuple has the iterator field owner and our local owner. */
-        assert(r == 0 || Py_REFCNT(result) == 2);
+        /* Now, we've got the only copy so we can update it in-place */
+        assert(r == 0 || Py_REFCNT(result) == 1);
 
         /* Decrement rightmost cycle, moving leftward upon zero rollover */
         for (i=r-1 ; i>=0 ; i--) {
@@ -3277,12 +3017,9 @@ permutations_next_impl(permutationsobject *self)
                     /* yield tuple(pool[k] for k in indices[:r]) */
                     index = indices[k];
                     elem = PyTuple_GET_VALUE(pool, index);
-                    {
-                        PyValue replacement = PyValue_MakeHeapSafe(elem);
-                        PyValue retired = _PyTuple_CAST(result)->ob_item[k];
-                        _PyTuple_CAST(result)->ob_item[k] = replacement;
-                        PyValue_XCLOSE(retired);
-                    }
+                    oldelem = _PyTuple_CAST(result)->ob_item[k];
+                    _PyTuple_CAST(result)->ob_item[k] = PyValue_MakeHeapSafe(elem);
+                    PyValue_CLOSE(oldelem);
                 }
                 break;
             }
@@ -3292,21 +3029,11 @@ permutations_next_impl(permutationsobject *self)
         if (i < 0)
             goto empty;
     }
-    output = Py_NewRef(result);
-    goto done;
+    return Py_NewRef(result);
 
 empty:
     po->stopped = 1;
-done:
-    Py_CLEAR(retired_field);
-    Py_CLEAR(copy_source);
-    Py_CLEAR(result_owner);
-    Py_CLEAR(pools_owner);
-    Py_CLEAR(iterator_owner);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(output);
-    }
-    return output;
+    return NULL;
 }
 
 static PyMethodDef permuations_methods[] = {
@@ -4125,29 +3852,34 @@ struct ziplongestobject {
 
 #define ziplongestobject_CAST(op)   ((ziplongestobject *)(op))
 
+/* The iterator at index i of ittuple, borrowed, or NULL once exhausted. */
+static inline PyObject *
+ittuple_get_iterator(PyObject *ittuple, Py_ssize_t i)
+{
+    PyValue it = PyTuple_GET_VALUE(ittuple, i);
+    return PyValue_IsNull(it) ? NULL : PyValue_AsKnownObjectBorrow(it);
+}
+
 static PyObject *
 zip_longest_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
-    ziplongestobject *lz = NULL;
+    ziplongestobject *lz;
     Py_ssize_t i;
-    PyObject *ittuple = NULL;  /* tuple of iterators */
-    PyObject *result = NULL;
-    PyObject *item = NULL;
-    PyObject *iter = NULL;
+    PyObject *ittuple;  /* tuple of iterators */
+    PyObject *result;
     PyObject *fillvalue = NULL;
     Py_ssize_t tuplesize;
 
     if (kwds != NULL && PyDict_CheckExact(kwds) && PyDict_GET_SIZE(kwds) > 0) {
         if (PyDict_GET_SIZE(kwds) == 1) {
-            int status = PyDict_GetItemRef(kwds, &_Py_ID(fillvalue), &fillvalue);
-            if (status < 0) {
-                goto error;
+            if (PyDict_GetItemRef(kwds, &_Py_ID(fillvalue), &fillvalue) < 0) {
+                return NULL;
             }
         }
         if (fillvalue == NULL) {
             PyErr_SetString(PyExc_TypeError,
-                            "zip_longest() got an unexpected keyword argument");
-            goto error;
+                "zip_longest() got an unexpected keyword argument");
+            return NULL;
         }
     }
     else {
@@ -4160,64 +3892,53 @@ zip_longest_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 
     /* obtain iterators */
     ittuple = PyTuple_New(tuplesize);
-    if (ittuple == NULL || PyErr_Occurred())
-        goto error;
+    if (ittuple == NULL) {
+        Py_DECREF(fillvalue);
+        return NULL;
+    }
     for (i=0; i < tuplesize; i++) {
-        item = PyTuple_GetItemRef(args, i);
+        PyObject *item = PyTuple_GetItemRef(args, i);
         if (item == NULL) {
-            goto error;
+            Py_DECREF(ittuple);
+            Py_DECREF(fillvalue);
+            return NULL;
         }
-
-        iter = PyObject_GetIter(item);
-        Py_CLEAR(item);
-        if (iter == NULL || PyErr_Occurred()) {
-            goto error;
+        PyObject *it = PyObject_GetIter(item);
+        Py_DECREF(item);
+        if (it == NULL) {
+            Py_DECREF(ittuple);
+            Py_DECREF(fillvalue);
+            return NULL;
         }
-
-        PyTuple_SET_ITEM(ittuple, i, iter);
-        iter = NULL;
-        if (PyErr_Occurred())
-            goto error;
+        PyTuple_SET_ITEM(ittuple, i, it);
     }
 
     /* create a result holder */
     result = PyTuple_New(tuplesize);
-    if (result == NULL || PyErr_Occurred())
-        goto error;
+    if (result == NULL) {
+        Py_DECREF(ittuple);
+        Py_DECREF(fillvalue);
+        return NULL;
+    }
     for (i=0 ; i < tuplesize ; i++) {
-        item = Py_NewRef(Py_None);
-        if (item == NULL || PyErr_Occurred())
-            goto error;
-        PyTuple_SET_ITEM(result, i, item);
-        item = NULL;
-        if (PyErr_Occurred())
-            goto error;
+        Py_INCREF(Py_None);
+        PyTuple_SET_ITEM(result, i, Py_None);
     }
 
     /* create ziplongestobject structure */
     lz = (ziplongestobject *)type->tp_alloc(type, 0);
-    if (lz == NULL)
-        goto error;
+    if (lz == NULL) {
+        Py_DECREF(ittuple);
+        Py_DECREF(result);
+        Py_DECREF(fillvalue);
+        return NULL;
+    }
     lz->ittuple = ittuple;
-    ittuple = NULL;
     lz->tuplesize = tuplesize;
     lz->numactive = tuplesize;
     lz->result = result;
-    result = NULL;
     lz->fillvalue = fillvalue;
-    fillvalue = NULL;
-    if (PyErr_Occurred())
-        goto error;
     return (PyObject *)lz;
-
-error:
-    Py_CLEAR(item);
-    Py_CLEAR(iter);
-    Py_CLEAR(fillvalue);
-    Py_CLEAR(result);
-    Py_CLEAR(ittuple);
-    Py_XDECREF(lz);
-    return NULL;
 }
 
 static void
@@ -4254,97 +3975,72 @@ zip_longest_next_impl(ziplongestobject *self)
 /*[clinic end generated code: output=11bc756cf896c576 input=5b1e3b52098852a9]*/
 {
     ziplongestobject *lz = self;
+    Py_ssize_t i;
     Py_ssize_t tuplesize = lz->tuplesize;
     PyObject *result = lz->result;
-    PyObject *iterator_owner = NULL;
-    PyObject *ittuple_owner = NULL;
-    PyObject *fill_owner = NULL;
-    PyObject *it_owner = NULL;
-    PyObject *item = NULL;
-    PyObject *output = NULL;
-    PyValue retired_iterator = PyValue_NULL;
-    PyValue retired_item = PyValue_NULL;
-    int reuse;
+    PyObject *it;
+    PyObject *item;
+    PyValue olditem;
 
-    if (tuplesize == 0 || lz->numactive == 0) {
+    if (tuplesize == 0)
         return NULL;
-    }
-    reuse = _PyObject_IsUniquelyReferenced(result);
-    iterator_owner = Py_NewRef((PyObject *)self);
-    ittuple_owner = Py_NewRef(lz->ittuple);
-    fill_owner = Py_NewRef(lz->fillvalue);
-    if (reuse) {
-        output = Py_NewRef(result);
-    }
-    else {
-        output = PyTuple_New(tuplesize);
-        if (output == NULL) {
-            goto done;
-        }
-    }
-    result = output;
-    for (Py_ssize_t i = 0; i < tuplesize; i++) {
-        if (PyValue_IsNull(PyTuple_GET_VALUE(ittuple_owner, i))) {
-            item = Py_NewRef(fill_owner);
-        }
-        else {
-            it_owner = PyTuple_GetItemRef(ittuple_owner, i);
-            if (it_owner == NULL) {
-                goto done;
-            }
-            item = PyIter_Next(it_owner);
-            if (item == NULL) {
-                lz->numactive -= 1;
-                if (lz->numactive == 0 || PyErr_Occurred()) {
-                    lz->numactive = 0;
-                    goto no_output;
+    if (lz->numactive == 0)
+        return NULL;
+    if (_PyObject_IsUniquelyReferenced(result)) {
+        Py_INCREF(result);
+        for (i=0 ; i < tuplesize ; i++) {
+            it = ittuple_get_iterator(lz->ittuple, i);
+            if (it == NULL) {
+                item = Py_NewRef(lz->fillvalue);
+            } else {
+                item = PyIter_Next(it);
+                if (item == NULL) {
+                    lz->numactive -= 1;
+                    if (lz->numactive == 0 || PyErr_Occurred()) {
+                        lz->numactive = 0;
+                        Py_DECREF(result);
+                        return NULL;
+                    } else {
+                        item = Py_NewRef(lz->fillvalue);
+                        _PyTuple_CAST(lz->ittuple)->ob_item[i] = PyValue_NULL;
+                        Py_DECREF(it);
+                    }
                 }
-                item = Py_NewRef(fill_owner);
-                retired_iterator = _PyTuple_CAST(ittuple_owner)->ob_item[i];
-                _PyTuple_CAST(ittuple_owner)->ob_item[i] = PyValue_NULL;
-                PyValue_CLEAR(retired_iterator);
             }
-            Py_CLEAR(it_owner);
-            if (PyErr_Occurred()) {
-                goto done;
-            }
+            olditem = _PyTuple_CAST(result)->ob_item[i];
+            _PyTuple_CAST(result)->ob_item[i] = PyValue_PrepareOwned(item);
+            PyValue_CLOSE(olditem);
         }
-        if (item == NULL || PyErr_Occurred()) {
-            goto done;
-        }
-        PyValue replacement = PyValue_MakeHeapSafe(PyValue_FromObjectBorrow(item));
-        if (reuse) {
-            retired_item = _PyTuple_CAST(result)->ob_item[i];
-            _PyTuple_CAST(result)->ob_item[i] = replacement;
-            PyValue_CLEAR(retired_item);
-        }
-        else {
-            PyTuple_SET_VALUE(result, i, replacement);
-        }
-        Py_CLEAR(item);
-        if (PyErr_Occurred()) {
-            goto done;
-        }
-    }
-    goto done;
-
-no_output:
-    Py_CLEAR(output);
-done:
-    if (reuse) {
+        // bpo-42536: The GC may have untracked this result tuple. Since we're
+        // recycling it, make sure it's tracked again:
         _PyTuple_Recycle(result);
+    } else {
+        result = PyTuple_New(tuplesize);
+        if (result == NULL)
+            return NULL;
+        for (i=0 ; i < tuplesize ; i++) {
+            it = ittuple_get_iterator(lz->ittuple, i);
+            if (it == NULL) {
+                item = Py_NewRef(lz->fillvalue);
+            } else {
+                item = PyIter_Next(it);
+                if (item == NULL) {
+                    lz->numactive -= 1;
+                    if (lz->numactive == 0 || PyErr_Occurred()) {
+                        lz->numactive = 0;
+                        Py_DECREF(result);
+                        return NULL;
+                    } else {
+                        item = Py_NewRef(lz->fillvalue);
+                        _PyTuple_CAST(lz->ittuple)->ob_item[i] = PyValue_NULL;
+                        Py_DECREF(it);
+                    }
+                }
+            }
+            PyTuple_SET_ITEM(result, i, item);
+        }
     }
-    PyValue_CLEAR(retired_iterator);
-    PyValue_CLEAR(retired_item);
-    Py_CLEAR(item);
-    Py_CLEAR(it_owner);
-    Py_CLEAR(fill_owner);
-    Py_CLEAR(ittuple_owner);
-    Py_CLEAR(iterator_owner);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(output);
-    }
-    return output;
+    return result;
 }
 
 PyDoc_STRVAR(zip_longest_doc,

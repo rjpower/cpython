@@ -829,13 +829,12 @@ append_ast_constant(PyUnicodeWriter *writer, PyObject *constant)
         for (i = 0; i < elem_count; i++) {
             APPEND_STR_IF(i > 0, ", ");
             PyObject *item = PyTuple_GetItemRef(constant, i);
-            if (item == NULL || PyErr_Occurred()) {
-                Py_CLEAR(item);
+            if (item == NULL) {
                 return -1;
             }
             int status = append_ast_constant(writer, item);
-            Py_CLEAR(item);
-            if (status < 0 || PyErr_Occurred()) {
+            Py_DECREF(item);
+            if (status < 0) {
                 return -1;
             }
         }

@@ -489,36 +489,29 @@ _PyTok_DecoderHasBufferedInput(struct tok_state *tok)
     if (tok->reader->decoder == NULL) {
         return 0;
     }
-    int pending = -1;
     PyObject *state = PyObject_CallMethodNoArgs(
         tok->reader->decoder, &_Py_ID(getstate));
     if (state == NULL) {
-        goto done;
-    }
-    if (!PyTuple_Check(state) || PyTuple_GET_SIZE(state) != 2) {
-        goto bad_state;
-    }
-    /* The owned immutable tuple roots both words through this pure check. */
-    PyValue buffered = PyTuple_GET_VALUE(state, 0);
-    PyValue flag = PyTuple_GET_VALUE(state, 1);
-    if (!PyValue_IsObject(buffered) ||
-            !PyBytes_Check(PyValue_AsKnownObjectBorrow(buffered)) ||
-            !PyValue_LongCheck(flag)) {
-        goto bad_state;
-    }
-    pending = PyBytes_GET_SIZE(PyValue_AsKnownObjectBorrow(buffered)) != 0;
-    goto done;
-
-bad_state:
-    PyErr_SetString(PyExc_TypeError,
-                    "incremental decoder getstate() must return (bytes, int)");
-done:
-    ;
-    Py_XDECREF(state);
-    if (PyErr_Occurred()) {
         tok->done = PyErr_ExceptionMatches(PyExc_MemoryError)
             ? E_NOMEM : E_DECODE;
         return -1;
     }
+    /* The owned immutable tuple roots both words through this pure check. */
+    PyValue buffered = PyValue_NULL, flag = PyValue_NULL;
+    if (PyTuple_Check(state) && PyTuple_GET_SIZE(state) == 2) {
+        buffered = PyTuple_GET_VALUE(state, 0);
+        flag = PyTuple_GET_VALUE(state, 1);
+    }
+    if (!PyValue_IsObject(buffered) ||
+            !PyBytes_Check(PyValue_AsKnownObjectBorrow(buffered)) ||
+            !PyValue_LongCheck(flag)) {
+        Py_DECREF(state);
+        PyErr_SetString(PyExc_TypeError,
+                        "incremental decoder getstate() must return (bytes, int)");
+        tok->done = E_DECODE;
+        return -1;
+    }
+    int pending = PyBytes_GET_SIZE(PyValue_AsKnownObjectBorrow(buffered)) != 0;
+    Py_DECREF(state);
     return pending;
 }

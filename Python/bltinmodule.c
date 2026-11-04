@@ -1688,42 +1688,21 @@ static PyObject *
 map_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     mapobject *lz = _mapobject_CAST(self);
-    PyObject *iterator_owner = Py_NewRef(self);
-    PyObject *iters_owner = Py_NewRef(lz->iters);
-    PyObject *args = NULL;
-    PyObject *type_owner = NULL;
-    PyObject *output = NULL;
-    Py_ssize_t numargs = PyTuple_GET_SIZE(iters_owner);
-
-    args = PyTuple_New(numargs+1);
-    if (args == NULL) {
-        goto done;
-    }
+    Py_ssize_t numargs = PyTuple_GET_SIZE(lz->iters);
+    PyObject *args = PyTuple_New(numargs+1);
+    Py_ssize_t i;
+    if (args == NULL)
+        return NULL;
     PyTuple_SET_ITEM(args, 0, Py_NewRef(lz->func));
-    for (Py_ssize_t i = 0; i < numargs; i++) {
-        PyValue item = PyTuple_GET_VALUE(iters_owner, i);
-        PyTuple_SET_VALUE(args, i+1, PyValue_MakeHeapSafe(item));
+    for (i = 0; i<numargs; i++){
+        PyValue it = PyTuple_GET_VALUE(lz->iters, i);
+        PyTuple_SET_VALUE(args, i+1, PyValue_MakeHeapSafe(it));
     }
 
-    type_owner = Py_NewRef((PyObject *)Py_TYPE(lz));
-    PyObject *transferred_args = args;
-    args = NULL;
     if (lz->strict) {
-        output = Py_BuildValue("ONO", type_owner, transferred_args, Py_True);
+        return Py_BuildValue("ONO", Py_TYPE(lz), args, Py_True);
     }
-    else {
-        output = Py_BuildValue("ON", type_owner, transferred_args);
-    }
-
-done:
-    Py_CLEAR(args);
-    Py_CLEAR(type_owner);
-    Py_CLEAR(iters_owner);
-    Py_CLEAR(iterator_owner);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(output);
-    }
-    return output;
+    return Py_BuildValue("ON", Py_TYPE(lz), args);
 }
 
 PyDoc_STRVAR(setstate_doc, "Set state information for unpickling.");
@@ -3522,18 +3501,16 @@ int
 _PyBuiltin_InitPythonFunctions(PyObject *dict)
 {
     int imported = PyImport_ImportFrozenModule("_pybuiltins");
-    if (imported <= 0 || PyErr_Occurred()) {
-        if (!PyErr_Occurred()) {
-            PyErr_SetString(PyExc_ImportError,
-                            "frozen module _pybuiltins not found");
-        }
+    if (imported < 0) {
+        return -1;
+    }
+    if (imported == 0) {
+        PyErr_SetString(PyExc_ImportError,
+                        "frozen module _pybuiltins not found");
         return -1;
     }
     PyObject *mod = PyImport_AddModuleRef("_pybuiltins");
     if (mod == NULL) {
-        if (mod != NULL) {
-            Py_CLEAR(mod);
-        }
         return -1;
     }
 
@@ -3549,32 +3526,25 @@ _PyBuiltin_InitPythonFunctions(PyObject *dict)
     for (Py_ssize_t i = 0; i < n; i++) {
         PyObject *name = PyList_GetItemRef(all, i);
         if (name == NULL) {
-            Py_CLEAR(name);
             goto done;
         }
         PyObject *func = PyObject_GetAttr(mod, name);
         if (func == NULL) {
-            Py_CLEAR(func);
-            Py_CLEAR(name);
+            Py_DECREF(name);
             goto done;
         }
         int r = PyDict_SetItem(dict, name, func);
-        int failed = r < 0 || PyErr_Occurred();
-        Py_CLEAR(func);
-        if (PyErr_Occurred()) failed = 1;
-        Py_CLEAR(name);
-        if (PyErr_Occurred()) failed = 1;
-        if (failed) {
+        Py_DECREF(func);
+        Py_DECREF(name);
+        if (r < 0) {
             goto done;
         }
     }
     rc = 0;
 
 done:
-    Py_CLEAR(all);
-    if (PyErr_Occurred()) rc = -1;
-    Py_CLEAR(mod);
-    if (PyErr_Occurred()) rc = -1;
+    Py_XDECREF(all);
+    Py_DECREF(mod);
     return rc;
 }
 

@@ -793,15 +793,11 @@ w_complex_object(PyObject *v, WFILE *p)
         for (i = 0; i < n; i++) {
             PyObject *item = PyTuple_GetItemRef(v, i);
             if (item == NULL) {
-                Py_XDECREF(item);
                 p->error = true;
                 break;
             }
             w_object(item, p);
-            Py_XDECREF(item);
-            if (PyErr_Occurred()) {
-                p->error = true;
-            }
+            Py_DECREF(item);
             if (p->error) {
                 break;
             }
@@ -815,15 +811,11 @@ w_complex_object(PyObject *v, WFILE *p)
         for (i = 0; i < n; i++) {
             PyObject *item = PyList_GetItemRef(v, i);
             if (item == NULL) {
-                Py_XDECREF(item);
                 p->error = true;
                 break;
             }
             w_object(item, p);
-            Py_XDECREF(item);
-            if (PyErr_Occurred()) {
-                p->error = true;
-            }
+            Py_DECREF(item);
             if (p->error) {
                 break;
             }
@@ -851,27 +843,18 @@ w_complex_object(PyObject *v, WFILE *p)
         pos = 0;
         int status;
         while ((status = PyDict_NextEntryRef(v, &pos, &key, &value)) > 0) {
-            if (!PyErr_Occurred()) {
-                w_object(key, p);
-                if (!p->error && !PyErr_Occurred()) {
-                    w_object(value, p);
-                }
-            }
-            Py_XDECREF(value);
-            Py_XDECREF(key);
-            if (PyErr_Occurred()) {
-                p->error = true;
-            }
+            w_object(key, p);
+            w_object(value, p);
+            Py_DECREF(value);
+            Py_DECREF(key);
             if (p->error) {
                 break;
             }
         }
-        if (status < 0 || PyErr_Occurred()) {
+        if (status < 0) {
             p->error = true;
         }
-        if (!p->error) {
-            w_object((PyObject *)NULL, p);
-        }
+        w_object((PyObject *)NULL, p);
         if (PyFrozenDict_CheckExact(v)) {
             w_complete(v, p);
         }
@@ -955,29 +938,23 @@ w_complex_object(PyObject *v, WFILE *p)
         }
         for (Py_ssize_t i = 0; i < n; i++) {
             PyObject *item = PyList_GetItemRef(items, i);
-            value = NULL;
-            if (item != NULL && !PyErr_Occurred()) {
-                value = PyTuple_GetItemRef(item, 2);
-            }
-            if (value != NULL && !PyErr_Occurred()) {
-                w_object(value, p);
-            }
-            else {
+            if (item == NULL) {
                 p->error = true;
+                break;
             }
-            Py_XDECREF(value);
-            Py_XDECREF(item);
-            if (PyErr_Occurred()) {
+            value = PyTuple_GetItemRef(item, 2);
+            Py_DECREF(item);
+            if (value == NULL) {
                 p->error = true;
+                break;
             }
+            w_object(value, p);
+            Py_DECREF(value);
             if (p->error) {
                 break;
             }
         }
-        Py_XDECREF(items);
-        if (PyErr_Occurred()) {
-            p->error = true;
-        }
+        Py_DECREF(items);
     }
     else if (PyCode_Check(v)) {
         if (!p->allow_code) {
@@ -1473,10 +1450,6 @@ static PyObject *
 r_ref_insert(PyObject *o, Py_ssize_t idx, int flag, RFILE *p)
 {
     if (o == NULL) {
-        return NULL;
-    }
-    if (PyErr_Occurred()) {
-        Py_XDECREF(o);
         return NULL;
     }
     if (flag) { /* currently only FLAG_REF is defined */
@@ -2040,10 +2013,6 @@ r_object(RFILE *p)
             Py_XDECREF(qualname);
             Py_XDECREF(linetable);
             Py_XDECREF(exceptiontable);
-            if (PyErr_Occurred()) {
-                Py_XDECREF(v);
-                v = NULL;
-            }
         }
         retval = v;
         break;
@@ -2096,10 +2065,6 @@ r_object(RFILE *p)
         Py_XDECREF(start);
         Py_XDECREF(stop);
         Py_XDECREF(step);
-        if (PyErr_Occurred()) {
-            Py_XDECREF(retval);
-            retval = NULL;
-        }
         break;
     }
 

@@ -3173,8 +3173,7 @@ pyvalue_contract(PyObject *self, PyObject *arg)
     PyObject *object = PyValue_AsObject(duplicate);
     PyValue_Close(duplicate);
     PyValue_Close(value);
-    if (object == NULL || PyErr_Occurred()) {
-        Py_XDECREF(object);
+    if (object == NULL) {
         return NULL;
     }
     return Py_BuildValue("sN", kind, object);

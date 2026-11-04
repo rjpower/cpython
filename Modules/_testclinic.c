@@ -2893,16 +2893,12 @@ owner_probe_impl(PyTypeObject *type, PyObject *value)
     if (callback == NULL) {
         return NULL;
     }
-    if (PyErr_Occurred()) {
-        Py_XDECREF(callback);
-        return NULL;
-    }
     PyObject *called = PyObject_CallNoArgs(callback);
-    Py_XDECREF(callback);
-    Py_XDECREF(called);
-    if (PyErr_Occurred()) {
+    Py_DECREF(callback);
+    if (called == NULL) {
         return NULL;
     }
+    Py_DECREF(called);
     return PyObject_Repr(value);
 }
 
@@ -2925,7 +2921,7 @@ owner_alias_impl(PyTypeObject *type, PyObject *context)
     }
     PyObject *target = PyTuple_GetItemRef(context, 0);
     PyObject *kwargs = NULL, *result = NULL;
-    if (target == NULL || PyErr_Occurred()) {
+    if (target == NULL) {
         goto done;
     }
     kwargs = PyTuple_GetItemRef(context, 1);
@@ -2940,10 +2936,6 @@ owner_alias_impl(PyTypeObject *type, PyObject *context)
 done:
     Py_XDECREF(kwargs);
     Py_XDECREF(target);
-    if (PyErr_Occurred()) {
-        Py_XDECREF(result);
-        return NULL;
-    }
     return result;
 }
 
@@ -2983,8 +2975,8 @@ static PyObject *
 positional_owner_probe(PyObject *value, int index, PyObject *tail)
 {
     PyObject *callback = PyObject_GetAttrString(value, "visit");
-    PyObject *number = NULL, *called = NULL, *result = NULL;
-    if (callback == NULL || PyErr_Occurred()) {
+    PyObject *number = NULL, *called, *result = NULL;
+    if (callback == NULL) {
         goto done;
     }
     number = PyLong_FromLong(index);
@@ -2995,23 +2987,11 @@ positional_owner_probe(PyObject *value, int index, PyObject *tail)
     if (called == NULL) {
         goto done;
     }
-    Py_XDECREF(called);
-    called = NULL;
-    Py_XDECREF(number);
-    number = NULL;
-    Py_XDECREF(callback);
-    callback = NULL;
-    if (!PyErr_Occurred()) {
-        result = PyObject_Repr(value);
-    }
+    Py_DECREF(called);
+    result = PyObject_Repr(value);
 done:
-    Py_XDECREF(called);
     Py_XDECREF(number);
     Py_XDECREF(callback);
-    if (PyErr_Occurred()) {
-        Py_XDECREF(result);
-        return NULL;
-    }
     return result;
 }
 
@@ -3055,8 +3035,8 @@ positional_owner_init_impl(PyObject *self, PyObject *value, int index,
     if (result == NULL) {
         return -1;
     }
-    Py_XDECREF(result);
-    return PyErr_Occurred() ? -1 : 0;
+    Py_DECREF(result);
+    return 0;
 }
 
 static PyTypeObject PositionalOwnerNew_Type = {

@@ -311,8 +311,10 @@ _PyJit_CompileCode(PyCodeObject *code)
     _PyJitCodeUnit *unit = NULL;
     int installed = 0;
     int attempted = 0;
+    int status = 0;
     exec = _PyCode_GetExec(code);
-    if (exec == NULL || PyErr_Occurred() || _Py_Instrument(code, tstate->interp) < 0 || PyErr_Occurred()) {
+    if (exec == NULL || _Py_Instrument(code, tstate->interp) < 0) {
+        status = -1;
         goto done;
     }
     exec = code->_co_exec;
@@ -325,7 +327,13 @@ _PyJit_CompileCode(PyCodeObject *code)
     if (exec->jit == NULL) {
         exec->jit = &initial_building;
         _PyJitState *fresh = initial_calloc(code, 0);
-        if ((fresh != NULL && !fresh->budgeted) || PyErr_Occurred() || code->_co_exec != exec ||
+        /* A test request's callback (_PyJit_TestColdCall) runs Python in
+         * initial_calloc: NULL with an exception is a hard failure, and the
+         * callback can replace the exec or change the epoch. */
+        if (fresh == NULL && PyErr_Occurred()) {
+            status = -1;
+        }
+        if ((fresh != NULL && !fresh->budgeted) || status < 0 || code->_co_exec != exec ||
             exec->jit != &initial_building || epoch != jit_epoch(tstate) ||
             source != jit_source_stamp(code)) {
             if (code->_co_exec == exec && exec->jit == &initial_building) {
@@ -341,7 +349,7 @@ _PyJit_CompileCode(PyCodeObject *code)
         fresh->refs = 1;  /* exec ownership */
     }
     state = exec->jit;
-    state->refs++;  /* survives an explicit exec clear during allocator reentry */
+    state->refs++;
     if (state->unit != NULL) {
         installed = state->unit->interpreter_id == PyInterpreterState_GetID(tstate->interp);
         goto done;
@@ -363,7 +371,7 @@ _PyJit_CompileCode(PyCodeObject *code)
     if (compile_stop >= compile_start) {
         state->compile_ns += (uint64_t)(compile_stop - compile_start);
     }
-    int valid = !PyErr_Occurred() && code->_co_exec == exec && exec->jit == state &&
+    int valid = code->_co_exec == exec && exec->jit == state &&
                 state->generation == generation && !state->disabled && epoch == jit_epoch(tstate) &&
                 source == jit_source_stamp(code);
     state->last_failure = !valid ? _PyJIT_FAILURE_INVALIDATED :
@@ -404,7 +412,7 @@ _PyJit_CompileCode(PyCodeObject *code)
         Py_DECREF(code);
         building_request = request.previous;
     }
-    return PyErr_Occurred() ? -1 : installed;
+    return status < 0 ? -1 : installed;
 #endif
 }
 
@@ -431,12 +439,10 @@ _PyJit_ReplaceRecorded(_PyJitContext *ctx, _PyJitRecord *record)
     (void)PyTime_PerfCounterRaw(&compile_start);
     if (state->compile_attempts < UINT32_MAX) state->compile_attempts++;
     _PyJitGraph *graph = record ? _PyJit_BuildGraph(record) : NULL;
-    _PyJitCodeUnit *fresh = NULL;
-    if (!PyErr_Occurred()) fresh = _PyJit_BuildOptimized(code, exec, generation, epoch, source, graph);
-    else _PyJit_FreeGraph(graph);
+    _PyJitCodeUnit *fresh = _PyJit_BuildOptimized(code, exec, generation, epoch, source, graph);
     (void)PyTime_PerfCounterRaw(&compile_stop);
     if (compile_stop >= compile_start) state->compile_ns += (uint64_t)(compile_stop - compile_start);
-    int valid = !PyErr_Occurred() && code->_co_exec == exec && exec->jit == state &&
+    int valid = code->_co_exec == exec && exec->jit == state &&
         state->unit == ctx->unit && state->generation == generation &&
         source == jit_source_stamp(code) && epoch == jit_epoch(ctx->tstate) &&
 
@@ -465,7 +471,8 @@ _PyJit_ReplaceRecorded(_PyJitContext *ctx, _PyJitRecord *record)
     release_jit_state(state);
     Py_DECREF(code);
     building_request = request.previous;
-    return PyErr_Occurred() ? -1 : 0;
+    /* Building, installing and releasing cannot raise: a failed build is soft. */
+    return 0;
 }
 
 int
@@ -506,15 +513,9 @@ _PyJit_PrepareActivation(PyThreadState *tstate, _PyInterpreterFrame *frame,
         int released = _PyJit_ReleaseActivation(&temporary);
         if (replaced < 0 || released < 0) return -1;
 
-        /* Release can reenter too. Never follow the old unit or derive an
-         * address from the old raw PC after the cold transaction. */
-        if (tstate->current_frame != frame || _PyFrame_GetCode(frame) != code ||
-            code->_co_exec != exec || frame->ir_words != exec->words ||
-            word >= exec->nwords) {
-            PyErr_SetString(PyExc_SystemError, "JIT recorder settlement changed executing words");
-            return -1;
-        }
-        /* RESUME already served its poll. Only synchronize a changed epoch;
+        /* Never follow the old unit or derive an address from the old raw
+         * PC after the cold transaction. RESUME already served its poll.
+         * Only synchronize a changed epoch;
          * ordinary fallback must see the current pending word's handler. */
         if (code->_co_instrumentation_version != jit_epoch(tstate) &&
             _Py_Instrument(code, tstate->interp) < 0) return -1;
@@ -549,7 +550,7 @@ int
 _PyJit_ReleaseActivation(_PyJitContext *ctx)
 {
     _PyJitCodeUnit *unit = ctx->unit;
-    /* Clear every borrowed/owned native pointer before any reentrant free.
+    /* Clear every borrowed/owned native pointer before releasing the unit.
      * No old exec, state or dying frame is consulted on this path. */
     ctx->unit = NULL;
     ctx->code = NULL;
@@ -664,8 +665,7 @@ _PyJit_CodeInfo(PyCodeObject *code)
             "last_failure", ordinary ? state->last_failure : 0,
             "process_units", units, "process_bytes", charged, "bootstrap_remaining", bootstrap);
     }
-    /* Boxing can invoke an allocator hook which invalidates this unit. The
-     * snapshot owns only its scalar artifact, not code or its constants. */
+    /* The snapshot owns only its scalar artifact, not code or its constants. */
     unit->refs++;
     uint32_t attempts = state->compile_attempts, failures = state->compile_failures;
     uint64_t elapsed = state->compile_ns;
@@ -729,10 +729,6 @@ _PyJit_CodeInfo(PyCodeObject *code)
     Py_XDECREF(offsets);
     Py_XDECREF(bytes);
     _PyJit_FreeUnit(unit);
-    if (PyErr_Occurred()) {
-        Py_XDECREF(result);
-        return NULL;
-    }
     return result;
 }
 
@@ -879,7 +875,11 @@ automatic_compile(PyThreadState *tstate, _PyInterpreterFrame *frame, PyCodeObjec
     Py_INCREF(code);  /* cold transaction only, never across a Python callee */
     _PyJitState *state = natural_state(code);
     int result = 0;
-    if (state == NULL || PyErr_Occurred()) {
+    if (state == NULL) {
+        /* NULL with an exception: initial_calloc's test callback raised. */
+        if (PyErr_Occurred()) {
+            result = -1;
+        }
         goto done;
     }
     if (state->coverage == 0) {
@@ -897,9 +897,6 @@ automatic_compile(PyThreadState *tstate, _PyInterpreterFrame *frame, PyCodeObjec
             result = 1; goto done;
         }
         _PyJit_DetachExec(exec);
-        if (PyErr_Occurred() || code->_co_exec != exec || exec->jit != state) {
-            goto done;
-        }
     }
     if (state->cooldown) { state->cooldown--; goto done; }
     if (!_PyJit_ObserversAllow(tstate, frame)) {
@@ -915,7 +912,7 @@ automatic_compile(PyThreadState *tstate, _PyInterpreterFrame *frame, PyCodeObjec
         code->_co_exec->jit != &initial_building) code->_co_exec->jit->cooldown = 4096;
     done:
     Py_DECREF(code);
-    return PyErr_Occurred() ? -1 : result;
+    return result;
 #endif
 }
 
@@ -946,7 +943,7 @@ _PyJit_PrepareCall(_PyJitContext *ctx, _PyIRWord *instr, PyValue callable)
         if (caller_code->_co_exec != NULL) {
             _PyJit_DetachExec(caller_code->_co_exec);
         }
-        if (PyErr_Occurred() || _Py_Instrument(caller_code, ctx->tstate->interp) < 0) {
+        if (_Py_Instrument(caller_code, ctx->tstate->interp) < 0) {
             return -1;
         }
         return 1;
@@ -988,7 +985,7 @@ _PyJit_PrepareCall(_PyJitContext *ctx, _PyIRWord *instr, PyValue callable)
     }
     PyCodeObject *target_code = (PyCodeObject *)PyFunction_GET_CODE(function);
     int result = automatic_compile(ctx->tstate, ctx->frame, target_code);
-    if (PyErr_Occurred()) {
+    if (result < 0) {
         return -1;
     }
     if (ctx->tstate->current_frame != ctx->frame || caller_code->_co_exec != caller_exec) {
@@ -998,7 +995,7 @@ _PyJit_PrepareCall(_PyJitContext *ctx, _PyIRWord *instr, PyValue callable)
         if (IR_HANDLER(*instr) == CALL_JIT_WARM)
             _PyIR_SetHandler(instr, _PyCode_GenericHandler(caller_code, (int)word));
         _PyJit_DetachExec(caller_exec);
-        if (PyErr_Occurred() || _Py_Instrument(caller_code, ctx->tstate->interp) < 0) {
+        if (_Py_Instrument(caller_code, ctx->tstate->interp) < 0) {
             return -1;
         }
         return 1;
@@ -1155,9 +1152,6 @@ initial_calloc_impl(PyCodeObject *code, int site)
                 return NULL;
             }
             Py_DECREF(result);
-            if (PyErr_Occurred()) {
-                return NULL;
-            }
         }
         if (request->fail) {
             return NULL;

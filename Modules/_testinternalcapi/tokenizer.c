@@ -219,7 +219,7 @@ _tokenizer_decoder_buffered_input(PyObject *Py_UNUSED(module), PyObject *decoder
     tok.reader = &reader;
     int pending = _PyTok_DecoderHasBufferedInput(&tok);
     Py_CLEAR(reader.decoder);
-    if (pending < 0 || PyErr_Occurred()) {
+    if (pending < 0) {
         return NULL;
     }
     return PyLong_FromLong(pending);

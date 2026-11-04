@@ -363,9 +363,6 @@ _PyJit_EmitBaseline(_PyJitCodeUnit *unit)
         jit_bind(&buffer, flow);
         if (op->kind == _PyJIT_LIR_BRANCH) {
             jit_load(&buffer, X86_RAX, X86_R12, offsetof(_PyJitContext, next_instr));
-            /* Buffer allocation can reenter and replace the borrowed exec.
-             * Encode addresses as integers; CompileCode rejects that stale
-             * transaction before publication without touching freed words. */
             uintptr_t target_address = (uintptr_t)op->decoded.instruction +
                 ((uintptr_t)op->target - i) * sizeof(_PyIRWord);
             jit_mov_imm64(&buffer, X86_RCX,

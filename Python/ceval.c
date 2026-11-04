@@ -518,9 +518,6 @@ _PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys)
         }
         PyTuple_SET_ITEM(values, i, value);
         Py_CLEAR(key);
-        if (PyErr_Occurred()) {
-            goto fail;
-        }
     }
     // Success:
 done:
@@ -530,10 +527,6 @@ done:
     Py_DECREF(dummy);
     Py_XDECREF(key);
     _PyValueTemps_Close(&method_temps);
-    if (PyErr_Occurred()) {
-        Py_DECREF(values);
-        return NULL;
-    }
     return values;
 fail:
     _PyThreadState_PopCValue(tstate, &method);
@@ -895,7 +888,7 @@ value_store_subscript(PyValue container, PyValue key, PyValue value,
         }
     }
     PyObject *obj = _PyValueTemps_Object(temps, container);
-    if (obj == NULL || PyErr_Occurred()) {
+    if (obj == NULL) {
         return -1;
     }
     PyObject *key_obj = _PyValueTemps_Object(temps, key);
@@ -920,7 +913,7 @@ value_store_attribute(PyValue owner, PyValue value, PyObject *name,
     }
     PyObject *object_value = PyValue_IsNull(value) ? NULL :
         _PyValueTemps_Object(temps, value);
-    if ((!PyValue_IsNull(value) && object_value == NULL) || PyErr_Occurred()) {
+    if (!PyValue_IsNull(value) && object_value == NULL) {
         return -1;
     }
     *invoked = 1;
@@ -964,7 +957,7 @@ value_load_attribute(PyThreadState *tstate, PyValue owner, PyObject *name,
         return _PyObject_GetMethodValue(tstate, self, name, result, object);
     }
     *result = _PyObject_GetAttrValue(object, name);
-    return PyValue_IsNull(*result) || PyErr_Occurred() ? -1 : 0;
+    return PyValue_IsNull(*result) ? -1 : 0;
 }
 
 static PyValue
@@ -992,7 +985,7 @@ value_binary_operation(int operation, PyValue left, PyValue right,
         }
     }
     PyObject *left_obj = _PyValueTemps_Object(temps, left);
-    if (left_obj == NULL || PyErr_Occurred()) {
+    if (left_obj == NULL) {
         return PyValue_NULL;
     }
     PyObject *right_obj = _PyValueTemps_Object(temps, right);
@@ -1603,7 +1596,7 @@ static int
 value_operation_finish(_PyValueOperation *operation, _PyInstr **next,
                        _PyValueTemps *temps)
 {
-    /* The operation may have reentered before creating any private boxes.
+    /* The operation can run Python even when it created no private boxes.
      * Refresh from pre-call scalar PCs even when the owner record is empty. */
     _PyValueTemps_Close(temps);
     return value_operation_refresh(operation, next, NULL);
@@ -1687,7 +1680,7 @@ call_transaction_prepare_tuple(_PyCallTransaction *call, _PyInstr **next)
     int status = -1;
     call->effects = 1;
     args_object = PyValue_AsObject(args);
-    if (args_object == NULL || PyErr_Occurred()) {
+    if (args_object == NULL) {
         goto done;
     }
     if (PyTuple_CheckExact(args_object)) {
@@ -1750,7 +1743,7 @@ call_transaction_monitor(_PyCallTransaction *call, _PyInstr **next)
     call->effects = 1;
     call->monitored = 1;
     function_object = PyValue_AsObject(function);
-    if (function_object == NULL || PyErr_Occurred()) {
+    if (function_object == NULL) {
         goto done;
     }
     argument = PyValue_IsNull(first) ? Py_NewRef(&_PyInstrumentation_MISSING)
@@ -1826,7 +1819,7 @@ call_transaction_native(_PyCallTransaction *call, _PyInstr **next)
     }
     if (call->count > (int)Py_ARRAY_LENGTH(small)) {
         retired = PyMem_Malloc((size_t)call->count * sizeof(PyValue));
-        if (retired == NULL && !PyErr_Occurred()) {
+        if (retired == NULL) {
             PyErr_NoMemory();
         }
         if (retired == NULL || call_transaction_refresh(call, next) < 0) {
@@ -1882,7 +1875,7 @@ call_transaction_native(_PyCallTransaction *call, _PyInstr **next)
             ? PyTuple_GET_VALUE(scope.callargs, 0) : PyValue_NULL;
         monitor_argument = PyValue_IsNull(first)
             ? Py_NewRef(&_PyInstrumentation_MISSING) : PyValue_AsObject(first);
-        if (monitor_argument == NULL || PyErr_Occurred()) {
+        if (monitor_argument == NULL) {
             goto abort;
         }
     }
@@ -1900,11 +1893,12 @@ call_transaction_native(_PyCallTransaction *call, _PyInstr **next)
             status = _PyNativeScope_InvokeObjectVector(&scope);
         }
     }
-    (void)call_transaction_refresh(call, next);
+    /* The call can run Python: refresh before monitoring reads the frame. */
+    int refreshed = call_transaction_refresh(call, next);
     if (call->instrumented &&
         !(call->kind == CALL_TRANSACTION_EX &&
           (PyFunction_Check(callable) || PyMethod_Check(callable)))) {
-        if (status < 0 || PyErr_Occurred()) {
+        if (status < 0 || refreshed < 0) {
             _Py_call_instrumentation_exc2(
                 call->operation.tstate, PY_MONITORING_EVENT_C_RAISE,
                 call->operation.frame, call->operation.frame->instr_ptr,
@@ -1917,7 +1911,8 @@ call_transaction_native(_PyCallTransaction *call, _PyInstr **next)
             status = -1;
         }
     }
-    if (status < 0 || call_transaction_refresh(call, next) < 0) {
+    if (status < 0 || refreshed < 0 ||
+        call_transaction_refresh(call, next) < 0) {
         goto abort;
     }
     call_transaction_detach(call, retired);
@@ -3170,9 +3165,6 @@ eval_frame_push_and_init_ex_code(PyThreadState *tstate, PyValue func,
             PyErr_NoMemory();
             goto fail_func;
         }
-        if (PyErr_Occurred()) {
-            goto fail_func;
-        }
     }
     /* Object views stay owned until the complete new frame is published.
      * Never overlay object pointers with value bits in the same array. */
@@ -3236,7 +3228,7 @@ call_transaction_push_python(_PyCallTransaction *call, _PyInstr **next,
     call->effects = 1;
     if (call->count > (int)Py_ARRAY_LENGTH(small) / 2) {
         storage = PyMem_Malloc((size_t)call->count * 2 * sizeof(PyValue));
-        if (storage == NULL && !PyErr_Occurred()) {
+        if (storage == NULL) {
             PyErr_NoMemory();
         }
         if (storage == NULL || call_transaction_refresh(call, next) < 0) {

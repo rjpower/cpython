@@ -29,10 +29,6 @@ build_method(PyCodeObject *code, _PyCodeExec *exec,
     unit->graph = graph;
     unit->refs = 1;
     unit->charged_bytes = sizeof(*unit);
-    if (PyErr_Occurred()) {
-        _PyJit_FreeUnit(unit);
-        return NULL;
-    }
     unit->generation = generation;
     unit->epoch = epoch;
     unit->source_stamp = source_stamp;
@@ -43,7 +39,7 @@ build_method(PyCodeObject *code, _PyCodeExec *exec,
     if (!_PyJit_ReserveBytes(bytes)) { _PyJit_FreeUnit(unit); return NULL; }
     unit->charged_bytes += bytes;
     unit->ops = PyMem_Calloc((size_t)count, sizeof(*unit->ops));
-    if (unit->ops == NULL || PyErr_Occurred()) {
+    if (unit->ops == NULL) {
         _PyJit_FreeUnit(unit);
         return NULL;
     }
@@ -51,7 +47,7 @@ build_method(PyCodeObject *code, _PyCodeExec *exec,
     if (!_PyJit_ReserveBytes(bytes)) { _PyJit_FreeUnit(unit); return NULL; }
     unit->charged_bytes += bytes;
     unit->offsets = PyMem_Malloc(bytes);
-    if (unit->ops == NULL || unit->offsets == NULL || PyErr_Occurred() || code->_co_exec != exec) {
+    if (unit->offsets == NULL) {
         _PyJit_FreeUnit(unit);
         return NULL;
     }

@@ -543,24 +543,6 @@ _PyCFunction_CallScoped(_PyNativeScope *scope, PyObject *callable,
         _Py_LeaveRecursiveCallTstate(scope->tstate);
         return -1;
     }
-    /* Boxing allocates (in Begin for a vector scope, above for a fixed one),
-     * and an object allocator hook may run code that changes the target.
-     * Read the target only after boxing, and do not invoke it with
-     * receiver/class metadata from a different callable. */
-    if (scope->vector && !_PyCFunction_CanCallScoped(callable)) {
-        _Py_LeaveRecursiveCallTstate(scope->tstate);
-        return 1;
-    }
-    if ((PyCFunction_GET_FLAGS(callable) & _Py_METH_CALL_FLAGS) != flags ||
-        (scope->vector &&
-         (PyCFunction_GET_SELF(callable) != scope->receiver_object ||
-          PyCFunction_GET_CLASS(callable) != scope->defining_class)))
-    {
-        _Py_LeaveRecursiveCallTstate(scope->tstate);
-        PyErr_SetString(PyExc_SystemError,
-                        "native function metadata changed during preparation");
-        return -1;
-    }
     PyCFunction method = PyCFunction_GET_FUNCTION(callable);
     PyObject *result;
     _PyBorrowMark mark = _PyBorrowScope_Enter(scope->tstate);

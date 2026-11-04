@@ -3531,7 +3531,7 @@ static PyObject *
 get_path_importer(PyThreadState *tstate, PyObject *path_importer_cache,
                   PyObject *path_hooks, PyObject *p)
 {
-    PyObject *importer = NULL;
+    PyObject *importer;
     Py_ssize_t j, nhooks;
 
     if (!PyList_Check(path_hooks)) {
@@ -3547,46 +3547,37 @@ get_path_importer(PyThreadState *tstate, PyObject *path_importer_cache,
     if (nhooks < 0)
         return NULL; /* Shouldn't happen */
 
-    int cached = PyDict_GetItemRef(path_importer_cache, p, &importer);
-    if (cached != 0 || PyErr_Occurred()) {
-        if (cached > 0 && !PyErr_Occurred()) return importer;
-        goto error;
+    if (PyDict_GetItemRef(path_importer_cache, p, &importer) != 0) {
+        // found or error
+        return importer;
     }
     // not found
     /* set path_importer_cache[p] to None to avoid recursion */
-    if (PyDict_SetItem(path_importer_cache, p, Py_None) != 0 || PyErr_Occurred())
-        goto error;
+    if (PyDict_SetItem(path_importer_cache, p, Py_None) != 0)
+        return NULL;
 
     for (j = 0; j < nhooks; j++) {
         PyObject *hook = PyList_GetItemRef(path_hooks, j);
-        if (hook == NULL) {
-            Py_CLEAR(hook);
-            goto error;
-        }
+        if (hook == NULL)
+            return NULL;
         importer = PyObject_CallOneArg(hook, p);
-        Py_CLEAR(hook);
-        if (importer != NULL) {
-            if (PyErr_Occurred()) {
-                goto error;
-            }
+        Py_DECREF(hook);
+        if (importer != NULL)
             break;
-        }
 
         if (!_PyErr_ExceptionMatches(tstate, PyExc_ImportError)) {
-            goto error;
+            return NULL;
         }
         _PyErr_Clear(tstate);
-        if (PyErr_Occurred()) goto error;
     }
     if (importer == NULL) {
         Py_RETURN_NONE;
     }
-    if (PyDict_SetItem(path_importer_cache, p, importer) < 0 || PyErr_Occurred())
-        goto error;
+    if (PyDict_SetItem(path_importer_cache, p, importer) < 0) {
+        Py_DECREF(importer);
+        return NULL;
+    }
     return importer;
-error:
-    Py_CLEAR(importer);
-    return NULL;
 }
 
 PyObject *

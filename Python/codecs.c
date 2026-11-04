@@ -271,21 +271,15 @@ PyObject *args_tuple(PyObject *object,
 static
 PyObject *codec_getitem(const char *encoding, int index)
 {
-    PyObject *codecs = NULL;
-    PyObject *v = NULL;
+    PyObject *codecs;
+    PyObject *v;
 
     codecs = _PyCodec_Lookup(encoding);
-    if (codecs == NULL) return NULL;
-    if (PyErr_Occurred()) goto error;
+    if (codecs == NULL)
+        return NULL;
     v = PyTuple_GetItemRef(codecs, index);
-    if (v == NULL) goto error;
-    Py_CLEAR(codecs);
-    if (PyErr_Occurred()) goto error;
+    Py_DECREF(codecs);
     return v;
-error:
-    Py_CLEAR(codecs);
-    Py_CLEAR(v);
-    return NULL;
 }
 
 /* Helper functions to create an incremental codec. */
@@ -330,29 +324,22 @@ PyObject *codec_getstreamcodec(const char *encoding,
                                const char *errors,
                                const int index)
 {
-    PyObject *codecs = NULL, *streamcodec = NULL, *codeccls = NULL;
+    PyObject *codecs, *streamcodec, *codeccls;
 
     codecs = _PyCodec_Lookup(encoding);
-    if (codecs == NULL) return NULL;
-    if (PyErr_Occurred()) goto error;
+    if (codecs == NULL)
+        return NULL;
 
     codeccls = PyTuple_GetItemRef(codecs, index);
-    if (codeccls == NULL) goto error;
+    Py_DECREF(codecs);
+    if (codeccls == NULL)
+        return NULL;
     if (errors != NULL)
         streamcodec = PyObject_CallFunction(codeccls, "Os", stream, errors);
     else
         streamcodec = PyObject_CallOneArg(codeccls, stream);
-    if (streamcodec == NULL || PyErr_Occurred()) goto error;
-    Py_CLEAR(codeccls);
-    if (PyErr_Occurred()) goto error;
-    Py_CLEAR(codecs);
-    if (PyErr_Occurred()) goto error;
+    Py_DECREF(codeccls);
     return streamcodec;
-error:
-    Py_CLEAR(codeccls);
-    Py_CLEAR(codecs);
-    Py_CLEAR(streamcodec);
-    return NULL;
 }
 
 /* Helpers to work with the result of _PyCodec_Lookup
@@ -458,10 +445,6 @@ cleanup:
     Py_CLEAR(args);
     Py_CLEAR(encoder);
     Py_CLEAR(result);
-    if (v == NULL || PyErr_Occurred()) {
-        Py_CLEAR(v);
-        return NULL;
-    }
     return v;
 }
 
@@ -507,10 +490,6 @@ cleanup:
     Py_CLEAR(args);
     Py_CLEAR(decoder);
     Py_CLEAR(result);
-    if (v == NULL || PyErr_Occurred()) {
-        Py_CLEAR(v);
-        return NULL;
-    }
     return v;
 }
 
@@ -595,23 +574,16 @@ PyObject *codec_getitem_checked(const char *encoding,
                                 const char *alternate_command,
                                 int index)
 {
-    PyObject *codec = NULL;
-    PyObject *v = NULL;
+    PyObject *codec;
+    PyObject *v;
 
     codec = _PyCodec_LookupTextEncoding(encoding, alternate_command);
     if (codec == NULL)
         return NULL;
-    if (PyErr_Occurred()) goto error;
 
     v = PyTuple_GetItemRef(codec, index);
-    if (v == NULL) goto error;
-    Py_CLEAR(codec);
-    if (PyErr_Occurred()) goto error;
+    Py_DECREF(codec);
     return v;
-error:
-    Py_CLEAR(codec);
-    Py_CLEAR(v);
-    return NULL;
 }
 
 static PyObject * _PyCodec_TextEncoder(const char *encoding)

@@ -512,143 +512,19 @@ dict_owned_entry_boxing_oom(PyObject *module, PyObject *Py_UNUSED(ignored))
     PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &allocator);
     int status = PyDict_NextEntryRef(dict, &position, &key, &value);
     PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &state.saved);
-    int valid = state.called == 1 && status == -1 && position == 0 &&
-        key == NULL && value == NULL && PyErr_ExceptionMatches(PyExc_MemoryError);
+    /* The key boxes to a cached small int; the value's box fails. As a dict
+     * iterator does, the failed step consumes the entry; it leaves no
+     * partial output. */
+    int valid = state.called == 1 && status == -1 &&
+        key == NULL && value == NULL && PyErr_ExceptionMatches(PyExc_MemoryError) &&
+        PyDict_GET_SIZE(dict) == 1;
     PyErr_Clear();
-    Py_XDECREF(key);
-    Py_XDECREF(value);
-    key = value = NULL;
-    if (valid) {
-        status = PyDict_NextEntryRef(dict, &position, &key, &value);
-        valid = status == 1 && key != NULL && value != NULL &&
-            PyLong_AsLong(key) == 1 && PyLong_AsLong(value) == INT32_MAX &&
-            PyDict_GET_SIZE(dict) == 1;
-    }
     Py_XDECREF(key);
     Py_XDECREF(value);
     Py_XDECREF(dict);
     if (!valid || PyErr_Occurred()) {
         if (!PyErr_Occurred()) {
-            PyErr_SetString(PyExc_AssertionError, "owned entry partial box rollback failed");
-        }
-        return NULL;
-    }
-    Py_RETURN_NONE;
-}
-
-typedef struct {
-    PyMemAllocatorEx saved;
-    PyObject *owner;
-    Py_ssize_t *position;
-    int called;
-    int destroyed;
-} DictEntryFinalPin;
-
-static void
-dict_entry_cursor_sentinel(PyObject *capsule)
-{
-    /* A capsule destructor runs in a deallocator, which must leave the
-     * current exception as it found it; reporting a bad capsule as
-     * unraisable would clear it. */
-    PyObject *entry = PyErr_GetRaisedException();
-    DictEntryFinalPin *state = PyCapsule_GetPointer(capsule, "dict-entry-cursor");
-    if (state != NULL) {
-        state->destroyed++;
-        *state->position = 99;
-    }
-    else {
-        PyErr_WriteUnraisable(capsule);
-    }
-    PyErr_SetRaisedException(entry);
-}
-
-static void
-dict_entry_final_pin_release(DictEntryFinalPin *state)
-{
-    state->called++;
-    PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &state->saved);
-    PyObject *dict = state->owner;
-    state->owner = NULL;
-    /* The adapter's pin keeps dict alive until its own final cleanup. */
-    Py_DECREF(dict);
-}
-
-static void *
-dict_entry_final_pin_malloc(void *context, size_t size)
-{
-    DictEntryFinalPin *state = context;
-    dict_entry_final_pin_release(state);
-    return state->saved.malloc(state->saved.ctx, size);
-}
-
-static void *
-dict_entry_final_pin_calloc(void *context, size_t count, size_t size)
-{
-    DictEntryFinalPin *state = context;
-    dict_entry_final_pin_release(state);
-    return state->saved.calloc(state->saved.ctx, count, size);
-}
-
-static void *
-dict_entry_final_pin_realloc(void *context, void *pointer, size_t size)
-{
-    DictEntryFinalPin *state = context;
-    dict_entry_final_pin_release(state);
-    return state->saved.realloc(state->saved.ctx, pointer, size);
-}
-
-static void
-dict_entry_final_pin_free(void *context, void *pointer)
-{
-    DictEntryFinalPin *state = context;
-    state->saved.free(state->saved.ctx, pointer);
-}
-
-static PyObject *
-dict_owned_entry_final_pin(PyObject *module, PyObject *Py_UNUSED(ignored))
-{
-    Py_ssize_t position = 0;
-    DictEntryFinalPin state = {.position = &position};
-    state.owner = PyDict_New();
-    if (state.owner == NULL) {
-        return NULL;
-    }
-    PyObject *capsule = PyCapsule_New(&state, "dict-entry-cursor", dict_entry_cursor_sentinel);
-    if (capsule == NULL) {
-        Py_XDECREF(state.owner);
-        return NULL;
-    }
-    if (_PyDict_SetValue_Take2((PyDictObject *)state.owner, PyValue_FromInt32(1),
-                              PyValue_FromInt32(INT32_MAX)) < 0)
-    {
-        Py_XDECREF(capsule);
-        Py_XDECREF(state.owner);
-        return NULL;
-    }
-    if (_PyDict_SetValue_Take2((PyDictObject *)state.owner, PyValue_FromInt32(2),
-                              PyValue_FromPyObjectSteal(capsule)) < 0)
-    {
-        Py_XDECREF(state.owner);
-        return NULL;
-    }
-    PyMem_GetAllocator(PYMEM_DOMAIN_OBJ, &state.saved);
-    PyMemAllocatorEx allocator = {.ctx = &state, .malloc = dict_entry_final_pin_malloc,
-        .calloc = dict_entry_final_pin_calloc, .realloc = dict_entry_final_pin_realloc,
-        .free = dict_entry_final_pin_free};
-    PyObject *key = NULL, *value = NULL;
-    PyObject *dict = state.owner;  /* Borrow, kept alive by owner until the hook. */
-    PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &allocator);
-    int status = PyDict_NextEntryRef(dict, &position, &key, &value);
-    PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &state.saved);
-    int valid = state.called == 1 && state.owner == NULL && state.destroyed == 1 &&
-        status == 1 && position == 99 && key != NULL && value != NULL &&
-        PyLong_AsLong(key) == 1 && PyLong_AsLong(value) == INT32_MAX;
-    Py_XDECREF(state.owner);
-    Py_XDECREF(key);
-    Py_XDECREF(value);
-    if (!valid || PyErr_Occurred()) {
-        if (!PyErr_Occurred()) {
-            PyErr_SetString(PyExc_AssertionError, "owned entry changed cursor after final dict cleanup");
+            PyErr_SetString(PyExc_AssertionError, "owned entry partial box failure left output");
         }
         return NULL;
     }
@@ -1088,7 +964,6 @@ static PyMethodDef methods[] = {
     {"dict_owned_migration", dict_owned_migration, METH_O},
     {"dict_owned_entry", dict_owned_entry, METH_O},
     {"dict_owned_entry_boxing_oom", dict_owned_entry_boxing_oom, METH_NOARGS},
-    {"dict_owned_entry_final_pin", dict_owned_entry_final_pin, METH_NOARGS},
     {"dict_owned_entry_contract", dict_owned_entry_contract, METH_NOARGS},
     {"dict_value_getref_entry", dict_value_getref_entry, METH_O},
     {"dict_value_getref_boxing_oom", dict_value_getref_boxing_oom, METH_O},

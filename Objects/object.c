@@ -1675,9 +1675,6 @@ _PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
         goto done;
     }
     (void)_PyType_LookupValueAndVersion(tp, name, &descriptor);
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     PyObject *descr = PyValue_IsObject(descriptor) ?
         PyValue_AsKnownObjectBorrow(descriptor) : NULL;
     descrgetfunc get = descr == NULL ? NULL : Py_TYPE(descr)->tp_descr_get;
@@ -1812,9 +1809,6 @@ _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
     _PyThreadState_PushCValue(tstate, &cref);
 
     (void)_PyType_LookupValueAndVersion(tp, name, &cref.ref);
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     descr = PyValue_IsObject(cref.ref) ? PyValue_AsKnownObjectBorrow(cref.ref) : NULL;
 
     f = NULL;
@@ -1848,19 +1842,23 @@ _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
     }
     if (dict == NULL) {
         if ((tp->tp_flags & Py_TPFLAGS_INLINE_VALUES)) {
-            if (PyUnicode_CheckExact(name) &&
-                _PyObject_TryGetInstanceAttribute(obj, name, &res)) {
-                if (PyErr_Occurred()) {
-                    goto done;
-                }
-                if (res != NULL) {
+            PyValue attr = PyValue_NULL;
+            int handled = PyUnicode_CheckExact(name) ?
+                _PyObject_TryGetInstanceValue(obj, name, &attr) : 0;
+            if (handled < 0) {
+                goto done;
+            }
+            if (handled) {
+                if (!PyValue_IsNull(attr)) {
+                    /* NULL with an exception set if boxing fails. */
+                    res = _PyValue_AsObjectAt(attr, BOX_SITE_ATTRIBUTE);
+                    PyValue_CLOSE(attr);
                     goto done;
                 }
             }
             else {
                 dict = (PyObject *)_PyObject_MaterializeManagedDict(obj);
-                if (dict == NULL || PyErr_Occurred()) {
-                    res = NULL;
+                if (dict == NULL) {
                     goto done;
                 }
             }
@@ -1890,7 +1888,7 @@ _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
             rc = 0;
         }
         Py_CLEAR(dict);
-        if (res != NULL || rc < 0 || PyErr_Occurred()) {
+        if (res != NULL || rc < 0) {
             goto done;
         }
     }
@@ -1922,9 +1920,6 @@ _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
     _PyThreadState_PopCValue(tstate, &cref);
     Py_CLEAR(name);
     Py_DECREF(tp);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(res);
-    }
     return res;
 }
 
@@ -1965,9 +1960,6 @@ _PyObject_GenericSetAttrWithDict(PyObject *obj, PyObject *name,
     _PyThreadState_PushCValue(tstate, &cref);
 
     (void)_PyType_LookupValueAndVersion(tp, name, &cref.ref);
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     descr = PyValue_IsObject(cref.ref) ? PyValue_AsKnownObjectBorrow(cref.ref) : NULL;
 
     if (descr != NULL) {
@@ -2608,8 +2600,7 @@ _PyTypes_InitTypes(PyInterpreterState *interp)
     PyObject *baseobj_reduce = NULL;
     int found = PyDict_GetItemRef(baseobj_dict, &_Py_ID(__reduce__),
                                 &baseobj_reduce);
-    if (found < 0 || PyErr_Occurred()) {
-        Py_CLEAR(baseobj_reduce);
+    if (found < 0) {
         return _PyStatus_ERR("Can't get __reduce__ from base object");
     }
     /* This identity cache borrows the immutable builtin namespace's
@@ -2619,10 +2610,6 @@ _PyTypes_InitTypes(PyInterpreterState *interp)
             Py_REFCNT(baseobj_reduce) > 1));
     _Py_INTERP_CACHED_OBJECT(interp, objreduce) = baseobj_reduce;
     Py_CLEAR(baseobj_reduce);
-    if (PyErr_Occurred()) {
-        _Py_INTERP_CACHED_OBJECT(interp, objreduce) = NULL;
-        return _PyStatus_ERR("Can't get __reduce__ from base object");
-    }
 
     // Must be after static types are initialized
     if (_Py_initialize_generic(interp) < 0) {
@@ -3066,7 +3053,6 @@ Py_ReprEnter(PyObject *obj)
         if (candidate == NULL) {
             goto done;
         }
-        /* Allocation can reenter and install a guard. Preserve that list. */
         found = _PyDict_SetDefaultValue(dict, name,
                                         PyValue_FromObjectBorrow(candidate), &guard);
         Py_CLEAR(candidate);

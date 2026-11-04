@@ -176,19 +176,12 @@ BaseException_str_impl(PyBaseExceptionObject *self)
         return Py_GetConstant(Py_CONSTANT_EMPTY_STR);
     case 1: {
         PyObject *arg = PyTuple_GetItemRef((PyObject *)self->args, 0);
-        if (arg == NULL || PyErr_Occurred()) {
-            Py_CLEAR(arg);
+        if (arg == NULL) {
             return NULL;
         }
         PyObject *result = PyObject_Str(arg);
-        if (result == NULL) goto str_cleanup_error;
-        Py_CLEAR(arg);
-        if (PyErr_Occurred()) goto str_cleanup_error;
+        Py_DECREF(arg);
         return result;
-str_cleanup_error:
-        Py_CLEAR(arg);
-        Py_CLEAR(result);
-        return NULL;
     }
     default:
         return PyObject_Str(self->args);
@@ -208,18 +201,11 @@ BaseException_repr_impl(PyBaseExceptionObject *self)
     if (PyTuple_GET_SIZE(self->args) == 1) {
         PyObject *arg = PyTuple_GetItemRef((PyObject *)self->args, 0);
         if (arg == NULL) {
-            Py_CLEAR(arg);
             return NULL;
         }
         PyObject *result = PyUnicode_FromFormat("%s(%R)", name, arg);
-        if (result == NULL) goto repr_cleanup_error;
-        Py_CLEAR(arg);
-        if (PyErr_Occurred()) goto repr_cleanup_error;
+        Py_DECREF(arg);
         return result;
-repr_cleanup_error:
-        Py_CLEAR(arg);
-        Py_CLEAR(result);
-        return NULL;
     }
     return PyUnicode_FromFormat("%s%R", name, self->args);
 }
@@ -3187,18 +3173,11 @@ KeyError_str(PyObject *op)
     if (PyTuple_GET_SIZE(self->args) == 1) {
         PyObject *arg = PyTuple_GetItemRef((PyObject *)self->args, 0);
         if (arg == NULL) {
-            Py_CLEAR(arg);
             return NULL;
         }
         PyObject *result = PyObject_Repr(arg);
-        if (result == NULL) goto keyerror_cleanup_error;
-        Py_CLEAR(arg);
-        if (PyErr_Occurred()) goto keyerror_cleanup_error;
+        Py_DECREF(arg);
         return result;
-keyerror_cleanup_error:
-        Py_CLEAR(arg);
-        Py_CLEAR(result);
-        return NULL;
     }
     return BaseException_str(op);
 }

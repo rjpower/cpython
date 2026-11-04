@@ -328,7 +328,7 @@ native_scope_discard(PyObject *Py_UNUSED(module), PyObject *argument)
         }
         int status = PyList_Append(ledger, marker);
         Py_DECREF(marker);
-        if (status < 0 || PyErr_Occurred()) {
+        if (status < 0) {
             return NULL;
         }
     }
@@ -610,10 +610,6 @@ native_scope_vector(PyObject *Py_UNUSED(module), PyObject *const *args,
         PyValue_CLOSE(value);
     }
     PyMem_Free(values);
-    if (PyErr_Occurred()) {
-        Py_XDECREF(result);
-        return NULL;
-    }
     return result;
 }
 
@@ -628,10 +624,6 @@ vector_fault_mechanism(PyObject *callable, int fault)
         PyValue owner = values[i];
         values[i] = PyValue_NULL;
         PyValue_XCLOSE(owner);
-    }
-    if (PyErr_Occurred()) {
-        Py_XDECREF(result);
-        return NULL;
     }
     return result;
 }
@@ -785,7 +777,7 @@ native_scope_call_state(PyObject *Py_UNUSED(module), PyObject *code_object)
     int nlocals = code->co_nlocalsplus;
     PyObject *values = PyTuple_New(nslots);
     PyObject *report = NULL;
-    if (values != NULL && !PyErr_Occurred()) {
+    if (values != NULL) {
         for (int i = 0; i < nslots; i++) {
             PyTuple_SET_VALUE(values, i, PyValue_IsNull(snapshots[i])
                 ? PyValue_FromPyObjectNew(Py_None) : PyValue_NewRef(snapshots[i]));
@@ -797,10 +789,6 @@ native_scope_call_state(PyObject *Py_UNUSED(module), PyObject *code_object)
     Py_XDECREF(values);
     for (int i = nslots; i-- > 0;) {
         PyValue_CLEAR(snapshots[i]);
-    }
-    if (PyErr_Occurred()) {
-        Py_XDECREF(report);
-        return NULL;
     }
     return report;
 }

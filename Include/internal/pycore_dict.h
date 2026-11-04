@@ -77,7 +77,8 @@ extern PyObject* _PyDictView_Intersect(PyObject* self, PyObject *other);
 /* Borrowed live dict/key inputs; hash must match the canonical language key.
  * Return 1 with an independently owned value, 0 if absent, -1 on error.
  * The output is NULL1 on absence/error; caller owns any prior output contents.
- * These error-reporting providers require no pending exception on entry. */
+ * Like PyDict_GetItemRef(), a lookup whose keys run no Python succeeds with
+ * an unrelated exception pending and leaves it pending. */
 PyAPI_FUNC(int) _PyDict_GetValue_KnownHash(PyObject *, PyValue, Py_hash_t, PyValue *);
 /* Return 1 with independent owners for requested key/value outputs, 0 at end,
  * or -1 on error. Optional output slots must be distinct; non-success sets
@@ -172,8 +173,8 @@ PyAPI_FUNC(Py_ssize_t) _PyDict_LookupIndexAndOwnedValue(PyDictObject *, PyObject
 PyAPI_FUNC(Py_ssize_t) _PyDict_LookupIndex(PyDictObject *, PyObject *);
 /* Owns the returned canonical key/value/item tuple; NULL1 means exhaustion
  * or error (PyErr distinguishes them). Supports the six builtin forward/
- * reverse dict iterator types. Cursor is reserved before any allocation;
- * failed boxing/pair allocation rolls back only untouched reservations.
+ * reverse dict iterator types. As in upstream's item iterator, a step whose
+ * pair allocation (or, in tp_iternext, boxing) fails consumes the entry.
  * Object tp_iternext remains a separate fallible outward bridge. */
 PyAPI_FUNC(PyValue) _PyDictIter_NextValue(PyObject *iterator);
 PyAPI_FUNC(Py_ssize_t) _PyDictKeys_StringLookup(PyDictKeysObject* dictkeys, PyObject *key);

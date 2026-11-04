@@ -1584,9 +1584,6 @@ error_unexpected_keyword_arg(PyObject *kwargs, PyObject *kwnames,
         return;
     }
     PyObject *keyword = NULL;
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     for (Py_ssize_t j = 0; j < PyList_GET_SIZE(names); j++) {
         keyword = PyList_GetItemRef(names, j);
         if (keyword == NULL) {
@@ -1597,25 +1594,14 @@ error_unexpected_keyword_arg(PyObject *kwargs, PyObject *kwnames,
             goto done;
         }
         int match = PySequence_Contains(kwtuple, keyword);
-        if (PyErr_Occurred()) {
-            goto done;
-        }
         if (match <= 0) {
             if (!match) {
                 PyObject *kwlist = PySequence_List(kwtuple);
                 if (kwlist == NULL) {
                     goto done;
                 }
-                if (PyErr_Occurred()) {
-                    Py_DECREF(kwlist);
-                    goto done;
-                }
                 PyObject *suggestion = _Py_CalculateSuggestions(kwlist, keyword);
                 Py_DECREF(kwlist);
-                if (PyErr_Occurred()) {
-                    Py_XDECREF(suggestion);
-                    goto done;
-                }
                 if (suggestion != NULL) {
                     PyErr_Format(PyExc_TypeError,
                                  "%.200s%s got an unexpected keyword argument '%S'."
@@ -1624,7 +1610,7 @@ error_unexpected_keyword_arg(PyObject *kwargs, PyObject *kwnames,
                                  fname == NULL ? "" : "()", keyword, suggestion);
                     Py_DECREF(suggestion);
                 }
-                else if (!PyErr_Occurred()) {
+                else {
                     PyErr_Format(PyExc_TypeError,
                                  "%.200s%s got an unexpected keyword argument '%S'",
                                  fname == NULL ? "this function" : fname,
@@ -1634,9 +1620,6 @@ error_unexpected_keyword_arg(PyObject *kwargs, PyObject *kwnames,
             goto done;
         }
         Py_CLEAR(keyword);
-        if (PyErr_Occurred()) {
-            goto done;
-        }
     }
     PyErr_Format(PyExc_TypeError, "invalid keyword argument for %.200s%s",
                  fname == NULL ? "this function" : fname, fname == NULL ? "" : "()");

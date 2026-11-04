@@ -19,7 +19,7 @@
 #include "pycore_pyerrors.h"      // _PyErr_FormatNote
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_runtime.h"       // _Py_ID()
-#include "pycore_setobject.h"     // _PySet_NextEntry()
+#include "pycore_setobject.h"     // _PySet_NextEntryRef()
 #include "pycore_symtable.h"      // _Py_Mangle()
 #include "pycore_sysmodule.h"     // _PySys_GetSizeOf()
 #include "pycore_tuple.h"         // _PyTuple_FromPair
@@ -1684,7 +1684,7 @@ _Unpickler_ResizeMemoList(UnpicklerObject *self, size_t new_size)
     return 0;
 }
 
-/* Returns NULL if idx is out of bounds. */
+/* Returns a new reference, or NULL if idx is out of bounds. */
 static PyObject *
 _Unpickler_MemoGet(PickleState *st, UnpicklerObject *self, size_t idx)
 {
@@ -1692,7 +1692,7 @@ _Unpickler_MemoGet(PickleState *st, UnpicklerObject *self, size_t idx)
     if (idx < self->memo_size) {
         value = self->memo[idx];
         if (value != NULL) {
-            return value;
+            return Py_NewRef(value);
         }
     }
     if (self->memo_dict != NULL) {
@@ -1704,9 +1704,10 @@ _Unpickler_MemoGet(PickleState *st, UnpicklerObject *self, size_t idx)
             (void)PyDict_Pop(self->memo_dict, key, &value);
             // Migrate dict entry to array for faster future access
             self->memo[idx] = value;
+            Py_XINCREF(value);
         }
         else {
-            value = PyDict_GetItemWithError(self->memo_dict, key);
+            (void)PyDict_GetItemRef(self->memo_dict, key, &value);
         }
         Py_DECREF(key);
         if (value != NULL || PyErr_Occurred()) {
@@ -2043,19 +2044,31 @@ mangle_dotted_path(PyObject *dotted_path)
     int rc = 0;
     Py_ssize_t n = PyList_GET_SIZE(dotted_path);
     for (Py_ssize_t i = n-1; i > 0; i--) {
-        PyObject *subpath = PyList_GET_ITEM(dotted_path, i);
+        PyObject *subpath = PyList_GetItemRef(dotted_path, i);
+        if (subpath == NULL) {
+            return -1;
+        }
         if (_Py_IsPrivateName(subpath)) {
-            PyObject *parent = PyList_GET_ITEM(dotted_path, i-1);
+            PyObject *parent = PyList_GetItemRef(dotted_path, i-1);
+            if (parent == NULL) {
+                Py_DECREF(subpath);
+                return -1;
+            }
             PyObject *mangled = _Py_Mangle(parent, subpath);
+            Py_DECREF(parent);
             if (mangled == NULL) {
+                Py_DECREF(subpath);
                 return -1;
             }
             if (mangled != subpath) {
                 rc = 1;
             }
-            PyList_SET_ITEM(dotted_path, i, mangled);
-            Py_DECREF(subpath);
+            if (PyList_SetItem(dotted_path, i, mangled) < 0) {
+                Py_DECREF(subpath);
+                return -1;
+            }
         }
+        Py_DECREF(subpath);
     }
     return rc;
 }
@@ -2067,8 +2080,13 @@ check_dotted_path(PickleState *st, PyObject *obj, PyObject *dotted_path)
     n = PyList_GET_SIZE(dotted_path);
     assert(n >= 1);
     for (i = 0; i < n; i++) {
-        PyObject *subpath = PyList_GET_ITEM(dotted_path, i);
-        if (_PyUnicode_EqualToASCIIString(subpath, "<locals>")) {
+        PyObject *subpath = PyList_GetItemRef(dotted_path, i);
+        if (subpath == NULL) {
+            return -1;
+        }
+        int is_locals = _PyUnicode_EqualToASCIIString(subpath, "<locals>");
+        Py_DECREF(subpath);
+        if (is_locals) {
             PyErr_Format(st->PicklingError,
                          "Can't pickle local object %R", obj);
             return -1;
@@ -2086,7 +2104,11 @@ getattribute(PyObject *obj, PyObject *names, int raises)
     Py_INCREF(obj);
     n = PyList_GET_SIZE(names);
     for (i = 0; i < n; i++) {
-        PyObject *name = PyList_GET_ITEM(names, i);
+        PyObject *name = PyList_GetItemRef(names, i);
+        if (name == NULL) {
+            Py_DECREF(obj);
+            return NULL;
+        }
         PyObject *parent = obj;
         if (raises) {
             obj = PyObject_GetAttr(parent, name);
@@ -2094,6 +2116,7 @@ getattribute(PyObject *obj, PyObject *names, int raises)
         else {
             (void)PyObject_GetOptionalAttr(parent, name, &obj);
         }
+        Py_DECREF(name);
         Py_DECREF(parent);
         if (obj == NULL) {
             return NULL;
@@ -2158,9 +2181,8 @@ whichmodule(PickleState *st, PyObject *global, PyObject *global_name, PyObject *
             int error = 0;
             i = 0;
             Py_BEGIN_CRITICAL_SECTION(modules);
-            while (PyDict_Next(modules, &i, &module_name, &module)) {
-                Py_INCREF(module_name);
-                Py_INCREF(module);
+            int rc;
+            while ((rc = PyDict_NextEntryRef(modules, &i, &module_name, &module)) > 0) {
                 if (_checkmodule(module_name, module, global, dotted_path) == 0) {
                     Py_DECREF(module);
                     found_name = module_name;
@@ -2172,6 +2194,9 @@ whichmodule(PickleState *st, PyObject *global, PyObject *global_name, PyObject *
                     error = 1;
                     break;
                 }
+            }
+            if (rc < 0) {
+                error = 1;
             }
             Py_END_CRITICAL_SECTION();
             if (error) {
@@ -3039,14 +3064,16 @@ store_tuple_elements(PickleState *state, PicklerObject *self, PyObject *t,
     assert(PyTuple_Size(t) == len);
 
     for (i = 0; i < len; i++) {
-        PyObject *element = PyTuple_GET_ITEM(t, i);
+        PyObject *element = PyTuple_GetItemRef(t, i);
 
         if (element == NULL)
             return -1;
         if (save(state, self, element, 0) < 0) {
+            Py_DECREF(element);
             _PyErr_FormatNote("when serializing %T item %zd", t, i);
             return -1;
         }
+        Py_DECREF(element);
     }
 
     return 0;
@@ -3417,6 +3444,33 @@ save_list(PickleState *state, PicklerObject *self, PyObject *obj)
     return status;
 }
 
+/* Save the key and value of the 2-tuple `pair` yielded by a dict items
+ * iterator. */
+static int
+save_dict_item(PickleState *state, PicklerObject *self, PyObject *pair,
+               PyObject *origobj)
+{
+    int ret = -1;
+    PyObject *key = PyTuple_GetItemRef(pair, 0);
+    PyObject *value = PyTuple_GetItemRef(pair, 1);
+
+    if (key == NULL || value == NULL) {
+        goto done;
+    }
+    if (save(state, self, key, 0) < 0) {
+        goto done;
+    }
+    if (save(state, self, value, 0) < 0) {
+        _PyErr_FormatNote("when serializing %T item %R", origobj, key);
+        goto done;
+    }
+    ret = 0;
+done:
+    Py_XDECREF(key);
+    Py_XDECREF(value);
+    return ret;
+}
+
 /* iter is an iterator giving (key, value) pairs, and we batch up chunks of
  *     MARK key value ... key value SETITEMS
  * opcode sequences.  Calling code should have arranged to first create an
@@ -3456,14 +3510,7 @@ batch_dict(PickleState *state, PicklerObject *self, PyObject *iter, PyObject *or
                 Py_DECREF(obj);
                 return -1;
             }
-            i = save(state, self, PyTuple_GET_ITEM(obj, 0), 0);
-            if (i >= 0) {
-                i = save(state, self, PyTuple_GET_ITEM(obj, 1), 0);
-                if (i < 0) {
-                    _PyErr_FormatNote("when serializing %T item %R",
-                                      origobj, PyTuple_GET_ITEM(obj, 0));
-                }
-            }
+            i = save_dict_item(state, self, obj, origobj);
             Py_DECREF(obj);
             if (i < 0)
                 return -1;
@@ -3497,13 +3544,8 @@ batch_dict(PickleState *state, PicklerObject *self, PyObject *iter, PyObject *or
                 goto error;
 
             /* Only one item to write */
-            if (save(state, self, PyTuple_GET_ITEM(firstitem, 0), 0) < 0)
+            if (save_dict_item(state, self, firstitem, origobj) < 0)
                 goto error;
-            if (save(state, self, PyTuple_GET_ITEM(firstitem, 1), 0) < 0) {
-                _PyErr_FormatNote("when serializing %T item %R",
-                                  origobj, PyTuple_GET_ITEM(firstitem, 0));
-                goto error;
-            }
             if (_Pickler_Write(self, &setitem_op, 1) < 0)
                 goto error;
             Py_CLEAR(firstitem);
@@ -3516,13 +3558,8 @@ batch_dict(PickleState *state, PicklerObject *self, PyObject *iter, PyObject *or
         if (_Pickler_Write(self, &mark_op, 1) < 0)
             goto error;
 
-        if (save(state, self, PyTuple_GET_ITEM(firstitem, 0), 0) < 0)
+        if (save_dict_item(state, self, firstitem, origobj) < 0)
             goto error;
-        if (save(state, self, PyTuple_GET_ITEM(firstitem, 1), 0) < 0) {
-            _PyErr_FormatNote("when serializing %T item %R",
-                              origobj, PyTuple_GET_ITEM(firstitem, 0));
-            goto error;
-        }
         Py_CLEAR(firstitem);
         n = 1;
 
@@ -3533,13 +3570,8 @@ batch_dict(PickleState *state, PicklerObject *self, PyObject *iter, PyObject *or
                     "iterator must return 2-tuples");
                 goto error;
             }
-            if (save(state, self, PyTuple_GET_ITEM(obj, 0), 0) < 0)
+            if (save_dict_item(state, self, obj, origobj) < 0)
                 goto error;
-            if (save(state, self, PyTuple_GET_ITEM(obj, 1), 0) < 0) {
-                _PyErr_FormatNote("when serializing %T item %R",
-                                  origobj, PyTuple_GET_ITEM(obj, 0));
-                goto error;
-            }
             Py_CLEAR(obj);
             n += 1;
 
@@ -3579,7 +3611,7 @@ static int
 batch_dict_exact_impl(PickleState *state, PicklerObject *self, PyObject *obj)
 {
     PyObject *key = NULL, *value = NULL;
-    int i;
+    int i, rc;
     Py_ssize_t dict_size, ppos = 0;
 
     const char mark_op = MARK;
@@ -3596,9 +3628,16 @@ batch_dict_exact_impl(PickleState *state, PicklerObject *self, PyObject *obj)
     Py_ssize_t total = 0;
     do {
         if (dict_size - total == 1) {
-            PyDict_Next(obj, &ppos, &key, &value);
-            Py_INCREF(key);
-            Py_INCREF(value);
+            rc = PyDict_NextEntryRef(obj, &ppos, &key, &value);
+            if (rc < 0) {
+                return -1;
+            }
+            if (rc == 0) {
+                PyErr_Format(
+                    PyExc_RuntimeError,
+                    "dictionary keys changed during iteration");
+                return -1;
+            }
             if (save(state, self, key, 0) < 0) {
                 goto error;
             }
@@ -3616,9 +3655,7 @@ batch_dict_exact_impl(PickleState *state, PicklerObject *self, PyObject *obj)
         i = 0;
         if (_Pickler_Write(self, &mark_op, 1) < 0)
             return -1;
-        while (PyDict_Next(obj, &ppos, &key, &value)) {
-            Py_INCREF(key);
-            Py_INCREF(value);
+        while ((rc = PyDict_NextEntryRef(obj, &ppos, &key, &value)) > 0) {
             if (save(state, self, key, 0) < 0) {
                 goto error;
             }
@@ -3632,6 +3669,8 @@ batch_dict_exact_impl(PickleState *state, PicklerObject *self, PyObject *obj)
             if (++i == BATCHSIZE)
                 break;
         }
+        if (rc < 0)
+            return -1;
         if (_Pickler_Write(self, &setitems_op, 1) < 0)
             return -1;
         if (PyDict_GET_SIZE(obj) != dict_size) {
@@ -3650,7 +3689,7 @@ error:
 }
 
 /* gh-146452: Wrap the dict iteration in a critical section to prevent
-   concurrent mutation from invalidating PyDict_Next() iteration state. */
+   concurrent mutation from invalidating PyDict_NextEntryRef() iteration state. */
 static int
 batch_dict_exact(PickleState *state, PicklerObject *self, PyObject *obj)
 {
@@ -3777,9 +3816,9 @@ save_set(PickleState *state, PicklerObject *self, PyObject *obj)
         if (_Pickler_Write(self, &mark_op, 1) < 0)
             return -1;
 
-        int err = 0;
+        int err = 0, rc;
         Py_BEGIN_CRITICAL_SECTION(obj);
-        while (_PySet_NextEntryRef(obj, &ppos, &item, &hash)) {
+        while ((rc = _PySet_NextEntryRef(obj, &ppos, &item, &hash)) > 0) {
             err = save(state, self, item, 0);
             Py_CLEAR(item);
             if (err < 0) {
@@ -3791,7 +3830,7 @@ save_set(PickleState *state, PicklerObject *self, PyObject *obj)
                 break;
         }
         Py_END_CRITICAL_SECTION();
-        if (err < 0) {
+        if (err < 0 || rc < 0) {
             return -1;
         }
         if (_Pickler_Write(self, &additems_op, 1) < 0)
@@ -3903,25 +3942,29 @@ fix_imports(PickleState *st, PyObject **module_name, PyObject **global_name)
 {
     PyObject *key;
     PyObject *item;
+    int rc;
 
     key = _PyTuple_FromPair(*module_name, *global_name);
     if (key == NULL)
         return -1;
-    item = PyDict_GetItemWithError(st->name_mapping_3to2, key);
+    rc = PyDict_GetItemRef(st->name_mapping_3to2, key, &item);
     Py_DECREF(key);
-    if (item) {
-        PyObject *fixed_module_name;
-        PyObject *fixed_global_name;
+    if (rc > 0) {
+        PyObject *fixed_module_name = NULL;
+        PyObject *fixed_global_name = NULL;
 
         if (!PyTuple_Check(item) || PyTuple_GET_SIZE(item) != 2) {
             PyErr_Format(PyExc_RuntimeError,
                          "_compat_pickle.REVERSE_NAME_MAPPING values "
                          "should be 2-tuples, not %.200s",
                          Py_TYPE(item)->tp_name);
-            return -1;
+            goto error;
         }
-        fixed_module_name = PyTuple_GET_ITEM(item, 0);
-        fixed_global_name = PyTuple_GET_ITEM(item, 1);
+        fixed_module_name = PyTuple_GetItemRef(item, 0);
+        fixed_global_name = PyTuple_GetItemRef(item, 1);
+        if (fixed_module_name == NULL || fixed_global_name == NULL) {
+            goto error;
+        }
         if (!PyUnicode_Check(fixed_module_name) ||
             !PyUnicode_Check(fixed_global_name)) {
             PyErr_Format(PyExc_RuntimeError,
@@ -3929,31 +3972,37 @@ fix_imports(PickleState *st, PyObject **module_name, PyObject **global_name)
                          "should be pairs of str, not (%.200s, %.200s)",
                          Py_TYPE(fixed_module_name)->tp_name,
                          Py_TYPE(fixed_global_name)->tp_name);
-            return -1;
+            goto error;
         }
 
-        Py_CLEAR(*module_name);
-        Py_CLEAR(*global_name);
-        *module_name = Py_NewRef(fixed_module_name);
-        *global_name = Py_NewRef(fixed_global_name);
+        Py_DECREF(item);
+        Py_SETREF(*module_name, fixed_module_name);
+        Py_SETREF(*global_name, fixed_global_name);
         return 0;
+
+      error:
+        Py_DECREF(item);
+        Py_XDECREF(fixed_module_name);
+        Py_XDECREF(fixed_global_name);
+        return -1;
     }
-    else if (PyErr_Occurred()) {
+    else if (rc < 0) {
         return -1;
     }
 
-    item = PyDict_GetItemWithError(st->import_mapping_3to2, *module_name);
-    if (item) {
+    rc = PyDict_GetItemRef(st->import_mapping_3to2, *module_name, &item);
+    if (rc > 0) {
         if (!PyUnicode_Check(item)) {
             PyErr_Format(PyExc_RuntimeError,
                          "_compat_pickle.REVERSE_IMPORT_MAPPING values "
                          "should be strings, not %.200s",
                          Py_TYPE(item)->tp_name);
+            Py_DECREF(item);
             return -1;
         }
-        Py_XSETREF(*module_name, Py_NewRef(item));
+        Py_XSETREF(*module_name, item);
     }
-    else if (PyErr_Occurred()) {
+    else if (rc < 0) {
         return -1;
     }
 
@@ -4085,7 +4134,10 @@ save_global(PickleState *st, PicklerObject *self, PyObject *obj,
             Py_ssize_t i;
             if (dotted_path) {
                 if (PyList_GET_SIZE(dotted_path) > 1) {
-                    Py_SETREF(global_name, Py_NewRef(PyList_GET_ITEM(dotted_path, 0)));
+                    Py_SETREF(global_name, PyList_GetItemRef(dotted_path, 0));
+                    if (global_name == NULL) {
+                        goto error;
+                    }
                 }
                 for (i = 1; i < PyList_GET_SIZE(dotted_path); i++) {
                     if (save(st, self, st->getattr, 0) < 0 ||
@@ -4166,12 +4218,18 @@ save_global(PickleState *st, PicklerObject *self, PyObject *obj,
 
             if (dotted_path) {
                 for (i = 1; i < PyList_GET_SIZE(dotted_path); i++) {
-                    if (save(st, self, PyList_GET_ITEM(dotted_path, i), 0) < 0 ||
+                    PyObject *subpath = PyList_GetItemRef(dotted_path, i);
+                    if (subpath == NULL) {
+                        goto error;
+                    }
+                    if (save(st, self, subpath, 0) < 0 ||
                         _Pickler_Write(self, &tupletwo_op, 1) < 0 ||
                         _Pickler_Write(self, &reduce_op, 1) < 0)
                     {
+                        Py_DECREF(subpath);
                         goto error;
                     }
+                    Py_DECREF(subpath);
                 }
             }
         }
@@ -4383,9 +4441,9 @@ save_reduce(PickleState *st, PicklerObject *self, PyObject *args,
     }
 
     if (use_newobj_ex) {
-        PyObject *cls;
-        PyObject *args;
-        PyObject *kwargs;
+        PyObject *cls = NULL;
+        PyObject *args = NULL;
+        PyObject *kwargs = NULL;
 
         if (PyTuple_GET_SIZE(argtup) != 3) {
             PyErr_Format(st->PicklingError,
@@ -4394,41 +4452,44 @@ save_reduce(PickleState *st, PicklerObject *self, PyObject *args,
             return -1;
         }
 
-        cls = PyTuple_GET_ITEM(argtup, 0);
+        cls = PyTuple_GetItemRef(argtup, 0);
+        args = PyTuple_GetItemRef(argtup, 1);
+        kwargs = PyTuple_GetItemRef(argtup, 2);
+        if (cls == NULL || args == NULL || kwargs == NULL) {
+            goto newobj_ex_error;
+        }
         if (!PyType_Check(cls)) {
             PyErr_Format(st->PicklingError,
                          "first argument to __newobj_ex__() "
                          "must be a class, not %T", cls);
-            return -1;
+            goto newobj_ex_error;
         }
-        args = PyTuple_GET_ITEM(argtup, 1);
         if (!PyTuple_Check(args)) {
             PyErr_Format(st->PicklingError,
                          "second argument to __newobj_ex__() "
                          "must be a tuple, not %T", args);
-            return -1;
+            goto newobj_ex_error;
         }
-        kwargs = PyTuple_GET_ITEM(argtup, 2);
         if (!PyDict_Check(kwargs)) {
             PyErr_Format(st->PicklingError,
                          "third argument to __newobj_ex__() "
                          "must be a dict, not %T", kwargs);
-            return -1;
+            goto newobj_ex_error;
         }
 
         if (self->proto >= 4) {
             if (save(st, self, cls, 0) < 0) {
                 _PyErr_FormatNote("when serializing %T class", obj);
-                return -1;
+                goto newobj_ex_error;
             }
             if (save(st, self, args, 0) < 0 ||
                 save(st, self, kwargs, 0) < 0)
             {
                 _PyErr_FormatNote("when serializing %T __new__ arguments", obj);
-                return -1;
+                goto newobj_ex_error;
             }
             if (_Pickler_Write(self, &newobj_ex_op, 1) < 0) {
-                return -1;
+                goto newobj_ex_error;
             }
         }
         else {
@@ -4438,29 +4499,33 @@ save_reduce(PickleState *st, PicklerObject *self, PyObject *args,
 
             newargs = PyTuple_New(PyTuple_GET_SIZE(args) + 2);
             if (newargs == NULL)
-                return -1;
+                goto newobj_ex_error;
 
             cls_new = PyObject_GetAttr(cls, &_Py_ID(__new__));
             if (cls_new == NULL) {
                 Py_DECREF(newargs);
-                return -1;
+                goto newobj_ex_error;
             }
             PyTuple_SET_ITEM(newargs, 0, cls_new);
             PyTuple_SET_ITEM(newargs, 1, Py_NewRef(cls));
             for (i = 0; i < PyTuple_GET_SIZE(args); i++) {
-                PyObject *item = PyTuple_GET_ITEM(args, i);
-                PyTuple_SET_ITEM(newargs, i + 2, Py_NewRef(item));
+                PyObject *item = PyTuple_GetItemRef(args, i);
+                if (item == NULL) {
+                    Py_DECREF(newargs);
+                    goto newobj_ex_error;
+                }
+                PyTuple_SET_ITEM(newargs, i + 2, item);
             }
 
             callable = PyObject_Call(st->partial, newargs, kwargs);
             Py_DECREF(newargs);
             if (callable == NULL)
-                return -1;
+                goto newobj_ex_error;
 
             newargs = PyTuple_New(0);
             if (newargs == NULL) {
                 Py_DECREF(callable);
-                return -1;
+                goto newobj_ex_error;
             }
 
             if (save(st, self, callable, 0) < 0 ||
@@ -4469,17 +4534,28 @@ save_reduce(PickleState *st, PicklerObject *self, PyObject *args,
                 _PyErr_FormatNote("when serializing %T reconstructor", obj);
                 Py_DECREF(newargs);
                 Py_DECREF(callable);
-                return -1;
+                goto newobj_ex_error;
             }
             Py_DECREF(newargs);
             Py_DECREF(callable);
             if (_Pickler_Write(self, &reduce_op, 1) < 0) {
-                return -1;
+                goto newobj_ex_error;
             }
+        }
+
+        Py_DECREF(cls);
+        Py_DECREF(args);
+        Py_DECREF(kwargs);
+        if (0) {
+  newobj_ex_error:
+            Py_XDECREF(cls);
+            Py_XDECREF(args);
+            Py_XDECREF(kwargs);
+            return -1;
         }
     }
     else if (use_newobj) {
-        PyObject *cls;
+        PyObject *cls = NULL;
         PyObject *newargtup;
         PyObject *obj_class;
         int p;
@@ -4492,25 +4568,28 @@ save_reduce(PickleState *st, PicklerObject *self, PyObject *args,
             return -1;
         }
 
-        cls = PyTuple_GET_ITEM(argtup, 0);
+        cls = PyTuple_GetItemRef(argtup, 0);
+        if (cls == NULL) {
+            return -1;
+        }
         if (!PyType_Check(cls)) {
             PyErr_Format(st->PicklingError,
                          "first argument to __newobj__() "
                          "must be a class, not %T", cls);
-            return -1;
+            goto newobj_error;
         }
 
         if (obj != NULL) {
             obj_class = get_class(obj);
             if (obj_class == NULL) {
-                return -1;
+                goto newobj_error;
             }
             if (obj_class != cls) {
                 PyErr_Format(st->PicklingError,
                              "first argument to __newobj__() "
                              "must be %R, not %R", obj_class, cls);
                 Py_DECREF(obj_class);
-                return -1;
+                goto newobj_error;
             }
             Py_DECREF(obj_class);
         }
@@ -4544,23 +4623,30 @@ save_reduce(PickleState *st, PicklerObject *self, PyObject *args,
         /* Save the class and its __new__ arguments. */
         if (save(st, self, cls, 0) < 0) {
             _PyErr_FormatNote("when serializing %T class", obj);
-            return -1;
+            goto newobj_error;
         }
 
         newargtup = PyTuple_GetSlice(argtup, 1, PyTuple_GET_SIZE(argtup));
         if (newargtup == NULL)
-            return -1;
+            goto newobj_error;
 
         p = save(st, self, newargtup, 0);
         Py_DECREF(newargtup);
         if (p < 0) {
             _PyErr_FormatNote("when serializing %T __new__ arguments", obj);
-            return -1;
+            goto newobj_error;
         }
 
         /* Add NEWOBJ opcode. */
         if (_Pickler_Write(self, &newobj_op, 1) < 0)
+            goto newobj_error;
+
+        Py_DECREF(cls);
+        if (0) {
+  newobj_error:
+            Py_DECREF(cls);
             return -1;
+        }
     }
     else { /* Not using NEWOBJ. */
         if (save(st, self, callable, 0) < 0) {
@@ -5578,28 +5664,44 @@ Pickler_set_memo(PyObject *op, PyObject *obj, void *Py_UNUSED(closure))
     }
     else if (PyDict_Check(obj)) {
         Py_ssize_t i = 0;
-        PyObject *key, *value;
+        PyObject *value;
 
         new_memo = PyMemoTable_New();
         if (new_memo == NULL)
             return -1;
 
-        while (PyDict_Next(obj, &i, &key, &value)) {
+        int rc;
+        while ((rc = PyDict_NextEntryRef(obj, &i, NULL, &value)) > 0) {
             Py_ssize_t memo_id;
-            PyObject *memo_obj;
+            PyObject *memo_id_obj = NULL, *memo_obj = NULL;
 
             if (!PyTuple_Check(value) || PyTuple_GET_SIZE(value) != 2) {
                 PyErr_SetString(PyExc_TypeError,
                                 "'memo' values must be 2-item tuples");
+                Py_DECREF(value);
                 goto error;
             }
-            memo_id = PyLong_AsSsize_t(PyTuple_GET_ITEM(value, 0));
-            if (memo_id == -1 && PyErr_Occurred())
+            memo_id_obj = PyTuple_GetItemRef(value, 0);
+            memo_obj = PyTuple_GetItemRef(value, 1);
+            Py_DECREF(value);
+            if (memo_id_obj == NULL || memo_obj == NULL) {
+                Py_XDECREF(memo_id_obj);
+                Py_XDECREF(memo_obj);
                 goto error;
-            memo_obj = PyTuple_GET_ITEM(value, 1);
-            if (PyMemoTable_Set(new_memo, memo_obj, memo_id) < 0)
+            }
+            memo_id = PyLong_AsSsize_t(memo_id_obj);
+            Py_DECREF(memo_id_obj);
+            if (memo_id == -1 && PyErr_Occurred()) {
+                Py_DECREF(memo_obj);
+                goto error;
+            }
+            int err = PyMemoTable_Set(new_memo, memo_obj, memo_id);
+            Py_DECREF(memo_obj);
+            if (err < 0)
                 goto error;
         }
+        if (rc < 0)
+            goto error;
     }
     else {
         PyErr_Format(PyExc_TypeError,
@@ -6766,7 +6868,7 @@ load_get(PickleState *st, UnpicklerObject *self)
         return -1;
     }
 
-    PDATA_APPEND(self->stack, value, -1);
+    PDATA_PUSH(self->stack, value, -1);
     return 0;
 }
 
@@ -6787,7 +6889,7 @@ load_binget(PickleState *st, UnpicklerObject *self)
         return -1;
     }
 
-    PDATA_APPEND(self->stack, value, -1);
+    PDATA_PUSH(self->stack, value, -1);
     return 0;
 }
 
@@ -6808,7 +6910,7 @@ load_long_binget(PickleState *st, UnpicklerObject *self)
         return -1;
     }
 
-    PDATA_APPEND(self->stack, value, -1);
+    PDATA_PUSH(self->stack, value, -1);
     return 0;
 }
 
@@ -6839,23 +6941,23 @@ load_extension(PickleState *st, UnpicklerObject *self, int nbytes)
     py_code = PyLong_FromLong(code);
     if (py_code == NULL)
         return -1;
-    obj = PyDict_GetItemWithError(st->extension_cache, py_code);
-    if (obj != NULL) {
-        /* Bingo. */
-        Py_DECREF(py_code);
-        PDATA_APPEND(self->stack, obj, -1);
-        return 0;
-    }
-    if (PyErr_Occurred()) {
+    int rc = PyDict_GetItemRef(st->extension_cache, py_code, &obj);
+    if (rc < 0) {
         Py_DECREF(py_code);
         return -1;
     }
+    if (rc > 0) {
+        /* Bingo. */
+        Py_DECREF(py_code);
+        PDATA_PUSH(self->stack, obj, -1);
+        return 0;
+    }
 
     /* Look up the (module_name, class_name) pair. */
-    pair = PyDict_GetItemWithError(st->inverted_registry, py_code);
-    if (pair == NULL) {
+    rc = PyDict_GetItemRef(st->inverted_registry, py_code, &pair);
+    if (rc <= 0) {
         Py_DECREF(py_code);
-        if (!PyErr_Occurred()) {
+        if (rc == 0) {
             PyErr_Format(PyExc_ValueError, "unregistered extension "
                          "code %ld", code);
         }
@@ -6868,18 +6970,26 @@ load_extension(PickleState *st, UnpicklerObject *self, int nbytes)
         goto error;
     }
 
-    module_name = PyTuple_GET_ITEM(pair, 0);
-    if (!PyUnicode_Check(module_name)) {
-        goto error;
+    module_name = PyTuple_GetItemRef(pair, 0);
+    class_name = PyTuple_GetItemRef(pair, 1);
+    Py_DECREF(pair);
+    pair = NULL;
+    if (module_name == NULL || class_name == NULL) {
+        Py_DECREF(py_code);
+        Py_XDECREF(module_name);
+        Py_XDECREF(class_name);
+        return -1;
     }
-
-    class_name = PyTuple_GET_ITEM(pair, 1);
-    if (!PyUnicode_Check(class_name)) {
+    if (!PyUnicode_Check(module_name) || !PyUnicode_Check(class_name)) {
+        Py_DECREF(module_name);
+        Py_DECREF(class_name);
         goto error;
     }
 
     /* Load the object. */
     obj = find_class(self, module_name, class_name);
+    Py_DECREF(module_name);
+    Py_DECREF(class_name);
     if (obj == NULL) {
         Py_DECREF(py_code);
         return -1;
@@ -6895,6 +7005,7 @@ load_extension(PickleState *st, UnpicklerObject *self, int nbytes)
     return 0;
 
 error:
+    Py_XDECREF(pair);
     Py_DECREF(py_code);
     PyErr_Format(PyExc_ValueError, "_inverted_registry[%ld] "
                  "isn't a 2-tuple of strings", code);
@@ -7223,11 +7334,14 @@ load_build(PickleState *st, UnpicklerObject *self)
     if (PyTuple_Check(state) && PyTuple_GET_SIZE(state) == 2) {
         PyObject *tmp = state;
 
-        state = PyTuple_GET_ITEM(tmp, 0);
-        slotstate = PyTuple_GET_ITEM(tmp, 1);
-        Py_INCREF(state);
-        Py_INCREF(slotstate);
+        state = PyTuple_GetItemRef(tmp, 0);
+        slotstate = PyTuple_GetItemRef(tmp, 1);
         Py_DECREF(tmp);
+        if (state == NULL || slotstate == NULL) {
+            Py_XDECREF(state);
+            Py_XDECREF(slotstate);
+            return -1;
+        }
     }
     else
         slotstate = NULL;
@@ -7247,22 +7361,26 @@ load_build(PickleState *st, UnpicklerObject *self)
             goto error;
 
         i = 0;
-        while (PyDict_Next(state, &i, &d_key, &d_value)) {
+        int rc;
+        while ((rc = PyDict_NextEntryRef(state, &i, &d_key, &d_value)) > 0) {
             /* normally the keys for instance attributes are
                interned.  we should try to do that here. */
-            Py_INCREF(d_key);
             if (PyUnicode_CheckExact(d_key)) {
                 PyInterpreterState *interp = _PyInterpreterState_GET();
                 _PyUnicode_InternMortal(interp, &d_key);
             }
-            if (PyObject_SetItem(dict, d_key, d_value) < 0) {
-                Py_DECREF(d_key);
+            int err = PyObject_SetItem(dict, d_key, d_value);
+            Py_DECREF(d_key);
+            Py_DECREF(d_value);
+            if (err < 0) {
                 Py_DECREF(dict);
                 goto error;
             }
-            Py_DECREF(d_key);
         }
         Py_DECREF(dict);
+        if (rc < 0) {
+            goto error;
+        }
     }
 
     /* Also set instance attributes from the slotstate dict (if any). */
@@ -7276,10 +7394,16 @@ load_build(PickleState *st, UnpicklerObject *self)
             goto error;
         }
         i = 0;
-        while (PyDict_Next(slotstate, &i, &d_key, &d_value)) {
-            if (PyObject_SetAttr(inst, d_key, d_value) < 0)
+        int rc;
+        while ((rc = PyDict_NextEntryRef(slotstate, &i, &d_key, &d_value)) > 0) {
+            int err = PyObject_SetAttr(inst, d_key, d_value);
+            Py_DECREF(d_key);
+            Py_DECREF(d_value);
+            if (err < 0)
                 goto error;
         }
+        if (rc < 0)
+            goto error;
     }
 
     if (0) {
@@ -7635,8 +7759,10 @@ _pickle_Unpickler_find_class_impl(UnpicklerObject *self, PyTypeObject *cls,
                                   PyObject *global_name)
 /*[clinic end generated code: output=99577948abb0be81 input=9577745719219fc7]*/
 {
-    PyObject *global;
+    PyObject *global = NULL;
     PyObject *module;
+    PyObject *fixed_module = NULL;
+    PyObject *fixed_global = NULL;
 
     if (PySys_Audit("pickle.find_class", "OO",
                     module_name, global_name) < 0) {
@@ -7649,6 +7775,7 @@ _pickle_Unpickler_find_class_impl(UnpicklerObject *self, PyTypeObject *cls,
     if (self->proto < 3 && self->fix_imports) {
         PyObject *key;
         PyObject *item;
+        int rc;
         PickleState *st = _Pickle_GetStateByClass(cls);
 
         /* Check if the global (i.e., a function or a class) was renamed
@@ -7656,17 +7783,24 @@ _pickle_Unpickler_find_class_impl(UnpicklerObject *self, PyTypeObject *cls,
         key = _PyTuple_FromPair(module_name, global_name);
         if (key == NULL)
             return NULL;
-        item = PyDict_GetItemWithError(st->name_mapping_2to3, key);
+        rc = PyDict_GetItemRef(st->name_mapping_2to3, key, &item);
         Py_DECREF(key);
-        if (item) {
+        if (rc > 0) {
             if (!PyTuple_Check(item) || PyTuple_GET_SIZE(item) != 2) {
                 PyErr_Format(PyExc_RuntimeError,
                              "_compat_pickle.NAME_MAPPING values should be "
                              "2-tuples, not %.200s", Py_TYPE(item)->tp_name);
+                Py_DECREF(item);
                 return NULL;
             }
-            module_name = PyTuple_GET_ITEM(item, 0);
-            global_name = PyTuple_GET_ITEM(item, 1);
+            fixed_module = PyTuple_GetItemRef(item, 0);
+            fixed_global = PyTuple_GetItemRef(item, 1);
+            Py_DECREF(item);
+            if (fixed_module == NULL || fixed_global == NULL) {
+                goto done;
+            }
+            module_name = fixed_module;
+            global_name = fixed_global;
             if (!PyUnicode_Check(module_name) ||
                 !PyUnicode_Check(global_name)) {
                 PyErr_Format(PyExc_RuntimeError,
@@ -7674,25 +7808,27 @@ _pickle_Unpickler_find_class_impl(UnpicklerObject *self, PyTypeObject *cls,
                              "pairs of str, not (%.200s, %.200s)",
                              Py_TYPE(module_name)->tp_name,
                              Py_TYPE(global_name)->tp_name);
-                return NULL;
+                goto done;
             }
         }
-        else if (PyErr_Occurred()) {
+        else if (rc < 0) {
             return NULL;
         }
         else {
             /* Check if the module was renamed. */
-            item = PyDict_GetItemWithError(st->import_mapping_2to3, module_name);
-            if (item) {
+            rc = PyDict_GetItemRef(st->import_mapping_2to3, module_name, &item);
+            if (rc > 0) {
                 if (!PyUnicode_Check(item)) {
                     PyErr_Format(PyExc_RuntimeError,
                                 "_compat_pickle.IMPORT_MAPPING values should be "
                                 "strings, not %.200s", Py_TYPE(item)->tp_name);
+                    Py_DECREF(item);
                     return NULL;
                 }
-                module_name = item;
+                fixed_module = item;
+                module_name = fixed_module;
             }
-            else if (PyErr_Occurred()) {
+            else if (rc < 0) {
                 return NULL;
             }
         }
@@ -7704,13 +7840,13 @@ _pickle_Unpickler_find_class_impl(UnpicklerObject *self, PyTypeObject *cls,
      */
     module = PyImport_Import(module_name);
     if (module == NULL) {
-        return NULL;
+        goto done;
     }
     if (self->proto >= 4) {
         PyObject *dotted_path = get_dotted_path(global_name);
         if (dotted_path == NULL) {
             Py_DECREF(module);
-            return NULL;
+            goto done;
         }
         global = getattribute(module, dotted_path, 1);
         assert(global != NULL || PyErr_Occurred());
@@ -7727,6 +7863,9 @@ _pickle_Unpickler_find_class_impl(UnpicklerObject *self, PyTypeObject *cls,
         global = PyObject_GetAttr(module, global_name);
     }
     Py_DECREF(module);
+done:
+    Py_XDECREF(fixed_module);
+    Py_XDECREF(fixed_global);
     return global;
 }
 
@@ -8087,6 +8226,7 @@ Unpickler_set_memo(PyObject *op, PyObject *obj, void *Py_UNUSED(closure))
     PyObject **new_memo;
     UnpicklerObject *self = UnpicklerObject_CAST(op);
     size_t new_memo_size = 0;
+    PyObject *key = NULL, *value = NULL;
 
     if (obj == NULL) {
         PyErr_SetString(PyExc_TypeError,
@@ -8110,14 +8250,14 @@ Unpickler_set_memo(PyObject *op, PyObject *obj, void *Py_UNUSED(closure))
     }
     else if (PyDict_Check(obj)) {
         Py_ssize_t i = 0;
-        PyObject *key, *value;
 
         new_memo_size = PyDict_GET_SIZE(obj);
         new_memo = _Unpickler_NewMemo(new_memo_size);
         if (new_memo == NULL)
             return -1;
 
-        while (PyDict_Next(obj, &i, &key, &value)) {
+        int rc;
+        while ((rc = PyDict_NextEntryRef(obj, &i, &key, &value)) > 0) {
             Py_ssize_t idx;
             if (!PyLong_Check(key)) {
                 PyErr_SetString(PyExc_TypeError,
@@ -8134,7 +8274,11 @@ Unpickler_set_memo(PyObject *op, PyObject *obj, void *Py_UNUSED(closure))
             }
             if (_Unpickler_MemoPut(self, idx, value) < 0)
                 goto error;
+            Py_CLEAR(key);
+            Py_CLEAR(value);
         }
+        if (rc < 0)
+            goto error;
     }
     else {
         PyErr_Format(PyExc_TypeError,
@@ -8150,6 +8294,8 @@ Unpickler_set_memo(PyObject *op, PyObject *obj, void *Py_UNUSED(closure))
     return 0;
 
   error:
+    Py_XDECREF(key);
+    Py_XDECREF(value);
     if (new_memo_size) {
         for (size_t i = new_memo_size - 1; i != SIZE_MAX; i--) {
             Py_XDECREF(new_memo[i]);

@@ -5,9 +5,10 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
-#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(code_new__doc__,
 "code(argcount, posonlyargcount, kwonlyargcount, nlocals, stacksize,\n"
@@ -32,8 +33,6 @@ code_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = &PyCode_Type;
-    _PyArg_OwnerScope _args_scope = {0};
-    PyObject *const *fastargs;
     int argcount;
     int posonlyargcount;
     int kwonlyargcount;
@@ -58,120 +57,114 @@ code_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         !_PyArg_NoKeywords("code", kwargs)) {
         goto exit;
     }
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
+    if (!_PyArg_CheckPositional("code", PyTuple_GET_SIZE(args), 16, 19)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "code",
-                                          16, 19);
-    if (fastargs == NULL) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
+    if (_args_items == NULL) {
         goto exit;
     }
-    argcount = PyLong_AsInt(fastargs[0]);
+    argcount = PyLong_AsInt(_args_items[0]);
     if (argcount == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    posonlyargcount = PyLong_AsInt(fastargs[1]);
+    posonlyargcount = PyLong_AsInt(_args_items[1]);
     if (posonlyargcount == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    kwonlyargcount = PyLong_AsInt(fastargs[2]);
+    kwonlyargcount = PyLong_AsInt(_args_items[2]);
     if (kwonlyargcount == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    nlocals = PyLong_AsInt(fastargs[3]);
+    nlocals = PyLong_AsInt(_args_items[3]);
     if (nlocals == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    stacksize = PyLong_AsInt(fastargs[4]);
+    stacksize = PyLong_AsInt(_args_items[4]);
     if (stacksize == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    flags = PyLong_AsInt(fastargs[5]);
+    flags = PyLong_AsInt(_args_items[5]);
     if (flags == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    if (!PyBytes_Check(fastargs[6])) {
-        _PyArg_BadArgument("code", "argument 7", "bytes", fastargs[6]);
+    if (!PyBytes_Check(_args_items[6])) {
+        _PyArg_BadArgument("code", "argument 7", "bytes", _args_items[6]);
         goto exit;
     }
-    code = fastargs[6];
-    if (!PyTuple_Check(fastargs[7])) {
-        _PyArg_BadArgument("code", "argument 8", "tuple", fastargs[7]);
+    code = _args_items[6];
+    if (!PyTuple_Check(_args_items[7])) {
+        _PyArg_BadArgument("code", "argument 8", "tuple", _args_items[7]);
         goto exit;
     }
-    consts = fastargs[7];
-    if (!PyTuple_Check(fastargs[8])) {
-        _PyArg_BadArgument("code", "argument 9", "tuple", fastargs[8]);
+    consts = _args_items[7];
+    if (!PyTuple_Check(_args_items[8])) {
+        _PyArg_BadArgument("code", "argument 9", "tuple", _args_items[8]);
         goto exit;
     }
-    names = fastargs[8];
-    if (!PyTuple_Check(fastargs[9])) {
-        _PyArg_BadArgument("code", "argument 10", "tuple", fastargs[9]);
+    names = _args_items[8];
+    if (!PyTuple_Check(_args_items[9])) {
+        _PyArg_BadArgument("code", "argument 10", "tuple", _args_items[9]);
         goto exit;
     }
-    varnames = fastargs[9];
-    if (!PyUnicode_Check(fastargs[10])) {
-        _PyArg_BadArgument("code", "argument 11", "str", fastargs[10]);
+    varnames = _args_items[9];
+    if (!PyUnicode_Check(_args_items[10])) {
+        _PyArg_BadArgument("code", "argument 11", "str", _args_items[10]);
         goto exit;
     }
-    filename = fastargs[10];
-    if (!PyUnicode_Check(fastargs[11])) {
-        _PyArg_BadArgument("code", "argument 12", "str", fastargs[11]);
+    filename = _args_items[10];
+    if (!PyUnicode_Check(_args_items[11])) {
+        _PyArg_BadArgument("code", "argument 12", "str", _args_items[11]);
         goto exit;
     }
-    name = fastargs[11];
-    if (!PyUnicode_Check(fastargs[12])) {
-        _PyArg_BadArgument("code", "argument 13", "str", fastargs[12]);
+    name = _args_items[11];
+    if (!PyUnicode_Check(_args_items[12])) {
+        _PyArg_BadArgument("code", "argument 13", "str", _args_items[12]);
         goto exit;
     }
-    qualname = fastargs[12];
-    firstlineno = PyLong_AsInt(fastargs[13]);
+    qualname = _args_items[12];
+    firstlineno = PyLong_AsInt(_args_items[13]);
     if (firstlineno == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    if (!PyBytes_Check(fastargs[14])) {
-        _PyArg_BadArgument("code", "argument 15", "bytes", fastargs[14]);
+    if (!PyBytes_Check(_args_items[14])) {
+        _PyArg_BadArgument("code", "argument 15", "bytes", _args_items[14]);
         goto exit;
     }
-    linetable = fastargs[14];
-    if (!PyBytes_Check(fastargs[15])) {
-        _PyArg_BadArgument("code", "argument 16", "bytes", fastargs[15]);
+    linetable = _args_items[14];
+    if (!PyBytes_Check(_args_items[15])) {
+        _PyArg_BadArgument("code", "argument 16", "bytes", _args_items[15]);
         goto exit;
     }
-    exceptiontable = fastargs[15];
-    if (_args_scope.nargs < 17) {
+    exceptiontable = _args_items[15];
+    if (PyTuple_GET_SIZE(args) < 17) {
         goto skip_optional;
     }
-    if (!PyTuple_Check(fastargs[16])) {
-        _PyArg_BadArgument("code", "argument 17", "tuple", fastargs[16]);
+    if (!PyTuple_Check(_args_items[16])) {
+        _PyArg_BadArgument("code", "argument 17", "tuple", _args_items[16]);
         goto exit;
     }
-    freevars = fastargs[16];
-    if (_args_scope.nargs < 18) {
+    freevars = _args_items[16];
+    if (PyTuple_GET_SIZE(args) < 18) {
         goto skip_optional;
     }
-    if (!PyTuple_Check(fastargs[17])) {
-        _PyArg_BadArgument("code", "argument 18", "tuple", fastargs[17]);
+    if (!PyTuple_Check(_args_items[17])) {
+        _PyArg_BadArgument("code", "argument 18", "tuple", _args_items[17]);
         goto exit;
     }
-    cellvars = fastargs[17];
-    if (_args_scope.nargs < 19) {
+    cellvars = _args_items[17];
+    if (PyTuple_GET_SIZE(args) < 19) {
         goto skip_optional;
     }
-    if (!PyBytes_Check(fastargs[18])) {
-        _PyArg_BadArgument("code", "argument 19", "bytes", fastargs[18]);
+    if (!PyBytes_Check(_args_items[18])) {
+        _PyArg_BadArgument("code", "argument 19", "bytes", _args_items[18]);
         goto exit;
     }
-    fbinit = fastargs[18];
+    fbinit = _args_items[18];
 skip_optional:
     return_value = code_new_impl(type, argcount, posonlyargcount, kwonlyargcount, nlocals, stacksize, flags, code, consts, names, varnames, filename, name, qualname, firstlineno, linetable, exceptiontable, freevars, cellvars, fbinit);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -206,11 +199,11 @@ code_replace(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(co_argcount), &_Py_ID(co_posonlyargcount), &_Py_ID(co_kwonlyargcount), &_Py_ID(co_nlocals), &_Py_ID(co_stacksize), &_Py_ID(co_flags), &_Py_ID(co_firstlineno), &_Py_ID(co_code), &_Py_ID(co_consts), &_Py_ID(co_names), &_Py_ID(co_varnames), &_Py_ID(co_freevars), &_Py_ID(co_cellvars), &_Py_ID(co_filename), &_Py_ID(co_name), &_Py_ID(co_qualname), &_Py_ID(co_linetable), &_Py_ID(co_exceptiontable), &_Py_ID(co_fbinit), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(co_argcount)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_posonlyargcount)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_kwonlyargcount)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_nlocals)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_stacksize)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_flags)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_firstlineno)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_code)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_consts)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_names)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_varnames)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_freevars)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_cellvars)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_filename)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_name)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_qualname)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_linetable)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_exceptiontable)), _PyValue_STATIC_IMMORTAL(&_Py_ID(co_fbinit)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -467,11 +460,11 @@ code__varname_from_oparg(PyObject *self, PyObject *const *args, Py_ssize_t nargs
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(oparg), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(oparg)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -504,4 +497,4 @@ code__varname_from_oparg(PyObject *self, PyObject *const *args, Py_ssize_t nargs
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=ecb8e2ce43d6628e input=a9049054013a1b77]*/
+/*[clinic end generated code: output=582f9328884e8c60 input=a9049054013a1b77]*/

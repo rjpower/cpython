@@ -2,6 +2,7 @@
 preserve
 [clinic start generated code]*/
 
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_modsupport.h"    // _PyArg_NoPositional()
 
 PyDoc_STRVAR(namespace___replace____doc__,
@@ -25,6 +26,10 @@ namespace___replace__(PyObject *self, PyObject *args, PyObject *kwargs)
     if (!_PyArg_NoPositional("__replace__", args)) {
         goto exit;
     }
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
+    if (_args_items == NULL) {
+        goto exit;
+    }
     if (kwargs == NULL) {
         changes = PyDict_New();
         if (changes == NULL) {
@@ -42,4 +47,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=67b5fcb6a6aee559 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=4d6ac138cccf1697 input=a9049054013a1b77]*/

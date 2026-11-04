@@ -2,9 +2,9 @@
 preserve
 [clinic start generated code]*/
 
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
-#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(float_is_integer__doc__,
 "is_integer($self, /)\n"
@@ -222,14 +222,8 @@ float_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = &PyFloat_Type;
-    PyObject *_clinic_receiver_owner = NULL;
-    PyObject *_clinic_item_owner = NULL;
     PyObject *x = NULL;
 
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    _clinic_receiver_owner = Py_NewRef((PyObject *)type);
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
         !_PyArg_NoKeywords("float", kwargs)) {
         goto exit;
@@ -237,40 +231,18 @@ float_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (!_PyArg_CheckPositional("float", PyTuple_GET_SIZE(args), 0, 1)) {
         goto exit;
     }
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
+    if (_args_items == NULL) {
+        goto exit;
+    }
     if (PyTuple_GET_SIZE(args) < 1) {
         goto skip_optional;
     }
-    _clinic_item_owner = PyTuple_GetItemRef(args, 0);
-    if (_clinic_item_owner == NULL || PyErr_Occurred()) {
-        goto exit;
-    }
-    x = _clinic_item_owner;
+    x = _args_items[0];
 skip_optional:
     return_value = float_new_impl(type, x);
 
 exit:
-    {
-        PyObject *_clinic_detached_owner = _clinic_item_owner;
-        _clinic_item_owner = NULL;
-        PyObject *_clinic_saved_exception = PyErr_GetRaisedException();
-        Py_XDECREF(_clinic_detached_owner);
-        _PyValue_RestoreException(_clinic_saved_exception);
-    }
-    {
-        PyObject *_clinic_detached_owner = _clinic_receiver_owner;
-        _clinic_receiver_owner = NULL;
-        PyObject *_clinic_saved_exception = PyErr_GetRaisedException();
-        Py_XDECREF(_clinic_detached_owner);
-        _PyValue_RestoreException(_clinic_saved_exception);
-    }
-    if (PyErr_Occurred()) {
-        PyObject *_clinic_output = return_value;
-        return_value = NULL;
-        PyObject *_clinic_saved_exception = PyErr_GetRaisedException();
-        Py_XDECREF(_clinic_output);
-        _PyValue_RestoreException(_clinic_saved_exception);
-        return NULL;
-    }
     return return_value;
 }
 
@@ -411,4 +383,4 @@ float___format__(PyObject *self, PyObject *arg)
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=ff4ddbeb99d075e9 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=017c4b0176f2c501 input=a9049054013a1b77]*/

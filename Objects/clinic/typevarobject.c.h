@@ -5,9 +5,10 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
-#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(typevar_new__doc__,
 "typevar(name, *constraints, bound=None, default=typing.NoDefault,\n"
@@ -32,11 +33,11 @@ typevar_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(name), &_Py_ID(bound), &_Py_ID(default), &_Py_ID(covariant), &_Py_ID(contravariant), &_Py_ID(infer_variance), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(name)), _PyValue_STATIC_IMMORTAL(&_Py_ID(bound)), _PyValue_STATIC_IMMORTAL(&_Py_ID(default)), _PyValue_STATIC_IMMORTAL(&_Py_ID(covariant)), _PyValue_STATIC_IMMORTAL(&_Py_ID(contravariant)), _PyValue_STATIC_IMMORTAL(&_Py_ID(infer_variance)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -54,8 +55,8 @@ typevar_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[6];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    Py_ssize_t noptargs = Py_MIN(nargs, 1) + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
     PyObject *name;
     PyObject *constraints = NULL;
     PyObject *bound = Py_None;
@@ -64,48 +65,31 @@ typevar_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     int contravariant = 0;
     int infer_variance = 0;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 6) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 1));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 1, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    noptargs = Py_MIN(_args_scope.nargs, 1)
-        + (_args_scope.nobjects - _args_scope.nargs)
-        - (1 + 0);
     if (!PyUnicode_Check(fastargs[0])) {
         _PyArg_BadArgument("typevar", "argument 'name'", "str", fastargs[0]);
         goto exit;
     }
     name = fastargs[0];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
     if (fastargs[1]) {
         bound = fastargs[1];
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
     if (fastargs[2]) {
         default_value = fastargs[2];
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
@@ -113,9 +97,6 @@ typevar_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (fastargs[3]) {
         covariant = PyObject_IsTrue(fastargs[3]);
         if (covariant < 0) {
-            goto exit;
-        }
-        if (PyErr_Occurred()) {
             goto exit;
         }
         if (!--noptargs) {
@@ -127,9 +108,6 @@ typevar_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         if (contravariant < 0) {
             goto exit;
         }
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
@@ -138,32 +116,17 @@ typevar_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (infer_variance < 0) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
 skip_optional_kwonly:
     constraints = PyTuple_GetSlice(args, 1, PY_SSIZE_T_MAX);
     if (!constraints) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     return_value = typevar_new_impl(type, name, constraints, bound, default_value, covariant, contravariant, infer_variance);
 
 exit:
-    {
-        PyObject *saved_exception = PyErr_GetRaisedException();
-        PyObject *owner_to_close = constraints;
-        constraints = NULL;
-        Py_XDECREF(owner_to_close);
-        _PyValue_RestoreException(saved_exception);
-    }
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
+    /* Cleanup for constraints */
+    Py_XDECREF(constraints);
+
     return return_value;
 }
 
@@ -272,11 +235,11 @@ paramspecargs_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(origin), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(origin)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -294,35 +257,22 @@ paramspecargs_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[1];
     PyObject * const *fastargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     PyObject *origin;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 1) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 1));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     origin = fastargs[0];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     return_value = paramspecargs_new_impl(type, origin);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -346,11 +296,11 @@ paramspeckwargs_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(origin), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(origin)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -368,35 +318,22 @@ paramspeckwargs_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[1];
     PyObject * const *fastargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     PyObject *origin;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 1) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 1));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     origin = fastargs[0];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     return_value = paramspeckwargs_new_impl(type, origin);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -423,11 +360,11 @@ paramspec_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(name), &_Py_ID(bound), &_Py_ID(default), &_Py_ID(covariant), &_Py_ID(contravariant), &_Py_ID(infer_variance), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(name)), _PyValue_STATIC_IMMORTAL(&_Py_ID(bound)), _PyValue_STATIC_IMMORTAL(&_Py_ID(default)), _PyValue_STATIC_IMMORTAL(&_Py_ID(covariant)), _PyValue_STATIC_IMMORTAL(&_Py_ID(contravariant)), _PyValue_STATIC_IMMORTAL(&_Py_ID(infer_variance)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -445,8 +382,8 @@ paramspec_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[6];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
     PyObject *name;
     PyObject *bound = Py_None;
     PyObject *default_value = &_Py_NoDefaultStruct;
@@ -454,48 +391,31 @@ paramspec_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     int contravariant = 0;
     int infer_variance = 0;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 6) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 1));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    noptargs = Py_MIN(_args_scope.nargs, 1)
-        + (_args_scope.nobjects - _args_scope.nargs)
-        - (1 + 0);
     if (!PyUnicode_Check(fastargs[0])) {
         _PyArg_BadArgument("paramspec", "argument 'name'", "str", fastargs[0]);
         goto exit;
     }
     name = fastargs[0];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
     if (fastargs[1]) {
         bound = fastargs[1];
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
     if (fastargs[2]) {
         default_value = fastargs[2];
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
@@ -503,9 +423,6 @@ paramspec_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (fastargs[3]) {
         covariant = PyObject_IsTrue(fastargs[3]);
         if (covariant < 0) {
-            goto exit;
-        }
-        if (PyErr_Occurred()) {
             goto exit;
         }
         if (!--noptargs) {
@@ -517,9 +434,6 @@ paramspec_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         if (contravariant < 0) {
             goto exit;
         }
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
@@ -528,18 +442,10 @@ paramspec_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (infer_variance < 0) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
 skip_optional_kwonly:
     return_value = paramspec_new_impl(type, name, bound, default_value, covariant, contravariant, infer_variance);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -651,11 +557,11 @@ typevartuple(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(name), &_Py_ID(bound), &_Py_ID(covariant), &_Py_ID(contravariant), &_Py_ID(infer_variance), &_Py_ID(default), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(name)), _PyValue_STATIC_IMMORTAL(&_Py_ID(bound)), _PyValue_STATIC_IMMORTAL(&_Py_ID(covariant)), _PyValue_STATIC_IMMORTAL(&_Py_ID(contravariant)), _PyValue_STATIC_IMMORTAL(&_Py_ID(infer_variance)), _PyValue_STATIC_IMMORTAL(&_Py_ID(default)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -673,8 +579,8 @@ typevartuple(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[6];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
     PyObject *name;
     PyObject *bound = Py_None;
     int covariant = 0;
@@ -682,39 +588,25 @@ typevartuple(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     int infer_variance = 0;
     PyObject *default_value = &_Py_NoDefaultStruct;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 6) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 1));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    noptargs = Py_MIN(_args_scope.nargs, 1)
-        + (_args_scope.nobjects - _args_scope.nargs)
-        - (1 + 0);
     if (!PyUnicode_Check(fastargs[0])) {
         _PyArg_BadArgument("typevartuple", "argument 'name'", "str", fastargs[0]);
         goto exit;
     }
     name = fastargs[0];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
     if (fastargs[1]) {
         bound = fastargs[1];
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
@@ -722,9 +614,6 @@ typevartuple(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (fastargs[2]) {
         covariant = PyObject_IsTrue(fastargs[2]);
         if (covariant < 0) {
-            goto exit;
-        }
-        if (PyErr_Occurred()) {
             goto exit;
         }
         if (!--noptargs) {
@@ -736,9 +625,6 @@ typevartuple(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         if (contravariant < 0) {
             goto exit;
         }
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
@@ -748,26 +634,15 @@ typevartuple(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         if (infer_variance < 0) {
             goto exit;
         }
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
     default_value = fastargs[5];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
 skip_optional_kwonly:
     return_value = typevartuple_impl(type, name, bound, covariant, contravariant, infer_variance, default_value);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -894,11 +769,11 @@ typealias_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(name), &_Py_ID(value), &_Py_ID(type_params), &_Py_ID(qualname), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(name)), _PyValue_STATIC_IMMORTAL(&_Py_ID(value)), _PyValue_STATIC_IMMORTAL(&_Py_ID(type_params)), _PyValue_STATIC_IMMORTAL(&_Py_ID(qualname)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -916,67 +791,42 @@ typealias_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[4];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 2;
     PyObject *name;
     PyObject *value;
     PyObject *type_params = NULL;
     PyObject *qualname = NULL;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 4) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    noptargs = Py_MIN(_args_scope.nargs, 2)
-        + (_args_scope.nobjects - _args_scope.nargs)
-        - (2 + 0);
     if (!PyUnicode_Check(fastargs[0])) {
         _PyArg_BadArgument("typealias", "argument 'name'", "str", fastargs[0]);
         goto exit;
     }
     name = fastargs[0];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     value = fastargs[1];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
     if (fastargs[2]) {
         type_params = fastargs[2];
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_kwonly;
         }
     }
     qualname = fastargs[3];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
 skip_optional_kwonly:
     return_value = typealias_new_impl(type, name, value, type_params, qualname);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
-/*[clinic end generated code: output=f0d3d59f21574f12 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=9f8045d9e8ef30b4 input=a9049054013a1b77]*/

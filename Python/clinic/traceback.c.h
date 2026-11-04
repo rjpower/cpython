@@ -5,10 +5,11 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
-#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(tb_new__doc__,
 "traceback(tb_next, tb_frame, tb_lasti, tb_lineno)\n"
@@ -31,11 +32,11 @@ tb_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(tb_next), &_Py_ID(tb_frame), &_Py_ID(tb_lasti), &_Py_ID(tb_lineno), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(tb_next)), _PyValue_STATIC_IMMORTAL(&_Py_ID(tb_frame)), _PyValue_STATIC_IMMORTAL(&_Py_ID(tb_lasti)), _PyValue_STATIC_IMMORTAL(&_Py_ID(tb_lineno)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -53,60 +54,38 @@ tb_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[4];
     PyObject * const *fastargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     PyObject *tb_next;
     PyFrameObject *tb_frame;
     int tb_lasti;
     int tb_lineno;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 4) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 4));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 4, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     tb_next = fastargs[0];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     if (!PyObject_TypeCheck(fastargs[1], &PyFrame_Type)) {
         _PyArg_BadArgument("traceback", "argument 'tb_frame'", (&PyFrame_Type)->tp_name, fastargs[1]);
         goto exit;
     }
     tb_frame = (PyFrameObject *)fastargs[1];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     tb_lasti = PyLong_AsInt(fastargs[2]);
     if (tb_lasti == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-    if (PyErr_Occurred()) {
         goto exit;
     }
     tb_lineno = PyLong_AsInt(fastargs[3]);
     if (tb_lineno == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     return_value = tb_new_impl(type, tb_next, tb_frame, tb_lasti, tb_lineno);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -149,4 +128,4 @@ traceback_tb_next_set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
 }
 #define TRACEBACK_TB_NEXT_GETSETDEF {"tb_next", (getter)traceback_tb_next_get, (setter)traceback_tb_next_set, NULL},
 
-/*[clinic end generated code: output=7e9dcc68d37d11a4 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=fe8501956b308adc input=a9049054013a1b77]*/

@@ -44,18 +44,59 @@ PyAPI_FUNC(PyValue) PyValue_PrepareOwned(PyObject *obj);
  * owning promotion or the last use; an immediate does not retain that owner. */
 PyAPI_FUNC(PyValue) PyValue_FromObjectBorrow(PyObject *obj);
 
+/* The view of an owner or a borrow, as a borrow: the same bits, at no cost.
+ * Readers take a PyValueBorrow; each has a same-name macro that passes its
+ * value arguments through PyValue_Borrow(), so that callers pass owners and
+ * borrows alike, and nothing else (pyjit/design/proposals/
+ * register-ir-v2-a5b.md, section 3.1). */
+#ifdef __cplusplus
+extern "C++" {
+static inline PyValueBorrow
+PyValue_Borrow(PyValue value)
+{
+    PyValueBorrow view = {value.bits};
+    return view;
+}
+
+static inline PyValueBorrow
+PyValue_Borrow(PyValueBorrow value)
+{
+    return value;
+}
+}
+#else
+static inline PyValueBorrow
+_PyValue_BorrowOwned(PyValue value)
+{
+    return (PyValueBorrow){value.bits};
+}
+
+static inline PyValueBorrow
+_PyValue_BorrowBorrowed(PyValueBorrow value)
+{
+    return value;
+}
+
+#define PyValue_Borrow(V) \
+    _Generic((V), PyValue: _PyValue_BorrowOwned, \
+                  PyValueBorrow: _PyValue_BorrowBorrowed)(V)
+#endif
+
 static inline int
-PyValue_IsObject(PyValue value)
+PyValue_IsObject(PyValueBorrow value)
 {
     return value.bits > 2 && value.bits < Py_PTR_LIMIT &&
            (value.bits & 2) == 0;
 }
+#define PyValue_IsObject(V0) (PyValue_IsObject)(PyValue_Borrow(V0))
 
-/* Borrowing changes only object ownership: NULL, index and inline scalar
- * bits stay.  A borrow lives in a C variable, never in a frame slot or a heap
- * home (pyjit/design/pyvalue.md D4). */
+/* The tagging borrow: an object's bits with the no-count tag, as a
+ * PyValue.  It remains only until register IR v2 step A5b-3 makes every
+ * borrow a PyValueBorrow, and then it is deleted.  NULL, index and inline
+ * scalar bits stay.  A borrow lives in a C variable, never in a frame slot or
+ * a heap home (pyjit/design/pyvalue.md D4). */
 static inline PyValue
-PyValue_Borrow(PyValue value)
+_PyValue_BorrowTagged(PyValue value)
 {
     value.bits |= (uintptr_t)PyValue_IsObject(value);
     return value;
@@ -90,7 +131,7 @@ PyValue_Close(PyValue value)
 }
 
 static inline int
-PyValue_IsLanguageValue(PyValue value)
+PyValue_IsLanguageValue(PyValueBorrow value)
 {
     if (value.bits < Py_DOUBLE_OFFSET) {
         return PyValue_IsObject(value);
@@ -103,6 +144,7 @@ PyValue_IsLanguageValue(PyValue value)
     memcpy(&number, &bits, sizeof(number));
     return !isnan(number);
 }
+#define PyValue_IsLanguageValue(V0) (PyValue_IsLanguageValue)(PyValue_Borrow(V0))
 
 #ifdef __cplusplus
 }

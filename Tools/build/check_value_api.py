@@ -4,12 +4,15 @@ The rules are those of pyjit/design/value-api.md, section 4. A value-native
 unit is one built with Py_BUILD_CORE and neither Py_BUILD_CORE_BUILTIN nor
 Py_BUILD_CORE_MODULE, or one that defines Py_VALUE_CORE (Include/pyport.h).
 
-* variadic: a PyValue, or a pointer to one, passed to a variadic argument.
-  Neither GCC nor Clang warns, and a PyValue at %R, or a PyValue * where
-  PyArg_ParseTuple() writes a PyObject *, is undefined behaviour. The one
-  exception is a PyValue at a value conversion (%vR, %vS, %vA, %vT, %vN) of
-  a formatting function whose format is a string literal; there the check
-  also requires every value conversion to receive a PyValue.
+* variadic: a PyValue or a PyValueBorrow, or a pointer to one, passed to a
+  variadic argument. Neither GCC nor Clang warns, and a value at %R, or a
+  PyValue * where PyArg_ParseTuple() writes a PyObject *, is undefined
+  behaviour. The one exception is a value conversion (%vR, %vS, %vA, %vT,
+  %vN) of a formatting function whose format is a string literal. A value
+  conversion reads its argument, so it takes a PyValueBorrow
+  (va_arg(*vargs, PyValueBorrow) in Objects/unicodeobject.c): the check
+  requires every value conversion to receive one, and reports an owner
+  there, which the caller passes as PyValue_Borrow(v).
 * slot-read: a read of an object slot field that has a value form
   (tp_as_number->nb_add, tp_richcompare, tp_iternext, tp_call and the rest).
   A read of a slot whose family is in MARKED_SLOT_FAMILIES fails; other reads
@@ -21,8 +24,10 @@ a value-native unit is a compile error.
 The script reads compile_commands.json, which intercept-build records while
 the units compile, and runs clang-query over every value-native unit. Before
 that it runs its self-tests: one-line units that must make each rule fire,
-and a unit that calls the marked probe declaration in
-Include/internal/pycore_value_api.h, which must fail to compile.
+a unit that calls the marked probe declaration in
+Include/internal/pycore_value_api.h, which must fail to compile, and the
+typed-borrow units (BORROW_TESTS): each misuse of a PyValueBorrow must fail
+to compile, and the readers must accept owners and borrows alike.
 
 Exit status: 0 if the self-tests pass and no rule fails; 1 otherwise.
 """
@@ -93,7 +98,9 @@ SLOT_FAMILIES = {
 # The packet that marks a family adds it here (value-api.md, section 9).
 MARKED_SLOT_FAMILIES = frozenset()
 
-PYVALUE_TYPES = ('asString("PyValue")', 'asString("const PyValue")')
+VALUE_TYPES = ("PyValue", "PyValueBorrow")
+PYVALUE_TYPES = tuple(f'asString("{const}{name}")' for name in VALUE_TYPES
+                      for const in ("", "const "))
 VARIADIC_MATCHER = (
     "callExpr(callee(functionDecl(isVariadic())), hasAnyArgument(hasType("
     "hasCanonicalType(anyOf({value}, pointsTo(anyOf({value})))))))"
@@ -287,12 +294,15 @@ def parse_call_dump(lines):
     return Call(callee, types, literals)
 
 
-def is_value(type_name):
-    return type_name.replace("const ", "").strip() == "PyValue"
+def value_type(type_name):
+    """PyValue or PyValueBorrow if type_name is one of them, else None."""
+    name = type_name.replace("const ", "").strip()
+    return name if name in VALUE_TYPES else None
 
 
 def is_value_pointer(type_name):
-    return re.fullmatch(r"(const )?PyValue \*( const)?", type_name.strip())
+    return re.fullmatch(r"(const )?PyValue(Borrow)? \*( const)?",
+                        type_name.strip())
 
 
 def check_call(call):
@@ -302,13 +312,14 @@ def check_call(call):
     for i, type_name in enumerate(call.argument_types):
         if is_value_pointer(type_name):
             messages.append(f"argument {i + 1} of {call.callee}() is a "
-                            f"PyValue * passed to a variadic argument")
+                            f"{type_name} passed to a variadic argument")
     if fmt_index is None or fmt_index >= len(call.literals) \
             or call.literals[fmt_index] is None:
-        if any(is_value(t) for t in call.argument_types):
+        for name in dict.fromkeys(filter(None, map(value_type,
+                                                   call.argument_types))):
             what = ("a formatting function with no literal format"
                     if fmt_index is not None else "a variadic argument")
-            messages.append(f"PyValue passed to {what} of {call.callee}()")
+            messages.append(f"{name} passed to {what} of {call.callee}()")
         return messages
     expected = format_arguments(call.literals[fmt_index])
     actual = call.argument_types[fmt_index + 1:]
@@ -316,13 +327,17 @@ def check_call(call):
         messages.append(f"{call.callee}() format takes {len(expected)} "
                         f"arguments, got {len(actual)}")
     for (spec, wants_value), type_name in zip(expected, actual):
-        if is_value(type_name) and not wants_value:
+        name = value_type(type_name)
+        if name and not wants_value:
             conv = spec[-1]
             hint = (f"; use %v{conv}" if conv in VALUE_CONVERSIONS
                     else "")
-            messages.append(f"PyValue passed to {spec} in "
+            messages.append(f"{name} passed to {spec} in "
                             f"{call.callee}(){hint}")
-        elif wants_value and not is_value(type_name):
+        elif wants_value and name == "PyValue":
+            messages.append(f"PyValue passed to the value conversion {spec} "
+                            f"in {call.callee}(); pass PyValue_Borrow()")
+        elif wants_value and name != "PyValueBorrow":
             messages.append(f"{type_name} passed to the value conversion "
                             f"{spec} in {call.callee}()")
     return messages
@@ -440,11 +455,25 @@ SELF_TESTS = {
     "variadic_object_at_value_conversion": ("""
         PyObject *f(PyObject *o) {
             PyValue v = PyValue_FromObjectBorrow(o);
-            return PyUnicode_FromFormat("%vR %vS", v, o);
+            return PyUnicode_FromFormat("%vR %vS", PyValue_Borrow(v), o);
+        }""", "variadic", 1),
+    "variadic_owner_at_value_conversion": ("""
+        PyObject *f(PyValue v) {
+            return PyUnicode_FromFormat("%vR", v);
+        }""", "variadic", 1),
+    "variadic_borrow_format": ("""
+        PyObject *f(PyValueBorrow b) {
+            return PyErr_Format(PyExc_TypeError, "%R", b);
+        }""", "variadic", 1),
+    "variadic_borrow_pointer": ("""
+        int f(PyObject *args) {
+            PyValueBorrow b;
+            return PyArg_ParseTuple(args, "O", &b);
         }""", "variadic", 1),
     "value_conversions": ("""
-        PyObject *f(PyValue v, PyObject *o) {
-            return PyUnicode_FromFormat("%vR %R %#vT %.*vS", v, o, v, 3, v);
+        PyObject *f(PyValue v, PyValueBorrow b, PyObject *o) {
+            return PyUnicode_FromFormat("%vR %R %#vT %.*vS",
+                                        PyValue_Borrow(v), o, b, 3, b);
         }""", "variadic", 0),
     "slot_read": ("""
         PyObject *f(PyObject *o) {
@@ -453,8 +482,99 @@ SELF_TESTS = {
 }
 SELF_TEST_HEADER = '#include "Python.h"\n#include "pycore_value_api.h"\n'
 
+# The typed borrow (pyjit/design/proposals/register-ir-v2-a5b.md, section 3.1
+# and Appendix A). Each unit with a pattern must fail to compile with an
+# error that the pattern matches (the GCC or the Clang text, in the C
+# locale), and a diagnostic must name its line marked "rejected". A unit
+# without a pattern must compile without a diagnostic. BORROW_TESTS are C
+# units; BORROW_CXX_TESTS are C++ units, which pin the overloads that are the
+# view in C++. Lib/test/test_tools/test_check_value_api.py compiles both
+# with the compilers and flags of the build.
+BORROW_TESTS = {
+    "borrow_stored_to_owner": ("""
+        void f(PyValueBorrow b, PyValue *slot) {
+            slot[1] = b;  /* rejected */
+        }""", r"incompatible types when assigning to type 'PyValue' from "
+              r"type 'PyValueBorrow'|assigning to 'PyValue' from "
+              r"incompatible type 'PyValueBorrow'"),
+    "borrow_closed": ("""
+        void f(PyValueBorrow b) {
+            PyValue_CLOSE(b);  /* rejected */
+        }""", r"incompatible type for argument 1 of 'PyValue_CLOSE'"
+              r"|passing 'PyValueBorrow' to parameter of incompatible type "
+              r"'PyValue'"),
+    "bits_read": ("""
+        int f(uintptr_t bits) {
+            return PyValue_IsInlineInt(bits);  /* rejected */
+        }""", r"'_Generic' selector of type .* is not compatible with any "
+              r"association|controlling expression type .* not compatible "
+              r"with any generic association type"),
+    "closer_as_reader": ("""
+        void (*f)(PyValueBorrow) = PyValue_CLOSE;  /* rejected */
+        """, r"initialization of 'void \(\*\)\(PyValueBorrow\)' from "
+             r"incompatible pointer type|incompatible function pointer "
+             r"types initializing 'void \(\*\)\(PyValueBorrow\)'"),
+    "borrow_address_as_owner": ("""
+        void f(PyValueBorrow b) {
+            PyValue *p = &b;  /* rejected */
+            (void)p;
+        }""", r"initialization of 'PyValue \*' from incompatible pointer "
+              r"type 'PyValueBorrow \*'|incompatible pointer types "
+              r"initializing 'PyValue \*' with an expression of type "
+              r"'PyValueBorrow \*'"),
+    "borrow_cleared": ("""
+        void f(PyValueBorrow b) {
+            PyValue_CLEAR(b);  /* rejected */
+        }""", r"initialization of 'PyValue \*' from incompatible pointer "
+              r"type 'PyValueBorrow \*'|incompatible pointer types "
+              r"initializing 'PyValue \*' with an expression of type "
+              r"'PyValueBorrow \*'"),
+    "borrow_returned_as_owner": ("""
+        PyValue f(PyValueBorrow b) {
+            return b;  /* rejected */
+        }""", r"incompatible types when returning type 'PyValueBorrow' but "
+              r"'PyValue' was expected|returning 'PyValueBorrow' from a "
+              r"function with incompatible result type 'PyValue'"),
+    "readers": ("""
+        typedef bool (*reader)(PyValueBorrow);
+        int f(PyValue o, PyValueBorrow b, const PyValue *p, Py_ssize_t i) {
+            reader test = &PyValue_IsInlineInt;
+            PyValueBorrow c = PyValue_Borrow(o);
+            PyValue owner = PyValue_XDUP(b);
+            int n = PyValue_IsInlineInt(o) + PyValue_IsInlineInt(b)
+                    + PyValue_IsInlineInt(*p) + PyValue_IsNull(p[i])
+                    + PyValue_Is(o, c) + PyValue_IsNone(PyValue_Borrow(c))
+                    + test(b) + PyValue_IsNull(owner);
+            PyValue_XCLOSE(owner);
+            return n;
+        }""", None),
+}
+BORROW_CXX_TESTS = {
+    "cxx_borrow_stored_to_owner": ("""
+        void f(PyValueBorrow b, PyValue *slot) {
+            slot[1] = b;  /* rejected */
+        }""", r"no match for 'operator=' \(operand types are 'PyValue' and "
+              r"'PyValueBorrow'\)|no viable overloaded '='"),
+    "cxx_bits_read": ("""
+        int f(uintptr_t bits) {
+            return PyValue_IsInlineInt(bits);  /* rejected */
+        }""", r"no matching function for call to 'PyValue_Borrow"),
+    "cxx_readers": ("""
+        int f(PyValue o, PyValueBorrow b, const PyValue *p, Py_ssize_t i) {
+            bool (*test)(PyValueBorrow) = &PyValue_IsInlineInt;
+            PyValueBorrow c = PyValue_Borrow(o);
+            PyValue owner = PyValue_XDUP(b);
+            int n = PyValue_IsInlineInt(o) + PyValue_IsInlineInt(b)
+                    + PyValue_IsInlineInt(*p) + PyValue_IsNull(p[i])
+                    + PyValue_Is(o, c) + PyValue_IsNone(PyValue_Borrow(c))
+                    + test(b) + PyValue_IsNull(owner);
+            PyValue_XCLOSE(owner);
+            return n;
+        }""", None),
+}
 
-def self_test(clang_query, template, compiler, jobs):
+
+def self_test(clang_query, template, compiler, cxx, jobs):
     """Run the self-tests with the flags of template, a core unit's entry.
     Return a list of failures."""
     failures = []
@@ -503,7 +623,54 @@ def self_test(clang_query, template, compiler, jobs):
                 print(f"self-test {name}: "
                       f"{'rejected' if should_fail else 'compiled'}, "
                       "as expected")
+        borrow_units = [(BORROW_TESTS, compiler, flags, ".c")]
+        if cxx:
+            borrow_units.append(
+                (BORROW_CXX_TESTS, cxx, cxx_flags(flags), ".cpp"))
+        for units, command, unit_flags, suffix in borrow_units:
+            for name, (body, pattern) in units.items():
+                failure = borrow_unit_failure(
+                    tmp, template["directory"], command, unit_flags, name,
+                    body, pattern, suffix)
+                if failure:
+                    failures.append(failure)
+                else:
+                    print(f"self-test {name}: "
+                          f"{'compiled' if pattern is None else 'rejected'}"
+                          ", as expected")
     return failures
+
+
+def cxx_flags(flags):
+    """The options of a C unit's flags that a C++ unit of the core takes:
+    the include paths and macros, with C++11 and -Wall."""
+    return [*(f for f in flags if f.startswith(("-I", "-D"))),
+            "-std=c++11", "-Wall"]
+
+
+def borrow_unit_failure(tmp, directory, compiler, flags, name, body,
+                        pattern, suffix):
+    """Compile one typed-borrow unit in directory, with compiler and flags.
+    Return the failure, or None if the unit behaves as its pattern says."""
+    path = Path(tmp, f"{name}{suffix}")
+    text = SELF_TEST_HEADER + body + "\n"
+    path.write_text(text)
+    proc = subprocess.run(
+        [*shlex.split(compiler), *flags, "-fsyntax-only", str(path)],
+        cwd=directory, capture_output=True, text=True,
+        env={**os.environ, "LC_ALL": "C"})
+    if pattern is None:
+        ok = proc.returncode == 0 and str(path) not in proc.stderr
+    else:
+        line = next(i for i, s in enumerate(text.splitlines(), 1)
+                    if "rejected" in s)
+        ok = (proc.returncode != 0
+              and re.search(rf"error: .*(?:{pattern})", proc.stderr)
+              and f"{path}:{line}:" in proc.stderr)
+    if ok:
+        return None
+    return (f"self-test {name}: compiler exit {proc.returncode}: "
+            f"{proc.stderr.strip()}")
 
 
 def main():
@@ -512,7 +679,11 @@ def main():
                         help="compile database (default: %(default)s)")
     parser.add_argument("--clang-query", help="clang-query to run")
     parser.add_argument("--cc", help="compiler for the Py_VALUE_COMPAT "
-                        "self-test (default: the database's)")
+                        "and typed-borrow self-tests (default: the "
+                        "database's)")
+    parser.add_argument("--cxx", help="C++ compiler for the typed-borrow "
+                        "self-tests (default: none, and the C++ units are "
+                        "not compiled)")
     parser.add_argument("-j", "--jobs", type=int, default=os.cpu_count())
     parser.add_argument("--self-test-only", action="store_true")
     parser.add_argument("--intercept", nargs=argparse.REMAINDER,
@@ -543,7 +714,8 @@ def main():
                     if entry["file"].endswith("Objects/object.c"))
     compiler = args.cc or entry_arguments(template)[0]
 
-    failures = self_test(clang_query, template, compiler, args.jobs)
+    failures = self_test(clang_query, template, compiler, args.cxx,
+                         args.jobs)
     if failures or args.self_test_only:
         for failure in failures:
             print(failure)

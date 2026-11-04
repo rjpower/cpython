@@ -76,7 +76,7 @@ _PyMember_SetValue(PyObject *obj, PyMemberDef *member, PyValue value)
         PyErr_SetString(PyExc_AttributeError, member->name);
         return -1;
     }
-    *slot = PyValue_MakeHeapSafe(PyValue_Borrow(value));
+    *slot = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(value));
     _PyValue_CheckHome(*slot);
     PyValue_XCLOSE(previous);
     return 0;

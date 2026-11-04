@@ -112,7 +112,7 @@ PyValue
 PyStructSequence_GET_VALUE(PyObject *op, Py_ssize_t index)
 {
     assert(index >= 0 && index < REAL_SIZE(op));
-    return PyValue_Borrow(((PyStructSequence *)op)->ob_item[index]);
+    return _PyValue_BorrowTagged(((PyStructSequence *)op)->ob_item[index]);
 }
 
 void

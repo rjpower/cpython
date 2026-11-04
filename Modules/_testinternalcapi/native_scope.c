@@ -772,7 +772,7 @@ native_scope_call_state(PyObject *Py_UNUSED(module), PyObject *code_object)
                 strong |= UINT64_C(1) << i;
             }
         }
-        snapshots[i] = PyValue_MakeHeapSafe(PyValue_Borrow(value));
+        snapshots[i] = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(value));
     }
     int nlocals = code->co_nlocalsplus;
     PyObject *values = PyTuple_New(nslots);

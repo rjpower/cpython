@@ -610,7 +610,7 @@ gen_try_set_executing(PyGenObject *gen)
             assert(value_temps->count < value_temps->capacity); \
             value_temps->objects[value_temps->count++] = \
                 PyValue_AsKnownObjectBorrow(REF); \
-            (REF) = PyValue_Borrow(REF); \
+            (REF) = _PyValue_BorrowTagged(REF); \
         } \
     } while (0)
 

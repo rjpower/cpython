@@ -22,7 +22,7 @@ PyCell_NewValue(PyValue value)
 {
     assert(PyValue_IsLanguageValue(value) || PyValue_IsNull(value));
     /* Retain the input before allocation can invalidate its source. */
-    PyValue owner = PyValue_MakeHeapSafe(PyValue_Borrow(value));
+    PyValue owner = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(value));
     PyCellObject *op;
 
     op = (PyCellObject *)PyObject_GC_New(PyCellObject, &PyCell_Type);
@@ -109,7 +109,7 @@ PyCell_SetValue(PyObject *op, PyValue value)
         return -1;
     }
     _PyCell_SetValue((PyCellObject *)op,
-                     PyValue_MakeHeapSafe(PyValue_Borrow(value)));
+                     PyValue_MakeHeapSafe(_PyValue_BorrowTagged(value)));
     return 0;
 }
 

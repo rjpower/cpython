@@ -1364,7 +1364,7 @@ const_index_key(PyValue value)
 {
     /* The table hashes/compares opaque words without dereferencing them.
        consts roots object identities until this index is destroyed. */
-    PyValue borrowed = PyValue_Borrow(value);
+    PyValue borrowed = _PyValue_BorrowTagged(value);
     return (void *)(uintptr_t)borrowed.bits;
 }
 

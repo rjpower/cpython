@@ -512,7 +512,7 @@ _PyTuple_FromValueArray(const PyValue *src, Py_ssize_t n)
     bool track = false;
     for (Py_ssize_t i = 0; i < n; i++) {
         assert(PyValue_IsLanguageValue(src[i]));
-        tuple->ob_item[i] = PyValue_MakeHeapSafe(PyValue_Borrow(src[i]));
+        tuple->ob_item[i] = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(src[i]));
         _PyValue_CheckHome(tuple->ob_item[i]);
         track |= maybe_tracked(tuple->ob_item[i]);
     }

@@ -3120,7 +3120,7 @@ value_box_roundtrip(PyObject *self, PyObject *arg)
         || !PyValue_IsValid(ref)
         || PyValue_RefcountOnObject(ref)
         || PyValue_TYPE(ref) != Py_TYPE(arg)
-        || !PyValue_Is(dup, ref) || !PyValue_Is(PyValue_Borrow(ref), ref)
+        || !PyValue_Is(dup, ref) || !PyValue_Is(_PyValue_BorrowTagged(ref), ref)
         || !PyValue_Is(PyValue_BorrowAt(&ref), ref)
         || !PyValue_IsInlineAt(&ref) || PyValue_IsPointerSpaceAt(&ref)
         || PyValue_Is(ref, PyValue_None))
@@ -3208,7 +3208,7 @@ pyvalue_contract(PyObject *self, PyObject *arg)
     PyValue value = PyValue_PrepareOwned(Py_NewRef(arg));
     const char *kind = PyValue_IsInlineInt(value) ? "int51" :
                        PyValue_IsInlineFloat(value) ? "float64" : "object";
-    PyValue duplicate = PyValue_NewRef(PyValue_Borrow(value));
+    PyValue duplicate = PyValue_NewRef(_PyValue_BorrowTagged(value));
     assert(PyValue_Is(value, duplicate));
     assert(PyValue_IsLanguageValue(value));
     PyObject *object = PyValue_AsObject(duplicate);
@@ -3324,7 +3324,7 @@ pyvalue_format(PyObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "sO|O", &format, &obj, &other)) {
         return NULL;
     }
-    PyValue value = PyValue_FromObjectBorrow(obj);
+    PyValueBorrow value = PyValue_Borrow(PyValue_FromObjectBorrow(obj));
     if (other == NULL) {
         return PyUnicode_FromFormat(format, value);
     }
@@ -3340,7 +3340,8 @@ pyvalue_err_format(PyObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "OsO", &exception, &format, &obj)) {
         return NULL;
     }
-    return PyErr_Format(exception, format, PyValue_FromObjectBorrow(obj));
+    return PyErr_Format(exception, format,
+                        PyValue_Borrow(PyValue_FromObjectBorrow(obj)));
 }
 
 /* PyValue_AsObject() of a tagged index, which is no language value: an

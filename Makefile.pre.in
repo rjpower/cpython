@@ -994,7 +994,7 @@ clinic-tests: check-clean-src $(srcdir)/Lib/test/clinic.test.c
 .PHONY: check-value-api
 check-value-api: compile_commands.json
 	$(PYTHON_FOR_REGEN) $(srcdir)/Tools/build/check_value_api.py \
-		--cdb compile_commands.json --cc "$(CC)"
+		--cdb compile_commands.json --cc "$(CC)" --cxx "$(CXX)"
 
 # intercept-build records the compile commands as the units compile, so the
 # core objects are compiled once more under it. A build started with

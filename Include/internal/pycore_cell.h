@@ -15,7 +15,7 @@ static inline PyValue
 PyCell_GET_VALUE(PyObject *op)
 {
     assert(PyCell_Check(op));
-    return PyValue_Borrow(_Py_CAST(PyCellObject *, op)->ob_ref);
+    return _PyValue_BorrowTagged(_Py_CAST(PyCellObject *, op)->ob_ref);
 }
 #define PyCell_GET_VALUE(op) PyCell_GET_VALUE(_PyObject_CAST(op))
 

@@ -46,13 +46,13 @@ _PyNativeScope_Begin(_PyNativeScope *scope, PyThreadState *tstate,
     scope->nargs = total_count;
     scope->positional_count = positional_count;
     if (!PyValue_IsNull(self_or_null)) {
-        scope->receiver = PyValue_MakeHeapSafe(PyValue_Borrow(self_or_null));
+        scope->receiver = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(self_or_null));
     }
     if (total_count != 0) {
         /* Borrow what the window owns, as upstream passes its stack; take an
            owner only for a value the window itself borrows. */
         scope->argument = PyValue_IsHeapSafe(args[0])
-            ? PyValue_Borrow(args[0]) : PyValue_MakeHeapSafe(args[0]);
+            ? _PyValue_BorrowTagged(args[0]) : PyValue_MakeHeapSafe(args[0]);
     }
     return 0;
 }

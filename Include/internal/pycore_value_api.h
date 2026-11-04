@@ -48,22 +48,24 @@ PyAPI_FUNC(int) _PyValue_SwapBoxSite(int site);
 PyAPI_FUNC(int) _PyValue_BoxSiteOr(int fallback);
 
 static inline PyObject *
-_PyValue_AsObjectAt(PyValue value, int site)
+_PyValue_AsObjectAt(PyValueBorrow value, int site)
 {
     int previous = _PyValue_SwapBoxSite(site);
     PyObject *object = PyValue_AsObject(value);
     _PyValue_SwapBoxSite(previous);
     return object;
 }
+#define _PyValue_AsObjectAt(V0, V1) (_PyValue_AsObjectAt)(PyValue_Borrow(V0), V1)
 
 static inline PyObject *
-_PyValueTemps_ObjectAt(_PyValueTemps *temps, PyValue value, int site)
+_PyValueTemps_ObjectAt(_PyValueTemps *temps, PyValueBorrow value, int site)
 {
     int previous = _PyValue_SwapBoxSite(site);
     PyObject *object = _PyValueTemps_Object(temps, value);
     _PyValue_SwapBoxSite(previous);
     return object;
 }
+#define _PyValueTemps_ObjectAt(V0, V1, V2) (_PyValueTemps_ObjectAt)(V0, PyValue_Borrow(V1), V2)
 
 static inline PyObject *const *
 _PyBorrow_TupleItemsAt(PyObject *tuple, Py_ssize_t n, int site)

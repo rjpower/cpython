@@ -21,7 +21,7 @@ _PyValue_Hash(PyValue value)
     }
     /* As PyObject_Hash() itself, with an owner in case __hash__ removes the
        value from the container that it was read from. */
-    PyValue owner = PyValue_MakeHeapSafe(PyValue_Borrow(value));
+    PyValue owner = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(value));
     Py_hash_t hash = PyObject_Hash(PyValue_AsKnownObjectBorrow(owner));
     PyValue_CLOSE(owner);
     return hash;

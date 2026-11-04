@@ -2709,17 +2709,18 @@ unicode_fromformat_write_wcstr(_PyUnicodeWriter *writer, const wchar_t *str,
 #define F_SIZE 3
 #define F_PTRDIFF 4
 #define F_INTMAX 5
-/* The argument is a PyValue: %vR, %vS, %vA, %vT, %vN, %#vT and %#vN take a
+/* The argument is a value: %vR, %vS, %vA, %vT, %vN, %#vT and %#vN take a
    value where %R, %S, %A, %T, %N, %#T and %#N take an object
-   (pyjit/design/value-api.md, section 4). */
+   (pyjit/design/value-api.md, section 4). A conversion reads the value, so
+   the argument is a PyValueBorrow: the caller passes PyValue_Borrow(v). */
 #define F_VALUE 6
 
-/* A new reference to the object for the PyValue argument of %vR, %vS or
+/* A new reference to the object for the value argument of %vR, %vS or
    %vA, boxing an inline value. */
 static PyObject *
 unicode_fromformat_value_object(va_list *vargs)
 {
-    PyValue value = va_arg(*vargs, PyValue);
+    PyValueBorrow value = va_arg(*vargs, PyValueBorrow);
     assert(!PyValue_IsNull(value));
     return _PyValue_AsObjectAt(value, BOX_SITE_REPR);
 }
@@ -3117,7 +3118,7 @@ unicode_fromformat_arg(_PyUnicodeWriter *writer,
     {
         PyTypeObject *type;
         if (sizemod == F_VALUE) {
-            PyValue value = va_arg(*vargs, PyValue);
+            PyValueBorrow value = va_arg(*vargs, PyValueBorrow);
             assert(!PyValue_IsNull(value));
             // The type of an inline value is int or float: no box.
             type = (PyTypeObject *)Py_NewRef(PyValue_TYPE(value));
@@ -3152,7 +3153,7 @@ unicode_fromformat_arg(_PyUnicodeWriter *writer,
     {
         PyObject *type_raw;
         if (sizemod == F_VALUE) {
-            PyValue value = va_arg(*vargs, PyValue);
+            PyValueBorrow value = va_arg(*vargs, PyValueBorrow);
             assert(!PyValue_IsNull(value));
             // An inline value is an int or a float, never a type.
             type_raw = PyValue_IsInline(value)

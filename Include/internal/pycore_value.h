@@ -35,25 +35,28 @@ typedef struct _PyValueTemps {
 /* Can releasing owner deallocate its object? Releasing a scalar, a borrow,
  * an immortal or an owner that is not the last cannot run Python. */
 static inline int
-_PyValue_MayDealloc(PyValue owner)
+_PyValue_MayDealloc(PyValueBorrow owner)
 {
     if (PyValue_IsObject(owner) && (owner.bits & 1) == 0) {
         return Py_REFCNT((PyObject *)owner.bits) == 1;
     }
     return 0;
 }
+#define _PyValue_MayDealloc(V0) (_PyValue_MayDealloc)(PyValue_Borrow(V0))
 
 PyAPI_FUNC(void) _PyValueTemps_CloseNonempty(_PyValueTemps *temps);
-PyAPI_FUNC(PyObject *) _PyValueTemps_Box(_PyValueTemps *temps, PyValue value);
+PyAPI_FUNC(PyObject *) _PyValueTemps_Box(_PyValueTemps *temps, PyValueBorrow value);
+#define _PyValueTemps_Box(V0, V1) (_PyValueTemps_Box)(V0, PyValue_Borrow(V1))
 
 static inline PyObject *
-_PyValueTemps_Object(_PyValueTemps *temps, PyValue value)
+_PyValueTemps_Object(_PyValueTemps *temps, PyValueBorrow value)
 {
     if (PyValue_IsObject(value)) {
         return (PyObject *)(value.bits & ~(uintptr_t)1);
     }
     return _PyValueTemps_Box(temps, value);
 }
+#define _PyValueTemps_Object(V0, V1) (_PyValueTemps_Object)(V0, PyValue_Borrow(V1))
 
 static inline void
 _PyValueTemps_Close(_PyValueTemps *temps)
@@ -185,15 +188,22 @@ _PyValue_Publish(PyValue *source)
 #define PyValue_NULL_BITS 0
 static const PyValue PyValue_NULL = { .bits = PyValue_NULL_BITS };
 
-#define PyValue_IsNull(ref) ((ref).bits == PyValue_NULL_BITS)
+static inline bool PyValue_IsNull(PyValueBorrow r) { return r.bits == PyValue_NULL_BITS; }
+#define PyValue_IsNull(V0) (PyValue_IsNull)(PyValue_Borrow(V0))
 
-static inline bool PyValue_IsPointerSpace(PyValue r) { return _PyValue_BITS(r) < Py_PTR_LIMIT; }
-static inline bool PyValue_IsTaggedIndex(PyValue r) { return _PyValue_BITS(r) - Py_INDEX_BASE < Py_DOUBLE_OFFSET - Py_INDEX_BASE; }
-static inline bool PyValue_IsInline(PyValue r) { return _PyValue_BITS(r) >= Py_DOUBLE_OFFSET; }
-static inline bool PyValue_IsInlineInt(PyValue r) { return _PyValue_BITS(r) >= Py_INT_BASE; }
-static inline bool PyValue_IsInlineFloat(PyValue r) { return _PyValue_BITS(r) - Py_DOUBLE_OFFSET < Py_INT_BASE - Py_DOUBLE_OFFSET; }
+static inline bool PyValue_IsPointerSpace(PyValueBorrow r) { return _PyValue_BITS(r) < Py_PTR_LIMIT; }
+#define PyValue_IsPointerSpace(V0) (PyValue_IsPointerSpace)(PyValue_Borrow(V0))
+static inline bool PyValue_IsTaggedIndex(PyValueBorrow r) { return _PyValue_BITS(r) - Py_INDEX_BASE < Py_DOUBLE_OFFSET - Py_INDEX_BASE; }
+#define PyValue_IsTaggedIndex(V0) (PyValue_IsTaggedIndex)(PyValue_Borrow(V0))
+static inline bool PyValue_IsInline(PyValueBorrow r) { return _PyValue_BITS(r) >= Py_DOUBLE_OFFSET; }
+#define PyValue_IsInline(V0) (PyValue_IsInline)(PyValue_Borrow(V0))
+static inline bool PyValue_IsInlineInt(PyValueBorrow r) { return _PyValue_BITS(r) >= Py_INT_BASE; }
+#define PyValue_IsInlineInt(V0) (PyValue_IsInlineInt)(PyValue_Borrow(V0))
+static inline bool PyValue_IsInlineFloat(PyValueBorrow r) { return _PyValue_BITS(r) - Py_DOUBLE_OFFSET < Py_INT_BASE - Py_DOUBLE_OFFSET; }
+#define PyValue_IsInlineFloat(V0) (PyValue_IsInlineFloat)(PyValue_Borrow(V0))
 // Exact: the AND has the top Py_INT_SHIFT bits set only if both words do.
-static inline bool PyValue_BothInlineInt(PyValue a, PyValue b) { return (_PyValue_BITS(a) & _PyValue_BITS(b)) >= Py_INT_BASE; }
+static inline bool PyValue_BothInlineInt(PyValueBorrow a, PyValueBorrow b) { return (_PyValue_BITS(a) & _PyValue_BITS(b)) >= Py_INT_BASE; }
+#define PyValue_BothInlineInt(V0, V1) (PyValue_BothInlineInt)(PyValue_Borrow(V0), PyValue_Borrow(V1))
 
 /* The top 16 bits of *ref, which select the region. Reading them from memory
    rather than shifting a loaded value lets the compiler fold the load into a
@@ -244,11 +254,12 @@ PyValue_FromInlineInt(int64_t i)
    overflows int64 exactly when its result leaves the inline range, so one
    overflow test (__builtin_*_overflow, or jo in the JIT) checks the range. */
 static inline int64_t
-_PyValue_IntScaled(PyValue r)
+_PyValue_IntScaled(PyValueBorrow r)
 {
     assert(PyValue_IsInlineInt(r));
     return (int64_t)(_PyValue_BITS(r) << Py_INT_SHIFT);
 }
+#define _PyValue_IntScaled(V0) (_PyValue_IntScaled)(PyValue_Borrow(V0))
 
 // The inline int whose scaled value is s, a multiple of 2**Py_INT_SHIFT.
 static inline PyValue
@@ -260,10 +271,11 @@ _PyValue_FromIntScaled(int64_t s)
 }
 
 static inline int64_t
-PyValue_InlineInt64(PyValue r)
+PyValue_InlineInt64(PyValueBorrow r)
 {
     return Py_ARITHMETIC_RIGHT_SHIFT(int64_t, _PyValue_IntScaled(r), Py_INT_SHIFT);
 }
+#define PyValue_InlineInt64(V0) (PyValue_InlineInt64)(PyValue_Borrow(V0))
 
 // The encoding of an inline float, which is also its identity.
 static inline uintptr_t
@@ -283,7 +295,7 @@ PyValue_FromDoubleNotNaN(double d)
 }
 
 static inline double
-PyValue_InlineFloat(PyValue r)
+PyValue_InlineFloat(PyValueBorrow r)
 {
     assert(PyValue_IsInlineFloat(r));
     uint64_t u = _PyValue_BITS(r) - Py_DOUBLE_OFFSET;
@@ -291,6 +303,7 @@ PyValue_InlineFloat(PyValue r)
     memcpy(&d, &u, sizeof(d));
     return d;
 }
+#define PyValue_InlineFloat(V0) (PyValue_InlineFloat)(PyValue_Borrow(V0))
 
 // i is in -1 .. 2**47 - 1.
 static inline PyValue
@@ -301,11 +314,12 @@ PyValue_TagIndex(intptr_t i)
 }
 
 static inline intptr_t
-PyValue_UntagIndex(PyValue r)
+PyValue_UntagIndex(PyValueBorrow r)
 {
     assert(PyValue_IsTaggedIndex(r));
     return Py_ARITHMETIC_RIGHT_SHIFT(intptr_t, (intptr_t)(_PyValue_BITS(r) << 16), 16);
 }
+#define PyValue_UntagIndex(V0) (PyValue_UntagIndex)(PyValue_Borrow(V0))
 
 /* Increments a tagged index, but does not check for overflow */
 static inline PyValue
@@ -317,7 +331,8 @@ PyValue_IncrementTaggedIndexNoOverflow(PyValue r)
     return r;
 }
 
-PyAPI_FUNC(PyValue) _PyValue_BoxInlineValue(PyValue ref);
+PyAPI_FUNC(PyValue) _PyValue_BoxInlineValue(PyValueBorrow ref);
+#define _PyValue_BoxInlineValue(V0) (_PyValue_BoxInlineValue)(PyValue_Borrow(V0))
 
 /* If ref holds an inline value, return an owned reference to a new box with
    the same value; return any other ref unchanged. On failure, set an exception
@@ -408,11 +423,12 @@ PyValue_Unwrap(PyValue ref)
 }
 
 static inline bool
-PyValue_IsValid(PyValue ref)
+PyValue_IsValid(PyValueBorrow ref)
 {
     /* NULL is invalid, and so are the bits Py_TAG_INVALID, which no value has */
     return ref.bits > Py_TAG_INVALID;
 }
+#define PyValue_IsValid(V0) (PyValue_IsValid)(PyValue_Borrow(V0))
 
 /* References to immortal objects always have their tag bit set to Py_TAG_REFCNT
  * as they can (must) have their reclamation deferred */
@@ -434,14 +450,31 @@ PyValue_IsValid(PyValue ref)
    object is aligned, so the sum equals the tagged bits. */
 #define _PyValue_STATIC_IMMORTAL(op) { .bits = (uintptr_t)(op) + Py_TAG_REFCNT }
 
-#define PyValue_IsTrue(REF) ((REF).bits == (((uintptr_t)&_Py_TrueStruct) | Py_TAG_REFCNT))
-#define PyValue_IsFalse(REF) ((REF).bits == (((uintptr_t)&_Py_FalseStruct) | Py_TAG_REFCNT))
-#define PyValue_IsNone(REF) ((REF).bits == (((uintptr_t)&_Py_NoneStruct) | Py_TAG_REFCNT))
+static inline bool
+PyValue_IsTrue(PyValueBorrow ref)
+{
+    return ref.bits == (((uintptr_t)&_Py_TrueStruct) | Py_TAG_REFCNT);
+}
+#define PyValue_IsTrue(V0) (PyValue_IsTrue)(PyValue_Borrow(V0))
+
+static inline bool
+PyValue_IsFalse(PyValueBorrow ref)
+{
+    return ref.bits == (((uintptr_t)&_Py_FalseStruct) | Py_TAG_REFCNT);
+}
+#define PyValue_IsFalse(V0) (PyValue_IsFalse)(PyValue_Borrow(V0))
+
+static inline bool
+PyValue_IsNone(PyValueBorrow ref)
+{
+    return ref.bits == (((uintptr_t)&_Py_NoneStruct) | Py_TAG_REFCNT);
+}
+#define PyValue_IsNone(V0) (PyValue_IsNone)(PyValue_Borrow(V0))
 
 #ifdef Py_DEBUG
 
 static inline void
-PyValue_CheckValid(PyValue ref)
+PyValue_CheckValid(PyValueBorrow ref)
 {
     if (PyValue_IsNull(ref)) {
         return;
@@ -462,10 +495,12 @@ PyValue_CheckValid(PyValue ref)
             assert(0);
     }
 }
+#define PyValue_CheckValid(V0) (PyValue_CheckValid)(PyValue_Borrow(V0))
 
 #else
 
-#define PyValue_CheckValid(REF) ((void)0)
+/* No check, but the argument must still be a value. */
+#define PyValue_CheckValid(V0) ((void)sizeof(PyValue_Borrow(V0)))
 
 #endif
 
@@ -580,37 +615,41 @@ PyAPI_FUNC(PyObject *) _PyValue_HomeViolationSites(void);
    references to immortal objects, borrowed and deferred references, indices
    and inline values. */
 static inline int
-PyValue_RefcountOnObject(PyValue ref)
+PyValue_RefcountOnObject(PyValueBorrow ref)
 {
     return !PyValue_IsNull(ref) && (ref.bits & Py_OWNED_MASK) == 0;
 }
+#define PyValue_RefcountOnObject(V0) (PyValue_RefcountOnObject)(PyValue_Borrow(V0))
 
 /* PyValue_RefcountOnObject() of a ref that is not PyValue_NULL, which
    needs one test fewer. */
 static inline int
-_PyValue_OwnsCountNotNull(PyValue ref)
+_PyValue_OwnsCountNotNull(PyValueBorrow ref)
 {
     assert(!PyValue_IsNull(ref));
     return (ref.bits & Py_OWNED_MASK) == 0;
 }
+#define _PyValue_OwnsCountNotNull(V0) (_PyValue_OwnsCountNotNull)(PyValue_Borrow(V0))
 
 /* Report a value that holds no object (an inline int or float, or an
    index) passed to PyValue_AsKnownObjectBorrow() or
    PyValue_AsKnownObjectSteal(), and abort. Out of line and cold, so that a
    caller carries one compare and an untaken branch. */
-PyAPI_FUNC(void) _Py_NO_RETURN _PyValue_FatalNotObject(PyValue ref);
+PyAPI_FUNC(void) _Py_NO_RETURN _PyValue_FatalNotObject(PyValueBorrow ref);
+#define _PyValue_FatalNotObject(V0) (_PyValue_FatalNotObject)(PyValue_Borrow(V0))
 
 /* The object that ref holds, borrowed. ref must hold an object or be
    PyValue_NULL. Every build checks this until packet V7 measures the check
    (pyjit/design/value-api.md, section 1.3). */
 static inline PyObject *
-PyValue_AsKnownObjectBorrow(PyValue ref)
+PyValue_AsKnownObjectBorrow(PyValueBorrow ref)
 {
     if (!PyValue_IsPointerSpace(ref)) {
         _PyValue_FatalNotObject(ref);
     }
     return BITS_TO_PTR_MASKED(ref);
 }
+#define PyValue_AsKnownObjectBorrow(V0) (PyValue_AsKnownObjectBorrow)(PyValue_Borrow(V0))
 
 /* The value in *ref, a frame slot, borrowed in a C variable: its bits. A
    frame slot never holds a borrow (pyjit/design/pyvalue.md D4), so the
@@ -726,13 +765,25 @@ PyValue_FromPyObjectBorrow(PyObject *obj)
 }
 
 static inline PyValue
-PyValue_DUP(PyValue ref)
+PyValue_DUP(PyValueBorrow ref)
 {
     if (_PyValue_OwnsCountNotNull(ref)) {
         _Py_INCREF_MORTAL(BITS_TO_PTR(ref));
     }
-    return ref;
+    return (PyValue){ref.bits};
 }
+#define PyValue_DUP(V0) (PyValue_DUP)(PyValue_Borrow(V0))
+
+/* PyValue_DUP() of a value that may be PyValue_NULL. */
+static inline PyValue
+PyValue_XDUP(PyValueBorrow ref)
+{
+    if (PyValue_RefcountOnObject(ref)) {
+        _Py_INCREF_MORTAL(BITS_TO_PTR(ref));
+    }
+    return (PyValue){ref.bits};
+}
+#define PyValue_XDUP(V0) (PyValue_XDUP)(PyValue_Borrow(V0))
 
 static inline PyValue
 PyValue_DupImmortal(PyValue ref)
@@ -815,9 +866,12 @@ PyValue_XCLOSE(PyValue ref)
 // constructors: the same bits, ignoring bit 0 (the no-count tag) of a
 // pointer. Such a value has one encoding (see "Value identity" above); a
 // box held in a C local is not one. Indices compare exactly.
-// Note: this is a macro because MSVC (Windows) has trouble inlining it.
-#define PyValue_Is(a, b) \
-    ((((a).bits ^ (b).bits) & ~(uintptr_t)PyValue_IsPointerSpace(a)) == 0)
+static inline bool
+PyValue_Is(PyValueBorrow a, PyValueBorrow b)
+{
+    return ((a.bits ^ b.bits) & ~(uintptr_t)PyValue_IsPointerSpace(a)) == 0;
+}
+#define PyValue_Is(V0, V1) (PyValue_Is)(PyValue_Borrow(V0), PyValue_Borrow(V1))
 
 
 
@@ -828,12 +882,13 @@ PyValue_XCLOSE(PyValue ref)
    other than PyValue_NULL owns a count unless a tag bit is set, so these
    test Py_TAG_BITS alone instead of Py_OWNED_MASK. */
 static inline int
-_PyValue_PointerOwnsCount(PyValue ref)
+_PyValue_PointerOwnsCount(PyValueBorrow ref)
 {
     assert(PyValue_IsPointerSpace(ref));
     assert(!PyValue_IsNull(ref));
     return (ref.bits & Py_TAG_BITS) == 0;
 }
+#define _PyValue_PointerOwnsCount(V0) (_PyValue_PointerOwnsCount)(PyValue_Borrow(V0))
 
 // PyValue_NULL has no tag bits set, so XCLOSE tests for it first.
 static inline void
@@ -861,13 +916,14 @@ _PyValue_CLOSE_SPECIALIZED_POINTER(PyValue ref, destructor destruct)
 }
 
 static inline PyValue
-_PyValue_DUP_POINTER(PyValue ref)
+_PyValue_DUP_POINTER(PyValueBorrow ref)
 {
     if (_PyValue_PointerOwnsCount(ref)) {
         _Py_INCREF_MORTAL(BITS_TO_PTR(ref));
     }
-    return ref;
+    return (PyValue){ref.bits};
 }
+#define _PyValue_DUP_POINTER(V0) (_PyValue_DUP_POINTER)(PyValue_Borrow(V0))
 
 static inline PyObject *
 _PyValue_AsPyObjectStealPointer(PyValue ref)
@@ -879,18 +935,20 @@ _PyValue_AsPyObjectStealPointer(PyValue ref)
 }
 
 static inline bool
-PyValue_IsMalformed(PyValue ref)
+PyValue_IsMalformed(PyValueBorrow ref)
 {
     return PyValue_IsPointerSpace(ref) && (_PyValue_BITS(ref) & Py_TAG_BITS) == Py_TAG_INVALID;
 }
+#define PyValue_IsMalformed(V0) (PyValue_IsMalformed)(PyValue_Borrow(V0))
 
 static inline PyTypeObject *
-PyValue_TYPE(PyValue value) {
+PyValue_TYPE(PyValueBorrow value) {
     if (PyValue_IsInline(value)) {
         return PyValue_IsInlineInt(value) ? &PyLong_Type : &PyFloat_Type;
     }
     return Py_TYPE(PyValue_AsKnownObjectBorrow(value));
 }
+#define PyValue_TYPE(V0) (PyValue_TYPE)(PyValue_Borrow(V0))
 
 // Converts a PyValue back to a PyObject *, converting the
 // value to a new reference.
@@ -900,37 +958,46 @@ PyValue_TYPE(PyValue value) {
 
 #define VALUE_CHECK_FUNC(T) \
     static inline bool \
-    PyValue_ ## T ## Check(PyValue value) { \
+    PyValue_ ## T ## Check(PyValueBorrow value) { \
         return PyValue_IsPointerSpace(value) && \
                Py ## T ## _Check(PyValue_AsKnownObjectBorrow(value)); \
     }
 
 VALUE_CHECK_FUNC(Gen)
+#define PyValue_GenCheck(V0) (PyValue_GenCheck)(PyValue_Borrow(V0))
 VALUE_CHECK_FUNC(Bool)
+#define PyValue_BoolCheck(V0) (PyValue_BoolCheck)(PyValue_Borrow(V0))
 VALUE_CHECK_FUNC(ExceptionInstance)
+#define PyValue_ExceptionInstanceCheck(V0) \
+    (PyValue_ExceptionInstanceCheck)(PyValue_Borrow(V0))
 VALUE_CHECK_FUNC(Code)
+#define PyValue_CodeCheck(V0) (PyValue_CodeCheck)(PyValue_Borrow(V0))
 VALUE_CHECK_FUNC(Function)
+#define PyValue_FunctionCheck(V0) (PyValue_FunctionCheck)(PyValue_Borrow(V0))
 
 static inline bool
-PyValue_LongCheck(PyValue value)
+PyValue_LongCheck(PyValueBorrow value)
 {
     return PyValue_IsInlineInt(value) ||
            (PyValue_IsPointerSpace(value) && PyLong_Check(PyValue_AsKnownObjectBorrow(value)));
 }
+#define PyValue_LongCheck(V0) (PyValue_LongCheck)(PyValue_Borrow(V0))
 
 static inline bool
-PyValue_FloatCheck(PyValue value)
+PyValue_FloatCheck(PyValueBorrow value)
 {
     return PyValue_IsInlineFloat(value) ||
            (PyValue_IsPointerSpace(value) && PyFloat_Check(PyValue_AsKnownObjectBorrow(value)));
 }
+#define PyValue_FloatCheck(V0) (PyValue_FloatCheck)(PyValue_Borrow(V0))
 
 static inline bool
-PyValue_LongCheckExact(PyValue value)
+PyValue_LongCheckExact(PyValueBorrow value)
 {
     return PyValue_IsInlineInt(value) ||
            (PyValue_IsPointerSpace(value) && PyLong_CheckExact(PyValue_AsKnownObjectBorrow(value)));
 }
+#define PyValue_LongCheckExact(V0) (PyValue_LongCheckExact)(PyValue_Borrow(V0))
 
 /* Numbers in specialized instructions. The int and float guards accept
    inline values only (PyValue_IsInlineInt(), PyValue_IsInlineFloat()):
@@ -968,29 +1035,31 @@ PyAPI_FUNC(PyValue) _PyValue_LshiftInt64(int64_t value, int64_t shift);
    or an inline float and an inline int? Every int51 converts to a double
    exactly, and an inline float is never NaN. */
 static inline bool
-PyValue_FloatOperandsCheck(PyValue a, PyValue b)
+PyValue_FloatOperandsCheck(PyValueBorrow a, PyValueBorrow b)
 {
     if (PyValue_IsInlineFloat(a)) {
         return PyValue_IsInlineFloat(b) || PyValue_IsInlineInt(b);
     }
     return PyValue_IsInlineInt(a) && PyValue_IsInlineFloat(b);
 }
+#define PyValue_FloatOperandsCheck(V0, V1) (PyValue_FloatOperandsCheck)(PyValue_Borrow(V0), PyValue_Borrow(V1))
 
 // An operand that passed PyValue_FloatOperandsCheck(), as a double.
 static inline double
-PyValue_NumberAsDouble(PyValue ref)
+PyValue_NumberAsDouble(PyValueBorrow ref)
 {
     if (PyValue_IsInlineFloat(ref)) {
         return PyValue_InlineFloat(ref);
     }
     return (double)PyValue_InlineInt64(ref);
 }
+#define PyValue_NumberAsDouble(V0) (PyValue_NumberAsDouble)(PyValue_Borrow(V0))
 
 /* If PyValue_FloatOperandsCheck(a, b), store a and b as doubles in *da
    and *db and return true. Two inline floats are tested first, which lets
    the compiler give them a path of their own. */
 static inline bool
-PyValue_FloatOperandValues(PyValue a, PyValue b, double *da, double *db)
+PyValue_FloatOperandValues(PyValueBorrow a, PyValueBorrow b, double *da, double *db)
 {
     if (PyValue_IsInlineFloat(a) && PyValue_IsInlineFloat(b)) {
         *da = PyValue_InlineFloat(a);
@@ -1004,6 +1073,7 @@ PyValue_FloatOperandValues(PyValue a, PyValue b, double *da, double *db)
     *db = PyValue_NumberAsDouble(b);
     return true;
 }
+#define PyValue_FloatOperandValues(V0, V1, V2, V3) (PyValue_FloatOperandValues)(PyValue_Borrow(V0), PyValue_Borrow(V1), V2, V3)
 
 // A new float for a NaN, the only float with no inline form, or
 // PyValue_NULL with an exception set.
@@ -1032,15 +1102,16 @@ PyValue_FromDouble(double value)
    1.3). An exception may be pending, as for any upstream API that allocates:
    a failed box replaces it. */
 static inline PyObject *
-PyValue_AsObject(PyValue ref)
+PyValue_AsObject(PyValueBorrow ref)
 {
     assert(PyValue_IsLanguageValue(ref));
     if (PyValue_IsInline(ref)) {
-        ref = PyValue_Box(ref);
-        return PyValue_IsInline(ref) ? NULL : PyValue_AsKnownObjectSteal(ref);
+        PyValue box = _PyValue_BoxInlineValue(ref);
+        return PyValue_IsInline(box) ? NULL : PyValue_AsKnownObjectSteal(box);
     }
     return PyValue_AsPyObjectNew(ref);
 }
+#define PyValue_AsObject(V0) (PyValue_AsObject)(PyValue_Borrow(V0))
 
 /* For each inline value src[i], store a new box in dst[i]; leave the other
    elements of dst alone. Return 0, or -1 with an exception set and no boxes

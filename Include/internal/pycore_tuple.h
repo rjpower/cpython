@@ -47,7 +47,7 @@ PyTuple_GET_VALUE(PyObject *op, Py_ssize_t index)
 {
     PyTupleObject *tuple = _PyTuple_CAST(op);
     assert(0 <= index && index < Py_SIZE(tuple));
-    return PyValue_Borrow(tuple->ob_item[index]);
+    return _PyValue_BorrowTagged(tuple->ob_item[index]);
 }
 #define PyTuple_GET_VALUE(op, index) \
     PyTuple_GET_VALUE(_PyObject_CAST(op), (index))

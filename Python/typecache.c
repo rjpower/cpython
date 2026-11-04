@@ -113,7 +113,7 @@ cache_insert(struct type_cache *cache, PyObject *name, PyValue value)
     for (;;) {
         if (cache->hashtable[index].name == NULL) {
             Py_INCREF(name);
-            cache->hashtable[index].value = PyValue_Borrow(value);
+            cache->hashtable[index].value = _PyValue_BorrowTagged(value);
             FT_ATOMIC_STORE_PTR_RELEASE(cache->hashtable[index].name, name);
             cache->used++;
             cache->available--;

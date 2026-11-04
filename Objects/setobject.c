@@ -367,7 +367,7 @@ set_add_entry(PySetObject *so, PyValue key, Py_hash_t hash)
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(so);
 
     return set_add_entry_takeref(so,
-                                PyValue_MakeHeapSafe(PyValue_Borrow(key)), hash);
+                                PyValue_MakeHeapSafe(_PyValue_BorrowTagged(key)), hash);
 }
 
 static void
@@ -3315,7 +3315,7 @@ _PySet_NextBorrowed(PyObject *set, Py_ssize_t *pos, PyValue *key)
     if (!set_next((PySetObject *)set, pos, &entry)) {
         return 0;
     }
-    *key = PyValue_Borrow(entry->key);
+    *key = _PyValue_BorrowTagged(entry->key);
     return 1;
 }
 

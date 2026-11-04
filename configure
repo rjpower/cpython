@@ -11493,6 +11493,100 @@ then :
   CFLAGS_NODIST="$CFLAGS_NODIST -Werror=implicit-function-declaration"
 fi
 
+     # A PyValueBorrow * used as a PyValue * must not compile.  GCC 14 and
+     # later reject it by default; Clang only warns (pyjit/design/proposals/
+     # register-ir-v2-a5b.md, section 3.6).
+     ac_save_cc="$CC"
+     CC="$CC -Werror=incompatible-pointer-types"
+     { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking if we can make incompatible pointer types an error in $CC" >&5
+printf %s "checking if we can make incompatible pointer types an error in $CC... " >&6; }
+if test ${ac_cv_enable_incompatible_pointer_types_error+y}
+then :
+  printf %s "(cached) " >&6
+else case e in #(
+  e) cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+
+int
+main (void)
+{
+
+  ;
+  return 0;
+}
+
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"
+then :
+
+           ac_cv_enable_incompatible_pointer_types_error=yes
+
+else case e in #(
+  e)
+           ac_cv_enable_incompatible_pointer_types_error=no
+	  ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext ;;
+esac
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ac_cv_enable_incompatible_pointer_types_error" >&5
+printf "%s\n" "$ac_cv_enable_incompatible_pointer_types_error" >&6; }
+     CC="$ac_save_cc"
+
+    if test "x$ac_cv_enable_incompatible_pointer_types_error" = xyes
+then :
+
+      CFLAGS_NODIST="$CFLAGS_NODIST -Werror=incompatible-pointer-types"
+      # Clang's group also holds the warning for a pointer that drops a
+      # qualifier, which GCC reports as -Wdiscarded-qualifiers and keeps a
+      # warning: keep it a warning on Clang too.
+
+
+  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking if $CC has an incompatible-pointer-types-discards-qualifiers warning" >&5
+printf %s "checking if $CC has an incompatible-pointer-types-discards-qualifiers warning... " >&6; }
+if test ${ac_cv_keep_incompatible_pointer_types_discards_qualifiers_warning+y}
+then :
+  printf %s "(cached) " >&6
+else case e in #(
+  e)
+    py_cflags=$CFLAGS
+    as_fn_append CFLAGS " -Wincompatible-pointer-types-discards-qualifiers -Werror"
+    cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main (void)
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"
+then :
+  ac_cv_keep_incompatible_pointer_types_discards_qualifiers_warning=yes
+else case e in #(
+  e) ac_cv_keep_incompatible_pointer_types_discards_qualifiers_warning=no ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
+    CFLAGS=$py_cflags
+   ;;
+esac
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ac_cv_keep_incompatible_pointer_types_discards_qualifiers_warning" >&5
+printf "%s\n" "$ac_cv_keep_incompatible_pointer_types_discards_qualifiers_warning" >&6; }
+
+
+      if test "x$ac_cv_keep_incompatible_pointer_types_discards_qualifiers_warning" = xyes
+then :
+  CFLAGS_NODIST="$CFLAGS_NODIST -Wno-error=incompatible-pointer-types-discards-qualifiers"
+fi
+
+fi
+
      ac_save_cc="$CC"
      CC="$CC -fvisibility=hidden"
      { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking if we can use visibility in $CC" >&5

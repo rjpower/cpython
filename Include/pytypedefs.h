@@ -17,7 +17,13 @@ typedef struct PyMemberDef PyMemberDef;
 typedef struct PySlot PySlot;
 
 #ifndef Py_LIMITED_API
+/* An owner: a home (frame slot or heap field) or an owning C local. */
 typedef struct { uintptr_t bits; } PyValue;
+/* A borrow of a value that an owner keeps alive: the owner's exact bits. It
+   lives only in C locals; reading it never takes a count, and only
+   PyValue_DUP() and PyValue_XDUP() make an owner of it
+   (pyjit/design/pyvalue.md D4). */
+typedef struct { uintptr_t bits; } PyValueBorrow;
 #endif
 
 typedef struct _object PyObject;

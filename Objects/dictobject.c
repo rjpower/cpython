@@ -1327,7 +1327,7 @@ _PyDict_GetValue_KnownHash(PyObject *op, PyValue key, Py_hash_t hash,
 
     /* Equality can remove the query's last external owner. Capture the found
      * value before releasing our query pin, which can itself reenter. */
-    PyValue query = PyValue_MakeHeapSafe(PyValue_Borrow(key));
+    PyValue query = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(key));
     PyValue value = PyValue_NULL;
     Py_ssize_t ix = _Py_dict_lookup((PyDictObject *)op, query, hash, &value);
     PyValue owned = PyValue_NULL;
@@ -1904,8 +1904,8 @@ _PyDict_FromValueItems(const PyValue *keys, Py_ssize_t key_stride,
     for (Py_ssize_t i = 0; i < count; i++) {
         PyValue key = keys[i * key_stride];
         PyValue value = values[i * value_stride];
-        key = PyValue_MakeHeapSafe(PyValue_Borrow(key));
-        value = PyValue_MakeHeapSafe(PyValue_Borrow(value));
+        key = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(key));
+        value = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(value));
         if (_PyDict_SetValue_Take2((PyDictObject *)dict, key, value) < 0) {
             Py_XDECREF(dict);
             return NULL;
@@ -2004,7 +2004,7 @@ PyDict_GetValue(PyObject *op, PyValue key, PyValue *result)
         return _PyDict_GetValue_KnownHash(op, key, cached, result);
     }
     PyObject *dict_owner = Py_NewRef(op);
-    PyValue query = PyValue_MakeHeapSafe(PyValue_Borrow(key));
+    PyValue query = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(key));
     PyValue value = PyValue_NULL;
     Py_hash_t hash = _PyValue_Hash(query);
     int status = -1;
@@ -2338,8 +2338,8 @@ PyDict_SetValue(PyObject *op, PyValue key, PyValue value)
         return -1;
     }
     return _PyDict_SetValue_Take2((PyDictObject *)op,
-        PyValue_MakeHeapSafe(PyValue_Borrow(key)),
-        PyValue_MakeHeapSafe(PyValue_Borrow(value)));
+        PyValue_MakeHeapSafe(_PyValue_BorrowTagged(key)),
+        PyValue_MakeHeapSafe(_PyValue_BorrowTagged(value)));
 }
 
 int
@@ -2356,8 +2356,8 @@ _PyDict_SetValue_KnownHash(PyObject *op, PyValue key, PyValue value, Py_hash_t h
         return -1;
     }
     return _PyDict_SetValue_Take2_KnownHash((PyDictObject *)op,
-        PyValue_MakeHeapSafe(PyValue_Borrow(key)),
-        PyValue_MakeHeapSafe(PyValue_Borrow(value)), hash);
+        PyValue_MakeHeapSafe(_PyValue_BorrowTagged(key)),
+        PyValue_MakeHeapSafe(_PyValue_BorrowTagged(value)), hash);
 }
 
 int
@@ -2487,7 +2487,7 @@ dict_entry_key(PyDictObject *mp, Py_ssize_t ix)
     if (DK_IS_UNICODE(mp->ma_keys)) {
         return PyValue_FromObjectBorrow(DK_UNICODE_ENTRIES(mp->ma_keys)[ix].me_key);
     }
-    return PyValue_Borrow(DK_ENTRIES(mp->ma_keys)[ix].me_key);
+    return _PyValue_BorrowTagged(DK_ENTRIES(mp->ma_keys)[ix].me_key);
 }
 
 /* Never dereference a saved table/value-array pointer after a callback. An
@@ -2519,7 +2519,7 @@ dict_selection_matches(PyDictObject *mp, PyDictKeysObject *saved_keys,
     if (PyValue_IsNull(current_value) || current_value.bits != value.bits) {
         return 0;
     }
-    if (dict_entry_key(mp, ix).bits != PyValue_Borrow(key).bits) {
+    if (dict_entry_key(mp, ix).bits != _PyValue_BorrowTagged(key).bits) {
         return 0;
     }
     Py_hash_t current_hash = DK_IS_UNICODE(keys) ?
@@ -2541,7 +2541,7 @@ dict_value_keyerror(PyValue key)
 static int
 delvalue_knownhash_lock_held(PyDictObject *mp, PyValue key, Py_hash_t hash)
 {
-    PyValue query = PyValue_MakeHeapSafe(PyValue_Borrow(key));
+    PyValue query = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(key));
     PyValue value = PyValue_NULL;
     int status = -1;
     Py_ssize_t ix = _Py_dict_lookup(mp, query, hash, &value);
@@ -2581,7 +2581,7 @@ PyDict_DelValue(PyObject *op, PyValue key)
         }
         return -1;
     }
-    PyValue query = PyValue_MakeHeapSafe(PyValue_Borrow(key));
+    PyValue query = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(key));
     Py_hash_t hash = _PyValue_Hash(query);
     int status = -1;
     if (hash != -1) {
@@ -2919,7 +2919,7 @@ _PyDict_NextValue(PyObject *op, Py_ssize_t *ppos, PyValue *pkey,
     }
     /* Capturing owners is pure: no table pointer crosses a callback. */
     if (pkey != NULL) {
-        *pkey = PyValue_MakeHeapSafe(PyValue_Borrow(key));
+        *pkey = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(key));
     }
     if (pvalue != NULL) {
         *pvalue = PyValue_DUP(value);
@@ -2941,10 +2941,10 @@ _PyDict_NextBorrowed(PyObject *op, Py_ssize_t *ppos, PyValue *pkey,
         return 0;
     }
     if (pkey != NULL) {
-        *pkey = PyValue_Borrow(key);
+        *pkey = _PyValue_BorrowTagged(key);
     }
     if (pvalue != NULL) {
-        *pvalue = PyValue_Borrow(value);
+        *pvalue = _PyValue_BorrowTagged(value);
     }
     return 1;
 }
@@ -4369,8 +4369,8 @@ dict_setdefault_value_lock_held(PyDictObject *mp, PyValue key, PyValue value,
     if (result != NULL) {
         *result = PyValue_NULL;
     }
-    key = PyValue_MakeHeapSafe(PyValue_Borrow(key));
-    value = PyValue_MakeHeapSafe(PyValue_Borrow(value));
+    key = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(key));
+    value = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(value));
     PyValue output = PyValue_NULL;
     int notified = 0, status = -1;
     for (;;) {
@@ -4458,8 +4458,8 @@ _PyDict_SetDefaultValue(PyObject *op, PyValue key, PyValue value, PyValue *resul
         return -1;
     }
     assert(can_modify_dict((PyDictObject *)op));
-    key = PyValue_MakeHeapSafe(PyValue_Borrow(key));
-    value = PyValue_MakeHeapSafe(PyValue_Borrow(value));
+    key = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(key));
+    value = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(value));
     Py_hash_t hash = _PyValue_Hash(key);
     int status = -1;
     if (hash != -1) {
@@ -5364,7 +5364,7 @@ dictiter_capture(PyDictObject *d, dictiterobject *di, int reverse,
         goto exhausted;
     }
     if (out_key != NULL) {
-        *out_key = PyValue_MakeHeapSafe(PyValue_Borrow(key));
+        *out_key = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(key));
     }
     if (out_value != NULL) {
         *out_value = PyValue_DUP(value);
@@ -6940,7 +6940,7 @@ store_instance_attr_lock_held(PyObject *obj, PyObject *name, PyValue value)
             return -1;
         }
         values->values[ix] = PyValue_IsNull(value) ? PyValue_NULL :
-            PyValue_MakeHeapSafe(PyValue_Borrow(value));
+            PyValue_MakeHeapSafe(_PyValue_BorrowTagged(value));
         _PyValue_CheckHome(values->values[ix]);
         if (PyValue_IsNull(old_value)) {
             _PyDictValues_AddToInsertionOrder(values, ix);
@@ -6972,7 +6972,7 @@ _PyObject_StoreInstanceValue(PyObject *obj, PyObject *name, PyValue value)
     Py_INCREF(obj);
     Py_INCREF(name);
     PyValue owner = PyValue_IsNull(value) ? PyValue_NULL :
-        PyValue_MakeHeapSafe(PyValue_Borrow(value));
+        PyValue_MakeHeapSafe(_PyValue_BorrowTagged(value));
     int status = store_instance_attr_lock_held(obj, name, owner);
     PyValue_XCLOSE(owner);
     Py_XDECREF(name);
@@ -7522,9 +7522,9 @@ _PyDict_SendEvent(int watcher_bits, PyDict_WatchEvent event,
     /* As upstream, a callback can be called with an exception pending and
      * must leave it pending (PyDict_WatchCallback). */
     PyValue key_owner = PyValue_IsNull(key) ? PyValue_NULL :
-        PyValue_MakeHeapSafe(PyValue_Borrow(key));
+        PyValue_MakeHeapSafe(_PyValue_BorrowTagged(key));
     PyValue value_owner = PyValue_IsNull(value) ? PyValue_NULL :
-        PyValue_MakeHeapSafe(PyValue_Borrow(value));
+        PyValue_MakeHeapSafe(_PyValue_BorrowTagged(value));
     PyInterpreterState *interp = _PyInterpreterState_GET();
     /* mp follows the existing metadata/resurrection protocol. In particular,
      * DEALLOCATED must not acquire an ordinary owner of a refcount-zero dict. */
@@ -7533,8 +7533,8 @@ _PyDict_SendEvent(int watcher_bits, PyDict_WatchEvent event,
             PyDict_WatchCallback cb = interp->dict_state.watchers[i];
             if (cb != NULL) {
                 int status = cb(event, (PyObject *)mp,
-                                PyValue_Borrow(key_owner),
-                                PyValue_Borrow(value_owner));
+                                _PyValue_BorrowTagged(key_owner),
+                                _PyValue_BorrowTagged(value_owner));
                 if (status < 0) {
                     PyErr_FormatUnraisable(
                         "Exception ignored in %s watcher callback for <dict at %p>",

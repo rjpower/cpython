@@ -2988,6 +2988,34 @@ AS_VAR_IF([ac_cv_gcc_compat], [yes], [
     AS_VAR_IF([ac_cv_enable_implicit_function_declaration_error], [yes],
               [CFLAGS_NODIST="$CFLAGS_NODIST -Werror=implicit-function-declaration"])
 
+     # A PyValueBorrow * used as a PyValue * must not compile.  GCC 14 and
+     # later reject it by default; Clang only warns (pyjit/design/proposals/
+     # register-ir-v2-a5b.md, section 3.6).
+     ac_save_cc="$CC"
+     CC="$CC -Werror=incompatible-pointer-types"
+     AC_CACHE_CHECK([if we can make incompatible pointer types an error in $CC],
+                    [ac_cv_enable_incompatible_pointer_types_error],
+       AC_COMPILE_IFELSE(
+         [
+	   AC_LANG_PROGRAM([[]], [[]])
+	 ],[
+           ac_cv_enable_incompatible_pointer_types_error=yes
+	 ],[
+           ac_cv_enable_incompatible_pointer_types_error=no
+	 ]))
+     CC="$ac_save_cc"
+
+    AS_VAR_IF([ac_cv_enable_incompatible_pointer_types_error], [yes], [
+      CFLAGS_NODIST="$CFLAGS_NODIST -Werror=incompatible-pointer-types"
+      # Clang's group also holds the warning for a pointer that drops a
+      # qualifier, which GCC reports as -Wdiscarded-qualifiers and keeps a
+      # warning: keep it a warning on Clang too.
+      PY_CHECK_CC_WARNING([keep], [incompatible-pointer-types-discards-qualifiers],
+                          [if $CC has an incompatible-pointer-types-discards-qualifiers warning])
+      AS_VAR_IF([ac_cv_keep_incompatible_pointer_types_discards_qualifiers_warning], [yes],
+                [CFLAGS_NODIST="$CFLAGS_NODIST -Wno-error=incompatible-pointer-types-discards-qualifiers"])
+    ])
+
      ac_save_cc="$CC"
      CC="$CC -fvisibility=hidden"
      AC_CACHE_CHECK([if we can use visibility in $CC], [ac_cv_enable_visibility],

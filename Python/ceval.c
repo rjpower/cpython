@@ -901,7 +901,7 @@ value_store_subscript(PyValue container, PyValue key, PyValue value,
             }
             err = _PyList_SetItemTakeValue(
                 (PyListObject *)list, index,
-                PyValue_MakeHeapSafe(PyValue_Borrow(value)));
+                PyValue_MakeHeapSafe(_PyValue_BorrowTagged(value)));
             Py_END_CRITICAL_SECTION();
             return err;
         }
@@ -973,7 +973,7 @@ value_load_attribute(PyThreadState *tstate, PyValue owner, PyObject *name,
     }
     *invoked = 1;
     if (method) {
-        *self = PyValue_MakeHeapSafe(PyValue_Borrow(owner));
+        *self = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(owner));
         return _PyObject_GetMethodValue(tstate, self, name, result, object);
     }
     *result = _PyObject_GetAttrValue(object, name);
@@ -1723,8 +1723,8 @@ call_transaction_prepare_tuple(_PyCallTransaction *call, _PyInstr *next)
     assert(call->kind == CALL_TRANSACTION_EX);
     call->prepared = 1;
     PyValue *homes = _PyFrame_Slots(call->operation.frame) + call->base;
-    PyValue args = PyValue_MakeHeapSafe(PyValue_Borrow(homes[2]));
-    PyValue func = PyValue_MakeHeapSafe(PyValue_Borrow(homes[0]));
+    PyValue args = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(homes[2]));
+    PyValue func = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(homes[0]));
     PyValue obsolete = PyValue_NULL;
     PyObject *args_object = NULL, *func_object = NULL, *tuple = NULL;
     int status = -1;
@@ -1774,7 +1774,7 @@ call_transaction_monitor(_PyCallTransaction *call, _PyInstr *next)
 {
     assert(!call->monitored);
     PyValue *homes = _PyFrame_Slots(call->operation.frame) + call->base;
-    PyValue function = PyValue_MakeHeapSafe(PyValue_Borrow(homes[0]));
+    PyValue function = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(homes[0]));
     PyValue first = PyValue_NULL;
     if (call->kind == CALL_TRANSACTION_EX) {
         PyObject *tuple = PyValue_AsKnownObjectBorrow(homes[2]);
@@ -1783,10 +1783,10 @@ call_transaction_monitor(_PyCallTransaction *call, _PyInstr *next)
         }
     }
     else if (!PyValue_IsNull(homes[1])) {
-        first = PyValue_MakeHeapSafe(PyValue_Borrow(homes[1]));
+        first = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(homes[1]));
     }
     else if (call->argument_count) {
-        first = PyValue_MakeHeapSafe(PyValue_Borrow(homes[2]));
+        first = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(homes[2]));
     }
     PyObject *function_object = NULL, *argument = NULL;
     int status = -1;

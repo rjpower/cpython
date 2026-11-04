@@ -69,7 +69,7 @@ _PyValue_Canonicalize(PyValue source)
 }
 
 PyObject *
-_PyValueTemps_Box(_PyValueTemps *temps, PyValue value)
+(_PyValueTemps_Box)(_PyValueTemps *temps, PyValueBorrow value)
 {
     PyObject *box = PyValue_AsObject(value);
     if (box == NULL) {
@@ -118,7 +118,7 @@ _PyValue_BoxSiteOr(int fallback)
 
 // Out of line, so that the test before each call is all that hot paths carry.
 Py_NO_INLINE PyValue
-_PyValue_BoxInlineValue(PyValue ref)
+(_PyValue_BoxInlineValue)(PyValueBorrow ref)
 {
     assert(PyValue_IsInline(ref));
     OBJECT_STAT_INC(box[box_site]);
@@ -132,13 +132,13 @@ _PyValue_BoxInlineValue(PyValue ref)
         box = PyFloat_FromDouble(PyValue_InlineFloat(ref));
     }
     if (box == NULL) {
-        return ref;
+        return (PyValue){ref.bits};  // an inline value owns nothing
     }
     return _PyValue_PointerSteal(box);
 }
 
 Py_NO_INLINE void _Py_NO_RETURN
-_PyValue_FatalNotObject(PyValue ref)
+(_PyValue_FatalNotObject)(PyValueBorrow ref)
 {
     _Py_FatalErrorFormat(__func__,
                          "PyValue_AsKnownObject*() of a value that holds no "

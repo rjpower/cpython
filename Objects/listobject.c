@@ -252,7 +252,7 @@ list_get_item_ref(PyListObject *op, Py_ssize_t i)
 PyValue
 (PyList_GET_VALUE)(PyObject *op, Py_ssize_t index)
 {
-    return PyValue_Borrow(_PyList_CAST(op)->ob_item[index]);
+    return _PyValue_BorrowTagged(_PyList_CAST(op)->ob_item[index]);
 }
 
 PyValue

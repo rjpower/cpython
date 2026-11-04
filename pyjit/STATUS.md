@@ -1,6 +1,6 @@
 # Project status
 
-Status as of 2026-11-04 07:00 PST, from the coordinator fact sheet. Update this
+Status as of 2026-11-04 09:30 PST, from the coordinator fact sheet. Update this
 page at each landing.
 
 ## Outcome and next milestone
@@ -38,7 +38,7 @@ v2 phase A) addressed, then the qualified baseline.
 
 ## Position
 
-- Runtime branch `boil/pyvalue-rc-universal`, HEAD `c8637fe7c6b`.
+- Runtime branch `boil/pyvalue-rc-universal`, HEAD `3e28e1755bd`.
 - Landed 2026-11-03: native boundary P3 (`56ff66a596b`, `643c69c7244`,
   `6d39221996d`) and P4 (`2558376b321`, post-review fixes `fdd7fed3216`);
   representation steps 1 (`f129780a9a7`), 2 (`f7dfc5b961f`), 3 (`dbce7b1260d`,
@@ -86,7 +86,17 @@ v2 phase A) addressed, then the qualified baseline.
   406 KB to 303 KB. Kernel time against `54825c08a1a` (information, not a
   gate): A1 0.983, A2 alone 1.024, both 0.986; A2's gain is for the
   tail-call build (A3a). Compiled output unchanged.
-- Suites at `c8637fe7c6b`, debug and release alike: run=51,552, failures=11.
+- Landed 2026-11-04 (continued): register IR v2 A5a. `3c7ac067f7f` the home
+  checker rejects a borrowed mortal in a frame slot (before the change: 510.5M
+  such stores at 13 sites over 623 modules, 364M from `LOAD_FAST_BORROW`).
+  `d60d3be46d6` no frame slot holds a borrow: `LOAD_FAST_BORROW` and the
+  other producers take a count for a mortal, in-place reads of locals get
+  conditional releases from the cases generator, the window `OwnArray` calls
+  become a debug recheck, magic 64403 (census after: 0). `3e28e1755bd`
+  post-review: the generator follows copies and object pointers of in-place
+  inputs. Release loop 308,756 to 279,995 B; kernel time 0.939-0.949 of
+  `c8637fe7c6b` (information, not a gate).
+- Suites at `3e28e1755bd`, debug and release alike: run=51,557, failures=11.
   Failing files: test_capi (2: test_is_unique_temporary,
   test_unicode.test_new), test_pyvalue_dict_vm (4), test_pyvalue_native_scope
   (5). `make check-value-api`: 177 units, 0 findings.
@@ -97,12 +107,11 @@ v2 phase A) addressed, then the qualified baseline.
 
 Running now:
 
-1. Register IR v2 A5a in the shared tree: no frame slot holds a borrow
-   (`LOAD_FAST_BORROW` into a temporary takes a count for a mortal).
-2. Representation steps 9a and 9b in their own worktree: int51 inline ints
-   in the runtime, interpreter and trace JIT; numeric guards inline-only.
-3. Triage of the 11 long-standing failures in their own worktree, against
-   upstream behaviour.
+1. Integration of representation steps 9a and 9b (int51 inline ints in the
+   runtime, interpreter and trace JIT; numeric guards inline-only; reviewed,
+   kernel time 0.964 of base) and the failures triage (9 of the 11 fixed:
+   two release-order bugs, a periodic-check order bug, stale fork tests;
+   the two `test_capi` refcount tests stay open for B5) onto A5a.
 
 Next, in order:
 

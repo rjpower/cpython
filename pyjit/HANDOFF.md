@@ -80,13 +80,15 @@ so pystats dispatch counts do not see it. A `pybuilddir.txt` of `none` makes a
 release build 5 to 12x slower; check it. `perf` is blocked
 (`perf_event_paranoid=4`); `tools/sampler/` has an LD_PRELOAD SIGPROF sampler.
 
-Running now, briefs in `build/pyjit-link-wave1/`: register IR v2 A5a in the
-shared tree (`A5A-BRIEF.md`); representation 9a/9b in worktree
-`build/worktrees/repr-step9` (`STEP9-BRIEF.md`); the failures triage in
-worktree `build/worktrees/failures` (`FAILURES-BRIEF.md`). Merge 9a and the
-failures diff after A5a with a 3-way apply and `make regen-cases`.
+Running now: integration of representation 9a/9b (`STEP9-BRIEF.md`,
+`repr-step9-notes.md`, review `review-repr-step9.md`) and the failures
+triage (`FAILURES-BRIEF.md`, `failures-notes.md`, review
+`review-failures.md`) onto A5a in the shared tree, by the step 9 agent.
 
 Landed on the runtime branch, newest first:
+
+- `3e28e1755bd`, `d60d3be46d6`, `3c7ac067f7f`: register IR v2 A5a
+  (post-review generator rules; no frame slot holds a borrow; the checker).
 
 - `c8637fe7c6b`, `335b86b71e9`, `44eb4e716dd`: register IR v2 A2 fixes
   (failed instrumentation walk; generator refuses a value use of a boxed
@@ -194,8 +196,9 @@ overwritten.
 
 ## Next steps
 
-1. Process A5a, step 9 and the failures triage as they report: post-review
-   each, then integrate A5a first, 9a/9b and the failures diff after it.
+1. Commit the step 9 and failures integration as three commits
+   (`repr-step9a-int`, `repr-step9b-int`, `failures-int`); then a Sonnet
+   design-doc sync from the A5a and step 9 notes' proposed sentences.
 2. Then A5b (with the constructor renames deferred from step 8), then
    A3a-A3c, the G2 experiment, B0b and the format steps B2-B7
    ([packet](design/proposals/register-ir-v2-packet.md)).

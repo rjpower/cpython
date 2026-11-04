@@ -1288,8 +1288,12 @@ list_pop_impl(PyListObject *self, Py_ssize_t index)
         PyValue value = PyValue_DUP(items[index]);
         PyObject *result = _PyValue_AsObjectAt(value, BOX_SITE_LIST);
         if (result == NULL) { PyValue_CLOSE(value); return NULL; }
-        /* A boxing allocator may mutate/reallocate the list. Reacquire the
-           selected element instead of deleting a different value. */
+        /* Box before removing, so that a failed box removes nothing. A box
+           that succeeds runs no Python (the release contract in
+           pycore_value.h), so the element should still be the one
+           selected; the test below re-selects it as a defence. A failed box
+           can run Python (it may free a pending exception), but then the
+           list is not touched. */
         if (self->ob_item != items || Py_SIZE(self) != size ||
             _PyValue_BITS(items[index]) != _PyValue_BITS(value)) {
             Py_DECREF(result);

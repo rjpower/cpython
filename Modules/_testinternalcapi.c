@@ -3181,8 +3181,9 @@ pyvalue_contract(PyObject *self, PyObject *arg)
 }
 
 /* The count of values found in a home in a non-canonical form (debug builds),
- * and the call sites that reported them. Step 3 of the representation packet
- * only reports; step 8 turns the check into an assertion. */
+ * and the call sites that reported them. A violation is a fatal error unless
+ * _PYTHON_VALUE_HOME_REPORT is set in the environment (see
+ * _PyValue_ReportHome()). */
 static PyObject *
 pyvalue_home_violations(PyObject *self, PyObject *unused)
 {
@@ -3193,6 +3194,30 @@ static PyObject *
 pyvalue_home_violation_sites(PyObject *self, PyObject *unused)
 {
     return _PyValue_HomeViolationSites();
+}
+
+/* Append value, an exact int or float with an inline form, to list as a box:
+ * a non-canonical store, which the home check rejects. */
+static PyObject *
+pyvalue_append_box(PyObject *self, PyObject *args)
+{
+    PyObject *list, *value;
+    if (!PyArg_ParseTuple(args, "O!O", &PyList_Type, &list, &value)) {
+        return NULL;
+    }
+    PyValue ref = PyValue_FromObjectBorrow(value);
+    if (!PyValue_IsInline(ref)) {
+        PyErr_SetString(PyExc_ValueError, "the value has no inline form");
+        return NULL;
+    }
+    PyValue box = PyValue_Box(ref);
+    if (PyValue_IsInline(box)) {
+        return NULL;
+    }
+    if (_PyList_AppendTakeValue((PyListObject *)list, box) < 0) {
+        return NULL;
+    }
+    Py_RETURN_NONE;
 }
 
 /* Value API packet V1 (pyjit/design/value-api.md): entry primitives and
@@ -4193,6 +4218,7 @@ static PyMethodDef module_functions[] = {
     {"pyvalue_internal_contract", pyvalue_internal_contract, METH_NOARGS, NULL},
     {"pyvalue_home_violations", pyvalue_home_violations, METH_NOARGS, NULL},
     {"pyvalue_home_violation_sites", pyvalue_home_violation_sites, METH_NOARGS, NULL},
+    {"pyvalue_append_box", pyvalue_append_box, METH_VARARGS, NULL},
     {"pyvalue_from_object_borrow_inline", pyvalue_from_object_borrow_inline, METH_O, NULL},
     {"pyvalue_from_object_known", pyvalue_from_object_known, METH_O, NULL},
     {"pyvalue_entry_null", pyvalue_entry_null, METH_NOARGS, NULL},

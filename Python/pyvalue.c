@@ -2,7 +2,9 @@
 
 #include "pycore_long.h"          // _PyLong_IsCompact()
 #include "pycore_object.h"
+#include "pycore_initconfig.h"    // _Py_GetEnv()
 #include "pycore_pyerrors.h"
+#include "pycore_pystate.h"       // _Py_GetConfig()
 #include "pycore_value.h"
 #include "pycore_value_api.h"     // _PyValue_SwapBoxSite()
 
@@ -17,7 +19,7 @@ PyValue_FromObjectBorrow(PyObject *obj)
     if (identity >= Py_DOUBLE_OFFSET) {
         return (PyValue){.bits = identity};
     }
-    return PyValue_FromPyObjectBorrow(obj);
+    return (PyValue){.bits = (uintptr_t)obj | Py_TAG_REFCNT};
 }
 
 PyValue
@@ -26,7 +28,23 @@ PyValue_PrepareOwned(PyObject *obj)
     if (obj == NULL) {
         return PyValue_NULL;
     }
-    return _PyValue_Canonicalize(PyValue_FromPyObjectSteal(obj));
+    return PyValue_FromPyObjectSteal(obj);
+}
+
+PyValue
+_PyValue_FromNumberSteal(PyObject *obj)
+{
+    assert(PyLong_CheckExact(obj) || PyFloat_CheckExact(obj));
+    uintptr_t identity = _PyObject_ValueIdentity(obj);
+    if (identity < Py_DOUBLE_OFFSET) {
+        return _PyValue_PointerSteal(obj);
+    }
+    /* The release contract: freeing an exact int or float box runs no
+       Python and leaves the current exception unchanged. */
+    _PyReleaseCheck_BEGIN(check);
+    Py_DECREF(obj);
+    _PyReleaseCheck_END(check, NULL);
+    return (PyValue){.bits = identity};
 }
 
 PyValue
@@ -116,7 +134,7 @@ _PyValue_BoxInlineValue(PyValue ref)
     if (box == NULL) {
         return ref;
     }
-    return PyValue_FromPyObjectSteal(box);
+    return _PyValue_PointerSteal(box);
 }
 
 Py_NO_INLINE void _Py_NO_RETURN
@@ -125,23 +143,6 @@ _PyValue_FatalNotObject(PyValue ref)
     _Py_FatalErrorFormat(__func__,
                          "PyValue_AsKnownObject*() of a value that holds no "
                          "object: %#" PRIx64, (uint64_t)ref.bits);
-}
-
-// The identity of a reference that is not NULL or ERROR.
-static uintptr_t
-value_identity(PyValue ref)
-{
-    if (!PyValue_IsPointerSpace(ref)) {
-        return _PyValue_BITS(ref);
-    }
-    return _PyObject_ValueIdentity(BITS_TO_PTR_MASKED(ref));
-}
-
-int
-_PyValue_IsSameValue(PyValue a, PyValue b)
-{
-    assert(PyValue_IsValid(a) && PyValue_IsValid(b));
-    return value_identity(a) == value_identity(b);
 }
 
 uintptr_t
@@ -193,6 +194,7 @@ _PyValue_LshiftInt32(int32_t value, int32_t shift)
 PyValue
 _PyValue_BoxDouble(double value)
 {
+    assert(isnan(value));
     PyObject *op = PyFloat_FromDouble(value);
     if (op == NULL) {
         return PyValue_NULL;
@@ -240,14 +242,35 @@ home_kind(PyValue ref)
     return PyFloat_CheckExact(obj) ? HOME_FLOAT_BOX : HOME_INT_BOX;
 }
 
+/* Is _PYTHON_VALUE_HOME_REPORT set? Read once, at the first violation, as
+   the configuration reads its environment variables (-E applies). */
+static int
+home_report_only(void)
+{
+    static int report_only = -1;
+    int value = _Py_atomic_load_int_relaxed(&report_only);
+    if (value < 0) {
+        value = _Py_GetEnv(_Py_GetConfig()->use_environment,
+                           "_PYTHON_VALUE_HOME_REPORT") != NULL;
+        _Py_atomic_store_int_relaxed(&report_only, value);
+    }
+    return value;
+}
+
 void
 _PyValue_ReportHome(PyValue ref, const char *site, int recheck)
 {
+    int kind = home_kind(ref);
+    if (!home_report_only()) {
+        _Py_FatalErrorFormat(__func__,
+                             "%s at %s: a non-canonical value (%s), bits %#" PRIx64,
+                             recheck ? "recheck" : "store", site,
+                             home_kind_names[kind], (uint64_t)ref.bits);
+    }
     if (!recheck) {
         _Py_atomic_add_ssize(&home_total, 1);
     }
     recheck = recheck != 0;
-    int kind = home_kind(ref);
     for (int i = 0; i < HOME_SITE_MAX; i++) {
         const char *claimed = _Py_atomic_load_ptr(&home_sites[recheck][kind][i].site);
         if (claimed == NULL) {

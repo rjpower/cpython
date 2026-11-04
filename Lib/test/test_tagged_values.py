@@ -8,6 +8,7 @@ import struct
 import sys
 import traceback
 import unittest
+from test import support
 from test.support import import_helper, requires_refcounting, script_helper
 
 _testinternalcapi = import_helper.import_module("_testinternalcapi")
@@ -184,6 +185,158 @@ class IdentityTest(unittest.TestCase):
         for value in range(-50, 50):
             self.assertNotIn(id(distinct(value * 1000)), ids)
         self.assertEqual(len({id(distinct(v)) for v in range(-500, 500)}), 1000)
+
+    def test_distinct_objects(self):
+        # `is` compares bits: distinct objects, and an inline value and an
+        # object, are never the same, in the generic and the specialized
+        # instruction.
+        def same(a, b):
+            return a is b
+        x, y = object(), object()
+        big = 2**60
+        for _ in range(THRESHOLD):
+            self.assertFalse(same(x, y))
+            self.assertFalse(same([], []))
+            self.assertFalse(same(distinct(big), distinct(big)))
+            self.assertFalse(same(5, x))
+            self.assertFalse(same(2.5, 5))
+            self.assertTrue(same(x, x))
+        self.check_different(x, y)
+
+
+# A generator receives through `yield from` the value that was sent, with
+# SEND generic: the receiver is one that SEND cannot specialize for, and the
+# second pass runs under sys.settrace.
+SEND_SCRIPT = """
+import sys
+def run(target):
+    res = []
+    def inner():
+        while True:
+            v = yield
+            res.append(v is target and target is v and id(v) == id(target))
+    def outer(it):
+        yield from it
+    class It:
+        def __iter__(self): return self
+        def __next__(self): return 1
+        def send(self, v): return 1
+    for _ in range(200):
+        g = outer(It()); next(g)
+        for _ in range(3): g.send(target)
+        g = outer(inner()); next(g)
+        for _ in range(3): g.send(target)
+    return res
+def tracer(frame, event, arg):
+    return tracer
+for traced in (False, True):
+    if traced:
+        sys.settrace(tracer)
+    for target in (5, 1000, 70000, 2**31 - 1, 2.5, -0.0):
+        res = run(target)
+        print(traced, repr(target), len(res), all(res))
+    sys.settrace(None)
+"""
+
+
+@unittest.skipUnless(TAGGED_VALUES, "inline values are off")
+class CanonicalConstructionTest(unittest.TestCase):
+    """A value made from an object holds an exact int that fits inline, or an
+    exact float other than NaN, inline; code that reads it as an object
+    boxes it."""
+
+    def test_method_on_int(self):
+        def f(x):
+            return x.bit_length(), (5).bit_length()
+        self.assertEqual(warm(f, make_inline(70000)), (17, 3))
+
+    def test_method_on_float(self):
+        def f(x):
+            return x.hex(), (2.5).hex()
+        self.assertEqual(warm(f, make_inline_float(2.5)),
+                         ("0x1.4000000000000p+1", "0x1.4000000000000p+1"))
+
+    def test_with_enter_returns_number(self):
+        class Manager:
+            def __init__(self, value):
+                self.value = value
+            def __enter__(self):
+                return self.value
+            def __exit__(self, *exc):
+                return None
+
+        def f(value):
+            with Manager(value) as result:
+                return result
+        for value in (5, 70000, 2.5, -0.0, 2**60):
+            with self.subTest(value=value):
+                result = warm(f, value)
+                self.assertEqual(result, value)
+                self.assertIs(type(result), type(value))
+                self.assertIs(result, value)
+
+    def test_with_exit_returns_int(self):
+        # A true result of __exit__ suppresses the exception.
+        class Suppress:
+            def __enter__(self):
+                return self
+            def __exit__(self, *exc):
+                return 1
+
+        def f():
+            with Suppress():
+                raise ValueError
+            return "suppressed"
+        self.assertEqual(warm(f), "suppressed")
+
+    def test_special_method_is_a_number(self):
+        class Enter:
+            __enter__ = 5
+            def __exit__(self, *exc):
+                return None
+
+        def f():
+            with Enter():
+                pass
+        for _ in range(THRESHOLD):
+            with self.assertRaisesRegex(TypeError, "'int' object is not callable"):
+                f()
+
+    def test_send_through_generic_send(self):
+        # In a subprocess: a debug build aborts on a box stored in the
+        # generator's frame.
+        _, out, _ = script_helper.assert_python_ok("-c", SEND_SCRIPT)
+        lines = out.decode().splitlines()
+        self.assertEqual(len(lines), 12)
+        for line in lines:
+            with self.subTest(line=line):
+                traced, target, count, ok = line.split()
+                self.assertEqual((count, ok), ("600", "True"))
+
+    @unittest.skipUnless(support.Py_DEBUG, "the home check is in debug builds")
+    def test_home_check(self):
+        # A box stored in a home is a fatal error, or a count when
+        # _PYTHON_VALUE_HOME_REPORT is set.
+        for value, kind in ((70000, "int-box"), (2.5, "float-box")):
+            with self.subTest(value=value):
+                code = ("import _testinternalcapi as t\n"
+                        f"t.pyvalue_append_box([], {value!r})\n"
+                        "print(t.pyvalue_home_violations(),"
+                        " list(t.pyvalue_home_violation_sites()))\n")
+                # -I (script_helper's default without variables) and -E
+                # ignore the variable, which the census sets.
+                for args, env in (((), {}),
+                                  (("-E",), {"_PYTHON_VALUE_HOME_REPORT": "1"})):
+                    with support.SuppressCrashReport():
+                        _, _, err = script_helper.assert_python_failure(
+                            *args, "-c", code, **env)
+                    self.assertRegex(err.decode(),
+                                     r"store at \S*Objects/listobject\.c:\d+: "
+                                     rf"a non-canonical value \({kind}\)")
+                _, out, _ = script_helper.assert_python_ok(
+                    "-c", code, _PYTHON_VALUE_HOME_REPORT="1")
+                self.assertRegex(out.decode(),
+                                 rf"^1 \['\S*Objects/listobject\.c:\d+ {kind}'\]")
 
 
 def warm(func, *args, **kwargs):

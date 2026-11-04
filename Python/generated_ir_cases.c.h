@@ -4436,7 +4436,7 @@
             if (list_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            list = PyValue_FromPyObjectStealMortal(list_o);
+            list = PyValue_FromPyObjectSteal(list_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg);
             window[0] = _PyValue_Publish(&list);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
@@ -4477,7 +4477,7 @@
             _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
             PyObject *map_o = _Py_BuildMap_ValueSteal(values, oparg);
             int failed = map_o == NULL;
-            map = failed ? PyValue_NULL : PyValue_FromPyObjectStealMortal(map_o);
+            map = failed ? PyValue_NULL : PyValue_FromPyObjectSteal(map_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg*2);
             window[0] = _PyValue_Publish(&map);
             {
@@ -4557,7 +4557,7 @@
                 Py_DECREF(set_o);
                 JUMP_TO_LABEL(error);
             }
-            set = PyValue_FromPyObjectStealMortal(set_o);
+            set = PyValue_FromPyObjectSteal(set_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg);
             window[0] = _PyValue_Publish(&set);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
@@ -4619,7 +4619,7 @@
             if (slice_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            slice = PyValue_FromPyObjectStealMortal(slice_o);
+            slice = PyValue_FromPyObjectSteal(slice_o);
             window[0] = _PyValue_Publish(&slice);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -5025,7 +5025,7 @@
                     tstate, (PyCodeObject *)&_Py_InitCleanup, 1, frame);
                 assert(_PyCode_InstrHandler(_PyFrame_GetCode(shim), 1) == EXIT_INIT_CHECK);
                 assert(_PyCode_InstrHandler(_PyFrame_GetCode(shim), 2) == RETURN_VALUE);
-                shim->base[0] = _PyValue_DUP_POINTER(self);
+                shim->base[0] = PyValue_DUP(self);
                 _PyInterpreterFrame *temp = _PyEvalFramePushAndInit(
                     tstate, init, NULL, args-1, oparg+1, NULL, shim);
                 IR_CLEAR_SLOTS(&window[0], 2 + oparg);
@@ -5136,6 +5136,11 @@
             // _CHECK_FUNCTION_VERSION
             {
                 uint32_t func_version = fb->func_version;
+                if (Py_UNLIKELY(!PyValue_IsPointerSpaceAt(&window[0]))) {
+                    UPDATE_MISS_STATS(CALL);
+                    assert(_PyOpcode_Deopt[opcode] == (CALL));
+                    JUMP_TO_PREDICTED(CALL);
+                }
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 if (!PyFunction_Check(callable_o)) {
                     UPDATE_MISS_STATS(CALL);
@@ -17708,7 +17713,7 @@
             frame = tstate->current_frame = prev;
             LOAD_IP(1);
             slots = _PyFrame_Slots(frame);
-            res = PyValue_FromPyObjectStealMortal((PyObject *)gen);
+            res = PyValue_FromPyObjectSteal((PyObject *)gen);
             LLTRACE_RESUME_FRAME();
             IR_STORE_RETURN(res);
             JIT_MAYBE_RESUME(1);
@@ -17823,15 +17828,6 @@
                     IR_KEEP_BOX(receiver);
                     window[0] = _PyValue_Publish(&receiver);
                 }
-                if (Py_UNLIKELY(PyValue_IsInlineAt(&window[2]))) {
-                    v = PyValue_Box(v);
-                    if (PyValue_IsInline(v)) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(SEND);
-                    IR_KEEP_BOX(v);
-                    window[2] = _PyValue_Publish(&v);
-                }
                 PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
                 assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
                 if (!IS_PEP523_HOOKED(tstate) &&
@@ -17864,13 +17860,16 @@
                     retval = item;
                 }
                 else {
-                    PyObject *v_o = PyValue_AsKnownObjectBorrow(v);
+                    PyObject *v_o = _PyValueTemps_Object(value_temps, v);
+                    if (v_o == NULL) {
+                        JUMP_TO_LABEL(error);
+                    }
                     PySendResultPair res = _PyIter_Send(receiver_o, v_o);
                     if (res.kind == PYGEN_ERROR) {
                         JUMP_TO_LABEL(error);
                     }
                     window[2] = PyValue_NULL;
-                    _PyValue_CLOSE_POINTER(v);
+                    PyValue_CLOSE(v);
                     retval = PyValue_FromPyObjectSteal(res.object);
                     if (res.kind == PYGEN_RETURN) {
                         JUMPBY(oparg);

@@ -157,9 +157,10 @@ error:
 static Py_ssize_t
 tuple_index(PyObject *self, Py_ssize_t len, PyObject *item)
 {
+    // Both are canonical, so `is` is a bit compare.
+    PyValue value = PyValue_FromPyObjectBorrow(item);
     for (Py_ssize_t i = 0; i < len; i++) {
-        if (PyValue_Is(PyTuple_GET_VALUE(self, i),
-                       PyValue_FromPyObjectBorrow(item))) {
+        if (PyValue_Is(PyTuple_GET_VALUE(self, i), value)) {
             return i;
         }
     }

@@ -114,16 +114,6 @@ POINTER_VARIANTS = {
     "PyValue_AsKnownObjectSteal": "_PyValue_AsPyObjectStealPointer",
 }
 
-# Calls that always return a reference in pointer space.
-POINTER_CONSTRUCTORS = {
-    "PyValue_FromPyObjectBorrow",
-    "PyValue_FromPyObjectImmortal",
-    "PyValue_FromPyObjectNew",
-    "PyValue_FromPyObjectNewMortal",
-    "PyValue_FromPyObjectSteal",
-    "PyValue_FromPyObjectStealMortal",
-}
-
 
 # Macros of the DSL that name the instruction stream or the feedback entry.
 # Each generator expands them for its form of the code: these are the stack
@@ -175,18 +165,6 @@ def find_local(name: str, storage: Storage) -> Local | None:
         if var.name == name:
             return var
     return None
-
-
-def matching_rparen(tkns: list[Token], lparen: int) -> int:
-    depth = 0
-    for i in range(lparen, len(tkns)):
-        if tkns[i].kind == "LPAREN":
-            depth += 1
-        elif tkns[i].kind == "RPAREN":
-            depth -= 1
-            if depth == 0:
-                return i
-    return -1
 
 
 def forget_stored_pointers(uop: CodeSection, storage: Storage) -> None:
@@ -804,17 +782,15 @@ class Emitter:
 
 
     def note_pointer_assignment(self, stmt: SimpleStmt, storage: Storage) -> None:
-        """After `a = b;` with b known to hold a pointer, or `a = C(...);` with
-        C in POINTER_CONSTRUCTORS, a is known to hold a pointer too."""
+        """After `a = b;` with b known to hold a pointer, a is known to hold a
+        pointer too. No constructor qualifies: the PyValue_FromPyObject*()
+        constructors are canonical, so an exact int or float they are given
+        becomes an inline value."""
         tkns = stmt.contents
-        if len(tkns) < 4 or tkns[1].kind != "EQUALS" or tkns[-1].kind != "SEMI":
+        if len(tkns) != 4 or tkns[1].kind != "EQUALS" or tkns[-1].kind != "SEMI":
             return
-        if len(tkns) == 4:
-            source = find_local(tkns[2].text, storage)
-            if source is None or not source.known_object:
-                return
-        elif not (tkns[2].text in POINTER_CONSTRUCTORS and tkns[3].kind == "LPAREN"
-                  and matching_rparen(tkns, 3) == len(tkns) - 2):
+        source = find_local(tkns[2].text, storage)
+        if source is None or not source.known_object:
             return
         # A peeked item has one Local among the inputs and another among the
         # outputs of a copied storage; mark both, as the store cleared both.

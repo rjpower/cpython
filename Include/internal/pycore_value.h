@@ -310,17 +310,23 @@ PyValue_Box(PyValue ref)
 
 /* Value identity (boil/design/02-tagged-values.md, section 3)
 
-   An exact int that fits in int32, or an exact float other than NaN, may be
-   held inline in one place and boxed in others, and a value may be boxed
-   more than once. The program must not be able to tell these apart, so such
-   a value has a single identity: its inline encoding, _PyValue_Int32Bits()
-   or _PyValue_DoubleBits(), whether it is held inline or boxed. Any other
+   An exact int that fits in int32, or an exact float other than NaN, is
+   held inline in every home (frame slot, container element, field, cell,
+   dict key or value, set key): the PyValue_FromPyObject*() constructors
+   turn such an object into its inline value, and _PyValue_CheckHome()
+   asserts it at each store. Only C code holds such a value boxed, in a
+   PyObject * or a C local PyValue, and a value may be boxed more than once.
+   The program must not be able to tell these apart, so such a value has a
+   single identity: its inline encoding, _PyValue_Int32Bits() or
+   _PyValue_DoubleBits(), whether it is held inline or boxed. Any other
    object's identity is its address. An encoding is at least Py_DOUBLE_OFFSET
    (2**49) and an address is below Py_PTR_LIMIT (2**48), so an identity names
    exactly one value or object.
 
-   `is` (PyValue_Is(), hence IS_OP; operator.is_ and operator.is_not)
-   compares identities and id() returns the identity, so id(x) == id(y)
+   `is` on two values (PyValue_Is(), hence IS_OP) compares their bits: a
+   value in a home has one encoding, which is its identity or its address.
+   operator.is_ and operator.is_not, which see objects and so may see boxes,
+   compare identities, and id() returns the identity, so id(x) == id(y)
    exactly when x is y, and id() of a value is the same before and after it
    is boxed. 0.0 and -0.0 differ in bits, so `0.0 is -0.0` is False. NaN is
    never inline and keeps object identity. Bools and int subclasses keep
@@ -349,10 +355,6 @@ _PyValue_IntFitsInline(int64_t v)
 {
     return INT32_MIN <= v && v <= INT32_MAX;
 }
-
-// Do a and b, which are different references, hold the same value?
-// Neither may be PyValue_NULL.
-PyAPI_FUNC(int) _PyValue_IsSameValue(PyValue a, PyValue b);
 
 
 // Ownership discipline is explicit; no separate debug payload format exists.
@@ -451,9 +453,14 @@ PyValue_CheckValid(PyValue ref)
 /* Canonical form of a value held in a home (a frame slot, container element,
    field, cell, dict key or value, or set key): an exact int that fits inline
    and an exact non-NaN float are never held as pointers, and a pointer
-   without the no-count tag is never a static immortal. This only reports:
-   it counts each violation by call site and kind, readable through
-   _testinternalcapi.pyvalue_home_violations(). Debug builds only.
+   without the no-count tag is never a static immortal. Debug builds only.
+
+   A violation is a fatal error naming the call site and kind. With
+   _PYTHON_VALUE_HOME_REPORT set in the environment (read once, at the
+   first violation; -E and -I ignore it) it is only counted, by call site
+   and kind, readable through
+   _testinternalcapi.pyvalue_home_violations() and
+   pyvalue_home_violation_sites(): a census of the writers to fix.
 
    _PyValue_CheckHome() checks a store, and the count is of stores.
    _PyValue_RecheckHome() checks a value already stored (the frame check, a
@@ -574,8 +581,19 @@ PyValue_AsKnownObjectSteal(PyValue ref)
     }
 }
 
+/* The canonical constructors (FromPyObjectSteal, FromPyObjectNew,
+   FromPyObjectBorrow) make an exact int that fits inline, or an exact float
+   other than NaN, an inline value: Steal frees the box at once (the release
+   contract under "Value identity"), New and Borrow leave it to its owner. Any other object
+   becomes a pointer, with the no-count tag if it is immortal (New, Steal) or
+   borrowed. Code that goes on to use the object keeps its PyObject * in a C
+   local: the value may hold no object. */
+
+/* The pointer value of obj, owning what obj owned, never inline. Only for
+   boxes, which are pointers by definition (PyValue_Box()), and for the
+   canonical constructors themselves: a home never receives a box. */
 static inline PyValue
-PyValue_FromPyObjectSteal(PyObject *obj)
+_PyValue_PointerSteal(PyObject *obj)
 {
     assert(obj != NULL);
     assert((uintptr_t)obj < Py_PTR_LIMIT);
@@ -585,14 +603,23 @@ PyValue_FromPyObjectSteal(PyObject *obj)
     return ref;
 }
 
+// Out of line: the canonical value of an exact int or float, consumed.
+PyAPI_FUNC(PyValue) _PyValue_FromNumberSteal(PyObject *obj);
+
+static inline bool
+_PyValue_IsNumberType(PyTypeObject *type)
+{
+    return type == &PyLong_Type || type == &PyFloat_Type;
+}
+
 static inline PyValue
-PyValue_FromPyObjectStealMortal(PyObject *obj)
+PyValue_FromPyObjectSteal(PyObject *obj)
 {
     assert(obj != NULL);
-    assert(!_Py_IsImmortal(obj));
-    PyValue ref = (PyValue){ .bits = (uintptr_t)obj };
-    PyValue_CheckValid(ref);
-    return ref;
+    if (_PyValue_IsNumberType(Py_TYPE(obj))) {
+        return _PyValue_FromNumberSteal(obj);
+    }
+    return _PyValue_PointerSteal(obj);
 }
 
 static inline PyValue
@@ -600,6 +627,12 @@ _PyValue_FromPyObjectNew(PyObject *obj)
 {
     assert(obj != NULL);
     assert((uintptr_t)obj < Py_PTR_LIMIT);
+    if (_PyValue_IsNumberType(Py_TYPE(obj))) {
+        PyValue value = PyValue_FromObjectBorrow(obj);
+        if (PyValue_IsInline(value)) {
+            return value;
+        }
+    }
     if (_Py_IsImmortal(obj)) {
         return (PyValue){ .bits = (uintptr_t)obj | Py_TAG_REFCNT };
     }
@@ -611,22 +644,13 @@ _PyValue_FromPyObjectNew(PyObject *obj)
 #define PyValue_FromPyObjectNew(obj) _PyValue_FromPyObjectNew(_PyObject_CAST(obj))
 
 static inline PyValue
-_PyValue_FromPyObjectNewMortal(PyObject *obj)
-{
-    assert(obj != NULL);
-    _Py_INCREF_MORTAL(obj);
-    PyValue ref = (PyValue){ .bits = (uintptr_t)obj };
-    PyValue_CheckValid(ref);
-    return ref;
-}
-#define PyValue_FromPyObjectNewMortal(obj) _PyValue_FromPyObjectNewMortal(_PyObject_CAST(obj))
-
-/* Create a new reference from an object with an embedded reference count */
-static inline PyValue
 PyValue_FromPyObjectBorrow(PyObject *obj)
 {
     assert(obj != NULL);
     assert((uintptr_t)obj < Py_PTR_LIMIT);
+    if (_PyValue_IsNumberType(Py_TYPE(obj))) {
+        return PyValue_FromObjectBorrow(obj);
+    }
     return (PyValue){ .bits = (uintptr_t)obj | Py_TAG_REFCNT};
 }
 
@@ -716,13 +740,13 @@ PyValue_XCLOSE(PyValue ref)
     } while (0)
 
 
-// Python's `is`: the same reference, ignoring bit 0 of a pointer, or else
-// the same value (see "Value identity" below), which only the out-of-line
-// test can establish. Indices compare exactly.
+// Python's `is` on values held in homes, or built by the canonical
+// constructors: the same bits, ignoring bit 0 (the no-count tag) of a
+// pointer. Such a value has one encoding (see "Value identity" above); a
+// box held in a C local is not one. Indices compare exactly.
 // Note: this is a macro because MSVC (Windows) has trouble inlining it.
 #define PyValue_Is(a, b) \
-    (((((a).bits ^ (b).bits) & ~(uintptr_t)PyValue_IsPointerSpace(a)) == 0) \
-     || _PyValue_IsSameValue((a), (b)))
+    ((((a).bits ^ (b).bits) & ~(uintptr_t)PyValue_IsPointerSpace(a)) == 0)
 
 
 
@@ -863,8 +887,10 @@ PyValue_CompactIntValue(PyValue ref)
     return (int32_t)_PyLong_CompactValue((PyLongObject *)PyValue_AsKnownObjectBorrow(ref));
 }
 
-// A new int for a result outside int32 (the slow path of int arithmetic),
-// or PyValue_NULL with an exception set.
+// The canonical value of an int64 result, or PyValue_NULL with an exception
+// set: a new int for a result outside int32 (the slow path of int
+// arithmetic), the inline value otherwise (FOR_ITER_RANGE, len()). Step 9a
+// renames it PyValue_FromInt64.
 PyAPI_FUNC(PyValue) _PyValue_BoxInt64(int64_t value);
 
 // value << shift for a shift of 32 or more places, which makes a long int,
@@ -947,7 +973,8 @@ PyValue_FloatOperandValues(PyValue a, PyValue b, double *da, double *db)
     return true;
 }
 
-// A new float, or PyValue_NULL with an exception set.
+// A new float for a NaN, the only float with no inline form, or
+// PyValue_NULL with an exception set.
 PyAPI_FUNC(PyValue) _PyValue_BoxDouble(double value);
 
 /* The result of float arithmetic: inline unless it is NaN, which is boxed

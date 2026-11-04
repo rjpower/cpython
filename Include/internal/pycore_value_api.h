@@ -92,9 +92,8 @@ _PyValue_FromObjectBorrowInline(PyObject *obj)
     if (obj == NULL) {
         return PyValue_NULL;
     }
-    PyTypeObject *type = Py_TYPE(obj);
-    if (type != &PyLong_Type && type != &PyFloat_Type) {
-        return PyValue_FromPyObjectBorrow(obj);
+    if (!_PyValue_IsNumberType(Py_TYPE(obj))) {
+        return _PyValue_FromObjectKnown(obj);
     }
     PyValue value = PyValue_FromObjectBorrow(obj);
 #ifdef Py_STATS

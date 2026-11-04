@@ -3222,12 +3222,12 @@ _PyObject_LookupSpecialMethod(PyObject *attr, PyValue *method,
     if (method_view == NULL) {
         goto done;
     }
-    /* Successful method/self outputs retain owned object views for native
-       consumers, including WITH_EXCEPT_START; do not canonicalize them here. */
-    *method = PyValue_FromPyObjectSteal(method_view);
-    method_view = NULL;
+    /* The outputs are the caller's frame slots, which hold canonical values;
+       a consumer that needs objects (WITH_EXCEPT_START) boxes them. The
+       method is tested and bound through its object view. */
+    *method = PyValue_FromPyObjectNew(method_view);
     PyValue_CLEAR(found);
-    PyObject *method_object = PyValue_AsKnownObjectBorrow(*method);
+    PyObject *method_object = method_view;
     if (_PyType_HasFeature(Py_TYPE(method_object), Py_TPFLAGS_METHOD_DESCRIPTOR)) {
         PyValue retired = *self;
         *self = PyValue_FromPyObjectSteal(self_view);
@@ -3266,13 +3266,17 @@ done:
     return rc;
 }
 
+/* On success, *out is a new reference to the method as an object, which
+   every caller calls: an int or float attribute comes back as its box. It
+   is a C local of the caller, not a home, so it need not be canonical. */
 static int
-lookup_method_ex(PyObject *self, PyObject *attr, PyValue *out,
+lookup_method_ex(PyObject *self, PyObject *attr, PyObject **out,
                  int raise_attribute_error)
 {
-    assert(PyValue_IsNull(*out));
-    (void)_PyType_LookupValueAndVersion(Py_TYPE(self), attr, out);
-    if (PyValue_IsNull(*out)) {
+    *out = NULL;
+    PyValue found = PyValue_NULL;
+    (void)_PyType_LookupValueAndVersion(Py_TYPE(self), attr, &found);
+    if (PyValue_IsNull(found)) {
         if (raise_attribute_error) {
             PyErr_SetObject(PyExc_AttributeError, attr);
         }
@@ -3280,22 +3284,22 @@ lookup_method_ex(PyObject *self, PyObject *attr, PyValue *out,
     }
 
     /* Callers use the method as an object: box an inline scalar value. */
-    PyObject *value = _PyValue_AsObjectAt(*out, BOX_SITE_ATTRIBUTE);
-    PyValue_CLEAR(*out);
+    PyObject *value = _PyValue_AsObjectAt(found, BOX_SITE_ATTRIBUTE);
+    PyValue_CLEAR(found);
     if (value == NULL) {
         return -1;
     }
-    *out = PyValue_FromPyObjectSteal(value);
     if (_PyType_HasFeature(Py_TYPE(value), Py_TPFLAGS_METHOD_DESCRIPTOR)) {
         /* Avoid temporary PyMethodObject */
+        *out = value;
         return 1;
     }
 
     descrgetfunc f = Py_TYPE(value)->tp_descr_get;
     if (f != NULL) {
-        value = f(value, self, (PyObject *)(Py_TYPE(self)));
-        PyValue_CLEAR(*out);
-        if (value == NULL) {
+        PyObject *bound = f(value, self, (PyObject *)(Py_TYPE(self)));
+        Py_DECREF(value);
+        if (bound == NULL) {
             if (!raise_attribute_error &&
                 PyErr_ExceptionMatches(PyExc_AttributeError))
             {
@@ -3303,19 +3307,20 @@ lookup_method_ex(PyObject *self, PyObject *attr, PyValue *out,
             }
             return -1;
         }
-        *out = PyValue_FromPyObjectSteal(value);
+        value = bound;
     }
+    *out = value;
     return 0;
 }
 
 static int
-lookup_maybe_method(PyObject *self, PyObject *attr, PyValue *out)
+lookup_maybe_method(PyObject *self, PyObject *attr, PyObject **out)
 {
     return lookup_method_ex(self, attr, out, 0);
 }
 
 static int
-lookup_method(PyObject *self, PyObject *attr, PyValue *out)
+lookup_method(PyObject *self, PyObject *attr, PyObject **out)
 {
     return lookup_method_ex(self, attr, out, 1);
 }
@@ -3352,27 +3357,18 @@ call_unbound_noarg(int unbound, PyObject *func, PyObject *self)
 static PyObject *
 call_method_noarg(PyObject *self, PyObject *attr)
 {
-    PyThreadState *tstate = _PyThreadState_GET();
     PyObject *self_owner = NULL;
     PyObject *result = NULL;
-    _PyCValue cref;
+    PyObject *func = NULL;
     int unbound = -1;
     self_owner = Py_NewRef(self);
-    _PyThreadState_PushCValue(tstate, &cref);
-    unbound = lookup_method(self_owner, attr, &cref.ref);
+    unbound = lookup_method(self_owner, attr, &func);
     if (unbound < 0) {
         goto done;
     }
-    assert(!PyValue_IsNull(cref.ref));
-    assert(PyValue_IsPointerSpace(cref.ref));
-    PyObject *func = PyValue_AsKnownObjectBorrow(cref.ref);
     result = call_unbound_noarg(unbound, func, self_owner);
 done:
-    {
-        PyValue retired = _PyThreadState_PopCValueSteal(tstate, &cref);
-        cref.ref = PyValue_NULL;
-        PyValue_XCLOSE(retired);
-    }
+    Py_XDECREF(func);
     Py_CLEAR(self_owner);
     return result;
 }
@@ -3383,19 +3379,15 @@ call_method(PyObject *self, PyObject *attr, PyObject *args, PyObject *kwds)
     PyThreadState *tstate = _PyThreadState_GET();
     PyObject *self_owner = NULL, *args_owner = NULL, *kwds_owner = NULL;
     PyObject *result = NULL;
-    _PyCValue cref;
+    PyObject *meth = NULL;
     int unbound = -1;
     self_owner = Py_NewRef(self);
     args_owner = Py_NewRef(args);
     kwds_owner = Py_XNewRef(kwds);
-    _PyThreadState_PushCValue(tstate, &cref);
-    unbound = lookup_method(self_owner, attr, &cref.ref);
+    unbound = lookup_method(self_owner, attr, &meth);
     if (unbound < 0) {
         goto done;
     }
-    assert(!PyValue_IsNull(cref.ref));
-    assert(PyValue_IsPointerSpace(cref.ref));
-    PyObject *meth = PyValue_AsKnownObjectBorrow(cref.ref);
     if (unbound) {
         result = _PyObject_Call_Prepend(tstate, meth, self_owner, args_owner,
                                         kwds_owner);
@@ -3404,11 +3396,7 @@ call_method(PyObject *self, PyObject *attr, PyObject *args, PyObject *kwds)
         result = _PyObject_Call(tstate, meth, args_owner, kwds_owner);
     }
 done:
-    {
-        PyValue retired = _PyThreadState_PopCValueSteal(tstate, &cref);
-        cref.ref = PyValue_NULL;
-        PyValue_XCLOSE(retired);
-    }
+    Py_XDECREF(meth);
     Py_CLEAR(kwds_owner);
     Py_CLEAR(args_owner);
     Py_CLEAR(self_owner);
@@ -3426,24 +3414,16 @@ vectorcall_method(PyObject *name, PyObject *const *args, Py_ssize_t nargs)
     assert(nargs >= 1);
     PyThreadState *tstate = _PyThreadState_GET();
     PyObject *self_owner = NULL, *result = NULL;
-    _PyCValue cref;
+    PyObject *func = NULL;
     int unbound = -1;
     self_owner = Py_NewRef(args[0]);
-    _PyThreadState_PushCValue(tstate, &cref);
-    unbound = lookup_method(self_owner, name, &cref.ref);
+    unbound = lookup_method(self_owner, name, &func);
     if (unbound < 0) {
         goto done;
     }
-    assert(!PyValue_IsNull(cref.ref));
-    assert(PyValue_IsPointerSpace(cref.ref));
-    PyObject *func = PyValue_AsKnownObjectBorrow(cref.ref);
     result = vectorcall_unbound(tstate, unbound, func, args, nargs);
 done:
-    {
-        PyValue retired = _PyThreadState_PopCValueSteal(tstate, &cref);
-        cref.ref = PyValue_NULL;
-        PyValue_XCLOSE(retired);
-    }
+    Py_XDECREF(func);
     Py_CLEAR(self_owner);
     return result;
 }
@@ -3458,29 +3438,21 @@ vectorcall_maybe(PyThreadState *tstate, PyObject *name,
 
     PyObject *self_owner = NULL;
     PyObject *result = NULL;
-    _PyCValue cref = { .ref = PyValue_NULL };
+    PyObject *func = NULL;
     int unbound = -1;
 
     self_owner = Py_NewRef(args[0]);
-    _PyThreadState_PushCValue(tstate, &cref);
-    unbound = lookup_maybe_method(self_owner, name, &cref.ref);
+    unbound = lookup_maybe_method(self_owner, name, &func);
     if (unbound < 0) {
         if (!PyErr_Occurred()) {
             result = Py_NewRef(Py_NotImplemented);
         }
         goto done;
     }
-    assert(!PyValue_IsNull(cref.ref));
-    assert(PyValue_IsPointerSpace(cref.ref));
-    PyObject *func = PyValue_AsKnownObjectBorrow(cref.ref);
     result = vectorcall_unbound(tstate, unbound, func, args, nargs);
 
 done:
-    {
-        PyValue retired = _PyThreadState_PopCValueSteal(tstate, &cref);
-        cref.ref = PyValue_NULL;
-        PyValue_XCLOSE(retired);
-    }
+    Py_XDECREF(func);
     Py_CLEAR(self_owner);
     return result;
 }
@@ -3492,24 +3464,19 @@ done:
 static PyObject *
 maybe_call_special_no_args(PyObject *self, PyObject *attr, int *attr_is_none)
 {
-    PyThreadState *tstate = _PyThreadState_GET();
     PyObject *self_owner = NULL;
     PyObject *result = NULL;
-    _PyCValue cref = { .ref = PyValue_NULL };
+    PyObject *func = NULL;
     int unbound = -1;
 
     if (attr_is_none != NULL) {
         *attr_is_none = 0;
     }
     self_owner = Py_NewRef(self);
-    _PyThreadState_PushCValue(tstate, &cref);
-    unbound = lookup_maybe_method(self_owner, attr, &cref.ref);
+    unbound = lookup_maybe_method(self_owner, attr, &func);
     if (unbound < 0) {
         goto done;
     }
-    assert(!PyValue_IsNull(cref.ref));
-    assert(PyValue_IsPointerSpace(cref.ref));
-    PyObject *func = PyValue_AsKnownObjectBorrow(cref.ref);
     if (attr_is_none != NULL) {
         *attr_is_none = (func == Py_None);
     }
@@ -3518,11 +3485,7 @@ maybe_call_special_no_args(PyObject *self, PyObject *attr, int *attr_is_none)
     }
 
 done:
-    {
-        PyValue retired = _PyThreadState_PopCValueSteal(tstate, &cref);
-        cref.ref = PyValue_NULL;
-        PyValue_XCLOSE(retired);
-    }
+    Py_XDECREF(func);
     Py_CLEAR(self_owner);
     return result;
 }
@@ -3535,7 +3498,7 @@ maybe_call_special_one_arg(PyObject *self, PyObject *attr, PyObject *arg,
     PyObject *self_owner = NULL;
     PyObject *arg_owner = NULL;
     PyObject *result = NULL;
-    _PyCValue cref = { .ref = PyValue_NULL };
+    PyObject *func = NULL;
     int unbound = -1;
 
     if (attr_is_none != NULL) {
@@ -3543,14 +3506,10 @@ maybe_call_special_one_arg(PyObject *self, PyObject *attr, PyObject *arg,
     }
     self_owner = Py_NewRef(self);
     arg_owner = Py_NewRef(arg);
-    _PyThreadState_PushCValue(tstate, &cref);
-    unbound = lookup_maybe_method(self_owner, attr, &cref.ref);
+    unbound = lookup_maybe_method(self_owner, attr, &func);
     if (unbound < 0) {
         goto done;
     }
-    assert(!PyValue_IsNull(cref.ref));
-    assert(PyValue_IsPointerSpace(cref.ref));
-    PyObject *func = PyValue_AsKnownObjectBorrow(cref.ref);
     if (attr_is_none != NULL) {
         *attr_is_none = (func == Py_None);
     }
@@ -3560,11 +3519,7 @@ maybe_call_special_one_arg(PyObject *self, PyObject *attr, PyObject *arg,
     }
 
 done:
-    {
-        PyValue retired = _PyThreadState_PopCValueSteal(tstate, &cref);
-        cref.ref = PyValue_NULL;
-        PyValue_XCLOSE(retired);
-    }
+    Py_XDECREF(func);
     Py_CLEAR(arg_owner);
     Py_CLEAR(self_owner);
     return result;
@@ -12006,14 +11961,12 @@ slot_tp_richcompare(PyObject *self, PyObject *other, int op)
 static int
 has_dunder_getitem(PyObject *self)
 {
-    PyThreadState *tstate = _PyThreadState_GET();
-    _PyCValue cref;
-    _PyThreadState_PushCValue(tstate, &cref);
-    int status = lookup_maybe_method(self, &_Py_ID(__getitem__), &cref.ref);
+    PyObject *func = NULL;
+    int status = lookup_maybe_method(self, &_Py_ID(__getitem__), &func);
     /* lookup_maybe_method() reports a missing method and an error the same
        way. Unlike upstream, propagate the error. */
     int result = status >= 0 ? 1 : (PyErr_Occurred() ? -1 : 0);
-    _PyThreadState_PopCValue(tstate, &cref);
+    Py_XDECREF(func);
     return result;
 }
 
@@ -12141,14 +12094,10 @@ slot_tp_finalize(PyObject *self)
     PyThreadState *tstate = _PyThreadState_GET();
     PyObject *exc = _PyErr_GetRaisedException(tstate);
 
-    _PyCValue cref;
-    _PyThreadState_PushCValue(tstate, &cref);
-
     /* Execute __del__ method, if any. */
-    int unbound = lookup_maybe_method(self, &_Py_ID(__del__), &cref.ref);
+    PyObject *del = NULL;
+    int unbound = lookup_maybe_method(self, &_Py_ID(__del__), &del);
     if (unbound >= 0) {
-        assert(!PyValue_IsNull(cref.ref));
-        PyObject *del = PyValue_AsKnownObjectBorrow(cref.ref);
         PyObject *res = call_unbound_noarg(unbound, del, self);
         if (res == NULL) {
             PyErr_FormatUnraisable("Exception ignored while "
@@ -12165,7 +12114,7 @@ slot_tp_finalize(PyObject *self)
                                "calling deallocator %R", self);
     }
 
-    _PyThreadState_PopCValue(tstate, &cref);
+    Py_XDECREF(del);
 
     /* Restore the saved exception. */
     _PyErr_SetRaisedException(tstate, exc);

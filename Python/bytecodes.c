@@ -1631,7 +1631,13 @@ dummy_func(
                 DEAD(v);
             }
             else {
-                PyObject *v_o = PyValue_AsKnownObjectBorrow(v);
+                /* Box v here, not at entry: the generator branch above
+                   stores v in the generator's frame, which needs it
+                   canonical. */
+                PyObject *v_o = _PyValueTemps_Object(value_temps, v);
+                if (v_o == NULL) {
+                    ERROR_NO_POP();
+                }
                 PySendResultPair res = _PyIter_Send(receiver_o, v_o);
                 if (res.kind == PYGEN_ERROR) {
                     ERROR_NO_POP();
@@ -2332,7 +2338,7 @@ dummy_func(
                 ERROR_NO_POP();
             }
             INPUTS_DEAD();
-            list = PyValue_FromPyObjectStealMortal(list_o);
+            list = PyValue_FromPyObjectSteal(list_o);
         }
 
         op(_LIST_EXTEND, (list_st, unused[oparg-1], iterable_st -- list_st, unused[oparg-1], i)) {
@@ -2398,7 +2404,7 @@ dummy_func(
             }
 
             INPUTS_DEAD();
-            set = PyValue_FromPyObjectStealMortal(set_o);
+            set = PyValue_FromPyObjectSteal(set_o);
         }
 
         inline_ok inst(BUILD_MAP, (values[oparg*2] -- map)) {
@@ -2406,7 +2412,7 @@ dummy_func(
             PyObject *map_o = _Py_BuildMap_ValueSteal(values, oparg);
             DEAD(values);
             int failed = map_o == NULL;
-            map = failed ? PyValue_NULL : PyValue_FromPyObjectStealMortal(map_o);
+            map = failed ? PyValue_NULL : PyValue_FromPyObjectSteal(map_o);
             SYNC_SP();
             IR_FINISH_VALUE_OPERATION(operation);
             ERROR_IF(failed);
@@ -3237,8 +3243,8 @@ dummy_func(
 
         macro(IS_OP) = _IS_OP + POP_TOP + POP_TOP;
 
-        // Value identity for inline ints and their boxes; see "Value
-        // identity" in pycore_value.h.
+        // A bit compare: the operands are canonical (see "Value identity"
+        // in pycore_value.h).
         inline_ok op(_IS_OP, (left, right -- b, l, r)) {
             int res = PyValue_Is(left, right) ^ oparg;
             b = res ? PyValue_True : PyValue_False;
@@ -5285,7 +5291,7 @@ dummy_func(
             frame = tstate->current_frame = prev;
             LOAD_IP(1);
             RELOAD_STACK();
-            res = PyValue_FromPyObjectStealMortal((PyObject *)gen);
+            res = PyValue_FromPyObjectSteal((PyObject *)gen);
             LLTRACE_RESUME_FRAME();
         }
 
@@ -5306,7 +5312,7 @@ dummy_func(
             PyObject *slice_o = PySlice_New(start_o, stop_o, step_o);
             DECREF_INPUTS();
             ERROR_IF(slice_o == NULL);
-            slice = PyValue_FromPyObjectStealMortal(slice_o);
+            slice = PyValue_FromPyObjectSteal(slice_o);
         }
 
         inst(CONVERT_VALUE, (value -- result)) {

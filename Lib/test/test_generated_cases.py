@@ -1023,6 +1023,31 @@ class TestIRCases(unittest.TestCase):
         analysis = self.analyze(f"\ninst(OP, ({effect})) {{\n{body}\n}}\n")
         return ir_generator.oparg_slot_role([analysis.instructions["OP"]])
 
+    def test_constructor_results_are_not_known_objects(self):
+        # The PyValue_FromPyObject*() constructors make an exact int or
+        # float inline, so their results get the generic DUP and an inline
+        # test before an object read, not the _POINTER forms
+        for ctor in ("Steal", "New", "Borrow"):
+            with self.subTest(ctor=ctor):
+                output = self.ir_output(f"""
+                op(_MAKE, (-- res)) {{
+                    res = PyValue_FromPyObject{ctor}(SPAM());
+                }}
+                op(_COPY, (value -- value, copy)) {{
+                    copy = PyValue_DUP(value);
+                }}
+                op(_USE, (value, copy --)) {{
+                    PyObject *o = PyValue_AsKnownObjectBorrow(value);
+                    EGGS(o);
+                    DECREF_INPUTS();
+                }}
+                macro(OP) = _MAKE + _COPY + _USE;
+                """)
+                self.assertIn("copy = PyValue_DUP(value);", output)
+                self.assertNotIn("_PyValue_DUP_POINTER", output)
+                self.assertLess(output.index("PyValue_IsInline(value)"),
+                                output.index("PyValue_AsKnownObjectBorrow(value)"))
+
     def test_slot_roles(self):
         # The role of an oparg that names a local follows from the uses of
         # GETLOCAL(oparg) in the body

@@ -2590,7 +2590,7 @@
             if (list_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            list = PyValue_FromPyObjectStealMortal(list_o);
+            list = PyValue_FromPyObjectSteal(list_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg);
             window[0] = _PyValue_Publish(&list);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
@@ -2639,7 +2639,7 @@
             _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
             PyObject *map_o = _Py_BuildMap_ValueSteal(values, oparg);
             int failed = map_o == NULL;
-            map = failed ? PyValue_NULL : PyValue_FromPyObjectStealMortal(map_o);
+            map = failed ? PyValue_NULL : PyValue_FromPyObjectSteal(map_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg*2);
             window[0] = _PyValue_Publish(&map);
             {

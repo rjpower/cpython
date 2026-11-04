@@ -274,8 +274,9 @@ that read inline values, such as `PyValue_TYPE()` and
 input only through them needs no box.
 
 An input that was checked, boxed or declared an object, and a variable assigned
-from such an input or from a `PyValue_FromPyObject...()` constructor, is
-known to be a pointer. `PyValue_CLOSE`, `PyValue_XCLOSE`,
+from such an input, is known to be a pointer. A `PyValue_FromPyObject...()`
+constructor is canonical: an exact int or float becomes an inline value, so
+its result is not known to be a pointer. `PyValue_CLOSE`, `PyValue_XCLOSE`,
 `PyValue_CLOSE_SPECIALIZED`, `PyValue_DUP` and
 `PyValue_AsKnownObjectSteal` on such a variable, and the generator's own close
 of such an input, become the `_PyValue_..._POINTER` variants, which test

@@ -1,6 +1,6 @@
 # Project status
 
-Status as of 2026-11-04 10:50 PST, from the coordinator fact sheet. Update this
+Status as of 2026-11-04 12:55 PST, from the coordinator fact sheet. Update this
 page at each landing.
 
 ## Outcome and next milestone
@@ -57,7 +57,7 @@ costs, then the qualified baseline.
 
 ## Position
 
-- Runtime branch `boil/pyvalue-rc-universal`, HEAD `5de7bd62ef9`.
+- Runtime branch `boil/pyvalue-rc-universal`, HEAD `2f572ea0ea8`.
 - Landed 2026-11-03: native boundary P3 (`56ff66a596b`, `643c69c7244`,
   `6d39221996d`) and P4 (`2558376b321`, post-review fixes `fdd7fed3216`);
   representation steps 1 (`f129780a9a7`), 2 (`f7dfc5b961f`), 3 (`dbce7b1260d`,
@@ -125,7 +125,17 @@ costs, then the qualified baseline.
   local result stored after the window retires and after the periodic
   check; `CALL_NON_PY_GENERAL` has upstream's periodic check), and five fork
   tests check the current rules: 9 of the 11 long-standing failures fixed.
-- Suites at `5de7bd62ef9`, debug and release alike: run=51,571, failures=2,
+- Landed 2026-11-04 (continued): value-form container calls
+  (`2f572ea0ea8`). Eleven sites that boxed an inline input for a
+  `PyObject *` call now call existing value-form functions: dict and set
+  contains, compare with two inline operands, `SET_ADD`, `BUILD_SET`,
+  `MAP_ADD`, `STORE_GLOBAL` and `STORE_NAME` on an exact dict, `DELETE_SUBSCR`
+  on an exact dict, list store and list or tuple subscript with an inline
+  index. Boxes per loop: nqueens 541,065 to 40,325, raytrace 1.34M to 0.93M,
+  go 229k to 125k, chaos 484k to 315k, deepcopy_memo 207 to 102. Compiled
+  output unchanged. The sites left need value-form functions from value API
+  V2a-V5 (FOLLOWUPS.md, "Box sites").
+- Suites at `2f572ea0ea8`, debug and release alike: run=51,613, failures=2,
   both in test_capi (test_is_unique_temporary, test_unicode.test_new): a local
   passed to a call reads `sys.getrefcount` 2 against upstream's 1, because
   the call window owns a copy; open for IR v2 B5 (register-ir.md G4). `make check-value-api`: 177 units, 0 findings.
@@ -136,16 +146,18 @@ costs, then the qualified baseline.
 
 Running now:
 
-1. Register IR v2 A5b phase 1: the typed-borrow design proposal
-   (`A5B-BRIEF.md`), reviewed before implementation.
+1. Register IR v2 A5b, the typed borrow
+   ([proposal](design/proposals/register-ir-v2-a5b.md), revision 3, accepted
+   after two reviews; `A5B-PHASE2-BRIEF.md`). Four diffs, each post-reviewed
+   and then integrated: A5b-1 types and readers (reviewed: integrate; fixes
+   in progress), A5b-2 the generator, A5b-3 the heap side, A5b-4 renames.
+   Budget 21.5 h, in its own worktree.
 
 Next, in order:
 
-2. A5b implementation; then A3a-A3c (tail calls become the only backend;
-   `clang-21` and gcc 15.2 are installed)
-   ([packet](design/proposals/register-ir-v2-packet.md)).
-3. Value-form dict lookups for `CONTAINS_OP_DICT` (the `id()` key boxes).
-4. Value API V1 follow-ups (box-site annotations in the interpreter files,
+2. A3a-A3c (tail calls become the only backend; `clang-21` and gcc 15.2 are
+   installed) ([packet](design/proposals/register-ir-v2-packet.md)).
+3. Value API V1 follow-ups (box-site annotations in the interpreter files,
    `entry_unbox` counts, seven modules that define a bare `Py_BUILD_CORE`),
    then V2a-0 onwards.
 

@@ -80,13 +80,22 @@ so pystats dispatch counts do not see it. A `pybuilddir.txt` of `none` makes a
 release build 5 to 12x slower; check it. `perf` is blocked
 (`perf_event_paranoid=4`); `tools/sampler/` has an LD_PRELOAD SIGPROF sampler.
 
-Running now, briefs in `build/pyjit-link-wave1/`: the re-measure
-(`REMEASURE2-BRIEF.md`; it times in a quiet window), A5b phase 1, the
-typed-borrow proposal (`A5B-BRIEF.md`; writes
-`pyjit/design/proposals/register-ir-v2-a5b.md`), and a Sonnet design-doc sync
-for A5a and int51.
+Running now, briefs in `build/pyjit-link-wave1/`: A5b phase 2, the typed
+borrow (`A5B-PHASE2-BRIEF.md`; proposal
+`pyjit/design/proposals/register-ir-v2-a5b.md`, revision 3). The author works
+in `build/worktrees/irv2-a5b` (base `5de7bd62ef9`, builds
+`build/irv2-a5b-{debug,release,clang-debug}`) and writes one increment per
+step (`irv2-a5b-N.diff`, progress `progress-irv2-a5b.txt`: "A5b-N ready",
+then "A5b-N final" after the post-review fixes). The coordinator
+post-reviews each increment, applies it to the shared tree with a 3-way
+apply and resolves clashes with `2f572ea0ea8` there. A5b-1 is reviewed
+(`review-irv2-a5b-1.md`: integrate, three should-fix items being fixed).
 
 Landed on the runtime branch, newest first:
+
+- `2f572ea0ea8`: value-form container calls in 11 box sites (contains,
+  compare, set and dict adds, global and name stores, dict delete, list and
+  tuple indexing); post-review `review-boxsites.md`.
 
 - `5de7bd62ef9`, `80bb9c84701`, `bf0639df819`: release-order fixes and stale
   fork tests (9 of 11 long-standing failures); int51 in the trace JIT (9b)
@@ -201,9 +210,9 @@ overwritten.
 
 ## Next steps
 
-1. Review the A5b proposal (critical review; it changes every core
-   signature that takes a borrow), then send phase 2; integrate the
-   re-measure report and the doc sync.
+1. A5b: post-review and integrate each increment as it is ready (A5b-1 to
+   A5b-4). When it lands, the doc edits listed in FOLLOWUPS.md ("Docs when
+   A5b lands").
 2. Then A3a-A3c, the G2 experiment, B0b and the format steps B2-B7
    ([packet](design/proposals/register-ir-v2-packet.md)).
 3. Value API V1 follow-ups (`FOLLOWUPS.md`), then V2a-0 onwards.

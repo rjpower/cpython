@@ -209,11 +209,12 @@ identity names one value.
 
 | Mechanism | Behaviour | Where |
 |---|---|---|
-| `PyValue_Is(a, b)` | XOR the bits, masking bit 0 if `a` is a pointer. If they differ, call the out-of-line `_PyValue_IsSameValue`, which compares `value_identity` of both | `pycore_value.h`, `pyvalue.c` |
+| `PyValue_Is(a, b)` | XOR the bits, masking bit 0 if `a` is a pointer; no fallback: every home holds an exact int that fits inline, or an exact non-NaN float, inline (canonical construction, asserted by `_PyValue_CheckHome` in debug builds) | `pycore_value.h` |
 | `IS_OP` | `PyValue_Is` | `Python/bytecodes.c:_IS_OP` |
 | `is None`, truth jumps | `PyValue_IsNone` / `PyValue_IsTrue`: an exact bit compare, no fallback | `bytecodes.c:_IS_NONE`, `_POP_JUMP_IF_TRUE` |
 | `id()` | `PyLong_FromVoidPtr(_PyObject_ValueIdentity(v))` | `Python/bltinmodule.c` |
-| `operator.is_` / `is_not` | Compare `_PyObject_ValueIdentity` | `Modules/_operator.c` |
+| `operator.is_` / `is_not` | `_PyObject_IsSame`: the same address, or the same value identity | `Modules/_operator.c` |
+| `object.__hash__`, `object.__repr__`, `object.__eq__`, method equality and hash | The value identity (`PyObject_GenericHash`, `_PyObject_IsSame`) | `pyhash.c`, `typeobject.c`, `methodobject.c`, `descrobject.c`, `classobject.c` |
 | C `Py_Is`, `==` on `PyObject *` | Pointer equality. Two boxes of one inline value are different objects to C | n/a |
 
 Consequences: `x is y` is True for equal int32 ints or equal-bit floats however

@@ -241,6 +241,9 @@ a `_testcapi` test that pins the round trips above, so a change is deliberate.
   exception, `StopIteration` included, left exactly as raised. Generic
   consumers treat a raised `StopIteration` as the end, as upstream does; `next()`
   passes it through (§2.1).
+  An iterator step whose box fails raises `MemoryError` and consumes the item
+  (list, tuple, set and dict iterators). A pop boxes before it removes, so a
+  failed box removes nothing (`list.pop`, `set.pop`, `dict.pop`).
 * **Absent arguments.** `PyValue_NULL` in an argument position means "not
   given" where the object form uses NULL (delete in `setattr`).
 * **`PyValue_ERROR`.** Two producers, both in `Python/ceval.c`:

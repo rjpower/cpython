@@ -57,7 +57,7 @@ costs, then the qualified baseline.
 
 ## Position
 
-- Runtime branch `boil/pyvalue-rc-universal`, HEAD `a6002e5854b`.
+- Runtime branch `boil/pyvalue-rc-universal`, HEAD `faddfd1454d`.
 - Landed 2026-11-03: native boundary P3 (`56ff66a596b`, `643c69c7244`,
   `6d39221996d`) and P4 (`2558376b321`, post-review fixes `fdd7fed3216`);
   representation steps 1 (`f129780a9a7`), 2 (`f7dfc5b961f`), 3 (`dbce7b1260d`,
@@ -142,6 +142,10 @@ costs, then the qualified baseline.
   change; compiled output unchanged. Integration caught the box-site commit's
   one `MakeHeapSafe(PyValue_Borrow(...))`, which no longer compiled (renamed to
   the interim tagging form).
+- Landed 2026-11-04 (continued): the fork's JIT is out of the build
+  (`faddfd1454d`; `_PyJIT_BASELINE_SUPPORTED` is 0 everywhere, the source
+  stays, `test_jit_method` skips) until the JIT stage rebuilds it on the final
+  IR. User decision, so IR steps carry no JIT upkeep.
 - Suites at `a6002e5854b`, debug and release alike: run=51,615, failures=2,
   both in test_capi (test_is_unique_temporary, test_unicode.test_new): a local
   passed to a call reads `sys.getrefcount` 2 against upstream's 1, because
@@ -153,18 +157,20 @@ costs, then the qualified baseline.
 
 Running now, in parallel (briefs in `build/pyjit-link-wave1/`):
 
-1. Register IR v2 A5b, the typed borrow, resumed from A5b-2
-   (`A5B-RESUME-BRIEF.md`; [proposal](design/proposals/register-ir-v2-a5b.md),
-   revision 3). The worktree `build/worktrees/irv2-a5b` moves onto the shared
-   HEAD first. A5b-3 adds the representation-boundary lints (value-api.md
-   R26). About 14.5 h left. Each increment is post-reviewed and then
-   integrated.
+1. Register IR v2 A5b, the typed borrow, in bulk style
+   (`A5B-RESUME2-BRIEF.md`; [proposal](design/proposals/register-ir-v2-a5b.md),
+   revision 3): A5b-2 finished from its saved diff, then A5b-3 as hand-made
+   type changes, a script for the mechanical classes, and parallel Sonnet
+   workers on the remaining compile errors. A5b-4's renames move into the
+   first value-API wave. About 5 h of wall clock.
 2. Removal of upstream CPython's JIT remnants (`jit_publish.c`, `jit_unwind.c`),
-   with `sys._jit` reporting the fork's JIT (`JITREM-BRIEF.md`; own worktree).
-3. Proposal for A3a-A3c, tail calls as the only backend (`A3-BRIEF.md`). It
-   decides whether the fork's JIT leaves the build until the IR settles.
-4. Proposal for the value API's route to R27 (no box inside the core) and
-   step V2a-0 (`V2A0-BRIEF.md`).
+   with `sys._jit` reporting the fork's JIT (`JITREM-BRIEF.md` and addendum;
+   Sonnet; own worktree).
+3. Proposal for A3a and A3c, tail calls as the only backend, with the JIT
+   out of the build and A3b dropped (`A3-BRIEF.md` and addendum).
+4. Proposal for the value API's route to R27 (no box inside the core): small
+   reviewed mechanism steps, then compiler-driven bulk waves on parallel
+   Sonnet workers (`V2A0-BRIEF.md` and addendum).
 
 Next: critical reviews of proposals 3 and 4, then their implementation where
 files allow; the `BUILD_SLICE` value form after A5b-2 lands; value API V1

@@ -33,7 +33,7 @@ estimates slot traffic per executed word:
   stay in place (FOR_ITER's iterator) count as read and written.
 """
 
-import collections, importlib.util, json, re, sys
+import collections, functools, importlib.util, json, re, sys
 
 IMM_READS = {"LOAD_FAST", "LOAD_FAST_BORROW", "LOAD_FAST_CHECK", "LOAD_FAST_AND_CLEAR",
              "LOAD_DEREF", "STORE_DEREF", "MAKE_CELL", "DELETE_DEREF"}
@@ -107,12 +107,21 @@ def main(kernel, metadata=None):
     print(json.dumps(out, indent=1, sort_keys=True))
 
 
+@functools.cache
+def ir_formats():
+    """(flags, roles, imm, fb, base) per handler, from the instruction
+    contract (register IR v2 B0a)"""
+    import _opcode
+    return [None if r is None else (r.flags, r.roles, r.imm, r.fb, r.base)
+            for r in _opcode.get_ir_contract()]
+
+
 def traffic(code, i, n, c, popped, pushed, opcode):
     args = set(code.co_varnames)
     nl = (len(code.co_varnames) + sum(x not in args for x in code.co_cellvars)
           + len(code.co_freevars))
     import dis
-    flags, roles, imm, fbloc, base = opcode._ir_formats[dis._all_opmap[i.handler]]
+    flags, roles, imm, fbloc, base = ir_formats()[dis._all_opmap[i.handler]]
     if flags & 2:   # _PyIR_WINDOW
         name = opcode.opname[base]
         oparg = i.arg or 0

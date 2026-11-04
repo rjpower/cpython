@@ -32,10 +32,13 @@ import collections, json, os, sys, time
 
 IR = hasattr(compile("0", "s", "eval"), "co_fbinit")
 if IR:
-    import dis, opcode
+    import _opcode, dis
     from dis import _unpack_words, _decode_word
     NAMES = dis._all_opname
-    FORMATS = opcode._ir_formats
+    # (flags, roles, imm, fb, base) per handler, from the instruction
+    # contract (register IR v2 B0a)
+    FORMATS = [None if r is None else (r.flags, r.roles, r.imm, r.fb, r.base)
+               for r in _opcode.get_ir_contract()]
 KINDS = ("COUNTER", "BRANCH", "UNARY", "BINARY", "ATTR", "GLOBAL", "CALL")
 # pycore_feedback.h struct sizes.  BRANCH is 16 for POP_JUMP_IF_NONE and _NOT_NONE
 # and 24 for POP_JUMP_IF_FALSE and _TRUE (a UNARY entry); the 8 extra bytes are

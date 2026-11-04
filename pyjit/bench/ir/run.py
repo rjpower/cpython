@@ -55,7 +55,8 @@ def main():
     ap.add_argument("--ir-python", required=True)
     ap.add_argument("--upstream-python", required=True)
     ap.add_argument("--repo", default="/home/power/code/cpython")
-    ap.add_argument("--commit", default="eba351fee7d", help="commit of the IR build")
+    ap.add_argument("--commit", required=True,
+                    help="commit of the IR build; its metadata must match the build")
     ap.add_argument("--corpus", action="append", default=[])
     ap.add_argument("--generated")
     ap.add_argument("--time-limit", default="420")

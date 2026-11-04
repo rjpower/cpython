@@ -25,14 +25,6 @@ PyAPI_FUNC(PyObject *) PyCell_NewValue(PyValue);
 PyAPI_FUNC(PyValue) PyCell_GetValue(PyObject *);
 PyAPI_FUNC(int) PyCell_SetValue(PyObject *, PyValue);
 
-static inline PyValue
-PyCell_GET_VALUE(PyObject *op)
-{
-    assert(PyCell_Check(op));
-    return PyValue_Borrow(_Py_CAST(PyCellObject *, op)->ob_ref);
-}
-#define PyCell_GET_VALUE(op) PyCell_GET_VALUE(_PyObject_CAST(op))
-
 #ifdef __cplusplus
 }
 #endif

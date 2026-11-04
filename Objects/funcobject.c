@@ -11,6 +11,7 @@
 #include "pycore_pyerrors.h"      // _PyErr_Occurred()
 #include "pycore_setobject.h"     // _PySet_NextEntry()
 #include "pycore_stats.h"
+#include "pycore_tuple.h"         // PyTuple_GET_VALUE()
 #include "pycore_value.h"         // PyValue_TYPE()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 

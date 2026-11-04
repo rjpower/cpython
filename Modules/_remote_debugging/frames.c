@@ -6,6 +6,7 @@
  ******************************************************************************/
 
 #include "_remote_debugging.h"
+#include "pycore_pyvalue.h"       // Py_PTR_LIMIT
 
 /* ============================================================================
  * STACK CHUNK MANAGEMENT FUNCTIONS

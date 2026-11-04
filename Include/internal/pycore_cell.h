@@ -11,6 +11,14 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
+static inline PyValue
+PyCell_GET_VALUE(PyObject *op)
+{
+    assert(PyCell_Check(op));
+    return PyValue_Borrow(_Py_CAST(PyCellObject *, op)->ob_ref);
+}
+#define PyCell_GET_VALUE(op) PyCell_GET_VALUE(_PyObject_CAST(op))
+
 /* Move/promote value without releasing anything. Detach the moved source
    before closing the returned previous owner. */
 static inline PyValue

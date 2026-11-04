@@ -1,7 +1,11 @@
-#ifndef Py_PYVALUE_H
-#define Py_PYVALUE_H
+#ifndef Py_INTERNAL_PYVALUE_H
+#define Py_INTERNAL_PYVALUE_H
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+#ifndef Py_BUILD_CORE
+#  error "this header requires Py_BUILD_CORE define"
 #endif
 
 /* One RC-aware value format on the supported private ABI. Borrowed pointer
@@ -94,4 +98,4 @@ PyValue_IsLanguageValue(PyValue value)
 #ifdef __cplusplus
 }
 #endif
-#endif /* Py_PYVALUE_H */
+#endif /* !Py_INTERNAL_PYVALUE_H */

@@ -26,18 +26,6 @@ static inline Py_ssize_t PyTuple_GET_SIZE(PyObject *op) {
 }
 #define PyTuple_GET_SIZE(op) PyTuple_GET_SIZE(_PyObject_CAST(op))
 
-/* A borrow rooted by the tuple. Retain it before a callback can remove its
-   owner. Generic object-form reads use the owning PyTuple_GetItemRef(). */
-static inline PyValue
-PyTuple_GET_VALUE(PyObject *op, Py_ssize_t index)
-{
-    PyTupleObject *tuple = _PyTuple_CAST(op);
-    assert(0 <= index && index < Py_SIZE(tuple));
-    return PyValue_Borrow(tuple->ob_item[index]);
-}
-#define PyTuple_GET_VALUE(op, index) \
-    PyTuple_GET_VALUE(_PyObject_CAST(op), (index))
-
 /* Function *only* to be used to fill in brand new tuples */
 PyAPI_FUNC(void) PyTuple_SET_VALUE(PyObject *op, Py_ssize_t index, PyValue value);
 #define PyTuple_SET_VALUE(op, index, value) \

@@ -7,6 +7,7 @@
 
 #include "_remote_debugging.h"
 #include "debug_offsets_validation.h"
+#include "pycore_pyvalue.h"       // PyValue_IsObject()
 
 /* ============================================================================
  * ASYNCIO DEBUG ADDRESS FUNCTIONS

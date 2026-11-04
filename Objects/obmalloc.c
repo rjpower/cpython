@@ -9,6 +9,7 @@
 #include "pycore_pyerrors.h"      // _Py_FatalErrorFormat()
 #include "pycore_pymem.h"
 #include "pycore_pystate.h"       // _PyInterpreterState_GET
+#include "pycore_pyvalue.h"       // Py_PTR_LIMIT
 #include "pycore_stats.h"         // OBJECT_STAT_INC_COND()
 
 #include <stdlib.h>               // malloc()

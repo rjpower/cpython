@@ -302,6 +302,7 @@
     <ClInclude Include="..\Include\internal\pycore_pystats.h" />
     <ClInclude Include="..\Include\internal\pycore_pythonrun.h" />
     <ClInclude Include="..\Include\internal\pycore_pythread.h" />
+    <ClInclude Include="..\Include\internal\pycore_pyvalue.h" />
     <ClInclude Include="..\Include\internal\pycore_qsbr.h" />
     <ClInclude Include="..\Include\internal\pycore_range.h" />
     <ClInclude Include="..\Include\internal\pycore_runtime.h" />

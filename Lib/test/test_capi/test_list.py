@@ -3,6 +3,7 @@ from test import support
 from test.support import import_helper
 from collections import UserList
 _testcapi = import_helper.import_module('_testcapi')
+_testinternalcapi = import_helper.import_module('_testinternalcapi')
 _testlimitedcapi = import_helper.import_module('_testlimitedcapi')
 
 NULL = None
@@ -31,13 +32,13 @@ class CAPITest(unittest.TestCase):
         for value in (-(1 << 31), -1, 0, (1 << 31) - 1):
             with self.subTest(value=value):
                 items = [value]
-                self.assertEqual(_testcapi.list_value_bits(items, 0),
+                self.assertEqual(_testinternalcapi.list_value_bits(items, 0),
                                  (0xfffe << 48) | (value & 0xffffffff))
-                self.assertEqual(_testcapi.list_get_value(items, 0), value)
+                self.assertEqual(_testinternalcapi.list_get_value(items, 0), value)
         for value in (0.0, -0.0, 1.25, float('inf'), -float('inf')):
             with self.subTest(value=value):
                 bits = struct.unpack('=Q', struct.pack('=d', value))[0]
-                self.assertEqual(_testcapi.list_value_bits([value], 0),
+                self.assertEqual(_testinternalcapi.list_value_bits([value], 0),
                                  (bits + (1 << 49)) & ((1 << 64) - 1))
 
         class IntSubclass(int):
@@ -45,22 +46,22 @@ class CAPITest(unittest.TestCase):
 
         for value in (True, 1 << 80, float('nan'), IntSubclass(3)):
             items = [value]
-            self.assertLess(_testcapi.list_value_bits(items, 0), 1 << 48)
-            self.assertIs(_testcapi.list_get_value(items, 0), value)
+            self.assertLess(_testinternalcapi.list_value_bits(items, 0), 1 << 48)
+            self.assertIs(_testinternalcapi.list_get_value(items, 0), value)
 
         class Item:
             pass
 
         items = [Item()]
         reference = weakref.ref(items[0])
-        result = _testcapi.list_get_value_and_clear(items, 0)
+        result = _testinternalcapi.list_get_value_and_clear(items, 0)
         self.assertEqual(items, [])
         self.assertIs(reference(), result)
         del result
         self.assertIsNone(reference())
 
-        self.assertRaises(IndexError, _testcapi.list_get_value, [], 0)
-        self.assertRaises(SystemError, _testcapi.list_get_value, (), 0)
+        self.assertRaises(IndexError, _testinternalcapi.list_get_value, [], 0)
+        self.assertRaises(SystemError, _testinternalcapi.list_get_value, (), 0)
 
     def test_value_boxing_failure_preserves_error_and_progress(self):
         # This int32 needs two PyLong digits, so boxing cannot use the
@@ -158,7 +159,7 @@ class CAPITest(unittest.TestCase):
 
     def test_list_get_value(self):
         # Test PyList_GetValue() through an owning object bridge.
-        self.check_list_get_item(_testcapi.list_get_value, SystemError)
+        self.check_list_get_item(_testinternalcapi.list_get_value, SystemError)
 
     def test_list_get_item_ref(self):
         # Test PyList_GetItemRef()
@@ -166,7 +167,7 @@ class CAPITest(unittest.TestCase):
 
     def test_list_get_item(self):
         # Test PyList_GET_VALUE() through an owning object bridge.
-        get_item = _testcapi.list_get_item
+        get_item = _testinternalcapi.list_get_item
         lst = [1, 2, [1, 2, 3]]
         self.assertEqual(get_item(lst, 0), 1)
         self.assertEqual(get_item(lst, 2), [1, 2, 3])

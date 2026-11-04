@@ -11,6 +11,7 @@ extern "C" {
 #include "pycore_long.h"          // _PyLong_CheckExactAndCompact()
 #include "pycore_object.h"        // Py_DECREF_MORTAL
 #include "pycore_object_deferred.h" // _PyObject_HasDeferredRefcount()
+#include "pycore_pyvalue.h"       // PyValue_IsObject()
 #include "pycore_stats.h"         // OBJECT_STAT_INC()
 
 #include <stdbool.h>              // bool

@@ -76,7 +76,7 @@
 // (When using a build tool, check if it has an option to set this
 //  so it does not need to be defined in the source.)
 // This runtime has no free-threaded build, so abi3t (Py_TARGET_ABI3T) is
-// not targeted: pyvalue.h rejects Py_GIL_DISABLED.
+// not targeted: pycore_pyvalue.h rejects Py_GIL_DISABLED.
 #define Py_LIMITED_API 0x030f0000   // abi3
 
 

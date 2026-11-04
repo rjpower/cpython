@@ -292,6 +292,18 @@ static PyTypeObject value_member_type = {
     .tp_setattro = PyObject_GenericSetAttr,
 };
 
+static PyObject *
+_check_tuple_item_is_NULL(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *obj;
+    Py_ssize_t i;
+    if (!PyArg_ParseTuple(args, "On", &obj, &i)) {
+        return NULL;
+    }
+    // An empty slot is the only non-language value a tuple can hold.
+    return PyLong_FromLong(!PyValue_IsLanguageValue(PyTuple_GET_VALUE(obj, i)));
+}
+
 
 static PyMethodDef test_methods[] = {
     {"tuple_from_pair", tuple_from_pair, METH_VARARGS},
@@ -301,6 +313,7 @@ static PyMethodDef test_methods[] = {
     {"cell_value_kind", cell_value_kind, METH_O},
     {"cell_value_boxing_errors", cell_value_boxing_errors, METH_NOARGS},
     {"tuple_value_boxing_errors", tuple_value_boxing_errors, METH_NOARGS},
+    {"_check_tuple_item_is_NULL", _check_tuple_item_is_NULL, METH_VARARGS},
     {NULL},
 };
 

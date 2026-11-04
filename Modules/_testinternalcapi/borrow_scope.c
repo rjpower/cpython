@@ -8,6 +8,7 @@
 #include "pycore_ceval.h"         // _PyEval_EvalFrameDefault()
 #include "pycore_interp.h"        // _PyInterpreterState_SetEvalFrameFunc()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
+#include "pycore_tuple.h"         // PyTuple_GET_VALUE()
 #include "pycore_value.h"         // PyValue_MakeHeapSafe()
 
 

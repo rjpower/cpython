@@ -840,6 +840,9 @@
     <ClInclude Include="..\Include\internal\pycore_pythread.h">
       <Filter>Include\internal</Filter>
     </ClInclude>
+    <ClInclude Include="..\Include\internal\pycore_pyvalue.h">
+      <Filter>Include\internal</Filter>
+    </ClInclude>
     <ClInclude Include="..\Include\internal\pycore_qsbr.h">
       <Filter>Include\internal</Filter>
     </ClInclude>

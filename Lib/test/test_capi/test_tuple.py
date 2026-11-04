@@ -57,7 +57,7 @@ class CAPITest(unittest.TestCase):
         # Test PyTuple_New()
         tuple_new = _testlimitedcapi.tuple_new
         size = _testlimitedcapi.tuple_size
-        checknull = _testcapi._check_tuple_item_is_NULL
+        checknull = _testinternalcapi._check_tuple_item_is_NULL
 
         tup1 = tuple_new(0)
         self.assertEqual(tup1, ())
@@ -246,7 +246,7 @@ class CAPITest(unittest.TestCase):
     def test_tuple_setitem(self):
         # Test PyTuple_SetItem()
         setitem = _testlimitedcapi.tuple_setitem
-        checknull = _testcapi._check_tuple_item_is_NULL
+        checknull = _testinternalcapi._check_tuple_item_is_NULL
 
         tup = ([1], [2])
         self.assertEqual(setitem(tup, 0, []), ([], [2]))
@@ -271,7 +271,7 @@ class CAPITest(unittest.TestCase):
     def test_tuple_set_item(self):
         # Test PyTuple_SET_ITEM() on a new tuple
         set_item = _testcapi.tuple_set_item
-        checknull = _testcapi._check_tuple_item_is_NULL
+        checknull = _testinternalcapi._check_tuple_item_is_NULL
 
         tup = ([1], [2])
         self.assertEqual(set_item(tup, 0, []), ([], [2]))
@@ -288,7 +288,7 @@ class CAPITest(unittest.TestCase):
     def test__tuple_resize(self):
         # Test _PyTuple_Resize()
         resize = _testcapi._tuple_resize
-        checknull = _testcapi._check_tuple_item_is_NULL
+        checknull = _testinternalcapi._check_tuple_item_is_NULL
 
         a = ()
         b = resize(a, 0, False)

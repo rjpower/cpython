@@ -40,6 +40,18 @@ PyAPI_FUNC(PyObject *) _PyTuple_FromPairSteal(PyObject *, PyObject *);
 extern _PyValueIndexPair _PyTuple_IterValue(PyObject *, Py_ssize_t);
 extern PyValue _PyTupleIter_NextValue(PyObject *);
 
+/* A borrow rooted by the tuple. Retain it before a callback can remove its
+   owner. Generic object-form reads use the owning PyTuple_GetItemRef(). */
+static inline PyValue
+PyTuple_GET_VALUE(PyObject *op, Py_ssize_t index)
+{
+    PyTupleObject *tuple = _PyTuple_CAST(op);
+    assert(0 <= index && index < Py_SIZE(tuple));
+    return PyValue_Borrow(tuple->ob_item[index]);
+}
+#define PyTuple_GET_VALUE(op, index) \
+    PyTuple_GET_VALUE(_PyObject_CAST(op), (index))
+
 /* Proven object-only metadata, such as a code object's tuple of names. This
    cannot be used for an arbitrary constant, argument or container element. */
 static inline PyObject *

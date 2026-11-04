@@ -1,6 +1,7 @@
 #include "Python.h"
 #include "pycore_abstract.h"   // _PyIndex_Check()
 #include "pycore_bytes_methods.h"
+#include "pycore_tuple.h"         // PyTuple_GET_VALUE()
 #include "pycore_value.h"
 
 PyDoc_STRVAR_shared(_Py_isspace__doc__,

@@ -102,6 +102,7 @@
     <ClCompile Include="..\Modules\_testinternalcapi\interpreter.c" />
     <ClCompile Include="..\Modules\_testinternalcapi\tokenizer.c" />
     <ClCompile Include="..\Modules\_testinternalcapi\tuple.c" />
+    <ClCompile Include="..\Modules\_testinternalcapi\list.c" />
     <ClCompile Include="..\Modules\_testinternalcapi\typecache.c" />
   </ItemGroup>
   <ItemGroup>

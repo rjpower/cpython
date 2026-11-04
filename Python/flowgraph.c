@@ -14,6 +14,7 @@
 #include "pycore_opcode_metadata.h" // OPCODE_HAS_ARG, etc
 #include "pycore_pystate.h"         // _PyInterpreterState_GET()
 #include "pycore_regcfg.h"          // _PyRegCfg_Build()
+#include "pycore_tuple.h"         // PyTuple_GET_VALUE()
 #include "pycore_value.h"        // PyValue_AsKnownObjectBorrow()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 

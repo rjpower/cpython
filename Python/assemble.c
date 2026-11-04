@@ -9,6 +9,7 @@
 #include "pycore_opcode_metadata.h" // _PyOpcode_num_popped
 #include "pycore_regcfg.h"          // _PyRegCfg
 #include "pycore_symtable.h"        // _Py_SourceLocation
+#include "pycore_tuple.h"         // PyTuple_GET_VALUE()
 #include "pycore_value.h"           // Canonical constant representation
 
 #include <stdbool.h>

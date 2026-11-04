@@ -12,6 +12,7 @@
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_structseq.h"     // _PyStructSequence_FiniBuiltin()
 #include "pycore_traceback.h"     // _PyTraceBack_FromFrame()
+#include "pycore_tuple.h"         // PyTuple_GET_VALUE()
 #include "pycore_unicodeobject.h" // _PyUnicode_Equal()
 #include "pycore_value.h"         // PyValue_Is()
 

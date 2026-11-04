@@ -2,6 +2,7 @@
 #include "pycore_codecs.h"
 #include "pycore_global_strings.h"
 #include "pycore_runtime.h"
+#include "pycore_tuple.h"         // PyTuple_GET_VALUE()
 #include "pycore_value.h"
 #include "errcode.h"
 

@@ -6,6 +6,7 @@
 #include "pycore_pathconfig.h"    // _PyPathConfig_ReadGlobal()
 #include "pycore_pymem.h"         // _PyMem_RawWcsdup()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
+#include "pycore_tuple.h"         // PyTuple_GET_VALUE()
 #include "pycore_value.h"         // PyValue_AsKnownObjectBorrow()
 
 #include "marshal.h"              // PyMarshal_ReadObjectFromString

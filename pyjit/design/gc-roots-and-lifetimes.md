@@ -25,6 +25,16 @@ observable release order, primary exceptions and initialized live homes.
 Deallocators preserve the exact entry exception and report their own failures
 as unraisable. Do not weaken that contract to make a test inject an error.
 
+Release contract (D2, invariant I9). Freeing an exact `int` or `float` box
+never runs Python and never changes the current exception. Allocator hooks,
+for allocation as well as free, and reftracers (`PyRefTracer_SetTracer`)
+never run Python, never raise and never change the current exception, so
+canonicalising a value frees its box at once, with no exception save around
+it. Debug builds check the hook and tracer entry points in `obmalloc.c` and
+`_PyReftracerTrack`, and the box free in `_PyValue_Canonicalize`: the current
+exception and frame must be unchanged (`_PyReleaseCheck`). Releasing any other
+object can still run Python, so revalidation after such a release stays.
+
 Fallible preparation precedes publication. Distinguish failure before commit
 from cleanup after commit; do not roll back callbacks or overwrite their later
 progress. Keep old/result owners until their actual caller-state publication

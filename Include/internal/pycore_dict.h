@@ -509,6 +509,17 @@ _PyShape_FindTransition(PyTypeObject *tp, uint8_t from, Py_ssize_t slot)
     }
     return _Py_SHAPE_NONE;
 }
+
+/* Whether adding SLOT to an instance in shape FROM needs a transition that
+ * does not exist yet and that _PyShape_Add() can still create.  A store that
+ * must not grow metadata leaves such an addition to one that may. */
+static inline bool
+_PyShape_TransitionMissing(PyTypeObject *tp, uint8_t from, Py_ssize_t slot)
+{
+    return from != _Py_SHAPE_NONE &&
+        _PyShape_FindTransition(tp, from, slot) == _Py_SHAPE_NONE &&
+        _PyType_Shapes(tp)->nshapes < _Py_SHAPE_MAX_PER_TYPE;
+}
 #endif
 
 // Follow the addition of slot IX to the inline VALUES of an instance of TP.

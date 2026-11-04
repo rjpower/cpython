@@ -2965,10 +2965,23 @@ dummy_func(
         inline_ok op(_STORE_ATTR_INSTANCE_VALUE, (offset/1, value, owner --)) {
             PyObject *owner_o = PyValue_AsPyObjectBorrow(owner);
 
-            STAT_INC(STORE_ATTR, hit);
             assert(_PyObject_GetManagedDict(owner_o) == NULL);
             PyValue *value_ptr = (PyValue *)(((char *)owner_o) + offset);
             PyValue old_value = *value_ptr;
+#ifdef Py_SHAPES
+            /* This store does not grow the type's shapes.  An addition whose
+             * transition is missing goes to STORE_ATTR, which creates it, so
+             * that the instance keeps a shape. */
+            if (PyValue_IsNull(old_value)) {
+                PyDictValues *values = _PyObject_InlineValues(owner_o);
+                if (_PyShape_TransitionMissing(Py_TYPE(owner_o), values->shape,
+                                               value_ptr - values->values)) {
+                    UNLOCK_OBJECT(owner_o);
+                    EXIT_IF(true);
+                }
+            }
+#endif
+            STAT_INC(STORE_ATTR, hit);
             *value_ptr = PyValue_MakeHeapSafe(value);
             DEAD(value);
             if (PyValue_IsNull(old_value)) {

@@ -1436,13 +1436,20 @@ class CopyPropagationAcrossCodeTests(BytecodeTestCase):
             return x + c
         self.assertReadsLocal(f, 'BINARY_OP', 'x')
 
-    def test_fold_under_tuple_and_is(self):
+    def test_fold_under_tuple(self):
         def f(x, a, b):
             return x == (a, b)
+        self.assertReadsLocal(f, 'COMPARE_OP', 'x')
+
+    def test_no_fold_under_is(self):
+        # IS_OP releases its inputs, and a release may run a finalizer, so
+        # its format runs code whatever the operands.  Knowing that borrowed
+        # or still-referenced operands cannot run code is a per-operand fact;
+        # a proven refinement belongs in the IR v2 instruction contract
+        # (operand-dependent may-run-Python), not in this pass.
         def g(x, a, b):
             return x + (a is b)
-        self.assertReadsLocal(f, 'COMPARE_OP', 'x')
-        self.assertReadsLocal(g, 'BINARY_OP', 'x')
+        self.assertReadsLocal(g, 'BINARY_OP', 'x', folded=False)
 
     def test_no_fold_under_global(self):
         def f(x):

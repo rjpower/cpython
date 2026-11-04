@@ -1221,12 +1221,16 @@ class TestJitHelpers(unittest.TestCase):
         wrapper = source.split("_Py_Specialize_BinaryOp(", 1)[1].split("\n}\n", 1)[0]
         nominate = source.split("\nspecialize_binary_op(", 1)[1].split("\n}\n", 1)[0]
         statistics = source.split("binary_op_fail_kind(", 1)[1].split("\n}\n", 1)[0]
-        for body in (wrapper, nominate, statistics):
+        getitem = source.split("\nspecialize_subscr_getitem(", 1)[1].split("\n}\n", 1)[0]
+        for body in (wrapper, nominate, statistics, getitem):
             self.assertNotIn("NewBoxed", body)
             self.assertNotIn("_PyType_Lookup", body)
             self.assertNotIn("Py_DECREF", body)
             self.assertNotIn("PyErr_Clear", body)
-        self.assertIn("fb_begin_binary_ex(instr, lhs_type, rhs_type, false)", nominate)
+        self.assertIn("_PyType_TryLookupValueNoAlloc", getitem)
+        # The poly table is raw memory, which runs no code, so nomination
+        # may grow it (register-ir.md, "lazily allocated poly table").
+        self.assertIn("fb_begin_binary(instr, lhs_type, rhs_type)", nominate)
         self.assertIn("lhs != NULL && rhs != NULL", nominate)
         table = source.split("binaryop_extend_descrs[] = {", 1)[1].split("\n};", 1)[0]
         rows = re.findall(r"^\s*\{(NB_\w+),\s*([^,]+),", table, re.M)
@@ -1264,7 +1268,7 @@ class TestJitHelpers(unittest.TestCase):
         source = (root / "Python/specialize.c").read_text()
         for name in ("_Py_Specialize_LoadAttr", "_Py_Specialize_StoreAttr"):
             body = source.split(name + "(", 1)[1].split("\n}\n", 1)[0]
-            self.assertLess(body.index("_PyType_TryLookupValueNoAlloc"), body.index("fb_begin_ex(instr, false)"))
+            self.assertLess(body.index("_PyType_TryLookupValueNoAlloc"), body.index("fb_begin(instr)"))
         self.assertNotIn("_Py_LoadAttr_ValueSteal", generated)
 
     def test_native_vector_taken_window_publication(self):

@@ -17492,10 +17492,27 @@
                 value = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = PyValue_AsPyObjectBorrow(owner);
-                STAT_INC(STORE_ATTR, hit);
                 assert(_PyObject_GetManagedDict(owner_o) == NULL);
                 PyValue *value_ptr = (PyValue *)(((char *)owner_o) + offset);
                 PyValue old_value = *value_ptr;
+                #ifdef Py_SHAPES
+
+                if (PyValue_IsNull(old_value)) {
+                    PyDictValues *values = _PyObject_InlineValues(owner_o);
+                    if (_PyShape_TransitionMissing(Py_TYPE(owner_o), values->shape,
+                            value_ptr - values->values)) {
+                        UNLOCK_OBJECT(owner_o);
+                        if (true) {
+                            IR_DROP_BORROW(value, IR_FIELD_B(this_instr));
+                            IR_DROP_BORROW(owner, IR_FIELD_A(this_instr));
+                            UPDATE_MISS_STATS(STORE_ATTR);
+                            assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
+                            JUMP_TO_PREDICTED(STORE_ATTR);
+                        }
+                    }
+                }
+                #endif
+                STAT_INC(STORE_ATTR, hit);
                 *value_ptr = PyValue_MakeHeapSafe(value);
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 if (PyValue_IsNull(old_value)) {

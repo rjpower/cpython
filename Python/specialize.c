@@ -484,19 +484,12 @@ fb_begin_unary(_PyInstr *instr, PyTypeObject *tp)
 }
 
 static _PyFbBinary *
-fb_begin_binary_ex(_PyInstr *instr, PyTypeObject *lhs_type,
-                   PyTypeObject *rhs_type, bool may_allocate)
+fb_begin_binary(_PyInstr *instr, PyTypeObject *lhs_type, PyTypeObject *rhs_type)
 {
-    _PyFbBinary *fb = (_PyFbBinary *)fb_begin_ex(instr, may_allocate);
+    _PyFbBinary *fb = (_PyFbBinary *)fb_begin(instr);
     fb->lhs_version = fb_type_version(lhs_type);
     fb->rhs_version = fb_type_version(rhs_type);
     return fb;
-}
-
-static _PyFbBinary *
-fb_begin_binary(_PyInstr *instr, PyTypeObject *lhs_type, PyTypeObject *rhs_type)
-{
-    return fb_begin_binary_ex(instr, lhs_type, rhs_type, true);
 }
 
 static void
@@ -1306,7 +1299,7 @@ _Py_Specialize_LoadAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
             return;
         }
     }
-    fb_begin_ex(instr, false);
+    fb_begin(instr);
     bool fail;
     if (!_PyType_IsReady(type)) {
         // We *might* not really need this check, but we inherited it from
@@ -1352,7 +1345,7 @@ _Py_Specialize_StoreAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
         unspecialize(instr);
         return;
     }
-    fb = (_PyFbAttr *)fb_begin_ex(instr, false);
+    fb = (_PyFbAttr *)fb_begin(instr);
     if (!_PyType_IsReady(type)) {
         // We *might* not really need this check, but we inherited it from
         // PyObject_GenericSetAttr and friends... and this way we still do the
@@ -2545,6 +2538,41 @@ binary_op_extended_specialization(PyObject *lhs, PyObject *rhs, int oparg,
     return 0;
 }
 
+/* Nominate BINARY_OP_SUBSCR_GETITEM for a heap type whose __getitem__ is a
+ * simple Python function of two arguments.  The lookup neither allocates nor
+ * runs code; the type caches the function under its version, which
+ * PyType_Modified() invalidates. */
+static bool
+specialize_subscr_getitem(PyTypeObject *container_type, _PyInstr *instr)
+{
+    /* Don't specialize if PEP 523 is active */
+    if (!(container_type->tp_flags & Py_TPFLAGS_HEAPTYPE) ||
+        !_PyInterpreterState_IsSpecializationEnabled(_PyInterpreterState_GET()))
+    {
+        return false;
+    }
+    PyValue descriptor = PyValue_NULL;
+    unsigned int tp_version = 0;
+    bool nominated = false;
+    if (_PyType_TryLookupValueNoAlloc(container_type, &_Py_ID(__getitem__),
+                                      &descriptor, &tp_version) == 1 &&
+        PyValue_IsObject(descriptor) &&
+        PyFunction_Check(PyValue_AsPyObjectBorrow(descriptor)))
+    {
+        PyObject *getitem = PyValue_AsPyObjectBorrow(descriptor);
+        PyCodeObject *code = (PyCodeObject *)PyFunction_GET_CODE(getitem);
+        if (function_kind(code) == SIMPLE_FUNCTION && code->co_argcount == 2 &&
+            _PyType_CacheGetItemForSpecialization(
+                (PyHeapTypeObject *)container_type, getitem, tp_version))
+        {
+            specialize(instr, BINARY_OP_SUBSCR_GETITEM);
+            nominated = true;
+        }
+    }
+    PyValue_XCLOSE(descriptor);
+    return nominated;
+}
+
 /* Binary nomination cannot escape: evaluated operands remain in their
  * canonical homes until the semantic operation captures independent owners.
  * Scalar types and existing compact predicates need no temporary boxes. */
@@ -2555,7 +2583,7 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
 {
     PyTypeObject *lhs_type = PyValue_TYPE(lhs_st);
     PyTypeObject *rhs_type = PyValue_TYPE(rhs_st);
-    _PyFbBinary *fb = fb_begin_binary_ex(instr, lhs_type, rhs_type, false);
+    _PyFbBinary *fb = fb_begin_binary(instr, lhs_type, rhs_type);
     fb->descr = NULL;
     bool producers = true;
     bool compact_ints = producers &&
@@ -2701,8 +2729,9 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
                 specialize(instr, BINARY_OP_SUBSCR_LIST_SLICE);
                 return;
             }
-            /* User __getitem__ nomination needs the separate value-native
-             * type-cache boundary. Generic subscription remains complete. */
+            if (specialize_subscr_getitem(lhs_type, instr)) {
+                return;
+            }
             break;
     }
 

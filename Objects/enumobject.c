@@ -206,7 +206,7 @@ enum_next(PyObject *op)
     }
 
     next_index = PyLong_FromSsize_t(en_index);
-    if (next_index == NULL || PyErr_Occurred()) {
+    if (next_index == NULL) {
         goto done;
     }
     FT_ATOMIC_STORE_SSIZE_RELAXED(en->en_index, en_index + 1);

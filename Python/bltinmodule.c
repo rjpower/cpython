@@ -1696,7 +1696,7 @@ map_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
     Py_ssize_t numargs = PyTuple_GET_SIZE(iters_owner);
 
     args = PyTuple_New(numargs+1);
-    if (args == NULL || PyErr_Occurred()) {
+    if (args == NULL) {
         goto done;
     }
     PyTuple_SET_ITEM(args, 0, Py_NewRef(lz->func));
@@ -3530,7 +3530,7 @@ _PyBuiltin_InitPythonFunctions(PyObject *dict)
         return -1;
     }
     PyObject *mod = PyImport_AddModuleRef("_pybuiltins");
-    if (mod == NULL || PyErr_Occurred()) {
+    if (mod == NULL) {
         if (mod != NULL) {
             Py_CLEAR(mod);
         }
@@ -3539,21 +3539,21 @@ _PyBuiltin_InitPythonFunctions(PyObject *dict)
 
     int rc = -1;
     PyObject *all = PyObject_GetAttr(mod, &_Py_ID(__all__));
-    if (all == NULL || PyErr_Occurred()) {
+    if (all == NULL) {
         goto done;
     }
     Py_ssize_t n = PyList_Size(all);
-    if (n < 0 || PyErr_Occurred()) {
+    if (n < 0) {
         goto done;
     }
     for (Py_ssize_t i = 0; i < n; i++) {
         PyObject *name = PyList_GetItemRef(all, i);
-        if (name == NULL || PyErr_Occurred()) {
+        if (name == NULL) {
             Py_CLEAR(name);
             goto done;
         }
         PyObject *func = PyObject_GetAttr(mod, name);
-        if (func == NULL || PyErr_Occurred()) {
+        if (func == NULL) {
             Py_CLEAR(func);
             Py_CLEAR(name);
             goto done;

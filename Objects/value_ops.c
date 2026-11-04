@@ -118,7 +118,7 @@ _PyValue_WriteRepr(PyUnicodeWriter *writer, PyValue value)
 {
     PyObject *prior = PyErr_GetRaisedException();
     PyObject *obj = PyValue_AsObject(value);
-    if (obj == NULL || PyErr_Occurred()) {
+    if (obj == NULL) {
         Py_XDECREF(obj);
         _PyValue_RestoreException(prior);
         return -1;

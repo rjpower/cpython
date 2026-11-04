@@ -140,7 +140,7 @@ template_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     PyObject *template = NULL;
     if (strings == NULL || PyErr_Occurred()) goto error;
     interpolations = PyTuple_New(interpolationslen);
-    if (interpolations == NULL || PyErr_Occurred()) goto error;
+    if (interpolations == NULL) goto error;
 
     last_was_str = 0;
     Py_ssize_t stringsidx = 0, interpolationsidx = 0;
@@ -150,7 +150,7 @@ template_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
             if (last_was_str) {
                 PyObject *laststring = _PyTuple_GET_OBJECT(strings, stringsidx - 1);
                 concat = PyUnicode_Concat(laststring, item);
-                if (concat == NULL || PyErr_Occurred()) goto error;
+                if (concat == NULL) goto error;
                 int status = PyTuple_SetItem(strings, stringsidx - 1, concat);
                 concat = NULL;
                 if (status < 0 || PyErr_Occurred()) goto error;
@@ -267,19 +267,19 @@ template_strings_concat(PyObject *left, PyObject *right)
     PyObject *newstrings = NULL;
 
     left_laststring = PyTuple_GetItemRef(left, left_stringslen - 1);
-    if (left_laststring == NULL || PyErr_Occurred()) goto error;
+    if (left_laststring == NULL) goto error;
     right_firststring = PyTuple_GetItemRef(right, 0);
-    if (right_firststring == NULL || PyErr_Occurred()) goto error;
+    if (right_firststring == NULL) goto error;
 
     concat = PyUnicode_Concat(left_laststring, right_firststring);
-    if (concat == NULL || PyErr_Occurred()) goto error;
+    if (concat == NULL) goto error;
     Py_CLEAR(left_laststring);
     if (PyErr_Occurred()) goto error;
     Py_CLEAR(right_firststring);
     if (PyErr_Occurred()) goto error;
 
     newstrings = PyTuple_New(left_stringslen + right_stringslen - 1);
-    if (newstrings == NULL || PyErr_Occurred()) goto error;
+    if (newstrings == NULL) goto error;
 
     Py_ssize_t index = 0;
     for (Py_ssize_t i = 0; i < left_stringslen - 1; i++) {
@@ -349,7 +349,7 @@ template_values_get(PyObject *op, void *Py_UNUSED(data))
     for (Py_ssize_t i = 0; i < len; i++) {
         PyObject *item = _PyTuple_GET_OBJECT(self->interpolations, i);
         value = _PyInterpolation_GetValueRef(item);
-        if (value == NULL || PyErr_Occurred()) goto error;
+        if (value == NULL) goto error;
         PyTuple_SET_ITEM(values, i, value);
         value = NULL;
         if (PyErr_Occurred()) goto error;

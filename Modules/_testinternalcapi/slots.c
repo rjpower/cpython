@@ -51,7 +51,7 @@ slot_clear(PyObject *module, PyObject *obj)
         PyErr_SetString(PyExc_TypeError, "object has no clear operation");
         return NULL;
     }
-    if (clear(obj) < 0 || PyErr_Occurred()) {
+    if (clear(obj) < 0) {
         return NULL;
     }
     Py_RETURN_NONE;

@@ -1799,7 +1799,7 @@ _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
 
     Py_INCREF(tp);
     if (!_PyType_IsReady(tp)) {
-        if (PyType_Ready(tp) < 0 || PyErr_Occurred()) {
+        if (PyType_Ready(tp) < 0) {
             Py_DECREF(tp);
             return NULL;
         }
@@ -3070,16 +3070,16 @@ Py_ReprEnter(PyObject *obj)
     }
     PyValue name = PyValue_FromObjectBorrow(&_Py_ID(Py_Repr));
     Py_hash_t hash = PyObject_Hash(&_Py_ID(Py_Repr));
-    if (hash == -1 || PyErr_Occurred()) {
+    if (hash == -1) {
         goto done;
     }
     int found = _PyDict_GetValue_KnownHash(dict, name, hash, &guard);
-    if (found < 0 || PyErr_Occurred()) {
+    if (found < 0) {
         goto done;
     }
     if (!found) {
         candidate = PyList_New(0);
-        if (candidate == NULL || PyErr_Occurred()) {
+        if (candidate == NULL) {
             goto done;
         }
         /* Allocation can reenter and install a guard. Preserve that list. */

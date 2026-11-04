@@ -149,7 +149,7 @@ _PyObject_VectorcallDictTstate(PyThreadState *tstate, PyObject *callable,
     PyObject *result = NULL;
     if (kwargs != NULL && PyDict_GET_SIZE(kwargs) != 0) {
         owned_stack = _PyStack_UnpackDict(tstate, args, nargs, kwargs, &kwnames);
-        if (owned_stack == NULL || PyErr_Occurred()) {
+        if (owned_stack == NULL) {
             goto done;
         }
         args = owned_stack;
@@ -236,7 +236,7 @@ _PyObject_MakeTpCall(PyThreadState *tstate, PyObject *callable,
         goto done;
     }
     argstuple = PyTuple_FromArray(args, nargs);
-    if (argstuple == NULL || PyErr_Occurred()) {
+    if (argstuple == NULL) {
         goto done;
     }
     if (keywords == NULL || PyDict_Check(keywords)) {
@@ -245,7 +245,7 @@ _PyObject_MakeTpCall(PyThreadState *tstate, PyObject *callable,
     else if (PyTuple_GET_SIZE(keywords) != 0) {
         assert(args != NULL);
         kwdict = _PyStack_AsDict(args + nargs, keywords);
-        if (kwdict == NULL || PyErr_Occurred()) {
+        if (kwdict == NULL) {
             goto done;
         }
     }
@@ -292,7 +292,7 @@ _PyVectorcall_Call(PyThreadState *tstate, PyObject *callable,
     size_t nargsf = nargs;
     if (kwargs != NULL && PyDict_GET_SIZE(kwargs) != 0) {
         stack = _PyStack_UnpackDict(tstate, args, nargs, kwargs, &kwnames);
-        if (stack == NULL || PyErr_Occurred()) {
+        if (stack == NULL) {
             goto done;
         }
         args = stack;
@@ -544,7 +544,7 @@ _PyObject_Call_Prepend(PyThreadState *tstate, PyObject *callable,
     }
     if (count + 1 > (Py_ssize_t)Py_ARRAY_LENGTH(small_stack)) {
         stack = PyMem_Malloc(((size_t)count + 1) * sizeof(*stack));
-        if (stack == NULL || PyErr_Occurred()) {
+        if (stack == NULL) {
             if (!PyErr_Occurred()) {
                 PyErr_NoMemory();
             }
@@ -679,7 +679,7 @@ callmethod(PyThreadState *tstate, PyObject *obj, PyObject *name,
         goto done;
     }
     PyObject *callable = _PyValueTemps_ObjectAt(&temps, method.ref, BOX_SITE_CALL);
-    if (callable == NULL || PyErr_Occurred()) {
+    if (callable == NULL) {
         goto done;
     }
     PyObject *receiver = PyValue_IsNull(self.ref) ? NULL : _PyValueTemps_ObjectAt(&temps, self.ref, BOX_SITE_CALL);
@@ -693,7 +693,7 @@ callmethod(PyThreadState *tstate, PyObject *obj, PyObject *name,
     }
     if (format != NULL && *format != '\0') {
         built = _Py_VaBuildStack(small_stack, Py_ARRAY_LENGTH(small_stack), format, va, &nargs);
-        if (built == NULL || PyErr_Occurred()) {
+        if (built == NULL) {
             goto done;
         }
     }
@@ -984,7 +984,7 @@ PyObject_VectorcallMethod(PyObject *name, PyObject *const *args,
         goto done;
     }
     PyObject *callable = _PyValueTemps_ObjectAt(&temps, method.ref, BOX_SITE_CALL);
-    if (callable == NULL || PyErr_Occurred()) {
+    if (callable == NULL) {
         goto done;
     }
     PyObject *receiver = PyValue_IsNull(self.ref) ? NULL : _PyValueTemps_ObjectAt(&temps, self.ref, BOX_SITE_CALL);
@@ -1030,7 +1030,7 @@ PyObject_CallMethodObjArgs(PyObject *obj, PyObject *name, ...)
         goto done;
     }
     PyObject *callable = _PyValueTemps_ObjectAt(&temps, method.ref, BOX_SITE_CALL);
-    if (callable == NULL || PyErr_Occurred()) {
+    if (callable == NULL) {
         goto done;
     }
     PyObject *receiver = PyValue_IsNull(self.ref) ? NULL : _PyValueTemps_ObjectAt(&temps, self.ref, BOX_SITE_CALL);
@@ -1118,7 +1118,7 @@ _PyStack_UnpackDict(PyThreadState *tstate,
         goto error;
     }
     items = PyDict_Items(kwargs);
-    if (items == NULL || PyErr_Occurred()) {
+    if (items == NULL) {
         goto error;
     }
     nkwargs = PyList_GET_SIZE(items);
@@ -1158,7 +1158,7 @@ _PyStack_UnpackDict(PyThreadState *tstate,
         PyObject *key = PyValue_AsKnownObjectBorrow(PyTuple_GET_VALUE(pair, 0));
         PyTuple_SET_ITEM(kwnames, i, Py_NewRef(key));
         stack[nargs + i] = _PyValue_AsObjectAt(PyTuple_GET_VALUE(pair, 1), BOX_SITE_CALL_ADAPTER);
-        if (stack[nargs + i] == NULL || PyErr_Occurred()) {
+        if (stack[nargs + i] == NULL) {
             goto error;
         }
     }

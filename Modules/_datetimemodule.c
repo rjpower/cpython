@@ -400,11 +400,11 @@ divide_nearest(PyObject *m, PyObject *n)
     PyObject *result = NULL;
 
     temp = _PyLong_DivmodNear(m, n);
-    if (temp == NULL || PyErr_Occurred()) {
+    if (temp == NULL) {
         goto Done;
     }
     result = PyTuple_GetItemRef(temp, 0);
-    if (result == NULL || PyErr_Occurred()) {
+    if (result == NULL) {
         goto Done;
     }
 
@@ -2245,12 +2245,12 @@ microseconds_to_delta_ex(PyObject *pyus, PyTypeObject *type)
     }
 
     tuple = checked_divmod(pyus, CONST_US_PER_SECOND(st));
-    if (tuple == NULL || PyErr_Occurred()) {
+    if (tuple == NULL) {
         goto Done;
     }
 
     remainder = PyTuple_GetItemRef(tuple, 1);  /* us */
-    if (remainder == NULL || PyErr_Occurred()) {
+    if (remainder == NULL) {
         goto Done;
     }
     us = PyLong_AsInt(remainder);
@@ -2263,7 +2263,7 @@ microseconds_to_delta_ex(PyObject *pyus, PyTypeObject *type)
     }
 
     num = PyTuple_GetItemRef(tuple, 0);  /* leftover seconds */
-    if (num == NULL || PyErr_Occurred()) {
+    if (num == NULL) {
         goto Done;
     }
     Py_CLEAR(tuple);
@@ -2272,7 +2272,7 @@ microseconds_to_delta_ex(PyObject *pyus, PyTypeObject *type)
     }
 
     tuple = checked_divmod(num, CONST_SEC_PER_DAY(st));
-    if (tuple == NULL || PyErr_Occurred()) {
+    if (tuple == NULL) {
         goto Done;
     }
     Py_CLEAR(num);
@@ -2281,7 +2281,7 @@ microseconds_to_delta_ex(PyObject *pyus, PyTypeObject *type)
     }
 
     remainder = PyTuple_GetItemRef(tuple, 1);  /* seconds */
-    if (remainder == NULL || PyErr_Occurred()) {
+    if (remainder == NULL) {
         goto Done;
     }
     s = PyLong_AsInt(remainder);
@@ -2294,7 +2294,7 @@ microseconds_to_delta_ex(PyObject *pyus, PyTypeObject *type)
     }
 
     num = PyTuple_GetItemRef(tuple, 0);  /* leftover days */
-    if (num == NULL || PyErr_Occurred()) {
+    if (num == NULL) {
         goto Done;
     }
     d = PyLong_AsInt(num);
@@ -2302,7 +2302,7 @@ microseconds_to_delta_ex(PyObject *pyus, PyTypeObject *type)
         goto Done;
     }
     result = new_delta_ex(d, s, us, 0, type);
-    if (result == NULL || PyErr_Occurred()) {
+    if (result == NULL) {
         goto Done;
     }
 
@@ -2393,19 +2393,19 @@ multiply_truedivide_timedelta_float(PyDateTime_Delta *delta, PyObject *floatobj,
     PyObject *pyus_out = NULL;
 
     pyus_in = delta_to_microseconds(delta);
-    if (pyus_in == NULL || PyErr_Occurred()) {
+    if (pyus_in == NULL) {
         goto Done;
     }
     ratio = get_float_as_integer_ratio(floatobj);
-    if (ratio == NULL || PyErr_Occurred()) {
+    if (ratio == NULL) {
         goto Done;
     }
     factor = PyTuple_GetItemRef(ratio, op);
-    if (factor == NULL || PyErr_Occurred()) {
+    if (factor == NULL) {
         goto Done;
     }
     temp = PyNumber_Multiply(pyus_in, factor);
-    if (temp == NULL || PyErr_Occurred()) {
+    if (temp == NULL) {
         goto Done;
     }
     Py_CLEAR(factor);
@@ -2418,11 +2418,11 @@ multiply_truedivide_timedelta_float(PyDateTime_Delta *delta, PyObject *floatobj,
     }
 
     divisor = PyTuple_GetItemRef(ratio, !op);
-    if (divisor == NULL || PyErr_Occurred()) {
+    if (divisor == NULL) {
         goto Done;
     }
     pyus_out = divide_nearest(temp, divisor);
-    if (pyus_out == NULL || PyErr_Occurred()) {
+    if (pyus_out == NULL) {
         goto Done;
     }
     Py_CLEAR(divisor);
@@ -2435,7 +2435,7 @@ multiply_truedivide_timedelta_float(PyDateTime_Delta *delta, PyObject *floatobj,
     }
 
     result = microseconds_to_delta(pyus_out);
-    if (result == NULL || PyErr_Occurred()) {
+    if (result == NULL) {
         goto Done;
     }
     Py_CLEAR(pyus_out);
@@ -2792,11 +2792,11 @@ delta_divmod(PyObject *left, PyObject *right)
         goto Done;
     }
     pyus_right = delta_to_microseconds((PyDateTime_Delta *)right);
-    if (pyus_right == NULL || PyErr_Occurred()) {
+    if (pyus_right == NULL) {
         goto Done;
     }
     divmod = checked_divmod(pyus_left, pyus_right);
-    if (divmod == NULL || PyErr_Occurred()) {
+    if (divmod == NULL) {
         goto Done;
     }
     Py_CLEAR(pyus_left);
@@ -2809,11 +2809,11 @@ delta_divmod(PyObject *left, PyObject *right)
     }
 
     remainder = PyTuple_GetItemRef(divmod, 1);
-    if (remainder == NULL || PyErr_Occurred()) {
+    if (remainder == NULL) {
         goto Done;
     }
     delta = microseconds_to_delta(remainder);
-    if (delta == NULL || PyErr_Occurred()) {
+    if (delta == NULL) {
         goto Done;
     }
     Py_CLEAR(remainder);
@@ -2822,11 +2822,11 @@ delta_divmod(PyObject *left, PyObject *right)
     }
 
     quotient = PyTuple_GetItemRef(divmod, 0);
-    if (quotient == NULL || PyErr_Occurred()) {
+    if (quotient == NULL) {
         goto Done;
     }
     result = _PyTuple_FromPair(quotient, delta);
-    if (result == NULL || PyErr_Occurred()) {
+    if (result == NULL) {
         goto Done;
     }
 
@@ -3367,7 +3367,7 @@ date_new(PyTypeObject *type, PyObject *args, PyObject *kw)
         return datetime_date(type, args, kw);
     }
     state = PyTuple_GetItemRef(args, 0);
-    if (state == NULL || PyErr_Occurred()) {
+    if (state == NULL) {
         goto done;
     }
     if (PyBytes_Check(state)) {
@@ -3375,7 +3375,7 @@ date_new(PyTypeObject *type, PyObject *args, PyObject *kw)
             MONTH_IS_SANE(PyBytes_AS_STRING(state)[2]))
         {
             result = date_from_pickle(type, state);
-            if (result == NULL || PyErr_Occurred()) goto done;
+            if (result == NULL) goto done;
             goto done;
         }
     }
@@ -3396,7 +3396,7 @@ date_new(PyTypeObject *type, PyObject *args, PyObject *kw)
             }
             if (PyErr_Occurred()) goto done;
             result = date_from_pickle(type, encoded);
-            if (result == NULL || PyErr_Occurred()) goto done;
+            if (result == NULL) goto done;
             goto done;
         }
     }
@@ -3407,7 +3407,7 @@ date_new(PyTypeObject *type, PyObject *args, PyObject *kw)
     Py_CLEAR(state);
     if (PyErr_Occurred()) goto done;
     result = datetime_date(type, args, kw);
-    if (result == NULL || PyErr_Occurred()) goto done;
+    if (result == NULL) goto done;
 
 done:
     Py_CLEAR(encoded);
@@ -3887,21 +3887,21 @@ iso_calendar_date_repr(PyObject *self)
     PyObject *result = NULL;
 
     year = PyTuple_GetItemRef(self, 0);
-    if (year == NULL || PyErr_Occurred()) {
+    if (year == NULL) {
         goto done;
     }
     week = PyTuple_GetItemRef(self, 1);
-    if (week == NULL || PyErr_Occurred()) {
+    if (week == NULL) {
         goto done;
     }
     weekday = PyTuple_GetItemRef(self, 2);
-    if (weekday == NULL || PyErr_Occurred()) {
+    if (weekday == NULL) {
         goto done;
     }
 
     result = PyUnicode_FromFormat("%.200s(year=%S, week=%S, weekday=%S)",
                                   Py_TYPE(self)->tp_name, year, week, weekday);
-    if (result == NULL || PyErr_Occurred()) {
+    if (result == NULL) {
         goto done;
     }
 done:
@@ -3925,22 +3925,22 @@ iso_calendar_date_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
     PyObject *result = NULL;
 
     year = PyTuple_GetItemRef(self, 0);
-    if (year == NULL || PyErr_Occurred()) {
+    if (year == NULL) {
         goto done;
     }
     week = PyTuple_GetItemRef(self, 1);
-    if (week == NULL || PyErr_Occurred()) {
+    if (week == NULL) {
         goto done;
     }
     weekday = PyTuple_GetItemRef(self, 2);
-    if (weekday == NULL || PyErr_Occurred()) {
+    if (weekday == NULL) {
         goto done;
     }
 
     result = Py_BuildValue(
         "O((OOO))", &PyTuple_Type, year, week, weekday
     );
-    if (result == NULL || PyErr_Occurred()) {
+    if (result == NULL) {
         goto done;
     }
 done:
@@ -4958,7 +4958,7 @@ time_new(PyTypeObject *type, PyObject *args, PyObject *kw)
         return datetime_time(type, args, kw);
     }
     state = PyTuple_GetItemRef(args, 0);
-    if (state == NULL || PyErr_Occurred()) {
+    if (state == NULL) {
         goto done;
     }
     if (PyTuple_GET_SIZE(args) == 2) {
@@ -4975,7 +4975,7 @@ time_new(PyTypeObject *type, PyObject *args, PyObject *kw)
             (0x7F & ((unsigned char) (PyBytes_AS_STRING(state)[0]))) < 24)
         {
             result = time_from_pickle(type, state, tzinfo);
-            if (result == NULL || PyErr_Occurred()) goto done;
+            if (result == NULL) goto done;
             goto done;
         }
     }
@@ -4996,7 +4996,7 @@ time_new(PyTypeObject *type, PyObject *args, PyObject *kw)
             }
             if (PyErr_Occurred()) goto done;
             result = time_from_pickle(type, encoded, tzinfo);
-            if (result == NULL || PyErr_Occurred()) goto done;
+            if (result == NULL) goto done;
             goto done;
         }
     }
@@ -5011,7 +5011,7 @@ time_new(PyTypeObject *type, PyObject *args, PyObject *kw)
     Py_CLEAR(state);
     if (PyErr_Occurred()) goto done;
     result = datetime_time(type, args, kw);
-    if (result == NULL || PyErr_Occurred()) goto done;
+    if (result == NULL) goto done;
 
 done:
     Py_CLEAR(encoded);
@@ -5808,7 +5808,7 @@ datetime_new(PyTypeObject *type, PyObject *args, PyObject *kw)
         return datetime_datetime(type, args, kw);
     }
     state = PyTuple_GetItemRef(args, 0);
-    if (state == NULL || PyErr_Occurred()) {
+    if (state == NULL) {
         goto done;
     }
     if (PyTuple_GET_SIZE(args) == 2) {
@@ -5825,7 +5825,7 @@ datetime_new(PyTypeObject *type, PyObject *args, PyObject *kw)
             MONTH_IS_SANE(PyBytes_AS_STRING(state)[2] & 0x7F))
         {
             result = datetime_from_pickle(type, state, tzinfo);
-            if (result == NULL || PyErr_Occurred()) goto done;
+            if (result == NULL) goto done;
             goto done;
         }
     }
@@ -5846,7 +5846,7 @@ datetime_new(PyTypeObject *type, PyObject *args, PyObject *kw)
             }
             if (PyErr_Occurred()) goto done;
             result = datetime_from_pickle(type, encoded, tzinfo);
-            if (result == NULL || PyErr_Occurred()) goto done;
+            if (result == NULL) goto done;
             goto done;
         }
     }
@@ -5861,7 +5861,7 @@ datetime_new(PyTypeObject *type, PyObject *args, PyObject *kw)
     Py_CLEAR(state);
     if (PyErr_Occurred()) goto done;
     result = datetime_datetime(type, args, kw);
-    if (result == NULL || PyErr_Occurred()) goto done;
+    if (result == NULL) goto done;
 
 done:
     Py_CLEAR(encoded);

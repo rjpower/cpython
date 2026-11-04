@@ -792,7 +792,7 @@ w_complex_object(PyObject *v, WFILE *p)
         }
         for (i = 0; i < n; i++) {
             PyObject *item = PyTuple_GetItemRef(v, i);
-            if (item == NULL || PyErr_Occurred()) {
+            if (item == NULL) {
                 Py_XDECREF(item);
                 p->error = true;
                 break;
@@ -814,7 +814,7 @@ w_complex_object(PyObject *v, WFILE *p)
         W_SIZE(n, p);
         for (i = 0; i < n; i++) {
             PyObject *item = PyList_GetItemRef(v, i);
-            if (item == NULL || PyErr_Occurred()) {
+            if (item == NULL) {
                 Py_XDECREF(item);
                 p->error = true;
                 break;
@@ -1481,7 +1481,7 @@ r_ref_insert(PyObject *o, Py_ssize_t idx, int flag, RFILE *p)
     }
     if (flag) { /* currently only FLAG_REF is defined */
         int status = PyList_SetItem(p->refs, idx, Py_NewRef(o));
-        if (status < 0 || PyErr_Occurred()) {
+        if (status < 0) {
             Py_XDECREF(o);
             return NULL;
         }
@@ -2058,7 +2058,7 @@ r_object(RFILE *p)
             break;
         }
         v = PyList_GetItemRef(p->refs, n);
-        if (v == NULL || PyErr_Occurred()) {
+        if (v == NULL) {
             Py_XDECREF(v);
             break;
         }

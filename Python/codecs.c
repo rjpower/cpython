@@ -278,7 +278,7 @@ PyObject *codec_getitem(const char *encoding, int index)
     if (codecs == NULL) return NULL;
     if (PyErr_Occurred()) goto error;
     v = PyTuple_GetItemRef(codecs, index);
-    if (v == NULL || PyErr_Occurred()) goto error;
+    if (v == NULL) goto error;
     Py_CLEAR(codecs);
     if (PyErr_Occurred()) goto error;
     return v;
@@ -337,7 +337,7 @@ PyObject *codec_getstreamcodec(const char *encoding,
     if (PyErr_Occurred()) goto error;
 
     codeccls = PyTuple_GetItemRef(codecs, index);
-    if (codeccls == NULL || PyErr_Occurred()) goto error;
+    if (codeccls == NULL) goto error;
     if (errors != NULL)
         streamcodec = PyObject_CallFunction(codeccls, "Os", stream, errors);
     else
@@ -430,11 +430,11 @@ _PyCodec_EncodeInternal(PyObject *object,
     PyObject *v = NULL;
 
     args = args_tuple(object, errors);
-    if (args == NULL || PyErr_Occurred())
+    if (args == NULL)
         goto onError;
 
     result = PyObject_Call(encoder, args, NULL);
-    if (result == NULL || PyErr_Occurred()) {
+    if (result == NULL) {
         _PyErr_FormatNote("%s with '%s' codec failed", "encoding", encoding);
         goto onError;
     }
@@ -446,7 +446,7 @@ _PyCodec_EncodeInternal(PyObject *object,
         goto onError;
     }
     v = PyTuple_GetItemRef(result, 0);
-    if (v == NULL || PyErr_Occurred()) {
+    if (v == NULL) {
         goto onError;
     }
     /* We don't check or use the second (integer) entry. */
@@ -480,11 +480,11 @@ _PyCodec_DecodeInternal(PyObject *object,
     PyObject *v = NULL;
 
     args = args_tuple(object, errors);
-    if (args == NULL || PyErr_Occurred())
+    if (args == NULL)
         goto onError;
 
     result = PyObject_Call(decoder, args, NULL);
-    if (result == NULL || PyErr_Occurred()) {
+    if (result == NULL) {
         _PyErr_FormatNote("%s with '%s' codec failed", "decoding", encoding);
         goto onError;
     }
@@ -495,7 +495,7 @@ _PyCodec_DecodeInternal(PyObject *object,
         goto onError;
     }
     v = PyTuple_GetItemRef(result, 0);
-    if (v == NULL || PyErr_Occurred()) {
+    if (v == NULL) {
         goto onError;
     }
     /* We don't check or use the second (integer) entry. */
@@ -604,7 +604,7 @@ PyObject *codec_getitem_checked(const char *encoding,
     if (PyErr_Occurred()) goto error;
 
     v = PyTuple_GetItemRef(codec, index);
-    if (v == NULL || PyErr_Occurred()) goto error;
+    if (v == NULL) goto error;
     Py_CLEAR(codec);
     if (PyErr_Occurred()) goto error;
     return v;

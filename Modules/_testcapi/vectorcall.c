@@ -309,7 +309,7 @@ callmethod_format(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
         return NULL;
     }
     const char *name = PyUnicode_AsUTF8(args[1]);
-    if (name == NULL || PyErr_Occurred()) {
+    if (name == NULL) {
         return NULL;
     }
     return PyObject_CallMethod(args[0], name, "O", args[2]);

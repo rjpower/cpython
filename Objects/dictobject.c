@@ -2328,7 +2328,7 @@ setitem_take2_lock_held_known_hash(PyDictObject *mp, PyValue key,
 {
     assert(PyValue_IsLanguageValue(key) && PyValue_IsHeapSafe(key));
     assert(PyValue_IsLanguageValue(value) && PyValue_IsHeapSafe(value));
-    if (!PyAnyDict_Check(mp) || PyErr_Occurred()) {
+    if (!PyAnyDict_Check(mp)) {
         if (!PyErr_Occurred()) {
             PyErr_BadInternalCall();
         }
@@ -2351,7 +2351,7 @@ setitem_take2_lock_held(PyDictObject *mp, PyValue key, PyValue value)
 {
     assert(PyValue_IsLanguageValue(key) && PyValue_IsHeapSafe(key));
     assert(PyValue_IsLanguageValue(value) && PyValue_IsHeapSafe(value));
-    if (!PyAnyDict_Check(mp) || PyErr_Occurred()) {
+    if (!PyAnyDict_Check(mp)) {
         if (!PyErr_Occurred()) {
             PyErr_BadInternalCall();
         }
@@ -2360,7 +2360,7 @@ setitem_take2_lock_held(PyDictObject *mp, PyValue key, PyValue value)
         return -1;
     }
     Py_hash_t hash = _PyValue_Hash(key);
-    if (hash == -1 || PyErr_Occurred()) {
+    if (hash == -1) {
         if (hash == -1 && PyValue_IsObject(key)) {
             dict_unhashable_type((PyObject *)mp, PyValue_AsKnownObjectBorrow(key));
         }
@@ -2708,7 +2708,7 @@ delitemif_lock_held(PyObject *op, PyObject *key,
     PyObject *object = NULL;
     int status = -1;
     Py_hash_t hash = _PyValue_Hash(query);
-    if (hash == -1 || PyErr_Occurred()) {
+    if (hash == -1) {
         goto done;
     }
     PyValue value = PyValue_NULL;
@@ -2817,7 +2817,7 @@ _PyDict_ReplaceItemIf(PyObject *op, PyObject *key,
     PyValue new_value = PyValue_MakeHeapSafe(PyValue_FromObjectBorrow(replacement));
     int status = -1;
     Py_hash_t hash = _PyValue_Hash(query);
-    if (hash == -1 || PyErr_Occurred()) {
+    if (hash == -1) {
         goto done;
     }
     PyValue value = PyValue_NULL;
@@ -3725,7 +3725,7 @@ _PyDict_Subscript(PyObject *self, PyObject *key)
     PyValue value = PyValue_NULL;
     PyObject *result = NULL;
     Py_hash_t hash = _PyValue_Hash(query);
-    if (hash == -1 || PyErr_Occurred()) {
+    if (hash == -1) {
         if (hash == -1) {
             dict_unhashable_type(self, key);
         }
@@ -4780,7 +4780,7 @@ dict_setdefault_object_owned(PyObject *op, PyObject *key, PyObject *default_valu
             break;
         }
         object = _PyValue_AsObjectAt(output, BOX_SITE_DICT);
-        if (object == NULL || PyErr_Occurred()) {
+        if (object == NULL) {
             status = -1;
             break;
         }
@@ -7979,7 +7979,7 @@ _PyDict_SendEvent(int watcher_bits, PyDict_WatchEvent event,
                 int status = cb(event, (PyObject *)mp,
                                 PyValue_Borrow(key_owner),
                                 PyValue_Borrow(value_owner));
-                if (status < 0 || PyErr_Occurred()) {
+                if (status < 0) {
                     PyErr_FormatUnraisable(
                         "Exception ignored in %s watcher callback for <dict at %p>",
                         dict_event_name(event), mp);

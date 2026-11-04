@@ -2929,7 +2929,7 @@ owner_alias_impl(PyTypeObject *type, PyObject *context)
         goto done;
     }
     kwargs = PyTuple_GetItemRef(context, 1);
-    if (kwargs == NULL || PyErr_Occurred()) {
+    if (kwargs == NULL) {
         goto done;
     }
     if (!PyDict_Check(kwargs)) {
@@ -2988,11 +2988,11 @@ positional_owner_probe(PyObject *value, int index, PyObject *tail)
         goto done;
     }
     number = PyLong_FromLong(index);
-    if (number == NULL || PyErr_Occurred()) {
+    if (number == NULL) {
         goto done;
     }
     called = PyObject_CallFunctionObjArgs(callback, number, tail, NULL);
-    if (called == NULL || PyErr_Occurred()) {
+    if (called == NULL) {
         goto done;
     }
     Py_XDECREF(called);

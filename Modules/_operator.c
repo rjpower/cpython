@@ -1125,7 +1125,7 @@ itemgetter_call(PyObject *op, PyObject *args, PyObject *kw)
     if (!_PyArg_NoKeywords("itemgetter", kw) ||
         !_PyArg_CheckPositional("itemgetter", PyTuple_GET_SIZE(args_owner), 1, 1)) goto done;
     selected = PyTuple_GetItemRef(args_owner, 0);
-    if (selected == NULL || PyErr_Occurred()) goto done;
+    if (selected == NULL) goto done;
     result = itemgetter_call_impl(itemgetterobject_CAST(op_owner), selected);
     if (PyErr_Occurred()) {
         Py_CLEAR(result);
@@ -1173,7 +1173,7 @@ itemgetter_call_impl(itemgetterobject *ig, PyObject *obj)
     assert(PyTuple_Check(ig->item));
     assert(PyTuple_GET_SIZE(ig->item) == nitems);
     result=PyTuple_New(nitems);
-    if (result==NULL || PyErr_Occurred()) goto done;
+    if (result==NULL) goto done;
     for (i=0; i<nitems; i++) {
         PyObject *item=PyTuple_GetItemRef(ig->item, i), *value=NULL;
         if (item != NULL && !PyErr_Occurred()) value=PyObject_GetItem(obj_owner,item);
@@ -1295,11 +1295,11 @@ attrgetter_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     Py_ssize_t nattrs, idx, char_idx;
     PyInterpreterState *interp=_PyInterpreterState_GET();
     if (PyErr_Occurred()) goto error;
-    if (!_PyArg_NoKeywords("attrgetter",kwds_owner) || PyErr_Occurred()) goto error;
+    if (!_PyArg_NoKeywords("attrgetter",kwds_owner)) goto error;
     nattrs=PyTuple_GET_SIZE(args_owner);
     if (nattrs<=1 && !_PyArg_CheckPositional("attrgetter",nattrs,1,1)) goto error;
     attr=PyTuple_New(nattrs);
-    if (attr==NULL || PyErr_Occurred()) goto error;
+    if (attr==NULL) goto error;
     for (idx=0; idx<nattrs; ++idx) {
         PyValue candidate=PyTuple_GET_VALUE(args_owner,idx);
         if (!PyValue_IsObject(candidate) ||
@@ -1308,7 +1308,7 @@ attrgetter_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
             goto error;
         }
         item=PyTuple_GetItemRef(args_owner,idx);
-        if (item==NULL || PyErr_Occurred()) goto error;
+        if (item==NULL) goto error;
         int dot_count=0;
         Py_ssize_t item_len=PyUnicode_GET_LENGTH(item);
         int kind=PyUnicode_KIND(item);
@@ -1320,7 +1320,7 @@ attrgetter_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
             if (PyErr_Occurred()) goto error;
             _PyUnicode_InternMortal(interp,&chain_item);
             if (PyErr_Occurred()) goto error;
-            if (PyTuple_SetItem(attr,idx,chain_item)<0 || PyErr_Occurred()) { chain_item=NULL; goto error; }
+            if (PyTuple_SetItem(attr,idx,chain_item)<0) { chain_item=NULL; goto error; }
             chain_item=NULL;
         } else {
             chain=PyTuple_New(dot_count+1);
@@ -1332,7 +1332,7 @@ attrgetter_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
                 if (chain_item==NULL || PyErr_Occurred()) goto error;
                 _PyUnicode_InternMortal(interp,&chain_item);
                 if (PyErr_Occurred()) goto error;
-                if (PyTuple_SetItem(chain,chain_idx++,chain_item)<0 || PyErr_Occurred()) { chain_item=NULL; goto error; }
+                if (PyTuple_SetItem(chain,chain_idx++,chain_item)<0) { chain_item=NULL; goto error; }
                 chain_item=NULL;
                 --dot_count;
                 till=from=till+1;
@@ -1341,7 +1341,7 @@ attrgetter_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
             if (chain_item==NULL || PyErr_Occurred()) goto error;
             _PyUnicode_InternMortal(interp,&chain_item);
             if (PyErr_Occurred()) goto error;
-            if (PyTuple_SetItem(chain,chain_idx,chain_item)<0 || PyErr_Occurred()) { chain_item=NULL; goto error; }
+            if (PyTuple_SetItem(chain,chain_idx,chain_item)<0) { chain_item=NULL; goto error; }
             chain_item=NULL;
             if (PyTuple_SetItem(attr,idx,chain)<0 || PyErr_Occurred()) { chain=NULL; goto error; }
             chain=NULL;
@@ -1464,7 +1464,7 @@ attrgetter_call(PyObject *op, PyObject *args, PyObject *kw)
     if (!_PyArg_NoKeywords("attrgetter",kw) ||
         !_PyArg_CheckPositional("attrgetter",PyTuple_GET_SIZE(args_owner),1,1)) goto done;
     selected=PyTuple_GetItemRef(args_owner,0);
-    if (selected==NULL || PyErr_Occurred()) goto done;
+    if (selected==NULL) goto done;
     result=attrgetter_call_impl(attrgetterobject_CAST(op_owner),selected);
     if (PyErr_Occurred()) {
         Py_CLEAR(result);
@@ -1511,7 +1511,7 @@ attrgetter_call_impl(attrgetterobject *ag, PyObject *obj)
     assert(PyTuple_Check(attrs));
     assert(PyTuple_GET_SIZE(attrs)==nattrs);
     result=PyTuple_New(nattrs);
-    if (result==NULL || PyErr_Occurred()) goto done;
+    if (result==NULL) goto done;
     for (Py_ssize_t i=0;i<nattrs;i++) {
         PyObject *attr=PyTuple_GetItemRef(attrs,i), *val=NULL;
         if (attr != NULL && !PyErr_Occurred()) val=dotted_getattr(obj_owner,attr);
@@ -1556,7 +1556,7 @@ attrgetter_args(attrgetterobject *ag)
     PyObject *attrsep=NULL, *attrstrings=NULL;
     if (PyErr_Occurred()) goto done;
     attrstrings=PyTuple_New(ag->nattrs);
-    if (attrstrings==NULL || PyErr_Occurred()) goto done;
+    if (attrstrings==NULL) goto done;
     for (Py_ssize_t i=0;i<ag->nattrs;i++) {
         PyObject *attr=PyTuple_GetItemRef(attrs,i), *attrstr=NULL;
         if (attr!=NULL && !PyErr_Occurred()) attrstr=dotjoinattr(attr,&attrsep);
@@ -1787,7 +1787,7 @@ methodcaller_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         goto error;
     }
     name=PyTuple_GetItemRef(args_owner,0);
-    if (name==NULL || PyErr_Occurred()) goto error;
+    if (name==NULL) goto error;
     _operator_state *state=_PyType_GetModuleState((PyTypeObject *)type_owner);
     mc=PyObject_GC_New(methodcallerobject,(PyTypeObject *)state->methodcaller_type);
     if (mc==NULL) goto error;
@@ -1808,11 +1808,11 @@ methodcaller_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     mc->name=interned;
     interned=NULL;
     mc->args=PyTuple_GetSlice(args_owner,1,nitems);
-    if (mc->args==NULL || PyErr_Occurred()) goto error;
+    if (mc->args==NULL) goto error;
     Py_ssize_t vectorcall_size=nitems+(kwds_owner ? PyDict_Size(kwds_owner) : 0);
     if (PyErr_Occurred()) goto error;
     if (vectorcall_size<_METHODCALLER_MAX_ARGS) {
-        if (_methodcaller_initialize_vectorcall(mc)<0 || PyErr_Occurred()) goto error;
+        if (_methodcaller_initialize_vectorcall(mc)<0) goto error;
     }
     PyObject_GC_Track(mc);
     result=(PyObject *)mc; mc=NULL;
@@ -1933,13 +1933,13 @@ methodcaller_repr(PyObject *op)
         goto cleanup;
     }
     argreprs=PyTuple_New(total);
-    if (argreprs==NULL || PyErr_Occurred()) goto cleanup;
+    if (argreprs==NULL) goto cleanup;
     for (i=0;i<npos;i++) {
         PyObject *item=PyTuple_GetItemRef(args,i);
         if (item!=NULL && !PyErr_Occurred()) one=PyObject_Repr(item);
         Py_CLEAR(item);
         if (one==NULL || PyErr_Occurred()) goto cleanup;
-        if (PyTuple_SetItem(argreprs,i,one)<0 || PyErr_Occurred()) { one=NULL; goto cleanup; }
+        if (PyTuple_SetItem(argreprs,i,one)<0) { one=NULL; goto cleanup; }
         one=NULL;
     }
     if (nkw) {
@@ -1952,7 +1952,7 @@ methodcaller_repr(PyObject *op)
                 goto cleanup;
             }
             one=PyUnicode_FromFormat("%U=%R",key,value);
-            if (one==NULL || PyErr_Occurred()) goto cleanup;
+            if (one==NULL) goto cleanup;
             if (i>=total) {
                 Py_CLEAR(one);
                 Py_CLEAR(key);
@@ -1961,7 +1961,7 @@ methodcaller_repr(PyObject *op)
                 i=-1;
                 break;
             }
-            if (PyTuple_SetItem(argreprs,i,one)<0 || PyErr_Occurred()) { one=NULL; goto cleanup; }
+            if (PyTuple_SetItem(argreprs,i,one)<0) { one=NULL; goto cleanup; }
             one=NULL;
             ++i;
             Py_CLEAR(key);
@@ -1978,7 +1978,7 @@ methodcaller_repr(PyObject *op)
     sep=PyUnicode_FromString(", ");
     if (sep==NULL || PyErr_Occurred()) goto cleanup;
     joined=PyUnicode_Join(sep,argreprs);
-    if (joined==NULL || PyErr_Occurred()) goto cleanup;
+    if (joined==NULL) goto cleanup;
     repr=PyUnicode_FromFormat("%s(%R, %U)",Py_TYPE(op_owner)->tp_name,name,joined);
 cleanup:
     Py_CLEAR(one);
@@ -2012,21 +2012,21 @@ methodcaller_reduce(PyObject *op, PyObject *Py_UNUSED(dummy))
     npos=PyTuple_GET_SIZE(args);
     if (kwds==NULL || PyDict_GET_SIZE(kwds)==0) {
         newargs=PyTuple_New(1+npos);
-        if (newargs==NULL || PyErr_Occurred()) goto done;
-        if (PyTuple_SetItem(newargs,0,Py_NewRef(name))<0 || PyErr_Occurred()) goto done;
+        if (newargs==NULL) goto done;
+        if (PyTuple_SetItem(newargs,0,Py_NewRef(name))<0) goto done;
         for (Py_ssize_t i=0;i<npos;i++) {
             selected=PyTuple_GetItemRef(args,i);
-            if (selected==NULL || PyErr_Occurred()) goto done;
+            if (selected==NULL) goto done;
             PyObject *transfer=selected;
             selected=NULL;
-            if (PyTuple_SetItem(newargs,i+1,transfer)<0 || PyErr_Occurred()) goto done;
+            if (PyTuple_SetItem(newargs,i+1,transfer)<0) goto done;
         }
         result=Py_BuildValue("ON",Py_TYPE(op_owner),newargs);
         newargs=NULL;
         goto done;
     }
     partial=PyImport_ImportModuleAttrString("functools","partial");
-    if (partial==NULL || PyErr_Occurred()) goto done;
+    if (partial==NULL) goto done;
     PyObject *vector_args[2]={(PyObject *)Py_TYPE(op_owner),name};
     constructor=PyObject_VectorcallDict(partial,vector_args,2,kwds);
     if (PyErr_Occurred()) { saved=PyErr_GetRaisedException(); Py_CLEAR(constructor); _PyValue_RestoreException(saved); }

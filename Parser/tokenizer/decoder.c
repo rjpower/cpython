@@ -492,7 +492,7 @@ _PyTok_DecoderHasBufferedInput(struct tok_state *tok)
     int pending = -1;
     PyObject *state = PyObject_CallMethodNoArgs(
         tok->reader->decoder, &_Py_ID(getstate));
-    if (state == NULL || PyErr_Occurred()) {
+    if (state == NULL) {
         goto done;
     }
     if (!PyTuple_Check(state) || PyTuple_GET_SIZE(state) != 2) {

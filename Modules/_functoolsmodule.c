@@ -1392,7 +1392,7 @@ lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
         if (written >= key_size) { PyErr_SetString(PyExc_RuntimeError,"keywords dict changed size during key construction"); goto error; }
         value=PyTuple_GetValue(args_owner,pos);
         if (PyValue_IsNull(value) || PyErr_Occurred()) goto error;
-        if (PyTuple_SetValue(key,written++,value)<0 || PyErr_Occurred()) { value=PyValue_NULL; goto error; }
+        if (PyTuple_SetValue(key,written++,value)<0) { value=PyValue_NULL; goto error; }
         value=PyValue_NULL;
     }
     if (nkwargs) {
@@ -1405,7 +1405,7 @@ lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
                 PyErr_SetString(PyExc_RuntimeError,"keywords dict changed size during key construction");
                 goto error;
             }
-            if (PyTuple_SetValue(key,written++,dict_key)<0 || PyErr_Occurred()) { dict_key=PyValue_NULL; goto error; }
+            if (PyTuple_SetValue(key,written++,dict_key)<0) { dict_key=PyValue_NULL; goto error; }
             dict_key=PyValue_NULL;
             if (PyTuple_SetValue(key,written++,value)<0 || PyErr_Occurred()) { value=PyValue_NULL; goto error; }
             value=PyValue_NULL;
@@ -1432,7 +1432,7 @@ lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
                 _PyValue_RestoreException(saved);
                 goto error;
             }
-            if (PyTuple_SetItem(key,written++,type_owner)<0 || PyErr_Occurred()) goto error;
+            if (PyTuple_SetItem(key,written++,type_owner)<0) goto error;
         }
         if (nkwargs) {
             cursor=0;
@@ -1450,7 +1450,7 @@ lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
                     _PyValue_RestoreException(saved);
                     goto error;
                 }
-                if (PyTuple_SetItem(key,written++,type_owner)<0 || PyErr_Occurred()) goto error;
+                if (PyTuple_SetItem(key,written++,type_owner)<0) goto error;
             }
             if (status<0 || PyErr_Occurred()) goto error;
         }

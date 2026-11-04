@@ -20,7 +20,9 @@ the related ones of steps 6a-6c of the PyValue representation packet
                     release in the helper's body; the helper goes.
   --rules class-p   rule 6: ``|| PyErr_Occurred()`` after a call whose
                     failure the left term reports, and the dead NULL test
-                    after Py_NewRef/Py_XNewRef.
+                    after Py_NewRef.  The term stays when an exception
+                    raised earlier may still be pending (after a
+                    PyIter_Next loop, for example): it tests that too.
 
 It refuses anything it does not recognise and prints each refused site as
 ``file:line: class X: reason``.  The class letters are those of the section
@@ -371,7 +373,6 @@ CLASS_REASONS = {
 
 def find_declaration(src: Source, var: str, before: int) -> int | None:
     """The declaration of var in a block that encloses line before."""
-    decl = re.compile(r"^\s*PyObject\s*\*(?:.*[,\s])?\*?\s*" + re.escape(var) + r"\s*(?:=\s*NULL\s*)?[,;]")
     decl2 = re.compile(r"^\s*PyObject\s*\*\s*" + re.escape(var) + r"\s*(?:=\s*NULL\s*)?[,;]|"
                        r"^\s*PyObject\s*\*.*,\s*\*\s*" + re.escape(var) + r"\s*(?:=\s*NULL\s*)?[,;]")
     for k in range(before - 1, -1, -1):
@@ -401,7 +402,6 @@ def check_direct(src: Source, save: int, restore: int, var: str):
     # Classify the lines between.
     detaches: dict[int, tuple[str, str, str, int]] = {}  # decl line -> (r, x, kind, null line)
     releases: list[int] = []
-    pending: tuple[int, str, str, str] | None = None
     start = save
 
     def scan_detach(k: int) -> tuple[str, str, str] | None:
@@ -882,6 +882,127 @@ def assigned_call(statement: str, x: str) -> str | None:
     return m.group("fn")
 
 
+JUMP_RE = re.compile(r"^(?:goto\s+\w+|return\b[^;]*|break|continue)\s*;$")
+CHECKED_JUMP_RE = re.compile(r"^(?:\}\s*else\s+)?if\s*\((?P<cond>.*)\)\s*"
+                             r"(?:goto\s+\w+|return\b[^;]*|break|continue)\s*;$")
+# Calls that cannot raise: releases (the release contract), new references,
+# borrows, size and type macros.
+QUIET_CALLS = set(RELEASES) | {"Py_INCREF", "Py_XINCREF", "assert", "strlen", "memcpy", "memset"}
+QUIET_CALL_RE = re.compile(
+    r"^(?:Py_X?NewRef|Py_SIZE|Py_TYPE|Py_IS_TYPE|Py_SET_SIZE|Py_REFCNT|_Py_ID|_PyObject_CAST|"
+    r"_PyType_CAST|_PyType_Name|Py\w*_GET_SIZE|Py\w*_GET_ITEM|Py\w*_SET_ITEM|Py\w*_GET_LENGTH|"
+    r"Py\w*_GET_VALUE|Py\w*_SET_VALUE|Py_ARRAY_LENGTH|\w+_CAST|_PyInterpreterState_GET|"
+    r"_PyThreadState_GET|PyVectorcall_NARGS|_PyType_IsReady|_PyObject_IsUniquelyReferenced|"
+    r"PyErr_Occurred|"
+    r"_PyTuple_GET_\w+|_?Py\w+_Check(?:Exact)?|PyValue_(?:MakeHeapSafe|FromObjectBorrow|"
+    r"FromPyObjectSteal|AsKnownObjectBorrow|AsKnownObjectSteal|Is\w+|DUP|TYPE))$")
+CLEARING_RE = re.compile(r"^(?:[\w\s\*]*=\s*)?(?:PyErr_GetRaisedException|PyErr_Clear)\(\);$")
+
+
+def quiet(text: str) -> bool:
+    """Whether every call in text is one that cannot raise."""
+    if re.match(r"^assert\s*\(", text):
+        return True
+    for m in re.finditer(r"\b(\w+)\s*\(", text):
+        name = m.group(1)
+        if name in ("if", "while", "for", "switch", "return", "sizeof"):
+            continue
+        if name not in QUIET_CALLS and not QUIET_CALL_RE.match(name):
+            return False
+    return True
+
+
+def statement_start(src: Source, k: int) -> int:
+    j = k
+    while j > 0:
+        prev = src.code[j - 1].rstrip()
+        if not prev.strip() or prev.endswith((";", "{", "}", ":")) or prev.lstrip().startswith("#"):
+            break
+        j -= 1
+    return j
+
+
+def if_head(src: Source, k: int) -> int | None:
+    """The first line of the if statement whose chain contains the block
+    opened on line k, or None if that block is not an if or else branch."""
+    while True:
+        start = statement_start(src, k)
+        header = " ".join(src.code[i].strip() for i in range(start, k + 1))
+        if re.match(r"^if\b", header):
+            return start
+        if re.match(r"^\}\s*else\b", header):
+            k = src.block_start(start)
+            continue
+        if re.match(r"^else\b", header):
+            j = start - 1
+            while j >= 0 and not src.code[j].strip():
+                j -= 1
+            if j < 0 or src.code[j].strip() != "}":
+                return None
+            k = src.block_start(j)
+            continue
+        return None
+
+
+def earlier_failure(src: Source, j: int) -> str | None:
+    """Why an exception raised before line j may still be pending at j, or
+    None.  `|| PyErr_Occurred()` also tests such an exception (the end of a
+    PyIter_Next loop, an unchecked call), so it is load-bearing there.  Walk
+    back over statements that cannot raise to the decisive line: the start of
+    a function or loop body, a jump, a clear, or an if block that ends in a
+    jump.  Branch conditions on the way must not raise."""
+    code = src.code
+    k = j - 1
+    while True:
+        while k >= 0 and (not code[k].strip() or code[k].lstrip().startswith("#")):
+            k -= 1
+        if k < 0:
+            return "no statement before the call"
+        line = code[k].strip()
+        if line.endswith("{"):
+            if line == "{" and src.depth[k] == 0:
+                return None
+            start = statement_start(src, k)
+            header = " ".join(code[i].strip() for i in range(start, k + 1))
+            if re.match(r"^(?:for|while|do)\b", header):
+                return None
+            head = if_head(src, k)
+            if head is None:
+                return f"first statement of a block opened by '{header[:40]}'"
+            cond = " ".join(code[i].strip() for i in range(head, statement_start(src, k) + 1))
+            if not quiet(cond.split("{")[0]):
+                return f"inside a branch whose condition can raise: '{cond[:40]}'"
+            k = head - 1
+            continue
+        if line.endswith(":"):
+            return "first statement after a label"
+        if line.startswith("}"):
+            opener = src.block_start(k)
+            start = statement_start(src, opener)
+            header = " ".join(code[i].strip() for i in range(start, opener + 1))
+            if line != "}" or not re.match(r"^(?:\}\s*else\s+)?if\b", header):
+                return f"after the end of a block opened by '{header[:40]}'"
+            b = k - 1
+            while b > opener and not code[b].strip():
+                b -= 1
+            if not JUMP_RE.match(code[b].strip()):
+                return "after an if block that falls through"
+            return None
+        prev = previous_statement(src, k + 1)
+        if prev is None:
+            return f"after '{line[:40]}'"
+        first, stmt = prev
+        if JUMP_RE.match(stmt) or CLEARING_RE.match(stmt):
+            return None
+        m = CHECKED_JUMP_RE.match(stmt)
+        if m and balanced(m.group("cond")):
+            return None
+        if quiet(stmt):
+            k = first - 1
+            continue
+        return f"after the unchecked statement '{stmt[:50]}'"
+
+
 def class_p_sites(src: Source, refusals: list[Refusal], edits: Edits) -> int:
     """Rule 6.  Return the number of terms dropped and branches deleted."""
     lines, code = src.lines, src.code
@@ -907,7 +1028,10 @@ def class_p_sites(src: Source, refusals: list[Refusal], edits: Edits) -> int:
         left = m.group("left").strip()
         dead_branch = False
         if any(p.match(left) and balanced(p.match(left).group("call")) for p in IN_CONDITION_TERMS):
-            pass
+            why = earlier_failure(src, k)
+            if why is not None:
+                refusals.append(Refusal(k, "P", f"an earlier failure may be pending: {why}"))
+                continue
         else:
             term = next(((p.match(left), kind) for p, kind in FAILURE_TERMS if p.match(left)), None)
             if term is None:
@@ -918,6 +1042,10 @@ def class_p_sites(src: Source, refusals: list[Refusal], edits: Edits) -> int:
             fn = assigned_call(prev[1], x) if prev else None
             if fn is None:
                 refusals.append(Refusal(k, "P", f"left term {left} does not test the previous statement's call"))
+                continue
+            why = earlier_failure(src, prev[0])
+            if why is not None:
+                refusals.append(Refusal(k, "P", f"an earlier failure may be pending: {why}"))
                 continue
             if fn == "Py_NewRef" and term[1] == "null":
                 dead_branch = True
@@ -993,11 +1121,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--rules", choices=("direct", "helpers", "class-p"),
                         default="direct")
     parser.add_argument("--check", action="store_true",
-                        help="change no file; print the diff instead")
+                        help="change no file; print the diff instead and exit 1 "
+                             "if any file would change")
     parser.add_argument("--root", default=os.getcwd(),
                         help="paths in the report are relative to this")
     args = parser.parse_args(argv)
     total = 0
+    would_change = False
     for path in args.files:
         if not path.endswith((".c", ".h")):
             print(f"{path}:1: class -: not a C file, not processed")
@@ -1008,9 +1138,11 @@ def main(argv: list[str] | None = None) -> int:
             print(line)
         if args.check and diff:
             sys.stdout.write(diff)
+            would_change = True
     print(f"# {total} sites rewritten" + (" (check only)" if args.check else ""),
           file=sys.stderr)
-    return 0
+    # Like a linter: with --check, exit 1 if any file would change.
+    return 1 if would_change else 0
 
 
 if __name__ == "__main__":

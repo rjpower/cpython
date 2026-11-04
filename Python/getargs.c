@@ -1589,7 +1589,7 @@ error_unexpected_keyword_arg(PyObject *kwargs, PyObject *kwnames,
     }
     for (Py_ssize_t j = 0; j < PyList_GET_SIZE(names); j++) {
         keyword = PyList_GetItemRef(names, j);
-        if (keyword == NULL || PyErr_Occurred()) {
+        if (keyword == NULL) {
             goto done;
         }
         if (!PyUnicode_Check(keyword)) {

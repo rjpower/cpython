@@ -3544,7 +3544,7 @@ get_path_importer(PyThreadState *tstate, PyObject *path_importer_cache,
     }
 
     nhooks = PyList_Size(path_hooks);
-    if (nhooks < 0 || PyErr_Occurred())
+    if (nhooks < 0)
         return NULL; /* Shouldn't happen */
 
     int cached = PyDict_GetItemRef(path_importer_cache, p, &importer);
@@ -3559,7 +3559,7 @@ get_path_importer(PyThreadState *tstate, PyObject *path_importer_cache,
 
     for (j = 0; j < nhooks; j++) {
         PyObject *hook = PyList_GetItemRef(path_hooks, j);
-        if (hook == NULL || PyErr_Occurred()) {
+        if (hook == NULL) {
             Py_CLEAR(hook);
             goto error;
         }

@@ -467,7 +467,7 @@ _PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys)
         goto fail;
     }
     PyObject *get = _PyValueTemps_Object(&method_temps, method.ref);
-    if (get == NULL || PyErr_Occurred()) {
+    if (get == NULL) {
         goto fail;
     }
     seen = PySet_New(NULL);
@@ -920,11 +920,11 @@ value_store_subscript(PyValue container, PyValue key, PyValue value,
         return -1;
     }
     PyObject *key_obj = _PyValueTemps_Object(temps, key);
-    if (key_obj == NULL || PyErr_Occurred()) {
+    if (key_obj == NULL) {
         return -1;
     }
     PyObject *value_obj = _PyValueTemps_Object(temps, value);
-    if (value_obj == NULL || PyErr_Occurred()) {
+    if (value_obj == NULL) {
         return -1;
     }
     return PyObject_SetItem(obj, key_obj, value_obj);
@@ -936,7 +936,7 @@ value_store_attribute(PyValue owner, PyValue value, PyObject *name,
 {
     *invoked = 0;
     PyObject *object = _PyValueTemps_Object(temps, owner);
-    if (object == NULL || PyErr_Occurred()) {
+    if (object == NULL) {
         return -1;
     }
     PyObject *object_value = PyValue_IsNull(value) ? NULL :
@@ -976,7 +976,7 @@ value_load_attribute(PyThreadState *tstate, PyValue owner, PyObject *name,
     *result = *self = PyValue_NULL;
     *invoked = 0;
     PyObject *object = _PyValueTemps_Object(temps, owner);
-    if (object == NULL || PyErr_Occurred()) {
+    if (object == NULL) {
         return -1;
     }
     *invoked = 1;
@@ -1005,7 +1005,7 @@ value_binary_operation(int operation, PyValue left, PyValue right,
             /* Exact dictionaries have no __missing__. Do not repeat a hash
              * or equality callback just to construct the missing-key error. */
             PyObject *key = _PyValueTemps_Object(temps, right);
-            if (key == NULL || PyErr_Occurred()) {
+            if (key == NULL) {
                 return PyValue_NULL;
             }
             _PyErr_SetKeyError(key);
@@ -1017,7 +1017,7 @@ value_binary_operation(int operation, PyValue left, PyValue right,
         return PyValue_NULL;
     }
     PyObject *right_obj = _PyValueTemps_Object(temps, right);
-    if (right_obj == NULL || PyErr_Occurred()) {
+    if (right_obj == NULL) {
         return PyValue_NULL;
     }
     assert(_PyEval_BinaryOps[operation] != NULL);
@@ -1712,7 +1712,7 @@ call_transaction_prepare_tuple(_PyCallTransaction *call, _PyInstr **next)
         goto done;
     }
     func_object = PyValue_AsObject(func);
-    if (func_object == NULL || PyErr_Occurred()) {
+    if (func_object == NULL) {
         goto done;
     }
     if (_Py_Check_ArgsIterable(call->operation.tstate, func_object,

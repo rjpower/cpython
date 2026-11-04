@@ -596,7 +596,7 @@ retry:
         PyObject *prior = PyErr_GetRaisedException();
         // A zero-filled table is empty: every key is PyValue_NULL, hash 0.
         newtable = PyMem_Calloc(newsize, sizeof(setentry));
-        if (newtable == NULL || PyErr_Occurred()) {
+        if (newtable == NULL) {
             if (!PyErr_Occurred()) {
                 PyErr_NoMemory();
             }
@@ -1351,7 +1351,7 @@ setiter_iternext(PyObject *self)
     }
     Py_ssize_t reserved_pos = si->si_pos;
     PyObject *boxed = _PyValue_AsObjectAt(key, BOX_SITE_ITERATION);
-    if (boxed == NULL || PyErr_Occurred()) {
+    if (boxed == NULL) {
         PyObject *saved = PyErr_GetRaisedException();
         Py_XDECREF(boxed);
         boxed = NULL;
@@ -3516,7 +3516,7 @@ _PySet_NextEntryRef(PyObject *set, Py_ssize_t *pos, PyObject **key, Py_hash_t *h
     }
     Py_ssize_t reserved_pos = *pos;
     PyObject *boxed = _PyValue_AsObjectAt(value, BOX_SITE_SET);
-    if (boxed == NULL || PyErr_Occurred()) {
+    if (boxed == NULL) {
         PyObject *saved = PyErr_GetRaisedException();
         Py_XDECREF(boxed);
         if (*pos == reserved_pos) {

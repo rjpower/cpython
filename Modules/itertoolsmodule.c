@@ -221,7 +221,7 @@ batched_next(PyObject *op)
     iterator_owner = Py_NewRef(op);
     it_owner = Py_NewRef(bo->it);
     result = PyTuple_New(n);
-    if (result == NULL || PyErr_Occurred()) {
+    if (result == NULL) {
         goto done;
     }
     iternextfunc iternext = *Py_TYPE(it_owner)->tp_iternext;
@@ -262,7 +262,7 @@ null_item:
         goto terminal;
     }
     int resize_status = _PyTuple_Resize(&result, i);
-    if (resize_status < 0 || PyErr_Occurred()) {
+    if (resize_status < 0) {
         goto done;
     }
     output = result;
@@ -1020,7 +1020,7 @@ itertools_teedataobject_impl(PyTypeObject *type, PyObject *it,
 
     for (i = 0; i < captured; i++) {
         item = PyValue_AsObject(snapshot[i]);
-        if (item == NULL || PyErr_Occurred()) {
+        if (item == NULL) {
             if (item == NULL && !PyErr_Occurred()) {
                 PyErr_SetString(PyExc_SystemError,
                                 "tee state value could not be boxed");
@@ -2230,7 +2230,7 @@ product_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     if (kwds != NULL) {
         char *kwlist[] = {"repeat", 0};
         tmpargs = PyTuple_New(0);
-        if (tmpargs == NULL || PyErr_Occurred()) {
+        if (tmpargs == NULL) {
             goto error;
         }
         parse_status = PyArg_ParseTupleAndKeywords(tmpargs, kwds, "|n:product",
@@ -2265,12 +2265,12 @@ product_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     }
 
     pools = PyTuple_New(npools);
-    if (pools == NULL || PyErr_Occurred())
+    if (pools == NULL)
         goto error;
 
     for (i=0; i < nargs ; ++i) {
         item = PyTuple_GetItemRef(args, i);
-        if (item == NULL || PyErr_Occurred())
+        if (item == NULL)
             goto error;
 
         pool = PySequence_Tuple(item);
@@ -2286,7 +2286,7 @@ product_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     }
     for ( ; i < npools; ++i) {
         pool = PyTuple_GetItemRef(pools, i - nargs);
-        if (pool == NULL || PyErr_Occurred())
+        if (pool == NULL)
             goto error;
         PyTuple_SET_ITEM(pools, i, pool);
         pool = NULL;
@@ -4158,7 +4158,7 @@ zip_longest_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     if (kwds != NULL && PyDict_CheckExact(kwds) && PyDict_GET_SIZE(kwds) > 0) {
         if (PyDict_GET_SIZE(kwds) == 1) {
             int status = PyDict_GetItemRef(kwds, &_Py_ID(fillvalue), &fillvalue);
-            if (status < 0 || PyErr_Occurred()) {
+            if (status < 0) {
                 goto error;
             }
         }
@@ -4170,9 +4170,6 @@ zip_longest_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     }
     else {
         fillvalue = Py_NewRef(Py_None);
-        if (fillvalue == NULL || PyErr_Occurred()) {
-            goto error;
-        }
     }
 
     /* args must be a tuple */
@@ -4185,7 +4182,7 @@ zip_longest_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         goto error;
     for (i=0; i < tuplesize; i++) {
         item = PyTuple_GetItemRef(args, i);
-        if (item == NULL || PyErr_Occurred()) {
+        if (item == NULL) {
             goto error;
         }
 
@@ -4305,7 +4302,7 @@ zip_longest_next_impl(ziplongestobject *self)
     }
     else {
         output = PyTuple_New(tuplesize);
-        if (output == NULL || PyErr_Occurred()) {
+        if (output == NULL) {
             goto done;
         }
     }
@@ -4316,7 +4313,7 @@ zip_longest_next_impl(ziplongestobject *self)
         }
         else {
             it_owner = PyTuple_GetItemRef(ittuple_owner, i);
-            if (it_owner == NULL || PyErr_Occurred()) {
+            if (it_owner == NULL) {
                 goto done;
             }
             item = PyIter_Next(it_owner);

@@ -105,27 +105,21 @@ ga_repr(PyObject *self)
     int completed = 0;
 
     self_owner = Py_NewRef(self);
-    if (self_owner == NULL || PyErr_Occurred()) {
-        goto done;
-    }
     gaobject *alias = (gaobject *)self_owner;
     args_owner = Py_NewRef(alias->args);
-    if (args_owner == NULL || PyErr_Occurred()) {
-        goto done;
-    }
     Py_ssize_t len = PyTuple_GET_SIZE(args_owner);
 
     // Estimation based on the shortest format: "int[int, int, int]"
     Py_ssize_t estimate = (len <= PY_SSIZE_T_MAX / 5) ? len * 5 : len;
     estimate = 3 + 1 + estimate + 1;
     writer = PyUnicodeWriter_Create(estimate);
-    if (writer == NULL || PyErr_Occurred()) {
+    if (writer == NULL) {
         goto done;
     }
 
     if (alias->starred) {
         int status = PyUnicodeWriter_WriteChar(writer, '*');
-        if (status < 0 || PyErr_Occurred()) {
+        if (status < 0) {
             goto done;
         }
     }
@@ -139,13 +133,13 @@ ga_repr(PyObject *self)
         goto done;
     }
     status = PyUnicodeWriter_WriteChar(writer, '[');
-    if (status < 0 || PyErr_Occurred()) {
+    if (status < 0) {
         goto done;
     }
     for (Py_ssize_t i = 0; i < len; i++) {
         if (i > 0) {
             status = PyUnicodeWriter_WriteASCII(writer, ", ", 2);
-            if (status < 0 || PyErr_Occurred()) {
+            if (status < 0) {
                 goto done;
             }
         }
@@ -179,7 +173,7 @@ ga_repr(PyObject *self)
     PyUnicodeWriter *finishing = writer;
     writer = NULL;
     result = PyUnicodeWriter_Finish(finishing);
-    if (result == NULL || PyErr_Occurred()) {
+    if (result == NULL) {
         goto done;
     }
     completed = 1;
@@ -292,9 +286,6 @@ _Py_make_parameters(PyObject *args)
     }
     assert(PyTuple_Check(args) || PyList_Check(args));
     input_owner = Py_NewRef(args);
-    if (input_owner == NULL || PyErr_Occurred()) {
-        goto done;
-    }
     if (Py_EnterRecursiveCall(" in __parameter__ calculation")) {
         goto done;
     }
@@ -306,7 +297,7 @@ _Py_make_parameters(PyObject *args)
     const bool is_args_list = PyList_Check(input_owner);
     if (is_args_list) {
         tuple_args = PySequence_Tuple(input_owner);
-        if (tuple_args == NULL || PyErr_Occurred()) {
+        if (tuple_args == NULL) {
             goto done;
         }
     }
@@ -319,7 +310,7 @@ _Py_make_parameters(PyObject *args)
     }
     for (Py_ssize_t iarg = 0; iarg < nargs; iarg++) {
         t = PyTuple_GetItemRef(source, iarg);
-        if (t == NULL || PyErr_Occurred()) {
+        if (t == NULL) {
             goto done;
         }
         // We don't want __parameters__ descriptor of a bare Python class.
@@ -331,7 +322,7 @@ _Py_make_parameters(PyObject *args)
             continue;
         }
         int rc = PyObject_HasAttrWithError(t, &_Py_ID(__typing_subst__));
-        if (rc < 0 || PyErr_Occurred()) {
+        if (rc < 0) {
             goto done;
         }
         if (rc) {
@@ -344,14 +335,14 @@ _Py_make_parameters(PyObject *args)
         else {
             rc = PyObject_GetOptionalAttr(t, &_Py_ID(__parameters__),
                                           &subparams);
-            if (rc < 0 || PyErr_Occurred()) {
+            if (rc < 0) {
                 goto done;
             }
             if (!subparams && (PyTuple_Check(t) || PyList_Check(t))) {
                 // Recursively call _Py_make_parameters for lists/tuples and
                 // add the results to the current parameters.
                 subparams = _Py_make_parameters(t);
-                if (subparams == NULL || PyErr_Occurred()) {
+                if (subparams == NULL) {
                     goto done;
                 }
             }
@@ -368,7 +359,7 @@ _Py_make_parameters(PyObject *args)
                 }
                 for (Py_ssize_t j = 0; j < len2; j++) {
                     t2 = PyTuple_GetItemRef(subparams, j);
-                    if (t2 == NULL || PyErr_Occurred()) {
+                    if (t2 == NULL) {
                         goto done;
                     }
                     int delta = tuple_add(parameters, iparam, t2);
@@ -443,17 +434,8 @@ subs_tvars(PyObject *obj, PyObject *params, PyObject *argitems,
     }
 
     obj_owner = Py_NewRef(obj);
-    if (obj_owner == NULL || PyErr_Occurred()) {
-        goto done;
-    }
     params_owner = Py_NewRef(params);
-    if (params_owner == NULL || PyErr_Occurred()) {
-        goto done;
-    }
     items_owner = Py_NewRef(argitems);
-    if (items_owner == NULL || PyErr_Occurred()) {
-        goto done;
-    }
 
     if (PyObject_GetOptionalAttr(obj_owner, &_Py_ID(__parameters__),
                                  &subparams) < 0 || PyErr_Occurred()) {
@@ -465,13 +447,13 @@ subs_tvars(PyObject *obj, PyObject *params, PyObject *argitems,
         Py_ssize_t nparams = PyTuple_GET_SIZE(params_owner);
         Py_ssize_t nsubargs = PyTuple_GET_SIZE(subparams);
         subargs = PyTuple_New(nsubargs);
-        if (subargs == NULL || PyErr_Occurred()) {
+        if (subargs == NULL) {
             goto done;
         }
         Py_ssize_t j = 0;
         for (Py_ssize_t i = 0; i < nsubargs; ++i) {
             arg = PyTuple_GetItemRef(subparams, i);
-            if (arg == NULL || PyErr_Occurred()) {
+            if (arg == NULL) {
                 goto done;
             }
             Py_ssize_t iparam = tuple_index(params_owner, nparams, arg);
@@ -488,7 +470,7 @@ subs_tvars(PyObject *obj, PyObject *params, PyObject *argitems,
                 }
                 if (Py_TYPE(param)->tp_iter && PyTuple_Check(replacement)) {
                     j = tuple_extend(&subargs, j, replacement);
-                    if (j < 0 || PyErr_Occurred()) {
+                    if (j < 0) {
                         goto done;
                     }
                     Py_CLEAR(replacement);
@@ -548,9 +530,6 @@ subs_tvars(PyObject *obj, PyObject *params, PyObject *argitems,
     }
     else {
         result = Py_NewRef(obj_owner);
-        if (result == NULL || PyErr_Occurred()) {
-            goto done;
-        }
     }
     completed = 1;
 
@@ -624,12 +603,9 @@ _unpack_args(PyObject *item)
     }
 
     input_owner = Py_NewRef(item);
-    if (input_owner == NULL || PyErr_Occurred()) {
-        goto done;
-    }
 
     newargs = PyList_New(0);
-    if (newargs == NULL || PyErr_Occurred()) {
+    if (newargs == NULL) {
         goto done;
     }
 
@@ -676,7 +652,7 @@ _unpack_args(PyObject *item)
             goto done;
         }
 
-        if (PyList_Append(newargs, selected) < 0 || PyErr_Occurred()) {
+        if (PyList_Append(newargs, selected) < 0) {
             goto done;
         }
         Py_CLEAR(selected);
@@ -740,28 +716,16 @@ _Py_subs_parameters(PyObject *self, PyObject *args, PyObject *parameters, PyObje
     }
 
     self_owner = Py_NewRef(self);
-    if (self_owner == NULL || PyErr_Occurred()) {
-        goto done;
-    }
     args_owner = Py_NewRef(args);
-    if (args_owner == NULL || PyErr_Occurred()) {
-        goto done;
-    }
     params_owner = Py_NewRef(parameters);
-    if (params_owner == NULL || PyErr_Occurred()) {
-        goto done;
-    }
     input_owner = Py_NewRef(item_arg);
-    if (input_owner == NULL || PyErr_Occurred()) {
-        goto done;
-    }
 
     nparams = PyTuple_GET_SIZE(params_owner);
     if (nparams == 0) {
         result = PyErr_Format(PyExc_TypeError,
                               "%R is not a generic class",
                               self_owner);
-        if (result == NULL || PyErr_Occurred()) {
+        if (result == NULL) {
             goto done;
         }
         completed = 1;
@@ -769,7 +733,7 @@ _Py_subs_parameters(PyObject *self, PyObject *args, PyObject *parameters, PyObje
     }
 
     item = _unpack_args(input_owner);
-    if (item == NULL || PyErr_Occurred()) {
+    if (item == NULL) {
         goto done;
     }
     Py_CLEAR(input_owner);
@@ -779,7 +743,7 @@ _Py_subs_parameters(PyObject *self, PyObject *args, PyObject *parameters, PyObje
 
     for (Py_ssize_t i = 0; i < nparams; i++) {
         param = PyTuple_GetItemRef(params_owner, i);
-        if (param == NULL || PyErr_Occurred()) {
+        if (param == NULL) {
             goto done;
         }
         if (PyObject_GetOptionalAttr(param, &_Py_ID(__typing_prepare_subst__),
@@ -828,7 +792,7 @@ _Py_subs_parameters(PyObject *self, PyObject *args, PyObject *parameters, PyObje
                               "Too %s arguments for %R; actual %zd, expected %zd",
                               nitems > nparams ? "many" : "few",
                               self_owner, nitems, nparams);
-        if (result == NULL || PyErr_Occurred()) {
+        if (result == NULL) {
             goto done;
         }
         completed = 1;
@@ -838,7 +802,7 @@ _Py_subs_parameters(PyObject *self, PyObject *args, PyObject *parameters, PyObje
     assert(PyTuple_Check(args_owner) || PyList_Check(args_owner));
     if (PyList_Check(args_owner)) {
         tuple_args = PySequence_Tuple(args_owner);
-        if (tuple_args == NULL || PyErr_Occurred()) {
+        if (tuple_args == NULL) {
             goto done;
         }
         source = tuple_args;
@@ -854,7 +818,7 @@ _Py_subs_parameters(PyObject *self, PyObject *args, PyObject *parameters, PyObje
 
     for (Py_ssize_t iarg = 0, jarg = 0; iarg < nargs; iarg++) {
         arg = PyTuple_GetItemRef(source, iarg);
-        if (arg == NULL || PyErr_Occurred()) {
+        if (arg == NULL) {
             goto done;
         }
         if (PyType_Check(arg)) {
@@ -868,7 +832,7 @@ _Py_subs_parameters(PyObject *self, PyObject *args, PyObject *parameters, PyObje
         }
         if (PyTuple_Check(arg) || PyList_Check(arg)) {
             subargs = _Py_subs_parameters(self_owner, arg, params_owner, item);
-            if (subargs == NULL || PyErr_Occurred()) {
+            if (subargs == NULL) {
                 goto done;
             }
             if (PyTuple_Check(arg)) {
@@ -880,7 +844,7 @@ _Py_subs_parameters(PyObject *self, PyObject *args, PyObject *parameters, PyObje
             }
             else {
                 subargs_list = PySequence_List(subargs);
-                if (subargs_list == NULL || PyErr_Occurred()) {
+                if (subargs_list == NULL) {
                     goto done;
                 }
                 Py_CLEAR(subargs);
@@ -902,7 +866,7 @@ _Py_subs_parameters(PyObject *self, PyObject *args, PyObject *parameters, PyObje
         }
 
         int unpack = _is_unpacked_typevartuple(arg);
-        if (unpack < 0 || PyErr_Occurred()) {
+        if (unpack < 0) {
             goto done;
         }
         if (PyObject_GetOptionalAttr(arg, &_Py_ID(__typing_subst__), &subst) < 0 ||
@@ -925,7 +889,7 @@ _Py_subs_parameters(PyObject *self, PyObject *args, PyObject *parameters, PyObje
                 goto done;
             }
             tmp = PyObject_CallOneArg(subst, replacement);
-            if (tmp == NULL || PyErr_Occurred()) {
+            if (tmp == NULL) {
                 goto done;
             }
             Py_CLEAR(replacement);
@@ -939,7 +903,7 @@ _Py_subs_parameters(PyObject *self, PyObject *args, PyObject *parameters, PyObje
         }
         else {
             tmp = subs_tvars(arg, params_owner, item, is_tuple, nitems);
-            if (tmp == NULL || PyErr_Occurred()) {
+            if (tmp == NULL) {
                 goto done;
             }
         }
@@ -955,7 +919,7 @@ _Py_subs_parameters(PyObject *self, PyObject *args, PyObject *parameters, PyObje
                 goto done;
             }
             jarg = tuple_extend(&newargs, jarg, tmp);
-            if (jarg < 0 || PyErr_Occurred()) {
+            if (jarg < 0) {
                 goto done;
             }
             Py_CLEAR(tmp);
@@ -1386,7 +1350,7 @@ ga_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         goto done;
     }
 
-    if (!_PyArg_NoKeywords("GenericAlias", kwds) || PyErr_Occurred()) {
+    if (!_PyArg_NoKeywords("GenericAlias", kwds)) {
         goto done;
     }
     if (!_PyArg_CheckPositional("GenericAlias", PyTuple_GET_SIZE(args_owner), 2, 2)
@@ -1395,11 +1359,11 @@ ga_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     }
 
     origin = PyTuple_GetItemRef(args_owner, 0);
-    if (origin == NULL || PyErr_Occurred()) {
+    if (origin == NULL) {
         goto done;
     }
     arguments = PyTuple_GetItemRef(args_owner, 1);
-    if (arguments == NULL || PyErr_Occurred()) {
+    if (arguments == NULL) {
         goto done;
     }
 
@@ -1410,7 +1374,7 @@ ga_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     }
 
     status = setup_ga((gaobject *)result, origin, arguments);
-    if (!status || PyErr_Occurred()) {
+    if (!status) {
         goto done;
     }
     completed = 1;

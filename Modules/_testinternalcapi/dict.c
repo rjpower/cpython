@@ -68,7 +68,7 @@ dict_value_pop_boxing_oom(PyObject *module, PyObject *key)
     }
     PyValue query = PyValue_MakeHeapSafe(PyValue_FromObjectBorrow(key));
     Py_hash_t hash = PyObject_Hash(key);
-    if (hash == -1 || PyErr_Occurred()) {
+    if (hash == -1) {
         PyValue_CLOSE(query);
         Py_XDECREF(dict);
         return NULL;
@@ -250,7 +250,7 @@ dict_value_setdefault_boxing_oom(PyObject *module, PyObject *key)
         return NULL;
     }
     Py_hash_t hash = PyObject_Hash(key);
-    if (hash == -1 || PyErr_Occurred()) {
+    if (hash == -1) {
         Py_XDECREF(dict);
         return NULL;
     }
@@ -829,7 +829,7 @@ dict_public_value_read(PyObject *module, PyObject *const *args, Py_ssize_t nargs
     }
     if (!PyValue_IsNull(value)) {
         object = PyValue_AsObject(value);
-        if (object == NULL || PyErr_Occurred()) {
+        if (object == NULL) {
             goto done;
         }
     }
@@ -872,12 +872,12 @@ dict_public_value_next(PyObject *module, PyObject *const *args, Py_ssize_t nargs
     int status = PyDict_NextValue(dict, &position,
         (mask & 1) || mask == 4 ? &key : NULL,
         mask == 4 ? &key : (mask & 2) ? &value : NULL);
-    if (status < 0 || PyErr_Occurred()) {
+    if (status < 0) {
         goto done;
     }
     if (!PyValue_IsNull(key)) {
         key_object = PyValue_AsObject(key);
-        if (key_object == NULL || PyErr_Occurred()) {
+        if (key_object == NULL) {
             goto done;
         }
     }

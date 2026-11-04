@@ -584,7 +584,7 @@ wrapperdescr_call(PyObject *_descr, PyObject *args, PyObject *kwds)
         return NULL;
     }
     self = PyTuple_GetItemRef(args, 0);
-    if (self == NULL || PyErr_Occurred()) goto cleanup;
+    if (self == NULL) goto cleanup;
     int is_subclass = _PyObject_RealIsSubclass((PyObject *)Py_TYPE(self),
                                               (PyObject *)PyDescr_TYPE(descr));
     if (PyErr_Occurred()) goto cleanup;
@@ -600,9 +600,9 @@ wrapperdescr_call(PyObject *_descr, PyObject *args, PyObject *kwds)
     }
 
     tail_args = PyTuple_GetSlice(args, 1, argc);
-    if (tail_args == NULL || PyErr_Occurred()) goto cleanup;
+    if (tail_args == NULL) goto cleanup;
     result = wrapperdescr_raw_call(descr, self, tail_args, kwds);
-    if (result == NULL || PyErr_Occurred()) goto cleanup;
+    if (result == NULL) goto cleanup;
 
 cleanup:
     Py_CLEAR(tail_args);

@@ -181,7 +181,7 @@ BaseException_str_impl(PyBaseExceptionObject *self)
             return NULL;
         }
         PyObject *result = PyObject_Str(arg);
-        if (result == NULL || PyErr_Occurred()) goto str_cleanup_error;
+        if (result == NULL) goto str_cleanup_error;
         Py_CLEAR(arg);
         if (PyErr_Occurred()) goto str_cleanup_error;
         return result;
@@ -207,12 +207,12 @@ BaseException_repr_impl(PyBaseExceptionObject *self)
     const char *name = _PyType_Name(Py_TYPE(self));
     if (PyTuple_GET_SIZE(self->args) == 1) {
         PyObject *arg = PyTuple_GetItemRef((PyObject *)self->args, 0);
-        if (arg == NULL || PyErr_Occurred()) {
+        if (arg == NULL) {
             Py_CLEAR(arg);
             return NULL;
         }
         PyObject *result = PyUnicode_FromFormat("%s(%R)", name, arg);
-        if (result == NULL || PyErr_Occurred()) goto repr_cleanup_error;
+        if (result == NULL) goto repr_cleanup_error;
         Py_CLEAR(arg);
         if (PyErr_Occurred()) goto repr_cleanup_error;
         return result;
@@ -3190,12 +3190,12 @@ KeyError_str(PyObject *op)
     PyBaseExceptionObject *self = PyBaseExceptionObject_CAST(op);
     if (PyTuple_GET_SIZE(self->args) == 1) {
         PyObject *arg = PyTuple_GetItemRef((PyObject *)self->args, 0);
-        if (arg == NULL || PyErr_Occurred()) {
+        if (arg == NULL) {
             Py_CLEAR(arg);
             return NULL;
         }
         PyObject *result = PyObject_Repr(arg);
-        if (result == NULL || PyErr_Occurred()) goto keyerror_cleanup_error;
+        if (result == NULL) goto keyerror_cleanup_error;
         Py_CLEAR(arg);
         if (PyErr_Occurred()) goto keyerror_cleanup_error;
         return result;

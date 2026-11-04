@@ -369,13 +369,13 @@ compute_abstract_methods(PyObject *self)
     PyObject *bases = NULL;
 
     abstracts = PyFrozenSet_New(NULL);
-    if (abstracts == NULL || PyErr_Occurred()) goto error;
+    if (abstracts == NULL) goto error;
 
     /* Stage 1: direct abstract methods. */
     ns = PyObject_GetAttr(self, &_Py_ID(__dict__));
-    if (ns == NULL || PyErr_Occurred()) goto error;
+    if (ns == NULL) goto error;
     items = PyMapping_Items(ns);
-    if (items == NULL || PyErr_Occurred()) goto error;
+    if (items == NULL) goto error;
     assert(PyList_Check(items));
 
     for (Py_ssize_t pos = 0; pos < PyList_GET_SIZE(items); pos++) {
@@ -386,12 +386,12 @@ compute_abstract_methods(PyObject *self)
         int failed = 0;
 
         pair = PyList_GetItemRef(items, pos);
-        if (pair == NULL || PyErr_Occurred()) {
+        if (pair == NULL) {
             failed = 1;
             goto stage1_cleanup;
         }
         it = PySequence_Fast(pair, "items() returned non-iterable");
-        if (it == NULL || PyErr_Occurred()) {
+        if (it == NULL) {
             failed = 1;
             goto stage1_cleanup;
         }
@@ -425,13 +425,13 @@ compute_abstract_methods(PyObject *self)
 
         /* These selections can be mutated by the abstractness/hash callbacks. */
         int is_abstract = _PyObject_IsAbstract(value);
-        if (is_abstract < 0 || PyErr_Occurred()) {
+        if (is_abstract < 0) {
             failed = 1;
             goto stage1_cleanup;
         }
         if (is_abstract) {
             int status = PySet_Add(abstracts, key);
-            if (status < 0 || PyErr_Occurred()) {
+            if (status < 0) {
                 failed = 1;
                 goto stage1_cleanup;
             }
@@ -462,19 +462,19 @@ stage1_cleanup:
         int failed = 0;
 
         base = PyTuple_GetItemRef(bases, pos);
-        if (base == NULL || PyErr_Occurred()) {
+        if (base == NULL) {
             failed = 1;
             goto stage2_cleanup;
         }
         int status = PyObject_GetOptionalAttr(base, &_Py_ID(__abstractmethods__),
                                               &base_abstracts);
-        if (status < 0 || PyErr_Occurred()) {
+        if (status < 0) {
             failed = 1;
             goto stage2_cleanup;
         }
         if (base_abstracts != NULL) {
             iter = PyObject_GetIter(base_abstracts);
-            if (iter == NULL || PyErr_Occurred()) {
+            if (iter == NULL) {
                 failed = 1;
                 goto stage2_cleanup;
             }
@@ -496,7 +496,7 @@ stage1_cleanup:
                 }
 
                 status = PyObject_GetOptionalAttr(self, key, &value);
-                if (status < 0 || PyErr_Occurred()) {
+                if (status < 0) {
                     failed = 1;
                     goto stage2_key_cleanup;
                 }
@@ -509,7 +509,7 @@ stage1_cleanup:
                     }
                     if (is_abstract) {
                         status = PySet_Add(abstracts, key);
-                        if (status < 0 || PyErr_Occurred()) {
+                        if (status < 0) {
                             failed = 1;
                             goto stage2_key_cleanup;
                         }
@@ -537,7 +537,7 @@ stage2_cleanup:
 
     if (PyErr_Occurred()) goto error;
     int status = PyObject_SetAttr(self, &_Py_ID(__abstractmethods__), abstracts);
-    if (status < 0 || PyErr_Occurred()) goto error;
+    if (status < 0) goto error;
     ret = 0;
 
 error:

@@ -2542,7 +2542,7 @@ abstract_get_bases(PyObject *cls)
 {
     PyObject *bases = NULL;
     int found = PyObject_GetOptionalAttr(cls, &_Py_ID(__bases__), &bases);
-    if (found < 0 || PyErr_Occurred()) {
+    if (found < 0) {
         Py_CLEAR(bases);
         return NULL;
     }
@@ -2589,7 +2589,7 @@ abstract_issubclass(PyObject *derived, PyObject *cls)
         /* Avoid recursivity in the single inheritance case */
         if (n == 1) {
             PyObject *child = PyTuple_GetItemRef(bases, 0);
-            if (child == NULL || PyErr_Occurred()) {
+            if (child == NULL) {
                 Py_CLEAR(child);
                 r = -1;
                 break;
@@ -2611,7 +2611,7 @@ abstract_issubclass(PyObject *derived, PyObject *cls)
         }
         for (i = 0; i < n; i++) {
             PyObject *child = PyTuple_GetItemRef(bases, i);
-            if (child == NULL || PyErr_Occurred()) {
+            if (child == NULL) {
                 Py_CLEAR(child);
                 r = -1;
                 break;
@@ -2767,7 +2767,7 @@ object_recursive_isinstance(PyThreadState *tstate, PyObject *inst, PyObject *cls
         int r = 0;
         for (Py_ssize_t i = 0; i < n; ++i) {
             PyObject *item = PyTuple_GetItemRef(cls, i);
-            if (item == NULL || PyErr_Occurred()) {
+            if (item == NULL) {
                 Py_CLEAR(item);
                 r = -1;
                 break;
@@ -2856,7 +2856,7 @@ object_issubclass(PyThreadState *tstate, PyObject *derived, PyObject *cls)
         int r = 0;
         for (Py_ssize_t i = 0; i < n; ++i) {
             PyObject *item = PyTuple_GetItemRef(cls, i);
-            if (item == NULL || PyErr_Occurred()) {
+            if (item == NULL) {
                 Py_CLEAR(item);
                 r = -1;
                 break;

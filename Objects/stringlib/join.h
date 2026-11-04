@@ -188,7 +188,7 @@ STRINGLIB(bytes_join)(PyObject *sep, PyObject *iterable)
     PyObject *res = NULL;
 
     seq = PySequence_Fast(iterable, "can only join an iterable");
-    if (seq == NULL || PyErr_Occurred()) goto cleanup;
+    if (seq == NULL) goto cleanup;
 
     Py_BEGIN_CRITICAL_SECTION_SEQUENCE_FAST(iterable);
     res = STRINGLIB(bytes_join_lock_held)(sep, seq);

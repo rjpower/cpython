@@ -367,6 +367,53 @@ class CanonicalConstructionTest(unittest.TestCase):
                                  rf"^1 \['\S*Objects/listobject\.c:\d+ {kind}'\]")
 
 
+class FrameSlotTest(unittest.TestCase):
+    """No frame slot holds a borrowed reference (pyjit/design/pyvalue.md
+    D4): a temporary owns a count of the object it holds."""
+
+    def test_trace_rebinds_local_before_call(self):
+        # A trace function rebinds a local through f_locals after the caller
+        # copied it into the call's arguments and before the call.  The
+        # copy owns a count, so the callee sees the object, alive.
+        class Witness:
+            deleted = False
+            def __del__(self):
+                Witness.deleted = True
+
+        def marker():
+            pass
+
+        def callee(obj, _):
+            return obj, Witness.deleted
+
+        def caller():
+            x = Witness()
+            return callee(
+                x,
+                marker())
+
+        line = caller.__code__.co_firstlineno + 4  # marker()
+        rebound = []
+        def tracer(frame, event, arg):
+            if (frame.f_code is caller.__code__ and event == "line"
+                    and frame.f_lineno == line and not rebound):
+                frame.f_locals["x"] = None
+                rebound.append(frame.f_locals["x"])
+            return tracer
+
+        old = sys.gettrace()
+        sys.settrace(tracer)
+        try:
+            obj, deleted = caller()
+        finally:
+            sys.settrace(old)
+        self.assertEqual(rebound, [None])
+        self.assertIs(type(obj), Witness)
+        self.assertFalse(deleted)
+        del obj
+        self.assertTrue(Witness.deleted)
+
+
 def warm(func, *args, **kwargs):
     """Call func until its instructions are specialized; return the result."""
     for _ in range(THRESHOLD):

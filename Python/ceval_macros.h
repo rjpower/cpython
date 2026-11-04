@@ -593,21 +593,11 @@ gen_try_set_executing(PyGenObject *gen)
 
 /* Whether field F names a local, a cell or a free variable rather than a
  * temporary: the executing copy keeps co_nlocalsplus in its header.  An
- * input read through a local is borrowed; one read through a temporary is
- * the handler's, which it takes, leaving NULL in the slot. */
+ * input read through a local is borrowed in place; one read through a
+ * temporary is the handler's, which it takes, leaving NULL in the slot. */
 #define IR_NLOCALSPLUS() \
     ((int)(((const _PyCodeExec *)frame->ir_words) - 1)->nlocalsplus)
 #define IR_IS_LOCAL(F) ((int)(F) < IR_NLOCALSPLUS())
-
-/* REF, read through field F and known to be in pointer space, borrowed if F
- * names a local.  Setting the tag on PyValue_NULL would make it 1, so a
- * local must be bound: a local reaches a field only through a folded
- * LOAD_FAST_BORROW (_PyRegPass_CopyProp), which reads a bound local.  A
- * temporary may be NULL (STORE_GLOBAL's input for `del`) and stays NULL. */
-static_assert(Py_TAG_REFCNT == 1, "IR_BORROW_KNOWN sets the tag from a test");
-#  define IR_BORROW_KNOWN(REF, F) \
-    (assert(!IR_IS_LOCAL(F) || !PyValue_IsNull(REF)), \
-     (PyValue){ .bits = (REF).bits | (uintptr_t)IR_IS_LOCAL(F) })
 
 /* REF is a box that the handler made of an inline input for an object
  * API: value_temps owns it until the handler finishes and REF borrows it,
@@ -624,22 +614,34 @@ static_assert(Py_TAG_REFCNT == 1, "IR_BORROW_KNOWN sets the tag from a test");
         } \
     } while (0)
 
-/* Before a deopt, drop REF, an object input read through field F, if F
- * names a local: the family head reads the local again. Private scalar
- * boxes must have been excluded or released before this restart. */
-#define IR_DROP_BORROW(REF, F) \
+/* An input that the handler consumes as it is, through field F: the slot's
+ * bits.  A temporary's value is the handler's.  A local's is borrowed in
+ * place, in the handler's C variable only: it owns no count, and its bits
+ * do not say so, since a frame slot never holds a borrow (pyjit/design/
+ * pyvalue.md D4).  The generator knows such a value from the instruction's
+ * borrow_mask and releases it only if F names a temporary
+ * (Tools/cases_generator/ir_generator.py, inplace_input_use()). */
+#define IR_LOAD_BORROWED(F) IR_SLOT(F)
+
+/* REF, read through field F, or a copy of it, goes to another slot: a
+ * local's value borrowed in place takes a count of its own. */
+#define IR_INPLACE_OWN(REF, F) \
     do { \
         if (IR_IS_LOCAL(F)) { \
-            PyValue_CLOSE(REF); \
+            (REF) = PyValue_DUP(REF); \
         } \
     } while (0)
 
-/* An input that the handler consumes as it is, through field F: a
- * temporary, or a borrow of the local that F names, which is what
- * LOAD_FAST_BORROW would have pushed. */
-#  define IR_LOAD_BORROWED(F) \
-    ((PyValue){ .bits = IR_SLOT(F).bits \
-        | ((uintptr_t)IR_IS_LOCAL(F) & _PyValue_BorrowBitAt(&IR_SLOT(F))) })
+/* REF, read through field F, made heap safe: a local's value borrowed in
+ * place takes a count of its own; a temporary's was the handler's. */
+#define IR_INPLACE_HEAP_SAFE(REF, F) \
+    (IR_IS_LOCAL(F) ? PyValue_NewRef(REF) : PyValue_MakeHeapSafe(REF))
+
+/* The object that REF, read through field F, holds, owned: a new count for
+ * a local's value borrowed in place, the handler's for a temporary's. */
+#define IR_INPLACE_OBJECT_STEAL(REF, F) \
+    (IR_IS_LOCAL(F) ? Py_NewRef(PyValue_AsKnownObjectBorrow(REF)) \
+                    : PyValue_AsKnownObjectSteal(REF))
 
 /* The truth of a value, as TO_BOOL tests it, or -1 with an exception set */
 static inline int

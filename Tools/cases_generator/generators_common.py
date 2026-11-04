@@ -809,6 +809,10 @@ class Emitter:
         inst: Instruction | None,
     ) -> tuple[bool, Token | None, Storage]:
         local_stores = set(uop.local_stores)
+        # The right of `x = f(x);` still reads the old x, which may borrow a
+        # local in place (ir_generator.py): x stops borrowing at the end of
+        # the statement
+        stored: list[Local] = []
         reachable = True
         tkn = stmt.contents[-1]
         self.killed_pointer = None
@@ -847,6 +851,7 @@ class Emitter:
                                     var.known_object = False
                                     var.ir_borrowed = False
                                     var.ir_field = None
+                                    stored.append(var)
                                     break
                             for var in storage.outputs:
                                 if var.name == tkn.text:
@@ -855,12 +860,15 @@ class Emitter:
                                     var.known_object = False
                                     var.ir_borrowed = False
                                     var.ir_field = None
+                                    stored.append(var)
                                     break
                         if tkn.text.startswith("DISPATCH"):
                             reachable = False
                         self.out.emit(tkn)
                 else:
                     self.out.emit(tkn)
+            for var in stored:
+                var.ir_inplace = None
             self.note_pointer_assignment(stmt, storage)
             if stmt in uop.properties.escaping_calls and not self.cannot_escape:
                 self.emit_reload(storage)

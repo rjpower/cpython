@@ -129,10 +129,11 @@ _PyValue_Publish(PyValue *source)
 
     Top 16 bits     Low 48 bits         Meaning
     0x0000          0x000000000000      NULL
-    0x0000          0x000000000002      ERROR
-    0x0000          ptr, bit 0 = 0      owned reference
-    0x0000          ptr, bit 0 = 1      borrowed, immortal or deferred reference
-    0x0000          ptr | 2             PyValue_Wrap() pointer (debug builds)
+    0x0000          ptr, bit 0 = 0      owned reference to a mortal object
+    0x0000          ptr, bit 0 = 1      no count: an immortal object, or a
+                                        borrowed reference (C variables only)
+    0x0000          ptr | 2             PyValue_Wrap() pointer (debug builds;
+                                        release builds wrap the bare pointer)
     0x0001          int48               index (Py_INDEX_BASE)
     0x0002-0x7FF2   double + 2^49       inline float, +0.0 to +inf
     0x8002-0xFFF2   double + 2^49       inline float, -0.0 to -inf
@@ -144,9 +145,17 @@ _PyValue_Publish(PyValue *source)
   nothing, so CLOSE, DUP and Borrow leave them unchanged. NaN results are
   always boxed, because some NaN images overlap the other regions.
 
+  A pointer to an immortal object always has bit 0 set, so each value has
+  one encoding. A frame slot (a local, a cell or free variable, or a
+  temporary) never holds a borrow, so there bit 0 means immortal: a value
+  read from a slot without a count stays in a C variable, and a slot that
+  receives it takes a count (pyjit/design/pyvalue.md D4). A heap home holds
+  no borrow either, because its setter makes the value heap safe
+  (PyValue_MakeHeapSafe()).
+
   NULL is zero, so zero-filled memory holds NULL values: memory from a
-  zeroing allocator needs no further initialization. The bits 1 and 3 are
-  never produced.
+  zeroing allocator needs no further initialization. The bits 1, 2 and 3
+  are never produced.
 
   An index is the position of a virtual iterator in the FOR_ITER family
   (null_or_index) or the saved lasti during exception unwinding. It never
@@ -204,16 +213,6 @@ _PyValue_TopBitsAt(const PyValue *ref)
 
 static inline bool PyValue_IsPointerSpaceAt(const PyValue *ref) { return _PyValue_TopBitsAt(ref) == 0; }
 static inline bool PyValue_IsInlineAt(const PyValue *ref) { return _PyValue_TopBitsAt(ref) >= (Py_DOUBLE_OFFSET >> 48); }
-
-// The bit that PyValue_Borrow() sets: Py_TAG_REFCNT on object values only.
-// PyValue_NULL, debug-wrap pointers (Py_TAG_INVALID) and non-pointer values
-// stay unchanged.
-static inline uintptr_t
-_PyValue_BorrowBitAt(const PyValue *ref)
-{
-    return (uintptr_t)(PyValue_IsPointerSpaceAt(ref) && !PyValue_IsNull(*ref)
-                       && (ref->bits & Py_TAG_INVALID) == 0);
-}
 
 // The encoding of an inline int, which is also its identity (see "Value
 // identity" below).
@@ -531,12 +530,22 @@ _PyValue_IsFrameHome(PyValue ref)
             _PyValue_CheckFrameHome(_temp_ref); \
         } \
     } while (0)
+/* The N temporaries at VALUES, a window that a handler consumes: they own
+ * their values, so the handler need not take counts of them. */
+#define _PyValue_RecheckWindow(VALUES, N) \
+    do { \
+        PyValue *_window_refs = (VALUES); \
+        for (Py_ssize_t _i = 0; _i < (Py_ssize_t)(N); _i++) { \
+            _PyValue_RecheckFrameHome(_window_refs[_i]); \
+        } \
+    } while (0)
 #else
 #define _PyValue_CheckHome(REF) ((void)0)
 #define _PyValue_RecheckHome(REF) ((void)0)
 #define _PyValue_CheckFrameHome(REF) ((void)0)
 #define _PyValue_RecheckFrameHome(REF) ((void)0)
 #define _PyValue_CheckTemp(REF) ((void)0)
+#define _PyValue_RecheckWindow(VALUES, N) ((void)0)
 #endif
 
 // The number of store violations reported (rechecks are not counted), and a
@@ -582,12 +591,14 @@ PyValue_AsKnownObjectBorrow(PyValue ref)
     return BITS_TO_PTR_MASKED(ref);
 }
 
-/* Borrow the reference in *ref, typically a local: see PyValue_Borrow().
-   Passing the slot's address lets the pointer-space test read it in place. */
+/* The value in *ref, a frame slot, borrowed in a C variable: its bits. A
+   frame slot never holds a borrow (pyjit/design/pyvalue.md D4), so the
+   borrow is not tagged, and the C code must neither release it nor store
+   it (to keep it, PyValue_DUP() it). */
 static inline PyValue
 PyValue_BorrowAt(const PyValue *ref)
 {
-    return (PyValue){ .bits = ref->bits | _PyValue_BorrowBitAt(ref) };
+    return *ref;
 }
 
 /* The object that ref holds, owned: ref's count, or a new one if ref owns

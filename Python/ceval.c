@@ -742,13 +742,13 @@ PyEval_EvalFrameEx(PyFrameObject *f, int throwflag)
 
 /* The object vector for VALUES_TO_PYOBJECTS (Python/ceval_macros.h), on the
  * borrow stack in the caller's scope.  It borrows the window's objects, as
- * upstream passes its stack.  Window slots are private evaluated operands:
- * give every borrowed slot its own owner first, so the window stays valid if
- * the callee replaces the local or container it was read from. */
+ * upstream passes its stack.  Window slots are private evaluated operands
+ * that own their values (pyjit/design/pyvalue.md D4), so the window stays
+ * valid if the callee replaces the local or container it was read from. */
 static PyObject **
 _PyValueArray_ToObjectVector(PyValue *input, Py_ssize_t nargs)
 {
-    _PyValue_OwnArray(input, nargs);
+    _PyValue_RecheckWindow(input, nargs);
     return _PyBorrow_ValueVector(input, nargs);
 }
 
@@ -1234,8 +1234,9 @@ _Py_BuildMap_ValueSteal(
     int half_args)
 {
     /* RegCFG verifies that this evaluated window contains consecutive
-     * temporaries, not locals exposed to callbacks through f_locals. */
-    _PyValue_OwnArray(arguments, half_args * 2);
+     * temporaries, not locals exposed to callbacks through f_locals, and
+     * temporaries own their values. */
+    _PyValue_RecheckWindow(arguments, half_args * 2);
     PyObject *res = _PyDict_FromValueItems(arguments, 2, arguments + 1, 2,
                                           half_args);
     clear_value_arguments(arguments, half_args * 2);
@@ -1630,8 +1631,9 @@ call_transaction_begin(PyThreadState *tstate, _PyInterpreterFrame *frame,
     assert(count >= 0 && base <= _PyFrame_NumSlots(frame) - count);
     assert(destination >= 0 && destination < _PyFrame_NumSlots(frame));
     /* Every call input is an evaluated temporary, including snapshots of
-     * locals. Callback-current LOCAL homes are never consumed by this record. */
-    _PyValue_OwnArray(_PyFrame_Slots(frame) + base, count);
+     * locals, and owns its value. Callback-current LOCAL homes are never
+     * consumed by this record. */
+    _PyValue_RecheckWindow(_PyFrame_Slots(frame) + base, count);
     return (_PyCallTransaction){
         .operation = operation, .base = base, .count = count,
         .destination = destination, .argument_count = argument_count,

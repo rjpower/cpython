@@ -311,28 +311,21 @@ class TestIRCases(unittest.TestCase):
                 BOX_STAT_INC(OP);
                 IR_KEEP_BOX(left);
             }
-            else {
-                left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr));
-            }
             if (Py_UNLIKELY(PyValue_IsInline(right))) {
                 right = PyValue_Box(right);
                 if (PyValue_IsInline(right)) {
-                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(OP);
                 IR_KEEP_BOX(right);
             }
-            else {
-                right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr));
-            }
             PyObject *l = PyValue_AsKnownObjectBorrow(left);
             PyObject *r = PyValue_AsKnownObjectBorrow(right);
             PyObject *o = SPAM(l, r);
             IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            _PyValue_CLOSE_POINTER(right);
+            if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) _PyValue_CLOSE_POINTER(right);
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            _PyValue_CLOSE_POINTER(left);
+            if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_POINTER(left);
             if (o == NULL) {
                 JUMP_TO_LABEL(error);
             }
@@ -370,13 +363,25 @@ class TestIRCases(unittest.TestCase):
             PyValue_CLOSE(value);
         }
         inst(OP_FAMILY_RAW, (value -- res)) {
-            res = SPAM_RAW(value);
+            res = SPAM_RAW(PyValue_IsNone(value));
             PyValue_CLOSE(value);
         }
         family(OP_FAMILY, 0) = { OP_FAMILY_RAW };
+        inst(OP_KEEP, (value -- res)) {
+            res = SPAM_KEEP(value);
+        }
+        inst(OP_STORE, (value --)) {
+            GETLOCAL(oparg) = value;
+            DEAD(value);
+        }
     """
         formats = self.formats(input)
         self.assertEqual(formats["OP_OBJ"].borrow_mask, 1)
+        # A local read in place holds no count (pyjit/design/pyvalue.md D4),
+        # so no local may reach an input that a handler may keep: one passed
+        # to a function that is not known to only read it, or stored.
+        self.assertEqual(formats["OP_KEEP"].borrow_mask, 0)
+        self.assertEqual(formats["OP_STORE"].borrow_mask, 0)
         # An input that stays on the stack is not borrowed: the stack slot
         # of a borrowed local holds NULL.
         self.assertEqual(formats["OP_PASS"].borrow_mask, 0)
@@ -386,13 +391,82 @@ class TestIRCases(unittest.TestCase):
         self.assertEqual(formats["OP_FAMILY"].borrow_mask, 1)
         self.assertIs(formats["OP_FAMILY_RAW"], formats["OP_FAMILY"])
 
+    def test_inplace_inputs(self):
+        # An input that may borrow a local in place holds the slot's bits and
+        # no count (pyjit/design/pyvalue.md D4).  The handler releases it
+        # only if its field names a temporary, and takes a count for a local
+        # where it keeps the value: in a conversion that gives a count, or
+        # on the path that copies it to a stored output.
+        input = """
+        inst(OP_CLOSE, (value --)) {
+            SPAM(PyValue_AsKnownObjectBorrow(value));
+            PyValue_CLOSE(value);
+        }
+        inst(OP_HELD, (value -- res)) {
+            res = PyValue_MakeHeapSafe(value);
+            DEAD(value);
+        }
+        inst(OP_STEAL, (value -- res)) {
+            PyObject *o = PyValue_AsKnownObjectSteal(value);
+            res = PyValue_FromPyObjectSteal(SPAM(o));
+        }
+        inst(OP_ALIAS, (value -- res)) {
+            if (SPAM(PyValue_AsKnownObjectBorrow(value))) {
+                res = value;
+                DEAD(value);
+            }
+            else {
+                PyValue_CLOSE(value);
+                res = PyValue_NULL;
+            }
+        }
+    """
+        formats = self.formats(input)
+        for name in ("OP_CLOSE", "OP_HELD", "OP_STEAL", "OP_ALIAS"):
+            self.assertEqual(formats[name].borrow_mask, 1, name)
+        output = self.ir_output(input)
+        close = self.handler(output, "OP_CLOSE")
+        self.assertIn("if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) "
+                      "_PyValue_CLOSE_POINTER(value);", close)
+        # No release of the input that does not test its field
+        self.assertNotRegex(output, r"\n\s*(_?PyValue_\w*CLOSE\w*)\(value")
+        self.assertIn("res = IR_INPLACE_HEAP_SAFE(value, IR_FIELD_B(this_instr));",
+                      self.handler(output, "OP_HELD"))
+        self.assertIn("IR_INPLACE_OBJECT_STEAL(value, IR_FIELD_B(this_instr))",
+                      self.handler(output, "OP_STEAL"))
+        self.assertNotIn("PyValue_AsKnownObjectSteal", output)
+        self.assertIn("res = value;\n"
+                      "                IR_INPLACE_OWN(res, IR_FIELD_B(this_instr));",
+                      self.handler(output, "OP_ALIAS"))
+
+    def test_inplace_inputs_fail_closed(self):
+        # The generator refuses what it cannot follow: a value that borrows
+        # a local in place on one path and not on another
+        input = """
+        op(_MAYBE_HELD, (value -- value)) {
+            if (SPAM_FLAG()) {
+                value = PyValue_MakeHeapSafe(value);
+            }
+        }
+        op(_USE, (value -- res)) {
+            res = SPAM(PyValue_AsKnownObjectBorrow(value));
+            PyValue_CLOSE(value);
+        }
+        macro(OP) = _MAYBE_HELD + _USE;
+    """
+        self.assertEqual(self.formats(input)["OP"].borrow_mask, 1)
+        with self.assertRaisesRegex(SyntaxError,
+                                    "may borrow a local in place on some paths"):
+            self.ir_output(input)
+
     def test_consumed_inputs(self):
         # A handler takes the inputs that it consumes: the slot of a
         # temporary becomes NULL, and a local keeps its value.  No handler
         # has a stack pointer to keep.
         input = """
         inst(STORE, (owner, value --)) {
-            SPAM(owner, value);
+            SPAM(PyValue_AsKnownObjectBorrow(owner),
+                 PyValue_AsKnownObjectBorrow(value));
             DECREF_INPUTS();
         }
         inst(BRANCH, (counter/1, cond --)) {
@@ -409,10 +483,13 @@ class TestIRCases(unittest.TestCase):
                          [ir_generator.ROLE_NONE, ir_generator.ROLE_NONE])
         output = self.ir_output(input)
         store = self.handler(output, "STORE")
+        # Only a temporary's value is the handler's to release
         self.assertIn("IR_CONSUME_INPUT(IR_FIELD_A(this_instr));\n"
-                      "            PyValue_CLOSE(owner);", store)
+                      "            if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) "
+                      "_PyValue_CLOSE_POINTER(owner);", store)
         self.assertIn("IR_CONSUME_INPUT(IR_FIELD_B(this_instr));\n"
-                      "            PyValue_CLOSE(value);", store)
+                      "            if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) "
+                      "_PyValue_CLOSE_POINTER(value);", store)
         self.assertIn("IR_CONSUME_INPUT(IR_FIELD_A(this_instr));",
                       self.handler(output, "BRANCH"))
         self.assertNotIn("stack_pointer", output)
@@ -514,7 +591,7 @@ class TestIRCases(unittest.TestCase):
             callable = window[0];
             res = SPAM(callable, args, oparg);
             IR_CLEAR_SLOTS(&window[1], oparg);
-            window[0] = _PyValue_Publish(&res);
+            IR_PUBLISH_TEMP(window[0], res);
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
@@ -679,13 +756,10 @@ class TestIRCases(unittest.TestCase):
                     BOX_STAT_INC(OP);
                     IR_KEEP_BOX(owner);
                 }
-                else {
-                    owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
-                }
                 PyObject *o = PyValue_AsKnownObjectBorrow(owner);
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                _PyValue_CLOSE_POINTER(owner);
+                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_POINTER(owner);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -738,13 +812,10 @@ class TestIRCases(unittest.TestCase):
                     BOX_STAT_INC(OP);
                     IR_KEEP_BOX(owner);
                 }
-                else {
-                    owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
-                }
                 PyObject *o = PyValue_AsKnownObjectBorrow(owner);
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                _PyValue_CLOSE_POINTER(owner);
+                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_POINTER(owner);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -784,9 +855,7 @@ class TestIRCases(unittest.TestCase):
                     assert(_PyOpcode_Deopt[opcode] == (OP));
                     JUMP_TO_PREDICTED(OP);
                 }
-                owner = IR_BORROW_KNOWN(owner, IR_FIELD_B(this_instr));
                 if (Py_TYPE(PyValue_AsKnownObjectBorrow(owner))->tp_version_tag != type_version) {
-                    IR_DROP_BORROW(owner, IR_FIELD_B(this_instr));
                     UPDATE_MISS_STATS(OP);
                     assert(_PyOpcode_Deopt[opcode] == (OP));
                     JUMP_TO_PREDICTED(OP);
@@ -797,7 +866,7 @@ class TestIRCases(unittest.TestCase):
                 PyObject *o = PyValue_AsKnownObjectBorrow(owner);
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                _PyValue_CLOSE_POINTER(owner);
+                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_POINTER(owner);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -847,15 +916,15 @@ class TestIRCases(unittest.TestCase):
             PyValue left;
             PyValue right;
             PyValue res;
-            right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-            left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+            right = IR_SLOT(IR_FIELD_C(this_instr));
+            left = IR_SLOT(IR_FIELD_B(this_instr));
             uint32_t counter = fb->counter;
             (void)counter;
             _PyFbHeader *feedback = ((_PyFbHeader *)fb);
             ADVANCE_ADAPTIVE_COUNTER(feedback);
             res = SPAM(left, right, oparg);
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+            IR_SLOT(IR_FIELD_B(this_instr)) = PyValue_NULL;
+            IR_SLOT(IR_FIELD_C(this_instr)) = PyValue_NULL;
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
@@ -886,15 +955,15 @@ class TestIRCases(unittest.TestCase):
             PyValue left;
             PyValue right;
             PyValue res;
-            right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-            left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+            right = IR_SLOT(IR_FIELD_C(this_instr));
+            left = IR_SLOT(IR_FIELD_B(this_instr));
             uint32_t counter = fb->counter;
             (void)counter;
             _PyFbHeader *feedback = ((_PyFbHeader *)fb);
             ADVANCE_ADAPTIVE_COUNTER(feedback);
             res = SPAM(left, right, oparg);
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+            IR_SLOT(IR_FIELD_B(this_instr)) = PyValue_NULL;
+            IR_SLOT(IR_FIELD_C(this_instr)) = PyValue_NULL;
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
@@ -1323,7 +1392,8 @@ class TestJitHelpers(unittest.TestCase):
             self.assertIn("return _PyJIT_RAISE", body)
         ceval = (root / "Python/ceval.c").read_text()
         construction = ceval.split("_Py_BuildMap_ValueSteal(", 1)[1].split("\nPyValue\n", 1)[0]
-        self.assertLess(construction.index("_PyValue_OwnArray("),
+        # The window's temporaries own their values (pyvalue.md D4)
+        self.assertLess(construction.index("_PyValue_RecheckWindow("),
                         construction.index("_PyDict_FromValueItems("))
         self.assertNotIn("VALUES_TO_PYOBJECTS", construction)
 
@@ -1501,7 +1571,7 @@ class TestJitHelpers(unittest.TestCase):
                 self.assertLess(body.index("call_transaction_begin("), first_box)
         runtime = (root / "Python/ceval.c").read_text()
         entry = runtime.split("call_transaction_begin(", 1)[1].split("\n}\n", 1)[0]
-        self.assertIn("_PyValue_OwnArray(_PyFrame_Slots(frame) + base, count)", entry)
+        self.assertIn("_PyValue_RecheckWindow(_PyFrame_Slots(frame) + base, count)", entry)
         constant = generated.split("TARGET(LOAD_CONST)", 1)[1].split("TARGET(", 1)[0]
         self.assertIn("PyTuple_GET_VALUE", constant)
         self.assertNotIn("PyValue_Box(", constant)
@@ -1541,7 +1611,8 @@ class TestJitHelpers(unittest.TestCase):
                         super_attr.index("_PyValueTemps_Object"))
         store = generated.split("TARGET(STORE_ATTR_WITH_HINT)", 1)[1].split("TARGET(", 1)[0]
         self.assertNotIn("PyValue_Box(value)", store)
-        self.assertIn("*value_ptr = PyValue_MakeHeapSafe(value)", store)
+        self.assertIn("*value_ptr = IR_INPLACE_HEAP_SAFE(value, IR_FIELD_B(this_instr))",
+                      store)
         self.assertIn("PyDict_SetValue", store)
 
     def test_bridge_cleanup_precedes_next_handler_decode(self):
@@ -1558,7 +1629,7 @@ class TestJitHelpers(unittest.TestCase):
         body = output.getvalue().split("TARGET(CALL_BUILTIN_O)", 1)[1].split("TARGET(", 1)[0]
         consume = body.index("IR_CLEAR_SLOTS(&window[0], 2 + oparg)")
         publish = body.index("_PyNativeResult_Publish(")
-        store = body.index("window[0] = _PyValue_Publish")
+        store = body.index("IR_PUBLISH_TEMP(window[0], ")
         finish = body.index("int failed = native_call_finish(")
         self.assertLess(consume, publish)
         self.assertLess(publish, store)

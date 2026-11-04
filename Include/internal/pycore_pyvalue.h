@@ -40,7 +40,9 @@ PyValue_IsObject(PyValue value)
            (value.bits & 2) == 0;
 }
 
-/* Borrowing changes only object ownership: NULL, ERROR and scalar bits stay. */
+/* Borrowing changes only object ownership: NULL, index and inline scalar
+ * bits stay.  A borrow lives in a C variable, never in a frame slot or a heap
+ * home (pyjit/design/pyvalue.md D4). */
 static inline PyValue
 PyValue_Borrow(PyValue value)
 {

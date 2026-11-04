@@ -151,11 +151,16 @@ class Local:
     known_object: bool = False
     # The IR field the value was read through (see ir_generator.IRStack).
     ir_field: str | None = None
-    # Holds the borrow that IR_BORROW_KNOWN made of what ir_field names.
+    # Read as it is (IR_LOAD_BORROWED) or converted to an object already,
+    # so that ir_generator's emit_object_inputs() leaves it.
     ir_borrowed: bool = False
     # The stack position of the register-style input that the value was
     # read from, whose slot is its home (see ir_generator.IRStack).
     ir_input: int | None = None
+    # The IR field whose slot the value may borrow in place, without a
+    # count, when the field names a local: an input read through it, or a
+    # copy of one (see ir_generator.inplace_input_use()).
+    ir_inplace: str | None = None
 
     def __repr__(self) -> str:
         return f"Local('{self.item.name}', mem={self.memory_offset}, local={self.in_local}, array={self.is_array()})"
@@ -202,6 +207,7 @@ class Local:
             self.ir_field,
             self.ir_borrowed,
             self.ir_input,
+            self.ir_inplace,
         )
 
     @property
@@ -230,6 +236,14 @@ class StackError(Exception):
 
 def array_or_scalar(var: StackItem | Local) -> str:
     return "array" if var.is_array() else "scalar"
+
+def check_inplace_merge(var: Local, other: Local) -> None:
+    """The generator releases or keeps a value that borrows a local in place
+    (ir_generator.py) as if it did on every path, so it must on all or none"""
+    if var.ir_inplace != other.ir_inplace:
+        raise StackError(
+            f"'{var.name}' may borrow a local in place on some paths, but not all")
+
 
 class Stack:
     def __init__(self, check_stack_bounds: bool = False) -> None:
@@ -456,6 +470,7 @@ class Stack:
             self_var.in_local = self_var.in_local and other_var.in_local
             known = self_var.known_object and other_var.known_object
             self_var.known_object = other_var.known_object = known
+            check_inplace_merge(self_var, other_var)
             if other_var.memory_offset is None:
                 self_var.memory_offset = None
         self.align(other, out)
@@ -698,6 +713,7 @@ class Storage:
                 raise StackError(f"'{var.name}' is cleared on some paths, but not all")
             known = var.known_object and other_var.known_object
             var.known_object = other_var.known_object = known
+            check_inplace_merge(var, other_var)
         if len(self.outputs) != len(other.outputs):
             self._push_defined_outputs()
             other._push_defined_outputs()
@@ -711,6 +727,7 @@ class Storage:
                 var.memory_offset = None
             known = var.known_object and other_var.known_object
             var.known_object = other_var.known_object = known
+            check_inplace_merge(var, other_var)
         self.stack.merge(other.stack, out)
         self.sanity_check()
 

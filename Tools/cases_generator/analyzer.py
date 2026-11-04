@@ -718,6 +718,7 @@ NON_ESCAPING_FUNCTIONS = (
     "_PyValue_BoxArray",
     # Debug checks of a home store (report only, no Python).
     "_PyValue_CheckFrameHome",
+    "_PyValue_RecheckWindow",
     "_PyValue_CheckHome",
     "_PyValue_CheckTemp",
     "PyValue_FromDoubleNotNaN",

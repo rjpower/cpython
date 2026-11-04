@@ -123,8 +123,8 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = PyValue_MakeHeapSafe(lhs);
-                PyValue held_right = PyValue_MakeHeapSafe(rhs);
+                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
+                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
@@ -215,8 +215,8 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = PyValue_MakeHeapSafe(lhs);
-                PyValue held_right = PyValue_MakeHeapSafe(rhs);
+                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
+                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
@@ -307,8 +307,8 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = PyValue_MakeHeapSafe(lhs);
-                PyValue held_right = PyValue_MakeHeapSafe(rhs);
+                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
+                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
@@ -399,8 +399,8 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = PyValue_MakeHeapSafe(lhs);
-                PyValue held_right = PyValue_MakeHeapSafe(rhs);
+                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
+                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
@@ -491,8 +491,8 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = PyValue_MakeHeapSafe(lhs);
-                PyValue held_right = PyValue_MakeHeapSafe(rhs);
+                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
+                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
@@ -583,8 +583,8 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = PyValue_MakeHeapSafe(lhs);
-                PyValue held_right = PyValue_MakeHeapSafe(rhs);
+                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
+                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
@@ -675,8 +675,8 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = PyValue_MakeHeapSafe(lhs);
-                PyValue held_right = PyValue_MakeHeapSafe(rhs);
+                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
+                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
@@ -767,8 +767,8 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = PyValue_MakeHeapSafe(lhs);
-                PyValue held_right = PyValue_MakeHeapSafe(rhs);
+                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
+                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
@@ -859,8 +859,8 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = PyValue_MakeHeapSafe(lhs);
-                PyValue held_right = PyValue_MakeHeapSafe(rhs);
+                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
+                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
@@ -951,8 +951,8 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = PyValue_MakeHeapSafe(lhs);
-                PyValue held_right = PyValue_MakeHeapSafe(rhs);
+                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
+                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
@@ -1043,8 +1043,8 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = PyValue_MakeHeapSafe(lhs);
-                PyValue held_right = PyValue_MakeHeapSafe(rhs);
+                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
+                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
@@ -1135,8 +1135,8 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = PyValue_MakeHeapSafe(lhs);
-                PyValue held_right = PyValue_MakeHeapSafe(rhs);
+                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
+                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
@@ -1227,8 +1227,8 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = PyValue_MakeHeapSafe(lhs);
-                PyValue held_right = PyValue_MakeHeapSafe(rhs);
+                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
+                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
@@ -1319,8 +1319,8 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = PyValue_MakeHeapSafe(lhs);
-                PyValue held_right = PyValue_MakeHeapSafe(rhs);
+                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
+                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
@@ -1411,8 +1411,8 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = PyValue_MakeHeapSafe(lhs);
-                PyValue held_right = PyValue_MakeHeapSafe(rhs);
+                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
+                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
@@ -1503,8 +1503,8 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = PyValue_MakeHeapSafe(lhs);
-                PyValue held_right = PyValue_MakeHeapSafe(rhs);
+                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
+                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
@@ -1595,8 +1595,8 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = PyValue_MakeHeapSafe(lhs);
-                PyValue held_right = PyValue_MakeHeapSafe(rhs);
+                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
+                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
@@ -1687,8 +1687,8 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = PyValue_MakeHeapSafe(lhs);
-                PyValue held_right = PyValue_MakeHeapSafe(rhs);
+                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
+                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
@@ -1779,8 +1779,8 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = PyValue_MakeHeapSafe(lhs);
-                PyValue held_right = PyValue_MakeHeapSafe(rhs);
+                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
+                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
@@ -1871,8 +1871,8 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = PyValue_MakeHeapSafe(lhs);
-                PyValue held_right = PyValue_MakeHeapSafe(rhs);
+                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
+                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
@@ -1963,8 +1963,8 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = PyValue_MakeHeapSafe(lhs);
-                PyValue held_right = PyValue_MakeHeapSafe(rhs);
+                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
+                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
@@ -2055,8 +2055,8 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = PyValue_MakeHeapSafe(lhs);
-                PyValue held_right = PyValue_MakeHeapSafe(rhs);
+                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
+                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
@@ -2147,8 +2147,8 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = PyValue_MakeHeapSafe(lhs);
-                PyValue held_right = PyValue_MakeHeapSafe(rhs);
+                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
+                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
@@ -2239,8 +2239,8 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = PyValue_MakeHeapSafe(lhs);
-                PyValue held_right = PyValue_MakeHeapSafe(rhs);
+                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
+                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
@@ -2331,8 +2331,8 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = PyValue_MakeHeapSafe(lhs);
-                PyValue held_right = PyValue_MakeHeapSafe(rhs);
+                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
+                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
@@ -2423,8 +2423,8 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = PyValue_MakeHeapSafe(lhs);
-                PyValue held_right = PyValue_MakeHeapSafe(rhs);
+                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
+                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
@@ -2515,8 +2515,8 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = PyValue_MakeHeapSafe(lhs);
-                PyValue held_right = PyValue_MakeHeapSafe(rhs);
+                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
+                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
@@ -2994,29 +2994,22 @@
                     BOX_STAT_INC(COMPARE_OP);
                     IR_KEEP_BOX(left);
                 }
-                else {
-                    left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr));
-                }
                 if (Py_UNLIKELY(PyValue_IsInline(right))) {
                     right = PyValue_Box(right);
                     if (PyValue_IsInline(right)) {
-                        IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(COMPARE_OP);
                     IR_KEEP_BOX(right);
-                }
-                else {
-                    right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr));
                 }
                 PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
                 PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
                 assert((oparg >> 5) <= Py_GE);
                 PyObject *res_o = PyObject_RichCompare(left_o, right_o, oparg >> 5);
                 IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-                _PyValue_CLOSE_POINTER(right);
+                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) _PyValue_CLOSE_POINTER(right);
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                _PyValue_CLOSE_POINTER(left);
+                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_POINTER(left);
                 if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
@@ -3105,27 +3098,18 @@
                     BOX_STAT_INC(CONTAINS_OP);
                     IR_KEEP_BOX(left);
                 }
-                else {
-                    left = IR_BORROW_KNOWN(left, IR_FIELD_B(this_instr));
-                }
                 if (Py_UNLIKELY(PyValue_IsInline(right))) {
                     right = PyValue_Box(right);
                     if (PyValue_IsInline(right)) {
-                        IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CONTAINS_OP);
                     IR_KEEP_BOX(right);
                 }
-                else {
-                    right = IR_BORROW_KNOWN(right, IR_FIELD_C(this_instr));
-                }
                 PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
                 PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
                 int res = PySequence_Contains(right_o, left_o);
                 if (res < 0) {
-                    IR_DROP_BORROW(left, IR_FIELD_B(this_instr));
-                    IR_DROP_BORROW(right, IR_FIELD_C(this_instr));
                     JUMP_TO_LABEL(error);
                 }
                 b = (res ^ oparg) ? PyValue_True : PyValue_False;
@@ -3138,13 +3122,13 @@
             {
                 value = r;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
-                _PyValue_XCLOSE_POINTER(value);
+                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) _PyValue_XCLOSE_POINTER(value);
             }
             // _POP_TOP
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
-                _PyValue_XCLOSE_POINTER(value);
+                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_XCLOSE_POINTER(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), b);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -3251,7 +3235,7 @@
             PyValue value;
             value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
             IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            PyValue_CLOSE(value);
+            if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE(value);
             DISPATCH();
         }
 
@@ -3574,7 +3558,7 @@
             {
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
                 int method = oparg & 1;
-                PyValue receiver = PyValue_MakeHeapSafe(owner);
+                PyValue receiver = IR_INPLACE_HEAP_SAFE(owner, IR_FIELD_B(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
@@ -3671,7 +3655,7 @@
             {
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
                 int method = oparg & 1;
-                PyValue receiver = PyValue_MakeHeapSafe(owner);
+                PyValue receiver = IR_INPLACE_HEAP_SAFE(owner, IR_FIELD_B(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
@@ -3989,7 +3973,7 @@
             (void)oparg;
             PyValue value;
             assert(!PyValue_IsNull(GETLOCAL(oparg)));
-            value = PyValue_BorrowAt(&GETLOCAL(oparg));
+            value = PyValue_DUP(GETLOCAL(oparg));
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
@@ -4032,8 +4016,8 @@
             PyValue value2;
             uint32_t oparg1 = oparg >> 4;
             uint32_t oparg2 = oparg & 15;
-            value1 = PyValue_BorrowAt(&GETLOCAL((uintptr_t)oparg1));
-            value2 = PyValue_BorrowAt(&GETLOCAL((uintptr_t)oparg2));
+            value1 = PyValue_DUP(GETLOCAL(oparg1));
+            value2 = PyValue_DUP(GETLOCAL(oparg2));
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), value1);
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr) + 1), value2);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -4484,7 +4468,7 @@
             (void)index_or_null;
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
             IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-            PyValue_CLOSE(iter);
+            if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE(iter);
             DISPATCH();
         }
 
@@ -4546,7 +4530,7 @@
                     err = PyObject_IsTrue(PyValue_AsKnownObjectBorrow(value));
                 }
                 IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                PyValue_CLOSE(value);
+                if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE(value);
                 if (err < 0) {
                     JUMP_TO_LABEL(error);
                 }
@@ -4606,7 +4590,7 @@
                 else {
                     b = PyValue_False;
                     IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                    PyValue_CLOSE(value);
+                    if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE(value);
                 }
             }
             // _POP_JUMP_IF_TRUE
@@ -4663,7 +4647,7 @@
                 else {
                     b = PyValue_False;
                     IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                    PyValue_CLOSE(value);
+                    if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE(value);
                 }
             }
             // _POP_JUMP_IF_FALSE
@@ -4740,7 +4724,7 @@
                     err = PyObject_IsTrue(PyValue_AsKnownObjectBorrow(value));
                 }
                 IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                PyValue_CLOSE(value);
+                if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE(value);
                 if (err < 0) {
                     JUMP_TO_LABEL(error);
                 }
@@ -4787,7 +4771,7 @@
             PyValue value;
             value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
             IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-            PyValue_XCLOSE(value);
+            if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_XCLOSE(value);
             DISPATCH();
         }
 
@@ -4859,7 +4843,7 @@
             PyValue *args;
             args = &window[0];
             assert(oparg < 3);
-            _PyValue_OwnArray(args, oparg);
+            _PyValue_RecheckWindow(args, oparg);
             PyObject *exc = oparg > 0 ? _PyValueTemps_Object(value_temps, args[0]) : NULL;
             if (oparg > 0 && exc == NULL) {
                 JUMP_TO_LABEL(error);
@@ -4971,7 +4955,7 @@
             // _MAKE_HEAP_SAFE
             {
                 value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
-                value = PyValue_MakeHeapSafe(value);
+                value = IR_INPLACE_HEAP_SAFE(value, IR_FIELD_A(this_instr));
             }
             // _RETURN_VALUE
             {
@@ -5053,8 +5037,8 @@
             // _STORE_ATTR
             {
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-                PyValue held_value = PyValue_MakeHeapSafe(v);
-                PyValue receiver = PyValue_MakeHeapSafe(owner);
+                PyValue held_value = IR_INPLACE_HEAP_SAFE(v, IR_FIELD_B(this_instr));
+                PyValue receiver = IR_INPLACE_HEAP_SAFE(owner, IR_FIELD_A(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_A(this_instr);
@@ -5136,8 +5120,8 @@
             // _STORE_ATTR
             {
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-                PyValue held_value = PyValue_MakeHeapSafe(v);
-                PyValue receiver = PyValue_MakeHeapSafe(owner);
+                PyValue held_value = IR_INPLACE_HEAP_SAFE(v, IR_FIELD_B(this_instr));
+                PyValue receiver = IR_INPLACE_HEAP_SAFE(owner, IR_FIELD_A(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_A(this_instr);
@@ -5192,10 +5176,10 @@
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
             PyValue v;
-            v = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+            v = IR_SLOT(IR_FIELD_A(this_instr));
             PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
             PyValue owned = v;
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+            IR_SLOT(IR_FIELD_A(this_instr)) = PyValue_NULL;
             _PyCell_SetValue(cell, owned);
             DISPATCH();
         }
@@ -5228,11 +5212,11 @@
             PyValue trash;
             // _SWAP_FAST
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                value = IR_SLOT(IR_FIELD_A(this_instr));
                 PyValue tmp = GETLOCAL(oparg);
                 GETLOCAL(oparg) = value;
                 _PyValue_CheckFrameHome(value);
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                IR_SLOT(IR_FIELD_A(this_instr)) = PyValue_NULL;
                 trash = tmp;
             }
             // _POP_TOP
@@ -5271,13 +5255,13 @@
             (void)oparg;
             PyValue value1;
             PyValue value2;
-            value1 = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+            value1 = IR_SLOT(IR_FIELD_B(this_instr));
             uint32_t oparg1 = oparg >> 4;
             uint32_t oparg2 = oparg & 15;
             PyValue tmp = GETLOCAL(oparg1);
             GETLOCAL(oparg1) = value1;
             _PyValue_CheckFrameHome(value1);
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            IR_SLOT(IR_FIELD_B(this_instr)) = PyValue_NULL;
             value2 = PyValue_DUP(GETLOCAL(oparg2));
             IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), value2);
             PyValue_XCLOSE(tmp);
@@ -5318,19 +5302,19 @@
             (void)oparg;
             PyValue value2;
             PyValue value1;
-            value1 = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-            value2 = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+            value1 = IR_SLOT(IR_FIELD_B(this_instr));
+            value2 = IR_SLOT(IR_FIELD_A(this_instr));
             uint32_t oparg1 = oparg >> 4;
             uint32_t oparg2 = oparg & 15;
             PyValue tmp = GETLOCAL(oparg1);
             GETLOCAL(oparg1) = value1;
             _PyValue_CheckFrameHome(value1);
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            IR_SLOT(IR_FIELD_B(this_instr)) = PyValue_NULL;
             PyValue_XCLOSE(tmp);
             tmp = GETLOCAL(oparg2);
             GETLOCAL(oparg2) = value2;
             _PyValue_CheckFrameHome(value2);
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+            IR_SLOT(IR_FIELD_A(this_instr)) = PyValue_NULL;
             PyValue_XCLOSE(tmp);
             DISPATCH();
         }
@@ -5383,9 +5367,9 @@
             // _STORE_SUBSCR
             {
                 v = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                PyValue held_value = PyValue_MakeHeapSafe(v);
-                PyValue held_container = PyValue_MakeHeapSafe(container);
-                PyValue held_sub = PyValue_MakeHeapSafe(sub);
+                PyValue held_value = IR_INPLACE_HEAP_SAFE(v, IR_FIELD_C(this_instr));
+                PyValue held_container = IR_INPLACE_HEAP_SAFE(container, IR_FIELD_A(this_instr));
+                PyValue held_sub = IR_INPLACE_HEAP_SAFE(sub, IR_FIELD_B(this_instr));
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
@@ -5565,7 +5549,6 @@
                     res = res_o == NULL ? PyValue_NULL : PyValue_FromPyObjectSteal(res_o);
                 }
                 if (PyValue_IsNull(res)) {
-                    IR_DROP_BORROW(value, IR_FIELD_B(this_instr));
                     JUMP_TO_LABEL(error);
                 }
                 v = value;
@@ -5575,7 +5558,7 @@
             {
                 value = v;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                PyValue_XCLOSE(value);
+                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_XCLOSE(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -5617,7 +5600,7 @@
             value = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
             int truth = _PyValue_Truth(value);
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            PyValue_CLOSE(value);
+            if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE(value);
             if (truth < 0) {
                 JUMP_TO_LABEL(error);
             }
@@ -5691,7 +5674,6 @@
                     }
                     BOX_STAT_INC(UNPACK_SEQUENCE);
                     IR_KEEP_BOX(seq);
-                    IR_PUBLISH_TEMP(window[0], seq);
                 }
                 PyObject *seq_o = _PyValue_AsPyObjectStealPointer(seq);
                 window[0] = PyValue_NULL;
@@ -5830,10 +5812,10 @@ static const _PyJitHelperInfo jit_helpers[305] = {
     [106] = {"SET_FUNCTION_ATTRIBUTE", NULL, "Action adapter not yet implemented", { .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_IMM }, .ninputs = 2, .borrow_mask = 3, .flags = 0 }},
     [107] = {"SET_UPDATE", NULL, "Action adapter not yet implemented", { .roles = { _PyIR_ROLE_BASE, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .ninputs = 0, .borrow_mask = 0, .flags = 2 }},
     [108] = {"STORE_ATTR", jit_helper_STORE_ATTR, NULL, { .roles = { _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_FB, _PyIR_ROLE_NONE }, .ninputs = 2, .borrow_mask = 3, .flags = 0 }},
-    [109] = {"STORE_DEREF", jit_helper_STORE_DEREF, NULL, { .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_CELL, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .ninputs = 1, .borrow_mask = 1, .flags = 0 }},
-    [110] = {"STORE_FAST", jit_helper_STORE_FAST, NULL, { .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_LOCAL_OUT, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .ninputs = 1, .borrow_mask = 1, .flags = 0 }},
-    [111] = {"STORE_FAST_LOAD_FAST", jit_helper_STORE_FAST_LOAD_FAST, NULL, { .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .ninputs = 1, .borrow_mask = 1, .flags = 64 }},
-    [112] = {"STORE_FAST_STORE_FAST", jit_helper_STORE_FAST_STORE_FAST, NULL, { .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .ninputs = 2, .borrow_mask = 3, .flags = 0 }},
+    [109] = {"STORE_DEREF", jit_helper_STORE_DEREF, NULL, { .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_CELL, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .ninputs = 1, .borrow_mask = 0, .flags = 0 }},
+    [110] = {"STORE_FAST", jit_helper_STORE_FAST, NULL, { .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_LOCAL_OUT, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .ninputs = 1, .borrow_mask = 0, .flags = 0 }},
+    [111] = {"STORE_FAST_LOAD_FAST", jit_helper_STORE_FAST_LOAD_FAST, NULL, { .roles = { _PyIR_ROLE_DST, _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .ninputs = 1, .borrow_mask = 0, .flags = 64 }},
+    [112] = {"STORE_FAST_STORE_FAST", jit_helper_STORE_FAST_STORE_FAST, NULL, { .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_IN0 + 1, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE }, .ninputs = 2, .borrow_mask = 0, .flags = 0 }},
     [113] = {"STORE_GLOBAL", NULL, "Action adapter not yet implemented", { .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .ninputs = 1, .borrow_mask = 1, .flags = 0 }},
     [114] = {"STORE_NAME", NULL, "Action adapter not yet implemented", { .roles = { _PyIR_ROLE_IN0 + 0, _PyIR_ROLE_NONE, _PyIR_ROLE_IMM, _PyIR_ROLE_IMM }, .ninputs = 1, .borrow_mask = 1, .flags = 0 }},
     [115] = {"SWAP", jit_helper_SWAP, NULL, { .roles = { _PyIR_ROLE_BASE, _PyIR_ROLE_IMM, _PyIR_ROLE_NONE, _PyIR_ROLE_NONE }, .ninputs = 0, .borrow_mask = 0, .flags = 2 }},

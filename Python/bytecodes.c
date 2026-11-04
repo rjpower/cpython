@@ -235,9 +235,12 @@ dummy_func(
             value = PyValue_DUP(GETLOCAL(oparg));
         }
 
+        // A temporary owns its value (pyjit/design/pyvalue.md D4): the load
+        // takes a count of a mortal object. A load that a fold absorbs
+        // reads the local in place instead (Python/regcfg_passes.c).
         pure inst (LOAD_FAST_BORROW, (-- value)) {
             assert(!PyValue_IsNull(GETLOCAL(oparg)));
-            value = PyValue_BorrowAt(&GETLOCAL(oparg));
+            value = PyValue_DUP(GETLOCAL(oparg));
         }
 
         inst(LOAD_FAST_AND_CLEAR, (-- value)) {
@@ -255,10 +258,9 @@ dummy_func(
         inst(LOAD_FAST_BORROW_LOAD_FAST_BORROW, ( -- value1, value2)) {
             uint32_t oparg1 = oparg >> 4;
             uint32_t oparg2 = oparg & 15;
-            // Pointer-sized indices let GCC fold the frame offset into the
-            // address of each slot test, as it does for LOAD_FAST_BORROW.
-            value1 = PyValue_BorrowAt(&GETLOCAL((uintptr_t)oparg1));
-            value2 = PyValue_BorrowAt(&GETLOCAL((uintptr_t)oparg2));
+            // Temporaries own their values, as for LOAD_FAST_BORROW.
+            value1 = PyValue_DUP(GETLOCAL(oparg1));
+            value2 = PyValue_DUP(GETLOCAL(oparg2));
         }
 
         // The assembler (Python/assemble.c) emits constant loads as the
@@ -1003,9 +1005,10 @@ dummy_func(
              * If `left` has only two references remaining (one from
              * the stack, one in the locals), DECREFing `left` leaves
              * only the locals reference, so PyUnicode_Append knows
-             * that the string is safe to mutate.
+             * that the string is safe to mutate.  A `left` read in place
+             * from the local holds no reference of its own, and the
+             * generator does not release it (pyjit/design/pyvalue.md D4).
              */
-            assert(Py_REFCNT(left_o) >= 2 || !PyValue_IsHeapSafe(left));
             /* gh-143403: It's critical to close this reference *before*
              * we append. Otherwise, append can move the underlying
              * unicode object, which will cause a use after free!
@@ -1014,6 +1017,8 @@ dummy_func(
              */
             PyValue_CLOSE_SPECIALIZED(left, _PyUnicode_ExactDealloc);
             DEAD(left);
+            // The local still holds the string
+            assert(Py_REFCNT(left_o) >= 1);
             PyObject *temp = PyValue_AsKnownObjectSteal(*target_local);
             PyObject *right_o = PyValue_AsKnownObjectSteal(right);
             PyUnicode_Append(&temp, right_o);
@@ -1434,7 +1439,7 @@ dummy_func(
 
         tier1 inst(RAISE_VARARGS, (args[oparg] -- )) {
             assert(oparg < 3);
-            _PyValue_OwnArray(args, oparg);
+            _PyValue_RecheckWindow(args, oparg);
             PyObject *exc = oparg > 0 ? _PyValueTemps_Object(value_temps, args[0]) : NULL;
             if (oparg > 0 && exc == NULL) {
                 ERROR_NO_POP();
@@ -5299,7 +5304,7 @@ dummy_func(
         }
 
         inst(BUILD_SLICE, (args[oparg] -- slice)) {
-            _PyValue_OwnArray(args, oparg);
+            _PyValue_RecheckWindow(args, oparg);
             PyObject *start_o = _PyValueTemps_Object(value_temps, args[0]);
             if (start_o == NULL) {
                 ERROR_NO_POP();

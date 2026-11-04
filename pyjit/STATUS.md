@@ -146,7 +146,8 @@ costs, then the qualified baseline.
   (`faddfd1454d`; `_PyJIT_BASELINE_SUPPORTED` is 0 everywhere, the source
   stays, `test_jit_method` skips) until the JIT stage rebuilds it on the final
   IR. User decision, so IR steps carry no JIT upkeep.
-- Suites at `a6002e5854b`, debug and release alike: run=51,615, failures=2,
+- Suites at `faddfd1454d`, debug and release alike: run=51,615, failures=2
+  (38 more skipped than at `a6002e5854b`: the JIT tests),
   both in test_capi (test_is_unique_temporary, test_unicode.test_new): a local
   passed to a call reads `sys.getrefcount` 2 against upstream's 1, because
   the call window owns a copy; open for IR v2 B5 (register-ir.md G4). `make check-value-api`: 177 units, 0 findings.

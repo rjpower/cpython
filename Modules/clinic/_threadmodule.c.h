@@ -5,6 +5,7 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
@@ -114,11 +115,11 @@ _thread_lock_acquire(PyObject *self, PyObject *const *args, Py_ssize_t nargs, Py
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(blocking), &_Py_ID(timeout), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(blocking)), _PyValue_STATIC_IMMORTAL(&_Py_ID(timeout)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -188,11 +189,11 @@ _thread_lock_acquire_lock(PyObject *self, PyObject *const *args, Py_ssize_t narg
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(blocking), &_Py_ID(timeout), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(blocking)), _PyValue_STATIC_IMMORTAL(&_Py_ID(timeout)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -446,11 +447,11 @@ _thread_RLock_acquire(PyObject *self, PyObject *const *args, Py_ssize_t nargs, P
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(blocking), &_Py_ID(timeout), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(blocking)), _PyValue_STATIC_IMMORTAL(&_Py_ID(timeout)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -816,11 +817,11 @@ _thread_start_joinable_thread(PyObject *module, PyObject *const *args, Py_ssize_
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(function), &_Py_ID(handle), &_Py_ID(daemon), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(function)), _PyValue_STATIC_IMMORTAL(&_Py_ID(handle)), _PyValue_STATIC_IMMORTAL(&_Py_ID(daemon)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1210,11 +1211,11 @@ _thread_set_name(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(name), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(name)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1272,4 +1273,4 @@ exit:
 #endif /* !defined(_THREAD_SET_NAME_METHODDEF) */
 #define _THREAD__THREADHANDLE_IDENT_GETSETDEF {"ident", (getter)_thread__ThreadHandle_ident_get, (setter)NULL, NULL},
 
-/*[clinic end generated code: output=3bfc76a318c6579d input=a9049054013a1b77]*/
+/*[clinic end generated code: output=12b73602cde7ccc5 input=a9049054013a1b77]*/

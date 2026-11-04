@@ -2494,6 +2494,11 @@ _Py_Finalize(_PyRuntimeState *runtime)
      * XXX but I'm unclear on exactly how that one happens.  In any case,
      * XXX I haven't seen a real-life report of either of these.
      */
+    /* Release the base region of the borrow stack (entries pushed outside
+       any scope), so that their finalizers run before modules are destroyed
+       and the collection below sees the objects. */
+    _PyBorrowStack_ReleaseAll(tstate);
+
     PyGC_Collect();
 
     /* Destroy all modules */
@@ -2835,6 +2840,10 @@ Py_EndInterpreter(PyThreadState *tstate)
     _PyThreadState_DeleteList(list, /*is_after_fork=*/0);
 
     // XXX Call something like _PyImport_Disable() here?
+
+    /* As in _Py_Finalize(): release the base borrow region before modules
+       are destroyed. */
+    _PyBorrowStack_ReleaseAll(tstate);
 
     _PyImport_FiniExternal(tstate->interp);
     finalize_modules(tstate);

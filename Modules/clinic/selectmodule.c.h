@@ -5,7 +5,9 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_long.h"          // _PyLong_UnsignedShort_Converter()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
@@ -572,11 +574,11 @@ select_epoll(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(sizehint), &_Py_ID(flags), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(sizehint)), _PyValue_STATIC_IMMORTAL(&_Py_ID(flags)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -599,7 +601,11 @@ select_epoll(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     int sizehint = -1;
     int flags = 0;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
+    if (_args_items == NULL) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -747,11 +753,11 @@ select_epoll_register(PyObject *self, PyObject *const *args, Py_ssize_t nargs, P
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(fd), &_Py_ID(eventmask), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(fd)), _PyValue_STATIC_IMMORTAL(&_Py_ID(eventmask)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -840,11 +846,11 @@ select_epoll_modify(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyO
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(fd), &_Py_ID(eventmask), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(fd)), _PyValue_STATIC_IMMORTAL(&_Py_ID(eventmask)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -925,11 +931,11 @@ select_epoll_unregister(PyObject *self, PyObject *const *args, Py_ssize_t nargs,
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(fd), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(fd)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1000,11 +1006,11 @@ select_epoll_poll(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObj
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(timeout), &_Py_ID(maxevents), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(timeout)), _PyValue_STATIC_IMMORTAL(&_Py_ID(maxevents)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1400,4 +1406,4 @@ exit:
 #ifndef SELECT_KQUEUE_CONTROL_METHODDEF
     #define SELECT_KQUEUE_CONTROL_METHODDEF
 #endif /* !defined(SELECT_KQUEUE_CONTROL_METHODDEF) */
-/*[clinic end generated code: output=a1ac666294fd14bd input=a9049054013a1b77]*/
+/*[clinic end generated code: output=f6bc02b86073eb99 input=a9049054013a1b77]*/

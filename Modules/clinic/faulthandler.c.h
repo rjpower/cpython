@@ -5,6 +5,7 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_long.h"          // _PyLong_UnsignedInt_Converter()
@@ -38,11 +39,11 @@ faulthandler_dump_traceback_py(PyObject *module, PyObject *const *args, Py_ssize
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(file), &_Py_ID(all_threads), &_Py_ID(max_threads), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(file)), _PyValue_STATIC_IMMORTAL(&_Py_ID(all_threads)), _PyValue_STATIC_IMMORTAL(&_Py_ID(max_threads)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -133,11 +134,11 @@ faulthandler_dump_c_stack_py(PyObject *module, PyObject *const *args, Py_ssize_t
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(file), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(file)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -199,11 +200,11 @@ faulthandler_py_enable(PyObject *module, PyObject *const *args, Py_ssize_t nargs
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(file), &_Py_ID(all_threads), &_Py_ID(c_stack), &_Py_ID(max_threads), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(file)), _PyValue_STATIC_IMMORTAL(&_Py_ID(all_threads)), _PyValue_STATIC_IMMORTAL(&_Py_ID(c_stack)), _PyValue_STATIC_IMMORTAL(&_Py_ID(max_threads)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -358,11 +359,11 @@ faulthandler_dump_traceback_later(PyObject *module, PyObject *const *args, Py_ss
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(timeout), &_Py_ID(repeat), &_Py_ID(file), &_Py_ID(exit), &_Py_ID(max_threads), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(timeout)), _PyValue_STATIC_IMMORTAL(&_Py_ID(repeat)), _PyValue_STATIC_IMMORTAL(&_Py_ID(file)), _PyValue_STATIC_IMMORTAL(&_Py_ID(exit)), _PyValue_STATIC_IMMORTAL(&_Py_ID(max_threads)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -492,11 +493,11 @@ faulthandler_register_py(PyObject *module, PyObject *const *args, Py_ssize_t nar
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(signum), &_Py_ID(file), &_Py_ID(all_threads), &_Py_ID(chain), &_Py_ID(max_threads), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(signum)), _PyValue_STATIC_IMMORTAL(&_Py_ID(file)), _PyValue_STATIC_IMMORTAL(&_Py_ID(all_threads)), _PyValue_STATIC_IMMORTAL(&_Py_ID(chain)), _PyValue_STATIC_IMMORTAL(&_Py_ID(max_threads)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -782,4 +783,4 @@ exit:
 #ifndef FAULTHANDLER__RAISE_EXCEPTION_METHODDEF
     #define FAULTHANDLER__RAISE_EXCEPTION_METHODDEF
 #endif /* !defined(FAULTHANDLER__RAISE_EXCEPTION_METHODDEF) */
-/*[clinic end generated code: output=14815a5f8afe813f input=a9049054013a1b77]*/
+/*[clinic end generated code: output=8c52528f8564fd2d input=a9049054013a1b77]*/

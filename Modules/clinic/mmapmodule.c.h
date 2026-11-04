@@ -5,6 +5,7 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
@@ -398,11 +399,11 @@ mmap_mmap_flush(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObjec
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(flags), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(flags)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -967,4 +968,4 @@ mmap_ass_subscript(PyObject *self, PyObject *item, PyObject *value)
 #ifndef MMAP_MMAP_MADVISE_METHODDEF
     #define MMAP_MMAP_MADVISE_METHODDEF
 #endif /* !defined(MMAP_MMAP_MADVISE_METHODDEF) */
-/*[clinic end generated code: output=90a906cde591ab92 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=1e8e7a4b950c207c input=a9049054013a1b77]*/

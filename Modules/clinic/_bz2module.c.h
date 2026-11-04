@@ -5,10 +5,11 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_modsupport.h"    // _PyArg_BadArgument()
-#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(_bz2_BZ2Compressor_compress__doc__,
 "compress($self, data, /)\n"
@@ -88,26 +89,23 @@ _bz2_BZ2Compressor(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = clinic_state()->bz2_compressor_type;
-    _PyArg_OwnerScope _args_scope = {0};
-    PyObject *const *fastargs;
     int compresslevel = 9;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
         !_PyArg_NoKeywords("BZ2Compressor", kwargs)) {
         goto exit;
     }
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
+    if (!_PyArg_CheckPositional("BZ2Compressor", PyTuple_GET_SIZE(args), 0, 1)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "BZ2Compressor",
-                                          0, 1);
-    if (fastargs == NULL) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (_args_scope.nargs < 1) {
+    if (PyTuple_GET_SIZE(args) < 1) {
         goto skip_optional;
     }
-    compresslevel = PyLong_AsInt(fastargs[0]);
+    compresslevel = PyLong_AsInt(_args_items[0]);
     if (compresslevel == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -115,11 +113,6 @@ skip_optional:
     return_value = _bz2_BZ2Compressor_impl(type, compresslevel);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -161,11 +154,11 @@ _bz2_BZ2Decompressor_decompress(PyObject *self, PyObject *const *args, Py_ssize_
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(data), &_Py_ID(max_length), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(data)), _PyValue_STATIC_IMMORTAL(&_Py_ID(max_length)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -251,4 +244,4 @@ _bz2_BZ2Decompressor(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=2ed97017f98398a2 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=f0f288b112bd7d32 input=a9049054013a1b77]*/

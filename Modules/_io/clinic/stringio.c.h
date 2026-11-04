@@ -5,11 +5,12 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_abstract.h"      // _Py_convert_optional_to_ssize_t()
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
-#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(_io_StringIO_getvalue__doc__,
 "getvalue($self, /)\n"
@@ -326,11 +327,11 @@ _io_StringIO___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(initial_value), &_Py_ID(newline), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(initial_value)), _PyValue_STATIC_IMMORTAL(&_Py_ID(newline)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -348,51 +349,34 @@ _io_StringIO___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[2];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
     PyObject *value = NULL;
     PyObject *newline_obj = NULL;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 2) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    noptargs = Py_MIN(_args_scope.nargs, 2)
-        + (_args_scope.nobjects - _args_scope.nargs)
-        - (0 + 0);
     if (!noptargs) {
         goto skip_optional_pos;
     }
     if (fastargs[0]) {
         value = fastargs[0];
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     newline_obj = fastargs[1];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
 skip_optional_pos:
     return_value = _io_StringIO___init___impl((stringio *)self, value, newline_obj);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        return_value = -1;
-    }
     return return_value;
 }
 
@@ -576,4 +560,4 @@ _io_StringIO_newlines_get(PyObject *self, void *Py_UNUSED(context))
 
 #define _IO_STRINGIO_NEWLINES_GETSETDEF {"newlines", (getter)_io_StringIO_newlines_get, (setter)NULL, NULL},
 
-/*[clinic end generated code: output=e9b358dc6b95de57 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=86468ee6eab81355 input=a9049054013a1b77]*/

@@ -5,8 +5,10 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 
 PyDoc_STRVAR(zlib_compress__doc__,
@@ -39,11 +41,11 @@ zlib_compress(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObjec
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(level), &_Py_ID(wbits), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(level)), _PyValue_STATIC_IMMORTAL(&_Py_ID(wbits)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -132,11 +134,11 @@ zlib_decompress(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObj
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(wbits), &_Py_ID(bufsize), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(wbits)), _PyValue_STATIC_IMMORTAL(&_Py_ID(bufsize)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -255,11 +257,11 @@ zlib_compressobj(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(level), &_Py_ID(method), &_Py_ID(wbits), &_Py_ID(memLevel), &_Py_ID(strategy), &_Py_ID(zdict), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(level)), _PyValue_STATIC_IMMORTAL(&_Py_ID(method)), _PyValue_STATIC_IMMORTAL(&_Py_ID(wbits)), _PyValue_STATIC_IMMORTAL(&_Py_ID(memLevel)), _PyValue_STATIC_IMMORTAL(&_Py_ID(strategy)), _PyValue_STATIC_IMMORTAL(&_Py_ID(zdict)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -381,11 +383,11 @@ zlib_decompressobj(PyObject *module, PyObject *const *args, Py_ssize_t nargs, Py
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(wbits), &_Py_ID(zdict), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(wbits)), _PyValue_STATIC_IMMORTAL(&_Py_ID(zdict)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -512,11 +514,11 @@ zlib_Decompress_decompress(PyObject *self, PyTypeObject *cls, PyObject *const *a
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(max_length), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(max_length)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -882,11 +884,11 @@ zlib__ZlibDecompressor_decompress(PyObject *self, PyObject *const *args, Py_ssiz
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(data), &_Py_ID(max_length), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(data)), _PyValue_STATIC_IMMORTAL(&_Py_ID(max_length)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -970,11 +972,11 @@ zlib__ZlibDecompressor(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(wbits), &_Py_ID(zdict), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(wbits)), _PyValue_STATIC_IMMORTAL(&_Py_ID(zdict)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -997,7 +999,11 @@ zlib__ZlibDecompressor(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     int wbits = MAX_WBITS;
     PyObject *zdict = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
+    if (_args_items == NULL) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -1338,4 +1344,4 @@ exit:
 #ifndef ZLIB_DECOMPRESS___DEEPCOPY___METHODDEF
     #define ZLIB_DECOMPRESS___DEEPCOPY___METHODDEF
 #endif /* !defined(ZLIB_DECOMPRESS___DEEPCOPY___METHODDEF) */
-/*[clinic end generated code: output=f4c3b5abac20df9b input=a9049054013a1b77]*/
+/*[clinic end generated code: output=e339593f76d34e36 input=a9049054013a1b77]*/

@@ -5,8 +5,10 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 
 PyDoc_STRVAR(_zstd_ZstdDecompressor_new__doc__,
@@ -38,11 +40,11 @@ _zstd_ZstdDecompressor_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(zstd_dict), &_Py_ID(options), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(zstd_dict)), _PyValue_STATIC_IMMORTAL(&_Py_ID(options)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -65,7 +67,11 @@ _zstd_ZstdDecompressor_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     PyObject *zstd_dict = Py_None;
     PyObject *options = Py_None;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
+    if (_args_items == NULL) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -149,11 +155,11 @@ _zstd_ZstdDecompressor_decompress(PyObject *self, PyObject *const *args, Py_ssiz
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(data), &_Py_ID(max_length), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(data)), _PyValue_STATIC_IMMORTAL(&_Py_ID(max_length)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -210,4 +216,4 @@ exit:
 }
 #define _ZSTD_ZSTDDECOMPRESSOR_UNUSED_DATA_GETSETDEF {"unused_data", (getter)_zstd_ZstdDecompressor_unused_data_get, (setter)NULL, _zstd_ZstdDecompressor_unused_data__doc__},
 
-/*[clinic end generated code: output=91b84afb07b1188c input=a9049054013a1b77]*/
+/*[clinic end generated code: output=237dd1e411321b7e input=a9049054013a1b77]*/

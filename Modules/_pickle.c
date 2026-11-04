@@ -4352,8 +4352,8 @@ get_class(PyObject *obj)
  * appropriate __reduce__ method for obj.
  */
 static int
-save_reduce(PickleState *st, PicklerObject *self, PyObject *args,
-            PyObject *obj)
+save_reduce_impl(PickleState *st, PicklerObject *self, PyObject *args,
+                 PyObject *obj)
 {
     PyObject *callable;
     PyObject *argtup;
@@ -4730,6 +4730,20 @@ save_reduce(PickleState *st, PicklerObject *self, PyObject *args,
         }
     }
     return 0;
+}
+
+/* save() runs once per object inside one dump() call, not through a
+   trampoline: scope each reduction, so that unpacking its tuple does not hold
+   entries on the borrow stack for the whole dump. */
+static int
+save_reduce(PickleState *st, PicklerObject *self, PyObject *args,
+            PyObject *obj)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
+    int status = save_reduce_impl(st, self, args, obj);
+    _PyBorrowScope_Exit(tstate, mark);
+    return status;
 }
 
 /* Weak-only objects are flagged in place in the memo (the MEMO_WEAK_ONLY bit
@@ -6654,7 +6668,13 @@ load_newobj(PickleState *state, UnpicklerObject *self, int use_kwargs)
         goto error;
     }
 
+    /* tp_new is called directly, not through a trampoline: scope it, so that
+       parsing the arguments of each object does not hold entries on the
+       borrow stack for the whole load. */
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     obj = ((PyTypeObject *)cls)->tp_new((PyTypeObject *)cls, args, kwargs);
+    _PyBorrowScope_Exit(tstate, mark);
     if (obj == NULL) {
         goto error;
     }

@@ -6160,19 +6160,14 @@ type_new(PyTypeObject *metatype, PyObject *args, PyObject *kwds)
     assert(args != NULL && PyTuple_Check(args));
     assert(kwds == NULL || PyDict_Check(kwds));
 
-    _PyArg_OwnerScope scope = {0};
     PyObject *keywords = NULL;
     PyObject *owned_bases = NULL;
     PyObject *selected_metatype_owner = NULL;
     PyObject *selected_base_owner = NULL;
     PyObject *type = NULL;
     PyTypeObject *error_type = NULL;
-    if (PyErr_Occurred() ||
-            _PyArg_OwnerScope_BeginTuple(&scope, args, 0) < 0) {
-        goto done;
-    }
     keywords = Py_XNewRef(kwds);
-    Py_ssize_t nargs = scope.nargs;
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     if (nargs != 3) {
         PyErr_Format(PyExc_TypeError,
                      "type.__new__() takes exactly 3 arguments (%zd given)",
@@ -6180,11 +6175,12 @@ type_new(PyTypeObject *metatype, PyObject *args, PyObject *kwds)
         goto done;
     }
 
-    /* Validate the fixed heap-only fields before creating their views.
-     * Invalid inline arguments need a type diagnostic, not a scalar box. */
-    PyValue name_value = PyTuple_GET_VALUE(scope.tuple, 0);
-    PyValue bases_value = PyTuple_GET_VALUE(scope.tuple, 1);
-    PyValue dict_value = PyTuple_GET_VALUE(scope.tuple, 2);
+    /* The arguments must be a str, a tuple and a dict, which are never
+     * inline, so the args tuple roots them and nothing is boxed.  Invalid
+     * inline arguments need a type diagnostic, not a scalar box. */
+    PyValue name_value = PyTuple_GET_VALUE(args, 0);
+    PyValue bases_value = PyTuple_GET_VALUE(args, 1);
+    PyValue dict_value = PyTuple_GET_VALUE(args, 2);
     PyValue invalid = PyValue_NULL;
     int invalid_arg = 0;
     if (!PyValue_IsObject(name_value) ||
@@ -6223,19 +6219,13 @@ type_new(PyTypeObject *metatype, PyObject *args, PyObject *kwds)
         goto done;
     }
 
-    /* All three proven object inputs fit the scope's inline storage. */
-    PyObject *const *views = _PyArg_UnpackPositionalOwned(
-        &scope, "type.__new__", 3, 3);
-    if (views == NULL || PyErr_Occurred()) {
-        goto done;
-    }
     type_new_ctx ctx = {
         .metatype = metatype,
-        .args = scope.tuple,
+        .args = args,
         .kwds = keywords,
-        .orig_dict = views[2],
-        .name = views[0],
-        .bases = views[1],
+        .orig_dict = PyValue_AsPyObjectBorrow(dict_value),
+        .name = PyValue_AsPyObjectBorrow(name_value),
+        .bases = PyValue_AsPyObjectBorrow(bases_value),
         .base = NULL,
         .slots = NULL,
         .nslot = 0,
@@ -6275,11 +6265,6 @@ done:
     saved = PyErr_GetRaisedException();
     Py_CLEAR(keywords);
     _PyValue_RestoreException(saved);
-    if (_PyArg_OwnerScope_End(&scope) < 0) {
-        saved = PyErr_GetRaisedException();
-        Py_CLEAR(type);
-        _PyValue_RestoreException(saved);
-    }
     return type;
 }
 
@@ -11370,10 +11355,6 @@ init_static_type(PyInterpreterState *interp, PyTypeObject *self,
         }
     }
     else {
-    else {
-        /* Admits the type to this interpreter's lookup cache. */
-        managed_static_type_state_get(interp, self)->ready = 1;
-    }
         assert(!initial);
         assert(self->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN);
         assert(self->tp_version_tag != 0);
@@ -11388,6 +11369,10 @@ init_static_type(PyInterpreterState *interp, PyTypeObject *self,
     if (res < 0) {
         _PyStaticType_ClearWeakRefs(interp, self);
         managed_static_type_state_clear(interp, self, isbuiltin, initial);
+    }
+    else {
+        /* Admits the type to this interpreter's lookup cache. */
+        managed_static_type_state_get(interp, self)->ready = 1;
     }
     return res;
 }

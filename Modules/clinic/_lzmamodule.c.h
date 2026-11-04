@@ -5,8 +5,10 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_modsupport.h"    // _PyArg_BadArgument()
 
 PyDoc_STRVAR(_lzma_LZMACompressor_compress__doc__,
@@ -106,11 +108,11 @@ _lzma_LZMADecompressor_decompress(PyObject *self, PyObject *const *args, Py_ssiz
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(data), &_Py_ID(max_length), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(data)), _PyValue_STATIC_IMMORTAL(&_Py_ID(max_length)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -204,11 +206,11 @@ _lzma_LZMADecompressor(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(format), &_Py_ID(memlimit), &_Py_ID(filters), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(format)), _PyValue_STATIC_IMMORTAL(&_Py_ID(memlimit)), _PyValue_STATIC_IMMORTAL(&_Py_ID(filters)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -232,7 +234,11 @@ _lzma_LZMADecompressor(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     PyObject *memlimit = Py_None;
     PyObject *filters = Py_None;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 3));
+    if (_args_items == NULL) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -334,4 +340,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=ffc6d673d858048c input=a9049054013a1b77]*/
+/*[clinic end generated code: output=bb0bde0a0aa71f23 input=a9049054013a1b77]*/

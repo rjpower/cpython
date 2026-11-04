@@ -5,6 +5,7 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_long.h"          // _PyLong_Size_t_Converter()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
@@ -121,11 +122,11 @@ _winapi_ConnectNamedPipe(PyObject *module, PyObject *const *args, Py_ssize_t nar
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(handle), &_Py_ID(overlapped), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(handle)), _PyValue_STATIC_IMMORTAL(&_Py_ID(overlapped)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -195,11 +196,11 @@ _winapi_CreateEventW(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(security_attributes), &_Py_ID(manual_reset), &_Py_ID(initial_state), &_Py_ID(name), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(security_attributes)), _PyValue_STATIC_IMMORTAL(&_Py_ID(manual_reset)), _PyValue_STATIC_IMMORTAL(&_Py_ID(initial_state)), _PyValue_STATIC_IMMORTAL(&_Py_ID(name)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -411,11 +412,11 @@ _winapi_CreateMutexW(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(security_attributes), &_Py_ID(initial_owner), &_Py_ID(name), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(security_attributes)), _PyValue_STATIC_IMMORTAL(&_Py_ID(initial_owner)), _PyValue_STATIC_IMMORTAL(&_Py_ID(name)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -928,11 +929,11 @@ _winapi_GetLongPathName(PyObject *module, PyObject *const *args, Py_ssize_t narg
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(path), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(path)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1037,11 +1038,11 @@ _winapi_GetShortPathName(PyObject *module, PyObject *const *args, Py_ssize_t nar
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(path), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(path)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1323,11 +1324,11 @@ _winapi_OpenEventW(PyObject *module, PyObject *const *args, Py_ssize_t nargs, Py
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(desired_access), &_Py_ID(inherit_handle), &_Py_ID(name), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(desired_access)), _PyValue_STATIC_IMMORTAL(&_Py_ID(inherit_handle)), _PyValue_STATIC_IMMORTAL(&_Py_ID(name)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1425,11 +1426,11 @@ _winapi_OpenMutexW(PyObject *module, PyObject *const *args, Py_ssize_t nargs, Py
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(desired_access), &_Py_ID(inherit_handle), &_Py_ID(name), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(desired_access)), _PyValue_STATIC_IMMORTAL(&_Py_ID(inherit_handle)), _PyValue_STATIC_IMMORTAL(&_Py_ID(name)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1719,11 +1720,11 @@ _winapi_LCMapStringEx(PyObject *module, PyObject *const *args, Py_ssize_t nargs,
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(locale), &_Py_ID(flags), &_Py_ID(src), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(locale)), _PyValue_STATIC_IMMORTAL(&_Py_ID(flags)), _PyValue_STATIC_IMMORTAL(&_Py_ID(src)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1814,11 +1815,11 @@ _winapi_ReadFile(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(handle), &_Py_ID(size), &_Py_ID(overlapped), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(handle)), _PyValue_STATIC_IMMORTAL(&_Py_ID(size)), _PyValue_STATIC_IMMORTAL(&_Py_ID(overlapped)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1905,11 +1906,11 @@ _winapi_ReleaseMutex(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(mutex), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(mutex)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1965,11 +1966,11 @@ _winapi_ResetEvent(PyObject *module, PyObject *const *args, Py_ssize_t nargs, Py
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(event), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(event)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -2025,11 +2026,11 @@ _winapi_SetEvent(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(event), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(event)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -2261,11 +2262,11 @@ _winapi_BatchedWaitForMultipleObjects(PyObject *module, PyObject *const *args, P
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(handle_seq), &_Py_ID(wait_all), &_Py_ID(milliseconds), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(handle_seq)), _PyValue_STATIC_IMMORTAL(&_Py_ID(wait_all)), _PyValue_STATIC_IMMORTAL(&_Py_ID(milliseconds)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -2471,11 +2472,11 @@ _winapi_WriteFile(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyO
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(handle), &_Py_ID(buffer), &_Py_ID(overlapped), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(handle)), _PyValue_STATIC_IMMORTAL(&_Py_ID(buffer)), _PyValue_STATIC_IMMORTAL(&_Py_ID(overlapped)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -2579,11 +2580,11 @@ _winapi_GetFileType(PyObject *module, PyObject *const *args, Py_ssize_t nargs, P
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(handle), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(handle)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -2649,11 +2650,11 @@ _winapi__mimetypes_read_windows_registry(PyObject *module, PyObject *const *args
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(on_type_read), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(on_type_read)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -2756,11 +2757,11 @@ _winapi_CopyFile2(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyO
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(existing_file_name), &_Py_ID(new_file_name), &_Py_ID(flags), &_Py_ID(progress_routine), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(existing_file_name)), _PyValue_STATIC_IMMORTAL(&_Py_ID(new_file_name)), _PyValue_STATIC_IMMORTAL(&_Py_ID(flags)), _PyValue_STATIC_IMMORTAL(&_Py_ID(progress_routine)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -3057,4 +3058,4 @@ _winapi_GetTickCount64(PyObject *module, PyObject *Py_UNUSED(ignored))
 #ifndef _WINAPI_GETSHORTPATHNAME_METHODDEF
     #define _WINAPI_GETSHORTPATHNAME_METHODDEF
 #endif /* !defined(_WINAPI_GETSHORTPATHNAME_METHODDEF) */
-/*[clinic end generated code: output=15ab8b04851932e1 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=95924424b22c0a67 input=a9049054013a1b77]*/

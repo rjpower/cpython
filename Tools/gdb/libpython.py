@@ -103,7 +103,7 @@ USED_TAGS = 0b11
 
 FRAME_INFO_OPTIMIZED_OUT = '(frame information optimized out)'
 UNABLE_READ_INFO_PYTHON_FRAME = 'Unable to read information on python frame'
-EVALFRAME = '_PyEval_EvalFrameDefault'
+EVALFRAME = '_PyEval_EvalFrameLoop'
 
 
 class NullPyObjectPtr(RuntimeError):

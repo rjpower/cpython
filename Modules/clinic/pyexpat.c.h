@@ -5,6 +5,7 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_long.h"          // _PyLong_UnsignedLongLong_Converter()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
@@ -617,11 +618,11 @@ pyexpat_ParserCreate(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(encoding), &_Py_ID(namespace_separator), &_Py_ID(intern), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(encoding)), _PyValue_STATIC_IMMORTAL(&_Py_ID(namespace_separator)), _PyValue_STATIC_IMMORTAL(&_Py_ID(intern)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -742,4 +743,4 @@ exit:
 #ifndef PYEXPAT_XMLPARSER_SETALLOCTRACKERMAXIMUMAMPLIFICATION_METHODDEF
     #define PYEXPAT_XMLPARSER_SETALLOCTRACKERMAXIMUMAMPLIFICATION_METHODDEF
 #endif /* !defined(PYEXPAT_XMLPARSER_SETALLOCTRACKERMAXIMUMAMPLIFICATION_METHODDEF) */
-/*[clinic end generated code: output=f1652fd212bce55f input=a9049054013a1b77]*/
+/*[clinic end generated code: output=fa4b4c1ffad09feb input=a9049054013a1b77]*/

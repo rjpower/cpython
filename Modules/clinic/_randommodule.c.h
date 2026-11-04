@@ -2,10 +2,10 @@
 preserve
 [clinic start generated code]*/
 
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_long.h"          // _PyLong_UInt64_Converter()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
-#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(_random_Random_random__doc__,
 "random($self, /)\n"
@@ -153,8 +153,6 @@ random_init(PyObject *self, PyObject *args, PyObject *kwargs)
 {
     int return_value = -1;
     PyTypeObject *base_tp = (PyTypeObject *)_randomstate_type(Py_TYPE(self))->Random_Type;
-    _PyArg_OwnerScope _args_scope = {0};
-    PyObject *const *fastargs;
     PyObject *seed = NULL;
 
     if ((Py_IS_TYPE(self, base_tp) ||
@@ -162,27 +160,23 @@ random_init(PyObject *self, PyObject *args, PyObject *kwargs)
         !_PyArg_NoKeywords("Random", kwargs)) {
         goto exit;
     }
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
+    if (!_PyArg_CheckPositional("Random", PyTuple_GET_SIZE(args), 0, 1)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "Random",
-                                          0, 1);
-    if (fastargs == NULL) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (_args_scope.nargs < 1) {
+    if (PyTuple_GET_SIZE(args) < 1) {
         goto skip_optional;
     }
-    seed = fastargs[0];
+    seed = _args_items[0];
 skip_optional:
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = random_init_impl((RandomObject *)self, seed);
     Py_END_CRITICAL_SECTION();
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        return_value = -1;
-    }
     return return_value;
 }
-/*[clinic end generated code: output=b25f09c8f8dfd8c2 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=dca4aa245a916b5b input=a9049054013a1b77]*/

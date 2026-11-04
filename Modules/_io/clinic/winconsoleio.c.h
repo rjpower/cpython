@@ -5,8 +5,10 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_abstract.h"      // _Py_convert_optional_to_ssize_t()
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 
@@ -67,11 +69,11 @@ _io__WindowsConsoleIO___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(file), &_Py_ID(mode), &_Py_ID(closefd), &_Py_ID(opener), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(file)), _PyValue_STATIC_IMMORTAL(&_Py_ID(mode)), _PyValue_STATIC_IMMORTAL(&_Py_ID(closefd)), _PyValue_STATIC_IMMORTAL(&_Py_ID(opener)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -96,7 +98,11 @@ _io__WindowsConsoleIO___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     int closefd = 1;
     PyObject *opener = Py_None;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 4));
+    if (_args_items == NULL) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -551,4 +557,4 @@ _io__WindowsConsoleIO_mode_get(PyObject *self, void *Py_UNUSED(context))
 #  define _IO__WINDOWSCONSOLEIO_MODE_GETSETDEF
 #endif
 
-/*[clinic end generated code: output=7c7499116eefd498 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=3d191b4740e15ffe input=a9049054013a1b77]*/

@@ -5,11 +5,12 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_abstract.h"      // _Py_convert_optional_to_ssize_t()
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
-#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(_io_FileIO__dealloc_warn__doc__,
 "_dealloc_warn($self, source, /)\n"
@@ -93,11 +94,11 @@ _io_FileIO___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(file), &_Py_ID(mode), &_Py_ID(closefd), &_Py_ID(opener), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(file)), _PyValue_STATIC_IMMORTAL(&_Py_ID(mode)), _PyValue_STATIC_IMMORTAL(&_Py_ID(closefd)), _PyValue_STATIC_IMMORTAL(&_Py_ID(opener)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -115,34 +116,23 @@ _io_FileIO___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[4];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
     PyObject *nameobj;
     const char *mode = "r";
     int closefd = 1;
     PyObject *opener = Py_None;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 4) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 4));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    noptargs = Py_MIN(_args_scope.nargs, 4)
-        + (_args_scope.nobjects - _args_scope.nargs)
-        - (1 + 0);
     nameobj = fastargs[0];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
@@ -155,9 +145,6 @@ _io_FileIO___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         if (mode == NULL) {
             goto exit;
         }
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -167,24 +154,15 @@ _io_FileIO___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         if (closefd < 0) {
             goto exit;
         }
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     opener = fastargs[3];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
 skip_optional_pos:
     return_value = _io_FileIO___init___impl((fileio *)self, nameobj, mode, closefd, opener);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        return_value = -1;
-    }
     return return_value;
 }
 
@@ -649,4 +627,4 @@ exit:
 
 #define _IO_FILEIO__BLKSIZE_GETSETDEF {"_blksize", (getter)_io_FileIO__blksize_get, (setter)NULL, _io_FileIO__blksize__doc__},
 
-/*[clinic end generated code: output=04a2d575b8f114e2 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=5683e5073a42b858 input=a9049054013a1b77]*/

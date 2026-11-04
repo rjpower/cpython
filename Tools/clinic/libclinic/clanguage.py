@@ -426,8 +426,10 @@ class CLanguage(Language):
         template_dict['keywords_c'] = ' '.join('"' + k + '",'
                                                for k in data.keywords)
         keywords = [k for k in data.keywords if k]
-        template_dict['keywords_py'] = ' '.join(c_id(k) + ','
-                                                for k in keywords)
+        # Tuples store canonical PyValues: a static immortal keyword carries
+        # the no-count tag.
+        template_dict['keywords_py'] = ' '.join(
+            f'_PyValue_STATIC_IMMORTAL({c_id(k)}),' for k in keywords)
         template_dict['format_units'] = ''.join(data.format_units)
         template_dict['parse_arguments'] = ', '.join(data.parse_arguments)
         if data.parse_arguments:

@@ -5,6 +5,7 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
@@ -35,11 +36,11 @@ _functools_cmp_to_key(PyObject *module, PyObject *const *args, Py_ssize_t nargs,
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(mycmp), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(mycmp)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -102,11 +103,11 @@ _functools_reduce(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyO
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(initial), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(initial)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -220,4 +221,4 @@ PyDoc_STRVAR(_functools__lru_cache_wrapper___deepcopy____doc__,
 
 #define _FUNCTOOLS__LRU_CACHE_WRAPPER___DEEPCOPY___METHODDEF    \
     {"__deepcopy__", (PyCFunction)_functools__lru_cache_wrapper___deepcopy__, METH_O, _functools__lru_cache_wrapper___deepcopy____doc__},
-/*[clinic end generated code: output=9af090694f03b4f2 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=03419f4e8ce4cb70 input=a9049054013a1b77]*/

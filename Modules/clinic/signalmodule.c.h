@@ -5,6 +5,7 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 
@@ -310,11 +311,11 @@ signal_set_wakeup_fd(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(warn_on_full_buffer), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(warn_on_full_buffer)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -807,4 +808,4 @@ exit:
 #ifndef SIGNAL_PIDFD_SEND_SIGNAL_METHODDEF
     #define SIGNAL_PIDFD_SEND_SIGNAL_METHODDEF
 #endif /* !defined(SIGNAL_PIDFD_SEND_SIGNAL_METHODDEF) */
-/*[clinic end generated code: output=2a04ec31f49b1c93 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=36e8cf84326567ed input=a9049054013a1b77]*/

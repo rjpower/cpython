@@ -21,5 +21,6 @@ int _PyTestInternalCapi_Init_Tuple(PyObject *module);
 int _PyTestInternalCapi_Init_TypeCache(PyObject *module);
 int _PyTestInternalCapi_Init_NativeScope(PyObject *module);
 int _PyTestInternalCapi_Init_Dict(PyObject *module);
+int _PyTestInternalCapi_Init_BorrowScope(PyObject *module);
 
 #endif // Py_TESTINTERNALCAPI_PARTS_H

@@ -6913,7 +6913,9 @@
                 }
                 STAT_INC(CALL, hit);
                 PyCFunction cfunc = method->d_method->ml_meth;
+                _PyBorrowMark borrow_mark = _PyBorrowScope_Enter(tstate);
                 PyObject *res_o = _PyCFunction_TrampolineCall(cfunc, self, NULL);
+                _PyBorrowScope_Exit(tstate, borrow_mark);
                 _Py_LeaveRecursiveCallTstate(tstate);
                 assert((res_o != NULL) ^ (_PyErr_Occurred(tstate) != NULL));
                 if (res_o == NULL) {
@@ -7044,7 +7046,9 @@
                 if (arg == NULL) {
                     JUMP_TO_LABEL(error);
                 }
+                _PyBorrowMark borrow_mark = _PyBorrowScope_Enter(tstate);
                 PyObject *res_o = _PyCFunction_TrampolineCall(cfunc, self, arg);
+                _PyBorrowScope_Exit(tstate, borrow_mark);
                 _Py_LeaveRecursiveCallTstate(tstate);
                 assert((res_o != NULL) ^ (_PyErr_Occurred(tstate) != NULL));
                 if (res_o == NULL) {

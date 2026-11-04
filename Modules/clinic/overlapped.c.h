@@ -5,7 +5,9 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_long.h"          // _PyLong_UnsignedLong_Converter()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 
@@ -460,11 +462,11 @@ _overlapped_Overlapped(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(event), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(event)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -486,7 +488,11 @@ _overlapped_Overlapped(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
     HANDLE event = INVALID_HANDLE_VALUE;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 1));
+    if (_args_items == NULL) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -1243,4 +1249,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=0ecaf45a09539599 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=6074c343ad834fb6 input=a9049054013a1b77]*/

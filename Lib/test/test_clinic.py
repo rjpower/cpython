@@ -7,7 +7,7 @@ from test import support, test_tools
 from test.support import force_not_colorized_test_class
 from test.support import os_helper
 from test.support.os_helper import TESTFN, unlink, rmtree
-from textwrap import dedent
+from textwrap import dedent, indent
 from unittest import TestCase
 import difflib
 import inspect
@@ -94,466 +94,6 @@ def save_restore_converters(testcase):
 
 class ClinicWholeFileTest(TestCase):
     maxDiff = None
-
-    def test_owned_constructor_helper_dispatch(self):
-        for kind in ('__new__', '__init__'):
-            for keyword_only in (False, True):
-                with self.subTest(kind=kind, keyword_only=keyword_only):
-                    decorator = '@classmethod\n' if kind == '__new__' else ''
-                    star = '    *\n' if keyword_only else ''
-                    source = (
-                        '/*[clinic input]\noutput everything block\n'
-                        'class Owner "OwnerObject *" "&Owner_Type"\n'
-                        f'{decorator}@vectorcall\n@critical_section\nOwner.{kind} as owner\n'
-                        f'    value: object\n{star}    optional: object = None\n'
-                        '[clinic start generated code]*/\n')
-                    generated = _make_clinic(filename='owner.c').parse(source)
-                    helper = generated[generated.index('owner_helper('):]
-                    helper = helper[:helper.index('\nstatic ')]
-                    self.assertIn('PyObject *_clinic_tuple_args)', helper)
-                    self.assertEqual(helper.count('_PyArg_UnpackKeywordsOwned('), 1)
-                    self.assertEqual(helper.count('_PyArg_UnpackKeywords('), 1)
-                    self.assertNotIn('_PyArg_OwnerScope_Objects(', generated)
-                    self.assertNotIn('_PyTuple_CAST(args)->ob_item', generated)
-                    self.assertIn('kwargs, NULL, args);', generated)
-                    self.assertIn('NULL, kwnames, NULL);', generated)
-                    self.assertIn('noptargs = _clinic_args_scope.nobjects - 1;', helper)
-                    self.assertIn('noptargs = nargs + nkw - 1;', helper)
-                    self.assertIn('if (_clinic_tuple_args != NULL && PyErr_Occurred())', helper)
-                    invoke = helper.index('owner_impl(')
-                    unlock = helper.index('Py_END_CRITICAL_SECTION', invoke)
-                    close = helper.index('_PyArg_OwnerScope_End(', unlock)
-                    self.assertLess(invoke, unlock)
-                    self.assertLess(unlock, close)
-                    self.assertIn('if (_clinic_tuple_args != NULL && _PyArg_OwnerScope_End(', helper)
-                    if kind == '__new__':
-                        tail = helper[close:]
-                        detach = tail.index('return_value = NULL;')
-                        retire = tail.index('Py_XDECREF(_clinic_output);')
-                        restore = tail.index('_PyValue_RestoreException(')
-                        self.assertLess(detach, retire)
-                        self.assertLess(retire, restore)
-                    else:
-                        self.assertIn('return_value = -1;', helper[close:])
-
-    def test_owned_constructor_helper_names(self):
-        stems = ('_clinic_tuple_args', '_clinic_args_scope',
-                 '_clinic_saved_exception', '_clinic_output')
-        parameters = ''.join(f'    {stem}{suffix}: object = None\n'
-                             for stem in stems for suffix in ('', '_1'))
-        source = (
-            '/*[clinic input]\noutput everything block\n'
-            'class Owner "OwnerObject *" "&Owner_Type"\n'
-            '@classmethod\n@vectorcall\nOwner.__new__\n' + parameters +
-            '[clinic start generated code]*/\n')
-        generated = _make_clinic(filename='owner.c').parse(source)
-        self.assertIn('PyObject *_clinic_tuple_args_2)', generated)
-        self.assertIn('_PyArg_OwnerScope _clinic_args_scope_2 = {0};', generated)
-        self.assertIn('PyObject *_clinic_output_2 = return_value;', generated)
-        self.assertIn('PyObject *_clinic_saved_exception_2 = PyErr_GetRaisedException();', generated)
-        self.assertIn('_PyValue_RestoreException(_clinic_saved_exception_2);', generated)
-        for stem in stems:
-            self.assertIn(f'PyObject *{stem} = Py_None;', generated)
-            self.assertIn(f'PyObject *{stem}_1 = Py_None;', generated)
-
-    def test_owned_constructor_helper_excludes_positional_and_limited(self):
-        for limited, slash in ((True, ''), (False, '    /\n')):
-            source = (
-                '/*[clinic input]\noutput everything block\n'
-                'class Owner "OwnerObject *" "&Owner_Type"\n'
-                '@classmethod\n@vectorcall\nOwner.__new__\n'
-                f'    value: object = None\n{slash}'
-                '[clinic start generated code]*/\n')
-            with self.subTest(limited=limited, slash=slash):
-                generated = _make_clinic(filename='owner.c', limited_capi=limited).parse(source)
-                self.assertNotIn('_clinic_tuple_args', generated)
-
-    def test_owned_tuple_vararg_constructor_cleanup_order(self):
-        for kind in ('__new__', '__init__'):
-            for owner in ('owner_to_close', 'saved_exception'):
-                decorator = '@classmethod\n' if kind == '__new__' else ''
-                source = (
-                    '/*[clinic input]\noutput everything block\n'
-                    'class Owner "OwnerObject *" "&Owner_Type"\n'
-                    f'{decorator}Owner.{kind}\n'
-                    '    name: object\n'
-                    f'    *{owner}: tuple\n'
-                    '    bound: object = None\n'
-                    '    covariant: bool = False\n'
-                    '[clinic start generated code]*/\n')
-                generated = _make_clinic(filename='owner.c').parse(source)
-                with self.subTest(kind=kind, owner=owner):
-                    saved = ('saved_exception_1' if owner == 'saved_exception'
-                             else 'saved_exception')
-                    to_close = ('owner_to_close_1' if owner == 'owner_to_close'
-                                else 'owner_to_close')
-                    begin = generated.index('_PyArg_OwnerScope_BeginTuple(')
-                    unpack = generated.index('_PyArg_UnpackKeywordsOwned(')
-                    count = generated.index(
-                        'noptargs = Py_MIN(_args_scope.nargs, 1)')
-                    fixed = generated.index('name = fastargs[0];', unpack)
-                    sliced = generated.index(
-                        f'{owner} = PyTuple_GetSlice(args, 1, PY_SSIZE_T_MAX);')
-                    slice_error = generated.index('if (PyErr_Occurred())', sliced)
-                    invoke = generated.index('_impl(', slice_error)
-                    close = generated.index(
-                        f'PyObject *{to_close} = {owner};', invoke)
-                    end = generated.index('_PyArg_OwnerScope_End(', close)
-                    self.assertLess(begin, unpack)
-                    self.assertLess(unpack, count)
-                    self.assertLess(count, fixed)
-                    self.assertLess(fixed, sliced)
-                    self.assertLess(sliced, slice_error)
-                    self.assertLess(slice_error, invoke)
-                    self.assertLess(invoke, close)
-                    self.assertLess(close, end)
-                    self.assertIn('/*varpos*/ 1', generated[unpack:fixed])
-                    self.assertEqual(generated.count('_PyArg_OwnerScope_End('), 1)
-                    self.assertEqual(generated.count(
-                        f'Py_XDECREF({to_close});'), 1)
-                    self.assertIn(f'{owner} = NULL;', generated[close:end])
-                    self.assertIn(
-                        f'_PyValue_RestoreException({saved});', generated[close:end])
-                    self.assertNotIn('Py_XDECREF(constraints);', generated)
-                    self.assertNotIn('PyDict_GET_SIZE(kwargs)', generated)
-                    self.assertIn(
-                        f'\n    {{\n        PyObject *{saved} =',
-                        generated[invoke:close])
-                    if kind == '__new__':
-                        self.assertIn('Py_CLEAR(return_value);', generated[end:])
-                    else:
-                        self.assertIn('return_value = -1;', generated[end:])
-
-    def test_owned_tuple_vararg_decline_uses_original_cleanup(self):
-        from unittest.mock import patch
-
-        for kind in ('__new__', '__init__'):
-            decorator = '@classmethod\n' if kind == '__new__' else ''
-            source = (
-                '/*[clinic input]\noutput everything block\n'
-                'class Owner "OwnerObject *" "&Owner_Type"\n'
-                f'{decorator}Owner.{kind}\n'
-                '    name: object\n'
-                '    *constraints: tuple\n'
-                '    limit: int = 0\n'
-                '[clinic start generated code]*/\n')
-            calls = []
-
-            def decline(converter, *args, **kwargs):
-                calls.append(args[0])
-                return None
-
-            with patch.object(int_converter, 'parse_arg', decline):
-                generated = _make_clinic(filename='owner.c').parse(source)
-            with self.subTest(kind=kind):
-                self.assertEqual(calls, ['fastargs[1]'])
-                self.assertNotIn('_PyArg_OwnerScope_', generated)
-                self.assertNotIn('_PyArg_UnpackKeywordsOwned(', generated)
-                self.assertIn('_PyArg_ParseTupleAndKeywordsFast(', generated)
-                self.assertEqual(generated.count('Py_XDECREF(constraints);'), 1)
-
-    def test_owned_tuple_vararg_excludes_other_varargs(self):
-        source = (
-            '/*[clinic input]\noutput everything block\n'
-            'class Owner "OwnerObject *" "&Owner_Type"\n'
-            '@classmethod\nOwner.__new__\n'
-            '    name: object\n'
-            '    *items: array\n'
-            '[clinic start generated code]*/\n')
-        generated = _make_clinic(filename='owner.c').parse(source)
-        self.assertNotIn('_PyArg_OwnerScope_', generated)
-        self.assertIn('_PyArg_UnpackKeywords(', generated)
-
-    def test_owned_tuple_constructor_cleanup_order(self):
-        for kind in ('__new__', '__init__'):
-            decorator = '@classmethod\n' if kind == '__new__' else ''
-            source = (
-                '/*[clinic input]\noutput everything block\n'
-                'class Owner "OwnerObject *" "&Owner_Type"\n'
-                f'{decorator}Owner.{kind}\n    value: object\n'
-                '[clinic start generated code]*/\n')
-            generated = _make_clinic(filename='owner.c').parse(source)
-            with self.subTest(kind=kind):
-                begin = generated.index('_PyArg_OwnerScope_BeginTuple(')
-                unpack = generated.index('_PyArg_UnpackKeywordsOwned(')
-                invoke = generated.index('_impl(', unpack)
-                end = generated.index('_PyArg_OwnerScope_End(', invoke)
-                self.assertLess(begin, unpack)
-                self.assertLess(unpack, invoke)
-                self.assertLess(invoke, end)
-                self.assertNotIn('_PyTuple_CAST(args)->ob_item', generated)
-                self.assertNotIn('Py_ssize_t nargs = PyTuple_GET_SIZE(args);',
-                                 generated)
-                if kind == '__new__':
-                    self.assertIn('Py_CLEAR(return_value);', generated[end:])
-                    self.assertIn('_PyValue_RestoreException(_saved);', generated[end:])
-                else:
-                    self.assertIn('return_value = -1;', generated[end:])
-
-    def test_owned_tuple_family_does_not_capture_other_converters(self):
-        for parameter in ('value: object(converter="PyUnicode_FSConverter")\n    /',):
-            source = (
-                '/*[clinic input]\noutput everything block\n'
-                'class Owner "OwnerObject *" "&Owner_Type"\n'
-                '@classmethod\nOwner.__new__\n'
-                f'    {parameter}\n[clinic start generated code]*/\n')
-            generated = _make_clinic(filename='owner.c').parse(source)
-            with self.subTest(parameter=parameter):
-                self.assertNotIn('_PyArg_OwnerScope_', generated)
-
-    def test_owned_tuple_keyword_fixed_family(self):
-        source = (
-            '/*[clinic input]\noutput everything block\n'
-            'class Owner "OwnerObject *" "&Owner_Type"\n'
-            '@classmethod\nOwner.__new__\n'
-            '    first: object\n    index: int = 7\n'
-            '    /\n    text: str = "x"\n'
-            '    *\n    flag: bool = False\n'
-            '[clinic start generated code]*/\n')
-        generated = _make_clinic(filename='owner.c').parse(source)
-        declaration = generated.index('_PyArg_OwnerScope _args_scope = {0};')
-        begin = generated.index('_PyArg_OwnerScope_BeginTuple(')
-        unpack = generated.index('_PyArg_UnpackKeywordsOwned(')
-        count = generated.index('noptargs = Py_MIN(_args_scope.nargs, 3)')
-        invoke = generated.index('_impl(', count)
-        end = generated.index('_PyArg_OwnerScope_End(', invoke)
-        self.assertLess(declaration, begin)
-        self.assertLess(begin, unpack)
-        self.assertLess(unpack, count)
-        self.assertLess(count, invoke)
-        self.assertLess(invoke, end)
-        self.assertIn('if (PyErr_Occurred())', generated[unpack:count])
-        conversion = generated.index('index = PyLong_AsInt(fastargs[1]);')
-        conversion_error = generated.index('if (PyErr_Occurred())', conversion)
-        later_converter = generated.index('PyUnicode_Check(fastargs[2])')
-        self.assertLess(conversion, conversion_error)
-        self.assertLess(conversion_error, later_converter)
-        self.assertEqual(generated.count('_PyArg_OwnerScope_End('), 1)
-        self.assertNotIn('_PyTuple_CAST(args)->ob_item', generated)
-
-    def test_owned_tuple_keyword_fallback_is_not_selected(self):
-        from unittest.mock import patch
-
-        source = (
-            '/*[clinic input]\noutput everything block\n'
-            'class Owner "OwnerObject *" "&Owner_Type"\n'
-            '@classmethod\nOwner.__new__\n'
-            '    value: int\n[clinic start generated code]*/\n')
-        calls = []
-
-        def unsupported(converter, *args, **kwargs):
-            calls.append(args[0])
-            return None
-
-        with patch.object(int_converter, 'parse_arg', unsupported):
-            generated = _make_clinic(filename='owner.c').parse(source)
-        self.assertEqual(calls, ['fastargs[0]'])
-        self.assertIn('_PyArg_ParseTupleAndKeywordsFast(', generated)
-        self.assertNotIn('_PyArg_OwnerScope_', generated)
-
-    def test_owned_tuple_helper_rejects_unsupported_shapes(self):
-        from unittest.mock import patch
-
-        parameters = (
-            'value: object(converter="PyUnicode_FSConverter")',
-            'value: int\n    *items: array',
-            'first: int\n    *\n    old as first: int = 0',
-            '[until 3.15] value: int = 0',
-        )
-        for parameter in parameters:
-            source = (
-                '/*[clinic input]\noutput everything block\n'
-                'class Owner "OwnerObject *" "&Owner_Type"\n'
-                '@classmethod\nOwner.__new__\n'
-                f'    {parameter}\n[clinic start generated code]*/\n')
-            generated = _make_clinic(filename='owner.c').parse(source)
-            with self.subTest(parameter=parameter):
-                self.assertNotIn('_clinic_args_scope', generated)
-                self.assertIn('_PyArg_UnpackKeywords(', generated)
-
-        source = (
-            '/*[clinic input]\noutput everything block\n'
-            'class Owner "OwnerObject *" "&Owner_Type"\n'
-            '@classmethod\nOwner.__new__\n'
-            '    value: int\n[clinic start generated code]*/\n')
-        with patch.object(int_converter, 'parse_arg', return_value=None):
-            generated = _make_clinic(filename='owner.c').parse(source)
-        self.assertNotIn('_clinic_args_scope', generated)
-        self.assertIn('_PyArg_ParseTupleAndKeywordsFast(', generated)
-
-    def test_owned_tuple_helper_vectorcall_exclusions(self):
-        from unittest.mock import patch
-        from libclinic.parse_args import ParseArgsCodeGen
-
-        parameters = (
-            'value: object(converter="PyUnicode_FSConverter")',
-            'value: int\n    *items: array',
-            'first: int\n    *\n    old as first: int = 0',
-            '[until 3.15] value: int = 0',
-        )
-        for parameter in parameters:
-            source = (
-                '/*[clinic input]\noutput everything block\n'
-                'class Owner "OwnerObject *" "&Owner_Type"\n'
-                '@classmethod\n@vectorcall\nOwner.__new__\n'
-                f'    {parameter}\n[clinic start generated code]*/\n')
-
-            def parse(disable_helper):
-                if disable_helper:
-                    with patch.object(ParseArgsCodeGen,
-                                      'use_scoped_tuple_helper',
-                                      lambda self: False):
-                        return _make_clinic(filename='owner.c').parse(source)
-                else:
-                    return _make_clinic(filename='owner.c').parse(source)
-
-            try:
-                generated = parse(False)
-            except Exception as current_error:
-                with self.assertRaises(type(current_error)) as old_error:
-                    parse(True)
-                self.assertEqual(str(current_error), str(old_error.exception))
-                continue
-            baseline = parse(True)
-            with self.subTest(parameter=parameter):
-                self.assertEqual(generated, baseline)
-                self.assertNotIn('_clinic_tuple_args', generated)
-                self.assertNotIn('_clinic_args_scope', generated)
-
-        source = (
-            '/*[clinic input]\noutput everything block\n'
-            'class Owner "OwnerObject *" "&Owner_Type"\n'
-            '@classmethod\n@vectorcall\nOwner.__new__\n'
-            '    value: int\n[clinic start generated code]*/\n')
-
-        def parse_with_declined_inline_parse(disable_helper):
-            original = int_converter.parse_arg
-            calls = 0
-
-            def decline_after_vectorcall_validation(converter, *args, **kwargs):
-                nonlocal calls
-                calls += 1
-                if calls == 1:
-                    return original(converter, *args, **kwargs)
-                return None
-
-            try:
-                with patch.object(int_converter, 'parse_arg',
-                                  decline_after_vectorcall_validation):
-                    if disable_helper:
-                        with patch.object(ParseArgsCodeGen,
-                                          'use_scoped_tuple_helper',
-                                          lambda self: False):
-                            output = _make_clinic(filename='owner.c').parse(source)
-                    else:
-                        output = _make_clinic(filename='owner.c').parse(source)
-            except Exception as error:
-                return ('error', type(error), str(error), calls)
-            self.assertGreaterEqual(calls, 2)
-            return ('output', output, calls)
-
-        generated = parse_with_declined_inline_parse(False)
-        baseline = parse_with_declined_inline_parse(True)
-        self.assertEqual(generated, baseline)
-        if generated[0] == 'output':
-            self.assertNotIn('_clinic_tuple_args', generated[1])
-        else:
-            self.assertGreaterEqual(generated[3], 2)
-
-    def test_owned_positional_constructor_order_and_defaults(self):
-        for kind in ('__new__', '__init__'):
-            decorator = '@classmethod\n' if kind == '__new__' else ''
-            source = (
-                '/*[clinic input]\noutput everything block\n'
-                'class Owner "OwnerObject *" "&Owner_Type"\n'
-                f'{decorator}Owner.{kind}\n'
-                '    value: object\n    index: int = 7\n'
-                '    tail: object = None\n    /\n'
-                '[clinic start generated code]*/\n')
-            generated = _make_clinic(filename='owner.c').parse(source)
-            with self.subTest(kind=kind):
-                declaration = generated.index('_PyArg_OwnerScope _args_scope = {0};')
-                keywords = generated.index('_PyArg_NoKeywords(')
-                begin = generated.index('_PyArg_OwnerScope_BeginTuple(')
-                unpack = generated.index('_PyArg_UnpackPositionalOwned(')
-                convert = generated.index('PyLong_AsInt(fastargs[1])')
-                invoke = generated.index('_impl(', convert)
-                end = generated.index('_PyArg_OwnerScope_End(', invoke)
-                self.assertLess(declaration, keywords)
-                self.assertLess(keywords, begin)
-                self.assertLess(begin, unpack)
-                self.assertLess(unpack, convert)
-                self.assertLess(convert, invoke)
-                self.assertLess(invoke, end)
-                self.assertEqual(generated.count('_PyArg_OwnerScope_End('), 1)
-                self.assertIn('1, 3);', generated[unpack:convert])
-                self.assertIn('int index = 7;', generated)
-                self.assertIn('PyObject *tail = Py_None;', generated)
-                self.assertIn('if (_args_scope.nargs < 2)', generated)
-                self.assertIn('if (_args_scope.nargs < 3)', generated)
-                self.assertNotIn('PyTuple_GET_ITEM', generated)
-                self.assertNotIn('_PyTuple_CAST', generated)
-                self.assertIn('goto exit;', generated[keywords:unpack])
-                self.assertIn('exit:', generated[invoke:end])
-                if kind == '__new__':
-                    self.assertIn('Py_CLEAR(return_value);', generated[end:])
-                    self.assertIn('_PyValue_RestoreException(_saved);', generated[end:])
-                else:
-                    self.assertIn('return_value = -1;', generated[end:])
-
-    def test_owned_positional_direct_parse_once_and_fallback(self):
-        from unittest.mock import patch
-
-        source = (
-            '/*[clinic input]\noutput everything block\n'
-            'class Owner "OwnerObject *" "&Owner_Type"\n'
-            '@classmethod\nOwner.__new__\n    index: int\n    /\n'
-            '[clinic start generated code]*/\n')
-        original = int_converter.parse_arg
-        calls = []
-
-        def parse(converter, *args, **kwargs):
-            calls.append(args[0])
-            return original(converter, *args, **kwargs)
-
-        with patch.object(int_converter, 'parse_arg', parse):
-            generated = _make_clinic(filename='owner.c').parse(source)
-        self.assertEqual(calls, ['fastargs[0]'])
-        self.assertIn('_PyArg_UnpackPositionalOwned', generated)
-        calls.clear()
-
-        def unsupported(converter, *args, **kwargs):
-            calls.append(args[0])
-            return None
-
-        with patch.object(int_converter, 'parse_arg', unsupported):
-            generated = _make_clinic(filename='owner.c').parse(source)
-        self.assertEqual(calls, ['fastargs[0]'])
-        self.assertIn('PyArg_ParseTuple(', generated)
-        self.assertNotIn('_PyArg_OwnerScope_', generated)
-
-    def test_owned_positional_family_exclusions(self):
-        cases = (
-            ('value: object\n    /', '@vectorcall\n', False),
-            ('value: object\n    /', '', True),
-            ('value: object(converter="PyUnicode_FSConverter")\n    /', '', False),
-            ('value: str\n    /', '', False),
-            ('value: object\n    *values: array', '', False),
-            ('value: object\n    [\n    tail: object\n    ]\n    /', '', False),
-            ('value: object\n    *\n    other as value: object = None', '', False),
-        )
-        for parameters, decorators, limited in cases:
-            source = (
-                '/*[clinic input]\noutput everything block\n'
-                'class Owner "OwnerObject *" "&Owner_Type"\n'
-                f'@classmethod\n{decorators}Owner.__new__\n'
-                f'    {parameters}\n[clinic start generated code]*/\n')
-            with self.subTest(parameters=parameters, decorators=decorators,
-                              limited=limited):
-                generated = _make_clinic(filename='owner.c',
-                                         limited_capi=limited).parse(source)
-                self.assertNotIn('_PyArg_UnpackPositionalOwned', generated)
-                self.assertNotIn('_PyArg_OwnerScope_End', generated)
 
     def expect_failure(self, raw, errmsg, *, filename=None, lineno=None):
         _expect_failure(self, self.clinic.parse, raw, errmsg,
@@ -4310,339 +3850,6 @@ class ClinicParserTest(TestCase):
                 with self.assertRaisesRegex((AssertionError, TypeError), errmsg):
                     self.parse_function(block)
 
-class OwnedTupleFinalConstructorsTests(TestCase):
-
-    def _constructor(self, parameter):
-        source = (
-            '/*[clinic input]\noutput everything block\n'
-            'class Owner "OwnerObject *" "&Owner_Type"\n'
-            '@classmethod\n@vectorcall\nOwner.__new__\n'
-            f'    {parameter}\n    /\n[clinic start generated code]*/\n')
-        return _make_clinic(filename='owner.c').parse(source)
-
-    def test_constructor_owns_tuple_entry_and_receiver(self):
-        from libclinic.parse_args import ParseArgsCodeGen
-        from unittest.mock import patch
-
-        required = self._constructor('value: object')
-        pin = required.index('_clinic_receiver_owner = Py_NewRef')
-        start = required.rfind('Owner(', 0, pin)
-        end = required.index('Owner_vectorcall(', pin)
-        parser = required[start:end]
-        self.assertEqual(parser.count('PyTuple_GetItemRef(args, 0)'), 1)
-        self.assertEqual(parser.count('value = _clinic_item_owner;'), 1)
-        invoke = parser.index('_impl(')
-        self.assertIn('return_value = Owner_impl(type, value);', parser)
-        self.assertLess(pin, invoke)
-        self.assertLess(parser.index('if (PyErr_Occurred())'),
-                        parser.index('_clinic_receiver_owner = Py_NewRef'))
-        self.assertLess(parser.index('_clinic_receiver_owner = Py_NewRef'),
-                        parser.index('_PyArg_NoKeywords'))
-        self.assertLess(parser.index('_PyArg_NoKeywords'),
-                        parser.index('_PyArg_CheckPositional'))
-        self.assertLess(parser.index('_PyArg_CheckPositional'),
-                        parser.index('PyTuple_GetItemRef(args, 0)'))
-        self.assertLess(parser.index('_clinic_item_owner = NULL;'),
-                        parser.index('if (PyErr_Occurred())'))
-        cleanup = parser[parser.index('exit:'):]
-        self.assertLess(cleanup.index('_clinic_item_owner = NULL;'),
-                        cleanup.index('_clinic_receiver_owner = NULL;'))
-        self.assertLess(cleanup.index('_clinic_receiver_owner = NULL;'),
-                        cleanup.index('if (PyErr_Occurred())'))
-        self.assertLess(invoke, parser.index('_clinic_receiver_owner = NULL;', invoke))
-        self.assertEqual(required.count('_PyValue_RestoreException('), 3)
-        self.assertNotIn('_clinic_item_owner', required[end:])
-        finale_start = parser.index('exit:\n')
-        finale_end = parser.index('\n}\n', finale_start) + 3
-        self.assertEqual(parser[finale_start:finale_end], '''exit:
-    {
-        PyObject *_clinic_detached_owner = _clinic_item_owner;
-        _clinic_item_owner = NULL;
-        PyObject *_clinic_saved_exception = PyErr_GetRaisedException();
-        Py_XDECREF(_clinic_detached_owner);
-        _PyValue_RestoreException(_clinic_saved_exception);
-    }
-    {
-        PyObject *_clinic_detached_owner = _clinic_receiver_owner;
-        _clinic_receiver_owner = NULL;
-        PyObject *_clinic_saved_exception = PyErr_GetRaisedException();
-        Py_XDECREF(_clinic_detached_owner);
-        _PyValue_RestoreException(_clinic_saved_exception);
-    }
-    if (PyErr_Occurred()) {
-        PyObject *_clinic_output = return_value;
-        return_value = NULL;
-        PyObject *_clinic_saved_exception = PyErr_GetRaisedException();
-        Py_XDECREF(_clinic_output);
-        _PyValue_RestoreException(_clinic_saved_exception);
-        return NULL;
-    }
-    return return_value;
-}
-''')
-
-        optional = self._constructor('value: object = None')
-        pin = optional.index('_clinic_receiver_owner = Py_NewRef')
-        start = optional.rfind('Owner(', 0, pin)
-        end = optional.index('Owner_vectorcall(', pin)
-        parser = optional[start:end]
-        self.assertLess(parser.index('goto skip_optional;'),
-                        parser.index('PyTuple_GetItemRef(args, 0)'))
-        self.assertEqual(parser.count('PyTuple_GetItemRef(args, 0)'), 1)
-
-        with patch.object(ParseArgsCodeGen,
-                          'use_owned_tuple_single_constructor',
-                          lambda self: False):
-            declined = self._constructor('value: object')
-        self.assertNotEqual(required, declined)
-
-    def test_varargs_varkw_owns_each_output_and_result(self):
-        source = '''/*[clinic input]
-module atexit
-output everything block
-[clinic start generated code]*/
-/*[clinic input]
-atexit.register
-    func: object
-    /
-    *args: tuple
-    **kwargs: dict
-[clinic start generated code]*/
-'''
-        generated = _make_clinic(filename='atexitmodule.c').parse(source)
-        parser = generated
-        self.assertLess(parser.index('if (PyErr_Occurred())'),
-                        parser.index('_clinic_receiver_owner = Py_NewRef'))
-        self.assertLess(parser.index('_clinic_receiver_owner = Py_NewRef'),
-                        parser.index('_PyArg_CheckPositional'))
-        getter = parser.index('PyTuple_GetItemRef(args, 0)')
-        self.assertLess(parser.index('_PyArg_CheckPositional'), getter)
-        self.assertLess(getter, parser.index('PyTuple_GetSlice(args, 1'))
-        self.assertLess(parser.index('PyTuple_GetSlice(args, 1'),
-                        parser.index('if (kwargs == NULL)'))
-        self.assertLess(parser.index('if (PyErr_Occurred())',
-                                     parser.index('PyTuple_GetSlice(args, 1')),
-                        parser.index('if (kwargs == NULL)'))
-        cleanup = parser[parser.index('exit:'):]
-        names = ('__clinic_args', '__clinic_kwargs', '_clinic_item_owner',
-                 '_clinic_receiver_owner')
-        positions = [cleanup.index(name + ' = NULL;') for name in names]
-        self.assertEqual(positions, sorted(positions))
-        self.assertEqual(cleanup.count('_PyValue_RestoreException('), 5)
-        invoke = parser.index('atexit_register_impl(module, func,')
-        pin = parser.index('_clinic_receiver_owner = Py_NewRef')
-        close = parser.index('_clinic_receiver_owner = NULL;', invoke)
-        self.assertLess(pin, invoke)
-        self.assertLess(invoke, close)
-
-    def test_varargs_rule_requires_callable_receiver(self):
-        from libclinic.parse_args import ParseArgsCodeGen
-        from unittest.mock import patch
-
-        body = ('    func: object\n    /\n'
-                '    *args: tuple\n    **kwargs: dict\n')
-        typed = ('/*[clinic input]\noutput everything block\n'
-                 'class Owner "OwnerObject *" "&Owner_Type"\n'
-                 'Owner.method\n' + body + '[clinic start generated code]*/\n')
-        generated = _make_clinic(filename='owner.c').parse(typed)
-        self.assertIn('PyObject *_clinic_receiver_owner = NULL;', generated)
-        self.assertIn('Owner_method_impl((OwnerObject *)self, func,', generated)
-
-        for decorator, name in (('@staticmethod\n', 'static_method'),
-                                ('@classmethod\n', 'class_method')):
-            source = ('/*[clinic input]\noutput everything block\n'
-                      'class Owner "OwnerObject *" "&Owner_Type"\n'
-                      f'{decorator}Owner.{name}\n' + body +
-                      '[clinic start generated code]*/\n')
-            with self.subTest(name=name):
-                output = _make_clinic(filename='owner.c').parse(source)
-                self.assertNotIn('_clinic_receiver_owner', output)
-                with patch.object(ParseArgsCodeGen,
-                                  'use_owned_tuple_varargs_varkw',
-                                  lambda self: False):
-                    baseline = _make_clinic(filename='owner.c').parse(source)
-                self.assertEqual(output, baseline)
-
-    def test_varargs_rule_rejects_nonexact_converter_metadata(self):
-        from types import SimpleNamespace
-        from libclinic.converters import Py_buffer_converter
-        from libclinic.parse_args import ParseArgsCodeGen
-        from unittest.mock import patch
-
-        source = '''/*[clinic input]
-module atexit
-output everything block
-[clinic start generated code]*/
-/*[clinic input]
-atexit.register
-    func: object
-    /
-    *args: tuple
-    **kwargs: dict
-[clinic start generated code]*/
-'''
-        original = ParseArgsCodeGen.parse_args
-        observed = []
-
-        def replace(obj, name, value):
-            old = getattr(obj, name)
-            setattr(obj, name, value)
-            return lambda: setattr(obj, name, old)
-
-        def probe(self, clang):
-            if self.func.c_basename == 'atexit_register':
-                fixed = self.converters[0]
-                variants = [
-                    ('O!', lambda: replace(fixed, 'format_unit', 'O!')),
-                    ('O&', lambda: replace(fixed, 'format_unit', 'O&')),
-                    ('resource converter', lambda: replace(
-                        self, 'converters', [object.__new__(Py_buffer_converter),
-                                             *self.converters[1:]])),
-                    ('fixed alias', lambda: replace(fixed, 'alias_of', 'func')),
-                    ('fixed deprecation', lambda: replace(
-                        self.parameters[0], 'deprecated_until', (3, 14))),
-                    ('fixed deprecated positional', lambda: replace(
-                        self.parameters[0], 'deprecated_positional', (3, 14))),
-                    ('critical section', lambda: replace(
-                        self.func, 'critical_section', True)),
-                    ('defining class', lambda: replace(
-                        self, 'requires_defining_class', True)),
-                    ('option groups', lambda: replace(
-                        self, 'has_option_groups', lambda: True)),
-                    ('wrong varargs converter', lambda: replace(
-                        self.varpos, 'converter', SimpleNamespace(
-                            alias_of=None, post_parsing=lambda: False))),
-                    ('wrong kwargs converter', lambda: replace(
-                        self.var_keyword, 'converter', SimpleNamespace(
-                            alias_of=None, post_parsing=lambda: False))),
-                    ('non-object result', lambda: replace(
-                        self.func.return_converter, 'type', 'int')),
-                    ('varargs alias', lambda: replace(
-                        self.varpos.converter, 'alias_of', 'args')),
-                    ('kwargs alias', lambda: replace(
-                        self.var_keyword.converter, 'alias_of', 'kwargs')),
-                    ('varargs deprecation', lambda: replace(
-                        self.varpos, 'deprecated_keyword', (3, 14))),
-                    ('kwargs deprecated positional', lambda: replace(
-                        self.var_keyword, 'deprecated_positional', (3, 14))),
-                    ('kwargs deprecation', lambda: replace(
-                        self.var_keyword, 'deprecated_until', (3, 14))),
-                ]
-                for label, edit in variants:
-                    restore = edit()
-                    try:
-                        observed.append((label,
-                                         self.use_owned_tuple_varargs_varkw()))
-                    finally:
-                        restore()
-            return original(self, clang)
-
-        with patch.object(ParseArgsCodeGen, 'parse_args', probe):
-            generated = _make_clinic(filename='atexitmodule.c').parse(source)
-        self.assertEqual([label for label, _ in observed], [
-            'O!', 'O&', 'resource converter', 'fixed alias',
-            'fixed deprecation', 'fixed deprecated positional',
-            'critical section', 'defining class',
-            'option groups', 'wrong varargs converter',
-            'wrong kwargs converter', 'non-object result',
-            'varargs alias', 'kwargs alias',
-            'varargs deprecation', 'kwargs deprecated positional',
-            'kwargs deprecation'])
-        self.assertTrue(all(not selected for _, selected in observed))
-        self.assertIn('PyObject *_clinic_receiver_owner = NULL;', generated)
-
-    def test_owned_tuple_identifier_collisions_are_reserved(self):
-        from types import SimpleNamespace
-        from libclinic.parse_args import ParseArgsCodeGen
-
-        stems = ('_clinic_receiver_owner', '_clinic_item_owner',
-                 '_clinic_saved_exception', '_clinic_detached_owner',
-                 '_clinic_output')
-        names = []
-        used = set()
-        for stem in stems:
-            used.update((stem, stem + '_1'))
-        fake = object.__new__(ParseArgsCodeGen)
-        fake.func = SimpleNamespace(parameters={
-            str(i): SimpleNamespace(converter=SimpleNamespace(
-                name=stem, parser_name=stem + '_1'))
-            for i, stem in enumerate(stems)
-        })
-        names = ParseArgsCodeGen.owned_tuple_local_names(fake)
-        self.assertEqual(names, tuple(stem + '_2' for stem in stems))
-        self.assertEqual(len(names), len(set(names)))
-
-    def test_owned_tuple_names_avoid_real_c_parameter_names(self):
-        stems = ('_clinic_receiver_owner', '_clinic_item_owner',
-                 '_clinic_saved_exception', '_clinic_detached_owner',
-                 '_clinic_output')
-        role_parameters = {
-            'fixed': lambda stem: (f'    {stem}: object\n    /\n'
-                                   '    *args: tuple\n    **kwargs: dict\n'),
-            'varargs': lambda stem: ('    func: object\n    /\n'
-                                     f'    *{stem}: tuple\n    **kwargs: dict\n'),
-            'varkw': lambda stem: ('    func: object\n    /\n'
-                                   '    *args: tuple\n'
-                                   f'    **{stem}: dict\n'),
-        }
-        expected_names = {
-            '_clinic_receiver_owner': 'PyObject *_clinic_receiver_owner_1 = NULL;',
-            '_clinic_item_owner': 'PyObject *_clinic_item_owner_1 = NULL;',
-            '_clinic_saved_exception': 'PyObject *_clinic_saved_exception_1 = PyErr_GetRaisedException();',
-            '_clinic_detached_owner': 'PyObject *_clinic_detached_owner_1 = __clinic_args;',
-            '_clinic_output': 'PyObject *_clinic_output_1 = return_value;',
-        }
-        for role, parameters in role_parameters.items():
-            for stem in stems:
-                source = ('/*[clinic input]\nmodule atexit\n'
-                          'output everything block\n[clinic start generated code]*/\n'
-                          '/*[clinic input]\natexit.register\n'
-                          + parameters(stem) + '[clinic start generated code]*/\n')
-                with self.subTest(role=role, stem=stem):
-                    generated = _make_clinic(filename='atexitmodule.c').parse(source)
-                    expected = expected_names[stem]
-                    if role == 'varargs' and stem == '_clinic_detached_owner':
-                        expected = 'PyObject *_clinic_detached_owner_1 = _clinic_detached_owner;'
-                    self.assertIn(expected, generated)
-
-    def test_nonmatching_constructor_shapes_keep_the_old_template(self):
-        from libclinic.parse_args import ParseArgsCodeGen
-        from unittest.mock import patch
-
-        inputs = (
-            ('@classmethod\nOwner.__new__\n    value: object', False),
-            ('@classmethod\n@vectorcall\nOwner.__new__\n'
-             '    value: object\n    other: object', True),
-            ('@vectorcall\nOwner.__init__\n'
-             '    value: object', True),
-            ('@classmethod\n@vectorcall\nOwner.__new__\n'
-             '    value: int', True),
-        )
-        for declarations, positional_only in inputs:
-            slash = '    /\n' if positional_only else ''
-            source = ('/*[clinic input]\noutput everything block\n'
-                      'class Owner "OwnerObject *" "&Owner_Type"\n'
-                      f'{declarations}\n{slash}'
-                      '[clinic start generated code]*/\n')
-            with self.subTest(declarations=declarations):
-                output = _make_clinic(filename='owner.c').parse(source)
-                self.assertNotIn('_clinic_receiver_owner', output)
-                with patch.object(ParseArgsCodeGen,
-                                  'use_owned_tuple_single_constructor',
-                                  lambda self: False):
-                    baseline = _make_clinic(filename='owner.c').parse(source)
-                self.assertEqual(output, baseline)
-
-        limited_source = ('/*[clinic input]\noutput everything block\n'
-                          'class Owner "OwnerObject *" "&Owner_Type"\n'
-                          '@classmethod\n@vectorcall\nOwner.__new__\n'
-                          '    value: object\n    /\n'
-                          '[clinic start generated code]*/\n')
-        limited = _make_clinic(filename='owner.c',
-                               limited_capi=True).parse(limited_source)
-        self.assertNotIn('_clinic_receiver_owner', limited)
-
-
 @force_not_colorized_test_class
 class ClinicExternalTest(TestCase):
     maxDiff = None
@@ -4797,7 +4004,7 @@ class ClinicExternalTest(TestCase):
             # Verify by checking the checksum.
             checksum = (
                 "/*[clinic end generated code: "
-                "output=a2957bc4d43a3c2f input=9543a8d2da235301]*/\n"
+                "output=fc0b4ee109b9d641 input=9543a8d2da235301]*/\n"
             )
             with open(fn, encoding='utf-8') as f:
                 generated = f.read()
@@ -6713,6 +5920,157 @@ class LimitedCAPIOutputTests(unittest.TestCase):
         err = ("Parameter 'a' cannot be deprecated: "
                "the arguments are not parsed one by one.")
         _expect_failure(self, self.clinic.parse, block, err)
+
+    def test_limited_capi_tuple_receiver(self):
+        # The limited C API has no borrowed tuple item accessor, so a tuple
+        # receiver unpacks its items with PyArg_UnpackTuple().
+        block = self.wrap_clinic_input("""
+            class Foo "FooObject *" "Foo_Type"
+            @classmethod
+            Foo.__new__
+                a: object
+                b: object = None
+                /
+        """)
+        generated = self.clinic.parse(block)
+        self.assertIn('PyArg_UnpackTuple(args, "Foo", 1, 2,', generated)
+        self.assertIn('a = _args_items[0];', generated)
+        self.assertNotIn('PyTuple_GetItem', generated)
+        self.assertNotIn('_PyBorrow', generated)
+
+    def test_limited_capi_tuple_receiver_varpos(self):
+        block = self.wrap_clinic_input("""
+            class Foo "FooObject *" "Foo_Type"
+            @classmethod
+            Foo.__new__
+                a: object
+                /
+                *args: tuple
+        """)
+        err = ("the limited C API cannot parse positional parameters "
+               "before *args from a tuple")
+        _expect_failure(self, self.clinic.parse, block, err)
+
+
+class TupleReceiverOutputTests(unittest.TestCase):
+    """Tuples hold canonical PyValues, so tuple receivers (METH_VARARGS,
+    tp_new, tp_init) lend their items from a borrow stack run."""
+
+    def setUp(self):
+        self.clinic = _make_clinic()
+
+    def generate(self, params, *, decorators='@classmethod',
+                 name='Foo.__new__'):
+        block = dedent("""
+            /*[clinic input]
+            output everything buffer
+            class Foo "FooObject *" "Foo_Type"
+            {decorators}
+            {name}
+            {params}
+            [clinic start generated code]*/
+            /*[clinic input]
+            dump buffer
+            [clinic start generated code]*/
+        """).format(decorators=decorators, name=name,
+                     params=indent(dedent(params), '    '))
+        return self.clinic.parse(block)
+
+    def assert_push_after(self, generated, check, push):
+        self.assertIn(check, generated)
+        self.assertIn(push, generated)
+        self.assertLess(generated.index(check), generated.index(push))
+
+    def test_positional_only(self):
+        generated = self.generate("""
+            a: object
+            b: int = 0
+            /
+        """)
+        self.assert_push_after(
+            generated, '_PyArg_CheckPositional("Foo", PyTuple_GET_SIZE(args), 1, 2)',
+            '_PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));')
+        self.assertIn('a = _args_items[0];', generated)
+        self.assertIn('_args_items[1]', generated)
+        self.assertNotIn('PyTuple_GET_ITEM', generated)
+
+    def test_varpos_tuple_pushes_only_positional_prefix(self):
+        generated = self.generate("""
+            a: object
+            /
+            *args: tuple
+        """)
+        self.assertIn('_PyBorrow_TupleItems(args, Py_MIN(PyTuple_GET_SIZE(args), 1));',
+                      generated)
+        self.assertIn('PyTuple_GetSlice(args, 1, PY_SSIZE_T_MAX)', generated)
+
+    def test_varpos_tuple_only_pushes_nothing(self):
+        generated = self.generate("""
+            *args: tuple
+        """)
+        self.assertNotIn('_PyBorrow_TupleItems', generated)
+
+    def test_varpos_array_lends_whole_run(self):
+        generated = self.generate("""
+            a: object
+            /
+            *args: array
+        """)
+        self.assertIn('_PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));',
+                      generated)
+        self.assertIn('args = _args_items + 1;', generated)
+        self.assertNotIn('_PyTuple_ITEMS', generated)
+
+    def test_var_keyword(self):
+        generated = self.generate("""
+            a: object
+            /
+            **kwds: dict
+        """)
+        self.assert_push_after(
+            generated, '_PyArg_CheckPositional("Foo", PyTuple_GET_SIZE(args), 1, 1)',
+            '_PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));')
+        self.assertIn('a = _args_items[0];', generated)
+
+    def test_keywords_bound_run_by_maxpos(self):
+        generated = self.generate("""
+            a: object
+            b: object = None
+            *
+            c: object = None
+        """)
+        self.assertIn('_PyBorrow_TupleItems(args, Py_MIN(nargs, 2));', generated)
+        self.assertIn('_PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL,',
+                      generated)
+        self.assertNotIn('_PyTuple_CAST(args)', generated)
+
+    def test_option_groups(self):
+        generated = self.generate("""
+            a: object
+            [
+            b: object
+            ]
+            /
+        """, decorators='', name='Foo.__init__')
+        self.assert_push_after(generated, 'requires 1 to 2 arguments',
+                               '_PyBorrow_TupleItems(args, nargs);')
+        self.assertIn('b = _args_items[1];', generated)
+
+    def test_vectorcall_delegate(self):
+        generated = self.generate("""
+            a: object
+            b: object = None
+        """, decorators='@classmethod\n@vectorcall')
+        self.assertIn('_PyBorrow_TupleItems(args, Py_MIN(nargs, 2));', generated)
+        self.assertIn('Foo_helper(type, _args_items, nargs,', generated)
+        self.assertNotIn('_PyTuple_CAST(args)', generated)
+
+    def test_static_kwtuple_holds_tagged_immortals(self):
+        generated = self.generate("""
+            spam: object
+        """)
+        self.assertIn('PyValue ob_item[NUM_KEYWORDS];', generated)
+        self.assertIn('_PyValue_STATIC_IMMORTAL(&_Py_ID(spam)),', generated)
 
 
 try:

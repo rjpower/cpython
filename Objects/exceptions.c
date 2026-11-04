@@ -3964,30 +3964,22 @@ UnicodeEncodeError_init(PyObject *self, PyObject *args, PyObject *kwds)
         return -1;
     }
 
-    _PyArg_OwnerScope parse_scope = {0};
-    PyObject *encoding = NULL, *object = NULL, *reason = NULL;
+    PyObject *encoding = NULL, *object = NULL, *reason = NULL;  // borrowed
     Py_ssize_t start = -1, end = -1;
 
-    if (!_PyArg_ParseTupleOwned(&parse_scope, args, "UUnnU",
-                                &encoding, &object, &start, &end, &reason))
+    if (!PyArg_ParseTuple(args, "UUnnU",
+                          &encoding, &object, &start, &end, &reason))
     {
-        _PyArg_OwnerScope_End(&parse_scope);
         return -1;
     }
 
     PyUnicodeErrorObject *exc = PyUnicodeErrorObject_CAST(self);
     Py_XSETREF(exc->encoding, Py_NewRef(encoding));
-    if (PyErr_Occurred()) goto error;
     Py_XSETREF(exc->object, Py_NewRef(object));
-    if (PyErr_Occurred()) goto error;
     exc->start = start;
     exc->end = end;
     Py_XSETREF(exc->reason, Py_NewRef(reason));
-    if (PyErr_Occurred()) goto error;
-    return _PyArg_OwnerScope_End(&parse_scope) < 0 ? -1 : 0;
-error:
-    _PyArg_OwnerScope_End(&parse_scope);
-    return -1;
+    return 0;
 }
 
 static PyObject *
@@ -4201,27 +4193,19 @@ UnicodeTranslateError_init(PyObject *self, PyObject *args, PyObject *kwds)
         return -1;
     }
 
-    _PyArg_OwnerScope parse_scope = {0};
-    PyObject *object = NULL, *reason = NULL;
+    PyObject *object = NULL, *reason = NULL;  // borrowed
     Py_ssize_t start = -1, end = -1;
 
-    if (!_PyArg_ParseTupleOwned(&parse_scope, args, "UnnU",
-                                &object, &start, &end, &reason)) {
-        _PyArg_OwnerScope_End(&parse_scope);
+    if (!PyArg_ParseTuple(args, "UnnU", &object, &start, &end, &reason)) {
         return -1;
     }
 
     PyUnicodeErrorObject *exc = PyUnicodeErrorObject_CAST(self);
     Py_XSETREF(exc->object, Py_NewRef(object));
-    if (PyErr_Occurred()) goto error;
     exc->start = start;
     exc->end = end;
     Py_XSETREF(exc->reason, Py_NewRef(reason));
-    if (PyErr_Occurred()) goto error;
-    return _PyArg_OwnerScope_End(&parse_scope) < 0 ? -1 : 0;
-error:
-    _PyArg_OwnerScope_End(&parse_scope);
-    return -1;
+    return 0;
 }
 
 

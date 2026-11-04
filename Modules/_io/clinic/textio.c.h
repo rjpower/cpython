@@ -5,12 +5,13 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_abstract.h"      // _Py_convert_optional_to_ssize_t()
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
-#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(_io__TextIOBase_detach__doc__,
 "detach($self, /)\n"
@@ -236,11 +237,11 @@ _io_IncrementalNewlineDecoder___init__(PyObject *self, PyObject *args, PyObject 
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(decoder), &_Py_ID(translate), &_Py_ID(errors), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(decoder)), _PyValue_STATIC_IMMORTAL(&_Py_ID(translate)), _PyValue_STATIC_IMMORTAL(&_Py_ID(errors)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -258,54 +259,34 @@ _io_IncrementalNewlineDecoder___init__(PyObject *self, PyObject *args, PyObject 
     #undef KWTUPLE
     PyObject *argsbuf[3];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 2;
     PyObject *decoder;
     int translate;
     PyObject *errors = NULL;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 3) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 3));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    noptargs = Py_MIN(_args_scope.nargs, 3)
-        + (_args_scope.nobjects - _args_scope.nargs)
-        - (2 + 0);
     decoder = fastargs[0];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     translate = PyObject_IsTrue(fastargs[1]);
     if (translate < 0) {
-        goto exit;
-    }
-    if (PyErr_Occurred()) {
         goto exit;
     }
     if (!noptargs) {
         goto skip_optional_pos;
     }
     errors = fastargs[2];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
 skip_optional_pos:
     return_value = _io_IncrementalNewlineDecoder___init___impl((nldecoder_object *)self, decoder, translate, errors);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        return_value = -1;
-    }
     return return_value;
 }
 
@@ -332,11 +313,11 @@ _io_IncrementalNewlineDecoder_decode(PyObject *self, PyObject *const *args, Py_s
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(input), &_Py_ID(final), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(input)), _PyValue_STATIC_IMMORTAL(&_Py_ID(final)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -509,11 +490,11 @@ _io_TextIOWrapper___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(buffer), &_Py_ID(encoding), &_Py_ID(errors), &_Py_ID(newline), &_Py_ID(line_buffering), &_Py_ID(write_through), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(buffer)), _PyValue_STATIC_IMMORTAL(&_Py_ID(encoding)), _PyValue_STATIC_IMMORTAL(&_Py_ID(errors)), _PyValue_STATIC_IMMORTAL(&_Py_ID(newline)), _PyValue_STATIC_IMMORTAL(&_Py_ID(line_buffering)), _PyValue_STATIC_IMMORTAL(&_Py_ID(write_through)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -531,8 +512,8 @@ _io_TextIOWrapper___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[6];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
     PyObject *buffer;
     const char *encoding = NULL;
     PyObject *errors = Py_None;
@@ -540,27 +521,16 @@ _io_TextIOWrapper___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     int line_buffering = 0;
     int write_through = 0;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 6) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 6));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 6, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    noptargs = Py_MIN(_args_scope.nargs, 6)
-        + (_args_scope.nobjects - _args_scope.nargs)
-        - (1 + 0);
     buffer = fastargs[0];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
@@ -578,18 +548,12 @@ _io_TextIOWrapper___init__(PyObject *self, PyObject *args, PyObject *kwargs)
             _PyArg_BadArgument("TextIOWrapper", "argument 'encoding'", "str or None", fastargs[1]);
             goto exit;
         }
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     if (fastargs[2]) {
         errors = fastargs[2];
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -608,9 +572,6 @@ _io_TextIOWrapper___init__(PyObject *self, PyObject *args, PyObject *kwargs)
             _PyArg_BadArgument("TextIOWrapper", "argument 'newline'", "str or None", fastargs[3]);
             goto exit;
         }
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -618,9 +579,6 @@ _io_TextIOWrapper___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     if (fastargs[4]) {
         line_buffering = PyObject_IsTrue(fastargs[4]);
         if (line_buffering < 0) {
-            goto exit;
-        }
-        if (PyErr_Occurred()) {
             goto exit;
         }
         if (!--noptargs) {
@@ -631,18 +589,12 @@ _io_TextIOWrapper___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     if (write_through < 0) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
 skip_optional_pos:
     Py_BEGIN_CRITICAL_SECTION(self);
     return_value = _io_TextIOWrapper___init___impl((textio *)self, buffer, encoding, errors, newline, line_buffering, write_through);
     Py_END_CRITICAL_SECTION();
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        return_value = -1;
-    }
     return return_value;
 }
 
@@ -675,11 +627,11 @@ _io_TextIOWrapper_reconfigure(PyObject *self, PyObject *const *args, Py_ssize_t 
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(encoding), &_Py_ID(errors), &_Py_ID(newline), &_Py_ID(line_buffering), &_Py_ID(write_through), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(encoding)), _PyValue_STATIC_IMMORTAL(&_Py_ID(errors)), _PyValue_STATIC_IMMORTAL(&_Py_ID(newline)), _PyValue_STATIC_IMMORTAL(&_Py_ID(line_buffering)), _PyValue_STATIC_IMMORTAL(&_Py_ID(write_through)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1319,4 +1271,4 @@ _io_TextIOWrapper_buffer_get(PyObject *self, void *Py_UNUSED(context))
 
 #define _IO_TEXTIOWRAPPER_BUFFER_GETSETDEF {"buffer", (getter)_io_TextIOWrapper_buffer_get, (setter)NULL, NULL},
 
-/*[clinic end generated code: output=773431ca2ad80d20 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=9c53b16d4754f6b1 input=a9049054013a1b77]*/

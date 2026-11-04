@@ -5,11 +5,12 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
-#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(deque_pop__doc__,
 "pop($self, /)\n"
@@ -548,11 +549,11 @@ deque_init(PyObject *deque, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(iterable), &_Py_ID(maxlen), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(iterable)), _PyValue_STATIC_IMMORTAL(&_Py_ID(maxlen)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -570,53 +571,36 @@ deque_init(PyObject *deque, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[2];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
     PyObject *iterable = NULL;
     PyObject *maxlenobj = NULL;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 2) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    noptargs = Py_MIN(_args_scope.nargs, 2)
-        + (_args_scope.nobjects - _args_scope.nargs)
-        - (0 + 0);
     if (!noptargs) {
         goto skip_optional_pos;
     }
     if (fastargs[0]) {
         iterable = fastargs[0];
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     maxlenobj = fastargs[1];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
 skip_optional_pos:
     Py_BEGIN_CRITICAL_SECTION(deque);
     return_value = deque_init_impl((dequeobject *)deque, iterable, maxlenobj);
     Py_END_CRITICAL_SECTION();
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        return_value = -1;
-    }
     return return_value;
 }
 
@@ -701,8 +685,6 @@ tuplegetter_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = clinic_state()->tuplegetter_type;
-    _PyArg_OwnerScope _args_scope = {0};
-    PyObject *const *fastargs;
     Py_ssize_t index;
     PyObject *doc;
 
@@ -710,17 +692,16 @@ tuplegetter_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         !_PyArg_NoKeywords("_tuplegetter", kwargs)) {
         goto exit;
     }
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
+    if (!_PyArg_CheckPositional("_tuplegetter", PyTuple_GET_SIZE(args), 2, 2)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "_tuplegetter",
-                                          2, 2);
-    if (fastargs == NULL) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
+    if (_args_items == NULL) {
         goto exit;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(fastargs[0]);
+        PyObject *iobj = _PyNumber_Index(_args_items[0]);
         if (iobj != NULL) {
             ival = PyLong_AsSsize_t(iobj);
             Py_DECREF(iobj);
@@ -730,15 +711,10 @@ tuplegetter_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         }
         index = ival;
     }
-    doc = fastargs[1];
+    doc = _args_items[1];
     return_value = tuplegetter_new_impl(type, index, doc);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
-/*[clinic end generated code: output=00f4b3d4cd1a60ae input=a9049054013a1b77]*/
+/*[clinic end generated code: output=d68ba57eb548fddb input=a9049054013a1b77]*/

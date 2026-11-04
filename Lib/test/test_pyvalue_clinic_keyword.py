@@ -208,7 +208,7 @@ class PyValueClinicKeywordTests(unittest.TestCase):
         self.assertIs(caught.exception, error)
         self.assertEqual(calls, ['covariant'])
 
-    def test_fixed_optional_constructor_uses_selected_owner_count(self):
+    def test_tuple_constructor_lends_bounded_borrow_run(self):
         source = (
             '/*[clinic input]\noutput everything block\n'
             'class Owner "OwnerObject *" "&Owner_Type"\n'
@@ -219,12 +219,14 @@ class PyValueClinicKeywordTests(unittest.TestCase):
             '[clinic start generated code]*/\n')
         generated = _make_clinic(filename='owner.c').parse(source)
         self.assertIn('Py_ssize_t nargs = PyTuple_GET_SIZE(args);', generated)
-        self.assertIn('_PyArg_UnpackKeywordsOwned(', generated)
-        self.assertIn('noptargs = Py_MIN(_args_scope.nargs, 3)', generated)
-        self.assertIn('_args_scope.nobjects - _args_scope.nargs', generated)
-        self.assertIn('- (1 + 0);', generated)
-        self.assertNotIn('PyDict_GET_SIZE(kwargs)', generated)
-        self.assertEqual(generated.count('_PyArg_OwnerScope_End('), 1)
+        # The run is bounded by maxpos because the arity check follows it.
+        self.assertIn('PyObject *const *_args_items = '
+                      '_PyBorrow_TupleItems(args, Py_MIN(nargs, 3));',
+                      generated)
+        self.assertIn('_PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL,',
+                      generated)
+        self.assertNotIn('_PyTuple_CAST(args)', generated)
+        self.assertNotIn('OwnerScope', generated)
 
     def test_integer_and_complex_constructors(self):
         self.assertEqual(int('101', base=2), 5)

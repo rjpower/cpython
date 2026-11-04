@@ -5,6 +5,7 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
@@ -111,11 +112,11 @@ _testcapi_make_exception_with_doc(PyObject *module, PyObject *const *args, Py_ss
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(name), &_Py_ID(doc), &_Py_ID(base), &_Py_ID(dict), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(name)), _PyValue_STATIC_IMMORTAL(&_Py_ID(doc)), _PyValue_STATIC_IMMORTAL(&_Py_ID(base)), _PyValue_STATIC_IMMORTAL(&_Py_ID(dict)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -481,4 +482,4 @@ _testcapi_unstable_exc_prep_reraise_star(PyObject *module, PyObject *const *args
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=93dfd0e1ca2253b6 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=0d8da9931639bbcf input=a9049054013a1b77]*/

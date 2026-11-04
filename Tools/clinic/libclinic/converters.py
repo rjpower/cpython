@@ -1411,9 +1411,9 @@ class varpos_array_converter(VarPosCConverter):
     def parse_vararg(self, *, pos_only: int, min_pos: int, max_pos: int,
                      fastcall: bool, limited_capi: bool) -> str:
         paramname = self.parser_name
-        if not fastcall:
-            self.add_include('pycore_tuple.h', '_PyTuple_ITEMS()')
-        start = 'args' if fastcall else '_PyTuple_ITEMS(args)'
+        # A tuple receiver lends the borrow-stack run of every tuple item,
+        # which the parser pushes for this converter.
+        start = 'args' if fastcall else '_args_items'
         size = 'nargs' if fastcall else 'PyTuple_GET_SIZE(args)'
         if max_pos:
             if min(pos_only, min_pos) < max_pos:

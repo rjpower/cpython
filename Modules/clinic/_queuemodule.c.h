@@ -5,6 +5,7 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_NoKeywords()
@@ -66,11 +67,11 @@ _queue_SimpleQueue_put(PyObject *self, PyObject *const *args, Py_ssize_t nargs, 
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(item), &_Py_ID(block), &_Py_ID(timeout), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(item)), _PyValue_STATIC_IMMORTAL(&_Py_ID(block)), _PyValue_STATIC_IMMORTAL(&_Py_ID(timeout)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -146,11 +147,11 @@ _queue_SimpleQueue_put_nowait(PyObject *self, PyObject *const *args, Py_ssize_t 
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(item), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(item)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -216,11 +217,11 @@ _queue_SimpleQueue_get(PyObject *self, PyTypeObject *cls, PyObject *const *args,
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(block), &_Py_ID(timeout), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(block)), _PyValue_STATIC_IMMORTAL(&_Py_ID(timeout)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -390,4 +391,4 @@ _queue_SimpleQueue___sizeof__(PyObject *self, PyObject *Py_UNUSED(ignored))
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=8219fe2f2ed5f068 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=2f9e63a22ac60c45 input=a9049054013a1b77]*/

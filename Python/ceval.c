@@ -1127,11 +1127,14 @@ _Py_BuiltinCallFast_Value(
     }
     PyObject *callable_o = PyValue_AsPyObjectBorrow(callable);
     PyCFunction cfunc = PyCFunction_GET_FUNCTION(callable_o);
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     res = _PyCFunctionFast_CAST(cfunc)(
         PyCFunction_GET_SELF(callable_o),
         args_o,
         total_args
     );
+    _PyBorrowScope_Exit(tstate, mark);
     VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
     assert((res != NULL) ^ (PyErr_Occurred() != NULL));
     return res;
@@ -1151,7 +1154,10 @@ _Py_BuiltinCallFastWithKeywords_Value(
     PyObject *callable_o = PyValue_AsPyObjectBorrow(callable);
     PyCFunctionFastWithKeywords cfunc =
         _PyCFunctionFastWithKeywords_CAST(PyCFunction_GET_FUNCTION(callable_o));
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     res = cfunc(PyCFunction_GET_SELF(callable_o), args_o, total_args, NULL);
+    _PyBorrowScope_Exit(tstate, mark);
     VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
     assert((res != NULL) ^ (PyErr_Occurred() != NULL));
     return res;
@@ -1172,7 +1178,10 @@ _PyCallMethodDescriptorFast_Value(
     }
     assert(PyValue_Is(PyValue_FromObjectBorrow(self), arguments[0]));
 
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     res = cfunc(self, (args_o + 1), total_args - 1);
+    _PyBorrowScope_Exit(tstate, mark);
     VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
     assert((res != NULL) ^ (PyErr_Occurred() != NULL));
     return res;
@@ -1193,7 +1202,10 @@ _PyCallMethodDescriptorFastWithKeywords_Value(
     }
     assert(PyValue_Is(PyValue_FromObjectBorrow(self), arguments[0]));
 
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     res = cfunc(self, (args_o + 1), total_args-1, NULL);
+    _PyBorrowScope_Exit(tstate, mark);
     VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
     assert((res != NULL) ^ (PyErr_Occurred() != NULL));
     return res;
@@ -1211,7 +1223,10 @@ _Py_CallBuiltinClass_Value(
         return NULL;
     }
     PyTypeObject *tp = (PyTypeObject *)PyValue_AsPyObjectBorrow(callable);
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     res = tp->tp_vectorcall((PyObject *)tp, args_o, total_args | PY_VECTORCALL_ARGUMENTS_OFFSET, NULL);
+    _PyBorrowScope_Exit(tstate, mark);
     VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
     assert((res != NULL) ^ (PyErr_Occurred() != NULL));
     return res;
@@ -2224,8 +2239,14 @@ native_call_finish(_PyNativeCallPublication *state, _PyNativeScope *scope,
 
 #include "generated_jit_helpers.c.h"
 
-PyObject* _Py_HOT_FUNCTION DONT_SLP_VECTORIZE
-_PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
+/* The evaluation loop.  _PyEval_EvalFrameDefault() wraps each activation in
+   its borrow floor.  The loop keeps an external name so that debuggers and
+   profilers (Tools/gdb/libpython.py) can find its frames. */
+PyObject *_PyEval_EvalFrameLoop(PyThreadState *tstate,
+                                _PyInterpreterFrame *frame, int throwflag);
+
+Py_NO_INLINE PyObject* _Py_HOT_FUNCTION DONT_SLP_VECTORIZE
+_PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
     _Py_EnsureTstateNotNULL(tstate);
     check_invalid_reentrancy();
@@ -2486,6 +2507,36 @@ early_exit:
 #ifdef DO_NOT_OPTIMIZE_INTERP_LOOP
 #  pragma optimize("", on)
 #endif
+
+/* Each activation of the evaluation loop is a borrow scope with a floor
+ * (pyjit/design/native-boundary.md, section 2).
+ *
+ * The release invariant: when _Py_HandlePending() releases the entries above
+ * eval_floor, no live C frame between the floor and the current instruction
+ * holds a mark or a borrow.  Every caller of _Py_HandlePending() is at an
+ * instruction boundary of this activation, where all native code it called
+ * has returned.  So the floor is set here, around the loop, and not in
+ * _PyEval_EvalFrame(): a PEP 523 hook runs C code between the two, and
+ * anything it pushed would be released while still live. */
+PyObject *
+_PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
+{
+    _Py_EnsureTstateNotNULL(tstate);
+    _PyBorrowStack *borrow = &((_PyThreadStateImpl *)tstate)->borrow;
+    PyObject **outer_floor = borrow->eval_floor;
+    PyObject **floor = borrow->top;
+    borrow->eval_floor = floor;
+    PyObject *result = _PyEval_EvalFrameLoop(tstate, frame, throwflag);
+    assert(borrow->eval_floor == floor);
+    _PyBorrowScope_Exit(tstate, floor);
+    borrow->eval_floor = outer_floor;
+    if (outer_floor != NULL && borrow->top != outer_floor) {
+        /* This activation consumed the release request of entries that
+           belong to the outer one; renew it. */
+        _PyBorrow_RequestRelease(tstate);
+    }
+    return result;
+}
 
 #if defined(__GNUC__) || defined(__clang__)
 #  pragma GCC diagnostic pop

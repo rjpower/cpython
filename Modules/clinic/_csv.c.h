@@ -5,7 +5,9 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_NoPositional()
 
@@ -68,6 +70,10 @@ _csv_Dialect___replace__(PyObject *self, PyObject *args, PyObject *kwargs)
     PyObject *changes = NULL;
 
     if (!_PyArg_NoPositional("__replace__", args)) {
+        goto exit;
+    }
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
+    if (_args_items == NULL) {
         goto exit;
     }
     if (kwargs == NULL) {
@@ -136,11 +142,15 @@ _csv_reader(PyObject *module, PyObject *args, PyObject *kwargs)
     if (!_PyArg_CheckPositional("reader", PyTuple_GET_SIZE(args), 1, 2)) {
         goto exit;
     }
-    iterable = PyTuple_GET_ITEM(args, 0);
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
+    if (_args_items == NULL) {
+        goto exit;
+    }
+    iterable = _args_items[0];
     if (PyTuple_GET_SIZE(args) < 2) {
         goto skip_optional;
     }
-    dialect = PyTuple_GET_ITEM(args, 1);
+    dialect = _args_items[1];
 skip_optional:
     if (kwargs == NULL) {
         fmtparams = PyDict_New();
@@ -189,11 +199,15 @@ _csv_writer(PyObject *module, PyObject *args, PyObject *kwargs)
     if (!_PyArg_CheckPositional("writer", PyTuple_GET_SIZE(args), 1, 2)) {
         goto exit;
     }
-    output_file = PyTuple_GET_ITEM(args, 0);
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
+    if (_args_items == NULL) {
+        goto exit;
+    }
+    output_file = _args_items[0];
     if (PyTuple_GET_SIZE(args) < 2) {
         goto skip_optional;
     }
-    dialect = PyTuple_GET_ITEM(args, 1);
+    dialect = _args_items[1];
 skip_optional:
     if (kwargs == NULL) {
         fmtparams = PyDict_New();
@@ -260,11 +274,15 @@ _csv_register_dialect(PyObject *module, PyObject *args, PyObject *kwargs)
     if (!_PyArg_CheckPositional("register_dialect", PyTuple_GET_SIZE(args), 1, 2)) {
         goto exit;
     }
-    name_obj = PyTuple_GET_ITEM(args, 0);
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
+    if (_args_items == NULL) {
+        goto exit;
+    }
+    name_obj = _args_items[0];
     if (PyTuple_GET_SIZE(args) < 2) {
         goto skip_optional;
     }
-    dialect_obj = PyTuple_GET_ITEM(args, 1);
+    dialect_obj = _args_items[1];
 skip_optional:
     if (kwargs == NULL) {
         fmtparams = PyDict_New();
@@ -307,11 +325,11 @@ _csv_unregister_dialect(PyObject *module, PyObject *const *args, Py_ssize_t narg
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(name), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(name)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -365,11 +383,11 @@ _csv_get_dialect(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(name), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(name)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -426,11 +444,11 @@ _csv_field_size_limit(PyObject *module, PyObject *const *args, Py_ssize_t nargs,
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(new_limit), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(new_limit)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -465,4 +483,4 @@ skip_optional_pos:
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=7e3a92d524d88023 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=5438afcbac6f4d9f input=a9049054013a1b77]*/

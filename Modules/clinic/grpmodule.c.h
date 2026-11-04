@@ -5,6 +5,7 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 
@@ -33,11 +34,11 @@ grp_getgrgid(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(id), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(id)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -95,11 +96,11 @@ grp_getgrnam(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(name), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(name)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -154,4 +155,4 @@ grp_getgrall(PyObject *module, PyObject *Py_UNUSED(ignored))
 {
     return grp_getgrall_impl(module);
 }
-/*[clinic end generated code: output=9052db62d986262c input=a9049054013a1b77]*/
+/*[clinic end generated code: output=ed6ccacb6736a278 input=a9049054013a1b77]*/

@@ -5,14 +5,15 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_fileutils.h"     // _Py_Off_t_Converter()
 #include "pycore_long.h"          // _PyLong_Size_t_Converter()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
-#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(_ssl__SSLSocket_do_handshake__doc__,
 "do_handshake($self, /)\n"
@@ -737,11 +738,11 @@ _ssl__SSLSocket_get_channel_binding(PyObject *self, PyObject *const *args, Py_ss
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(cb_type), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(cb_type)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -877,23 +878,20 @@ _ssl__SSLContext(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = get_state_type(type)->PySSLContext_Type;
-    _PyArg_OwnerScope _args_scope = {0};
-    PyObject *const *fastargs;
     int proto_version;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
         !_PyArg_NoKeywords("_SSLContext", kwargs)) {
         goto exit;
     }
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
+    if (!_PyArg_CheckPositional("_SSLContext", PyTuple_GET_SIZE(args), 1, 1)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "_SSLContext",
-                                          1, 1);
-    if (fastargs == NULL) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
+    if (_args_items == NULL) {
         goto exit;
     }
-    proto_version = PyLong_AsInt(fastargs[0]);
+    proto_version = PyLong_AsInt(_args_items[0]);
     if (proto_version == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -902,11 +900,6 @@ _ssl__SSLContext(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     Py_END_CRITICAL_SECTION();
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -1055,11 +1048,11 @@ _ssl__SSLContext_get_groups(PyObject *self, PyObject *const *args, Py_ssize_t na
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(include_aliases), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(include_aliases)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1644,11 +1637,11 @@ _ssl__SSLContext_load_cert_chain(PyObject *self, PyObject *const *args, Py_ssize
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(certfile), &_Py_ID(keyfile), &_Py_ID(password), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(certfile)), _PyValue_STATIC_IMMORTAL(&_Py_ID(keyfile)), _PyValue_STATIC_IMMORTAL(&_Py_ID(password)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1718,11 +1711,11 @@ _ssl__SSLContext_load_verify_locations(PyObject *self, PyObject *const *args, Py
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(cafile), &_Py_ID(capath), &_Py_ID(cadata), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(cafile)), _PyValue_STATIC_IMMORTAL(&_Py_ID(capath)), _PyValue_STATIC_IMMORTAL(&_Py_ID(cadata)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1822,11 +1815,11 @@ _ssl__SSLContext__wrap_socket(PyObject *self, PyObject *const *args, Py_ssize_t 
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(sock), &_Py_ID(server_side), &_Py_ID(server_hostname), &_Py_ID(owner), &_Py_ID(session), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(sock)), _PyValue_STATIC_IMMORTAL(&_Py_ID(server_side)), _PyValue_STATIC_IMMORTAL(&_Py_ID(server_hostname)), _PyValue_STATIC_IMMORTAL(&_Py_ID(owner)), _PyValue_STATIC_IMMORTAL(&_Py_ID(session)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1919,11 +1912,11 @@ _ssl__SSLContext__wrap_bio(PyObject *self, PyObject *const *args, Py_ssize_t nar
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(incoming), &_Py_ID(outgoing), &_Py_ID(server_side), &_Py_ID(server_hostname), &_Py_ID(owner), &_Py_ID(session), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(incoming)), _PyValue_STATIC_IMMORTAL(&_Py_ID(outgoing)), _PyValue_STATIC_IMMORTAL(&_Py_ID(server_side)), _PyValue_STATIC_IMMORTAL(&_Py_ID(server_hostname)), _PyValue_STATIC_IMMORTAL(&_Py_ID(owner)), _PyValue_STATIC_IMMORTAL(&_Py_ID(session)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -2171,11 +2164,11 @@ _ssl__SSLContext_get_ca_certs(PyObject *self, PyObject *const *args, Py_ssize_t 
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(binary_form), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(binary_form)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -2239,11 +2232,11 @@ _ssl__SSLContext_set_psk_client_callback(PyObject *self, PyObject *const *args, 
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(callback), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(callback)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -2300,11 +2293,11 @@ _ssl__SSLContext_set_psk_server_callback(PyObject *self, PyObject *const *args, 
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(callback), &_Py_ID(identity_hint), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(callback)), _PyValue_STATIC_IMMORTAL(&_Py_ID(identity_hint)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -2800,11 +2793,11 @@ _ssl_txt2obj(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(txt), &_Py_ID(name), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(txt)), _PyValue_STATIC_IMMORTAL(&_Py_ID(name)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -2915,11 +2908,11 @@ _ssl_enum_certificates(PyObject *module, PyObject *const *args, Py_ssize_t nargs
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(store_name), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(store_name)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -2991,11 +2984,11 @@ _ssl_enum_crls(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObje
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(store_name), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(store_name)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -3096,4 +3089,4 @@ exit:
 
 #define _SSL_SSLSESSION_HAS_TICKET_GETSETDEF {"has_ticket", (getter)_ssl_SSLSession_has_ticket_get, (setter)NULL, _ssl_SSLSession_has_ticket__doc__},
 
-/*[clinic end generated code: output=9b7ce34091fba70f input=a9049054013a1b77]*/
+/*[clinic end generated code: output=18a94d2b6b16d766 input=a9049054013a1b77]*/

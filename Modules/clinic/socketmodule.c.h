@@ -5,8 +5,10 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_long.h"          // _PyLong_UInt16_Converter()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
@@ -508,11 +510,11 @@ _socket_socket_recv_into(PyObject *s, PyObject *const *args, Py_ssize_t nargs, P
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(buffer), &_Py_ID(nbytes), &_Py_ID(flags), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(buffer)), _PyValue_STATIC_IMMORTAL(&_Py_ID(nbytes)), _PyValue_STATIC_IMMORTAL(&_Py_ID(flags)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -664,11 +666,11 @@ _socket_socket_recvfrom_into(PyObject *s, PyObject *const *args, Py_ssize_t narg
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(buffer), &_Py_ID(nbytes), &_Py_ID(flags), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(buffer)), _PyValue_STATIC_IMMORTAL(&_Py_ID(nbytes)), _PyValue_STATIC_IMMORTAL(&_Py_ID(flags)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1114,11 +1116,11 @@ _socket_socket_sendmsg_afalg(PyObject *self, PyObject *const *args, Py_ssize_t n
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(msg), &_Py_ID(op), &_Py_ID(iv), &_Py_ID(assoclen), &_Py_ID(flags), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(msg)), _PyValue_STATIC_IMMORTAL(&_Py_ID(op)), _PyValue_STATIC_IMMORTAL(&_Py_ID(iv)), _PyValue_STATIC_IMMORTAL(&_Py_ID(assoclen)), _PyValue_STATIC_IMMORTAL(&_Py_ID(flags)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1299,11 +1301,11 @@ sock_initobj(PyObject *self, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(family), &_Py_ID(type), &_Py_ID(proto), &_Py_ID(fileno), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(family)), _PyValue_STATIC_IMMORTAL(&_Py_ID(type)), _PyValue_STATIC_IMMORTAL(&_Py_ID(proto)), _PyValue_STATIC_IMMORTAL(&_Py_ID(fileno)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1328,7 +1330,11 @@ sock_initobj(PyObject *self, PyObject *args, PyObject *kwargs)
     int proto = -1;
     PyObject *fdobj = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 4));
+    if (_args_items == NULL) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -1981,11 +1987,11 @@ _socket_getaddrinfo(PyObject *module, PyObject *const *args, Py_ssize_t nargs, P
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(host), &_Py_ID(port), &_Py_ID(family), &_Py_ID(type), &_Py_ID(proto), &_Py_ID(flags), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(host)), _PyValue_STATIC_IMMORTAL(&_Py_ID(port)), _PyValue_STATIC_IMMORTAL(&_Py_ID(family)), _PyValue_STATIC_IMMORTAL(&_Py_ID(type)), _PyValue_STATIC_IMMORTAL(&_Py_ID(proto)), _PyValue_STATIC_IMMORTAL(&_Py_ID(flags)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -2449,4 +2455,4 @@ exit:
 #ifndef _SOCKET_CMSG_SPACE_METHODDEF
     #define _SOCKET_CMSG_SPACE_METHODDEF
 #endif /* !defined(_SOCKET_CMSG_SPACE_METHODDEF) */
-/*[clinic end generated code: output=bca43f33969d67ad input=a9049054013a1b77]*/
+/*[clinic end generated code: output=127f01dd1ac2217e input=a9049054013a1b77]*/

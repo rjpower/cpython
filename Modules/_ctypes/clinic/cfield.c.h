@@ -5,8 +5,10 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 
 static PyObject *
@@ -26,11 +28,11 @@ PyCField_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(name), &_Py_ID(type), &_Py_ID(byte_size), &_Py_ID(byte_offset), &_Py_ID(index), &_Py_ID(_internal_use), &_Py_ID(bit_size), &_Py_ID(bit_offset), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(name)), _PyValue_STATIC_IMMORTAL(&_Py_ID(type)), _PyValue_STATIC_IMMORTAL(&_Py_ID(byte_size)), _PyValue_STATIC_IMMORTAL(&_Py_ID(byte_offset)), _PyValue_STATIC_IMMORTAL(&_Py_ID(index)), _PyValue_STATIC_IMMORTAL(&_Py_ID(_internal_use)), _PyValue_STATIC_IMMORTAL(&_Py_ID(bit_size)), _PyValue_STATIC_IMMORTAL(&_Py_ID(bit_offset)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -59,7 +61,11 @@ PyCField_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     PyObject *bit_size_obj = Py_None;
     PyObject *bit_offset_obj = Py_None;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, 0);
+    if (_args_items == NULL) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 6, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -126,4 +132,4 @@ skip_optional_kwonly:
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=7eb1621e22ea2e05 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=a91dd651ce181f2a input=a9049054013a1b77]*/

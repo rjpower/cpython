@@ -2,7 +2,7 @@
 #define PYTESTCAPI_NEED_INTERNAL_API
 
 #include "parts.h"
-#include "pycore_value.h"         // _PyValue_RestoreException()
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "clinic/vectorcall.c.h"
 
 
@@ -15,45 +15,27 @@ module _testcapi
 
 /* Test PEP 590 - Vectorcall */
 
+/* The stack borrows from the borrow stack until the calling function's
+   scope exits. */
 static int
-fastcall_args(PyObject *args, _PyArg_OwnerScope *scope,
-              PyObject *const **stack, Py_ssize_t *nargs)
+fastcall_args(PyObject *args, PyObject *const **stack, Py_ssize_t *nargs)
 {
-    *scope = (_PyArg_OwnerScope){0};
-    *stack = NULL;
-    *nargs = 0;
-    if (PyErr_Occurred()) {
-        return -1;
-    }
     if (args == Py_None) {
-        return 0;
+        *stack = NULL;
+        *nargs = 0;
     }
-    if (!PyTuple_Check(args)) {
+    else if (PyTuple_Check(args)) {
+        *nargs = PyTuple_GET_SIZE(args);
+        *stack = _PyBorrow_TupleItems(args, *nargs);
+        if (*stack == NULL) {
+            return -1;
+        }
+    }
+    else {
         PyErr_SetString(PyExc_TypeError, "args must be None or a tuple");
         return -1;
     }
-    if (_PyArg_OwnerScope_BeginTuple(scope, args, 0) < 0) {
-        return -1;
-    }
-    *stack = _PyArg_UnpackPositionalOwned(scope, "fastcall_args",
-                                         0, PY_SSIZE_T_MAX);
-    if (*stack == NULL || PyErr_Occurred()) {
-        return -1;
-    }
-    *nargs = scope->nargs;
     return 0;
-}
-
-static PyObject *
-fastcall_result(_PyArg_OwnerScope *scope, PyObject *result)
-{
-    if (_PyArg_OwnerScope_End(scope) < 0) {
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_CLEAR(result);
-        _PyValue_RestoreException(saved);
-        return NULL;
-    }
-    return result;
 }
 
 /*[clinic input]
@@ -69,13 +51,11 @@ _testcapi_pyobject_fastcalldict_impl(PyObject *module, PyObject *func,
                                      PyObject *func_args, PyObject *kwargs)
 /*[clinic end generated code: output=35902ece94de4418 input=b9c0196ca7d5f9e4]*/
 {
-    _PyArg_OwnerScope scope = {0};
-    PyObject *result = NULL;
     PyObject *const *stack;
     Py_ssize_t nargs;
 
-    if (fastcall_args(func_args, &scope, &stack, &nargs) < 0) {
-        goto done;
+    if (fastcall_args(func_args, &stack, &nargs) < 0) {
+        return NULL;
     }
 
     if (kwargs == Py_None) {
@@ -83,12 +63,10 @@ _testcapi_pyobject_fastcalldict_impl(PyObject *module, PyObject *func,
     }
     else if (!PyDict_Check(kwargs)) {
         PyErr_SetString(PyExc_TypeError, "kwnames must be None or a dict");
-        goto done;
+        return NULL;
     }
 
-    result = PyObject_VectorcallDict(func, stack, nargs, kwargs);
-done:
-    return fastcall_result(&scope, result);
+    return PyObject_VectorcallDict(func, stack, nargs, kwargs);
 }
 
 /*[clinic input]
@@ -104,13 +82,11 @@ _testcapi_pyobject_vectorcall_impl(PyObject *module, PyObject *func,
                                    PyObject *func_args, PyObject *kwnames)
 /*[clinic end generated code: output=ff77245bc6afe0d8 input=a0668dfef625764c]*/
 {
-    _PyArg_OwnerScope scope = {0};
-    PyObject *result = NULL;
     PyObject *const *stack;
     Py_ssize_t nargs, nkw;
 
-    if (fastcall_args(func_args, &scope, &stack, &nargs) < 0) {
-        goto done;
+    if (fastcall_args(func_args, &stack, &nargs) < 0) {
+        return NULL;
     }
 
     if (kwnames == Py_None) {
@@ -120,17 +96,15 @@ _testcapi_pyobject_vectorcall_impl(PyObject *module, PyObject *func,
         nkw = PyTuple_GET_SIZE(kwnames);
         if (nargs < nkw) {
             PyErr_SetString(PyExc_ValueError, "kwnames longer than args");
-            goto done;
+            return NULL;
         }
         nargs -= nkw;
     }
     else {
         PyErr_SetString(PyExc_TypeError, "kwnames must be None or a tuple");
-        goto done;
+        return NULL;
     }
-    result = PyObject_Vectorcall(func, stack, nargs, kwnames);
-done:
-    return fastcall_result(&scope, result);
+    return PyObject_Vectorcall(func, stack, nargs, kwnames);
 }
 
 static PyObject *

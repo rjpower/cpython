@@ -5,7 +5,9 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 
@@ -23,4 +25,4 @@ PyDoc_STRVAR(pysqlite_connect__doc__,
 
 #define PYSQLITE_CONNECT_METHODDEF    \
     {"connect", _PyCFunction_CAST(pysqlite_connect), METH_FASTCALL|METH_KEYWORDS, pysqlite_connect__doc__},
-/*[clinic end generated code: output=07d5692e22b0fdf2 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=f449d6728e0bc479 input=a9049054013a1b77]*/

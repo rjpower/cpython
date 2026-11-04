@@ -1,4 +1,5 @@
 #include "Python.h"
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_moduleobject.h"  // _PyModule_GetState()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
@@ -1987,120 +1988,32 @@ typedef struct {
 
 static PyObject *
 methodcaller_vectorcall(PyObject *op, PyObject *const *args,
-                        size_t nargsf, PyObject* kwnames)
+        size_t nargsf, PyObject* kwnames)
 {
-    methodcallerobject *mc;
-    PyObject *op_owner=Py_NewRef(op), *kwnames_owner=Py_XNewRef(kwnames);
-    PyObject *target=NULL, *name=NULL, *posargs=NULL, *combined=NULL, *names=NULL;
-    PyObject *result=NULL, *saved;
-    int scope_status=0;
-    PyObject *tmp_args[_METHODCALLER_MAX_ARGS];
-    _PyArg_OwnerScope scope={0};
-    bool scope_started=false;
-    PyObject *const *owned=NULL;
-    Py_ssize_t nargs=PyVectorcall_NARGS(nargsf), nall, npos, nkw;
-    if (PyErr_Occurred()) goto done;
-    if (!_PyArg_CheckPositional("methodcaller",nargs,1,1) ||
-        !_PyArg_NoKwnames("methodcaller",kwnames_owner)) goto done;
-    target=Py_NewRef(args[0]);
-    if (PyErr_Occurred()) goto done;
-    mc=methodcallerobject_CAST(op_owner);
-    name=Py_XNewRef(mc->name); posargs=Py_XNewRef(mc->args);
-    combined=Py_XNewRef(mc->vectorcall_args); names=Py_XNewRef(mc->vectorcall_kwnames);
-    if (PyErr_Occurred()) goto done;
-    if (posargs==NULL || combined==NULL ||
-        !PyTuple_Check(posargs) || !PyTuple_Check(combined) ||
-        (names!=NULL && !PyTuple_Check(names))) {
-        PyErr_SetString(PyExc_RuntimeError,"methodcaller argument layout changed");
-        goto done;
-    }
-    nall=PyTuple_GET_SIZE(combined); npos=PyTuple_GET_SIZE(posargs);
-    nkw=names ? PyTuple_GET_SIZE(names) : 0;
-    if (nall > _METHODCALLER_MAX_ARGS-1 || npos > nall || nkw != nall-npos) {
-        PyErr_SetString(PyExc_RuntimeError,"methodcaller argument layout changed");
-        goto done;
-    }
-    assert(1 + nall <= _METHODCALLER_MAX_ARGS);
-    for (Py_ssize_t i=0;i<nkw;i++) {
-        PyValue key=PyTuple_GET_VALUE(names,i);
-        if (!PyValue_IsObject(key) ||
-            !PyUnicode_Check(PyValue_AsPyObjectBorrow(key))) {
-            PyErr_SetString(PyExc_TypeError,"keywords must be strings");
-            goto done;
-        }
-    }
-    if (_PyArg_OwnerScope_BeginTuple(&scope,combined,0)<0 || PyErr_Occurred()) {
-        scope_started=true;
-        goto done;
-    }
-    scope_started=true;
-    owned=_PyArg_UnpackPositionalOwned(&scope,NULL,nall,nall);
-    if (owned==NULL || PyErr_Occurred()) goto done;
-    tmp_args[0]=target;
-    for (Py_ssize_t i=0;i<nall;i++) tmp_args[i+1]=owned[i];
-    result=PyObject_VectorcallMethod(name,tmp_args,
-            (1+npos)|PY_VECTORCALL_ARGUMENTS_OFFSET,names);
-done:
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = names;
-        names = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = combined;
-        combined = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = posargs;
-        posargs = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = name;
-        name = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = target;
-        target = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = kwnames_owner;
-        kwnames_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    {
-        saved = PyErr_GetRaisedException();
-        PyObject *retired = op_owner;
-        op_owner = NULL;
-        Py_XDECREF(retired);
-        _PyValue_RestoreException(saved);
-    }
-    if (scope_started) {
-        scope_status = _PyArg_OwnerScope_End(&scope);
-    }
-    if (scope_status < 0 || PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *retired_result = result;
-        result = NULL;
-        Py_XDECREF(retired_result);
-        _PyValue_RestoreException(saved);
+    methodcallerobject *mc = methodcallerobject_CAST(op);
+    if (!_PyArg_CheckPositional("methodcaller", PyVectorcall_NARGS(nargsf), 1, 1)
+        || !_PyArg_NoKwnames("methodcaller", kwnames)) {
         return NULL;
     }
+    assert(mc->vectorcall_args != NULL);
+
+    Py_ssize_t nall = PyTuple_GET_SIZE(mc->vectorcall_args);
+    assert(1 + nall <= _METHODCALLER_MAX_ARGS);
+    /* The stored arguments may hold inline values: lend them as a borrow
+       stack run for the duration of the call. */
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
+    PyObject *result = NULL;
+    PyObject *const *items = _PyBorrow_TupleItems(mc->vectorcall_args, nall);
+    if (items != NULL) {
+        PyObject *tmp_args[_METHODCALLER_MAX_ARGS];
+        tmp_args[0] = args[0];
+        memcpy(tmp_args + 1, items, sizeof(PyObject *) * nall);
+        result = PyObject_VectorcallMethod(mc->name, tmp_args,
+                (1 + PyTuple_GET_SIZE(mc->args)) | PY_VECTORCALL_ARGUMENTS_OFFSET,
+                mc->vectorcall_kwnames);
+    }
+    _PyBorrowScope_Exit(tstate, mark);
     return result;
 }
 

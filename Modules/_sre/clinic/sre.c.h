@@ -5,6 +5,7 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
@@ -189,11 +190,11 @@ _sre_SRE_Pattern_prefixmatch(PyObject *self, PyTypeObject *cls, PyObject *const 
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(string), &_Py_ID(pos), &_Py_ID(endpos), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(string)), _PyValue_STATIC_IMMORTAL(&_Py_ID(pos)), _PyValue_STATIC_IMMORTAL(&_Py_ID(endpos)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -285,11 +286,11 @@ _sre_SRE_Pattern_fullmatch(PyObject *self, PyTypeObject *cls, PyObject *const *a
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(string), &_Py_ID(pos), &_Py_ID(endpos), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(string)), _PyValue_STATIC_IMMORTAL(&_Py_ID(pos)), _PyValue_STATIC_IMMORTAL(&_Py_ID(endpos)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -383,11 +384,11 @@ _sre_SRE_Pattern_search(PyObject *self, PyTypeObject *cls, PyObject *const *args
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(string), &_Py_ID(pos), &_Py_ID(endpos), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(string)), _PyValue_STATIC_IMMORTAL(&_Py_ID(pos)), _PyValue_STATIC_IMMORTAL(&_Py_ID(endpos)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -478,11 +479,11 @@ _sre_SRE_Pattern_findall(PyObject *self, PyObject *const *args, Py_ssize_t nargs
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(string), &_Py_ID(pos), &_Py_ID(endpos), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(string)), _PyValue_STATIC_IMMORTAL(&_Py_ID(pos)), _PyValue_STATIC_IMMORTAL(&_Py_ID(endpos)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -576,11 +577,11 @@ _sre_SRE_Pattern_finditer(PyObject *self, PyTypeObject *cls, PyObject *const *ar
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(string), &_Py_ID(pos), &_Py_ID(endpos), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(string)), _PyValue_STATIC_IMMORTAL(&_Py_ID(pos)), _PyValue_STATIC_IMMORTAL(&_Py_ID(endpos)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -671,11 +672,11 @@ _sre_SRE_Pattern_scanner(PyObject *self, PyTypeObject *cls, PyObject *const *arg
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(string), &_Py_ID(pos), &_Py_ID(endpos), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(string)), _PyValue_STATIC_IMMORTAL(&_Py_ID(pos)), _PyValue_STATIC_IMMORTAL(&_Py_ID(endpos)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -766,11 +767,11 @@ _sre_SRE_Pattern_split(PyObject *self, PyObject *const *args, Py_ssize_t nargs, 
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(string), &_Py_ID(maxsplit), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(string)), _PyValue_STATIC_IMMORTAL(&_Py_ID(maxsplit)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -843,11 +844,11 @@ _sre_SRE_Pattern_sub(PyObject *self, PyTypeObject *cls, PyObject *const *args, P
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(repl), &_Py_ID(string), &_Py_ID(count), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(repl)), _PyValue_STATIC_IMMORTAL(&_Py_ID(string)), _PyValue_STATIC_IMMORTAL(&_Py_ID(count)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -923,11 +924,11 @@ _sre_SRE_Pattern_subn(PyObject *self, PyTypeObject *cls, PyObject *const *args, 
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(repl), &_Py_ID(string), &_Py_ID(count), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(repl)), _PyValue_STATIC_IMMORTAL(&_Py_ID(string)), _PyValue_STATIC_IMMORTAL(&_Py_ID(count)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1079,11 +1080,11 @@ _sre_compile(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(pattern), &_Py_ID(flags), &_Py_ID(code), &_Py_ID(groups), &_Py_ID(groupindex), &_Py_ID(indexgroup), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(pattern)), _PyValue_STATIC_IMMORTAL(&_Py_ID(flags)), _PyValue_STATIC_IMMORTAL(&_Py_ID(code)), _PyValue_STATIC_IMMORTAL(&_Py_ID(groups)), _PyValue_STATIC_IMMORTAL(&_Py_ID(groupindex)), _PyValue_STATIC_IMMORTAL(&_Py_ID(indexgroup)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1212,11 +1213,11 @@ _sre_SRE_Match_expand(PyObject *self, PyObject *const *args, Py_ssize_t nargs, P
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(template), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(template)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1302,11 +1303,11 @@ _sre_SRE_Match_groups(PyObject *self, PyObject *const *args, Py_ssize_t nargs, P
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(default), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(default)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1368,11 +1369,11 @@ _sre_SRE_Match_groupdict(PyObject *self, PyObject *const *args, Py_ssize_t nargs
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(default), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(default)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1597,4 +1598,4 @@ _sre_SRE_Scanner_search(PyObject *self, PyTypeObject *cls, PyObject *const *args
 #ifndef _SRE_SRE_PATTERN__FAIL_AFTER_METHODDEF
     #define _SRE_SRE_PATTERN__FAIL_AFTER_METHODDEF
 #endif /* !defined(_SRE_SRE_PATTERN__FAIL_AFTER_METHODDEF) */
-/*[clinic end generated code: output=2e6c222a2eb0875e input=a9049054013a1b77]*/
+/*[clinic end generated code: output=06a7dc4ec5ebfd85 input=a9049054013a1b77]*/

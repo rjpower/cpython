@@ -465,6 +465,12 @@ static const PyValue PyValue_NULL = { .bits = PyValue_NULL_BITS };
 #define PyValue_False ((PyValue){.bits = ((uintptr_t)&_Py_FalseStruct) | Py_TAG_REFCNT })
 #define PyValue_None ((PyValue){.bits = ((uintptr_t)&_Py_NoneStruct) | Py_TAG_REFCNT })
 
+/* Initializer for the canonical value of a statically allocated immortal
+   object, e.g. a keyword in a static tuple.  C accepts an address plus a
+   constant in a static initializer but not an address OR-ed with one; the
+   object is aligned, so the sum equals the tagged bits. */
+#define _PyValue_STATIC_IMMORTAL(op) { .bits = (uintptr_t)(op) + Py_TAG_REFCNT }
+
 #ifdef Py_GIL_DISABLED
 // Checks that mask out the deferred bit in the free threading build.
 #define PyValue_IsNone(REF) (((REF).bits & ~Py_TAG_REFCNT) == (uintptr_t)&_Py_NoneStruct)

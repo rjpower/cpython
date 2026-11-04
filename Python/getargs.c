@@ -46,9 +46,9 @@ typedef struct {
 #define STATIC_FREELIST_ENTRIES 8
 
 /* Forward */
-static int vgetargs1_impl(PyObject *args, PyObject *const *stack, Py_ssize_t nargs,
-                          const char *format, va_list *p_va, int flags,
-                          _PyArg_OwnerScope *tuple_scope);
+static int vgetargs1_impl(PyObject *args, PyObject *tuple,
+                          PyObject *const *stack, Py_ssize_t nargs,
+                          const char *format, va_list *p_va, int flags);
 static int vgetargs1(PyObject *, const char *, va_list *, int);
 static void seterror(Py_ssize_t, const char *, int *, const char *, const char *);
 static const char *convertitem(PyObject *, const char **, va_list *, int, int *,
@@ -65,13 +65,14 @@ vgetargskeywords(PyObject *args, PyObject *kwargs,
                  const char *format, const char * const *kwlist,
                  va_list *p_va, int flags);
 static int
-vgetargskeywords_impl(PyObject *const *args, Py_ssize_t nargs,
+vgetargskeywords_impl(PyObject *const *args, PyObject *tuple, Py_ssize_t nargs,
                       PyObject *kwargs, PyObject *kwnames,
                       const char *format, const char * const *kwlist,
                       va_list *p_va, int flags);
 static int vgetargskeywordsfast(PyObject *, PyObject *,
                             struct _PyArg_Parser *, va_list *, int);
-static int vgetargskeywordsfast_impl(PyObject *const *args, Py_ssize_t nargs,
+static int vgetargskeywordsfast_impl(PyObject *const *args, PyObject *tuple,
+                          Py_ssize_t nargs,
                           PyObject *keywords, PyObject *kwnames,
                           struct _PyArg_Parser *parser,
                           va_list *p_va, int flags);
@@ -132,7 +133,7 @@ PyArg_ParseArray(PyObject *const *args, Py_ssize_t nargs, const char *format, ..
 {
     va_list va;
     va_start(va, format);
-    int retval = vgetargs1_impl(NULL, args, nargs, format, &va, 0, NULL);
+    int retval = vgetargs1_impl(NULL, NULL, args, nargs, format, &va, 0);
     va_end(va);
     return retval;
 }
@@ -154,8 +155,8 @@ PyArg_ParseArrayAndKeywords(PyObject *const *args, Py_ssize_t nargs,
 
     va_list va;
     va_start(va, kwlist);
-    int retval = vgetargskeywords_impl(args, nargs, NULL, kwnames, format,
-                                       kwlist, &va, 0);
+    int retval = vgetargskeywords_impl(args, NULL, nargs, NULL, kwnames,
+                                       format, kwlist, &va, 0);
     va_end(va);
     return retval;
 }
@@ -243,9 +244,13 @@ cleanreturn(int retval, freelist_t *freelist)
 }
 
 
+/* Parse nargs arguments from stack, or from the items of tuple when it is
+   not NULL.  The tuple's items are pushed on the borrow stack only after the
+   arity check, so a rejected call pushes nothing. */
 static int
-vgetargs1_impl(PyObject *compat_args, PyObject *const *stack, Py_ssize_t nargs, const char *format,
-               va_list *p_va, int flags, _PyArg_OwnerScope *tuple_scope)
+vgetargs1_impl(PyObject *compat_args, PyObject *tuple,
+               PyObject *const *stack, Py_ssize_t nargs, const char *format,
+               va_list *p_va, int flags)
 {
     char msgbuf[256];
     int levels[32];
@@ -262,7 +267,7 @@ vgetargs1_impl(PyObject *compat_args, PyObject *const *stack, Py_ssize_t nargs, 
     freelistentry_t static_entries[STATIC_FREELIST_ENTRIES];
     freelist_t freelist;
 
-    assert(nargs == 0 || stack != NULL || tuple_scope != NULL);
+    assert(nargs == 0 || stack != NULL || tuple != NULL);
 
     freelist.entries = static_entries;
     freelist.first_available = 0;
@@ -377,10 +382,10 @@ vgetargs1_impl(PyObject *compat_args, PyObject *const *stack, Py_ssize_t nargs, 
         return cleanreturn(0, &freelist);
     }
 
-    if (tuple_scope != NULL) {
+    if (tuple != NULL) {
         assert(!compat);
-        stack = _PyArg_UnpackPositionalOwned(tuple_scope, fname, min, max);
-        if (stack == NULL || PyErr_Occurred()) {
+        stack = _PyBorrow_TupleItems(tuple, nargs);
+        if (stack == NULL) {
             return cleanreturn(0, &freelist);
         }
     }
@@ -392,10 +397,8 @@ vgetargs1_impl(PyObject *compat_args, PyObject *const *stack, Py_ssize_t nargs, 
         msg = convertitem(stack[i], &format, p_va,
                           flags, levels, msgbuf,
                           sizeof(msgbuf), &freelist);
-        if (msg || (tuple_scope != NULL && PyErr_Occurred())) {
-            if (msg != NULL) {
-                seterror(i+1, msg, levels, fname, message);
-            }
+        if (msg) {
+            seterror(i+1, msg, levels, fname, message);
             return cleanreturn(0, &freelist);
         }
     }
@@ -414,7 +417,7 @@ vgetargs1_impl(PyObject *compat_args, PyObject *const *stack, Py_ssize_t nargs, 
 static int
 vgetargs1(PyObject *args, const char *format, va_list *p_va, int flags)
 {
-    PyObject *const *stack;
+    PyObject *tuple;
     Py_ssize_t nargs;
 
     if (!(flags & FLAG_COMPAT)) {
@@ -426,83 +429,16 @@ vgetargs1(PyObject *args, const char *format, va_list *p_va, int flags)
             return 0;
         }
 
-        stack = _PyBorrow_TupleItems(args);
-        if (stack == NULL) {
-            return 0;
-        }
+        tuple = args;
         nargs = PyTuple_GET_SIZE(args);
     }
     else {
-        stack = NULL;
+        tuple = NULL;
         nargs = 0;
     }
 
-    return vgetargs1_impl(args, stack, nargs, format, p_va, flags, NULL);
+    return vgetargs1_impl(args, tuple, NULL, nargs, format, p_va, flags);
 }
-
-static int
-flat_format_supported(const char *format)
-{
-    int optional = 0;
-    if (format == NULL) {
-        return 0;
-    }
-    for (const unsigned char *p = (const unsigned char *)format; *p; p++) {
-        unsigned char c = *p;
-        if (c == ':' || c == ';') {
-            return 1;
-        }
-        if (c == '|') {
-            if (optional) return 0;
-            optional = 1;
-            continue;
-        }
-        if (c == 'O' && p[1] == '!') {
-            p++;
-            continue;
-        }
-        if (strchr("bBhHiInlkLKfdDcCpSYUOsz", c) == NULL) {
-            return 0;
-        }
-    }
-    return 1;
-}
-
-int
-_PyArg_ParseTupleOwned(_PyArg_OwnerScope *scope, PyObject *args,
-                       const char *format, ...)
-{
-    if (PyErr_Occurred()) {
-        return 0;
-    }
-    if (scope == NULL) {
-        PyErr_BadInternalCall();
-        return 0;
-    }
-    if (!flat_format_supported(format)) {
-        PyErr_SetString(PyExc_SystemError,
-                        "unsupported scoped argument format");
-        return 0;
-    }
-    if (args == NULL || !PyTuple_Check(args)) {
-        PyErr_SetString(PyExc_SystemError,
-            "new style getargs format but argument is not a tuple");
-        return 0;
-    }
-    if (_PyArg_OwnerScope_BeginTuple(scope, args, 0) < 0) {
-        return 0;
-    }
-    va_list va;
-    va_start(va, format);
-    int retval = vgetargs1_impl(NULL, NULL, scope->nargs, format, &va, 0,
-                                scope);
-    va_end(va);
-    if (PyErr_Occurred()) {
-        retval = 0;
-    }
-    return retval;
-}
-
 
 static void
 seterror(Py_ssize_t iarg, const char *msg, int *levels, const char *fname,
@@ -660,7 +596,7 @@ converttuple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
     }
 
     len = PyTuple_GET_SIZE(arg);
-    PyObject *const *items = len == n ? _PyBorrow_TupleItems(arg) : NULL;
+    PyObject *const *items = len == n ? _PyBorrow_TupleItems(arg, n) : NULL;
     if (!istuple) {
         Py_DECREF(arg);            /* the run owns the elements */
     }
@@ -1618,7 +1554,7 @@ _PyArg_ParseStackAndKeywords(PyObject *const *args, Py_ssize_t nargs, PyObject *
     va_list va;
 
     va_start(va, parser);
-    retval = vgetargskeywordsfast_impl(args, nargs, NULL, kwnames, parser, &va, 0);
+    retval = vgetargskeywordsfast_impl(args, NULL, nargs, NULL, kwnames, parser, &va, 0);
     va_end(va);
     return retval;
 }
@@ -1631,7 +1567,7 @@ _PyArg_ParseStackAndKeywords_SizeT(PyObject *const *args, Py_ssize_t nargs, PyOb
     va_list va;
 
     va_start(va, parser);
-    retval = vgetargskeywordsfast_impl(args, nargs, NULL, kwnames, parser, &va, 0);
+    retval = vgetargskeywordsfast_impl(args, NULL, nargs, NULL, kwnames, parser, &va, 0);
     va_end(va);
     return retval;
 }
@@ -1756,8 +1692,11 @@ find_keyword_str(PyObject *kwnames, PyObject *const *kwstack, const char *key)
 
 #define IS_END_OF_FORMAT(c) (c == '\0' || c == ';' || c == ':')
 
+/* Parse nargs positional arguments from args, or from the items of tuple
+   when it is not NULL.  The tuple's items are pushed on the borrow stack
+   after the total arity check, so the run is bounded by the keyword list. */
 static int
-vgetargskeywords_impl(PyObject *const *args, Py_ssize_t nargs,
+vgetargskeywords_impl(PyObject *const *args, PyObject *tuple, Py_ssize_t nargs,
                       PyObject *kwargs, PyObject *kwnames,
                       const char *format, const char * const *kwlist,
                       va_list *p_va, int flags)
@@ -1778,7 +1717,8 @@ vgetargskeywords_impl(PyObject *const *args, Py_ssize_t nargs,
     freelist.first_available = 0;
     freelist.entries_malloced = 0;
 
-    assert(args != NULL || nargs == 0);
+    assert(args != NULL || tuple != NULL || nargs == 0);
+    assert(tuple == NULL || kwnames == NULL);
     assert(kwargs == NULL || PyDict_Check(kwargs));
     assert(kwnames == NULL || PyTuple_Check(kwnames));
     assert(format != NULL);
@@ -1840,6 +1780,12 @@ vgetargskeywords_impl(PyObject *const *args, Py_ssize_t nargs,
                      (len == 1) ? "" : "s",
                      nargs + nkwargs);
         return cleanreturn(0, &freelist);
+    }
+    if (tuple != NULL) {
+        args = _PyBorrow_TupleItems(tuple, nargs);
+        if (args == NULL) {
+            return cleanreturn(0, &freelist);
+        }
     }
 
     /* convert tuple args and keyword args in same loop, using kwlist to drive process */
@@ -1914,22 +1860,26 @@ vgetargskeywords_impl(PyObject *const *args, Py_ssize_t nargs,
                 current_arg = args[i];
             }
             else if (nkwargs && i >= pos) {
-                /* Keyword values are owned; the borrow stack keeps them
-                   for the parse's borrowed outputs. */
-                PyObject *owned = NULL;
                 if (kwargs != NULL) {
+                    /* A dict value may be a fresh box of an inline value:
+                       the borrow stack keeps it for the borrowed outputs. */
+                    PyObject *owned;
                     if (PyDict_GetItemStringRef(kwargs, kwlist[i], &owned) < 0) {
                         return cleanreturn(0, &freelist);
                     }
+                    if (owned != NULL) {
+                        current_arg = _PyBorrow_Keep(owned);
+                        if (current_arg == NULL) {
+                            return cleanreturn(0, &freelist);
+                        }
+                    }
                 }
                 else {
-                    owned = find_keyword_str(kwnames, kwstack, kwlist[i]);
+                    /* The caller's kwstack owns the value. */
+                    current_arg = find_keyword_str(kwnames, kwstack, kwlist[i]);
+                    Py_XDECREF(current_arg);
                 }
-                if (owned != NULL) {
-                    current_arg = _PyBorrow_Keep(owned);
-                    if (current_arg == NULL) {
-                        return cleanreturn(0, &freelist);
-                    }
+                if (current_arg != NULL) {
                     --nkwargs;
                 }
             }
@@ -2117,13 +2067,8 @@ vgetargskeywords(PyObject *argstuple, PyObject *kwargs,
                  const char *format, const char * const *kwlist,
                  va_list *p_va, int flags)
 {
-    PyObject *const *args = _PyBorrow_TupleItems(argstuple);
-    if (args == NULL) {
-        return 0;
-    }
-    Py_ssize_t nargs = PyTuple_GET_SIZE(argstuple);
-    return vgetargskeywords_impl(args, nargs, kwargs, NULL,
-                                 format, kwlist, p_va, flags);
+    return vgetargskeywords_impl(NULL, argstuple, PyTuple_GET_SIZE(argstuple),
+                                 kwargs, NULL, format, kwlist, p_va, flags);
 }
 
 static int
@@ -2392,8 +2337,12 @@ find_keyword(PyObject *kwnames, PyObject *const *kwstack, PyObject *key)
     return NULL;
 }
 
+/* Parse nargs positional arguments from args, or from the items of tuple
+   when it is not NULL.  The tuple's items are pushed on the borrow stack
+   after the arity checks, so a rejected call pushes nothing. */
 static int
-vgetargskeywordsfast_impl(PyObject *const *args, Py_ssize_t nargs,
+vgetargskeywordsfast_impl(PyObject *const *args, PyObject *tuple,
+                          Py_ssize_t nargs,
                           PyObject *kwargs, PyObject *kwnames,
                           struct _PyArg_Parser *parser,
                           va_list *p_va, int flags)
@@ -2417,6 +2366,7 @@ vgetargskeywordsfast_impl(PyObject *const *args, Py_ssize_t nargs,
 
     assert(kwargs == NULL || PyDict_Check(kwargs));
     assert(kwargs == NULL || kwnames == NULL);
+    assert(tuple == NULL || kwnames == NULL);
     assert(p_va != NULL);
 
     if (parser == NULL) {
@@ -2488,6 +2438,12 @@ vgetargskeywordsfast_impl(PyObject *const *args, Py_ssize_t nargs,
         }
         return cleanreturn(0, &freelist);
     }
+    if (tuple != NULL) {
+        args = _PyBorrow_TupleItems(tuple, nargs);
+        if (args == NULL) {
+            return cleanreturn(0, &freelist);
+        }
+    }
 
     format = parser->format;
     assert(format != NULL || len == 0);
@@ -2508,25 +2464,29 @@ vgetargskeywordsfast_impl(PyObject *const *args, Py_ssize_t nargs,
         else if (nkwargs && i >= pos) {
             /* The parser's keyword tuple holds interned str. */
             keyword = _PyTuple_GET_OBJECT(kwtuple, i - pos);
-            /* Keyword values are owned; the borrow stack keeps them for the
-               parse's borrowed outputs. */
-            PyObject *owned;
             if (kwargs != NULL) {
+                /* A dict value may be a fresh box of an inline value: the
+                   borrow stack keeps it for the borrowed outputs. */
+                PyObject *owned;
                 if (PyDict_GetItemRef(kwargs, keyword, &owned) < 0) {
                     return cleanreturn(0, &freelist);
                 }
+                if (owned != NULL) {
+                    current_arg = _PyBorrow_Keep(owned);
+                    if (current_arg == NULL) {
+                        return cleanreturn(0, &freelist);
+                    }
+                }
             }
             else {
-                owned = find_keyword(kwnames, kwstack, keyword);
-                if (owned == NULL && PyErr_Occurred()) {
+                /* The caller's kwstack owns the value. */
+                current_arg = find_keyword(kwnames, kwstack, keyword);
+                if (current_arg == NULL && PyErr_Occurred()) {
                     return cleanreturn(0, &freelist);
                 }
+                Py_XDECREF(current_arg);
             }
-            if (owned != NULL) {
-                current_arg = _PyBorrow_Keep(owned);
-                if (current_arg == NULL) {
-                    return cleanreturn(0, &freelist);
-                }
+            if (current_arg != NULL) {
                 --nkwargs;
             }
         }
@@ -2621,9 +2581,6 @@ static int
 vgetargskeywordsfast(PyObject *args, PyObject *keywords,
                      struct _PyArg_Parser *parser, va_list *p_va, int flags)
 {
-    PyObject *const *stack;
-    Py_ssize_t nargs;
-
     if (args == NULL
         || !PyTuple_Check(args)
         || (keywords != NULL && !PyDict_Check(keywords)))
@@ -2632,511 +2589,19 @@ vgetargskeywordsfast(PyObject *args, PyObject *keywords,
         return 0;
     }
 
-    stack = _PyBorrow_TupleItems(args);
-    if (stack == NULL) {
-        return 0;
-    }
-    nargs = PyTuple_GET_SIZE(args);
-    return vgetargskeywordsfast_impl(stack, nargs, keywords, NULL,
-                                     parser, p_va, flags);
+    return vgetargskeywordsfast_impl(NULL, args, PyTuple_GET_SIZE(args),
+                                     keywords, NULL, parser, p_va, flags);
 }
 
-
-int
-_PyArg_OwnerScope_BeginTuple(_PyArg_OwnerScope *scope, PyObject *args,
-                             Py_ssize_t keyword_owner_budget)
-{
-    *scope = (_PyArg_OwnerScope){0};
-    scope->values = scope->inline_values;
-    scope->objects = scope->inline_objects;
-    scope->capacity = Py_ARRAY_LENGTH(scope->inline_objects);
-    if (PyErr_Occurred()) {
-        return -1;
-    }
-    if (!PyTuple_Check(args) || keyword_owner_budget < 0) {
-        PyErr_BadInternalCall();
-        return -1;
-    }
-    scope->tuple = Py_NewRef(args);
-    scope->nargs = PyTuple_GET_SIZE(args);
-    scope->keyword_budget = keyword_owner_budget;
-    return 0;
-}
-
-static int
-arg_scope_materialize(_PyArg_OwnerScope *scope)
-{
-    assert(!scope->ended && !scope->materialized);
-    Py_ssize_t nargs = scope->nargs;
-    Py_ssize_t budget = scope->keyword_budget;
-    if (nargs > PY_SSIZE_T_MAX - budget) {
-        PyErr_NoMemory();
-        return -1;
-    }
-    Py_ssize_t count = nargs + budget;
-    if (count > scope->capacity) {
-        if ((size_t)nargs > SIZE_MAX / sizeof(PyValue) ||
-            (size_t)count > (SIZE_MAX - (size_t)nargs * sizeof(PyValue)) /
-                            sizeof(PyObject *)) {
-            PyErr_NoMemory();
-            return -1;
-        }
-        size_t values_size = (size_t)nargs * sizeof(PyValue);
-        scope->storage = PyMem_Malloc(values_size + (size_t)count * sizeof(PyObject *));
-        if (scope->storage == NULL) {
-            if (!PyErr_Occurred()) {
-                PyErr_NoMemory();
-            }
-            return -1;
-        }
-        if (PyErr_Occurred()) {
-            return -1;
-        }
-        scope->values = scope->storage;
-        scope->objects = (PyObject **)((char *)scope->storage + values_size);
-        scope->capacity = count;
-    }
-    for (Py_ssize_t i = 0; i < nargs; i++) {
-        scope->values[i] = PyValue_NULL;
-    }
-    for (Py_ssize_t i = 0; i < count; i++) {
-        scope->objects[i] = NULL;
-    }
-    scope->nvalues = nargs;
-    scope->nobjects = nargs;
-    /* No callback occurs while capturing/promoting the immutable source. */
-    for (Py_ssize_t i = 0; i < nargs; i++) {
-        scope->values[i] = PyValue_MakeHeapSafe(PyTuple_GET_VALUE(scope->tuple, i));
-    }
-    for (Py_ssize_t i = 0; i < nargs; i++) {
-        scope->objects[i] = PyValue_AsObject(scope->values[i]);
-        if (scope->objects[i] == NULL || PyErr_Occurred()) {
-            return -1;
-        }
-    }
-    scope->materialized = 1;
-    return 0;
-}
-
-PyObject *const *
-_PyArg_UnpackPositionalOwned(_PyArg_OwnerScope *scope, const char *name,
-                             Py_ssize_t min, Py_ssize_t max)
-{
-    assert(!scope->ended && !scope->materialized);
-    assert(scope->tuple != NULL && scope->keyword_budget == 0);
-    assert(0 <= min && min <= max);
-    if (PyErr_Occurred()) {
-        return NULL;
-    }
-    if (!_PyArg_CheckPositional(name, scope->nargs, min, max)) {
-        return NULL;
-    }
-    if (arg_scope_materialize(scope) < 0) {
-        return NULL;
-    }
-    return _PyArg_OwnerScope_Objects(scope);
-}
-
-PyObject *const *
-_PyArg_OwnerScope_Objects(const _PyArg_OwnerScope *scope)
-{
-    assert(scope->materialized && !scope->ended);
-    return scope->objects;
-}
-
-static void
-arg_scope_save_error(PyObject **saved)
-{
-    _PyValue_RestoreException(*saved);
-    *saved = PyErr_GetRaisedException();
-}
-
-enum { ARG_LEASE_OBJECTS = 1, ARG_LEASE_BUFFER = 2 };
-struct _PyArg_LeaseChunk {
-    struct _PyArg_LeaseChunk *next;
-    Py_ssize_t used;
-    int kind;
-    union {
-        PyObject *objects[8];
-        Py_buffer buffer;
-    } payload;
-};
-
-struct _PyArg_ResourceChunk {
-    struct _PyArg_ResourceChunk *next;
-    Py_ssize_t used, capacity;
-    _PyArg_FormatResource items[];
-};
-
-PyObject *
-_PyArg_OwnerScope_KeepObject(_PyArg_OwnerScope *scope, PyObject *owned)
-{
-    if (PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(owned);
-        _PyValue_RestoreException(saved);
-        return NULL;
-    }
-    if (owned == NULL) {
-        PyErr_SetString(PyExc_SystemError, "cannot lease a NULL argument owner");
-        return NULL;
-    }
-    if (scope->ended) {
-        PyErr_SetString(PyExc_SystemError, "cannot lease an ended argument scope");
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_DECREF(owned);
-        _PyValue_RestoreException(saved);
-        return NULL;
-    }
-    struct _PyArg_LeaseChunk *chunk = scope->lease_last;
-    if (chunk == NULL || chunk->kind != ARG_LEASE_OBJECTS || chunk->used == 8) {
-        chunk = PyMem_Malloc(sizeof(*chunk));
-        if (chunk == NULL || PyErr_Occurred()) {
-            if (!PyErr_Occurred()) {
-                PyErr_NoMemory();
-            }
-            PyObject *saved = PyErr_GetRaisedException();
-            PyMem_Free(chunk);
-            _PyValue_RestoreException(saved);
-            saved = PyErr_GetRaisedException();
-            Py_XDECREF(owned);
-            _PyValue_RestoreException(saved);
-            return NULL;
-        }
-        chunk->next = NULL;
-        chunk->used = 0;
-        chunk->kind = ARG_LEASE_OBJECTS;
-        for (int i = 0; i < 8; i++) {
-            chunk->payload.objects[i] = NULL;
-        }
-        if (scope->lease_last != NULL) {
-            scope->lease_last->next = chunk;
-        }
-        else {
-            scope->lease_first = chunk;
-        }
-        scope->lease_last = chunk;
-    }
-    chunk->payload.objects[chunk->used] = owned;
-    chunk->used++;
-    return owned;
-}
-
-/* PROPOSED new private API, not an existing spelling. Caller roots arg. */
-const Py_buffer *
-_PyArg_OwnerScope_GetBuffer(_PyArg_OwnerScope *scope, PyObject *arg)
-{
-    if (PyErr_Occurred()) {
-        return NULL;
-    }
-    if (scope == NULL || scope->ended || arg == NULL) {
-        PyErr_BadInternalCall();
-        return NULL;
-    }
-    struct _PyArg_LeaseChunk *chunk = PyMem_Malloc(sizeof(*chunk));
-    if (chunk == NULL || PyErr_Occurred()) {
-        if (!PyErr_Occurred()) {
-            PyErr_NoMemory();
-        }
-        PyObject *saved = PyErr_GetRaisedException();
-        PyMem_Free(chunk);
-        _PyValue_RestoreException(saved);
-        return NULL;
-    }
-    chunk->next = NULL;
-    chunk->used = 0;
-    chunk->kind = ARG_LEASE_BUFFER;
-    memset(&chunk->payload.buffer, 0, sizeof(chunk->payload.buffer));
-    if (scope->lease_last != NULL) {
-        scope->lease_last->next = chunk;
-    }
-    else {
-        scope->lease_first = chunk;
-    }
-    scope->lease_last = chunk;
-    /* Export directly into stationary storage. No stack descriptor is moved. */
-    int status = PyObject_GetBuffer(arg, &chunk->payload.buffer, PyBUF_SIMPLE);
-    if (status != 0) {
-        /* A failing exporter owns its partial initialization, as in GetBuffer. */
-        return NULL;
-    }
-    chunk->used = 1;
-    if (PyErr_Occurred()) {
-        /* Success acquired an obligation even with a pending exception. */
-        return NULL;
-    }
-    return &chunk->payload.buffer;
-}
-
-int
-_PyArg_FormatResources_Begin(_PyArg_OwnerScope *scope, Py_ssize_t initial_capacity)
-{
-    if (PyErr_Occurred()) {
-        return -1;
-    }
-    if (scope->ended || scope->resource_state != 0 || initial_capacity < 0) {
-        PyErr_SetString(PyExc_SystemError, "invalid argument resource scope state");
-        return -1;
-    }
-    scope->resource_state = 1;
-    if (initial_capacity <= 8) {
-        return 0;
-    }
-    size_t capacity = (size_t)initial_capacity;
-    if (capacity > (SIZE_MAX - sizeof(struct _PyArg_ResourceChunk)) /
-                   sizeof(_PyArg_FormatResource) ||
-        capacity > (size_t)PY_SSIZE_T_MAX) {
-        PyErr_NoMemory();
-        return -1;
-    }
-    size_t size = sizeof(struct _PyArg_ResourceChunk) +
-                  capacity * sizeof(_PyArg_FormatResource);
-    struct _PyArg_ResourceChunk *chunk = PyMem_Malloc(size);
-    if (chunk == NULL || PyErr_Occurred()) {
-        if (!PyErr_Occurred()) {
-            PyErr_NoMemory();
-        }
-        PyObject *saved = PyErr_GetRaisedException();
-        PyMem_Free(chunk);
-        _PyValue_RestoreException(saved);
-        return -1;
-    }
-    chunk->next = NULL;
-    chunk->used = 0;
-    chunk->capacity = initial_capacity;
-    scope->resource_first = scope->resource_last = chunk;
-    return 0;
-}
-
-int
-_PyArg_FormatResources_Register(_PyArg_OwnerScope *scope, void *item,
-                                _PyArg_FormatDestructor destructor)
-{
-    assert(destructor != NULL);
-    PyObject *saved = PyErr_GetRaisedException();
-    struct _PyArg_ResourceChunk *chunk = scope->resource_last;
-    if (saved != NULL || scope->ended || scope->resource_state != 1) {
-        if (saved == NULL) {
-            PyErr_SetString(PyExc_SystemError, "invalid argument resource registration");
-            saved = PyErr_GetRaisedException();
-        }
-        (void)destructor(NULL, item);
-        PyObject *cleanup = PyErr_GetRaisedException();
-        if (cleanup != NULL) {
-            Py_DECREF(cleanup);
-        }
-        _PyValue_RestoreException(saved);
-        return -1;
-    }
-    if (chunk == NULL || chunk->used == chunk->capacity) {
-        size_t capacity = 8;
-        if (capacity > (SIZE_MAX - sizeof(*chunk)) / sizeof(_PyArg_FormatResource)) {
-            PyErr_NoMemory();
-            saved = PyErr_GetRaisedException();
-            (void)destructor(NULL, item);
-            PyObject *cleanup = PyErr_GetRaisedException();
-            Py_XDECREF(cleanup);
-            _PyValue_RestoreException(saved);
-            return -1;
-        }
-        size_t size = sizeof(*chunk) + capacity * sizeof(_PyArg_FormatResource);
-        chunk = PyMem_Malloc(size);
-        if (chunk == NULL || PyErr_Occurred()) {
-            if (!PyErr_Occurred()) {
-                PyErr_NoMemory();
-            }
-            saved = PyErr_GetRaisedException();
-            PyMem_Free(chunk);
-            _PyValue_RestoreException(saved);
-            saved = PyErr_GetRaisedException();
-            (void)destructor(NULL, item);
-            PyObject *cleanup = PyErr_GetRaisedException();
-            Py_XDECREF(cleanup);
-            _PyValue_RestoreException(saved);
-            return -1;
-        }
-        chunk->next = NULL;
-        chunk->used = 0;
-        chunk->capacity = 8;
-        if (scope->resource_last != NULL) {
-            scope->resource_last->next = chunk;
-        }
-        else {
-            scope->resource_first = chunk;
-        }
-        scope->resource_last = chunk;
-    }
-    chunk->items[chunk->used].item = item;
-    chunk->items[chunk->used].destructor = destructor;
-    chunk->used++;
-    return 0;
-}
-
-int
-_PyArg_FormatResources_Finish(_PyArg_OwnerScope *scope, int success)
-{
-    if (scope->resource_state == 3 || scope->resource_state == 4) {
-        return scope->resource_state == 4 && !PyErr_Occurred();
-    }
-    if (scope->resource_state == 0) {
-        scope->resource_state = PyErr_Occurred() || !success ? 3 : 4;
-        return scope->resource_state == 4;
-    }
-    if (scope->resource_state != 1) {
-        PyErr_SetString(PyExc_SystemError, "recursive argument resource cleanup");
-        return 0;
-    }
-    scope->resource_state = 2;
-    if (PyErr_Occurred()) {
-        success = 0;
-    }
-    if (success) {
-        for (struct _PyArg_ResourceChunk *chunk = scope->resource_first;
-             chunk != NULL; chunk = chunk->next) {
-            for (Py_ssize_t i = 0; i < chunk->used; i++) {
-                chunk->items[i].destructor = NULL;
-            }
-        }
-        scope->resource_state = 4;
-        return !PyErr_Occurred();
-    }
-    for (struct _PyArg_ResourceChunk *chunk = scope->resource_first;
-         chunk != NULL; chunk = chunk->next) {
-        for (Py_ssize_t i = 0; i < chunk->used; i++) {
-            _PyArg_FormatResource *resource = &chunk->items[i];
-            void *item = resource->item;
-            _PyArg_FormatDestructor destructor = resource->destructor;
-            resource->item = NULL;
-            resource->destructor = NULL;
-            if (destructor == NULL) {
-                continue;
-            }
-            PyObject *saved = PyErr_GetRaisedException();
-            int status = destructor(NULL, item);
-            if (status < 0 && saved == NULL && !PyErr_Occurred()) {
-                PyErr_SetString(PyExc_SystemError,
-                                "argument cleanup failed without an exception");
-            }
-            _PyValue_RestoreException(saved);
-        }
-    }
-    scope->resource_state = 3;
-    return 0;
-}
-
-int
-_PyArg_OwnerScope_End(_PyArg_OwnerScope *scope)
-{
-    if (scope->ended) {
-        return PyErr_Occurred() ? -1 : 0;
-    }
-    scope->ended = 1;
-    if (scope->resource_state == 1) {
-        (void)_PyArg_FormatResources_Finish(scope, 0);
-    }
-    PyObject *saved = PyErr_GetRaisedException();
-    struct _PyArg_LeaseChunk *lease = scope->lease_first;
-    scope->lease_first = scope->lease_last = NULL;
-    struct _PyArg_LeaseChunk *reversed = NULL;
-    while (lease != NULL) {
-        struct _PyArg_LeaseChunk *next = lease->next;
-        lease->next = reversed;
-        reversed = lease;
-        lease = next;
-    }
-    while (reversed != NULL) {
-        struct _PyArg_LeaseChunk *next = reversed->next;
-        if (reversed->kind == ARG_LEASE_OBJECTS) {
-            for (Py_ssize_t i = reversed->used; i > 0; i--) {
-                PyObject *object = reversed->payload.objects[i - 1];
-                reversed->payload.objects[i - 1] = NULL;
-                Py_XDECREF(object);
-                arg_scope_save_error(&saved);
-            }
-        }
-        else {
-            assert(reversed->kind == ARG_LEASE_BUFFER);
-            if (reversed->used != 0) {
-                reversed->used = 0;  /* Disarm before callback. */
-                Py_buffer *view = &reversed->payload.buffer;
-                PyObject *exporter = view->obj;
-                if (exporter != NULL) {
-                    PyBufferProcs *pb = Py_TYPE(exporter)->tp_as_buffer;
-                    if (pb != NULL && pb->bf_releasebuffer != NULL) {
-                        pb->bf_releasebuffer(exporter, view);
-                    }
-                    view->obj = NULL;
-                    arg_scope_save_error(&saved);
-                    Py_DECREF(exporter);
-                    arg_scope_save_error(&saved);
-                }
-            }
-        }
-        PyMem_Free(reversed);
-        arg_scope_save_error(&saved);
-        reversed = next;
-    }
-    for (Py_ssize_t i = scope->nobjects; i > 0; i--) {
-        PyObject *object = scope->objects[i - 1];
-        scope->objects[i - 1] = NULL;
-        Py_XDECREF(object);
-        arg_scope_save_error(&saved);
-    }
-    for (Py_ssize_t i = scope->nvalues; i > 0; i--) {
-        PyValue value = scope->values[i - 1];
-        scope->values[i - 1] = PyValue_NULL;
-        PyValue_XCLOSE(value);
-        arg_scope_save_error(&saved);
-    }
-    Py_CLEAR(scope->kwargs);
-    arg_scope_save_error(&saved);
-    Py_CLEAR(scope->kwtuple);
-    arg_scope_save_error(&saved);
-    Py_CLEAR(scope->tuple);
-    arg_scope_save_error(&saved);
-    void *storage = scope->storage;
-    scope->storage = NULL;
-    scope->objects = NULL;
-    scope->values = NULL;
-    if (storage != NULL) {
-        PyMem_Free(storage);
-        arg_scope_save_error(&saved);
-    }
-    struct _PyArg_ResourceChunk *resource = scope->resource_first;
-    scope->resource_first = scope->resource_last = NULL;
-    while (resource != NULL) {
-        struct _PyArg_ResourceChunk *next = resource->next;
-        PyMem_Free(resource);
-        arg_scope_save_error(&saved);
-        resource = next;
-    }
-    _PyValue_RestoreException(saved);
-    return PyErr_Occurred() ? -1 : 0;
-}
-
-static int
-arg_scope_keep_keyword(_PyArg_OwnerScope *scope, PyObject *owned)
-{
-    assert(scope->materialized);
-    if (scope->nobjects >= scope->nargs + scope->keyword_budget) {
-        PyErr_SetString(PyExc_SystemError, "argument keyword owner budget exhausted");
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_DECREF(owned);
-        _PyValue_RestoreException(saved);
-        return -1;
-    }
-    scope->objects[scope->nobjects++] = owned;
-    return 0;
-}
 
 #undef _PyArg_UnpackKeywords
 
-static PyObject *const *
-unpack_keywords(PyObject *const *args, Py_ssize_t nargs,
+PyObject * const *
+_PyArg_UnpackKeywords(PyObject *const *args, Py_ssize_t nargs,
                       PyObject *kwargs, PyObject *kwnames,
                       struct _PyArg_Parser *parser,
                       int minpos, int maxpos, int minkw, int varpos,
-                      PyObject **buf, _PyArg_OwnerScope *scope)
+                      PyObject **buf)
 {
     PyObject *kwtuple;
     PyObject *keyword;
@@ -3162,14 +2627,11 @@ unpack_keywords(PyObject *const *args, Py_ssize_t nargs,
         args = buf;
     }
 
-    if (parser_init(parser) < 0 || PyErr_Occurred()) {
+    if (parser_init(parser) < 0) {
         return NULL;
     }
 
     kwtuple = parser->kwtuple;
-    if (scope != NULL) {
-        scope->kwtuple = Py_NewRef(kwtuple);
-    }
     posonly = parser->pos;
     minposonly = Py_MIN(posonly, minpos);
     maxargs = posonly + (int)PyTuple_GET_SIZE(kwtuple);
@@ -3185,13 +2647,7 @@ unpack_keywords(PyObject *const *args, Py_ssize_t nargs,
         nkwargs = 0;
     }
     if (nkwargs == 0 && minkw == 0 && minpos <= nargs && (varpos || nargs <= maxpos)) {
-        /* Shape is valid before the scoped tuple view is materialized. */
-        if (scope != NULL) {
-            if (arg_scope_materialize(scope) < 0) {
-                return NULL;
-            }
-            return _PyArg_OwnerScope_Objects(scope);
-        }
+        /* Fast path. */
         return args;
     }
     if (!varpos && nargs + nkwargs > maxargs) {
@@ -3239,15 +2695,6 @@ unpack_keywords(PyObject *const *args, Py_ssize_t nargs,
         return NULL;
     }
 
-    if (scope != NULL) {
-        if (scope->keyword_budget < maxargs || arg_scope_materialize(scope) < 0) {
-            if (!PyErr_Occurred()) {
-                PyErr_SetString(PyExc_SystemError, "argument keyword owner budget too small");
-            }
-            return NULL;
-        }
-        args = _PyArg_OwnerScope_Objects(scope);
-    }
     if (varpos) {
         nargs = Py_MIN(maxpos, nargs);
     }
@@ -3265,12 +2712,22 @@ unpack_keywords(PyObject *const *args, Py_ssize_t nargs,
                 if (PyDict_GetItemRef(kwargs, keyword, &current_arg) < 0) {
                     return NULL;
                 }
+                /* A dict value may be a fresh box of an inline value: the
+                   borrow stack keeps it for the caller's borrowed buffer. */
+                if (current_arg != NULL) {
+                    current_arg = _PyBorrow_Keep(current_arg);
+                    if (current_arg == NULL) {
+                        return NULL;
+                    }
+                }
             }
             else {
+                /* The caller's kwstack owns the value. */
                 current_arg = find_keyword(kwnames, kwstack, keyword);
                 if (current_arg == NULL && PyErr_Occurred()) {
                     return NULL;
                 }
+                Py_XDECREF(current_arg);
             }
         }
         else if (i >= reqlimit) {
@@ -3280,24 +2737,12 @@ unpack_keywords(PyObject *const *args, Py_ssize_t nargs,
             current_arg = NULL;
         }
 
-        if (current_arg != NULL) {
-            if (scope != NULL) {
-                if (arg_scope_keep_keyword(scope, current_arg) < 0) {
-                    return NULL;
-                }
-            }
-            else {
-                /* The borrow stack keeps the value for the caller's
-                   borrowed buffer. */
-                current_arg = _PyBorrow_Keep(current_arg);
-                if (current_arg == NULL) {
-                    return NULL;
-                }
-            }
+        buf[i] = current_arg;
+
+        if (current_arg) {
             --nkwargs;
         }
-        buf[i] = current_arg;
-        if (current_arg == NULL && (i < minpos || (maxpos <= i && i < reqlimit))) {
+        else if (i < minpos || (maxpos <= i && i < reqlimit)) {
             /* Less arguments than required */
             keyword = _PyTuple_GET_OBJECT(kwtuple, i - posonly);
             PyErr_Format(PyExc_TypeError,  "%.200s%s missing required "
@@ -3327,9 +2772,6 @@ unpack_keywords(PyObject *const *args, Py_ssize_t nargs,
             }
             if (current_arg) {
                 Py_DECREF(current_arg);
-                if (PyErr_Occurred()) {
-                    return NULL;
-                }
                 /* arg present in tuple and in dict */
                 PyErr_Format(PyExc_TypeError,
                              "argument for %.200s%s given by name ('%U') "
@@ -3348,43 +2790,6 @@ unpack_keywords(PyObject *const *args, Py_ssize_t nargs,
     return buf;
 }
 
-PyObject *const *
-_PyArg_UnpackKeywords(PyObject *const *args, Py_ssize_t nargs,
-                      PyObject *kwargs, PyObject *kwnames,
-                      struct _PyArg_Parser *parser,
-                      int minpos, int maxpos, int minkw, int varpos,
-                      PyObject **buf)
-{
-    return unpack_keywords(args, nargs, kwargs, kwnames, parser,
-                           minpos, maxpos, minkw, varpos, buf, NULL);
-}
-
-PyObject *const *
-_PyArg_UnpackKeywordsOwned(_PyArg_OwnerScope *scope, PyObject *kwargs,
-                           struct _PyArg_Parser *parser,
-                           int minpos, int maxpos, int minkw, int varpos,
-                           PyObject **buf)
-{
-    assert(!scope->ended && !scope->materialized && scope->tuple != NULL);
-    if (PyErr_Occurred()) {
-        return NULL;
-    }
-    if (kwargs != NULL && !PyDict_Check(kwargs)) {
-        PyErr_BadInternalCall();
-        return NULL;
-    }
-    scope->kwargs = Py_XNewRef(kwargs);
-    /* Preserve the old macro's pre-parser-init no-keyword fast path. */
-    if (minkw == 0 && kwargs == NULL && minpos <= scope->nargs &&
-        (varpos || scope->nargs <= maxpos)) {
-        if (arg_scope_materialize(scope) < 0) {
-            return NULL;
-        }
-        return _PyArg_OwnerScope_Objects(scope);
-    }
-    return unpack_keywords(NULL, scope->nargs, kwargs, NULL, parser,
-                           minpos, maxpos, minkw, varpos, buf, scope);
-}
 
 static const char *
 skipitem(const char **p_format, va_list *p_va, int flags)
@@ -3599,11 +3004,15 @@ PyArg_UnpackTuple(PyObject *args, const char *name, Py_ssize_t min, Py_ssize_t m
             "PyArg_UnpackTuple() argument list is not a tuple");
         return 0;
     }
-    stack = _PyBorrow_TupleItems(args);
+    nargs = PyTuple_GET_SIZE(args);
+    /* Check the arity first, so a rejected call pushes nothing. */
+    if (!_PyArg_CheckPositional(name, nargs, min, max)) {
+        return 0;
+    }
+    stack = _PyBorrow_TupleItems(args, nargs);
     if (stack == NULL) {
         return 0;
     }
-    nargs = PyTuple_GET_SIZE(args);
 
     va_start(vargs, max);
     retval = unpack_stack(stack, nargs, name, min, max, vargs);

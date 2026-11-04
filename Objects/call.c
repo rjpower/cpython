@@ -2,12 +2,13 @@
 #include "pycore_borrow.h"        // _PyBorrowScope_Enter()
 #include "pycore_call.h"          // _PyObject_CallNoArgsTstate()
 #include "pycore_ceval.h"         // _Py_EnterRecursiveCallTstate()
-#include "pycore_dict.h"          // _PyDict_FromItems()
+#include "pycore_dict.h"          // _PyDict_NewPresized()
 #include "pycore_function.h"      // _PyFunction_Vectorcall() definition
 #include "pycore_modsupport.h"    // _Py_VaBuildStack()
 #include "pycore_object.h"        // _PyCFunctionWithKeywords_TrampolineCall()
 #include "pycore_pyerrors.h"      // _PyErr_Occurred()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
+#include "pycore_tuple.h"         // _PyTuple_GET_OBJECT()
 #include "pycore_value.h"         // Owning object bridges and cleanup
 
 
@@ -288,20 +289,16 @@ static PyObject *
 _PyVectorcall_Call(PyThreadState *tstate, PyObject *callable,
                    PyObject *tuple, PyObject *kwargs, bool respect_flags)
 {
-    _PyArg_OwnerScope scope = {0};
+    /* The tuple's items are lent to the callee as a borrow-stack run. */
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     PyObject *const *stack = NULL;
     PyObject *kwnames = NULL;
     PyObject *result = NULL;
-    Py_ssize_t nargs = 0;
-    if (_PyArg_OwnerScope_BeginTuple(&scope, tuple, 0) < 0) {
+    Py_ssize_t nargs = PyTuple_GET_SIZE(tuple);
+    PyObject *const *args = _PyBorrow_TupleItems(tuple, nargs);
+    if (args == NULL) {
         goto done;
     }
-    PyObject *const *args = _PyArg_UnpackPositionalOwned(
-        &scope, "vectorcall", 0, PY_SSIZE_T_MAX);
-    if (args == NULL || PyErr_Occurred()) {
-        goto done;
-    }
-    nargs = scope.nargs;
     size_t nargsf = nargs;
     if (kwargs != NULL && PyDict_GET_SIZE(kwargs) != 0) {
         stack = _PyStack_UnpackDict(tstate, args, nargs, kwargs, &kwnames);
@@ -346,7 +343,7 @@ done:
     if (stack != NULL) {
         _PyStack_UnpackDict_Free(stack, nargs, kwnames);
     }
-    _PyArg_OwnerScope_End(&scope);
+    _PyBorrowScope_Exit(tstate, mark);
     return _Py_CheckFunctionResult(tstate, callable, call_finish_result(result), NULL);
 }
 
@@ -542,19 +539,15 @@ _PyObject_Call_Prepend(PyThreadState *tstate, PyObject *callable,
                        PyObject *obj, PyObject *args, PyObject *kwargs)
 {
     assert(PyTuple_Check(args));
-    _PyArg_OwnerScope scope = {0};
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     PyObject *small_stack[_PY_FASTCALL_SMALL_STACK];
     PyObject **stack = small_stack;
     PyObject *result = NULL;
-    if (_PyArg_OwnerScope_BeginTuple(&scope, args, 0) < 0) {
+    Py_ssize_t count = PyTuple_GET_SIZE(args);
+    PyObject *const *views = _PyBorrow_TupleItems(args, count);
+    if (views == NULL) {
         goto done;
     }
-    PyObject *const *views = _PyArg_UnpackPositionalOwned(
-        &scope, "call", 0, PY_SSIZE_T_MAX);
-    if (views == NULL || PyErr_Occurred()) {
-        goto done;
-    }
-    Py_ssize_t count = scope.nargs;
     if ((size_t)count > SIZE_MAX / sizeof(*stack) - 1) {
         PyErr_NoMemory();
         goto done;
@@ -575,7 +568,7 @@ done:
     if (stack != small_stack) {
         call_free_buffer(stack);
     }
-    _PyArg_OwnerScope_End(&scope);
+    _PyBorrowScope_Exit(tstate, mark);
     return call_finish_result(result);
 }
 
@@ -596,28 +589,25 @@ _PyObject_CallFunctionVa(PyThreadState *tstate, PyObject *callable,
     Py_ssize_t nargs = 0;
     PyObject **stack = _Py_VaBuildStack(small_stack, Py_ARRAY_LENGTH(small_stack),
                                        format, va, &nargs);
-    _PyArg_OwnerScope scope = {0};
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     PyObject *result = NULL;
     if (stack == NULL || PyErr_Occurred()) {
         goto done;
     }
     EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_API, callable);
     if (nargs == 1 && PyTuple_Check(stack[0])) {
-        if (_PyArg_OwnerScope_BeginTuple(&scope, stack[0], 0) < 0) {
+        Py_ssize_t count = PyTuple_GET_SIZE(stack[0]);
+        PyObject *const *args = _PyBorrow_TupleItems(stack[0], count);
+        if (args == NULL) {
             goto done;
         }
-        PyObject *const *args = _PyArg_UnpackPositionalOwned(
-            &scope, "call", 0, PY_SSIZE_T_MAX);
-        if (args == NULL || PyErr_Occurred()) {
-            goto done;
-        }
-        result = _PyObject_VectorcallTstate(tstate, callable, args, scope.nargs, NULL);
+        result = _PyObject_VectorcallTstate(tstate, callable, args, count, NULL);
     }
     else {
         result = _PyObject_VectorcallTstate(tstate, callable, stack, nargs, NULL);
     }
 done:
-    _PyArg_OwnerScope_End(&scope);
+    _PyBorrowScope_Exit(tstate, mark);
     if (stack != NULL) {
         for (Py_ssize_t i = 0; i < nargs; i++) {
             call_close_object(&stack[i]);
@@ -685,7 +675,7 @@ callmethod(PyThreadState *tstate, PyObject *obj, PyObject *name,
 {
     PyObject *boxes[4];
     _PyValueTemps temps = {boxes, 0, 4, NULL};
-    _PyArg_OwnerScope scope = {0};
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     PyObject *small_stack[_PY_FASTCALL_SMALL_STACK];
     PyObject **built = NULL;
     Py_ssize_t nargs = 0;
@@ -720,14 +710,11 @@ callmethod(PyThreadState *tstate, PyObject *obj, PyObject *name,
     PyObject *const *args = built;
     Py_ssize_t count = nargs;
     if (nargs == 1 && PyTuple_Check(built[0])) {
-        if (_PyArg_OwnerScope_BeginTuple(&scope, built[0], 0) < 0) {
+        count = PyTuple_GET_SIZE(built[0]);
+        args = _PyBorrow_TupleItems(built[0], count);
+        if (args == NULL) {
             goto done;
         }
-        args = _PyArg_UnpackPositionalOwned(&scope, "call", 0, PY_SSIZE_T_MAX);
-        if (args == NULL || PyErr_Occurred()) {
-            goto done;
-        }
-        count = scope.nargs;
     }
     if (receiver != NULL) {
         result = _PyObject_VectorcallPrepend(tstate, callable, receiver, args, count, NULL);
@@ -736,7 +723,7 @@ callmethod(PyThreadState *tstate, PyObject *obj, PyObject *name,
         result = _PyObject_VectorcallTstate(tstate, callable, args, count, NULL);
     }
 done:
-    _PyArg_OwnerScope_End(&scope);
+    _PyBorrowScope_Exit(tstate, mark);
     if (built != NULL) {
         for (Py_ssize_t i = 0; i < nargs; i++) {
             call_close_object(&built[i]);
@@ -1093,19 +1080,20 @@ PyObject *
 _PyStack_AsDict(PyObject *const *values, PyObject *kwnames)
 {
     assert(kwnames != NULL);
-    _PyArg_OwnerScope scope = {0};
-    PyObject *result = NULL;
-    if (_PyArg_OwnerScope_BeginTuple(&scope, kwnames, 0) < 0) {
-        goto done;
+    Py_ssize_t nkwargs = PyTuple_GET_SIZE(kwnames);
+    PyObject *dict = _PyDict_NewPresized(nkwargs);
+    if (dict == NULL) {
+        return NULL;
     }
-    PyObject *const *keys = _PyArg_UnpackPositionalOwned(&scope, "keywords", 0, PY_SSIZE_T_MAX);
-    if (keys == NULL || PyErr_Occurred()) {
-        goto done;
+    for (Py_ssize_t i = 0; i < nkwargs; i++) {
+        /* Vectorcall kwnames hold only str, which is never inline. */
+        PyObject *key = _PyTuple_GET_OBJECT(kwnames, i);
+        if (PyDict_SetItem(dict, key, values[i]) < 0) {
+            Py_DECREF(dict);
+            return NULL;
+        }
     }
-    result = _PyDict_FromItems(keys, 1, values, 1, scope.nargs);
-done:
-    _PyArg_OwnerScope_End(&scope);
-    return call_finish_result(result);
+    return dict;
 }
 
 

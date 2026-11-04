@@ -8,7 +8,6 @@
 #include "Python.h"
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_namespace.h"     // _PyNamespace_New()
-#include "pycore_value.h"         // _PyValue_RestoreException()
 
 /* State for testing module state access from methods */
 
@@ -59,25 +58,13 @@ Example_finalize(PyObject *op)
 static PyObject *
 Example_demo(PyObject *op, PyObject *args)
 {
-    _PyArg_OwnerScope parse_scope = {0};
     PyObject *o = NULL;
-    PyObject *result = NULL;
-    if (!_PyArg_ParseTupleOwned(&parse_scope, args, "|O:demo", &o))
-        goto exit;
-    if (o != NULL && PyUnicode_Check(o)) {
-        result = Py_NewRef(o);
-    }
-    else {
-        result = Py_NewRef(Py_None);
-    }
-exit:
-    if (_PyArg_OwnerScope_End(&parse_scope) < 0) {
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(result);
-        _PyValue_RestoreException(saved);
+    if (!PyArg_ParseTuple(args, "|O:demo", &o))
         return NULL;
+    if (o != NULL && PyUnicode_Check(o)) {
+        return Py_NewRef(o);
     }
-    return result;
+    Py_RETURN_NONE;
 }
 
 #include "clinic/_testmultiphase.c.h"
@@ -339,22 +326,12 @@ Return the sum of i and j.");
 static PyObject *
 testexport_foo(PyObject *self, PyObject *args)
 {
-    _PyArg_OwnerScope parse_scope = {0};
     long i, j;
     long res;
-    PyObject *result = NULL;
-    if (!_PyArg_ParseTupleOwned(&parse_scope, args, "ll:foo", &i, &j))
-        goto exit;
-    res = i + j;
-    result = PyLong_FromLong(res);
-exit:
-    if (_PyArg_OwnerScope_End(&parse_scope) < 0) {
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(result);
-        _PyValue_RestoreException(saved);
+    if (!PyArg_ParseTuple(args, "ll:foo", &i, &j))
         return NULL;
-    }
-    return result;
+    res = i + j;
+    return PyLong_FromLong(res);
 }
 
 /* Test that PyState registration fails  */
@@ -544,22 +521,12 @@ Return the difference of i - j.");
 static PyObject *
 nonmodule_bar(PyObject *self, PyObject *args)
 {
-    _PyArg_OwnerScope parse_scope = {0};
     long i, j;
     long res;
-    PyObject *result = NULL;
-    if (!_PyArg_ParseTupleOwned(&parse_scope, args, "ll:bar", &i, &j))
-        goto exit;
-    res = i - j;
-    result = PyLong_FromLong(res);
-exit:
-    if (_PyArg_OwnerScope_End(&parse_scope) < 0) {
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_XDECREF(result);
-        _PyValue_RestoreException(saved);
+    if (!PyArg_ParseTuple(args, "ll:bar", &i, &j))
         return NULL;
-    }
-    return result;
+    res = i - j;
+    return PyLong_FromLong(res);
 }
 
 static PyMethodDef nonmodule_methods[] = {

@@ -5,7 +5,9 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_long.h"          // _PyLong_UnsignedLong_Converter()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 
@@ -37,11 +39,11 @@ py_blake2b_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(data), &_Py_ID(digest_size), &_Py_ID(key), &_Py_ID(salt), &_Py_ID(person), &_Py_ID(fanout), &_Py_ID(depth), &_Py_ID(leaf_size), &_Py_ID(node_offset), &_Py_ID(node_depth), &_Py_ID(inner_size), &_Py_ID(last_node), &_Py_ID(usedforsecurity), &_Py_ID(string), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(data)), _PyValue_STATIC_IMMORTAL(&_Py_ID(digest_size)), _PyValue_STATIC_IMMORTAL(&_Py_ID(key)), _PyValue_STATIC_IMMORTAL(&_Py_ID(salt)), _PyValue_STATIC_IMMORTAL(&_Py_ID(person)), _PyValue_STATIC_IMMORTAL(&_Py_ID(fanout)), _PyValue_STATIC_IMMORTAL(&_Py_ID(depth)), _PyValue_STATIC_IMMORTAL(&_Py_ID(leaf_size)), _PyValue_STATIC_IMMORTAL(&_Py_ID(node_offset)), _PyValue_STATIC_IMMORTAL(&_Py_ID(node_depth)), _PyValue_STATIC_IMMORTAL(&_Py_ID(inner_size)), _PyValue_STATIC_IMMORTAL(&_Py_ID(last_node)), _PyValue_STATIC_IMMORTAL(&_Py_ID(usedforsecurity)), _PyValue_STATIC_IMMORTAL(&_Py_ID(string)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -76,7 +78,11 @@ py_blake2b_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     int usedforsecurity = 1;
     PyObject *string = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 1));
+    if (_args_items == NULL) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -246,11 +252,11 @@ py_blake2s_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(data), &_Py_ID(digest_size), &_Py_ID(key), &_Py_ID(salt), &_Py_ID(person), &_Py_ID(fanout), &_Py_ID(depth), &_Py_ID(leaf_size), &_Py_ID(node_offset), &_Py_ID(node_depth), &_Py_ID(inner_size), &_Py_ID(last_node), &_Py_ID(usedforsecurity), &_Py_ID(string), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(data)), _PyValue_STATIC_IMMORTAL(&_Py_ID(digest_size)), _PyValue_STATIC_IMMORTAL(&_Py_ID(key)), _PyValue_STATIC_IMMORTAL(&_Py_ID(salt)), _PyValue_STATIC_IMMORTAL(&_Py_ID(person)), _PyValue_STATIC_IMMORTAL(&_Py_ID(fanout)), _PyValue_STATIC_IMMORTAL(&_Py_ID(depth)), _PyValue_STATIC_IMMORTAL(&_Py_ID(leaf_size)), _PyValue_STATIC_IMMORTAL(&_Py_ID(node_offset)), _PyValue_STATIC_IMMORTAL(&_Py_ID(node_depth)), _PyValue_STATIC_IMMORTAL(&_Py_ID(inner_size)), _PyValue_STATIC_IMMORTAL(&_Py_ID(last_node)), _PyValue_STATIC_IMMORTAL(&_Py_ID(usedforsecurity)), _PyValue_STATIC_IMMORTAL(&_Py_ID(string)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -285,7 +291,11 @@ py_blake2s_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     int usedforsecurity = 1;
     PyObject *string = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 1));
+    if (_args_items == NULL) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -506,4 +516,4 @@ _blake2_blake2b_hexdigest(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     return _blake2_blake2b_hexdigest_impl((Blake2Object *)self);
 }
-/*[clinic end generated code: output=5f76c18211cd7f8f input=a9049054013a1b77]*/
+/*[clinic end generated code: output=96f29c6e0ae5f48c input=a9049054013a1b77]*/

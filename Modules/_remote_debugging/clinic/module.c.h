@@ -5,11 +5,12 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_long.h"          // _PyLong_UnsignedLongLong_Converter()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
-#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(_remote_debugging_RemoteUnwinder___init____doc__,
 "RemoteUnwinder(pid, *, all_threads=False, only_active_thread=False,\n"
@@ -76,11 +77,11 @@ _remote_debugging_RemoteUnwinder___init__(PyObject *self, PyObject *args, PyObje
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(pid), &_Py_ID(all_threads), &_Py_ID(only_active_thread), &_Py_ID(mode), &_Py_ID(debug), &_Py_ID(skip_non_matching_threads), &_Py_ID(native), &_Py_ID(gc), &_Py_ID(opcodes), &_Py_ID(cache_frames), &_Py_ID(stats), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(pid)), _PyValue_STATIC_IMMORTAL(&_Py_ID(all_threads)), _PyValue_STATIC_IMMORTAL(&_Py_ID(only_active_thread)), _PyValue_STATIC_IMMORTAL(&_Py_ID(mode)), _PyValue_STATIC_IMMORTAL(&_Py_ID(debug)), _PyValue_STATIC_IMMORTAL(&_Py_ID(skip_non_matching_threads)), _PyValue_STATIC_IMMORTAL(&_Py_ID(native)), _PyValue_STATIC_IMMORTAL(&_Py_ID(gc)), _PyValue_STATIC_IMMORTAL(&_Py_ID(opcodes)), _PyValue_STATIC_IMMORTAL(&_Py_ID(cache_frames)), _PyValue_STATIC_IMMORTAL(&_Py_ID(stats)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -112,7 +113,11 @@ _remote_debugging_RemoteUnwinder___init__(PyObject *self, PyObject *args, PyObje
     int cache_frames = 0;
     int stats = 0;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 1));
+    if (_args_items == NULL) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -576,11 +581,11 @@ _remote_debugging_GCMonitor___init__(PyObject *self, PyObject *args, PyObject *k
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(pid), &_Py_ID(debug), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(pid)), _PyValue_STATIC_IMMORTAL(&_Py_ID(debug)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -603,7 +608,11 @@ _remote_debugging_GCMonitor___init__(PyObject *self, PyObject *args, PyObject *k
     pid_t pid;
     int debug = 0;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 1));
+    if (_args_items == NULL) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -673,11 +682,11 @@ _remote_debugging_GCMonitor_get_gc_stats(PyObject *self, PyObject *const *args, 
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(all_interpreters), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(all_interpreters)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -756,11 +765,11 @@ _remote_debugging_BinaryWriter___init__(PyObject *self, PyObject *args, PyObject
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(filename), &_Py_ID(sample_interval_us), &_Py_ID(start_time_us), &_Py_ID(compression), &_Py_ID(mode), &_Py_ID(capture_features), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(filename)), _PyValue_STATIC_IMMORTAL(&_Py_ID(sample_interval_us)), _PyValue_STATIC_IMMORTAL(&_Py_ID(start_time_us)), _PyValue_STATIC_IMMORTAL(&_Py_ID(compression)), _PyValue_STATIC_IMMORTAL(&_Py_ID(mode)), _PyValue_STATIC_IMMORTAL(&_Py_ID(capture_features)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -787,7 +796,11 @@ _remote_debugging_BinaryWriter___init__(PyObject *self, PyObject *args, PyObject
     int mode = -1;
     int capture_features = -1;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 3));
+    if (_args_items == NULL) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -861,11 +874,11 @@ _remote_debugging_BinaryWriter_write_sample(PyObject *self, PyObject *const *arg
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(stack_frames), &_Py_ID(timestamp_us), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(stack_frames)), _PyValue_STATIC_IMMORTAL(&_Py_ID(timestamp_us)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -928,11 +941,11 @@ _remote_debugging_BinaryWriter_set_stats(PyObject *self, PyObject *const *args, 
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(duration_sec), &_Py_ID(sample_rate), &_Py_ID(error_rate), &_Py_ID(missed_samples), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(duration_sec)), _PyValue_STATIC_IMMORTAL(&_Py_ID(sample_rate)), _PyValue_STATIC_IMMORTAL(&_Py_ID(error_rate)), _PyValue_STATIC_IMMORTAL(&_Py_ID(missed_samples)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1079,11 +1092,11 @@ _remote_debugging_BinaryWriter___exit__(PyObject *self, PyObject *const *args, P
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(exc_type), &_Py_ID(exc_val), &_Py_ID(exc_tb), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(exc_type)), _PyValue_STATIC_IMMORTAL(&_Py_ID(exc_val)), _PyValue_STATIC_IMMORTAL(&_Py_ID(exc_tb)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1181,11 +1194,11 @@ _remote_debugging_BinaryReader___init__(PyObject *self, PyObject *args, PyObject
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(filename), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(filename)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1203,33 +1216,22 @@ _remote_debugging_BinaryReader___init__(PyObject *self, PyObject *args, PyObject
     #undef KWTUPLE
     PyObject *argsbuf[1];
     PyObject * const *fastargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     PyObject *filename;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 1) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 1));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     filename = fastargs[0];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     return_value = _remote_debugging_BinaryReader___init___impl((BinaryReaderObject *)self, filename);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        return_value = -1;
-    }
     return return_value;
 }
 
@@ -1265,11 +1267,11 @@ _remote_debugging_BinaryReader_replay(PyObject *self, PyObject *const *args, Py_
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(collector), &_Py_ID(progress_callback), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(collector)), _PyValue_STATIC_IMMORTAL(&_Py_ID(progress_callback)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1411,11 +1413,11 @@ _remote_debugging_BinaryReader___exit__(PyObject *self, PyObject *const *args, P
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(exc_type), &_Py_ID(exc_val), &_Py_ID(exc_tb), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(exc_type)), _PyValue_STATIC_IMMORTAL(&_Py_ID(exc_val)), _PyValue_STATIC_IMMORTAL(&_Py_ID(exc_tb)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1527,11 +1529,11 @@ _remote_debugging_get_child_pids(PyObject *module, PyObject *const *args, Py_ssi
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(pid), &_Py_ID(recursive), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(pid)), _PyValue_STATIC_IMMORTAL(&_Py_ID(recursive)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1598,11 +1600,11 @@ _remote_debugging_is_python_process(PyObject *module, PyObject *const *args, Py_
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(pid), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(pid)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1680,11 +1682,11 @@ _remote_debugging_get_gc_stats(PyObject *module, PyObject *const *args, Py_ssize
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(pid), &_Py_ID(all_interpreters), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(pid)), _PyValue_STATIC_IMMORTAL(&_Py_ID(all_interpreters)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1727,4 +1729,4 @@ skip_optional_kwonly:
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=66e30dc8ab658e73 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=c8a9a523663dfc87 input=a9049054013a1b77]*/

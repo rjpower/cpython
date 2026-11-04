@@ -5,6 +5,7 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
@@ -36,11 +37,11 @@ _symtable_symtable(PyObject *module, PyObject *const *args, Py_ssize_t nargs, Py
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(module), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(module)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -93,4 +94,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=910e4f6ce98ae0a1 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=70bf7a7b4a3253d9 input=a9049054013a1b77]*/

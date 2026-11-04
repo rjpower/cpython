@@ -5,6 +5,7 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
@@ -40,11 +41,11 @@ _multibytecodec_MultibyteCodec_encode(PyObject *self, PyObject *const *args, Py_
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(input), &_Py_ID(errors), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(input)), _PyValue_STATIC_IMMORTAL(&_Py_ID(errors)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -125,11 +126,11 @@ _multibytecodec_MultibyteCodec_decode(PyObject *self, PyObject *const *args, Py_
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(input), &_Py_ID(errors), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(input)), _PyValue_STATIC_IMMORTAL(&_Py_ID(errors)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -210,11 +211,11 @@ _multibytecodec_MultibyteIncrementalEncoder_encode(PyObject *self, PyObject *con
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(input), &_Py_ID(final), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(input)), _PyValue_STATIC_IMMORTAL(&_Py_ID(final)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -342,11 +343,11 @@ _multibytecodec_MultibyteIncrementalDecoder_decode(PyObject *self, PyObject *con
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(input), &_Py_ID(final), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(input)), _PyValue_STATIC_IMMORTAL(&_Py_ID(final)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -663,4 +664,4 @@ PyDoc_STRVAR(_multibytecodec___create_codec__doc__,
 
 #define _MULTIBYTECODEC___CREATE_CODEC_METHODDEF    \
     {"__create_codec", (PyCFunction)_multibytecodec___create_codec, METH_O, _multibytecodec___create_codec__doc__},
-/*[clinic end generated code: output=20fec21d79e87a15 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=c2b7ab94e94fcbd9 input=a9049054013a1b77]*/

@@ -5,8 +5,10 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 
@@ -36,20 +38,24 @@ _elementtree_SubElement(PyObject *module, PyObject *args, PyObject *kwargs)
     if (!_PyArg_CheckPositional("SubElement", PyTuple_GET_SIZE(args), 2, 3)) {
         goto exit;
     }
-    if (!PyObject_TypeCheck(PyTuple_GET_ITEM(args, 0), get_elementtree_state(module)->Element_Type)) {
-        _PyArg_BadArgument("SubElement", "argument 1", (get_elementtree_state(module)->Element_Type)->tp_name, PyTuple_GET_ITEM(args, 0));
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
+    if (_args_items == NULL) {
         goto exit;
     }
-    parent = PyTuple_GET_ITEM(args, 0);
-    tag = PyTuple_GET_ITEM(args, 1);
+    if (!PyObject_TypeCheck(_args_items[0], get_elementtree_state(module)->Element_Type)) {
+        _PyArg_BadArgument("SubElement", "argument 1", (get_elementtree_state(module)->Element_Type)->tp_name, _args_items[0]);
+        goto exit;
+    }
+    parent = _args_items[0];
+    tag = _args_items[1];
     if (PyTuple_GET_SIZE(args) < 3) {
         goto skip_optional;
     }
-    if (!PyDict_Check(PyTuple_GET_ITEM(args, 2))) {
-        _PyArg_BadArgument("SubElement", "argument 3", "dict", PyTuple_GET_ITEM(args, 2));
+    if (!PyDict_Check(_args_items[2])) {
+        _PyArg_BadArgument("SubElement", "argument 3", "dict", _args_items[2]);
         goto exit;
     }
-    attrib = PyTuple_GET_ITEM(args, 2);
+    attrib = _args_items[2];
 skip_optional:
     if (kwargs == NULL) {
         extra = PyDict_New();
@@ -318,11 +324,11 @@ _elementtree_Element_find(PyObject *self, PyTypeObject *cls, PyObject *const *ar
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(path), &_Py_ID(namespaces), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(path)), _PyValue_STATIC_IMMORTAL(&_Py_ID(namespaces)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -394,11 +400,11 @@ _elementtree_Element_findtext(PyObject *self, PyTypeObject *cls, PyObject *const
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(path), &_Py_ID(default), &_Py_ID(namespaces), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(path)), _PyValue_STATIC_IMMORTAL(&_Py_ID(default)), _PyValue_STATIC_IMMORTAL(&_Py_ID(namespaces)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -473,11 +479,11 @@ _elementtree_Element_findall(PyObject *self, PyTypeObject *cls, PyObject *const 
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(path), &_Py_ID(namespaces), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(path)), _PyValue_STATIC_IMMORTAL(&_Py_ID(namespaces)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -545,11 +551,11 @@ _elementtree_Element_iterfind(PyObject *self, PyTypeObject *cls, PyObject *const
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(path), &_Py_ID(namespaces), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(path)), _PyValue_STATIC_IMMORTAL(&_Py_ID(namespaces)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -618,11 +624,11 @@ _elementtree_Element_get(PyObject *self, PyObject *const *args, Py_ssize_t nargs
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(key), &_Py_ID(default), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(key)), _PyValue_STATIC_IMMORTAL(&_Py_ID(default)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -695,11 +701,11 @@ _elementtree_Element_iter(PyObject *self, PyTypeObject *cls, PyObject *const *ar
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(tag), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(tag)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1004,11 +1010,11 @@ _elementtree_TreeBuilder___init__(PyObject *self, PyObject *args, PyObject *kwar
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(element_factory), &_Py_ID(comment_factory), &_Py_ID(pi_factory), &_Py_ID(insert_comments), &_Py_ID(insert_pis), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(element_factory)), _PyValue_STATIC_IMMORTAL(&_Py_ID(comment_factory)), _PyValue_STATIC_IMMORTAL(&_Py_ID(pi_factory)), _PyValue_STATIC_IMMORTAL(&_Py_ID(insert_comments)), _PyValue_STATIC_IMMORTAL(&_Py_ID(insert_pis)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1034,7 +1040,11 @@ _elementtree_TreeBuilder___init__(PyObject *self, PyObject *args, PyObject *kwar
     int insert_comments = 0;
     int insert_pis = 0;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 1));
+    if (_args_items == NULL) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -1308,11 +1318,11 @@ _elementtree_XMLParser___init__(PyObject *self, PyObject *args, PyObject *kwargs
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(target), &_Py_ID(encoding), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(target)), _PyValue_STATIC_IMMORTAL(&_Py_ID(encoding)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1335,7 +1345,11 @@ _elementtree_XMLParser___init__(PyObject *self, PyObject *args, PyObject *kwargs
     PyObject *target = Py_None;
     const char *encoding = NULL;
 
-    fastargs = _PyArg_UnpackKeywords(_PyTuple_CAST(args)->ob_item, nargs, kwargs, NULL, &_parser,
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, 0);
+    if (_args_items == NULL) {
+        goto exit;
+    }
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 0, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
@@ -1482,4 +1496,4 @@ skip_optional:
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=01693c4bcc6c63b2 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=9147a5213e9f50ba input=a9049054013a1b77]*/

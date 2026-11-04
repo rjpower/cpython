@@ -5,10 +5,11 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
-#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(delta_new__doc__,
 "timedelta(days=0, seconds=0, microseconds=0, milliseconds=0, minutes=0,\n"
@@ -36,11 +37,11 @@ delta_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(days), &_Py_ID(seconds), &_Py_ID(microseconds), &_Py_ID(milliseconds), &_Py_ID(minutes), &_Py_ID(hours), &_Py_ID(weeks), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(days)), _PyValue_STATIC_IMMORTAL(&_Py_ID(seconds)), _PyValue_STATIC_IMMORTAL(&_Py_ID(microseconds)), _PyValue_STATIC_IMMORTAL(&_Py_ID(milliseconds)), _PyValue_STATIC_IMMORTAL(&_Py_ID(minutes)), _PyValue_STATIC_IMMORTAL(&_Py_ID(hours)), _PyValue_STATIC_IMMORTAL(&_Py_ID(weeks)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -58,8 +59,8 @@ delta_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[7];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
     PyObject *days = NULL;
     PyObject *seconds = NULL;
     PyObject *microseconds = NULL;
@@ -68,93 +69,59 @@ delta_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     PyObject *hours = NULL;
     PyObject *weeks = NULL;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 7) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 7));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 7, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    noptargs = Py_MIN(_args_scope.nargs, 7)
-        + (_args_scope.nobjects - _args_scope.nargs)
-        - (0 + 0);
     if (!noptargs) {
         goto skip_optional_pos;
     }
     if (fastargs[0]) {
         days = fastargs[0];
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     if (fastargs[1]) {
         seconds = fastargs[1];
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     if (fastargs[2]) {
         microseconds = fastargs[2];
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     if (fastargs[3]) {
         milliseconds = fastargs[3];
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     if (fastargs[4]) {
         minutes = fastargs[4];
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     if (fastargs[5]) {
         hours = fastargs[5];
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     weeks = fastargs[6];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
 skip_optional_pos:
     return_value = delta_new_impl(type, days, seconds, microseconds, milliseconds, minutes, hours, weeks);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -178,11 +145,11 @@ datetime_date(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(year), &_Py_ID(month), &_Py_ID(day), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(year)), _PyValue_STATIC_IMMORTAL(&_Py_ID(month)), _PyValue_STATIC_IMMORTAL(&_Py_ID(day)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -200,54 +167,35 @@ datetime_date(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[3];
     PyObject * const *fastargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     int year;
     int month;
     int day;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 3) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 3));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
-        goto exit;
-    }
-    if (PyErr_Occurred()) {
         goto exit;
     }
     year = PyLong_AsInt(fastargs[0]);
     if (year == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     month = PyLong_AsInt(fastargs[1]);
     if (month == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-    if (PyErr_Occurred()) {
         goto exit;
     }
     day = PyLong_AsInt(fastargs[2]);
     if (day == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     return_value = datetime_date_impl(type, year, month, day);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -382,11 +330,11 @@ datetime_date_fromisocalendar(PyObject *type, PyObject *const *args, Py_ssize_t 
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(year), &_Py_ID(week), &_Py_ID(day), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(year)), _PyValue_STATIC_IMMORTAL(&_Py_ID(week)), _PyValue_STATIC_IMMORTAL(&_Py_ID(day)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -500,11 +448,11 @@ datetime_date_strftime(PyObject *self, PyObject *const *args, Py_ssize_t nargs, 
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(format), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(format)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -583,11 +531,11 @@ iso_calendar_date_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(year), &_Py_ID(week), &_Py_ID(weekday), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(year)), _PyValue_STATIC_IMMORTAL(&_Py_ID(week)), _PyValue_STATIC_IMMORTAL(&_Py_ID(weekday)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -605,54 +553,35 @@ iso_calendar_date_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[3];
     PyObject * const *fastargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     int year;
     int week;
     int weekday;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 3) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 3));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 3, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
-        goto exit;
-    }
-    if (PyErr_Occurred()) {
         goto exit;
     }
     year = PyLong_AsInt(fastargs[0]);
     if (year == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     week = PyLong_AsInt(fastargs[1]);
     if (week == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-    if (PyErr_Occurred()) {
         goto exit;
     }
     weekday = PyLong_AsInt(fastargs[2]);
     if (weekday == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     return_value = iso_calendar_date_new_impl(type, year, week, weekday);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -680,11 +609,11 @@ datetime_date_replace(PyObject *self, PyObject *const *args, Py_ssize_t nargs, P
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(year), &_Py_ID(month), &_Py_ID(day), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(year)), _PyValue_STATIC_IMMORTAL(&_Py_ID(month)), _PyValue_STATIC_IMMORTAL(&_Py_ID(day)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -763,11 +692,11 @@ timezone_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(offset), &_Py_ID(name), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(offset)), _PyValue_STATIC_IMMORTAL(&_Py_ID(name)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -785,36 +714,25 @@ timezone_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[2];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
     PyObject *offset;
     PyObject *name = NULL;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 2) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    noptargs = Py_MIN(_args_scope.nargs, 2)
-        + (_args_scope.nobjects - _args_scope.nargs)
-        - (1 + 0);
     if (!PyObject_TypeCheck(fastargs[0], DELTA_TYPE(NO_STATE))) {
         _PyArg_BadArgument("timezone", "argument 'offset'", (DELTA_TYPE(NO_STATE))->tp_name, fastargs[0]);
         goto exit;
     }
     offset = fastargs[0];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
@@ -823,18 +741,10 @@ timezone_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         goto exit;
     }
     name = fastargs[1];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
 skip_optional_pos:
     return_value = timezone_new_impl(type, offset, name);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -862,11 +772,11 @@ datetime_time(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(hour), &_Py_ID(minute), &_Py_ID(second), &_Py_ID(microsecond), &_Py_ID(tzinfo), &_Py_ID(fold), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(hour)), _PyValue_STATIC_IMMORTAL(&_Py_ID(minute)), _PyValue_STATIC_IMMORTAL(&_Py_ID(second)), _PyValue_STATIC_IMMORTAL(&_Py_ID(microsecond)), _PyValue_STATIC_IMMORTAL(&_Py_ID(tzinfo)), _PyValue_STATIC_IMMORTAL(&_Py_ID(fold)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -884,8 +794,8 @@ datetime_time(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[6];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
     int hour = 0;
     int minute = 0;
     int second = 0;
@@ -893,32 +803,21 @@ datetime_time(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     PyObject *tzinfo = Py_None;
     int fold = 0;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 6) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 5));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 5, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    noptargs = Py_MIN(_args_scope.nargs, 5)
-        + (_args_scope.nobjects - _args_scope.nargs)
-        - (0 + 0);
     if (!noptargs) {
         goto skip_optional_pos;
     }
     if (fastargs[0]) {
         hour = PyLong_AsInt(fastargs[0]);
         if (hour == -1 && PyErr_Occurred()) {
-            goto exit;
-        }
-        if (PyErr_Occurred()) {
             goto exit;
         }
         if (!--noptargs) {
@@ -930,9 +829,6 @@ datetime_time(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         if (minute == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -940,9 +836,6 @@ datetime_time(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (fastargs[2]) {
         second = PyLong_AsInt(fastargs[2]);
         if (second == -1 && PyErr_Occurred()) {
-            goto exit;
-        }
-        if (PyErr_Occurred()) {
             goto exit;
         }
         if (!--noptargs) {
@@ -954,18 +847,12 @@ datetime_time(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         if (microsecond == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     if (fastargs[4]) {
         tzinfo = fastargs[4];
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -978,18 +865,10 @@ skip_optional_pos:
     if (fold == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
 skip_optional_kwonly:
     return_value = datetime_time_impl(type, hour, minute, second, microsecond, tzinfo, fold);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -1065,11 +944,11 @@ datetime_time_isoformat(PyObject *self, PyObject *const *args, Py_ssize_t nargs,
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(timespec), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(timespec)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1141,11 +1020,11 @@ datetime_time_strftime(PyObject *self, PyObject *const *args, Py_ssize_t nargs, 
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(format), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(format)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1235,11 +1114,11 @@ datetime_time_replace(PyObject *self, PyObject *const *args, Py_ssize_t nargs, P
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(hour), &_Py_ID(minute), &_Py_ID(second), &_Py_ID(microsecond), &_Py_ID(tzinfo), &_Py_ID(fold), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(hour)), _PyValue_STATIC_IMMORTAL(&_Py_ID(minute)), _PyValue_STATIC_IMMORTAL(&_Py_ID(second)), _PyValue_STATIC_IMMORTAL(&_Py_ID(microsecond)), _PyValue_STATIC_IMMORTAL(&_Py_ID(tzinfo)), _PyValue_STATIC_IMMORTAL(&_Py_ID(fold)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1428,11 +1307,11 @@ datetime_datetime(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(year), &_Py_ID(month), &_Py_ID(day), &_Py_ID(hour), &_Py_ID(minute), &_Py_ID(second), &_Py_ID(microsecond), &_Py_ID(tzinfo), &_Py_ID(fold), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(year)), _PyValue_STATIC_IMMORTAL(&_Py_ID(month)), _PyValue_STATIC_IMMORTAL(&_Py_ID(day)), _PyValue_STATIC_IMMORTAL(&_Py_ID(hour)), _PyValue_STATIC_IMMORTAL(&_Py_ID(minute)), _PyValue_STATIC_IMMORTAL(&_Py_ID(second)), _PyValue_STATIC_IMMORTAL(&_Py_ID(microsecond)), _PyValue_STATIC_IMMORTAL(&_Py_ID(tzinfo)), _PyValue_STATIC_IMMORTAL(&_Py_ID(fold)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1450,8 +1329,8 @@ datetime_datetime(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[9];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 3;
     int year;
     int month;
     int day;
@@ -1462,42 +1341,25 @@ datetime_datetime(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     PyObject *tzinfo = Py_None;
     int fold = 0;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 9) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 8));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 3, /*maxpos*/ 8, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    noptargs = Py_MIN(_args_scope.nargs, 8)
-        + (_args_scope.nobjects - _args_scope.nargs)
-        - (3 + 0);
     year = PyLong_AsInt(fastargs[0]);
     if (year == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-    if (PyErr_Occurred()) {
         goto exit;
     }
     month = PyLong_AsInt(fastargs[1]);
     if (month == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     day = PyLong_AsInt(fastargs[2]);
     if (day == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-    if (PyErr_Occurred()) {
         goto exit;
     }
     if (!noptargs) {
@@ -1506,9 +1368,6 @@ datetime_datetime(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (fastargs[3]) {
         hour = PyLong_AsInt(fastargs[3]);
         if (hour == -1 && PyErr_Occurred()) {
-            goto exit;
-        }
-        if (PyErr_Occurred()) {
             goto exit;
         }
         if (!--noptargs) {
@@ -1520,9 +1379,6 @@ datetime_datetime(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         if (minute == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -1530,9 +1386,6 @@ datetime_datetime(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (fastargs[5]) {
         second = PyLong_AsInt(fastargs[5]);
         if (second == -1 && PyErr_Occurred()) {
-            goto exit;
-        }
-        if (PyErr_Occurred()) {
             goto exit;
         }
         if (!--noptargs) {
@@ -1544,18 +1397,12 @@ datetime_datetime(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         if (microsecond == -1 && PyErr_Occurred()) {
             goto exit;
         }
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     if (fastargs[7]) {
         tzinfo = fastargs[7];
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -1568,18 +1415,10 @@ skip_optional_pos:
     if (fold == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
 skip_optional_kwonly:
     return_value = datetime_datetime_impl(type, year, month, day, hour, minute, second, microsecond, tzinfo, fold);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -1611,11 +1450,11 @@ datetime_datetime_now(PyObject *type, PyObject *const *args, Py_ssize_t nargs, P
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(tz), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(tz)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1696,11 +1535,11 @@ datetime_datetime_fromtimestamp(PyObject *type, PyObject *const *args, Py_ssize_
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(timestamp), &_Py_ID(tz), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(timestamp)), _PyValue_STATIC_IMMORTAL(&_Py_ID(tz)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1827,11 +1666,11 @@ datetime_datetime_combine(PyObject *type, PyObject *const *args, Py_ssize_t narg
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(date), &_Py_ID(time), &_Py_ID(tzinfo), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(date)), _PyValue_STATIC_IMMORTAL(&_Py_ID(time)), _PyValue_STATIC_IMMORTAL(&_Py_ID(tzinfo)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1945,11 +1784,11 @@ datetime_datetime_isoformat(PyObject *self, PyObject *const *args, Py_ssize_t na
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(sep), &_Py_ID(timespec), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(sep)), _PyValue_STATIC_IMMORTAL(&_Py_ID(timespec)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -2038,11 +1877,11 @@ datetime_datetime_replace(PyObject *self, PyObject *const *args, Py_ssize_t narg
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(year), &_Py_ID(month), &_Py_ID(day), &_Py_ID(hour), &_Py_ID(minute), &_Py_ID(second), &_Py_ID(microsecond), &_Py_ID(tzinfo), &_Py_ID(fold), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(year)), _PyValue_STATIC_IMMORTAL(&_Py_ID(month)), _PyValue_STATIC_IMMORTAL(&_Py_ID(day)), _PyValue_STATIC_IMMORTAL(&_Py_ID(hour)), _PyValue_STATIC_IMMORTAL(&_Py_ID(minute)), _PyValue_STATIC_IMMORTAL(&_Py_ID(second)), _PyValue_STATIC_IMMORTAL(&_Py_ID(microsecond)), _PyValue_STATIC_IMMORTAL(&_Py_ID(tzinfo)), _PyValue_STATIC_IMMORTAL(&_Py_ID(fold)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -2186,11 +2025,11 @@ datetime_datetime_astimezone(PyObject *self, PyObject *const *args, Py_ssize_t n
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(tz), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(tz)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -2269,4 +2108,4 @@ datetime_datetime___reduce__(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     return datetime_datetime___reduce___impl((PyDateTime_DateTime *)self);
 }
-/*[clinic end generated code: output=e6765f55a12fa990 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=c0390b4c9e52d5a4 input=a9049054013a1b77]*/

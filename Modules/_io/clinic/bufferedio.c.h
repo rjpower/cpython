@@ -5,11 +5,12 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_BadArgument()
-#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(_io__BufferedIOBase_readinto__doc__,
 "readinto($self, buffer, /)\n"
@@ -878,11 +879,11 @@ _io_BufferedReader___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(raw), &_Py_ID(buffer_size), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(raw)), _PyValue_STATIC_IMMORTAL(&_Py_ID(buffer_size)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -900,32 +901,21 @@ _io_BufferedReader___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[2];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
     PyObject *raw;
     Py_ssize_t buffer_size = DEFAULT_BUFFER_SIZE;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 2) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    noptargs = Py_MIN(_args_scope.nargs, 2)
-        + (_args_scope.nobjects - _args_scope.nargs)
-        - (1 + 0);
     raw = fastargs[0];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
@@ -941,16 +931,10 @@ _io_BufferedReader___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         }
         buffer_size = ival;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
 skip_optional_pos:
     return_value = _io_BufferedReader___init___impl((buffered *)self, raw, buffer_size);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        return_value = -1;
-    }
     return return_value;
 }
 
@@ -979,11 +963,11 @@ _io_BufferedWriter___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(raw), &_Py_ID(buffer_size), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(raw)), _PyValue_STATIC_IMMORTAL(&_Py_ID(buffer_size)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1001,32 +985,21 @@ _io_BufferedWriter___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[2];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
     PyObject *raw;
     Py_ssize_t buffer_size = DEFAULT_BUFFER_SIZE;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 2) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    noptargs = Py_MIN(_args_scope.nargs, 2)
-        + (_args_scope.nobjects - _args_scope.nargs)
-        - (1 + 0);
     raw = fastargs[0];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
@@ -1042,16 +1015,10 @@ _io_BufferedWriter___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         }
         buffer_size = ival;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
 skip_optional_pos:
     return_value = _io_BufferedWriter___init___impl((buffered *)self, raw, buffer_size);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        return_value = -1;
-    }
     return return_value;
 }
 
@@ -1111,8 +1078,6 @@ _io_BufferedRWPair___init__(PyObject *self, PyObject *args, PyObject *kwargs)
 {
     int return_value = -1;
     PyTypeObject *base_tp = clinic_state()->PyBufferedRWPair_Type;
-    _PyArg_OwnerScope _args_scope = {0};
-    PyObject *const *fastargs;
     PyObject *reader;
     PyObject *writer;
     Py_ssize_t buffer_size = DEFAULT_BUFFER_SIZE;
@@ -1122,22 +1087,21 @@ _io_BufferedRWPair___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         !_PyArg_NoKeywords("BufferedRWPair", kwargs)) {
         goto exit;
     }
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
+    if (!_PyArg_CheckPositional("BufferedRWPair", PyTuple_GET_SIZE(args), 2, 3)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "BufferedRWPair",
-                                          2, 3);
-    if (fastargs == NULL) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
+    if (_args_items == NULL) {
         goto exit;
     }
-    reader = fastargs[0];
-    writer = fastargs[1];
-    if (_args_scope.nargs < 3) {
+    reader = _args_items[0];
+    writer = _args_items[1];
+    if (PyTuple_GET_SIZE(args) < 3) {
         goto skip_optional;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(fastargs[2]);
+        PyObject *iobj = _PyNumber_Index(_args_items[2]);
         if (iobj != NULL) {
             ival = PyLong_AsSsize_t(iobj);
             Py_DECREF(iobj);
@@ -1151,9 +1115,6 @@ skip_optional:
     return_value = _io_BufferedRWPair___init___impl((rwpair *)self, reader, writer, buffer_size);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        return_value = -1;
-    }
     return return_value;
 }
 
@@ -1432,11 +1393,11 @@ _io_BufferedRandom___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(raw), &_Py_ID(buffer_size), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(raw)), _PyValue_STATIC_IMMORTAL(&_Py_ID(buffer_size)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1454,32 +1415,21 @@ _io_BufferedRandom___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[2];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
     PyObject *raw;
     Py_ssize_t buffer_size = DEFAULT_BUFFER_SIZE;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 2) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    noptargs = Py_MIN(_args_scope.nargs, 2)
-        + (_args_scope.nobjects - _args_scope.nargs)
-        - (1 + 0);
     raw = fastargs[0];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
@@ -1495,16 +1445,10 @@ _io_BufferedRandom___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         }
         buffer_size = ival;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
 skip_optional_pos:
     return_value = _io_BufferedRandom___init___impl((buffered *)self, raw, buffer_size);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        return_value = -1;
-    }
     return return_value;
 }
 #define _IO__BUFFERED_CLOSED_GETSETDEF {"closed", (getter)_io__Buffered_closed_get, (setter)NULL, NULL},
@@ -1515,4 +1459,4 @@ exit:
 
 #define _IO_BUFFEREDRWPAIR_CLOSED_GETSETDEF {"closed", (getter)_io_BufferedRWPair_closed_get, (setter)NULL, NULL},
 
-/*[clinic end generated code: output=dd04d53245ba0318 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=35ef7c6b1eeb9d7f input=a9049054013a1b77]*/

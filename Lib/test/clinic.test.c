@@ -2296,11 +2296,11 @@ test_keywords(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObjec
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _Py_LATIN1_CHR('a'), _Py_LATIN1_CHR('b'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('a')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('b')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -2335,7 +2335,7 @@ exit:
 
 static PyObject *
 test_keywords_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=591462ba3858e446 input=0d3484844749c05b]*/
+/*[clinic end generated code: output=813a86202563fc38 input=0d3484844749c05b]*/
 
 
 /*[clinic input]
@@ -2369,11 +2369,11 @@ test_keywords_kwonly(PyObject *module, PyObject *const *args, Py_ssize_t nargs, 
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _Py_LATIN1_CHR('a'), _Py_LATIN1_CHR('b'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('a')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('b')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -2408,7 +2408,7 @@ exit:
 
 static PyObject *
 test_keywords_kwonly_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=620bb64efa62d69b input=384adc78bfa0bff7]*/
+/*[clinic end generated code: output=a47fb2fe99d770b0 input=384adc78bfa0bff7]*/
 
 
 /*[clinic input]
@@ -2443,11 +2443,11 @@ test_keywords_opt(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyO
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _Py_LATIN1_CHR('a'), _Py_LATIN1_CHR('b'), _Py_LATIN1_CHR('c'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('a')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('b')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('c')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -2495,7 +2495,7 @@ exit:
 static PyObject *
 test_keywords_opt_impl(PyObject *module, PyObject *a, PyObject *b,
                        PyObject *c)
-/*[clinic end generated code: output=3ea21673d129218c input=eda7964f784f4607]*/
+/*[clinic end generated code: output=be372783e84e0b48 input=eda7964f784f4607]*/
 
 
 /*[clinic input]
@@ -2532,11 +2532,11 @@ test_keywords_opt_kwonly(PyObject *module, PyObject *const *args, Py_ssize_t nar
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _Py_LATIN1_CHR('a'), _Py_LATIN1_CHR('b'), _Py_LATIN1_CHR('c'), _Py_LATIN1_CHR('d'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('a')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('b')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('c')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('d')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -2595,7 +2595,7 @@ exit:
 static PyObject *
 test_keywords_opt_kwonly_impl(PyObject *module, PyObject *a, PyObject *b,
                               PyObject *c, PyObject *d)
-/*[clinic end generated code: output=1e5fbe4eebfd40a5 input=209387a4815e5082]*/
+/*[clinic end generated code: output=3bf66e100276cd18 input=209387a4815e5082]*/
 
 
 /*[clinic input]
@@ -2631,11 +2631,11 @@ test_keywords_kwonly_opt(PyObject *module, PyObject *const *args, Py_ssize_t nar
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _Py_LATIN1_CHR('a'), _Py_LATIN1_CHR('b'), _Py_LATIN1_CHR('c'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('a')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('b')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('c')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -2683,7 +2683,7 @@ exit:
 static PyObject *
 test_keywords_kwonly_opt_impl(PyObject *module, PyObject *a, PyObject *b,
                               PyObject *c)
-/*[clinic end generated code: output=bac8882cbcd50151 input=18393cc64fa000f4]*/
+/*[clinic end generated code: output=12c59e022d4f371d input=18393cc64fa000f4]*/
 
 
 /*[clinic input]
@@ -2717,11 +2717,11 @@ test_posonly_keywords(PyObject *module, PyObject *const *args, Py_ssize_t nargs,
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _Py_LATIN1_CHR('b'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('b')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -2756,7 +2756,7 @@ exit:
 
 static PyObject *
 test_posonly_keywords_impl(PyObject *module, PyObject *a, PyObject *b)
-/*[clinic end generated code: output=7ddf55a744ba53dc input=1767b0ebdf06060e]*/
+/*[clinic end generated code: output=bc60133aefb165cf input=1767b0ebdf06060e]*/
 
 
 /*[clinic input]
@@ -2791,11 +2791,11 @@ test_posonly_kwonly(PyObject *module, PyObject *const *args, Py_ssize_t nargs, P
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _Py_LATIN1_CHR('c'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('c')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -2830,7 +2830,7 @@ exit:
 
 static PyObject *
 test_posonly_kwonly_impl(PyObject *module, PyObject *a, PyObject *c)
-/*[clinic end generated code: output=095a4e17e22609bc input=9042f2818f664839]*/
+/*[clinic end generated code: output=8bc15b3effb3a669 input=9042f2818f664839]*/
 
 
 /*[clinic input]
@@ -2867,11 +2867,11 @@ test_posonly_keywords_kwonly(PyObject *module, PyObject *const *args, Py_ssize_t
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _Py_LATIN1_CHR('b'), _Py_LATIN1_CHR('c'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('b')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('c')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -2909,7 +2909,7 @@ exit:
 static PyObject *
 test_posonly_keywords_kwonly_impl(PyObject *module, PyObject *a, PyObject *b,
                                   PyObject *c)
-/*[clinic end generated code: output=2f03aff955026341 input=29546ebdca492fea]*/
+/*[clinic end generated code: output=c02526889e706401 input=29546ebdca492fea]*/
 
 
 /*[clinic input]
@@ -2946,11 +2946,11 @@ test_posonly_keywords_opt(PyObject *module, PyObject *const *args, Py_ssize_t na
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _Py_LATIN1_CHR('b'), _Py_LATIN1_CHR('c'), _Py_LATIN1_CHR('d'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('b')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('c')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('d')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -3000,7 +3000,7 @@ exit:
 static PyObject *
 test_posonly_keywords_opt_impl(PyObject *module, PyObject *a, PyObject *b,
                                PyObject *c, PyObject *d)
-/*[clinic end generated code: output=2c8b2ca42f821c66 input=cdf5a9625e554e9b]*/
+/*[clinic end generated code: output=57411d62fae22ecd input=cdf5a9625e554e9b]*/
 
 
 /*[clinic input]
@@ -3036,11 +3036,11 @@ test_posonly_keywords_opt2(PyObject *module, PyObject *const *args, Py_ssize_t n
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _Py_LATIN1_CHR('b'), _Py_LATIN1_CHR('c'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('b')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('c')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -3088,7 +3088,7 @@ exit:
 static PyObject *
 test_posonly_keywords_opt2_impl(PyObject *module, PyObject *a, PyObject *b,
                                 PyObject *c)
-/*[clinic end generated code: output=969a3b2b020310f1 input=1581299d21d16f14]*/
+/*[clinic end generated code: output=359047a76b60a059 input=1581299d21d16f14]*/
 
 
 /*[clinic input]
@@ -3125,11 +3125,11 @@ test_posonly_opt_keywords_opt(PyObject *module, PyObject *const *args, Py_ssize_
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _Py_LATIN1_CHR('c'), _Py_LATIN1_CHR('d'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('c')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('d')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -3184,7 +3184,7 @@ exit:
 static PyObject *
 test_posonly_opt_keywords_opt_impl(PyObject *module, PyObject *a,
                                    PyObject *b, PyObject *c, PyObject *d)
-/*[clinic end generated code: output=02bf5e64403946fc input=408798ec3d42949f]*/
+/*[clinic end generated code: output=f4a8742bd7fcf7c6 input=408798ec3d42949f]*/
 
 
 /*[clinic input]
@@ -3222,11 +3222,11 @@ test_posonly_kwonly_opt(PyObject *module, PyObject *const *args, Py_ssize_t narg
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _Py_LATIN1_CHR('b'), _Py_LATIN1_CHR('c'), _Py_LATIN1_CHR('d'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('b')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('c')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('d')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -3276,7 +3276,7 @@ exit:
 static PyObject *
 test_posonly_kwonly_opt_impl(PyObject *module, PyObject *a, PyObject *b,
                              PyObject *c, PyObject *d)
-/*[clinic end generated code: output=26510e61948015e8 input=8d8e5643bbbc2309]*/
+/*[clinic end generated code: output=4a0cde12512561bc input=8d8e5643bbbc2309]*/
 
 
 /*[clinic input]
@@ -3313,11 +3313,11 @@ test_posonly_kwonly_opt2(PyObject *module, PyObject *const *args, Py_ssize_t nar
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _Py_LATIN1_CHR('b'), _Py_LATIN1_CHR('c'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('b')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('c')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -3365,7 +3365,7 @@ exit:
 static PyObject *
 test_posonly_kwonly_opt2_impl(PyObject *module, PyObject *a, PyObject *b,
                               PyObject *c)
-/*[clinic end generated code: output=b31416e16c908756 input=f7e5eed94f75fff0]*/
+/*[clinic end generated code: output=25e224641a6ac4fa input=f7e5eed94f75fff0]*/
 
 
 /*[clinic input]
@@ -3403,11 +3403,11 @@ test_posonly_opt_kwonly_opt(PyObject *module, PyObject *const *args, Py_ssize_t 
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _Py_LATIN1_CHR('c'), _Py_LATIN1_CHR('d'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('c')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('d')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -3462,7 +3462,7 @@ exit:
 static PyObject *
 test_posonly_opt_kwonly_opt_impl(PyObject *module, PyObject *a, PyObject *b,
                                  PyObject *c, PyObject *d)
-/*[clinic end generated code: output=dc2337647059cb51 input=1e557dc979d120fd]*/
+/*[clinic end generated code: output=6c1e1eceb96f342b input=1e557dc979d120fd]*/
 
 
 /*[clinic input]
@@ -3502,11 +3502,11 @@ test_posonly_keywords_kwonly_opt(PyObject *module, PyObject *const *args, Py_ssi
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _Py_LATIN1_CHR('b'), _Py_LATIN1_CHR('c'), _Py_LATIN1_CHR('d'), _Py_LATIN1_CHR('e'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('b')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('c')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('d')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('e')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -3559,7 +3559,7 @@ static PyObject *
 test_posonly_keywords_kwonly_opt_impl(PyObject *module, PyObject *a,
                                       PyObject *b, PyObject *c, PyObject *d,
                                       PyObject *e)
-/*[clinic end generated code: output=b7adeae40c9833a4 input=c3884a4f956fdc89]*/
+/*[clinic end generated code: output=b258328e5188d3e4 input=c3884a4f956fdc89]*/
 
 
 /*[clinic input]
@@ -3597,11 +3597,11 @@ test_posonly_keywords_kwonly_opt2(PyObject *module, PyObject *const *args, Py_ss
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _Py_LATIN1_CHR('b'), _Py_LATIN1_CHR('c'), _Py_LATIN1_CHR('d'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('b')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('c')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('d')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -3651,7 +3651,7 @@ exit:
 static PyObject *
 test_posonly_keywords_kwonly_opt2_impl(PyObject *module, PyObject *a,
                                        PyObject *b, PyObject *c, PyObject *d)
-/*[clinic end generated code: output=827a349e36e89c82 input=68d01d7c0f6dafb0]*/
+/*[clinic end generated code: output=27ebf9fd7c563de0 input=68d01d7c0f6dafb0]*/
 
 
 /*[clinic input]
@@ -3692,11 +3692,11 @@ test_posonly_keywords_opt_kwonly_opt(PyObject *module, PyObject *const *args, Py
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _Py_LATIN1_CHR('b'), _Py_LATIN1_CHR('c'), _Py_LATIN1_CHR('d'), _Py_LATIN1_CHR('e'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('b')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('c')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('d')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('e')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -3758,7 +3758,7 @@ static PyObject *
 test_posonly_keywords_opt_kwonly_opt_impl(PyObject *module, PyObject *a,
                                           PyObject *b, PyObject *c,
                                           PyObject *d, PyObject *e)
-/*[clinic end generated code: output=bcb0088555123966 input=d0883d45876f186c]*/
+/*[clinic end generated code: output=06f56ea80bb231a8 input=d0883d45876f186c]*/
 
 
 /*[clinic input]
@@ -3799,11 +3799,11 @@ test_posonly_keywords_opt2_kwonly_opt(PyObject *module, PyObject *const *args, P
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _Py_LATIN1_CHR('b'), _Py_LATIN1_CHR('c'), _Py_LATIN1_CHR('d'), _Py_LATIN1_CHR('e'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('b')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('c')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('d')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('e')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -3870,7 +3870,7 @@ static PyObject *
 test_posonly_keywords_opt2_kwonly_opt_impl(PyObject *module, PyObject *a,
                                            PyObject *b, PyObject *c,
                                            PyObject *d, PyObject *e)
-/*[clinic end generated code: output=a22d1276d4c2c9c7 input=c95e2e1ec93035ad]*/
+/*[clinic end generated code: output=1ff239c412b06072 input=c95e2e1ec93035ad]*/
 
 
 /*[clinic input]
@@ -3913,11 +3913,11 @@ test_posonly_opt_keywords_opt_kwonly_opt(PyObject *module, PyObject *const *args
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _Py_LATIN1_CHR('c'), _Py_LATIN1_CHR('d'), _Py_LATIN1_CHR('e'), _Py_LATIN1_CHR('f'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('c')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('d')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('e')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('f')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -3992,7 +3992,7 @@ test_posonly_opt_keywords_opt_kwonly_opt_impl(PyObject *module, PyObject *a,
                                               PyObject *b, PyObject *c,
                                               PyObject *d, PyObject *e,
                                               PyObject *f)
-/*[clinic end generated code: output=ebdbe695ee85a2ea input=9914857713c5bbf8]*/
+/*[clinic end generated code: output=68e202aac6846f2c input=9914857713c5bbf8]*/
 
 /*[clinic input]
 test_keyword_only_parameter
@@ -4025,11 +4025,11 @@ test_keyword_only_parameter(PyObject *module, PyObject *const *args, Py_ssize_t 
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(co_lnotab), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(co_lnotab)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -4071,7 +4071,7 @@ exit:
 
 static PyObject *
 test_keyword_only_parameter_impl(PyObject *module, PyBytesObject *co_lnotab)
-/*[clinic end generated code: output=bcad654ee66b0972 input=303df5046c7e37a3]*/
+/*[clinic end generated code: output=884f5600255a7075 input=303df5046c7e37a3]*/
 
 
 /*[clinic input]
@@ -4389,11 +4389,11 @@ test_vararg(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject 
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _Py_LATIN1_CHR('a'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('a')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -4437,7 +4437,7 @@ exit:
 
 static PyObject *
 test_vararg_impl(PyObject *module, PyObject *a, PyObject *args)
-/*[clinic end generated code: output=d773f7b54e61f73a input=7448995636d9186a]*/
+/*[clinic end generated code: output=1aa1d6af9b24a88e input=7448995636d9186a]*/
 
 /*[clinic input]
 test_vararg_with_default
@@ -4472,11 +4472,11 @@ test_vararg_with_default(PyObject *module, PyObject *const *args, Py_ssize_t nar
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _Py_LATIN1_CHR('a'), _Py_LATIN1_CHR('b'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('a')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('b')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -4531,7 +4531,7 @@ exit:
 static PyObject *
 test_vararg_with_default_impl(PyObject *module, PyObject *a, PyObject *args,
                               int b)
-/*[clinic end generated code: output=d25e56802c197344 input=3a0f9f557ce1f712]*/
+/*[clinic end generated code: output=153b9549c2bf5d6a input=3a0f9f557ce1f712]*/
 
 /*[clinic input]
 test_vararg_with_only_defaults
@@ -4566,11 +4566,11 @@ test_vararg_with_only_defaults(PyObject *module, PyObject *const *args, Py_ssize
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _Py_LATIN1_CHR('b'), _Py_LATIN1_CHR('c'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('b')), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('c')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -4628,7 +4628,7 @@ exit:
 static PyObject *
 test_vararg_with_only_defaults_impl(PyObject *module, PyObject *args, int b,
                                     PyObject *c)
-/*[clinic end generated code: output=7366943a7df42e05 input=6983e66817f82924]*/
+/*[clinic end generated code: output=892b51aa4562d5b7 input=6983e66817f82924]*/
 
 /*[clinic input]
 test_paramname_module
@@ -4658,11 +4658,11 @@ test_paramname_module(PyObject *module, PyObject *const *args, Py_ssize_t nargs,
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(module), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(module)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -4695,7 +4695,7 @@ exit:
 
 static PyObject *
 test_paramname_module_impl(PyObject *module, PyObject *mod)
-/*[clinic end generated code: output=b979bb1c03b16911 input=afefe259667f13ba]*/
+/*[clinic end generated code: output=82ee126c04101083 input=afefe259667f13ba]*/
 
 /*[clinic input]
 mangle1
@@ -4738,11 +4738,11 @@ mangle1(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwn
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(args), &_Py_ID(kwnames), &_Py_ID(return_value), &_Py_ID(_keywords), &_Py_ID(_parser), &_Py_ID(argsbuf), &_Py_ID(fastargs), &_Py_ID(nargs), &_Py_ID(noptargs), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(args)), _PyValue_STATIC_IMMORTAL(&_Py_ID(kwnames)), _PyValue_STATIC_IMMORTAL(&_Py_ID(return_value)), _PyValue_STATIC_IMMORTAL(&_Py_ID(_keywords)), _PyValue_STATIC_IMMORTAL(&_Py_ID(_parser)), _PyValue_STATIC_IMMORTAL(&_Py_ID(argsbuf)), _PyValue_STATIC_IMMORTAL(&_Py_ID(fastargs)), _PyValue_STATIC_IMMORTAL(&_Py_ID(nargs)), _PyValue_STATIC_IMMORTAL(&_Py_ID(noptargs)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -4794,7 +4794,7 @@ mangle1_impl(PyObject *module, PyObject *args, PyObject *kwnames,
              PyObject *return_value, PyObject *_keywords, PyObject *_parser,
              PyObject *argsbuf, PyObject *fastargs, PyObject *nargs,
              PyObject *noptargs)
-/*[clinic end generated code: output=8993a3111845dfc3 input=a3ed51bdedf8a3c7]*/
+/*[clinic end generated code: output=30a9edc1a62840c2 input=a3ed51bdedf8a3c7]*/
 
 /*[clinic input]
 mangle2
@@ -4828,11 +4828,11 @@ mangle2(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwn
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(args), &_Py_ID(kwargs), &_Py_ID(return_value), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(args)), _PyValue_STATIC_IMMORTAL(&_Py_ID(kwargs)), _PyValue_STATIC_IMMORTAL(&_Py_ID(return_value)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -4870,7 +4870,7 @@ exit:
 static PyObject *
 mangle2_impl(PyObject *module, PyObject *args, PyObject *kwargs,
              PyObject *return_value)
-/*[clinic end generated code: output=bbbe696e52e0267f input=391766fee51bad7a]*/
+/*[clinic end generated code: output=4c0566ab3e236641 input=391766fee51bad7a]*/
 
 
 /*[clinic input]
@@ -4902,11 +4902,11 @@ Test_cls_with_param(PyObject *self, PyTypeObject *cls, PyObject *const *args, Py
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _Py_LATIN1_CHR('a'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('a')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -4942,7 +4942,7 @@ exit:
 
 static PyObject *
 Test_cls_with_param_impl(TestObj *self, PyTypeObject *cls, int a)
-/*[clinic end generated code: output=bd3883003f57d02b input=af158077bd237ef9]*/
+/*[clinic end generated code: output=30462db7bfdc078a input=af158077bd237ef9]*/
 
 
 /*[clinic input]
@@ -5292,11 +5292,11 @@ Test___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _Py_LATIN1_CHR('a'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('a')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -5314,39 +5314,28 @@ Test___init__(PyObject *self, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[1];
     PyObject * const *fastargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     PyObject *a;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 1) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 1));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     a = fastargs[0];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     return_value = Test___init___impl((TestObj *)self, a);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        return_value = -1;
-    }
     return return_value;
 }
 
 static int
 Test___init___impl(TestObj *self, PyObject *a)
-/*[clinic end generated code: output=dfb3fb9ccc541ae9 input=a8f9222a6ab35c59]*/
+/*[clinic end generated code: output=c64cc5e288d9856e input=a8f9222a6ab35c59]*/
 
 
 /*[clinic input]
@@ -5718,11 +5707,11 @@ mangled_c_keyword_identifier(PyObject *module, PyObject *const *args, Py_ssize_t
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _Py_LATIN1_CHR('i'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('i')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -5758,7 +5747,7 @@ exit:
 
 static PyObject *
 mangled_c_keyword_identifier_impl(PyObject *module, int int_value)
-/*[clinic end generated code: output=49365b3b96b23980 input=060876448ab567a2]*/
+/*[clinic end generated code: output=83b6e00745e93efc input=060876448ab567a2]*/
 
 
 /*[clinic input]
@@ -5870,9 +5859,13 @@ Test___init__(PyObject *self, PyObject *args, PyObject *kwargs)
         PyErr_SetString(PyExc_TypeError, "Test.__init__ requires 1 to 2 arguments");
         goto exit;
     }
-    a = PyTuple_GET_ITEM(args, 0);
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, nargs);
+    if (_args_items == NULL) {
+        goto exit;
+    }
+    a = _args_items[0];
     if (nargs >= 2) {
-        b = PyTuple_GET_ITEM(args, 1);
+        b = _args_items[1];
         group_right_1 = 1;
     }
     return_value = Test___init___impl((TestObj *)self, a, group_right_1, b);
@@ -5884,7 +5877,7 @@ exit:
 static int
 Test___init___impl(TestObj *self, PyObject *a, int group_right_1,
                    PyObject *b)
-/*[clinic end generated code: output=72fdd2de63c05b9e input=10f5d0f1e8e466ef]*/
+/*[clinic end generated code: output=963e6f053a06e6aa input=10f5d0f1e8e466ef]*/
 
 
 /*[clinic input]
@@ -6131,11 +6124,11 @@ fn_with_default_binop_expr(PyObject *module, PyObject *const *args, Py_ssize_t n
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(arg), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(arg)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -6173,7 +6166,7 @@ exit:
 
 static PyObject *
 fn_with_default_binop_expr_impl(PyObject *module, PyObject *arg)
-/*[clinic end generated code: output=6613a7a96537bcf2 input=1b55c8ae68d89453]*/
+/*[clinic end generated code: output=60e852d3e802c6e5 input=1b55c8ae68d89453]*/
 
 
 /*[python input]
@@ -6223,11 +6216,11 @@ docstr_fallback_to_converter_default(PyObject *module, PyObject *const *args, Py
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _Py_LATIN1_CHR('a'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('a')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -6262,7 +6255,7 @@ exit:
 
 static PyObject *
 docstr_fallback_to_converter_default_impl(PyObject *module, str a)
-/*[clinic end generated code: output=4405b7050a5f6fb9 input=0cbe6a4d24bc2274]*/
+/*[clinic end generated code: output=a8826526c7878816 input=0cbe6a4d24bc2274]*/
 
 
 /*[clinic input]
@@ -6446,142 +6439,3 @@ dump buffer
 dump buffer
 [clinic start generated code]*/
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=524ce2e021e4eba6]*/
-
-/*[clinic input]
-@classmethod
-Test.__new__ as positional_owner_new
-    value: object
-    index: int = 7
-    tail: object = None
-    /
-Positional views survive implementation and declaration rebuilding.
-[clinic start generated code]*/
-
-PyDoc_STRVAR(positional_owner_new__doc__,
-"Test(value, index=7, tail=None, /)\n"
-"--\n"
-"\n"
-"Positional views survive implementation and declaration rebuilding.");
-
-static PyObject *
-positional_owner_new_impl(PyTypeObject *type, PyObject *value, int index,
-                          PyObject *tail);
-
-static PyObject *
-positional_owner_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
-{
-    PyObject *return_value = NULL;
-    PyTypeObject *base_tp = TestType;
-    _PyArg_OwnerScope _args_scope = {0};
-    PyObject *const *fastargs;
-    PyObject *value;
-    int index = 7;
-    PyObject *tail = Py_None;
-
-    if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
-        !_PyArg_NoKeywords("Test", kwargs)) {
-        goto exit;
-    }
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "Test",
-                                          1, 3);
-    if (fastargs == NULL) {
-        goto exit;
-    }
-    value = fastargs[0];
-    if (_args_scope.nargs < 2) {
-        goto skip_optional;
-    }
-    index = PyLong_AsInt(fastargs[1]);
-    if (index == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-    if (_args_scope.nargs < 3) {
-        goto skip_optional;
-    }
-    tail = fastargs[2];
-skip_optional:
-    return_value = positional_owner_new_impl(type, value, index, tail);
-
-exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
-    return return_value;
-}
-
-static PyObject *
-positional_owner_new_impl(PyTypeObject *type, PyObject *value, int index,
-                          PyObject *tail)
-/*[clinic end generated code: output=1d5057218da6fda4 input=c24d4e9bccd1a0cc]*/
-
-/*[clinic input]
-Test.__init__ as positional_owner_init
-    value: object
-    index: int
-    tail: object = None
-    /
-Positional init retains its own result and error finale.
-[clinic start generated code]*/
-
-PyDoc_STRVAR(positional_owner_init__doc__,
-"Test(value, index, tail=None, /)\n"
-"--\n"
-"\n"
-"Positional init retains its own result and error finale.");
-
-static int
-positional_owner_init_impl(TestObj *self, PyObject *value, int index,
-                           PyObject *tail);
-
-static int
-positional_owner_init(PyObject *self, PyObject *args, PyObject *kwargs)
-{
-    int return_value = -1;
-    PyTypeObject *base_tp = TestType;
-    _PyArg_OwnerScope _args_scope = {0};
-    PyObject *const *fastargs;
-    PyObject *value;
-    int index;
-    PyObject *tail = Py_None;
-
-    if ((Py_IS_TYPE(self, base_tp) ||
-         Py_TYPE(self)->tp_new == base_tp->tp_new) &&
-        !_PyArg_NoKeywords("Test", kwargs)) {
-        goto exit;
-    }
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "Test",
-                                          2, 3);
-    if (fastargs == NULL) {
-        goto exit;
-    }
-    value = fastargs[0];
-    index = PyLong_AsInt(fastargs[1]);
-    if (index == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-    if (_args_scope.nargs < 3) {
-        goto skip_optional;
-    }
-    tail = fastargs[2];
-skip_optional:
-    return_value = positional_owner_init_impl((TestObj *)self, value, index, tail);
-
-exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        return_value = -1;
-    }
-    return return_value;
-}
-
-static int
-positional_owner_init_impl(TestObj *self, PyObject *value, int index,
-                           PyObject *tail)
-/*[clinic end generated code: output=9f73a79f30873122 input=0319e0c64bd3efbd]*/

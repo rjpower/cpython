@@ -74,82 +74,6 @@ PyAPI_FUNC(int) _PyArg_ParseStackAndKeywords(
     struct _PyArg_Parser *,
     ...);
 
-/* A callee-local view of an immutable canonical tuple. Begin only pins/counts;
- * the shared unpack preflight precedes storage allocation and object boxing.
- * Args, kwargs and parser keyword metadata stay pinned through implementation
- * and converter cleanup; object outputs borrow the scope's independent owners.
- * The caller must already have published coherent IN_CALL state. */
-struct _PyArg_LeaseChunk;
-struct _PyArg_ResourceChunk;
-
-typedef int (*_PyArg_FormatDestructor)(PyObject *, void *);
-typedef struct {
-    void *item;
-    _PyArg_FormatDestructor destructor;  /* NULL means disarmed */
-} _PyArg_FormatResource;
-
-typedef struct {
-    PyObject *tuple;
-    PyObject *kwargs;
-    PyObject *kwtuple;
-    PyValue *values;
-    PyObject **objects;
-    void *storage;
-    Py_ssize_t nargs;
-    Py_ssize_t keyword_budget;
-    Py_ssize_t capacity;
-    Py_ssize_t nvalues;
-    Py_ssize_t nobjects;
-    int materialized;
-    int ended;
-    PyValue inline_values[4];
-    PyObject *inline_objects[4];
-    struct _PyArg_LeaseChunk *lease_first, *lease_last;
-    struct _PyArg_ResourceChunk *resource_first, *resource_last;
-    int resource_state;
-} _PyArg_OwnerScope;
-
-PyAPI_FUNC(int) _PyArg_OwnerScope_BeginTuple(
-    _PyArg_OwnerScope *, PyObject *, Py_ssize_t keyword_owner_budget);
-/* Valid only after successful scoped unpack; borrows stable scope storage. */
-PyAPI_FUNC(PyObject *const *) _PyArg_OwnerScope_Objects(const _PyArg_OwnerScope *);
-PyAPI_FUNC(PyObject *const *) _PyArg_UnpackKeywordsOwned(
-    _PyArg_OwnerScope *, PyObject *kwargs, struct _PyArg_Parser *,
-    int minpos, int maxpos, int minkw, int varpos, PyObject **buf);
-/* Fresh successful BeginTuple(args, 0), valid 0 <= min <= max. Check the
- * positional count before materializing; NULL reports an error. The returned
- * views borrow independent scope owners through implementation and cleanup. */
-PyAPI_FUNC(PyObject *const *) _PyArg_UnpackPositionalOwned(
-    _PyArg_OwnerScope *, const char *name, Py_ssize_t min, Py_ssize_t max);
-/* A fresh scope supports one parse and stays live through consumer use and
- * successful converter-resource cleanup. During Begin, KeepObject, GetBuffer,
- * Register or EXPLICIT Finish, callbacks must not operate on this SAME scope,
- * including End. A nested parse must use a different scope. End sets ended
- * before callbacks: End -> callback -> End and repeated End are supported.
- * Explicit Finish -> callback -> End is not supported. */
-/* Acquire one PyBUF_SIMPLE export directly into stationary scope storage.
- * The caller roots arg through this call. The returned const descriptor is a
- * borrow through End: never modify/release it or retain it after End. Scope
- * owns the actual export, including when acquisition succeeds with an error
- * pending. A NULL return leaves the scope End-able. Failure does not transfer
- * an export to the caller. Input leases are independent of successful parser
- * resources, which the consumer still releases before End. */
-PyAPI_FUNC(const Py_buffer *) _PyArg_OwnerScope_GetBuffer(
-    _PyArg_OwnerScope *, PyObject *arg);
-/* Safe after a partial Begin/unpack. Retains the primary or first cleanup error.
- * Run after converter cleanup; 0 has no pending error, -1 reports an error. */
-PyAPI_FUNC(int) _PyArg_OwnerScope_End(_PyArg_OwnerScope *);
-PyAPI_FUNC(PyObject *) _PyArg_OwnerScope_KeepObject(
-    _PyArg_OwnerScope *, PyObject *owned);
-PyAPI_FUNC(int) _PyArg_FormatResources_Begin(
-    _PyArg_OwnerScope *, Py_ssize_t initial_capacity);
-PyAPI_FUNC(int) _PyArg_FormatResources_Register(
-    _PyArg_OwnerScope *, void *item, _PyArg_FormatDestructor destructor);
-PyAPI_FUNC(int) _PyArg_FormatResources_Finish(
-    _PyArg_OwnerScope *, int success);
-PyAPI_FUNC(int) _PyArg_ParseTupleOwned(
-    _PyArg_OwnerScope *scope, PyObject *args, const char *format, ...);
-
 // Export for 'math' shared extension
 PyAPI_FUNC(PyObject * const *) _PyArg_UnpackKeywords(
     PyObject *const *args,
@@ -173,3 +97,4 @@ PyAPI_FUNC(PyObject * const *) _PyArg_UnpackKeywords(
 }
 #endif
 #endif  // !Py_INTERNAL_MODSUPPORT_H
+

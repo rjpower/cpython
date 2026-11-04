@@ -1049,7 +1049,7 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
 
     Py_ssize_t i, numfields = 0, size = -1, num_keywords = 0;
     int res = -1;
-    _PyArg_OwnerScope args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     PyObject *keywords = Py_XNewRef(kw);
     PyObject *positional_keys = NULL, *key = NULL, *value = NULL;
     PyObject *fields = NULL, *attributes = NULL, *remaining_fields = NULL;
@@ -1058,10 +1058,6 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
     PyObject *const *positional = NULL;
 
     if (PyErr_Occurred()) {
-        goto cleanup;
-    }
-    if (_PyArg_OwnerScope_BeginTuple(&args_scope, args, 0) < 0 ||
-        PyErr_Occurred()) {
         goto cleanup;
     }
 
@@ -1080,20 +1076,20 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
     }
 
     res = 0; /* if no error occurs, this stays 0 to the end */
-    if (numfields < args_scope.nargs) {
+    if (numfields < nargs) {
         PyErr_Format(PyExc_TypeError, "%T constructor takes at most "
                      "%zd positional argument%s",
                      self, numfields, numfields == 1 ? "" : "s");
         res = -1;
         goto cleanup;
     }
-    positional = _PyArg_UnpackPositionalOwned(
-        &args_scope, "AST", 0, PY_SSIZE_T_MAX);
-    if (positional == NULL || PyErr_Occurred()) {
+    /* tp_init runs inside the borrow scope that type_call opens. */
+    positional = _PyBorrow_TupleItems(args, nargs);
+    if (positional == NULL) {
         res = -1;
         goto cleanup;
     }
-    for (i = 0; i < args_scope.nargs; i++) {
+    for (i = 0; i < nargs; i++) {
         name = PySequence_GetItem(fields, i);
         if (name == NULL || PyErr_Occurred()) {
             res = -1;
@@ -1433,9 +1429,6 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
         keywords = NULL;
         Py_XDECREF(tmp);
         _PyValue_RestoreException(saved_error);
-    }
-    if (_PyArg_OwnerScope_End(&args_scope) < 0 || PyErr_Occurred()) {
-        res = -1;
     }
     if (PyErr_Occurred()) {
         res = -1;
@@ -2543,6 +2536,7 @@ def generate_module_def(mod, metadata, f, internal_h):
         #include "Python.h"
         #include "pycore_ast.h"
         #include "pycore_ast_state.h"     // struct ast_state
+        #include "pycore_borrow.h"        // _PyBorrow_TupleItems()
         #include "pycore_ceval.h"         // _Py_EnterRecursiveCall()
         #include "pycore_lock.h"          // _PyOnceFlag
         #include "pycore_modsupport.h"    // _PyArg_NoPositional()

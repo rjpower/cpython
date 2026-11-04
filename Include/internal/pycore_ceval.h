@@ -120,27 +120,15 @@ static inline PyObject*
 _PyEval_EvalFrame(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
     EVAL_CALL_STAT_INC(EVAL_CALL_TOTAL);
-    /* Each activation is a borrow scope.  Its floor lets the instruction
-       boundary (_Py_HandlePending) release entries left by slot code that
-       bytecode calls directly. */
-    _PyBorrowStack *borrow = &((_PyThreadStateImpl *)tstate)->borrow;
-    PyObject **outer_floor = borrow->eval_floor;
-    PyObject **floor = borrow->top;
-    borrow->eval_floor = floor;
-    PyObject *result;
     if (tstate->interp->eval_frame == NULL) {
-        result = _PyEval_EvalFrameDefault(tstate, frame, throwflag);
+        /* Sets the activation's borrow floor. */
+        return _PyEval_EvalFrameDefault(tstate, frame, throwflag);
     }
-    else {
-        result = tstate->interp->eval_frame(tstate, frame, throwflag);
-    }
-    _PyBorrowScope_Exit(tstate, floor);
-    borrow->eval_floor = outer_floor;
-    if (outer_floor != NULL && borrow->top != outer_floor) {
-        /* This activation consumed the release request of entries that
-           belong to the outer one; renew it. */
-        _PyBorrow_RequestRelease(tstate);
-    }
+    /* A PEP 523 hook is native code: give it a borrow scope.  The default
+       evaluator it calls sets its own floor above the hook's entries. */
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
+    PyObject *result = tstate->interp->eval_frame(tstate, frame, throwflag);
+    _PyBorrowScope_Exit(tstate, mark);
     return result;
 }
 

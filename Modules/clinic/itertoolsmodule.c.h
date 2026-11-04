@@ -5,11 +5,12 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
-#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(batched_new__doc__,
 "batched(iterable, n, *, strict=False)\n"
@@ -47,11 +48,11 @@ batched_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(iterable), _Py_LATIN1_CHR('n'), &_Py_ID(strict), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(iterable)), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('n')), _PyValue_STATIC_IMMORTAL(&_Py_ID(strict)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -69,33 +70,22 @@ batched_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[3];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 2;
     PyObject *iterable;
     Py_ssize_t n;
     int strict = 0;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 3) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    noptargs = Py_MIN(_args_scope.nargs, 2)
-        + (_args_scope.nobjects - _args_scope.nargs)
-        - (2 + 0);
     iterable = fastargs[0];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     {
         Py_ssize_t ival = -1;
         PyObject *iobj = _PyNumber_Index(fastargs[1]);
@@ -108,9 +98,6 @@ batched_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         }
         n = ival;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     if (!noptargs) {
         goto skip_optional_kwonly;
     }
@@ -118,18 +105,10 @@ batched_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     if (strict < 0) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
 skip_optional_kwonly:
     return_value = batched_new_impl(type, iterable, n, strict);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -149,31 +128,23 @@ pairwise_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = clinic_state()->pairwise_type;
-    _PyArg_OwnerScope _args_scope = {0};
-    PyObject *const *fastargs;
     PyObject *iterable;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
         !_PyArg_NoKeywords("pairwise", kwargs)) {
         goto exit;
     }
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
+    if (!_PyArg_CheckPositional("pairwise", PyTuple_GET_SIZE(args), 1, 1)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "pairwise",
-                                          1, 1);
-    if (fastargs == NULL) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
+    if (_args_items == NULL) {
         goto exit;
     }
-    iterable = fastargs[0];
+    iterable = _args_items[0];
     return_value = pairwise_new_impl(type, iterable);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -204,11 +175,11 @@ itertools_groupby(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(iterable), &_Py_ID(key), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(iterable)), _PyValue_STATIC_IMMORTAL(&_Py_ID(key)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -226,48 +197,29 @@ itertools_groupby(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[2];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
     PyObject *it;
     PyObject *keyfunc = Py_None;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 2) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    noptargs = Py_MIN(_args_scope.nargs, 2)
-        + (_args_scope.nobjects - _args_scope.nargs)
-        - (1 + 0);
     it = fastargs[0];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
     keyfunc = fastargs[1];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
 skip_optional_pos:
     return_value = itertools_groupby_impl(type, it, keyfunc);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -280,8 +232,6 @@ itertools__grouper(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = clinic_state()->_grouper_type;
-    _PyArg_OwnerScope _args_scope = {0};
-    PyObject *const *fastargs;
     PyObject *parent;
     PyObject *tgtkey;
 
@@ -289,28 +239,22 @@ itertools__grouper(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         !_PyArg_NoKeywords("_grouper", kwargs)) {
         goto exit;
     }
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
+    if (!_PyArg_CheckPositional("_grouper", PyTuple_GET_SIZE(args), 2, 2)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "_grouper",
-                                          2, 2);
-    if (fastargs == NULL) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (!PyObject_TypeCheck(fastargs[0], clinic_state_by_cls()->groupby_type)) {
-        _PyArg_BadArgument("_grouper", "argument 1", (clinic_state_by_cls()->groupby_type)->tp_name, fastargs[0]);
+    if (!PyObject_TypeCheck(_args_items[0], clinic_state_by_cls()->groupby_type)) {
+        _PyArg_BadArgument("_grouper", "argument 1", (clinic_state_by_cls()->groupby_type)->tp_name, _args_items[0]);
         goto exit;
     }
-    parent = fastargs[0];
-    tgtkey = fastargs[1];
+    parent = _args_items[0];
+    tgtkey = _args_items[1];
     return_value = itertools__grouper_impl(type, parent, tgtkey);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -329,8 +273,6 @@ itertools_teedataobject(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = clinic_state()->teedataobject_type;
-    _PyArg_OwnerScope _args_scope = {0};
-    PyObject *const *fastargs;
     PyObject *it;
     PyObject *values;
     PyObject *next;
@@ -339,29 +281,23 @@ itertools_teedataobject(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         !_PyArg_NoKeywords("teedataobject", kwargs)) {
         goto exit;
     }
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
+    if (!_PyArg_CheckPositional("teedataobject", PyTuple_GET_SIZE(args), 3, 3)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "teedataobject",
-                                          3, 3);
-    if (fastargs == NULL) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
+    if (_args_items == NULL) {
         goto exit;
     }
-    it = fastargs[0];
-    if (!PyList_Check(fastargs[1])) {
-        _PyArg_BadArgument("teedataobject", "argument 2", "list", fastargs[1]);
+    it = _args_items[0];
+    if (!PyList_Check(_args_items[1])) {
+        _PyArg_BadArgument("teedataobject", "argument 2", "list", _args_items[1]);
         goto exit;
     }
-    values = fastargs[1];
-    next = fastargs[2];
+    values = _args_items[1];
+    next = _args_items[2];
     return_value = itertools_teedataobject_impl(type, it, values, next);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -379,31 +315,23 @@ itertools__tee(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = clinic_state()->tee_type;
-    _PyArg_OwnerScope _args_scope = {0};
-    PyObject *const *fastargs;
     PyObject *iterable;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
         !_PyArg_NoKeywords("_tee", kwargs)) {
         goto exit;
     }
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
+    if (!_PyArg_CheckPositional("_tee", PyTuple_GET_SIZE(args), 1, 1)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "_tee",
-                                          1, 1);
-    if (fastargs == NULL) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
+    if (_args_items == NULL) {
         goto exit;
     }
-    iterable = fastargs[0];
+    iterable = _args_items[0];
     return_value = itertools__tee_impl(type, iterable);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -471,31 +399,23 @@ itertools_cycle(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = clinic_state()->cycle_type;
-    _PyArg_OwnerScope _args_scope = {0};
-    PyObject *const *fastargs;
     PyObject *iterable;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
         !_PyArg_NoKeywords("cycle", kwargs)) {
         goto exit;
     }
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
+    if (!_PyArg_CheckPositional("cycle", PyTuple_GET_SIZE(args), 1, 1)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "cycle",
-                                          1, 1);
-    if (fastargs == NULL) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
+    if (_args_items == NULL) {
         goto exit;
     }
-    iterable = fastargs[0];
+    iterable = _args_items[0];
     return_value = itertools_cycle_impl(type, iterable);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -515,8 +435,6 @@ itertools_dropwhile(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = clinic_state()->dropwhile_type;
-    _PyArg_OwnerScope _args_scope = {0};
-    PyObject *const *fastargs;
     PyObject *func;
     PyObject *seq;
 
@@ -524,24 +442,18 @@ itertools_dropwhile(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         !_PyArg_NoKeywords("dropwhile", kwargs)) {
         goto exit;
     }
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
+    if (!_PyArg_CheckPositional("dropwhile", PyTuple_GET_SIZE(args), 2, 2)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "dropwhile",
-                                          2, 2);
-    if (fastargs == NULL) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
+    if (_args_items == NULL) {
         goto exit;
     }
-    func = fastargs[0];
-    seq = fastargs[1];
+    func = _args_items[0];
+    seq = _args_items[1];
     return_value = itertools_dropwhile_impl(type, func, seq);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -559,8 +471,6 @@ itertools_takewhile(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = clinic_state()->takewhile_type;
-    _PyArg_OwnerScope _args_scope = {0};
-    PyObject *const *fastargs;
     PyObject *func;
     PyObject *seq;
 
@@ -568,24 +478,18 @@ itertools_takewhile(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         !_PyArg_NoKeywords("takewhile", kwargs)) {
         goto exit;
     }
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
+    if (!_PyArg_CheckPositional("takewhile", PyTuple_GET_SIZE(args), 2, 2)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "takewhile",
-                                          2, 2);
-    if (fastargs == NULL) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
+    if (_args_items == NULL) {
         goto exit;
     }
-    func = fastargs[0];
-    seq = fastargs[1];
+    func = _args_items[0];
+    seq = _args_items[1];
     return_value = itertools_takewhile_impl(type, func, seq);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -603,8 +507,6 @@ itertools_starmap(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = clinic_state()->starmap_type;
-    _PyArg_OwnerScope _args_scope = {0};
-    PyObject *const *fastargs;
     PyObject *func;
     PyObject *seq;
 
@@ -612,24 +514,18 @@ itertools_starmap(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         !_PyArg_NoKeywords("starmap", kwargs)) {
         goto exit;
     }
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
+    if (!_PyArg_CheckPositional("starmap", PyTuple_GET_SIZE(args), 2, 2)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "starmap",
-                                          2, 2);
-    if (fastargs == NULL) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
+    if (_args_items == NULL) {
         goto exit;
     }
-    func = fastargs[0];
-    seq = fastargs[1];
+    func = _args_items[0];
+    seq = _args_items[1];
     return_value = itertools_starmap_impl(type, func, seq);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -708,11 +604,11 @@ itertools_combinations(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(iterable), _Py_LATIN1_CHR('r'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(iterable)), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('r')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -730,28 +626,20 @@ itertools_combinations(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[2];
     PyObject * const *fastargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     PyObject *iterable;
     Py_ssize_t r;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 2) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     iterable = fastargs[0];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     {
         Py_ssize_t ival = -1;
         PyObject *iobj = _PyNumber_Index(fastargs[1]);
@@ -769,17 +657,9 @@ itertools_combinations(PyTypeObject *type, PyObject *args, PyObject *kwargs)
             goto exit;
         }
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     return_value = itertools_combinations_impl(type, iterable, r);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -822,11 +702,11 @@ itertools_combinations_with_replacement(PyTypeObject *type, PyObject *args, PyOb
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(iterable), _Py_LATIN1_CHR('r'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(iterable)), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('r')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -844,28 +724,20 @@ itertools_combinations_with_replacement(PyTypeObject *type, PyObject *args, PyOb
     #undef KWTUPLE
     PyObject *argsbuf[2];
     PyObject * const *fastargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     PyObject *iterable;
     Py_ssize_t r;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 2) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     iterable = fastargs[0];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     {
         Py_ssize_t ival = -1;
         PyObject *iobj = _PyNumber_Index(fastargs[1]);
@@ -883,17 +755,9 @@ itertools_combinations_with_replacement(PyTypeObject *type, PyObject *args, PyOb
             goto exit;
         }
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     return_value = itertools_combinations_with_replacement_impl(type, iterable, r);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -935,11 +799,11 @@ itertools_permutations(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(iterable), _Py_LATIN1_CHR('r'), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(iterable)), _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('r')), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -957,48 +821,29 @@ itertools_permutations(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[2];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
     PyObject *iterable;
     PyObject *robj = Py_None;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 2) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    noptargs = Py_MIN(_args_scope.nargs, 2)
-        + (_args_scope.nobjects - _args_scope.nargs)
-        - (1 + 0);
     iterable = fastargs[0];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
     robj = fastargs[1];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
 skip_optional_pos:
     return_value = itertools_permutations_impl(type, iterable, robj);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -1038,11 +883,11 @@ itertools_accumulate(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(iterable), &_Py_ID(func), &_Py_ID(initial), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(iterable)), _PyValue_STATIC_IMMORTAL(&_Py_ID(func)), _PyValue_STATIC_IMMORTAL(&_Py_ID(initial)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1060,41 +905,27 @@ itertools_accumulate(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[3];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
     PyObject *iterable;
     PyObject *binop = Py_None;
     PyObject *initial = Py_None;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 3) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    noptargs = Py_MIN(_args_scope.nargs, 2)
-        + (_args_scope.nobjects - _args_scope.nargs)
-        - (1 + 0);
     iterable = fastargs[0];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     if (!noptargs) {
         goto skip_optional_pos;
     }
     if (fastargs[1]) {
         binop = fastargs[1];
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
@@ -1104,18 +935,10 @@ skip_optional_pos:
         goto skip_optional_kwonly;
     }
     initial = fastargs[2];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
 skip_optional_kwonly:
     return_value = itertools_accumulate_impl(type, iterable, binop, initial);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -1157,11 +980,11 @@ itertools_compress(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(data), &_Py_ID(selectors), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(data)), _PyValue_STATIC_IMMORTAL(&_Py_ID(selectors)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1179,40 +1002,24 @@ itertools_compress(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[2];
     PyObject * const *fastargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     PyObject *seq1;
     PyObject *seq2;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 2) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     seq1 = fastargs[0];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     seq2 = fastargs[1];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     return_value = itertools_compress_impl(type, seq1, seq2);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -1232,8 +1039,6 @@ itertools_filterfalse(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 {
     PyObject *return_value = NULL;
     PyTypeObject *base_tp = clinic_state()->filterfalse_type;
-    _PyArg_OwnerScope _args_scope = {0};
-    PyObject *const *fastargs;
     PyObject *func;
     PyObject *seq;
 
@@ -1241,24 +1046,18 @@ itertools_filterfalse(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         !_PyArg_NoKeywords("filterfalse", kwargs)) {
         goto exit;
     }
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
+    if (!_PyArg_CheckPositional("filterfalse", PyTuple_GET_SIZE(args), 2, 2)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "filterfalse",
-                                          2, 2);
-    if (fastargs == NULL) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
+    if (_args_items == NULL) {
         goto exit;
     }
-    func = fastargs[0];
-    seq = fastargs[1];
+    func = _args_items[0];
+    seq = _args_items[1];
     return_value = itertools_filterfalse_impl(type, func, seq);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -1290,11 +1089,11 @@ itertools_count(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(start), &_Py_ID(step), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(start)), _PyValue_STATIC_IMMORTAL(&_Py_ID(step)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -1312,53 +1111,34 @@ itertools_count(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[2];
     PyObject * const *fastargs;
-    Py_ssize_t noptargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
     PyObject *long_cnt = NULL;
     PyObject *long_step = NULL;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 2) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    noptargs = Py_MIN(_args_scope.nargs, 2)
-        + (_args_scope.nobjects - _args_scope.nargs)
-        - (0 + 0);
     if (!noptargs) {
         goto skip_optional_pos;
     }
     if (fastargs[0]) {
         long_cnt = fastargs[0];
-        if (PyErr_Occurred()) {
-            goto exit;
-        }
         if (!--noptargs) {
             goto skip_optional_pos;
         }
     }
     long_step = fastargs[1];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
 skip_optional_pos:
     return_value = itertools_count_impl(type, long_cnt, long_step);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -1376,4 +1156,4 @@ zip_longest_next(PyObject *self)
 
     return return_value;
 }
-/*[clinic end generated code: output=efa6b7c64f2d1605 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=16a973d890de7312 input=a9049054013a1b77]*/

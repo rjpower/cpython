@@ -5,6 +5,7 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 
@@ -31,11 +32,11 @@ _testinternalcapi_compiler_cleandoc(PyObject *module, PyObject *const *args, Py_
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(doc), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(doc)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -117,11 +118,11 @@ _testinternalcapi_compiler_codegen(PyObject *module, PyObject *const *args, Py_s
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(ast), &_Py_ID(filename), &_Py_ID(optimize), &_Py_ID(compile_mode), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(ast)), _PyValue_STATIC_IMMORTAL(&_Py_ID(filename)), _PyValue_STATIC_IMMORTAL(&_Py_ID(optimize)), _PyValue_STATIC_IMMORTAL(&_Py_ID(compile_mode)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -196,11 +197,11 @@ _testinternalcapi_optimize_cfg(PyObject *module, PyObject *const *args, Py_ssize
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(instructions), &_Py_ID(consts), &_Py_ID(nlocals), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(instructions)), _PyValue_STATIC_IMMORTAL(&_Py_ID(consts)), _PyValue_STATIC_IMMORTAL(&_Py_ID(nlocals)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -264,11 +265,11 @@ _testinternalcapi_assemble_code_object(PyObject *module, PyObject *const *args, 
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(filename), &_Py_ID(instructions), &_Py_ID(metadata), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(filename)), _PyValue_STATIC_IMMORTAL(&_Py_ID(instructions)), _PyValue_STATIC_IMMORTAL(&_Py_ID(metadata)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -343,11 +344,11 @@ gh_119213_getargs(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyO
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(spam), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(spam)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -399,4 +400,4 @@ get_next_dict_keys_version(PyObject *module, PyObject *Py_UNUSED(ignored))
 {
     return get_next_dict_keys_version_impl(module);
 }
-/*[clinic end generated code: output=ecb5d7ac85b153fa input=a9049054013a1b77]*/
+/*[clinic end generated code: output=31f6329904fc8602 input=a9049054013a1b77]*/

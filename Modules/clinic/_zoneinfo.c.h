@@ -5,10 +5,11 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
-#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(zoneinfo_ZoneInfo__doc__,
 "ZoneInfo(key)\n"
@@ -30,11 +31,11 @@ zoneinfo_ZoneInfo(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(key), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(key)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -52,37 +53,24 @@ zoneinfo_ZoneInfo(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     #undef KWTUPLE
     PyObject *argsbuf[1];
     PyObject * const *fastargs;
-    _PyArg_OwnerScope _args_scope = {0};
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
     PyObject *key;
 
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 1) < 0) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 1));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
-    fastargs = _PyArg_UnpackKeywordsOwned(&_args_scope, kwargs, &_parser,
+    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
             /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
     if (!fastargs) {
         goto exit;
     }
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     key = fastargs[0];
-    if (PyErr_Occurred()) {
-        goto exit;
-    }
     Py_BEGIN_CRITICAL_SECTION(type);
     return_value = zoneinfo_ZoneInfo_impl(type, key);
     Py_END_CRITICAL_SECTION();
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        PyObject *_saved = PyErr_GetRaisedException();
-        Py_CLEAR(return_value);
-        _PyValue_RestoreException(_saved);
-    }
     return return_value;
 }
 
@@ -110,11 +98,11 @@ zoneinfo_ZoneInfo_from_file(PyObject *type, PyTypeObject *cls, PyObject *const *
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(key), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(key)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -176,11 +164,11 @@ zoneinfo_ZoneInfo_no_cache(PyObject *type, PyTypeObject *cls, PyObject *const *a
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(key), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(key)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -235,11 +223,11 @@ zoneinfo_ZoneInfo_clear_cache(PyObject *type, PyTypeObject *cls, PyObject *const
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(only_keys), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(only_keys)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -443,6 +431,10 @@ zoneinfo_ZoneInfo___init_subclass__(PyObject *type, PyObject *args, PyObject *kw
     if (!_PyArg_NoPositional("__init_subclass__", args)) {
         goto exit;
     }
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
+    if (_args_items == NULL) {
+        goto exit;
+    }
     if (kwargs == NULL) {
         __clinic_kwargs = PyDict_New();
         if (__clinic_kwargs == NULL) {
@@ -460,4 +452,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=b0783b65e6cfd9e6 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=828bbc4276d9f9cd input=a9049054013a1b77]*/

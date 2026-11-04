@@ -5,6 +5,7 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
 
@@ -86,11 +87,11 @@ _testmultiphase_StateAccessType_increment_count_clinic(PyObject *self, PyTypeObj
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { _Py_LATIN1_CHR('n'), &_Py_ID(twice), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(_Py_LATIN1_CHR('n')), _PyValue_STATIC_IMMORTAL(&_Py_ID(twice)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -165,4 +166,4 @@ _testmultiphase_StateAccessType_get_count(PyObject *self, PyTypeObject *cls, PyO
     }
     return _testmultiphase_StateAccessType_get_count_impl((StateAccessTypeObject *)self, cls);
 }
-/*[clinic end generated code: output=aff91f6219a7baca input=a9049054013a1b77]*/
+/*[clinic end generated code: output=fdbe80331f2bf8f5 input=a9049054013a1b77]*/

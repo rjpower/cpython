@@ -519,54 +519,22 @@ classmethoddescr_call(PyObject *_descr, PyObject *args,
                      PyDescr_TYPE(descr)->tp_name);
         return NULL;
     }
-    PyObject *self = NULL;
-    PyObject *bound = NULL;
-    PyObject *result = NULL;
-    _PyArg_OwnerScope call_scope = {0};
-
-    self = PyTuple_GetItemRef(args, 0);
-    if (self == NULL || PyErr_Occurred()) goto cleanup;
-    bound = classmethod_get((PyObject *)descr, NULL, self);
-    if (bound == NULL || PyErr_Occurred()) goto cleanup;
-
-    if (_PyArg_OwnerScope_BeginTuple(&call_scope, args, 0) < 0 ||
-        PyErr_Occurred()) {
-        goto cleanup;
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
+    PyObject *res = NULL;
+    PyObject *const *items = _PyBorrow_TupleItems(args, argc);
+    if (items == NULL) {
+        goto done;
     }
-    PyObject *const *call_args = _PyArg_UnpackPositionalOwned(
-        &call_scope, NULL, argc, argc);
-    if (call_args == NULL || PyErr_Occurred()) goto cleanup;
-
-    result = PyObject_VectorcallDict(bound, call_args + 1, argc - 1, kwds);
-    if (result == NULL || PyErr_Occurred()) goto cleanup;
-
-cleanup:
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = bound;
-        bound = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
+    PyObject *bound = classmethod_get((PyObject *)descr, NULL, items[0]);
+    if (bound == NULL) {
+        goto done;
     }
-    {
-        PyObject *saved = PyErr_GetRaisedException();
-        PyObject *tmp = self;
-        self = NULL;
-        Py_XDECREF(tmp);
-        _PyValue_RestoreException(saved);
-    }
-    int scope_status = _PyArg_OwnerScope_End(&call_scope);
-    if (scope_status < 0 || PyErr_Occurred()) {
-        {
-            PyObject *saved = PyErr_GetRaisedException();
-            PyObject *tmp = result;
-            result = NULL;
-            Py_XDECREF(tmp);
-            _PyValue_RestoreException(saved);
-        }
-        return NULL;
-    }
-    return result;
+    res = PyObject_VectorcallDict(bound, items + 1, argc - 1, kwds);
+    Py_DECREF(bound);
+done:
+    _PyBorrowScope_Exit(tstate, mark);
+    return res;
 }
 
 Py_LOCAL_INLINE(PyObject *)

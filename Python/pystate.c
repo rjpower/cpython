@@ -1715,7 +1715,7 @@ PyThreadState_Clear(PyThreadState *tstate)
     /* Don't clear tstate->pyframe: it is a borrowed reference */
 
     // Release the base region while the thread state is still intact.
-    _PyBorrowStack_Clear(tstate);
+    _PyBorrowStack_ReleaseAll(tstate);
 
     Py_CLEAR(tstate->threading_local_key);
     Py_CLEAR(tstate->threading_local_sentinel);

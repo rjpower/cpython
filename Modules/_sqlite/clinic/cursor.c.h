@@ -5,11 +5,12 @@ preserve
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_long.h"          // _PyLong_UInt32_Converter()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
-#include "pycore_value.h"         // _PyValue_RestoreException()
 
 static int
 pysqlite_cursor_init_impl(pysqlite_Cursor *self,
@@ -20,8 +21,6 @@ pysqlite_cursor_init(PyObject *self, PyObject *args, PyObject *kwargs)
 {
     int return_value = -1;
     PyTypeObject *base_tp = clinic_state()->CursorType;
-    _PyArg_OwnerScope _args_scope = {0};
-    PyObject *const *fastargs;
     pysqlite_Connection *connection;
 
     if ((Py_IS_TYPE(self, base_tp) ||
@@ -29,25 +28,21 @@ pysqlite_cursor_init(PyObject *self, PyObject *args, PyObject *kwargs)
         !_PyArg_NoKeywords("Cursor", kwargs)) {
         goto exit;
     }
-    if (_PyArg_OwnerScope_BeginTuple(&_args_scope, args, 0) < 0) {
+    if (!_PyArg_CheckPositional("Cursor", PyTuple_GET_SIZE(args), 1, 1)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackPositionalOwned(&_args_scope, "Cursor",
-                                          1, 1);
-    if (fastargs == NULL) {
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
+    if (_args_items == NULL) {
         goto exit;
     }
-    if (!PyObject_TypeCheck(fastargs[0], clinic_state()->ConnectionType)) {
-        _PyArg_BadArgument("Cursor", "argument 1", (clinic_state()->ConnectionType)->tp_name, fastargs[0]);
+    if (!PyObject_TypeCheck(_args_items[0], clinic_state()->ConnectionType)) {
+        _PyArg_BadArgument("Cursor", "argument 1", (clinic_state()->ConnectionType)->tp_name, _args_items[0]);
         goto exit;
     }
-    connection = (pysqlite_Connection *)fastargs[0];
+    connection = (pysqlite_Connection *)_args_items[0];
     return_value = pysqlite_cursor_init_impl((pysqlite_Cursor *)self, connection);
 
 exit:
-    if (_PyArg_OwnerScope_End(&_args_scope) < 0) {
-        return_value = -1;
-    }
     return return_value;
 }
 
@@ -202,11 +197,11 @@ pysqlite_cursor_fetchmany(PyObject *self, PyObject *const *args, Py_ssize_t narg
         PyGC_Head _this_is_not_used;
         PyObject_VAR_HEAD
         Py_hash_t ob_hash;
-        PyObject *ob_item[NUM_KEYWORDS];
+        PyValue ob_item[NUM_KEYWORDS];
     } _kwtuple = {
         .ob_base = PyVarObject_HEAD_INIT(&PyTuple_Type, NUM_KEYWORDS)
         .ob_hash = -1,
-        .ob_item = { &_Py_ID(size), },
+        .ob_item = { _PyValue_STATIC_IMMORTAL(&_Py_ID(size)), },
     };
     #undef NUM_KEYWORDS
     #define KWTUPLE (&_kwtuple.ob_base.ob_base)
@@ -371,4 +366,4 @@ exit:
 }
 #define _SQLITE3_CURSOR_ARRAYSIZE_GETSETDEF {"arraysize", (getter)_sqlite3_Cursor_arraysize_get, (setter)_sqlite3_Cursor_arraysize_set, NULL},
 
-/*[clinic end generated code: output=c5da06d4103c7e0a input=a9049054013a1b77]*/
+/*[clinic end generated code: output=940f307433d82e20 input=a9049054013a1b77]*/

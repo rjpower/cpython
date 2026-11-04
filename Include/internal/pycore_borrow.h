@@ -26,7 +26,9 @@ typedef PyObject **_PyBorrowMark;
 /* Pop and Py_DECREF the entries above mark, newest first.  Cannot fail and
  * does not touch the error indicator (deallocators preserve it).  Reentrant:
  * code run by a deallocator pushes above the current top and either releases
- * its own entries or leaves them for this loop. */
+ * its own entries or leaves them for this loop.  Debug builds fail fatally if
+ * mark is not on the stack at or below the top: scopes exited out of LIFO
+ * order, or a floor released entries that a live scope still owned. */
 PyAPI_FUNC(void) _PyBorrowScope_Release(PyThreadState *, _PyBorrowMark);
 
 static inline _PyBorrowMark
@@ -50,21 +52,34 @@ _PyBorrowScope_Exit(PyThreadState *tstate, _PyBorrowMark mark)
  * `owned`, set MemoryError and return NULL. */
 PyAPI_FUNC(PyObject *) _PyBorrow_Keep(PyObject *owned);
 
-/* Push one owned reference per item of `tuple` as one contiguous run and
- * return the run.  Inline scalars are boxed.  An empty tuple returns a static
- * empty array.  On failure, return NULL with MemoryError; items already pushed
+/* Push one owned reference for each of the first n items of `tuple`
+ * (0 <= n <= its size) as one contiguous run and return the run.  Inline
+ * scalars are boxed.  n == 0 returns a static empty array.  Call it with no
+ * exception set, after any arity check, so a rejected call pushes nothing.
+ * The only failure is memory: the stack cannot grow or a box cannot be
+ * allocated.  Then return NULL with MemoryError set; items already pushed
  * stay until the scope exits.  The run is read-only and has no slot before
  * element 0: never pass PY_VECTORCALL_ARGUMENTS_OFFSET with it. */
-PyAPI_FUNC(PyObject *const *) _PyBorrow_TupleItems(PyObject *tuple);
+PyAPI_FUNC(PyObject *const *) _PyBorrow_TupleItems(PyObject *tuple,
+                                                   Py_ssize_t n);
 
 /* Ask the innermost eval loop to release the entries above its floor at the
  * next instruction boundary.  No-op outside any eval loop. */
 PyAPI_FUNC(void) _PyBorrow_RequestRelease(PyThreadState *tstate);
 
-/* Thread-state lifecycle (Python/pystate.c).  Init allocates nothing.  Clear
- * releases every entry, including the base region, and frees the chunks. */
+/* Thread-state lifecycle (Python/pystate.c, Python/pylifecycle.c).  Init
+ * allocates nothing.  ReleaseAll releases every entry, including the base
+ * region pushed outside any scope; finalization calls it before modules are
+ * destroyed, so an explicit scope must not span Py_FinalizeEx().  Clear also
+ * frees the chunks; nothing may push afterwards.  Both leave the entries of a
+ * thread that still has a frame (a daemon thread stopped in mid-evaluation),
+ * as PyThreadState_Clear() leaves its frames. */
 extern void _PyBorrowStack_Init(_PyBorrowStack *stack);
+extern void _PyBorrowStack_ReleaseAll(PyThreadState *tstate);
 extern void _PyBorrowStack_Clear(PyThreadState *tstate);
+
+/* The number of entries on the stack (for tests and debug checks). */
+PyAPI_FUNC(Py_ssize_t) _PyBorrow_Depth(PyThreadState *tstate);
 
 #ifdef __cplusplus
 }

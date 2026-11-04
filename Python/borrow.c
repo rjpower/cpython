@@ -10,8 +10,11 @@
 #include "Python.h"
 #include "pycore_borrow.h"
 #include "pycore_ceval.h"         // _Py_set_eval_breaker_bit()
+#include "pycore_pyerrors.h"      // _Py_FatalErrorFormat()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
+#include "pycore_traceback.h"     // _Py_DumpStack()
 #include "pycore_tuple.h"         // PyTuple_GET_VALUE()
+#include "pycore_value.h"         // PyValue_AsPyObjectNewBoxed()
 
 #define BORROW_CHUNK_SLOTS 1024
 
@@ -21,6 +24,7 @@ static _PyBorrowChunk empty_chunk = {
     .previous = NULL,
     .previous_top = NULL,
     .end = empty_chunk.slots,
+    .base_depth = 0,
 };
 
 /* The run returned for an empty tuple.  It is never read. */
@@ -41,14 +45,62 @@ _PyBorrowStack_Init(_PyBorrowStack *s)
     s->spare = NULL;
 }
 
+/* Number of entries below p, or -1 if p is not a position on the stack at or
+   below the top. */
+static Py_ssize_t
+borrow_depth(const _PyBorrowStack *s, PyObject **p)
+{
+    PyObject **limit = s->top;
+    for (const _PyBorrowChunk *c = s->chunk; c != NULL; c = c->previous) {
+        if (c->slots <= p && p <= limit) {
+            return c->base_depth + (p - c->slots);
+        }
+        limit = c->previous_top;
+    }
+    return -1;
+}
+
+Py_ssize_t
+_PyBorrow_Depth(PyThreadState *tstate)
+{
+    _PyBorrowStack *s = borrow_stack(tstate);
+    return s->chunk->base_depth + (s->top - s->chunk->slots);
+}
+
+static void borrow_release(_PyBorrowStack *s, _PyBorrowMark mark);
+
+/* A thread that still has a frame is a daemon thread that stopped while
+   taking the GIL in mid-evaluation; its C frames may still hold borrows. */
+static int
+borrow_thread_has_frame(PyThreadState *tstate)
+{
+    return tstate->current_frame != tstate->base_frame;
+}
+
+void
+_PyBorrowStack_ReleaseAll(PyThreadState *tstate)
+{
+    if (!borrow_thread_has_frame(tstate)) {
+        borrow_release(borrow_stack(tstate), empty_chunk.slots);
+    }
+}
+
 void
 _PyBorrowStack_Clear(PyThreadState *tstate)
 {
     _PyBorrowStack *s = borrow_stack(tstate);
-    _PyBorrowScope_Exit(tstate, empty_chunk.slots);
+    if (borrow_thread_has_frame(tstate)) {
+        /* Leave the entries and their chunks, as PyThreadState_Clear()
+           leaves the frames. */
+        return;
+    }
+    borrow_release(s, empty_chunk.slots);
     assert(s->chunk == &empty_chunk);
     PyMem_RawFree(s->spare);
     s->spare = NULL;
+#ifdef Py_DEBUG
+    s->cleared = 1;
+#endif
 }
 
 void
@@ -63,6 +115,10 @@ _PyBorrow_RequestRelease(PyThreadState *tstate)
 static int
 borrow_grow(_PyBorrowStack *s, Py_ssize_t n)
 {
+#ifdef Py_DEBUG
+    /* Pushing on a cleared thread state would leak the new chunk. */
+    assert(!s->cleared);
+#endif
     _PyBorrowChunk *chunk = s->spare;
     if (chunk != NULL && chunk->end - chunk->slots >= n) {
         s->spare = NULL;
@@ -84,6 +140,7 @@ borrow_grow(_PyBorrowStack *s, Py_ssize_t n)
     }
     chunk->previous = s->chunk;
     chunk->previous_top = s->top;
+    chunk->base_depth = s->chunk->base_depth + (s->top - s->chunk->slots);
     s->chunk = chunk;
     s->top = chunk->slots;
     s->end = chunk->end;
@@ -103,10 +160,9 @@ borrow_chunk_retire(_PyBorrowStack *s, _PyBorrowChunk *chunk)
     }
 }
 
-void
-_PyBorrowScope_Release(PyThreadState *tstate, _PyBorrowMark mark)
+static void
+borrow_release(_PyBorrowStack *s, _PyBorrowMark mark)
 {
-    _PyBorrowStack *s = borrow_stack(tstate);
     /* Re-read the stack on every iteration: a deallocator may push or pop. */
     while (s->top != mark) {
         if (s->top == s->chunk->slots) {
@@ -124,6 +180,77 @@ _PyBorrowScope_Release(PyThreadState *tstate, _PyBorrowMark mark)
     }
 }
 
+void
+_PyBorrowScope_Release(PyThreadState *tstate, _PyBorrowMark mark)
+{
+    _PyBorrowStack *s = borrow_stack(tstate);
+#ifdef Py_DEBUG
+    /* A scope's Exit runs on the thread state that its Enter used. */
+    assert(tstate == _PyThreadState_GET());
+    if (borrow_depth(s, mark) < 0) {
+        /* Releasing would pop live entries of outer scopes and then run off
+           the bottom of the stack. */
+        _Py_FatalErrorFormat(__func__,
+            "borrow scope mark %p is not on the borrow stack of thread "
+            "state %p at or below its top %p (depth %zd): a scope exited "
+            "out of LIFO order, or an eval floor released entries that a "
+            "live scope owned", (void *)mark, (void *)tstate,
+            (void *)s->top, _PyBorrow_Depth(tstate));
+    }
+#endif
+    borrow_release(s, mark);
+}
+
+#ifdef Py_DEBUG
+/* The measured limit of rule L (pyjit/design/native-boundary.md, section 5):
+   warn once per push site when the entries above the innermost eval floor
+   exceed this count.  A parse in a loop whose trip count depends on the input
+   needs its own scope (Py_BEGIN_BORROW_SCOPE). */
+#define BORROW_SCOPE_WARN_SIZE 10000
+#define BORROW_WARN_SITES 32
+
+static void
+borrow_check_size(PyThreadState *tstate, _PyBorrowStack *s, void *site)
+{
+    Py_ssize_t depth = _PyBorrow_Depth(tstate);
+    if (depth <= BORROW_SCOPE_WARN_SIZE) {
+        return;
+    }
+    if (s->eval_floor != NULL) {
+        depth -= borrow_depth(s, s->eval_floor);
+        if (depth <= BORROW_SCOPE_WARN_SIZE) {
+            return;
+        }
+    }
+    static void *warned[BORROW_WARN_SITES];
+    static int nwarned;
+    for (int i = 0; i < nwarned; i++) {
+        if (warned[i] == site) {
+            return;
+        }
+    }
+    if (nwarned == BORROW_WARN_SITES) {
+        return;
+    }
+    warned[nwarned++] = site;
+    fprintf(stderr,
+            "Warning: a borrow scope holds %zd entries (limit %d); the push "
+            "at %p is in an unbounded loop without its own scope:\n",
+            depth, BORROW_SCOPE_WARN_SIZE, site);
+    _Py_DumpStack(fileno(stderr));
+}
+
+#  if defined(__GNUC__) || defined(__clang__)
+#    define BORROW_PUSH_SITE() __builtin_return_address(0)
+#  else
+#    define BORROW_PUSH_SITE() NULL
+#  endif
+#  define BORROW_CHECK_SIZE(tstate, s) \
+       borrow_check_size((tstate), (s), BORROW_PUSH_SITE())
+#else
+#  define BORROW_CHECK_SIZE(tstate, s) ((void)0)
+#endif
+
 PyObject *
 _PyBorrow_Keep(PyObject *owned)
 {
@@ -136,14 +263,16 @@ _PyBorrow_Keep(PyObject *owned)
     }
     *s->top++ = owned;
     _PyBorrow_RequestRelease(tstate);
+    BORROW_CHECK_SIZE(tstate, s);
     return owned;
 }
 
 PyObject *const *
-_PyBorrow_TupleItems(PyObject *tuple)
+_PyBorrow_TupleItems(PyObject *tuple, Py_ssize_t n)
 {
     assert(PyTuple_Check(tuple));
-    Py_ssize_t n = PyTuple_GET_SIZE(tuple);
+    assert(0 <= n && n <= PyTuple_GET_SIZE(tuple));
+    assert(!PyErr_Occurred());
     if (n == 0) {
         return empty_run;
     }
@@ -157,13 +286,14 @@ _PyBorrow_TupleItems(PyObject *tuple)
        Python code, so nothing else pushes while the run is filled. */
     PyObject **run = s->top;
     for (Py_ssize_t i = 0; i < n; i++) {
-        PyObject *item = PyValue_AsObject(PyTuple_GET_VALUE(tuple, i));
+        PyObject *item = PyValue_AsPyObjectNewBoxed(PyTuple_GET_VALUE(tuple, i));
         if (item == NULL) {
             return NULL;
         }
         assert(s->top == run + i);
         *s->top++ = item;
     }
+    BORROW_CHECK_SIZE(tstate, s);
     return run;
 }
 

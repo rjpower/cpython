@@ -8,6 +8,7 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
+#include "pycore_borrow.h"        // _PyBorrowScope_Enter()
 #include "pycore_code.h"          // EVAL_CALL_STAT_INC_IF_FUNCTION()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_stats.h"
@@ -140,7 +141,12 @@ _PyObject_VectorcallTstate(PyThreadState *tstate, PyObject *callable,
         Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
         return _PyObject_MakeTpCall(tstate, callable, args, nargs, kwnames);
     }
+    // Every call through the call protocol opens a borrow scope: this path
+    // reaches builtin-type tp_vectorcall and third-party function objects
+    // that never pass through a PyCFunction trampoline.
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     res = func(callable, args, nargsf, kwnames);
+    _PyBorrowScope_Exit(tstate, mark);
     return _Py_CheckFunctionResult(tstate, callable, res, NULL);
 }
 

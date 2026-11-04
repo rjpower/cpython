@@ -4,15 +4,15 @@ preserve
 
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
+#  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_abstract.h"      // _PyNumber_Index()
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 #include "pycore_long.h"          // _PyLong_UnsignedShort_Converter()
 #include "pycore_modsupport.h"    // _PyArg_CheckPositional()
 #include "pycore_runtime.h"       // _Py_ID()
-#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
-#include "pycore_value.h"         // _PyValue_RestoreException()
 
 PyDoc_STRVAR(lone_kwds__doc__,
 "lone_kwds($module, /, **kwds)\n"
@@ -32,6 +32,10 @@ lone_kwds(PyObject *module, PyObject *args, PyObject *kwargs)
     PyObject *__clinic_kwds = NULL;
 
     if (!_PyArg_NoPositional("lone_kwds", args)) {
+        goto exit;
+    }
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
+    if (_args_items == NULL) {
         goto exit;
     }
     if (kwargs == NULL) {
@@ -75,8 +79,12 @@ kwds_with_pos_only(PyObject *module, PyObject *args, PyObject *kwargs)
     if (!_PyArg_CheckPositional("kwds_with_pos_only", PyTuple_GET_SIZE(args), 2, 2)) {
         goto exit;
     }
-    a = PyTuple_GET_ITEM(args, 0);
-    b = PyTuple_GET_ITEM(args, 1);
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
+    if (_args_items == NULL) {
+        goto exit;
+    }
+    a = _args_items[0];
+    b = _args_items[1];
     if (kwargs == NULL) {
         __clinic_kwds = PyDict_New();
         if (__clinic_kwds == NULL) {
@@ -118,11 +126,15 @@ kwds_with_optional_pos_only(PyObject *module, PyObject *args, PyObject *kwargs)
     if (!_PyArg_CheckPositional("kwds_with_optional_pos_only", PyTuple_GET_SIZE(args), 1, 2)) {
         goto exit;
     }
-    a = PyTuple_GET_ITEM(args, 0);
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
+    if (_args_items == NULL) {
+        goto exit;
+    }
+    a = _args_items[0];
     if (PyTuple_GET_SIZE(args) < 2) {
         goto skip_optional;
     }
-    b = PyTuple_GET_ITEM(args, 1);
+    b = _args_items[1];
 skip_optional:
     if (kwargs == NULL) {
         __clinic_kwds = PyDict_New();
@@ -206,8 +218,12 @@ kwds_with_pos_only_and_stararg(PyObject *module, PyObject *args, PyObject *kwarg
     if (!_PyArg_CheckPositional("kwds_with_pos_only_and_stararg", PyTuple_GET_SIZE(args), 2, PY_SSIZE_T_MAX)) {
         goto exit;
     }
-    a = PyTuple_GET_ITEM(args, 0);
-    b = PyTuple_GET_ITEM(args, 1);
+    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(PyTuple_GET_SIZE(args), 2));
+    if (_args_items == NULL) {
+        goto exit;
+    }
+    a = _args_items[0];
+    b = _args_items[1];
     __clinic_args = PyTuple_GetSlice(args, 2, PY_SSIZE_T_MAX);
     if (!__clinic_args) {
         goto exit;
@@ -231,4 +247,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=f8b4e6997c9f6865 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=d03962f7b7677931 input=a9049054013a1b77]*/

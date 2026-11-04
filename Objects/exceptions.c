@@ -314,15 +314,17 @@ BaseException___setstate___impl(PyBaseExceptionObject *self, PyObject *state)
             PyErr_SetString(PyExc_TypeError, "state is not a dictionary");
             return NULL;
         }
-        while (PyDict_Next(state, &i, &d_key, &d_value)) {
-            Py_INCREF(d_key);
-            Py_INCREF(d_value);
+        int rc;
+        while ((rc = PyDict_NextEntryRef(state, &i, &d_key, &d_value)) > 0) {
             int res = PyObject_SetAttr((PyObject *)self, d_key, d_value);
             Py_DECREF(d_value);
             Py_DECREF(d_key);
             if (res < 0) {
                 return NULL;
             }
+        }
+        if (rc < 0) {
+            return NULL;
         }
     }
     Py_RETURN_NONE;
@@ -809,11 +811,16 @@ StopIteration_init(PyObject *op, PyObject *args, PyObject *kwds)
         return -1;
     PyStopIterationObject *self = PyStopIterationObject_CAST(op);
     Py_CLEAR(self->value);
-    if (size > 0)
-        value = PyTuple_GET_ITEM(args, 0);
-    else
-        value = Py_None;
-    self->value = Py_NewRef(value);
+    if (size > 0) {
+        value = PyTuple_GetItemRef(args, 0);
+        if (value == NULL) {
+            return -1;
+        }
+    }
+    else {
+        value = Py_NewRef(Py_None);
+    }
+    self->value = value;
     return 0;
 }
 
@@ -876,7 +883,11 @@ SystemExit_init(PyObject *op, PyObject *args, PyObject *kwds)
     if (size == 0)
         return 0;
     if (size == 1) {
-        Py_XSETREF(self->code, Py_NewRef(PyTuple_GET_ITEM(args, 0)));
+        PyObject *code = PyTuple_GetItemRef(args, 0);
+        if (code == NULL) {
+            return -1;
+        }
+        Py_XSETREF(self->code, code);
     }
     else { /* size > 1 */
         Py_XSETREF(self->code, Py_NewRef(args));
@@ -985,11 +996,12 @@ BaseExceptionGroup_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 
     bool nested_base_exceptions = false;
     for (Py_ssize_t i = 0; i < numexcs; i++) {
-        PyObject *exc = PyTuple_GET_ITEM(exceptions, i);
+        PyObject *exc = PyTuple_GetItemRef(exceptions, i);
         if (!exc) {
             goto error;
         }
         if (!PyExceptionInstance_Check(exc)) {
+            Py_DECREF(exc);
             PyErr_Format(
                 PyExc_ValueError,
                 "Item %zd of second argument (exceptions) is not an exception",
@@ -997,6 +1009,7 @@ BaseExceptionGroup_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
             goto error;
         }
         int is_nonbase_exception = PyObject_IsInstance(exc, PyExc_Exception);
+        Py_DECREF(exc);
         if (is_nonbase_exception < 0) {
             goto error;
         }
@@ -1149,7 +1162,16 @@ BaseExceptionGroup_repr(PyObject *op)
          * with self.exceptions. Instead, use self.exceptions for accuracy,
          * making it look like self.args[1] for backwards compatibility. */
         assert(PyTuple_Check(self->args));
-        if (PyTuple_GET_SIZE(self->args) == 2 && PyList_Check(PyTuple_GET_ITEM(self->args, 1))) {
+        PyObject *args_exceptions = NULL;
+        if (PyTuple_GET_SIZE(self->args) == 2) {
+            args_exceptions = PyTuple_GetItemRef(self->args, 1);
+            if (args_exceptions == NULL) {
+                return NULL;
+            }
+        }
+        int is_list = args_exceptions != NULL && PyList_Check(args_exceptions);
+        Py_XDECREF(args_exceptions);
+        if (is_list) {
             PyObject *exceptions_list = PySequence_List(self->excs);
             if (!exceptions_list) {
                 return NULL;
@@ -1313,7 +1335,13 @@ get_matcher_type(PyObject *value,
     if (PyTuple_CheckExact(value)) {
         Py_ssize_t n = PyTuple_GET_SIZE(value);
         for (Py_ssize_t i=0; i<n; i++) {
-            if (!PyExceptionClass_Check(PyTuple_GET_ITEM(value, i))) {
+            PyObject *item = PyTuple_GetItemRef(value, i);
+            if (item == NULL) {
+                return -1;
+            }
+            int is_class = PyExceptionClass_Check(item);
+            Py_DECREF(item);
+            if (!is_class) {
                 goto error;
             }
         }
@@ -1425,9 +1453,13 @@ exceptiongroup_split_recursive(PyObject *exc,
     }
     /* recursive calls */
     for (Py_ssize_t i = 0; i < num_excs; i++) {
-        PyObject *e = PyTuple_GET_ITEM(eg->excs, i);
+        PyObject *e = PyTuple_GetItemRef(eg->excs, i);
+        if (e == NULL) {
+            goto done;
+        }
         _exceptiongroup_split_result rec_result;
         if (_Py_EnterRecursiveCall(" in exceptiongroup_split_recursive")) {
+            Py_DECREF(e);
             goto done;
         }
         if (exceptiongroup_split_recursive(
@@ -1436,9 +1468,11 @@ exceptiongroup_split_recursive(PyObject *exc,
             assert(!rec_result.match);
             assert(!rec_result.rest);
             _Py_LeaveRecursiveCall();
+            Py_DECREF(e);
             goto done;
         }
         _Py_LeaveRecursiveCall();
+        Py_DECREF(e);
         if (rec_result.match) {
             assert(PyList_CheckExact(match_list));
             if (PyList_Append(match_list, rec_result.match) < 0) {
@@ -1573,12 +1607,17 @@ collect_exception_group_leaf_ids(PyObject *exc, PyObject *leaf_ids)
     Py_ssize_t num_excs = PyTuple_GET_SIZE(eg->excs);
     /* recursive calls */
     for (Py_ssize_t i = 0; i < num_excs; i++) {
-        PyObject *e = PyTuple_GET_ITEM(eg->excs, i);
+        PyObject *e = PyTuple_GetItemRef(eg->excs, i);
+        if (e == NULL) {
+            return -1;
+        }
         if (_Py_EnterRecursiveCall(" in collect_exception_group_leaf_ids")) {
+            Py_DECREF(e);
             return -1;
         }
         int res = collect_exception_group_leaf_ids(e, leaf_ids);
         _Py_LeaveRecursiveCall();
+        Py_DECREF(e);
         if (res < 0) {
             return -1;
         }
@@ -1605,10 +1644,15 @@ exception_group_projection(PyObject *eg, PyObject *keep)
 
     Py_ssize_t n = PyList_GET_SIZE(keep);
     for (Py_ssize_t i = 0; i < n; i++) {
-        PyObject *e = PyList_GET_ITEM(keep, i);
-        assert(e != NULL);
+        PyObject *e = PyList_GetItemRef(keep, i);
+        if (e == NULL) {
+            Py_DECREF(leaf_ids);
+            return NULL;
+        }
         assert(_PyBaseExceptionGroup_Check(e));
-        if (collect_exception_group_leaf_ids(e, leaf_ids) < 0) {
+        int res = collect_exception_group_leaf_ids(e, leaf_ids);
+        Py_DECREF(e);
+        if (res < 0) {
             Py_DECREF(leaf_ids);
             return NULL;
         }
@@ -1681,11 +1725,10 @@ _PyExc_PrepReraiseStar(PyObject *orig, PyObject *excs)
          * could have executed,so there is at most one exception to raise.
          */
 
-        assert(numexcs == 1 || (numexcs == 2 && PyList_GET_ITEM(excs, 1) == Py_None));
+        assert(numexcs == 1
+               || (numexcs == 2 && PyValue_IsNone(PyList_GET_VALUE(excs, 1))));
 
-        PyObject *e = PyList_GET_ITEM(excs, 0);
-        assert(e != NULL);
-        return Py_NewRef(e);
+        return PyList_GetItemRef(excs, 0);
     }
 
     PyObject *raised_list = PyList_New(0);
@@ -1704,14 +1747,19 @@ _PyExc_PrepReraiseStar(PyObject *orig, PyObject *excs)
 
     /* Split excs into raised and reraised by comparing metadata with orig */
     for (Py_ssize_t i = 0; i < numexcs; i++) {
-        PyObject *e = PyList_GET_ITEM(excs, i);
-        assert(e != NULL);
+        PyObject *e = PyList_GetItemRef(excs, i);
+        if (e == NULL) {
+            goto done;
+        }
         if (Py_IsNone(e)) {
+            Py_DECREF(e);
             continue;
         }
         bool is_reraise = is_same_exception_metadata(e, orig);
         PyObject *append_list = is_reraise ? reraised_list : raised_list;
-        if (PyList_Append(append_list, e) < 0) {
+        int err = PyList_Append(append_list, e);
+        Py_DECREF(e);
+        if (err < 0) {
             goto done;
         }
     }
@@ -1741,7 +1789,7 @@ _PyExc_PrepReraiseStar(PyObject *orig, PyObject *excs)
             result = _PyExc_CreateExceptionGroup("", raised_list);
         }
         else {
-            result = Py_NewRef(PyList_GetItem(raised_list, 0));
+            result = PyList_GetItemRef(raised_list, 0);
         }
         if (result == NULL) {
             goto done;
@@ -1768,8 +1816,15 @@ PyUnstable_Exc_PrepReraiseStar(PyObject *orig, PyObject *excs)
     }
     Py_ssize_t numexcs = PyList_GET_SIZE(excs);
     for (Py_ssize_t i = 0; i < numexcs; i++) {
-        PyObject *exc = PyList_GET_ITEM(excs, i);
-        if (exc == NULL || !(PyExceptionInstance_Check(exc) || Py_IsNone(exc))) {
+        PyObject *exc = PyList_GetItemRef(excs, i);
+        if (exc == NULL && PyErr_Occurred()) {
+            return NULL;
+        }
+        /* A NULL slot is not an exception. */
+        int ok = exc != NULL
+                 && (PyExceptionInstance_Check(exc) || Py_IsNone(exc));
+        Py_XDECREF(exc);
+        if (!ok) {
             PyErr_Format(PyExc_TypeError,
                          "item %zd of excs is not an exception", i);
             return NULL;
@@ -1882,7 +1937,10 @@ ImportError_init(PyObject *op, PyObject *args, PyObject *kwds)
     Py_XSETREF(self->name_from, Py_XNewRef(name_from));
 
     if (PyTuple_GET_SIZE(args) == 1) {
-        msg = Py_NewRef(PyTuple_GET_ITEM(args, 0));
+        msg = PyTuple_GetItemRef(args, 0);
+        if (msg == NULL) {
+            return -1;
+        }
     }
     Py_XSETREF(self->msg, msg);
 
@@ -2161,8 +2219,12 @@ oserror_parse_args(PyObject **p_args,
                 return -1;
             PyTuple_SET_ITEM(newargs, 0, *myerrno);
             for (i = 1; i < nargs; i++) {
-                PyObject *val = PyTuple_GET_ITEM(args, i);
-                PyTuple_SET_ITEM(newargs, i, Py_NewRef(val));
+                PyObject *val = PyTuple_GetItemRef(args, i);
+                if (val == NULL) {
+                    Py_DECREF(newargs);
+                    return -1;
+                }
+                PyTuple_SET_ITEM(newargs, i, val);
             }
             Py_DECREF(args);
             args = *p_args = newargs;
@@ -2281,12 +2343,15 @@ OSError_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         if (myerrno && PyLong_Check(myerrno) &&
             state->errnomap && (PyObject *) type == PyExc_OSError) {
             PyObject *newtype;
-            newtype = PyDict_GetItemWithError(state->errnomap, myerrno);
-            if (newtype) {
-                type = _PyType_CAST(newtype);
-            }
-            else if (PyErr_Occurred())
+            int rc = PyDict_GetItemRef(state->errnomap, myerrno, &newtype);
+            if (rc < 0) {
                 goto error;
+            }
+            if (rc > 0) {
+                type = _PyType_CAST(newtype);
+                /* errnomap keeps the class alive. */
+                Py_DECREF(newtype);
+            }
         }
     }
 
@@ -2457,8 +2522,19 @@ OSError_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
         if (!args)
             return NULL;
 
-        PyTuple_SET_ITEM(args, 0, Py_NewRef(PyTuple_GET_ITEM(self->args, 0)));
-        PyTuple_SET_ITEM(args, 1, Py_NewRef(PyTuple_GET_ITEM(self->args, 1)));
+        PyObject *errno_obj = PyTuple_GetItemRef(self->args, 0);
+        if (errno_obj == NULL) {
+            Py_DECREF(args);
+            return NULL;
+        }
+        PyObject *strerror_obj = PyTuple_GetItemRef(self->args, 1);
+        if (strerror_obj == NULL) {
+            Py_DECREF(errno_obj);
+            Py_DECREF(args);
+            return NULL;
+        }
+        PyTuple_SET_ITEM(args, 0, errno_obj);
+        PyTuple_SET_ITEM(args, 1, strerror_obj);
         PyTuple_SET_ITEM(args, 2, Py_NewRef(self->filename));
 
         if (self->filename2) {
@@ -2763,8 +2839,8 @@ static PyObject *
 AttributeError_str(PyObject *op)
 {
     PyAttributeErrorObject *self = PyAttributeErrorObject_CAST(op);
-    PyObject *arg;  // borrowed ref
     PyObject *obj = NULL, *name = NULL;
+    int error = 0;
 
      /* .name and .obj are set automatically when attribute lookup fails, so
         synthesize a more informative message from them when the caller
@@ -2773,17 +2849,30 @@ AttributeError_str(PyObject *op)
         message the caller gave. */
 
     Py_BEGIN_CRITICAL_SECTION(self);
-    if (
-        self->obj && self->name && PyUnicode_Check(self->name)
-        && ((PyTuple_GET_SIZE(self->args) == 1
-             && PyUnicode_Check(arg = PyTuple_GET_ITEM(self->args, 0))
-             && _PyUnicode_Equal(arg, self->name))
-            || PyTuple_GET_SIZE(self->args) == 0)
-    ) {
-        obj = Py_NewRef(self->obj);
-        name = Py_NewRef(self->name);
+    if (self->obj && self->name && PyUnicode_Check(self->name)) {
+        Py_ssize_t nargs = PyTuple_GET_SIZE(self->args);
+        int synthesize = (nargs == 0);
+        if (nargs == 1) {
+            PyObject *arg = PyTuple_GetItemRef(self->args, 0);
+            if (arg == NULL) {
+                error = 1;
+            }
+            else {
+                synthesize = PyUnicode_Check(arg)
+                             && _PyUnicode_Equal(arg, self->name);
+                Py_DECREF(arg);
+            }
+        }
+        if (synthesize) {
+            obj = Py_NewRef(self->obj);
+            name = Py_NewRef(self->name);
+        }
     }
     Py_END_CRITICAL_SECTION();
+
+    if (error) {
+        return NULL;
+    }
 
     if (!obj) {
         assert(!name);
@@ -2910,11 +2999,18 @@ SyntaxError_init(PyObject *op, PyObject *args, PyObject *kwds)
 
     PySyntaxErrorObject *self = PySyntaxErrorObject_CAST(op);
     if (lenargs >= 1) {
-        Py_XSETREF(self->msg, Py_NewRef(PyTuple_GET_ITEM(args, 0)));
+        PyObject *msg = PyTuple_GetItemRef(args, 0);
+        if (msg == NULL) {
+            return -1;
+        }
+        Py_XSETREF(self->msg, msg);
     }
     if (lenargs == 2) {
-        info = PyTuple_GET_ITEM(args, 1);
-        info = PySequence_Tuple(info);
+        info = PyTuple_GetItemRef(args, 1);
+        if (info == NULL) {
+            return -1;
+        }
+        Py_SETREF(info, PySequence_Tuple(info));
         if (!info) {
             return -1;
         }

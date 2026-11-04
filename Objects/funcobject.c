@@ -581,9 +581,20 @@ func_get_annotation_dict(PyFunctionObject *op)
         assert(PyTuple_GET_SIZE(ann_tuple) % 2 == 0);
 
         for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(ann_tuple); i += 2) {
-            int err = PyDict_SetItem(ann_dict,
-                                     PyTuple_GET_ITEM(ann_tuple, i),
-                                     PyTuple_GET_ITEM(ann_tuple, i + 1));
+            PyObject *key = PyTuple_GetItemRef(ann_tuple, i);
+            if (key == NULL) {
+                Py_DECREF(ann_dict);
+                return NULL;
+            }
+            PyObject *value = PyTuple_GetItemRef(ann_tuple, i + 1);
+            if (value == NULL) {
+                Py_DECREF(key);
+                Py_DECREF(ann_dict);
+                return NULL;
+            }
+            int err = PyDict_SetItem(ann_dict, key, value);
+            Py_DECREF(key);
+            Py_DECREF(value);
 
             if (err < 0) {
                 Py_DECREF(ann_dict);

@@ -53,8 +53,12 @@ union_hash(PyObject *self)
         assert(PyTuple_CheckExact(alias->unhashable_args));
         Py_ssize_t n = PyTuple_GET_SIZE(alias->unhashable_args);
         for (Py_ssize_t i = 0; i < n; i++) {
-            PyObject *arg = PyTuple_GET_ITEM(alias->unhashable_args, i);
+            PyObject *arg = PyTuple_GetItemRef(alias->unhashable_args, i);
+            if (arg == NULL) {
+                return -1;
+            }
             Py_hash_t hash = PyObject_Hash(arg);
+            Py_DECREF(arg);
             if (hash == -1) {
                 return -1;
             }
@@ -83,8 +87,12 @@ unions_equal(unionobject *a, unionobject *b)
             return 0;
         }
         for (Py_ssize_t i = 0; i < n; i++) {
-            PyObject *arg_a = PyTuple_GET_ITEM(a->unhashable_args, i);
+            PyObject *arg_a = PyTuple_GetItemRef(a->unhashable_args, i);
+            if (arg_a == NULL) {
+                return -1;
+            }
             int result = PySequence_Contains(b->unhashable_args, arg_a);
+            Py_DECREF(arg_a);
             if (result == -1) {
                 return -1;
             }
@@ -93,8 +101,12 @@ unions_equal(unionobject *a, unionobject *b)
             }
         }
         for (Py_ssize_t i = 0; i < n; i++) {
-            PyObject *arg_b = PyTuple_GET_ITEM(b->unhashable_args, i);
+            PyObject *arg_b = PyTuple_GetItemRef(b->unhashable_args, i);
+            if (arg_b == NULL) {
+                return -1;
+            }
             int result = PySequence_Contains(a->unhashable_args, arg_b);
+            Py_DECREF(arg_b);
             if (result == -1) {
                 return -1;
             }
@@ -233,7 +245,13 @@ unionbuilder_add_tuple(unionbuilder *ub, PyObject *tuple)
 {
     Py_ssize_t n = PyTuple_GET_SIZE(tuple);
     for (Py_ssize_t i = 0; i < n; i++) {
-        if (!unionbuilder_add_single(ub, PyTuple_GET_ITEM(tuple, i))) {
+        PyObject *item = PyTuple_GetItemRef(tuple, i);
+        if (item == NULL) {
+            return false;
+        }
+        bool ok = unionbuilder_add_single(ub, item);
+        Py_DECREF(item);
+        if (!ok) {
             return false;
         }
     }
@@ -293,8 +311,13 @@ union_repr(PyObject *self)
         if (i > 0 && PyUnicodeWriter_WriteASCII(writer, " | ", 3) < 0) {
             goto error;
         }
-        PyObject *p = PyTuple_GET_ITEM(alias->args, i);
-        if (_Py_typing_type_repr(writer, p) < 0) {
+        PyObject *p = PyTuple_GetItemRef(alias->args, i);
+        if (p == NULL) {
+            goto error;
+        }
+        int err = _Py_typing_type_repr(writer, p);
+        Py_DECREF(p);
+        if (err < 0) {
             goto error;
         }
     }
@@ -557,8 +580,7 @@ make_union(unionbuilder *ub)
         return NULL;
     }
     if (n == 1) {
-        PyObject *result = PyList_GET_ITEM(ub->args, 0);
-        Py_INCREF(result);
+        PyObject *result = PyList_GetItemRef(ub->args, 0);
         unionbuilder_finalize(ub);
         return result;
     }

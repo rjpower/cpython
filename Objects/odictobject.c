@@ -73,7 +73,6 @@ summary of the methods/macros:
 Node info:
 
 * _odictnode_KEY(node)
-* _odictnode_VALUE(od, node)
 * _odictnode_PREV(node)
 * _odictnode_NEXT(node)
 
@@ -520,9 +519,6 @@ struct _odictnode {
     (node->key)
 #define _odictnode_HASH(node) \
     (node->hash)
-/* borrowed reference */
-#define _odictnode_VALUE(node, od) \
-    PyODict_GetItemWithError((PyObject *)od, _odictnode_KEY(node))
 #define _odictnode_PREV(node) (node->prev)
 #define _odictnode_NEXT(node) (node->next)
 
@@ -537,14 +533,15 @@ static Py_ssize_t
 _odict_get_index_raw(PyODictObject *od, PyObject *key, Py_hash_t hash)
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(od);
-    PyObject *value = NULL;
+    PyValue value = PyValue_NULL;
     PyDictKeysObject *keys = ((PyDictObject *)od)->ma_keys;
     Py_ssize_t ix;
 #ifdef Py_GIL_DISABLED
-    ix = _Py_dict_lookup_threadsafe((PyDictObject *)od, key, hash, &value);
-    Py_XDECREF(value);
+    ix = _Py_dict_lookup_threadsafe_value((PyDictObject *)od, key, hash, &value);
+    PyValue_XCLOSE(value);
 #else
-    ix = _Py_dict_lookup((PyDictObject *)od, key, hash, &value);
+    ix = _Py_dict_lookup((PyDictObject *)od, PyValue_FromObjectBorrow(key),
+                         hash, &value);
 #endif
     if (ix == DKIX_EMPTY) {
         return keys->dk_nentries;  /* index of new entry */
@@ -1046,17 +1043,15 @@ OrderedDict_setdefault_impl(PyODictObject *self, PyObject *key,
     PyObject *result = NULL;
 
     if (PyODict_CheckExact(self)) {
-        result = PyODict_GetItemWithError(self, key);  /* borrowed */
-        if (result == NULL) {
-            if (PyErr_Occurred())
-                return NULL;
+        int rc = PyDict_GetItemRef((PyObject *)self, key, &result);
+        if (rc < 0) {
+            return NULL;
+        }
+        if (rc == 0) {
             assert(_odict_find_node(self, key) == NULL);
             if (PyODict_SetItem_LockHeld((PyObject *)self, key, default_value) >= 0) {
                 result = Py_NewRef(default_value);
             }
-        }
-        else {
-            Py_INCREF(result);
         }
     }
     else {
@@ -1260,15 +1255,17 @@ OrderedDict_copy_impl(PyObject *od)
         _odict_FOREACH(od, node) {
             PyObject *key = Py_NewRef(_odictnode_KEY(node));
             Py_hash_t hash = _odictnode_HASH(node);
-            PyObject *value = PyODict_GetItemWithError(od, key);
-            if (value == NULL) {
-                if (!PyErr_Occurred())
+            PyObject *value;
+            int rc = PyDict_GetItemRef((PyObject *)od, key, &value);
+            if (rc <= 0) {
+                if (rc == 0)
                     PyErr_SetObject(PyExc_KeyError, key);
                 Py_DECREF(key);
                 goto fail;
             }
             int res = _PyODict_SetItem_KnownHash_LockHeld((PyObject *)od_copy,
                                                           key, value, hash);
+            Py_DECREF(value);
             Py_DECREF(key);
             if (res != 0)
                 goto fail;
@@ -1846,13 +1843,11 @@ odictiter_iternext_impl(PyObject *self)
         /* not in use so we can reuse it
          * (the common case during iteration) */
         Py_INCREF(result);
-        Py_DECREF(PyTuple_GET_ITEM(result, 0));  /* borrowed */
-        Py_DECREF(PyTuple_GET_ITEM(result, 1));  /* borrowed */
+        _PyTuple_ReplaceTakeRef(result, 0, key);
+        _PyTuple_ReplaceTakeRef(result, 1, value);
         // bpo-42536: The GC may have untracked this result tuple. Since we're
         // recycling it, make sure it's tracked again:
         _PyTuple_Recycle(result);
-        PyTuple_SET_ITEM(result, 0, key);  /* steals reference */
-        PyTuple_SET_ITEM(result, 1, value);  /* steals reference */
     }
     else {
         result = _PyTuple_FromPairSteal(key, value);
@@ -2357,9 +2352,10 @@ mutablemapping_update(PyObject *self, PyObject *args, PyObject *kwargs)
     }
 
     if (len) {
-        PyObject *other = PyTuple_GET_ITEM(args, 0);  /* borrowed reference */
-        assert(other != NULL);
-        Py_INCREF(other);
+        PyObject *other = PyTuple_GetItemRef(args, 0);
+        if (other == NULL) {
+            return NULL;
+        }
         res = mutablemapping_update_arg(self, other);
         Py_DECREF(other);
         if (res < 0) {

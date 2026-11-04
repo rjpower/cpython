@@ -178,6 +178,19 @@ PyTuple_SetItem(PyObject *op, Py_ssize_t i, PyObject *item)
 }
 
 void
+_PyTuple_ReplaceTakeRef(PyObject *op, Py_ssize_t i, PyObject *item)
+{
+    assert(PyTuple_CheckExact(op));
+    assert(0 <= i && i < Py_SIZE(op));
+    PyObject *retired;
+    PyValue value = PyValue_PrepareOwned(item, &retired);
+    PyValue old = _PyTuple_CAST(op)->ob_item[i];
+    _PyTuple_CAST(op)->ob_item[i] = PyValue_MakeHeapSafe(value);
+    Py_XDECREF(retired);
+    PyValue_XCLOSE(old);
+}
+
+void
 _PyTuple_MaybeUntrack(PyObject *op)
 {
     PyTupleObject *t;

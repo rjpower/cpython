@@ -50,6 +50,13 @@ _PyTuple_GET_OBJECT(PyObject *tuple, Py_ssize_t index)
     return PyValue_AsPyObjectBorrow(value);
 }
 
+/* Replace item i of a result tuple that an iterator recycles, taking the
+   reference to item and releasing the old one. The caller takes its own
+   reference to the tuple first, so a destructor that re-enters the iterator
+   sees a shared tuple and builds a new one; call _PyTuple_Recycle() after
+   the last replacement. PyTuple_SetItem() refuses a shared tuple. */
+PyAPI_FUNC(void) _PyTuple_ReplaceTakeRef(PyObject *tuple, Py_ssize_t i, PyObject *item);
+
 typedef struct {
     PyObject_HEAD
     Py_ssize_t it_index;

@@ -197,14 +197,21 @@ constevaluator_call(PyObject *self, PyObject *args, PyObject *kwargs)
                 return NULL;
             }
             for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(value); i++) {
-                PyObject *item = PyTuple_GET_ITEM(value, i);
+                PyObject *item = PyTuple_GetItemRef(value, i);
+                if (item == NULL) {
+                    PyUnicodeWriter_Discard(writer);
+                    return NULL;
+                }
                 if (i > 0) {
                     if (PyUnicodeWriter_WriteASCII(writer, ", ", 2) < 0) {
+                        Py_DECREF(item);
                         PyUnicodeWriter_Discard(writer);
                         return NULL;
                     }
                 }
-                if (_Py_typing_type_repr(writer, item) < 0) {
+                int err = _Py_typing_type_repr(writer, item);
+                Py_DECREF(item);
+                if (err < 0) {
                     PyUnicodeWriter_Discard(writer);
                     return NULL;
                 }
@@ -451,9 +458,14 @@ unpack_typevartuples(PyObject *params)
         }
         PyTypeObject *tp = _PyInterpreterState_GET()->cached_objects.typevartuple_type;
         for (Py_ssize_t i = 0; i < n; i++) {
-            PyObject *param = PyTuple_GET_ITEM(params, i);
+            PyObject *param = PyTuple_GetItemRef(params, i);
+            if (param == NULL) {
+                Py_DECREF(new_params);
+                return NULL;
+            }
             if (Py_IS_TYPE(param, tp)) {
                 PyObject *unpacked = unpack(param);
+                Py_DECREF(param);
                 if (unpacked == NULL) {
                     Py_DECREF(new_params);
                     return NULL;
@@ -461,7 +473,7 @@ unpack_typevartuples(PyObject *params)
                 PyTuple_SET_ITEM(new_params, i, unpacked);
             }
             else {
-                PyTuple_SET_ITEM(new_params, i, Py_NewRef(param));
+                PyTuple_SET_ITEM(new_params, i, param);
             }
         }
         return new_params;
@@ -2036,9 +2048,14 @@ typealias_check_type_params(PyObject *type_params, int *err) {
     PyThreadState *ts = _PyThreadState_GET();
     int default_seen = 0;
     for (Py_ssize_t index = 0; index < length; index++) {
-        PyObject *type_param = PyTuple_GET_ITEM(type_params, index);
+        PyObject *type_param = PyTuple_GetItemRef(type_params, index);
+        if (type_param == NULL) {
+            *err = 1;
+            return NULL;
+        }
         PyObject *dflt = get_type_param_default(ts, type_param);
         if (dflt == NULL) {
+            Py_DECREF(type_param);
             *err = 1;
             return NULL;
         }
@@ -2049,12 +2066,14 @@ typealias_check_type_params(PyObject *type_params, int *err) {
                                 "non-default type parameter '%R' "
                                 "follows default type parameter",
                                 type_param);
+                Py_DECREF(type_param);
                 return NULL;
             }
         } else {
             default_seen = 1;
             Py_DECREF(dflt);
         }
+        Py_DECREF(type_param);
     }
 
     return type_params;
@@ -2260,10 +2279,12 @@ _Py_make_typealias(PyThreadState* unused, PyObject *args)
 {
     assert(PyTuple_Check(args));
     assert(PyTuple_GET_SIZE(args) == 3);
-    PyObject *name = PyTuple_GET_ITEM(args, 0);
+    // The compiler builds args as (str, tuple or None, function), so no item
+    // can be an inline int or float.
+    PyObject *name = _PyTuple_GET_OBJECT(args, 0);
     assert(PyUnicode_Check(name));
-    PyObject *type_params = typealias_convert_type_params(PyTuple_GET_ITEM(args, 1));
-    PyObject *compute_value = PyTuple_GET_ITEM(args, 2);
+    PyObject *type_params = typealias_convert_type_params(_PyTuple_GET_OBJECT(args, 1));
+    PyObject *compute_value = _PyTuple_GET_OBJECT(args, 2);
     assert(PyFunction_Check(compute_value));
 
     PyFunctionObject *compute_func = (PyFunctionObject *)compute_value;
@@ -2331,8 +2352,11 @@ call_typing_args_kwargs(const char *name, PyTypeObject *cls, PyObject *args, PyO
     }
     PyTuple_SET_ITEM(new_args, 0, Py_NewRef((PyObject *)cls));
     for (Py_ssize_t i = 0; i < nargs; i++) {
-        PyObject *arg = PyTuple_GET_ITEM(args, i);
-        PyTuple_SET_ITEM(new_args, i + 1, Py_NewRef(arg));
+        PyObject *arg = PyTuple_GetItemRef(args, i);
+        if (arg == NULL) {
+            goto error;
+        }
+        PyTuple_SET_ITEM(new_args, i + 1, arg);
     }
     PyObject *result = PyObject_Call(func, new_args, kwargs);
     Py_DECREF(typing);

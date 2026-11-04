@@ -28,18 +28,21 @@ const char * const PyStructSequence_UnnamedField = "unnamed field";
 static Py_ssize_t
 get_type_attr_as_size(PyTypeObject *tp, PyObject *name)
 {
-    PyObject *v = PyDict_GetItemWithError(_PyType_GetDict(tp), name);
+    PyObject *v;
+    int rc = PyDict_GetItemRef(_PyType_GetDict(tp), name, &v);
 
-    if (v == NULL) {
-        if (PyErr_Occurred()) {
-            return -1;
-        }
+    if (rc < 0) {
+        return -1;
+    }
+    if (rc == 0) {
         PyErr_Format(PyExc_TypeError,
                      "Missed attribute '%U' of type %s",
                      name, tp->tp_name);
         return -1;
     }
-    return PyLong_AsSsize_t(v);
+    Py_ssize_t size = PyLong_AsSsize_t(v);
+    Py_DECREF(v);
+    return size;
 }
 
 #define VISIBLE_SIZE(op) Py_SIZE(op)

@@ -444,11 +444,19 @@ framelocalsproxy_keys(PyObject *self, PyObject *Py_UNUSED(ignored))
         PyObject *key = NULL;
         PyObject *value = NULL;
 
-        while (PyDict_Next(frame->f_extra_locals, &i, &key, &value)) {
-            if (PyList_Append(names, key) < 0) {
+        int rc;
+        while ((rc = PyDict_NextEntryRef(frame->f_extra_locals, &i, &key, &value)) > 0) {
+            int err = PyList_Append(names, key);
+            Py_DECREF(key);
+            Py_DECREF(value);
+            if (err < 0) {
                 Py_DECREF(names);
                 return NULL;
             }
+        }
+        if (rc < 0) {
+            Py_DECREF(names);
+            return NULL;
         }
     }
 
@@ -674,11 +682,19 @@ framelocalsproxy_values(PyObject *self, PyObject *Py_UNUSED(ignored))
         Py_ssize_t j = 0;
         PyObject *key = NULL;
         PyObject *value = NULL;
-        while (PyDict_Next(frame->f_extra_locals, &j, &key, &value)) {
-            if (PyList_Append(values, value) < 0) {
+        int rc;
+        while ((rc = PyDict_NextEntryRef(frame->f_extra_locals, &j, &key, &value)) > 0) {
+            int err = PyList_Append(values, value);
+            Py_DECREF(key);
+            Py_DECREF(value);
+            if (err < 0) {
                 Py_DECREF(values);
                 return NULL;
             }
+        }
+        if (rc < 0) {
+            Py_DECREF(values);
+            return NULL;
         }
     }
 
@@ -739,8 +755,11 @@ framelocalsproxy_items(PyObject *self, PyObject *Py_UNUSED(ignored))
         Py_ssize_t j = 0;
         PyObject *key = NULL;
         PyObject *value = NULL;
-        while (PyDict_Next(frame->f_extra_locals, &j, &key, &value)) {
+        int rc;
+        while ((rc = PyDict_NextEntryRef(frame->f_extra_locals, &j, &key, &value)) > 0) {
             PyObject *pair = _PyTuple_FromPair(key, value);
+            Py_DECREF(key);
+            Py_DECREF(value);
             if (pair == NULL) {
                 goto error;
             }
@@ -748,6 +767,9 @@ framelocalsproxy_items(PyObject *self, PyObject *Py_UNUSED(ignored))
             if (_PyList_AppendTakeRef((PyListObject *)items, pair) < 0) {
                 goto error;
             }
+        }
+        if (rc < 0) {
+            goto error;
         }
     }
 

@@ -349,6 +349,32 @@ pysentinel_checkexact(PyObject *self, PyObject *obj)
 }
 
 
+/* Py_ReprEnter() twice and Py_ReprLeave() with an unrelated ValueError
+   pending. Return (first result, second result, the exception pending
+   afterwards or None). The thread's repr list is created first with no
+   exception pending: upstream reports a pending exception as a failure when
+   it has to create the list. */
+static PyObject *
+pyobject_repr_enter_pending(PyObject *Py_UNUSED(module), PyObject *obj)
+{
+    int entered = Py_ReprEnter(obj);
+    if (entered < 0) {
+        return NULL;
+    }
+    if (entered == 0) {
+        Py_ReprLeave(obj);
+    }
+    PyErr_SetString(PyExc_ValueError, "pending");
+    int first = Py_ReprEnter(obj);
+    int second = Py_ReprEnter(obj);
+    if (first == 0) {
+        Py_ReprLeave(obj);
+    }
+    PyObject *exc = PyErr_GetRaisedException();
+    return Py_BuildValue("(iiN)", first, second,
+                         exc != NULL ? exc : Py_NewRef(Py_None));
+}
+
 static PyMethodDef test_methods[] = {
     {"call_pyobject_print", call_pyobject_print, METH_VARARGS},
     {"pyobject_print_null", pyobject_print_null, METH_O},
@@ -357,6 +383,7 @@ static PyMethodDef test_methods[] = {
     {"pyobject_clear_weakrefs_no_callbacks", pyobject_clear_weakrefs_no_callbacks, METH_O},
     {"pyobject_enable_deferred_refcount", pyobject_enable_deferred_refcount, METH_O},
     {"pyobject_is_unique_temporary", pyobject_is_unique_temporary, METH_O},
+    {"pyobject_repr_enter_pending", pyobject_repr_enter_pending, METH_O},
     {"pyobject_is_unique_temporary_new_object", pyobject_is_unique_temporary_new_object, METH_NOARGS},
     {"test_py_try_inc_ref", test_py_try_inc_ref, METH_NOARGS},
     {"test_py_set_immortal", test_py_set_immortal, METH_NOARGS},

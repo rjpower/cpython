@@ -323,9 +323,6 @@ _PyJit_CompileCode(PyCodeObject *code)
     return -1;
 #else
     PyThreadState *tstate = _PyThreadState_GET();
-    if (PyErr_Occurred()) {
-        return -1;
-    }
     for (JitBuildRequest *item = building_request; item; item = item->previous) {
         if (item->code == code && item->tstate == tstate) {
             return 0;
@@ -516,9 +513,6 @@ _PyJit_PrepareActivation(PyThreadState *tstate, _PyInterpreterFrame *frame,
     return 0;
 #else
     assert(ctx->unit == NULL && ctx->code == NULL);
-    if (PyErr_Occurred()) {
-        return -1;
-    }
     if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
         return 0;
     }
@@ -560,7 +554,7 @@ _PyJit_PrepareActivation(PyThreadState *tstate, _PyInterpreterFrame *frame,
         /* RESUME already served its poll. Only synchronize a changed epoch;
          * ordinary fallback must see the current pending word's handler. */
         if (code->_co_instrumentation_version != jit_epoch(tstate) &&
-            (_Py_Instrument(code, tstate->interp) < 0 || PyErr_Occurred())) return -1;
+            _Py_Instrument(code, tstate->interp) < 0) return -1;
         if (tstate->current_frame != frame || _PyFrame_GetCode(frame) != code ||
             code->_co_exec != exec || frame->ir_words != exec->words ||
             word >= exec->nwords) {
@@ -613,7 +607,7 @@ _PyJit_ReleaseActivation(_PyJitContext *ctx)
             PyErr_SetRaisedException(saved);
         }
     }
-    return PyErr_Occurred() ? -1 : 0;
+    return 0;
 }
 
 void
@@ -872,7 +866,7 @@ _PyJit_FreeFlow(_PyJitFlow **owner)
     if (budgeted) {
         _Py_atomic_add_ssize(&process_bytes, -(Py_ssize_t)sizeof(*flow));
     }
-    return PyErr_Occurred() ? -1 : 0;
+    return 0;
 }
 
 static int
@@ -1104,7 +1098,7 @@ _PyJit_WarmBackedge(PyThreadState *tstate, _PyInterpreterFrame *frame)
     /* A long-running frame may not execute RESUME again after an observer is
      * removed. Sync the header before testing retained active monitor bits. */
     if (code->_co_instrumentation_version != jit_epoch(tstate)) {
-        if (_Py_Instrument(code, tstate->interp) < 0 || PyErr_Occurred()) {
+        if (_Py_Instrument(code, tstate->interp) < 0) {
             return -1;
         }
     }

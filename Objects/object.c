@@ -1417,7 +1417,7 @@ PyObject_GetOptionalAttr(PyObject *v, PyObject *name, PyObject **result)
         *result = _Py_type_getattro_impl((PyTypeObject*)v, name, &suppress_missing_attribute_exception);
         if (suppress_missing_attribute_exception) {
             // return 0 without having to clear the exception
-            return PyErr_Occurred() ? -1 : 0;
+            return 0;
         }
     }
     else if (tp->tp_getattro == (getattrofunc)_Py_module_getattro) {
@@ -1716,7 +1716,7 @@ _PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
         Py_INCREF(dict);
         int found = PyDict_GetValue(dict, PyValue_FromObjectBorrow(name), &attr);
         Py_DECREF(dict);
-        if (found < 0 || PyErr_Occurred()) {
+        if (found < 0) {
             PyValue_XCLOSE(attr);
             goto done;
         }
@@ -1769,7 +1769,7 @@ _PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
     PyValue_XCLOSE(descriptor);
     PyValue_XCLOSE(original_self);
     Py_DECREF(tp);
-    return PyErr_Occurred() ? -1 : status;
+    return status;
 }
 
 
@@ -1956,7 +1956,7 @@ _PyObject_GenericSetAttrWithDict(PyObject *obj, PyObject *name,
     }
 
     _Py_INCREF_TYPE(tp);
-    if ((!_PyType_IsReady(tp) && PyType_Ready(tp) < 0) || PyErr_Occurred()) {
+    if (!_PyType_IsReady(tp) && PyType_Ready(tp) < 0) {
         PyObject *saved = PyErr_GetRaisedException();
         _Py_DECREF_TYPE(tp);
         _PyValue_RestoreException(saved);
@@ -2048,7 +2048,7 @@ _PyObject_GenericSetAttrWithDict(PyObject *obj, PyObject *name,
     saved = PyErr_GetRaisedException();
     _Py_DECREF_TYPE(tp);
     _PyValue_RestoreException(saved);
-    return PyErr_Occurred() ? -1 : res;
+    return res;
 }
 
 int
@@ -3049,9 +3049,6 @@ _PyObject_DebugTypeStats(FILE *out)
 int
 Py_ReprEnter(PyObject *obj)
 {
-    if (PyErr_Occurred()) {
-        return -1;
-    }
     PyValue value = PyValue_MakeHeapSafe(PyValue_FromObjectBorrow(obj));
     PyValue guard = PyValue_NULL;
     PyObject *list = NULL;
@@ -3061,13 +3058,10 @@ Py_ReprEnter(PyObject *obj)
     /* Ignore a missing thread-state, so that this function can be called
        early on startup. */
     if (dict == NULL) {
-        result = PyErr_Occurred() ? -1 : 0;
+        result = 0;
         goto done;
     }
     Py_INCREF(dict);
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     PyValue name = PyValue_FromObjectBorrow(&_Py_ID(Py_Repr));
     Py_hash_t hash = PyObject_Hash(&_Py_ID(Py_Repr));
     if (hash == -1) {
@@ -3086,7 +3080,7 @@ Py_ReprEnter(PyObject *obj)
         found = _PyDict_SetDefaultValue(dict, name,
                                         PyValue_FromObjectBorrow(candidate), &guard);
         Py_CLEAR(candidate);
-        if (found < 0 || PyErr_Occurred()) {
+        if (found < 0) {
             goto done;
         }
     }
@@ -3110,7 +3104,7 @@ done:
     PyValue_XCLOSE(guard);
     Py_CLEAR(dict);
     PyValue_CLOSE(value);
-    return PyErr_Occurred() ? -1 : result;
+    return result;
 }
 
 void

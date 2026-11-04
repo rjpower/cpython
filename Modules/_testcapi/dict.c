@@ -307,6 +307,89 @@ frozendict_new(PyObject *self, PyObject *obj)
     return PyFrozenDict_New(obj);
 }
 
+/* Call the dict API named by the first argument with an unrelated exception
+ * pending. With keys that run no Python, the API behaves as with none
+ * pending and keeps that exception. Return (status, result or None). */
+static PyObject *
+dict_with_pending_exception(PyObject *self, PyObject *args)
+{
+    const char *api;
+    PyObject *dict, *key, *value;
+    if (!PyArg_ParseTuple(args, "sOOO", &api, &dict, &key, &value)) {
+        return NULL;
+    }
+    const char *name = PyUnicode_AsUTF8(key);
+    if (name == NULL) {
+        return NULL;
+    }
+    PyObject *marker = PyObject_CallFunction(PyExc_ValueError, "s", "pending");
+    if (marker == NULL) {
+        return NULL;
+    }
+    PyObject *result = NULL;
+    int status;
+    PyErr_SetRaisedException(Py_NewRef(marker));
+    if (strcmp(api, "GetItemRef") == 0) {
+        status = PyDict_GetItemRef(dict, key, &result);
+    }
+    else if (strcmp(api, "GetItemStringRef") == 0) {
+        status = PyDict_GetItemStringRef(dict, name, &result);
+    }
+    else if (strcmp(api, "Contains") == 0) {
+        status = PyDict_Contains(dict, key);
+    }
+    else if (strcmp(api, "ContainsString") == 0) {
+        status = PyDict_ContainsString(dict, name);
+    }
+    else if (strcmp(api, "SetItem") == 0) {
+        status = PyDict_SetItem(dict, key, value);
+    }
+    else if (strcmp(api, "SetItemString") == 0) {
+        status = PyDict_SetItemString(dict, name, value);
+    }
+    else if (strcmp(api, "DelItem") == 0) {
+        status = PyDict_DelItem(dict, key);
+    }
+    else if (strcmp(api, "DelItemString") == 0) {
+        status = PyDict_DelItemString(dict, name);
+    }
+    else if (strcmp(api, "SetDefaultRef") == 0) {
+        status = PyDict_SetDefaultRef(dict, key, value, &result);
+    }
+    else if (strcmp(api, "Pop") == 0) {
+        status = PyDict_Pop(dict, key, &result);
+    }
+    else if (strcmp(api, "PopString") == 0) {
+        status = PyDict_PopString(dict, name, &result);
+    }
+    else if (strcmp(api, "GenericGetDict") == 0) {
+        result = PyObject_GenericGetDict(dict, NULL);
+        status = result == NULL ? -1 : 0;
+    }
+    else {
+        PyErr_Clear();
+        Py_DECREF(marker);
+        PyErr_Format(PyExc_ValueError, "unknown dict API %s", api);
+        return NULL;
+    }
+    PyObject *observed = PyErr_GetRaisedException();
+    PyObject *report = NULL;
+    if (observed == marker) {
+        report = Py_BuildValue("iO", status, result != NULL ? result : Py_None);
+    }
+    else if (observed == NULL) {
+        PyErr_SetString(PyExc_AssertionError, "the pending exception was lost");
+    }
+    else {
+        PyErr_Format(PyExc_AssertionError,
+                     "the pending exception was replaced by %R", observed);
+    }
+    Py_XDECREF(observed);
+    Py_XDECREF(result);
+    Py_DECREF(marker);
+    return report;
+}
+
 
 static PyMethodDef test_methods[] = {
     {"dict_containsstring", dict_containsstring, METH_VARARGS},
@@ -324,6 +407,7 @@ static PyMethodDef test_methods[] = {
     {"anydict_check", anydict_check, METH_O},
     {"anydict_checkexact", anydict_checkexact, METH_O},
     {"frozendict_new", frozendict_new, METH_O},
+    {"dict_with_pending_exception", dict_with_pending_exception, METH_VARARGS},
     {NULL},
 };
 

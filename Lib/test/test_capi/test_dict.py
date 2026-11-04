@@ -427,6 +427,54 @@ class CAPITest(unittest.TestCase):
         # CRASHES mergefromseq2({}, NULL, 0)
         # CRASHES mergefromseq2(NULL, {}, 0)
 
+    def test_dict_pending_exception(self):
+        # With an unrelated exception pending and str keys, which run no
+        # Python, each API takes its status from the operation and keeps the
+        # exception.
+        call = _testcapi.dict_with_pending_exception
+        # Inline ints and floats box on the way out, which must also keep
+        # the pending exception.
+        for value, other in ((object(), object()), (7, 2.5)):
+            self.check_dict_pending_exception(call, value, other)
+
+        class Instance:
+            pass
+        instance = Instance()
+        value = object()
+        instance.a = value
+        status, result = call('GenericGetDict', instance, 'a', None)
+        self.assertEqual(status, 0)
+        self.assertIs(result, instance.__dict__)
+        self.assertEqual(result, {'a': value})
+
+    def check_dict_pending_exception(self, call, value, other):
+        for api, key, expected, after in (
+            ('GetItemRef', 'a', (1, value), {'a': value}),
+            ('GetItemRef', 'b', (0, None), {'a': value}),
+            ('GetItemStringRef', 'a', (1, value), {'a': value}),
+            ('GetItemStringRef', 'b', (0, None), {'a': value}),
+            ('Contains', 'a', (1, None), {'a': value}),
+            ('Contains', 'b', (0, None), {'a': value}),
+            ('ContainsString', 'a', (1, None), {'a': value}),
+            ('ContainsString', 'b', (0, None), {'a': value}),
+            ('SetItem', 'a', (0, None), {'a': other}),
+            ('SetItem', 'b', (0, None), {'a': value, 'b': other}),
+            ('SetItemString', 'a', (0, None), {'a': other}),
+            ('SetItemString', 'b', (0, None), {'a': value, 'b': other}),
+            ('DelItem', 'a', (0, None), {}),
+            ('DelItemString', 'a', (0, None), {}),
+            ('SetDefaultRef', 'a', (1, value), {'a': value}),
+            ('SetDefaultRef', 'b', (0, other), {'a': value, 'b': other}),
+            ('Pop', 'a', (1, value), {}),
+            ('Pop', 'b', (0, None), {'a': value}),
+            ('PopString', 'a', (1, value), {}),
+            ('PopString', 'b', (0, None), {'a': value}),
+        ):
+            with self.subTest(api=api, key=key, value=value):
+                mydict = {'a': value}
+                self.assertEqual(call(api, mydict, key, other), expected)
+                self.assertEqual(mydict, after)
+
     def test_dict_pop(self):
         # Test PyDict_Pop()
         dict_pop = _testcapi.dict_pop

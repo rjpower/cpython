@@ -319,14 +319,14 @@ _PyJit_EmitBaseline(_PyJitCodeUnit *unit)
     jit_buf buffer = {0};
     int epilogue = jit_new_label(&buffer);
     int fallback = jit_new_label(&buffer);
-    if (buffer.failed || PyErr_Occurred()) {
+    if (buffer.failed) {
         free_buffer(&buffer);
         return -1;
     }
     size_t label_bytes = unit->nops * sizeof(int);
     if (!_PyJit_ReserveBytes(label_bytes)) { free_buffer(&buffer); return -1; }
     int *labels = PyMem_Malloc(label_bytes);
-    if (labels == NULL || PyErr_Occurred()) {
+    if (labels == NULL) {
         free_labels(labels, label_bytes);
         free_buffer(&buffer);
         return -1;
@@ -337,7 +337,7 @@ _PyJit_EmitBaseline(_PyJitCodeUnit *unit)
     }
     unit->charged_bytes += offset_bytes;
     unit->op_offsets = PyMem_Malloc(offset_bytes);
-    if (unit->op_offsets == NULL || PyErr_Occurred()) {
+    if (unit->op_offsets == NULL) {
         free_labels(labels, label_bytes); free_buffer(&buffer); return -1;
     }
     for (uint32_t i = 0; i < unit->nops; i++) {
@@ -420,7 +420,7 @@ _PyJit_EmitBaseline(_PyJitCodeUnit *unit)
     jit_ret(&buffer);
     int ok = jit_resolve(&buffer);
     free_labels(labels, label_bytes);
-    if (ok < 0 || PyErr_Occurred()) {
+    if (ok < 0) {
         free_buffer(&buffer);
         return -1;
     }
@@ -453,6 +453,6 @@ _PyJit_EmitBaseline(_PyJitCodeUnit *unit)
     unit->code_size = (size_t)buffer.size;
     unit->entry = (_PyJitEntry)mapping;
     free_buffer(&buffer);
-    return PyErr_Occurred() ? -1 : 0;
+    return 0;
 #endif
 }

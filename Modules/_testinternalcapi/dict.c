@@ -681,10 +681,14 @@ dict_owned_entry_contract(PyObject *module, PyObject *Py_UNUSED(ignored))
         Py_XDECREF(dict);
         return NULL;
     }
+    /* Like PyDict_Next(), a step succeeds with an unrelated exception
+     * pending and leaves it pending. */
     PyErr_SetRaisedException(Py_NewRef(primary));
     status = PyDict_NextEntryRef(dict, &position, NULL, &output);
     PyObject *observed = PyErr_GetRaisedException();
-    valid = valid && status == -1 && position == 0 && output == NULL && observed == primary;
+    valid = valid && status == 1 && position == 1 && output != NULL &&
+        PyLong_AsLong(output) == INT32_MAX && observed == primary;
+    Py_XDECREF(output);
     Py_XDECREF(observed);
     Py_XDECREF(primary);
     Py_XDECREF(dict);
@@ -904,57 +908,85 @@ done:
     return report;
 }
 
+/* Run one public value API with an unrelated exception pending. It must
+ * behave as with none pending and keep that exception, as upstream's
+ * PyDict_GetItemRef(), PyDict_Contains(), PyDict_Next() and PyDict_DelItem()
+ * do for keys that run no Python. Operations: 0 PyDict_GetValue(),
+ * 1 PyDict_GetValueString(), 2 PyDict_ContainsValue(), 3 PyDict_NextValue()
+ * from position 0, 4 PyDict_DelValue(). Return (status, first, second). */
 static PyObject *
-dict_public_value_entry_error(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+dict_public_value_pending(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
 {
-    if (nargs != 4 || !PyExceptionInstance_Check(args[2])) {
-        PyErr_SetString(PyExc_TypeError, "expected dictionary, key, exception, operation");
+    if (nargs != 3) {
+        PyErr_SetString(PyExc_TypeError, "expected dictionary, key, operation");
         return NULL;
     }
-    long mode = PyLong_AsLong(args[3]);
-    if ((mode == -1 && PyErr_Occurred()) || mode < 0 || mode > 4) {
-        if (!PyErr_Occurred()) {
-            PyErr_SetString(PyExc_ValueError, "invalid dictionary operation");
+    long mode = PyLong_AsLong(args[2]);
+    if (mode == -1 && PyErr_Occurred()) {
+        return NULL;
+    }
+    if (mode < 0 || mode > 4) {
+        PyErr_SetString(PyExc_ValueError, "invalid dictionary operation");
+        return NULL;
+    }
+    const char *name = NULL;
+    if (mode == 1) {
+        name = PyUnicode_AsUTF8(args[1]);
+        if (name == NULL) {
+            return NULL;
         }
+    }
+    PyObject *marker = PyObject_CallFunction(PyExc_ValueError, "s", "pending");
+    if (marker == NULL) {
         return NULL;
     }
-    PyObject *primary = Py_NewRef(args[2]);
     PyValue key = PyValue_FromObjectBorrow(args[1]);
-    /* Immortal non-owning sentinels check that outputs are initialized. */
-    PyValue first = PyValue_None, second = PyValue_None;
+    PyValue first = PyValue_NULL, second = PyValue_NULL;
     Py_ssize_t position = 0;
-    PyErr_SetRaisedException(Py_NewRef(primary));
     int status;
+    PyErr_SetRaisedException(Py_NewRef(marker));
     switch (mode) {
         case 0:
             status = PyDict_GetValue(args[0], key, &first);
             break;
         case 1:
-            status = PyDict_GetValueString(args[0], "key", &first);
+            status = PyDict_GetValueString(args[0], name, &first);
             break;
         case 2:
             status = PyDict_ContainsValue(args[0], key);
             break;
+        case 3:
+            status = PyDict_NextValue(args[0], &position, &first, &second);
+            break;
         default:
-            status = PyDict_NextValue(args[0], &position, &first,
-                                      mode == 4 ? &first : &second);
+            status = PyDict_DelValue(args[0], key);
             break;
     }
     PyObject *observed = PyErr_GetRaisedException();
-    int valid = status == -1 && observed == primary && position == 0 &&
-        (mode == 2 || PyValue_IsNull(first)) &&
-        (mode != 3 || PyValue_IsNull(second));
+    PyObject *first_object = NULL, *second_object = NULL, *report = NULL;
+    if (observed != marker) {
+        if (observed == NULL) {
+            PyErr_SetString(PyExc_AssertionError, "the pending exception was lost");
+        }
+        else {
+            PyErr_Format(PyExc_AssertionError,
+                         "the pending exception was replaced by %R", observed);
+        }
+        goto done;
+    }
+    first_object = PyValue_IsNull(first) ? Py_NewRef(Py_None) : PyValue_AsObject(first);
+    second_object = PyValue_IsNull(second) ? Py_NewRef(Py_None) : PyValue_AsObject(second);
+    if (first_object != NULL && second_object != NULL) {
+        report = Py_BuildValue("iOO", status, first_object, second_object);
+    }
+done:
     PyValue_XCLOSE(first);
     PyValue_XCLOSE(second);
+    Py_XDECREF(first_object);
+    Py_XDECREF(second_object);
     Py_XDECREF(observed);
-    Py_XDECREF(primary);
-    if (!valid || PyErr_Occurred()) {
-        if (!PyErr_Occurred()) {
-            PyErr_SetString(PyExc_AssertionError, "public dictionary entry error was changed");
-        }
-        return NULL;
-    }
-    Py_RETURN_NONE;
+    Py_DECREF(marker);
+    return report;
 }
 
 static PyObject *
@@ -1047,7 +1079,7 @@ dict_public_value_string_oom(PyObject *module, PyObject *const *args, Py_ssize_t
 static PyMethodDef methods[] = {
     {"dict_public_value_read", _PyCFunction_CAST(dict_public_value_read), METH_FASTCALL},
     {"dict_public_value_next", _PyCFunction_CAST(dict_public_value_next), METH_FASTCALL},
-    {"dict_public_value_entry_error", _PyCFunction_CAST(dict_public_value_entry_error), METH_FASTCALL},
+    {"dict_public_value_pending", _PyCFunction_CAST(dict_public_value_pending), METH_FASTCALL},
     {"dict_public_value_retirement", _PyCFunction_CAST(dict_public_value_retirement), METH_FASTCALL},
     {"dict_public_value_string_oom", _PyCFunction_CAST(dict_public_value_string_oom), METH_FASTCALL},
     {"dict_owned_migration", dict_owned_migration, METH_O},

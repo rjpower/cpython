@@ -674,17 +674,19 @@ callmethod(PyThreadState *tstate, PyObject *obj, PyObject *name,
     _PyThreadState_PushCValue(tstate, &self);
     _PyThreadState_PushCValue(tstate, &method);
     self.ref = PyValue_FromPyObjectBorrow(obj);
-    if (_PyObject_GetMethodValue(tstate, &self.ref, name, &method.ref, obj) < 0 ||
-            PyErr_Occurred()) {
+    if (_PyObject_GetMethodValue(tstate, &self.ref, name, &method.ref, obj) < 0) {
         goto done;
     }
     PyObject *callable = _PyValueTemps_ObjectAt(&temps, method.ref, BOX_SITE_CALL);
     if (callable == NULL) {
         goto done;
     }
-    PyObject *receiver = PyValue_IsNull(self.ref) ? NULL : _PyValueTemps_ObjectAt(&temps, self.ref, BOX_SITE_CALL);
-    if (PyErr_Occurred()) {
-        goto done;
+    PyObject *receiver = NULL;
+    if (!PyValue_IsNull(self.ref)) {
+        receiver = _PyValueTemps_ObjectAt(&temps, self.ref, BOX_SITE_CALL);
+        if (receiver == NULL) {
+            goto done;
+        }
     }
     if (!PyCallable_Check(callable)) {
         _PyErr_Format(tstate, PyExc_TypeError,
@@ -725,7 +727,7 @@ done:
     call_pop_value(tstate, &method);
     call_pop_value(tstate, &self);
     _PyValueTemps_Close(&temps);
-    return call_finish_result(result);
+    return result;
 }
 
 PyObject *
@@ -979,17 +981,19 @@ PyObject_VectorcallMethod(PyObject *name, PyObject *const *args,
     _PyThreadState_PushCValue(tstate, &self);
     _PyThreadState_PushCValue(tstate, &method);
     self.ref = PyValue_FromPyObjectBorrow(args[0]);
-    if (_PyObject_GetMethodValue(tstate, &self.ref, name, &method.ref, args[0]) < 0 ||
-            PyErr_Occurred()) {
+    if (_PyObject_GetMethodValue(tstate, &self.ref, name, &method.ref, args[0]) < 0) {
         goto done;
     }
     PyObject *callable = _PyValueTemps_ObjectAt(&temps, method.ref, BOX_SITE_CALL);
     if (callable == NULL) {
         goto done;
     }
-    PyObject *receiver = PyValue_IsNull(self.ref) ? NULL : _PyValueTemps_ObjectAt(&temps, self.ref, BOX_SITE_CALL);
-    if (PyErr_Occurred()) {
-        goto done;
+    PyObject *receiver = NULL;
+    if (!PyValue_IsNull(self.ref)) {
+        receiver = _PyValueTemps_ObjectAt(&temps, self.ref, BOX_SITE_CALL);
+        if (receiver == NULL) {
+            goto done;
+        }
     }
     EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_METHOD, callable);
     if (receiver == NULL) {
@@ -1007,7 +1011,7 @@ done:
     call_pop_value(tstate, &method);
     call_pop_value(tstate, &self);
     _PyValueTemps_Close(&temps);
-    return call_finish_result(result);
+    return result;
 }
 
 
@@ -1025,17 +1029,19 @@ PyObject_CallMethodObjArgs(PyObject *obj, PyObject *name, ...)
     _PyThreadState_PushCValue(tstate, &self);
     _PyThreadState_PushCValue(tstate, &method);
     self.ref = PyValue_FromPyObjectBorrow(obj);
-    if (_PyObject_GetMethodValue(tstate, &self.ref, name, &method.ref, obj) < 0 ||
-            PyErr_Occurred()) {
+    if (_PyObject_GetMethodValue(tstate, &self.ref, name, &method.ref, obj) < 0) {
         goto done;
     }
     PyObject *callable = _PyValueTemps_ObjectAt(&temps, method.ref, BOX_SITE_CALL);
     if (callable == NULL) {
         goto done;
     }
-    PyObject *receiver = PyValue_IsNull(self.ref) ? NULL : _PyValueTemps_ObjectAt(&temps, self.ref, BOX_SITE_CALL);
-    if (PyErr_Occurred()) {
-        goto done;
+    PyObject *receiver = NULL;
+    if (!PyValue_IsNull(self.ref)) {
+        receiver = _PyValueTemps_ObjectAt(&temps, self.ref, BOX_SITE_CALL);
+        if (receiver == NULL) {
+            goto done;
+        }
     }
     va_list vargs;
     va_start(vargs, name);
@@ -1045,7 +1051,7 @@ done:
     call_pop_value(tstate, &method);
     call_pop_value(tstate, &self);
     _PyValueTemps_Close(&temps);
-    return call_finish_result(result);
+    return result;
 }
 
 

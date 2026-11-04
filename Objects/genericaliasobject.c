@@ -92,61 +92,39 @@ ga_repr_items_list(PyUnicodeWriter *writer, PyObject *p)
 static PyObject *
 ga_repr(PyObject *self)
 {
-    if (PyErr_Occurred()) {
-        return NULL;
-    }
-
-    PyObject *self_owner = NULL;
-    PyObject *args_owner = NULL;
-    PyObject *origin_owner = NULL;
-    PyObject *p = NULL;
-    PyObject *result = NULL;
-    PyUnicodeWriter *writer = NULL;
-    int completed = 0;
-
-    self_owner = Py_NewRef(self);
-    gaobject *alias = (gaobject *)self_owner;
-    args_owner = Py_NewRef(alias->args);
-    Py_ssize_t len = PyTuple_GET_SIZE(args_owner);
+    gaobject *alias = (gaobject *)self;
+    Py_ssize_t len = PyTuple_GET_SIZE(alias->args);
 
     // Estimation based on the shortest format: "int[int, int, int]"
     Py_ssize_t estimate = (len <= PY_SSIZE_T_MAX / 5) ? len * 5 : len;
     estimate = 3 + 1 + estimate + 1;
-    writer = PyUnicodeWriter_Create(estimate);
+    PyUnicodeWriter *writer = PyUnicodeWriter_Create(estimate);
     if (writer == NULL) {
-        goto done;
+        return NULL;
     }
 
     if (alias->starred) {
-        int status = PyUnicodeWriter_WriteChar(writer, '*');
-        if (status < 0) {
-            goto done;
+        if (PyUnicodeWriter_WriteChar(writer, '*') < 0) {
+            goto error;
         }
     }
-    origin_owner = Py_NewRef(alias->origin);
-    if (origin_owner == NULL || PyErr_Occurred()) {
-        goto done;
+    if (_Py_typing_type_repr(writer, alias->origin) < 0) {
+        goto error;
     }
-    int status = _Py_typing_type_repr(writer, origin_owner);
-    Py_CLEAR(origin_owner);
-    if (status < 0 || PyErr_Occurred()) {
-        goto done;
-    }
-    status = PyUnicodeWriter_WriteChar(writer, '[');
-    if (status < 0) {
-        goto done;
+    if (PyUnicodeWriter_WriteChar(writer, '[') < 0) {
+        goto error;
     }
     for (Py_ssize_t i = 0; i < len; i++) {
         if (i > 0) {
-            status = PyUnicodeWriter_WriteASCII(writer, ", ", 2);
-            if (status < 0) {
-                goto done;
+            if (PyUnicodeWriter_WriteASCII(writer, ", ", 2) < 0) {
+                goto error;
             }
         }
-        p = PyTuple_GetItemRef(args_owner, i);
-        if (p == NULL || PyErr_Occurred()) {
-            goto done;
+        PyObject *p = PyTuple_GetItemRef(alias->args, i);
+        if (p == NULL) {
+            goto error;
         }
+        int status;
         if (PyList_CheckExact(p)) {
             // Looks like we are working with ParamSpec's list of type args:
             status = ga_repr_items_list(writer, p);
@@ -154,47 +132,25 @@ ga_repr(PyObject *self)
         else {
             status = _Py_typing_type_repr(writer, p);
         }
-        Py_CLEAR(p);
-        if (status < 0 || PyErr_Occurred()) {
-            goto done;
+        Py_DECREF(p);
+        if (status < 0) {
+            goto error;
         }
     }
     if (len == 0) {
         // for something like tuple[()] we should print a "()"
-        status = PyUnicodeWriter_WriteASCII(writer, "()", 2);
-        if (status < 0 || PyErr_Occurred()) {
-            goto done;
+        if (PyUnicodeWriter_WriteASCII(writer, "()", 2) < 0) {
+            goto error;
         }
     }
-    status = PyUnicodeWriter_WriteChar(writer, ']');
-    if (status < 0 || PyErr_Occurred()) {
-        goto done;
+    if (PyUnicodeWriter_WriteChar(writer, ']') < 0) {
+        goto error;
     }
-    PyUnicodeWriter *finishing = writer;
-    writer = NULL;
-    result = PyUnicodeWriter_Finish(finishing);
-    if (result == NULL) {
-        goto done;
-    }
-    completed = 1;
+    return PyUnicodeWriter_Finish(writer);
 
-done:
-    if (writer != NULL) {
-        PyUnicodeWriter *retired = writer;
-        writer = NULL;
-        PyObject *saved = PyErr_GetRaisedException();
-        PyUnicodeWriter_Discard(retired);
-        _PyValue_RestoreException(saved);
-    }
-    Py_CLEAR(p);
-    Py_CLEAR(origin_owner);
-    Py_CLEAR(args_owner);
-    Py_CLEAR(self_owner);
-    if (!completed || PyErr_Occurred()) {
-        Py_CLEAR(result);
-        return NULL;
-    }
-    return result;
+error:
+    PyUnicodeWriter_Discard(writer);
+    return NULL;
 }
 
 // Index of item in self[:len], or -1 if not found (self is a tuple)
@@ -591,96 +547,51 @@ _unpacked_tuple_args(PyObject *arg)
 static PyObject *
 _unpack_args(PyObject *item)
 {
-    PyObject *input_owner = NULL;
-    PyObject *selected = NULL;
-    PyObject *subargs = NULL;
-    PyObject *newargs = NULL;
-    PyObject *result = NULL;
-    int completed = 0;
-
-    if (PyErr_Occurred()) {
-        return NULL;
-    }
-
-    input_owner = Py_NewRef(item);
-
-    newargs = PyList_New(0);
+    PyObject *newargs = PyList_New(0);
     if (newargs == NULL) {
-        goto done;
-    }
-
-    int is_tuple = PyTuple_Check(input_owner);
-    Py_ssize_t nitems = is_tuple ? PyTuple_GET_SIZE(input_owner) : 1;
-    for (Py_ssize_t i = 0; i < nitems; i++) {
-        selected = is_tuple ? PyTuple_GetItemRef(input_owner, i)
-                            : Py_NewRef(input_owner);
-        if (selected == NULL || PyErr_Occurred()) {
-            goto done;
-        }
-
-        if (!PyType_Check(selected)) {
-            subargs = _unpacked_tuple_args(selected);
-            if (PyErr_Occurred()) {
-                goto done;
-            }
-            if (subargs != NULL && PyTuple_Check(subargs)) {
-                Py_ssize_t subargs_size = PyTuple_GET_SIZE(subargs);
-                int suppress_expansion = subargs_size > 0 &&
-                    PyValue_Is(PyTuple_GET_VALUE(subargs, subargs_size - 1),
-                               PyValue_FromPyObjectBorrow(Py_Ellipsis));
-                if (!suppress_expansion) {
-                    if (PyList_SetSlice(newargs, PY_SSIZE_T_MAX,
-                                        PY_SSIZE_T_MAX, subargs) < 0 ||
-                        PyErr_Occurred()) {
-                        goto done;
-                    }
-                    Py_CLEAR(subargs);
-                    if (PyErr_Occurred()) {
-                        goto done;
-                    }
-                    Py_CLEAR(selected);
-                    if (PyErr_Occurred()) {
-                        goto done;
-                    }
-                    continue;
-                }
-            }
-        }
-
-        Py_CLEAR(subargs);
-        if (PyErr_Occurred()) {
-            goto done;
-        }
-
-        if (PyList_Append(newargs, selected) < 0) {
-            goto done;
-        }
-        Py_CLEAR(selected);
-        if (PyErr_Occurred()) {
-            goto done;
-        }
-    }
-
-    result = PySequence_Tuple(newargs);
-    if (result == NULL || PyErr_Occurred()) {
-        goto done;
-    }
-    Py_CLEAR(newargs);
-    if (PyErr_Occurred()) {
-        goto done;
-    }
-    completed = 1;
-
-done:
-    Py_CLEAR(subargs);
-    Py_CLEAR(selected);
-    Py_CLEAR(newargs);
-    Py_CLEAR(input_owner);
-    if (!completed || PyErr_Occurred()) {
-        Py_CLEAR(result);
         return NULL;
     }
-    return result;
+    int is_tuple = PyTuple_Check(item);
+    Py_ssize_t nitems = is_tuple ? PyTuple_GET_SIZE(item) : 1;
+    for (Py_ssize_t i = 0; i < nitems; i++) {
+        PyObject *arg = is_tuple ? PyTuple_GetItemRef(item, i) : Py_NewRef(item);
+        if (arg == NULL) {
+            Py_DECREF(newargs);
+            return NULL;
+        }
+        if (!PyType_Check(arg)) {
+            PyObject *subargs = _unpacked_tuple_args(arg);
+            if (subargs != NULL &&
+                PyTuple_Check(subargs) &&
+                !(PyTuple_GET_SIZE(subargs) &&
+                  PyValue_Is(PyTuple_GET_VALUE(subargs, PyTuple_GET_SIZE(subargs)-1),
+                             PyValue_FromPyObjectBorrow(Py_Ellipsis))))
+            {
+                int rc = PyList_SetSlice(newargs, PY_SSIZE_T_MAX, PY_SSIZE_T_MAX, subargs);
+                Py_DECREF(subargs);
+                Py_DECREF(arg);
+                if (rc < 0) {
+                    Py_DECREF(newargs);
+                    return NULL;
+                }
+                continue;
+            }
+            Py_XDECREF(subargs);
+            if (PyErr_Occurred()) {
+                Py_DECREF(arg);
+                Py_DECREF(newargs);
+                return NULL;
+            }
+        }
+        int rc = PyList_Append(newargs, arg);
+        Py_DECREF(arg);
+        if (rc < 0) {
+            Py_DECREF(newargs);
+            return NULL;
+        }
+    }
+    Py_SETREF(newargs, PySequence_Tuple(newargs));
+    return newargs;
 }
 
 PyObject *

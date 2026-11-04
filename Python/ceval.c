@@ -1554,6 +1554,9 @@ value_operation_refresh(_PyValueOperation *operation, _PyInstr **next,
     PyCodeObject *code = operation->code;
     Py_ssize_t word = operation->next_word;
     Py_ssize_t current = operation->current_word;
+    /* The status is the refresh's own (a changed frame or executable, a
+     * failed reinstrumentation); each caller reports its operation's. */
+    int status = 0;
 refresh_after_cleanup:
     /* The operation can run Python, and so can the release of its operands,
      * of its results and of a displaced local (__del__, weakref callbacks).
@@ -1566,13 +1569,15 @@ refresh_after_cleanup:
     }
     uintptr_t epoch = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) &
                       ~_PY_EVAL_EVENTS_MASK;
-    if (code->_co_instrumentation_version != epoch) {
-        (void)_Py_Instrument(code, tstate->interp);
+    if (code->_co_instrumentation_version != epoch &&
+        _Py_Instrument(code, tstate->interp) < 0) {
+        status = -1;
     }
     _PyCodeExec *exec = code->_co_exec;
     if (tstate->current_frame != frame || _PyFrame_GetCode(frame) != code ||
         exec == NULL || word < 0 || word > exec->nwords ||
         current < 0 || current >= exec->nwords) {
+        /* Keep a pending instrumentation or operation error. */
         if (!PyErr_Occurred()) {
             PyErr_SetString(PyExc_SystemError, "value bridge changed executing words");
         }
@@ -1583,14 +1588,14 @@ refresh_after_cleanup:
     frame->ir_feedback = exec->entries;
     frame->instr_ptr = exec->words + current;
     *next = exec->words + word;
-    if (PyErr_Occurred() && failed_result != NULL &&
+    if (status < 0 && failed_result != NULL &&
         !PyValue_IsNull(*failed_result)) {
         /* Instrumentation itself can fail after receiver cleanup. Retire
          * the C-only result, then refresh after its possible callbacks too. */
         drop_failed_value(failed_result);
         goto refresh_after_cleanup;
     }
-    return PyErr_Occurred() ? -1 : 0;
+    return status;
 }
 
 /* Release owners[0] to owners[count - 1] in order, then the handler's input
@@ -1605,16 +1610,13 @@ finish_value_bridges_ex(PyThreadState *tstate, _PyInterpreterFrame *frame,
             PyValue_XCLOSE(owners[i]);
         }
         _PyValueTemps_Close(temps);
-        return PyErr_Occurred() ? -1 : 0;
+        return 0;
     }
     _PyValueOperation operation = value_operation_begin(tstate, frame, *next);
     for (int i = 0; i < count; i++) {
         PyValue_XCLOSE(owners[i]);
     }
     _PyValueTemps_Close(temps);
-    if (PyErr_Occurred() && failed_result != NULL) {
-        drop_failed_value(failed_result);
-    }
     return value_operation_refresh(&operation, next, failed_result);
 }
 
@@ -1703,12 +1705,14 @@ call_transaction_prepare_tuple(_PyCallTransaction *call, _PyInstr **next)
     PyValue func = PyValue_MakeHeapSafe(PyValue_Borrow(homes[0]));
     PyValue obsolete = PyValue_NULL;
     PyObject *args_object = NULL, *func_object = NULL, *tuple = NULL;
+    int status = -1;
     call->effects = 1;
     args_object = PyValue_AsObject(args);
     if (args_object == NULL || PyErr_Occurred()) {
         goto done;
     }
     if (PyTuple_CheckExact(args_object)) {
+        status = 0;
         goto done;
     }
     func_object = PyValue_AsObject(func);
@@ -1729,6 +1733,7 @@ call_transaction_prepare_tuple(_PyCallTransaction *call, _PyInstr **next)
      * scalar box. Only the final tuple home is visible during local cleanup. */
     homes[2] = PyValue_FromPyObjectSteal(tuple);
     tuple = NULL;
+    status = 0;
 done:
     Py_CLEAR(tuple);
     Py_CLEAR(func_object);
@@ -1736,7 +1741,10 @@ done:
     PyValue_CLEAR(func);
     PyValue_CLEAR(args);
     PyValue_CLEAR(obsolete);
-    return call_transaction_refresh(call, next);
+    if (call_transaction_refresh(call, next) < 0) {
+        return -1;
+    }
+    return status;
 }
 
 static int
@@ -1759,6 +1767,7 @@ call_transaction_monitor(_PyCallTransaction *call, _PyInstr **next)
         first = PyValue_MakeHeapSafe(PyValue_Borrow(homes[2]));
     }
     PyObject *function_object = NULL, *argument = NULL;
+    int status = -1;
     call->effects = 1;
     call->monitored = 1;
     function_object = PyValue_AsObject(function);
@@ -1770,7 +1779,7 @@ call_transaction_monitor(_PyCallTransaction *call, _PyInstr **next)
     if (argument == NULL || call_transaction_refresh(call, next) < 0) {
         goto done;
     }
-    (void)_Py_call_instrumentation_2args(
+    status = _Py_call_instrumentation_2args(
         call->operation.tstate, PY_MONITORING_EVENT_CALL, call->operation.frame,
         call->operation.frame->instr_ptr, function_object, argument);
 done:
@@ -1778,7 +1787,10 @@ done:
     Py_CLEAR(function_object);
     PyValue_CLEAR(first);
     PyValue_CLEAR(function);
-    return call_transaction_refresh(call, next);
+    if (call_transaction_refresh(call, next) < 0) {
+        return -1;
+    }
+    return status < 0 ? -1 : 0;
 }
 
 static void
@@ -1827,7 +1839,7 @@ call_transaction_native(_PyCallTransaction *call, _PyInstr **next)
 {
     PyValue small[8];
     PyValue *retired = small;
-    int retired_count = 0, scope_started = 0;
+    int retired_count = 0, scope_started = 0, call_status = -1;
     PyObject *callable = NULL, *monitor_argument = NULL;
     _PyNativeScope scope;
     call->effects = 1;
@@ -1921,11 +1933,11 @@ call_transaction_native(_PyCallTransaction *call, _PyInstr **next)
                 call->operation.frame, call->operation.frame->instr_ptr,
                 callable, monitor_argument);
         }
-        else {
-            (void)_Py_call_instrumentation_2args(
-                call->operation.tstate, PY_MONITORING_EVENT_C_RETURN,
-                call->operation.frame, call->operation.frame->instr_ptr,
-                callable, monitor_argument);
+        else if (_Py_call_instrumentation_2args(
+                     call->operation.tstate, PY_MONITORING_EVENT_C_RETURN,
+                     call->operation.frame, call->operation.frame->instr_ptr,
+                     callable, monitor_argument) < 0) {
+            status = -1;
         }
     }
     if (status < 0 || call_transaction_refresh(call, next) < 0) {
@@ -1936,20 +1948,28 @@ call_transaction_native(_PyCallTransaction *call, _PyInstr **next)
     _PyNativeResult_Publish(&scope.result,
         _PyFrame_Slots(call->operation.frame) + call->destination,
         call_transaction_publish_pc, call);
+    call_status = 0;
     goto end_scope;
 abort:
     _PyNativeResult_Abort(&scope.result, call_transaction_publish_pc, call);
 end_scope:
-    (void)_PyNativeScope_End(&scope);
+    _PyNativeScope_End(&scope);
 done:
     assert(scope_started || retired_count == 0);
     Py_CLEAR(monitor_argument);
     Py_CLEAR(callable);
     call_transaction_retire(retired, retired_count, small);
     int failed = call_transaction_refresh(call, next);
+    if (call_status < 0) {
+        return -1;
+    }
     if (failed == 0 && call->periodic) {
-        (void)check_periodics_at_end(call->operation.tstate, call->operation.frame);
+        int periodic = check_periodics_at_end(call->operation.tstate,
+                                              call->operation.frame);
         failed = call_transaction_refresh(call, next);
+        if (periodic < 0) {
+            failed = -1;
+        }
     }
     return failed;
 }
@@ -1982,7 +2002,8 @@ value_reader_complete(_PyValueOperation *operation, _PyInstr **next,
         drop_failed_value(result);
         value_operation_close3(first, second, NULL);
         _PyValueTemps_Close(temps);
-        return value_operation_refresh(operation, next, NULL);
+        (void)value_operation_refresh(operation, next, NULL);
+        return -1;
     }
     *result = _PyValue_Publish(result);
     if (!local) {
@@ -1990,9 +2011,6 @@ value_reader_complete(_PyValueOperation *operation, _PyInstr **next,
     }
     value_operation_close3(first, second, NULL);
     _PyValueTemps_Close(temps);
-    if (PyErr_Occurred() && local) {
-        drop_failed_value(result);
-    }
     return value_operation_refresh(operation, next, local ? result : NULL);
 }
 
@@ -2026,7 +2044,8 @@ value_attribute_complete(_PyValueOperation *operation, _PyInstr **next,
         drop_failed_value(self);
         value_operation_close3(receiver, NULL, NULL);
         _PyValueTemps_Close(temps);
-        return value_operation_refresh(operation, next, NULL);
+        (void)value_operation_refresh(operation, next, NULL);
+        return -1;
     }
     *result = _PyValue_Publish(result);
     *self = _PyValue_Publish(self);
@@ -2121,7 +2140,7 @@ static int
 native_call_finish(_PyNativeCallPublication *state, _PyNativeScope *scope,
                    PyValue *argument, PyValue *callable, _PyInstr **next)
 {
-    (void)_PyNativeScope_End(scope);
+    _PyNativeScope_End(scope);
     if (argument != NULL) {
         PyValue_CLEAR(*argument);
         PyValue_CLEAR(*callable);
@@ -2134,14 +2153,18 @@ native_call_finish(_PyNativeCallPublication *state, _PyNativeScope *scope,
     }
     uintptr_t epoch = _Py_atomic_load_uintptr_relaxed(&state->tstate->eval_breaker) &
                       ~_PY_EVAL_EVENTS_MASK;
-    if (state->code->_co_instrumentation_version != epoch) {
-        (void)_Py_Instrument(state->code, state->tstate->interp);
+    /* As in value_operation_refresh, the status is the refresh's own. */
+    int status = 0;
+    if (state->code->_co_instrumentation_version != epoch &&
+        _Py_Instrument(state->code, state->tstate->interp) < 0) {
+        status = -1;
     }
     _PyCodeExec *exec = state->code->_co_exec;
     if (state->tstate->current_frame != frame ||
         _PyFrame_GetCode(frame) != state->code || exec == NULL ||
         state->current_word < 0 || state->current_word >= exec->nwords ||
         state->next_word < 0 || state->next_word > exec->nwords) {
+        /* Keep a pending instrumentation or call error. */
         if (!PyErr_Occurred()) {
             PyErr_SetString(PyExc_SystemError, "native cleanup changed executing words");
         }
@@ -2151,7 +2174,7 @@ native_call_finish(_PyNativeCallPublication *state, _PyNativeScope *scope,
     frame->ir_feedback = exec->entries;
     frame->instr_ptr = exec->words + state->current_word;
     *next = exec->words + state->next_word;
-    return PyErr_Occurred() ? -1 : 0;
+    return status;
 }
 
 #include "generated_jit_helpers.c.h"
@@ -3251,6 +3274,8 @@ call_transaction_push_python(_PyCallTransaction *call, _PyInstr **next,
     PyValue *storage = small;
     int copied = 0, retired_count = 0;
     int invoked = 0;
+    /* 1: not invoked (the caller falls back), 0: pushed, -1: failed */
+    int status = 1;
     PyValue function = PyValue_NULL;
     PyObject *locals = NULL, *names = NULL, *tuple = NULL, *kwargs = NULL;
     PyCodeObject *code = NULL;
@@ -3263,6 +3288,7 @@ call_transaction_push_python(_PyCallTransaction *call, _PyInstr **next,
             PyErr_NoMemory();
         }
         if (storage == NULL || call_transaction_refresh(call, next) < 0) {
+            status = -1;
             goto done;
         }
     }
@@ -3311,6 +3337,7 @@ call_transaction_push_python(_PyCallTransaction *call, _PyInstr **next,
             positional, names, op->frame, code);
     }
     if (call_transaction_refresh(call, next) < 0 || child == NULL) {
+        status = -1;
         goto done;
     }
     /* The code-specific provider initializes at numeric PC 0. Binding may
@@ -3319,6 +3346,7 @@ call_transaction_push_python(_PyCallTransaction *call, _PyInstr **next,
     _PyCodeExec *exec = code->_co_exec;
     if (exec == NULL || exec->nwords == 0) {
         PyErr_SetString(PyExc_SystemError, "Python call lost its executable");
+        status = -1;
         goto done;
     }
     child->ir_words = exec->words;
@@ -3330,6 +3358,7 @@ call_transaction_push_python(_PyCallTransaction *call, _PyInstr **next,
     op->frame->return_slot = (uint16_t)call->destination;
     assert(child->previous == op->frame);
     op->tstate->current_frame = child;
+    status = 0;
 done:
     PyValue_CLEAR(function);
     Py_CLEAR(locals);
@@ -3350,13 +3379,15 @@ done:
         PyMem_Free(storage);
         _PyValue_RestoreException(saved);
     }
-    if (child != NULL && retired_count != 0 && !PyErr_Occurred()) {
+    if (status == 0) {
         _PyCallTransaction child_call = {.operation = {
             op->tstate, child, _PyFrame_GetCode(child), 0, 0, {-1, -1}, -1}};
         _PyInstr *entry;
-        (void)call_transaction_refresh(&child_call, &entry);
+        if (call_transaction_refresh(&child_call, &entry) < 0) {
+            status = -1;
+        }
     }
-    if (child != NULL && (retired_count == 0 || PyErr_Occurred())) {
+    if (child != NULL && status < 0) {
         /* The child has not entered its recursion/monitor protocol. Restore
          * the actual parent before clearing it; do not unwind it as executed. */
         PyObject *saved = PyErr_GetRaisedException();
@@ -3372,7 +3403,7 @@ done:
                             "Python frame initialization failed without an error");
         }
         int failed = call_transaction_refresh(call, next);
-        if (failed < 0) {
+        if (failed < 0 || status < 0) {
             return -1;
         }
     }

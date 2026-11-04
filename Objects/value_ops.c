@@ -52,11 +52,10 @@ box_operands(PyValue left, PyValue right, PyObject **a, PyObject **b)
     PyValue left_owner = PyValue_MakeHeapSafe(PyValue_Borrow(left));
     PyValue right_owner = PyValue_MakeHeapSafe(PyValue_Borrow(right));
     *a = PyValue_AsObject(left_owner);
-    *b = *a == NULL || PyErr_Occurred()
-         ? NULL : PyValue_AsObject(right_owner);
+    *b = *a == NULL ? NULL : PyValue_AsObject(right_owner);
     PyValue_CLOSE(right_owner);
     PyValue_CLOSE(left_owner);
-    if (*b == NULL || PyErr_Occurred()) {
+    if (*b == NULL) {
         Py_XDECREF(*b);
         Py_XDECREF(*a);
         *a = NULL;
@@ -85,9 +84,8 @@ _PyValue_RichCompareBool(PyValue left, PyValue right, int op)
     int result = PyObject_RichCompareBool(a, b, op);
     Py_XDECREF(b);
     Py_XDECREF(a);
-    int failed = result < 0 || PyErr_Occurred();
     _PyValue_RestoreException(prior);
-    return failed ? -1 : result;
+    return result;
 }
 
 PyObject *
@@ -105,10 +103,6 @@ _PyValue_RichCompareObject(PyValue left, PyValue right, int op)
     PyObject *result = PyObject_RichCompare(a, b, op);
     Py_XDECREF(b);
     Py_XDECREF(a);
-    if (PyErr_Occurred()) {
-        Py_XDECREF(result);
-        result = NULL;
-    }
     _PyValue_RestoreException(prior);
     return result;
 }
@@ -125,7 +119,6 @@ _PyValue_WriteRepr(PyUnicodeWriter *writer, PyValue value)
     }
     int result = PyUnicodeWriter_WriteRepr(writer, obj);
     Py_XDECREF(obj);
-    int failed = result < 0 || PyErr_Occurred();
     _PyValue_RestoreException(prior);
-    return failed ? -1 : result;
+    return result;
 }

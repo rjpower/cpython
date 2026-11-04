@@ -99,9 +99,6 @@ begin_vector(_PyNativeScope *scope, PyThreadState *tstate,
 {
     initialize_scope(scope, tstate);
     scope->vector = cfunction ? 1 : 2;
-    if (PyErr_Occurred()) {
-        return -1;
-    }
     if (tstate == NULL || callable == NULL ||
         (cfunction && !PyCFunction_Check(callable)) ||
         positional_count < 0 || total_count < positional_count ||
@@ -182,9 +179,6 @@ _PyNativeScope_BeginTupleCall(_PyNativeScope *scope, PyThreadState *tstate,
 {
     initialize_scope(scope, tstate);
     scope->vector = 3;
-    if (PyErr_Occurred()) {
-        return -1;
-    }
     if (tstate == NULL || callable == NULL || args == NULL || !PyTuple_Check(args) ||
         (kwargs != NULL && !PyDict_Check(kwargs))) {
         PyErr_SetString(PyExc_SystemError, "invalid native tuple-call arguments");
@@ -215,9 +209,6 @@ _PyNativeScope_InvokeTupleCall(_PyNativeScope *scope)
 {
     assert(scope->vector == 3 && !scope->ended);
     assert(scope->result.state == _Py_NATIVE_RESULT_EMPTY);
-    if (PyErr_Occurred()) {
-        return -1;
-    }
     PyObject *result = PyObject_Call(scope->callable, scope->callargs, scope->kwargs);
     return _PyNativeScope_StageResult(scope, result, &scope->result);
 }
@@ -227,9 +218,6 @@ _PyNativeScope_Objects(_PyNativeScope *scope, PyObject *const **args)
 {
     assert(!scope->ended);
     *args = scope->objects;
-    if (PyErr_Occurred()) {
-        return -1;
-    }
     if (!PyValue_IsNull(scope->receiver) && scope->receiver_object == NULL) {
         scope->receiver_object = _PyValue_AsObjectAt(scope->receiver, BOX_SITE_CALL_ADAPTER);
         if (scope->receiver_object == NULL) {
@@ -272,11 +260,11 @@ _PyNativeScope_StageResult(_PyNativeScope *scope, PyObject *owned_result,
         return -1;
     }
     /* Preparation releases a scalar box at once (the release contract in
-     * pycore_value.h). Any other result, even an invalid object-with-error
-     * return, stays live until caller abort. */
+     * pycore_value.h); every caller has checked the result with
+     * _Py_CheckFunctionResult() or holds an owned object. */
     out->value = PyValue_PrepareOwned(owned_result);
     out->state = _Py_NATIVE_RESULT_STAGED;
-    return PyErr_Occurred() ? -1 : 0;
+    return 0;
 }
 
 void
@@ -311,11 +299,11 @@ _PyNativeResult_Abort(_PyNativeResult *out,
     publish_error_state(caller_state);
 }
 
-int
+void
 _PyNativeScope_End(_PyNativeScope *scope)
 {
     if (scope->ended) {
-        return PyErr_Occurred() ? -1 : 0;
+        return;
     }
     _PyNativeResult *out = &scope->result;
     assert(out->state == _Py_NATIVE_RESULT_PUBLISHED ||
@@ -357,5 +345,4 @@ _PyNativeScope_End(_PyNativeScope *scope)
     scope->objects = NULL;
     scope->nargs = 0;
     PyErr_SetRaisedException(saved);
-    return PyErr_Occurred() ? -1 : 0;
 }

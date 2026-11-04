@@ -302,7 +302,9 @@ PyList_GetItemRef(PyObject *op, Py_ssize_t i)
         return NULL;
     }
     PyObject *item = list_get_item_ref((PyListObject *)op, i);
-    if (item == NULL && !PyErr_Occurred() && !valid_index(i, Py_SIZE(op))) {
+    /* With a valid index, NULL is an unpublished slot (no exception) or a
+       failed box of an inline item (exception set). */
+    if (item == NULL && !valid_index(i, Py_SIZE(op))) {
         _Py_DECLARE_STR(list_err, "list index out of range");
         PyErr_SetObject(PyExc_IndexError, &_Py_STR(list_err));
         return NULL;

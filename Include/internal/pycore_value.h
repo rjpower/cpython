@@ -294,8 +294,9 @@ PyAPI_FUNC(PyValue) _PyValue_BoxInlineValue(PyValue ref);
 
 /* If ref holds an inline value, return an owned reference to a new box with
    the same value; return any other ref unchanged. On failure, set an exception
-   and return ref unchanged, so the result is still inline. Normal scalar
-   constructors do not run Python, but allocator hooks may reenter.
+   and return ref unchanged, so the result is still inline. Scalar
+   constructors, and the allocator hooks under them, run no Python (the
+   release contract below).
 
    Callers pass and assign the value (x = PyValue_Box(x)) rather than its
    address, so that x can stay in a register. */
@@ -944,14 +945,14 @@ PyValue_FromDouble(double value)
 
 /* A new reference to the object that ref holds, a new box if ref holds an
    inline value, or NULL with an exception set if boxing fails. ref must be a
-   language value and no exception may be set; debug builds check both
-   (pyjit/design/value-api.md, section 1.3). */
+   language value; debug builds check it (pyjit/design/value-api.md, section
+   1.3). An exception may be pending, as for any upstream API that allocates:
+   a failed box replaces it. */
 static inline PyObject *
 PyValue_AsObject(PyValue ref)
 {
     assert(PyValue_IsLanguageValue(ref));
     if (PyValue_IsInline(ref)) {
-        assert(!PyErr_Occurred());
         ref = PyValue_Box(ref);
         return PyValue_IsInline(ref) ? NULL : PyValue_AsKnownObjectSteal(ref);
     }

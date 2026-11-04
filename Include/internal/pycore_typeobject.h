@@ -58,7 +58,7 @@ typedef struct {
 } _PyTypeMutation;
 
 PyAPI_FUNC(int) _PyTypeMutation_Begin(_PyTypeMutation *, PyTypeObject *);
-PyAPI_FUNC(int) _PyTypeMutation_End(_PyTypeMutation *);
+PyAPI_FUNC(void) _PyTypeMutation_End(_PyTypeMutation *);
 
 /* runtime lifecycle */
 
@@ -116,7 +116,7 @@ _PyType_GetModuleState(PyTypeObject *type)
 // Export for 'math' shared extension, used via _PyType_IsReady() static inline
 // function
 PyAPI_FUNC(PyObject *) _PyType_GetDict(PyTypeObject *);
-/* 1: eligible native lookup (NULL value means absent); 0: decline; -1: error. */
+/* 1: eligible native lookup (NULL value means absent); 0: decline. Never fails. */
 PyAPI_FUNC(int) _PyType_TryLookupValueNoAlloc(
     PyTypeObject *, PyObject *, PyValue *, unsigned int *);
 // Visit what a static type refers to; for the tracing verifier.

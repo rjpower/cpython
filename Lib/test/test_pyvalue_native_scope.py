@@ -175,12 +175,6 @@ class NativeScopeVectorMechanismTests(unittest.TestCase):
         self.assertEqual(_testinternalcapi.native_scope_vector(
             _testinternalcapi.native_scope_flat_fast, 1, 2), 3)
 
-    def test_entry_error_is_preserved(self):
-        # The C mechanism verifies the exact entry exception pointer too.
-        with self.assertRaisesRegex(ValueError, "native vector entry error"):
-            _testinternalcapi.native_scope_vector_prior_error(
-                _testinternalcapi.native_scope_flat_noargs)
-
     def test_custom_vectorcall_keeps_fallback(self):
         function = _testinternalcapi.native_scope_vector_override()
         self.assertFalse(_testinternalcapi.native_scope_vector_can_call(function))

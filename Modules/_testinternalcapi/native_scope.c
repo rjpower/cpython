@@ -163,7 +163,8 @@ scope_mechanism(PyObject *argument, int abort_result, int cleanup_error,
         _PyNativeResult_Publish(&scope.result, &destination,
                                 publish_state, &state);
     }
-    int status = _PyNativeScope_End(&scope);
+    _PyNativeScope_End(&scope);
+    int failed = primary != NULL;
     if (primary != NULL) {
         PyObject *current = PyErr_GetRaisedException();
         assert(current == primary);
@@ -173,7 +174,7 @@ scope_mechanism(PyObject *argument, int abort_result, int cleanup_error,
     }
     assert(state.destroyed == 1);
     assert(scope.result.state == _Py_NATIVE_RESULT_DRAINED);
-    if (status < 0) {
+    if (failed) {
         PyValue_CLEAR(destination);
         return NULL;
     }
@@ -238,9 +239,9 @@ native_scope_end_pending(PyObject *Py_UNUSED(module), PyObject *factory)
     PyObject *primary = PyErr_GetRaisedException();
     PyErr_SetRaisedException(Py_NewRef(primary));
     _PyNativeResult_Abort(&scope.result, publish_state, &state);
-    int status = _PyNativeScope_End(&scope);
+    _PyNativeScope_End(&scope);
     PyObject *raised = PyErr_GetRaisedException();
-    int valid = status < 0 && raised == primary;
+    int valid = raised == primary;
     Py_XDECREF(raised);
     if (!valid) {
         Py_DECREF(primary);
@@ -370,12 +371,8 @@ gateway_mechanism(PyObject *argument)
         goto abort;
     }
     _PyNativeResult_Publish(&scope.result, &destination, publish_state, &state);
-    int status = _PyNativeScope_End(&scope);
+    _PyNativeScope_End(&scope);
     Py_CLEAR(callable);
-    if (status < 0 || PyErr_Occurred()) {
-        PyValue_CLEAR(destination);
-        return NULL;
-    }
     PyObject *result = PyValue_AsObject(destination);
     if (close_destination(&destination) < 0) {
         Py_XDECREF(result);
@@ -572,11 +569,7 @@ vector_mechanism(PyObject *callable, const PyValue *values,
     }
     _PyNativeResult_Publish(&scope.result, &destination,
                             publish_state, &publication);
-    status = _PyNativeScope_End(&scope);
-    if (status < 0 || PyErr_Occurred()) {
-        PyValue_CLEAR(destination);
-        return NULL;
-    }
+    _PyNativeScope_End(&scope);
     PyObject *result = PyValue_AsObject(destination);
     if (close_destination(&destination) < 0) {
         Py_XDECREF(result);
@@ -586,7 +579,7 @@ vector_mechanism(PyObject *callable, const PyValue *values,
 
 abort:
     _PyNativeResult_Abort(&scope.result, publish_state, &publication);
-    (void)_PyNativeScope_End(&scope);
+    _PyNativeScope_End(&scope);
     PyValue_CLEAR(destination);
     if (_PyBorrow_Depth(tstate) != depth) {
         PyErr_SetString(PyExc_AssertionError,
@@ -698,34 +691,6 @@ native_scope_vector_override(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(ar
 }
 
 static PyObject *
-native_scope_vector_prior_error(PyObject *Py_UNUSED(module), PyObject *callable)
-{
-    PyObject *primary = PyObject_CallFunction(PyExc_ValueError, "s",
-                                             "native vector entry error");
-    if (primary == NULL) {
-        return NULL;
-    }
-    PyErr_SetRaisedException(Py_NewRef(primary));
-    _PyNativeScope scope;
-    int status = _PyNativeScope_BeginVector(
-        &scope, PyThreadState_Get(), callable, NULL, 0, 0, NULL);
-    PyValue destination = PyValue_NULL;
-    Publication publication = {.destination = &destination};
-    _PyNativeResult_Abort(&scope.result, publish_state, &publication);
-    (void)_PyNativeScope_End(&scope);
-    PyObject *raised = PyErr_GetRaisedException();
-    int correct = status == -1 && raised == primary;
-    Py_XDECREF(raised);
-    if (!correct) {
-        Py_DECREF(primary);
-        PyErr_SetString(PyExc_AssertionError, "native vector entry error changed");
-        return NULL;
-    }
-    PyErr_SetRaisedException(primary);
-    return NULL;
-}
-
-static PyObject *
 native_scope_vector_counts(PyObject *Py_UNUSED(module), PyObject *callable)
 {
     Py_ssize_t counts[][2] = {
@@ -741,7 +706,7 @@ native_scope_vector_counts(PyObject *Py_UNUSED(module), PyObject *callable)
         PyValue destination = PyValue_NULL;
         Publication publication = {.destination = &destination};
         _PyNativeResult_Abort(&scope.result, publish_state, &publication);
-        (void)_PyNativeScope_End(&scope);
+        _PyNativeScope_End(&scope);
         PyErr_Clear();
         if (!correct) {
             PyValue_CLOSE(input);
@@ -874,7 +839,6 @@ static PyMethodDef methods[] = {
     {"native_scope_vector_box_oom", native_scope_vector_box_oom, METH_O},
     {"native_scope_vector_can_call", native_scope_vector_can_call, METH_O},
     {"native_scope_vector_override", native_scope_vector_override, METH_NOARGS},
-    {"native_scope_vector_prior_error", native_scope_vector_prior_error, METH_O},
     {"native_scope_vector_counts", native_scope_vector_counts, METH_O},
     {"native_scope_vector_method", native_scope_vector_method, METH_NOARGS},
     {"native_scope_publish", native_scope_publish, METH_O},

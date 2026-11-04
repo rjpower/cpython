@@ -165,6 +165,26 @@ class CAPITest(unittest.TestCase):
         # Test PyList_GetItemRef()
         self.check_list_get_item(_testlimitedcapi.list_get_item_ref, TypeError)
 
+    def test_list_get_item_ref_with_pending_exception(self):
+        # PyList_GetItemRef() takes its status from the lookup, as upstream
+        # does, so an unrelated pending exception survives a successful call.
+        get = _testcapi.list_get_item_ref_pending
+        item = object()
+        # The int and float are inline and box on the way out.
+        lst = ['spam', item, 7, 2.5]
+        for index in range(len(lst)):
+            with self.subTest(index=index):
+                result, exc = get(lst, index)
+                self.assertEqual(result, lst[index])
+                self.assertIs(type(result), type(lst[index]))
+                self.assertIsInstance(exc, ValueError)
+                self.assertEqual(exc.args, ('pending',))
+        self.assertIs(get(lst, 1)[0], item)
+        # A failure replaces the pending exception, as upstream.
+        result, exc = get(lst, len(lst))
+        self.assertIsNone(result)
+        self.assertIsInstance(exc, IndexError)
+
     def test_list_get_item(self):
         # Test PyList_GET_VALUE() through an owning object bridge.
         get_item = _testinternalcapi.list_get_item

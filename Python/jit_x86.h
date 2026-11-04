@@ -79,7 +79,7 @@ jit_grow(void **array, int *capacity, int need, size_t item)
     _PyJit_ReleaseBytes((size_t)*capacity * item);
     *array = array2;
     *capacity = capacity2;
-    return PyErr_Occurred() ? -1 : 0;
+    return 0;
 }
 
 static inline void

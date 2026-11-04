@@ -94,10 +94,11 @@ PyAPI_FUNC(void) _PyNativeResult_Publish(
 PyAPI_FUNC(void) _PyNativeResult_Abort(
     _PyNativeResult *out, _PyNativePublishState publish_error_state,
     void *caller_state);
-/* Call after Publish/Abort and actual caller-state publication. A negative
- * status leaves a published result caller-owned. Reload/revalidate cached
- * frame/IR/feedback state after End even when it succeeds. */
-PyAPI_FUNC(int) _PyNativeScope_End(_PyNativeScope *scope);
+/* Call after Publish/Abort and actual caller-state publication. End only
+ * releases, so it cannot fail and leaves the current exception as it found
+ * it. Its releases can run Python: reload/revalidate cached frame/IR/feedback
+ * state after End. */
+PyAPI_FUNC(void) _PyNativeScope_End(_PyNativeScope *scope);
 
 /* Pure eligibility: supported flags AND their standard vectorcall target. */
 PyAPI_FUNC(int) _PyCFunction_CanCallScoped(PyObject *callable);

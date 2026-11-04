@@ -79,7 +79,7 @@ _PyMember_SetValue(PyObject *obj, PyMemberDef *member, PyValue value)
     *slot = PyValue_MakeHeapSafe(PyValue_Borrow(value));
     _PyValue_CheckHome(*slot);
     PyValue_XCLOSE(previous);
-    return PyErr_Occurred() ? -1 : 0;
+    return 0;
 }
 
 PyObject *

@@ -3462,7 +3462,7 @@ _PySys_SetFlagObj(Py_ssize_t pos, PyObject *value)
     int res = _PySys_SetAttr(flags_str, new_flags);
     Py_DECREF(old_flags);
     Py_DECREF(new_flags);
-    return res < 0 || PyErr_Occurred() ? -1 : 0;
+    return res;
 
 error:;
     Py_XDECREF(old_flags);

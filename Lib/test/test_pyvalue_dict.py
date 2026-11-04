@@ -470,7 +470,7 @@ class DictValueMutationTests(unittest.TestCase):
 
 
 class DictValueReaderTests(unittest.TestCase):
-    def test_owned_reader_entry_error_and_new_failure(self):
+    def test_owned_reader_keeps_entry_error(self):
         capi = import_helper.import_module("_testinternalcapi")
         marker = object()
         for mapping, key, status, expected in (
@@ -485,26 +485,6 @@ class DictValueReaderTests(unittest.TestCase):
                 self.assertEqual(str(error), "entry marker")
                 self.assertEqual(result, expected)
 
-        class BadHash:
-            def __hash__(self):
-                raise RuntimeError("new hash failure")
-
-        class Key:
-            def __hash__(self):
-                return 23
-
-            def __eq__(self, other):
-                raise RuntimeError("new equality failure")
-
-        for mapping, key, message in (
-            ({}, BadHash(), "new hash failure"),
-            ({Key(): 1}, Key(), "new equality failure"),
-        ):
-            actual, error, result = capi.dict_value_getref_entry((mapping, key))
-            self.assertEqual(actual, -1)
-            self.assertIs(type(error), RuntimeError)
-            self.assertEqual(str(error), message)
-            self.assertIsNone(result)
         self.assertIsNone(capi.dict_value_getref_boxing_oom("present"))
 
     def test_forward_reverse_owned_iteration_and_split_snapshots(self):

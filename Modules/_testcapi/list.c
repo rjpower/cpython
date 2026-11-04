@@ -75,6 +75,23 @@ list_get_item_oom(PyObject *Py_UNUSED(module), PyObject *args)
     return result;
 }
 
+/* Call PyList_GetItemRef() with an unrelated ValueError pending. Return
+   (item or None, the exception pending afterwards or None). */
+static PyObject *
+list_get_item_ref_pending(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *obj;
+    Py_ssize_t index;
+    if (!PyArg_ParseTuple(args, "On", &obj, &index)) {
+        return NULL;
+    }
+    PyErr_SetString(PyExc_ValueError, "pending");
+    PyObject *item = PyList_GetItemRef(obj, index);
+    PyObject *exc = PyErr_GetRaisedException();
+    return Py_BuildValue("(NN)", item != NULL ? item : Py_NewRef(Py_None),
+                         exc != NULL ? exc : Py_NewRef(Py_None));
+}
+
 static PyObject *
 list_next_oom(PyObject *Py_UNUSED(module), PyObject *iterator)
 {
@@ -207,6 +224,7 @@ test_list_api(PyObject *self, PyObject *Py_UNUSED(ignored))
 static PyMethodDef test_methods[] = {
     {"list_get_size", list_get_size, METH_O},
     {"list_get_item_oom", list_get_item_oom, METH_VARARGS},
+    {"list_get_item_ref_pending", list_get_item_ref_pending, METH_VARARGS},
     {"list_next_oom", list_next_oom, METH_O},
     {"list_unpublished_nulls", list_unpublished_nulls, METH_NOARGS},
     {"list_set_item", list_set_item, METH_VARARGS},

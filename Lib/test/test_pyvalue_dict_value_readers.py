@@ -116,22 +116,31 @@ class DictCanonicalReadTests(unittest.TestCase):
         with self.assertRaises(SystemError):
             self.capi.dict_public_value_next(None, 0, 3)
 
-    def test_entry_error_precedes_invalid_map_and_alias(self):
-        # A callback that raises immediately makes accidental hashing visible
-        # even when an implementation restores the original marker afterward.
-        calls = []
-
-        class Query:
-            def __hash__(self):
-                calls.append('hash')
-                raise AssertionError('pending-error hash')
-
-        marker = RuntimeError('entry marker')
-        for mapping in ({'key': 1}, None):
-            for mode in range(5):
-                with self.subTest(mapping=mapping, mode=mode):
-                    self.capi.dict_public_value_entry_error(mapping, Query(), marker, mode)
-        self.assertEqual(calls, [])
+    def test_pending_exception(self):
+        # An unrelated pending exception changes nothing: each API takes its
+        # status from the operation and leaves the exception pending.
+        pending = self.capi.dict_public_value_pending
+        # Inline int keys and values take the same paths as objects.
+        for value in (object(), 7, 2.5):
+            for factory in (dict, frozendict):
+                mapping = factory({'key': value, 3: value})
+                with self.subTest(factory=factory, value=value):
+                    self.assertEqual(pending(mapping, 'key', 0), (1, value, None))
+                    self.assertEqual(pending(mapping, 'missing', 0), (0, None, None))
+                    self.assertEqual(pending(mapping, 3, 0), (1, value, None))
+                    self.assertEqual(pending(mapping, 4, 0), (0, None, None))
+                    self.assertEqual(pending(mapping, 'key', 1), (1, value, None))
+                    self.assertEqual(pending(mapping, 'missing', 1), (0, None, None))
+                    self.assertEqual(pending(mapping, 'key', 2), (1, None, None))
+                    self.assertEqual(pending(mapping, 'missing', 2), (0, None, None))
+                    self.assertEqual(pending(mapping, 3, 2), (1, None, None))
+                    self.assertEqual(pending(mapping, 4, 2), (0, None, None))
+                    self.assertEqual(pending(mapping, None, 3), (1, 'key', value))
+                    self.assertEqual(pending(factory(), None, 3), (0, None, None))
+            mapping = {'key': value, 3: value}
+            self.assertEqual(pending(mapping, 'key', 4), (0, None, None))
+            self.assertEqual(pending(mapping, 3, 4), (0, None, None))
+            self.assertEqual(mapping, {})
 
     def test_next_mixed_holes_optional_outputs_and_end(self):
         source = {17: 'hole', 1: 2147483647, 3.25: 2.5, None: None, 'text': []}

@@ -57,10 +57,6 @@ _PyValueTemps_Box(_PyValueTemps *temps, PyValue value)
     if (box == NULL) {
         return NULL;
     }
-    if (PyErr_Occurred()) {
-        Py_DECREF(box);
-        return NULL;
-    }
     assert(temps != NULL && temps->count < temps->capacity);
     temps->objects[temps->count++] = box;
     return box;
@@ -160,8 +156,7 @@ _PyValue_BoxInlineValue(PyValue ref)
         OBJECT_STAT_INC(inline_float_boxes);
         box = PyFloat_FromDouble(PyValue_InlineFloat(ref));
     }
-    if (box == NULL || PyErr_Occurred()) {
-        Py_XDECREF(box);
+    if (box == NULL) {
         return ref;
     }
     return PyValue_FromPyObjectSteal(box);

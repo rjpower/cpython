@@ -40,13 +40,11 @@ symtable_get_flags(PyObject *dict, PyObject *name, long *flags)
         return found;
     }
     *flags = symtable_long(value);
-    PyObject *saved = PyErr_GetRaisedException();
     PyValue_CLOSE(value);
-    if (saved != NULL) {
-        _PyValue_RestoreException(saved);
+    if (*flags == -1 && PyErr_Occurred()) {
         return -1;
     }
-    return PyErr_Occurred() ? -1 : 1;
+    return 1;
 }
 
 static int

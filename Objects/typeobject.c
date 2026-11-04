@@ -773,47 +773,18 @@ clear_tp_mro(PyTypeObject *self, int final)
 static PyObject *
 init_tp_subclasses(PyTypeObject *self)
 {
-    assert(Py_REFCNT(self) > 0);
-    Py_INCREF(self);
-    PyObject *result = NULL;
-    for (;;) {
-        PyObject *candidate = NULL;
-        if (!PyErr_Occurred()) {
-            candidate = PyDict_New();
-        }
-        if (candidate != NULL && !PyErr_Occurred()) {
-            if (self->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN) {
-                managed_static_type_state *state = _PyStaticType_GetState(
-                    _PyInterpreterState_GET(), self);
-                if (state->tp_subclasses == NULL) {
-                    state->tp_subclasses = candidate;
-                    candidate = NULL;
-                }
-            }
-            else if (self->tp_subclasses == NULL) {
-                self->tp_subclasses = candidate;
-                candidate = NULL;
-            }
-        }
-        Py_XDECREF(candidate);
-        if (PyErr_Occurred()) {
-            break;
-        }
-        /* A losing candidate's retirement can replace the installed map. */
-        if (self->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN) {
-            managed_static_type_state *state = _PyStaticType_GetState(
-                _PyInterpreterState_GET(), self);
-            result = state->tp_subclasses;
-        }
-        else {
-            result = (PyObject *)self->tp_subclasses;
-        }
-        if (result != NULL) {
-            break;
-        }
+    PyObject *subclasses = PyDict_New();
+    if (subclasses == NULL) {
+        return NULL;
     }
-    Py_DECREF(self);
-    return PyErr_Occurred() ? NULL : result;
+    if (self->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN) {
+        PyInterpreterState *interp = _PyInterpreterState_GET();
+        managed_static_type_state *state = _PyStaticType_GetState(interp, self);
+        state->tp_subclasses = subclasses;
+        return subclasses;
+    }
+    self->tp_subclasses = (void *)subclasses;
+    return subclasses;
 }
 
 static void
@@ -880,9 +851,6 @@ get_subclasses_unlocked(PyTypeObject *self, PyObject *list)
 {
     ASSERT_TYPE_LOCK_HELD();
     assert(PyList_GET_SIZE(list) == 0);
-    if (PyErr_Occurred()) {
-        return -1;
-    }
     PyObject *subclasses = lookup_tp_subclasses(self);
     if (subclasses == NULL) {
         return 0;
@@ -908,7 +876,7 @@ get_subclasses_unlocked(PyTypeObject *self, PyObject *list)
             Py_SET_SIZE(list, size + 1);
         }
     }
-    return found < 0 || PyErr_Occurred() ? -1 : 0;
+    return found < 0 ? -1 : 0;
 }
 
 PyObject*
@@ -917,9 +885,6 @@ _PyType_GetSubclasses(PyTypeObject *self)
     assert(Py_REFCNT(self) > 0);
     Py_INCREF(self);
     PyObject *list = NULL;
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     for (;;) {
         Py_ssize_t capacity;
         BEGIN_TYPE_LOCK();
@@ -932,28 +897,24 @@ _PyType_GetSubclasses(PyTypeObject *self)
              * any later allocation, retry or cleanup. */
             Py_SET_SIZE(list, 0);
         }
-        if (list == NULL || PyErr_Occurred()) {
+        if (list == NULL) {
             break;
         }
         int status;
         BEGIN_TYPE_LOCK();
         status = get_subclasses_unlocked(self, list);
         END_TYPE_LOCK();
-        if (status <= 0 || PyErr_Occurred()) {
+        if (status < 0) {
+            Py_CLEAR(list);
             break;
         }
+        if (status == 0) {
+            break;
+        }
+        /* The list was too small: retry with the current size. */
         Py_CLEAR(list);
-        if (PyErr_Occurred()) {
-            break;
-        }
     }
-
-done:
-    ;
     Py_DECREF(self);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(list);
-    }
     return list;
 }
 
@@ -1271,9 +1232,6 @@ int
 _PyTypeMutation_Begin(_PyTypeMutation *scope, PyTypeObject *type)
 {
     assert(!scope->active);
-    if (PyErr_Occurred()) {
-        return -1;
-    }
     PyInterpreterState *interp = _PyInterpreterState_GET();
     if (interp->types.mutation_depth == UINT_MAX) {
         PyErr_SetString(PyExc_OverflowError, "type mutation nesting overflow");
@@ -1288,11 +1246,12 @@ _PyTypeMutation_Begin(_PyTypeMutation *scope, PyTypeObject *type)
     return 0;
 }
 
-int
+/* Ending a scope cannot fail: it releases the type and reopens admission. */
+void
 _PyTypeMutation_End(_PyTypeMutation *scope)
 {
     if (!scope->active) {
-        return PyErr_Occurred() ? -1 : 0;
+        return;
     }
     PyInterpreterState *interp = scope->interp;
     PyTypeObject *type = scope->type;
@@ -1302,7 +1261,6 @@ _PyTypeMutation_End(_PyTypeMutation *scope)
     // No type access or callback follows reopening this scope's admission.
     assert(interp->types.mutation_depth > 0);
     interp->types.mutation_depth--;
-    return PyErr_Occurred() ? -1 : 0;
 }
 
 // The cursor exists only in this allocation-free capture. Weakref and child
@@ -1814,9 +1772,6 @@ type_set_module(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
         goto done;
     }
     PyType_Modified(type);
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     dict = type_mutation_get_dict(type);
     if (dict == NULL) {
         goto done;
@@ -1828,9 +1783,7 @@ type_set_module(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
 done:
     Py_CLEAR(dict);
     Py_CLEAR(value);
-    if (_PyTypeMutation_End(&scope) < 0) {
-        return -1;
-    }
+    _PyTypeMutation_End(&scope);
     return result;
 }
 
@@ -1918,9 +1871,6 @@ type_set_abstractmethods(PyObject *tp, PyObject *value, void *Py_UNUSED(closure)
         }
     }
     PyType_Modified(type);
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     dict = type_mutation_get_dict(type);
     if (dict == NULL) {
         goto done;
@@ -1930,11 +1880,12 @@ type_set_abstractmethods(PyObject *tp, PyObject *value, void *Py_UNUSED(closure)
     }
     else {
         result = PyDict_Pop(dict, &_Py_ID(__abstractmethods__), NULL);
-        if (result == 0 && !PyErr_Occurred()) {
+        if (result == 0) {
             PyErr_SetObject(PyExc_AttributeError, &_Py_ID(__abstractmethods__));
+            result = -1;
         }
     }
-    if (result < 0 || PyErr_Occurred()) {
+    if (result < 0) {
         goto done;
     }
     pinned_mutexes_t pinned;
@@ -1954,7 +1905,8 @@ type_set_abstractmethods(PyObject *tp, PyObject *value, void *Py_UNUSED(closure)
 done:
     Py_CLEAR(dict);
     Py_CLEAR(value);
-    return _PyTypeMutation_End(&scope) < 0 ? -1 : result;
+    _PyTypeMutation_End(&scope);
+    return result;
 }
 
 static PyObject *
@@ -2371,9 +2323,6 @@ type_set_doc(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
         goto done;
     }
     PyType_Modified(type);
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     dict = type_mutation_get_dict(type);
     if (dict == NULL) {
         goto done;
@@ -2382,9 +2331,7 @@ type_set_doc(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
 done:
     Py_CLEAR(dict);
     Py_CLEAR(value);
-    if (_PyTypeMutation_End(&scope) < 0) {
-        return -1;
-    }
+    _PyTypeMutation_End(&scope);
     return result;
 }
 
@@ -2410,42 +2357,26 @@ type_get_annotate(PyObject *tp, void *Py_UNUSED(closure))
         goto done;
     }
     if (annotate == NULL &&
-        (PyDict_GetItemRef(dict, &_Py_ID(__annotate_func__), &annotate) < 0 || PyErr_Occurred())) {
+        PyDict_GetItemRef(dict, &_Py_ID(__annotate_func__), &annotate) < 0) {
         goto done;
     }
     if (annotate != NULL) {
         descrgetfunc get = Py_TYPE(annotate)->tp_descr_get;
         if (get != NULL) {
-            PyObject *selected = annotate;
-            annotate = get(selected, NULL, tp);
-            Py_CLEAR(selected);
+            Py_SETREF(annotate, get(annotate, NULL, tp));
         }
     }
     else {
         annotate = Py_NewRef(Py_None);
         PyType_Modified(type);
-        if (PyErr_Occurred()) {
-            goto done;
-        }
-        Py_CLEAR(dict);
-        if (PyErr_Occurred()) {
-            goto done;
-        }
-        dict = type_mutation_get_dict(type);
-        if (dict == NULL || PyErr_Occurred() ||
-            PyDict_SetItem(dict, &_Py_ID(__annotate_func__), annotate) < 0) {
+        if (PyDict_SetItem(dict, &_Py_ID(__annotate_func__), annotate) < 0) {
+            Py_CLEAR(annotate);
             goto done;
         }
     }
 done:
     Py_CLEAR(dict);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(annotate);
-    }
     _PyTypeMutation_End(&scope);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(annotate);
-    }
     return annotate;
 }
 
@@ -2475,23 +2406,21 @@ type_set_annotate(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
         goto done;
     }
     PyType_Modified(type);
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     dict = type_mutation_get_dict(type);
-    if (dict == NULL || PyErr_Occurred() ||
-        PyDict_SetItem(dict, &_Py_ID(__annotate_func__), value) < 0 || PyErr_Occurred()) {
+    if (dict == NULL ||
+        PyDict_SetItem(dict, &_Py_ID(__annotate_func__), value) < 0) {
         goto done;
     }
     if (!Py_IsNone(value) &&
-        (PyDict_Pop(dict, &_Py_ID(__annotations_cache__), NULL) < 0 || PyErr_Occurred())) {
+        PyDict_Pop(dict, &_Py_ID(__annotations_cache__), NULL) < 0) {
         goto done;
     }
     result = 0;
 done:
     Py_CLEAR(dict);
     Py_CLEAR(value);
-    return _PyTypeMutation_End(&scope) < 0 ? -1 : result;
+    _PyTypeMutation_End(&scope);
+    return result;
 }
 
 static PyObject *
@@ -2510,20 +2439,18 @@ type_get_annotations(PyObject *tp, void *Py_UNUSED(closure))
         goto done;
     }
     dict = type_mutation_get_dict(type);
-    if (dict == NULL || PyErr_Occurred() ||
-        PyDict_GetItemRef(dict, &_Py_ID(__annotations__), &annotations) < 0 || PyErr_Occurred()) {
+    if (dict == NULL ||
+        PyDict_GetItemRef(dict, &_Py_ID(__annotations__), &annotations) < 0) {
         goto done;
     }
     if (annotations == NULL &&
-        (PyDict_GetItemRef(dict, &_Py_ID(__annotations_cache__), &annotations) < 0 || PyErr_Occurred())) {
+        PyDict_GetItemRef(dict, &_Py_ID(__annotations_cache__), &annotations) < 0) {
         goto done;
     }
     if (annotations != NULL) {
         descrgetfunc get = Py_TYPE(annotations)->tp_descr_get;
         if (get != NULL) {
-            PyObject *selected = annotations;
-            annotations = get(selected, NULL, tp);
-            Py_CLEAR(selected);
+            Py_SETREF(annotations, get(annotations, NULL, tp));
         }
     }
     else {
@@ -2539,6 +2466,7 @@ type_get_annotations(PyObject *tp, void *Py_UNUSED(closure))
             if (!PyDict_Check(annotations)) {
                 PyErr_Format(PyExc_TypeError,
                              "__annotate__() must return a dict, not %T", annotations);
+                Py_CLEAR(annotations);
                 goto done;
             }
         }
@@ -2548,32 +2476,16 @@ type_get_annotations(PyObject *tp, void *Py_UNUSED(closure))
                 goto done;
             }
         }
-        // The annotate callback ran once. Its old dict view is not a write
-        // target after reentry; invalidate, retire it and acquire current state.
         PyType_Modified(type);
-        if (PyErr_Occurred()) {
-            goto done;
-        }
-        Py_CLEAR(dict);
-        if (PyErr_Occurred()) {
-            goto done;
-        }
-        dict = type_mutation_get_dict(type);
-        if (dict == NULL || PyErr_Occurred() ||
-            PyDict_SetItem(dict, &_Py_ID(__annotations_cache__), annotations) < 0) {
+        if (PyDict_SetItem(dict, &_Py_ID(__annotations_cache__), annotations) < 0) {
+            Py_CLEAR(annotations);
             goto done;
         }
     }
 done:
     Py_CLEAR(annotate);
     Py_CLEAR(dict);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(annotations);
-    }
     _PyTypeMutation_End(&scope);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(annotations);
-    }
     return annotations;
 }
 
@@ -2595,9 +2507,6 @@ type_set_annotations(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
         goto done;
     }
     PyType_Modified(type);
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     dict = type_mutation_get_dict(type);
     if (dict == NULL) {
         goto done;
@@ -2612,26 +2521,29 @@ type_set_annotations(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
     }
     else {
         result = PyDict_Pop(dict, key, NULL);
-        if (result == 0 && !PyErr_Occurred()) {
+        if (result == 0) {
             PyErr_SetString(PyExc_AttributeError, "__annotations__");
+            result = -1;
         }
     }
-    if (result < 0 || PyErr_Occurred()) {
+    if (result < 0) {
         goto done;
     }
+    result = -1;
     if (explicit &&
-        (PyDict_Pop(dict, &_Py_ID(__annotations_cache__), NULL) < 0 || PyErr_Occurred())) {
+        PyDict_Pop(dict, &_Py_ID(__annotations_cache__), NULL) < 0) {
         goto done;
     }
-    if (PyDict_Pop(dict, &_Py_ID(__annotate_func__), NULL) < 0 || PyErr_Occurred() ||
-        PyDict_Pop(dict, &_Py_ID(__annotate__), NULL) < 0 || PyErr_Occurred()) {
+    if (PyDict_Pop(dict, &_Py_ID(__annotate_func__), NULL) < 0 ||
+        PyDict_Pop(dict, &_Py_ID(__annotate__), NULL) < 0) {
         goto done;
     }
     result = 0;
 done:
     Py_CLEAR(dict);
     Py_CLEAR(value);
-    return _PyTypeMutation_End(&scope) < 0 ? -1 : result;
+    _PyTypeMutation_End(&scope);
+    return result;
 }
 
 static PyObject *
@@ -2664,9 +2576,6 @@ type_set_type_params(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
         goto done;
     }
     PyType_Modified(type);
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     dict = type_mutation_get_dict(type);
     if (dict == NULL) {
         goto done;
@@ -2675,9 +2584,7 @@ type_set_type_params(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
 done:
     Py_CLEAR(dict);
     Py_CLEAR(value);
-    if (_PyTypeMutation_End(&scope) < 0) {
-        return -1;
-    }
+    _PyTypeMutation_End(&scope);
     return result;
 }
 
@@ -3383,18 +3290,12 @@ _PyObject_LookupSpecialMethod(PyObject *attr, PyValue *method,
     PyObject *bound = NULL, *binding_type = NULL;
     PyValue found = PyValue_NULL;
     int rc = -1;
-    if (PyErr_Occurred()) {
-        return -1;
-    }
     attr_owner = Py_NewRef(attr);
     self_view = _PyValue_AsObjectAt(*self, BOX_SITE_ATTRIBUTE);
     if (self_view == NULL) {
         goto done;
     }
     (void)_PyType_LookupValueAndVersion(Py_TYPE(self_view), attr_owner, &found);
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     if (PyValue_IsNull(found)) {
         rc = 0;
         goto done;
@@ -3408,18 +3309,13 @@ _PyObject_LookupSpecialMethod(PyObject *attr, PyValue *method,
     *method = PyValue_FromPyObjectSteal(method_view);
     method_view = NULL;
     PyValue_CLEAR(found);
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     PyObject *method_object = PyValue_AsKnownObjectBorrow(*method);
     if (_PyType_HasFeature(Py_TYPE(method_object), Py_TPFLAGS_METHOD_DESCRIPTOR)) {
         PyValue retired = *self;
         *self = PyValue_FromPyObjectSteal(self_view);
         self_view = NULL;
         PyValue_XCLOSE(retired);
-        if (!PyErr_Occurred()) {
-            rc = 1;
-        }
+        rc = 1;
         goto done;
     }
     descrgetfunc f = Py_TYPE(method_object)->tp_descr_get;
@@ -3435,14 +3331,9 @@ _PyObject_LookupSpecialMethod(PyObject *attr, PyValue *method,
         else {
             goto done;
         }
-        if (PyErr_Occurred()) {
-            goto done;
-        }
     }
     PyValue_CLEAR(*self);
-    if (!PyErr_Occurred()) {
-        rc = 1;
-    }
+    rc = 1;
 done:
     PyValue_CLEAR(found);
     Py_CLEAR(bound);
@@ -3450,7 +3341,7 @@ done:
     Py_CLEAR(binding_type);
     Py_CLEAR(attr_owner);
     Py_CLEAR(self_view);
-    if (rc < 0 || PyErr_Occurred()) {
+    if (rc < 0) {
         PyValue_CLEAR(*method);
         return -1;
     }
@@ -3466,15 +3357,9 @@ lookup_method_ex(PyObject *self, PyObject *attr, PyValue *out,
     PyObject *view = NULL, *bound = NULL, *binding_type = NULL;
     PyObject *suppressed_error = NULL;
     int rc = -1;
-    if (PyErr_Occurred()) {
-        return -1;
-    }
     self_owner = Py_NewRef(self);
     attr_owner = Py_NewRef(attr);
     (void)_PyType_LookupValueAndVersion(Py_TYPE(self_owner), attr_owner, out);
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     if (PyValue_IsNull(*out)) {
         if (raise_attribute_error) {
             PyErr_SetObject(PyExc_AttributeError, attr_owner);
@@ -3490,9 +3375,6 @@ lookup_method_ex(PyObject *self, PyObject *attr, PyValue *out,
         *out = PyValue_FromPyObjectSteal(view);
         view = NULL;
         PyValue_XCLOSE(retired);
-    }
-    if (PyErr_Occurred()) {
-        goto done;
     }
     PyObject *value = PyValue_AsKnownObjectBorrow(*out);
     if (_PyType_HasFeature(Py_TYPE(value), Py_TPFLAGS_METHOD_DESCRIPTOR)) {
@@ -3522,7 +3404,7 @@ lookup_method_ex(PyObject *self, PyObject *attr, PyValue *out,
         }
         PyValue_XCLOSE(retired);
     }
-    if (had_bound && !PyErr_Occurred()) {
+    if (had_bound) {
         rc = 0;
     }
 done:
@@ -3532,7 +3414,7 @@ done:
     Py_CLEAR(binding_type);
     Py_CLEAR(attr_owner);
     Py_CLEAR(self_owner);
-    if (rc < 0 || PyErr_Occurred()) {
+    if (rc < 0) {
         PyValue_CLEAR(*out);
         return -1;
     }
@@ -3588,13 +3470,10 @@ call_method_noarg(PyObject *self, PyObject *attr)
     PyObject *result = NULL;
     _PyCValue cref;
     int unbound = -1;
-    if (PyErr_Occurred()) {
-        return NULL;
-    }
     self_owner = Py_NewRef(self);
     _PyThreadState_PushCValue(tstate, &cref);
     unbound = lookup_method(self_owner, attr, &cref.ref);
-    if (PyErr_Occurred() || unbound < 0) {
+    if (unbound < 0) {
         goto done;
     }
     assert(!PyValue_IsNull(cref.ref));
@@ -3608,10 +3487,6 @@ done:
         PyValue_XCLOSE(retired);
     }
     Py_CLEAR(self_owner);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-        return NULL;
-    }
     return result;
 }
 
@@ -3623,15 +3498,12 @@ call_method(PyObject *self, PyObject *attr, PyObject *args, PyObject *kwds)
     PyObject *result = NULL;
     _PyCValue cref;
     int unbound = -1;
-    if (PyErr_Occurred()) {
-        return NULL;
-    }
     self_owner = Py_NewRef(self);
     args_owner = Py_NewRef(args);
     kwds_owner = Py_XNewRef(kwds);
     _PyThreadState_PushCValue(tstate, &cref);
     unbound = lookup_method(self_owner, attr, &cref.ref);
-    if (PyErr_Occurred() || unbound < 0) {
+    if (unbound < 0) {
         goto done;
     }
     assert(!PyValue_IsNull(cref.ref));
@@ -3653,10 +3525,6 @@ done:
     Py_CLEAR(kwds_owner);
     Py_CLEAR(args_owner);
     Py_CLEAR(self_owner);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-        return NULL;
-    }
     return result;
 }
 
@@ -3673,13 +3541,10 @@ vectorcall_method(PyObject *name, PyObject *const *args, Py_ssize_t nargs)
     PyObject *self_owner = NULL, *result = NULL;
     _PyCValue cref;
     int unbound = -1;
-    if (PyErr_Occurred()) {
-        return NULL;
-    }
     self_owner = Py_NewRef(args[0]);
     _PyThreadState_PushCValue(tstate, &cref);
     unbound = lookup_method(self_owner, name, &cref.ref);
-    if (PyErr_Occurred() || unbound < 0) {
+    if (unbound < 0) {
         goto done;
     }
     assert(!PyValue_IsNull(cref.ref));
@@ -3693,10 +3558,6 @@ done:
         PyValue_XCLOSE(retired);
     }
     Py_CLEAR(self_owner);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-        return NULL;
-    }
     return result;
 }
 
@@ -3713,17 +3574,13 @@ vectorcall_maybe(PyThreadState *tstate, PyObject *name,
     _PyCValue cref = { .ref = PyValue_NULL };
     int unbound = -1;
 
-    if (PyErr_Occurred()) {
-        return NULL;
-    }
     self_owner = Py_NewRef(args[0]);
     _PyThreadState_PushCValue(tstate, &cref);
     unbound = lookup_maybe_method(self_owner, name, &cref.ref);
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     if (unbound < 0) {
-        result = Py_NewRef(Py_NotImplemented);
+        if (!PyErr_Occurred()) {
+            result = Py_NewRef(Py_NotImplemented);
+        }
         goto done;
     }
     assert(!PyValue_IsNull(cref.ref));
@@ -3738,10 +3595,6 @@ done:
         PyValue_XCLOSE(retired);
     }
     Py_CLEAR(self_owner);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-        return NULL;
-    }
     return result;
 }
 
@@ -3761,13 +3614,10 @@ maybe_call_special_no_args(PyObject *self, PyObject *attr, int *attr_is_none)
     if (attr_is_none != NULL) {
         *attr_is_none = 0;
     }
-    if (PyErr_Occurred()) {
-        return NULL;
-    }
     self_owner = Py_NewRef(self);
     _PyThreadState_PushCValue(tstate, &cref);
     unbound = lookup_maybe_method(self_owner, attr, &cref.ref);
-    if (PyErr_Occurred() || unbound < 0) {
+    if (unbound < 0) {
         goto done;
     }
     assert(!PyValue_IsNull(cref.ref));
@@ -3787,13 +3637,6 @@ done:
         PyValue_XCLOSE(retired);
     }
     Py_CLEAR(self_owner);
-    if (PyErr_Occurred()) {
-        if (attr_is_none != NULL) {
-            *attr_is_none = 0;
-        }
-        Py_CLEAR(result);
-        return NULL;
-    }
     return result;
 }
 
@@ -3811,14 +3654,11 @@ maybe_call_special_one_arg(PyObject *self, PyObject *attr, PyObject *arg,
     if (attr_is_none != NULL) {
         *attr_is_none = 0;
     }
-    if (PyErr_Occurred()) {
-        return NULL;
-    }
     self_owner = Py_NewRef(self);
     arg_owner = Py_NewRef(arg);
     _PyThreadState_PushCValue(tstate, &cref);
     unbound = lookup_maybe_method(self_owner, attr, &cref.ref);
-    if (PyErr_Occurred() || unbound < 0) {
+    if (unbound < 0) {
         goto done;
     }
     assert(!PyValue_IsNull(cref.ref));
@@ -3840,13 +3680,6 @@ done:
     }
     Py_CLEAR(arg_owner);
     Py_CLEAR(self_owner);
-    if (PyErr_Occurred()) {
-        if (attr_is_none != NULL) {
-            *attr_is_none = 0;
-        }
-        Py_CLEAR(result);
-        return NULL;
-    }
     return result;
 }
 
@@ -3920,9 +3753,6 @@ check_duplicates(PyObject *tuple)
     PyObject *name = NULL;
     PyObject *error_type = NULL;
     int result = -1;
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     Py_ssize_t n = PyTuple_GET_SIZE(owner);
     for (Py_ssize_t i = 0; i < n; i++) {
         PyValue item = PyTuple_GET_VALUE(owner, i);
@@ -3936,7 +3766,7 @@ check_duplicates(PyObject *tuple)
         for (Py_ssize_t j = i + 1; j < n; j++) {
             if (PyValue_Is(item, PyTuple_GET_VALUE(owner, j))) {
                 name = class_name(PyValue_AsKnownObjectBorrow(item));
-                if (name == NULL || PyErr_Occurred()) {
+                if (name == NULL) {
                     goto done;
                 }
                 if (PyUnicode_Check(name)) {
@@ -3954,7 +3784,7 @@ done:
     Py_CLEAR(name);
     Py_CLEAR(error_type);
     Py_CLEAR(owner);
-    return PyErr_Occurred() ? -1 : result;
+    return result;
 }
 
 /* Raise a TypeError for an MRO order disagreement.
@@ -3974,9 +3804,6 @@ set_mro_error(PyObject **to_merge, Py_ssize_t to_merge_size, Py_ssize_t *remain)
     PyObject *set = NULL;
     PyObject *keys = NULL;
     PyObject *name = NULL;
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     set = PyDict_New();
     if (set == NULL) {
         goto done;
@@ -3985,14 +3812,13 @@ set_mro_error(PyObject **to_merge, Py_ssize_t to_merge_size, Py_ssize_t *remain)
         PyObject *tuple = to_merge[i];
         if (remain[i] < PyTuple_GET_SIZE(tuple)) {
             PyValue candidate = PyTuple_GET_VALUE(tuple, remain[i]);
-            if (PyDict_SetValue(set, candidate, PyValue_FromObjectBorrow(Py_None)) < 0 ||
-                    PyErr_Occurred()) {
+            if (PyDict_SetValue(set, candidate, PyValue_FromObjectBorrow(Py_None)) < 0) {
                 goto done;
             }
         }
     }
     keys = PyDict_Keys(set);
-    if (keys == NULL || PyErr_Occurred()) {
+    if (keys == NULL) {
         goto done;
     }
     Py_ssize_t n = PyList_GET_SIZE(keys);
@@ -4006,14 +3832,11 @@ set_mro_error(PyObject **to_merge, Py_ssize_t to_merge_size, Py_ssize_t *remain)
             goto done;
         }
         const char *text = PyUnicode_Check(name) ? PyUnicode_AsUTF8(name) : "?";
-        if (text == NULL || PyErr_Occurred()) {
+        if (text == NULL) {
             goto done;
         }
         off += PyOS_snprintf(buf + off, sizeof(buf) - off, " %s", text);
         Py_CLEAR(name);
-        if (PyErr_Occurred()) {
-            goto done;
-        }
         if (i + 1 < n && (size_t)(off + 1) < sizeof(buf)) {
             buf[off++] = ',';
             buf[off] = '\0';
@@ -4024,7 +3847,7 @@ done:
     Py_CLEAR(name);
     Py_CLEAR(keys);
     Py_CLEAR(set);
-    if (formatted && !PyErr_Occurred()) {
+    if (formatted) {
         PyErr_SetString(PyExc_TypeError, buf);
     }
 }
@@ -4034,21 +3857,13 @@ pmerge(PyObject *acc, PyObject **to_merge, Py_ssize_t to_merge_size)
 {
     int result = -1;
     Py_ssize_t *remain = NULL;
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     if ((size_t)to_merge_size > SIZE_MAX / sizeof(Py_ssize_t)) {
         PyErr_NoMemory();
         goto done;
     }
     remain = PyMem_New(Py_ssize_t, to_merge_size);
     if (remain == NULL) {
-        if (!PyErr_Occurred()) {
-            PyErr_NoMemory();
-        }
-        goto done;
-    }
-    if (PyErr_Occurred()) {
+        PyErr_NoMemory();
         goto done;
     }
     for (Py_ssize_t i = 0; i < to_merge_size; i++) {
@@ -4072,7 +3887,7 @@ again:
                 goto skip;
             }
         }
-        if (PyList_Append(acc, candidate) < 0 || PyErr_Occurred()) {
+        if (PyList_Append(acc, candidate) < 0) {
             goto done;
         }
         for (Py_ssize_t j = 0; j < to_merge_size; j++) {
@@ -4098,128 +3913,98 @@ done:
         PyMem_Free(remain);
     }
     _PyValue_RestoreException(saved);
-    return PyErr_Occurred() ? -1 : result;
+    return result;
 }
 
 static PyObject *
 mro_implementation_unlocked(PyTypeObject *type)
 {
     ASSERT_TYPE_LOCK_HELD();
-    PyObject *receiver = Py_NewRef(type);
-    PyObject *bases = NULL;
-    PyObject *base_mro = NULL;
-    PyObject *error_type = NULL;
-    PyObject *result = NULL;
-    PyObject **to_merge = NULL;
-    Py_ssize_t captured = 0;
-    if (PyErr_Occurred()) {
-        goto done;
+
+    if (!_PyType_IsReady(type)) {
+        if (PyType_Ready(type) < 0)
+            return NULL;
     }
-    if (!_PyType_IsReady(type) &&
-            (PyType_Ready(type) < 0 || PyErr_Occurred())) {
-        goto done;
-    }
-    bases = Py_XNewRef(lookup_tp_bases(type));
-    if (bases == NULL) {
-        PyErr_SetString(PyExc_SystemError, "type has no bases tuple");
-        goto done;
-    }
+
+    PyObject *bases = lookup_tp_bases(type);
     Py_ssize_t n = PyTuple_GET_SIZE(bases);
     for (Py_ssize_t i = 0; i < n; i++) {
         PyValue item = PyTuple_GET_VALUE(bases, i);
         if (!PyValue_IsObject(item) || !PyType_Check(PyValue_AsKnownObjectBorrow(item))) {
-            error_type = Py_NewRef(PyValue_TYPE(item));
-            PyErr_Format(PyExc_TypeError, "bases must be types; got '%N'", error_type);
-            goto done;
+            PyErr_Format(PyExc_TypeError, "bases must be types; got '%N'",
+                         PyValue_TYPE(item));
+            return NULL;
         }
         PyTypeObject *base = _PyType_CAST(PyValue_AsKnownObjectBorrow(item));
         if (lookup_tp_mro(base) == NULL) {
             PyErr_Format(PyExc_TypeError,
-                         "Cannot extend an incomplete type '%.100s'", base->tp_name);
-            goto done;
+                         "Cannot extend an incomplete type '%.100s'",
+                         base->tp_name);
+            return NULL;
         }
+        assert(PyTuple_Check(lookup_tp_mro(base)));
     }
+
     if (n == 1) {
-        PyValue item = PyTuple_GET_VALUE(bases, 0);
-        PyTypeObject *base = _PyType_CAST(PyValue_AsKnownObjectBorrow(item));
-        base_mro = Py_NewRef(lookup_tp_mro(base));
+        /* Fast path: if there is a single base, constructing the MRO
+         * is trivial.
+         */
+        PyTypeObject *base = _PyType_CAST(_PyTuple_GET_OBJECT(bases, 0));
+        PyObject *base_mro = lookup_tp_mro(base);
+        assert(base_mro != NULL);
         Py_ssize_t k = PyTuple_GET_SIZE(base_mro);
-        if (k == PY_SSIZE_T_MAX) {
-            PyErr_NoMemory();
-            goto done;
-        }
-        result = PyTuple_New(k + 1);
+        PyObject *result = PyTuple_New(k + 1);
         if (result == NULL) {
-            goto done;
+            return NULL;
         }
+
         PyTuple_SET_VALUE(result, 0, PyValue_FromPyObjectNew((PyObject *)type));
         for (Py_ssize_t i = 0; i < k; i++) {
             PyTuple_SET_VALUE(result, i + 1, PyValue_MakeHeapSafe(
                 PyTuple_GET_VALUE(base_mro, i)));
         }
-        goto done;
-    }
-    if (check_duplicates(bases) < 0) {
-        goto done;
-    }
-    if ((size_t)n >= SIZE_MAX / sizeof(PyObject *)) {
-        PyErr_NoMemory();
-        goto done;
-    }
-    to_merge = PyMem_Calloc((size_t)n + 1, sizeof(PyObject *));
-    if (to_merge == NULL) {
-        if (!PyErr_Occurred()) {
-            PyErr_NoMemory();
-        }
-        goto done;
-    }
-    if (PyErr_Occurred()) {
-        goto done;
-    }
-    /* Reacquire every MRO after array allocation, then own the complete
-     * input snapshot before result allocation or C3's append callbacks. */
-    for (Py_ssize_t i = 0; i < n; i++) {
-        PyValue item = PyTuple_GET_VALUE(bases, i);
-        PyTypeObject *base = _PyType_CAST(PyValue_AsKnownObjectBorrow(item));
-        PyObject *mro = lookup_tp_mro(base);
-        if (mro == NULL) {
-            PyErr_Format(PyExc_TypeError,
-                         "Cannot extend an incomplete type '%.100s'", base->tp_name);
-            goto done;
-        }
-        to_merge[captured++] = Py_NewRef(mro);
-    }
-    to_merge[captured++] = Py_NewRef(bases);
-    result = PyList_New(1);
-    if (result != NULL) {
-        // Keep private logical slots initialized even on success plus error.
-        Py_SET_SIZE(result, 0);
-    }
-    if (result == NULL || PyErr_Occurred()) {
-        goto done;
-    }
-    PyList_SET_VALUE(result, 0, PyValue_FromPyObjectNew((PyObject *)type));
-    Py_SET_SIZE(result, 1);
-    if (pmerge(result, to_merge, n + 1) < 0 || PyErr_Occurred()) {
-        Py_CLEAR(result);
+        return result;
     }
 
-done:
-    for (Py_ssize_t i = 0; i < captured; i++) {
-        Py_CLEAR(to_merge[i]);
+    /* This is just a basic sanity check. */
+    if (check_duplicates(bases) < 0) {
+        return NULL;
     }
-    PyObject *saved = PyErr_GetRaisedException();
-    if (to_merge != NULL) {
+
+    /* Find a superclass linearization that honors the constraints
+       of the explicit tuples of bases and the constraints implied by
+       each base class.
+
+       to_merge is an array of tuples, where each tuple is a superclass
+       linearization implied by a base class.  The last element of
+       to_merge is the declared tuple of bases.
+    */
+    PyObject **to_merge = PyMem_New(PyObject *, n + 1);
+    if (to_merge == NULL) {
+        PyErr_NoMemory();
+        return NULL;
+    }
+
+    for (Py_ssize_t i = 0; i < n; i++) {
+        PyTypeObject *base = _PyType_CAST(_PyTuple_GET_OBJECT(bases, i));
+        PyObject *mro_to_merge = lookup_tp_mro(base);
+        assert(mro_to_merge != NULL);
+        to_merge[i] = mro_to_merge;
+    }
+    to_merge[n] = bases;
+
+    PyObject *result = PyList_New(1);
+    if (result == NULL) {
         PyMem_Free(to_merge);
+        return NULL;
     }
-    _PyValue_RestoreException(saved);
-    Py_CLEAR(error_type);
-    Py_CLEAR(base_mro);
-    Py_CLEAR(bases);
-    Py_CLEAR(receiver);
-    if (PyErr_Occurred()) {
+
+    PyList_SET_VALUE(result, 0, PyValue_FromPyObjectNew((PyObject *)type));
+    if (pmerge(result, to_merge, n + 1) < 0) {
         Py_CLEAR(result);
     }
+    PyMem_Free(to_merge);
+
     return result;
 }
 
@@ -4243,32 +4028,12 @@ static PyObject *
 type_mro_impl(PyTypeObject *self)
 /*[clinic end generated code: output=bffc4a39b5b57027 input=28414f4e156db28d]*/
 {
-    PyObject *original = NULL;
-    PyObject *result = NULL;
-    if (PyErr_Occurred()) {
-        goto done;
+    PyObject *seq;
+    seq = mro_implementation(self);
+    if (seq != NULL && !PyList_Check(seq)) {
+        Py_SETREF(seq, PySequence_List(seq));
     }
-    original = mro_implementation(self);
-    if (original == NULL) {
-        goto done;
-    }
-    if (PyList_Check(original)) {
-        result = original;
-        original = NULL;
-    }
-    else {
-        result = PySequence_List(original);
-        if (result == NULL) {
-            goto done;
-        }
-    }
-
-done:
-    Py_CLEAR(original);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-    }
-    return result;
+    return seq;
 }
 
 static int
@@ -4278,9 +4043,6 @@ mro_check(PyTypeObject *type, PyObject *mro)
     PyObject *solid = Py_NewRef(solid_base(type));
     PyObject *error_type = NULL;
     int result = -1;
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(owner); i++) {
         PyValue item = PyTuple_GET_VALUE(owner, i);
         if (!PyValue_IsObject(item) || !PyType_Check(PyValue_AsKnownObjectBorrow(item))) {
@@ -4303,7 +4065,7 @@ done:
     Py_CLEAR(error_type);
     Py_CLEAR(solid);
     Py_CLEAR(owner);
-    return PyErr_Occurred() ? -1 : result;
+    return result;
 }
 
 /* Lookups an mcls.mro method, invokes it and checks the result (if needed,
@@ -4323,39 +4085,41 @@ done:
 static PyObject *
 mro_invoke(PyTypeObject *type)
 {
+    PyObject *mro_result;
+    PyObject *new_mro;
+
     ASSERT_TYPE_LOCK_HELD();
-    PyObject *mro_result = NULL;
-    PyObject *new_mro = NULL;
-    if (PyErr_Occurred()) {
-        goto done;
-    }
+
     const int custom = !Py_IS_TYPE(type, &PyType_Type);
+
     if (custom) {
+        // Custom mro() method on metaclass.  This is potentially re-entrant.
+        // We are called either from type_ready() or from type_set_bases().
         mro_result = call_method_noarg((PyObject *)type, &_Py_ID(mro));
     }
     else {
+        // In this case, the mro() method on the type object is being used and
+        // we know that these calls are not re-entrant.
         mro_result = mro_implementation_unlocked(type);
     }
-    if (mro_result == NULL || PyErr_Occurred()) {
-        goto done;
-    }
+    if (mro_result == NULL)
+        return NULL;
+
     new_mro = PySequence_Tuple(mro_result);
-    Py_CLEAR(mro_result);
-    if (new_mro == NULL || PyErr_Occurred()) {
-        goto done;
-    }
-    if (PyTuple_GET_SIZE(new_mro) == 0) {
-        PyErr_SetString(PyExc_TypeError, "type MRO must not be empty");
-        goto done;
-    }
-    if (custom && (mro_check(type, new_mro) < 0 || PyErr_Occurred())) {
-        goto done;
+    Py_DECREF(mro_result);
+    if (new_mro == NULL) {
+        return NULL;
     }
 
-done:
-    Py_CLEAR(mro_result);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(new_mro);
+    if (PyTuple_GET_SIZE(new_mro) == 0) {
+        Py_DECREF(new_mro);
+        PyErr_Format(PyExc_TypeError, "type MRO must not be empty");
+        return NULL;
+    }
+
+    if (custom && mro_check(type, new_mro) < 0) {
+        Py_DECREF(new_mro);
+        return NULL;
     }
     return new_mro;
 }
@@ -4443,9 +4207,6 @@ find_best_base(PyObject *bases)
     PyObject *winner_owner = NULL;
     PyObject *error_type = NULL;
     PyTypeObject *result = NULL;
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     Py_ssize_t n = PyTuple_GET_SIZE(owner);
     for (Py_ssize_t i = 0; i < n; i++) {
         PyValue item = PyTuple_GET_VALUE(owner, i);
@@ -4457,8 +4218,7 @@ find_best_base(PyObject *bases)
         PyTypeObject *base_i = _PyType_CAST(PyValue_AsKnownObjectBorrow(item));
         /* Preserve per-base rejection/readiness order. The prior solid
          * winner stays owned if readiness reparents an earlier base. */
-        if (!_PyType_IsReady(base_i) &&
-                (PyType_Ready(base_i) < 0 || PyErr_Occurred())) {
+        if (!_PyType_IsReady(base_i) && PyType_Ready(base_i) < 0) {
             goto done;
         }
         if (!_PyType_HasFeature(base_i, Py_TPFLAGS_BASETYPE)) {
@@ -4468,9 +4228,6 @@ find_best_base(PyObject *bases)
         }
         Py_CLEAR(winner_owner);
         Py_CLEAR(selected);
-        if (PyErr_Occurred()) {
-            goto done;
-        }
         /* Old-pin retirement can also reenter. Recompute only now, without
          * replaying readiness or carrying an old ancestor pointer. */
         PyTypeObject *winner = NULL;
@@ -4512,7 +4269,7 @@ done:
     Py_CLEAR(winner_owner);
     Py_CLEAR(selected);
     Py_CLEAR(owner);
-    return PyErr_Occurred() ? NULL : result;
+    return result;
 }
 
 static int
@@ -4937,9 +4694,6 @@ _PyType_CalculateMetaclass(PyTypeObject *metatype, PyObject *bases)
     PyObject *owner = Py_NewRef(bases);
     PyObject *winner = Py_NewRef(metatype);
     PyTypeObject *result = NULL;
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(owner); i++) {
         PyTypeObject *candidate = PyValue_TYPE(PyTuple_GET_VALUE(owner, i));
         if (PyType_IsSubtype((PyTypeObject *)winner, candidate)) {
@@ -4949,9 +4703,6 @@ _PyType_CalculateMetaclass(PyTypeObject *metatype, PyObject *bases)
             PyObject *replacement = Py_NewRef(candidate);
             Py_CLEAR(winner);
             winner = replacement;
-            if (PyErr_Occurred()) {
-                goto done;
-            }
             continue;
         }
         PyErr_SetString(PyExc_TypeError,
@@ -4965,7 +4716,7 @@ _PyType_CalculateMetaclass(PyTypeObject *metatype, PyObject *bases)
 done:
     Py_CLEAR(winner);
     Py_CLEAR(owner);
-    return PyErr_Occurred() ? NULL : result;
+    return result;
 }
 
 
@@ -4999,9 +4750,6 @@ type_new_visit_slots(type_new_ctx *ctx)
     PyValue selected = PyValue_NULL;
     int result = -1;
 
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     slots_owner = Py_NewRef(ctx->slots);
     for (Py_ssize_t i = 0; i < ctx->nslot; i++) {
         selected = PyTuple_GET_VALUE(slots_owner, i);
@@ -5042,16 +4790,13 @@ type_new_visit_slots(type_new_ctx *ctx)
             }
             ctx->add_weak++;
         }
-        if (PyErr_Occurred()) {
-            goto done;
-        }
     }
     result = 0;
 
 done:
     Py_CLEAR(error_type_owner);
     Py_CLEAR(slots_owner);
-    return PyErr_Occurred() ? -1 : result;
+    return result;
 }
 
 
@@ -5062,91 +4807,69 @@ done:
 static PyObject*
 type_new_copy_slots(type_new_ctx *ctx, PyObject *dict)
 {
-    PyObject *slots_owner = NULL;
-    PyObject *name_owner = NULL;
-    PyObject *dict_owner = NULL;
-    PyObject *new_slots = NULL;
-    PyObject *mangled = NULL;
-    PyObject *tuple = NULL;
-    PyObject *result = NULL;
-    int ok = 0;
+    PyObject *slots = ctx->slots;
     Py_ssize_t nslot = ctx->nslot;
-    Py_ssize_t new_nslot = nslot - ctx->add_dict - ctx->add_weak;
 
-    if (PyErr_Occurred()) {
-        goto done;
+    Py_ssize_t new_nslot = nslot - ctx->add_dict - ctx->add_weak;
+    PyObject *new_slots = PyList_New(new_nslot);
+    if (new_slots == NULL) {
+        return NULL;
     }
-    slots_owner = Py_NewRef(ctx->slots);
-    name_owner = Py_NewRef(ctx->name);
-    dict_owner = Py_NewRef(dict);
-    new_slots = PyList_New(new_nslot);
-    if (new_slots == NULL) goto done;
 
     Py_ssize_t j = 0;
     for (Py_ssize_t i = 0; i < nslot; i++) {
-        PyValue value = PyTuple_GET_VALUE(slots_owner, i);
-        assert(PyValue_IsObject(value));
-        PyObject *slot = PyValue_AsKnownObjectBorrow(value);
+        PyObject *slot = _PyTuple_GET_OBJECT(slots, i);
         if ((ctx->add_dict && _PyUnicode_Equal(slot, &_Py_ID(__dict__))) ||
-            (ctx->add_weak && _PyUnicode_Equal(slot, &_Py_ID(__weakref__)))) {
-            if (PyErr_Occurred()) goto done;
+            (ctx->add_weak && _PyUnicode_Equal(slot, &_Py_ID(__weakref__))))
+        {
             continue;
         }
-        if (PyErr_Occurred()) goto done;
-        mangled = _Py_Mangle(name_owner, slot);
-        if (mangled == NULL) goto done;
-        int set_status = PyList_SetItem(new_slots, j, Py_NewRef(mangled));
-        if (set_status < 0) goto done;
-        int contains = PyDict_Contains(dict_owner, mangled);
-        if (contains < 0) goto done;
-        if (contains > 0) {
-            if (!_PyUnicode_Equal(mangled, &_Py_ID(__qualname__)) &&
-                !_PyUnicode_Equal(mangled, &_Py_ID(__classcell__)) &&
-                !_PyUnicode_Equal(mangled, &_Py_ID(__classdictcell__))) {
+
+        slot =_Py_Mangle(ctx->name, slot);
+        if (!slot) {
+            goto error;
+        }
+        PyList_SET_VALUE(new_slots, j, PyValue_FromPyObjectSteal(slot));
+
+        int r = PyDict_Contains(dict, slot);
+        if (r < 0) {
+            goto error;
+        }
+        if (r > 0) {
+            /* CPython inserts these names (when needed)
+               into the namespace when creating a class.  They will be deleted
+               below so won't act as class variables. */
+            if (!_PyUnicode_Equal(slot, &_Py_ID(__qualname__)) &&
+                !_PyUnicode_Equal(slot, &_Py_ID(__classcell__)) &&
+                !_PyUnicode_Equal(slot, &_Py_ID(__classdictcell__)))
+            {
                 PyErr_Format(PyExc_ValueError,
                              "%R in __slots__ conflicts with class variable",
-                             mangled);
-                goto done;
+                             slot);
+                goto error;
             }
-            if (PyErr_Occurred()) goto done;
         }
-        Py_CLEAR(mangled);
-        if (PyErr_Occurred()) goto done;
+
         j++;
     }
     assert(j == new_nslot);
-    int sort_status = PyList_Sort(new_slots);
-    if (sort_status < 0 || PyErr_Occurred()) goto done;
-    tuple = PyList_AsTuple(new_slots);
-    if (tuple == NULL) goto done;
-    if (PyTuple_GET_SIZE(tuple) != new_nslot) {
-        PyErr_SetString(PyExc_RuntimeError, "stale __slots__ construction");
-        goto done;
-    }
-    for (Py_ssize_t i = 0; i < new_nslot; i++) {
-        PyValue value = PyTuple_GET_VALUE(tuple, i);
-        if (!PyValue_IsObject(value) ||
-                !PyUnicode_Check(PyValue_AsKnownObjectBorrow(value))) {
-            PyErr_SetString(PyExc_RuntimeError, "stale __slots__ construction");
-            goto done;
-        }
-    }
-    if (PyErr_Occurred()) goto done;
-    ok = 1;
 
-done:
-    Py_CLEAR(mangled);
-    Py_CLEAR(new_slots);
-    Py_CLEAR(dict_owner);
-    Py_CLEAR(name_owner);
-    Py_CLEAR(slots_owner);
-    if (PyErr_Occurred()) ok = 0;
-    if (ok) {
-        result = tuple;
-        tuple = NULL;
+    if (PyList_Sort(new_slots) == -1) {
+        goto error;
     }
-    Py_CLEAR(tuple);
-    return result;
+
+    PyObject *tuple = PyList_AsTuple(new_slots);
+    Py_DECREF(new_slots);
+    if (tuple == NULL) {
+        return NULL;
+    }
+
+    assert(PyTuple_GET_SIZE(tuple) == new_nslot);
+    return tuple;
+
+error:
+    Py_DECREF(new_slots);
+    return NULL;
 }
 
 
@@ -5368,7 +5091,6 @@ type_new_set_doc(PyTypeObject *type, PyObject* dict)
     PyValue doc = PyValue_NULL;
     char *tp_doc = NULL;
     int result = -1;
-    if (PyErr_Occurred()) goto done;
     type_owner = Py_NewRef((PyObject *)type);
     dict_owner = Py_NewRef(dict);
     int found = PyDict_GetValue(dict_owner, PyValue_FromObjectBorrow(&_Py_ID(__doc__)), &doc);
@@ -5383,7 +5105,7 @@ type_new_set_doc(PyTypeObject *type, PyObject* dict)
     Py_ssize_t size = strlen(doc_str) + 1;
     tp_doc = PyMem_Malloc(size);
     if (tp_doc == NULL) {
-        if (tp_doc == NULL && !PyErr_Occurred()) PyErr_NoMemory();
+        PyErr_NoMemory();
         goto done;
     }
     memcpy(tp_doc, doc_str, size);
@@ -5401,7 +5123,7 @@ done:
     PyValue_CLEAR(doc);
     Py_CLEAR(dict_owner);
     Py_CLEAR(type_owner);
-    return PyErr_Occurred() ? -1 : result;
+    return result;
 }
 
 
@@ -5413,7 +5135,6 @@ type_new_staticmethod(PyObject *dict, PyObject *attr)
     PyObject *wrapper = NULL;
     PyValue selected = PyValue_NULL;
     int result = -1;
-    if (PyErr_Occurred()) goto done;
     dict_owner = Py_NewRef(dict);
     key_owner = Py_NewRef(attr);
     int found = PyDict_GetValue(dict_owner, PyValue_FromObjectBorrow(key_owner), &selected);
@@ -5423,7 +5144,6 @@ type_new_staticmethod(PyObject *dict, PyObject *attr)
         result = 0;
         goto done;
     }
-    if (PyErr_Occurred()) goto done;
     wrapper = PyStaticMethod_New(PyValue_AsKnownObjectBorrow(selected));
     if (wrapper == NULL) goto done;
     result = PyDict_SetItem(dict_owner, key_owner, wrapper);
@@ -5432,7 +5152,7 @@ done:
     PyValue_CLEAR(selected);
     Py_CLEAR(key_owner);
     Py_CLEAR(dict_owner);
-    return PyErr_Occurred() ? -1 : result;
+    return result;
 }
 
 
@@ -5444,7 +5164,6 @@ type_new_classmethod(PyObject *dict, PyObject *attr)
     PyObject *wrapper = NULL;
     PyValue selected = PyValue_NULL;
     int result = -1;
-    if (PyErr_Occurred()) goto done;
     dict_owner = Py_NewRef(dict);
     key_owner = Py_NewRef(attr);
     int found = PyDict_GetValue(dict_owner, PyValue_FromObjectBorrow(key_owner), &selected);
@@ -5454,7 +5173,6 @@ type_new_classmethod(PyObject *dict, PyObject *attr)
         result = 0;
         goto done;
     }
-    if (PyErr_Occurred()) goto done;
     wrapper = PyClassMethod_New(PyValue_AsKnownObjectBorrow(selected));
     if (wrapper == NULL) goto done;
     result = PyDict_SetItem(dict_owner, key_owner, wrapper);
@@ -5463,7 +5181,7 @@ done:
     PyValue_CLEAR(selected);
     Py_CLEAR(key_owner);
     Py_CLEAR(dict_owner);
-    return PyErr_Occurred() ? -1 : result;
+    return result;
 }
 
 /* Add __dict__ or __weakref__ descriptor */
@@ -5601,7 +5319,6 @@ type_new_set_classcell(PyTypeObject *type, PyObject *dict)
     PyObject *selected_type_owner = NULL;
     PyValue cell = PyValue_NULL;
     int result = -1;
-    if (PyErr_Occurred()) goto done;
     type_owner = Py_NewRef((PyObject *)type);
     dict_owner = Py_NewRef(dict);
     int found = PyDict_GetValue(
@@ -5610,7 +5327,6 @@ type_new_set_classcell(PyTypeObject *type, PyObject *dict)
     if (found == 0) { result = 0; goto done; }
     if (!PyValue_IsObject(cell) || !PyCell_Check(PyValue_AsKnownObjectBorrow(cell))) {
         selected_type_owner = (PyObject *)Py_NewRef(PyValue_TYPE(cell));
-        if (selected_type_owner == NULL || PyErr_Occurred()) goto done;
         PyErr_Format(PyExc_TypeError,
                      "__classcell__ must be a nonlocal cell, not %.200R",
                      selected_type_owner);
@@ -5626,7 +5342,7 @@ done:
     PyValue_CLEAR(cell);
     Py_CLEAR(dict_owner);
     Py_CLEAR(type_owner);
-    return PyErr_Occurred() ? -1 : result;
+    return result;
 }
 
 static int
@@ -5636,7 +5352,6 @@ type_new_set_classdictcell(PyObject *dict)
     PyObject *selected_type_owner = NULL;
     PyValue cell = PyValue_NULL;
     int result = -1;
-    if (PyErr_Occurred()) goto done;
     dict_owner = Py_NewRef(dict);
     int found = PyDict_GetValue(
         dict_owner, PyValue_FromObjectBorrow(&_Py_ID(__classdictcell__)), &cell);
@@ -5644,7 +5359,6 @@ type_new_set_classdictcell(PyObject *dict)
     if (found == 0) { result = 0; goto done; }
     if (!PyValue_IsObject(cell) || !PyCell_Check(PyValue_AsKnownObjectBorrow(cell))) {
         selected_type_owner = (PyObject *)Py_NewRef(PyValue_TYPE(cell));
-        if (selected_type_owner == NULL || PyErr_Occurred()) goto done;
         PyErr_Format(PyExc_TypeError,
                      "__classdictcell__ must be a nonlocal cell, not %.200R",
                      selected_type_owner);
@@ -5659,7 +5373,7 @@ done:
     Py_CLEAR(selected_type_owner);
     PyValue_CLEAR(cell);
     Py_CLEAR(dict_owner);
-    return PyErr_Occurred() ? -1 : result;
+    return result;
 }
 
 static int
@@ -5730,58 +5444,39 @@ type_new_set_attrs(const type_new_ctx *ctx, PyTypeObject *type)
 static int
 type_new_get_slots(type_new_ctx *ctx, PyObject *dict)
 {
-    PyObject *dict_owner = NULL;
-    PyObject *iterable_owner = NULL;
-    PyObject *new_slots = NULL;
     PyValue selected = PyValue_NULL;
-    int result = -1;
-    int missing = 0;
-    if (PyErr_Occurred()) goto done;
-    dict_owner = Py_NewRef(dict);
     int found = PyDict_GetValue(
-        dict_owner, PyValue_FromObjectBorrow(&_Py_ID(__slots__)), &selected);
-    if (found < 0) goto done;
-    if (found == 0) {
-        missing = 1;
-        result = 0;
-        goto done;
+        dict, PyValue_FromObjectBorrow(&_Py_ID(__slots__)), &selected);
+    if (found < 0) {
+        return -1;
     }
-    iterable_owner = _PyValue_AsObjectAt(selected, BOX_SITE_ATTRIBUTE);
-    if (iterable_owner == NULL) goto done;
-    if (PyUnicode_Check(iterable_owner)) {
-        new_slots = PyTuple_Pack(1, iterable_owner);
+    if (found == 0) {
+        ctx->slots = NULL;
+        ctx->nslot = 0;
+        return 0;
+    }
+    PyObject *slots = _PyValue_AsObjectAt(selected, BOX_SITE_ATTRIBUTE);
+    PyValue_CLOSE(selected);
+    if (slots == NULL) {
+        return -1;
+    }
+
+    // Make it into a tuple
+    PyObject *new_slots;
+    if (PyUnicode_Check(slots)) {
+        new_slots = PyTuple_Pack(1, slots);
     }
     else {
-        new_slots = PySequence_Tuple(iterable_owner);
+        new_slots = PySequence_Tuple(slots);
     }
-    if (new_slots == NULL || PyErr_Occurred()) goto done;
-    if (!PyTuple_CheckExact(new_slots)) {
-        PyErr_SetString(PyExc_SystemError,
-                        "type.__new__ slots conversion did not return an exact tuple");
-        goto done;
+    Py_DECREF(slots);
+    if (new_slots == NULL) {
+        return -1;
     }
-    if (PyErr_Occurred()) goto done;
-    result = 0;
-done:
-    Py_CLEAR(iterable_owner);
-    PyValue_CLEAR(selected);
-    Py_CLEAR(dict_owner);
-    if (PyErr_Occurred()) {
-        result = -1;
-    }
-    if (result == 0) {
-        if (missing) {
-            ctx->slots = NULL;
-            ctx->nslot = 0;
-        }
-        else {
-            ctx->slots = new_slots;
-            ctx->nslot = PyTuple_GET_SIZE(new_slots);
-            new_slots = NULL;
-        }
-    }
-    Py_CLEAR(new_slots);
-    return result;
+    assert(PyTuple_CheckExact(new_slots));
+    ctx->slots = new_slots;
+    ctx->nslot = PyTuple_GET_SIZE(new_slots);
+    return 0;
 }
 
 
@@ -6179,9 +5874,6 @@ check_immutable_bases(const char *type_name, PyObject *bases, int skip_first)
     PyObject *owner = Py_NewRef(bases);
     PyObject *error_type = NULL;
     int result = -1;
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     for (Py_ssize_t i = skip_first ? 1 : 0; i < PyTuple_GET_SIZE(owner); i++) {
         PyValue item = PyTuple_GET_VALUE(owner, i);
         if (!PyValue_IsObject(item) || !PyType_Check(PyValue_AsKnownObjectBorrow(item))) {
@@ -6200,7 +5892,7 @@ check_immutable_bases(const char *type_name, PyObject *bases, int skip_first)
 done:
     Py_CLEAR(error_type);
     Py_CLEAR(owner);
-    return PyErr_Occurred() ? -1 : result;
+    return result;
 }
 
 
@@ -7212,9 +6904,6 @@ _PyType_TryLookupValueNoAlloc(PyTypeObject *type, PyObject *name,
 #ifdef Py_GIL_DISABLED
     return 0;
 #else
-    if (PyErr_Occurred()) {
-        return -1;
-    }
     if (!PyUnicode_CheckExact(name) ||
         PyUnstable_Unicode_GET_CACHED_HASH(name) == -1 ||
         !(type->tp_flags & Py_TPFLAGS_READY)) {
@@ -7313,10 +7002,6 @@ _PyType_LookupValueAndVersion(PyTypeObject *type, PyObject *name, PyValue *out)
 {
     *out = PyValue_NULL;
     PyInterpreterState *interp = _PyInterpreterState_GET();
-    (void)_PyType_GetVersionForCurrentState(interp, type);
-    if (PyErr_Occurred()) {
-        return 0;
-    }
     int cacheable = MCACHE_CACHEABLE_NAME(name);
     if (cacheable) {
         struct _PyTypeCacheLookupResult r = _PyTypeCache_Lookup(type, name);
@@ -7329,6 +7014,9 @@ _PyType_LookupValueAndVersion(PyTypeObject *type, PyObject *name, PyValue *out)
     }
     OBJECT_STAT_INC_COND(type_cache_misses, !is_dunder_name(name));
     OBJECT_STAT_INC_COND(type_cache_dunder_misses, is_dunder_name(name));
+
+    /* We may end up clearing live exceptions below, so make sure it's ours. */
+    assert(!PyErr_Occurred());
 
     // Keep the semantic source and receiver alive through allocator/free hooks.
     Py_INCREF(type);
@@ -7345,7 +7033,7 @@ _PyType_LookupValueAndVersion(PyTypeObject *type, PyObject *name, PyValue *out)
         }
     }
     res = find_name_in_mro(type, name, &result);
-    if (res >= 0 && !PyErr_Occurred() &&
+    if (res >= 0 &&
         _PyType_MatchesVersion(interp, type, expected)) {
         _PyTypeCache_Insert(type, name, result, expected);
     }
@@ -7356,7 +7044,7 @@ _PyType_LookupValueAndVersion(PyTypeObject *type, PyObject *name, PyValue *out)
     PyObject *saved = PyErr_GetRaisedException();
     Py_DECREF(name);
     _PyValue_RestoreException(saved);
-    if (res < 0 || PyErr_Occurred()) {
+    if (res < 0) {
         saved = PyErr_GetRaisedException();
         PyValue_XCLOSE(result);
         result = PyValue_NULL;
@@ -7369,10 +7057,6 @@ _PyType_LookupValueAndVersion(PyTypeObject *type, PyObject *name, PyValue *out)
     }
     // A final close cannot be followed by any type access or version lookup.
     Py_DECREF(type);
-    if (PyErr_Occurred()) {
-        PyValue_XCLOSE(result);
-        return 0;
-    }
     *out = result;
     return version;
 }
@@ -7576,22 +7260,16 @@ _Py_type_getattro_impl(PyTypeObject *type, PyObject *name, int *suppress_missing
 {
     PyObject *type_owner = NULL, *name_owner = NULL, *result = NULL;
     PyValue ref = PyValue_NULL;
-    if (PyErr_Occurred()) {
-        return NULL;
-    }
     type_owner = Py_NewRef((PyObject *)type);
     name_owner = Py_NewRef(name);
     ref = _Py_type_getattro_value((PyTypeObject *)type_owner,
                                  name_owner, suppress_missing_attribute);
-    if (!PyValue_IsNull(ref) && !PyErr_Occurred()) {
+    if (!PyValue_IsNull(ref)) {
         result = _PyValue_AsObjectAt(ref, BOX_SITE_ATTRIBUTE);
     }
     PyValue_CLEAR(ref);
     Py_CLEAR(name_owner);
     Py_CLEAR(type_owner);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-    }
     return result;
 }
 
@@ -7625,9 +7303,6 @@ _Py_type_getattro_value(PyTypeObject *type, PyObject *name,
     PyThreadState *tstate = _PyThreadState_GET();
     int active = 0, missing = 0;
     descrgetfunc meta_get = NULL;
-    if (PyErr_Occurred()) {
-        return PyValue_NULL;
-    }
     type_owner = Py_NewRef((PyObject *)type);
     name_owner = Py_NewRef(name);
     metatype_owner = Py_NewRef((PyObject *)Py_TYPE(type));
@@ -7653,9 +7328,6 @@ _Py_type_getattro_value(PyTypeObject *type, PyObject *name,
     active = 1;
     (void)_PyType_LookupValueAndVersion((PyTypeObject *)metatype_owner, name_owner,
                                         &meta_attribute_ref.ref);
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     if (PyValue_IsObject(meta_attribute_ref.ref)) {
         PyObject *meta_obj = PyValue_AsKnownObjectBorrow(meta_attribute_ref.ref);
         meta_get = Py_TYPE(meta_obj)->tp_descr_get;
@@ -7669,17 +7341,11 @@ _Py_type_getattro_value(PyTypeObject *type, PyObject *name,
     }
     (void)_PyType_LookupValueAndVersion((PyTypeObject *)type_owner, name_owner,
                                         &attribute_ref.ref);
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     if (!PyValue_IsNull(attribute_ref.ref)) {
         PyObject *attr_obj = PyValue_IsObject(attribute_ref.ref)
             ? PyValue_AsKnownObjectBorrow(attribute_ref.ref) : NULL;
         descrgetfunc local_get = attr_obj == NULL ? NULL : Py_TYPE(attr_obj)->tp_descr_get;
         PyValue_CLEAR(meta_attribute_ref.ref);
-        if (PyErr_Occurred()) {
-            goto done;
-        }
         if (local_get != NULL) {
             if (Py_TYPE(attr_obj) == &PyStaticMethod_Type) {
                 PyObject *callable = _PyStaticMethod_GetFunc(attr_obj);
@@ -7747,10 +7413,6 @@ done:
         result = _PyThreadState_PopCValueSteal(tstate, &result_ref);
         result_ref.ref = PyValue_NULL;
     }
-    if (PyErr_Occurred()) {
-        PyValue_CLEAR(result);
-        return PyValue_NULL;
-    }
     if (missing) {
         *suppress_missing_attribute = 1;
     }
@@ -7764,9 +7426,6 @@ type_update_dict(PyTypeObject *type, PyDictObject *dict, PyObject *name,
                  PyObject *value, PyObject **old_value)
 {
     assert(_PyInterpreterState_GET()->types.mutation_depth != 0);
-    if (PyErr_Occurred()) {
-        return -1;
-    }
     int found = _PyDict_GetItemRef_Unicode_LockHeld(dict, name, old_value);
     if (found < 0) {
         return -1;
@@ -7827,9 +7486,6 @@ update_slot_after_setattr(PyTypeObject *type, PyObject *name)
 static int
 type_setattro(PyObject *self, PyObject *name, PyObject *value)
 {
-    if (PyErr_Occurred()) {
-        return -1;
-    }
     PyTypeObject *type = PyTypeObject_CAST(self);
     Py_INCREF(type);
     Py_XINCREF(value);
@@ -7853,14 +7509,11 @@ type_setattro(PyObject *self, PyObject *name, PyObject *value)
     }
     name = PyUnicode_CheckExact(original_name)
         ? Py_NewRef(original_name) : _PyUnicode_Copy(original_name);
-    if (name == NULL || PyErr_Occurred()) {
+    if (name == NULL) {
         goto done;
     }
     if (!PyUnicode_CHECK_INTERNED(name)) {
         _PyUnicode_InternMortal(_PyInterpreterState_GET(), &name);
-        if (PyErr_Occurred()) {
-            goto done;
-        }
         if (!PyUnicode_CHECK_INTERNED(name)) {
             PyErr_SetString(PyExc_MemoryError, "Out of memory interning an attribute name");
             goto done;
@@ -7882,7 +7535,8 @@ type_setattro(PyObject *self, PyObject *name, PyObject *value)
 #endif
 
     descr = _PyType_LookupRef(metatype, name);
-    if (PyErr_Occurred()) {
+    if (descr == NULL && PyErr_Occurred()) {
+        /* Boxing an inline class attribute failed. */
         goto done;
     }
     if (descr != NULL) {
@@ -7897,12 +7551,9 @@ type_setattro(PyObject *self, PyObject *name, PyObject *value)
         goto done;
     }
     PyType_Modified(type);
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     if (lookup_tp_dict(type) == NULL) {
         candidate = PyDict_New();
-        if (candidate == NULL || PyErr_Occurred()) {
+        if (candidate == NULL) {
             goto done;
         }
         BEGIN_TYPE_LOCK();
@@ -7912,20 +7563,15 @@ type_setattro(PyObject *self, PyObject *name, PyObject *value)
         }
         END_TYPE_LOCK();
         Py_CLEAR(candidate);
-        if (PyErr_Occurred()) {
-            goto done;
-        }
     }
     dict = type_mutation_get_dict(type);
-    if (dict == NULL || PyErr_Occurred()) {
+    if (dict == NULL) {
         goto done;
     }
     BEGIN_TYPE_DICT_LOCK(dict);
     res = type_update_dict(type, (PyDictObject *)dict, name, value, &old_value);
-    if (!PyErr_Occurred()) {
-        assert(_PyType_CheckConsistency(type));
-    }
-    if (res == 0 && !PyErr_Occurred() && is_dunder_name(name) && has_slotdef(name)) {
+    assert(_PyType_CheckConsistency(type));
+    if (res == 0 && is_dunder_name(name) && has_slotdef(name)) {
         res = update_slot_after_setattr(type, name);
     }
     END_TYPE_DICT_LOCK();
@@ -7942,7 +7588,8 @@ done:
     Py_CLEAR(original_name);
     Py_CLEAR(value);
     Py_DECREF(type);
-    return _PyTypeMutation_End(&scope) < 0 ? -1 : res;
+    _PyTypeMutation_End(&scope);
+    return res;
 }
 
 
@@ -9124,9 +8771,6 @@ object_getstate_default(PyObject *obj, int required)
     PyValue name_value = PyValue_NULL;
     int rc = -1;
 
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     obj_owner = Py_NewRef(obj);
 
     if (required && Py_TYPE(obj)->tp_itemsize) {
@@ -9150,14 +8794,14 @@ object_getstate_default(PyObject *obj, int required)
     else {
         state = PyObject_GenericGetDict(obj, NULL);
     }
-    if (state == NULL || PyErr_Occurred()) {
+    if (state == NULL) {
         goto done;
     }
 
     selected_type = Py_NewRef((PyObject *)Py_TYPE(obj));
     slotnames = _PyType_GetSlotNames((PyTypeObject *)selected_type);
     Py_CLEAR(selected_type);
-    if (slotnames == NULL || PyErr_Occurred()) {
+    if (slotnames == NULL) {
         goto done;
     }
 
@@ -9178,9 +8822,6 @@ object_getstate_default(PyObject *obj, int required)
         if (Py_TYPE(obj)->tp_basicsize > basicsize) {
             Py_CLEAR(slotnames);
             Py_CLEAR(state);
-            if (PyErr_Occurred()) {
-                goto done;
-            }
             diagnostic_type = Py_NewRef((PyObject *)Py_TYPE(obj));
             if (PyType_HasFeature((PyTypeObject *)diagnostic_type,
                                   Py_TPFLAGS_HEAPTYPE)) {
@@ -9209,7 +8850,7 @@ object_getstate_default(PyObject *obj, int required)
     Py_ssize_t slotnames_size = PyList_GET_SIZE(slotnames);
     for (Py_ssize_t i = 0; i < slotnames_size; i++) {
         name_value = PyList_GetValue(slotnames, i);
-        if (PyValue_IsNull(name_value) || PyErr_Occurred()) {
+        if (PyValue_IsNull(name_value)) {
             goto done;
         }
         if (!PyValue_IsObject(name_value) ||
@@ -9243,12 +8884,9 @@ object_getstate_default(PyObject *obj, int required)
             int err = PyDict_SetItem(slots, name, value);
             Py_CLEAR(name);
             Py_CLEAR(value);
-            if (err < 0 || PyErr_Occurred()) {
+            if (err < 0) {
                 goto done;
             }
-        }
-        if (PyErr_Occurred()) {
-            goto done;
         }
         if (slotnames_size != PyList_GET_SIZE(slotnames)) {
             PyErr_Format(PyExc_RuntimeError,
@@ -9260,7 +8898,7 @@ object_getstate_default(PyObject *obj, int required)
     if (PyDict_GET_SIZE(slots) > 0) {
         state2 = _PyTuple_FromPair(state, slots);
         Py_CLEAR(state);
-        if (state2 == NULL || PyErr_Occurred()) {
+        if (state2 == NULL) {
             goto done;
         }
         state = state2;
@@ -9268,13 +8906,7 @@ object_getstate_default(PyObject *obj, int required)
     }
 
     Py_CLEAR(slots);
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     Py_CLEAR(slotnames);
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     rc = 0;
     goto done;
 
@@ -9289,7 +8921,7 @@ done:
     Py_CLEAR(slots);
     Py_CLEAR(state2);
     Py_CLEAR(obj_owner);
-    if (rc < 0 || PyErr_Occurred()) {
+    if (rc < 0) {
         Py_CLEAR(state);
         return NULL;
     }
@@ -10719,9 +10351,6 @@ type_ready_inherit(PyTypeObject *type)
     PyObject *base_owner = Py_XNewRef(type->tp_base);
     PyObject *mro = Py_XNewRef(lookup_tp_mro(type));
     int result = -1;
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     if (mro == NULL) {
         PyErr_SetString(PyExc_SystemError, "type has no MRO tuple");
         goto done;
@@ -10730,9 +10359,6 @@ type_ready_inherit(PyTypeObject *type)
     PyTypeObject *base = (PyTypeObject *)base_owner;
     if (base != NULL) {
         inherit_special(type, base);
-        if (PyErr_Occurred()) {
-            goto done;
-        }
     }
     for (Py_ssize_t i = 1; i < PyTuple_GET_SIZE(mro); i++) {
         PyValue item = PyTuple_GET_VALUE(mro, i);
@@ -10743,17 +10369,11 @@ type_ready_inherit(PyTypeObject *type)
                     goto done;
                 }
                 inherit_patma_flags(type, (PyTypeObject *)parent);
-                if (PyErr_Occurred()) {
-                    goto done;
-                }
             }
         }
     }
     if (base != NULL) {
         type_ready_inherit_as_structs(type, base);
-        if (PyErr_Occurred()) {
-            goto done;
-        }
     }
     if (_PyType_IS_GC(type) && (type->tp_flags & Py_TPFLAGS_BASETYPE) &&
             (type->tp_free == NULL || type->tp_free == PyObject_Free)) {
@@ -10765,7 +10385,7 @@ type_ready_inherit(PyTypeObject *type)
 done:
     Py_CLEAR(mro);
     Py_CLEAR(base_owner);
-    return PyErr_Occurred() ? -1 : result;
+    return result;
 }
 
 
@@ -10804,9 +10424,6 @@ type_ready_add_subclasses(PyTypeObject *type)
 {
     PyObject *bases = Py_XNewRef(lookup_tp_bases(type));
     int result = -1;
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     if (bases == NULL) {
         PyErr_SetString(PyExc_SystemError, "type has no bases tuple");
         goto done;
@@ -10816,7 +10433,7 @@ type_ready_add_subclasses(PyTypeObject *type)
         if (PyValue_IsObject(item)) {
             PyObject *base = PyValue_AsKnownObjectBorrow(item);
             if (PyType_Check(base) &&
-                    (add_subclass((PyTypeObject *)base, type) < 0 || PyErr_Occurred())) {
+                    add_subclass((PyTypeObject *)base, type) < 0) {
                 goto done;
             }
         }
@@ -10824,7 +10441,7 @@ type_ready_add_subclasses(PyTypeObject *type)
     result = 0;
 done:
     Py_CLEAR(bases);
-    return PyErr_Occurred() ? -1 : result;
+    return result;
 }
 
 
@@ -11168,106 +10785,65 @@ _PyStaticType_InitBuiltin(PyInterpreterState *interp, PyTypeObject *self)
 static int
 add_subclass(PyTypeObject *base, PyTypeObject *type)
 {
-    assert(Py_REFCNT(base) > 0 && Py_REFCNT(type) > 0);
-    Py_INCREF(base);
-    Py_INCREF(type);
-    PyObject *key = NULL;
-    PyObject *ref = NULL;
-    PyObject *subclasses = NULL;
-    int result = -1;
-    if (PyErr_Occurred()) {
-        goto done;
-    }
-    key = PyLong_FromVoidPtr((void *)type);
-    if (key == NULL) {
-        goto done;
-    }
-    ref = PyWeakref_NewRef((PyObject *)type, NULL);
-    if (ref == NULL) {
-        goto done;
-    }
-    PyObject *current = lookup_tp_subclasses(base);
-    if (current == NULL) {
-        current = init_tp_subclasses(base);
-    }
-    if (current == NULL || PyErr_Occurred()) {
-        goto done;
-    }
-    subclasses = Py_NewRef(current);
-    result = PyDict_SetItem(subclasses, key, ref);
+    PyObject *key = PyLong_FromVoidPtr((void *) type);
+    if (key == NULL)
+        return -1;
 
-done:
-    Py_CLEAR(ref);
-    Py_CLEAR(key);
-    if (result == 0 && !PyErr_Occurred() &&
-            lookup_tp_subclasses(base) != subclasses) {
-        PyErr_SetString(PyExc_RuntimeError,
-                        "subclass dictionary changed during publication");
+    PyObject *ref = PyWeakref_NewRef((PyObject *)type, NULL);
+    if (ref == NULL) {
+        Py_DECREF(key);
+        return -1;
     }
-    /* On successful revalidation the installed slot keeps this close
-     * nonfinal. An error path may retire a detached map instead. */
-    Py_CLEAR(subclasses);
-    Py_DECREF(type);
-    Py_DECREF(base);
-    return PyErr_Occurred() ? -1 : result;
+
+    // Only get tp_subclasses after creating the key and value.
+    PyObject *subclasses = lookup_tp_subclasses(base);
+    if (subclasses == NULL) {
+        subclasses = init_tp_subclasses(base);
+        if (subclasses == NULL) {
+            Py_DECREF(key);
+            Py_DECREF(ref);
+            return -1;
+        }
+    }
+    assert(PyDict_CheckExact(subclasses));
+
+    int result = PyDict_SetItem(subclasses, key, ref);
+    Py_DECREF(ref);
+    Py_DECREF(key);
+    return result;
 }
 
 static int
 add_all_subclasses(PyTypeObject *type, PyObject *bases)
 {
-    PyObject *owner = Py_NewRef(bases);
-    int result = 0;
-    if (PyErr_Occurred()) {
-        result = -1;
-        goto done;
-    }
-    Py_ssize_t n = PyTuple_GET_SIZE(owner);
+    Py_ssize_t n = PyTuple_GET_SIZE(bases);
+    int res = 0;
     for (Py_ssize_t i = 0; i < n; i++) {
-        PyValue item = PyTuple_GET_VALUE(owner, i);
+        PyValue item = PyTuple_GET_VALUE(bases, i);
+        // bases tuple must only contain types
         assert(PyValue_IsObject(item));
         PyTypeObject *base = _PyType_CAST(PyValue_AsKnownObjectBorrow(item));
         if (add_subclass(base, type) < 0) {
-            result = -1;
-            break;
+            res = -1;
         }
     }
-done:
-    Py_CLEAR(owner);
-    return PyErr_Occurred() ? -1 : result;
+    return res;
 }
 
 static int
 get_subclasses_key(PyTypeObject *type, PyTypeObject *base, PyValue *result)
 {
     *result = PyValue_NULL;
-    if (PyErr_Occurred()) {
-        return -1;
-    }
     PyObject *key = PyLong_FromVoidPtr((void *)type);
     if (key != NULL) {
-        if (!PyErr_Occurred()) {
-            *result = PyValue_PrepareOwned(key);
-            key = NULL;
-        }
-        Py_CLEAR(key);
-        if (!PyErr_Occurred()) {
-            return 1;
-        }
-        PyObject *saved = PyErr_GetRaisedException();
-        PyValue_XCLOSE(*result);
-        *result = PyValue_NULL;
-        _PyValue_RestoreException(saved);
-        return -1;
-    }
-    if (!PyErr_ExceptionMatches(PyExc_MemoryError)) {
-        return -1;
+        *result = PyValue_PrepareOwned(key);
+        return 1;
     }
     PyErr_Clear();
-    if (PyErr_Occurred()) {
-        return -1;
-    }
 
-    /* The target can already be dying. Compare only its address: weakref
+    /* This basically means we're out of memory.
+     * We fall back to manually traversing the values.
+     * The target can already be dying. Compare only its address: weakref
      * promotion would reject it, and INCREF would resurrect a zero count. */
     PyObject *subclasses = lookup_tp_subclasses(base);
     if (subclasses == NULL) {
@@ -11289,7 +10865,7 @@ get_subclasses_key(PyTypeObject *type, PyTypeObject *base, PyValue *result)
         /* The map still owns this exact integer key: this is nonfinal. */
         PyValue_CLOSE(candidate);
     }
-    return found < 0 || PyErr_Occurred() ? -1 : 0;
+    return found < 0 ? -1 : 0;
 }
 
 static void
@@ -11432,9 +11008,6 @@ wrap_binaryfunc(PyObject *self, PyObject *args, void *wrapped)
     PyObject *other = NULL;
     PyObject *result = NULL;
 
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     receiver = Py_NewRef(self);
     tuple = Py_NewRef(args);
     if (!check_num_args(tuple, 1)) {
@@ -11450,9 +11023,6 @@ done:
     Py_CLEAR(other);
     Py_CLEAR(tuple);
     Py_CLEAR(receiver);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-    }
     return result;
 }
 
@@ -11465,9 +11035,6 @@ wrap_binaryfunc_l(PyObject *self, PyObject *args, void *wrapped)
     PyObject *other = NULL;
     PyObject *result = NULL;
 
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     receiver = Py_NewRef(self);
     tuple = Py_NewRef(args);
     if (!check_num_args(tuple, 1)) {
@@ -11483,9 +11050,6 @@ done:
     Py_CLEAR(other);
     Py_CLEAR(tuple);
     Py_CLEAR(receiver);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-    }
     return result;
 }
 
@@ -11498,9 +11062,6 @@ wrap_binaryfunc_r(PyObject *self, PyObject *args, void *wrapped)
     PyObject *other = NULL;
     PyObject *result = NULL;
 
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     receiver = Py_NewRef(self);
     tuple = Py_NewRef(args);
     if (!check_num_args(tuple, 1)) {
@@ -11516,9 +11077,6 @@ done:
     Py_CLEAR(other);
     Py_CLEAR(tuple);
     Py_CLEAR(receiver);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-    }
     return result;
 }
 
@@ -11536,9 +11094,6 @@ wrap_ternaryfunc(PyObject *self, PyObject *args, void *wrapped)
 
     /* Note: This wrapper only works for __pow__() */
 
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     receiver = Py_NewRef(self);
     tuple = Py_NewRef(args);
     size = check_pow_args(tuple);
@@ -11563,9 +11118,6 @@ done:
     Py_CLEAR(other);
     Py_CLEAR(tuple);
     Py_CLEAR(receiver);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-    }
     return result;
 }
 
@@ -11583,9 +11135,6 @@ wrap_ternaryfunc_r(PyObject *self, PyObject *args, void *wrapped)
 
     /* Note: This wrapper only works for __rpow__() */
 
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     receiver = Py_NewRef(self);
     tuple = Py_NewRef(args);
     size = check_pow_args(tuple);
@@ -11610,9 +11159,6 @@ done:
     Py_CLEAR(other);
     Py_CLEAR(tuple);
     Py_CLEAR(receiver);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-    }
     return result;
 }
 
@@ -11636,9 +11182,6 @@ wrap_indexargfunc(PyObject *self, PyObject *args, void *wrapped)
     PyObject *result = NULL;
     Py_ssize_t i;
 
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     receiver = Py_NewRef(self);
     tuple = Py_NewRef(args);
     if (!check_num_args(tuple, 1)) {
@@ -11649,7 +11192,7 @@ wrap_indexargfunc(PyObject *self, PyObject *args, void *wrapped)
         goto done;
     }
     i = PyNumber_AsSsize_t(operand, PyExc_OverflowError);
-    if (PyErr_Occurred()) {
+    if (i == -1 && PyErr_Occurred()) {
         goto done;
     }
     result = (*func)(receiver, i);
@@ -11658,9 +11201,6 @@ done:
     Py_CLEAR(operand);
     Py_CLEAR(tuple);
     Py_CLEAR(receiver);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-    }
     return result;
 }
 
@@ -11696,9 +11236,6 @@ wrap_sq_item(PyObject *self, PyObject *args, void *wrapped)
     PyObject *result = NULL;
     Py_ssize_t i;
 
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     receiver = Py_NewRef(self);
     tuple = Py_NewRef(args);
     if (PyTuple_GET_SIZE(tuple) == 1) {
@@ -11707,7 +11244,7 @@ wrap_sq_item(PyObject *self, PyObject *args, void *wrapped)
             goto done;
         }
         i = getindex(receiver, operand);
-        if (PyErr_Occurred()) {
+        if (i == -1 && PyErr_Occurred()) {
             goto done;
         }
         result = (*func)(receiver, i);
@@ -11720,9 +11257,6 @@ done:
     Py_CLEAR(operand);
     Py_CLEAR(tuple);
     Py_CLEAR(receiver);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-    }
     return result;
 }
 
@@ -11755,9 +11289,6 @@ wrap_sq_delitem(PyObject *self, PyObject *args, void *wrapped)
     PyObject *result = NULL;
     Py_ssize_t i;
 
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     receiver = Py_NewRef(self);
     tuple = Py_NewRef(args);
     if (!check_num_args(tuple, 1)) {
@@ -11768,11 +11299,11 @@ wrap_sq_delitem(PyObject *self, PyObject *args, void *wrapped)
         goto done;
     }
     i = getindex(receiver, operand);
-    if (PyErr_Occurred()) {
+    if (i == -1 && PyErr_Occurred()) {
         goto done;
     }
-    (void)(*func)(receiver, i, NULL);
-    if (PyErr_Occurred()) {
+    int res = (*func)(receiver, i, NULL);
+    if (res == -1 && PyErr_Occurred()) {
         goto done;
     }
     result = Py_NewRef(Py_None);
@@ -11781,9 +11312,6 @@ done:
     Py_CLEAR(operand);
     Py_CLEAR(tuple);
     Py_CLEAR(receiver);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-    }
     return result;
 }
 
@@ -11798,9 +11326,6 @@ wrap_objobjproc(PyObject *self, PyObject *args, void *wrapped)
     PyObject *result = NULL;
     int res;
 
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     receiver = Py_NewRef(self);
     tuple = Py_NewRef(args);
     if (!check_num_args(tuple, 1)) {
@@ -11811,7 +11336,7 @@ wrap_objobjproc(PyObject *self, PyObject *args, void *wrapped)
         goto done;
     }
     res = (*func)(receiver, operand);
-    if (PyErr_Occurred()) {
+    if (res == -1 && PyErr_Occurred()) {
         goto done;
     }
     result = PyBool_FromLong((long)res);
@@ -11820,9 +11345,6 @@ done:
     Py_CLEAR(operand);
     Py_CLEAR(tuple);
     Py_CLEAR(receiver);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-    }
     return result;
 }
 
@@ -11850,9 +11372,6 @@ wrap_delitem(PyObject *self, PyObject *args, void *wrapped)
     PyObject *operand = NULL;
     PyObject *result = NULL;
 
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     receiver = Py_NewRef(self);
     tuple = Py_NewRef(args);
     if (!check_num_args(tuple, 1)) {
@@ -11862,8 +11381,8 @@ wrap_delitem(PyObject *self, PyObject *args, void *wrapped)
     if (operand == NULL) {
         goto done;
     }
-    (void)(*func)(receiver, operand, NULL);
-    if (PyErr_Occurred()) {
+    int res = (*func)(receiver, operand, NULL);
+    if (res == -1 && PyErr_Occurred()) {
         goto done;
     }
     result = Py_NewRef(Py_None);
@@ -11872,9 +11391,6 @@ done:
     Py_CLEAR(operand);
     Py_CLEAR(tuple);
     Py_CLEAR(receiver);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-    }
     return result;
 }
 
@@ -11980,9 +11496,6 @@ wrap_delattr(PyObject *self, PyObject *args, void *wrapped)
     PyObject *result = NULL;
     int res;
 
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     receiver = Py_NewRef(self);
     tuple = Py_NewRef(args);
     if (!check_num_args(tuple, 1)) {
@@ -11997,7 +11510,7 @@ wrap_delattr(PyObject *self, PyObject *args, void *wrapped)
         goto done;
     }
     res = (*func)(receiver, name, NULL);
-    if (res < 0 || PyErr_Occurred()) {
+    if (res < 0) {
         goto done;
     }
     result = Py_NewRef(Py_None);
@@ -12006,9 +11519,6 @@ done:
     Py_CLEAR(name);
     Py_CLEAR(tuple);
     Py_CLEAR(receiver);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-    }
     return result;
 }
 
@@ -12055,9 +11565,6 @@ wrap_richcmpfunc(PyObject *self, PyObject *args, void *wrapped, int op)
     PyObject *other = NULL;
     PyObject *result = NULL;
 
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     receiver = Py_NewRef(self);
     tuple = Py_NewRef(args);
     if (!check_num_args(tuple, 1)) {
@@ -12073,9 +11580,6 @@ done:
     Py_CLEAR(other);
     Py_CLEAR(tuple);
     Py_CLEAR(receiver);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-    }
     return result;
 }
 
@@ -12154,9 +11658,6 @@ wrap_descr_delete(PyObject *self, PyObject *args, void *wrapped)
     PyObject *result = NULL;
     int ret;
 
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     receiver = Py_NewRef(self);
     tuple = Py_NewRef(args);
     if (!check_num_args(tuple, 1)) {
@@ -12167,7 +11668,7 @@ wrap_descr_delete(PyObject *self, PyObject *args, void *wrapped)
         goto done;
     }
     ret = (*func)(receiver, operand, NULL);
-    if (ret < 0 || PyErr_Occurred()) {
+    if (ret < 0) {
         goto done;
     }
     result = Py_NewRef(Py_None);
@@ -12176,9 +11677,6 @@ done:
     Py_CLEAR(operand);
     Py_CLEAR(tuple);
     Py_CLEAR(receiver);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-    }
     return result;
 }
 
@@ -12929,17 +12427,16 @@ has_dunder_getitem(PyObject *self)
     _PyCValue cref;
     int status = -1;
     int result = -1;
-    if (PyErr_Occurred()) {
-        return -1;
-    }
     self_owner = Py_NewRef(self);
     _PyThreadState_PushCValue(tstate, &cref);
     status = lookup_maybe_method(self_owner, &_Py_ID(__getitem__), &cref.ref);
-    if (PyErr_Occurred()) {
-        result = -1;
+    if (status >= 0) {
+        result = 1;
     }
     else {
-        result = status >= 0 ? 1 : 0;
+        /* lookup_maybe_method() reports a missing method and an error the
+           same way. */
+        result = PyErr_Occurred() ? -1 : 0;
     }
     {
         PyValue retired = _PyThreadState_PopCValueSteal(tstate, &cref);
@@ -12947,9 +12444,6 @@ has_dunder_getitem(PyObject *self)
         PyValue_XCLOSE(retired);
     }
     Py_CLEAR(self_owner);
-    if (PyErr_Occurred()) {
-        return -1;
-    }
     return result;
 }
 
@@ -12962,20 +12456,17 @@ slot_tp_iter(PyObject *self)
     PyObject *diagnostic_name = NULL;
     int attr_is_none = 0;
     int present;
-    if (PyErr_Occurred()) {
-        return NULL;
-    }
     self_owner = Py_NewRef(self);
     result = maybe_call_special_no_args(self_owner, &_Py_ID(__iter__),
                                         &attr_is_none);
-    if (PyErr_Occurred() || result != NULL) {
+    if (result != NULL || PyErr_Occurred()) {
         goto done;
     }
     if (attr_is_none) {
         goto not_iterable;
     }
     present = has_dunder_getitem(self_owner);
-    if (PyErr_Occurred() || present < 0) {
+    if (present < 0) {
         goto done;
     }
     if (present) {
@@ -12999,10 +12490,6 @@ done:
     Py_CLEAR(diagnostic_name);
     Py_CLEAR(diagnostic_type);
     Py_CLEAR(self_owner);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-        return NULL;
-    }
     return result;
 }
 
@@ -13022,43 +12509,28 @@ _PyType_HasSlotTpIternext(PyTypeObject *type)
 static PyObject *
 slot_tp_descr_get(PyObject *self, PyObject *obj, PyObject *type)
 {
-    PyObject *self_owner = NULL, *obj_owner = NULL, *type_owner = NULL;
-    PyObject *receiver_type_owner = NULL, *get = NULL, *result = NULL;
-    if (PyErr_Occurred()) {
+    PyTypeObject *tp = Py_TYPE(self);
+    PyObject *get = _PyType_LookupRef(tp, &_Py_ID(__get__));
+    if (get == NULL && PyErr_Occurred()) {
+        /* Boxing an inline class attribute failed. */
         return NULL;
-    }
-    self_owner = Py_NewRef(self);
-    obj_owner = Py_XNewRef(obj);
-    type_owner = Py_XNewRef(type);
-    receiver_type_owner = Py_NewRef((PyObject *)Py_TYPE(self_owner));
-    PyTypeObject *tp = (PyTypeObject *)receiver_type_owner;
-    get = _PyType_LookupRef(tp, &_Py_ID(__get__));
-    if (PyErr_Occurred()) {
-        goto done;
     }
     if (get == NULL) {
 #ifndef Py_GIL_DISABLED
-        if (tp->tp_descr_get == slot_tp_descr_get) {
+        /* Avoid further slowdowns */
+        if (tp->tp_descr_get == slot_tp_descr_get)
             tp->tp_descr_get = NULL;
-        }
 #endif
-        result = Py_NewRef(self_owner);
-        goto done;
+        return Py_NewRef(self);
     }
-    PyObject *stack[3] = {self_owner,
-        obj_owner != NULL ? obj_owner : Py_None,
-        type_owner != NULL ? type_owner : Py_None};
-    result = PyObject_Vectorcall(get, stack, 3, NULL);
-done:
-    Py_CLEAR(get);
-    Py_CLEAR(receiver_type_owner);
-    Py_CLEAR(type_owner);
-    Py_CLEAR(obj_owner);
-    Py_CLEAR(self_owner);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-    }
-    return result;
+    if (obj == NULL)
+        obj = Py_None;
+    if (type == NULL)
+        type = Py_None;
+    PyObject *stack[3] = {self, obj, type};
+    PyObject *res = PyObject_Vectorcall(get, stack, 3, NULL);
+    Py_DECREF(get);
+    return res;
 }
 
 static int
@@ -13102,28 +12574,14 @@ slot_tp_init(PyObject *self, PyObject *args, PyObject *kwds)
 static PyObject *
 slot_tp_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 {
-    PyObject *type_owner = NULL, *args_owner = NULL, *kwds_owner = NULL;
-    PyObject *func = NULL, *result = NULL;
-    if (PyErr_Occurred()) {
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyObject *func = PyObject_GetAttr((PyObject *)type, &_Py_ID(__new__));
+    if (func == NULL) {
         return NULL;
     }
-    type_owner = Py_NewRef((PyObject *)type);
-    args_owner = Py_NewRef(args);
-    kwds_owner = Py_XNewRef(kwds);
-    func = PyObject_GetAttr(type_owner, &_Py_ID(__new__));
-    if (func == NULL) {
-        goto done;
-    }
-    result = _PyObject_Call_Prepend(_PyThreadState_GET(), func,
-                                  type_owner, args_owner, kwds_owner);
-done:
-    Py_CLEAR(func);
-    Py_CLEAR(kwds_owner);
-    Py_CLEAR(args_owner);
-    Py_CLEAR(type_owner);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(result);
-    }
+    PyObject *result = _PyObject_Call_Prepend(tstate, func, (PyObject *)type,
+                                              args, kwds);
+    Py_DECREF(func);
     return result;
 }
 
@@ -14126,9 +13584,6 @@ _PyType_InitSlotDefs(PyInterpreterState *interp)
     if (!_Py_IsMainInterpreter(interp)) {
         return 0;
     }
-    if (PyErr_Occurred()) {
-        return -1;
-    }
     int result = -1;
     PyObject *bytearray = NULL;
     PyObject *cache = NULL;
@@ -14143,7 +13598,7 @@ _PyType_InitSlotDefs(PyInterpreterState *interp)
     for (p = slotdefs; p->name_strobj; p++, idx++) {
         assert(idx < 255);
         int found = PyDict_GetItemRef(cache, p->name_strobj, &bytearray);
-        if (PyErr_Occurred() || found < 0) {
+        if (found < 0) {
             goto done;
         }
         if (!bytearray) {
@@ -14155,7 +13610,7 @@ _PyType_InitSlotDefs(PyInterpreterState *interp)
             uint8_t *data = (uint8_t *)PyByteArray_AS_STRING(bytearray);
             data[0] = 0;
             int status = PyDict_SetItem(cache, p->name_strobj, bytearray);
-            if (PyErr_Occurred() || status < 0) {
+            if (status < 0) {
                 goto done;
             }
         }
@@ -14165,18 +13620,12 @@ _PyType_InitSlotDefs(PyInterpreterState *interp)
         assert(data[0] < MAX_EQUIV);
         data[data[0]] = (uint8_t)idx;
         Py_CLEAR(bytearray);
-        if (PyErr_Occurred()) {
-            goto done;
-        }
     }
     memset(slotdefs_dups, -1, sizeof(slotdefs_dups));
 
     Py_ssize_t pos = 0;
     int found;
     while ((found = _PyDict_NextValue(cache, &pos, NULL, &value, NULL)) > 0) {
-        if (PyErr_Occurred()) {
-            goto done;
-        }
         assert(PyValue_IsObject(value));
         PyObject *object = PyValue_AsKnownObjectBorrow(value);
         assert(PyByteArray_CheckExact(object));
@@ -14187,27 +13636,16 @@ _PyType_InitSlotDefs(PyInterpreterState *interp)
             memcpy(&slotdefs_dups[slot], data, sizeof(uint8_t) * (n + 1));
         }
         PyValue_CLEAR(value);
-        if (PyErr_Occurred()) {
-            goto done;
-        }
     }
-    if (found < 0 || PyErr_Occurred()) {
+    if (found < 0) {
         goto done;
     }
     result = 0;
 
 done:
-    if (!PyValue_IsNull(value)) {
-        PyValue_CLEAR(value);
-    }
+    PyValue_XCLOSE(value);
     Py_CLEAR(bytearray);
-    if (PyErr_Occurred()) {
-        result = -1;
-    }
     Py_CLEAR(cache);
-    if (PyErr_Occurred()) {
-        result = -1;
-    }
     return result;
 }
 
@@ -14235,105 +13673,63 @@ _PyType_GetSlotWrapperNames(void)
 static int
 type_new_set_names(PyTypeObject *type)
 {
-    if (PyErr_Occurred()) {
+    PyObject *dict = lookup_tp_dict(type);
+    PyObject *names_to_set = PyDict_Copy(dict);
+    if (names_to_set == NULL) {
         return -1;
     }
-    int result = -1;
-    PyObject *type_owner = Py_NewRef((PyObject *)type);
-    PyObject *source = Py_XNewRef(lookup_tp_dict(type));
-    PyObject *names_to_set = NULL;
-    PyObject *key = NULL;
-    PyObject *value = NULL;
-    PyObject *set_name = NULL;
-    PyObject *res = NULL;
-    PyObject *value_type_owner = NULL;
-    PyObject *value_name_owner = NULL;
-    PyObject *type_name_owner = NULL;
-    if (source == NULL || PyErr_Occurred()) {
-        goto done;
-    }
-    names_to_set = PyDict_Copy(source);
-    if (names_to_set == NULL) {
-        goto done;
-    }
 
+    int result = -1;
     Py_ssize_t i = 0;
+    PyObject *key, *value;
     int found;
     while ((found = PyDict_NextEntryRef(names_to_set, &i, &key, &value)) > 0) {
-        if (PyErr_Occurred()) {
-            goto done;
-        }
-        set_name = _PyObject_LookupSpecial(value, &_Py_ID(__set_name__));
+        PyObject *set_name = _PyObject_LookupSpecial(value,
+                                                     &_Py_ID(__set_name__));
         if (set_name == NULL) {
-            if (PyErr_Occurred()) {
-                goto done;
-            }
-            Py_CLEAR(value);
-            Py_CLEAR(key);
+            Py_DECREF(value);
+            Py_DECREF(key);
             if (PyErr_Occurred()) {
                 goto done;
             }
             continue;
         }
-        if (PyErr_Occurred()) {
-            goto done;
-        }
-        res = PyObject_CallFunctionObjArgs(set_name, type, key, NULL);
-        int call_failed = res == NULL || PyErr_Occurred();
-        Py_CLEAR(set_name);
-        if (call_failed) {
-            Py_CLEAR(res);
-            value_type_owner = Py_NewRef((PyObject *)Py_TYPE(value));
+
+        PyObject *res = PyObject_CallFunctionObjArgs(set_name, type, key, NULL);
+        Py_DECREF(set_name);
+
+        if (res == NULL) {
+            /* The note's %R runs Python, which can rebind __name__ and free
+               the strings that the tp_name pointers point into. */
+            PyObject *value_type = Py_NewRef((PyObject *)Py_TYPE(value));
+            PyObject *value_name = NULL, *type_name = NULL;
             if (_PyType_HasFeature(Py_TYPE(value), Py_TPFLAGS_HEAPTYPE)) {
-                value_name_owner = Py_NewRef(((PyHeapTypeObject *)Py_TYPE(value))->ht_name);
+                value_name = Py_NewRef(((PyHeapTypeObject *)Py_TYPE(value))->ht_name);
             }
             if (_PyType_HasFeature(type, Py_TPFLAGS_HEAPTYPE)) {
-                type_name_owner = Py_NewRef(((PyHeapTypeObject *)type)->ht_name);
+                type_name = Py_NewRef(((PyHeapTypeObject *)type)->ht_name);
             }
-            const char *value_type_name = Py_TYPE(value)->tp_name;
-            const char *receiver_type_name = type->tp_name;
             _PyErr_FormatNote(
                 "Error calling __set_name__ on '%.100s' instance %R "
                 "in '%.100s'",
-                value_type_name, key, receiver_type_name);
-            Py_CLEAR(type_name_owner);
-            Py_CLEAR(value_name_owner);
-            Py_CLEAR(value_type_owner);
+                Py_TYPE(value)->tp_name, key, type->tp_name);
+            Py_XDECREF(type_name);
+            Py_XDECREF(value_name);
+            Py_DECREF(value_type);
+            Py_DECREF(value);
+            Py_DECREF(key);
             goto done;
         }
-        if (PyErr_Occurred()) {
-            Py_CLEAR(res);
-            goto done;
-        }
-        Py_CLEAR(res);
-        if (PyErr_Occurred()) {
-            goto done;
-        }
-        Py_CLEAR(value);
-        Py_CLEAR(key);
-        if (PyErr_Occurred()) {
-            goto done;
-        }
+        Py_DECREF(res);
+        Py_DECREF(value);
+        Py_DECREF(key);
     }
-    if (found < 0 || PyErr_Occurred()) {
-        goto done;
+    if (found == 0) {
+        result = 0;
     }
-    result = 0;
 
 done:
-    Py_CLEAR(res);
-    Py_CLEAR(set_name);
-    Py_CLEAR(value);
-    Py_CLEAR(key);
-    Py_CLEAR(value_type_owner);
-    Py_CLEAR(value_name_owner);
-    Py_CLEAR(type_name_owner);
-    Py_CLEAR(names_to_set);
-    Py_CLEAR(source);
-    Py_CLEAR(type_owner);
-    if (PyErr_Occurred()) {
-        result = -1;
-    }
+    Py_DECREF(names_to_set);
     return result;
 }
 
@@ -14387,9 +13783,6 @@ recurse_down_subclasses(PyTypeObject *type, PyObject *attr_name,
     PyObject *children = NULL;
     PyObject *dict = NULL;
     int result = -1;
-    if (PyErr_Occurred()) {
-        goto done;
-    }
     children = _PyType_GetSubclasses(type);
     if (children == NULL) {
         goto done;
@@ -14405,12 +13798,11 @@ recurse_down_subclasses(PyTypeObject *type, PyObject *attr_name,
             contains = PyDict_Contains(dict, attr_name);
         }
         Py_CLEAR(dict);
-        if (contains < 0 || PyErr_Occurred()) {
+        if (contains < 0) {
             goto done;
         }
         if (!contains &&
-                (update_subclasses(child, attr_name, callback, data) < 0 ||
-                 PyErr_Occurred())) {
+                update_subclasses(child, attr_name, callback, data) < 0) {
             goto done;
         }
     }
@@ -14418,7 +13810,7 @@ recurse_down_subclasses(PyTypeObject *type, PyObject *attr_name,
 done:
     Py_CLEAR(dict);
     Py_CLEAR(children);
-    return PyErr_Occurred() ? -1 : result;
+    return result;
 }
 
 static int
@@ -14605,65 +13997,38 @@ May return NULL with or without an exception set, like PyDict_GetItemWithError. 
 PyObject *
 _PySuper_LookupDescr(PyTypeObject *su_type, PyTypeObject *su_obj_type, PyObject *name)
 {
-    if (PyErr_Occurred()) {
-        return NULL;
-    }
-    PyObject *su_type_owner = Py_NewRef((PyObject *)su_type);
-    PyObject *su_obj_type_owner = Py_NewRef((PyObject *)su_obj_type);
-    PyObject *name_owner = Py_NewRef(name);
-    PyObject *mro = lookup_tp_mro(su_obj_type);
-    PyObject *mro_owner = Py_XNewRef(mro);
-    PyObject *res = NULL;
-    int result = 0;
+    PyObject *mro, *res = NULL;
+    Py_ssize_t i, n;
 
-    if (mro_owner != NULL) {
-        assert(PyTuple_Check(mro_owner));
-        Py_ssize_t n = PyTuple_GET_SIZE(mro_owner);
-        Py_ssize_t i;
-        for (i = 0; i + 1 < n; i++) {
-            PyValue value = PyTuple_GET_VALUE(mro_owner, i);
-            assert(PyValue_IsObject(value));
-            PyObject *obj = PyValue_AsKnownObjectBorrow(value);
-            assert(PyType_Check(obj));
-            if (obj == su_type_owner) {
-                break;
-            }
-        }
-        i++;  /* skip su->type (if any) */
-        if (i < n) {
-            for (; i < n; i++) {
-                PyValue value = PyTuple_GET_VALUE(mro_owner, i);
-                assert(PyValue_IsObject(value));
-                PyObject *obj = PyValue_AsKnownObjectBorrow(value);
-                assert(PyType_Check(obj));
-                PyObject *dict_owner = Py_XNewRef(lookup_tp_dict((PyTypeObject *)obj));
-                assert(dict_owner != NULL && PyDict_Check(dict_owner));
-                if (PyErr_Occurred()) {
-                    Py_CLEAR(dict_owner);
-                    break;
-                }
-                result = PyDict_GetItemRef(dict_owner, name_owner, &res);
-                int failed = PyErr_Occurred() || result < 0;
-                Py_CLEAR(dict_owner);
-                if (failed || PyErr_Occurred()) {
-                    break;
-                }
-                if (result > 0) {
-                    break;
-                }
-            }
+    mro = lookup_tp_mro(su_obj_type);
+    if (mro == NULL)
+        return NULL;
+
+    /* Keep a strong reference to mro because su_obj_type->tp_mro can be
+       replaced during PyDict_GetItemRef(dict, name, &res). */
+    Py_INCREF(mro);
+
+    assert(PyTuple_Check(mro));
+    n = PyTuple_GET_SIZE(mro);
+
+    /* No need to check the last one: it's gonna be skipped anyway.  */
+    for (i = 0; i+1 < n; i++) {
+        if ((PyObject *)(su_type) == _PyTuple_GET_OBJECT(mro, i))
+            break;
+    }
+    i++;  /* skip su->type (if any)  */
+    for (; i < n; i++) {
+        PyObject *obj = _PyTuple_GET_OBJECT(mro, i);
+        PyObject *dict = lookup_tp_dict(_PyType_CAST(obj));
+        assert(dict != NULL && PyDict_Check(dict));
+
+        if (PyDict_GetItemRef(dict, name, &res) != 0) {
+            // found or error
+            break;
         }
     }
-
-    Py_CLEAR(name_owner);
-    Py_CLEAR(su_obj_type_owner);
-    Py_CLEAR(su_type_owner);
-    Py_CLEAR(mro_owner);
-    if (PyErr_Occurred()) {
-        Py_CLEAR(res);
-        return NULL;
-    }
-    return result > 0 ? res : NULL;
+    Py_DECREF(mro);
+    return res;
 }
 
 // if `method` is non-NULL, we are looking for a method descriptor,
@@ -14851,9 +14216,6 @@ super_init_without_args(_PyInterpreterFrame *cframe, PyTypeObject **type_p,
 {
     *type_p = NULL;
     *obj_p = NULL;
-    if (PyErr_Occurred()) {
-        return -1;
-    }
     PyCodeObject *co = _PyFrame_GetCode(cframe);
     PyObject *co_owner = Py_NewRef((PyObject *)co);
     PyObject *firstarg = NULL;
@@ -14886,7 +14248,8 @@ super_init_without_args(_PyInterpreterFrame *cframe, PyTypeObject **type_p,
         PyObject *cell = PyValue_AsKnownObjectBorrow(firstref);
         assert(PyCell_Check(cell));
         firstarg = PyCell_Get(cell);
-        if (firstarg == NULL || PyErr_Occurred()) {
+        if (firstarg == NULL) {
+            /* NULL is an empty cell, or a failed box of an inline value. */
             if (!PyErr_Occurred()) {
                 PyErr_SetString(PyExc_RuntimeError, "super(): arg[0] deleted");
             }
@@ -14896,7 +14259,7 @@ super_init_without_args(_PyInterpreterFrame *cframe, PyTypeObject **type_p,
     else {
         // The argument may be an inline value, which this boxes.
         firstarg = _PyValue_AsObjectAt(firstref, BOX_SITE_FRAME);
-        if (firstarg == NULL || PyErr_Occurred()) {
+        if (firstarg == NULL) {
             goto cleanup;
         }
     }
@@ -14920,6 +14283,7 @@ super_init_without_args(_PyInterpreterFrame *cframe, PyTypeObject **type_p,
             PyObject *cell = PyValue_AsKnownObjectBorrow(cell_value);
             type_owner = PyCell_Get(cell);
             if (type_owner == NULL) {
+                /* NULL is an empty cell, or a failed box of an inline value. */
                 if (!PyErr_Occurred()) {
                     PyErr_SetString(PyExc_RuntimeError,
                                     "super(): empty __class__ cell");
@@ -14952,7 +14316,7 @@ cleanup:
     Py_CLEAR(error_name_owner);
     Py_CLEAR(error_type_owner);
     Py_CLEAR(co_owner);
-    if (result < 0 || PyErr_Occurred()) {
+    if (result < 0) {
         Py_CLEAR(type_owner);
         Py_CLEAR(firstarg);
         return -1;

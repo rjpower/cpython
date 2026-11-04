@@ -468,9 +468,8 @@ _PyCFunction_CallScoped(_PyNativeScope *scope, PyObject *callable,
     assert(!scope->ended);
     assert(out == &scope->result);
     assert(out->state == _Py_NATIVE_RESULT_EMPTY);
-    if (PyErr_Occurred()) {
-        return -1;
-    }
+    /* As cfunction_call() and cfunction_check_kwargs() assert. */
+    assert(!_PyErr_Occurred(scope->tstate));
     if (scope->vector && !_PyCFunction_CanCallScoped(callable)) {
         return 1;
     }

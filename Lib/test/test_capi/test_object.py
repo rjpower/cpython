@@ -336,6 +336,14 @@ class CAPITest(unittest.TestCase):
         finally:
             os_helper.unlink(filename)
 
+    def test_repr_enter_with_pending_exception(self):
+        # Py_ReprEnter() takes its status from the repr list, as upstream
+        # does, so an unrelated pending exception survives.
+        first, second, exc = _testcapi.pyobject_repr_enter_pending(object())
+        self.assertEqual((first, second), (0, 1))
+        self.assertIsInstance(exc, ValueError)
+        self.assertEqual(exc.args, ('pending',))
+
     def test_pyobject_dump(self):
         # test string object
         str_obj = 'test string'

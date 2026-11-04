@@ -11,7 +11,8 @@ COMMIT:path` into a temporary directory and puts it on the IR worker's
 PYTHONPATH only.
 
 --corpus DIR: static counts over every .py below DIR, with both builds.
---generated DIR: static counts, IR build only, over every *_pb2.py and every
+--generated DIR: (writes generated-corpus.txt, "sha1  path" per file, next to this script)
+  static counts, IR build only, over every *_pb2.py and every
   .py larger than 200 KB below DIR, deduplicated by content and taken in hash
   order, stopping after --time-limit seconds.
 --kernels: dynamic counts per kernel in pyjit/bench/internal/kernels.
@@ -43,6 +44,9 @@ def generated_files(root, listing):
             if f.endswith("_pb2.py") or (f.endswith(".py") and os.path.getsize(p) > 200_000):
                 seen.setdefault(hashlib.sha1(Path(p).read_bytes()).hexdigest(), p)
     listing.write_text("\n".join(p for h, p in sorted(seen.items())) + "\n")
+    # the reproducible record: content hash and path, kept next to the scripts
+    (HERE / "generated-corpus.txt").write_text(
+        "".join(f"{h}  {p}\n" for h, p in sorted(seen.items())))
     return len(seen)
 
 

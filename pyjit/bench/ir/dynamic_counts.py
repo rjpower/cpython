@@ -122,6 +122,11 @@ def traffic(code, i, n, c, popped, pushed, opcode):
         c["slot_writes"] += n * w
         c["null_stores"] += n * r
         return
+    # LOAD_FAST* that write a temporary: under pyvalue D4 (no borrow in a home)
+    # the _BORROW forms take a count for a mortal object (register-ir.md G2).
+    if i.opname.startswith("LOAD_FAST") and i.dst is not None and i.dst >= nl:
+        c["load_fast_to_temp"] += n
+        c["load_fast_borrow_to_temp"] += n * (i.opname == "LOAD_FAST_BORROW")
     r = len(i.srcs) + (i.opname in IMM_READS)
     w = (i.dst is not None) + (i.opname in IMM_WRITES)
     c["slot_reads"] += n * r

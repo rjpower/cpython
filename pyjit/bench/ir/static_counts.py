@@ -37,7 +37,11 @@ if IR:
     NAMES = dis._all_opname
     FORMATS = opcode._ir_formats
 KINDS = ("COUNTER", "BRANCH", "UNARY", "BINARY", "ATTR", "GLOBAL", "CALL")
-KIND_BYTES = (16, 16, 24, 32, 40, 32, 24)   # pycore_feedback.h struct sizes
+# pycore_feedback.h struct sizes.  BRANCH is 16 for POP_JUMP_IF_NONE and _NOT_NONE
+# and 24 for POP_JUMP_IF_FALSE and _TRUE (a UNARY entry); the 8 extra bytes are
+# added per word below, since the kind byte does not tell the two apart.
+KIND_BYTES = (16, 16, 24, 32, 40, 32, 24)
+BRANCH_TRUTH_EXTRA = 8
 STRIDE = 40                                  # sizeof(_PyFbAttr)
 SCALARS = (type(None), bool, int, float)
 
@@ -142,7 +146,7 @@ def measure(co, c, dist):
     dist["slots"].append(nl + co.co_stacksize)
     dist["names"].append(len(co.co_names))
     dist["consts"].append(len(co.co_consts))
-    nwords = sites = 0
+    nwords = sites = cmp_sites = truth_branches = 0
     for off, h, fields in _unpack_words(co.co_code):
         if FORMATS[h] is None:
             continue
@@ -151,12 +155,20 @@ def measure(co, c, dist):
         # a site that wants an entry: an fb field (0 past the limit) or a NOFB form
         sites += 3 in FORMATS[h][1] or name.endswith("_NOFB")
         arg, dst, srcs, fb = _decode_word(h, fields, fbinit)
+        # compare and contains sites need an entry (G10): count them, with or without one
+        cmp_sites += name.startswith(("COMPARE_OP", "CONTAINS_OP"))
+        # truth-test branches have the 24-byte UNARY-layout entry
+        truth_branches += fb != 0 and name.startswith(("POP_JUMP_IF_FALSE", "POP_JUMP_IF_TRUE"))
         k = const_kind(name, arg, co)
         if k is not None:
             c["const_" + k] += 1
             c["const_loads"] += 1
         if name == "PUSH_NULL":
             c["push_null_dst_" + ("local" if dst is not None and dst < nl else "temp")] += 1
+    packed += BRANCH_TRUTH_EXTRA * truth_branches
+    c["fb_bytes_per_kind"] += BRANCH_TRUTH_EXTRA * truth_branches
+    dist["fb_packed_8byte_units"][-1] = packed // 8
+    dist["compare_sites"].append(cmp_sites)
     c["words"] += nwords
     c["fb_sites"] += sites
     dist["words"].append(nwords)

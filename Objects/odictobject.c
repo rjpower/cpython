@@ -536,13 +536,8 @@ _odict_get_index_raw(PyODictObject *od, PyObject *key, Py_hash_t hash)
     PyValue value = PyValue_NULL;
     PyDictKeysObject *keys = ((PyDictObject *)od)->ma_keys;
     Py_ssize_t ix;
-#ifdef Py_GIL_DISABLED
-    ix = _Py_dict_lookup_threadsafe_value((PyDictObject *)od, key, hash, &value);
-    PyValue_XCLOSE(value);
-#else
     ix = _Py_dict_lookup((PyDictObject *)od, PyValue_FromObjectBorrow(key),
                          hash, &value);
-#endif
     if (ix == DKIX_EMPTY) {
         return keys->dk_nentries;  /* index of new entry */
     }

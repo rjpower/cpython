@@ -135,8 +135,7 @@ _PyValueTemps_Publish(_PyValueTemps *temps, PyValue *source)
 
   Encoding
 
-  On 64-bit builds without Py_GIL_DISABLED (Py_VALUE_INLINE_VALUES), a
-  PyValue also holds exact ints that fit in int32 and exact non-NaN floats
+  A PyValue also holds exact ints that fit in int32 and exact non-NaN floats
   without a heap object, and interpreter-internal indices. The bits are laid
   out as follows (boil/design/02-tagged-values.md, section 2.1):
 
@@ -178,14 +177,6 @@ _PyValueTemps_Publish(_PyValueTemps *temps, PyValue *source)
 
 #  define _PyValue_BITS(REF) ((REF).bits)
 
-#if SIZEOF_VOID_P == 8 && !defined(Py_GIL_DISABLED)
-
-#define Py_VALUE_INLINE_VALUES 1
-
-#define Py_PTR_LIMIT     ((uintptr_t)1 << 48)
-#define Py_INDEX_BASE    ((uintptr_t)1 << 48)
-#define Py_DOUBLE_OFFSET ((uintptr_t)1 << 49)
-#define Py_INT_BASE      ((uintptr_t)0xFFFE << 48)
 // A reference owns a count on its object only if all of these bits are 0.
 #define Py_OWNED_MASK    (((uintptr_t)0xFFFF << 48) | Py_TAG_BITS)
 
@@ -314,64 +305,6 @@ PyValue_Box(PyValue ref)
     return PyValue_IsInline(ref) ? _PyValue_BoxInlineValue(ref) : ref;
 }
 
-#else  // No inline values: free-threaded and 32-bit builds.
-
-#define Py_INDEX_TAG 3
-#define Py_OWNED_MASK Py_TAG_BITS
-
-static inline bool PyValue_IsTaggedIndex(PyValue r) { return (_PyValue_BITS(r) & Py_TAG_BITS) == Py_INDEX_TAG; }
-static inline bool PyValue_IsPointerSpace(PyValue r) { return !PyValue_IsTaggedIndex(r); }
-static inline bool PyValue_IsInline(PyValue r) { (void)r; return false; }
-static inline bool PyValue_IsInlineInt(PyValue r) { (void)r; return false; }
-static inline bool PyValue_IsInlineFloat(PyValue r) { (void)r; return false; }
-static inline bool PyValue_BothInlineInt(PyValue a, PyValue b) { (void)a; (void)b; return false; }
-static inline bool PyValue_IsPointerSpaceAt(const PyValue *ref) { return PyValue_IsPointerSpace(*ref); }
-static inline bool PyValue_IsInlineAt(const PyValue *ref) { (void)ref; return false; }
-
-// Nothing is inline, so code behind the tests above never calls these.
-static inline int32_t PyValue_InlineInt(PyValue r) { (void)r; Py_UNREACHABLE(); }
-static inline double PyValue_InlineFloat(PyValue r) { (void)r; Py_UNREACHABLE(); }
-static inline PyValue PyValue_FromDoubleNotNaN(double d) { (void)d; Py_UNREACHABLE(); }
-
-// Indices already have Py_TAG_REFCNT set; Py_TAG_INVALID values stay unchanged.
-static inline uintptr_t
-_PyValue_BorrowBitAt(const PyValue *ref)
-{
-    return (ref->bits & Py_TAG_INVALID) ? 0 : Py_TAG_REFCNT;
-}
-
-static inline PyValue
-PyValue_TagIndex(intptr_t i)
-{
-    assert(Py_ARITHMETIC_RIGHT_SHIFT(intptr_t, (intptr_t)(((uintptr_t)i) << Py_TAGGED_SHIFT),
-                                     Py_TAGGED_SHIFT) == i);
-    return (PyValue){ .bits = ((((uintptr_t)i) << Py_TAGGED_SHIFT) | Py_INDEX_TAG) };
-}
-
-static inline intptr_t
-PyValue_UntagIndex(PyValue r)
-{
-    assert(PyValue_IsTaggedIndex(r));
-    return Py_ARITHMETIC_RIGHT_SHIFT(intptr_t, (intptr_t)r.bits, Py_TAGGED_SHIFT);
-}
-
-/* Increments a tagged index, but does not check for overflow */
-static inline PyValue
-PyValue_IncrementTaggedIndexNoOverflow(PyValue r)
-{
-    assert(PyValue_IsTaggedIndex(r));
-    assert((r.bits & (~Py_TAG_BITS)) != (INTPTR_MAX & (~Py_TAG_BITS))); // Isn't about to overflow
-    return (PyValue){ .bits = r.bits + (1 << Py_TAGGED_SHIFT) };
-}
-
-static inline PyValue
-PyValue_Box(PyValue ref)
-{
-    return ref;
-}
-
-#endif  // SIZEOF_VOID_P == 8 && !defined(Py_GIL_DISABLED)
-
 /* Value identity (boil/design/02-tagged-values.md, section 3)
 
    An exact int that fits in int32, or an exact float other than NaN, may be
@@ -389,17 +322,14 @@ PyValue_Box(PyValue ref)
    is boxed. 0.0 and -0.0 differ in bits, so `0.0 is -0.0` is False. NaN is
    never inline and keeps object identity. Bools and int subclasses keep
    object identity. Py_Is() stays pointer equality: C code sees only boxes.
-
-   Builds without inline values use object identity throughout. */
+ */
 
 // The identity of op: its value encoding or its address.
 PyAPI_FUNC(uintptr_t) _PyObject_ValueIdentity(PyObject *op);
 
-#ifdef Py_VALUE_INLINE_VALUES
 // Do a and b, which are different references, hold the same value?
 // Neither may be PyValue_NULL or PyValue_ERROR.
 PyAPI_FUNC(int) _PyValue_IsSameValue(PyValue a, PyValue b);
-#endif
 
 
 // Ownership discipline is explicit; no separate debug payload format exists.
@@ -471,18 +401,11 @@ static const PyValue PyValue_NULL = { .bits = PyValue_NULL_BITS };
    object is aligned, so the sum equals the tagged bits. */
 #define _PyValue_STATIC_IMMORTAL(op) { .bits = (uintptr_t)(op) + Py_TAG_REFCNT }
 
-#ifdef Py_GIL_DISABLED
-// Checks that mask out the deferred bit in the free threading build.
-#define PyValue_IsNone(REF) (((REF).bits & ~Py_TAG_REFCNT) == (uintptr_t)&_Py_NoneStruct)
-#define PyValue_IsTrue(REF) (((REF).bits & ~Py_TAG_REFCNT) == (uintptr_t)&_Py_TrueStruct)
-#define PyValue_IsFalse(REF) (((REF).bits & ~Py_TAG_REFCNT) == (uintptr_t)&_Py_FalseStruct)
-#else
 #define PyValue_IsTrue(REF) ((REF).bits == (((uintptr_t)&_Py_TrueStruct) | Py_TAG_REFCNT))
 #define PyValue_IsFalse(REF) ((REF).bits == (((uintptr_t)&_Py_FalseStruct) | Py_TAG_REFCNT))
 #define PyValue_IsNone(REF) ((REF).bits == (((uintptr_t)&_Py_NoneStruct) | Py_TAG_REFCNT))
-#endif
 
-#if defined(Py_DEBUG) && !defined(Py_GIL_DISABLED)
+#ifdef Py_DEBUG
 
 static inline void
 PyValue_CheckValid(PyValue ref)
@@ -549,14 +472,10 @@ static inline PyValue
 PyValue_FromPyObjectSteal(PyObject *obj)
 {
     assert(obj != NULL);
-#ifdef Py_GIL_DISABLED
-    return (PyValue){ .bits = (uintptr_t)obj };
-#else
     unsigned int tag = _Py_IsImmortal(obj) ? Py_TAG_REFCNT : 0;
     PyValue ref = ((PyValue){.bits = ((uintptr_t)(obj)) | tag});
     PyValue_CheckValid(ref);
     return ref;
-#endif
 }
 
 static inline PyValue
@@ -573,15 +492,9 @@ static inline PyValue
 _PyValue_FromPyObjectNew(PyObject *obj)
 {
     assert(obj != NULL);
-#ifdef Py_GIL_DISABLED
-    if (_PyObject_HasDeferredRefcount(obj)) {
-        return (PyValue){ .bits = (uintptr_t)obj | Py_TAG_REFCNT };
-    }
-#else
     if (_Py_IsImmortal(obj)) {
         return (PyValue){ .bits = (uintptr_t)obj | Py_TAG_REFCNT };
     }
-#endif
     _Py_INCREF_MORTAL(obj);
     PyValue ref = (PyValue){ .bits = (uintptr_t)obj };
     PyValue_CheckValid(ref);
@@ -630,16 +543,8 @@ PyValue_DupImmortal(PyValue ref)
 static inline bool
 PyValue_IsHeapSafe(PyValue ref)
 {
-#ifdef Py_GIL_DISABLED
-    if ((ref.bits & Py_TAG_BITS) != Py_TAG_REFCNT) {
-        return true;
-    }
-    PyObject *obj = BITS_TO_PTR_MASKED(ref);
-    return obj == NULL || _PyObject_HasDeferredRefcount(obj);
-#else
     return (ref.bits & Py_TAG_BITS) != Py_TAG_REFCNT || ref.bits == PyValue_NULL_BITS ||
            !PyValue_IsPointerSpace(ref) || _Py_IsImmortal(BITS_TO_PTR_MASKED(ref));
-#endif
 }
 
 static inline PyValue
@@ -711,14 +616,9 @@ PyValue_XCLOSE(PyValue ref)
 // the same value (see "Value identity" below), which only the out-of-line
 // test can establish. Indices compare exactly.
 // Note: this is a macro because MSVC (Windows) has trouble inlining it.
-#ifdef Py_VALUE_INLINE_VALUES
 #define PyValue_Is(a, b) \
     (((((a).bits ^ (b).bits) & ~(uintptr_t)PyValue_IsPointerSpace(a)) == 0) \
      || _PyValue_IsSameValue((a), (b)))
-#else
-#define PyValue_Is(a, b) \
-    ((((a).bits ^ (b).bits) & ~(uintptr_t)PyValue_IsPointerSpace(a)) == 0)
-#endif
 
 
 
@@ -728,8 +628,6 @@ PyValue_XCLOSE(PyValue ref)
    in Tools/cases_generator/interpreter_definition.md). There a reference owns
    a count unless a tag bit is set, so these test Py_TAG_BITS alone instead
    of Py_OWNED_MASK. */
-#if defined(Py_VALUE_INLINE_VALUES)
-
 static inline int
 _PyValue_PointerOwnsCount(PyValue ref)
 {
@@ -781,16 +679,6 @@ _PyValue_AsPyObjectStealPointer(PyValue ref)
     }
     return Py_NewRef(BITS_TO_PTR_MASKED(ref));
 }
-
-#else
-
-#define _PyValue_CLOSE_POINTER PyValue_CLOSE
-#define _PyValue_XCLOSE_POINTER PyValue_XCLOSE
-#define _PyValue_CLOSE_SPECIALIZED_POINTER PyValue_CLOSE_SPECIALIZED
-#define _PyValue_DUP_POINTER PyValue_DUP
-#define _PyValue_AsPyObjectStealPointer PyValue_AsPyObjectSteal
-
-#endif
 
 static inline bool
 PyValue_IsMalformed(PyValue ref)
@@ -871,18 +759,6 @@ PyValue_CompactIntValue(PyValue ref)
     }
     return (int32_t)_PyLong_CompactValue((PyLongObject *)PyValue_AsPyObjectBorrow(ref));
 }
-
-#ifndef Py_VALUE_INLINE_VALUES
-/* Without inline values the result of int arithmetic is an int object:
-   a new reference, or PyValue_NULL with an exception set. With them,
-   PyValue_FromInt32() cannot fail and the callers' NULL tests fold away. */
-static inline PyValue
-PyValue_FromInt32(int32_t i)
-{
-    PyObject *op = PyLong_FromLong(i);
-    return op == NULL ? PyValue_NULL : PyValue_FromPyObjectSteal(op);
-}
-#endif
 
 // A new int for a result outside int32 (the slow path of int arithmetic),
 // or PyValue_NULL with an exception set.
@@ -973,12 +849,10 @@ PyAPI_FUNC(PyValue) _PyValue_BoxDouble(double value);
 
 /* The result of float arithmetic: inline unless it is NaN, which is boxed
    (see "NaN and signed zero" in boil/design/02-tagged-values.md, section
-   3), and always boxed in builds without inline values. PyValue_NULL
-   with an exception set if boxing fails. */
+   3). PyValue_NULL with an exception set if boxing fails. */
 static inline PyValue
 PyValue_FromDouble(double value)
 {
-#ifdef Py_VALUE_INLINE_VALUES
     if (!isnan(value)) {
         PyValue ref = PyValue_FromDoubleNotNaN(value);
         // So that the caller's test for failure folds away on this path.
@@ -987,7 +861,6 @@ PyValue_FromDouble(double value)
         }
         return ref;
     }
-#endif
     return _PyValue_BoxDouble(value);
 }
 
@@ -1029,11 +902,6 @@ _PyValue_BoxInto(const PyValue *src, PyObject **dst, Py_ssize_t n)
 static inline void
 _PyThreadState_PushCValue(PyThreadState *tstate, _PyCValue *ref)
 {
-#ifdef Py_GIL_DISABLED
-    _PyThreadStateImpl *tstate_impl = (_PyThreadStateImpl *)tstate;
-    ref->next = tstate_impl->c_stack_refs;
-    tstate_impl->c_stack_refs = ref;
-#endif
     ref->ref = PyValue_NULL;
 }
 
@@ -1049,11 +917,6 @@ _PyThreadState_PushCValueNew(PyThreadState *tstate, _PyCValue *ref, PyObject *ob
 static inline void
 _PyThreadState_PopCValue(PyThreadState *tstate, _PyCValue *ref)
 {
-#ifdef Py_GIL_DISABLED
-    _PyThreadStateImpl *tstate_impl = (_PyThreadStateImpl *)tstate;
-    assert(tstate_impl->c_stack_refs == ref);
-    tstate_impl->c_stack_refs = ref->next;
-#endif
     PyValue_XCLOSE(ref->ref);
     _PyCValue_CLEAR(ref);
 }
@@ -1061,44 +924,10 @@ _PyThreadState_PopCValue(PyThreadState *tstate, _PyCValue *ref)
 static inline PyValue
 _PyThreadState_PopCValueSteal(PyThreadState *tstate, _PyCValue *ref)
 {
-#ifdef Py_GIL_DISABLED
-    _PyThreadStateImpl *tstate_impl = (_PyThreadStateImpl *)tstate;
-    assert(tstate_impl->c_stack_refs == ref);
-    tstate_impl->c_stack_refs = ref->next;
-#endif
     PyValue res = ref->ref;
     _PyCValue_CLEAR(ref);
     return res;
 }
-
-#ifdef Py_GIL_DISABLED
-
-static inline int
-_Py_TryIncrefCompareValue(PyObject **src, PyObject *op, PyValue *out)
-{
-    if (_PyObject_HasDeferredRefcount(op)) {
-        *out = (PyValue){ .bits = (uintptr_t)op | Py_TAG_REFCNT };
-        return 1;
-    }
-    if (_Py_TryIncrefCompare(src, op)) {
-        *out = PyValue_FromPyObjectSteal(op);
-        return 1;
-    }
-    return 0;
-}
-
-static inline int
-_Py_TryXGetValue(PyObject **src, PyValue *out)
-{
-    PyObject *op = _PyObject_CAST(_Py_atomic_load_ptr_relaxed(src));
-    if (op == NULL) {
-        *out = PyValue_NULL;
-        return 1;
-    }
-    return _Py_TryIncrefCompareValue(src, op, out);
-}
-
-#endif
 
 #define PyValue_XSETREF(dst, src) \
     do { \

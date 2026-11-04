@@ -3031,16 +3031,6 @@
                 if (index < 0) {
                     index += PyList_GET_SIZE(list);
                 }
-                #ifdef Py_GIL_DISABLED
-                PyObject *res_o = _PyList_GetItemRef((PyListObject*)list, index);
-                if (res_o == NULL) {
-                    IR_DROP_BORROW(list_st, IR_FIELD_B(this_instr));
-                    IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr));
-                    UPDATE_MISS_STATS(BINARY_OP);
-                    IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
-                }
-                res = PyValue_FromPyObjectSteal(res_o);
-                #else
                 if (index < 0 || index >= PyList_GET_SIZE(list)) {
                     IR_DROP_BORROW(list_st, IR_FIELD_B(this_instr));
                     IR_DROP_BORROW(sub_st, IR_FIELD_C(this_instr));
@@ -3049,7 +3039,6 @@
                 }
                 res = PyValue_NewRef(PyList_GET_VALUE(list, index));
                 assert(!PyValue_IsNull(res));
-                #endif
                 STAT_INC(BINARY_OP, hit);
                 ls = list_st;
                 ss = sub_st;
@@ -9564,26 +9553,7 @@
             {
                 PyObject *list_o = PyValue_AsPyObjectBorrow(iter);
                 assert(PyList_CheckExact(list_o));
-                #ifdef Py_GIL_DISABLED
-                assert(_Py_IsOwnedByCurrentThread(list_o) ||
-                  _PyObject_GC_IS_SHARED(list_o));
-                STAT_INC(FOR_ITER, hit);
-                int result = _PyList_GetItemRefNoLock((PyListObject *)list_o, PyValue_UntagIndex(null_or_index), &next);
-                if (result < 0) {
-                    UPDATE_MISS_STATS(FOR_ITER);
-                    assert(_PyOpcode_Deopt[opcode] == (FOR_ITER));
-                    JUMP_TO_PREDICTED(FOR_ITER);
-                }
-                if (result == 0) {
-                    null_or_index = PyValue_TagIndex(-1);
-                    JUMPBY(oparg + 1);
-                    window[1] = _PyValueTemps_Publish(value_temps, &null_or_index);
-                    _PyValueTemps_CommitLocal(value_temps);
-                    DISPATCH();
-                }
-                #else
                 next = PyValue_NewRef(PyList_GET_VALUE(list_o, PyValue_UntagIndex(null_or_index)));
-                #endif
                 null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
             }
             window[1] = _PyValueTemps_Publish(value_temps, &null_or_index);

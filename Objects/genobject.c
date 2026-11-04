@@ -908,26 +908,11 @@ static PyObject *
 gen_getyieldfrom(PyObject *self, void *Py_UNUSED(ignored))
 {
     PyGenObject *gen = _PyGen_CAST(self);
-#ifdef Py_GIL_DISABLED
-    int8_t frame_state = _Py_atomic_load_int8_relaxed(&gen->gi_frame_state);
-    do {
-        if (frame_state != FRAME_SUSPENDED_YIELD_FROM &&
-            frame_state != FRAME_SUSPENDED_YIELD_FROM_LOCKED)
-        {
-            Py_RETURN_NONE;
-        }
-    } while (!_Py_GEN_TRY_SET_FRAME_STATE(gen, frame_state, FRAME_SUSPENDED_YIELD_FROM_LOCKED));
-
-    PyObject *result = PyValue_AsPyObjectNew(_PyGen_YieldFromRef(&gen->gi_iframe));
-    _Py_atomic_store_int8_release(&gen->gi_frame_state, FRAME_SUSPENDED_YIELD_FROM);
-    return result;
-#else
     int8_t frame_state = gen->gi_frame_state;
     if (frame_state != FRAME_SUSPENDED_YIELD_FROM) {
         Py_RETURN_NONE;
     }
     return PyValue_AsPyObjectNew(_PyGen_YieldFromRef(&gen->gi_iframe));
-#endif
 }
 
 

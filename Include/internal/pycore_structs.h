@@ -63,9 +63,6 @@ typedef struct {
 // Used in combination with _PyThreadState_PushCValue().
 typedef struct _PyCValue {
     PyValue ref;
-#ifdef Py_GIL_DISABLED
-    struct _PyCValue *next;
-#endif
 } _PyCValue;
 
 

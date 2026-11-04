@@ -301,15 +301,10 @@ struct _dictkeysobject {
 #define _Py_SHAPE_NONE 0xFF
 #define _Py_SHAPE_MAX_PER_TYPE 64
 
-typedef enum {
-    _Py_SLOT_BOXED = 0,     // a strong reference; the only kind written so far
-} _PySlotKind;
-
 typedef struct {
     uint32_t present;       // bit i is set when slot i holds a value
     uint8_t parent;         // _Py_SHAPE_NONE for the root
     uint8_t slot;           // the slot added to the parent
-    uint8_t kind;           // _PySlotKind of that slot
 } _PyShape;
 
 typedef struct {
@@ -502,8 +497,7 @@ _PyShape_FindTransition(PyTypeObject *tp, uint8_t from, Py_ssize_t slot)
     }
     for (int i = from + 1; i < shapes->nshapes; i++) {
         _PyShape *shape = &shapes->shapes[i];
-        if (shape->parent == from && shape->slot == slot &&
-            shape->kind == _Py_SLOT_BOXED) {
+        if (shape->parent == from && shape->slot == slot) {
             return (uint8_t)i;
         }
     }

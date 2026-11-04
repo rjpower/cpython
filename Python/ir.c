@@ -23,7 +23,7 @@
 #include "pycore_opcode_metadata.h" // _PyOpcode_Deopt
 #include "pycore_pyatomic_ft_wrappers.h"
 #include "pycore_pystate.h"         // _PyInterpreterState_GET()
-#include "pycore_value.h"        // Py_VALUE_INLINE_VALUES
+#include "pycore_value.h"
 
 static_assert(sizeof(_PyCodeExec) % sizeof(_PyIRWord) == 0,
               "words must follow the header aligned");

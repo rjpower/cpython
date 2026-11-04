@@ -3070,7 +3070,6 @@ incref_decref_delayed(PyObject *self, PyObject *op)
     Py_RETURN_NONE;
 }
 
-#ifdef Py_VALUE_INLINE_VALUES
 // Encode an exact int32 or non-NaN float as an inline stack value, check that
 // the operations valid on any value treat it as a value, then box it.
 static PyObject *
@@ -3239,7 +3238,6 @@ pyvalue_internal_contract(PyObject *self, PyObject *unused)
     Py_DECREF(primary);
     Py_RETURN_NONE;
 }
-#endif
 
 #ifdef __EMSCRIPTEN__
 #include "emscripten.h"
@@ -4085,10 +4083,8 @@ static PyMethodDef module_functions[] = {
     {"test_list_setitem_take_value", test_list_setitem_take_value, METH_NOARGS},
     {"dict_vm_storage", dict_vm_storage, METH_O},
     {"common_constant_storage", common_constant_storage, METH_NOARGS},
-#ifdef Py_VALUE_INLINE_VALUES
     {"pyvalue_contract", pyvalue_contract, METH_O, NULL},
     {"pyvalue_internal_contract", pyvalue_internal_contract, METH_NOARGS, NULL},
-#endif
     {"jit_method_record_index", jit_method_record_index, METH_NOARGS, NULL},
     {"jit_method_cold_call", jit_method_cold_call, METH_VARARGS, NULL},
     {"jit_method_compile", jit_method_compile, METH_O, NULL},
@@ -4210,10 +4206,8 @@ static PyMethodDef module_functions[] = {
     {"get_tracked_heap_size", get_tracked_heap_size, METH_NOARGS},
     {"is_static_immortal", is_static_immortal, METH_O},
     {"incref_decref_delayed", incref_decref_delayed, METH_O},
-#ifdef Py_VALUE_INLINE_VALUES
     {"value_box_roundtrip", value_box_roundtrip, METH_O},
     {"inline_locals", inline_locals, METH_O},
-#endif
     GET_NEXT_DICT_KEYS_VERSION_METHODDEF
 #ifdef __EMSCRIPTEN__
     {"emscripten_set_up_async_input_device", emscripten_set_up_async_input_device, METH_NOARGS},
@@ -4318,11 +4312,9 @@ module_exec(PyObject *module)
         return 1;
     }
 
-#ifdef Py_VALUE_INLINE_VALUES
     if (PyModule_Add(module, "TAGGED_VALUES", PyBool_FromLong(1)) < 0) {
         return 1;
     }
-#endif
 
 #ifdef Py_SHAPES
     if (PyModule_AddIntMacro(module, _Py_SHAPE_MAX_PER_TYPE) < 0) {

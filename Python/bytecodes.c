@@ -1102,15 +1102,9 @@ dummy_func(
             if (index < 0) {
                 index += PyList_GET_SIZE(list);
             }
-#ifdef Py_GIL_DISABLED
-            PyObject *res_o = _PyList_GetItemRef((PyListObject*)list, index);
-            EXIT_IF(res_o == NULL);
-            res = PyValue_FromPyObjectSteal(res_o);
-#else
             EXIT_IF(index < 0 || index >= PyList_GET_SIZE(list));
             res = PyValue_NewRef(PyList_GET_VALUE(list, index));
             assert(!PyValue_IsNull(res));
-#endif
             STAT_INC(BINARY_OP, hit);
             ls = list_st;
             ss = sub_st;
@@ -3816,23 +3810,7 @@ dummy_func(
         replaced op(_ITER_NEXT_LIST, (iter, null_or_index -- iter, null_or_index, next)) {
             PyObject *list_o = PyValue_AsPyObjectBorrow(iter);
             assert(PyList_CheckExact(list_o));
-#ifdef Py_GIL_DISABLED
-            assert(_Py_IsOwnedByCurrentThread(list_o) ||
-                   _PyObject_GC_IS_SHARED(list_o));
-            STAT_INC(FOR_ITER, hit);
-            int result = _PyList_GetItemRefNoLock((PyListObject *)list_o, PyValue_UntagIndex(null_or_index), &next);
-            // A negative result means we lost a race with another thread
-            // and we need to take the slow path.
-            DEOPT_IF(result < 0);
-            if (result == 0) {
-                null_or_index = PyValue_TagIndex(-1);
-                /* Jump forward oparg, then skip following END_FOR instruction */
-                JUMPBY(oparg + 1);
-                DISPATCH();
-            }
-#else
             next = PyValue_NewRef(PyList_GET_VALUE(list_o, PyValue_UntagIndex(null_or_index)));
-#endif
             null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
         }
 

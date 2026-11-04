@@ -179,8 +179,6 @@ _PyValue_RestoreException(PyObject *saved)
 }
 
 
-#ifdef Py_VALUE_INLINE_VALUES
-
 // The tag bits (Py_TAG_BITS) of an object pointer must be clear.
 static_assert(_Alignof(PyObject) >= 8, "PyObject must be 8-byte aligned");
 
@@ -224,12 +222,9 @@ _PyValue_IsSameValue(PyValue a, PyValue b)
     return value_identity(a) == value_identity(b);
 }
 
-#endif  // Py_VALUE_INLINE_VALUES
-
 uintptr_t
 _PyObject_ValueIdentity(PyObject *op)
 {
-#ifdef Py_VALUE_INLINE_VALUES
     if (PyLong_CheckExact(op)) {
         if (_PyLong_IsCompact((PyLongObject *)op)) {
             return _PyValue_Int32Bits((int32_t)_PyLong_CompactValue((PyLongObject *)op));
@@ -244,7 +239,6 @@ _PyObject_ValueIdentity(PyObject *op)
     else if (PyFloat_CheckExact(op) && !isnan(PyFloat_AS_DOUBLE(op))) {
         return _PyValue_DoubleBits(PyFloat_AS_DOUBLE(op));
     }
-#endif
     return (uintptr_t)op;
 }
 

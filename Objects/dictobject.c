@@ -6959,7 +6959,7 @@ new_type_shapes(void)
     shapes->nshapes = 1;
     shapes->capacity = SHAPES_INITIAL_CAPACITY;
     shapes->shapes[_Py_SHAPE_ROOT] = (_PyShape){
-        .present = 0, .parent = _Py_SHAPE_NONE, .slot = 0, .kind = _Py_SLOT_BOXED,
+        .present = 0, .parent = _Py_SHAPE_NONE, .slot = 0,
     };
     return shapes;
 }
@@ -6975,7 +6975,7 @@ _PyShape_Add(PyTypeObject *tp, uint8_t from, Py_ssize_t slot)
     // A shape is always added after its parent.
     for (int i = from + 1; i < shapes->nshapes; i++) {
         _PyShape *s = &shapes->shapes[i];
-        if (s->parent == from && s->slot == slot && s->kind == _Py_SLOT_BOXED) {
+        if (s->parent == from && s->slot == slot) {
             return (uint8_t)i;
         }
     }
@@ -6996,7 +6996,7 @@ _PyShape_Add(PyTypeObject *tp, uint8_t from, Py_ssize_t slot)
     uint8_t index = shapes->nshapes++;
     shapes->shapes[index] = (_PyShape){
         .present = parent->present | (1u << slot), .parent = from,
-        .slot = (uint8_t)slot, .kind = _Py_SLOT_BOXED,
+        .slot = (uint8_t)slot,
     };
     return index;
 }

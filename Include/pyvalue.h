@@ -11,6 +11,13 @@ extern "C" {
 #  error "PyValue requires the 64-bit GIL private runtime"
 #endif
 
+/* The regions of the bits of a PyValue (see "Encoding" in
+ * Include/internal/pycore_value.h). */
+#define Py_PTR_LIMIT     ((uintptr_t)1 << 48)
+#define Py_INDEX_BASE    ((uintptr_t)1 << 48)
+#define Py_DOUBLE_OFFSET ((uintptr_t)1 << 49)
+#define Py_INT_BASE      ((uintptr_t)0xFFFE << 48)
+
 /* Pure preparation consumes obj without releasing it. For an inline scalar,
  * *retired receives that owner; otherwise the returned value owns it. Publish
  * the value and valid live state before releasing *retired. */
@@ -27,7 +34,7 @@ PyAPI_FUNC(PyObject *) PyValue_AsObject(PyValue value);
 static inline int
 PyValue_IsObject(PyValue value)
 {
-    return value.bits > 2 && value.bits < ((uintptr_t)1 << 48) &&
+    return value.bits > 2 && value.bits < Py_PTR_LIMIT &&
            (value.bits & 2) == 0;
 }
 
@@ -70,13 +77,13 @@ PyValue_Close(PyValue value)
 static inline int
 PyValue_IsLanguageValue(PyValue value)
 {
-    if (value.bits < ((uintptr_t)1 << 49)) {
+    if (value.bits < Py_DOUBLE_OFFSET) {
         return PyValue_IsObject(value);
     }
-    if ((value.bits & ~(uintptr_t)UINT32_MAX) == ((uintptr_t)0xFFFE << 48)) {
+    if ((value.bits & ~(uintptr_t)UINT32_MAX) == Py_INT_BASE) {
         return 1;
     }
-    uint64_t bits = value.bits - ((uintptr_t)1 << 49);
+    uint64_t bits = value.bits - Py_DOUBLE_OFFSET;
     double number;
     memcpy(&number, &bits, sizeof(number));
     return !isnan(number);

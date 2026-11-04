@@ -16,13 +16,11 @@ restore_error(PyObject *saved)
 int
 _PyJit_ReadInt32(PyValue ref, int32_t *value)
 {
-#if Py_VALUE_INLINE_VALUES
     if (PyValue_IsInlineInt(ref)) {
         *value = PyValue_InlineInt(ref);
         return 1;
     }
     if (PyValue_IsNull(ref) || PyValue_IsInline(ref)) return 0;
-#endif
     if (PyValue_IsNull(ref)) return 0;
     if (!PyValue_IsPointerSpace(ref)) return 0;
     PyObject *object = PyValue_AsPyObjectBorrow(ref);

@@ -629,11 +629,6 @@ specialize_module_load_attr_lock_held(PyDictObject *dict, _PyInstr *instr, PyObj
         SPECIALIZATION_FAIL(LOAD_ATTR, SPEC_FAIL_OUT_OF_VERSIONS);
         goto fail;
     }
-#ifdef Py_GIL_DISABLED
-    if (PyValue_IsObject(value)) {
-        maybe_enable_deferred_ref_count(PyValue_AsPyObjectBorrow(value));
-    }
-#endif
     fb->dict_version = keys_version;
     fb->index = (uint32_t)index;
     specialize(instr, LOAD_ATTR_MODULE);
@@ -932,9 +927,6 @@ specialize_dict_access_hint(
     _PyFbAttr *fb = instr_entry(instr);
 
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(dict);
-#ifdef Py_GIL_DISABLED
-    _PyDict_EnsureSharedOnRead(dict);
-#endif
 
     // We found an instance with a __dict__.
     // STORE_ATTR_WITH_HINT can write the values of a split table, such as a
@@ -1701,11 +1693,6 @@ specialize_load_global_lock_held(
             goto fail;
         }
         PyDict_Watch(MODULE_WATCHER_ID, globals);
-#ifdef Py_GIL_DISABLED
-        if (PyValue_IsObject(value)) {
-            maybe_enable_deferred_ref_count(PyValue_AsPyObjectBorrow(value));
-        }
-#endif
         fb->index = (uint32_t)index;
         fb->globals_version = keys_version;
         specialize(instr, LOAD_GLOBAL_MODULE);

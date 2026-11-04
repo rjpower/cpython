@@ -1,71 +1,103 @@
-# Proposal: register IR v2 packet (IR-D1, IR-D2, G2–G6, G9, G10, G12)
+# Proposal: register IR v2 packet (IR-D1, IR-D2, IR-D3/D4, G2–G6, G9, G10, G12)
 
-Status: proposal, revision 1, 2026-11-03. Not yet reviewed.
+Status: proposal, revision 2, 2026-11-04. Reviewed in
+[review 1](../reviews/register-ir-v2-packet-review-1.md) (`d5fed44bd29`). The
+coordinator's decisions on findings 3, 4, 6, 7 and 8 are built in. Every other
+finding has a disposition below.
+
 Design reference: [register-ir.md](../register-ir.md) §3 (IR-D1 to IR-D3,
 G2–G12), §4 (bit budget and format list) and §5 (instruction contract).
 Companion: [pyvalue-representation-packet.md](pyvalue-representation-packet.md),
 whose steps 6a–9b are still to land.
 
 **Source.** `build/worktrees/pyvalue-rc-universal` at `48bb4d6d1d3`, read
-through `git show` and `git archive`, because another agent had uncommitted
-edits in the working tree. The release build `build/pyvalue-rc-release-20261103`
-reports `f3a20271f26`-dirty. Its `ceval.o` has the same text size (595,778
-bytes) as `ceval.c` from `48bb4d6d1d3` compiled with the same flags, so its
-disassembly describes HEAD. The three commits after `f3a20271f26` rename
-value API functions. Upstream is `build/upstream-release-3a440b6`
-(`3a440b65695`).
+through `git show` and `git archive`, because other agents edit and build in
+that working tree. The release build `build/pyvalue-rc-release-20261103`
+reports `f3a20271f26`-dirty. `ceval.c` from `48bb4d6d1d3`, compiled with the
+release flags, gives the same `ceval.o` text (595,778 B) and loop (407,484 B);
+the review confirmed this independently. Upstream is
+`build/upstream-release-3a440b6` (`3a440b65695`).
 
-**Tools.** GCC 15.2. Clang is not installed. `perf` is unavailable
-(`perf_event_paranoid` is 4). The evidence is therefore static (disassembly,
-DWARF, generated source) plus `sys.monitoring` counts. Nothing was timed. The
-scripts and their raw output are in `build/pyjit-link-wave1/irv2/` (§8.1).
+**Tools.**
+- **Compilers.** GCC 15.2 and Clang 21.1.8 (`/usr/bin/clang-21`).
+  - GCC has `musttail` and `no_callee_saved_registers`; it ignores
+    `preserve_none`.
+  - Clang has `preserve_none` and `musttail`, but not
+    `no_callee_saved_registers`.
+- **`perf`** is unavailable (`perf_event_paranoid` is 4).
+- **Timing** comes from review 1. This revision timed nothing.
+- **Scripts and raw output.** This proposal's are in
+  `build/pyjit-link-wave1/irv2/`; the review's are in
+  `build/pyjit-link-wave1/irv2-review/`.
 
-**Out of scope.**
-- Exception save and restore: 25% of the gap, removed by representation
-  steps 5–7.
-- Value bridging: 17%, which belongs to the value-API and native-boundary work.
-- Lazy feedback allocation (G5 item 2), heat and OSR (G7), and the JIT-stage
-  decisions (IR-D4).
+**Out of scope.** Exception save and restore (representation steps 5–7),
+value bridging (the value-API and native-boundary work), lazy feedback
+allocation (G5 item 2), heat and OSR (G7), and the JIT-stage decisions
+(IR-D4).
+
+## Changes after review 1
+
+| # | Severity | Finding | Disposition |
+|---|---|---|---|
+| 1 | major | The headline rests on static counts | **Accepted.** The summary and §1.1 lead with the review's timing: GCC tail calls alone run 0.870× the computed-goto build; computed goto runs 2.42× upstream. The static counts are now labelled as diagnosis (§1.2). The per-word costs are assigned to an owner: format, representation or structure (§1.4). §6.3's "3.2×" sentence is deleted. A re-split of the gap at HEAD with the sampler is a §8 measurement; this revision does no timing. |
+| 2 | minor | The path measures favour the fork | **Accepted.** The shortest path is called the inline-scalar lower bound. `LOAD_FAST_BORROW`'s object path (about 61 instructions) is given. The per-variable fall-through counts are dropped. The handlers with no weight are listed. Object paths for the top ten handlers are a §8 measurement before A1; they were not measured here. |
+| 3 | blocking | D4 has no step | **Accepted (coordinator).** New step A5 (D4) follows representation step 8 and is independent of the A4/B3 outcome. B3 keeps only the class bits. §11 reconciles IR-D3's wording with G2's rule. |
+| 4 | major | A2 fixes the wrong contract | **Accepted, after checking the code (§0.2).** `_co_exec` is set once (`ir.c:312–326`) and cleared only from `code_dealloc` (`codeobject.c:2559`). Both writes through `_PyInstr **` (`ceval.c:1587`, `2175`) store the value `next_instr` already has. A2 deletes the out-parameter from all 12 helper families, keeping their `int` status. It also answers the representation packet's §3.4 hand-off: the in-helper re-instrumentation duplicates `instrument_all_executing_code_objects`, so A2 makes it a debug assert. The "may redirect the PC" column is dropped. |
+| 5 | major | A3a's "no address-taken locals" lacks a plan for transaction records | **Accepted.** Box storage and the transaction records (`operation`, `call`, `pending`, `held_*`, `receiver`, `callable`, …) live in one activation record. The target is "no address-taken locals; frame at most N bytes", checked by `tcframes.py` on both compilers, not a canary count. A3a is re-estimated at 14 h. |
+| 6 | major | Clang is installed | **Accepted (coordinator).** Corrected. A3a qualifies on GCC 15 and Clang 21. `Py_PRESERVE_NONE_CC` uses `preserve_none` where the compiler has it, then `no_callee_saved_registers`, then nothing (plain `musttail`). The JIT enters and leaves through C-ABI functions only. |
+| 7 | major | Keeping computed goto is a second backend | **Accepted (coordinator).** A3c deletes the computed-goto and switch backends. `configure` rejects a compiler without `musttail`. Until A3 lands, computed goto stays the qualified build. |
+| 8 | major | Ordering | **Changed.** A1 and A2 follow representation step 7, which edits their helpers. A3a, A3b and A3c land together after 9b. There is no measured reason to land A3a earlier: the 13% is not a gate, and landing it early would make steps 7–9b pass on two backends. The dual-CI cost is limited to the A3 branch and counted (2 h). `bytecodes.c` is listed for A3a. "A4 or B3 before B7" is dropped. "A2 before A3" is kept as natural, not forced. |
+| 9 | major | Every format step needs its own magic number | **Accepted.** B2–B7 each bump `PYC_MAGIC_NUMBER`. Numbering is dense and regenerated in every step that adds or removes handlers (B2, B4, B6); there are no reserved holes. |
+| 10 | major | The estimate is low | **Accepted.** Re-estimated per step at about 97 agent-hours (§10), with B3's prototype counted in every case. |
+| 11 | minor | Errors in the V8/LuaJIT table | **Accepted.** §2 uses the review's corrections from the primary sources, and the "from memory" caveat is gone. |
+| 12 | minor | Missed techniques: predecode, lookahead pairing, static operand roles | **Scope cut, listed as open questions 7–9.** The register budget is stated in A3a. |
+| 13 | minor | B6 counted the deferred inversion; head shapes | **Accepted.** B6's column no longer counts inversion (fannkuch 5.4%). The head shapes are in §4.1, and the deferral stands under §4.3's fused-only rule. |
+| 14 | minor | B7's bound includes window-fed constants | **Accepted.** The tighter bound is used: fannkuch 20.5%; geometric mean 0.66 without unpack_sequence. |
+| 15 | minor | Limit errors are mostly done | **Accepted.** Corrected. B1 now changes only `regcfg.c`'s "too many temporaries" to `SyntaxError`, tested through a test-only limit knob. The "two live temporaries" check stays `SystemError`, because it is a compiler invariant, not a limit. |
+| 16 | minor | Five literal masks, not four | **Accepted.** `Modules/_remote_debugging/code_objects.c:495` is added, with tests under B2 and B3. |
+| 17 | minor | A4 is not one macro | **Accepted.** A4 passes `nlocalsplus` to the class test explicitly. Helpers outside the handlers read it from the executing copy's header. Risk is low to medium, estimate 3.5 h. |
+| 18 | minor | Test sets | **Accepted.** `test_gdb` does not run on this host. A3a adds a debug tail-call build (frame assert) and a `Py_STATS` tail-call build. B7 adds `test_code`, copy and pickle. B2 adds the remote-debugging opcode check. A1 alone is recorded against HEAD. |
+| 19 | minor | §11 edits | **Accepted.** §11 is rewritten with every item the review lists. |
+| 20 | minor | `finish_value_bridges` is a twelfth escaping helper | **Accepted.** It is in C1 and A2. |
 
 ## Summary
 
-- **The 39% is per-word cost, and the encoding does not cause it.**
-  - Weighted over 29 kernels, a word's predicted path in the eval loop is
-    77.3 instructions with 15.3 stack references.
-  - The shortest call-free path is 48.9 instructions and 12.1 stack
-    references, against upstream's 22.0 and 1.3 on the same handlers.
-  - Most of the stack traffic comes from the state the C compiler cannot keep
-    in registers in one 407 KB function. `next_instr` escapes to helpers at
-    290 sites, so it has a fixed stack home. `frame`, `slots` and `tstate` are
-    reloaded in every handler. And every handler sets up a `_PyValueTemps`
-    record in memory, although 177 of the 292 never box.
-- **The encoding revision is worth about 12% of executed words.** On 13
-  kernels (unpack_sequence excluded), words per upstream instruction go from
-  0.74 to 0.71 after G4, 0.69 after G3 and at most 0.65 after G6.
-  unpack_sequence goes from 1.70 to 0.15.
-- **Hence two phases.**
-  - **Phase A** changes the interpreter's structure, not the format. Its
-    steps are A1 (the record only where a handler boxes), A2 (helpers return
-    the PC instead of writing it through `&next_instr`), A3 (tail-call
-    dispatch as the qualified build) and A4 (the G2 control).
-    - In diagnostic builds, A1–A3 cut stack references on the shortest path
-      from 12.1 to 1.5 per word. Upstream has 1.3.
-    - A linked GCC tail-call interpreter fails the same test files as the
-      computed-goto build over the full suite. It differs only in the JIT
-      tests, because the JIT is compiled out under tail calls today.
-    - Phase A can start after representation step 6c. A3's JIT part waits
-      for step 9b.
-  - **Phase B** is the encoding (IR-D1). Its first format step comes after
-    representation step 9b, as IR-D1 says.
-    - The contract table (IR-D2) can start before int51. Each later format
-      step updates it, and the verifier checks every step against it.
-- **Design changes proposed** (§11):
-  - Phase A is G9 work. It moves before baseline, because it is the measured
-    39%.
-  - G6's constant table must not persist `PyValue` bits in `.pyc` files.
-  - Loop inversion with backward fused jumps is deferred, because it removes
-    0.5% of words on one kernel and nearly nothing elsewhere.
-  - The 0xFFF-mask reader list shrinks to four literal masks.
+- **Measured: tail calls alone cut the time by 13%.** These timings are from
+  review 1 (§1.1): 5 interleaved rounds; each sample the best of 3 runs of
+  `run(1)`; the median over rounds; load 1.1–3.7. On 12 kernels:
+  - computed goto at HEAD runs **2.42× upstream**. This is the corrected
+    baseline for this packet, replacing the triage's 2.6× on build F;
+  - a tail-call link of HEAD with no other change runs **0.870×** computed
+    goto under GCC (0.80–0.92 per kernel; repeat 0.872) and 0.877× under
+    Clang 21, which is 2.10× upstream;
+  - that removes about 16% of the log gap;
+  - a ten-copy probe (`straight`) is 1–4% slower under GCC tail calls and 15%
+    slower under Clang.
+- **Diagnosis, from static counts.** The fork's handlers keep `next_instr`,
+  `frame` and `slots` in stack homes, set up a `_PyValueTemps` record in
+  every handler, and pass `next_instr` by address to 12 helper families.
+  - On the inline-scalar lower bound (the shortest call-free path), a word is
+    48.9 instructions with 12.1 stack references, against upstream's 22.0
+    and 1.3.
+  - In diagnostic builds, the record removal and tail calls take the stack
+    references to 1.5 but leave 45.5 instructions.
+  - The rest is representation work (C5: borrow tags, publish tests, D4 and
+    step 8) and loop structure (bridges, transactions, the class test).
+- **Who owns which cost.**
+  - Structure: state transport, the record, the prologue. Phase A.
+  - Format: the class test, the `NOT_TAKEN` skip. Steps A4 or B3, and B2.
+  - Representation: borrow tags and publish tests. Step A5 (D4) and
+    representation step 8.
+  - The encoding's word savings are about 11%: 0.74 → 0.66 words per upstream
+    instruction on 13 kernels.
+- **Order.**
+  - A1 and A2 follow representation step 7, and A5 (D4) follows step 8.
+  - A3 (tail calls, the JIT entry, deletion of computed goto) is one landing
+    after 9b.
+  - A4, the G2 control, comes after A3.
+  - The contract table (B0a) can start now. The format steps B2–B7 follow
+    A3, so they change one backend.
+- **Estimate:** about 97 agent-hours (§10).
 
 ---
 
@@ -74,345 +106,344 @@ scripts and their raw output are in `build/pyjit-link-wave1/irv2/` (§8.1).
 ### 0.1 Recount of register-ir.md
 
 Every number the design gives for the code was recounted at `48bb4d6d1d3`.
-Lib counts compile upstream `3a440b6`'s `Lib/` with the release build, as
-§2.3 did (2,071 files; 11 fail by design). Where a number changed, the code
-wins.
+Lib counts compile upstream `3a440b6`'s `Lib/` with the release build (2,071
+files; 11 fail by design). Where a number changed, the code wins.
 
 | Item | register-ir.md | Code at `48bb4d6d1d3` |
 |---|---|---|
 | `generated_ir_cases.c.h` | 18,772 lines, 292 `TARGET`s | **20,710 lines**, 292 `TARGET`s |
-| Handler numbers | 305; first-only 267 | 305; 267 |
+| Handler numbers; first-only | 305; 267 | 305; 267 |
 | Valid formats / targets | – | 293 / 292 (`BINARY_OP` is valid but has no `TARGET` of its own) |
-| Window handlers; role tuples; layouts | 83; 9; 10 | 83; 9; 10 |
-| Window formats; formats | 19; 64 | 19; 64 |
-| NOFB handlers | 7 | 7 (`COMPARE_OP`, `CONTAINS_OP`, `LOAD_ATTR`, `LOAD_GLOBAL`, `LOAD_SUPER_ATTR`, its instrumented twin, `STORE_ATTR`) |
-| `FBARG`; `RUNS_CODE`; formats with an fb field; using all four fields | 87; 261; 167; 144 | 87; 261; 167; 144 |
+| Window handlers; role tuples; layouts; window formats; formats | 83; 9; 10; 19; 64 | the same |
+| NOFB handlers; `FBARG`; `RUNS_CODE`; with an fb field; all four fields | 7; 87; 261; 167; 144 | the same |
 | Class-test macro lines | 890 (1,040 with store and move) | 1,040 lines in **211 handlers** |
-| `instr_ptr` saved in the prologue | 289 of 292 | 289 of 292 |
-| Value record set up | 292 of 292 | 292 of 292 (177 never box, §6.2) |
+| `instr_ptr` in the prologue; value record | 289; 292 of 292 | the same; 177 of the 292 never box (§6.2) |
 | `ir_displaced` / `finish_displaced_local` | 174 / 165 | 174 handlers / 165 calls in 159 handlers |
 | `_PyValue_Publish`; `RECORD_BRANCH_TAKEN` | 184; 20 | 184 uses in 67 handlers; 20 |
 | `ceval.o` text | 223 KB (interim build), upstream 107 KB | **595,778 B**; upstream 107,446 B |
 | Evaluator function | – | `_PyEval_EvalFrameLoop` **407,484 B**; upstream `_PyEval_EvalFrameDefault` 58,419 B |
-| Evaluator C frame | about 5.5 KB at `ca8a9d6d827`; upstream 360 B | **3,304 B** (`sub $0xce8,%rsp`); upstream 360 B (`0x168`) |
-| Text per target | 0.76 KB | **1.40 KB** (407,484 B / 292) |
-| Readers that mask the handler with 0xFFFF | about 20 functions in 13 files | **4 literal masks**: `pycore_ir.h:71` (`IR_HANDLER`), `pycore_ir.h:272` (`_PyIR_SetHandler`), `specialize.c:311`, `Lib/dis.py:413`; every other reader goes through `IR_HANDLER` (about 70 sites in 17 files) |
+| Evaluator C frame | about 5.5 KB at `ca8a9d6d827`; upstream 360 B | **3,304 B**; upstream 360 B |
+| Text per target | 0.76 KB | **1.40 KB** |
+| Literal 0xFFFF handler masks | about 20 functions in 13 files | **5**: `pycore_ir.h:71` (`IR_HANDLER`), `pycore_ir.h:272` (`_PyIR_SetHandler`), `specialize.c:311`, `Lib/dis.py:413`, `Modules/_remote_debugging/code_objects.c:495` (out of process). Every other reader goes through `IR_HANDLER` (about 70 sites in 17 files) |
 | Dead handlers | 5 | 5, with 0 static uses |
-| Lib words | 4,574,431 | **4,584,034** |
-| `NOT_TAKEN`; `PUSH_NULL` (all into temporaries) | 80,618; 117,632 | 80,618; 117,632 |
-| Constant loads; feedback sites | 855,432; 1,492,371 | 855,432; 1,492,371, same kinds |
-| Fusable compares | 17,381 of 21,564; `CONTAINS_OP` 3,557; `IS_OP` 1,960 | the same (of 21,564, 4,431 and 2,697) |
-| Fused jump distance | all within ±2,047 | 22,840 within 127, 56 more within 511, 2 more within 2,047 |
+| Lib words; `NOT_TAKEN`; `PUSH_NULL` (all into temporaries) | 4,574,431; 80,618; 117,632 | **4,584,034**; 80,618; 117,632 |
+| Constant loads; feedback sites | 855,432; 1,492,371 | the same, same kinds |
+| Fusable compares; distances | 17,381 of 21,564 (+3,557 `CONTAINS_OP`, 1,960 `IS_OP`); within ±2,047 | the same; 22,840 within 127, 56 more within 511, 2 more within 2,047 |
 | Jumps | 138,306 | 138,306 without `FOR_ITER` (18,168) and `SEND` (3,155); 48,248 backward with them |
-| `LOAD_GLOBAL` NULL bits | – | **93,334** |
-| `LOAD_FAST_BORROW` into a temporary | – | 232,433 (every one) |
-| Unpacks; 2 elements; at most 8 | 9,871; –; 99.7% | 9,871; 7,250; 9,846 (99.75%) |
-| Unpack then stores; into consecutive locals | 8,894; 8,057 | **8,887; 8,050** |
-| `CALL` → `POP_TOP` | 218,006 | **229,553** counting every `CALL*` family (`CALL_INTRINSIC_*` and `CALL_FUNCTION_EX` included); 218,006 was not reproduced, and the design does not say which families it counted |
+| `LOAD_GLOBAL` NULL bits; `LOAD_FAST_BORROW` into a temporary | – | **93,334**; 232,433 |
+| Unpacks; at most 8 elements; then stores; into consecutive locals | 9,871; 99.7%; 8,894; 8,057 | 9,871; 9,846 (99.75%); **8,887; 8,050** |
+| `CALL` → `POP_TOP` | 218,006 | **229,553** counting every `CALL*` family (intrinsics and `CALL_FUNCTION_EX` included); 218,006 not reproduced |
 | Per-code-object maxima | slots 803, entries 1,180, 4,480 units, 7,764 words, 4,048 constants, 368 names, compare sites 70 | unchanged |
-| unpack_sequence after G4.4 | about 870 words | 862 (9,667 − 8,805) |
-| Stale items (G10) | docstring, `_PyFb_FAMILIES`, `IR_MAX_FORWARD`, `SystemError` | all still present: `ir_generator.py` docstring lines 55–63 ("folds no load yet", "stack_pointer"); `_PyFb_FAMILIES` lists `RESUME` and `JUMP_BACKWARD`; `IR_MAX_FORWARD` 2047 (`pycore_ir.h:69`) with no stated reason; limit errors raise `SystemError` |
+| Limit errors | `SystemError` | **Mostly `SyntaxError`**: `assemble.c:716–720` (`too_large`) for words and opargs; a function with 5,000 locals raises `SyntaxError` (needs 5000 slots, limit 4095). Only `regcfg.c`'s "too many temporaries" (`slot_error`, line 790, called at 820) is a limit that still raises `SystemError` |
+| Other stale items (G10) | docstring, `_PyFb_FAMILIES`, `IR_MAX_FORWARD` | still present: `ir_generator.py` docstring lines 55–63; `_PyFb_FAMILIES` lists `RESUME` and `JUMP_BACKWARD`; `IR_MAX_FORWARD` 2047 (`pycore_ir.h:69`) without a reason |
 
-Not recounted: note 06's frame-pointer reference counts (2,021 against 3,736)
-cited in G2. The 29-kernel geometric mean of 0.81 words per upstream
-instruction is taken from the checkpoint ([checkpoint-20261103.md](../../bench/results/checkpoint-20261103.md)).
+The 29-kernel geometric mean of 0.81 words per upstream instruction is from
+the checkpoint. On the 14 kernels used here it is 0.78.
 
 ### 0.2 Facts the design does not state
 
-- **The tail-call backend does not build at HEAD.** Two things stop it:
-  - `ceval.c` includes `generated_ir_cases.c.h` under `_Py_TAIL_CALL_INTERP`
-    at line 1337, before the bridge helpers it calls (lines 1549–2140), so
-    `call_transaction_begin` and others are undeclared.
+- **The tail-call backend does not build at HEAD.**
+  - `ceval.c:1337` includes the handlers before the helpers they call (lines
+    1549–2140).
   - `ceval_macros.h` stops with `#error` unless the compiler has
-    `preserve_none`. GCC 15.2 does not: it warns and ignores the attribute.
-- **GCC 15.2 has what a tail-call interpreter needs.**
-  - It has `musttail` and the x86 attribute `no_callee_saved_registers`.
-  - `irv2/tcpatch.py` makes two edits: it moves the include after the
-    helpers, and under GCC it defines `Py_PRESERVE_NONE_CC` as
-    `no_callee_saved_registers`. With them, the backend compiles.
-  - `irv2/tclink.sh` rebuilds the ten core files that depend on
-    `_Py_TAIL_CALL_INTERP`, directly or through `pycore_jit.h`, and links an
-    interpreter from the release objects.
-  - The full suite (§9.1) fails the same nine test files under that
-    interpreter and under the copied computed-goto binary, both on HEAD's
-    `Lib`. The only difference is `test_jit_method`, because the JIT is
-    compiled out under tail calls.
-  - The handlers save no callee-saved registers; each one pushes only
-    `%rbp`, because the build keeps frame pointers.
-- **The baseline method JIT is compiled out under tail calls.**
-  `pycore_jit.h:157` defines `_PyJIT_BASELINE_SUPPORTED` only when
-  `!_Py_TAIL_CALL_INTERP`. Its entry code lives in locals and labels of the
-  loop:
+    `preserve_none`, which GCC 15.2 lacks.
+  - Two edits make it build under GCC (`irv2/tcpatch.py`): move the include,
+    and use `no_callee_saved_registers` under GCC.
+  - Linked with `irv2/tclink.sh`, it fails the same 9 test files as computed
+    goto over the full suite. The only difference is `test_jit_method`
+    (§9.1).
+  - The review linked a Clang 21 `preserve_none` variant (`tccl.sh`). It
+    gives the same 9 files and 33 failures.
+- **The baseline method JIT is compiled out under tail calls**
+  (`pycore_jit.h:157–158`, which also excludes `Py_STATS` and free
+  threading). Its entry state is loop-local:
   - the locals `jit_flow`, `jit_request`, `jit_context`, `jit_cold_request`
-    and `jit_from_return`;
-  - the labels `jit_resume`, `jit_enter` and `jit_step` (`ceval.c:2290`
-    onwards).
+    and `jit_from_return` (`ceval.c:2209–2214`);
+  - the labels `jit_resume`, `jit_enter`, `jit_step` and
+    `jit_consume_action` (`ceval.c:2290`, 2304, 2320, 2365).
+- **The executing copy is fixed for the code object's life.**
+  - `_PyCode_GetExec` creates `_co_exec` once, when it is NULL, under the
+    code object's critical section (`ir.c:312–326`).
+  - `_PyCode_ClearExec` (`ir.c:331`) is its only clearer. Its only caller is
+    `code_dealloc` (`codeobject.c:2559`), and a running frame holds a
+    reference to its code object.
+  - `exec->words` points into the same allocation and is never reassigned.
+    Instrumentation and specialisation rewrite handler fields in place.
+  - The free-threaded build shares one copy (`pycore_ir.h:140–152`).
+  - **What follows.** The only two writes through the helpers' `_PyInstr **`
+    parameters store `exec->words + word` (`ceval.c:1587`) and
+    `exec->words + state->next_word` (`ceval.c:2175`). Both offsets were
+    taken from `next_instr` against the same `exec->words` when the
+    operation began (`value_operation_begin`, `ceval.c:834`). The writes
+    therefore store the value `next_instr` already has.
+  - The `frame->ir_words = exec->words` refreshes at lines 1584, 1816, 2125
+    and 2172 are identities in the same way.
+- **The instrumentation refresh in the helpers duplicates
+  `sys.monitoring`.** `value_operation_refresh` and `native_call_finish` call
+  `_Py_Instrument(code)` when the version changed. But setting events already
+  instruments every code object with a frame on any thread's stack
+  (`instrument_all_executing_code_objects`, `instrumentation.c:2031`, called
+  at 2116, 2201 and 2543), as upstream does. `DISPATCH` re-reads the
+  rewritten handler.
 - **Step 5 left the record in every handler.** Representation step 5 says
-  "Handlers that box nothing drop `value_temps`". At HEAD, all 292 handlers
-  still set up the record.
-- **The tail-call handlers have a stack canary.** Under
-  `_Py_TAIL_CALL_INTERP`, each handler declares its own `value_boxes` array
-  and `_PyValueTemps`. With Ubuntu's default `-fstack-protector-strong`, any
-  handler with an array or an address-taken local gets a canary check.
-- **The release flags.** They include `-fno-omit-frame-pointer`,
-  `-fcf-protection` (`endbr64` at every handler entry) and `-fno-gcse`.
-  Upstream's release build has the same.
+  handlers that box nothing drop `value_temps`. At HEAD all 292 set it up.
+- **Release flags.** `-fno-omit-frame-pointer`, `-fcf-protection` (`endbr64`
+  at each handler entry), `-fno-gcse`; Ubuntu GCC adds
+  `-fstack-protector-strong`. Upstream's build has the same.
 
 ---
 
-## 1. The 39%: what the eval loop spends per word
+## 1. The loop cost
 
-### 1.1 Method
+### 1.1 Timing (review 1)
 
-- **Handler addresses.** They come from the relocations of the
-  `opcode_targets` table in the release `python` and in upstream's
-  (`labels.py`).
-- **Two path measures per handler.** Each ends at the indirect jump that
-  dispatches the next word.
-  - *Fall-through* (`hpath.py`) follows the not-taken side of every
-    conditional branch, which is the path GCC laid out as likely. Along it,
-    the script counts instructions, calls, conditional branches, stack
-    references by variable, loads of `nlocalsplus` (`-0x14(%r…)` off
-    `ir_words`) and the `PyLong`/`PyFloat` tests of `_PyValue_Publish`.
-  - *Shortest call-free path* (`hmin.py`) is the cheapest path with no call,
-    which is the path a handler's fast case takes. Unlike fall-through, it
-    compares across backends, because tail-call handlers place cold code
-    differently.
-- **Stack homes.** DWARF gives `next_instr` one fixed home for the whole
-  function, `-0xc90(%rbp)` (`DW_OP_fbreg -3232`, `homes.py`). GCC's location
-  lists for `frame` and `slots` are almost all empty, so their homes
-  (`-0xcc8` and `-0xcd8`) were found from the loads that feed `frame->` and
-  `slots[…]` accesses.
-- **Weights.** Each handler is weighted by its entries per kernel, from the
-  checkpoint's stats build (`checkpoint-20261103-C-kernels-boxes.json`, 29
-  kernels, `dbce7b1260d`). Handler names are stable across those commits.
-  Means are taken per kernel, then over kernels.
-- **Diagnostic variants of `ceval.c`.** All are compiled with the release
-  flags (`variants.py`, `tcpatch.py`, `cc.sh`):
-  - `ni` wraps each helper call that takes `&next_instr` as
-    `({ _PyInstr *ir_ni = next_instr; int r = F(…, &ir_ni, …); next_instr = ir_ni; r; })`,
-    which removes the escape without changing the helpers;
-  - `vt` is `ni` plus `value_temps = NULL` in the 177 handlers that never box;
-  - `tc` is the tail-call backend under GCC (`tcpatch.py`); `tcni` and `tcvt`
-    add `ni` and `ni`+`vt`.
+Method:
+- `irv2-review/scripts/interleave.sh` and `tbench.py`;
+- 5 interleaved rounds per binary; each sample is the best of 3 runs of
+  `run(1)`; the table uses the median over rounds;
+- load 1.1–3.7 in run 1 and 2.2–3.4 in run 2, on 16 cores (`timing.tsv`,
+  `timing2.tsv`).
 
-  Only `tc` was linked into an interpreter.
+The binaries:
+- `cg`: the release binary, copied into the same layout;
+- `tc`: the GCC tail-call link of HEAD with no other change (`tclink.sh`);
+- `cl`: `ceval.c` built with Clang 21 under `preserve_none`, linked with the
+  GCC objects;
+- upstream `3a440b6`.
 
-### 1.2 One word: `LOAD_FAST_BORROW`
-
-`LOAD_FAST_BORROW` is 13.8% of handler entries. Its shortest path is 44
-instructions with 12 stack references. Upstream's is 14 instructions with
-one stack load, the dispatch table base. Upstream keeps `next_instr` in
-`%r12`, `frame` in `%rbx`, `stack_pointer` in `%r13` and `oparg` in `%r11d`.
-
-`hcat.py` charges each instruction on the fork's path to the innermost
-source construct, using the DWARF inline chain:
-
-| Construct | Instructions |
-|---|---:|
-| `IR_STORE_DST`: the class test against `nlocalsplus` (two dependent loads), the write | 11 |
-| `PyValue_BorrowAt`: the borrow tag of an in-place read | 10 |
-| `DISPATCH`: the record's count test, fetch, decode, jump | 7 |
-| `_PyValueTemps` set-up | 4 |
-| `_PyValue_Publish`: `PyLong` and `PyFloat` tests | 4 |
-| `frame->instr_ptr = next_instr` (a load of the stack home, then the store) | 2 |
-| `next_instr += 1` (a load and a store of the stack home) | 2 |
-| Other: `this_instr`, the field decode, a NULL test, `ir_bytes_at` | 4 |
-| **Total** | **44** |
-
-Under `tcvt`, the same handler is 43 instructions with 2 stack references:
-
-| Construct | Instructions |
-|---|---:|
-| `DISPATCH` | 10 |
-| Function prologue and canary | 9 |
-| `IR_STORE_DST` | 8 |
-| `PyValue_BorrowAt` | 7 |
-| `_PyValue_Publish` | 4 |
-| The frame load from `tstate` | 1 |
-| `instr_ptr` | 1 |
-| Other | 3 |
-
-The stack references go. The instruction count stays, because the value
-representation's work and the prologue remain.
-
-### 1.3 Weighted over the kernels
-
-**Fall-through path, computed goto, today** (`weigh-rc.md`; per executed
-word, mean of 29 kernels):
-
-| Instructions | Stack refs | `next_instr` | `frame` | `slots` | `tstate` | Value record | `nlocalsplus` loads | Publish tests | Calls | Conditional branches |
-|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 77.3 | 15.3 | 3.3 | 3.5 | 1.8 | 0.4 | 4.1 | 1.2 | 0.6 | 0.7 | 9.9 |
-
-The `ni` variant gives 79.7 instructions and 16.3 stack references. The `vt`
-variant (`ni` plus `vt`) gives 75.1 and 11.9, and the value record's
-references fall from 4.1 to 0.9.
-
-**Shortest call-free path, per variant** (`weighmin.md`, `weighmin-up.md`;
-per word):
-
-| Build | 78% of entries: instructions / stack refs | 59% of entries (upstream has the handler): instructions / stack refs |
+| Geometric mean, 12 kernels | Run 1 | Run 2 |
 |---|---:|---:|
-| Computed goto (today) | 53.0 / 12.3 | 48.9 / 12.1 |
-| Computed goto + `ni` + `vt` | 50.0 / 9.3 | 45.4 / 8.6 |
-| Tail call | 57.4 / 6.8 | – |
-| Tail call + `ni` | 55.9 / 5.4 | – |
-| Tail call + `ni` + `vt` | 50.0 / 2.2 | 45.5 / 1.5 |
-| Upstream | – | 22.0 / 1.3 |
+| GCC tail call / computed goto | 0.870 (per kernel 0.80–0.92) | 0.872 |
+| Clang 21 tail call / computed goto | – | 0.877 |
+| Computed goto / upstream | **2.418** | – |
+| GCC tail call / upstream | 2.104 | – |
 
-The hottest handlers on that path (instructions / stack references):
+| Kernel | cg / upstream | GCC tc / cg |
+|---|---:|---:|
+| chaos | 2.43 | 0.853 |
+| coroutines | 1.97 | 0.887 |
+| deltablue | 4.52 | 0.902 |
+| fannkuch | 2.49 | 0.869 |
+| float | 2.07 | 0.900 |
+| generators | 2.60 | 0.855 |
+| go | 2.86 | 0.870 |
+| nbody | 1.80 | 0.796 |
+| nqueens | 2.15 | 0.861 |
+| raytrace | 2.31 | 0.891 |
+| richards | 3.05 | 0.920 |
+| spectral_norm | 1.76 | 0.845 |
 
-| Handler | Share of entries | Computed goto | cg + `ni` + `vt` | tc + `ni` + `vt` | Upstream |
-|---|---:|---:|---:|---:|---:|
-| `LOAD_FAST_BORROW` | 13.8% | 44 / 12 | 38 / 8 | 43 / 2 | 14 / 1 |
-| `STORE_FAST` | 4.7% | 46 / 11 | 46 / 8 | 36 / 0 | 18 / 1 |
-| `POP_JUMP_IF_FALSE_BOOL` | 4.3% | 59 / 11 | 56 / 7 | 56 / 0 | – |
-| `POP_TOP` | 3.8% | 28 / 9 | 25 / 5 | 26 / 0 | 14 / 1 |
-| `LOAD_GLOBAL_MODULE` | 3.6% | 60 / 11 | 58 / 8 | 54 / 0 | 40 / 1 |
-| `PUSH_NULL` | 3.0% | 25 / 9 | 23 / 6 | 32 / 2 | 11 / 1 |
-| `LOAD_SMALL_INT_INLINE` | 2.9% | 31 / 10 | 29 / 7 | 37 / 2 | 17 / 1 |
-| `JUMP_BACKWARD` | 2.8% | 27 / 12 | 20 / 5 | 20 / 0 | 13 / 2 |
-| `SEND_GEN` | 1.2% | 118 / 39 | 115 / 36 | 62 / 0 | – |
+- **Tail calls alone help.** With every escape and every record still in
+  place, they remove about 16% of the log gap (log 0.870 / log 2.418).
+- **Tiny handlers get slower.** The `straight` probe (ten `b = a` per
+  iteration) is 1.04× and 1.01× slower under GCC tail calls, and 1.15× slower
+  under Clang. The likely cause is a function prologue in very small
+  handlers.
+- **The 39% is a share of build F, before step 5.** It is loop *self* time,
+  so it includes the representation work inlined into the handlers (C5).
+  This packet does not claim phase A removes all of it. A re-split of the
+  gap at HEAD with the sampler is a §8 measurement.
 
-Three things follow.
+### 1.2 Diagnosis: what the static counts show
 
-- **Under computed goto, removing the escape alone does not help.** In the
-  `ni` variant, GCC still stores `next_instr` to its home at each dispatch,
-  and the copies add instructions. The single huge function, not the
-  escapes alone, is what decides where GCC keeps its state.
-- **Under tail calls, the state is in argument registers.** Each handler is
-  its own allocation problem, and the state arrives in argument registers.
-  The escape removal and the record removal then take stack traffic down to
-  upstream's level.
-- **The instruction count is what remains.** It is 45.5 against 22.0 per
-  word. It is the value representation's fast-path work (§1.4, C5) and the
-  per-handler prologue (C6), not state transport.
+These are counts of code shape, not time. They say where the time can come
+from, not how much.
 
-### 1.4 Named causes
+- **Handler addresses** come from the `opcode_targets` relocations
+  (`labels.py`). The review reproduced them from DWARF labels for all 292
+  and 231 handlers.
+- **The inline-scalar lower bound** (`hmin.py`) is the shortest call-free
+  path from handler entry to the next dispatch. In a handler that branches
+  on the value, it is the inline-scalar case. An object value takes more: on
+  `LOAD_FAST_BORROW`, the borrow-tag block, the `ob_type` load and two type
+  compares, about 61 instructions against 44. Upstream's handler is 14
+  either way.
+- The fall-through measure of revision 1 is dropped. Its
+  `LOAD_FAST_BORROW` path stored to a local, which no `LOAD_FAST_BORROW`
+  does, so the per-variable reference counts taken from it (3.3, 3.5, 1.8,
+  0.4, 4.1) are withdrawn.
+- **Weights.** Handler entries per kernel come from the checkpoint's stats
+  build (`checkpoint-20261103-C-kernels-boxes.json`, `dbce7b1260d`).
+  `INSTRUCTION_STATS` counts only handlers below 256 (`ceval_macros.h:70–80`),
+  so the IR-only handlers 267–304 carry no weight. They include:
+  - `IR_JUMP`;
+  - the per-operation `BINARY_OP_*` generics, which count as `BINARY_OP`, a
+    name with no label (up to 1.7% of entries on raytrace);
+  - the NOFB forms;
+  - the `*_JIT_WARM` forms.
+- **Variants** of `ceval.c`, compiled with the release flags:
+  - `ni`: a short-lived copy replaces `&next_instr`;
+  - `vt`: `ni`, plus no record in the 177 handlers that never box;
+  - `tc`, `tcni`, `tcvt`: the GCC tail-call build, alone and with those two;
+  - the review's `rep`: no publish canonicalisation, and `PyValue_BorrowAt`
+    returns the slot bits. This approximates step 8 and D4. It does not
+    preserve behaviour and was only compiled.
 
-| # | Cause | Handlers affected | Evidence | Removed by |
-|---|---|---|---|---|
-| C1 | **`next_instr` escapes.** Helpers that may redirect the PC after reentrant code write it through `_PyInstr **`. | 290 `&next_instr` sites in 185 handlers, passed to 11 out-of-line helpers: `finish_displaced_local` 165, `value_operation_finish` 38, `value_reader_complete` 28, `call_transaction_invoke` 26, `retire_published_values` 10, `call_transaction_expand_method` 7, `call_transaction_refresh` 6, `call_transaction_prepare_tuple` 4, `value_attribute_complete` 2, `native_call_finish` 2, `call_transaction_monitor` 2. Also 5 in `ceval_macros.h` and 2 in `bytecodes.c`. The generated sites come from 10 emit sites in `ir_generator.py`. | One stack home for the whole function; 3.3 references per word | A2 (return the PC), effective with A3 |
-| C2 | **One 407 KB function.** GCC allocates registers across 292 handlers with 4,772 call instructions (upstream: 611) and 471 indirect jumps (upstream: 257). `frame`, `slots` and `tstate` live in stack homes and are reloaded in each handler. | All 292 | 3.5 + 1.8 + 0.4 references per word; C frame 3,304 B against 360 B | A3 (each handler a function; the state as arguments) |
-| C3 | **The value record.** `value_owners = (_PyValueTemps){value_boxes, 0, 3}` is three stores in each handler, and `DISPATCH` tests the count. | 292, of which 177 never box | 4.1 references per word; the `vt` variant cuts loop text by 18% (407,484 → 333,672 B) | A1 |
-| C4 | **The slot-class test reads memory.** `IR_IS_LOCAL` compares a field with `nlocalsplus` from the code header at `ir_words − 0x14`, behind a load of `frame->ir_words`. | 1,040 lines in 211 handlers | 1.2 header loads per word, each on a dependent chain | A4 (`nlocalsplus` as dispatch state) or B3 (class bits), chosen by G2's rule |
-| C5 | **Representation work on the fast path.** It covers the publish tests (`_PyValue_Publish`), the borrow-tag computation (`PyValue_BorrowAt`, `IR_LOAD_BORROWED`) and the displaced-local protocol (`ir_displaced`, `finish_displaced_local`). | Publish: 67 handlers; `ir_displaced`: 174; `finish_displaced_local`: 159 | 0.6 publish tests per word; 19 of `LOAD_FAST_BORROW`'s 43 `tcvt` instructions; 15 of `STORE_FAST`'s 46 are `IR_LOAD_BORROWED` | Representation step 8 (canonical construction makes publish-time canonicalisation redundant) and D4 with G2 (no borrow tags in homes); not the format |
-| C6 | **Fixed prologue per handler.** It covers the `instr_ptr` store, the frame load from `tstate` (tail call only), the canary, `endbr64` and the frame pointer. | 289 (`instr_ptr`); 276 of 298 tail-call functions have a canary (200 under `tcvt`) | 1–2 instructions for `instr_ptr`; 9 for prologue and canary in `tcvt` `LOAD_FAST_BORROW` | A3 (frame as a parameter; no handler arrays, so no canary); `instr_ptr` at escapes only is G9 item 1, after baseline; `endbr64` and the frame pointer stay, as upstream pays them |
-| C7 | **Code size.** | All | Loop 407,484 B against 58,419 B (7.0×); mean 1,358 B per handler against 243 B (§6.1) | A1 (−18%), A3 (cold paths out of line per function), representation steps 7–9a (bridge code) |
+Weighted inline-scalar lower bound, per word (`weighmin*.md`; review
+`out/sp-*.json`):
 
-The branch-history read-modify-write (G9 item 2, 20 handlers) and the NULL
-store per consumed temporary (G9 item 4) are real but smaller. They stay
-after baseline, as G9 says.
+| Build | 78% of entries | 59% of entries (upstream has the handler) | Loop text |
+|---|---:|---:|---:|
+| Computed goto, HEAD | 53.0 / 12.3 | 48.9 / 12.1 | 407,484 B |
+| cg + `rep` (step 8, D4) | – | 42.6 / 10.8 | 365,548 B |
+| cg + `ni` + `vt` (A1, A2) | 50.0 / 9.3 | 45.4 / 8.6 | 333,672 B |
+| cg + `vt` + `rep` | – | 40.8 / 8.3 | 304,791 B |
+| Tail call | 57.4 / 6.8 | – | – |
+| Tail call + `ni` | 55.9 / 5.4 | – | – |
+| Tail call + `ni` + `vt` | 50.0 / 2.2 | 45.5 / 1.5 | – |
+| Upstream | – | 22.0 / 1.3 | 58,419 B |
+
+Each cell gives instructions / stack references per word.
+
+What follows from the table:
+- **The escape alone does not free the register under computed goto.** In
+  `ni`, GCC still keeps `next_instr` in its stack home.
+- **Under tail calls, the state is in argument registers.** There the escape
+  and record removals take stack traffic to upstream's level.
+- **The remaining instruction gap is representation and loop structure.**
+  `rep` removes 16 of `LOAD_FAST_BORROW`'s 30 excess instructions (44 → 28).
+  `STORE_FAST` stays at 45–46 in every variant.
+
+### 1.3 `LOAD_FAST_BORROW` on the inline-scalar path
+
+| Construct (`hcat.py`, computed goto) | Instructions |
+|---|---:|
+| `IR_STORE_DST`: class test against `nlocalsplus` (two dependent loads), write | 11 |
+| `PyValue_BorrowAt`: borrow tag of an in-place read | 10 |
+| `DISPATCH`: record count test, fetch, decode, jump | 7 |
+| `_PyValueTemps` set-up | 4 |
+| `_PyValue_Publish`: `PyLong`/`PyFloat` tests | 4 |
+| `instr_ptr` store; `next_instr += 1` through its home | 2 + 2 |
+| Other | 4 |
+| **Total** (upstream: 14) | **44** |
+
+Under `tcvt` it is 43 instructions with 2 stack references: `DISPATCH` 10,
+prologue and canary 9, `IR_STORE_DST` 8, `PyValue_BorrowAt` 7, publish 4,
+frame load 1, `instr_ptr` 1, other 3.
+
+### 1.4 Named costs and their owners
+
+| # | Cost | Owner | Handlers affected | Evidence | Removed by |
+|---|---|---|---|---|---|
+| C1 | `next_instr` passed by address | structure | 290 generated sites in 185 handlers, to 11 helpers (`finish_displaced_local` 165, `value_operation_finish` 38, `value_reader_complete` 28, `call_transaction_invoke` 26, `retire_published_values` 10, `call_transaction_expand_method` 7, `call_transaction_refresh` 6, `call_transaction_prepare_tuple` 4, `value_attribute_complete` 2, `native_call_finish` 2, `call_transaction_monitor` 2). The twelfth helper, `finish_value_bridges`, is reached from `DISPATCH` (`ceval_macros.h:272–281`), the three `JUMP_TO_LABEL`s and `DISPATCH_INLINED`, so it is in all 292 | One fixed DWARF home (`-0xc90(%rbp)`); tail call 6.8 → 5.4 stack refs with `ni` | A2 (delete the parameter), effective under A3 |
+| C2 | One 407 KB function | structure | 292 | 4,772 calls against 611; 471 indirect jumps against 257; C frame 3,304 B against 360 B; under tail calls, stack refs fall to 1.5 with A1 and A2 | A3 |
+| C3 | The value record in every handler | structure | 292, of which 177 never box | `vt`: 48.9/12.1 → 45.4/8.6; loop −18% | A1 |
+| C4 | The slot-class test reads the code header | **format** | 1,040 lines in 211 handlers | 1.2 header loads per word, each behind `frame->ir_words` | A4 (`nlocalsplus` as state) or B3 (class bits); open question 9 (static roles) |
+| C5 | Borrow tags and publish canonicalisation on the fast path | **representation** | Publish: 67 handlers; borrow macros: 590 lines generated | `rep`: 48.9 → 42.6 instructions; loop −10%; `LOAD_FAST_BORROW` 44 → 28 | A5 (D4) and representation step 8 |
+| C6 | Fixed prologue: `instr_ptr`, frame load (tail call), canary, `endbr64`, frame pointer | structure | 289 (`instr_ptr`); 276 of 298 tail-call functions have a canary | 9 prologue instructions in `tcvt` `LOAD_FAST_BORROW` | A3a (frame parameter; no address-taken locals, so no canary); `instr_ptr` at escapes only is G9 item 1, after baseline |
+| C7 | The `NOT_TAKEN` skip on every conditional fall-through | **format** | conditional jumps | 0–8.9% of words | B2 |
+| C8 | Code size | all | all | mean 1,358 B per handler against 243 B; loop 7.0× upstream; 5.2× with A1, step 8 and D4 | A1, A3, A5, step 8 |
 
 ---
 
-## 2. How V8 Ignition and LuaJIT keep the state in registers
+## 2. How V8 Ignition and LuaJIT keep state in registers
 
-Facts about the two VMs come from their public sources: V8's
-`src/interpreter/` and `src/codegen/x64/register-x64.h`, and LuaJIT's
-`src/vm_x86.dasc`, `vm_x64.dasc` and `lj_bc.h`. Clang's `preserve_none`
-argument order is from LLVM's documentation. All of these are from memory
-and were not re-verified for this note.
+Review 1 checked these against LuaJIT v2.1 (`src/vm_x64.dasc`, `lj_bc.h`) and
+V8 main (`src/codegen/x64/register-x64.h`,
+`src/interpreter/interpreter-assembler.cc`, `bytecodes.h`).
 
-| Technique | V8 Ignition | LuaJIT 2 | Fits a C interpreter under GCC or Clang? | In this packet |
+| Technique | V8 Ignition | LuaJIT 2.1 | Fits a C interpreter? | Here |
 |---|---|---|---|---|
-| Fixed registers for dispatch state | The accumulator, bytecode offset, bytecode array and dispatch table each have a fixed register (x64: `rax`, `r9`, `r12`, `r15`), set by the bytecode-handler calling convention | `BASE`, `KBASE`, `PC` and `DISPATCH` in fixed registers (x86 VM: `edx`, `edi`, `esi`, `ebx`) | **Yes, through tail calls.** A handler's parameters are the fixed registers: Clang's `preserve_none` passes the first arguments in `r12`–`r15`, then `rdi`, `rsi`, …; GCC's `no_callee_saved_registers` passes them in the SysV argument registers. Under computed goto, the compiler allocates registers for the whole function and nothing can be pinned. | A3 |
-| State that must survive calls into C | Saved to the frame around calls | `PC`, `KBASE` and `DISPATCH` are in C callee-saved registers, so C helpers preserve them; `BASE` is caller-saved and refetched | **Yes.** With either attribute, a handler may use `rbx` and `r12`–`r15` without saving them, and the compiler moves live state there around calls. Under Clang the arguments arrive in `r12`–`r15` already. Under GCC they arrive in caller-saved registers, and a handler with a call path pays a few moves. | A3 |
-| Operand decode during dispatch | Operands read from the bytecode array by offset | `ins_NEXT` loads the word, decodes `A` and `D` into registers and jumps; handlers receive them in registers | **Yes.** Pass the word as a parameter (`ir_word` already is one in the tail-call build) and decode fields with shifts. This retires the computed-goto build's memory re-read of fields (`IR_FIELD_*`), a second decode form that exists only because of GCC's spill. | A3 |
-| PC saved only when calling out | `SaveBytecodeOffset` before calls that may need it | `savePC` before calls into C | **Yes.** The generator knows which uops escape. | G9 item 1, after baseline; A2 makes the PC a value, which is the precondition |
-| Slow paths out of line | Deferred labels in the handler builder | Shared `->vmeta_*` stubs | **Yes.** Cold `noinline` helpers. Under tail calls, a slow path can be its own function reached by `musttail`, which keeps the fast handler small. | A3 (cold-path placement); G9 item 5 |
-| Register file in the machine frame | Interpreter registers are frame slots off `rbp` | Lua slots off `BASE` | Already: `slots` is the base, and it is a parameter in the tail-call build | – |
-| Dispatch-table register | `r15` | `DISPATCH` (also used to swap hook tables) | **Not needed.** The table is a RIP-relative constant (one `lea` or an indexed jump), and instrumentation rewrites handlers instead of swapping tables. | – |
-| Accumulator | Implicit operand of most bytecodes | – | **No.** A second operand model next to the slot fields. Its gain is encoding density, which a three-address register IR already has. | rejected (§7) |
-| Handlers written in a macro assembler | CodeStubAssembler compiled by TurboFan | DynASM | **No.** CPython generates handlers from `bytecodes.c` for the C compiler; tail calls get the register discipline without a second handler language. | rejected (§7) |
-| Short forms and operand-kind opcodes | `Star0`–`Star15`; `AddSmi`, `LdaSmi` | `ADDVN`, `ADDNV`, `KSHORT` | **No.** They multiply handlers (G6's rejected experiment). | rejected; G6 uses hidden slots |
-| Variable-width operands | `Wide` and `ExtraWide` prefixes | – | **No.** Two encodings of one operation. | rejected (§7) |
-| Compare and jump | Accumulator compare, then `JumpIfTrue` | `ISLT` and the following `JMP` read as a pair | Yes: a fused fixed form | B6 (G3) |
+| Fixed registers for dispatch state | accumulator `rax`, bytecode offset `r9`, bytecode array `r12`, dispatch table `r15` | x64 POSIX: `BASE` `rdx` ("Not C callee-save, refetched anyway"), `KBASE` `r15`, `PC` `rbx`, `DISPATCH` `r14` (each "Must be C callee-save"); x86 and Windows x64: `edx`, `edi`, `esi`, `ebx` | **Yes, through tail calls**: a handler's parameters are its fixed registers. Clang's `preserve_none` uses r12–r15, rdi, rsi, rdx, rcx, r8, r9, r11 and rax. GCC's `no_callee_saved_registers` uses the six SysV argument registers. | A3a |
+| State across calls into C | registers are frame slots off the interpreted frame pointer; it reloads the bytecode array after every call "in case the debugger has been activated" (`BytecodeArrayTaggedPointer`) | `PC`, `KBASE`, `DISPATCH` in C callee-saved registers | **Yes.** Either attribute leaves `rbx` and `r12`–`r15` free for the compiler to carry state across calls. Here the executing copy never moves, so nothing needs reloading (§0.2). | A2, A3a |
+| Operand decode during dispatch | operands loaded from the bytecode array by offset | `ins_NEXT` decodes A, D and OP before `jmp [DISPATCH+OP*8]` | **Yes.** Upstream predecodes `oparg` into `%r11d` under computed goto and passes it as a tail-call parameter. A3a passes `ir_word` and decodes after the jump; whether to predecode a field is a register-budget question (open question 7). | A3a |
+| PC saved only when calling out | `SaveBytecodeOffset` in `CallPrologue`, unless `MakesCallAlongCriticalPath` | handlers store `mov SAVE_PC, PC` to a C-stack slot (`aword [rsp+aword*3]`) before calls that need it | **Yes**; the generator knows which uops escape | G9 item 1, after baseline |
+| Dispatch-table register | `r15` | `DISPATCH`: one dynamic table and a static copy, with hooks re-dispatching through `[DISPATCH+OP*8+GG_DISP2STATIC]`; also the base for `global_State` and `jit_State` (`DISPATCH_GL`, `DISPATCH_J`) | **A choice.** Upstream CPython passes the table as a tail-call parameter (`instruction_funcptr_table`, `ceval_macros.h:75–79`) and switches it for trace recording (`ENTER_TRACING`, lines 146–157). Its computed-goto loop loads the table from the stack, which is upstream's one stack reference per word. The fork switches no table, so the table can be a constant; the sixth GCC register goes to A4 or to a predecoded field instead (open question 7). | A3a, A4 |
+| Slow paths out of line | deferred labels | shared `->vmeta_*` stubs | **Yes**: cold helpers; under tail calls a slow path is its own function | A3a |
+| Compare and jump | no fused bytecode (accumulator compare, then a jump) | ISLT consumes the following JMP (`add PC, 4`, then `PC_RD`) | **Yes**: a fixed fused form | B6 |
+| Lookahead pairing | inlines a following short `Star` (`StarDispatchLookahead`) | ISLT with JMP, as above | open question 8 | – |
+| Accumulator | implicit operand | – | **No**: a second operand model | §7 |
+| Handlers in a macro assembler | CodeStubAssembler / TurboFan | DynASM | **No**: a second handler language | §7 |
+| Short forms, operand-kind opcodes | `Star0`–`Star15`, `LdaSmi`, `AddSmi` | `ADDVN`, `KSHORT` | **No**: they multiply handlers (G6's experiment) | §7 |
+| Variable-width operands | `Wide`/`ExtraWide` prefixes, with separate handler-table ranges (256–511, 512–767), tripling handlers | – | **No**: two encodings of one operation | §7 |
 
-Upstream CPython 3.14 ships the tail-call interpreter for Clang 19. Its gain
-there is small, because upstream's computed-goto loop already keeps its state
-in registers (one stack load per word, §1.3). Here, the computed-goto loop
-does not keep its state in registers, which is why the same change matters
-more.
+Calling conventions:
+- **GCC.** The current manual documents an x86 `preserve_none` that passes
+  integer parameters in r12, r13, r14, r15, rdi and rsi and "is subject to
+  change". GCC 15.2 lacks it, and the work on it (PR 119628) cites CPython.
+- **Clang.** It documents `preserve_none`'s ABI as unstable.
+
+Hence A3a's rule: handlers use an internal convention, and everything else,
+the JIT included, enters and leaves through C-ABI functions.
 
 ---
 
 ## 3. Ordering against the representation packet
 
-The representation packet's remaining steps touch these files:
-
-| Step | Files and generated output |
+| Representation step | Files that matter here |
 |---|---|
-| 6a–6c | `Objects`, `Modules`, `Python` sweep sites (running now) |
-| 7 | judgment sites in `Objects`; comments in `ceval.c`; `_PyValue_RestoreException` deleted |
-| 8 | constructors; `generators_common.py:POINTER_CONSTRUCTORS`; generated files regenerated |
-| 9a | `pycore_value.h`, `bytecodes.c` numeric handlers, `specialize.c`, the compiler's inline-int users |
-| 9b | `jit_x86.h`, `jit_backend_x86.c`, `jit_record.c`, `jit_ir.c`, `jit_baseline.c`, `jit_runtime.c` |
+| 6a–6c | sweep sites; 6b rewrites the release helpers in `ceval.c`'s bridge region |
+| 7 | deletes `_PyValue_RestoreException` and its 33 uses in `ceval.c`, inside the bridge helpers (`drop_failed_value` 1546; `call_transaction_close_value` and `_object` 1683, 1693; line 1840); `DISPATCH_INLINED` in `ceval_macros.h`; 2 uses in `bytecodes.c` |
+| 8 | constructors; `generators_common.py:POINTER_CONSTRUCTORS`; regenerated files |
+| 9a | `pycore_value.h`, the numeric handlers in `bytecodes.c`, `specialize.c`, the compiler's inline-int users |
+| 9b | `jit_*.c`, `jit_x86.h`, `pycore_jit*.h` |
 
-| IR v2 step | Can start | Why |
+| IR v2 step | Starts after | Why |
 |---|---|---|
-| A1, A2 | after 6c | They change `ir_generator.py`'s prologue, epilogue and helper calls, plus the helper signatures in `ceval.c` (lines 1549–2140). Steps 7–9a edit handler bodies and other files; the generated files are regenerated, not merged. Step 7 keeps every check in `ceval.c` (packet §3.4), so it does not edit these helpers. |
-| A3a | after A2 | It edits `ceval.c`'s include order, `ceval_macros.h`, the tail-call prologue in the generator and `configure`. Its JIT part (A3b) edits `jit_runtime.c`, which 9b rewrites. |
-| A3b | after 9b | Same file as 9b (`jit_runtime.c`, entry and resume), and the JIT suite is 9b's validation point. |
-| A4 | after A3a | It needs the tail-call parameter list. |
-| B0a (contract table, C consumers) | after 6c | A new generated table and the consumers in `assemble.c`, `regcfg*.c`, `ir.c`, `specialize.c`, `dis`. No format change. 9a's handler rewrites only regenerate rows. |
-| B0b (JIT front end on the table) | after 9b | The consumers are the JIT files 9b rewrites. |
-| B1 | any time | `SyntaxError` limits, the docstring and the `IR_MAX_FORWARD` reason are independent. |
-| B2–B7 (format) | after 9b | IR-D1. Each changes the word stream, so `dis`, `mark_stacks`, the verifier and the JIT decoders, which 9b also edits. And: B6's `_INT` fused forms compare scaled int51 values (written once, after 9a); B7's constant slots hold inline values, and int51 decides which ints are inline; B3's D4 consequence (counted temporaries) needs step 8's canonical constructors. |
+| A1, A2 | rep. 7 | Step 7 edits the bridge helpers whose signatures A2 changes, and `ceval_macros.h`'s dispatch macros, which A1 changes |
+| A5 (D4) | rep. 8 | D4 needs canonical construction: a value stored in a home must be canonical before its tag means only "immortal or not". It shares `pycore_value.h` with 9a, in different functions; any order with 9a and 9b |
+| A3a + A3b + A3c, one landing | rep. 9b (and A2) | A3a's slot-addressed rewrites edit `bytecodes.c` handler bodies that 9a rewrites; A3b edits `jit_runtime.c`, which 9b rewrites. Landing them together means no representation step has to pass on two backends (coordinator decision on finding 8) |
+| A4 | A3 | It needs the parameter list |
+| B0a | rep. 6c | A new generated table and consumers in `assemble.c`, `regcfg*.c`, `ir.c`, `specialize.c` and `dis`; no format change |
+| B0b | A3 | The JIT front end, after 9b's rewrite and A3b's entry change |
+| B1 | any time | Independent |
+| B2–B7 | A3 | IR-D1 puts them after 9b. After A3c there is one backend, so each format step edits one dispatch form. B6's `_INT` forms compare int51 values, and B7's slots hold inline values, whose range int51 sets |
 
-**Forced orders inside the packet.**
-- A2 before A3a: without A2 the parameter escapes and stays in memory (§1.3,
-  tail call 6.8 against 5.4).
-- A3a before A4: the control is a parameter.
-- A4 before B3: G2's decision rule.
-- B2 first among the format steps: it carries the magic-number bump, dense
-  numbering and the dead-handler removal, so later steps renumber nothing.
-- B4 before B6: the fused entry is G5's 32-byte BINARY layout with the taken
-  history in `misses`.
-- A4 or B3 before B7: constant slots need a static class. Either outcome
-  works, because hidden slots count as frame variables (below
-  `nlocalsplus`).
+Forced orders inside the packet:
+- **B2 first among the format steps:** `NOT_TAKEN` and the dead handlers.
+- **B4 before B6:** the fused entry is G5's 32-byte layout.
+- **A4 before B3:** G2's rule.
+- **A2 before A3** is natural, not forced. A3a builds without it, but its
+  target (no address-taken state) includes `next_instr`.
+- **B7 needs no class step.** Today's run-time test already treats hidden
+  slots below `nlocalsplus` as frame variables.
 
 ---
 
 ## 4. Steps
 
-| Step | Content | Gaps | Kind | Words executed | Per-word cost | Agent-h |
-|---|---|---|---|---|---|---:|
-| A1 | The record only in handlers that box | G9.3 | generator | 0 | −4.4 stack refs and −4.6 instructions per word (fall-through, against `ni`); loop text −18% | 2 |
-| A2 | Helpers take and return the PC | C1 | generator + `ceval.c` | 0 | none under computed goto alone; −1.4 stack refs under tail calls | 4 |
-| A3a | Tail-call backend builds and passes, GCC and Clang; frame as a parameter; no handler arrays; one field decode | §1.13, G9.6 | judgment | 0 | shortest path 12.1 → 1.5 stack refs per word (with A1, A2); canaries 276 → 0 | 5 |
-| A3b | JIT entry as functions; tail calls become the qualified build | §1.13 | judgment | 0 | – | 6 |
-| A4 | G2 control: `nlocalsplus` as the sixth parameter | G2 | experiment | 0 | −1.2 header loads per word | 2 |
-| B0a | Contract table; verifier, passes, assembler, specialiser, `dis` | IR-D2, G1 | generator | 0 | 0 | 6 |
-| B0b | JIT front end reads the table | IR-D2 | judgment | 0 | 0 | 3 |
-| B1 | `SyntaxError` limits; docstring; `IR_MAX_FORWARD` | G10 | small | 0 | 0 | 1 |
-| B2 | First format step: no `NOT_TAKEN`; dead handlers out; dense numbering | G12, §1.6 | format | 0 (already excluded from counts) | a load and a compare less per conditional fall-through: 0–8.9% of words | 3 |
-| B3 | Class bits and D4, only if A4 does not recover the cost | G2, IR-D3 | format | 0 | −1.2 header loads per word; one count pair more per `LOAD_FAST_BORROW` into a temporary (3.8–8.5% of words) | 5 |
-| B4 | Feedback layout and index; NOFB removed | G5.1, G10 | format | 0 | none; feedback memory −22% | 6 |
-| B5 | No-dst calls; `PUSH_NULL` omitted; append and unpack source fields; unpack into locals | G4 | format | −0.7% to −8.1% (unpack_sequence −91%) | unpack handlers grow a store loop | 7 |
-| B6 | Fused compare-and-jump; one jump-target rule; signed `FOR_ITER`/`SEND` | G3, §4.3 | format | −0% to −7.4% | one dispatch, a slot write, read and NULL store less per pair | 7 |
-| B7 | Inline scalar constants as hidden slots | G6 | format | −0% to −28.2% (upper bound) | one 8-byte store per constant slot at entry of looping functions | 6 |
-| M | Measurements (§8) | – | measurement | – | – | 2 |
+Landing order: A1, A2 → A5 → A3 (a, b, c together) → A4 → B2 → B3 (if
+needed) → B4 → B5 → B6 → B7, with B0a in parallel from now, B0b after A3, and
+B1 at any time.
+
+| Step | Content | Gaps | Words executed | Per-word or code effect | Agent-h |
+|---|---|---|---|---|---:|
+| A1 | The record only in handlers that box | G9.3 | 0 | `vt` against `ni`: 45.4/8.6 from 48.9/12.1 on the lower bound; loop −18% | 2 |
+| A2 | Delete the PC out-parameter (12 families); instrumentation refresh becomes an assert | C1 | 0 | none alone under computed goto; under tail calls 6.8 → 5.4 stack refs | 2.5 |
+| A5 | D4: no home holds a borrow | IR-D3, D4 | 0 | with step 8: `LOAD_FAST_BORROW` 44 → 28, loop −10% (`rep`); plus one count pair per `LOAD_FAST_BORROW` into a temporary (3.8–8.5% of words) | 6 |
+| A3a | Tail-call build with no stack state, GCC 15 and Clang 21 | §1.13, G9.6 | 0 | measured 0.870× with nothing else changed; stack refs 12.1 → 1.5 with A1 and A2 | 14 |
+| A3b | JIT entry and exit as C-ABI functions | §1.13 | 0 | – | 9 |
+| A3c | Delete the computed-goto and switch backends | finding 7 | 0 | one decode, one dispatch form | 2 |
+| – | Both suites on the A3 branch until A3c | finding 8 | – | – | 2 |
+| A4 | G2 control: `nlocalsplus` in dispatch state | G2 | 0 | −1.2 header loads | 3.5 |
+| B0a | Contract table; C consumers; `dis` | IR-D2, G1 | 0 | 0 | 11 |
+| B0b | JIT front end reads the table | IR-D2 | 0 | 0 | 3 |
+| B1 | Last limit `SyntaxError`; docstring; `IR_MAX_FORWARD` | G10 | 0 | 0 | 1.5 |
+| B2 | No `NOT_TAKEN`; dead handlers out; dense numbering; magic | G12 | 0 | a load and a compare less on 0–8.9% of words | 3 |
+| B3 | Class bits (prototype always; lands only if A4 loses); magic | G2 | 0 | −1.2 header loads | 5 |
+| B4 | Feedback layout and index; NOFB out; renumber; magic | G5.1, G10 | 0 | feedback memory −22%; −6 handlers | 9 |
+| B5 | Call and unpack forms; magic | G4 | −0.7% to −8.1% (unpack_sequence −91%) | unpack store loop | 7 |
+| B6 | Fused compare-and-jump, forward only; jump rule; renumber; magic | G3, §4.3 | 0 to −7.4% | one dispatch, slot write, read and NULL store less per pair | 7 |
+| B7 | Inline scalar constants as hidden slots; magic | G6 | 0 to −20.5% | entry stores in looping functions | 6.5 |
+| M | Measurements (§8) | – | – | – | 3 |
 
 ### 4.1 Expected words executed
 
-The columns are `sys.monitoring` counts of one `run(1)` after a warm-up, with
-`NOT_TAKEN` excluded on both sides, from `steps.py` over `dyn_v2.py` and
-`dyn_v3.py` output. A step's column is the words of the *current* IR that
-the new form removes, assuming the compiler applies it at every counted site.
+The source is `irv2/steps.py` over `irv2/dyn-v2/`, with the window-fed
+constants from review `mydyn2.txt` (`irv2/steps-r2.md`). A step's column is
+the words of the current IR that the new form removes, if the compiler
+applies it at every counted site.
 
-| Kernel | U instructions | C words | B5 removes | B6 removes | B7 removes (upper bound) | C/U now | after B5 | after B6 | after B7 |
+| Kernel | U instructions | C words | B5 | B6 | B7 | C/U now | after B5 | after B6 | after B7 |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| chaos | 10,532,435 | 7,321,871 | 0.7% | 2.3% | 4.2% | 0.70 | 0.69 | 0.67 | 0.64 |
+| chaos | 10,532,435 | 7,321,871 | 0.7% | 2.3% | 4.2% | 0.70 | 0.69 | 0.67 | 0.65 |
 | comprehensions | 3,223 | 2,417 | 2.4% | 0.8% | 0.8% | 0.75 | 0.73 | 0.73 | 0.72 |
 | coroutines | 3,884,596 | 3,277,628 | 7.4% | 7.4% | 7.4% | 0.84 | 0.78 | 0.72 | 0.66 |
-| deltablue | 726,098 | 545,927 | 4.0% | 6.0% | 0.3% | 0.75 | 0.72 | 0.68 | 0.67 |
-| fannkuch | 70,923,145 | 53,069,157 | 3.5% | 5.8% | 28.2% | 0.75 | 0.72 | 0.68 | 0.47 |
+| deltablue | 726,098 | 545,927 | 4.0% | 6.0% | 0.1% | 0.75 | 0.72 | 0.68 | 0.68 |
+| fannkuch | 70,923,145 | 53,069,157 | 3.5% | 5.4% | 20.5% | 0.75 | 0.72 | 0.68 | 0.53 |
 | float | 12,199,935 | 7,899,942 | 1.3% | 3.8% | 0.0% | 0.65 | 0.64 | 0.61 | 0.61 |
 | generators | 6,806,866 | 6,106,863 | 0.0% | 0.0% | 2.2% | 0.90 | 0.90 | 0.90 | 0.88 |
-| go | 28,667,983 | 18,762,468 | 2.2% | 7.1% | 2.8% | 0.65 | 0.64 | 0.59 | 0.58 |
+| go | 28,667,983 | 18,762,468 | 2.2% | 7.1% | 2.5% | 0.65 | 0.64 | 0.59 | 0.58 |
 | nbody | 28,581,241 | 19,300,999 | 7.8% | 0.0% | 8.8% | 0.68 | 0.62 | 0.62 | 0.56 |
 | nqueens | 14,592,232 | 11,850,310 | 0.7% | 2.0% | 4.5% | 0.81 | 0.81 | 0.79 | 0.75 |
 | raytrace | 41,877,624 | 29,606,956 | 3.7% | 0.9% | 0.5% | 0.71 | 0.68 | 0.67 | 0.67 |
@@ -420,406 +451,426 @@ the new form removes, assuming the compiler applies it at every counted site.
 | spectral_norm | 19,045,221 | 17,011,597 | 8.1% | 0.0% | 0.0% | 0.89 | 0.82 | 0.82 | 0.82 |
 | unpack_sequence | 5,679 | 9,667 | 91.1% | 0.0% | 0.0% | 1.70 | 0.15 | 0.15 | 0.15 |
 | **Geometric mean** | | | | | | **0.78** | **0.64** | **0.62** | **0.59** |
-| Without unpack_sequence | | | | | | 0.74 | 0.71 | 0.69 | 0.65 |
+| Without unpack_sequence | | | | | | 0.74 | 0.71 | 0.69 | 0.66 |
 
-- **B5** counts `POP_TOP` of the result of the `CALL*` just before it (no
-  intrinsics), `PUSH_NULL`, the `STORE_FAST`s of an unpack into consecutive
-  locals in order, the `LOAD_FAST_BORROW` of the unpacked sequence, and the
-  `LOAD_FAST_BORROW` before `LIST_APPEND`/`SET_ADD`/`MAP_ADD`.
+- **B5** counts:
+  - `POP_TOP` of the result of the `CALL*` just before it (not the
+    intrinsics);
+  - `PUSH_NULL`;
+  - the `STORE_FAST`s of an unpack into consecutive locals;
+  - the `LOAD_FAST_BORROW` of the unpacked sequence or appended value.
+
+  Review 1's classifier matches on seven kernels. On go it counts 393,631
+  against 409,593 here, a difference of 4%.
 - **B6** counts compares whose result is the condition of the next
-  conditional jump. Inverted `while` loops add only 260,650 words on
-  fannkuch (0.5%), 5,030 on chaos and 133 on go (`invertible_backedge`). So
-  conditional back edges are deferred (§7).
-- **B7** counts loads of small ints, inline ints and floats, `None`, `True`
-  and `False` between a back edge's target and the back edge. It is an upper
-  bound, because a constant that feeds a call or build window keeps its load
-  (the window is copied).
-- **Over the 17 kernels** in `checkpoint-20261103-dispatch.json`, the counters
-  recorded for every kernel (call results popped, `PUSH_NULL`, fusable
-  compares) give 0.78 → 0.77 → 0.74.
+  conditional jump. It no longer counts loop inversion.
+- **Loop inversion is deferred.** The loop heads that it could remove a back
+  edge from are:
+  - compare heads: fannkuch 260,650, chaos 5,030, go 133;
+  - fannkuch: 260,650 more after a constant load (`while r != 1:`);
+  - truth-test heads: fannkuch 1,731,245 (3.3%), richards 106,950 (1.8%),
+    nqueens 40,319.
+
+  §4.3 allows backward conditional jumps only in the fused form, so
+  truth-test heads would need a plain backward jump, which the design
+  excludes. The deferral stands.
+- **B7** counts inline scalar constants loaded inside a loop, less those a
+  call or build window reads, which keep their load. For fannkuch that is
+  4,086,019 `BUILD_SLICE` inputs, for go 45,854. It is still an upper bound
+  on the compiler's coverage.
 
 ### Step A1. The value record only where a handler boxes
 
-- **Generator.** `ir_generator.py` emits `value_owners`, `value_temps` and
-  the `DISPATCH` count test only in handlers whose body boxes: `IR_KEEP_BOX`,
-  `_PyValueTemps_Box` or `_PyValueTemps_Object`, or `value_temps` passed to a
-  bridge helper that may box. `vtemps.py` classifies 177 as never boxing and
-  115 as boxing at HEAD.
-- **Other handlers.** They pass no record to `finish_displaced_local`, so its
-  record parameter becomes optional, or the function splits by whether a
-  record exists. `DISPATCH` loses its test there.
-- **Close the 115 at the source.** Ten of the 115 are specialised attribute
-  handlers: `LOAD_ATTR_INSTANCE_VALUE`, `_MODULE`, `_SHAPE`, `_SLOT`,
-  `_WITH_HINT`, and the five `STORE_ATTR_*`. Their guards prove an object
-  receiver, so they box only if the shared completion helper does.
-  `LOAD_ATTR_SHAPE` alone is 4.5% of entries. If the stored value or the
-  result is the only reason they box, pass the record only on that path.
-- **Debug check.** `IR_KEEP_BOX` asserts a record exists, so a
-  misclassification fails in debug builds.
-- **Test.**
-  - The step-0 suite set.
-  - `test_pyvalue_call_bridges`, `test_pyvalue_repr_cleanup`.
-  - A generator test that checks no record is emitted where the classifier
-    says "never boxes".
-  - The debug suite (assert above).
-- **Expected effect.** Words 0. Per word, fall-through 79.7 → 75.1
-  instructions and 16.3 → 11.9 stack references (`vt` against `ni`); loop
-  text −18%.
-- **Risk.** Low.
-
-### Step A2. Helpers take and return the PC
-
-- **The rule.** No handler or macro takes the address of `next_instr`. A
-  helper that can redirect the PC after reentrant code takes `next_instr` by
-  value and returns the PC to continue at, or NULL with an exception set:
-
-  ```c
-  next_instr = value_operation_finish(&state, next_instr, value_temps);
-  if (next_instr == NULL) { goto error; }
-  ```
-
-  Each of these helpers returns an int status today. At each site, A2 checks
-  that the status means only success or failure. Where it carries more, the
-  helper returns a two-word struct of status and PC, which SysV returns in
-  `rax:rdx`.
-- **Sites.**
-  - 290 in the generated file, from 10 emit sites in `ir_generator.py` (lines
-    1288–2113).
-  - 5 in `ceval_macros.h` and 2 in `bytecodes.c`.
-  - The 11 helper families of C1 in `ceval.c`.
-  - `generated_jit_helpers.c.h` is regenerated from the same emitters.
-- **Also.** `frame` and `slots` stay values. A helper that needs the frame
-  takes it, and none takes `&frame`.
+- **The change.** `ir_generator.py` emits `value_owners`, `value_temps` and
+  the `DISPATCH` count test only in the 115 handlers whose body boxes
+  (`vtemps.py`; the review confirms the split with a different classifier).
+  - In the 177 others, the record reaches only `finish_displaced_local` (81
+    handlers) and `assert`s.
+  - `finish_displaced_local` takes no record there.
+  - `finish_value_bridges` folds away, because `value_temps` is NULL.
+- **Check the attribute handlers.** The ten specialised attribute handlers
+  (`LOAD_ATTR_INSTANCE_VALUE`, `_MODULE`, `_SHAPE`, `_SLOT`, `_WITH_HINT` and
+  the five `STORE_ATTR_*`) guard an object receiver. Check whether they box
+  only through the shared completion helper (open question 5).
+- **Debug check.** `IR_KEEP_BOX` asserts that a record exists.
 - **Test.**
   - The step-0 set.
-  - The step-5 tests: a `__del__` from rebinding a local, and a native call,
-    that call `sys.monitoring.set_events` or `sys.settrace` take effect at
-    the next instruction.
-  - `test_monitoring`, `test_sys_settrace`.
-  - A static check (the generator's own test) that no emitted line contains
-    `&next_instr`.
-- **Expected effect.** Words 0. No per-word gain under computed goto alone
-  (§1.3). Under tail calls, shortest-path stack references go from 6.8 to
-  5.4. It is the precondition for A3.
-- **Risk.** Low to medium. The redirect logic itself does not change, only
-  how its result returns.
+  - `test_pyvalue_call_bridges`, `test_pyvalue_repr_cleanup`.
+  - A generator test that no record is emitted where the classifier says
+    none.
+  - The debug suite.
+  - Record A1 alone against HEAD on the lower bound when it lands.
+- **Risk.** Low.
 
-### Step A3a. The tail-call backend builds, passes and has no stack state
+### Step A2. Delete the PC out-parameter
 
-- **Build.**
-  - Move the tail-call include in `ceval.c` after
-    `generated_jit_helpers.c.h`, or declare the helpers in a header; the
-    second needs no include-order rule.
-  - `Py_PRESERVE_NONE_CC` is `preserve_none` under Clang and
-    `no_callee_saved_registers` under GCC ≥ 15 on x86-64, with `musttail`
-    under both.
-  - `configure` tests for both attributes, and the `#error` goes.
-- **Parameters.** `TAIL_CALL_PARAMS` becomes `frame, slots, tstate,
-  next_instr, ir_word`, five of the six SysV integer argument registers.
-  - Handlers that change frames (calls, returns, generator entry and exit)
-    pass the new frame.
-  - `TAIL_CALL_LOAD_FRAME` goes, along with its dependent load per handler.
-- **No arrays or address-taken locals in handlers (G9.6).**
-  - **Box storage.** The 115 boxing handlers need box storage that lives
-    until the handler finishes. It is owned by the eval activation: an area
-    of three boxes (today's capacity) in the entry function's frame, reached
-    through the entry frame record. Nested evaluations get their own area.
-    A per-thread buffer would not work, because reentrant code nests
-    evaluations on one thread.
-  - **Helper-owned boxes.** Where a box is not read after the helper
-    returns, the helper owns and releases it instead, as G4.4's unpack
-    collector does.
-  - The per-handler `value_boxes[N]` and `_PyValueTemps` declarations under
-    `_Py_TAIL_CALL_INTERP` go.
-  - Each remaining `&res` or `&left` becomes a slot-addressed helper
-    (`&slots[F]`), as G9.6 says.
-- **One field decode.** Every build decodes fields from `ir_word`. The
-  `IR_FIELD_*` memory re-read under computed goto with the GIL goes.
-- **Build roles.** The tail-call build joins CI as a second configuration
-  with the JIT compiled out, as it is today. The qualified build stays
-  computed goto until A3b.
+- **The change.** All 12 helper families take `next_instr` by value, or not
+  at all, and keep their `int` status:
+  - `finish_displaced_local`, `value_operation_finish`,
+    `value_reader_complete`, `retire_published_values`,
+    `value_attribute_complete` and `native_call_finish`;
+  - the five `call_transaction_*` helpers;
+  - `finish_value_bridges`.
+- **The writes go.** The two writes through `_PyInstr **` (`ceval.c:1587`,
+  `2175`) and the four identity refreshes of `frame->ir_words` and
+  `ir_feedback` go (§0.2).
+- **Sites.**
+  - 290 generated sites from 10 emitters in `ir_generator.py` (lines
+    1288–2113).
+  - 5 macro sites in `ceval_macros.h` (`DISPATCH`, three `JUMP_TO_LABEL`s,
+    `DISPATCH_INLINED`).
+  - 2 in `bytecodes.c`.
+- **Kept.** Each family's validation (frame, code and range checks that raise
+  `SystemError`) and its return status stay. Representation §3.4 decided to
+  keep them.
+- **The answer to representation §3.4's hand-off.**
+  - The `_Py_Instrument` call in `value_operation_refresh` and
+    `native_call_finish` becomes a debug assert that the code's
+    instrumentation version is current. `instrument_all_executing_code_objects`
+    already re-instruments every executing code object when events change.
+  - If the debug suite fires the assert, the refresh stays and the case is
+    recorded. No dispatch-time check is added.
+- **New invariant**, asserted after each reentrant call in debug builds:
+  `frame->ir_words == _PyFrame_GetCode(frame)->_co_exec->words`. register-ir.md
+  §1.10 states it (§11).
 - **Test.**
-  - The full suite on the tail-call build, under GCC and, where available,
-    Clang 19+, with the same failure set as the computed-goto build.
-  - `test_sys` and `test_call` recursion tests: the C stack per Python call
-    level changes from one 3.3 KB frame to small handler frames.
-  - `test_gdb`, `test_perf_profiler`, `test_external_inspection`: tools that
-    look for `_PyEval_EvalFrameDefault` frames.
-  - `tcframes.py` as a build check: no `_TAIL_CALL_*` function reads
-    `%fs:0x28`, and none has a frame above a stated bound.
-- **Expected effect.** Words 0.
-  - Shortest-path stack references go from 12.1 to 1.5 per word on the
-    upstream-covered subset, measured with A1 and A2 (`tcvt`). The frame
-    parameter and the canary removal are not in that measurement; they
-    remove one more load and up to 9 prologue instructions per handler.
-  - Tail-call text today is 450,721 B in 298 functions, and 387,461 B under
-    `tcvt`.
-- **Risk.** Medium.
-  - `no_callee_saved_registers` with `musttail` is a rarer combination than
-    Clang's `preserve_none`.
-  - Stack-walking tools change.
-  - The diagnostic link matched the computed-goto suite result outside the
-    JIT tests (§9.1), but that is not a qualification.
+  - The step-0 set.
+  - The step-5 tests: a `__del__` or native call that calls
+    `sys.monitoring.set_events` or `sys.settrace` takes effect at the next
+    instruction.
+  - `test_monitoring`, `test_sys_settrace`, `test_bdb`.
+  - A generator test that no emitted line takes `&next_instr`.
+- **Risk.** Low.
 
-### Step A3b. JIT entry under tail calls; tail calls become the qualified build
+### Step A5. D4: no home holds a borrow
 
-- **JIT entry.** The baseline JIT's loop-local state (`jit_flow`,
-  `jit_request`, `jit_context`, `jit_cold_request`, `jit_from_return`) moves
-  into a per-activation record reached from the entry frame. The labels
-  `jit_enter`, `jit_resume`, `jit_step` and `jit_consume_action` become
-  functions called (or tail-called) from the handlers that use
-  `JIT_SITE_ENTRY`.
-  - The computed-goto build calls the same functions, so the JIT's entry
-    exists in one form.
-  - `_PyJIT_BASELINE_SUPPORTED` no longer depends on
-    `_Py_TAIL_CALL_INTERP`.
-- **Qualified build.** The tail-call build becomes the qualified and
-  measured build.
-  - Computed goto stays generated for compilers without `musttail`, as
-    upstream keeps it. It is compiled and smoke-tested in CI, but not
-    measured.
-  - Its loop no longer holds the JIT state as locals.
-- **Test.** The JIT modules (`test_jit_method` and the others in the
-  representation packet's step-0 survey), with admission forced on, and the
-  full suite on both builds.
-- **Expected effect.** None on words. The JIT state leaves the loop's locals,
-  which also helps the computed-goto build.
-- **Risk.** Medium to high. It is the one part that changes JIT control
+- **Decided, not optional.** IR-D3 and pyvalue.md D4 decided this. It lands
+  whichever of A4 or B3 wins: D4 concerns value tags, not slot classes.
+- **The change.**
+  - A frame slot never holds a borrow. `LOAD_FAST_BORROW` into a temporary
+    takes a count for a mortal object; inline values and immortals take
+    none.
+  - A consumer of a temporary owns what it consumes, and releases it by the
+    immortal test alone.
+  - An in-place read of a local produces a borrow only in the handler's C
+    local: `PyValue_BorrowAt` returns the slot bits, and `IR_BORROW_KNOWN`,
+    `IR_LOAD_BORROWED` and `IR_DROP_BORROW` lose their class-dependent tag.
+  - The value tag means only "immortal or not".
+- **Files.** `ceval_macros.h` (the five borrow macros), `pycore_value.h` (23
+  borrow-tag uses), `ir_generator.py` (4), `bytecodes.c` (3), and
+  `stack.py` and `analyzer.py` (1 each). The generated files are
+  regenerated: 590 and 91 lines.
+- **Cost and benefit.**
+  - One count pair per `LOAD_FAST_BORROW` into a temporary, on 3.8–8.5% of
+    words (`load_fast_borrow_to_temp`, register-ir.md G2).
+  - With step 8's publish change, the review's `rep` approximation takes
+    `LOAD_FAST_BORROW` from 44 to 28 instructions and the loop down 10%.
+- **Test.**
+  - The step-0 set; `test_tagged_values`.
+  - `test_sys` (`getrefcount` around calls), `test_gc`, `test_weakref`,
+    `test_finalization` (lifetimes of values held by temporaries).
+  - `test_generators` and `test_frame` (frame copies), `test_peepholer`.
+- **Risk.** Medium. It changes when references are taken on the hottest
+  path.
+
+### Step A3a. Tail-call build with no stack state
+
+- **Build.** `Py_PRESERVE_NONE_CC` is chosen in this order:
+  - `preserve_none` when `__has_attribute(preserve_none)` (Clang, and GCC
+    once it ships the attribute);
+  - otherwise `no_callee_saved_registers` (GCC on x86);
+  - otherwise nothing, which leaves plain `musttail`: one source, slower.
+
+  `configure` rejects a compiler without `musttail`. The handlers are
+  included after the helpers, or the helpers are declared in a header.
+- **Parameters: the register budget.**
+  - `frame, slots, tstate, next_instr, ir_word` take five of GCC's six
+    argument registers.
+  - Under GCC the sixth is held for the G2 decision (A4). The alternatives
+    are a predecoded field or the dispatch table (open question 7).
+  - Under Clang twelve are available.
+  - `TAIL_CALL_LOAD_FRAME` goes. Handlers that change frames pass the new
+    frame.
+- **No address-taken locals in any handler.**
+  - One activation record holds the box area (three boxes) and every
+    transaction record that handlers now pass by address:
+    | Record | Handlers |
+    |---|---:|
+    | `operation` (`_PyValueOperation`) | 38 |
+    | `pending` | 29 |
+    | `held_left`, `held_right` | 27 each |
+    | `call`, `call_child` | 15 each |
+    | `receiver` | 15 |
+    | `callable` | 12 |
+    | `publication`, `scope` | 1 each |
+  - Handlers never nest within one activation, so one record per activation
+    serves them. The record lives in the entry function's frame and is
+    reached through `tstate` (pushed and popped at eval entry and exit), so
+    nested evaluations get their own. A per-thread buffer would not survive
+    nesting.
+  - Values held there sit in one known place per activation. G11's open risk
+    is that the free-threaded collector cannot see values held only in C
+    variables. A collector could scan this record, but A3a does not add that
+    scan; it stays with free-threaded qualification.
+  - The remaining `&res` and `&left` become slot-addressed helpers
+    (`&slots[F]`), as G9.6 says. This edits handler bodies in `bytecodes.c`.
+- **One field decode.** Every handler decodes from `ir_word`. The `IR_FIELD_*`
+  memory re-read goes with A3c.
+- **Target.** No handler has an address-taken local, and every handler's
+  frame is at most N bytes. `tcframes.py` checks this on both compilers. N
+  is the value measured when A3a lands and may only fall.
+  - Today the median frame is 160 B and the largest 512 B under GCC; under
+    Clang the median is 144 B and the largest 464 B.
+  - Meeting the target also removes GCC's canaries, because
+    `-fstack-protector-strong` adds one only to a function with a local array
+    or an address-taken local.
+- **Test.**
+  - The full suite on GCC 15 and Clang 21, with the same failure set as
+    computed goto, `test_jit_method` aside until A3b.
+  - A debug tail-call build: `PRE_DISPATCH_GOTO` asserts
+    `frame == tstate->current_frame`.
+  - A `Py_STATS` tail-call build: `lastopcode` is a seventh argument, on the
+    stack under GCC.
+  - `test_sys` and `test_call` recursion tests, `test_perf_profiler`,
+    `test_external_inspection`.
+  - `test_gdb` does not run on this host: gdb is not installed, and the
+    tests "only work on source builds". The stack-walking check needs a
+    source build on a host with gdb.
+- **Measured so far.** The unchanged tail-call link runs 0.870× (GCC) and
+  0.877× (Clang) of computed goto. That is a measurement, not a gate.
+- **Risk.** Medium. The calling conventions are documented as unstable, so
+  they stay internal (A3b).
+
+### Step A3b. JIT entry and exit as C-ABI functions
+
+- **The change.**
+  - The loop-local JIT state (§0.2) moves into the activation record.
+  - `jit_enter`, `jit_resume`, `jit_step` and `jit_consume_action` become
+    ordinary C functions that the `JIT_SITE_ENTRY` handlers call.
+  - Compiled code enters and leaves only through C-ABI functions, because
+    the two handler conventions put arguments in different registers.
+  - `_PyJIT_BASELINE_SUPPORTED` no longer depends on `_Py_TAIL_CALL_INTERP`.
+- **Test.** The JIT modules (`test_jit_method` and the representation
+  packet's step-0 survey), with admission forced on, on both compilers.
+- **Risk.** Medium to high. This is the one part that changes JIT control
   flow.
+
+### Step A3c. One backend
+
+- **The change.**
+  - The generator emits only tail-call handlers.
+  - Delete the computed-goto backend (`opcode_targets`, `DISPATCH_GOTO`'s
+    goto form, the loop's labels) and the switch fallback
+    (`ceval_macros.h:170–188`).
+  - Delete the `IR_FIELD_*` memory decode.
+  - The tail-call build becomes the qualified and measured build.
+- **Why delete it.** A platform that needs another backend must be named,
+  with the measurement that forces it. None is known.
+- **Test.** The full suite on both compilers, and the docs build.
+- **Risk.** Low, once A3a and A3b pass.
 
 ### Step A4. G2 control: `nlocalsplus` in dispatch state (experiment)
 
-- **Change.** `IR_NLOCALSPLUS()` reads a sixth tail-call parameter, set
-  wherever the frame changes. This uses the last SysV argument register;
-  under Clang's `preserve_none`, more remain.
-- **Decision.** Run the matched elapsed comparison of A4 against B3 (G2's
-  decision rule), on a quiet machine.
-  - If A4 recovers the cost, A4 lands, the class bits are dropped, and §4.1
-    keeps a 16-bit handler.
-  - Otherwise B3 lands, and A4 is discarded.
-- **Expected effect.** Words 0. 1.2 header loads per word fewer, each behind
-  a load of `frame->ir_words`.
-- **Risk.** Low. It is one macro and a parameter.
+- **The change.** The class test takes `nlocalsplus` explicitly:
+  `IR_IS_LOCAL(F)` becomes a test against a value the caller supplies.
+  - Handlers get it as a parameter, the sixth under GCC, set wherever the
+    frame changes.
+  - Out-of-line code reads it from the executing copy's header, as today.
+    This covers the 4 uses in `generated_jit_helpers.c.h`, the one in
+    `ceval.c` outside the handlers, and `value_operation_restore2`
+    (`ceval.c:841`), which reads `co_nlocalsplus` itself.
+  - The revision-1 variant (`nlp`) failed with 65 errors because it did not
+    separate these.
+- **Decision.** A matched elapsed comparison against B3's prototype, on a
+  quiet machine (G2's rule).
+  - If A4 recovers the cost, A4 stays and the bits are not built.
+  - Otherwise B3 lands and A4 is reverted.
+  - Open question 9 (static operand roles) should be counted first.
+- **Risk.** Low to medium. Under GCC it costs the last argument register.
 
 ### Step B0a. The instruction contract table
 
-See §5 for the table's form. This step generates it, replaces
-`_PyFb_FAMILIES`, `_PyIR_RUNS_CODE`'s separate use in the passes and the
-flag tests in `regcfg_passes.c`, and makes the verifier check folded loads
-against "may run Python" with its operand dependence (G1's remaining caveat).
+See §5. This step generates the table, replaces `_PyFb_FAMILIES` and the
+passes' own flag tests, and makes the verifier check folded loads against
+"may run Python" with its operand rules (G1's caveat).
 
 - **Test.**
-  - A generated-table test (`test_ir_contract`): every handler has a row; the
-    rows agree with `_PyOpcode_num_popped/pushed` for window extents, with
-    the analyzer's `escapes`, `error_*`, `deopts` and `jumps`, and with
-    `pycore_feedback.h`'s kinds.
+  - `test_ir_contract`: rows agree with the stack effects, the analyzer's
+    properties and the feedback kinds.
   - `test_peepholer`, `test_ir`, `test_dis`.
-  - `_PyRegCfg_Verify` over the stdlib in a release test job (G11).
-- **Risk.** Medium. It is generator work, and it replaces three hand-written
-  consumers.
+  - `_PyRegCfg_Verify` over the stdlib in a release test job.
+- **Risk.** Medium.
 
 ### Step B0b. The JIT front end reads the table
 
-`_PyJitHomeEffect` (`pycore_jit.h`, `pycore_jit_ir.h`) goes. `jit_ir.c`,
-`jit_record.c` and `jit_baseline.c` read roles, window extents and effects
-from the table.
+`_PyJitHomeEffect` goes. `jit_ir.c`, `jit_record.c` and `jit_baseline.c` read
+the table. Heap effects, guards and result facts are added here, as
+`bytecodes.c` annotations.
 
 - **Test.** The JIT modules.
 - **Risk.** Medium.
 
-### Step B1. Small G10 items
+### Step B1. The last limit error, the docstring, `IR_MAX_FORWARD`
 
-- Limit errors raise `SyntaxError` at the code object's first line, naming
-  the limit (`regcfg.c:occ_take`, `assemble.c`).
-- Fix the `ir_generator.py` docstring (lines 55–63).
-- Either state why `IR_MAX_FORWARD` is 2,047 (`pycore_ir.h:69`), or set it to
-  the signed rule's 2,047 in B6 and say so.
-- **Test.** A function with 5,000 locals raises `SyntaxError`.
+- **The limit.** "Too many temporaries" (`regcfg.c:820` through
+  `slot_error`) raises `SyntaxError` naming the limit.
+  - No Lib source reaches it, so it is tested through a test-only knob,
+    `_PyIR_MaxSlots`, as `_PyIR_MaxForward` is for relaxation.
+  - The other `slot_error` calls (`regcfg.c:841`, 883, 887, 962) and the
+    verifier's "two live temporaries in one slot" (`regcfg.c:1279`) stay
+    `SystemError`: they are compiler invariants, not limits.
+- **The docstring.** Correct the `ir_generator.py` docstring (lines 55–63).
+- **`IR_MAX_FORWARD`.** State its reason, or set it with B6's signed rule.
 - **Risk.** Low.
 
-### Step B2. First format step: `NOT_TAKEN` dropped, dense numbering
+### Step B2. First format step: no `NOT_TAKEN`, dense numbering
 
 - **The change.**
-  - Remove `NOT_TAKEN` (G12).
-  - The instrumented twins of the conditional jumps fire `BRANCH_LEFT` and
-    `BRANCH_RIGHT` with the jump's own location.
+  - Remove `NOT_TAKEN` (G12). The instrumented twins of the conditional
+    jumps fire `BRANCH_LEFT` and `BRANCH_RIGHT` with the jump's location.
   - Remove the five dead handlers and renumber densely.
-  - Bump the magic number.
+  - Bump `PYC_MAGIC_NUMBER` (64402 today).
 - **Test.**
-  - `test_monitoring` (branch events now at the jump's offset: a visible
-    change; the tests state what they accept), `test_dis`, `test_compile`.
-  - `test_coverage`-style users of branch events in `Lib/test`.
-- **Expected effect.** 80,618 static words fewer (1.8%). Executed words are
-  unchanged, since `NOT_TAKEN` is skipped, not dispatched.
-  - Per word, a load and a compare less on each conditional fall-through. On
-    the kernels the fall-throughs are 0–8.9% of words (richards 513,653 of
-    5,789,061; fannkuch 6.8%; go 5.5%).
-- **Risk.** Low to medium, because of the monitoring change.
+  - `test_monitoring` (branch events at the jump's offset: a visible
+    change), `test_dis`, `test_compile`.
+  - `test_external_inspection`: `_remote_debugging`'s opcode output, which
+    masks words itself, reports the new numbers.
+- **Expected effect.** 80,618 static words fewer; a load and a compare less
+  on each conditional fall-through, which is 0–8.9% of words (richards 8.9%,
+  fannkuch 6.8%, go 5.5%).
+- **Risk.** Low to medium.
 
-### Step B3. The class bits (only if A4 loses)
+### Step B3. Class bits (prototype always; lands only if A4 loses)
 
-- **The change.** As G2 and §4.1 specify. The handler is in bits 0–11 and the
-  class bits in 12–15.
-  - The four literal 0xFFFF masks become 0xFFF.
+- **The prototype.** G2's rule needs it for the comparison whichever way the
+  decision goes.
+- **The change.**
+  - The handler uses bits 0–11 and the class bits 12–15.
+  - The five literal masks become 0xFFF, the remote-debugging reader
+    included.
   - `IR_WORD` sets the bits, and `_PyIR_SetHandler` keeps them.
-  - The verifier checks each bit against `nlocalsplus`.
-- **D4.** No slot holds a borrow, so `LOAD_FAST_BORROW` into a temporary
-  takes a count for a mortal object.
-- **Test.**
-  - `test_ir`, `test_dis`, `test_peepholer`.
-  - The verifier over the stdlib.
-  - `test_tagged_values`.
-- **Expected effect.** Words 0. 1.2 header loads per word fewer. A count pair
-  more per `LOAD_FAST_BORROW` into a temporary, on 3.8–8.5% of words
-  (`load_fast_borrow_to_temp`).
+  - The verifier checks them against `nlocalsplus`.
+  - Bump the magic number.
+- **Test.** `test_ir`, `test_dis`, `test_peepholer`, the verifier over the
+  stdlib, and `test_external_inspection`.
 - **Risk.** Moderate.
 
 ### Step B4. Feedback layout and index; NOFB removed
 
 - **Precondition.** The generated-corpus maximum of compare and contains
-  sites per code object (G10). It has not been measured, because the corpus
-  listing was not kept.
+  sites per code object.
 - **The change.** As G5 item 1 and G10 option (c):
-  - offsets in 8-byte units, per-kind sizes, priority-ordered assignment, a
-    header-only entry 0;
-  - names in D (12 bits) or CD (`LOAD_GLOBAL`);
-  - a second generic head for `LOAD_ATTR`'s method bit;
-  - the 7 NOFB handlers go, and 14 intrinsics are added for compare sites
-    past the limit.
-- **Test.**
-  - `test_ir`, `test_dis`, `test_opcache`.
-  - The JIT feedback readers.
-  - A generated code object past 4,095 units that still specialises its
-    early sites.
-- **Expected effect.** Words 0. Feedback memory −22%. Handlers −6.
+  - 8-byte units, per-kind sizes, priority-ordered assignment, a header-only
+    entry 0;
+  - names in D or CD;
+  - a second `LOAD_ATTR` head;
+  - 14 intrinsics for compare sites past the limit;
+  - NOFB goes (−7 handlers, +1);
+  - renumber and bump the magic number.
+- **Test.** `test_ir`, `test_dis`, `test_opcache`, the JIT feedback readers,
+  and a code object past 4,095 units.
 - **Risk.** Moderate.
 
 ### Step B5. Call and unpack forms (G4)
 
 - **The change.** As G4 items 1, 2 and 4, and item 3 for `LIST_APPEND`,
   `SET_ADD` and `MAP_ADD`.
-  - The `LOAD_GLOBAL` NULL bit (93,334 static) is dropped with `PUSH_NULL`
-    (117,632 static).
-  - Unpacks past 8 elements collect into a temporary list in an out-of-line
-    helper.
+  - The `LOAD_GLOBAL` NULL bit goes with `PUSH_NULL`.
+  - Unpacks past 8 elements collect in an out-of-line helper.
+  - Bump the magic number.
 - **Test.**
-  - `test_unpack`, `test_unpack_ex`, `test_listcomps`, `test_setcomps`,
-    `test_dictcomps`, `test_extcall`, `test_call`.
-  - A failure in `__next__` part-way through an unpack into locals leaves the
-    locals unchanged.
+  - `test_unpack`, `test_unpack_ex`, the comprehension tests,
+    `test_extcall`, `test_call`.
+  - A failure in `__next__` part-way through leaves the locals unchanged.
   - The verifier proves the omitted `PUSH_NULL` slot NULL.
-- **Expected effect.** §4.1 B5 column. spectral_norm −8.1%, nbody −7.8%,
-  coroutines −7.4%; unpack_sequence 9,667 → 862.
+- **Expected effect.** §4.1 B5.
 - **Risk.** Small to moderate.
 
 ### Step B6. Fused compare-and-jump and the one jump-target rule
 
-- **The change.** As G3 and §4.3, with two changes:
-  - Fused forms are forward only.
-  - Conditional back edges and loop inversion are deferred (§4.1: 0.5% of
-    fannkuch's words, almost nothing elsewhere), so the fused handlers never
-    poll the eval breaker, and the contract needs no sign-dependent "may run
-    Python" for them.
-- **Jump encoding.** `FOR_ITER` and `SEND` use the signed 12-bit distance.
-- **Handlers.** 11 new: 3 generic, 5 specialised and 3 instrumented. The
-  compiler declines fusion when the compare and the jump have different line
-  numbers, so line events do not change.
-- **Test.**
-  - `test_compile`, `test_peepholer`, `test_dis`, `test_monitoring`
-    (`BRANCH_*` from the fused twin), `test_sys_settrace`.
-  - The 2 static pairs at distance 512–2,047.
-- **Expected effect.** §4.1 B6 column. go −7.1%, coroutines −7.4%, deltablue
-  −6.0%, fannkuch −5.8%.
-  - Text grows by about 11 × 1.6 KB = 18 KB at today's handler sizes, or less
-    after phase A.
+- **The change.** As G3 and §4.3, but forward only. Conditional back edges
+  are deferred (§4.1), so the fused handlers never poll the eval breaker.
+  - `FOR_ITER` and `SEND` use the signed 12-bit distance.
+  - 11 new handlers. Renumber and bump the magic number.
+  - Fusion is declined when the compare and the jump are on different lines.
+- **Test.** `test_compile`, `test_peepholer`, `test_dis`, `test_monitoring`,
+  `test_sys_settrace`.
+- **Expected effect.** §4.1 B6.
 - **Risk.** Moderate.
 
 ### Step B7. Inline scalar constants as hidden slots (G6)
 
-- **The change.** As G6, with one change (§11, item 9).
-  - The constant-slot table stores `(slot, co_consts index)` pairs.
-  - The executing copy (`make_exec`) writes the values when it is built, and
-    the frame push copies them.
-  - Marshal then stores no `PyValue` bits, and the representation packet's
-    "no persisted encodings" still holds.
+- **The change.** As G6, except that the table stores `(slot, co_consts
+  index)`. The executing copy (`make_exec`) writes the values, so marshal
+  stores no `PyValue` bits. Bump the magic number.
 - **Test.**
-  - `test_marshal`, `test_py_compile`, `test_compileall` (`.pyc`
-    determinism).
-  - `test_frame` and `test_inspect` (`f_locals` hides the slots), `test_dis`,
-    and generators (`_PyFrame_Copy`).
-- **Expected effect.** §4.1 B7 column, an upper bound. fannkuch −28.2%,
-  nbody −8.8%, coroutines −7.4%.
-  - The cost is entry stores per call of a looping function.
+  - `test_marshal`, `test_py_compile`, `test_compileall`.
+  - `test_code`: `code.replace(co_consts=…)` rebuilds the table.
+  - Copying and pickling code objects.
+  - `test_frame` and `test_inspect` (`f_locals` hides the slots),
+    `test_dis`, generators.
+- **Expected effect.** §4.1 B7.
 - **Risk.** Moderate.
 
 ---
 
 ## 5. The instruction contract table (IR-D2)
 
-- **Form.** One table, `_PyIR_Formats` grown into the contract, not a second
-  table next to it.
-  - Today's row already has `flags`, `roles`, `imm`, `fb`, `ninputs`, `dst`,
-    `borrow_mask`, `shadow` and `nofb`.
-  - It gains the §5 columns:
-    - per-field operand roles, including the slot roles hidden in `IMM`;
-    - window extent as (base field, a fixed count or "oparg field + k");
-    - consumed or in place, per input;
-    - an effect bitset: raises, runs Python, deoptimises, jumps, suspends,
-      pushes a frame, polls, allocates, releases the old dst;
-    - "runs Python" operand rules: releases a local through `DST`,
-      `LOCAL_OUT` or a window output;
-    - feedback kind and layout;
-    - target fields and their encoding;
-    - the monitoring twin and its events;
-    - pass-through inputs.
-  - Two columns are new against §5:
-    - **boxes inputs**: the handler needs the value record (A1);
-    - **may redirect the PC**: it calls a helper that returns a new PC (A2).
-  - Heap reads and writes, guards with the feedback fields they read, and
-    result facts are added with B0b. They need annotations in `bytecodes.c`
-    and are read only by the JIT.
-- **Where.** The table is generated by `Tools/cases_generator/ir_generator.py`
-  into `Include/internal/pycore_ir_metadata.h`, where `_PyIR_Formats` is
-  generated today.
-  - Python reads it through `_opcode.get_ir_contract()`, which grows from
-    `get_ir_formats()`. There is no generated Python copy, so there is one
-    source.
-  - This settles O1.
-- **Consumers today, which move to the table** (counts at HEAD):
+- **Form.** One table: `_PyIR_Formats` grown into the contract. Today's rows
+  have `flags`, `roles`, `imm`, `fb`, `ninputs`, `dst`, `borrow_mask`,
+  `shadow` and `nofb`. They gain the §5 columns:
+  - per-field roles, including the slot roles hidden in `IMM`;
+  - window extents (base field plus a fixed count, or an oparg field plus k);
+  - consumed or in place, per input;
+  - effect bits: raises, runs Python, deoptimises, jumps, suspends, pushes a
+    frame, polls, allocates, releases the old dst;
+  - "runs Python" operand rules: releases a local through `DST`, `LOCAL_OUT`
+    or a window output;
+  - feedback kind and layout;
+  - target fields and their encodings;
+  - the monitoring twin and its events;
+  - pass-through inputs;
+  - one new column, **boxes inputs**: the handler needs the value record
+    (A1).
 
-  | Consumer | Uses today | Reads |
-  |---|---|---|
-  | `Python/ir.c` (decoders `_PyIR_FieldOparg`, `_PyCode_Instr*`) | `_PyIR_FormatOf` 10, flags and roles 6 | roles, targets, fb location |
-  | `Python/assemble.c` (handler choice, feedback assignment) | `_PyIR_FormatOf` 3, flags and roles 12, `_PyFb_FAMILIES` 2 | roles, feedback kind and layout (B4's assignment order) |
-  | `Python/regcfg.c` (conversion, compaction, verifier) | `_PyIR_FormatOf` 3, flags and roles 10 | roles, extents, consumed or in place |
-  | `Python/regcfg_passes.c` (copy propagation, store elimination) | flags 7 | runs Python with operand rules, slots read and written |
-  | `Python/specialize.c` | `_PyIR_FormatOf` 1 | feedback kind and layout |
-  | `Include/internal/pycore_ir.h` | flags and roles 12 | – (accessors) |
-  | `Lib/opcode.py` → `Lib/dis.py` | `_opcode.get_ir_formats()` | roles, hidden slot operands, folded inputs (G11) |
-  | `Python/jit_ir.c`, `jit_record.c`, `jit_baseline.c` | `_PyJitHomeEffect`, `_PyIR_FormatOf` 1, flags 2 | everything, including heap effects, guards and result facts (B0b) |
-  | `ir_generator.py` itself | – | boxes inputs (A1), slot-addressed helpers (G9.6) |
-  | Verifier (`_PyRegCfg_Verify`, `_PyCode_Validate`) | format flags | every row; checks each format step from B2 on |
+  Heap effects, guards and result facts come with B0b.
+- **Where.** Generated by `ir_generator.py` into `pycore_ir_metadata.h`.
+  Python reads it through `_opcode.get_ir_contract()`, grown from
+  `get_ir_formats()`. There is no generated Python copy. This settles O1.
+- **Consumers** (counts at HEAD):
 
-- **Step.** B0a builds the table with v1 rows, after 6c and before int51. B0b
-  switches the JIT front end after 9b. Each format step B2–B7 updates the
-  rows it changes, and the verifier checks the step against the table.
+  | Consumer | Uses today |
+  |---|---|
+  | `Python/ir.c` decoders | `_PyIR_FormatOf` 10, flags and roles 6 |
+  | `Python/assemble.c` | `_PyIR_FormatOf` 3, flags and roles 12, `_PyFb_FAMILIES` 2 |
+  | `Python/regcfg.c` (conversion, compaction, verifier) | `_PyIR_FormatOf` 3, flags and roles 10 |
+  | `Python/regcfg_passes.c` | flags 7 |
+  | `Python/specialize.c` | `_PyIR_FormatOf` 1 |
+  | `Include/internal/pycore_ir.h` | flags and roles 12 |
+  | `Lib/opcode.py` → `Lib/dis.py` | `_opcode.get_ir_formats()` |
+  | JIT (`jit_ir.c`, `jit_record.c`, `jit_baseline.c`) | `_PyJitHomeEffect`, `_PyIR_FormatOf` 1, flags 2 |
+  | `ir_generator.py` | boxes inputs (A1), slot-addressed helpers (G9.6) |
+  | Verifier | every row, from B2 on |
+
+- **Step.** B0a builds it with the v1 rows. Each format step updates its rows,
+  and the verifier checks the step against them. This also answers §4's
+  churn argument: the decoders read the table, so a format step changes the
+  table and the handlers, not every decoder by hand.
 
 ---
 
 ## 6. G9: handler count, code size and dispatch
 
-### 6.1 Today against upstream (release builds)
+### 6.1 Today against upstream
 
 | Measure | Fork | Upstream |
 |---|---:|---:|
 | Handlers with a `TARGET` | 292 | 231 |
-| Handler numbers | 305 | – |
 | `ceval.o` text | 595,778 B | 107,446 B |
 | Evaluator function | 407,484 B | 58,419 B |
-| Bytes per handler region (`hsize.py`, labels included): mean / median | 1,358 / 1,362 (300 regions) | 243 / 196 (240 regions) |
-| C frame of the evaluator | 3,304 B | 360 B |
-| Call instructions in the evaluator | 4,772 | 611 |
-| Indirect jumps in the evaluator | 471 | 257 |
+| Mean / median bytes per handler region (`hsize.py`) | 1,358 / 1,362 | 243 / 196 |
+| Evaluator C frame | 3,304 B | 360 B |
+| Calls / indirect jumps in the evaluator | 4,772 / 471 | 611 / 257 |
 
 | Handler | Fork bytes | Upstream bytes |
 |---|---:|---:|
@@ -831,133 +882,89 @@ from the table.
 | `RETURN_VALUE` | 1,040 | 160 |
 | `CALL_PY_EXACT_ARGS` | 961 | 378 |
 
-The tail-call object (`tc`) has 298 `_TAIL_CALL_*` functions totalling
-450,721 B. The median frame is 160 B, the largest 512 B, and 276 have a
-canary. Under `tcvt` the functions total 387,461 B, with a median frame of
-80 B, the largest 304 B, and 200 canaries. `LOAD_FAST_BORROW` is 852 B under
-`tc` and 571 B under `tcvt`; `STORE_FAST` 462 and 210; `JUMP_BACKWARD` 462
-and 116.
+The tail-call functions:
+- **GCC `tc`.** 298 functions, 450,721 B. The median frame is 160 B, the
+  largest 512 B, and 276 have a canary.
+- **GCC `tcvt`.** 387,461 B; median frame 80 B; 200 canaries. 86 of the 177
+  never-box handlers still have one, from transaction records and the `ni`
+  copy.
+- **Clang 21.** No canaries; median frame 144 B, largest 464 B.
 
 ### 6.2 Which handlers can drop `value_temps`
 
-- **Now: 177 of 292.** They never box; the list is in
-  `irv2/value-temps-handlers.txt`. Step A1.
-- **The other 115 box.** They are:
+- **Now: 177 of 292.** This is A1.
+- **The 115 others** pass an inline input to an object API:
   - generic `BINARY_OP` operations, 28;
-  - the attribute families: `LOAD_ATTR` 7, `STORE_ATTR` 7, `LOAD_SUPER_ATTR` 6;
+  - `LOAD_ATTR` 7, `STORE_ATTR` 7, `LOAD_SUPER_ATTR` 6;
   - `CONTAINS_OP` 4, `CALL_METHOD_DESCRIPTOR_*` 4, `STORE_SUBSCR` 2,
     `LOAD_GLOBAL` 2;
-  - the generic and instrumented heads of other families.
-
-  They pass an inline input to an object API. The representation packet does
-  not change that:
-  - step 8 canonicalises constructors;
-  - step 9a makes numeric guards inline-only, which removes box paths from
-    specialised numeric handlers, but those are already in the 177.
-
-  They keep the record until value-form object entry points exist. That is
-  the value-API work, not this packet. The ten specialised attribute
-  handlers are the exception to check in A1 (§4, A1).
+  - generic and instrumented heads.
+- **The representation packet does not change this.** Step 9a's inline-only
+  numeric guards remove box paths from handlers already in the 177. The 115
+  keep the record until value-form object entry points exist.
 
 ### 6.3 Dispatch overhead
 
-- **Per word, computed goto.**
-  - `DISPATCH` is 7 instructions on `LOAD_FAST_BORROW`'s path: the record
-    count test, fetch, decode and indirect jump.
-  - The prologue adds 4 for the record, 2 for `instr_ptr` and 2 for
-    `next_instr += 1` through its home.
-- **Per word, tail call (`tcvt`).** `DISPATCH` is 10 instructions: the
-  fetch, the decode into parameters and the tail jump through the table. The
-  prologue adds 9 for the frame setup and the canary.
-  - A3a removes the canary.
-  - The frame-pointer push stays while the build keeps frame pointers, as
-    upstream's tail-call build does.
-- **Words per upstream instruction.** 0.78 on the 14 kernels today, 0.59
-  after B7 at most (§4.1).
-  - With method-JIT admission off, the kernels take 2.6× upstream's time
-    (triage) while executing 0.81 words per upstream instruction. Each word
-    therefore costs about 3.2 times an upstream instruction.
-  - A 12% cut in words is small against that. That is why phase A comes
-    first.
+- **Computed goto.** `DISPATCH` is 7 instructions on `LOAD_FAST_BORROW`'s
+  path. The prologue adds 4 for the record and 4 for `instr_ptr` and
+  `next_instr` through their homes.
+- **Tail calls (`tcvt`).** `DISPATCH` is 10 instructions; the prologue adds
+  9 for the frame and the canary. A3a removes the canary and the frame load.
+  The frame-pointer push stays while the build keeps frame pointers, which
+  may be why the `straight` probe is slower under tail calls (§1.1).
+- **Words.** Words per upstream instruction go from 0.78 to 0.59 on 14
+  kernels, or 0.74 to 0.66 without unpack_sequence (§4.1).
 
 ---
 
 ## 7. What we would not do
 
-- **An accumulator register (V8).** It is a second operand model next to the
-  slot fields, and it buys density a register IR already has.
-- **Handlers in a macro assembler (TurboFan, DynASM).** It is a second handler
+- **An accumulator register (V8).** A second operand model next to the slot
+  fields.
+- **Handlers in a macro assembler (TurboFan, DynASM).** A second handler
   language; tail calls give the register discipline from C.
-- **GCC global register variables to pin state under computed goto.** They
-  are GCC-only, reserve the register for the whole program and every library
-  call, and Clang does not support them for this.
-- **Fixing the computed-goto loop with compiler flags or hot/cold splitting.**
-  Tuning one 407 KB function's register allocator is fragile; tail calls make
-  each handler its own problem.
-- **Keeping the `IR_FIELD_*` memory decode.** It is a second decode form whose
-  only reason is GCC's computed-goto spill. It goes in A3a.
-- **Variable-width operands (V8 `Wide`/`ExtraWide`).** They are two encodings
-  of one operation.
-- **Short forms and operand-kind opcodes (V8 `Star0`–`Star15`, LuaJIT
-  `ADDVN`).** They multiply handlers; G6's constant-operands experiment
-  regressed.
-- **A dispatch-table register.** The table is a RIP-relative constant, and
-  instrumentation rewrites handlers.
-- **Conditional back edges and loop inversion in v2.** They remove 0.5% of
-  words on fannkuch and almost nothing elsewhere, and they cost a
-  sign-dependent eval-breaker poll and contract rule in the fused handlers.
-  Revisit with the JIT, where loop shape matters more.
-- **The copy-around-call idiom (`ni`) as the landed form.** It hides the
-  escape behind a second variable. Returning the PC states the contract.
-- **A handler per slot-class combination (G2).** That multiplies handlers.
-- **`PyValue` bits in `.pyc` files for constant slots.** They would make
-  every representation change a bytecode format change.
-- **Measuring elapsed time per step as a gate.** No intermediate performance
-  gates. Counts are recorded per step, and elapsed time once after A3a and
-  once after B7.
+- **GCC global register variables under computed goto.** GCC-only; they
+  reserve the register for the whole program.
+- **Keeping computed goto or the switch after A3.** A second and third
+  backend with no measured limit (A3c).
+- **Keeping the `IR_FIELD_*` memory decode.** It exists only for GCC's
+  computed-goto spill.
+- **Returning the PC from helpers.** The PC never moves (§0.2); the
+  out-parameter goes instead.
+- **Variable-width operands (V8 `Wide`/`ExtraWide`).** Two encodings of one
+  operation, and they triple the handler table.
+- **Short forms and operand-kind opcodes (`Star0`–`Star15`, `ADDVN`).** They
+  multiply handlers.
+- **Conditional back edges and loop inversion in v2.** Compare heads remove
+  0.5% of fannkuch's words (1.0% once B7 turns its constant-then-compare
+  heads into compare heads) and almost nothing elsewhere. Truth-test heads
+  need a plain backward jump, which §4.3 excludes.
+- **A handler per slot-class combination (G2).** It multiplies handlers.
+- **`PyValue` bits in `.pyc` files for constant slots.** Every
+  representation change would become a bytecode format change.
+- **One magic-number bump for the whole revision.** Stale `.pyc` files would
+  load across steps.
+- **Elapsed time as a per-step gate.** There are no intermediate performance
+  gates. Counts are recorded per step.
 
 ---
 
 ## 8. Measurements (not gates)
 
-Recorded on the release build and upstream `3a440b65695`, at the points
-named:
-
 | What | Script | When |
 |---|---|---|
-| Words executed per kernel and per counted class | `pyjit/bench/ir/dynamic_counts.py`, `irv2/dyn_v2.py`, `irv2/dyn_v3.py`, `irv2/steps.py` | before A1; after B2, B5, B6, B7 |
-| Shortest and fall-through paths: instructions, stack refs per word, per state variable | `irv2/labels.py`, `hpath.py`, `hmin.py`, `weigh.py`, `weighmin.py`, `hcat.py` | before A1; after A1, A2, A3a; after B7 |
-| Handler bytes, loop text, C frame, tail-call frames and canaries | `irv2/hsize.py`, `tcframes.py`, `size`, `-fstack-usage` | the same points |
-| Static Lib counts | `pyjit/bench/ir/static_counts.py`, `irv2/static_pairs.py` | after each format step |
+| Re-split of the loop gap at HEAD by self-symbol category | `pyjit/tools/sampler/` | before A1; after A3c; after B7 |
+| Object-value paths for the ten hottest handlers | `hmin.py` with the object branch forced | before A1; after A5; after A3c |
+| Words executed per class | `dynamic_counts.py`, `irv2/dyn_v2.py`, `irv2/steps.py` | before A1; after B2, B5, B6, B7 |
+| Inline-scalar lower bound per word | `labels.py`, `hmin.py`, `weighmin.py`, `hcat.py` | after A1, A2, A5, A3c, B7 |
+| Handler bytes, loop text, frames, canaries (both compilers) | `hsize.py`, `tcframes.py`, `size` | the same points |
+| Static Lib counts | `static_counts.py`, `irv2/static_pairs.py` | after each format step |
 | Generated-corpus `compare_sites` maximum | `static_counts.py` | before B4 (required) |
-| Matched elapsed comparison, interleaved, with the load stated | `pyjit/bench/run.py` | after A3a; A4 against B3; after B7 |
+| Matched elapsed comparison, interleaved, load stated | review `interleave.sh` or `pyjit/bench/run.py` | after A5; after A3c; A4 against B3; after B7 |
 
-### 8.1 Files
-
-In `build/pyjit-link-wave1/irv2/`:
-
-- **Scripts.**
-  - `labels.py`: handler addresses from table relocations.
-  - `hpath.py`, `hmin.py`, `homes.py`, `hcat.py`: the path measures, the
-    DWARF homes and the per-construct charges.
-  - `weigh.py`, `weighmin.py`: entry weighting.
-  - `hsize.py`, `tcframes.py`: sizes, frames and canaries.
-  - `formats.py`: format recounts.
-  - `vtemps.py`: the record classifier.
-  - `static_pairs.py`, `dyn_v2.py`, `dyn_v3.py`, `steps.py`: the static and
-    dynamic counts.
-  - `variants.py`, `tcpatch.py`, `cc.sh`: the diagnostic variants.
-  - `tclink.sh`, `runtests.sh`, `fullsuite.sh`: the linked tail-call
-    interpreter and its tests.
-- **Raw output.**
-  - `hpath-*.tsv`, `hmin-*.tsv`, `hsize-*.tsv`, `labels_*.json`.
-  - `weigh-*.md`, `weighmin.md`, `weighmin-up.md`.
-  - `static-lib.*`, `static-pairs-lib.*`.
-  - `dyn-v2/`, `dyn-v3/`, `steps.md`.
-  - `value-temps-handlers.txt`.
-  - `tests-*.log`, `suite-*.log`.
-- **Removed.** Large intermediates (disassembly, DWARF dumps, object files,
-  source trees). The scripts regenerate them.
+Weights must come from a stats build that counts handlers above 255. The
+stats counter skips them today (§1.2), so the first stats build after A3a
+should count them.
 
 ---
 
@@ -965,177 +972,194 @@ In `build/pyjit-link-wave1/irv2/`:
 
 ### 9.1 Validation done
 
-Full suite, `-j6`, both binaries on HEAD's `Lib` (`fullsuite.sh`):
+| Build | Tests run | Failed files | Failures and errors |
+|---|---:|---|---:|
+| Computed goto (copied release binary, HEAD `Lib`) | 50,935 | 9 | 20 |
+| GCC tail call (`tclink.sh`) | 50,935 | the same 9 | 33 |
+| Clang 21 tail call (review `tccl.sh`) | 50,935 | the same 9 | 33 |
 
-| Build | Test files | Tests run | Failed files | Failures and errors |
-|---|---:|---:|---|---:|
-| Computed goto (copied release binary) | 622 | 50,935 | 9 | 20 |
-| Tail call, GCC (`tclink.sh`) | 622 | 50,935 | the same 9 | 33 |
-
-- **The failed files.** Both runs fail the same nine: `test_pydoc`,
-  `test_build_details`, `test_capi`, `test_jit_method`,
-  `test_pyvalue_dict_vm`, `test_pyvalue_native_scope`, `test_subprocess`,
-  `test_sysconfig` and `test_unittest`.
-- **The only difference is `test_jit_method`.** It has 25 errors and 13
-  failures under tail calls, against 1 error under computed goto. The
-  baseline JIT is compiled out under tail calls, which is A3b's work.
-- **Every other file has the same counts.**
-  - `test_capi` (3), `test_pyvalue_dict_vm` (4) and
-    `test_pyvalue_native_scope` (5) are the tree's 12 known failures.
-  - The rest come from the copied directory layout: those tests read source
-    or build paths. That includes `test_jit_method`'s one computed-goto
-    error, a `runpy` path.
+- **The one difference.** `test_jit_method` has 25 errors and 13 failures
+  under tail calls, against 1 error under computed goto, because the JIT is
+  compiled out.
+- **The tree's 12 known failures** are `test_capi` (3),
+  `test_pyvalue_dict_vm` (4) and `test_pyvalue_native_scope` (5).
+- **The rest come from the copied directory layout:** tests that read
+  source or build paths.
 
 ### 9.2 Risks
 
-| Risk | Step | How it is detected |
+| Risk | Step | Detection |
 |---|---|---|
-| A handler classified "never boxes" boxes | A1 | `IR_KEEP_BOX` asserts a record; debug suite |
-| A PC redirect lost when a helper returns | A2 | step-5 monitoring and settrace tests; `test_monitoring` |
-| GCC miscompiles `no_callee_saved_registers` with `musttail` | A3a | full suite on the GCC tail-call build; a Clang build where available; `tcframes.py` checks |
-| Deep recursion or stack-walking tools assume one evaluator frame | A3a | `test_sys`, `test_call`, `test_gdb`, `test_perf_profiler`, `test_external_inspection` |
-| JIT entry or resume broken by moving its state out of the loop | A3b | JIT modules with admission forced on |
-| The unmeasured computed-goto build decays | A3b | CI compile and smoke job |
-| The G2 decision needs timing on a loaded machine | A4, B3 | interleaved runs; state the load; repeat when quiet |
-| Branch events move to the jump's offset | B2 | `test_monitoring`; documented as a visible change |
-| Generated code past the compare-entry limit | B4 | the required corpus measurement; the intrinsic lowering's tests |
-| A partly failed unpack into locals changes locals | B5 | the new test in B5 |
-| Line events change with fusion | B6 | decline fusion across lines; `test_sys_settrace` |
-| Frame introspection shows constant slots | B7 | `test_frame`, `test_inspect`, `test_dis` |
-| Conflicts with representation steps 7–9b | all | §3's ordering; recount at the start of each step |
-| Handler mix drift: the weights come from `dbce7b1260d` | all | re-weigh with a new stats build before A1 and after B7 |
+| A handler classified "never boxes" boxes | A1 | `IR_KEEP_BOX` assert; debug suite |
+| The executing copy is replaced after all (a missed writer) | A2 | the `ir_words` assert after each reentrant call |
+| An executing code object misses re-instrumentation | A2 | the version assert; step-5 monitoring tests |
+| A reference leak or early release from D4 | A5 | debug refcount checks; `test_gc`, `test_weakref`, `test_finalization` |
+| A miscompile under an unstable calling convention | A3a | full suite on two compilers; debug frame assert; `tcframes.py` |
+| Stack-walking tools assume one evaluator frame | A3a | `test_perf_profiler`, `test_external_inspection`; `test_gdb` on a host with gdb |
+| JIT entry broken by moving its state | A3b | JIT modules, admission forced |
+| Small handlers get slower under tail calls (`straight`) | A3 | the matched comparison after A3c; frame-pointer and prologue counts |
+| A stale `.pyc` loaded across format steps | B2–B7 | a magic bump in every step |
+| Branch events move to the jump's offset | B2 | `test_monitoring` |
+| Generated code past the compare-entry limit | B4 | the corpus measurement |
+| A partly failed unpack changes locals | B5 | the B5 test |
+| Line events change with fusion | B6 | fusion declined across lines |
+| Constant slots visible or stale after `code.replace` | B7 | `test_code`, `test_frame` |
+| Conflicts with representation steps 7–9b | all | §3's order; recount at each step |
 
 ---
 
 ## 10. Estimate
 
-| Step | Agent-hours | Model |
-|---|---:|---|
-| A1 | 2 | Opus |
-| A2 | 4 | Opus (generator), Sonnet (helper signatures) |
-| A3a | 5 | Opus |
-| A3b | 6 | Opus |
-| A4 | 2 | Sonnet |
-| B0a | 6 | Opus |
-| B0b | 3 | Opus |
-| B1 | 1 | Sonnet |
-| B2 | 3 | Opus |
-| B3 | 5 (only if A4 loses) | Opus |
-| B4 | 6 (+1 corpus measurement) | Opus |
-| B5 | 7 | Opus |
-| B6 | 7 | Opus |
-| B7 | 6 | Opus |
-| M | 2 | Sonnet |
-| **Total** | **about 66** (61 if A4 wins) | |
+This is a judgement, not a measurement.
 
-Each step is one commit, reviewed with a release-mode compile, and keeps the
-suite's pass set.
+| Step | Agent-h | Basis | Model |
+|---|---:|---|---|
+| A1 | 2 | the classifier exists; one emitter | Opus |
+| A2 | 2.5 | parameter deletion in 12 families, 10 emitters, 7 macro and body sites; two asserts | Sonnet, Opus review |
+| A5 (D4) | 6 | five macros, 23 helper uses, count cost, lifetime tests | Opus |
+| A3a | 14 | activation record for boxes and transactions (about 140 handlers); frame parameter; one decode; three conventions in `configure`; two compilers; debug and stats tail-call builds; frame check | Opus |
+| A3b | 9 | JIT entry, resume, step and consume as C-ABI functions; JIT suite on both compilers | Opus |
+| A3c | 2 | delete two backends and the memory decode | Sonnet |
+| Dual CI on the A3 branch | 2 | both suites per A3 commit until A3c | Sonnet |
+| A4 | 3.5 | explicit `nlocalsplus` in the class test, helpers outside handlers, stats build | Sonnet |
+| B0a | 11 | about 10 columns, three consumers replaced, verifier, `get_ir_contract` | Opus |
+| B0b | 3 | JIT front end | Opus |
+| B1 | 1.5 | one `SyntaxError`, a test knob, the docstring | Sonnet |
+| B2 | 3 | monitoring twins, renumbering, magic | Opus |
+| B3 | 5 | prototype needed for G2's comparison in every case; lands only if A4 loses | Opus |
+| B4 | 9 | per-kind sizes, priority assignment, 14 intrinsics, a second head, corpus measurement | Opus |
+| B5 | 7 | four forms, unpack collector | Opus |
+| B6 | 7 | 11 handlers, jump rule | Opus |
+| B7 | 6.5 | constant table, frame push, `code.replace`, copy, pickle | Opus |
+| M | 3 | sampler re-split, object paths, three matched comparisons | Sonnet |
+| **Total** | **about 97** | phase A 41, phase B 53, measurements 3 | |
 
-- **Phase A** (19 agent-hours) can run while representation steps 7–9b land.
-  A3b waits for 9b.
-- **Phase B** (44 agent-hours) begins with B0a in parallel with phase A, and
-  the format steps follow 9b.
+Each step is one commit, except A3, which is three commits landed together.
+Each is reviewed with a release-mode compile and keeps the suite's pass set.
+Phase A's A1, A2 and A5 can run while representation steps 8–9b land; A3
+follows 9b.
 
 ---
 
 ## 11. Proposed edits to register-ir.md
 
-1. **Source header.** Recount at `48bb4d6d1d3`, and replace the numbers in
-   §0.1's table:
+1. **Source header and numbers.** Recount at `48bb4d6d1d3`:
    - generated file 20,710 lines;
    - `ceval.o` 595,778 B; evaluator 407,484 B against 58,419 B;
-   - C frame 3,304 B;
-   - 1.40 KB per target;
-   - Lib words 4,584,034; unpack stores 8,887 and 8,050;
+   - C frame 3,304 B; 1.40 KB per target;
+   - Lib words 4,584,034;
+   - unpack stores 8,887 and 8,050;
    - `CALL` → `POP_TOP` 229,553, with its family set stated;
    - `LOAD_GLOBAL` NULL bits 93,334.
 2. **§1.13 Dispatch.**
    - The tail-call backend does not build at HEAD (include order; `#error`
-     without `preserve_none`).
-   - GCC 15 has `musttail` and `no_callee_saved_registers`, and with them the
-     backend builds and passes (§0.2).
-   - Handlers load the frame from `tstate`; v2 passes it.
-   - Replace "decoding from `ir_word` made GCC spill `next_instr`": the spill
-     comes from `&next_instr` escaping to 11 helpers in one function, and the
-     memory decode is a second form that goes with A3a.
-3. **§1.13 JIT admission.** The baseline JIT is compiled out under tail calls
-   because its entry state is loop-local (`pycore_jit.h:157`).
-4. **G9 problem list.** Add:
-   - `next_instr` escapes (290 sites in 185 handlers, 11 helpers);
-   - `frame`, `slots` and `tstate` reloaded from stack homes in every handler
-     (3.5, 1.8 and 0.4 references per word);
-   - the per-handler record set-up (4.1 references per word);
-   - the stack canary that `-fstack-protector-strong` adds to any handler
-     with an array or address-taken local (276 of 298 tail-call functions).
-
-   Replace "5.5 KB" with 3,304 B.
-5. **G9 timing.** State transport and the record (this packet's A1–A3) move
-   before baseline, because they are the measured 39%. Items 1, 2, 4 and 5
-   stay after baseline.
-6. **G9 item 6.** Add the canary rule: no handler-local arrays, and the
-   tail-call build is checked by a script for canaries and frame size.
+     without `preserve_none`). GCC 15.2 has `musttail` and
+     `no_callee_saved_registers`; Clang 21 has `preserve_none`.
+   - With two edits, each builds and fails the same 9 files as computed goto
+     in one diagnostic run, with the JIT compiled out.
+   - Replace "decoding from `ir_word` made GCC spill `next_instr`" with:
+     "under computed goto, `next_instr` stays in memory with or without the
+     escapes; under tail calls, the escapes are what keep it there".
+   - The baseline JIT is compiled out under tail calls because its entry
+     state is loop-local (`pycore_jit.h:157`).
+   - After IR v2's A3, the interpreter has one backend: tail-call handlers.
+     A compiler without `preserve_none` or `no_callee_saved_registers` uses
+     plain `musttail`, and a compiler without `musttail` is unsupported.
+3. **§1.10.** Add the invariant: the executing copy is created once and
+   freed only with the code object, so `frame->ir_words` never changes while
+   the frame runs. Helpers that run reentrant code do not rebase the PC.
+4. **IR-D3 and G2.**
+   - IR-D3's "the slot class … lives in the instruction" becomes "the slot
+     class is static; whether it is encoded in the instruction (class bits)
+     or kept in dispatch state is G2's decision".
+   - Add: D4 (no home holds a borrow) is its own step after representation
+     step 8, whichever way G2 goes.
+5. **G9.**
+   - Problem list: add `next_instr` passed by address to 12 helper families
+     (290 generated sites in 185 handlers, plus `finish_value_bridges` in
+     every handler); `frame`, `slots` and `tstate` in stack homes; the record
+     in every handler; and the canary that `-fstack-protector-strong` adds
+     to a handler with an address-taken local.
+   - Replace "5.5 KB" with 3,304 B.
+   - Timing: state transport and the record move before baseline, justified
+     by the measured tail-call gain (0.870× on 12 kernels, review 1), not by
+     the 39% share.
+6. **G9 item 6.** Address-taken transaction state lives in an activation
+   record. The target is "no address-taken locals; frame at most N bytes",
+   checked by a script on every supported compiler.
 7. **G2.**
-   - The control's concrete form is `nlocalsplus` as the sixth tail-call
-     argument.
-   - Replace the reader list with the four literal masks and `IR_HANDLER`'s
+   - Five literal masks, `_remote_debugging` included, plus `IR_HANDLER`'s
      about 70 uses.
-   - State that G6 works under either outcome, because hidden slots are
-     frame variables.
-8. **G3.**
+   - The control passes `nlocalsplus` to the class test explicitly; helpers
+     outside the handlers read it from the executing copy.
+   - The decision rule needs a B3 prototype in every case.
+   - Count static operand roles before deciding.
+8. **G3 and §4.3.**
    - Fused forms are forward only in v2.
-   - Conditional back edges and loop inversion are deferred, with the count
-     (fannkuch 0.5%, chaos 0.07%, others 0).
-   - Text estimate: 11 handlers at about 1.6 KB each.
+   - Conditional back edges and loop inversion are deferred. Compare heads:
+     fannkuch 260,650 (0.5%), chaos 5,030, go 133. Constant-then-compare
+     heads: fannkuch 260,650. Truth-test heads, which would need a plain
+     backward jump: fannkuch 1,731,245, richards 106,950, nqueens 40,319.
+   - The contract's sign-dependent poll rule goes.
 9. **G6.**
    - The constant-slot table stores `(slot, co_consts index)`, and the
-     executing copy builds the values. Marshal stores no `PyValue` bits.
-   - "With G2" becomes "after representation step 9a and after G2's decision
-     (A4 or B3)".
-   - Add the window caveat: a constant that feeds a call or build window
-     keeps its load.
-10. **§4.3.**
-    - The rule stands for field encodings.
-    - "Conditional back edges: allowed in the fused form" becomes "deferred"
-      (item 8).
-    - The contract's sign-dependent poll rule goes with it.
-11. **§4 introduction and IR-D1.**
-    - The format steps land as a sequence (B2–B7) after representation step
-      9b. Counts are recorded per step, and elapsed time is measured once
-      after B7.
-    - Phase A precedes them.
-    - The contract table is built first (B0a) and checks each format step.
-12. **§5 and O1.**
-    - The contract is `_PyIR_Formats` extended, one table, exported through
-      `_opcode.get_ir_contract()` with no generated Python copy. That decides
-      O1.
-    - Add the columns "boxes inputs" and "may redirect the PC".
-    - Heap effects, guards and result facts are built with the JIT front-end
-      switch (B0b).
-13. **G10.** The stale docstring, `_PyFb_FAMILIES`' `RESUME`/`JUMP_BACKWARD`,
-    `IR_MAX_FORWARD` and the `SystemError` limits are all still present at
-    `48bb4d6d1d3`.
-14. **§2.4.** Record the per-kernel removed-word counts of §4.1 and the
-    `invertible_backedge` counter (`dyn_v3.py`).
+     executing copy builds the values.
+   - Schedule: after representation step 9a.
+   - Window-fed constants keep their loads: 27% of fannkuch's loop constants.
+10. **§4 and IR-D1.**
+    - The format steps land as a sequence (B2–B7) after A3, each with its own
+      magic number and dense renumbering where handlers change.
+    - The churn argument for one revision is answered by the contract table:
+      the decoders read it.
+    - Counts are recorded per step; elapsed time is measured after A5, A3c
+      and B7.
+11. **§5 and O1.** The contract is `_PyIR_Formats` extended, exported through
+    `_opcode.get_ir_contract()`, with no generated Python copy (O1 decided).
+    Add the column "boxes inputs".
+12. **§1.14 and G10.**
+    - Limit errors already raise `SyntaxError`, except `regcfg.c`'s "too many
+      temporaries", which v2 changes and tests through a limit knob.
+    - "Two live temporaries" stays `SystemError`, as an invariant.
+    - The docstring, `_PyFb_FAMILIES`' `RESUME`/`JUMP_BACKWARD` and
+      `IR_MAX_FORWARD` are still stale at `48bb4d6d1d3`.
+13. **§2.4.** Record §4.1's removed-word counts, the loop-head shapes and the
+    window-fed constants.
+14. **§2.1.** Replace the V8 and LuaJIT register and save-PC facts with §2's
+    corrected rows, and drop "not re-verified" for them.
 
 ---
 
 ## 12. Open questions
 
-1. **GCC tail calls.** Is `no_callee_saved_registers` with `musttail` sound
-   enough to be the qualified GCC build? The diagnostic link matches the
-   computed-goto suite result outside the JIT tests (§9.1), but no Clang
-   build was possible here to compare with `preserve_none`. Qualification needs Clang 19+ on the
-   build host.
-2. **Computed goto after A3b.** Should it stay generated? Upstream keeps it,
-   and the proposal keeps it unmeasured. The alternative is to drop it and
-   require `musttail`, which GCC ≥ 15 and Clang ≥ 19 both have.
-3. **The G2 decision.** It needs a matched elapsed comparison of A4 and B3 on
-   a quiet machine. The load during this work was 7–20 on 16 cores.
-4. **Generated-corpus `compare_sites`.** The maximum is a precondition of B4.
-   The corpus listing must be rebuilt.
+1. **The loop share at HEAD.** What share of the gap is loop self time at
+   HEAD? Step 5 has landed and steps 6–7 are landing. The 39% is from build
+   F. The sampler re-split (§8) answers it before A1.
+2. **Object paths.** How much longer are the object-value paths of the
+   hottest handlers than the inline-scalar bound? It is about 61 against 44
+   on `LOAD_FAST_BORROW` (§8).
+3. **The G2 decision.** It needs a quiet machine. Load during review 1 was
+   1.1–3.7.
+4. **Generated-corpus `compare_sites`.** It is a precondition of B4; the
+   corpus listing must be rebuilt.
 5. **The attribute handlers in A1.** Can the ten specialised attribute
-   handlers leave the boxing set without a value-form attribute API? This is
-   decided by reading `value_attribute_complete` in A1.
-6. **Elapsed gain of phase A.** It is unmeasured. The counts say stack
-   traffic falls to upstream's level and instructions by about 7%. The time
-   effect on a 2.6× gap is for the first matched run after A3a.
+   handlers leave the boxing set without a value-form attribute API?
+6. **Small handlers under tail calls.** Why is `straight` slower, and do
+   A3a's frame target and the frame-pointer policy fix it?
+7. **Register budget (finding 12).** What takes GCC's sixth register:
+   `nlocalsplus` (A4), the dispatch table, or a predecoded field (as
+   upstream predecodes `oparg`)? Under Clang all fit.
+8. **Lookahead pairing (finding 12).** Is a handler that consumes a following
+   conditional jump (LuaJIT's ISLT/JMP, V8's `Star` lookahead) a better fit
+   than B6's 11 fused handlers and B5's no-destination calls? It needs no
+   format change, but it executes one pair in two ways.
+9. **Static operand roles (finding 12).** In Lib, `LOAD_FAST_BORROW`,
+   `LOAD_CONST`, `LOAD_SMALL_INT`, `LOAD_GLOBAL` and `PUSH_NULL` write
+   temporaries at least 98% of the time, and `LOAD_ATTR` 95% (review
+   `dstclass.py`).
+   - If the contract fixes those dsts as temporaries, and the compiler emits
+     a `STORE_FAST` for the rare local, the class test leaves the hottest
+     handlers without a bit or a parameter.
+   - Count this before the A4/B3 decision. The review's count (51,198
+     `LOAD_FAST_BORROW` destinations) skips `test` directories and
+     `idlelib`; this proposal's 232,433 covers all of Lib. The decision
+     needs one file set, and dynamic counts on the kernels beside it.

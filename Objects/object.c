@@ -1775,12 +1775,6 @@ _PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
 
 /* Generic GetAttr functions - put these in your tp_[gs]etattro slot. */
 
-static void
-attribute_close(PyObject **slot)
-{
-    Py_CLEAR(*slot);
-}
-
 PyObject *
 _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
                                  PyObject *dict, int suppress)
@@ -1895,7 +1889,7 @@ _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
             PyErr_Clear();
             rc = 0;
         }
-        attribute_close(&dict);
+        Py_CLEAR(dict);
         if (res != NULL || rc < 0 || PyErr_Occurred()) {
             goto done;
         }
@@ -1929,10 +1923,10 @@ _PyObject_GenericGetAttrWithDict(PyObject *obj, PyObject *name,
     PyObject *saved = PyErr_GetRaisedException();
     _PyThreadState_PopCValue(tstate, &cref);
     _PyValue_RestoreException(saved);
-    attribute_close(&name);
+    Py_CLEAR(name);
     Py_DECREF(tp);
     if (PyErr_Occurred()) {
-        attribute_close(&res);
+        Py_CLEAR(res);
     }
     return res;
 }
@@ -2049,8 +2043,8 @@ _PyObject_GenericSetAttrWithDict(PyObject *obj, PyObject *name,
     PyObject *saved = PyErr_GetRaisedException();
     _PyThreadState_PopCValue(tstate, &cref);
     _PyValue_RestoreException(saved);
-    attribute_close(&owned_dict);
-    attribute_close(&name);
+    Py_CLEAR(owned_dict);
+    Py_CLEAR(name);
     saved = PyErr_GetRaisedException();
     _Py_DECREF_TYPE(tp);
     _PyValue_RestoreException(saved);
@@ -2625,7 +2619,7 @@ _PyTypes_InitTypes(PyInterpreterState *interp)
     int found = PyDict_GetItemRef(baseobj_dict, &_Py_ID(__reduce__),
                                 &baseobj_reduce);
     if (found < 0 || PyErr_Occurred()) {
-        attribute_close(&baseobj_reduce);
+        Py_CLEAR(baseobj_reduce);
         return _PyStatus_ERR("Can't get __reduce__ from base object");
     }
     /* This identity cache borrows the immutable builtin namespace's
@@ -2634,7 +2628,7 @@ _PyTypes_InitTypes(PyInterpreterState *interp)
            (Py_IS_TYPE(baseobj_reduce, &PyMethodDescr_Type) &&
             Py_REFCNT(baseobj_reduce) > 1));
     _Py_INTERP_CACHED_OBJECT(interp, objreduce) = baseobj_reduce;
-    attribute_close(&baseobj_reduce);
+    Py_CLEAR(baseobj_reduce);
     if (PyErr_Occurred()) {
         _Py_INTERP_CACHED_OBJECT(interp, objreduce) = NULL;
         return _PyStatus_ERR("Can't get __reduce__ from base object");
@@ -3091,7 +3085,7 @@ Py_ReprEnter(PyObject *obj)
         /* Allocation can reenter and install a guard. Preserve that list. */
         found = _PyDict_SetDefaultValue(dict, name,
                                         PyValue_FromObjectBorrow(candidate), &guard);
-        attribute_close(&candidate);
+        Py_CLEAR(candidate);
         if (found < 0 || PyErr_Occurred()) {
             goto done;
         }
@@ -3111,10 +3105,10 @@ Py_ReprEnter(PyObject *obj)
     }
     result = _PyList_AppendTakeValue((PyListObject *)list, PyValue_DUP(value));
 done:
-    attribute_close(&candidate);
-    attribute_close(&list);
+    Py_CLEAR(candidate);
+    Py_CLEAR(list);
     PyValue_XCLOSE(guard);
-    attribute_close(&dict);
+    Py_CLEAR(dict);
     PyValue_CLOSE(value);
     return PyErr_Occurred() ? -1 : result;
 }

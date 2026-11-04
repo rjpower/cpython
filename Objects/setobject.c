@@ -201,7 +201,7 @@ set_compare_entry_lock_held(PySetObject *so, setentry *table, setentry *entry,
         /* Compare the location while our snapshot still owns its object.
            If it is unchanged, the table retains an owner through CLOSE. */
         int changed = table != so->table || entry->key.bits != startkey.bits;
-        cmp = set_close_key(startkey, cmp);
+        PyValue_XCLOSE(startkey);
         if (cmp < 0)
             return SET_LOOKKEY_ERROR;
         if (changed)
@@ -339,7 +339,7 @@ set_add_entry_takeref(PySetObject *so, PyValue key, Py_hash_t hash)
                 cmp = _PyValue_RichCompareBool(startkey, key, Py_EQ);
                 int changed = table != so->table ||
                               entry->key.bits != startkey.bits;
-                cmp = set_close_key(startkey, cmp);
+                PyValue_XCLOSE(startkey);
                 if (cmp > 0)
                     goto found_active;
                 if (cmp < 0)
@@ -379,10 +379,12 @@ set_add_entry_takeref(PySetObject *so, PyValue key, Py_hash_t hash)
     return set_table_resize(so, so->used>50000 ? so->used*2 : so->used*4);
 
   found_active:
-    return set_close_key(key, 0);
+    PyValue_XCLOSE(key);
+    return 0;
 
   comparison_error:
-    return set_close_key(key, -1);
+    PyValue_XCLOSE(key);
+    return -1;
 }
 
 static int
@@ -407,7 +409,7 @@ set_unhashable_type(PyObject *key)
     PyErr_Format(PyExc_TypeError,
                  "cannot use '%T' as a set element (%S)",
                  key, exc);
-    (void)set_close_object(exc, -1);
+    Py_XDECREF(exc);
 }
 
 int
@@ -417,7 +419,8 @@ _PySet_AddValueTakeRef(PySetObject *so, PyValue key)
     Py_hash_t hash = _PyValue_Hash(key);
     if (hash == -1) {
         set_unhashable_type(PyValue_AsKnownObjectBorrow(key));
-        return set_close_key(key, -1);
+        PyValue_XCLOSE(key);
+        return -1;
     }
     // We don't pre-increment here, the caller holds a strong
     // reference to the object which we are stealing.
@@ -682,7 +685,8 @@ set_discard_entry(PySetObject *so, PyValue key, Py_hash_t hash)
     FT_ATOMIC_STORE_SSIZE_RELAXED(entry->hash, -1);
     FT_ATOMIC_STORE_SSIZE_RELAXED(so->used, so->used - 1);
     FT_ATOMIC_STORE_PTR_RELEASE(entry->key, dummy);
-    return set_close_key(old_key, DISCARD_FOUND);
+    PyValue_XCLOSE(old_key);
+    return DISCARD_FOUND;
 }
 
 static int
@@ -699,10 +703,12 @@ set_contains_value(PySetObject *so, PyValue key)
     Py_hash_t hash = _PyValue_Hash(key);
     if (hash == -1) {
         set_unhashable_type(PyValue_AsKnownObjectBorrow(key));
-        return set_close_key(key, -1);
+        PyValue_XCLOSE(key);
+        return -1;
     }
     int result = set_contains_entry(so, key, hash);
-    return set_close_key(key, result);
+    PyValue_XCLOSE(key);
+    return result;
 }
 
 static int
@@ -712,10 +718,12 @@ set_discard_value(PySetObject *so, PyValue key)
     Py_hash_t hash = _PyValue_Hash(key);
     if (hash == -1) {
         set_unhashable_type(PyValue_AsKnownObjectBorrow(key));
-        return set_close_key(key, -1);
+        PyValue_XCLOSE(key);
+        return -1;
     }
     int result = set_discard_entry(so, key, hash);
-    return set_close_key(key, result);
+    PyValue_XCLOSE(key);
+    return result;
 }
 
 static int
@@ -856,7 +864,7 @@ set_dealloc(PyObject *self)
                 used--;
                 PyValue key = entry->key;
                 entry->key = PyValue_NULL;
-                (void)set_close_key(key, 0);
+                PyValue_XCLOSE(key);
         }
     }
     if (so->table != so->smalltable)
@@ -926,14 +934,14 @@ snapshot:
     /* repr(keys)[1:-1] */
     listrepr = PyObject_Repr(keys);
     if (set_close_object(keys, listrepr == NULL ? -1 : 0) < 0) {
-        (void)set_close_object(listrepr, -1);
+        Py_XDECREF(listrepr);
         goto done;
     }
     if (listrepr == NULL)
         goto done;
     tmp = PyUnicode_Substring(listrepr, 1, PyUnicode_GET_LENGTH(listrepr)-1);
     if (set_close_object(listrepr, tmp == NULL ? -1 : 0) < 0) {
-        (void)set_close_object(tmp, -1);
+        Py_XDECREF(tmp);
         goto done;
     }
     if (tmp == NULL)
@@ -947,13 +955,13 @@ snapshot:
     else
         result = PyUnicode_FromFormat("{%U}", listrepr);
     if (set_close_object(listrepr, result == NULL ? -1 : 0) < 0) {
-        (void)set_close_object(result, -1);
+        Py_XDECREF(result);
         result = NULL;
     }
 done:
     Py_ReprLeave((PyObject*)so);
     if (result != NULL && PyErr_Occurred()) {
-        (void)set_close_object(result, -1);
+        Py_XDECREF(result);
         result = NULL;
     }
     return result;
@@ -1075,7 +1083,7 @@ set_pop_impl(PySetObject *so)
         if (table != so->table || index > so->mask ||
             table[index].key.bits != key.bits || table[index].hash != hash) {
             int closed = set_close_object(boxed, 0);
-            closed = set_close_key(key, closed);
+            PyValue_XCLOSE(key);
             if (closed < 0) {
                 return NULL;
             }
@@ -1229,7 +1237,7 @@ setiter_dealloc(PyObject *self)
     _PyObject_GC_UNTRACK(si);
     PySetObject *so = si->si_set;
     si->si_set = NULL;
-    (void)set_close_object((PyObject *)so, 0);
+    Py_XDECREF((PyObject *)so);
     PyObject *saved = PyErr_GetRaisedException();
     PyObject_GC_Del(si);
     _PyValue_RestoreException(saved);
@@ -1270,7 +1278,7 @@ setiter_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
     int closed = set_close_object((PyObject *)tmp.si_set,
                                   list == NULL ? -1 : 0);
     if (closed < 0) {
-        (void)set_close_object(list, -1);
+        Py_XDECREF(list);
         return NULL;
     }
     return Py_BuildValue("N(N)", _PyEval_GetBuiltin(&_Py_ID(iter)), list);
@@ -1406,7 +1414,7 @@ set_iter(PyObject *so)
     Py_INCREF(so);
     setiterobject *si = PyObject_GC_New(setiterobject, &PySetIter_Type);
     if (si == NULL) {
-        (void)set_close_object(so, -1);
+        Py_XDECREF(so);
         return NULL;
     }
     Py_ssize_t size = set_len(so);
@@ -1467,12 +1475,12 @@ set_update_iterable_lock_held(PySetObject *so, PyObject *other)
     PyObject *key;
     while ((key = PyIter_Next(it)) != NULL) {
         if (set_add_key(so, key)) {
-            (void)set_close_object(it, -1);
-            (void)set_close_object(key, -1);
+            Py_XDECREF(it);
+            Py_XDECREF(key);
             return -1;
         }
         if (set_close_object(key, 0) < 0) {
-            (void)set_close_object(it, -1);
+            Py_XDECREF(it);
             return -1;
         }
     }
@@ -1607,7 +1615,7 @@ make_new_set_untracked(PyTypeObject *type, PyObject *iterable)
 
     if (iterable != NULL) {
         if (set_update_local(so, iterable)) {
-            (void)set_close_object((PyObject *)so, -1);
+            Py_XDECREF((PyObject *)so);
             return NULL;
         }
     }
@@ -1827,7 +1835,7 @@ set_copy_untracked_lock_held(PySetObject *so)
         return NULL;
     }
     if (set_merge_lock_held((PySetObject *)copy, (PyObject *)so) < 0) {
-        (void)set_close_object((PyObject *)copy, -1);
+        Py_XDECREF((PyObject *)copy);
         return NULL;
     }
     return copy;
@@ -1915,7 +1923,7 @@ set_union_impl(PySetObject *so, PyObject * const *others,
         if ((PyObject *)so == other)
             continue;
         if (set_update_local(result, other)) {
-            (void)set_close_object((PyObject *)result, -1);
+            Py_XDECREF((PyObject *)result);
             return NULL;
         }
     }
@@ -1939,7 +1947,7 @@ set_or(PyObject *self, PyObject *other)
         return (PyObject *)result;
     }
     if (set_update_local(result, other)) {
-        (void)set_close_object((PyObject *)result, -1);
+        Py_XDECREF((PyObject *)result);
         return NULL;
     }
     return (PyObject *)result;
@@ -1988,19 +1996,19 @@ set_intersection(PySetObject *so, PyObject *other)
             hash = entry->hash;
             rv = set_contains_entry(so, value, hash);
             if (rv < 0) {
-                (void)set_close_object((PyObject *)result, -1);
-                (void)set_close_key(value, -1);
+                Py_XDECREF((PyObject *)result);
+                PyValue_XCLOSE(value);
                 return NULL;
             }
             if (rv) {
                 if (set_add_entry(result, value, hash)) {
-                    (void)set_close_object((PyObject *)result, -1);
-                    (void)set_close_key(value, -1);
+                    Py_XDECREF((PyObject *)result);
+                    PyValue_XCLOSE(value);
                     return NULL;
                 }
             }
             if (set_close_key(value, 0) < 0) {
-                (void)set_close_object((PyObject *)result, -1);
+                Py_XDECREF((PyObject *)result);
                 return NULL;
             }
         }
@@ -2010,7 +2018,7 @@ set_intersection(PySetObject *so, PyObject *other)
 
     it = PyObject_GetIter(other);
     if (it == NULL) {
-        (void)set_close_object((PyObject *)result, -1);
+        Py_XDECREF((PyObject *)result);
         return NULL;
     }
 
@@ -2041,15 +2049,15 @@ set_intersection(PySetObject *so, PyObject *other)
     }
     int closed = set_close_object(it, 0);
     if (closed < 0 || PyErr_Occurred()) {
-        (void)set_close_object((PyObject *)result, -1);
+        Py_XDECREF((PyObject *)result);
         return NULL;
     }
     _PyObject_GC_TRACK(result);
     return (PyObject *)result;
   error:
-    (void)set_close_object(it, -1);
-    (void)set_close_object((PyObject *)result, -1);
-    (void)set_close_object(key, -1);
+    Py_XDECREF(it);
+    Py_XDECREF((PyObject *)result);
+    Py_XDECREF(key);
     return NULL;
 }
 
@@ -2080,13 +2088,13 @@ set_intersection_multi_impl(PySetObject *so, PyObject * const *others,
         newresult = set_intersection((PySetObject *)result, other);
         Py_END_CRITICAL_SECTION2();
         if (newresult == NULL) {
-            (void)set_close_object((PyObject *)result, -1);
+            Py_XDECREF((PyObject *)result);
             return NULL;
         }
         PyObject *previous = result;
         result = newresult;
         if (set_close_object(previous, 0) < 0) {
-            (void)set_close_object(result, -1);
+            Py_XDECREF(result);
             return NULL;
         }
     }
@@ -2205,7 +2213,7 @@ set_isdisjoint_impl(PySetObject *so, PyObject *other)
         while (set_next((PySetObject *)other, &pos, &entry)) {
             PyValue key = PyValue_DUP(entry->key);
             rv = set_contains_entry(so, key, entry->hash);
-            rv = set_close_key(key, rv);
+            PyValue_XCLOSE(key);
             if (rv < 0) {
                 return NULL;
             }
@@ -2222,9 +2230,9 @@ set_isdisjoint_impl(PySetObject *so, PyObject *other)
 
     while ((key = PyIter_Next(it)) != NULL) {
         rv = set_contains_key(so, key);
-        rv = set_close_object(key, rv);
+        Py_XDECREF(key);
         if (rv < 0) {
-            (void)set_close_object(it, -1);
+            Py_XDECREF(it);
             return NULL;
         }
         if (rv) {
@@ -2268,12 +2276,12 @@ set_difference_update_internal(PySetObject *so, PyObject *other)
         while (set_next((PySetObject *)other, &pos, &entry)) {
             PyValue key = PyValue_DUP(entry->key);
             if (set_discard_entry(so, key, entry->hash) < 0) {
-                (void)set_close_object(other, -1);
-                (void)set_close_key(key, -1);
+                Py_XDECREF(other);
+                PyValue_XCLOSE(key);
                 return -1;
             }
             if (set_close_key(key, 0) < 0) {
-                (void)set_close_object(other, -1);
+                Py_XDECREF(other);
                 return -1;
             }
         }
@@ -2289,12 +2297,12 @@ set_difference_update_internal(PySetObject *so, PyObject *other)
 
         while ((key = PyIter_Next(it)) != NULL) {
             if (set_discard_key(so, key) < 0) {
-                (void)set_close_object(it, -1);
-                (void)set_close_object(key, -1);
+                Py_XDECREF(it);
+                Py_XDECREF(key);
                 return -1;
             }
             if (set_close_object(key, 0) < 0) {
-                (void)set_close_object(it, -1);
+                Py_XDECREF(it);
                 return -1;
             }
         }
@@ -2346,7 +2354,7 @@ set_copy_and_difference_untracked(PySetObject *so, PyObject *other)
         return NULL;
     if (set_difference_update_internal((PySetObject *) result, other) == 0)
         return result;
-    (void)set_close_object((PyObject *)result, -1);
+    Py_XDECREF((PyObject *)result);
     return NULL;
 }
 
@@ -2387,22 +2395,22 @@ set_difference_untracked(PySetObject *so, PyObject *other)
             PyValue found;
             rv = _PyDict_GetValue_KnownHash(other, key, hash, &found);
             if (!PyValue_IsNull(found)) {
-                rv = set_close_key(found, rv);
+                PyValue_XCLOSE(found);
             }
             if (rv < 0) {
-                (void)set_close_object(result, -1);
-                (void)set_close_key(key, -1);
+                Py_XDECREF(result);
+                PyValue_XCLOSE(key);
                 return NULL;
             }
             if (!rv) {
                 if (set_add_entry((PySetObject *)result, key, hash)) {
-                    (void)set_close_object(result, -1);
-                    (void)set_close_key(key, -1);
+                    Py_XDECREF(result);
+                    PyValue_XCLOSE(key);
                     return NULL;
                 }
             }
             if (set_close_key(key, 0) < 0) {
-                (void)set_close_object(result, -1);
+                Py_XDECREF(result);
                 return NULL;
             }
         }
@@ -2415,19 +2423,19 @@ set_difference_untracked(PySetObject *so, PyObject *other)
         hash = entry->hash;
         rv = set_contains_entry((PySetObject *)other, key, hash);
         if (rv < 0) {
-            (void)set_close_object(result, -1);
-            (void)set_close_key(key, -1);
+            Py_XDECREF(result);
+            PyValue_XCLOSE(key);
             return NULL;
         }
         if (!rv) {
             if (set_add_entry((PySetObject *)result, key, hash)) {
-                (void)set_close_object(result, -1);
-                (void)set_close_key(key, -1);
+                Py_XDECREF(result);
+                PyValue_XCLOSE(key);
                 return NULL;
             }
         }
         if (set_close_key(key, 0) < 0) {
-            (void)set_close_object(result, -1);
+            Py_XDECREF(result);
             return NULL;
         }
     }
@@ -2469,7 +2477,7 @@ set_difference_multi_impl(PySetObject *so, PyObject * const *others,
         rv = set_difference_update_internal((PySetObject *)result, other);
         Py_END_CRITICAL_SECTION();
         if (rv) {
-            (void)set_close_object((PyObject *)result, -1);
+            Py_XDECREF((PyObject *)result);
             return NULL;
         }
     }
@@ -2528,12 +2536,12 @@ set_symmetric_difference_update_dict(PySetObject *so, PyObject *other)
     while ((status = _PyDict_NextValue(other, &pos, &key, NULL, &hash)) == 1) {
         int rv = set_discard_entry(so, key, hash);
         if (rv < 0) {
-            (void)set_close_key(key, -1);
+            PyValue_XCLOSE(key);
             return -1;
         }
         if (rv == DISCARD_NOTFOUND) {
             if (set_add_entry(so, key, hash)) {
-                (void)set_close_key(key, -1);
+                PyValue_XCLOSE(key);
                 return -1;
             }
         }
@@ -2557,12 +2565,12 @@ set_symmetric_difference_update_set(PySetObject *so, PySetObject *other)
         Py_hash_t hash = entry->hash;
         int rv = set_discard_entry(so, key, hash);
         if (rv < 0) {
-            (void)set_close_key(key, -1);
+            PyValue_XCLOSE(key);
             return -1;
         }
         if (rv == DISCARD_NOTFOUND) {
             if (set_add_entry(so, key, hash)) {
-                (void)set_close_key(key, -1);
+                PyValue_XCLOSE(key);
                 return -1;
             }
         }
@@ -2617,7 +2625,7 @@ set_symmetric_difference_update_impl(PySetObject *so, PyObject *other)
         rv = set_symmetric_difference_update_set(so, otherset);
         Py_END_CRITICAL_SECTION();
 
-        rv = set_close_object((PyObject *)otherset, rv);
+        Py_XDECREF((PyObject *)otherset);
     }
     if (rv < 0) {
         return NULL;
@@ -2646,11 +2654,11 @@ set_symmetric_difference_impl(PySetObject *so, PyObject *other)
         return NULL;
     }
     if (set_update_lock_held(result, other) < 0) {
-        (void)set_close_object((PyObject *)result, -1);
+        Py_XDECREF((PyObject *)result);
         return NULL;
     }
     if (set_symmetric_difference_update_set(result, so) < 0) {
-        (void)set_close_object((PyObject *)result, -1);
+        Py_XDECREF((PyObject *)result);
         return NULL;
     }
     _PyObject_GC_TRACK(result);
@@ -2706,7 +2714,7 @@ set_issubset_impl(PySetObject *so, PyObject *other)
             return NULL;
         }
         int result = (PySet_GET_SIZE(tmp) == PySet_GET_SIZE(so));
-        result = set_close_object(tmp, result);
+        Py_XDECREF(tmp);
         if (result < 0) {
             return NULL;
         }
@@ -2718,7 +2726,7 @@ set_issubset_impl(PySetObject *so, PyObject *other)
     while (set_next(so, &pos, &entry)) {
         PyValue key = PyValue_DUP(entry->key);
         rv = set_contains_entry((PySetObject *)other, key, entry->hash);
-        rv = set_close_key(key, rv);
+        PyValue_XCLOSE(key);
         if (rv < 0) {
             return NULL;
         }
@@ -2753,9 +2761,9 @@ set_issuperset_impl(PySetObject *so, PyObject *other)
     }
     while ((key = PyIter_Next(it)) != NULL) {
         int rv = set_contains_key(so, key);
-        rv = set_close_object(key, rv);
+        Py_XDECREF(key);
         if (rv < 0) {
-            (void)set_close_object(it, -1);
+            Py_XDECREF(it);
             return NULL;
         }
         if (!rv) {
@@ -2796,7 +2804,7 @@ set_richcompare(PyObject *self, PyObject *w, int op)
         if (r1 == NULL)
             return NULL;
         r2 = PyObject_IsTrue(r1);
-        r2 = set_close_object(r1, r2);
+        Py_XDECREF(r1);
         if (r2 < 0)
             return NULL;
         return PyBool_FromLong(!r2);
@@ -3023,11 +3031,11 @@ set___reduce___impl(PySetObject *so)
     result = PyTuple_Pack(3, Py_TYPE(so), args, state);
 done:
     status = result == NULL ? -1 : 0;
-    status = set_close_object(args, status);
-    status = set_close_object(keys, status);
-    status = set_close_object(state, status);
+    Py_XDECREF(args);
+    Py_XDECREF(keys);
+    Py_XDECREF(state);
     if (status < 0) {
-        (void)set_close_object(result, -1);
+        Py_XDECREF(result);
         result = NULL;
     }
     return result;

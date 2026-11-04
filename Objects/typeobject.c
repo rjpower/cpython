@@ -1256,12 +1256,6 @@ set_version_unlocked(PyTypeObject *tp, unsigned int version)
 }
 
 
-static void
-type_mutation_close(PyObject **slot)
-{
-    Py_CLEAR(*slot);
-}
-
 
 static PyObject *
 type_mutation_get_dict(PyTypeObject *type)
@@ -1494,8 +1488,8 @@ type_mro_modified(PyTypeObject *type, PyObject *bases)
             ((PyHeapTypeObject *)receiver)->_spec_cache.getitem, NULL);
     }
  done:
-    type_mutation_close(&bases_owner);
-    type_mutation_close(&receiver_owner);
+    Py_CLEAR(bases_owner);
+    Py_CLEAR(receiver_owner);
 }
 
 /*
@@ -1832,8 +1826,8 @@ type_set_module(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
     }
     result = PyDict_SetItem(dict, &_Py_ID(__module__), value);
 done:
-    type_mutation_close(&dict);
-    type_mutation_close(&value);
+    Py_CLEAR(dict);
+    Py_CLEAR(value);
     if (_PyTypeMutation_End(&scope) < 0) {
         return -1;
     }
@@ -1958,8 +1952,8 @@ type_set_abstractmethods(PyObject *tp, PyObject *value, void *Py_UNUSED(closure)
     END_TYPE_LOCK();
     result = 0;
 done:
-    type_mutation_close(&dict);
-    type_mutation_close(&value);
+    Py_CLEAR(dict);
+    Py_CLEAR(value);
     return _PyTypeMutation_End(&scope) < 0 ? -1 : result;
 }
 
@@ -2089,7 +2083,7 @@ mro_hierarchy_for_complete_type(PyTypeObject *type, PyObject *temp)
                 break;
             }
         }
-        type_mutation_close(&subclasses);
+        Py_CLEAR(subclasses);
         if (PyErr_Occurred()) {
             res = -1;
         }
@@ -2146,10 +2140,10 @@ type_check_new_bases(PyTypeObject *type, PyObject *new_bases, PyTypeObject **bes
             PyErr_Format(PyExc_TypeError,
                          "%s.__bases__ must be tuple of classes, not '%s'",
                          receiver_name, actual_name);
-            type_mutation_close(&actual_name_owner);
-            type_mutation_close(&actual_type_owner);
-            type_mutation_close(&receiver_name_owner);
-            type_mutation_close(&receiver_owner);
+            Py_CLEAR(actual_name_owner);
+            Py_CLEAR(actual_type_owner);
+            Py_CLEAR(receiver_name_owner);
+            Py_CLEAR(receiver_owner);
             return -1;
         }
         PyObject *ob = PyValue_AsKnownObjectBorrow(item);
@@ -2278,7 +2272,7 @@ type_set_bases_unlocked(PyTypeObject *type, PyObject *new_bases, PyTypeObject *b
             set_tp_mro(cls, Py_XNewRef(old_mro), 0);
             Py_DECREF(new_mro);
         }
-        type_mutation_close(&record_owner);
+        Py_CLEAR(record_owner);
     }
     Py_DECREF(temp);
 
@@ -2386,8 +2380,8 @@ type_set_doc(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
     }
     result = PyDict_SetItem(dict, &_Py_ID(__doc__), value);
 done:
-    type_mutation_close(&dict);
-    type_mutation_close(&value);
+    Py_CLEAR(dict);
+    Py_CLEAR(value);
     if (_PyTypeMutation_End(&scope) < 0) {
         return -1;
     }
@@ -2424,7 +2418,7 @@ type_get_annotate(PyObject *tp, void *Py_UNUSED(closure))
         if (get != NULL) {
             PyObject *selected = annotate;
             annotate = get(selected, NULL, tp);
-            type_mutation_close(&selected);
+            Py_CLEAR(selected);
         }
     }
     else {
@@ -2433,7 +2427,7 @@ type_get_annotate(PyObject *tp, void *Py_UNUSED(closure))
         if (PyErr_Occurred()) {
             goto done;
         }
-        type_mutation_close(&dict);
+        Py_CLEAR(dict);
         if (PyErr_Occurred()) {
             goto done;
         }
@@ -2444,13 +2438,13 @@ type_get_annotate(PyObject *tp, void *Py_UNUSED(closure))
         }
     }
 done:
-    type_mutation_close(&dict);
+    Py_CLEAR(dict);
     if (PyErr_Occurred()) {
-        type_mutation_close(&annotate);
+        Py_CLEAR(annotate);
     }
     _PyTypeMutation_End(&scope);
     if (PyErr_Occurred()) {
-        type_mutation_close(&annotate);
+        Py_CLEAR(annotate);
     }
     return annotate;
 }
@@ -2495,8 +2489,8 @@ type_set_annotate(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
     }
     result = 0;
 done:
-    type_mutation_close(&dict);
-    type_mutation_close(&value);
+    Py_CLEAR(dict);
+    Py_CLEAR(value);
     return _PyTypeMutation_End(&scope) < 0 ? -1 : result;
 }
 
@@ -2529,7 +2523,7 @@ type_get_annotations(PyObject *tp, void *Py_UNUSED(closure))
         if (get != NULL) {
             PyObject *selected = annotations;
             annotations = get(selected, NULL, tp);
-            type_mutation_close(&selected);
+            Py_CLEAR(selected);
         }
     }
     else {
@@ -2560,7 +2554,7 @@ type_get_annotations(PyObject *tp, void *Py_UNUSED(closure))
         if (PyErr_Occurred()) {
             goto done;
         }
-        type_mutation_close(&dict);
+        Py_CLEAR(dict);
         if (PyErr_Occurred()) {
             goto done;
         }
@@ -2571,14 +2565,14 @@ type_get_annotations(PyObject *tp, void *Py_UNUSED(closure))
         }
     }
 done:
-    type_mutation_close(&annotate);
-    type_mutation_close(&dict);
+    Py_CLEAR(annotate);
+    Py_CLEAR(dict);
     if (PyErr_Occurred()) {
-        type_mutation_close(&annotations);
+        Py_CLEAR(annotations);
     }
     _PyTypeMutation_End(&scope);
     if (PyErr_Occurred()) {
-        type_mutation_close(&annotations);
+        Py_CLEAR(annotations);
     }
     return annotations;
 }
@@ -2635,8 +2629,8 @@ type_set_annotations(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
     }
     result = 0;
 done:
-    type_mutation_close(&dict);
-    type_mutation_close(&value);
+    Py_CLEAR(dict);
+    Py_CLEAR(value);
     return _PyTypeMutation_End(&scope) < 0 ? -1 : result;
 }
 
@@ -2679,8 +2673,8 @@ type_set_type_params(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
     }
     result = PyDict_SetItem(dict, &_Py_ID(__type_params__), value);
 done:
-    type_mutation_close(&dict);
-    type_mutation_close(&value);
+    Py_CLEAR(dict);
+    Py_CLEAR(value);
     if (_PyTypeMutation_End(&scope) < 0) {
         return -1;
     }
@@ -3451,11 +3445,11 @@ _PyObject_LookupSpecialMethod(PyObject *attr, PyValue *method,
     }
 done:
     PyValue_CLEAR(found);
-    type_mutation_close(&bound);
-    type_mutation_close(&method_view);
-    type_mutation_close(&binding_type);
-    type_mutation_close(&attr_owner);
-    type_mutation_close(&self_view);
+    Py_CLEAR(bound);
+    Py_CLEAR(method_view);
+    Py_CLEAR(binding_type);
+    Py_CLEAR(attr_owner);
+    Py_CLEAR(self_view);
     if (rc < 0 || PyErr_Occurred()) {
         PyValue_CLEAR(*method);
         return -1;
@@ -3532,12 +3526,12 @@ lookup_method_ex(PyObject *self, PyObject *attr, PyValue *out,
         rc = 0;
     }
 done:
-    type_mutation_close(&view);
-    type_mutation_close(&bound);
-    type_mutation_close(&suppressed_error);
-    type_mutation_close(&binding_type);
-    type_mutation_close(&attr_owner);
-    type_mutation_close(&self_owner);
+    Py_CLEAR(view);
+    Py_CLEAR(bound);
+    Py_CLEAR(suppressed_error);
+    Py_CLEAR(binding_type);
+    Py_CLEAR(attr_owner);
+    Py_CLEAR(self_owner);
     if (rc < 0 || PyErr_Occurred()) {
         PyValue_CLEAR(*out);
         return -1;
@@ -3613,9 +3607,9 @@ done:
         cref.ref = PyValue_NULL;
         PyValue_XCLOSE(retired);
     }
-    type_mutation_close(&self_owner);
+    Py_CLEAR(self_owner);
     if (PyErr_Occurred()) {
-        type_mutation_close(&result);
+        Py_CLEAR(result);
         return NULL;
     }
     return result;
@@ -3656,11 +3650,11 @@ done:
         cref.ref = PyValue_NULL;
         PyValue_XCLOSE(retired);
     }
-    type_mutation_close(&kwds_owner);
-    type_mutation_close(&args_owner);
-    type_mutation_close(&self_owner);
+    Py_CLEAR(kwds_owner);
+    Py_CLEAR(args_owner);
+    Py_CLEAR(self_owner);
     if (PyErr_Occurred()) {
-        type_mutation_close(&result);
+        Py_CLEAR(result);
         return NULL;
     }
     return result;
@@ -3698,9 +3692,9 @@ done:
         cref.ref = PyValue_NULL;
         PyValue_XCLOSE(retired);
     }
-    type_mutation_close(&self_owner);
+    Py_CLEAR(self_owner);
     if (PyErr_Occurred()) {
-        type_mutation_close(&result);
+        Py_CLEAR(result);
         return NULL;
     }
     return result;
@@ -3743,9 +3737,9 @@ done:
         cref.ref = PyValue_NULL;
         PyValue_XCLOSE(retired);
     }
-    type_mutation_close(&self_owner);
+    Py_CLEAR(self_owner);
     if (PyErr_Occurred()) {
-        type_mutation_close(&result);
+        Py_CLEAR(result);
         return NULL;
     }
     return result;
@@ -3792,12 +3786,12 @@ done:
         cref.ref = PyValue_NULL;
         PyValue_XCLOSE(retired);
     }
-    type_mutation_close(&self_owner);
+    Py_CLEAR(self_owner);
     if (PyErr_Occurred()) {
         if (attr_is_none != NULL) {
             *attr_is_none = 0;
         }
-        type_mutation_close(&result);
+        Py_CLEAR(result);
         return NULL;
     }
     return result;
@@ -3844,13 +3838,13 @@ done:
         cref.ref = PyValue_NULL;
         PyValue_XCLOSE(retired);
     }
-    type_mutation_close(&arg_owner);
-    type_mutation_close(&self_owner);
+    Py_CLEAR(arg_owner);
+    Py_CLEAR(self_owner);
     if (PyErr_Occurred()) {
         if (attr_is_none != NULL) {
             *attr_is_none = 0;
         }
-        type_mutation_close(&result);
+        Py_CLEAR(result);
         return NULL;
     }
     return result;
@@ -3957,9 +3951,9 @@ check_duplicates(PyObject *tuple)
     }
     result = 0;
 done:
-    type_mutation_close(&name);
-    type_mutation_close(&error_type);
-    type_mutation_close(&owner);
+    Py_CLEAR(name);
+    Py_CLEAR(error_type);
+    Py_CLEAR(owner);
     return PyErr_Occurred() ? -1 : result;
 }
 
@@ -4016,7 +4010,7 @@ set_mro_error(PyObject **to_merge, Py_ssize_t to_merge_size, Py_ssize_t *remain)
             goto done;
         }
         off += PyOS_snprintf(buf + off, sizeof(buf) - off, " %s", text);
-        type_mutation_close(&name);
+        Py_CLEAR(name);
         if (PyErr_Occurred()) {
             goto done;
         }
@@ -4027,9 +4021,9 @@ set_mro_error(PyObject **to_merge, Py_ssize_t to_merge_size, Py_ssize_t *remain)
     }
     formatted = 1;
 done:
-    type_mutation_close(&name);
-    type_mutation_close(&keys);
-    type_mutation_close(&set);
+    Py_CLEAR(name);
+    Py_CLEAR(keys);
+    Py_CLEAR(set);
     if (formatted && !PyErr_Occurred()) {
         PyErr_SetString(PyExc_TypeError, buf);
     }
@@ -4207,24 +4201,24 @@ mro_implementation_unlocked(PyTypeObject *type)
     PyList_SET_VALUE(result, 0, PyValue_FromPyObjectNew((PyObject *)type));
     Py_SET_SIZE(result, 1);
     if (pmerge(result, to_merge, n + 1) < 0 || PyErr_Occurred()) {
-        type_mutation_close(&result);
+        Py_CLEAR(result);
     }
 
 done:
     for (Py_ssize_t i = 0; i < captured; i++) {
-        type_mutation_close(&to_merge[i]);
+        Py_CLEAR(to_merge[i]);
     }
     PyObject *saved = PyErr_GetRaisedException();
     if (to_merge != NULL) {
         PyMem_Free(to_merge);
     }
     _PyValue_RestoreException(saved);
-    type_mutation_close(&error_type);
-    type_mutation_close(&base_mro);
-    type_mutation_close(&bases);
-    type_mutation_close(&receiver);
+    Py_CLEAR(error_type);
+    Py_CLEAR(base_mro);
+    Py_CLEAR(bases);
+    Py_CLEAR(receiver);
     if (PyErr_Occurred()) {
-        type_mutation_close(&result);
+        Py_CLEAR(result);
     }
     return result;
 }
@@ -4270,9 +4264,9 @@ type_mro_impl(PyTypeObject *self)
     }
 
 done:
-    type_mutation_close(&original);
+    Py_CLEAR(original);
     if (PyErr_Occurred()) {
-        type_mutation_close(&result);
+        Py_CLEAR(result);
     }
     return result;
 }
@@ -4306,9 +4300,9 @@ mro_check(PyTypeObject *type, PyObject *mro)
     }
     result = 0;
 done:
-    type_mutation_close(&error_type);
-    type_mutation_close(&solid);
-    type_mutation_close(&owner);
+    Py_CLEAR(error_type);
+    Py_CLEAR(solid);
+    Py_CLEAR(owner);
     return PyErr_Occurred() ? -1 : result;
 }
 
@@ -4346,7 +4340,7 @@ mro_invoke(PyTypeObject *type)
         goto done;
     }
     new_mro = PySequence_Tuple(mro_result);
-    type_mutation_close(&mro_result);
+    Py_CLEAR(mro_result);
     if (new_mro == NULL || PyErr_Occurred()) {
         goto done;
     }
@@ -4359,9 +4353,9 @@ mro_invoke(PyTypeObject *type)
     }
 
 done:
-    type_mutation_close(&mro_result);
+    Py_CLEAR(mro_result);
     if (PyErr_Occurred()) {
-        type_mutation_close(&new_mro);
+        Py_CLEAR(new_mro);
     }
     return new_mro;
 }
@@ -4472,8 +4466,8 @@ find_best_base(PyObject *bases)
                          base_i->tp_name);
             goto done;
         }
-        type_mutation_close(&winner_owner);
-        type_mutation_close(&selected);
+        Py_CLEAR(winner_owner);
+        Py_CLEAR(selected);
         if (PyErr_Occurred()) {
             goto done;
         }
@@ -4514,10 +4508,10 @@ find_best_base(PyObject *bases)
     }
     result = (PyTypeObject *)selected;
 done:
-    type_mutation_close(&error_type);
-    type_mutation_close(&winner_owner);
-    type_mutation_close(&selected);
-    type_mutation_close(&owner);
+    Py_CLEAR(error_type);
+    Py_CLEAR(winner_owner);
+    Py_CLEAR(selected);
+    Py_CLEAR(owner);
     return PyErr_Occurred() ? NULL : result;
 }
 
@@ -4953,7 +4947,7 @@ _PyType_CalculateMetaclass(PyTypeObject *metatype, PyObject *bases)
         }
         if (PyType_IsSubtype(candidate, (PyTypeObject *)winner)) {
             PyObject *replacement = Py_NewRef(candidate);
-            type_mutation_close(&winner);
+            Py_CLEAR(winner);
             winner = replacement;
             if (PyErr_Occurred()) {
                 goto done;
@@ -4969,8 +4963,8 @@ _PyType_CalculateMetaclass(PyTypeObject *metatype, PyObject *bases)
     }
     result = (PyTypeObject *)winner;
 done:
-    type_mutation_close(&winner);
-    type_mutation_close(&owner);
+    Py_CLEAR(winner);
+    Py_CLEAR(owner);
     return PyErr_Occurred() ? NULL : result;
 }
 
@@ -5061,8 +5055,8 @@ type_new_visit_slots(type_new_ctx *ctx)
     result = 0;
 
 done:
-    type_mutation_close(&error_type_owner);
-    type_mutation_close(&slots_owner);
+    Py_CLEAR(error_type_owner);
+    Py_CLEAR(slots_owner);
     return PyErr_Occurred() ? -1 : result;
 }
 
@@ -5125,7 +5119,7 @@ type_new_copy_slots(type_new_ctx *ctx, PyObject *dict)
             }
             if (PyErr_Occurred()) goto done;
         }
-        type_mutation_close(&mangled);
+        Py_CLEAR(mangled);
         if (PyErr_Occurred()) goto done;
         j++;
     }
@@ -5150,17 +5144,17 @@ type_new_copy_slots(type_new_ctx *ctx, PyObject *dict)
     ok = 1;
 
 done:
-    type_mutation_close(&mangled);
-    type_mutation_close(&new_slots);
-    type_mutation_close(&dict_owner);
-    type_mutation_close(&name_owner);
-    type_mutation_close(&slots_owner);
+    Py_CLEAR(mangled);
+    Py_CLEAR(new_slots);
+    Py_CLEAR(dict_owner);
+    Py_CLEAR(name_owner);
+    Py_CLEAR(slots_owner);
     if (PyErr_Occurred()) ok = 0;
     if (ok) {
         result = tuple;
         tuple = NULL;
     }
-    type_mutation_close(&tuple);
+    Py_CLEAR(tuple);
     return result;
 }
 
@@ -5416,8 +5410,8 @@ done:
         _PyValue_RestoreException(saved);
     }
     PyValue_CLEAR(doc);
-    type_mutation_close(&dict_owner);
-    type_mutation_close(&type_owner);
+    Py_CLEAR(dict_owner);
+    Py_CLEAR(type_owner);
     return PyErr_Occurred() ? -1 : result;
 }
 
@@ -5447,10 +5441,10 @@ type_new_staticmethod(PyObject *dict, PyObject *attr)
     if (wrapper == NULL || PyErr_Occurred()) goto done;
     result = PyDict_SetItem(dict_owner, key_owner, wrapper);
 done:
-    type_mutation_close(&wrapper);
+    Py_CLEAR(wrapper);
     PyValue_CLEAR(selected);
-    type_mutation_close(&key_owner);
-    type_mutation_close(&dict_owner);
+    Py_CLEAR(key_owner);
+    Py_CLEAR(dict_owner);
     return PyErr_Occurred() ? -1 : result;
 }
 
@@ -5480,10 +5474,10 @@ type_new_classmethod(PyObject *dict, PyObject *attr)
     if (wrapper == NULL || PyErr_Occurred()) goto done;
     result = PyDict_SetItem(dict_owner, key_owner, wrapper);
 done:
-    type_mutation_close(&wrapper);
+    Py_CLEAR(wrapper);
     PyValue_CLEAR(selected);
-    type_mutation_close(&key_owner);
-    type_mutation_close(&dict_owner);
+    Py_CLEAR(key_owner);
+    Py_CLEAR(dict_owner);
     return PyErr_Occurred() ? -1 : result;
 }
 
@@ -5645,10 +5639,10 @@ type_new_set_classcell(PyTypeObject *type, PyObject *dict)
     if (del_status < 0 || PyErr_Occurred()) goto done;
     result = 0;
 done:
-    type_mutation_close(&selected_type_owner);
+    Py_CLEAR(selected_type_owner);
     PyValue_CLEAR(cell);
-    type_mutation_close(&dict_owner);
-    type_mutation_close(&type_owner);
+    Py_CLEAR(dict_owner);
+    Py_CLEAR(type_owner);
     return PyErr_Occurred() ? -1 : result;
 }
 
@@ -5680,9 +5674,9 @@ type_new_set_classdictcell(PyObject *dict)
     if (del_status < 0 || PyErr_Occurred()) goto done;
     result = 0;
 done:
-    type_mutation_close(&selected_type_owner);
+    Py_CLEAR(selected_type_owner);
     PyValue_CLEAR(cell);
-    type_mutation_close(&dict_owner);
+    Py_CLEAR(dict_owner);
     return PyErr_Occurred() ? -1 : result;
 }
 
@@ -5788,9 +5782,9 @@ type_new_get_slots(type_new_ctx *ctx, PyObject *dict)
     if (PyErr_Occurred()) goto done;
     result = 0;
 done:
-    type_mutation_close(&iterable_owner);
+    Py_CLEAR(iterable_owner);
     PyValue_CLEAR(selected);
-    type_mutation_close(&dict_owner);
+    Py_CLEAR(dict_owner);
     if (PyErr_Occurred()) {
         result = -1;
     }
@@ -5805,7 +5799,7 @@ done:
             new_slots = NULL;
         }
     }
-    type_mutation_close(&new_slots);
+    Py_CLEAR(new_slots);
     return result;
 }
 
@@ -5950,7 +5944,7 @@ type_new_get_bases(type_new_ctx *ctx, PyObject **type,
         base_view = _PyValue_AsObjectAt(value, BOX_SITE_ATTRIBUTE);
         if (base_view == NULL || PyErr_Occurred()) goto done;
         int has_mro_entries = PyObject_HasAttrWithError(base_view, &_Py_ID(__mro_entries__));
-        type_mutation_close(&base_view);
+        Py_CLEAR(base_view);
         if (has_mro_entries < 0 || PyErr_Occurred()) goto done;
         if (has_mro_entries) {
             PyErr_SetString(PyExc_TypeError,
@@ -5991,12 +5985,12 @@ type_new_get_bases(type_new_ctx *ctx, PyObject **type,
     result = 0;
 
 done:
-    type_mutation_close(&base_view);
-    type_mutation_close(&winner_owner);
-    type_mutation_close(&initial_metatype_owner);
-    type_mutation_close(&args_owner);
-    type_mutation_close(&kwds_owner);
-    type_mutation_close(&bases_owner);
+    Py_CLEAR(base_view);
+    Py_CLEAR(winner_owner);
+    Py_CLEAR(initial_metatype_owner);
+    Py_CLEAR(args_owner);
+    Py_CLEAR(kwds_owner);
+    Py_CLEAR(bases_owner);
     if (PyErr_Occurred()) result = -1;
     if (result == 0) {
         ctx->base = _PyType_CAST(chosen_base_owner);
@@ -6012,20 +6006,20 @@ done:
         *type = delegated;
         delegated = NULL;
     }
-    type_mutation_close(&chosen_bases_owner);
-    type_mutation_close(&chosen_base_owner);
-    type_mutation_close(&chosen_metatype_owner);
-    type_mutation_close(&delegated);
+    Py_CLEAR(chosen_bases_owner);
+    Py_CLEAR(chosen_base_owner);
+    Py_CLEAR(chosen_metatype_owner);
+    Py_CLEAR(delegated);
     if (PyErr_Occurred()) {
         if (*selected_base_owner != NULL) {
-            type_mutation_close(selected_base_owner);
+            Py_CLEAR(*selected_base_owner);
             ctx->base = NULL;
         }
         if (*selected_metatype_owner != NULL) {
-            type_mutation_close(selected_metatype_owner);
+            Py_CLEAR(*selected_metatype_owner);
             ctx->metatype = NULL;
         }
-        type_mutation_close(type);
+        Py_CLEAR(*type);
         return -1;
     }
     return result;
@@ -6133,8 +6127,8 @@ type_new(PyTypeObject *metatype, PyObject *args, PyObject *kwds)
 done:
     ;
     Py_CLEAR(error_type);
-    type_mutation_close(&selected_base_owner);
-    type_mutation_close(&selected_metatype_owner);
+    Py_CLEAR(selected_base_owner);
+    Py_CLEAR(selected_metatype_owner);
     Py_CLEAR(owned_bases);
     Py_CLEAR(keywords);
     return type;
@@ -6232,8 +6226,8 @@ check_immutable_bases(const char *type_name, PyObject *bases, int skip_first)
     }
     result = 0;
 done:
-    type_mutation_close(&error_type);
-    type_mutation_close(&owner);
+    Py_CLEAR(error_type);
+    Py_CLEAR(owner);
     return PyErr_Occurred() ? -1 : result;
 }
 
@@ -7565,7 +7559,7 @@ set_flags_recursive(PyTypeObject *self, unsigned long mask, unsigned long flags)
             break;
         }
     }
-    type_mutation_close(&children);
+    Py_CLEAR(children);
 }
 
 void
@@ -7621,10 +7615,10 @@ _Py_type_getattro_impl(PyTypeObject *type, PyObject *name, int *suppress_missing
         result = _PyValue_AsObjectAt(ref, BOX_SITE_ATTRIBUTE);
     }
     PyValue_CLEAR(ref);
-    type_mutation_close(&name_owner);
-    type_mutation_close(&type_owner);
+    Py_CLEAR(name_owner);
+    Py_CLEAR(type_owner);
     if (PyErr_Occurred()) {
-        type_mutation_close(&result);
+        Py_CLEAR(result);
     }
     return result;
 }
@@ -7772,11 +7766,11 @@ done:
             PyValue_XCLOSE(retired);
         }
     }
-    type_mutation_close(&diagnostic_name);
-    type_mutation_close(&diagnostic_type);
-    type_mutation_close(&metatype_owner);
-    type_mutation_close(&name_owner);
-    type_mutation_close(&type_owner);
+    Py_CLEAR(diagnostic_name);
+    Py_CLEAR(diagnostic_type);
+    Py_CLEAR(metatype_owner);
+    Py_CLEAR(name_owner);
+    Py_CLEAR(type_owner);
     if (active) {
         result = _PyThreadState_PopCValueSteal(tstate, &result_ref);
         result_ref.ref = PyValue_NULL;
@@ -7945,7 +7939,7 @@ type_setattro(PyObject *self, PyObject *name, PyObject *value)
             candidate = NULL;
         }
         END_TYPE_LOCK();
-        type_mutation_close(&candidate);
+        Py_CLEAR(candidate);
         if (PyErr_Occurred()) {
             goto done;
         }
@@ -7965,16 +7959,16 @@ type_setattro(PyObject *self, PyObject *name, PyObject *value)
     END_TYPE_DICT_LOCK();
 
 done:
-    type_mutation_close(&candidate);
-    type_mutation_close(&dict);
-    type_mutation_close(&descr);
+    Py_CLEAR(candidate);
+    Py_CLEAR(dict);
+    Py_CLEAR(descr);
     // Keep admission closed through delayed retirement of the displaced value.
     PyObject *saved = PyErr_GetRaisedException();
     _PyObject_XDecRefDelayed(old_value);
     _PyValue_RestoreException(saved);
-    type_mutation_close(&name);
-    type_mutation_close(&original_name);
-    type_mutation_close(&value);
+    Py_CLEAR(name);
+    Py_CLEAR(original_name);
+    Py_CLEAR(value);
     Py_DECREF(type);
     return _PyTypeMutation_End(&scope) < 0 ? -1 : res;
 }
@@ -8043,7 +8037,7 @@ clear_static_tp_subclasses(PyTypeObject *type, int isbuiltin)
             if (subclass != NULL) {
                 PyErr_SetRaisedException(error);
                 PyObject *owner = (PyObject *)subclass;
-                type_mutation_close(&owner);
+                Py_CLEAR(owner);
                 error = NULL;
             }
             if (primary == NULL) {
@@ -8052,7 +8046,7 @@ clear_static_tp_subclasses(PyTypeObject *type, int isbuiltin)
             else if (error != NULL) {
                 PyErr_SetRaisedException(primary);
                 primary = NULL;
-                type_mutation_close(&error);
+                Py_CLEAR(error);
                 primary = PyErr_GetRaisedException();
             }
             break;
@@ -8061,7 +8055,7 @@ clear_static_tp_subclasses(PyTypeObject *type, int isbuiltin)
             // All static builtin subtypes should have been finalized already.
             assert(!isbuiltin || !(subclass->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN));
             PyObject *owner = (PyObject *)subclass;
-            type_mutation_close(&owner);
+            Py_CLEAR(owner);
         }
     }
     PyObject *diagnostic_error = PyErr_GetRaisedException();
@@ -8071,7 +8065,7 @@ clear_static_tp_subclasses(PyTypeObject *type, int isbuiltin)
     else if (diagnostic_error != NULL) {
         PyErr_SetRaisedException(primary);
         primary = NULL;
-        type_mutation_close(&diagnostic_error);
+        Py_CLEAR(diagnostic_error);
         primary = PyErr_GetRaisedException();
     }
 #else
@@ -8087,11 +8081,11 @@ clear_static_tp_subclasses(PyTypeObject *type, int isbuiltin)
     else if (clear_error != NULL) {
         PyErr_SetRaisedException(primary);
         primary = NULL;
-        type_mutation_close(&clear_error);
+        Py_CLEAR(clear_error);
         primary = PyErr_GetRaisedException();
     }
     PyErr_SetRaisedException(primary);
-    type_mutation_close(&subclasses);
+    Py_CLEAR(subclasses);
 }
 
 static void
@@ -9173,8 +9167,8 @@ object_getstate_default(PyObject *obj, int required)
         PyErr_Format(PyExc_TypeError,
                      "cannot pickle %.200s objects",
                      type_name);
-        type_mutation_close(&diagnostic_name);
-        type_mutation_close(&diagnostic_type);
+        Py_CLEAR(diagnostic_name);
+        Py_CLEAR(diagnostic_type);
         goto done;
     }
 
@@ -9190,7 +9184,7 @@ object_getstate_default(PyObject *obj, int required)
 
     selected_type = Py_NewRef((PyObject *)Py_TYPE(obj));
     slotnames = _PyType_GetSlotNames((PyTypeObject *)selected_type);
-    type_mutation_close(&selected_type);
+    Py_CLEAR(selected_type);
     if (slotnames == NULL || PyErr_Occurred()) {
         goto done;
     }
@@ -9210,8 +9204,8 @@ object_getstate_default(PyObject *obj, int required)
             basicsize += sizeof(PyObject *) * PyList_GET_SIZE(slotnames);
         }
         if (Py_TYPE(obj)->tp_basicsize > basicsize) {
-            type_mutation_close(&slotnames);
-            type_mutation_close(&state);
+            Py_CLEAR(slotnames);
+            Py_CLEAR(state);
             if (PyErr_Occurred()) {
                 goto done;
             }
@@ -9224,8 +9218,8 @@ object_getstate_default(PyObject *obj, int required)
             PyErr_Format(PyExc_TypeError,
                          "cannot pickle '%.200s' object",
                          type_name);
-            type_mutation_close(&diagnostic_name);
-            type_mutation_close(&diagnostic_type);
+            Py_CLEAR(diagnostic_name);
+            Py_CLEAR(diagnostic_type);
             goto done;
         }
     }
@@ -9257,8 +9251,8 @@ object_getstate_default(PyObject *obj, int required)
             PyErr_Format(PyExc_TypeError,
                          "attribute name must be string, not '%.200s'",
                          type_name);
-            type_mutation_close(&diagnostic_name);
-            type_mutation_close(&diagnostic_type);
+            Py_CLEAR(diagnostic_name);
+            Py_CLEAR(diagnostic_type);
             goto done;
         }
         name = PyValue_AsKnownObjectSteal(name_value);
@@ -9266,17 +9260,17 @@ object_getstate_default(PyObject *obj, int required)
 
         int status = PyObject_GetOptionalAttr(obj, name, &value);
         if (status < 0 || PyErr_Occurred()) {
-            type_mutation_close(&name);
-            type_mutation_close(&value);
+            Py_CLEAR(name);
+            Py_CLEAR(value);
             goto done;
         }
         if (status == 0) {
-            type_mutation_close(&name);
+            Py_CLEAR(name);
         }
         else {
             int err = PyDict_SetItem(slots, name, value);
-            type_mutation_close(&name);
-            type_mutation_close(&value);
+            Py_CLEAR(name);
+            Py_CLEAR(value);
             if (err < 0 || PyErr_Occurred()) {
                 goto done;
             }
@@ -9293,7 +9287,7 @@ object_getstate_default(PyObject *obj, int required)
 
     if (PyDict_GET_SIZE(slots) > 0) {
         state2 = _PyTuple_FromPair(state, slots);
-        type_mutation_close(&state);
+        Py_CLEAR(state);
         if (state2 == NULL || PyErr_Occurred()) {
             goto done;
         }
@@ -9301,11 +9295,11 @@ object_getstate_default(PyObject *obj, int required)
         state2 = NULL;
     }
 
-    type_mutation_close(&slots);
+    Py_CLEAR(slots);
     if (PyErr_Occurred()) {
         goto done;
     }
-    type_mutation_close(&slotnames);
+    Py_CLEAR(slotnames);
     if (PyErr_Occurred()) {
         goto done;
     }
@@ -9314,17 +9308,17 @@ object_getstate_default(PyObject *obj, int required)
 
 done:
     PyValue_CLEAR(name_value);
-    type_mutation_close(&name);
-    type_mutation_close(&value);
-    type_mutation_close(&selected_type);
-    type_mutation_close(&diagnostic_name);
-    type_mutation_close(&diagnostic_type);
-    type_mutation_close(&slotnames);
-    type_mutation_close(&slots);
-    type_mutation_close(&state2);
-    type_mutation_close(&obj_owner);
+    Py_CLEAR(name);
+    Py_CLEAR(value);
+    Py_CLEAR(selected_type);
+    Py_CLEAR(diagnostic_name);
+    Py_CLEAR(diagnostic_type);
+    Py_CLEAR(slotnames);
+    Py_CLEAR(slots);
+    Py_CLEAR(state2);
+    Py_CLEAR(obj_owner);
     if (rc < 0 || PyErr_Occurred()) {
-        type_mutation_close(&state);
+        Py_CLEAR(state);
         return NULL;
     }
     return state;
@@ -9413,7 +9407,7 @@ _PyObject_GetNewArguments(PyObject *obj, PyObject **args, PyObject **kwargs)
     }
 
     outer = _PyObject_CallNoArgs(method);
-    type_mutation_close(&method);
+    Py_CLEAR(method);
     if (outer == NULL || PyErr_Occurred()) {
         goto done;
     }
@@ -9428,8 +9422,8 @@ _PyObject_GetNewArguments(PyObject *obj, PyObject **args, PyObject **kwargs)
         PyErr_Format(PyExc_TypeError,
                      "__getnewargs_ex__ should return a tuple, "
                      "not '%.200s'", tp_name);
-        type_mutation_close(&diagnostic_name);
-        type_mutation_close(&diagnostic_type);
+        Py_CLEAR(diagnostic_name);
+        Py_CLEAR(diagnostic_type);
         goto done;
     }
     if (PyTuple_GET_SIZE(outer) != 2) {
@@ -9446,7 +9440,7 @@ _PyObject_GetNewArguments(PyObject *obj, PyObject **args, PyObject **kwargs)
     if (PyValue_IsNull(kwargs_value) || PyErr_Occurred()) {
         goto done;
     }
-    type_mutation_close(&outer);
+    Py_CLEAR(outer);
     if (PyErr_Occurred()) {
         goto done;
     }
@@ -9465,8 +9459,8 @@ _PyObject_GetNewArguments(PyObject *obj, PyObject **args, PyObject **kwargs)
                      "first item of the tuple returned by "
                      "__getnewargs_ex__ must be a tuple, not '%.200s'",
                      tp_name);
-        type_mutation_close(&diagnostic_name);
-        type_mutation_close(&diagnostic_type);
+        Py_CLEAR(diagnostic_name);
+        Py_CLEAR(diagnostic_type);
         goto done;
     }
     if (!PyValue_IsObject(kwargs_value) ||
@@ -9482,8 +9476,8 @@ _PyObject_GetNewArguments(PyObject *obj, PyObject **args, PyObject **kwargs)
                      "second item of the tuple returned by "
                      "__getnewargs_ex__ must be a dict, not '%.200s'",
                      tp_name);
-        type_mutation_close(&diagnostic_name);
-        type_mutation_close(&diagnostic_type);
+        Py_CLEAR(diagnostic_name);
+        Py_CLEAR(diagnostic_type);
         goto done;
     }
     local_args = PyValue_AsKnownObjectSteal(args_value);
@@ -9506,7 +9500,7 @@ fallback:
         goto done;
     }
     local_args = _PyObject_CallNoArgs(method);
-    type_mutation_close(&method);
+    Py_CLEAR(method);
     if (local_args == NULL || PyErr_Occurred()) {
         goto done;
     }
@@ -9521,24 +9515,24 @@ fallback:
         PyErr_Format(PyExc_TypeError,
                      "__getnewargs__ should return a tuple, "
                      "not '%.200s'", tp_name);
-        type_mutation_close(&diagnostic_name);
-        type_mutation_close(&diagnostic_type);
+        Py_CLEAR(diagnostic_name);
+        Py_CLEAR(diagnostic_type);
         goto done;
     }
     rc = 0;
 
 done:
-    type_mutation_close(&method);
-    type_mutation_close(&outer);
+    Py_CLEAR(method);
+    Py_CLEAR(outer);
     PyValue_CLEAR(args_value);
     PyValue_CLEAR(kwargs_value);
-    type_mutation_close(&diagnostic_name);
-    type_mutation_close(&diagnostic_type);
-    type_mutation_close(&obj_owner);
+    Py_CLEAR(diagnostic_name);
+    Py_CLEAR(diagnostic_type);
+    Py_CLEAR(obj_owner);
 
     if (rc < 0 || PyErr_Occurred()) {
-        type_mutation_close(&local_args);
-        type_mutation_close(&local_kwargs);
+        Py_CLEAR(local_args);
+        Py_CLEAR(local_kwargs);
         return -1;
     }
     *args = local_args;
@@ -9623,8 +9617,8 @@ reduce_newobj(PyObject *obj)
         PyErr_Format(PyExc_TypeError,
                      "cannot pickle '%.200s' object",
                      tp_name);
-        type_mutation_close(&diagnostic_name);
-        type_mutation_close(&diagnostic_type);
+        Py_CLEAR(diagnostic_name);
+        Py_CLEAR(diagnostic_type);
         goto done;
     }
     if (_PyObject_GetNewArguments(obj, &args, &kwargs) < 0 ||
@@ -9640,12 +9634,12 @@ reduce_newobj(PyObject *obj)
     if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
         Py_ssize_t i, n;
 
-        type_mutation_close(&kwargs);
+        Py_CLEAR(kwargs);
         if (PyErr_Occurred()) {
             goto done;
         }
         newobj = PyObject_GetAttr(copyreg, &_Py_ID(__newobj__));
-        type_mutation_close(&copyreg);
+        Py_CLEAR(copyreg);
         if (newobj == NULL || PyErr_Occurred()) {
             goto done;
         }
@@ -9664,7 +9658,7 @@ reduce_newobj(PyObject *obj)
             PyTuple_SET_VALUE(newargs, i + 1, item_value);
             item_value = PyValue_NULL;
         }
-        type_mutation_close(&args);
+        Py_CLEAR(args);
         if (PyErr_Occurred()) {
             goto done;
         }
@@ -9672,23 +9666,23 @@ reduce_newobj(PyObject *obj)
     }
     else if (args != NULL) {
         newobj = PyObject_GetAttr(copyreg, &_Py_ID(__newobj_ex__));
-        type_mutation_close(&copyreg);
+        Py_CLEAR(copyreg);
         if (newobj == NULL || PyErr_Occurred()) {
             goto done;
         }
         class_owner = Py_NewRef((PyObject *)Py_TYPE(obj));
         newargs = PyTuple_Pack(3, class_owner, args, kwargs);
-        type_mutation_close(&args);
-        type_mutation_close(&kwargs);
-        type_mutation_close(&class_owner);
+        Py_CLEAR(args);
+        Py_CLEAR(kwargs);
+        Py_CLEAR(class_owner);
         if (newargs == NULL || PyErr_Occurred()) {
             goto done;
         }
         goto state_phase;
     }
     else {
-        type_mutation_close(&copyreg);
-        type_mutation_close(&kwargs);
+        Py_CLEAR(copyreg);
+        Py_CLEAR(kwargs);
         if (PyErr_Occurred()) {
             goto done;
         }
@@ -9714,20 +9708,20 @@ state_phase:
 
 done:
     PyValue_CLEAR(item_value);
-    type_mutation_close(&args);
-    type_mutation_close(&kwargs);
-    type_mutation_close(&copyreg);
-    type_mutation_close(&class_owner);
-    type_mutation_close(&diagnostic_name);
-    type_mutation_close(&diagnostic_type);
-    type_mutation_close(&newobj);
-    type_mutation_close(&newargs);
-    type_mutation_close(&state);
-    type_mutation_close(&listitems);
-    type_mutation_close(&dictitems);
-    type_mutation_close(&obj_owner);
+    Py_CLEAR(args);
+    Py_CLEAR(kwargs);
+    Py_CLEAR(copyreg);
+    Py_CLEAR(class_owner);
+    Py_CLEAR(diagnostic_name);
+    Py_CLEAR(diagnostic_type);
+    Py_CLEAR(newobj);
+    Py_CLEAR(newargs);
+    Py_CLEAR(state);
+    Py_CLEAR(listitems);
+    Py_CLEAR(dictitems);
+    Py_CLEAR(obj_owner);
     if (rc < 0 || PyErr_Occurred()) {
-        type_mutation_close(&result);
+        Py_CLEAR(result);
         return NULL;
     }
     return result;
@@ -10702,8 +10696,8 @@ type_ready_mro(PyTypeObject *type, int initial)
                              "type '%.100s' is not dynamically allocated but "
                              "its base type '%.100s' is dynamically allocated",
                              type->tp_name, base_name);
-                type_mutation_close(&name_owner);
-                type_mutation_close(&base_owner);
+                Py_CLEAR(name_owner);
+                Py_CLEAR(base_owner);
                 return -1;
             }
             assert(!(type->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN) ||
@@ -10797,8 +10791,8 @@ type_ready_inherit(PyTypeObject *type)
     }
     result = 0;
 done:
-    type_mutation_close(&mro);
-    type_mutation_close(&base_owner);
+    Py_CLEAR(mro);
+    Py_CLEAR(base_owner);
     return PyErr_Occurred() ? -1 : result;
 }
 
@@ -10857,7 +10851,7 @@ type_ready_add_subclasses(PyTypeObject *type)
     }
     result = 0;
 done:
-    type_mutation_close(&bases);
+    Py_CLEAR(bases);
     return PyErr_Occurred() ? -1 : result;
 }
 
@@ -11231,8 +11225,8 @@ add_subclass(PyTypeObject *base, PyTypeObject *type)
     result = PyDict_SetItem(subclasses, key, ref);
 
 done:
-    type_mutation_close(&ref);
-    type_mutation_close(&key);
+    Py_CLEAR(ref);
+    Py_CLEAR(key);
     if (result == 0 && !PyErr_Occurred() &&
             lookup_tp_subclasses(base) != subclasses) {
         PyErr_SetString(PyExc_RuntimeError,
@@ -11240,7 +11234,7 @@ done:
     }
     /* On successful revalidation the installed slot keeps this close
      * nonfinal. An error path may retire a detached map instead. */
-    type_mutation_close(&subclasses);
+    Py_CLEAR(subclasses);
     Py_DECREF(type);
     Py_DECREF(base);
     return PyErr_Occurred() ? -1 : result;
@@ -11266,7 +11260,7 @@ add_all_subclasses(PyTypeObject *type, PyObject *bases)
         }
     }
 done:
-    type_mutation_close(&owner);
+    Py_CLEAR(owner);
     return PyErr_Occurred() ? -1 : result;
 }
 
@@ -11283,7 +11277,7 @@ get_subclasses_key(PyTypeObject *type, PyTypeObject *base, PyValue *result)
             *result = PyValue_PrepareOwned(key);
             key = NULL;
         }
-        type_mutation_close(&key);
+        Py_CLEAR(key);
         if (!PyErr_Occurred()) {
             return 1;
         }
@@ -11362,7 +11356,7 @@ remove_subclass(PyTypeObject *base, PyTypeObject *type)
 done:
     PyValue_XCLOSE(ref);
     PyValue_XCLOSE(key);
-    type_mutation_close(&subclasses);
+    Py_CLEAR(subclasses);
     Py_DECREF(base);
     _PyValue_RestoreException(primary);
 }
@@ -11381,7 +11375,7 @@ remove_all_subclasses(PyTypeObject *type, PyObject *bases)
             }
         }
     }
-    type_mutation_close(&owner);
+    Py_CLEAR(owner);
 }
 
 static int
@@ -11481,11 +11475,11 @@ wrap_binaryfunc(PyObject *self, PyObject *args, void *wrapped)
     result = (*func)(receiver, other);
 
 done:
-    type_mutation_close(&other);
-    type_mutation_close(&tuple);
-    type_mutation_close(&receiver);
+    Py_CLEAR(other);
+    Py_CLEAR(tuple);
+    Py_CLEAR(receiver);
     if (PyErr_Occurred()) {
-        type_mutation_close(&result);
+        Py_CLEAR(result);
     }
     return result;
 }
@@ -11514,11 +11508,11 @@ wrap_binaryfunc_l(PyObject *self, PyObject *args, void *wrapped)
     result = (*func)(receiver, other);
 
 done:
-    type_mutation_close(&other);
-    type_mutation_close(&tuple);
-    type_mutation_close(&receiver);
+    Py_CLEAR(other);
+    Py_CLEAR(tuple);
+    Py_CLEAR(receiver);
     if (PyErr_Occurred()) {
-        type_mutation_close(&result);
+        Py_CLEAR(result);
     }
     return result;
 }
@@ -11547,11 +11541,11 @@ wrap_binaryfunc_r(PyObject *self, PyObject *args, void *wrapped)
     result = (*func)(other, receiver);
 
 done:
-    type_mutation_close(&other);
-    type_mutation_close(&tuple);
-    type_mutation_close(&receiver);
+    Py_CLEAR(other);
+    Py_CLEAR(tuple);
+    Py_CLEAR(receiver);
     if (PyErr_Occurred()) {
-        type_mutation_close(&result);
+        Py_CLEAR(result);
     }
     return result;
 }
@@ -11593,12 +11587,12 @@ wrap_ternaryfunc(PyObject *self, PyObject *args, void *wrapped)
     result = (*func)(receiver, other, third);
 
 done:
-    type_mutation_close(&third_owner);
-    type_mutation_close(&other);
-    type_mutation_close(&tuple);
-    type_mutation_close(&receiver);
+    Py_CLEAR(third_owner);
+    Py_CLEAR(other);
+    Py_CLEAR(tuple);
+    Py_CLEAR(receiver);
     if (PyErr_Occurred()) {
-        type_mutation_close(&result);
+        Py_CLEAR(result);
     }
     return result;
 }
@@ -11640,12 +11634,12 @@ wrap_ternaryfunc_r(PyObject *self, PyObject *args, void *wrapped)
     result = (*func)(other, receiver, third);
 
 done:
-    type_mutation_close(&third_owner);
-    type_mutation_close(&other);
-    type_mutation_close(&tuple);
-    type_mutation_close(&receiver);
+    Py_CLEAR(third_owner);
+    Py_CLEAR(other);
+    Py_CLEAR(tuple);
+    Py_CLEAR(receiver);
     if (PyErr_Occurred()) {
-        type_mutation_close(&result);
+        Py_CLEAR(result);
     }
     return result;
 }
@@ -11689,11 +11683,11 @@ wrap_indexargfunc(PyObject *self, PyObject *args, void *wrapped)
     result = (*func)(receiver, i);
 
 done:
-    type_mutation_close(&operand);
-    type_mutation_close(&tuple);
-    type_mutation_close(&receiver);
+    Py_CLEAR(operand);
+    Py_CLEAR(tuple);
+    Py_CLEAR(receiver);
     if (PyErr_Occurred()) {
-        type_mutation_close(&result);
+        Py_CLEAR(result);
     }
     return result;
 }
@@ -11751,11 +11745,11 @@ wrap_sq_item(PyObject *self, PyObject *args, void *wrapped)
     assert(PyErr_Occurred());
 
 done:
-    type_mutation_close(&operand);
-    type_mutation_close(&tuple);
-    type_mutation_close(&receiver);
+    Py_CLEAR(operand);
+    Py_CLEAR(tuple);
+    Py_CLEAR(receiver);
     if (PyErr_Occurred()) {
-        type_mutation_close(&result);
+        Py_CLEAR(result);
     }
     return result;
 }
@@ -11812,11 +11806,11 @@ wrap_sq_delitem(PyObject *self, PyObject *args, void *wrapped)
     result = Py_NewRef(Py_None);
 
 done:
-    type_mutation_close(&operand);
-    type_mutation_close(&tuple);
-    type_mutation_close(&receiver);
+    Py_CLEAR(operand);
+    Py_CLEAR(tuple);
+    Py_CLEAR(receiver);
     if (PyErr_Occurred()) {
-        type_mutation_close(&result);
+        Py_CLEAR(result);
     }
     return result;
 }
@@ -11851,11 +11845,11 @@ wrap_objobjproc(PyObject *self, PyObject *args, void *wrapped)
     result = PyBool_FromLong((long)res);
 
 done:
-    type_mutation_close(&operand);
-    type_mutation_close(&tuple);
-    type_mutation_close(&receiver);
+    Py_CLEAR(operand);
+    Py_CLEAR(tuple);
+    Py_CLEAR(receiver);
     if (PyErr_Occurred()) {
-        type_mutation_close(&result);
+        Py_CLEAR(result);
     }
     return result;
 }
@@ -11903,11 +11897,11 @@ wrap_delitem(PyObject *self, PyObject *args, void *wrapped)
     result = Py_NewRef(Py_None);
 
 done:
-    type_mutation_close(&operand);
-    type_mutation_close(&tuple);
-    type_mutation_close(&receiver);
+    Py_CLEAR(operand);
+    Py_CLEAR(tuple);
+    Py_CLEAR(receiver);
     if (PyErr_Occurred()) {
-        type_mutation_close(&result);
+        Py_CLEAR(result);
     }
     return result;
 }
@@ -11965,8 +11959,8 @@ hackcheck_unlocked(PyObject *self, setattrofunc func, const char *what)
             PyErr_Format(PyExc_TypeError,
                          "can't apply this %s to %s object",
                          what, type_name);
-            type_mutation_close(&name_owner);
-            type_mutation_close(&type_owner);
+            Py_CLEAR(name_owner);
+            Py_CLEAR(type_owner);
             return 0;
         }
     }
@@ -12037,11 +12031,11 @@ wrap_delattr(PyObject *self, PyObject *args, void *wrapped)
     result = Py_NewRef(Py_None);
 
 done:
-    type_mutation_close(&name);
-    type_mutation_close(&tuple);
-    type_mutation_close(&receiver);
+    Py_CLEAR(name);
+    Py_CLEAR(tuple);
+    Py_CLEAR(receiver);
     if (PyErr_Occurred()) {
-        type_mutation_close(&result);
+        Py_CLEAR(result);
     }
     return result;
 }
@@ -12104,11 +12098,11 @@ wrap_richcmpfunc(PyObject *self, PyObject *args, void *wrapped, int op)
     result = (*func)(receiver, other, op);
 
 done:
-    type_mutation_close(&other);
-    type_mutation_close(&tuple);
-    type_mutation_close(&receiver);
+    Py_CLEAR(other);
+    Py_CLEAR(tuple);
+    Py_CLEAR(receiver);
     if (PyErr_Occurred()) {
-        type_mutation_close(&result);
+        Py_CLEAR(result);
     }
     return result;
 }
@@ -12207,11 +12201,11 @@ wrap_descr_delete(PyObject *self, PyObject *args, void *wrapped)
     result = Py_NewRef(Py_None);
 
 done:
-    type_mutation_close(&operand);
-    type_mutation_close(&tuple);
-    type_mutation_close(&receiver);
+    Py_CLEAR(operand);
+    Py_CLEAR(tuple);
+    Py_CLEAR(receiver);
     if (PyErr_Occurred()) {
-        type_mutation_close(&result);
+        Py_CLEAR(result);
     }
     return result;
 }
@@ -12980,7 +12974,7 @@ has_dunder_getitem(PyObject *self)
         cref.ref = PyValue_NULL;
         PyValue_XCLOSE(retired);
     }
-    type_mutation_close(&self_owner);
+    Py_CLEAR(self_owner);
     if (PyErr_Occurred()) {
         return -1;
     }
@@ -13030,11 +13024,11 @@ not_iterable:
         type_name);
 
 done:
-    type_mutation_close(&diagnostic_name);
-    type_mutation_close(&diagnostic_type);
-    type_mutation_close(&self_owner);
+    Py_CLEAR(diagnostic_name);
+    Py_CLEAR(diagnostic_type);
+    Py_CLEAR(self_owner);
     if (PyErr_Occurred()) {
-        type_mutation_close(&result);
+        Py_CLEAR(result);
         return NULL;
     }
     return result;
@@ -13084,13 +13078,13 @@ slot_tp_descr_get(PyObject *self, PyObject *obj, PyObject *type)
         type_owner != NULL ? type_owner : Py_None};
     result = PyObject_Vectorcall(get, stack, 3, NULL);
 done:
-    type_mutation_close(&get);
-    type_mutation_close(&receiver_type_owner);
-    type_mutation_close(&type_owner);
-    type_mutation_close(&obj_owner);
-    type_mutation_close(&self_owner);
+    Py_CLEAR(get);
+    Py_CLEAR(receiver_type_owner);
+    Py_CLEAR(type_owner);
+    Py_CLEAR(obj_owner);
+    Py_CLEAR(self_owner);
     if (PyErr_Occurred()) {
-        type_mutation_close(&result);
+        Py_CLEAR(result);
     }
     return result;
 }
@@ -13151,12 +13145,12 @@ slot_tp_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     result = _PyObject_Call_Prepend(_PyThreadState_GET(), func,
                                   type_owner, args_owner, kwds_owner);
 done:
-    type_mutation_close(&func);
-    type_mutation_close(&kwds_owner);
-    type_mutation_close(&args_owner);
-    type_mutation_close(&type_owner);
+    Py_CLEAR(func);
+    Py_CLEAR(kwds_owner);
+    Py_CLEAR(args_owner);
+    Py_CLEAR(type_owner);
     if (PyErr_Occurred()) {
-        type_mutation_close(&result);
+        Py_CLEAR(result);
     }
     return result;
 }
@@ -13181,7 +13175,7 @@ slot_tp_finalize(PyObject *self)
     else {
         report_owner = Py_NewRef(self_owner);
     }
-    type_mutation_close(&result);
+    Py_CLEAR(result);
     {
         PyValue retired = _PyThreadState_PopCValueSteal(tstate, &cref);
         cref.ref = PyValue_NULL;
@@ -13191,8 +13185,8 @@ slot_tp_finalize(PyObject *self)
         PyErr_FormatUnraisable("Exception ignored while "
                                "calling deallocator %R", report_owner);
     }
-    type_mutation_close(&report_owner);
-    type_mutation_close(&self_owner);
+    Py_CLEAR(report_owner);
+    Py_CLEAR(self_owner);
     if (PyErr_Occurred()) {
         /* Original caller/live or temporary-resurrection owner still roots self. */
         PyErr_FormatUnraisable("Exception ignored while "
@@ -14198,7 +14192,7 @@ _PyType_InitSlotDefs(PyInterpreterState *interp)
         data[0] += 1;
         assert(data[0] < MAX_EQUIV);
         data[data[0]] = (uint8_t)idx;
-        type_mutation_close(&bytearray);
+        Py_CLEAR(bytearray);
         if (PyErr_Occurred()) {
             goto done;
         }
@@ -14234,11 +14228,11 @@ done:
     if (!PyValue_IsNull(value)) {
         PyValue_CLEAR(value);
     }
-    type_mutation_close(&bytearray);
+    Py_CLEAR(bytearray);
     if (PyErr_Occurred()) {
         result = -1;
     }
-    type_mutation_close(&cache);
+    Py_CLEAR(cache);
     if (PyErr_Occurred()) {
         result = -1;
     }
@@ -14302,8 +14296,8 @@ type_new_set_names(PyTypeObject *type)
             if (PyErr_Occurred()) {
                 goto done;
             }
-            type_mutation_close(&value);
-            type_mutation_close(&key);
+            Py_CLEAR(value);
+            Py_CLEAR(key);
             if (PyErr_Occurred()) {
                 goto done;
             }
@@ -14314,9 +14308,9 @@ type_new_set_names(PyTypeObject *type)
         }
         res = PyObject_CallFunctionObjArgs(set_name, type, key, NULL);
         int call_failed = res == NULL || PyErr_Occurred();
-        type_mutation_close(&set_name);
+        Py_CLEAR(set_name);
         if (call_failed) {
-            type_mutation_close(&res);
+            Py_CLEAR(res);
             value_type_owner = Py_NewRef((PyObject *)Py_TYPE(value));
             if (_PyType_HasFeature(Py_TYPE(value), Py_TPFLAGS_HEAPTYPE)) {
                 value_name_owner = Py_NewRef(((PyHeapTypeObject *)Py_TYPE(value))->ht_name);
@@ -14330,21 +14324,21 @@ type_new_set_names(PyTypeObject *type)
                 "Error calling __set_name__ on '%.100s' instance %R "
                 "in '%.100s'",
                 value_type_name, key, receiver_type_name);
-            type_mutation_close(&type_name_owner);
-            type_mutation_close(&value_name_owner);
-            type_mutation_close(&value_type_owner);
+            Py_CLEAR(type_name_owner);
+            Py_CLEAR(value_name_owner);
+            Py_CLEAR(value_type_owner);
             goto done;
         }
         if (PyErr_Occurred()) {
-            type_mutation_close(&res);
+            Py_CLEAR(res);
             goto done;
         }
-        type_mutation_close(&res);
+        Py_CLEAR(res);
         if (PyErr_Occurred()) {
             goto done;
         }
-        type_mutation_close(&value);
-        type_mutation_close(&key);
+        Py_CLEAR(value);
+        Py_CLEAR(key);
         if (PyErr_Occurred()) {
             goto done;
         }
@@ -14355,16 +14349,16 @@ type_new_set_names(PyTypeObject *type)
     result = 0;
 
 done:
-    type_mutation_close(&res);
-    type_mutation_close(&set_name);
-    type_mutation_close(&value);
-    type_mutation_close(&key);
-    type_mutation_close(&value_type_owner);
-    type_mutation_close(&value_name_owner);
-    type_mutation_close(&type_name_owner);
-    type_mutation_close(&names_to_set);
-    type_mutation_close(&source);
-    type_mutation_close(&type_owner);
+    Py_CLEAR(res);
+    Py_CLEAR(set_name);
+    Py_CLEAR(value);
+    Py_CLEAR(key);
+    Py_CLEAR(value_type_owner);
+    Py_CLEAR(value_name_owner);
+    Py_CLEAR(type_name_owner);
+    Py_CLEAR(names_to_set);
+    Py_CLEAR(source);
+    Py_CLEAR(type_owner);
     if (PyErr_Occurred()) {
         result = -1;
     }
@@ -14438,7 +14432,7 @@ recurse_down_subclasses(PyTypeObject *type, PyObject *attr_name,
         if (dict != NULL && PyDict_Check(dict)) {
             contains = PyDict_Contains(dict, attr_name);
         }
-        type_mutation_close(&dict);
+        Py_CLEAR(dict);
         if (contains < 0 || PyErr_Occurred()) {
             goto done;
         }
@@ -14450,8 +14444,8 @@ recurse_down_subclasses(PyTypeObject *type, PyObject *attr_name,
     }
     result = 0;
 done:
-    type_mutation_close(&dict);
-    type_mutation_close(&children);
+    Py_CLEAR(dict);
+    Py_CLEAR(children);
     return PyErr_Occurred() ? -1 : result;
 }
 
@@ -14673,12 +14667,12 @@ _PySuper_LookupDescr(PyTypeObject *su_type, PyTypeObject *su_obj_type, PyObject 
                 PyObject *dict_owner = Py_XNewRef(lookup_tp_dict((PyTypeObject *)obj));
                 assert(dict_owner != NULL && PyDict_Check(dict_owner));
                 if (PyErr_Occurred()) {
-                    type_mutation_close(&dict_owner);
+                    Py_CLEAR(dict_owner);
                     break;
                 }
                 result = PyDict_GetItemRef(dict_owner, name_owner, &res);
                 int failed = PyErr_Occurred() || result < 0;
-                type_mutation_close(&dict_owner);
+                Py_CLEAR(dict_owner);
                 if (failed || PyErr_Occurred()) {
                     break;
                 }
@@ -14689,12 +14683,12 @@ _PySuper_LookupDescr(PyTypeObject *su_type, PyTypeObject *su_obj_type, PyObject 
         }
     }
 
-    type_mutation_close(&name_owner);
-    type_mutation_close(&su_obj_type_owner);
-    type_mutation_close(&su_type_owner);
-    type_mutation_close(&mro_owner);
+    Py_CLEAR(name_owner);
+    Py_CLEAR(su_obj_type_owner);
+    Py_CLEAR(su_type_owner);
+    Py_CLEAR(mro_owner);
     if (PyErr_Occurred()) {
-        type_mutation_close(&res);
+        Py_CLEAR(res);
         return NULL;
     }
     return result > 0 ? res : NULL;
@@ -14983,12 +14977,12 @@ super_init_without_args(_PyInterpreterFrame *cframe, PyTypeObject **type_p,
     result = 0;
 
 cleanup:
-    type_mutation_close(&error_name_owner);
-    type_mutation_close(&error_type_owner);
-    type_mutation_close(&co_owner);
+    Py_CLEAR(error_name_owner);
+    Py_CLEAR(error_type_owner);
+    Py_CLEAR(co_owner);
     if (result < 0 || PyErr_Occurred()) {
-        type_mutation_close(&type_owner);
-        type_mutation_close(&firstarg);
+        Py_CLEAR(type_owner);
+        Py_CLEAR(firstarg);
         return -1;
     }
     *type_p = (PyTypeObject *)type_owner;

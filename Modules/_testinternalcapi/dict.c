@@ -5,12 +5,6 @@
 #include "pycore_value.h"
 
 
-static void
-dict_fixture_close(PyObject *object)
-{
-    Py_XDECREF(object);
-}
-
 static PyObject *
 dict_value_seed(PyObject *Py_UNUSED(module), PyObject *key)
 {
@@ -22,7 +16,7 @@ dict_value_seed(PyObject *Py_UNUSED(module), PyObject *key)
     }
     if (_PyDict_SetValue_Take2((PyDictObject *)dict, owned_key,
                               PyValue_FromInt32(INT32_MAX)) < 0) {
-        dict_fixture_close(dict);
+        Py_XDECREF(dict);
         return NULL;
     }
     return dict;
@@ -76,7 +70,7 @@ dict_value_pop_boxing_oom(PyObject *module, PyObject *key)
     Py_hash_t hash = PyObject_Hash(key);
     if (hash == -1 || PyErr_Occurred()) {
         PyValue_CLOSE(query);
-        dict_fixture_close(dict);
+        Py_XDECREF(dict);
         return NULL;
     }
     DictBoxFailure failure = {0};
@@ -93,7 +87,7 @@ dict_value_pop_boxing_oom(PyObject *module, PyObject *key)
     int valid = failure.called == 1 && status == -1 && result == NULL &&
                 PyErr_ExceptionMatches(PyExc_MemoryError);
     PyErr_Clear();
-    dict_fixture_close(result);
+    Py_XDECREF(result);
     PyValue found = PyValue_NULL;
     status = _PyDict_GetValue_KnownHash(dict, query, hash, &found);
     valid = valid && status == 1 && PyValue_IsInlineInt(found) &&
@@ -105,9 +99,9 @@ dict_value_pop_boxing_oom(PyObject *module, PyObject *key)
         valid = status == 1 && result != NULL &&
                 PyLong_AsLong(result) == INT32_MAX && PyDict_GET_SIZE(dict) == 0;
     }
-    dict_fixture_close(result);
+    Py_XDECREF(result);
     PyValue_CLOSE(query);
-    dict_fixture_close(dict);
+    Py_XDECREF(dict);
     if (!valid || PyErr_Occurred()) {
         if (!PyErr_Occurred()) {
             PyErr_SetString(PyExc_AssertionError,
@@ -142,8 +136,8 @@ dict_value_delete_if(PyObject *module, PyObject *args)
             status = _PyDict_DelItemIf(dict, key, dict_always_delete, NULL);
         }
     }
-    dict_fixture_close(key);
-    dict_fixture_close(dict);
+    Py_XDECREF(key);
+    Py_XDECREF(dict);
     return status < 0 || PyErr_Occurred() ? NULL : PyLong_FromLong(status);
 }
 
@@ -234,10 +228,10 @@ dict_value_merge_mode(PyObject *module, PyObject *args)
     if (status == -2 && !PyErr_Occurred()) {
         PyErr_SetObject(PyExc_KeyError, duplicate);
     }
-    dict_fixture_close(duplicate);
-    dict_fixture_close(mode_object);
-    dict_fixture_close(input);
-    dict_fixture_close(target);
+    Py_XDECREF(duplicate);
+    Py_XDECREF(mode_object);
+    Py_XDECREF(input);
+    Py_XDECREF(target);
     if (status < 0 || PyErr_Occurred()) {
         return NULL;
     }
@@ -257,7 +251,7 @@ dict_value_setdefault_boxing_oom(PyObject *module, PyObject *key)
     }
     Py_hash_t hash = PyObject_Hash(key);
     if (hash == -1 || PyErr_Occurred()) {
-        dict_fixture_close(dict);
+        Py_XDECREF(dict);
         return NULL;
     }
     DictBoxFailure failure = {0};
@@ -271,7 +265,7 @@ dict_value_setdefault_boxing_oom(PyObject *module, PyObject *key)
     int valid = status == -1 && result == NULL && failure.called == 1 &&
         PyErr_ExceptionMatches(PyExc_MemoryError);
     PyErr_Clear();
-    dict_fixture_close(result);
+    Py_XDECREF(result);
     result = NULL;
     PyValue found = PyValue_NULL;
     valid = valid && _PyDict_GetValue_KnownHash(dict,
@@ -282,8 +276,8 @@ dict_value_setdefault_boxing_oom(PyObject *module, PyObject *key)
         status = PyDict_SetDefaultRef(dict, key, Py_None, &result);
         valid = status == 1 && result != NULL && PyLong_AsLong(result) == INT32_MAX;
     }
-    dict_fixture_close(result);
-    dict_fixture_close(dict);
+    Py_XDECREF(result);
+    Py_XDECREF(dict);
     if (!valid || PyErr_Occurred()) {
         if (!PyErr_Occurred()) {
             PyErr_SetString(PyExc_AssertionError, "setdefault boxing OOM contract failed");
@@ -302,13 +296,13 @@ dict_value_clear_preserves_exception(PyObject *module, PyObject *instance)
     }
     PyDictValues *values = ((PyDictObject *)dict)->ma_values;
     if (values == NULL || !values->embedded) {
-        dict_fixture_close(dict);
+        Py_XDECREF(dict);
         PyErr_SetString(PyExc_AssertionError, "fixture needs materialized inline values");
         return NULL;
     }
     PyObject *primary = PyObject_CallFunction(PyExc_ValueError, "s", "preserved entry");
     if (primary == NULL) {
-        dict_fixture_close(dict);
+        Py_XDECREF(dict);
         return NULL;
     }
     DictStorageFailure state = {.size = dict_fixture_values_size(values)};
@@ -322,9 +316,9 @@ dict_value_clear_preserves_exception(PyObject *module, PyObject *instance)
     int valid = observed == primary && state.called == 1 &&
         PyDict_GET_SIZE(dict) == 0 && ((PyDictObject *)dict)->ma_values == NULL &&
         _PyObject_GetManagedDict(instance) == NULL;
-    dict_fixture_close(observed);
-    dict_fixture_close(primary);
-    dict_fixture_close(dict);
+    Py_XDECREF(observed);
+    Py_XDECREF(primary);
+    Py_XDECREF(dict);
     if (!valid || PyErr_Occurred()) {
         if (!PyErr_Occurred()) {
             PyErr_SetString(PyExc_AssertionError, "managed clear lost entry exception or valid empty state");
@@ -367,7 +361,7 @@ dict_value_getref_entry(PyObject *module, PyObject *args)
     if (report != NULL) {
         PyObject *status_object = PyLong_FromLong(status);
         if (status_object == NULL) {
-            dict_fixture_close(report);
+            Py_XDECREF(report);
             report = NULL;
             goto done;
         }
@@ -376,11 +370,11 @@ dict_value_getref_entry(PyObject *module, PyObject *args)
         PyTuple_SET_ITEM(report, 2, Py_NewRef(result != NULL ? result : Py_None));
     }
 done:
-    dict_fixture_close(result);
-    dict_fixture_close(observed);
-    dict_fixture_close(primary);
-    dict_fixture_close(key);
-    dict_fixture_close(dict);
+    Py_XDECREF(result);
+    Py_XDECREF(observed);
+    Py_XDECREF(primary);
+    Py_XDECREF(key);
+    Py_XDECREF(dict);
     return report;
 }
 
@@ -396,8 +390,8 @@ dict_value_getref_boxing_oom(PyObject *module, PyObject *key)
     PyObject *result = NULL;
     Py_hash_t hash = PyObject_Hash(key);
     if (dict == NULL || primary == NULL || hash == -1) {
-        dict_fixture_close(dict);
-        dict_fixture_close(primary);
+        Py_XDECREF(dict);
+        Py_XDECREF(primary);
         return NULL;
     }
     DictBoxFailure state = {0};
@@ -412,10 +406,10 @@ dict_value_getref_boxing_oom(PyObject *module, PyObject *key)
     int valid = state.called == 1 && status == -1 && result == NULL &&
         observed != NULL && observed != primary &&
         PyObject_TypeCheck(observed, (PyTypeObject *)PyExc_MemoryError);
-    dict_fixture_close(observed);
-    dict_fixture_close(result);
-    dict_fixture_close(primary);
-    dict_fixture_close(dict);
+    Py_XDECREF(observed);
+    Py_XDECREF(result);
+    Py_XDECREF(primary);
+    Py_XDECREF(dict);
     if (!valid || PyErr_Occurred()) {
         if (!PyErr_Occurred()) {
             PyErr_SetString(PyExc_AssertionError, "new boxing failure lost to entry exception");
@@ -438,7 +432,7 @@ dict_iterator_boxing_oom(PyObject *module, PyObject *iterator)
     int valid = state.called == 1 && result == NULL &&
         PyErr_ExceptionMatches(PyExc_MemoryError);
     PyErr_Clear();
-    dict_fixture_close(result);
+    Py_XDECREF(result);
     if (!valid) {
         PyErr_SetString(PyExc_AssertionError, "iterator fixture did not reach boxing OOM");
         return NULL;
@@ -457,7 +451,7 @@ dict_iterator_prime_pair(PyObject *module, PyObject *iterator)
         return NULL;
     }
     Py_hash_t hash = PyObject_Hash(pair);
-    dict_fixture_close(pair);
+    Py_XDECREF(pair);
     if (hash == -1 || PyErr_Occurred()) {
         return NULL;
     }
@@ -474,14 +468,14 @@ dict_owned_entry(PyObject *module, PyObject *args)
     PyObject *dict = PyTuple_GetItemRef(args, 0);
     PyObject *position_object = PyTuple_GetItemRef(args, 1);
     if (dict == NULL || position_object == NULL) {
-        dict_fixture_close(dict);
-        dict_fixture_close(position_object);
+        Py_XDECREF(dict);
+        Py_XDECREF(position_object);
         return NULL;
     }
     Py_ssize_t position = PyLong_AsSsize_t(position_object);
-    dict_fixture_close(position_object);
+    Py_XDECREF(position_object);
     if (position == -1 && PyErr_Occurred()) {
-        dict_fixture_close(dict);
+        Py_XDECREF(dict);
         return NULL;
     }
     PyObject *key = NULL, *value = NULL;
@@ -493,9 +487,9 @@ dict_owned_entry(PyObject *module, PyObject *args)
                               key != NULL ? key : Py_None,
                               value != NULL ? value : Py_None, hash);
     }
-    dict_fixture_close(key);
-    dict_fixture_close(value);
-    dict_fixture_close(dict);
+    Py_XDECREF(key);
+    Py_XDECREF(value);
+    Py_XDECREF(dict);
     return report;
 }
 
@@ -506,7 +500,7 @@ dict_owned_entry_boxing_oom(PyObject *module, PyObject *Py_UNUSED(ignored))
     if (dict == NULL || _PyDict_SetValue_Take2((PyDictObject *)dict,
             PyValue_FromInt32(1), PyValue_FromInt32(INT32_MAX)) < 0)
     {
-        dict_fixture_close(dict);
+        Py_XDECREF(dict);
         return NULL;
     }
     DictBoxFailure state = {0};
@@ -521,8 +515,8 @@ dict_owned_entry_boxing_oom(PyObject *module, PyObject *Py_UNUSED(ignored))
     int valid = state.called == 1 && status == -1 && position == 0 &&
         key == NULL && value == NULL && PyErr_ExceptionMatches(PyExc_MemoryError);
     PyErr_Clear();
-    dict_fixture_close(key);
-    dict_fixture_close(value);
+    Py_XDECREF(key);
+    Py_XDECREF(value);
     key = value = NULL;
     if (valid) {
         status = PyDict_NextEntryRef(dict, &position, &key, &value);
@@ -530,9 +524,9 @@ dict_owned_entry_boxing_oom(PyObject *module, PyObject *Py_UNUSED(ignored))
             PyLong_AsLong(key) == 1 && PyLong_AsLong(value) == INT32_MAX &&
             PyDict_GET_SIZE(dict) == 1;
     }
-    dict_fixture_close(key);
-    dict_fixture_close(value);
-    dict_fixture_close(dict);
+    Py_XDECREF(key);
+    Py_XDECREF(value);
+    Py_XDECREF(dict);
     if (!valid || PyErr_Occurred()) {
         if (!PyErr_Occurred()) {
             PyErr_SetString(PyExc_AssertionError, "owned entry partial box rollback failed");
@@ -618,20 +612,20 @@ dict_owned_entry_final_pin(PyObject *module, PyObject *Py_UNUSED(ignored))
     }
     PyObject *capsule = PyCapsule_New(&state, "dict-entry-cursor", dict_entry_cursor_sentinel);
     if (capsule == NULL) {
-        dict_fixture_close(state.owner);
+        Py_XDECREF(state.owner);
         return NULL;
     }
     if (_PyDict_SetValue_Take2((PyDictObject *)state.owner, PyValue_FromInt32(1),
                               PyValue_FromInt32(INT32_MAX)) < 0)
     {
-        dict_fixture_close(capsule);
-        dict_fixture_close(state.owner);
+        Py_XDECREF(capsule);
+        Py_XDECREF(state.owner);
         return NULL;
     }
     if (_PyDict_SetValue_Take2((PyDictObject *)state.owner, PyValue_FromInt32(2),
                               PyValue_FromPyObjectSteal(capsule)) < 0)
     {
-        dict_fixture_close(state.owner);
+        Py_XDECREF(state.owner);
         return NULL;
     }
     PyMem_GetAllocator(PYMEM_DOMAIN_OBJ, &state.saved);
@@ -646,9 +640,9 @@ dict_owned_entry_final_pin(PyObject *module, PyObject *Py_UNUSED(ignored))
     int valid = state.called == 1 && state.owner == NULL && state.destroyed == 1 &&
         status == 1 && position == 99 && key != NULL && value != NULL &&
         PyLong_AsLong(key) == 1 && PyLong_AsLong(value) == INT32_MAX;
-    dict_fixture_close(state.owner);
-    dict_fixture_close(key);
-    dict_fixture_close(value);
+    Py_XDECREF(state.owner);
+    Py_XDECREF(key);
+    Py_XDECREF(value);
     if (!valid || PyErr_Occurred()) {
         if (!PyErr_Occurred()) {
             PyErr_SetString(PyExc_AssertionError, "owned entry changed cursor after final dict cleanup");
@@ -665,7 +659,7 @@ dict_owned_entry_contract(PyObject *module, PyObject *Py_UNUSED(ignored))
     if (dict == NULL || _PyDict_SetValue_Take2((PyDictObject *)dict,
             PyValue_FromInt32(1), PyValue_FromInt32(INT32_MAX)) < 0)
     {
-        dict_fixture_close(dict);
+        Py_XDECREF(dict);
         return NULL;
     }
     Py_ssize_t position = 0;
@@ -677,23 +671,23 @@ dict_owned_entry_contract(PyObject *module, PyObject *Py_UNUSED(ignored))
     status = PyDict_NextEntryRef(dict, &position, NULL, &output);
     valid = valid && status == 1 && output != NULL &&
         PyLong_AsLong(output) == INT32_MAX;
-    dict_fixture_close(output);
+    Py_XDECREF(output);
     output = Py_None;  /* Non-owning sentinel: end must overwrite it with NULL. */
     status = PyDict_NextEntryRef(dict, &position, NULL, &output);
     valid = valid && status == 0 && output == NULL;
     position = 0;
     PyObject *primary = PyObject_CallFunction(PyExc_ValueError, "s", "entry marker");
     if (primary == NULL) {
-        dict_fixture_close(dict);
+        Py_XDECREF(dict);
         return NULL;
     }
     PyErr_SetRaisedException(Py_NewRef(primary));
     status = PyDict_NextEntryRef(dict, &position, NULL, &output);
     PyObject *observed = PyErr_GetRaisedException();
     valid = valid && status == -1 && position == 0 && output == NULL && observed == primary;
-    dict_fixture_close(observed);
-    dict_fixture_close(primary);
-    dict_fixture_close(dict);
+    Py_XDECREF(observed);
+    Py_XDECREF(primary);
+    Py_XDECREF(dict);
     if (!valid || PyErr_Occurred()) {
         if (!PyErr_Occurred()) {
             PyErr_SetString(PyExc_AssertionError, "owned entry status/output contract failed");
@@ -771,22 +765,16 @@ dict_owned_migration(PyObject *module, PyObject *args)
         report = Py_BuildValue("iO", status, value != NULL ? value : Py_None);
     }
 done:
-    dict_fixture_close(value);
-    dict_fixture_close(fallback);
-    dict_fixture_close(key);
-    dict_fixture_close(dict);
-    dict_fixture_close(operation);
+    Py_XDECREF(value);
+    Py_XDECREF(fallback);
+    Py_XDECREF(key);
+    Py_XDECREF(dict);
+    Py_XDECREF(operation);
     if (PyErr_Occurred()) {
-        dict_fixture_close(report);
+        Py_XDECREF(report);
         return NULL;
     }
     return report;
-}
-
-static void
-dict_public_close_value(PyValue value)
-{
-    PyValue_XCLOSE(value);
 }
 
 static const char *
@@ -848,12 +836,12 @@ dict_public_value_read(PyObject *module, PyObject *const *args, Py_ssize_t nargs
     report = Py_BuildValue("iOs", status, object != NULL ? object : Py_None,
                            dict_public_value_kind(value));
 done:
-    dict_public_close_value(value);
-    dict_fixture_close(object);
-    dict_fixture_close(key);
-    dict_fixture_close(dict);
+    PyValue_XCLOSE(value);
+    Py_XDECREF(object);
+    Py_XDECREF(key);
+    Py_XDECREF(dict);
     if (PyErr_Occurred()) {
-        dict_fixture_close(report);
+        Py_XDECREF(report);
         return NULL;
     }
     return report;
@@ -904,13 +892,13 @@ dict_public_value_next(PyObject *module, PyObject *const *args, Py_ssize_t nargs
         value_object != NULL ? value_object : Py_None,
         dict_public_value_kind(key), dict_public_value_kind(value));
 done:
-    dict_public_close_value(value);
-    dict_public_close_value(key);
-    dict_fixture_close(value_object);
-    dict_fixture_close(key_object);
-    dict_fixture_close(dict);
+    PyValue_XCLOSE(value);
+    PyValue_XCLOSE(key);
+    Py_XDECREF(value_object);
+    Py_XDECREF(key_object);
+    Py_XDECREF(dict);
     if (PyErr_Occurred()) {
-        dict_fixture_close(report);
+        Py_XDECREF(report);
         return NULL;
     }
     return report;
@@ -956,10 +944,10 @@ dict_public_value_entry_error(PyObject *module, PyObject *const *args, Py_ssize_
     int valid = status == -1 && observed == primary && position == 0 &&
         (mode == 2 || PyValue_IsNull(first)) &&
         (mode != 3 || PyValue_IsNull(second));
-    dict_public_close_value(first);
-    dict_public_close_value(second);
-    dict_fixture_close(observed);
-    dict_fixture_close(primary);
+    PyValue_XCLOSE(first);
+    PyValue_XCLOSE(second);
+    Py_XDECREF(observed);
+    Py_XDECREF(primary);
     if (!valid || PyErr_Occurred()) {
         if (!PyErr_Occurred()) {
             PyErr_SetString(PyExc_AssertionError, "public dictionary entry error was changed");
@@ -1011,10 +999,10 @@ dict_public_value_retirement(PyObject *module, PyObject *const *args, Py_ssize_t
         report = Py_BuildValue("iO", status, object != NULL ? object : Py_None);
     }
 done:
-    dict_public_close_value(value);
-    dict_fixture_close(object);
+    PyValue_XCLOSE(value);
+    Py_XDECREF(object);
     if (PyErr_Occurred()) {
-        dict_fixture_close(report);
+        Py_XDECREF(report);
         return NULL;
     }
     return report;
@@ -1045,8 +1033,8 @@ dict_public_value_string_oom(PyObject *module, PyObject *const *args, Py_ssize_t
     if (valid) {
         PyErr_Clear();
     }
-    dict_public_close_value(output);
-    dict_fixture_close(dict);
+    PyValue_XCLOSE(output);
+    Py_XDECREF(dict);
     if (!valid || PyErr_Occurred()) {
         if (!PyErr_Occurred()) {
             PyErr_SetString(PyExc_AssertionError, "public string read OOM contract failed");

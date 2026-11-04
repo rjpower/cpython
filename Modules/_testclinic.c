@@ -2876,12 +2876,6 @@ owner_echo_impl(PyTypeObject *type, PyObject *value)
     return Py_NewRef(value);
 }
 
-static void
-owner_fixture_close(PyObject *object)
-{
-    Py_XDECREF(object);
-}
-
 /*[clinic input]
 @classmethod
 _testclinic.OwnerProbe.__new__ as owner_probe
@@ -2900,12 +2894,12 @@ owner_probe_impl(PyTypeObject *type, PyObject *value)
         return NULL;
     }
     if (PyErr_Occurred()) {
-        owner_fixture_close(callback);
+        Py_XDECREF(callback);
         return NULL;
     }
     PyObject *called = PyObject_CallNoArgs(callback);
-    owner_fixture_close(callback);
-    owner_fixture_close(called);
+    Py_XDECREF(callback);
+    Py_XDECREF(called);
     if (PyErr_Occurred()) {
         return NULL;
     }
@@ -2944,10 +2938,10 @@ owner_alias_impl(PyTypeObject *type, PyObject *context)
     }
     result = PyObject_VectorcallDict(target, NULL, 0, kwargs);
 done:
-    owner_fixture_close(kwargs);
-    owner_fixture_close(target);
+    Py_XDECREF(kwargs);
+    Py_XDECREF(target);
     if (PyErr_Occurred()) {
-        owner_fixture_close(result);
+        Py_XDECREF(result);
         return NULL;
     }
     return result;
@@ -3001,21 +2995,21 @@ positional_owner_probe(PyObject *value, int index, PyObject *tail)
     if (called == NULL || PyErr_Occurred()) {
         goto done;
     }
-    owner_fixture_close(called);
+    Py_XDECREF(called);
     called = NULL;
-    owner_fixture_close(number);
+    Py_XDECREF(number);
     number = NULL;
-    owner_fixture_close(callback);
+    Py_XDECREF(callback);
     callback = NULL;
     if (!PyErr_Occurred()) {
         result = PyObject_Repr(value);
     }
 done:
-    owner_fixture_close(called);
-    owner_fixture_close(number);
-    owner_fixture_close(callback);
+    Py_XDECREF(called);
+    Py_XDECREF(number);
+    Py_XDECREF(callback);
     if (PyErr_Occurred()) {
-        owner_fixture_close(result);
+        Py_XDECREF(result);
         return NULL;
     }
     return result;
@@ -3061,7 +3055,7 @@ positional_owner_init_impl(PyObject *self, PyObject *value, int index,
     if (result == NULL) {
         return -1;
     }
-    owner_fixture_close(result);
+    Py_XDECREF(result);
     return PyErr_Occurred() ? -1 : 0;
 }
 

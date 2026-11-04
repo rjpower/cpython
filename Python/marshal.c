@@ -651,13 +651,6 @@ w_complete(PyObject *v, WFILE *p)
     entry->value = (void *)w;
 }
 
-/* Serializer callbacks and allocator hooks can raise during owner retirement. */
-static void
-marshal_close_object(PyObject *object)
-{
-    Py_XDECREF(object);
-}
-
 static void
 w_complex_object(PyObject *v, WFILE *p);
 
@@ -800,12 +793,12 @@ w_complex_object(PyObject *v, WFILE *p)
         for (i = 0; i < n; i++) {
             PyObject *item = PyTuple_GetItemRef(v, i);
             if (item == NULL || PyErr_Occurred()) {
-                marshal_close_object(item);
+                Py_XDECREF(item);
                 p->error = true;
                 break;
             }
             w_object(item, p);
-            marshal_close_object(item);
+            Py_XDECREF(item);
             if (PyErr_Occurred()) {
                 p->error = true;
             }
@@ -822,12 +815,12 @@ w_complex_object(PyObject *v, WFILE *p)
         for (i = 0; i < n; i++) {
             PyObject *item = PyList_GetItemRef(v, i);
             if (item == NULL || PyErr_Occurred()) {
-                marshal_close_object(item);
+                Py_XDECREF(item);
                 p->error = true;
                 break;
             }
             w_object(item, p);
-            marshal_close_object(item);
+            Py_XDECREF(item);
             if (PyErr_Occurred()) {
                 p->error = true;
             }
@@ -864,8 +857,8 @@ w_complex_object(PyObject *v, WFILE *p)
                     w_object(value, p);
                 }
             }
-            marshal_close_object(value);
-            marshal_close_object(key);
+            Py_XDECREF(value);
+            Py_XDECREF(key);
             if (PyErr_Occurred()) {
                 p->error = true;
             }
@@ -972,8 +965,8 @@ w_complex_object(PyObject *v, WFILE *p)
             else {
                 p->error = true;
             }
-            marshal_close_object(value);
-            marshal_close_object(item);
+            Py_XDECREF(value);
+            Py_XDECREF(item);
             if (PyErr_Occurred()) {
                 p->error = true;
             }
@@ -981,7 +974,7 @@ w_complex_object(PyObject *v, WFILE *p)
                 break;
             }
         }
-        marshal_close_object(items);
+        Py_XDECREF(items);
         if (PyErr_Occurred()) {
             p->error = true;
         }
@@ -1483,13 +1476,13 @@ r_ref_insert(PyObject *o, Py_ssize_t idx, int flag, RFILE *p)
         return NULL;
     }
     if (PyErr_Occurred()) {
-        marshal_close_object(o);
+        Py_XDECREF(o);
         return NULL;
     }
     if (flag) { /* currently only FLAG_REF is defined */
         int status = PyList_SetItem(p->refs, idx, Py_NewRef(o));
         if (status < 0 || PyErr_Occurred()) {
-            marshal_close_object(o);
+            Py_XDECREF(o);
             return NULL;
         }
     }
@@ -2036,19 +2029,19 @@ r_object(RFILE *p)
                 PyErr_SetString(PyExc_TypeError,
                     "NULL object in marshal data for code object");
             }
-            marshal_close_object(code);
-            marshal_close_object(fbinit);
-            marshal_close_object(consts);
-            marshal_close_object(names);
-            marshal_close_object(localsplusnames);
-            marshal_close_object(localspluskinds);
-            marshal_close_object(filename);
-            marshal_close_object(name);
-            marshal_close_object(qualname);
-            marshal_close_object(linetable);
-            marshal_close_object(exceptiontable);
+            Py_XDECREF(code);
+            Py_XDECREF(fbinit);
+            Py_XDECREF(consts);
+            Py_XDECREF(names);
+            Py_XDECREF(localsplusnames);
+            Py_XDECREF(localspluskinds);
+            Py_XDECREF(filename);
+            Py_XDECREF(name);
+            Py_XDECREF(qualname);
+            Py_XDECREF(linetable);
+            Py_XDECREF(exceptiontable);
             if (PyErr_Occurred()) {
-                marshal_close_object(v);
+                Py_XDECREF(v);
                 v = NULL;
             }
         }
@@ -2066,12 +2059,12 @@ r_object(RFILE *p)
         }
         v = PyList_GetItemRef(p->refs, n);
         if (v == NULL || PyErr_Occurred()) {
-            marshal_close_object(v);
+            Py_XDECREF(v);
             break;
         }
         if (v == Py_None) {
             PyErr_SetString(PyExc_ValueError, "bad marshal data (invalid reference)");
-            marshal_close_object(v);
+            Py_XDECREF(v);
             break;
         }
         retval = v;
@@ -2100,11 +2093,11 @@ r_object(RFILE *p)
         retval = PySlice_New(start, stop, step);
         retval = r_ref_insert(retval, idx, flag, p);
     cleanup:
-        marshal_close_object(start);
-        marshal_close_object(stop);
-        marshal_close_object(step);
+        Py_XDECREF(start);
+        Py_XDECREF(stop);
+        Py_XDECREF(step);
         if (PyErr_Occurred()) {
-            marshal_close_object(retval);
+            Py_XDECREF(retval);
             retval = NULL;
         }
         break;

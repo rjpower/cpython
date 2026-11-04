@@ -174,7 +174,7 @@ scope_mechanism(PyObject *argument, int abort_result, int cleanup_error,
     assert(state.destroyed == 1);
     assert(scope.result.state == _Py_NATIVE_RESULT_DRAINED);
     if (status < 0) {
-        close_destination(&destination);
+        PyValue_CLEAR(destination);
         return NULL;
     }
     PyObject *result = PyValue_AsObject(destination);
@@ -187,7 +187,7 @@ scope_mechanism(PyObject *argument, int abort_result, int cleanup_error,
 abort:
     _PyNativeResult_Abort(&scope.result, publish_state, &state);
     _PyNativeScope_End(&scope);
-    close_destination(&destination);
+    PyValue_CLEAR(destination);
     return NULL;
 }
 
@@ -373,7 +373,7 @@ gateway_mechanism(PyObject *argument)
     int status = _PyNativeScope_End(&scope);
     Py_CLEAR(callable);
     if (status < 0 || PyErr_Occurred()) {
-        close_destination(&destination);
+        PyValue_CLEAR(destination);
         return NULL;
     }
     PyObject *result = PyValue_AsObject(destination);
@@ -387,7 +387,7 @@ abort:
     _PyNativeResult_Abort(&scope.result, publish_state, &state);
     _PyNativeScope_End(&scope);
     Py_XDECREF(callable);
-    close_destination(&destination);
+    PyValue_CLEAR(destination);
     return NULL;
 }
 
@@ -574,7 +574,7 @@ vector_mechanism(PyObject *callable, const PyValue *values,
                             publish_state, &publication);
     status = _PyNativeScope_End(&scope);
     if (status < 0 || PyErr_Occurred()) {
-        close_destination(&destination);
+        PyValue_CLEAR(destination);
         return NULL;
     }
     PyObject *result = PyValue_AsObject(destination);
@@ -587,7 +587,7 @@ vector_mechanism(PyObject *callable, const PyValue *values,
 abort:
     _PyNativeResult_Abort(&scope.result, publish_state, &publication);
     (void)_PyNativeScope_End(&scope);
-    close_destination(&destination);
+    PyValue_CLEAR(destination);
     if (_PyBorrow_Depth(tstate) != depth) {
         PyErr_SetString(PyExc_AssertionError,
                         "native vector End did not release its run");

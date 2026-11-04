@@ -13,13 +13,6 @@
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 
-/* Retire invocation-local owners without replacing the primary error. */
-static void
-call_close_object(PyObject **owner)
-{
-    Py_CLEAR(*owner);
-}
-
 static void
 call_free_buffer(void *buffer)
 {
@@ -40,7 +33,7 @@ static PyObject *
 call_finish_result(PyObject *result)
 {
     if (PyErr_Occurred()) {
-        call_close_object(&result);
+        Py_CLEAR(result);
     }
     return result;
 }
@@ -269,8 +262,8 @@ _PyObject_MakeTpCall(PyThreadState *tstate, PyObject *callable,
         _Py_LeaveRecursiveCallTstate(tstate);
     }
 done:
-    call_close_object(&kwdict);
-    call_close_object(&argstuple);
+    Py_CLEAR(kwdict);
+    Py_CLEAR(argstuple);
     return _Py_CheckFunctionResult(tstate, callable, call_finish_result(result), NULL);
 }
 
@@ -607,7 +600,7 @@ done:
     _PyBorrowScope_Exit(tstate, mark);
     if (stack != NULL) {
         for (Py_ssize_t i = 0; i < nargs; i++) {
-            call_close_object(&stack[i]);
+            Py_CLEAR(stack[i]);
         }
         if (stack != small_stack) {
             call_free_buffer(stack);
@@ -723,7 +716,7 @@ done:
     _PyBorrowScope_Exit(tstate, mark);
     if (built != NULL) {
         for (Py_ssize_t i = 0; i < nargs; i++) {
-            call_close_object(&built[i]);
+            Py_CLEAR(built[i]);
         }
         if (built != small_stack) {
             call_free_buffer(built);
@@ -1169,21 +1162,21 @@ _PyStack_UnpackDict(PyThreadState *tstate,
             goto error;
         }
     }
-    call_close_object(&items);
+    Py_CLEAR(items);
     if (PyErr_Occurred()) {
         goto error;
     }
     *p_kwnames = kwnames;
     return stack;
 error:
-    call_close_object(&items);
+    Py_CLEAR(items);
     if (stack != NULL) {
         for (Py_ssize_t i = 0; i < nkwargs; i++) {
-            call_close_object(&stack[nargs + i]);
+            Py_CLEAR(stack[nargs + i]);
         }
         call_free_buffer(stack - 1);
     }
-    call_close_object(&kwnames);
+    Py_CLEAR(kwnames);
     return NULL;
 }
 
@@ -1194,7 +1187,7 @@ _PyStack_UnpackDict_Free(PyObject *const *stack, Py_ssize_t nargs,
     Py_ssize_t count = PyTuple_GET_SIZE(kwnames);
     PyObject **owned = (PyObject **)stack;
     for (Py_ssize_t i = 0; i < count; i++) {
-        call_close_object(&owned[nargs + i]);
+        Py_CLEAR(owned[nargs + i]);
     }
     _PyStack_UnpackDict_FreeNoDecRef(stack, kwnames);
 }
@@ -1203,7 +1196,7 @@ void
 _PyStack_UnpackDict_FreeNoDecRef(PyObject *const *stack, PyObject *kwnames)
 {
     call_free_buffer((PyObject **)stack - 1);
-    call_close_object(&kwnames);
+    Py_CLEAR(kwnames);
 }
 
 // Export for the stable ABI

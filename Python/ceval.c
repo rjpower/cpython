@@ -1671,18 +1671,6 @@ call_transaction_refresh(_PyCallTransaction *call, _PyInstr **next)
     return status;
 }
 
-static void
-call_transaction_close_value(PyValue *slot)
-{
-    PyValue_CLEAR(*slot);
-}
-
-static void
-call_transaction_close_object(PyObject **slot)
-{
-    Py_CLEAR(*slot);
-}
-
 static int
 call_transaction_expand_method(_PyCallTransaction *call, _PyInstr **next)
 {
@@ -1701,7 +1689,7 @@ call_transaction_expand_method(_PyCallTransaction *call, _PyInstr **next)
     homes[0] = function;
     homes[1] = self;
     call->effects = 1;
-    call_transaction_close_value(&obsolete);
+    PyValue_CLEAR(obsolete);
     return call_transaction_refresh(call, next);
 }
 
@@ -1742,12 +1730,12 @@ call_transaction_prepare_tuple(_PyCallTransaction *call, _PyInstr **next)
     homes[2] = PyValue_FromPyObjectSteal(tuple);
     tuple = NULL;
 done:
-    call_transaction_close_object(&tuple);
-    call_transaction_close_object(&func_object);
-    call_transaction_close_object(&args_object);
-    call_transaction_close_value(&func);
-    call_transaction_close_value(&args);
-    call_transaction_close_value(&obsolete);
+    Py_CLEAR(tuple);
+    Py_CLEAR(func_object);
+    Py_CLEAR(args_object);
+    PyValue_CLEAR(func);
+    PyValue_CLEAR(args);
+    PyValue_CLEAR(obsolete);
     return call_transaction_refresh(call, next);
 }
 
@@ -1786,10 +1774,10 @@ call_transaction_monitor(_PyCallTransaction *call, _PyInstr **next)
         call->operation.tstate, PY_MONITORING_EVENT_CALL, call->operation.frame,
         call->operation.frame->instr_ptr, function_object, argument);
 done:
-    call_transaction_close_object(&argument);
-    call_transaction_close_object(&function_object);
-    call_transaction_close_value(&first);
-    call_transaction_close_value(&function);
+    Py_CLEAR(argument);
+    Py_CLEAR(function_object);
+    PyValue_CLEAR(first);
+    PyValue_CLEAR(function);
     return call_transaction_refresh(call, next);
 }
 
@@ -1822,7 +1810,7 @@ static void
 call_transaction_retire(PyValue *retired, int count, PyValue *small)
 {
     for (int i = count; i-- > 0;) {
-        call_transaction_close_value(&retired[i]);
+        PyValue_CLEAR(retired[i]);
     }
     if (retired != small && retired != NULL) {
         PyObject *saved = PyErr_GetRaisedException();
@@ -1955,8 +1943,8 @@ end_scope:
     (void)_PyNativeScope_End(&scope);
 done:
     assert(scope_started || retired_count == 0);
-    call_transaction_close_object(&monitor_argument);
-    call_transaction_close_object(&callable);
+    Py_CLEAR(monitor_argument);
+    Py_CLEAR(callable);
     call_transaction_retire(retired, retired_count, small);
     int failed = call_transaction_refresh(call, next);
     if (failed == 0 && call->periodic) {
@@ -3343,19 +3331,19 @@ call_transaction_push_python(_PyCallTransaction *call, _PyInstr **next,
     assert(child->previous == op->frame);
     op->tstate->current_frame = child;
 done:
-    call_transaction_close_value(&function);
-    call_transaction_close_object(&locals);
-    call_transaction_close_object(&names);
-    call_transaction_close_object(&tuple);
-    call_transaction_close_object(&kwargs);
+    PyValue_CLEAR(function);
+    Py_CLEAR(locals);
+    Py_CLEAR(names);
+    Py_CLEAR(tuple);
+    Py_CLEAR(kwargs);
     PyObject *code_owner = (PyObject *)code;
     code = NULL;
-    call_transaction_close_object(&code_owner);
+    Py_CLEAR(code_owner);
     for (int i = copied; i-- > 0;) {
-        call_transaction_close_value(&storage[i]);
+        PyValue_CLEAR(storage[i]);
     }
     for (int i = retired_count; i-- > 0;) {
-        call_transaction_close_value(&storage[call->count + i]);
+        PyValue_CLEAR(storage[call->count + i]);
     }
     if (storage != small && storage != NULL) {
         PyObject *saved = PyErr_GetRaisedException();

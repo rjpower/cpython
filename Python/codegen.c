@@ -757,16 +757,6 @@ codegen_setup_annotations_scope(compiler *c, location loc,
     return SUCCESS;
 }
 
-static void
-codegen_close_value(PyValue value)
-{
-    PyObject *saved = PyErr_GetRaisedException();
-    PyValue_CLOSE(value);
-    if (saved != NULL) {
-        _PyValue_RestoreException(saved);
-    }
-}
-
 static PyObject *
 codegen_list_name(PyObject *list, Py_ssize_t index)
 {
@@ -4041,7 +4031,7 @@ load_args_for_super(compiler *c, expr_ty e) {
     }
     assert(PyValue_IsObject(key));
     int ret = codegen_nameop(c, loc, PyValue_AsKnownObjectBorrow(key), Load);
-    codegen_close_value(key);
+    PyValue_CLOSE(key);
     return ret < 0 || PyErr_Occurred() ? ERROR : SUCCESS;
 }
 
@@ -4999,16 +4989,16 @@ codegen_push_inlined_comprehension_locals(compiler *c, location loc,
         assert(PyValue_LongCheckExact(value));
         long symbol = PyValue_IsInlineInt(value) ? PyValue_InlineInt(value) :
                       PyLong_AsLong(PyValue_AsKnownObjectBorrow(value));
-        codegen_close_value(value);
+        PyValue_CLOSE(value);
         value = PyValue_NULL;
         if (PyErr_Occurred()) {
-            codegen_close_value(key);
+            PyValue_CLOSE(key);
             return ERROR;
         }
         assert(symbol >= 0);
         int ret = codegen_push_inlined_comprehension_name(
             c, loc, PyValue_AsKnownObjectBorrow(key), symbol, state);
-        codegen_close_value(key);
+        PyValue_CLOSE(key);
         key = PyValue_NULL;
         if (ret < 0 || PyErr_Occurred()) {
             return ERROR;

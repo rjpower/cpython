@@ -4219,9 +4219,8 @@
                 PyValue value = values[i];
                 values[i] = PyValue_NULL;
                 if (err == 0) {
-                    value = PyValue_Box(value);
-                    err = PyValue_IsInline(value) ? -1 :
-                    _PySet_AddTakeRef((PySetObject *)set_o, PyValue_AsKnownObjectSteal(value));
+                    err = _PySet_AddValueTakeRef((PySetObject *)set_o,
+                        PyValue_MakeHeapSafe(value));
                 }
                 else {
                     PyValue_CLOSE(value);
@@ -7928,8 +7927,8 @@
             PyValue res;
             // _SPECIALIZE_COMPARE_OP
             {
-                right = IR_SLOT(IR_FIELD_C(this_instr));
-                left = IR_SLOT(IR_FIELD_B(this_instr));
+                right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -7943,30 +7942,26 @@
             }
             // _COMPARE_OP
             {
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    left = PyValue_Box(left);
-                    if (PyValue_IsInline(left)) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(COMPARE_OP);
-                    IR_KEEP_BOX(left);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                    right = PyValue_Box(right);
-                    if (PyValue_IsInline(right)) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(COMPARE_OP);
-                    IR_KEEP_BOX(right);
-                }
-                PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
-                PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
                 assert((oparg >> 5) <= Py_GE);
-                PyObject *res_o = PyObject_RichCompare(left_o, right_o, oparg >> 5);
+                PyObject *res_o;
+                if (PyValue_IsInline(left) && PyValue_IsInline(right)) {
+                    res_o = _PyValue_RichCompareObject(left, right, oparg >> 5);
+                }
+                else {
+                    PyObject *left_o = _PyValueTemps_Object(value_temps, left);
+                    if (left_o == NULL) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    PyObject *right_o = _PyValueTemps_Object(value_temps, right);
+                    if (right_o == NULL) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    res_o = PyObject_RichCompare(left_o, right_o, oparg >> 5);
+                }
                 IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) _PyValue_CLOSE_POINTER(right);
+                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE(right);
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_POINTER(left);
+                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE(left);
                 if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
@@ -8170,8 +8165,8 @@
             PyValue res;
             // _SPECIALIZE_COMPARE_OP
             {
-                right = IR_SLOT(IR_FIELD_C(this_instr));
-                left = IR_SLOT(IR_FIELD_B(this_instr));
+                right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -8185,30 +8180,26 @@
             }
             // _COMPARE_OP
             {
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    left = PyValue_Box(left);
-                    if (PyValue_IsInline(left)) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(COMPARE_OP);
-                    IR_KEEP_BOX(left);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                    right = PyValue_Box(right);
-                    if (PyValue_IsInline(right)) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(COMPARE_OP);
-                    IR_KEEP_BOX(right);
-                }
-                PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
-                PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
                 assert((oparg >> 5) <= Py_GE);
-                PyObject *res_o = PyObject_RichCompare(left_o, right_o, oparg >> 5);
+                PyObject *res_o;
+                if (PyValue_IsInline(left) && PyValue_IsInline(right)) {
+                    res_o = _PyValue_RichCompareObject(left, right, oparg >> 5);
+                }
+                else {
+                    PyObject *left_o = _PyValueTemps_Object(value_temps, left);
+                    if (left_o == NULL) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    PyObject *right_o = _PyValueTemps_Object(value_temps, right);
+                    if (right_o == NULL) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    res_o = PyObject_RichCompare(left_o, right_o, oparg >> 5);
+                }
                 IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) _PyValue_CLOSE_POINTER(right);
+                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE(right);
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_POINTER(left);
+                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE(left);
                 if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
@@ -8427,18 +8418,14 @@
             int opcode = CONTAINS_OP_DICT;
             (void)(opcode);
             _PyInterpreterFrame *frame = tstate->current_frame;
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CONTAINS_OP_DICT);
-            #if _Py_TAIL_CALL_INTERP
-            PyObject *value_boxes[11];
-            _PyValueTemps value_owners;
-            #endif
-            value_owners = (_PyValueTemps){value_boxes, 0, 11};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_FIELD_D(this_instr));
@@ -8469,20 +8456,11 @@
             // _CONTAINS_OP_DICT
             {
                 right = tos;
-                left = IR_SLOT(IR_FIELD_B(this_instr));
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    left = PyValue_Box(left);
-                    if (PyValue_IsInline(left)) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(CONTAINS_OP_DICT);
-                    IR_KEEP_BOX(left);
-                }
-                PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
                 PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
                 assert(PyAnyDict_CheckExact(right_o));
                 STAT_INC(CONTAINS_OP, hit);
-                int res = PyDict_Contains(right_o, left_o);
+                int res = PyDict_ContainsValue(right_o, left);
                 if (res < 0) {
                     JUMP_TO_LABEL(error);
                 }
@@ -8502,11 +8480,11 @@
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_XCLOSE_POINTER(value);
+                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_XCLOSE(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), b);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -8612,18 +8590,14 @@
             int opcode = CONTAINS_OP_SET;
             (void)(opcode);
             _PyInterpreterFrame *frame = tstate->current_frame;
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(CONTAINS_OP_SET);
-            #if _Py_TAIL_CALL_INTERP
-            PyObject *value_boxes[11];
-            _PyValueTemps value_owners;
-            #endif
-            value_owners = (_PyValueTemps){value_boxes, 0, 11};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_FIELD_D(this_instr));
@@ -8654,20 +8628,18 @@
             // _CONTAINS_OP_SET
             {
                 right = tos;
-                left = IR_SLOT(IR_FIELD_B(this_instr));
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    left = PyValue_Box(left);
-                    if (PyValue_IsInline(left)) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(CONTAINS_OP_SET);
-                    IR_KEEP_BOX(left);
-                }
-                PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
                 PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
                 assert(PyAnySet_CheckExact(right_o));
                 STAT_INC(CONTAINS_OP, hit);
-                int res = _PySet_Contains((PySetObject *)right_o, left_o);
+                int res;
+                if (PyValue_IsInline(left)) {
+                    res = PySet_ContainsValue(right_o, left);
+                }
+                else {
+                    res = _PySet_Contains((PySetObject *)right_o,
+                                      PyValue_AsKnownObjectBorrow(left));
+                }
                 if (res < 0) {
                     JUMP_TO_LABEL(error);
                 }
@@ -8687,11 +8659,11 @@
             {
                 value = l;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_XCLOSE_POINTER(value);
+                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_XCLOSE(value);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), b);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -8874,30 +8846,27 @@
             _PyValueTemps *value_temps = &value_owners;
             PyValue container;
             PyValue sub;
-            sub = IR_SLOT(IR_FIELD_B(this_instr));
-            container = IR_SLOT(IR_FIELD_A(this_instr));
-            if (Py_UNLIKELY(PyValue_IsInline(container))) {
-                container = PyValue_Box(container);
-                if (PyValue_IsInline(container)) {
+            sub = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+            container = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+            PyObject *container_o = _PyValueTemps_Object(value_temps, container);
+            if (container_o == NULL) {
+                JUMP_TO_LABEL(error);
+            }
+            int err;
+            if (PyDict_CheckExact(container_o)) {
+                err = PyDict_DelValue(container_o, sub);
+            }
+            else {
+                PyObject *sub_o = _PyValueTemps_Object(value_temps, sub);
+                if (sub_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                BOX_STAT_INC(DELETE_SUBSCR);
-                IR_KEEP_BOX(container);
+                err = PyObject_DelItem(container_o, sub_o);
             }
-            if (Py_UNLIKELY(PyValue_IsInline(sub))) {
-                sub = PyValue_Box(sub);
-                if (PyValue_IsInline(sub)) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(DELETE_SUBSCR);
-                IR_KEEP_BOX(sub);
-            }
-            int err = PyObject_DelItem(PyValue_AsKnownObjectBorrow(container),
-                                       PyValue_AsKnownObjectBorrow(sub));
             IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_POINTER(sub);
+            if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE(sub);
             IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-            if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) _PyValue_CLOSE_POINTER(container);
+            if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE(container);
             if (err) {
                 JUMP_TO_LABEL(error);
             }
@@ -14887,18 +14856,14 @@
             int opcode = MAP_ADD;
             (void)(opcode);
             _PyInterpreterFrame *frame = tstate->current_frame;
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(MAP_ADD);
-            #if _Py_TAIL_CALL_INTERP
-            PyObject *value_boxes[8];
-            _PyValueTemps value_owners;
-            #endif
-            value_owners = (_PyValueTemps){value_boxes, 0, 8};
-            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_FIELD_A(this_instr));
@@ -14909,44 +14874,17 @@
             value = window[2 + (oparg - 1)];
             key = window[1 + (oparg - 1)];
             dict_st = window[0];
-            if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                dict_st = PyValue_Box(dict_st);
-                if (PyValue_IsInline(dict_st)) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(MAP_ADD);
-                IR_KEEP_BOX(dict_st);
-            }
-            if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1 + (oparg - 1)]))) {
-                key = PyValue_Box(key);
-                if (PyValue_IsInline(key)) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(MAP_ADD);
-                IR_KEEP_BOX(key);
-            }
-            if (Py_UNLIKELY(PyValue_IsInlineAt(&window[2 + (oparg - 1)]))) {
-                value = PyValue_Box(value);
-                if (PyValue_IsInline(value)) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(MAP_ADD);
-                IR_KEEP_BOX(value);
-            }
             PyObject *dict = PyValue_AsKnownObjectBorrow(dict_st);
             assert(PyDict_CheckExact(dict));
-            int err = _PyDict_SetItem_Take2(
-                (PyDictObject *)dict,
-                _PyValue_AsPyObjectStealPointer(key),
-                _PyValue_AsPyObjectStealPointer(value)
-            );
-            if (err != 0) {
-                window[1 + (oparg - 1)] = PyValue_NULL;
-                window[2 + (oparg - 1)] = PyValue_NULL;
-                JUMP_TO_LABEL(error);
-            }
+            PyValue stored_key = PyValue_MakeHeapSafe(key);
+            PyValue stored_value = PyValue_MakeHeapSafe(value);
             window[1 + (oparg - 1)] = PyValue_NULL;
             window[2 + (oparg - 1)] = PyValue_NULL;
+            int err = _PyDict_SetValue_Take2(
+                (PyDictObject *)dict, stored_key, stored_value);
+            if (err != 0) {
+                JUMP_TO_LABEL(error);
+            }
             DISPATCH();
         }
 
@@ -16988,18 +16926,14 @@
             int opcode = SET_ADD;
             (void)(opcode);
             _PyInterpreterFrame *frame = tstate->current_frame;
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(SET_ADD);
-            #if _Py_TAIL_CALL_INTERP
-            PyObject *value_boxes[7];
-            _PyValueTemps value_owners;
-            #endif
-            value_owners = (_PyValueTemps){value_boxes, 0, 7};
-            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_B(this_instr);
             (void)oparg;
             PyValue *window = &IR_SLOT(IR_FIELD_A(this_instr));
@@ -17008,29 +16942,12 @@
             PyValue v;
             v = window[1 + (oparg-1)];
             set = window[0];
-            if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                set = PyValue_Box(set);
-                if (PyValue_IsInline(set)) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(SET_ADD);
-                IR_KEEP_BOX(set);
-            }
-            if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1 + (oparg-1)]))) {
-                v = PyValue_Box(v);
-                if (PyValue_IsInline(v)) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(SET_ADD);
-                IR_KEEP_BOX(v);
-            }
-            int err = _PySet_AddTakeRef((PySetObject *)PyValue_AsKnownObjectBorrow(set),
-                                        _PyValue_AsPyObjectStealPointer(v));
+            PyValue item = PyValue_MakeHeapSafe(v);
+            window[1 + (oparg-1)] = PyValue_NULL;
+            int err = _PySet_AddValueTakeRef((PySetObject *)PyValue_AsKnownObjectBorrow(set), item);
             if (err) {
-                window[1 + (oparg-1)] = PyValue_NULL;
                 JUMP_TO_LABEL(error);
             }
-            window[1 + (oparg-1)] = PyValue_NULL;
             DISPATCH();
         }
 
@@ -17919,30 +17836,18 @@
             int opcode = STORE_GLOBAL;
             (void)(opcode);
             _PyInterpreterFrame *frame = tstate->current_frame;
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_GLOBAL);
-            #if _Py_TAIL_CALL_INTERP
-            PyObject *value_boxes[3];
-            _PyValueTemps value_owners;
-            #endif
-            value_owners = (_PyValueTemps){value_boxes, 0, 3};
-            _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
             PyValue v;
-            v = IR_SLOT(IR_FIELD_A(this_instr));
-            if (Py_UNLIKELY(PyValue_IsInline(v))) {
-                v = PyValue_Box(v);
-                if (PyValue_IsInline(v)) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(STORE_GLOBAL);
-                IR_KEEP_BOX(v);
-            }
+            v = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             int err;
             if (PyValue_IsNull(v)) {
@@ -17955,9 +17860,9 @@
                 }
             }
             else {
-                err = PyDict_SetItem(GLOBALS(), name, PyValue_AsKnownObjectBorrow(v));
+                err = PyDict_SetValue(GLOBALS(), PyValue_FromObjectBorrow(name), v);
                 IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) _PyValue_CLOSE_POINTER(v);
+                if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE(v);
             }
             if (err < 0) {
                 JUMP_TO_LABEL(error);

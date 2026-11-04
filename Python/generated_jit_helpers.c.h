@@ -2968,8 +2968,8 @@
             PyValue res;
             // _SPECIALIZE_COMPARE_OP
             {
-                right = IR_SLOT(IR_FIELD_C(this_instr));
-                left = IR_SLOT(IR_FIELD_B(this_instr));
+                right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -2986,30 +2986,26 @@
             }
             // _COMPARE_OP
             {
-                if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    left = PyValue_Box(left);
-                    if (PyValue_IsInline(left)) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(COMPARE_OP);
-                    IR_KEEP_BOX(left);
-                }
-                if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                    right = PyValue_Box(right);
-                    if (PyValue_IsInline(right)) {
-                        JUMP_TO_LABEL(error);
-                    }
-                    BOX_STAT_INC(COMPARE_OP);
-                    IR_KEEP_BOX(right);
-                }
-                PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
-                PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
                 assert((oparg >> 5) <= Py_GE);
-                PyObject *res_o = PyObject_RichCompare(left_o, right_o, oparg >> 5);
+                PyObject *res_o;
+                if (PyValue_IsInline(left) && PyValue_IsInline(right)) {
+                    res_o = _PyValue_RichCompareObject(left, right, oparg >> 5);
+                }
+                else {
+                    PyObject *left_o = _PyValueTemps_Object(value_temps, left);
+                    if (left_o == NULL) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    PyObject *right_o = _PyValueTemps_Object(value_temps, right);
+                    if (right_o == NULL) {
+                        JUMP_TO_LABEL(error);
+                    }
+                    res_o = PyObject_RichCompare(left_o, right_o, oparg >> 5);
+                }
                 IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) _PyValue_CLOSE_POINTER(right);
+                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE(right);
                 IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_POINTER(left);
+                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE(left);
                 if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }

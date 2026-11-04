@@ -539,6 +539,16 @@ INPLACE_READERS = {
     "PyValue_BoolCheck", "PyValue_FloatOperandValues", "PyValue_InlineFloat",
     "PyValue_InlineInt64", "_PyValue_IntScaled", "PyValue_LongCheckExact",
     "_PyValue_Truth",
+    # Value-form container calls: they only read their key argument
+    "PyDict_ContainsValue", "PySet_ContainsValue", "PyDict_DelValue",
+    "_PyValue_RichCompareObject",
+    # Not a reader: PyDict_SetValue keeps counted copies of its key and
+    # value (MakeHeapSafe of a borrow), so it neither keeps nor releases the
+    # caller's count and a borrowed local may be passed to it
+    "PyDict_SetValue",
+    # Boxes an inline input into value_temps, which owns the box; the result
+    # is followed as an uncounted object (inplace_input_use)
+    "_PyValueTemps_Object",
     # Python/ceval.c: they read their value arguments, and the handler
     # releases them after
     "_PyEval_BinarySlice", "_PyEval_StoreName", "_PyEval_StoreSlice",
@@ -670,6 +680,16 @@ def inplace_input_use(uop: CodeSection, name: str) -> Token | None:
                 if consumed_argument(tokens, i - 2):
                     return tkn
                 holder = assigned_name(tokens, i - 2, i + 1)
+                if holder is not None:
+                    objects.add(holder)
+            elif callee == "_PyValueTemps_Object" and prev == "," and nxt == ")":
+                # `_PyValueTemps_Object(temps, name)`: the object of name,
+                # uncounted (or a box that temps owns). Follow it like
+                # PyValue_AsKnownObjectBorrow's, so that a release drops
+                # the borrow.
+                if consumed_argument(tokens, i - 4):
+                    return tkn
+                holder = assigned_name(tokens, i - 4, i + 1)
                 if holder is not None:
                     objects.add(holder)
         elif nxt == "." and i + 3 < len(tokens) and tokens[i + 2].text == "bits" \

@@ -888,6 +888,24 @@ value_store_subscript(PyValue container, PyValue key, PyValue value,
             return PyDict_SetValue(obj, key, value);
         }
     }
+    if (PyValue_IsInlineInt(key) && PyValue_IsObject(container)) {
+        PyObject *list = PyValue_AsKnownObjectBorrow(container);
+        if (PyList_CheckExact(list)) {
+            /* list_ass_subscript() for an int index, which stores the value
+             * as it is: no box of the index or the value. */
+            Py_ssize_t index = PyValue_InlineInt64(key);
+            int err;
+            Py_BEGIN_CRITICAL_SECTION(list);
+            if (index < 0) {
+                index += PyList_GET_SIZE(list);
+            }
+            err = _PyList_SetItemTakeValue(
+                (PyListObject *)list, index,
+                PyValue_MakeHeapSafe(PyValue_Borrow(value)));
+            Py_END_CRITICAL_SECTION();
+            return err;
+        }
+    }
     PyObject *obj = _PyValueTemps_Object(temps, container);
     if (obj == NULL) {
         return -1;
@@ -984,6 +1002,26 @@ value_binary_operation(int operation, PyValue left, PyValue right,
             }
             _PyErr_SetKeyError(key);
             return PyValue_NULL;
+        }
+    }
+    /* An exact list or tuple indexed by an inline int in range, as
+     * list_subscript() and tuple_subscript() do: no box of the index or of
+     * the item. Any other index takes the generic path, which raises. */
+    if (operation == NB_SUBSCR && PyValue_IsInlineInt(right)
+        && PyValue_IsObject(left)) {
+        PyObject *container = PyValue_AsKnownObjectBorrow(left);
+        int is_list = PyList_CheckExact(container);
+        if (is_list || PyTuple_CheckExact(container)) {
+            Py_ssize_t size = Py_SIZE(container);
+            Py_ssize_t index = PyValue_InlineInt64(right);
+            if (index < 0) {
+                index += size;
+            }
+            if (0 <= index && index < size) {
+                return is_list
+                    ? _PyList_GetValue((PyListObject *)container, index)
+                    : PyTuple_GetValue(container, index);
+            }
         }
     }
     PyObject *left_obj = _PyValueTemps_Object(temps, left);
@@ -1383,17 +1421,15 @@ int _PyEval_StoreName(PyThreadState *tstate, PyValue v, PyObject *name, PyObject
         return error;
     }
 
+    if (PyDict_CheckExact(ns)) {
+        // PyDict_SetItem() with the value as it is: an inline value needs no box.
+        return PyDict_SetValue(ns, PyValue_FromObjectBorrow(name), v);
+    }
     PyObject *v_o = PyValue_AsObject(v);
     if (v_o == NULL) {
         return -1;
     }
-    int err;
-    if (PyDict_CheckExact(ns)) {
-        err = PyDict_SetItem(ns, name, v_o);
-    }
-    else {
-        err = PyObject_SetItem(ns, name, v_o);
-    }
+    int err = PyObject_SetItem(ns, name, v_o);
     Py_DECREF(v_o);
     return err;
 }

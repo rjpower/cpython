@@ -1974,6 +1974,21 @@ dict_unhashable_type(PyObject *op, PyObject *key)
     Py_DECREF(exc);
 }
 
+/* The cached hash of an exact str key, or -1 if key is not one or has none
+   (the dictionary fast path of _PyObject_HashDictKey()). */
+static inline Py_hash_t
+cached_str_hash(PyValue key)
+{
+    if (!PyValue_IsObject(key)) {
+        return -1;
+    }
+    PyObject *object = PyValue_AsKnownObjectBorrow(key);
+    if (!PyUnicode_CheckExact(object)) {
+        return -1;
+    }
+    return PyUnstable_Unicode_GET_CACHED_HASH(object);
+}
+
 int
 PyDict_GetValue(PyObject *op, PyValue key, PyValue *result)
 {
@@ -1981,6 +1996,12 @@ PyDict_GetValue(PyObject *op, PyValue key, PyValue *result)
     if (!PyAnyDict_Check(op) || !PyValue_IsLanguageValue(key)) {
         PyErr_BadInternalCall();
         return -1;
+    }
+    Py_hash_t cached = cached_str_hash(key);
+    if (cached != -1) {
+        /* No Python code can run: the hash is cached and str equality is
+         * native, so the key and the dict need no extra owner. */
+        return _PyDict_GetValue_KnownHash(op, key, cached, result);
     }
     PyObject *dict_owner = Py_NewRef(op);
     PyValue query = PyValue_MakeHeapSafe(PyValue_Borrow(key));
@@ -2025,6 +2046,12 @@ PyDict_GetValueString(PyObject *op, const char *key, PyValue *result)
 int
 PyDict_ContainsValue(PyObject *op, PyValue key)
 {
+    Py_hash_t cached = cached_str_hash(key);
+    if (cached != -1) {
+        /* As dict_contains(): no result copy, no extra owners. */
+        return _PyDict_Contains_KnownHash(op, PyValue_AsKnownObjectBorrow(key),
+                                          cached);
+    }
     PyValue value = PyValue_NULL;
     int status = PyDict_GetValue(op, key, &value);
     PyValue_XCLOSE(value);

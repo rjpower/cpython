@@ -1292,9 +1292,10 @@ dummy_func(
             ERROR_IF(err < 0);
         }
 
-        inst(SET_ADD, (set, unused[oparg-1], v -- set, unused[oparg-1])) {
-            int err = _PySet_AddTakeRef((PySetObject *)PyValue_AsKnownObjectBorrow(set),
-                                        PyValue_AsKnownObjectSteal(v));
+        inline_ok inst(SET_ADD, (set, unused[oparg-1], v -- set, unused[oparg-1])) {
+            PyValue item = PyValue_MakeHeapSafe(v);
+            DEAD(v);
+            int err = _PySet_AddValueTakeRef((PySetObject *)PyValue_AsKnownObjectBorrow(set), item);
             ERROR_IF(err);
         }
 
@@ -1385,8 +1386,23 @@ dummy_func(
 
         inst(DELETE_SUBSCR, (container, sub --)) {
             /* del container[sub] */
-            int err = PyObject_DelItem(PyValue_AsKnownObjectBorrow(container),
-                                       PyValue_AsKnownObjectBorrow(sub));
+            PyObject *container_o = _PyValueTemps_Object(value_temps, container);
+            if (container_o == NULL) {
+                ERROR_NO_POP();
+            }
+            int err;
+            if (PyDict_CheckExact(container_o)) {
+                // What PyObject_DelItem() does for an exact dict, with the
+                // key as a value: an inline key needs no box.
+                err = PyDict_DelValue(container_o, sub);
+            }
+            else {
+                PyObject *sub_o = _PyValueTemps_Object(value_temps, sub);
+                if (sub_o == NULL) {
+                    ERROR_NO_POP();
+                }
+                err = PyObject_DelItem(container_o, sub_o);
+            }
             DECREF_INPUTS();
             ERROR_IF(err);
         }
@@ -2038,7 +2054,7 @@ dummy_func(
                 }
             }
             else {
-                err = PyDict_SetItem(GLOBALS(), name, PyValue_AsKnownObjectBorrow(v));
+                err = PyDict_SetValue(GLOBALS(), PyValue_FromObjectBorrow(name), v);
                 PyValue_CLOSE(v);
             }
             ERROR_IF(err < 0);
@@ -2381,9 +2397,8 @@ dummy_func(
                 PyValue value = values[i];
                 values[i] = PyValue_NULL;
                 if (err == 0) {
-                    value = PyValue_Box(value);
-                    err = PyValue_IsInline(value) ? -1 :
-                        _PySet_AddTakeRef((PySetObject *)set_o, PyValue_AsKnownObjectSteal(value));
+                    err = _PySet_AddValueTakeRef((PySetObject *)set_o,
+                                                 PyValue_MakeHeapSafe(value));
                 }
                 else {
                     PyValue_CLOSE(value);
@@ -2483,16 +2498,17 @@ dummy_func(
 
         macro(DICT_MERGE) = _DICT_MERGE + POP_TOP;
 
-        inst(MAP_ADD, (dict_st, unused[oparg - 1], key, value -- dict_st, unused[oparg - 1])) {
+        inline_ok inst(MAP_ADD, (dict_st, unused[oparg - 1], key, value -- dict_st, unused[oparg - 1])) {
             PyObject *dict = PyValue_AsKnownObjectBorrow(dict_st);
             assert(PyDict_CheckExact(dict));
             /* dict[key] = value */
             // Do not DECREF INPUTS because the function steals the references
-            int err = _PyDict_SetItem_Take2(
-                (PyDictObject *)dict,
-                PyValue_AsKnownObjectSteal(key),
-                PyValue_AsKnownObjectSteal(value)
-            );
+            PyValue stored_key = PyValue_MakeHeapSafe(key);
+            PyValue stored_value = PyValue_MakeHeapSafe(value);
+            DEAD(key);
+            DEAD(value);
+            int err = _PyDict_SetValue_Take2(
+                (PyDictObject *)dict, stored_key, stored_value);
             ERROR_IF(err != 0);
         }
 
@@ -3156,11 +3172,24 @@ dummy_func(
         }
 
         op(_COMPARE_OP, (left, right -- res)) {
-            PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
-            PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
-
             assert((oparg >> 5) <= Py_GE);
-            PyObject *res_o = PyObject_RichCompare(left_o, right_o, oparg >> 5);
+            PyObject *res_o;
+            if (PyValue_IsInline(left) && PyValue_IsInline(right)) {
+                // Two inline numbers compare as their boxes do (exactly, as
+                // an int51 is exact in a double) and run no Python code.
+                res_o = _PyValue_RichCompareObject(left, right, oparg >> 5);
+            }
+            else {
+                PyObject *left_o = _PyValueTemps_Object(value_temps, left);
+                if (left_o == NULL) {
+                    ERROR_NO_POP();
+                }
+                PyObject *right_o = _PyValueTemps_Object(value_temps, right);
+                if (right_o == NULL) {
+                    ERROR_NO_POP();
+                }
+                res_o = PyObject_RichCompare(left_o, right_o, oparg >> 5);
+            }
             DECREF_INPUTS();
             ERROR_IF(res_o == NULL);
             if (oparg & 16) {
@@ -3287,14 +3316,24 @@ dummy_func(
 
         macro(CONTAINS_OP_SET) = _GUARD_TOS_ANY_SET + unused/1 + _CONTAINS_OP_SET + POP_TOP + POP_TOP;
 
-        op(_CONTAINS_OP_SET, (left, right -- b, l, r)) {
-            PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
+        // inline_ok: left is handled by value if inline, so only a pointer
+        // is ever read as an object and nothing is boxed.
+        inline_ok op(_CONTAINS_OP_SET, (left, right -- b, l, r)) {
             PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
 
             assert(PyAnySet_CheckExact(right_o));
             STAT_INC(CONTAINS_OP, hit);
             // Note: both set and frozenset use the same seq_contains method!
-            int res = _PySet_Contains((PySetObject *)right_o, left_o);
+            int res;
+            if (PyValue_IsInline(left)) {
+                // An inline int or float is hashable and never a set, so
+                // _PySet_Contains()'s frozenset fallback cannot apply.
+                res = PySet_ContainsValue(right_o, left);
+            }
+            else {
+                res = _PySet_Contains((PySetObject *)right_o,
+                                      PyValue_AsKnownObjectBorrow(left));
+            }
             if (res < 0) {
                 ERROR_NO_POP();
             }
@@ -3307,12 +3346,12 @@ dummy_func(
         macro(CONTAINS_OP_DICT) = _GUARD_TOS_ANY_DICT + unused/1 + _CONTAINS_OP_DICT + POP_TOP + POP_TOP;
 
         op(_CONTAINS_OP_DICT, (left, right -- b, l, r)) {
-            PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
             PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
 
             assert(PyAnyDict_CheckExact(right_o));
             STAT_INC(CONTAINS_OP, hit);
-            int res = PyDict_Contains(right_o, left_o);
+            // The key is looked up as a value: an inline key needs no box.
+            int res = PyDict_ContainsValue(right_o, left);
             if (res < 0) {
                 ERROR_NO_POP();
             }

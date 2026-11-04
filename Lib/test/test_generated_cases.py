@@ -511,6 +511,40 @@ class TestIRCases(unittest.TestCase):
         self.assertIn("if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) "
                       "_PyValue_CLOSE_POINTER(value);", output)
 
+    def test_inplace_inputs_temps_object(self):
+        # _PyValueTemps_Object(temps, name) gives the object of name, uncounted
+        # like PyValue_AsKnownObjectBorrow's: reading it keeps the borrow,
+        # releasing or stealing it drops the borrow.
+        input = """
+        inst(OP_TEMPS_READ, (value --)) {
+            PyObject *o = _PyValueTemps_Object(value_temps, value);
+            int err = SPAM(o);
+            PyValue_CLOSE(value);
+            ERROR_IF(err);
+        }
+        inst(OP_TEMPS_RELEASE, (value --)) {
+            PyObject *o = _PyValueTemps_Object(value_temps, value);
+            DEAD(value);
+            Py_DECREF(o);
+        }
+        inst(OP_TEMPS_COPY_RELEASE, (value --)) {
+            PyObject *o = _PyValueTemps_Object(value_temps, value);
+            PyObject *p;
+            p = o;
+            DEAD(value);
+            Py_DECREF(p);
+        }
+        inst(OP_TEMPS_STEAL, (value -- res)) {
+            res = PyValue_FromPyObjectSteal(_PyValueTemps_Object(value_temps, value));
+            DEAD(value);
+        }
+    """
+        formats = self.formats(input)
+        self.assertEqual(formats["OP_TEMPS_READ"].borrow_mask, 1)
+        for name in ("OP_TEMPS_RELEASE", "OP_TEMPS_COPY_RELEASE",
+                     "OP_TEMPS_STEAL"):
+            self.assertEqual(formats[name].borrow_mask, 0, name)
+
     def test_consumed_inputs(self):
         # A handler takes the inputs that it consumes: the slot of a
         # temporary becomes NULL, and a local keeps its value.  No handler

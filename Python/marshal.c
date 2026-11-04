@@ -915,8 +915,9 @@ w_complex_object(PyObject *v, WFILE *p)
         // of the set.
         Py_ssize_t i = 0;
         bool changed = false;
+        int rc;
         Py_BEGIN_CRITICAL_SECTION(v);
-        while (_PySet_NextEntryRef(v, &pos, &value, &hash)) {
+        while ((rc = _PySet_NextEntryRef(v, &pos, &value, &hash)) > 0) {
             if (i == n) {
                 changed = true;
                 Py_DECREF(value);
@@ -944,6 +945,9 @@ w_complex_object(PyObject *v, WFILE *p)
             PyList_SET_ITEM(items, i++, item);
         }
         Py_END_CRITICAL_SECTION();
+        if (rc < 0) {
+            p->error = true;
+        }
         if (!p->error && (changed || i != n)) {
             PyErr_SetString(PyExc_RuntimeError,
                             "set changed size during iteration");

@@ -474,10 +474,10 @@ getnextarg(PyObject *args, Py_ssize_t arglen, Py_ssize_t *p_argidx, int allowone
     if (argidx < arglen) {
         (*p_argidx)++;
         if (arglen >= 0) {
-            return PyTuple_GetItem(args, argidx);
+            return PyTuple_GetItemRef(args, argidx);
         }
         else if (allowone) {
-            return args;
+            return Py_NewRef(args);
         }
     }
     PyErr_Format(PyExc_TypeError,
@@ -685,6 +685,7 @@ _PyBytes_FormatEx(const char *format, Py_ssize_t format_len,
     int args_owned = 0;
     PyObject *dict = NULL;
     PyObject *key = NULL;
+    PyObject *v = NULL;  /* current argument, owned */
 
     if (args == NULL) {
         PyErr_BadInternalCall();
@@ -743,7 +744,6 @@ _PyBytes_FormatEx(const char *format, Py_ssize_t format_len,
             int prec = -1;
             int c = '\0';
             int fill;
-            PyObject *v = NULL;
             PyObject *temp = NULL;
             const char *pbuf = NULL;
             int sign;
@@ -837,7 +837,7 @@ _PyBytes_FormatEx(const char *format, Py_ssize_t format_len,
                             (Py_ssize_t)(fmtstart - format - 1));
                     goto error;
                 }
-                v = getnextarg(args, arglen, &argidx, 0);
+                Py_XSETREF(v, getnextarg(args, arglen, &argidx, 0));
                 if (v == NULL)
                     goto error;
                 if (!PyLong_Check(v)) {
@@ -892,7 +892,7 @@ _PyBytes_FormatEx(const char *format, Py_ssize_t format_len,
                                 (Py_ssize_t)(fmtstart - format - 1));
                         goto error;
                     }
-                    v = getnextarg(args, arglen, &argidx, 0);
+                    Py_XSETREF(v, getnextarg(args, arglen, &argidx, 0));
                     if (v == NULL)
                         goto error;
                     if (!PyLong_Check(v)) {
@@ -941,7 +941,7 @@ _PyBytes_FormatEx(const char *format, Py_ssize_t format_len,
                              (Py_ssize_t)(fmtstart - format - 1));
                 goto error;
             }
-            v = getnextarg(args, arglen, &argidx, 1);
+            Py_XSETREF(v, getnextarg(args, arglen, &argidx, 1));
             if (v == NULL)
                 goto error;
 
@@ -1213,6 +1213,7 @@ _PyBytes_FormatEx(const char *format, Py_ssize_t format_len,
         goto error;
     }
 
+    Py_XDECREF(v);
     Py_XDECREF(key);
     if (args_owned) {
         Py_DECREF(args);
@@ -1220,6 +1221,7 @@ _PyBytes_FormatEx(const char *format, Py_ssize_t format_len,
     return PyBytesWriter_FinishWithPointer(writer, res);
 
  error:
+    Py_XDECREF(v);
     Py_XDECREF(key);
     PyBytesWriter_Discard(writer);
     if (args_owned) {
@@ -3062,9 +3064,15 @@ _PyBytes_FromSequence_lock_held(PyObject *x, PyObject **result)
     }
     char *str = PyBytesWriter_GetData(writer);
 
-    PyObject *const *items = PySequence_Fast_ITEMS(x);
     for (Py_ssize_t i = 0; i < size; i++) {
-        Py_ssize_t value = PyLong_AsSsize_t(items[i]);
+        PyObject *item = PyList_CheckExact(x)
+            ? PyList_GetItemRef(x, i) : PyTuple_GetItemRef(x, i);
+        if (item == NULL) {
+            PyBytesWriter_Discard(writer);
+            return -1;
+        }
+        Py_ssize_t value = PyLong_AsSsize_t(item);
+        Py_DECREF(item);
         if (value == -1 && PyErr_Occurred()) {
             PyBytesWriter_Discard(writer);
             PyErr_Clear();

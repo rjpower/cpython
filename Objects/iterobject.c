@@ -336,29 +336,44 @@ static PyObject *
 calliter_setstate(PyObject *op, PyObject *state)
 {
     calliterobject *it = (calliterobject*)op;
-    PyObject *sentinel, *stop_exc;
+    PyObject *sentinel = NULL, *stop_exc = NULL, *item = NULL;
 
     if (!PyTuple_Check(state) || PyTuple_GET_SIZE(state) != 2) {
         goto error;
     }
-    sentinel = PyTuple_GET_ITEM(state, 0);
-    stop_exc = PyTuple_GET_ITEM(state, 1);
+    sentinel = PyTuple_GetItemRef(state, 0);
+    if (sentinel == NULL) {
+        return NULL;
+    }
+    stop_exc = PyTuple_GetItemRef(state, 1);
+    if (stop_exc == NULL) {
+        goto fail;
+    }
     if (!PyTuple_Check(sentinel) || PyTuple_GET_SIZE(sentinel) > 1) {
         goto error;
     }
     if (_PyEval_CheckExceptTypeValid(_PyThreadState_GET(), stop_exc) < 0) {
-        return NULL;
+        goto fail;
     }
     if (it->it_callable != NULL) {
-        Py_XSETREF(it->it_sentinel,
-                   PyTuple_GET_SIZE(sentinel) ?
-                   Py_NewRef(PyTuple_GET_ITEM(sentinel, 0)) : NULL);
+        if (PyTuple_GET_SIZE(sentinel)) {
+            item = PyTuple_GetItemRef(sentinel, 0);
+            if (item == NULL) {
+                goto fail;
+            }
+        }
+        Py_XSETREF(it->it_sentinel, item);
         Py_SETREF(it->it_stop_exc, Py_NewRef(stop_exc));
     }
+    Py_DECREF(sentinel);
+    Py_DECREF(stop_exc);
     Py_RETURN_NONE;
 
 error:
     PyErr_SetString(PyExc_TypeError, "invalid state for callable_iterator");
+fail:
+    Py_XDECREF(sentinel);
+    Py_XDECREF(stop_exc);
     return NULL;
 }
 

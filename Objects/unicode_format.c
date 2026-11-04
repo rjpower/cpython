@@ -56,6 +56,9 @@ struct unicode_formatter_t {
     int args_owned;
     Py_ssize_t arglen, argidx;
     PyObject *dict;
+    /* Owns the tuple item most recently returned by
+       unicode_format_getnextarg(); released by the next call. */
+    PyObject *curarg;
 
     int fmtkind;
     Py_ssize_t fmtcnt, fmtpos;
@@ -101,7 +104,8 @@ unicode_format_getnextarg(struct unicode_formatter_t *ctx, int allowone)
     if (argidx < ctx->arglen && (allowone || ctx->arglen >= 0)) {
         ctx->argidx++;
         if (ctx->arglen >= 0) {
-            return PyTuple_GetItem(ctx->args, argidx);
+            Py_XSETREF(ctx->curarg, PyTuple_GetItemRef(ctx->args, argidx));
+            return ctx->curarg;
         }
         else if (allowone) {
             return ctx->args;
@@ -1065,6 +1069,7 @@ PyUnicode_Format(PyObject *format, PyObject *args)
         ctx.argidx = -2;
     }
     ctx.args_owned = 0;
+    ctx.curarg = NULL;
     if (PyMapping_Check(args) && !PyTuple_Check(args) && !PyUnicode_Check(args))
         ctx.dict = args;
     else
@@ -1106,6 +1111,7 @@ PyUnicode_Format(PyObject *format, PyObject *args)
         goto onError;
     }
 
+    Py_XDECREF(ctx.curarg);
     if (ctx.args_owned) {
         Py_DECREF(ctx.args);
     }
@@ -1113,6 +1119,7 @@ PyUnicode_Format(PyObject *format, PyObject *args)
 
   onError:
     _PyUnicodeWriter_Dealloc(&ctx.writer);
+    Py_XDECREF(ctx.curarg);
     if (ctx.args_owned) {
         Py_DECREF(ctx.args);
     }

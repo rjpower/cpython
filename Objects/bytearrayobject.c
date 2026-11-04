@@ -1102,11 +1102,17 @@ bytearray___init___impl(PyByteArrayObject *self, PyObject *arg,
         if (PyByteArray_Resize((PyObject *)self, size) < 0) {
             return -1;
         }
-        PyObject **items = PySequence_Fast_ITEMS(arg);
         char *s = PyByteArray_AS_STRING(self);
         for (Py_ssize_t i = 0; i < size; i++) {
             int value;
-            if (!PyLong_CheckExact(items[i])) {
+            PyObject *item = PyList_CheckExact(arg)
+                ? PyList_GetItemRef(arg, i) : PyTuple_GetItemRef(arg, i);
+            if (item == NULL) {
+                (void)PyByteArray_Resize((PyObject *)self, 0);
+                return -1;
+            }
+            if (!PyLong_CheckExact(item)) {
+                Py_DECREF(item);
                 /* Resize to 0 and go through slowpath */
                 if (Py_SIZE(self) != 0) {
                    if (PyByteArray_Resize((PyObject *)self, 0) < 0) {
@@ -1115,7 +1121,8 @@ bytearray___init___impl(PyByteArrayObject *self, PyObject *arg,
                 }
                 goto slowpath;
             }
-            int rc = _getbytevalue(items[i], &value);
+            int rc = _getbytevalue(item, &value);
+            Py_DECREF(item);
             if (!rc) {
                 /* Don't expose the uninitialized bytes: reset to empty */
                 (void)PyByteArray_Resize((PyObject *)self, 0);

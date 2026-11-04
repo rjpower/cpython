@@ -2954,26 +2954,13 @@ PyDict_Clear(PyObject *op)
     Py_END_CRITICAL_SECTION();
 }
 
-int
-_PyDict_NextValue(PyObject *op, Py_ssize_t *ppos, PyValue *pkey,
-                  PyValue *pvalue, Py_hash_t *phash)
+/* Find the entry at or after *ppos without changing ownership: on success
+ * store the dict's own key, value and hash, advance *ppos past the entry and
+ * return 1; return 0 at the end. */
+static int
+dict_next_stored(PyDictObject *mp, Py_ssize_t *ppos, PyValue *pkey,
+                 PyValue *pvalue, Py_hash_t *phash)
 {
-    assert(pkey == NULL || pvalue == NULL || pkey != pvalue);
-    if (pkey != NULL) {
-        *pkey = PyValue_NULL;
-    }
-    if (pvalue != NULL) {
-        *pvalue = PyValue_NULL;
-    }
-    if (!PyAnyDict_Check(op)) {
-        PyErr_BadInternalCall();
-        return -1;
-    }
-    if (PyErr_Occurred()) {
-        return -1;
-    }
-
-    PyDictObject *mp = (PyDictObject *)op;
     Py_ssize_t i = *ppos;
     PyValue key, value;
     Py_hash_t hash;
@@ -3021,6 +3008,37 @@ _PyDict_NextValue(PyObject *op, Py_ssize_t *ppos, PyValue *pkey,
     }
     assert(PyValue_IsLanguageValue(key));
     assert(PyValue_IsLanguageValue(value) && PyValue_IsHeapSafe(value));
+    *pkey = key;
+    *pvalue = value;
+    *phash = hash;
+    *ppos = i + 1;
+    return 1;
+}
+
+int
+_PyDict_NextValue(PyObject *op, Py_ssize_t *ppos, PyValue *pkey,
+                  PyValue *pvalue, Py_hash_t *phash)
+{
+    assert(pkey == NULL || pvalue == NULL || pkey != pvalue);
+    if (pkey != NULL) {
+        *pkey = PyValue_NULL;
+    }
+    if (pvalue != NULL) {
+        *pvalue = PyValue_NULL;
+    }
+    if (!PyAnyDict_Check(op)) {
+        PyErr_BadInternalCall();
+        return -1;
+    }
+    if (PyErr_Occurred()) {
+        return -1;
+    }
+
+    PyValue key, value;
+    Py_hash_t hash;
+    if (!dict_next_stored((PyDictObject *)op, ppos, &key, &value, &hash)) {
+        return 0;
+    }
     /* Capturing owners is pure: no table pointer crosses a callback. */
     if (pkey != NULL) {
         *pkey = PyValue_MakeHeapSafe(PyValue_Borrow(key));
@@ -3031,7 +3049,25 @@ _PyDict_NextValue(PyObject *op, Py_ssize_t *ppos, PyValue *pkey,
     if (phash != NULL) {
         *phash = hash;
     }
-    *ppos = i + 1;
+    return 1;
+}
+
+int
+_PyDict_NextBorrowed(PyObject *op, Py_ssize_t *ppos, PyValue *pkey,
+                     PyValue *pvalue)
+{
+    assert(PyAnyDict_Check(op));
+    PyValue key, value;
+    Py_hash_t hash;
+    if (!dict_next_stored((PyDictObject *)op, ppos, &key, &value, &hash)) {
+        return 0;
+    }
+    if (pkey != NULL) {
+        *pkey = PyValue_Borrow(key);
+    }
+    if (pvalue != NULL) {
+        *pvalue = PyValue_Borrow(value);
+    }
     return 1;
 }
 

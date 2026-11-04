@@ -156,7 +156,26 @@ range_new(PyTypeObject *type, PyObject *args, PyObject *kw)
     if (!_PyArg_NoKeywords("range", kw))
         return NULL;
 
-    return range_from_array(type, _PyTuple_ITEMS(args), PyTuple_GET_SIZE(args));
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (nargs < 1 || nargs > 3) {
+        /* range_from_array() reports the arity error without reading args. */
+        return range_from_array(type, NULL, nargs);
+    }
+    PyObject *items[3];
+    for (Py_ssize_t i = 0; i < nargs; i++) {
+        items[i] = PyTuple_GetItemRef(args, i);
+        if (items[i] == NULL) {
+            while (--i >= 0) {
+                Py_DECREF(items[i]);
+            }
+            return NULL;
+        }
+    }
+    PyObject *result = range_from_array(type, items, nargs);
+    for (Py_ssize_t i = 0; i < nargs; i++) {
+        Py_DECREF(items[i]);
+    }
+    return result;
 }
 
 

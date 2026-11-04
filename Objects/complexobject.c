@@ -1141,7 +1141,10 @@ actual_complex_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         return complex_subtype_from_doubles(type, 0, 0);
     }
 
-    PyObject *arg = PyTuple_GET_ITEM(args, 0);
+    PyObject *arg = PyTuple_GetItemRef(args, 0);
+    if (arg == NULL) {
+        return NULL;
+    }
     /* Special-case for a single argument when type(arg) is complex. */
     if (PyComplex_CheckExact(arg) && type == &PyComplex_Type) {
         /* Note that we can't know whether it's safe to return
@@ -1149,10 +1152,12 @@ actual_complex_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
            to exact complexes here.  If either the input or the
            output is a complex subclass, it will be handled below
            as a non-orthogonal vector.  */
-        return Py_NewRef(arg);
+        return arg;
     }
     if (PyUnicode_Check(arg)) {
-        return complex_subtype_from_string(type, arg);
+        res = complex_subtype_from_string(type, arg);
+        Py_DECREF(arg);
+        return res;
     }
     PyObject *tmp = try_complex_special_method(arg);
     if (tmp) {
@@ -1161,6 +1166,7 @@ actual_complex_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         Py_DECREF(tmp);
     }
     else if (PyErr_Occurred()) {
+        Py_DECREF(arg);
         return NULL;
     }
     else if (PyComplex_Check(arg)) {
@@ -1186,6 +1192,7 @@ actual_complex_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
                      "complex() argument must be a string or a number, not %T",
                      arg);
     }
+    Py_DECREF(arg);
     return res;
 }
 

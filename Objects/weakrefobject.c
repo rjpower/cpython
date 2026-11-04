@@ -1113,10 +1113,14 @@ PyObject_ClearWeakRefs(PyObject *object)
     }
 
     for (Py_ssize_t i = 0; i < num_items; i += 2) {
-        PyObject *callback = PyTuple_GET_ITEM(tuple, i + 1);
+        /* NULL means an empty slot (no callback): callbacks are callable, so
+           never stored inline, and no exception is set. */
+        PyObject *callback = PyTuple_GetItemRef(tuple, i + 1);
         if (callback != NULL) {
-            PyObject *weakref = PyTuple_GET_ITEM(tuple, i);
+            PyObject *weakref = PyTuple_GetItemRef(tuple, i);
             handle_callback((PyWeakReference *)weakref, callback);
+            Py_DECREF(weakref);
+            Py_DECREF(callback);
         }
     }
 

@@ -4381,21 +4381,33 @@ pylong_int_divmod(PyLongObject *v, PyLongObject *w,
                         "tuple of length 2 is required from int_divmod()");
         return -1;
     }
-    PyObject *q = PyTuple_GET_ITEM(result, 0);
-    PyObject *r = PyTuple_GET_ITEM(result, 1);
+    PyObject *q = PyTuple_GetItemRef(result, 0);
+    PyObject *r = PyTuple_GetItemRef(result, 1);
+    Py_DECREF(result);
+    if (q == NULL || r == NULL) {
+        Py_XDECREF(q);
+        Py_XDECREF(r);
+        return -1;
+    }
     if (!PyLong_Check(q) || !PyLong_Check(r)) {
-        Py_DECREF(result);
+        Py_DECREF(q);
+        Py_DECREF(r);
         PyErr_SetString(PyExc_ValueError,
                         "tuple of int is required from int_divmod()");
         return -1;
     }
     if (pdiv != NULL) {
-        *pdiv = (PyLongObject *)Py_NewRef(q);
+        *pdiv = (PyLongObject *)q;
+    }
+    else {
+        Py_DECREF(q);
     }
     if (pmod != NULL) {
-        *pmod = (PyLongObject *)Py_NewRef(r);
+        *pmod = (PyLongObject *)r;
     }
-    Py_DECREF(result);
+    else {
+        Py_DECREF(r);
+    }
     return 0;
 }
 #endif /* WITH_PYLONG_MODULE */
@@ -6200,9 +6212,13 @@ int___round___impl(PyObject *self, PyObject *o_ndigits)
     if (result == NULL)
         return NULL;
 
-    temp = (PyObject*)long_sub((PyLongObject*)self,
-                               (PyLongObject*)PyTuple_GET_ITEM(result, 1));
-    Py_SETREF(result, temp);
+    PyObject *rem = PyTuple_GetItemRef(result, 1);
+    Py_DECREF(result);
+    if (rem == NULL) {
+        return NULL;
+    }
+    result = (PyObject*)long_sub((PyLongObject*)self, (PyLongObject*)rem);
+    Py_DECREF(rem);
 
     return result;
 }

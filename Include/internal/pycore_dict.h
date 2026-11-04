@@ -85,6 +85,12 @@ PyAPI_FUNC(int) _PyDict_GetValue_KnownHash(PyObject *, PyValue, Py_hash_t, PyVal
  * As with dict iteration, owners do not make key mutation during iteration
  * safe. The borrowed dict must remain live throughout each call. */
 PyAPI_FUNC(int) _PyDict_NextValue(PyObject *, Py_ssize_t *, PyValue *, PyValue *, Py_hash_t *);
+/* Borrowed iteration for core code that must not allocate or fail, such as
+ * finalization and fault dumps: return 1 with borrowed key/value views, or 0
+ * at the end. Never sets an exception. The views are valid only while the
+ * entry stays in the dict, so the caller must not run code that can mutate
+ * it between reading and using them. */
+PyAPI_FUNC(int) _PyDict_NextBorrowed(PyObject *, Py_ssize_t *, PyValue *, PyValue *);
 /* Same owned-entry contract, with a snapshot of the cached source key hash. */
 PyAPI_FUNC(int) _PyDict_NextEntryRefKnownHash(
     PyObject *, Py_ssize_t *, PyObject **, PyObject **, Py_hash_t *);

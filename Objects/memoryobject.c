@@ -1379,20 +1379,26 @@ out:
 
 /* The memoryview must have space for 3*len(seq) elements. */
 static Py_ssize_t
-copy_shape(Py_ssize_t *shape, const PyObject *seq, Py_ssize_t ndim,
+copy_shape(Py_ssize_t *shape, PyObject *seq, Py_ssize_t ndim,
            Py_ssize_t itemsize)
 {
     Py_ssize_t x, i;
     Py_ssize_t len = itemsize;
 
     for (i = 0; i < ndim; i++) {
-        PyObject *tmp = PySequence_Fast_GET_ITEM(seq, i);
+        PyObject *tmp = PyList_Check(seq) ? PyList_GetItemRef(seq, i)
+                                          : PyTuple_GetItemRef(seq, i);
+        if (tmp == NULL) {
+            return -1;
+        }
         if (!PyLong_Check(tmp)) {
+            Py_DECREF(tmp);
             PyErr_SetString(PyExc_TypeError,
                 "memoryview.cast(): elements of shape must be integers");
             return -1;
         }
         x = PyLong_AsSsize_t(tmp);
+        Py_DECREF(tmp);
         if (x == -1 && PyErr_Occurred()) {
             return -1;
         }
@@ -1419,7 +1425,7 @@ copy_shape(Py_ssize_t *shape, const PyObject *seq, Py_ssize_t ndim,
    array does not have exactly the same byte length as the input array, raise
    TypeError. */
 static int
-cast_to_ND(PyMemoryViewObject *mv, const PyObject *shape, int ndim, char order)
+cast_to_ND(PyMemoryViewObject *mv, PyObject *shape, int ndim, char order)
 {
     Py_buffer *view = &mv->view;
     Py_ssize_t len;
@@ -2250,7 +2256,7 @@ struct_unpack_single(const char *ptr, struct unpacker *x)
         return NULL;
 
     if (PyTuple_GET_SIZE(v) == 1) {
-        PyObject *res = Py_NewRef(PyTuple_GET_ITEM(v, 0));
+        PyObject *res = PyTuple_GetItemRef(v, 0);
         Py_DECREF(v);
         return res;
     }
@@ -2552,8 +2558,12 @@ ptr_from_tuple(const Py_buffer *view, PyObject *tup)
 
     for (dim = 0; dim < nindices; dim++) {
         Py_ssize_t index;
-        index = PyNumber_AsSsize_t(PyTuple_GET_ITEM(tup, dim),
-                                   PyExc_IndexError);
+        PyObject *item = PyTuple_GetItemRef(tup, dim);
+        if (item == NULL) {
+            return NULL;
+        }
+        index = PyNumber_AsSsize_t(item, PyExc_IndexError);
+        Py_DECREF(item);
         if (index == -1 && PyErr_Occurred())
             return NULL;
         ptr = lookup_dimension(view, ptr, (int)dim, index);
@@ -2662,14 +2672,19 @@ is_multislice(PyObject *key)
         return 0;
 
     for (i = 0; i < size; i++) {
-        PyObject *x = PyTuple_GET_ITEM(key, i);
-        if (!PySlice_Check(x))
+        PyObject *x = PyTuple_GetItemRef(key, i);
+        if (x == NULL) {
+            return -1;
+        }
+        int is_slice = PySlice_Check(x);
+        Py_DECREF(x);
+        if (!is_slice)
             return 0;
     }
     return 1;
 }
 
-static Py_ssize_t
+static int
 is_multiindex(PyObject *key)
 {
     Py_ssize_t size, i;
@@ -2678,8 +2693,13 @@ is_multiindex(PyObject *key)
         return 0;
     size = PyTuple_GET_SIZE(key);
     for (i = 0; i < size; i++) {
-        PyObject *x = PyTuple_GET_ITEM(key, i);
-        if (!_PyIndex_Check(x)) {
+        PyObject *x = PyTuple_GetItemRef(key, i);
+        if (x == NULL) {
+            return -1;
+        }
+        int is_index = _PyIndex_Check(x);
+        Py_DECREF(x);
+        if (!is_index) {
             return 0;
         }
     }
@@ -2742,10 +2762,19 @@ memory_subscript(PyObject *_self, PyObject *key)
 
         return (PyObject *)sliced;
     }
-    else if (is_multiindex(key)) {
+
+    int multi = is_multiindex(key);
+    if (multi < 0) {
+        return NULL;
+    }
+    if (multi) {
         return memory_item_multi(self, key);
     }
-    else if (is_multislice(key)) {
+    multi = is_multislice(key);
+    if (multi < 0) {
+        return NULL;
+    }
+    if (multi) {
         PyErr_SetString(PyExc_NotImplementedError,
             "multi-dimensional slicing is not implemented");
         return NULL;
@@ -2833,7 +2862,11 @@ memory_ass_sub(PyObject *_self, PyObject *key, PyObject *value)
         PyBuffer_Release(&src);
         return ret;
     }
-    if (is_multiindex(key)) {
+    int multi = is_multiindex(key);
+    if (multi < 0) {
+        return -1;
+    }
+    if (multi) {
         char *ptr;
         if (PyTuple_GET_SIZE(key) < view->ndim) {
             PyErr_SetString(PyExc_NotImplementedError,
@@ -2845,7 +2878,11 @@ memory_ass_sub(PyObject *_self, PyObject *key, PyObject *value)
             return -1;
         return pack_single(self, ptr, value, fmt);
     }
-    if (PySlice_Check(key) || is_multislice(key)) {
+    multi = is_multislice(key);
+    if (multi < 0) {
+        return -1;
+    }
+    if (PySlice_Check(key) || multi) {
         /* Call memory_subscript() to produce a sliced lvalue, then copy
            rvalue into lvalue. This is already implemented in _testbuffer.c. */
         PyErr_SetString(PyExc_NotImplementedError,

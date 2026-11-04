@@ -46,6 +46,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "pycore_value.h"
 #include "pycore_codecs.h"        // _PyCodec_Lookup()
 #include "pycore_critical_section.h" // Py_*_CRITICAL_SECTION_SEQUENCE_FAST
+#include "pycore_dict.h"          // _PyDict_NextBorrowed()
 #include "pycore_format.h"        // F_LJUST
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_interp.h"        // PyInterpreterState.fs_codec
@@ -236,7 +237,7 @@ Py_ssize_t
 _PyUnicode_InternedSize_Immortal(void)
 {
     PyObject *dict = get_interned_dict(_PyInterpreterState_GET());
-    PyObject *key, *value;
+    PyValue keyval;
     Py_ssize_t pos = 0;
     Py_ssize_t count = 0;
 
@@ -244,7 +245,9 @@ _PyUnicode_InternedSize_Immortal(void)
     // is intended for refleak tests. It spends extra work to report the true
     // value, to help detect bugs in optimizations.
 
-    while (PyDict_Next(dict, &pos, &key, &value)) {
+    while (_PyDict_NextBorrowed(dict, &pos, &keyval, NULL)) {
+        // The interned dict holds only str keys, which have object form.
+        PyObject *key = PyValue_AsPyObjectBorrow(keyval);
         assert(PyUnicode_CHECK_INTERNED(key) != SSTATE_INTERNED_IMMORTAL_STATIC);
         if (PyUnicode_CHECK_INTERNED(key) == SSTATE_INTERNED_IMMORTAL) {
            count++;
@@ -10427,7 +10430,7 @@ case_operation(PyObject *self,
 PyObject *
 PyUnicode_Join(PyObject *separator, PyObject *seq)
 {
-    PyObject *res;
+    PyObject *res = NULL;
     PyObject *fseq;
     Py_ssize_t seqlen;
     PyObject **items;
@@ -10439,9 +10442,31 @@ PyUnicode_Join(PyObject *separator, PyObject *seq)
 
     Py_BEGIN_CRITICAL_SECTION_SEQUENCE_FAST(seq);
 
-    items = PySequence_Fast_ITEMS(fseq);
+    /* Items are stored as values that may have no object form, so collect
+       owned references for _PyUnicode_JoinArray(). */
     seqlen = PySequence_Fast_GET_SIZE(fseq);
-    res = _PyUnicode_JoinArray(separator, items, seqlen);
+    items = PyMem_New(PyObject *, seqlen ? seqlen : 1);
+    if (items == NULL) {
+        PyErr_NoMemory();
+    }
+    else {
+        Py_ssize_t n = 0;
+        while (n < seqlen) {
+            items[n] = PyList_Check(fseq) ? PyList_GetItemRef(fseq, n)
+                                          : PyTuple_GetItemRef(fseq, n);
+            if (items[n] == NULL) {
+                break;
+            }
+            n++;
+        }
+        if (n == seqlen) {
+            res = _PyUnicode_JoinArray(separator, items, seqlen);
+        }
+        while (--n >= 0) {
+            Py_DECREF(items[n]);
+        }
+        PyMem_Free(items);
+    }
 
     Py_END_CRITICAL_SECTION_SEQUENCE_FAST();
 
@@ -13544,8 +13569,8 @@ unicode_maketrans_from_dict(PyObject *x, PyObject *newdict)
 {
     PyObject *key, *value;
     Py_ssize_t i = 0;
-    int res;
-    while (PyDict_Next(x, &i, &key, &value)) {
+    int res, rc;
+    while ((rc = PyDict_NextEntryRef(x, &i, &key, &value)) > 0) {
         if (PyUnicode_Check(key)) {
             PyObject *newkey;
             int kind;
@@ -13553,29 +13578,39 @@ unicode_maketrans_from_dict(PyObject *x, PyObject *newdict)
             if (PyUnicode_GET_LENGTH(key) != 1) {
                 PyErr_SetString(PyExc_ValueError, "string keys in translate"
                                 "table must be of length 1");
-                return -1;
+                goto fail;
             }
             kind = PyUnicode_KIND(key);
             data = PyUnicode_DATA(key);
             newkey = PyLong_FromLong(PyUnicode_READ(kind, data, 0));
             if (!newkey)
-                return -1;
+                goto fail;
             res = PyDict_SetItem(newdict, newkey, value);
             Py_DECREF(newkey);
             if (res < 0)
-                return -1;
+                goto fail;
         }
         else if (PyLong_Check(key)) {
             if (PyDict_SetItem(newdict, key, value) < 0)
-                return -1;
+                goto fail;
         }
         else {
             PyErr_SetString(PyExc_TypeError, "keys in translate table must"
                             "be strings or integers");
-            return -1;
+            goto fail;
         }
+        Py_DECREF(key);
+        Py_DECREF(value);
+    }
+    if (rc < 0) {
+        return -1;
     }
     return 0;
+
+fail:
+    Py_DECREF(key);
+    Py_DECREF(value);
+    return -1;
 }
 
 /*[clinic input]
@@ -13793,15 +13828,20 @@ unicode_startswith_impl(PyObject *self, PyObject *subobj, Py_ssize_t start,
     if (PyTuple_Check(subobj)) {
         Py_ssize_t i;
         for (i = 0; i < PyTuple_GET_SIZE(subobj); i++) {
-            PyObject *substring = PyTuple_GET_ITEM(subobj, i);
+            PyObject *substring = PyTuple_GetItemRef(subobj, i);
+            if (substring == NULL) {
+                return NULL;
+            }
             if (!PyUnicode_Check(substring)) {
                 PyErr_Format(PyExc_TypeError,
                              "tuple for startswith must only contain str, "
                              "not %.100s",
                              Py_TYPE(substring)->tp_name);
+                Py_DECREF(substring);
                 return NULL;
             }
             int result = tailmatch(self, substring, start, end, -1);
+            Py_DECREF(substring);
             if (result < 0) {
                 return NULL;
             }
@@ -13850,15 +13890,20 @@ unicode_endswith_impl(PyObject *self, PyObject *subobj, Py_ssize_t start,
     if (PyTuple_Check(subobj)) {
         Py_ssize_t i;
         for (i = 0; i < PyTuple_GET_SIZE(subobj); i++) {
-            PyObject *substring = PyTuple_GET_ITEM(subobj, i);
+            PyObject *substring = PyTuple_GetItemRef(subobj, i);
+            if (substring == NULL) {
+                return NULL;
+            }
             if (!PyUnicode_Check(substring)) {
                 PyErr_Format(PyExc_TypeError,
                              "tuple for endswith must only contain str, "
                              "not %.100s",
                              Py_TYPE(substring)->tp_name);
+                Py_DECREF(substring);
                 return NULL;
             }
             int result = tailmatch(self, substring, start, end, +1);
+            Py_DECREF(substring);
             if (result < 0) {
                 return NULL;
             }
@@ -14952,8 +14997,10 @@ _PyUnicode_ClearInterned(PyInterpreterState *interp)
     Py_ssize_t total_length = 0;
 #endif
     Py_ssize_t pos = 0;
-    PyObject *s, *ignored_value;
-    while (PyDict_Next(interned, &pos, &s, &ignored_value)) {
+    PyValue key;
+    while (_PyDict_NextBorrowed(interned, &pos, &key, NULL)) {
+        // The interned dict holds only str keys, which have object form.
+        PyObject *s = PyValue_AsPyObjectBorrow(key);
         int shared = 0;
         switch (PyUnicode_CHECK_INTERNED(s)) {
         case SSTATE_INTERNED_IMMORTAL:

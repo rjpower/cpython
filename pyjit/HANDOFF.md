@@ -1,6 +1,6 @@
 # Coordinator handoff
 
-Operational snapshot: 2026-11-03 17:40 PST. Read [STATUS](STATUS.md) for the
+Operational snapshot: 2026-11-03 20:40 PST. Read [STATUS](STATUS.md) for the
 project summary, [ROADMAP](ROADMAP.md) for stage outcomes, [GOAL](GOAL.md) for
 standing direction, and [PROCESS](PROCESS.md) before assigning work. This is a
 restart guide, not a claim that workers remain active. Recheck agents and
@@ -31,12 +31,12 @@ and backend. The stage pages distinguish selected designs from working code.
 | --- | --- |
 | Documentation root (canonical `pyjit/`) | `/home/power/code/cpython/.worktrees/python-jit`, branch `weaver/python-jit` |
 | Runtime tree (nested worktree) | `/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/pyvalue-rc-universal` |
-| Runtime branch / HEAD | `boil/pyvalue-rc-universal`, `6d39221996d` |
+| Runtime branch / HEAD | `boil/pyvalue-rc-universal`, `1f19952778d` |
 | Debug build | `build/pyvalue-rc-debug-20261102-v1` (under the `python-boil-the-ocean` worktree) |
 | Triage debug builds | `build/pyvalue-rc-bringup-debug`, `build/pyvalue-rc-triage-rt-debug` |
 | Release build | `build/pyvalue-rc-release-20261103` (`--with-mimalloc --with-computed-gotos --with-shapes`, -O3) |
 | Upstream control | `build/upstream-release-3a440b6` (`3a440b65695`, `CC=gcc --with-mimalloc --with-computed-gotos`, -O3); passes `test_int` |
-| Wave 1 working directory | `build/pyjit-link-wave1/` (reviews in `review-*.md`, bring-up ladder in `BRINGUP-BRIEF.md`) |
+| Coordinator working files | `build/pyjit-link-wave1/` (briefs, `FOLLOWUPS.md`, reviews, progress logs; bring-up ladder in `BRINGUP-BRIEF.md`) |
 
 The outer `python-boil-the-ocean` worktree's git link is broken. Run Git in the
 nested runtime worktree. Older worktrees hold historical copies of these pages;
@@ -59,12 +59,44 @@ and shapes. Read the build directories for the exact commands.
 
 The runtime tree has no held modifications. Debug and release builds link and
 run. All 67 shared modules whose third-party headers exist build; the decimal,
-tkinter, ssl, sqlite and zstd headers are not installed on this host. Full
-debug suite at 17:31 (before the last fixes): 611 of 619 files run, 484 OK, 30
-failed, 3 env changed; 48,500 tests, 52 failures. Two triage agents are fixing
-the rest. Known causes: zero-filled slots (NULL = 0 change), per-call malloc in
-`native_scope.c` (P4), IR and tooling expectations. There are no performance
-results for the universal-value runtime yet.
+tkinter, ssl, sqlite and zstd headers are not installed on this host. Debug
+suite after representation step 4: run=51,496, failures=13 (test_capi 3:
+test_getitem_with_error, test_is_unique_temporary, test_unicode.test_new;
+test_pyvalue_dict_vm 4; test_pyvalue_native_scope 6). Release also fails
+test_pyvalue, a release-only abort at `PyValue_Wrap` in `_testinternalcapi.c`.
+
+Checkpoint measurement
+([checkpoint](bench/results/checkpoint-20261103.md),
+[triage](bench/results/checkpoint-20261103-triage.md)): kernels take 2.6x
+upstream `3a440b6` (geomean, interleaved) with natural method-JIT admission off;
+4.6x at `dbce7b1260d` with it on; the interim build takes 1.21x. Remaining gap:
+interpreter-loop self cost 39%, exception save/restore around releases 25%,
+value bridging 17%, other 14%. The IR executes 0.81 words per upstream
+instruction. Peak RSS is 34% above upstream (startup 12.4 vs 9.5 MiB).
+
+Measurement lessons: `sys._jit` covers only upstream's JIT, so the harness must
+assert the fork's method-JIT state too. The pystats build compiles that JIT out,
+so pystats dispatch counts do not see it. A `pybuilddir.txt` of `none` makes a
+release build 5 to 12x slower; check it. `perf` is blocked
+(`perf_event_paranoid=4`); `tools/sampler/` has an LD_PRELOAD SIGPROF sampler.
+
+Running now: representation step 5 (D2 core: release contract and retire path)
+and value API V1 (additive part: box counters, enforcement macros, a clang-based
+check, format conversions, entry primitives; the rename and header move are
+deferred scripts).
+
+Landed today on the runtime branch, newest first:
+
+- `1f19952778d`: natural method-JIT admission off by default.
+- `7171541fa49`: representation step 4, `PyValue_NULL` is all zero bits.
+- `fdd7fed3216`: P4 post-review fixes (borrow release bit re-armed only when it
+  was already set).
+- `379e92cded9`, `dbce7b1260d`: step 3 (debug check of canonical values in homes;
+  3b checks homes in the IR store macros).
+- `2558376b321`: native boundary P4, call arguments through the borrow stack.
+- `f7dfc5b961f`: step 2, 48-bit address limit checked where memory comes from
+  the OS.
+- `f129780a9a7`: step 1, one PyValue build profile and one set of constants.
 
 Commits since checkpoint56 (`6bf198d1ef5`), each reviewed independently before
 commit:
@@ -102,17 +134,18 @@ commit:
 
 All under `design/`. Each is short markdown. Design reviews live in
 `design/reviews/`; code reviews of ports live in `build/pyjit-link-wave1/`.
-All three designs are accepted.
+The designs below and the value API page are accepted.
 
 - [pyvalue.md](design/pyvalue.md), [review 1](design/reviews/pyvalue-review-1.md):
   decisions D1 G1' fixes (done); D2 canonical construction and release contract;
   D3 int51 (measured, `bench/results/pyvalue-int-width-20261103.md`); D4 static
-  borrowing (joint with register-ir IR-D3); D5 NULL = 0; D6 ABI policy (done);
-  D7 type-slot gap after baseline; D8 G7 non-goal, G8 deleted.
+  borrowing (joint with register-ir IR-D3); D5 NULL = 0 (done, step 4); D6 ABI policy (done);
+  D7 type-slot gap after baseline (rows updated); D8 G7 non-goal, G8 deleted.
 - [native-boundary.md](design/native-boundary.md),
   [review 1](design/reviews/native-boundary-review-1.md): accepted with changes.
-  A per-thread borrow stack replaces `_PyArg_OwnerScope`. P1 to P3 landed; P4
-  (argument vectors on the borrow stack) is in progress; post-review is running.
+  A per-thread borrow stack replaces `_PyArg_OwnerScope`. P1 to P4 landed
+  (P4: argument vectors on the borrow stack, with post-review fixes); the page
+  describes P4 as built.
 - [register-ir.md](design/register-ir.md),
   [review 1](design/reviews/register-ir-review-1.md),
   [review 2](design/reviews/register-ir-review-2.md): accepted after review 2.
@@ -123,7 +156,10 @@ All three designs are accepted.
 - Proposal: [pyvalue-representation-packet.md](design/proposals/pyvalue-representation-packet.md)
   and its [review](design/reviews/pyvalue-representation-packet-review-1.md).
   Accepted plan for D2, D3, D5, G1', G3, G10 and G11: 11 steps, about 42
-  agent-hours, starting after triage and P4.
+  agent-hours. Steps 1 to 4 landed; step 5 is running.
+- [value-api.md](design/value-api.md): values are the internal API and
+  `PyObject *` is the compatibility layer. Reviews 1 and 2 and revisions 2 and 3
+  (`74236263ef1`) done; accepted for packet V1.
 
 **Clinic means CPython's Argument Clinic wrapper generator.** Producer changes
 must be made in `Tools/clinic/libclinic/`; bulk edits to generated C are
@@ -131,18 +167,18 @@ overwritten.
 
 ## Next steps
 
-1. Test-suite triage (two agents running) and native-boundary P4; post-review
-   of P1 to P3 is running.
-2. Representation packet (11 steps).
-3. IR v2.
-4. Baseline.
-5. Checkpoint measurement: time and RSS against upstream `3a440b6` and the
-   interim runtime, on a quiet machine once the suite is near green.
+1. Finish representation step 5 and value API V1 (running).
+2. Representation steps 6a to 6c, 7 and 8.
+3. IR v2: IR-D1, IR-D2, G9 in [register-ir.md](design/register-ir.md); targets
+   the 39% interpreter-loop cost.
+4. Value API V2a-0 onwards.
+5. Official re-measure of kernels and the pyperformance subset on a quiet
+   machine after step 5, then the qualified baseline.
+6. Fix the remaining 13 debug failures and the release-only `test_pyvalue` abort.
 
-The instruction-count metric needs `kernel.perf_event_paranoid` lowered; the
-user was asked and it is not done. Until then use the time metric. Do not
-present host controls, object files or compiler-error reductions as runtime
-performance.
+Use the time metric; the instruction-count metric needs `perf_event_paranoid`
+lowered, which the user has not done. Do not present host controls, object files
+or compiler-error reductions as runtime performance.
 
 ## Coordination
 

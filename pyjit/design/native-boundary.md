@@ -2,8 +2,10 @@
 
 Decision record, 2026-11-03, revised after
 [review 1](reviews/native-boundary-review-1.md). P1 and P2 landed together as
-`acbdf45627d` in the runtime tree; P3 and most review changes are in
-progress. [Implementation status](#implementation-status) lists what is built.
+`acbdf45627d` in the runtime tree; P3 landed as `56ff66a596b` (with the
+regenerated Clinic output in `643c69c7244` and `6d39221996d`); P4 landed as
+`2558376b321`. Only decision 2 (stack switching) is not built.
+[Implementation status](#implementation-status) lists what is built.
 
 Source references are to the runtime tree
 `build/worktrees/pyvalue-rc-universal` in the boil worktree; `build/` below
@@ -12,21 +14,21 @@ means `/home/power/code/cpython/.worktrees/python-boil-the-ocean/build`.
 ## Decisions (2026-11-03)
 
 The coordinator accepted all 12 required changes of review 1 as stated. Status
-is as of `acbdf45627d`.
+is as of `379e92cded9`.
 
 | # | Decision | Review item | Status |
 |---|---|---|---|
-| 1 | The eval floor is set and restored in `_PyEval_EvalFrameDefault`, not in the inline `_PyEval_EvalFrame` wrapper. The invariant is stated in §2 and asserted in debug builds. | 1 | In progress |
+| 1 | The eval floor is set and restored in `_PyEval_EvalFrameDefault`, not in the inline `_PyEval_EvalFrame` wrapper. The invariant is stated in §2 and asserted in debug builds. | 1 | Landed (`_PyEval_EvalFrameDefault`, Python/ceval.c; the `_Py_HandlePending` floor assert is in 56ff66a596b) |
 | 2 | Code that switches C stacks inside one thread state swaps one `_PyBorrowStack` per C stack, as `datastack_*` is swapped. greenlet joins the port list with this requirement. | 2 | Specified in §3; not built |
 | 3 | On activation exit, re-arm `_PY_BORROW_RELEASE_BIT` when the stack top is above the restored floor. | 3 | Landed |
-| 4 | Debug builds track depth and assert on Exit that the mark is not above `top`. Item 4 of "Why" is reworded. | 4 | In progress |
-| 5 | The growth bound is transitive. `_pickle.c:load_newobj` gets an explicit scope. Debug builds warn once per site when one scope passes a fixed size (the JNI `-Xcheck:jni` analogue). | 5 | In progress |
-| 6 | The direct native-call sites in `Python/ceval.c` and `Python/bytecodes.c`, and the generic vectorcall dispatch, get explicit Enter/Exit. | 6 | In progress |
+| 4 | Debug builds track depth and assert on Exit that the mark is not above `top`. Item 4 of "Why" is reworded. | 4 | Landed in `56ff66a596b` (`_PyBorrowScope_Release` fatal error; chunks record `base_depth`) |
+| 5 | The growth bound is transitive. `_pickle.c:load_newobj` gets an explicit scope. Debug builds warn once per site when one scope passes a fixed size (the JNI `-Xcheck:jni` analogue). | 5 | Landed in `56ff66a596b` (`load_newobj` scope in Modules/_pickle.c; `borrow_check_size` warns once per site above 10000 entries) |
+| 6 | The direct native-call sites in `Python/ceval.c` and `Python/bytecodes.c`, and the generic vectorcall dispatch, get explicit Enter/Exit. | 6 | Landed in `56ff66a596b` (`VALUES_TO_PYOBJECTS` scope, two `bytecodes.c` sites, `pycore_call.h` dispatch); P4 vector pushes request no release (cost table below) |
 | 7 | Packet order: P1 and P2 land together. | 7 | Resolved (landed together) |
-| 8 | Keep only dict-derived values. Push tuple runs after the arity check and only `min(nargs, max)` items. State every failure mode of `_PyBorrow_TupleItems` and box without the checking primitive. | 8 | In progress |
-| 9 | Release the main thread's base region before module teardown. Assert that nothing pushes onto a cleared thread state. Leave the entries of a daemon thread that still has a frame. No explicit scope may span `Py_FinalizeEx`. | 9 | In progress |
+| 8 | Keep only dict-derived values. Push tuple runs after the arity check and only `min(nargs, max)` items. State every failure mode of `_PyBorrow_TupleItems` and box without the checking primitive. | 8 | Landed in `56ff66a596b` (arity check before `_PyBorrow_TupleItems(tuple, n)`; `_PyBorrow_Keep` only on dict values) |
+| 9 | Release the main thread's base region before module teardown. Pushes after clear are allowed, because finalizers parse after `PyThreadState_Clear`; `interpreter_clear` releases again after them, and the chunks are freed with the thread state. Leave the entries of a daemon thread that still has a frame. No explicit scope may span `Py_FinalizeEx`. | 9 | Built in P4 (the no-push-after-clear assert was dropped on purpose) |
 | 10 | The cost statements use the per-operation figures for calls that push, and name the benchmarks to record. | 10 | Documented here |
-| 11 | Specify the limited-API Clinic emission for tuple receivers and state the abi3 gap. | 11 | Documented here; Clinic change is P3 |
+| 11 | Specify the limited-API Clinic emission for tuple receivers and state the abi3 gap. | 11 | Landed in `56ff66a596b` (Clinic emits `_PyBorrow_TupleItems`; the limited-API form was not checked) |
 | 12 | Wording fixes in §3 (setters, slot wrappers, `Py_MakePendingCalls`, C trace functions). | 12 | Documented here |
 
 **Problem.** Legacy C APIs hand out a borrowed `PyObject *` read from argument
@@ -119,6 +121,30 @@ box into C locals and do not use the stack.
    `HandleScope`. HPy remains the opaque target for ported extensions; this
    record sets the lifetime rule for the rebuilt-source bridge.
 
+### Decision 6 cost
+
+Release build, load about 3.5, best of two interleaved best-of-9, noise ±5 ns,
+in ns per call. Measured before the borrowed-argument change.
+
+| Benchmark | Push requests release | No request on vector pushes | No push requests at all |
+|---|---|---|---|
+| `f(1,2)` | 112 | 106 | 103 |
+| `g(1,2,3)` | 134 | 127 | 125 |
+| `s.replace('a','b')` | 147 | 135 | 133 |
+| `d.get(1,2)` | 158 | 155 | 150 |
+| `isinstance(1,int)` | 40 | 40 | 40 |
+| METH_VARARGS `v(1, 2.5)` | 467 | 466 | 447 |
+| `datetime(2020,1,1)` | 504 | 507 | 499 |
+| `PyObject_Call` with an inline-int tuple, `f(*t)` | 395 | 387 | 380 |
+| `list(genexpr)` | 969 | 944 | 954 |
+| JIT-hot `datetime` loop, ns/iteration | 736–753 | 752–754 | 739–749 |
+
+P4 takes the middle column: vector pushes request no release, which saves 6–12
+ns per native call. The remaining requests (`_PyBorrow_Keep`, tuple-item
+pushes) cost about 19 ns (4%) on a METH_VARARGS call and 7–8 ns on
+`PyObject_Call` with a tuple and on `datetime`. They are within noise for
+`list(genexpr)` and the JIT loop.
+
 ### Problems with the existing design
 
 - **Scopes with no boxes.** `UnicodeEncodeError_init` (Objects/exceptions.c:3961)
@@ -171,6 +197,15 @@ box into C locals and do not use the stack.
 - **Release can run deallocators.** The stack holds references to arbitrary
   objects, so release must be LIFO and reentrant (§2). Boxes themselves have
   trivial deallocators.
+- **Argument vectors borrow from the call window (P4).** A vector entry points
+  at an object the register-IR call window owns, so the window must outlive the
+  scope. Two refcounts show the remaining copies: `sys.getrefcount(object())`
+  is 1 (it was 3 before P4), and a local passed to a native call reads 2,
+  because the call window holds an owned copy (IR v2 owns that). Vector scopes
+  still INCREF the callable, self, defining class and kwnames; value-api V3
+  owns borrowing them. Two `PyMem_Malloc` calls remain: the retired window for
+  calls with more than 8 slots in `call_transaction_native`, and `newargs` in
+  the `*args/**kwargs` path.
 
 ### Options compared
 
@@ -184,20 +219,20 @@ box into C locals and do not use the stack.
 | Runtime machinery | ~740 lines + 4 templates; leases, budgets, registry | ~150 lines (chunked stack, keep, tuple run, release) + ~30 short entry edits | Tuple layout change, dealloc hook, and a second mechanism for kwargs | Small | Clinic conversion of 123 files |
 | Verdict | Withdrawn | **Adopted** | Rejected: puts a second representation in every tuple and still needs a kwargs mechanism | Rejected: the most edits and the worst error paths | Right long-term direction for speed; not a lifetime mechanism |
 
-**Interpreter FASTCALL boxing.** It can use the same stack, and should once
-the runtime links (P4 in §5). Python/ceval.c:1304 and :1349,
-`_PyObjectArray_FromValueArray` and `_PyObjectArray_Free`, already make every
-argument an owned reference for the duration of the call. Pushing those
-references as one run inside a scope would:
-
-- remove the `MAX_VALUE_SCRATCH` C-stack array and the `PyMem_Malloc` path;
-- remove the separate free function;
-- make the interpreter's call bridge the scope boundary for calls from the
-  interpreter.
-
-The leading `PY_VECTORCALL_ARGUMENTS_OFFSET` slot becomes an owned NULL entry,
-and release uses `Py_XDECREF`. This change is not on the getargs critical
-path.
+**Interpreter FASTCALL boxing (P4, built).** The interpreter builds the object
+vector on the same stack with `_PyBorrow_ValueVector`, inside a scope. The
+vector holds borrowed object pointers to values that the register-IR call
+window owns. It sits behind a tagged skip entry that release,
+release-to-mark, `_PyBorrowStack_ReleaseAll` and `_PyBorrowStack_Visit` step
+over; the leading `PY_VECTORCALL_ARGUMENTS_OFFSET` slot (a NULL) lies inside
+that skipped run. Inline values are boxed as owned entries above the skip
+entry. A vector push requests no eval-breaker release, because every vector
+caller releases its own entries at scope exit. `VALUES_TO_PYOBJECTS` opens the
+scope, and its cleanup runs on every path, including conversion failure. The
+`*args/**kwargs` path (`eval_frame_push_and_init_ex_code`) reads positional
+objects with `_PyBorrow_TupleItems` inside a scope. This removed the
+`MAX_VALUE_SCRATCH` C-stack array, `_PyObjectArray_FromValueArray` and
+`_PyObjectArray_Free`.
 
 ## 2. API and lifetime contract
 
@@ -259,29 +294,52 @@ PyAPI_FUNC(PyObject *) _PyBorrow_Keep(PyObject *owned);
  * scalars are boxed. A zero `count` returns a static array and pushes
  * nothing. The caller checks arity first and passes
  * `min(nargs, max)`, so a wrong-arity call or `f(*range(10**7))` pushes
- * nothing. Failure returns NULL with a pending exception: MemoryError when a
- * chunk cannot grow, or SystemError when an item is not a language value.
- * (The built version also fails with an exception that was already pending,
- * through `PyValue_AsObject`; the non-checking box removes that case.) Items
- * already pushed stay until the scope exits. The run is
+ * nothing. The only failure is memory: NULL with MemoryError set, when a
+ * chunk cannot grow or a box cannot be allocated. Call it with no exception
+ * set. Items already pushed stay until the scope exits. The run is
  * read-only and has no slot before element 0. */
 PyAPI_FUNC(PyObject *const *) _PyBorrow_TupleItems(PyObject *tuple,
                                                    Py_ssize_t count);
+
+/* Build a vectorcall argument vector for values[0..n) (P4). Entries borrow
+ * the objects the values own, behind a tagged skip entry that the stack steps
+ * over; only inline scalars get new boxes, pushed as owned entries above the
+ * skip entry. The callee may use PY_VECTORCALL_ARGUMENTS_OFFSET. The caller
+ * keeps the values alive and unchanged until its own scope exits. Requests no
+ * eval-breaker release. */
+PyAPI_FUNC(PyObject **) _PyBorrow_ValueVector(const PyValue *values,
+                                              Py_ssize_t n);
 
 /* Ask the innermost eval loop to release the entries above its floor at the
  * next instruction boundary. No-op outside any eval loop. */
 PyAPI_FUNC(void) _PyBorrow_RequestRelease(PyThreadState *tstate);
 
-/* Thread-state lifecycle (Python/pystate.c). Init allocates nothing. Clear
- * releases every entry, including the base region, and frees the chunks. */
+/* Thread-state lifecycle (Python/pystate.c, Python/pylifecycle.c). Init
+ * allocates nothing. ReleaseAll releases every entry, including the base
+ * region, unless the thread still has a frame. Fini frees the chunks and
+ * releases nothing; in debug builds it asserts the stack is empty unless the
+ * thread still has a frame. Pushes after ReleaseAll are legal (finalizers
+ * parse after PyThreadState_Clear), so there is no "cleared" state.
+ * Visit shows the owned entries to the GC verifier. */
 extern void _PyBorrowStack_Init(_PyBorrowStack *stack);
-extern void _PyBorrowStack_Clear(PyThreadState *tstate);
+extern void _PyBorrowStack_ReleaseAll(PyThreadState *tstate);
+extern void _PyBorrowStack_Fini(PyThreadState *tstate);
+extern int _PyBorrowStack_Visit(PyThreadState *tstate, visitproc visit,
+                                void *arg);
 ```
 
 `_PyBorrow_RequestRelease` is exported because the inline
-`_PyEval_EvalFrame` calls it. `_PyBorrow_TupleItems` as built takes the tuple
-only and pushes every item (Python/borrow.c:_PyBorrow_TupleItems); the
-`count` parameter is decision 8 and is in progress.
+`_PyEval_EvalFrame` calls it. `_PyBorrow_TupleItems` takes the tuple and
+`count`, as in decision 8 (Python/borrow.c:_PyBorrow_TupleItems). The stack
+keeps knowledge of its own layout: `_PyBorrowStack_Visit` is the only way
+`Python/gc_trace.c` reads it, and release, `ReleaseAll` and `Visit` step over
+the skipped run of a vector. `_PyBorrow_Depth` reports the number of entries, for
+tests and debug checks.
+
+**Lifetime of vector entries (P4).** A vector entry is a borrowed pointer to an
+object the register-IR call window owns, so the window must outlive the
+scope that holds the vector. The vector is not an owner. Only the boxes above
+it are owned entries.
 
 Implementation rules for `Python/borrow.c`:
 
@@ -314,11 +372,9 @@ Implementation rules for `Python/borrow.c`:
   }
   ```
 - **Boxing.** `_PyBorrow_TupleItems` boxes each item with
-  `PyValue_AsPyObjectNewBoxed(PyTuple_GET_VALUE(tuple, i))` after checking
-  `PyValue_IsLanguageValue`. It does not call `PyValue_AsObject`, which runs
-  `PyErr_Occurred()` per item (Python/pyvalue.c:PyValue_AsObject). As built,
-  `_PyBorrow_TupleItems` still calls `PyValue_AsObject`; the change is part of
-  decision 8. Boxing an exact int or float and taking a new reference cannot
+  `PyValue_AsPyObjectNewBoxed(PyTuple_GET_VALUE(tuple, i))`. It does not call
+  `PyValue_AsObject`, which runs `PyErr_Occurred()` per item, and it does not
+  check `PyValue_IsLanguageValue`. Boxing an exact int or float and taking a new reference cannot
   run Python code, so the run stays contiguous.
 - **Eval-breaker bit.** When `eval_floor != NULL`, `_PyBorrow_Keep` and
   `_PyBorrow_TupleItems` call `_PyBorrow_RequestRelease`, which sets a new
@@ -328,9 +384,12 @@ Implementation rules for `Python/borrow.c`:
   sees it. The bit is per thread, but the parked entries belong to one
   activation. When an activation exits and restores the outer floor, it
   re-arms the bit if `top` is above that floor
-  (Include/internal/pycore_ceval.h:_PyEval_EvalFrame). Without this, a nested
+  (Python/ceval.c:_PyEval_EvalFrameDefault). Without this, a nested
   activation's first check clears the bit and strands the outer activation's
-  entries until it exits.
+  entries until it exits. The P4 post-review found that a live argument vector
+  keeps `top` above the outer floor, so every Python callback from a builtin
+  re-arms the bit for nothing; this is being fixed, by re-arming only when the
+  bit was set when the nested activation started.
 - **Where the release runs.** `_Py_HandlePending` releases to `eval_floor`
   after the GC step and before the GIL-drop and async-exception steps. It
   tests the bit after pending calls and GC have run, because both can push and
@@ -351,9 +410,9 @@ entry frame, in `_PyEval_EvalFrameDefault`, and not in the inline
 `_PyEval_EvalFrame` wrapper. A PEP 523 hook (the perf trampoline at
 Python/perf_trampoline.c:470, `record_eval` in Modules/_testinternalcapi.c,
 third-party evaluators) runs C code between the wrapper and the evaluator;
-anything it pushes would be released while live. As built, the floor is still
-set in the wrapper (Include/internal/pycore_ceval.h:_PyEval_EvalFrame); moving
-it is decision 1.
+anything it pushes would be released while live. As built, the floor is set in
+`_PyEval_EvalFrameDefault` (Python/ceval.c), and the inline wrapper opens its
+own scope for a PEP 523 hook.
 
 A broken invariant is worse than a dangling borrow. Release leaves `top`
 below a live mark. The owner's later Exit then sees `top != mark` and pops
@@ -364,7 +423,7 @@ current debug build trips `assert(done != &empty_chunk)` in
 
 ### Debug checks
 
-Debug builds add four checks (decisions 1, 4 and 5; none is built yet):
+Debug builds add four checks (decisions 1, 4 and 5; built in `56ff66a596b`; the floor assert in `_Py_HandlePending` checks only that the floor is non-NULL):
 
 - **Depth on Exit.** Each chunk records the depth below it. Exit asserts
   `depth(mark) <= depth(top)` and fails fatally with a message naming the
@@ -433,8 +492,11 @@ signatures.
    `Py_EndInterpreter` after atexit callbacks and before `finalize_modules`,
    so retained objects run `__del__` before module teardown. Long-running code
    there must open an explicit scope. An explicit scope must not span
-   `Py_FinalizeEx`: Exit would run on a cleared thread state. No push may
-   reach a cleared thread state (debug builds assert this).
+   `Py_FinalizeEx`: Exit would run on a cleared thread state. Pushes can reach a cleared
+   thread state, because finalizers that run after `PyThreadState_Clear` parse
+   (debug builds do not assert against it); `interpreter_clear` releases the
+   finalizing thread's entries again after them, and the chunks are freed with
+   the thread state.
 10. **Growth bound.** Per parse, a scope gains at most the tuple's length (or
     `min(nargs, max)` once decision 8 lands), plus the length of any nested
     `(...)` tuple, plus the number of keyword values matched, plus up to
@@ -459,7 +521,7 @@ _PyBorrowScope_Exit(tstate, mark);
 
 | File | Function | Change |
 |---|---|---|
-| Python/ceval.c | `_PyEval_EvalFrameDefault` (entry frame push and pop) | Save `borrow.eval_floor`, set it to `top`, run the loop, `Exit` to the floor, restore, and re-arm `_PY_BORROW_RELEASE_BIT` if `top` is above the restored outer floor. The floor belongs here, not in the inline wrapper, so a PEP 523 hook's own C code (the perf trampoline at Python/perf_trampoline.c:470, `record_eval`, third-party evaluators) is outside the floor (§2 "The release invariant"). Covers `_PyEval_Vector` and generators and coroutines resumed from C (`gen_send_ex2`). **As built:** the save, set, Exit, restore and re-arm sit in the inline `_PyEval_EvalFrame` (Include/internal/pycore_ceval.h); the re-arm is landed, the move is decision 1. |
+| Python/ceval.c | `_PyEval_EvalFrameDefault` (entry frame push and pop) | Save `borrow.eval_floor`, set it to `top`, run the loop, `Exit` to the floor, restore, and re-arm `_PY_BORROW_RELEASE_BIT` if `top` is above the restored outer floor. The floor belongs here, not in the inline wrapper, so a PEP 523 hook's own C code (the perf trampoline at Python/perf_trampoline.c:470, `record_eval`, third-party evaluators) is outside the floor (§2 "The release invariant"). Covers `_PyEval_Vector` and generators and coroutines resumed from C (`gen_send_ex2`). **As built:** the save, set, Exit, restore and re-arm sit in `_PyEval_EvalFrameDefault` (Python/ceval.c). |
 | Python/ceval_gil.c | `_Py_HandlePending` | After GC and before the GIL-drop and async-exception steps: if `_PY_BORROW_RELEASE_BIT` is set (read again after pending calls and GC), clear it and `_PyBorrowScope_Exit(tstate, borrow.eval_floor)`. Releases entries parked by slot code that bytecode handlers call directly (`nb_*`, `tp_richcompare`, `tp_iter`, `tp_getattro`, descriptors), by C trace and profile functions (`PyEval_SetTrace`) that run inside instrumented instructions, and by pending calls that ran in the same call. The only callers are `check_periodics` and `check_periodics_at_end` (Python/ceval_macros.h:533, 543), reached from the eval loop and from the call-transaction end (Python/ceval.c:2010). Every caller is at an instruction boundary, where all native code that this activation called has returned (the invariant in §2). That code already runs GC and signal handlers, so a release that runs deallocators adds no new kind of reentry. |
 | Python/ceval.c | `_Py_BuiltinCallFast_Value`, `_Py_BuiltinCallFastWithKeywords_Value`, `_PyCallMethodDescriptorFast_Value`, `_PyCallMethodDescriptorFastWithKeywords_Value`, `_Py_CallBuiltinClass_Value` | Enter/Exit around the body call. These are the hot builtin-call paths; without scopes any push costs an atomic pair plus `_Py_HandlePending`. |
 | Python/bytecodes.c | `_CALL_METHOD_DESCRIPTOR_O` (:4847) and `_CALL_METHOD_DESCRIPTOR_NOARGS` (:4961), which call `_PyCFunction_TrampolineCall` directly | Enter/Exit around the call. The other bytecodes.c CALL sites (:4552, :4648, :4686, :4908, :5016) go through the helpers above. |
@@ -475,19 +537,20 @@ _PyBorrowScope_Exit(tstate, mark);
 | Objects/call.c | `_PyObject_MakeTpCall`, `_PyObject_Call` (`tp_call` branch) | Enter/Exit around `tp_call`. |
 | Objects/call.c | `_PyVectorcall_Call`, `_PyObject_Call_Prepend`, `_PyObject_CallFunctionVa`, `callmethod` | Replace the OwnerScope with Enter, `_PyBorrow_TupleItems(tuple)`, call, Exit. The scope is both the view owner and the call boundary. |
 | Objects/call.c | `_PyStack_AsDict` (line 1091) | No scope needed: `kwnames` holds only str, so read names with `_PyTuple_GET_OBJECT`. |
-| Python/pystate.c | `init_threadstate`; `PyThreadState_Clear` | Init calls `_PyBorrowStack_Init`, which points at the empty chunk. Clear calls `_PyBorrowStack_Clear` twice: once before other teardown, and once after the finalizers that Clear runs, because those can push. Each call releases to the empty chunk's slots and frees `spare`. `PyGILState_Release` reaches Clear for thread states that Ensure created. Clearing a thread state that still has a frame (a daemon thread inside `Py_BEGIN_ALLOW_THREADS` at `interpreter_clear`, Python/pystate.c:757) leaves its entries, as upstream leaves its frames (warning at Python/pystate.c:1696), because GIL-free code may still read them. Debug builds assert that nothing pushes onto a cleared thread state (decision 9, in progress). |
+| Python/pystate.c | `init_threadstate`; `PyThreadState_Clear` | Init calls `_PyBorrowStack_Init`, which points at the empty chunk. `PyThreadState_Clear` calls `_PyBorrowStack_ReleaseAll` twice: once before other teardown, and once after the finalizers that Clear runs, because those can push. `interpreter_clear` releases the finalizing thread's entries a third time after its last collection. `free_threadstate` calls `_PyBorrowStack_Fini`, which frees the chunks and asserts in debug builds that the stack is empty unless the thread still has a frame. `PyGILState_Release` reaches Clear for thread states that Ensure created. Releasing a thread state that still has a frame (a daemon thread inside `Py_BEGIN_ALLOW_THREADS` at `interpreter_clear`) leaves its entries, as upstream leaves its frames, because GIL-free code may still read them. `_PyBorrowStack_Clear` and the debug "cleared" flag (no pushes after clear) were removed on purpose (decision 9). |
 | Python/pylifecycle.c | `init_interp_main` | Enter at start and Exit at end (a wrapper around `init_interp_main_impl`), so main initialization does not leave entries behind. Entries from `pyinit_core`, before this point, stay in the base region. They are bounded by startup's fixed work. |
-| Python/pylifecycle.c | `Py_FinalizeEx`, `Py_EndInterpreter` | Release the main thread's base region after atexit callbacks and before `finalize_modules` (Python/pylifecycle.c:2485), so retained objects run `__del__` before module teardown. Not built yet (decision 9). |
-| Modules/_pickle.c | `load_newobj` (:6657) | One scope around each `tp_new` call, because a Clinic `tp_new` with a tuple receiver pushes once per NEWOBJ opcode inside one `load()`. Not built yet (decision 5). |
+| Python/pylifecycle.c | `Py_FinalizeEx`, `Py_EndInterpreter` | Release the main thread's base region after atexit callbacks and before `finalize_modules` (Python/pylifecycle.c:2485), so retained objects run `__del__` before module teardown. Built: `_PyBorrowStack_ReleaseAll` at Python/pylifecycle.c:2500 and :2846 (decision 9). |
+| Modules/_pickle.c | `load_newobj` (:6657) | One scope around each `tp_new` call, because a Clinic `tp_new` with a tuple receiver pushes once per NEWOBJ opcode inside one `load()`. Built in `56ff66a596b` (decision 5). |
 
 **As built.** `acbdf45627d` wires the PyCFunction and method-descriptor
 trampolines, `wrapperdescr_raw_call`, `type_call`, `_PyObject_MakeTpCall`,
 `_PyObject_Call` and `_PyCFunction_CallScoped`; the `_PyEval_EvalFrame` wrapper;
 the `_Py_HandlePending` release; `init_interp_main`; and the public
 `PyBorrowScope`. The rows for `classmethoddescr_call`, `tp_new_wrapper`, the
-tuple-to-vector bridges in Objects/call.c and `methodcaller_vectorcall` are P3.
-The ceval.c and bytecodes.c helpers, the generic vectorcall dispatch,
-`load_newobj` and the finalization rows are in progress.
+tuple-to-vector bridges in Objects/call.c and `methodcaller_vectorcall` landed
+with P3 (`56ff66a596b`), as did the ceval.c and bytecodes.c sites, the generic
+vectorcall dispatch, `load_newobj` and the finalization rows. At
+`379e92cded9` every row of the table above is built.
 
 **Covered without new code:**
 
@@ -551,9 +614,9 @@ but tuple runs still use the stack, and the code is the same.
 ## 4. Closing Python/getargs.c (packet P1, under two hours)
 
 P1 landed in `acbdf45627d` with the line numbers below as of its parent. The
-as-built code differs from the steps in two ways, both in progress as decision
-8: tuple runs push every item before the arity check, and values from
-`find_keyword` and `find_keyword_str` are kept. Step 9 landed.
+as-built code differed from the steps in two ways, both fixed by decision 8
+in `56ff66a596b`: tuple runs pushed every item before the arity check, and
+values from `find_keyword` and `find_keyword_str` were kept. Step 9 landed.
 
 There are 12 errors: the 11 listed in `build/pyjit-link-wave1/v22-errors.txt`,
 plus `Include/pymacro.h:313`, which comes from line 2104. P1 leaves the
@@ -856,9 +919,9 @@ packet-order concern in review item 7 does not arise.
 | Packet | Content | Size | Status |
 |---|---|---|---|
 | P1 | Borrow stack core + getargs.c (§4) | < 2 h | Landed with P2 in `acbdf45627d` |
-| P2 | Entry points (§3) and the public `PyBorrowScope` | ~1 h; landed together with P1 | Landed with P1; the ceval.c, bytecodes.c and vectorcall-dispatch sites are in progress |
-| P3 | Delete OwnerScope; Clinic producer and regeneration; 9 handwritten files | ~2 h | In progress |
-| P4 | After link: interpreter argument windows move onto the stack; delete `_PyObjectArray_FromValueArray/_Free` and `MAX_VALUE_SCRATCH`; measure | ~2 h | Not started |
+| P2 | Entry points (§3) and the public `PyBorrowScope` | ~1 h; landed together with P1 | Landed with P1; the ceval.c, bytecodes.c and vectorcall-dispatch sites landed in `56ff66a596b` |
+| P3 | Delete OwnerScope; Clinic producer and regeneration; 9 handwritten files | ~2 h | Landed: `56ff66a596b` (Clinic and owner-scope deletion), `643c69c7244` and `6d39221996d` (regenerated output) |
+| P4 | After link: interpreter argument windows move onto the stack; delete `_PyObjectArray_FromValueArray/_Free` and `MAX_VALUE_SCRATCH`; measure | ~2 h | Landed as `2558376b321`: borrowed argument vector (`_PyBorrow_ValueVector`), `mark` in the native scope, `ReleaseAll`/`Fini` lifecycle, `_PyBorrowStack_Visit`; cost table under decision 6. The release-bit re-arm fix is open |
 
 ## 6. Tests (once the runtime links)
 
@@ -943,18 +1006,21 @@ in source.
    Include/internal/pycore_tstate.h, not in `pycore_borrow.h`, to avoid an
    include cycle: `_PyThreadStateImpl` embeds the stack and `pycore_borrow.h`
    includes `pycore_tstate.h`.
-2. **Helpers.** `_PyBorrowStack_Init`, `_PyBorrowStack_Clear` and
+2. **Helpers.** `_PyBorrowStack_Init`, `_PyBorrowStack_ReleaseAll`,
+   `_PyBorrowStack_Fini`, `_PyBorrowStack_Visit` and
    `_PyBorrow_RequestRelease` (exported) are in Python/borrow.c. The empty
    chunk is the file-static `empty_chunk`.
-3. **Re-arm on eval exit.** `_PyEval_EvalFrame` re-arms
+3. **Re-arm on eval exit.** `_PyEval_EvalFrameDefault` re-arms
    `_PY_BORROW_RELEASE_BIT` through `_PyBorrow_RequestRelease` when `top` is
-   above the restored outer floor (Include/internal/pycore_ceval.h). This is
-   review item 3, landed.
+   above the restored outer floor (Python/ceval.c). This is review item 3,
+   landed. It over-fires with a live argument vector; the fix is under "Eval-breaker bit" in §2.
 4. **Release order.** `_Py_HandlePending` releases after the GC step and before
    the GIL-drop and async-exception steps, and tests the bit again at that
    point (Python/ceval_gil.c).
-5. **Thread-state clear.** `PyThreadState_Clear` calls `_PyBorrowStack_Clear`
-   twice, because finalizers that Clear runs can push (Python/pystate.c).
+5. **Thread-state lifecycle.** `PyThreadState_Clear` calls
+   `_PyBorrowStack_ReleaseAll` twice, because finalizers that Clear runs can
+   push. `interpreter_clear` releases again after finalizers, and
+   `free_threadstate` calls `_PyBorrowStack_Fini` (Python/pystate.c).
 6. **Spare chunk.** Only a standard 1024-slot chunk is kept as `spare`
    (`borrow_chunk_retire`).
 7. **Packet order.** P1 and P2 landed together, so review item 7 is resolved.
@@ -962,15 +1028,23 @@ in source.
    the tracing verifier (Python/gc_trace.c).
 9. **getpath.** `getpath_joinpath_impl` was ported to `PyTuple_GET_VALUE`, the
    last other link blocker (Modules/getpath.c).
+10. **P4, commit `2558376b321`.** The interpreter's native calls build their
+    argument vector with `_PyBorrow_ValueVector` (§1 "Interpreter FASTCALL
+    boxing"). The native scope struct has `mark` in place of `storage`.
+    Boxing happens at Begin and End exits to the mark. A fixed (METH_O) scope
+    borrows the window value, takes its own reference only when the window
+    value is itself borrowed, boxes only inline values and closes only those
+    boxes (Python/native_scope.c). `_PyCFunction_CallScoped` checks results
+    with `_Py_CheckFunctionResult`, which frees a result returned with an
+    exception set.
 
 Review items, by state:
 
 | State | Items |
 |---|---|
-| Landed | 3 (re-arm), 7 (resolved) |
-| In progress (P3 and the changes below) | 1, 4, 5, 6, 8, 9 |
+| Landed | 1, 3 (re-arm; over-fires with a live vector, fix under way), 4, 5, 6, 7 (resolved), 8, 9 (P4), 11 |
 | Specified here, not built | 2 (stack switching) |
-| Documented here | 10, 11, 12 |
+| Documented here | 10, 12 |
 
 ## Open questions
 
@@ -997,11 +1071,17 @@ Review items, by state:
 3. **What else moves onto the stack.** P4 moves the interpreter's argument
    windows. The `_PyValueTemps` operand boxes could follow, but they share a
    protocol with result publication (`pending_local`) and may stay separate.
-   The `_PyNativeScope` invocation transaction (Python/native_scope.c) also
-   owns an argument vector and should be reconciled in P4.
+   The `_PyNativeScope` invocation transaction (Python/native_scope.c) was
+   reconciled in P4: its vector scopes use the borrow stack.
 4. **How many parse calls are in input-sized loops (rule L).** A
    parser-aware scan is needed; a lexical census will not answer this.
 5. **Public API.** `PyBorrowScope` and the macros are in Include/cpython (not
    the limited API) as landed in P2. Limited-API (abi3) extensions therefore
    have no remedy under rule L. Decide whether to add `PyBorrowScope` or an
    equivalent to the limited API.
+6. **`f_lineno` crash (upstream parity, not P4).** Setting `f_lineno` from a
+   trace function on a caller frame that is inside a call releases that
+   frame's call window while the callee borrows from it, and segfaults on this
+   fork and on system Python 3.14.4 (Objects/frameobject.c checks only the
+   thread's current trace event). A separate packet should refuse the jump
+   unless the frame is the one being traced.

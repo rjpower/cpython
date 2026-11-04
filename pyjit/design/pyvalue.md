@@ -6,10 +6,9 @@ built, compares it with other dynamic-language runtimes, and lists the gaps
 we should close. It is the reference for value, container and C-boundary work.
 
 Source of truth: the universal-value worktree
-`build/worktrees/pyvalue-rc-universal` at `0ab5bc42f61` (2026-11-03), which
-contains the G1 fix `271f4e435e5`. That tree has not linked, so nothing here
-has run. Behaviour described below is
-read from source, not observed. Where this page and the code disagree, the code
+`build/worktrees/pyvalue-rc-universal` at `f6508007b94` (2026-11-04), which
+contains the G1 fix `271f4e435e5`. Section 1 was read from source at that
+commit, not observed. Where this page and the code disagree, the code
 wins; fix this page. Design review 1
 ([reviews/pyvalue-review-1.md](reviews/pyvalue-review-1.md)) is folded in,
 with the coordinator decisions at the top of section 3.
@@ -32,38 +31,37 @@ File references below are relative to the source worktree.
 `typedef struct { uintptr_t bits; } PyValue;` (`Include/pytypedefs.h`).
 The struct prevents implicit conversion to or from `PyObject *`.
 
-The encoding needs a 64-bit GIL build. `Include/pyvalue.h` stops the build
-otherwise (`#error "PyValue requires the 64-bit GIL private runtime"`). In
-`Include/internal/pycore_value.h` this profile defines `Py_VALUE_INLINE_VALUES`.
+The encoding needs a 64-bit GIL build. `Include/internal/pycore_pyvalue.h`
+stops the build otherwise (`#error "PyValue requires the 64-bit GIL private
+runtime"`). There is one profile and one set of constants; no macro selects an
+encoding.
 
 ### 1.2 Constants
 
 | Constant | Value | Defined in |
 |---|---|---|
 | `Py_TAG_REFCNT` | `1` (bit 0: reference owns no count) | `pycore_value.h` |
-| `Py_TAG_INVALID` | `2` (bit 1: `PyValue_ERROR`, debug `PyValue_Wrap`) | `pycore_value.h` |
+| `Py_TAG_INVALID` | `2` (bit 1: debug `PyValue_Wrap`) | `pycore_value.h` |
 | `Py_TAG_BITS` | `3` | `pycore_value.h` |
-| `Py_PTR_LIMIT` | `1 << 48` | `pycore_value.h` |
-| `Py_INDEX_BASE` | `1 << 48` | `pycore_value.h` |
-| `Py_DOUBLE_OFFSET` | `1 << 49` | `pycore_value.h` |
-| `Py_INT_BASE` | `0xFFFE << 48` | `pycore_value.h` |
-| `Py_OWNED_MASK` | `(0xFFFF << 48) \| Py_TAG_REFCNT` | `pycore_value.h` |
-| `PyValue_NULL_BITS` | `Py_TAG_REFCNT` (`1`) | `pycore_value.h` |
-| `PyValue_ERROR` | `Py_TAG_INVALID` (`2`) | `pycore_value.h` |
+| `Py_PTR_LIMIT` | `1 << 48` | `pycore_pyvalue.h` |
+| `Py_INDEX_BASE` | `1 << 48` | `pycore_pyvalue.h` |
+| `Py_DOUBLE_OFFSET` | `1 << 49` | `pycore_pyvalue.h` |
+| `Py_INT_BASE` | `0xFFFE << 48` | `pycore_pyvalue.h` |
+| `Py_OWNED_MASK` | `(0xFFFF << 48) \| Py_TAG_BITS` | `pycore_value.h` |
+| `PyValue_NULL_BITS` | `0` | `pycore_value.h` |
 
-`Include/pyvalue.h` repeats `1 << 48`, `1 << 49` and `0xFFFE << 48` as
-literals instead of using these names.
+`pycore_pyvalue.h` is `Include/internal/pycore_pyvalue.h`. There is no
+`Include/pyvalue.h`.
 
 ### 1.3 Bit layout
 
 | Top 16 bits | Low 48 bits | Region | Meaning |
 |---|---|---|---|
-| `0x0000` | `0` | none | Not a value. Zero-filled memory is invalid (`PyValue_CheckValid` asserts `bits != 0`) |
-| `0x0000` | `0x1` | sentinel | `PyValue_NULL`: absent, empty slot, end of iteration |
-| `0x0000` | `0x2` | sentinel | `PyValue_ERROR` |
+| `0x0000` | `0` | sentinel | `PyValue_NULL`: absent, empty slot, end of iteration. Zero-filled memory is a valid empty slot |
 | `0x0000` | address, bits 1..0 = `00` | pointer | Owned strong reference |
 | `0x0000` | address, bits 1..0 = `01` | pointer | No count owned: borrowed, immortal, or (free-threaded only) deferred |
 | `0x0000` | address, bits 1..0 = `10` | pointer | Debug builds only: `PyValue_Wrap()` of a non-object pointer |
+| `0x0000` | `0x1`, `0x2`, `0x3` | none | Never produced: the tag bits without an address |
 | `0x0001` | int48, two's complement | index | Interpreter-internal index, -1 to 2^47-1 |
 | `0x0002` to `0x7FF2` | | inline float | IEEE bits + 2^49: +0.0 (`0x0002_0000_0000_0000`) to +inf (`0x7FF2_0000_0000_0000`) |
 | `0x7FF2_..._0001` to `0x8001` | | unused | Images of positive NaNs |
@@ -79,9 +77,8 @@ arbitrary NaN cannot be encoded safely.
 ```mermaid
 flowchart TD
     B[64-bit word] --> P{"bits < 2^48 ?"}
-    P -- yes --> S{"bits == 1 or 2 ?"}
-    S -- "1" --> NULL[PyValue_NULL]
-    S -- "2" --> ERR[PyValue_ERROR]
+    P -- yes --> S{"bits == 0 ?"}
+    S -- yes --> NULL[PyValue_NULL]
     S -- no --> W{"bit 1 set ?"}
     W -- yes --> WR[debug Wrap: not an object]
     W -- no --> O{"bit 0 set ?"}
@@ -99,15 +96,16 @@ flowchart TD
 | Operation | Definition | Where |
 |---|---|---|
 | `PyValue_IsPointerSpace` | `bits < Py_PTR_LIMIT` | `pycore_value.h` |
-| `PyValue_IsObject` | `bits > 2 && bits < 2^48 && (bits & 2) == 0` | `pyvalue.h` |
-| `PyValue_IsTaggedIndex` | `bits - 2^48 < 2^48` | `pycore_value.h` |
+| `PyValue_IsNull` | `bits == PyValue_NULL_BITS` | `pycore_value.h` |
+| `PyValue_IsObject` | `bits > 2 && bits < 2^48 && (bits & 2) == 0` | `pycore_pyvalue.h` |
+| `PyValue_IsTaggedIndex` | `bits - Py_INDEX_BASE < Py_DOUBLE_OFFSET - Py_INDEX_BASE` | `pycore_value.h` |
 | `PyValue_IsInline` | `bits >= 2^49` | `pycore_value.h` |
 | `PyValue_IsInlineInt` | `bits >= Py_INT_BASE` | `pycore_value.h` |
 | `PyValue_IsInlineFloat` | `bits - 2^49 < Py_INT_BASE - 2^49` | `pycore_value.h` |
 | `PyValue_BothInlineInt(a, b)` | `(a & b) >= Py_INT_BASE` (relies on `0xFFFF` being unused) | `pycore_value.h` |
 | `PyValue_IsInlineAt(p)` | Loads the top 16 bits from memory (`cmpw $imm, 6(p)`) | `pycore_value.h:_PyValue_TopBitsAt` |
-| `PyValue_IsLanguageValue` | Object, or exact int pattern `(bits & ~0xFFFFFFFF) == 0xFFFE << 48`, or a decoded double that is not NaN | `pyvalue.h` |
-| `PyValue_RefcountOnObject` | `(bits & Py_OWNED_MASK) == 0` | `pycore_value.h` |
+| `PyValue_IsLanguageValue` | Object, or exact int pattern `(bits & ~0xFFFFFFFF) == 0xFFFE << 48`, or a decoded double that is not NaN | `pycore_pyvalue.h` |
+| `PyValue_RefcountOnObject` | `!IsNull && (bits & Py_OWNED_MASK) == 0`; `_PyValue_OwnsCountNotNull` drops the NULL test | `pycore_value.h` |
 | `PyValue_IsNone/IsTrue/IsFalse` | Exact compare with `&singleton \| 1` | `pycore_value.h` |
 | `PyValue_TYPE` | Inline int gives `&PyLong_Type`, inline float `&PyFloat_Type`, otherwise `Py_TYPE` | `pycore_value.h` |
 | `PyValue_IsCompactInt` / `PyValue_CompactIntValue` | Inline int, or a boxed exact one-digit int | `pycore_value.h` |
@@ -117,6 +115,9 @@ Encoding: `PyValue_FromInt32` (cannot fail), `PyValue_FromDoubleNotNaN`, and
 `PyValue_FromDouble`, which boxes a NaN through `_PyValue_BoxDouble` and so can
 fail. `PyValue_TagIndex`, `PyValue_UntagIndex` and
 `PyValue_IncrementTaggedIndexNoOverflow` handle indices.
+`_PyValue_IntFitsInline` is the one test of the inline int range, and
+`_PyValue_Int32Bits` and `_PyValue_DoubleBits` give the encoding, which is also
+the value identity.
 
 ### 1.5 Canonical forms
 
@@ -133,7 +134,7 @@ container element, field, cell, dict key or value, or set key).
 | `float` subclass | Boxed |
 | `None` | Immortal singleton pointer with bit 0 set (`PyValue_None`) |
 | Every other object | Pointer |
-| NULL, ERROR, index | Never a language value |
+| NULL, index | Never a language value |
 
 `floatobject.c` and `longobject.c` do not canonicalize. Numbers are created as
 heap objects and converted when a `PyValue` is built:
@@ -142,7 +143,7 @@ heap objects and converted when a `PyValue` is built:
 |---|---|
 | `PyValue_FromObjectBorrow` (`Python/pyvalue.c`) | Canonical borrow. Calls `_PyObject_ValueIdentity`, which tests the exact type and, for a non-compact int, calls `PyLong_AsLongAndOverflow` |
 | `PyValue_PrepareOwned(obj)` (`Python/pyvalue.c`) | Consumes an owned object; `NULL` maps to `PyValue_NULL`. Calls `PyValue_FromPyObjectSteal`, so an inline-capable scalar returns the immediate and its box is freed at once |
-| `_PyValue_Publish`, `_PyValue_Canonicalize` (`pycore_value.h`, `pyvalue.c`) | Frame publication. The generated register handlers write homes through `IR_STORE_DST`, `IR_STORE_TEMP`, `IR_STORE_INPUT` and `IR_MOVE_TO_DST` (`Python/ceval_macros.h`). Each tests for exact int or float and canonicalises through `_PyValue_Canonicalize`, which frees an owned box at once |
+| `_PyValue_Publish`, `_PyValue_Canonicalize` (`pycore_value.h`, `pyvalue.c`) | Frame publication. The generated register handlers write homes through `IR_STORE_DST`, `IR_STORE_TEMP`, `IR_STORE_INPUT` and `IR_MOVE_TO_DST` (`Python/ceval_macros.h`). Each calls `_PyValue_Publish`, which tests for exact int or float and canonicalises through `_PyValue_Canonicalize`. That frees an owned box at once; a borrowed box stays in the source, and only the returned value is inline |
 | `PyValue_FromInt32`, `PyValue_FromDouble`, `LOAD_CONST_INLINE_INT/FLOAT` | Produce inline values directly |
 | Object-form container setters (`PyTuple_SET_ITEM`, `PyTuple_SetItem`, `PyList_SetItem`, `PyList_Append`, `PyDict_SetItem`, `PyStructSequence_SetItem`, `PyMember_SetOne`) | Canonicalize through `PrepareOwned` or `FromObjectBorrow` |
 
@@ -157,10 +158,12 @@ constructors themselves. Value-form setters (`PyTuple_SET_VALUE`,
 canonical form of their input. They do promote a borrow to an owner through
 `PyValue_MakeHeapSafe` (`tupleobject.c:PyTuple_SetValue`,
 `_PyTuple_FromValueStealOnSuccess`). In debug builds each home store calls
-`_PyValue_CheckHome`, which asserts canonical form (`_PyValue_IsCanonicalHome`,
-`pycore_value.h`). The frame store macros and the list, tuple, dict and set
-writers call it. With `_PYTHON_VALUE_HOME_REPORT` set it reports instead of
-asserting.
+`_PyValue_CheckHome`, which is a fatal error on a non-canonical value
+(`_PyValue_IsCanonicalHome`, `pycore_value.h`; `_PyValue_ReportHome`,
+`pyvalue.c`). The frame store macros and the list, tuple, dict and set
+writers call it. `_PyValue_RecheckHome` checks a value already stored. With
+`_PYTHON_VALUE_HOME_REPORT` set the check counts by call site instead of
+stopping.
 
 The header states the rule as a single identity for a value, inline or boxed
 (`pycore_value.h`, "Value identity"). Only C code holds a box.
@@ -169,7 +172,7 @@ The header states the rule as a single identity for a value, inline or boxed
 
 | Operation | Contract | Where |
 |---|---|---|
-| `PyValue_FromPyObjectSteal(o)` | Consumes one strong reference. Canonicalizes an exact int or float. Immortal objects get bit 0 from `ob_flags` | `pycore_value.h` |
+| `PyValue_FromPyObjectSteal(o)` | Consumes one strong reference. Canonicalizes an exact int or float. An immortal object gets bit 0 (`_PyValue_PointerSteal`) | `pycore_value.h` |
 | `PyValue_FromPyObjectNew(o)` | INCREFs a mortal object; tags an immortal one. Tests immortality by the refcount (`_Py_IsImmortal`), not `ob_flags` (G1'). Canonicalizes | `pycore_value.h:_PyValue_FromPyObjectNew` |
 | `PyValue_FromPyObjectBorrow(o)` | Sets bit 0; no INCREF; canonicalizes | `pycore_value.h` |
 | `PyValue_FromObjectBorrow(o)` | Exported (`PyAPI_FUNC`). Canonical borrow; `NULL` maps to `PyValue_NULL` | `pycore_pyvalue.h`, `pyvalue.c` |
@@ -177,9 +180,9 @@ The header states the rule as a single identity for a value, inline or boxed
 | `PyValue_Borrow(v)` / `PyValue_BorrowAt(p)` | Sets bit 0 on an object; leaves inline values and NULL unchanged | `pycore_pyvalue.h`, `pycore_value.h` |
 | `PyValue_DUP(v)` | INCREFs only if `v` owns a count, and returns the same bits. A DUP of a borrow is still a borrow | `pycore_value.h` |
 | `PyValue_NewRef(v)` | `Py_INCREF`s a mortal object and clears bit 0, which promotes a borrow to an owner. Tags an immortal object with bit 0 (the G1 fix, `271f4e435e5`; the refcount test is G1') | `pycore_pyvalue.h` |
-| `PyValue_CLOSE` / `PyValue_XCLOSE` | Internal. `Py_DECREF_MORTAL` if `RefcountOnObject`; no immortality check in release builds | `pycore_value.h` |
+| `PyValue_CLOSE` / `PyValue_XCLOSE` | Internal. `Py_DECREF_MORTAL` if the value owns a count. `XCLOSE` accepts `PyValue_NULL` (`RefcountOnObject`); `CLOSE` does not | `pycore_value.h` |
 | `PyValue_Close(v)` | `Py_DECREF` (immortality-aware) if the value is an object with bit 0 clear | `pycore_pyvalue.h` |
-| `_PyValue_CLOSE_POINTER` etc. | Generator-selected variants that test only bit 0 (`_PyValue_PointerOwnsCount`), for inputs proven to be pointers. They also treat ERROR and `Wrap` values as owned (G3) | `pycore_value.h` |
+| `_PyValue_CLOSE_POINTER` etc. | Generator-selected variants that test `Py_TAG_BITS` alone (`_PyValue_PointerOwnsCount`), for inputs proven to be pointers other than NULL (`_PyValue_XCLOSE_POINTER` tests NULL first) | `pycore_value.h` |
 | `PyValue_IsHeapSafe` / `PyValue_MakeHeapSafe` | A borrowed mortal is promoted with `Py_INCREF`. Telling borrowed from immortal loads the object (`_Py_IsImmortal`) | `pycore_value.h` |
 | `_PyValue_OwnArray` | `MakeHeapSafe` over an argument window | `pycore_value.h` |
 | `PyValue_Box(v)` | Inline value to owned box; on failure returns `v` unchanged with an exception set | `pycore_value.h`, `pyvalue.c:_PyValue_BoxInlineValue` |
@@ -267,18 +270,19 @@ only.
 | List | `PyListObject.ob_item` (`Include/cpython/listobject.h`) | |
 | Dict, combined | `PyDictKeyEntry.me_key`, `me_value` (`pycore_dict.h`) | |
 | Dict, unicode keys | `PyDictUnicodeEntry.me_value`; key stays `PyObject *` | |
-| Split dict / instance inline values | `struct _dictvalues.values[]` (`pycore_dict.h`) | Shapes carry `_PySlotKind`, whose only member is `_Py_SLOT_BOXED` |
+| Split dict / instance inline values | `struct _dictvalues.values[]` (`pycore_dict.h`) | Shapes (`_Py_SHAPE_NONE` when absent) describe insertion order only; every slot is a `PyValue` |
 | Set / frozenset | `setentry.key` (`Include/cpython/setobject.h`) | Unused entries are `PyValue_NULL` with hash 0 |
 | Cell | `PyCellObject.ob_ref` (`Include/cpython/cellobject.h`) | |
 | `__slots__` | `_Py_T_VALUE_EX` members (`Objects/typeobject.c`, `Python/structmember.c`) | |
 | Struct sequences | `ob_item[]` with `_Py_T_VALUE` members (`Objects/structseq.c`) | Unset fields read as `None` |
-| Type cache | `pycore_typecache.h` entry `value` | Non-owning; protected by version |
+| Type cache | `pycore_typecache.h` `type_cache_entry.value` | Non-owning; protected by version. `_PyTypeCacheLookupResult.value` is an owned hit |
 
 Every heap field owns a strong reference or holds an immortal or an inline
-value. Because zero bits are not `PyValue_NULL`, every allocator must
-initialise value fields explicitly. `_PyType_AllocNoTrack` walks the
-`tp_members` of each base on every allocation to do so
-(`typeobject.c:init_value_slots`).
+value. Zero bits are `PyValue_NULL`, so zeroed memory needs no further
+initialisation: `_PyType_AllocNoTrack` zeroes the object after its header
+(`typeobject.c`), and `PyList_New` uses `PyMem_Calloc` (`listobject.c`).
+Allocators that use `PyMem_Malloc` for value arrays, such as
+`dictobject.c:new_values`, store `PyValue_NULL` in a loop.
 
 ```mermaid
 flowchart LR
@@ -292,19 +296,14 @@ flowchart LR
 ### 1.9 GC traversal and clearing
 
 `_Py_VISIT_VALUE` (`pycore_value.h`) visits only `PyValue_IsObject` values, so
-NULL, ERROR, indices and inline scalars are skipped.
-`_PyGC_VisitValue` (`Python/gc.c`) skips `visit_decref` for references with
-bit 0 set. Frames are scanned over all slots (`gc.c:_PyGC_VisitFrameStack`).
+NULL, indices and inline scalars are skipped.
+`_PyGC_VisitValue` (`Python/gc.c`) skips `visit_decref` for references that own
+no count (`PyValue_RefcountOnObject` is false). Frames are scanned over all slots (`gc.c:_PyGC_VisitFrameStack`).
 `list_traverse`, `dict_traverse`, set, cell, tuple and structseq traversal use
-the same macro. `__slots__` traversal (`typeobject.c:traverse_slots`) instead
-calls `visit` directly on every object value, so it does not apply the bit-0
-`visit_decref` skip. It asserts `PyValue_IsHeapSafe` first. Under that
-invariant the only bit-0 values it visits are immortals. `_Py_SetImmortal`
-untracks those, so `visit_decref` does nothing to them and the divergence is
-harmless. If the invariant breaks, `traverse_slots` subtracts a count that was
-never taken and can free a reachable object early. It should use
-`_Py_VISIT_VALUE`, like every other traversal (G6). `_PyTuple_MaybeUntrack`
-treats inline elements as untracked.
+the same macro. `__slots__` traversal (`typeobject.c:traverse_slots`) uses it
+for `_Py_T_VALUE` and `_Py_T_VALUE_EX` members, after asserting
+`PyValue_IsHeapSafe`. `_PyTuple_MaybeUntrack` treats inline elements as
+untracked.
 Clearing detaches before release: `PyValue_CLEAR` and `_PyValue_CloseStack`
 write `PyValue_NULL`, then close.
 
@@ -312,7 +311,7 @@ write `PyValue_NULL`, then close.
 
 | Boundary | What happens per value | Where |
 |---|---|---|
-| Native call (vectorcall, builtins) | `_PyObjectArray_FromValueArray`. First `MakeHeapSafe` on each argument, then `PyValue_AsObject` for each. That runs `IsLanguageValue`, INCREFs a pointer or allocates a box for a scalar, and checks `PyErr_Occurred`. Cleanup (`_PyObjectArray_Free`) DECREFs each element through `_PyValueTemps`, with an exception save and restore. More than 10 arguments use `PyMem_Malloc` | `Python/ceval.c`, `ceval_macros.h:VALUES_TO_PYOBJECTS` |
+| Native call (vectorcall, builtins) | `VALUES_TO_PYOBJECTS` opens a borrow scope (`_PyBorrowScope_Enter`) and `_PyValueArray_ToObjectVector` calls `_PyValue_OwnArray` on the window, then `_PyBorrow_ValueVector`, which pushes an object vector onto the thread's borrow stack. A scalar argument gets a box there. `VALUES_TO_PYOBJECTS_CLEANUP` exits the scope and releases the entries newest first without touching the error indicator | `Python/ceval.c`, `ceval_macros.h:VALUES_TO_PYOBJECTS`, `pycore_borrow.h` |
 | Native result | Returned `PyObject *` becomes a `PyValue` (`FromPyObjectSteal`); publication canonicalizes and frees an int or float box at once | `ceval.c`, `_PyValue_Publish` |
 | Generated handler inputs | The cases generator boxes each scalar input passed whole to `PyValue_AsPyObject*` (or exits in a guard). Array inputs are not checked | `Tools/cases_generator/interpreter_definition.md`, "Inline values" |
 | Owning object getters | `PyTuple_GetItemRef`, `PyList_GetItemRef`, `PyStructSequence_GetItemRef`, `PyMember_GetOne` allocate a fresh box for each inline element read | `tupleobject.c`, `listobject.c`, `structseq.c`, `structmember.c` |
@@ -321,13 +320,12 @@ write `PyValue_NULL`, then close.
 
 Call-site counts in `Objects/`, `Python/` and `Modules/` respectively:
 `PyTuple_GetItemRef` 94/26/119, `PyList_GetItemRef` 14/97/33,
-`PyValue_AsObject` 46/19/22, and `PyValue_AsPyObjectBorrow` 849 in total.
+`PyValue_AsObject` 3/13/27, and `PyValue_AsKnownObjectBorrow` 163/649/25.
 No box is cached and no borrowed box is returned. That is a deliberate rule
 (see the [extension API](extension-api.md)).
 
-Compared with upstream CPython's GIL build, every native call now adds an
-INCREF/DECREF pair and at least two exception-state checks per argument, plus
-one allocation per scalar argument. Every object-form read of a scalar container
+Compared with upstream CPython's GIL build, every native call now adds a
+borrow-scope entry and exit, plus one allocation per scalar argument. Every object-form read of a scalar container
 element adds an allocation and a free. No measurement exists yet. The stats
 counters `inline_ints_created`, `inline_floats_created`, `inline_int_boxes`
 and `inline_float_boxes` (`Include/cpython/pystats.h`) count boxing but not
@@ -337,12 +335,12 @@ the site or int32 overflow.
 
 | Family | Value form (no box) | Object form (owning, fallible, boxes) |
 |---|---|---|
-| Tuple | `PyTuple_GET_VALUE` (borrow, inline), `PyTuple_GetValue` (owned, checked), `PyTuple_SET_VALUE`, `PyTuple_SetValue` | `PyTuple_GetItemRef`, `PyTuple_SET_ITEM`, `PyTuple_SetItem` |
+| Tuple | `PyTuple_GetValue` (owned, checked), `PyTuple_SET_VALUE`, `PyTuple_SetValue` | `PyTuple_GetItemRef`, `PyTuple_SET_ITEM`, `PyTuple_SetItem` |
 | List | `PyList_GET_VALUE` (an out-of-line function), `PyList_GetValue`, `PyList_SET_VALUE` | `PyList_GetItemRef`, `PyList_SET_ITEM`, `PyList_SetItem` |
-| Dict | `PyDict_GetValue`, `GetValueString`, `NextValue`, `SetValue`, `DelValue`, `ContainsValue`, `PopValue` (`Include/dictobject.h`) | `PyDict_GetItemRef`, `PyDict_SetItem` |
-| Cell | `PyCell_GET_VALUE`, `PyCell_GetValue`, `PyCell_SetValue`, `PyCell_NewValue` | — |
+| Dict | `PyDict_GetValue`, `GetValueString`, `NextValue`, `SetValue`, `DelValue`, `ContainsValue`, `PopValue` (`Include/cpython/dictobject.h`) | `PyDict_GetItemRef`, `PyDict_SetItem` |
+| Cell | `PyCell_GetValue`, `PyCell_SetValue`, `PyCell_NewValue` | — |
 | Struct sequence | `PyStructSequence_GET_VALUE`, `SET_VALUE` | `PyStructSequence_GetItemRef`, `PyStructSequence_SetItem` |
-| Core-only | `_PyTuple_GET_OBJECT` (metadata proven to hold objects), `_PyList_GetValue`, `_PyList_AppendTakeValue`, `_PyMember_GetValue/SetValue` | — |
+| Core-only | `PyTuple_GET_VALUE` (borrow, inline; `pycore_tuple.h`), `PyCell_GET_VALUE` (`pycore_cell.h`), `_PyTuple_GET_OBJECT` (metadata proven to hold objects), `_PyList_GetValue`, `_PyList_AppendTakeValue`, `_PyMember_GetValue/SetValue` | — |
 
 The borrowed object getters (`PyTuple_GetItem`, `PyTuple_GET_ITEM`,
 `PyList_GetItem`, `PyList_GET_ITEM`, `PyDict_GetItem`, `PyDict_Next`) are gone
@@ -353,16 +351,14 @@ decision on borrowed-returning APIs and argument parsing.
 
 **ABI policy (decided 2026-11-03).**
 
-* `pyvalue.h` and every declaration that takes or returns `PyValue` are outside
-  the limited API: they sit under `#ifndef Py_LIMITED_API`. Today `Python.h`
-  includes `pyvalue.h` unconditionally (`Include/Python.h`), and the public
-  `PyValue_NewRef` calls `_Py_IsImmortal`, which `Include/refcount.h` hides
-  under `_Py_OPAQUE_PYOBJECT` (G1').
+* The `PyValue` typedef (`Include/pytypedefs.h`) sits under
+  `#ifndef Py_LIMITED_API`, and every declaration that takes or returns
+  `PyValue` is outside the limited API. The inline functions that compute on
+  the bits are in `Include/internal/pycore_pyvalue.h` and `pycore_value.h`,
+  which need `Py_BUILD_CORE`.
 * The limited API stays available in source form, minus the deleted borrowed
-  getters. `Misc/stable_abi.toml` still lists `PyTuple_GetItem` and
-  `PyList_GetItem`, and `PC/python3dll.c` still exports them (lines 348 and
-  680), though they have no definition. Remove both entries. Until then
-  `test_stable_abi_ctypes` and the Windows `python3.dll` link fail.
+  getters. `Misc/stable_abi.toml` and `PC/python3dll.c` no longer list
+  `PyTuple_GetItem` and `PyList_GetItem`.
 * abi3 binaries built against upstream CPython are unsupported, because the
   container layouts differ. Extensions are rebuilt.
 * Free threading and abi3t are non-goals. The `test_cext` abi3t builds
@@ -371,8 +367,9 @@ decision on borrowed-returning APIs and argument parsing.
 
 The project intends PyValue as a private core representation behind opaque
 extension handles ([extension API](extension-api.md)). As built,
-`Include/pyvalue.h` and the container headers expose the struct and inline
-functions that compute on its bits to every rebuilt `Python.h` extension. The
+the container headers (`Include/cpython/tupleobject.h` and others) expose the
+`PyValue` struct and the value-form functions to every rebuilt `Python.h`
+extension. The
 encoding is therefore part of the private extension ABI until the opaque
 backend exists.
 
@@ -380,15 +377,15 @@ backend exists.
 
 | Property | As built |
 |---|---|
-| Word | 64-bit only; `#error` otherwise (`pyvalue.h`) |
+| Word | 64-bit only; `#error` otherwise (`pycore_pyvalue.h`) |
 | Threading | GIL only; free-threaded builds `#error`. Free threading is a non-goal (section 1.11). Aligned 8-byte stores cannot tear. Were it ever a goal, bit 0 would also mean "deferred", and inline values would help |
-| Pointers | Must be below 2^48. No runtime or debug check that object addresses fit |
+| Pointers | Must be below 2^48. Debug builds assert it in the constructors (`(uintptr_t)obj < Py_PTR_LIMIT` in `PyValue_FromObjectBorrow`, `_PyValue_PointerSteal` and others); release builds do not check |
 | Alignment | `static_assert(_Alignof(PyObject) >= 8)` (`pyvalue.c`); bit 2 is free |
 | Endianness | `_PyValue_TopBitsAt` assumes little-endian for its fast path; other byte orders use a shift |
 | Inline int range | -2^31 to 2^31-1 |
 | Inline floats | All non-NaN doubles |
 | Index range | -1 to 2^47-1 |
-| Qualified OS/ISA | Linux x86-64 ([runtime architecture](runtime-architecture.md)). `pycore_value.h` still has `_WIN32` macro variants and a no-inline branch for free-threaded and 32-bit builds |
+| Qualified OS/ISA | Linux x86-64 ([runtime architecture](runtime-architecture.md)). Other platforms and free-threaded builds are outside the supported private ABI (`pycore_value.h`, "Encoding") |
 
 ### 1.13 Observable behaviour and external tools
 
@@ -408,7 +405,7 @@ output is deterministic (`Python/marshal.c:w_ref`).
 
 Out-of-process tools: `_Py_DebugOffsets` exports no encoding constants
 (`Include/internal/pycore_debug_offsets.h`). The in-tree `_remote_debugging`
-module knows PyValue (`asyncio.c:remote_value_object_addr`), but py-spy, austin
+module knows PyValue (`Modules/_remote_debugging/asyncio.c:remote_value_object_addr`), but py-spy, austin
 and memray would misread frames, tuples and dicts. Add `Py_INT_BASE`,
 `Py_DOUBLE_OFFSET`, `Py_PTR_LIMIT` and the tag mask to the debug offsets, in
 the same change as any G5 decision.

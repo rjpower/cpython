@@ -4,11 +4,12 @@
 #define PY_CXX_CONST const
 #include "Python.h"
 #include "pycore_abstract.h"      // _PyNumber_Index()
+#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_dict.h"          // _PyDict_HasOnlyStringKeys()
 #include "pycore_modsupport.h"    // export _PyArg_NoKeywords()
 #include "pycore_pylifecycle.h"   // _PyArg_Fini
 #include "pycore_pystate.h"       // _Py_IsMainInterpreter()
-#include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_tuple.h"         // _PyTuple_GET_OBJECT()
 #include "pycore_value.h"         // canonical argument snapshots
 #include "pycore_pyerrors.h"      // _Py_CalculateSuggestions()
 #include "pycore_unicodeobject.h" // _PyUnicode_InternImmortal
@@ -413,7 +414,7 @@ vgetargs1_impl(PyObject *compat_args, PyObject *const *stack, Py_ssize_t nargs, 
 static int
 vgetargs1(PyObject *args, const char *format, va_list *p_va, int flags)
 {
-    PyObject **stack;
+    PyObject *const *stack;
     Py_ssize_t nargs;
 
     if (!(flags & FLAG_COMPAT)) {
@@ -425,7 +426,10 @@ vgetargs1(PyObject *args, const char *format, va_list *p_va, int flags)
             return 0;
         }
 
-        stack = _PyTuple_ITEMS(args);
+        stack = _PyBorrow_TupleItems(args);
+        if (stack == NULL) {
+            return 0;
+        }
         nargs = PyTuple_GET_SIZE(args);
     }
     else {
@@ -656,36 +660,33 @@ converttuple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
     }
 
     len = PyTuple_GET_SIZE(arg);
+    PyObject *const *items = len == n ? _PyBorrow_TupleItems(arg) : NULL;
+    if (!istuple) {
+        Py_DECREF(arg);            /* the run owns the elements */
+    }
     if (len != n) {
         levels[0] = 0;
         PyOS_snprintf(msgbuf, bufsize,
                       "must be tuple of length %d, not %zd",
                       n, len);
-        if (!istuple) {
-            Py_DECREF(arg);
-        }
         return msgbuf;
+    }
+    if (items == NULL) {
+        return msgbuf;             /* MemoryError set; seterror() defers to it */
     }
 
     format = *p_format;
     for (i = 0; i < n; i++) {
         const char *msg;
-        PyObject *item = PyTuple_GET_ITEM(arg, i);
-        msg = convertitem(item, &format, p_va, flags, levels+1,
+        msg = convertitem(items[i], &format, p_va, flags, levels+1,
                           msgbuf, bufsize, freelist);
         if (msg != NULL) {
             levels[0] = i+1;
-            if (!istuple) {
-                Py_DECREF(arg);
-            }
             return msg;
         }
     }
 
     *p_format = format;
-    if (!istuple) {
-        Py_DECREF(arg);
-    }
     return NULL;
 }
 
@@ -1743,7 +1744,8 @@ find_keyword_str(PyObject *kwnames, PyObject *const *kwstack, const char *key)
 {
     Py_ssize_t nkwargs = PyTuple_GET_SIZE(kwnames);
     for (Py_ssize_t i = 0; i < nkwargs; i++) {
-        PyObject *kwname = PyTuple_GET_ITEM(kwnames, i);
+        /* Vectorcall kwnames hold only str. */
+        PyObject *kwname = _PyTuple_GET_OBJECT(kwnames, i);
         assert(PyUnicode_Check(kwname));
         if (PyUnicode_EqualToUTF8(kwname, key)) {
             return Py_NewRef(kwstack[i]);
@@ -1907,31 +1909,34 @@ vgetargskeywords_impl(PyObject *const *args, Py_ssize_t nargs,
             return cleanreturn(0, &freelist);
         }
         if (!skip) {
-            PyObject *current_arg;
+            PyObject *current_arg = NULL;
             if (i < nargs) {
-                current_arg = Py_NewRef(args[i]);
+                current_arg = args[i];
             }
             else if (nkwargs && i >= pos) {
+                /* Keyword values are owned; the borrow stack keeps them
+                   for the parse's borrowed outputs. */
+                PyObject *owned = NULL;
                 if (kwargs != NULL) {
-                    if (PyDict_GetItemStringRef(kwargs, kwlist[i], &current_arg) < 0) {
+                    if (PyDict_GetItemStringRef(kwargs, kwlist[i], &owned) < 0) {
                         return cleanreturn(0, &freelist);
                     }
                 }
                 else {
-                    current_arg = find_keyword_str(kwnames, kwstack, kwlist[i]);
+                    owned = find_keyword_str(kwnames, kwstack, kwlist[i]);
                 }
-                if (current_arg) {
+                if (owned != NULL) {
+                    current_arg = _PyBorrow_Keep(owned);
+                    if (current_arg == NULL) {
+                        return cleanreturn(0, &freelist);
+                    }
                     --nkwargs;
                 }
-            }
-            else {
-                current_arg = NULL;
             }
 
             if (current_arg) {
                 msg = convertitem(current_arg, &format, p_va, flags,
                     levels, msgbuf, sizeof(msgbuf), &freelist);
-                Py_DECREF(current_arg);
                 if (msg) {
                     seterror(i+1, msg, levels, fname, custom_msg);
                     return cleanreturn(0, &freelist);
@@ -2027,15 +2032,26 @@ vgetargskeywords_impl(PyObject *const *args, Py_ssize_t nargs,
         j = 0;
         while (1) {
             if (kwargs != NULL) {
-                if (!PyDict_Next(kwargs, &j, &key, NULL)) {
+                /* Error path only: keeping the keys costs nothing. */
+                PyObject *owned;
+                int r = PyDict_NextEntryRef(kwargs, &j, &owned, NULL);
+                if (r < 0) {
+                    return cleanreturn(0, &freelist);
+                }
+                if (r == 0) {
                     break;
+                }
+                key = _PyBorrow_Keep(owned);
+                if (key == NULL) {
+                    return cleanreturn(0, &freelist);
                 }
             }
             else {
                 if (j >= nkwargs) {
                     break;
                 }
-                key = PyTuple_GET_ITEM(kwnames, j);
+                /* Vectorcall kwnames hold only str. */
+                key = _PyTuple_GET_OBJECT(kwnames, j);
                 j++;
             }
 
@@ -2101,7 +2117,10 @@ vgetargskeywords(PyObject *argstuple, PyObject *kwargs,
                  const char *format, const char * const *kwlist,
                  va_list *p_va, int flags)
 {
-    PyObject *const *args = _PyTuple_ITEMS(argstuple);
+    PyObject *const *args = _PyBorrow_TupleItems(argstuple);
+    if (args == NULL) {
+        return 0;
+    }
     Py_ssize_t nargs = PyTuple_GET_SIZE(argstuple);
     return vgetargskeywords_impl(args, nargs, kwargs, NULL,
                                  format, kwlist, p_va, flags);
@@ -2482,32 +2501,39 @@ vgetargskeywordsfast_impl(PyObject *const *args, Py_ssize_t nargs,
         }
         assert(!IS_END_OF_FORMAT(*format));
 
-        PyObject *current_arg;
+        PyObject *current_arg = NULL;
         if (i < nargs) {
-            current_arg = Py_NewRef(args[i]);
+            current_arg = args[i];
         }
         else if (nkwargs && i >= pos) {
-            keyword = PyTuple_GET_ITEM(kwtuple, i - pos);
+            /* The parser's keyword tuple holds interned str. */
+            keyword = _PyTuple_GET_OBJECT(kwtuple, i - pos);
+            /* Keyword values are owned; the borrow stack keeps them for the
+               parse's borrowed outputs. */
+            PyObject *owned;
             if (kwargs != NULL) {
-                if (PyDict_GetItemRef(kwargs, keyword, &current_arg) < 0) {
+                if (PyDict_GetItemRef(kwargs, keyword, &owned) < 0) {
                     return cleanreturn(0, &freelist);
                 }
             }
             else {
-                current_arg = find_keyword(kwnames, kwstack, keyword);
+                owned = find_keyword(kwnames, kwstack, keyword);
+                if (owned == NULL && PyErr_Occurred()) {
+                    return cleanreturn(0, &freelist);
+                }
             }
-            if (current_arg) {
+            if (owned != NULL) {
+                current_arg = _PyBorrow_Keep(owned);
+                if (current_arg == NULL) {
+                    return cleanreturn(0, &freelist);
+                }
                 --nkwargs;
             }
-        }
-        else {
-            current_arg = NULL;
         }
 
         if (current_arg) {
             msg = convertitem(current_arg, &format, p_va, flags,
                 levels, msgbuf, sizeof(msgbuf), &freelist);
-            Py_DECREF(current_arg);
             if (msg) {
                 seterror(i+1, msg, levels, parser->fname, parser->custom_msg);
                 return cleanreturn(0, &freelist);
@@ -2530,7 +2556,7 @@ vgetargskeywordsfast_impl(PyObject *const *args, Py_ssize_t nargs,
                              nargs);
             }
             else {
-                keyword = PyTuple_GET_ITEM(kwtuple, i - pos);
+                keyword = _PyTuple_GET_OBJECT(kwtuple, i - pos);
                 PyErr_Format(PyExc_TypeError,  "%.200s%s missing required "
                              "argument '%U' (pos %zd)",
                              (parser->fname == NULL) ? "function" : parser->fname,
@@ -2559,7 +2585,7 @@ vgetargskeywordsfast_impl(PyObject *const *args, Py_ssize_t nargs,
         /* make sure there are no arguments given by name and position */
         for (i = pos; i < nargs; i++) {
             PyObject *current_arg;
-            keyword = PyTuple_GET_ITEM(kwtuple, i - pos);
+            keyword = _PyTuple_GET_OBJECT(kwtuple, i - pos);
             if (kwargs != NULL) {
                 if (PyDict_GetItemRef(kwargs, keyword, &current_arg) < 0) {
                     return cleanreturn(0, &freelist);
@@ -2567,6 +2593,9 @@ vgetargskeywordsfast_impl(PyObject *const *args, Py_ssize_t nargs,
             }
             else {
                 current_arg = find_keyword(kwnames, kwstack, keyword);
+                if (current_arg == NULL && PyErr_Occurred()) {
+                    return cleanreturn(0, &freelist);
+                }
             }
             if (current_arg) {
                 Py_DECREF(current_arg);
@@ -2592,7 +2621,7 @@ static int
 vgetargskeywordsfast(PyObject *args, PyObject *keywords,
                      struct _PyArg_Parser *parser, va_list *p_va, int flags)
 {
-    PyObject **stack;
+    PyObject *const *stack;
     Py_ssize_t nargs;
 
     if (args == NULL
@@ -2603,7 +2632,10 @@ vgetargskeywordsfast(PyObject *args, PyObject *keywords,
         return 0;
     }
 
-    stack = _PyTuple_ITEMS(args);
+    stack = _PyBorrow_TupleItems(args);
+    if (stack == NULL) {
+        return 0;
+    }
     nargs = PyTuple_GET_SIZE(args);
     return vgetargskeywordsfast_impl(stack, nargs, keywords, NULL,
                                      parser, p_va, flags);
@@ -3255,8 +3287,12 @@ unpack_keywords(PyObject *const *args, Py_ssize_t nargs,
                 }
             }
             else {
-                /* Old object-vector callers still require their own port. */
-                Py_DECREF(current_arg);
+                /* The borrow stack keeps the value for the caller's
+                   borrowed buffer. */
+                current_arg = _PyBorrow_Keep(current_arg);
+                if (current_arg == NULL) {
+                    return NULL;
+                }
             }
             --nkwargs;
         }
@@ -3553,7 +3589,7 @@ unpack_stack(PyObject *const *args, Py_ssize_t nargs, const char *name,
 int
 PyArg_UnpackTuple(PyObject *args, const char *name, Py_ssize_t min, Py_ssize_t max, ...)
 {
-    PyObject **stack;
+    PyObject *const *stack;
     Py_ssize_t nargs;
     int retval;
     va_list vargs;
@@ -3563,7 +3599,10 @@ PyArg_UnpackTuple(PyObject *args, const char *name, Py_ssize_t min, Py_ssize_t m
             "PyArg_UnpackTuple() argument list is not a tuple");
         return 0;
     }
-    stack = _PyTuple_ITEMS(args);
+    stack = _PyBorrow_TupleItems(args);
+    if (stack == NULL) {
+        return 0;
+    }
     nargs = PyTuple_GET_SIZE(args);
 
     va_start(vargs, max);

@@ -2,6 +2,7 @@
 
 #include "Python.h"
 #include "pycore_audit.h"         // _PySys_ClearAuditHooks()
+#include "pycore_borrow.h"        // _PyBorrowScope_Enter()
 #include "pycore_call.h"          // _PyObject_CallMethod()
 #include "pycore_ceval.h"         // _PyEval_FiniGIL()
 #include "pycore_codecs.h"        // _PyCodec_Lookup()
@@ -1368,7 +1369,7 @@ error:
 
 
 static PyStatus
-init_interp_main(PyThreadState *tstate)
+init_interp_main_impl(PyThreadState *tstate)
 {
     assert(!_PyErr_Occurred(tstate));
 
@@ -1562,6 +1563,17 @@ init_interp_main(PyThreadState *tstate)
     }
 
     return _PyStatus_OK();
+}
+
+/* Main initialization runs outside any eval loop: give it a borrow scope so
+   that it leaves no entries in the thread's base region. */
+static PyStatus
+init_interp_main(PyThreadState *tstate)
+{
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
+    PyStatus status = init_interp_main_impl(tstate);
+    _PyBorrowScope_Exit(tstate, mark);
+    return status;
 }
 
 

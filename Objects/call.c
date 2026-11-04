@@ -1,4 +1,5 @@
 #include "Python.h"
+#include "pycore_borrow.h"        // _PyBorrowScope_Enter()
 #include "pycore_call.h"          // _PyObject_CallNoArgsTstate()
 #include "pycore_ceval.h"         // _Py_EnterRecursiveCallTstate()
 #include "pycore_dict.h"          // _PyDict_FromItems()
@@ -263,8 +264,10 @@ _PyObject_MakeTpCall(PyThreadState *tstate, PyObject *callable,
         goto done;
     }
     if (_Py_EnterRecursiveCallTstate(tstate, " while calling a Python object") == 0) {
+        _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
         result = _PyCFunctionWithKeywords_TrampolineCall(
             (PyCFunctionWithKeywords)call, callable, argstuple, kwdict);
+        _PyBorrowScope_Exit(tstate, mark);
         _Py_LeaveRecursiveCallTstate(tstate);
     }
 done:
@@ -416,7 +419,9 @@ _PyObject_Call(PyThreadState *tstate, PyObject *callable,
             return NULL;
         }
 
+        _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
         result = (*call)(callable, args, kwargs);
+        _PyBorrowScope_Exit(tstate, mark);
 
         _Py_LeaveRecursiveCallTstate(tstate);
 

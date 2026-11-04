@@ -2,6 +2,7 @@
 
 #include "Python.h"
 #include "pycore_abstract.h"      // _PyObject_RealIsSubclass()
+#include "pycore_borrow.h"        // _PyBorrowScope_Enter()
 #include "pycore_call.h"          // _PyStack_AsDict()
 #include "pycore_ceval.h"         // _Py_EnterRecursiveCallTstate()
 #include "pycore_wasm_trampoline.h" // descr_set_trampoline_call(), descr_get_trampoline_call()
@@ -325,8 +326,10 @@ method_vectorcall_VARARGS(
         Py_DECREF(argstuple);
         return NULL;
     }
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     PyObject *result = _PyCFunction_TrampolineCall(
         meth, args[0], argstuple);
+    _PyBorrowScope_Exit(tstate, mark);
     Py_DECREF(argstuple);
     _Py_LeaveRecursiveCallTstate(tstate);
     return result;
@@ -359,8 +362,10 @@ method_vectorcall_VARARGS_KEYWORDS(
     if (meth == NULL) {
         goto exit;
     }
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     result = _PyCFunctionWithKeywords_TrampolineCall(
         meth, args[0], argstuple, kwdict);
+    _PyBorrowScope_Exit(tstate, mark);
     _Py_LeaveRecursiveCallTstate(tstate);
 exit:
     Py_DECREF(argstuple);
@@ -381,9 +386,11 @@ method_vectorcall_FASTCALL_KEYWORDS_METHOD(
     if (meth == NULL) {
         return NULL;
     }
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     PyObject *result = meth(args[0],
                             ((PyMethodDescrObject *)func)->d_common.d_type,
                             args+1, nargs-1, kwnames);
+    _PyBorrowScope_Exit(tstate, mark);
     _Py_LeaveRecursiveCall();
     return result;
 }
@@ -402,7 +409,9 @@ method_vectorcall_FASTCALL(
     if (meth == NULL) {
         return NULL;
     }
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     PyObject *result = meth(args[0], args+1, nargs-1);
+    _PyBorrowScope_Exit(tstate, mark);
     _Py_LeaveRecursiveCallTstate(tstate);
     return result;
 }
@@ -421,7 +430,9 @@ method_vectorcall_FASTCALL_KEYWORDS(
     if (meth == NULL) {
         return NULL;
     }
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     PyObject *result = meth(args[0], args+1, nargs-1, kwnames);
+    _PyBorrowScope_Exit(tstate, mark);
     _Py_LeaveRecursiveCallTstate(tstate);
     return result;
 }
@@ -448,7 +459,9 @@ method_vectorcall_NOARGS(
     if (meth == NULL) {
         return NULL;
     }
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     PyObject *result = _PyCFunction_TrampolineCall(meth, args[0], NULL);
+    _PyBorrowScope_Exit(tstate, mark);
     _Py_LeaveRecursiveCallTstate(tstate);
     return result;
 }
@@ -476,7 +489,9 @@ method_vectorcall_O(
     if (meth == NULL) {
         return NULL;
     }
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     PyObject *result = _PyCFunction_TrampolineCall(meth, args[0], args[1]);
+    _PyBorrowScope_Exit(tstate, mark);
     _Py_LeaveRecursiveCallTstate(tstate);
     return result;
 }
@@ -559,10 +574,15 @@ wrapperdescr_raw_call(PyWrapperDescrObject *descr, PyObject *self,
                       PyObject *args, PyObject *kwds)
 {
     wrapperfunc wrapper = descr->d_base->wrapper;
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyObject *result;
 
     if (descr->d_base->flags & PyWrapperFlag_KEYWORDS) {
         wrapperfunc_kwds wk = _Py_FUNC_CAST(wrapperfunc_kwds, wrapper);
-        return (*wk)(self, args, descr->d_wrapped, kwds);
+        _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
+        result = (*wk)(self, args, descr->d_wrapped, kwds);
+        _PyBorrowScope_Exit(tstate, mark);
+        return result;
     }
 
     if (kwds != NULL && (!PyDict_Check(kwds) || PyDict_GET_SIZE(kwds) != 0)) {
@@ -571,7 +591,10 @@ wrapperdescr_raw_call(PyWrapperDescrObject *descr, PyObject *self,
                      descr->d_base->name);
         return NULL;
     }
-    return (*wrapper)(self, args, descr->d_wrapped);
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
+    result = (*wrapper)(self, args, descr->d_wrapped);
+    _PyBorrowScope_Exit(tstate, mark);
+    return result;
 }
 
 static PyObject *

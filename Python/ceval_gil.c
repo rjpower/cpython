@@ -1,4 +1,5 @@
 #include "Python.h"
+#include "pycore_borrow.h"        // _PyBorrowScope_Exit()
 #include "pycore_ceval.h"         // _PyEval_SignalReceived()
 #include "pycore_gc.h"            // _Py_RunGC()
 #include "pycore_gc_trace.h"      // _PyGC_TRACE_CAPTURE_THREAD()
@@ -1404,6 +1405,17 @@ _Py_HandlePending(PyThreadState *tstate)
     if ((breaker & _PY_GC_SCHEDULED_BIT) != 0) {
         _Py_unset_eval_breaker_bit(tstate, _PY_GC_SCHEDULED_BIT);
         _Py_RunGC(tstate);
+    }
+
+    /* Borrow entries left by slot code that bytecode called directly, or by
+       the pending calls above.  At an instruction boundary every native call
+       made by this activation has returned, so nothing above the floor is
+       live.  Re-read the breaker: pending calls may have set the bit. */
+    if (_Py_eval_breaker_bit_is_set(tstate, _PY_BORROW_RELEASE_BIT)) {
+        _Py_unset_eval_breaker_bit(tstate, _PY_BORROW_RELEASE_BIT);
+        _PyBorrowStack *borrow = &((_PyThreadStateImpl *)tstate)->borrow;
+        assert(borrow->eval_floor != NULL);
+        _PyBorrowScope_Exit(tstate, borrow->eval_floor);
     }
 
     /* GIL drop request */

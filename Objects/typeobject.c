@@ -2,6 +2,7 @@
 
 #include "Python.h"
 #include "pycore_abstract.h"      // _PySequence_IterSearch()
+#include "pycore_borrow.h"        // _PyBorrowScope_Enter()
 #include "pycore_call.h"          // _PyObject_VectorcallTstate()
 #include "pycore_code.h"          // CO_FAST_FREE
 #include "pycore_descrobject.h"   // _PyMember_GetOffset()
@@ -2833,15 +2834,19 @@ type_call(PyObject *self, PyObject *args, PyObject *kwds)
         return NULL;
     }
 
+    /* One borrow scope covers tp_new and tp_init: both parse args. */
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     obj = type->tp_new(type, args, kwds);
     obj = _Py_CheckFunctionResult(tstate, (PyObject*)type, obj, NULL);
-    if (obj == NULL)
-        return NULL;
+    if (obj == NULL) {
+        goto done;
+    }
 
     /* If the returned object is not an instance of type,
        it won't be initialized. */
-    if (!PyObject_TypeCheck(obj, type))
-        return obj;
+    if (!PyObject_TypeCheck(obj, type)) {
+        goto done;
+    }
 
     type = Py_TYPE(obj);
     if (type->tp_init != NULL) {
@@ -2854,6 +2859,8 @@ type_call(PyObject *self, PyObject *args, PyObject *kwds)
             assert(!_PyErr_Occurred(tstate));
         }
     }
+done:
+    _PyBorrowScope_Exit(tstate, mark);
     return obj;
 }
 

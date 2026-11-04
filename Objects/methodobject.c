@@ -2,6 +2,7 @@
 /* Method object implementation */
 
 #include "Python.h"
+#include "pycore_borrow.h"        // _PyBorrowScope_Enter()
 #include "pycore_call.h"          // _Py_CheckFunctionResult()
 #include "pycore_ceval.h"         // _Py_EnterRecursiveCallTstate()
 #include "pycore_freelist.h"
@@ -561,6 +562,7 @@ _PyCFunction_CallScoped(_PyNativeScope *scope, PyObject *callable,
     }
     PyCFunction method = PyCFunction_GET_FUNCTION(callable);
     PyObject *result;
+    _PyBorrowMark mark = _PyBorrowScope_Enter(scope->tstate);
     if (flags == METH_NOARGS || flags == METH_O) {
         result = _PyCFunction_TrampolineCall(
             method, scope->receiver_object, flags == METH_O ? args[0] : NULL);
@@ -579,6 +581,7 @@ _PyCFunction_CallScoped(_PyNativeScope *scope, PyObject *callable,
         result = meth(scope->receiver_object, scope->defining_class, args,
                       scope->positional_count, scope->kwnames);
     }
+    _PyBorrowScope_Exit(scope->tstate, mark);
     _Py_LeaveRecursiveCallTstate(scope->tstate);
     if (result == NULL && !_PyErr_Occurred(scope->tstate)) {
         _PyErr_Format(scope->tstate, PyExc_SystemError,
@@ -618,7 +621,9 @@ cfunction_vectorcall_FASTCALL(
     if (meth == NULL) {
         return NULL;
     }
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     PyObject *result = meth(PyCFunction_GET_SELF(func), args, nargs);
+    _PyBorrowScope_Exit(tstate, mark);
     _Py_LeaveRecursiveCallTstate(tstate);
     return result;
 }
@@ -634,7 +639,9 @@ cfunction_vectorcall_FASTCALL_KEYWORDS(
     if (meth == NULL) {
         return NULL;
     }
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     PyObject *result = meth(PyCFunction_GET_SELF(func), args, nargs, kwnames);
+    _PyBorrowScope_Exit(tstate, mark);
     _Py_LeaveRecursiveCallTstate(tstate);
     return result;
 }
@@ -650,7 +657,9 @@ cfunction_vectorcall_FASTCALL_KEYWORDS_METHOD(
     if (meth == NULL) {
         return NULL;
     }
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     PyObject *result = meth(PyCFunction_GET_SELF(func), cls, args, nargs, kwnames);
+    _PyBorrowScope_Exit(tstate, mark);
     _Py_LeaveRecursiveCallTstate(tstate);
     return result;
 }
@@ -677,8 +686,10 @@ cfunction_vectorcall_NOARGS(
     if (meth == NULL) {
         return NULL;
     }
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     PyObject *result = _PyCFunction_TrampolineCall(
         meth, PyCFunction_GET_SELF(func), NULL);
+    _PyBorrowScope_Exit(tstate, mark);
     _Py_LeaveRecursiveCallTstate(tstate);
     return result;
 }
@@ -705,8 +716,10 @@ cfunction_vectorcall_O(
     if (meth == NULL) {
         return NULL;
     }
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     PyObject *result = _PyCFunction_TrampolineCall(
         meth, PyCFunction_GET_SELF(func), args[0]);
+    _PyBorrowScope_Exit(tstate, mark);
     _Py_LeaveRecursiveCallTstate(tstate);
     return result;
 }
@@ -733,9 +746,11 @@ cfunction_call(PyObject *func, PyObject *args, PyObject *kwargs)
 
     PyObject *result;
     if (flags & METH_KEYWORDS) {
+        _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
         result = _PyCFunctionWithKeywords_TrampolineCall(
             *_PyCFunctionWithKeywords_CAST(meth),
             self, args, kwargs);
+        _PyBorrowScope_Exit(tstate, mark);
     }
     else {
         if (kwargs != NULL && PyDict_GET_SIZE(kwargs) != 0) {
@@ -744,7 +759,9 @@ cfunction_call(PyObject *func, PyObject *args, PyObject *kwargs)
                           ((PyCFunctionObject*)func)->m_ml->ml_name);
             return NULL;
         }
+        _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
         result = _PyCFunction_TrampolineCall(meth, self, args);
+        _PyBorrowScope_Exit(tstate, mark);
     }
     return _Py_CheckFunctionResult(tstate, func, result, NULL);
 }

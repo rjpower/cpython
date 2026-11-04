@@ -1092,6 +1092,14 @@ _PyGC_TraceVisitThreadState(PyThreadState *p, visitproc visit, void *arg)
     Py_VISIT(ts->asyncio_running_loop);
     Py_VISIT(ts->asyncio_running_task);
     Py_VISIT(ts->lazy_imports);
+    /* The borrow stack owns its entries (Python/borrow.c). */
+    PyObject **top = ts->borrow.top;
+    for (_PyBorrowChunk *c = ts->borrow.chunk; c != NULL; c = c->previous) {
+        for (PyObject **q = c->slots; q < top; q++) {
+            Py_VISIT(*q);
+        }
+        top = c->previous_top;
+    }
     /* Objects the trashcan deferred: their reference count is already zero
      * but they still own their members until the chain is destroyed. */
     for (PyObject *op = p->delete_later; op != NULL;

@@ -22,6 +22,25 @@ struct _gc_thread_state {
 };
 #endif
 
+// The borrow stack (Python/borrow.c, pycore_borrow.h): owned references
+// that back borrowed results handed out by the argument parsers.  The types
+// live here because _PyThreadStateImpl embeds the stack.
+typedef struct _PyBorrowChunk {
+    struct _PyBorrowChunk *previous;
+    PyObject **previous_top;    // previous chunk's top when this one opened
+    PyObject **end;
+    PyObject *slots[];
+} _PyBorrowChunk;
+
+typedef struct {
+    PyObject **top;             // next free slot
+    PyObject **end;             // end of the current chunk
+    PyObject **eval_floor;      // top when the innermost eval loop was
+                                // entered; NULL outside any eval loop
+    _PyBorrowChunk *chunk;      // initially &_PyBorrow_EmptyChunk
+    _PyBorrowChunk *spare;      // one cached chunk
+} _PyBorrowStack;
+
 
 // Every PyThreadState is actually allocated as a _PyThreadStateImpl. The
 // PyThreadState fields are exposed as part of the C API, although most fields
@@ -52,6 +71,8 @@ typedef struct _PyThreadStateImpl {
 
     // Reused for the thread's lifetime; owns placeholders while they resolve.
     PyObject *lazy_imports;
+
+    _PyBorrowStack borrow;
 
     // Distinguishes between yield and return from PyEval_EvalFrame().
     // See gen_send_ex2() in Objects/genobject.c

@@ -10,6 +10,7 @@ extern "C" {
 
 #include "dynamic_annotations.h"  // _Py_ANNOTATE_RWLOCK_CREATE
 
+#include "pycore_borrow.h"        // _PyBorrowScope_Exit()
 #include "pycore_code.h"          // _PyCode_GetTLBCFast()
 #include "pycore_interp.h"        // PyInterpreterState.eval_frame
 #include "pycore_pystate.h"       // _PyThreadState_GET()
@@ -119,10 +120,28 @@ static inline PyObject*
 _PyEval_EvalFrame(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
     EVAL_CALL_STAT_INC(EVAL_CALL_TOTAL);
+    /* Each activation is a borrow scope.  Its floor lets the instruction
+       boundary (_Py_HandlePending) release entries left by slot code that
+       bytecode calls directly. */
+    _PyBorrowStack *borrow = &((_PyThreadStateImpl *)tstate)->borrow;
+    PyObject **outer_floor = borrow->eval_floor;
+    PyObject **floor = borrow->top;
+    borrow->eval_floor = floor;
+    PyObject *result;
     if (tstate->interp->eval_frame == NULL) {
-        return _PyEval_EvalFrameDefault(tstate, frame, throwflag);
+        result = _PyEval_EvalFrameDefault(tstate, frame, throwflag);
     }
-    return tstate->interp->eval_frame(tstate, frame, throwflag);
+    else {
+        result = tstate->interp->eval_frame(tstate, frame, throwflag);
+    }
+    _PyBorrowScope_Exit(tstate, floor);
+    borrow->eval_floor = outer_floor;
+    if (outer_floor != NULL && borrow->top != outer_floor) {
+        /* This activation consumed the release request of entries that
+           belong to the outer one; renew it. */
+        _PyBorrow_RequestRelease(tstate);
+    }
+    return result;
 }
 
 extern PyObject*
@@ -337,6 +356,8 @@ _PyEval_SpecialMethodCanSuggest(PyObject *self, int oparg);
 #define _PY_GC_SCHEDULED_BIT (1U << 4)
 #define _PY_EVAL_PLEASE_STOP_BIT (1U << 5)
 #define _PY_EVAL_EXPLICIT_MERGE_BIT (1U << 6)
+/* Entries on the borrow stack above the eval loop's floor (pycore_borrow.h) */
+#define _PY_BORROW_RELEASE_BIT (1U << 7)
 
 /* Reserve a few bits for future use */
 #define _PY_EVAL_EVENTS_BITS 8

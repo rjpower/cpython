@@ -38,6 +38,22 @@ typedef struct _PyArg_Parser {
 PyAPI_FUNC(int) _PyArg_ParseTupleAndKeywordsFast(PyObject *, PyObject *,
                                                  struct _PyArg_Parser *, ...);
 
+/* A borrow scope bounds the borrowed object outputs of the PyArg_* parsers
+   (O, O!, S, U, Y, objects passed to O&, PyArg_UnpackTuple).  The runtime
+   opens one around every native function body; open one explicitly around
+   a loop body that parses, or around parsing outside any callback.  Take a
+   strong reference to any output kept past the scope.  Like
+   Py_BEGIN_ALLOW_THREADS, break, continue and return must not leave the
+   block. */
+typedef struct { void *_mark; } PyBorrowScope;
+PyAPI_FUNC(void) PyBorrowScope_Enter(PyBorrowScope *scope);
+PyAPI_FUNC(void) PyBorrowScope_Exit(PyBorrowScope *scope);
+
+#define Py_BEGIN_BORROW_SCOPE \
+    { PyBorrowScope _py_borrow_scope; PyBorrowScope_Enter(&_py_borrow_scope);
+#define Py_END_BORROW_SCOPE \
+    PyBorrowScope_Exit(&_py_borrow_scope); }
+
 #ifdef Py_BUILD_CORE
 // For internal use in stdlib. Needs C99 compound literals.
 // Defined here to avoid every stdlib module including pycore_modsupport.h

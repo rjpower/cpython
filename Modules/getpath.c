@@ -6,6 +6,7 @@
 #include "pycore_pathconfig.h"    // _PyPathConfig_ReadGlobal()
 #include "pycore_pymem.h"         // _PyMem_RawWcsdup()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
+#include "pycore_value.h"         // PyValue_AsPyObjectBorrow()
 
 #include "marshal.h"              // PyMarshal_ReadObjectFromString
 #include "osdefs.h"               // DELIM
@@ -311,11 +312,13 @@ getpath_joinpath_impl(PyObject *module, PyObject *args)
     Py_ssize_t first = 0;
 
     for (Py_ssize_t i = 0; i < n; ++i) {
-        PyObject *s = PyTuple_GET_ITEM(args, i);
+        /* Borrowed from args; an inline scalar is neither str nor None. */
+        PyValue v = PyTuple_GET_VALUE(args, i);
+        PyObject *s = PyValue_IsObject(v) ? PyValue_AsPyObjectBorrow(v) : NULL;
         Py_ssize_t cch;
         if (s == Py_None) {
             cch = 0;
-        } else if (PyUnicode_Check(s)) {
+        } else if (s != NULL && PyUnicode_Check(s)) {
             parts[i] = PyUnicode_AsWideCharString(s, &cch);
             if (!parts[i]) {
                 cchFinal = -1;

@@ -5,6 +5,7 @@
 #include "pycore_abstract.h"      // _PyIndex_Check()
 #include "pycore_audit.h"         // _Py_AuditHookEntry
 #include "pycore_backoff.h"       // JUMP_BACKWARD_INITIAL_VALUE, SIDE_EXIT_INITIAL_VALUE
+#include "pycore_borrow.h"        // _PyBorrowStack_Init()
 #include "pycore_ceval.h"         // _PyEval_AcquireLock()
 #include "pycore_codecs.h"        // _PyCodec_Fini()
 #include "pycore_critical_section.h" // _PyCriticalSection_Resume()
@@ -1516,6 +1517,7 @@ init_threadstate(_PyThreadStateImpl *_tstate,
     _tstate->asyncio_running_loop = NULL;
     _tstate->asyncio_running_task = NULL;
     _tstate->lazy_imports = NULL;
+    _PyBorrowStack_Init(&_tstate->borrow);
 
     tstate->delete_later = NULL;
 
@@ -1712,6 +1714,9 @@ PyThreadState_Clear(PyThreadState *tstate)
 
     /* Don't clear tstate->pyframe: it is a borrowed reference */
 
+    // Release the base region while the thread state is still intact.
+    _PyBorrowStack_Clear(tstate);
+
     Py_CLEAR(tstate->threading_local_key);
     Py_CLEAR(tstate->threading_local_sentinel);
 
@@ -1751,6 +1756,9 @@ PyThreadState_Clear(PyThreadState *tstate)
 
     // Finalizers above may resolve imports and create this set.
     Py_CLEAR(((_PyThreadStateImpl *)tstate)->lazy_imports);
+
+    // Finalizers above may also have pushed borrow entries.
+    _PyBorrowStack_Clear(tstate);
 
 #ifdef Py_GIL_DISABLED
     // Each thread should clear own freelists in free-threading builds.

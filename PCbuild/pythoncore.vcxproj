@@ -217,6 +217,7 @@
     <ClInclude Include="..\Include\internal\pycore_audit.h" />
     <ClInclude Include="..\Include\internal\pycore_backoff.h" />
     <ClInclude Include="..\Include\internal\pycore_bitutils.h" />
+    <ClInclude Include="..\Include\internal\pycore_borrow.h" />
     <ClInclude Include="..\Include\internal\pycore_brc.h" />
     <ClInclude Include="..\Include\internal\pycore_bytes_methods.h" />
     <ClInclude Include="..\Include\internal\pycore_bytesobject.h" />
@@ -618,6 +619,7 @@
     <ClCompile Include="..\Python\ast_unparse.c" />
     <ClCompile Include="..\Python\bltinmodule.c" />
     <ClCompile Include="..\Python\bootstrap_hash.c" />
+    <ClCompile Include="..\Python\borrow.c" />
     <ClCompile Include="..\Python\brc.c" />
     <ClCompile Include="..\Python\ceval.c">
       <AdditionalOptions Condition="'$(UseTailCallInterp)' == 'true' and $(PlatformToolset) != 'ClangCL'">/std:clatest %(AdditionalOptions)</AdditionalOptions>

@@ -31,7 +31,7 @@ and backend. The stage pages distinguish selected designs from working code.
 | --- | --- |
 | Documentation root (canonical `pyjit/`) | `/home/power/code/cpython/.worktrees/python-jit`, branch `weaver/python-jit` |
 | Runtime tree (nested worktree) | `/home/power/code/cpython/.worktrees/python-boil-the-ocean/build/worktrees/pyvalue-rc-universal` |
-| Runtime branch / HEAD | `boil/pyvalue-rc-universal`, `1f19952778d` |
+| Runtime branch / HEAD | `boil/pyvalue-rc-universal`, `48bb4d6d1d3` |
 | Debug build | `build/pyvalue-rc-debug-20261102-v1` (under the `python-boil-the-ocean` worktree) |
 | Triage debug builds | `build/pyvalue-rc-bringup-debug`, `build/pyvalue-rc-triage-rt-debug` |
 | Release build | `build/pyvalue-rc-release-20261103` (`--with-mimalloc --with-computed-gotos --with-shapes`, -O3) |
@@ -80,13 +80,22 @@ so pystats dispatch counts do not see it. A `pybuilddir.txt` of `none` makes a
 release build 5 to 12x slower; check it. `perf` is blocked
 (`perf_event_paranoid=4`); `tools/sampler/` has an LD_PRELOAD SIGPROF sampler.
 
-Running now: representation step 5 (D2 core: release contract and retire path)
-and value API V1 (additive part: box counters, enforcement macros, a clang-based
-check, format conversions, entry primitives; the rename and header move are
-deferred scripts).
+Running now: the step 5 review fixes and representation steps 6a to 6c
+(scripted save/restore sweeps; brief `build/pyjit-link-wave1/STEP6-BRIEF.md`),
+and the register IR v2 implementation proposal (design only; brief
+`IRV2-PROPOSAL-BRIEF.md`, output `design/proposals/register-ir-v2-packet.md`).
 
 Landed today on the runtime branch, newest first:
 
+- `48bb4d6d1d3`: value API V1, `PyValue_ERROR` removed; `PyValue_AsObject` is
+  the inline boxing converter.
+- `946f622e1d1`: value API V1, `pyvalue.h` moved to `Include/internal`.
+- `1a71a5cc2cf`: value API V1, `PyValue_AsPyObjectBorrow`/`Steal` renamed to
+  `PyValue_AsKnownObjectBorrow`/`Steal`, checked in every build.
+- `f3a20271f26`: value API V1 additive part (box counters by site,
+  `Py_VALUE_CORE`/`Py_VALUE_COMPAT`, `make check-value-api`, value format
+  conversions, entry primitives).
+- `0bf3ad80ecf`: representation step 5, release contract and retire path.
 - `1f19952778d`: natural method-JIT admission off by default.
 - `7171541fa49`: representation step 4, `PyValue_NULL` is all zero bits.
 - `fdd7fed3216`: P4 post-review fixes (borrow release bit re-armed only when it
@@ -156,10 +165,11 @@ The designs below and the value API page are accepted.
 - Proposal: [pyvalue-representation-packet.md](design/proposals/pyvalue-representation-packet.md)
   and its [review](design/reviews/pyvalue-representation-packet-review-1.md).
   Accepted plan for D2, D3, D5, G1', G3, G10 and G11: 11 steps, about 42
-  agent-hours. Steps 1 to 4 landed; step 5 is running.
+  agent-hours. Steps 1 to 5 landed; 6a to 6c are running.
 - [value-api.md](design/value-api.md): values are the internal API and
   `PyObject *` is the compatibility layer. Reviews 1 and 2 and revisions 2 and 3
-  (`74236263ef1`) done; accepted for packet V1.
+  (`74236263ef1`) done; accepted for packet V1, which landed (`f3a20271f26` to
+  `48bb4d6d1d3`).
 
 **Clinic means CPython's Argument Clinic wrapper generator.** Producer changes
 must be made in `Tools/clinic/libclinic/`; bulk edits to generated C are
@@ -167,14 +177,15 @@ overwritten.
 
 ## Next steps
 
-1. Finish representation step 5 and value API V1 (running).
-2. Representation steps 6a to 6c, 7 and 8.
-3. IR v2: IR-D1, IR-D2, G9 in [register-ir.md](design/register-ir.md); targets
-   the 39% interpreter-loop cost.
-4. Value API V2a-0 onwards.
-5. Official re-measure of kernels and the pyperformance subset on a quiet
-   machine after step 5, then the qualified baseline.
-6. Fix the remaining 13 debug failures and the release-only `test_pyvalue` abort.
+1. Finish the step 5 review fixes and steps 6a to 6c (running).
+2. Review the IR v2 proposal (running), then implement it in the order it
+   settles against steps 7 to 9b.
+3. Representation steps 7, 8, 9a and 9b.
+4. Official re-measure of kernels and the pyperformance subset on a quiet
+   machine after 6c, then the qualified baseline.
+5. Value API V1 follow-ups (`FOLLOWUPS.md`), then V2a-0 onwards.
+6. Fix the remaining 12 failures (test_capi 3, test_pyvalue_dict_vm 4,
+   test_pyvalue_native_scope 5).
 
 Use the time metric; the instruction-count metric needs `perf_event_paranoid`
 lowered, which the user has not done. Do not present host controls, object files

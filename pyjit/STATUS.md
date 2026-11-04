@@ -1,6 +1,6 @@
 # Project status
 
-Status as of 2026-11-03 20:40 PST, from the coordinator fact sheet. Update this
+Status as of 2026-11-03 22:40 PST, from the coordinator fact sheet. Update this
 page at each landing.
 
 ## Outcome and next milestone
@@ -23,20 +23,29 @@ first checkpoint measurement (time and RSS, quiet-ish host) is in.
 These numbers are a checkpoint, not a baseline. The next milestone is a
 near-green suite, the 25% and 39% costs addressed (steps below), and an
 official re-measure of kernels and the pyperformance subset on a quiet machine
-after representation step 5.
+after representation step 6c (moved from step 5: steps 6a-6c remove most of
+the same 25% cost, and the sweep agent builds continuously until then).
 
 ## Position
 
-- Runtime branch `boil/pyvalue-rc-universal`, HEAD `1f19952778d`.
+- Runtime branch `boil/pyvalue-rc-universal`, HEAD `48bb4d6d1d3`.
 - Landed today: native boundary P3 (`56ff66a596b`, `643c69c7244`,
   `6d39221996d`) and P4 (`2558376b321`, post-review fixes `fdd7fed3216`);
   representation steps 1 (`f129780a9a7`), 2 (`f7dfc5b961f`), 3 (`dbce7b1260d`,
-  with 3b `379e92cded9`) and 4 (`7171541fa49`, `PyValue_NULL` is all zero bits);
-  natural method-JIT admission off by default (`1f19952778d`).
-- Debug suite after step 4: run=51,496, failures=13. Failing files: test_capi
-  (3: test_getitem_with_error, test_is_unique_temporary, test_unicode.test_new),
-  test_pyvalue_dict_vm (4), test_pyvalue_native_scope (6). Release also fails
-  test_pyvalue: a release-only abort at `PyValue_Wrap` in `_testinternalcapi.c`.
+  with 3b `379e92cded9`), 4 (`7171541fa49`, `PyValue_NULL` is all zero bits)
+  and 5 (`0bf3ad80ecf`, release contract and retire path); natural method-JIT
+  admission off by default (`1f19952778d`); value API V1 (`f3a20271f26`
+  additive part; `1a71a5cc2cf` rename to `PyValue_AsKnownObjectBorrow`/`Steal`
+  with a check in every build; `946f622e1d1` `pyvalue.h` moved to
+  `Include/internal`; `48bb4d6d1d3` `PyValue_ERROR` removed).
+- Suites at `48bb4d6d1d3`, debug and release alike: run=51,511, failures=12.
+  Failing files: test_capi (3: test_getitem_with_error,
+  test_is_unique_temporary, test_unicode.test_new), test_pyvalue_dict_vm (4),
+  test_pyvalue_native_scope (5). The release-only test_pyvalue abort is gone.
+  `make check-value-api`: 177 units, 0 findings, 149 slot reads listed.
+- Step 5 post-review: no confirmed bugs; two risks (revalidation
+  `SystemError`s drop a pending error; dict allocator-hook fixtures still
+  reenter) and two style items are fixed first in the step 6 packet.
 - All 67 shared modules whose third-party headers exist build. The decimal,
   tkinter, ssl, sqlite and zstd headers are not installed on this host.
 
@@ -44,20 +53,22 @@ after representation step 5.
 
 Running now:
 
-1. Representation step 5 (D2 core: release contract and retire path). Targets
-   the 25% exception save/restore cost.
-2. Value API V1, additive part: box counters, enforcement macros, a clang-based
-   check, format conversions, entry primitives. The rename and header move are
-   deferred scripts.
+1. Step 5 review fixes, then representation steps 6a to 6c (scripted sweeps of
+   the save/restore sites around plain releases).
+2. Register IR v2 implementation proposal (IR-D1, IR-D2, G9 in
+   [register-ir.md](design/register-ir.md)): steps, ordering against the
+   representation packet, and the named causes of the 39% loop cost. Design
+   only; peer review follows.
 
 Next, in order:
 
-3. Representation steps 6a to 6c, 7 and 8
+3. Representation steps 7 and 8, then 9a/9b (int51)
    ([packet](design/proposals/pyvalue-representation-packet.md)).
-4. Register IR v2 (IR-D1, IR-D2, G9 in [register-ir.md](design/register-ir.md)).
-   Targets the 39% interpreter-loop cost.
-5. Value API V2a-0 onwards.
-6. Official re-measure after step 5, then the qualified baseline.
+4. Official re-measure after 6c.
+5. Register IR v2 implementation, once the proposal is reviewed.
+6. Value API V1 follow-ups (box-site annotations in the interpreter files,
+   `entry_unbox` counts, seven modules that define a bare `Py_BUILD_CORE`),
+   then V2a-0 onwards.
 
 ## Design decisions
 

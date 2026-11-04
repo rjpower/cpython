@@ -20,11 +20,21 @@ first checkpoint measurement (time and RSS, quiet-ish host) is in.
 - The register IR executes 0.81 words per upstream instruction (geomean). Peak
   RSS is 34% above upstream, mostly startup (12.4 MiB against 9.5 MiB).
 
-These numbers are a checkpoint, not a baseline. The next milestone is a
-near-green suite, the 25% and 39% costs addressed (steps below), and an
-official re-measure of kernels and the pyperformance subset on a quiet machine
-after representation step 6c (moved from step 5: steps 6a-6c remove most of
-the same 25% cost, and the sweep agent builds continuously until then).
+[Re-measure after step 6c](bench/results/remeasure-20261104.md) (`c8a0b4dc54c`,
+one quiet window, kernels at load at most 1.2):
+
+- Kernels take 2.27x upstream (geomean; 2.64x at `1f19952778d`), 14% less
+  time than before step 5. pyperformance subset: 2.53x upstream, 12% less.
+- Exception save/restore fell from 22.3% to 8.2% of the "before" time on the
+  triage's five worst kernels: 83% of the saving. The loop's own cost did not
+  change and is again the largest bucket (32% of the gap), then value
+  bridging (28%) and save/restore (14%, the step 7 sites).
+- Words executed and boxes are unchanged (0.805 words per upstream
+  instruction). Peak RSS stays 28% above upstream.
+
+These numbers are not a baseline. The next milestone is a near-green suite,
+the remaining save/restore cost (step 7) and the loop's own cost (register IR
+v2 phase A) addressed, then the qualified baseline.
 
 ## Position
 

@@ -88,11 +88,13 @@ in `build/worktrees/irv2-a5b` (base `5de7bd62ef9`, builds
 step (`irv2-a5b-N.diff`, progress `progress-irv2-a5b.txt`: "A5b-N ready",
 then "A5b-N final" after the post-review fixes). The coordinator
 post-reviews each increment, applies it to the shared tree with a 3-way
-apply and resolves clashes with `2f572ea0ea8` there. A5b-1 is reviewed
-(`review-irv2-a5b-1.md`: integrate, three should-fix items being fixed).
+apply and resolves clashes with `2f572ea0ea8` there. A5b-1 landed
+(`a6002e5854b`); A5b-2 (the generator) is in progress.
 
 Landed on the runtime branch, newest first:
 
+- `a6002e5854b`: A5b-1, `PyValueBorrow` and the reader macros
+  (`review-irv2-a5b-1.md`).
 - `2f572ea0ea8`: value-form container calls in 11 box sites (contains,
   compare, set and dict adds, global and name stores, dict delete, list and
   tuple indexing); post-review `review-boxsites.md`.

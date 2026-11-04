@@ -108,6 +108,11 @@ struct _ceval_state {
        running, this value is overlaid onto PyThreadState.eval_breaker so that
        changes in the instrumentation version will trigger the eval breaker. */
     uintptr_t instrumentation_version;
+    /* The version whose re-instrumentation of executing code stopped at an
+       error, or 0 once a later one completes.  Until then, the code of a
+       running frame that the walk did not reach stays older than it
+       (instrument_all_executing_code_objects). */
+    uintptr_t instrumentation_failed_version;
     int recursion_limit;
     struct _gil_runtime_state *gil;
     int own_gil;

@@ -4,13 +4,17 @@ or monitoring that it makes takes effect at the next instruction.
 
 The register IR keeps a local that an instruction's result displaces
 (``x = a + b`` with ``x`` bound) until the instruction has finished, and a
-native call releases its arguments after the call returns; both then check
-the instrumentation of the code again (Python/ceval.c,
-value_operation_refresh and native_call_finish)."""
+native call releases its arguments after the call returns.  Setting events
+re-instruments every executing code object, as upstream does, so the
+instruction after the release dispatches through the new instrumentation;
+a debug build checks that the code is current (Python/ceval.c,
+instrumentation_is_current)."""
 
 import sys
+import textwrap
 import unittest
 from test import support
+from test.support import import_helper, script_helper
 
 
 TOOL = 2  # As in test_monitoring
@@ -151,6 +155,46 @@ class ReleaseChangesInstrumentation(unittest.TestCase):
                     finally:
                         sys.settrace(None)
                     self.assertEqual(relative_lines(function.__code__, seen), [3, 4])
+
+
+class FailedInstrumentation(unittest.TestCase):
+    def test_monitoring_failure_handled_in_frame(self):
+        # set_events fails while it re-instruments the executing code
+        # (instrument_all_executing_code_objects) and f handles the
+        # MemoryError.  As upstream, f goes on with its old instrumentation,
+        # so it reports no LINE event, and its next operation (len) does not
+        # fail the debug check of its instrumentation.  The subprocess keeps
+        # a debug abort from ending the run.
+        import_helper.import_module("_testcapi")
+        code = textwrap.dedent("""
+            import sys
+            import _testcapi
+
+            E = sys.monitoring.events
+            TOOL = 4
+            seen = []
+            sys.monitoring.use_tool_id(TOOL, "test")
+            sys.monitoring.register_callback(
+                TOOL, E.LINE,
+                lambda code, line: seen.append(line - code.co_firstlineno)
+                if code.co_name == "f" else None)
+
+            def f():
+                try:
+                    _testcapi.set_nomemory(0, 1)
+                    sys.monitoring.set_events(TOOL, E.LINE)
+                except MemoryError:
+                    seen.append("MemoryError")
+                finally:
+                    _testcapi.remove_mem_hooks()
+                n = len([1, 2])
+                return n + 1
+
+            print(f(), seen)
+            sys.monitoring.set_events(TOOL, 0)
+        """)
+        result = script_helper.assert_python_ok("-c", code)
+        self.assertEqual(result.out.decode().strip(), "3 ['MemoryError']")
 
 
 if __name__ == "__main__":

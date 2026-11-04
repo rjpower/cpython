@@ -6,6 +6,7 @@ from analyzer import (
     Properties,
     StackItem,
     Uop,
+    VALUE_TO_OBJECT,
     analysis_error,
     Label,
     CodeSection,
@@ -176,6 +177,82 @@ def forget_stored_pointers(uop: CodeSection, storage: Storage) -> None:
             var.known_object = False
 
 
+# What a uop body may do with an input that emit_object_inputs boxed,
+# besides converting it to an object: the box replaces the input's C local,
+# and is not the canonical value, so it must not reach a home.  Only the
+# uop's outputs are published (_PyValue_Publish) on their way to one.
+BOXED_INPUT_RELEASES = {"DEAD", "PyValue_CLOSE", "PyValue_XCLOSE"}
+# Functions that take a value and only read it as an object
+BOXED_INPUT_READERS = {"_PyForIter_VirtualIteratorNext"}
+
+
+def enclosing_callee(tokens: list[Token], i: int) -> str | None:
+    "The function whose argument list holds tokens[i], or None"
+    depth = 0
+    for j in range(i - 1, -1, -1):
+        text = tokens[j].text
+        if text == ")":
+            depth += 1
+        elif text == "(":
+            if depth == 0:
+                if j > 0 and tokens[j - 1].kind == "IDENTIFIER":
+                    return tokens[j - 1].text
+                return None
+            depth -= 1
+        elif text in (";", "{", "}") and depth == 0:
+            return None
+    return None
+
+
+def safe_boxed_use(tokens: list[Token], i: int, outputs: set[str]) -> bool:
+    "Whether the use tokens[i] of a boxed input cannot keep the box"
+    prev = tokens[i - 1].text if i > 0 else ""
+    nxt = tokens[i + 1].text if i + 1 < len(tokens) else ""
+    if prev in ("(", ",") and nxt in (")", ","):
+        callee = enclosing_callee(tokens, i) or ""
+        if callee in BOXED_INPUT_READERS:
+            return True
+        return prev == "(" and nxt == ")" and (
+            callee in VALUE_TO_OBJECT or callee in BOXED_INPUT_RELEASES
+            or callee.startswith("PyValue_Is"))
+    # The whole right-hand side of an assignment to an output
+    return (prev == "=" and nxt == ";" and i >= 2
+            and tokens[i - 2].text in outputs
+            and (i < 3 or tokens[i - 3].text in (";", "{", "}")))
+
+
+def boxed_input_store(uop: Uop, name: str) -> Token | None:
+    """The first use of input name in the body of uop, outside assert(),
+    that could keep the box the generator made of it, or None.
+
+    A use is safe when name is the whole argument of an object conversion
+    (VALUE_TO_OBJECT), of a PyValue_Is* test or of a release
+    (BOXED_INPUT_RELEASES), an argument of a function that only reads it
+    (BOXED_INPUT_READERS), or the whole right-hand side of an assignment to
+    an output.  Anything else may store it, as the generic SEND once did with
+    _PyFrame_SetReturnValue(gen_frame, PyValue_MakeHeapSafe(v))."""
+    outputs = {item.name for item in uop.stack.outputs}
+    tokens = list(uop.body.tokens())
+    i = 0
+    while i < len(tokens):
+        tkn = tokens[i]
+        if tkn.text == "assert":
+            depth = 0
+            for i in range(i + 1, len(tokens)):
+                if tokens[i].text == "(":
+                    depth += 1
+                elif tokens[i].text == ")":
+                    depth -= 1
+                    if depth == 0:
+                        break
+        elif (tkn.kind == "IDENTIFIER" and tkn.text == name
+                and (i == 0 or tokens[i - 1].text not in (".", "->"))
+                and not safe_boxed_use(tokens, i, outputs)):
+            return tkn
+        i += 1
+    return None
+
+
 class Emitter:
     out: CWriter
     labels: dict[str, Label]
@@ -311,6 +388,7 @@ class Emitter:
                 self.emit(f"if (Py_UNLIKELY(!PyValue_IsPointerSpace{at}({ref}))) {{\n")
                 self.emit_jump_to_predicted(inst)
             else:
+                self.check_boxed_input(uop, var.name, inst)
                 self.emit(f"if (Py_UNLIKELY(PyValue_IsInline{at}({ref}))) {{\n")
                 self.emit(f"{var.name} = PyValue_Box({var.name});\n")
                 # A failed box leaves the value inline. Every input is still
@@ -330,6 +408,16 @@ class Emitter:
                         unsynced.append(var)
             self.emit("}\n")
             var.known_object = True
+
+    def check_boxed_input(self, uop: Uop, name: str, inst: Instruction | None) -> None:
+        "Refuse a uop that boxes input name and could then keep the box"
+        store = boxed_input_store(uop, name)
+        if store is not None:
+            raise analysis_error(
+                f"{uop.name} boxes input '{name}' for an object API and then "
+                f"uses it as a value, which can keep the box; box it "
+                f"explicitly (_PyValueTemps_Object) where it needs the object",
+                store)
 
     def emit_store_input(self, var: Local, storage: Storage) -> None:
         assert var.memory_offset is not None

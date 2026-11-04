@@ -1523,15 +1523,19 @@ drop_failed_value(PyValue *result)
  * every code object with a frame on a thread's stack
  * (instrument_all_executing_code_objects), and a frame's RESUME
  * re-instruments its code when it starts, except while tracing in the
- * default build (_MAYBE_INSTRUMENT).  A failure to instrument stops with the
- * error set. */
+ * default build (_MAYBE_INSTRUMENT).  A walk that fails stops with the error
+ * set; once Python code has handled the error, the frames the walk did not
+ * reach run code older than the version that failed, until a later walk
+ * completes. */
 static int
 instrumentation_is_current(PyThreadState *tstate, PyCodeObject *code)
 {
     uintptr_t epoch = _Py_atomic_load_uintptr_relaxed(&tstate->eval_breaker) &
                       ~_PY_EVAL_EVENTS_MASK;
-    if (FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(code->_co_instrumentation_version) == epoch ||
-        PyErr_Occurred()) {
+    uintptr_t version = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(code->_co_instrumentation_version);
+    uintptr_t failed = FT_ATOMIC_LOAD_UINTPTR_ACQUIRE(
+        tstate->interp->ceval.instrumentation_failed_version);
+    if (version == epoch || version < failed || PyErr_Occurred()) {
         return 1;
     }
 #ifdef Py_GIL_DISABLED

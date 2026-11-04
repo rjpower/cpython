@@ -568,6 +568,37 @@ class TestIRCases(unittest.TestCase):
         self.assertTrue(formats["OP_ANNOTATED"].window)
         self.assertTrue(formats["OP_SWITCH"].window)
 
+    def test_boxed_input_used_as_value(self):
+        # An input that the body converts to an object is boxed at entry, and
+        # the box replaces the input's C local.  The box is not the canonical
+        # value, so a use that can keep it fails generation: the generic SEND
+        # once stored it in a generator's frame with
+        # _PyFrame_SetReturnValue(gen_frame, PyValue_MakeHeapSafe(v)).
+        input = """
+        inst(OP, (v -- res)) {
+            PyObject *v_o = PyValue_AsKnownObjectBorrow(v);
+            PyValue kept = PyValue_MakeHeapSafe(v);
+            SPAM(v_o, kept);
+            DEAD(v);
+            res = kept;
+        }
+    """
+        with self.assertRaisesRegex(SyntaxError, "_OP boxes input 'v'"):
+            self.ir_output(input)
+        # A test, a release and an assignment to an output are safe: the
+        # outputs are published canonical
+        for body in ("SPAM(v_o, PyValue_IsNone(v));\n res = v;\n DEAD(v);",
+                     "int err = SPAM(v_o);\n PyValue_CLOSE(v);\n"
+                     " ERROR_IF(err);\n res = PyValue_None;"):
+            with self.subTest(body=body):
+                output = self.ir_output(f"""
+                inst(OP, (v -- res)) {{
+                    PyObject *v_o = PyValue_AsKnownObjectBorrow(v);
+                    {body}
+                }}
+            """)
+                self.assertIn("v = PyValue_Box(v);", output)
+
     def test_frame_switch_needs_window(self):
         # The outputs of an instruction that switches frames land in the
         # other frame, where the fields name no slots.

@@ -2214,6 +2214,7 @@ class IREmitter(Emitter):
                     self.emit(f"if (Py_UNLIKELY(!PyValue_IsPointerSpace({var.name}))) {{\n")
                     self.emit_jump_to_predicted(inst)
                 else:
+                    self.check_boxed_input(uop, var.name, inst)
                     self.emit(f"if (Py_UNLIKELY(PyValue_IsInline({var.name}))) {{\n")
                     self.emit(f"{var.name} = PyValue_Box({var.name});\n")
                     self.emit(f"if (PyValue_IsInline({var.name})) {{\n")

@@ -2047,6 +2047,14 @@ instrument_all_executing_code_objects(PyInterpreterState *interp)
     }
 done:
     _Py_FOR_EACH_TSTATE_END(interp);
+    /* After a failure, the frames not yet reached run older code until their
+     * next RESUME; a complete walk brings every executing code object up to
+     * the version.  Debug builds check this (ceval.c,
+     * instrumentation_is_current). */
+    uintptr_t failed = err ? _Py_atomic_load_uintptr_relaxed(
+                                 &interp->ceval.instrumentation_version) : 0;
+    FT_ATOMIC_STORE_UINTPTR_RELEASE(interp->ceval.instrumentation_failed_version,
+                                    failed);
     return err;
 }
 

@@ -709,7 +709,7 @@ _PyJit_CodeInfo(PyCodeObject *code)
             "backedge_seen", unit->trace_backedge_seen ? Py_True : Py_False,
             "events", g ? g->event_count : 0, "nodes", g ? g->nnodes : 0,
             "values", g ? g->nvalues : 0, "spills", g ? g->nspills : 0,
-            "scratch", g ? g->nscratch : 0, "boxed_imports", g ? g->boxed_imports : 0,
+            "scratch", g ? g->nscratch : 0, "scalar_imports", g ? g->nimports : 0,
             "python_calls", g ? g->python_calls : 0,
             "header", g ? g->header : unit->record_header,
             "backedge", g ? g->backedge : unit->record_backedge,

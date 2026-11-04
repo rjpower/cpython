@@ -856,11 +856,51 @@ class TestObservedLoops(unittest.TestCase):
         for n, seed in ((2400, 3), (31, -7), (1200, 19)):
             self.assertEqual(work(n, seed), seed + 2 * n * (n - 1) + 7 * n)
         info = self.optimized(work)
-        # Every home holds an exact int in int32 range, whose canonical form
-        # is inline (pyvalue.md section 1.5), so no import reads a box.
-        self.assertEqual(info["trace"]["boxed_imports"], 0)
+        # Every local holds an exact int at the loop header. Its canonical
+        # form is inline (pyvalue.md section 1.5), so the trace imports each
+        # one as a scalar and none stays an opaque home.
+        self.assertEqual(info["trace"]["scalar_imports"], work.__code__.co_nlocals)
         self.assertTrue(_testinternalcapi.jit_method_record_index())
         print("JIT_OBSERVED_LOOP_WITNESS", info)
+
+    def test_int51_scalars_and_overflow_exits(self):
+        # Trace scalars are the inline ints, -2**50 <= v < 2**50, scaled in
+        # int64 registers. Each add, subtract or multiply whose result leaves
+        # that range exits to the interpreter, which boxes the result.
+        def work(start, stop, total, rest, step, factor):
+            i = start
+            product = 0
+            while i < stop:
+                total = total + step
+                rest = rest - step
+                product = i * factor
+                i = i + 1
+            return total, rest, product
+
+        def expected(start, stop, total, rest, step, factor):
+            n = max(0, stop - start)
+            return total + n * step, rest - n * step, (stop - 1) * factor if n else 0
+
+        wide = 2**45
+        # Recorded with values outside int32, which are scalars here.
+        args = (wide, wide + 2400, 2**40, -2**40, 2**20, 3)
+        self.assertEqual(work(*args), expected(*args))
+        info = self.optimized(work)
+        self.assertEqual(info["trace"]["scalar_imports"], work.__code__.co_nlocals)
+        for args in (
+            (wide, wide + 5, 2**50 - 6, -2**50 + 5, 1, 31),   # reach both bounds
+            (wide, wide + 5, 2**50 - 3, 0, 1, 0),             # add above
+            (wide, wide + 5, 0, -2**50 + 3, 1, 0),            # subtract below
+            (wide, wide + 5, -2**50 + 3, 2**50 - 3, -1, 0),   # the reverse
+            (wide, wide + 5, 0, 0, 0, 32),                    # product 2**50
+            (wide, wide + 5, 0, 0, 0, -32),                   # -2**50, then below
+            (-2**50, -2**50 + 3, 0, 0, 1, -1),                # -(-2**50)
+            (2**50 - 3, 2**50 - 1, 0, 0, 1, 1),
+            (0, 0, 2**50 - 1, -2**50, 1, 1),
+        ):
+            with self.subTest(args=args):
+                self.assertEqual(work(*args), expected(*args))
+        self.assertTrue(self.info(work)["active"])
 
     def test_python_and_c_call_continuations(self):
         ledger = []
@@ -900,7 +940,8 @@ class TestObservedLoops(unittest.TestCase):
 
         self.assertEqual(work(2400, 1, 3000), 7201)
         self.optimized(work)
-        for n, seed, cut in ((0, 7, 0), (30, 2**31 - 2, 7), (33, 1.5, 12), (49, -2**31, 3)):
+        for n, seed, cut in ((0, 7, 0), (30, 2**31 - 2, 7), (30, 2**50 - 2, 7), (33, 1.5, 12),
+                             (49, -2**31, 3), (49, -2**50, 3)):
             self.assertEqual(work(n, seed, cut), seed + 3 * min(n, cut) - 2 * max(0, n - cut))
 
         # Returning before the nominated loop, or running a different loop,

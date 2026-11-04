@@ -15,8 +15,10 @@
 #define JIT_NO_VALUE UINT16_MAX
 #define JIT_NULL_VALUE (UINT16_MAX - 1)
 
-typedef enum { JIT_HOME_OPAQUE, JIT_HOME_NULL, JIT_HOME_INLINE, JIT_HOME_BOXED } JitHomeKind;
-typedef struct { int32_t value; uint8_t kind; } JitHome;
+/* A recorded home: NULL, an inline int (the only scalar a trace imports; an
+ * int outside the inline range is a box and opaque), or anything else. */
+typedef enum { JIT_HOME_OPAQUE, JIT_HOME_NULL, JIT_HOME_INLINE } JitHomeKind;
+typedef struct { uint8_t kind; } JitHome;
 typedef struct {
     uint32_t word, successor;
     _PyJitDecodedOp decoded; /* instruction is NULL: no exec borrow survives */
@@ -46,7 +48,7 @@ typedef struct {
 typedef struct {
     uint32_t word, successor;
     uint16_t left, right, value, before, after, effect;
-    int32_t immediate;
+    int64_t immediate; /* CONST: the int51 value, unscaled; CMP: oparg and branch */
     int16_t home;
     uint8_t kind, clears; /* bit k consumes input k's temporary */
     uint16_t input_home[2];
@@ -65,7 +67,7 @@ struct _PyJitGraph {
     JitFrameState states[JIT_GRAPH_STATES];
     uint32_t map_entries;
     size_t charged_bytes;
-    uint16_t event_count, python_calls, boxed_imports, optimized_values;
+    uint16_t event_count, python_calls, optimized_values;
     uint32_t record_words[JIT_RECORD_EVENTS], record_successors[JIT_RECORD_EVENTS];
 };
 
@@ -81,7 +83,6 @@ extern void _PyJit_OptimizeGraph(_PyJitGraph *);
 extern int _PyJit_AllocateGraph(_PyJitGraph *);
 extern void _PyJit_FreeGraph(_PyJitGraph *);
 extern int _PyJit_LowerGraph(_PyJitCodeUnit *);
-extern int _PyJit_ReadInt32(PyValue, int32_t *);
 extern _PyJitAction _PyJit_TraceImport(_PyJitContext *, const JitSsaNode *);
 extern _PyJitAction _PyJit_TracePublish(_PyJitContext *, const JitFrameState *);
 extern _PyJitAction _PyJit_TraceCommit(_PyJitContext *, const JitSsaNode *);

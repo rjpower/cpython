@@ -40,12 +40,11 @@ imports(_PyJitGraph *g, uint16_t *homes, const JitHome *observed, uint32_t word,
 {
     for (int h = 0; h < g->nhomes; h++) {
         homes[h] = observed[h].kind == JIT_HOME_NULL ? JIT_NULL_VALUE : JIT_NO_VALUE;
-        if (observed[h].kind != JIT_HOME_INLINE && observed[h].kind != JIT_HOME_BOXED) continue;
-        /* An owning boxed temporary remains canonical and its consumer uses
-         * the shared helper. It is not an int32 import/ownership promise. */
-        if (!phi && h >= g->nlocals && observed[h].kind == JIT_HOME_BOXED) continue;
+        /* Anything but an inline int, a big int's box included, stays in its
+         * home and its consumer uses the shared helper. */
+        if (observed[h].kind != JIT_HOME_INLINE) continue;
         /* Loop-carried temporaries require an ownership PHI not provided by
-         * this first scalar graph. Borrowed boxed locals remain eligible. */
+         * this first scalar graph. */
         if (phi && h >= g->nlocals) return -1;
         int v = value(g, h);
         JitSsaNode *n = node(g, phi ? JIT_SSA_PHI : JIT_SSA_IMPORT, word);
@@ -84,7 +83,6 @@ _PyJit_BuildGraph(const _PyJitRecord *record)
     uint16_t homes[JIT_GRAPH_HOMES];
     if (imports(g, homes, record->events[0].before, g->header, 1) < 0) goto fail;
     g->nimports = g->nnodes;
-    for (int h = 0; h < g->nhomes; h++) g->boxed_imports += record->events[0].before[h].kind == JIT_HOME_BOXED;
     int effect = 0, arithmetic = 0;
     for (uint32_t e = 0; e < record->count; e++) {
         const JitRecordEvent *event = &record->events[e];
@@ -232,12 +230,16 @@ _PyJit_OptimizeGraph(_PyJitGraph *g)
                 if (g->nodes[j].value == n->right) right = &g->nodes[j];
             }
             if (left != NULL && right != NULL) {
-                int64_t a = left->immediate, b = right->immediate;
-                int64_t result = n->kind == JIT_SSA_ADD ? a+b : n->kind == JIT_SSA_SUB ? a-b :
-                    n->kind == JIT_SSA_MUL ? a*b : (int32_t)((uint32_t)a & (uint32_t)b);
-                if (_PyValue_IntFitsInline(result)) {
+                /* Constants are int51: only their product can leave int64. */
+                int64_t a = left->immediate, b = right->immediate, result;
+                int overflow = 0;
+                if (n->kind == JIT_SSA_ADD) result = a + b;
+                else if (n->kind == JIT_SSA_SUB) result = a - b;
+                else if (n->kind == JIT_SSA_MUL) overflow = __builtin_mul_overflow(a, b, &result);
+                else result = a & b;
+                if (!overflow && _PyValue_IntFitsInline(result)) {
                     n->kind = JIT_SSA_CONST;
-                    n->immediate = (int32_t)result;
+                    n->immediate = result;
                     n->left = n->right = JIT_NO_VALUE;
                     g->optimized_values++;
                 }

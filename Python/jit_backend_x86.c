@@ -41,21 +41,23 @@ call_absolute(jit_buf *buffer, uintptr_t address)
     jit_call_reg(buffer, X86_RAX);
 }
 
+/* Scalar values are inline ints scaled to int64 (_PyValue_IntScaled(), see
+ * jit_record.c), in these registers or in 8-byte scratch slots. */
 static const jit_reg scalar_regs[6] = {X86_RAX, X86_RCX, X86_RDX, X86_R8, X86_R9, X86_R10};
 
 static void
 read_value(jit_buf *b, _PyJitGraph *g, uint16_t id, jit_reg dst)
 {
     JitSsaValue *v = &g->values[id];
-    if (v->reg >= 0) jit_mov32(b, dst, scalar_regs[v->reg]);
-    else jit_load32(b, dst, X86_RSP, v->spill * 8);
+    if (v->reg >= 0) jit_mov(b, dst, scalar_regs[v->reg]);
+    else jit_load(b, dst, X86_RSP, v->spill * 8);
 }
 
 static void
 write_value(jit_buf *b, _PyJitGraph *g, uint16_t id, jit_reg src)
 {
     JitSsaValue *v = &g->values[id];
-    if (v->reg >= 0) jit_mov32(b, scalar_regs[v->reg], src);
+    if (v->reg >= 0) jit_mov(b, scalar_regs[v->reg], src);
     else jit_store(b, X86_RSP, v->spill * 8, src);
 }
 
@@ -75,7 +77,7 @@ reload_values(jit_buf *b, _PyJitGraph *g, int at)
     for (int id = 0; id < g->nvalues; id++) {
         JitSsaValue *v = &g->values[id];
         if (v->reg >= 0 && v->first <= at && v->last >= at)
-            jit_load32(b, scalar_regs[v->reg], X86_RSP, v->spill * 8);
+            jit_load(b, scalar_regs[v->reg], X86_RSP, v->spill * 8);
     }
 }
 
@@ -117,15 +119,15 @@ phi_moves(jit_buf *b, _PyJitGraph *g)
         }
         if (ready < 0) {
             int saved = dest[0];
-            if (saved < 100) jit_mov32(b, X86_R11, scalar_regs[saved]);
-            else jit_load32(b, X86_R11, X86_RSP, (saved - 100) * 8);
+            if (saved < 100) jit_mov(b, X86_R11, scalar_regs[saved]);
+            else jit_load(b, X86_R11, X86_RSP, (saved - 100) * 8);
             for (int j = 0; j < count; j++) if (source[j] == saved) source[j] = -2;
             continue;
         }
-        if (source[ready] == -2) jit_mov32(b, X86_RDI, X86_R11);
-        else if (source[ready] < 100) jit_mov32(b, X86_RDI, scalar_regs[source[ready]]);
-        else jit_load32(b, X86_RDI, X86_RSP, (source[ready] - 100) * 8);
-        if (dest[ready] < 100) jit_mov32(b, scalar_regs[dest[ready]], X86_RDI);
+        if (source[ready] == -2) jit_mov(b, X86_RDI, X86_R11);
+        else if (source[ready] < 100) jit_mov(b, X86_RDI, scalar_regs[source[ready]]);
+        else jit_load(b, X86_RDI, X86_RSP, (source[ready] - 100) * 8);
+        if (dest[ready] < 100) jit_mov(b, scalar_regs[dest[ready]], X86_RDI);
         else jit_store(b, X86_RSP, (dest[ready] - 100) * 8, X86_RDI);
         count--;
         source[ready] = source[count]; dest[ready] = dest[count];
@@ -220,21 +222,28 @@ emit_graph(jit_buf *b, _PyJitCodeUnit *unit, int *labels, int epilogue, int fall
             static const jit_cond condition[] = {X86_L, X86_LE, X86_E, X86_NE, X86_G, X86_GE};
             read_value(b, g, n->left, X86_R11);
             read_value(b, g, n->right, X86_RDI);
-            jit_cmp32(b, X86_R11, X86_RDI);
+            jit_cmp(b, X86_R11, X86_RDI); /* scaling keeps the order */
             jit_cond failed = condition[n->immediate & 0xff];
             if (n->immediate & 256) failed = (jit_cond)(failed ^ 1);
             jit_jcc(b, failed, guard);
         }
         else {
-            if (op->kind == _PyJIT_LIR_CONST) jit_mov_imm32(b, X86_R11, (uint32_t)n->immediate);
+            if (op->kind == _PyJIT_LIR_CONST) {
+                jit_mov_imm64(b, X86_R11, (uint64_t)n->immediate << Py_INT_SHIFT);
+            }
             else if (op->kind == _PyJIT_LIR_COMMIT) read_value(b, g, n->value, X86_R11);
             else {
+                /* The int64 overflow of a scaled sum, difference or product
+                 * (one operand unscaled) is the int51 overflow. */
                 read_value(b, g, n->left, X86_R11);
                 read_value(b, g, n->right, X86_RDI);
-                if (op->kind == _PyJIT_LIR_ADD) jit_add32(b, X86_R11, X86_RDI);
-                else if (op->kind == _PyJIT_LIR_SUB) jit_sub32(b, X86_R11, X86_RDI);
-                else if (op->kind == _PyJIT_LIR_MUL) jit_imul32(b, X86_R11, X86_RDI);
-                else jit_op_reg(b, 0, 0x21, X86_RDI, X86_R11);
+                if (op->kind == _PyJIT_LIR_ADD) jit_add(b, X86_R11, X86_RDI);
+                else if (op->kind == _PyJIT_LIR_SUB) jit_sub(b, X86_R11, X86_RDI);
+                else if (op->kind == _PyJIT_LIR_MUL) {
+                    jit_sar_imm(b, X86_RDI, Py_INT_SHIFT);
+                    jit_imul(b, X86_R11, X86_RDI);
+                }
+                else jit_and(b, X86_R11, X86_RDI);
                 if (op->kind != _PyJIT_LIR_AND) jit_jcc(b, X86_O, guard);
             }
             write_value(b, g, n->value, X86_R11);
@@ -253,8 +262,9 @@ emit_graph(jit_buf *b, _PyJitCodeUnit *unit, int *labels, int epilogue, int fall
                 jit_jmp(b, done);
                 jit_bind(b, inline_old);
                 read_value(b, g, n->value, X86_R11);
+                jit_shr_imm(b, X86_R11, Py_INT_SHIFT); /* _PyValue_FromIntScaled() */
                 jit_mov_imm64(b, X86_RDI, Py_INT_BASE);
-                jit_add(b, X86_R11, X86_RDI);
+                jit_or(b, X86_R11, X86_RDI);
                 jit_store(b, X86_RSI, n->home * 8, X86_R11);
             }
         }

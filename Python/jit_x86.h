@@ -286,12 +286,10 @@ static inline void jit_mov(jit_buf *b, jit_reg dst, jit_reg src) { jit_op_reg(b,
 static inline void jit_mov32(jit_buf *b, jit_reg dst, jit_reg src) { jit_op_reg(b, 0, 0x89, src, dst); }
 static inline void jit_movsxd(jit_buf *b, jit_reg dst, jit_reg src) { jit_op_reg(b, 1, 0x63, dst, src); }
 static inline void jit_add(jit_buf *b, jit_reg dst, jit_reg src) { jit_op_reg(b, 1, 0x01, src, dst); }
-static inline void jit_add32(jit_buf *b, jit_reg dst, jit_reg src) { jit_op_reg(b, 0, 0x01, src, dst); }
 static inline void jit_sub(jit_buf *b, jit_reg dst, jit_reg src) { jit_op_reg(b, 1, 0x29, src, dst); }
-static inline void jit_sub32(jit_buf *b, jit_reg dst, jit_reg src) { jit_op_reg(b, 0, 0x29, src, dst); }
 static inline void jit_and(jit_buf *b, jit_reg dst, jit_reg src) { jit_op_reg(b, 1, 0x21, src, dst); }
+static inline void jit_or(jit_buf *b, jit_reg dst, jit_reg src) { jit_op_reg(b, 1, 0x09, src, dst); }
 static inline void jit_cmp(jit_buf *b, jit_reg a, jit_reg c) { jit_op_reg(b, 1, 0x39, c, a); }
-static inline void jit_cmp32(jit_buf *b, jit_reg a, jit_reg c) { jit_op_reg(b, 0, 0x39, c, a); }
 static inline void jit_test(jit_buf *b, jit_reg a, jit_reg c) { jit_op_reg(b, 1, 0x85, c, a); }
 static inline void jit_load_rip(jit_buf *b, jit_reg dst, int label) { jit_op_rip(b, 1, 0x8B, dst, label); }
 static inline void jit_cmp_rip(jit_buf *b, jit_reg reg, int label) { jit_op_rip(b, 1, 0x3B, reg, label); }
@@ -299,7 +297,7 @@ static inline void jit_lea_rip(jit_buf *b, jit_reg dst, int label) { jit_op_rip(
 static inline void jit_or_rip(jit_buf *b, jit_reg dst, int label) { jit_op_rip(b, 1, 0x0B, dst, label); }
 static inline void jit_test_rip(jit_buf *b, jit_reg reg, int label) { jit_op_rip(b, 1, 0x85, reg, label); }
 static inline void jit_cmov_rip(jit_buf *b, jit_cond cond, jit_reg dst, int label) { jit_op_rip(b, 1, 0x0F40 | cond, dst, label); }
-static inline void jit_imul32(jit_buf *b, jit_reg dst, jit_reg src) { jit_op_reg(b, 0, 0x0FAF, dst, src); }
+static inline void jit_imul(jit_buf *b, jit_reg dst, jit_reg src) { jit_op_reg(b, 1, 0x0FAF, dst, src); }
 
 /* mov word [base + disp], src */
 static inline void
@@ -436,7 +434,7 @@ jit_test_imm(jit_buf *b, jit_reg reg, int32_t imm)
     jit_u32(b, (uint32_t)imm);
 }
 
-/* Shifts by an immediate: /4 shl, /5 shr */
+/* Shifts by an immediate: /4 shl, /5 shr, /7 sar */
 static inline void
 jit_shift_imm(jit_buf *b, int ext, jit_reg dst, int imm)
 {
@@ -448,6 +446,7 @@ jit_shift_imm(jit_buf *b, int ext, jit_reg dst, int imm)
 
 static inline void jit_shl_imm(jit_buf *b, jit_reg dst, int imm) { jit_shift_imm(b, 4, dst, imm); }
 static inline void jit_shr_imm(jit_buf *b, jit_reg dst, int imm) { jit_shift_imm(b, 5, dst, imm); }
+static inline void jit_sar_imm(jit_buf *b, jit_reg dst, int imm) { jit_shift_imm(b, 7, dst, imm); }
 
 /* movsxd dst, dword [base + index * 1] */
 static inline void

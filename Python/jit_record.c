@@ -1,42 +1,21 @@
 #include "Python.h"
 #include "pycore_jit_ir.h"
-#include "pycore_long.h"
 #include "pycore_pystate.h"
 #include "pycore_ceval.h"
 
-int
-_PyJit_ReadInt32(PyValue ref, int32_t *value)
-{
-    if (PyValue_IsInlineInt(ref)) {
-        int64_t inline_value = PyValue_InlineInt64(ref);
-        if (inline_value < INT32_MIN || inline_value > INT32_MAX) return 0;
-        *value = (int32_t)inline_value;
-        return 1;
-    }
-    if (PyValue_IsNull(ref) || PyValue_IsInline(ref)) return 0;
-    if (PyValue_IsNull(ref)) return 0;
-    if (!PyValue_IsPointerSpace(ref)) return 0;
-    PyObject *object = PyValue_AsKnownObjectBorrow(ref);
-    if (!PyLong_CheckExact(object)) return 0;
-    /* Exact PyLong conversion cannot call __index__; overflow is a guard,
-     * not an exception or a request to allocate a boxed replacement. */
-    int overflow = 0;
-    long result = PyLong_AsLongAndOverflow(object, &overflow);
-    if (overflow || result < INT32_MIN || result > INT32_MAX) return 0;
-    *value = (int32_t)result;
-    return 1;
-}
-
+/* Trace scalars are inline ints, held in registers and scratch as the scaled
+ * int64 _PyValue_IntScaled(): v * 2**13, so a 64-bit add, subtract or
+ * multiply by an unscaled operand overflows exactly when the result leaves
+ * the int51 range. A home's int is inline whenever it fits (canonical
+ * construction), so a box is never a scalar. */
 static void
 observe(_PyInterpreterFrame *frame, JitHome *homes, int count)
 {
     PyValue *slots = _PyFrame_Slots(frame);
     for (int i = 0; i < count; i++) {
-        homes[i] = (JitHome){0, JIT_HOME_OPAQUE};
+        homes[i] = (JitHome){JIT_HOME_OPAQUE};
         if (PyValue_IsNull(slots[i])) homes[i].kind = JIT_HOME_NULL;
-        else if (_PyJit_ReadInt32(slots[i], &homes[i].value)) {
-            homes[i].kind = PyValue_IsInlineInt(slots[i]) ? JIT_HOME_INLINE : JIT_HOME_BOXED;
-        }
+        else if (PyValue_IsInlineInt(slots[i])) homes[i].kind = JIT_HOME_INLINE;
     }
 }
 
@@ -46,10 +25,8 @@ _PyJit_TestRecordIndex(void)
     PyValue index = PyValue_TagIndex(17);
     _PyInterpreterFrame frame = {.base = &index};
     JitHome observation;
-    int32_t scalar = 0;
-    int accepted = _PyJit_ReadInt32(index, &scalar);
     observe(&frame, &observation, 1);
-    return PyBool_FromLong(!accepted && observation.kind == JIT_HOME_OPAQUE);
+    return PyBool_FromLong(!PyValue_IsInlineInt(index) && observation.kind == JIT_HOME_OPAQUE);
 }
 
 void
@@ -183,10 +160,6 @@ _PyJit_RecordAfter(_PyJitContext *ctx, _PyJitAction action, const _PyJitLirOp *o
          * reads operands. Capacity allocation is never a per-operation event. */
         if (ctx->expected_exec->jit->record_attempted) return action;
         ctx->expected_exec->jit->record_attempted = 1;
-        /* The trace backend encodes int32 results for the int32 inline
-         * range; until representation step 9b moves it to int51, no int
-         * trace is recorded. */
-        goto abandon;
         if (_PyJit_EnsureFlow(ctx) < 0) goto error;
         flow = ctx->flow_owner ? *ctx->flow_owner : NULL;
         if (flow == NULL || !record_valid(ctx)) goto abandon;
@@ -297,13 +270,11 @@ _PyJit_TraceAfter(_PyJitContext *ctx, _PyJitAction action, const JitSsaNode *nod
 _PyJitAction
 _PyJit_TraceImport(_PyJitContext *ctx, const JitSsaNode *node)
 {
-    int32_t scalar;
     PyValue slot = _PyFrame_Slots(ctx->frame)[node->home];
-    if (!_PyJit_ReadInt32(slot, &scalar) ||
-        (node->home >= ctx->unit->graph->nlocals && !PyValue_IsInlineInt(slot))) {
+    if (!PyValue_IsInlineInt(slot)) {
         return _PyJit_TraceFallback(ctx, node->word);
     }
-    ctx->scratch[ctx->unit->graph->values[node->value].spill] = scalar;
+    ctx->scratch[ctx->unit->graph->values[node->value].spill] = _PyValue_IntScaled(slot);
     return _PyJIT_CONTINUE;
 }
 
@@ -327,7 +298,7 @@ _PyJit_TracePublish(_PyJitContext *ctx, const JitFrameState *state)
     for (int h = 0; h < g->nhomes; h++) {
         uint16_t id = state->value[h];
         if (id == JIT_NO_VALUE || (id < g->nvalues && g->values[id].import_home == h)) continue;
-        slots[h] = id == JIT_NULL_VALUE ? PyValue_NULL : PyValue_FromInlineInt((int32_t)ctx->scratch[g->values[id].spill]);
+        slots[h] = id == JIT_NULL_VALUE ? PyValue_NULL : _PyValue_FromIntScaled(ctx->scratch[g->values[id].spill]);
     }
     ctx->next_instr = ctx->frame->ir_words + state->word;
     ctx->frame->instr_ptr = ctx->next_instr;
@@ -344,7 +315,7 @@ _PyJit_TraceCommit(_PyJitContext *ctx, const JitSsaNode *node)
     for (int k = 0; k < 2; k++) if (node->clears & (1u << k)) slots[node->input_home[k]] = PyValue_NULL;
     PyValue old = slots[node->home];
     int reentrant = !PyValue_IsNull(old) && !PyValue_IsInline(old);
-    slots[node->home] = PyValue_FromInlineInt((int32_t)ctx->scratch[g->values[node->value].spill]);
+    slots[node->home] = _PyValue_FromIntScaled(ctx->scratch[g->values[node->value].spill]);
     /* Same order as IR_STORE_DST. Release may reenter or invalidate code;
      * the new local is visible and all other live values are canonical. */
     PyValue_XCLOSE(old);
@@ -361,13 +332,10 @@ _PyJit_TraceCommit(_PyJitContext *ctx, const JitSsaNode *node)
         slots = _PyFrame_Slots(ctx->frame);
         for (int h = 0; h < g->nhomes; h++) {
             uint16_t id = after->value[h];
-            int32_t actual;
             if (id == JIT_NO_VALUE) continue;
             if ((id == JIT_NULL_VALUE && PyValue_IsNull(slots[h])) ||
-                (id < g->nvalues &&
-                 (g->values[id].import_home == h || PyValue_IsInlineInt(slots[h])) &&
-                 _PyJit_ReadInt32(slots[h], &actual) &&
-                 actual == (int32_t)ctx->scratch[g->values[id].spill])) continue;
+                (id < g->nvalues && PyValue_IsInlineInt(slots[h]) &&
+                 _PyValue_IntScaled(slots[h]) == ctx->scratch[g->values[id].spill])) continue;
             action = _PyJit_TraceFallback(ctx, node->successor);
             ctx->phase = _PyJIT_AFTER;
             break;

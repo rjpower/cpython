@@ -162,6 +162,36 @@ set_value_boxing_errors(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(args))
 }
 
 
+/* Clear set with an exception pending. The keys' releases report their own
+ * errors as unraisable; the pending exception must survive and the set must
+ * end empty. */
+static PyObject *
+set_clear_pending(PyObject *Py_UNUSED(module), PyObject *set)
+{
+    if (!PySet_Check(set)) {
+        PyErr_SetString(PyExc_TypeError, "expected a set");
+        return NULL;
+    }
+    PyObject *pending = PyObject_CallFunction(PyExc_ValueError, "s",
+                                              "pending set clear error");
+    if (pending == NULL) {
+        return NULL;
+    }
+    PyErr_SetRaisedException(Py_NewRef(pending));
+    int status = PySet_Clear(set);
+    PyObject *raised = PyErr_GetRaisedException();
+    int valid = status == 0 && raised == pending && PySet_GET_SIZE(set) == 0;
+    Py_XDECREF(raised);
+    Py_DECREF(pending);
+    if (!valid) {
+        PyErr_SetString(PyExc_AssertionError,
+                        "set clear changed the pending exception or kept a key");
+        return NULL;
+    }
+    Py_RETURN_NONE;
+}
+
+
 static PyObject *
 set_update(PyObject *self, PyObject *args)
 {
@@ -207,6 +237,7 @@ static PyMethodDef TestMethods[] = {
     {"set_value_storage", set_value_storage, METH_O},
     {"set_value_frozenset_tracking", set_value_frozenset_tracking, METH_O},
     {"set_value_boxing_errors", set_value_boxing_errors, METH_NOARGS},
+    {"set_clear_pending", set_clear_pending, METH_O},
     {"set_update", set_update, METH_VARARGS},
     {"set_next_entry", set_next_entry, METH_VARARGS},
 

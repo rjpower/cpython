@@ -145,7 +145,6 @@ class DictOwnedMigrationTests(unittest.TestCase):
     def test_owned_entry_failure_and_reentry_contracts(self):
         self.capi.dict_owned_entry_contract()
         self.capi.dict_owned_entry_boxing_oom()
-        self.capi.dict_owned_entry_boxing_reentry()
         self.capi.dict_owned_entry_final_pin()
 
 

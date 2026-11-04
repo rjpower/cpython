@@ -939,6 +939,11 @@ class IRStack(Stack):
         # The selected generic attribute helper published temporary outputs
         # before receiver retirement. Only a folded local remains to write.
         self.published_temporary_result = False
+        # The IR_STORE_DST and IR_MOVE_TO_DST lines emitted for the handler.
+        # Copies share the list: ir_displaced holds one displaced local and
+        # finish_displaced_local takes it by value, so a handler may store
+        # dst once (generate_handler checks).
+        self.dst_stores: list[str] = []
 
     def copy(self) -> "IRStack":
         other = super().copy()
@@ -1059,7 +1064,8 @@ class IRStack(Stack):
             if self.final:
                 if self.published_temporary_result:
                     out.emit(f"if (IR_IS_LOCAL({FIELD_VARS[lay.dst]})) {{\n")
-                out.emit(f"IR_STORE_DST({FIELD_VARS[lay.dst]}, {var.name});\n")
+                self.dst_stores.append(f"IR_STORE_DST({FIELD_VARS[lay.dst]}, {var.name})")
+                out.emit(f"{self.dst_stores[-1]};\n")
                 if self.published_temporary_result:
                     out.emit("}\n")
                 return True
@@ -2153,7 +2159,8 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         if mode == STORE_RESULT and fmt.window:
             # The result is in its slot of the window; a local takes it
             dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
-            out.emit(f"IR_MOVE_TO_DST({dst}, window[{fmt.dst_offset}]);\n")
+            stack.dst_stores.append(f"IR_MOVE_TO_DST({dst}, window[{fmt.dst_offset}])")
+            out.emit(f"{stack.dst_stores[-1]};\n")
         if fmt.store_dst:
             emitter.release_displaced()
         if name in ("RETURN_VALUE", "RETURN_GENERATOR") and not helper:
@@ -2167,6 +2174,11 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     out.start_line()
     out.emit("}")
     out.emit("\n")
+    assert isinstance(stack, IRStack)
+    if len(stack.dst_stores) > 1:
+        raise SyntaxError(f"{name}: {len(stack.dst_stores)} dst stores "
+                          f"({'; '.join(stack.dst_stores)}), but ir_displaced "
+                          "holds one displaced local")
 
 
 def generate_ir_cases(analysis: Analysis, formats: dict[str, IRFormat],

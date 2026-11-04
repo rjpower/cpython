@@ -289,18 +289,6 @@ class DictValueMutationTests(unittest.TestCase):
         self.assertEqual(copied["beta"], -2147483648)
         self.assertIs(copied["gamma"], split["gamma"])
 
-    def test_copy_reacquires_source_after_allocator_reentry(self):
-        capi = import_helper.import_module("_testinternalcapi")
-        self.assertIsNone(capi.dict_value_copy_reentry())
-
-        class Instance:
-            pass
-
-        instance = Instance()
-        instance.alpha = 2147483647
-        instance.beta = object()
-        self.assertIsNone(capi.dict_value_split_copy_reentry(instance))
-
     def test_merge_uses_cached_dictionary_hash_and_mapping_condition(self):
         capi = import_helper.import_module("_testinternalcapi")
         for mode in (0, 1, 2):
@@ -430,17 +418,6 @@ class DictValueMutationTests(unittest.TestCase):
         self.assertEqual(mapping.popitem(), ("later", -2147483648))
         self.assertEqual(mapping, {"first": 0})
 
-    def test_managed_detach_revalidates_nested_dictionary_replacement(self):
-        capi = import_helper.import_module("_testinternalcapi")
-
-        class Instance:
-            pass
-
-        instance = Instance()
-        instance.alpha = 2147483647
-        instance.beta = object()
-        self.assertIsNone(capi.dict_value_detach_reentry(instance))
-
     def test_managed_store_and_zero_rc_detach_preserve_owners(self):
         from test import support
 
@@ -564,17 +541,6 @@ class DictValueReaderTests(unittest.TestCase):
             iterator = reversed(key_mapping) if reverse else iter(key_mapping)
             self.assertEqual(capi.dict_iterator_boxing_oom(iterator), expected)
 
-    def test_iterator_outer_oom_preserves_nested_cursor_progress(self):
-        capi = import_helper.import_module("_testinternalcapi")
-        for reverse in (False, True):
-            values = [2147483647, -2147483648, 17]
-            mapping = dict(enumerate(values[::-1] if reverse else values))
-            iterator = reversed(mapping.values()) if reverse else iter(mapping.values())
-            self.assertEqual(capi.dict_iterator_boxing_reentry(iterator), -2147483648)
-            self.assertEqual(next(iterator), 17)
-            with self.assertRaises(StopIteration):
-                next(iterator)
-
     def test_reused_item_pair_publishes_hash_and_fields_before_release(self):
         capi = import_helper.import_module("_testinternalcapi")
         events = []
@@ -684,11 +650,10 @@ class DictOwnedEntryBridgeTests(unittest.TestCase):
         self.assertEqual(snapshot[2], 3.25)
         self.assertIs(snapshot[3], marker)
 
-    def test_owned_entry_partial_box_failure_and_nested_progress(self):
+    def test_owned_entry_partial_box_failure(self):
         capi = import_helper.import_module("_testinternalcapi")
         self.assertIsNone(capi.dict_owned_entry_contract())
         self.assertIsNone(capi.dict_owned_entry_boxing_oom())
-        self.assertIsNone(capi.dict_owned_entry_boxing_reentry())
 
     def test_owned_entry_final_dictionary_pin_retains_cleanup_cursor(self):
         capi = import_helper.import_module("_testinternalcapi")

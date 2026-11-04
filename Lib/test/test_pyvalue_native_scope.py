@@ -69,6 +69,31 @@ class NativeScopeMechanismTests(unittest.TestCase):
             self.assertEqual(str(unraisable.unraisable.exc_value),
                              "native scope cleanup failure")
 
+    def test_end_keeps_pending_exception_over_result_finalizer(self):
+        class Result:
+            def __del__(self):
+                raise RuntimeError("native scope result finalizer")
+
+        reentered = []
+        with support.catch_unraisable_exception() as caught:
+            capture = sys.unraisablehook
+
+            def reenter(event):
+                reentered.append(_testinternalcapi.native_scope_echo(3.25))
+                capture(event)
+
+            sys.unraisablehook = reenter
+            try:
+                with self.assertRaisesRegex(ValueError,
+                                            "native scope primary failure"):
+                    _testinternalcapi.native_scope_end_pending(Result)
+            finally:
+                sys.unraisablehook = capture
+            self.assertIs(caught.unraisable.exc_type, RuntimeError)
+            self.assertEqual(str(caught.unraisable.exc_value),
+                             "native scope result finalizer")
+        self.assertEqual(reentered, [3.25])
+
     @unittest.skipIf(support.Py_GIL_DISABLED or struct.calcsize("P") != 8,
                      "requires inline scalar values")
     def test_box_oom(self):

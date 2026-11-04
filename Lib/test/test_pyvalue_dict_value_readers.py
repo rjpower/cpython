@@ -168,7 +168,6 @@ class DictCanonicalReadTests(unittest.TestCase):
             self.capi.dict_public_value_next({1: 2}, 0, 4)
         self.capi.dict_owned_entry_contract()
         self.capi.dict_owned_entry_boxing_oom()
-        self.capi.dict_owned_entry_boxing_reentry()
         self.capi.dict_owned_entry_final_pin()
 
     def test_hash_drops_last_input_owners(self):

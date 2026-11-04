@@ -2,10 +2,11 @@
 
 import gc
 import math
+import sys
 import unittest
 import weakref
 
-from test.support import import_helper
+from test.support import import_helper, swap_attr
 
 _testinternalcapi = import_helper.import_module('_testinternalcapi')
 
@@ -103,6 +104,37 @@ class PyValueSetTests(unittest.TestCase):
 
     def test_object_boxing_failure_preserves_iteration_and_pop(self):
         _testinternalcapi.set_value_boxing_errors()
+
+    def test_clear_reports_unraisable_and_keeps_pending_exception(self):
+        class Key:
+            def __hash__(self):
+                return 13
+
+            def __del__(self):
+                raise RuntimeError("set key finalizer")
+
+        reports = []
+
+        def report(event):
+            reports.append((event.exc_type, str(event.exc_value)))
+
+        for large in (False, True):
+            for pending in (False, True):
+                with self.subTest(large=large, pending=pending):
+                    values = {Key(), Key()}
+                    if large:
+                        values.update(range(100))
+                    with swap_attr(sys, 'unraisablehook', report):
+                        if pending:
+                            _testinternalcapi.set_clear_pending(values)
+                        else:
+                            try:
+                                raise KeyError('handled')
+                            except KeyError as handled:
+                                values.clear()
+                                self.assertIs(sys.exception(), handled)
+                    self.assertEqual(len(values), 0)
+        self.assertEqual(reports, [(RuntimeError, 'set key finalizer')] * 8)
 
     def test_frozenset_value_insertion_tracks_new_cycle(self):
         class Item:

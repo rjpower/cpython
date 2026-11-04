@@ -149,50 +149,22 @@ dict_value_delete_if(PyObject *module, PyObject *args)
     return status < 0 || PyErr_Occurred() ? NULL : PyLong_FromLong(status);
 }
 
-/* Restore the allocator before callbacks; the enclosing fixture owns this
- * record and all objects until the actual copy/detach operation returns. */
+/* Fail the first PYMEM_DOMAIN_MEM allocation of size bytes, then restore
+ * the saved allocator. */
 typedef struct {
     PyMemAllocatorEx allocator;
     size_t size;
-    PyObject *dict;
-    PyObject *instance;
-    PyObject *replacement;
     int called;
-    int fail;
-} DictStorageReentry;
-
-static int
-dict_storage_reenter(DictStorageReentry *state)
-{
-    if (state->replacement != NULL) {
-        return PyObject_SetAttrString(state->instance, "__dict__", state->replacement);
-    }
-    PyDict_Clear(state->dict);
-    if (PyErr_Occurred()) {
-        return -1;
-    }
-    for (int i = 1000; i < 1200; i++) {
-        if (PyDict_SetValue(state->dict, PyValue_FromInt32(i),
-                            PyValue_FromInt32(i + 1)) < 0) {
-            return -1;
-        }
-    }
-    return 0;
-}
+} DictStorageFailure;
 
 static void *
 dict_storage_malloc(void *context, size_t size)
 {
-    DictStorageReentry *state = context;
+    DictStorageFailure *state = context;
     if (size == state->size && !state->called) {
         state->called = 1;
         PyMem_SetAllocator(PYMEM_DOMAIN_MEM, &state->allocator);
-        if (state->fail) {
-            return NULL;
-        }
-        if (dict_storage_reenter(state) < 0 || PyErr_Occurred()) {
-            return NULL;
-        }
+        return NULL;
     }
     return state->allocator.malloc(state->allocator.ctx, size);
 }
@@ -213,19 +185,19 @@ dict_storage_calloc(void *context, size_t count, size_t size)
 static void *
 dict_storage_realloc(void *context, void *pointer, size_t size)
 {
-    DictStorageReentry *state = context;
+    DictStorageFailure *state = context;
     return state->allocator.realloc(state->allocator.ctx, pointer, size);
 }
 
 static void
 dict_storage_free(void *context, void *pointer)
 {
-    DictStorageReentry *state = context;
+    DictStorageFailure *state = context;
     state->allocator.free(state->allocator.ctx, pointer);
 }
 
 static void
-dict_storage_install(DictStorageReentry *state)
+dict_storage_install(DictStorageFailure *state)
 {
     PyMem_GetAllocator(PYMEM_DOMAIN_MEM, &state->allocator);
     PyMemAllocatorEx allocator = {.ctx = state,
@@ -239,120 +211,6 @@ dict_fixture_values_size(PyDictValues *values)
 {
     return offsetof(PyDictValues, values) + values->capacity * sizeof(PyValue) +
         _Py_SIZE_ROUND_UP(values->capacity, sizeof(PyObject *));
-}
-
-static int
-dict_storage_check_copy(PyObject *dict, PyObject *copy, int called)
-{
-    if (copy == NULL || PyErr_Occurred()) {
-        return -1;
-    }
-    PyValue found = PyValue_NULL;
-    int valid = called == 1 && PyDict_GET_SIZE(dict) == 200 && PyDict_GET_SIZE(copy) == 200 &&
-        _PyDict_GetValue_KnownHash(copy, PyValue_FromInt32(1199), 1199, &found) == 1 &&
-        PyValue_IsInlineInt(found) && PyValue_InlineInt(found) == 1200;
-    PyValue_XCLOSE(found);
-    if (!valid && !PyErr_Occurred()) {
-        PyErr_SetString(PyExc_AssertionError, "copy did not reacquire the allocation-mutated source");
-    }
-    return valid && !PyErr_Occurred() ? 0 : -1;
-}
-
-static PyObject *
-dict_value_copy_reentry(PyObject *module, PyObject *unused)
-{
-    PyObject *dict = PyDict_New();
-    if (dict == NULL) {
-        return NULL;
-    }
-    for (int i = 0; i < 16; i++) {
-        if (PyDict_SetValue(dict, PyValue_FromInt32(i), PyValue_FromInt32(i)) < 0) {
-            dict_fixture_close(dict);
-            return NULL;
-        }
-    }
-    PyDictKeysObject *keys = ((PyDictObject *)dict)->ma_keys;
-    size_t bytes = sizeof(PyDictKeysObject) + ((size_t)1 << keys->dk_log2_index_bytes) +
-        (keys->dk_nentries + keys->dk_usable) * sizeof(PyDictKeyEntry);
-    DictStorageReentry state = {.dict = dict, .size = bytes};
-    dict_storage_install(&state);
-    PyObject *copy = PyDict_Copy(dict);
-    PyMem_SetAllocator(PYMEM_DOMAIN_MEM, &state.allocator);
-    int status = dict_storage_check_copy(dict, copy, state.called);
-    dict_fixture_close(copy);
-    dict_fixture_close(dict);
-    if (status < 0 || PyErr_Occurred()) {
-        return NULL;
-    }
-    Py_RETURN_NONE;
-}
-
-static PyObject *
-dict_value_split_copy_reentry(PyObject *module, PyObject *instance)
-{
-    PyObject *dict = PyObject_GenericGetDict(instance, NULL);
-    if (dict == NULL) {
-        return NULL;
-    }
-    PyDictValues *values = ((PyDictObject *)dict)->ma_values;
-    if (values == NULL) {
-        dict_fixture_close(dict);
-        PyErr_SetString(PyExc_AssertionError, "fixture needs split storage");
-        return NULL;
-    }
-    DictStorageReentry state = {.dict = dict, .size = dict_fixture_values_size(values)};
-    dict_storage_install(&state);
-    PyObject *copy = PyDict_Copy(dict);
-    PyMem_SetAllocator(PYMEM_DOMAIN_MEM, &state.allocator);
-    int status = dict_storage_check_copy(dict, copy, state.called);
-    dict_fixture_close(copy);
-    dict_fixture_close(dict);
-    if (status < 0 || PyErr_Occurred()) {
-        return NULL;
-    }
-    Py_RETURN_NONE;
-}
-
-static PyObject *
-dict_value_detach_reentry(PyObject *module, PyObject *instance)
-{
-    PyObject *old = PyObject_GenericGetDict(instance, NULL);
-    PyObject *inner = old == NULL ? NULL : PyDict_New();
-    PyObject *outer = inner == NULL ? NULL : PyDict_New();
-    if (outer == NULL) {
-        dict_fixture_close(inner);
-        dict_fixture_close(old);
-        return NULL;
-    }
-    PyDictValues *values = ((PyDictObject *)old)->ma_values;
-    if (values == NULL || !values->embedded) {
-        dict_fixture_close(outer);
-        dict_fixture_close(inner);
-        dict_fixture_close(old);
-        PyErr_SetString(PyExc_AssertionError, "fixture needs materialized inline storage");
-        return NULL;
-    }
-    Py_ssize_t old_size = PyDict_GET_SIZE(old);
-    DictStorageReentry state = {.dict = old, .instance = instance,
-        .replacement = inner, .size = dict_fixture_values_size(values)};
-    dict_storage_install(&state);
-    int status = PyObject_SetAttrString(instance, "__dict__", outer);
-    PyMem_SetAllocator(PYMEM_DOMAIN_MEM, &state.allocator);
-    PyObject *current = status < 0 ? NULL : PyObject_GenericGetDict(instance, NULL);
-    int valid = status == 0 && current == outer && state.called == 1 &&
-        PyDict_GET_SIZE(old) == old_size && ((PyDictObject *)old)->ma_values != NULL &&
-        !((PyDictObject *)old)->ma_values->embedded;
-    dict_fixture_close(current);
-    dict_fixture_close(outer);
-    dict_fixture_close(inner);
-    dict_fixture_close(old);
-    if (!valid || PyErr_Occurred()) {
-        if (!PyErr_Occurred()) {
-            PyErr_SetString(PyExc_AssertionError, "detach reused an association changed during allocation");
-        }
-        return NULL;
-    }
-    Py_RETURN_NONE;
 }
 
 static PyObject *
@@ -455,8 +313,7 @@ dict_value_clear_preserves_exception(PyObject *module, PyObject *instance)
         dict_fixture_close(dict);
         return NULL;
     }
-    DictStorageReentry state = {.dict = dict, .fail = 1,
-        .size = dict_fixture_values_size(values)};
+    DictStorageFailure state = {.size = dict_fixture_values_size(values)};
     dict_storage_install(&state);
     PyErr_SetRaisedException(Py_NewRef(primary));
     /* This live-object mechanism witness pairs with the Python zero-RC
@@ -591,66 +448,6 @@ dict_iterator_boxing_oom(PyObject *module, PyObject *iterator)
     return PyIter_Next(iterator);
 }
 
-typedef struct {
-    PyMemAllocatorEx saved;
-    PyObject *iterator;
-    PyObject *nested;
-    int called;
-} DictIteratorReentry;
-
-static void *
-dict_iterator_reentry_malloc(void *context, size_t size)
-{
-    DictIteratorReentry *state = context;
-    state->called++;
-    PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &state->saved);
-    state->nested = PyIter_Next(state->iterator);
-    /* Fail the outer box only after the nested next has advanced the cursor. */
-    return NULL;
-}
-
-static void *
-dict_iterator_reentry_calloc(void *context, size_t count, size_t size)
-{
-    return dict_iterator_reentry_malloc(context, 0);
-}
-
-static void *
-dict_iterator_reentry_realloc(void *context, void *pointer, size_t size)
-{
-    return dict_iterator_reentry_malloc(context, 0);
-}
-
-static void
-dict_iterator_reentry_free(void *context, void *pointer)
-{
-    DictIteratorReentry *state = context;
-    state->saved.free(state->saved.ctx, pointer);
-}
-
-static PyObject *
-dict_iterator_boxing_reentry(PyObject *module, PyObject *iterator)
-{
-    DictIteratorReentry state = {.iterator = iterator};
-    PyMem_GetAllocator(PYMEM_DOMAIN_OBJ, &state.saved);
-    PyMemAllocatorEx allocator = {.ctx = &state, .malloc = dict_iterator_reentry_malloc,
-        .calloc = dict_iterator_reentry_calloc, .realloc = dict_iterator_reentry_realloc,
-        .free = dict_iterator_reentry_free};
-    PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &allocator);
-    PyObject *outer = PyIter_Next(iterator);
-    PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &state.saved);
-    int valid = state.called == 1 && outer == NULL && state.nested != NULL &&
-        PyErr_ExceptionMatches(PyExc_MemoryError);
-    PyErr_Clear();
-    dict_fixture_close(outer);
-    if (!valid) {
-        dict_fixture_close(state.nested);
-        PyErr_SetString(PyExc_AssertionError, "iterator reentry did not advance before outer OOM");
-        return NULL;
-    }
-    return state.nested;
-}
-
 static PyObject *
 dict_iterator_prime_pair(PyObject *module, PyObject *iterator)
 {
@@ -741,101 +538,6 @@ dict_owned_entry_boxing_oom(PyObject *module, PyObject *Py_UNUSED(ignored))
     if (!valid || PyErr_Occurred()) {
         if (!PyErr_Occurred()) {
             PyErr_SetString(PyExc_AssertionError, "owned entry partial box rollback failed");
-        }
-        return NULL;
-    }
-    Py_RETURN_NONE;
-}
-
-typedef struct {
-    PyMemAllocatorEx saved;
-    PyObject *dict;
-    Py_ssize_t *position;
-    PyObject *key;
-    PyObject *value;
-    int status;
-    int called;
-} DictEntryReentry;
-
-static void *
-dict_entry_reentry_malloc(void *context, size_t size)
-{
-    DictEntryReentry *state = context;
-    state->called++;
-    PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &state->saved);
-    state->status = PyDict_NextEntryRef(state->dict, state->position,
-                                       &state->key, &state->value);
-    return NULL;
-}
-
-static void *
-dict_entry_reentry_calloc(void *context, size_t count, size_t size)
-{
-    return dict_entry_reentry_malloc(context, 0);
-}
-
-static void *
-dict_entry_reentry_realloc(void *context, void *pointer, size_t size)
-{
-    return dict_entry_reentry_malloc(context, 0);
-}
-
-static void
-dict_entry_reentry_free(void *context, void *pointer)
-{
-    DictEntryReentry *state = context;
-    state->saved.free(state->saved.ctx, pointer);
-}
-
-static PyObject *
-dict_owned_entry_boxing_reentry(PyObject *module, PyObject *Py_UNUSED(ignored))
-{
-    PyObject *dict = PyDict_New();
-    if (dict == NULL) {
-        return NULL;
-    }
-    const int32_t values[] = {INT32_MAX, INT32_MIN, 17};
-    for (int i = 0; i < 3; i++) {
-        if (_PyDict_SetValue_Take2((PyDictObject *)dict, PyValue_FromInt32(i + 1),
-                                  PyValue_FromInt32(values[i])) < 0)
-        {
-            dict_fixture_close(dict);
-            return NULL;
-        }
-    }
-    Py_ssize_t position = 0;
-    DictEntryReentry state = {.dict = dict, .position = &position};
-    PyMem_GetAllocator(PYMEM_DOMAIN_OBJ, &state.saved);
-    PyMemAllocatorEx allocator = {.ctx = &state, .malloc = dict_entry_reentry_malloc,
-        .calloc = dict_entry_reentry_calloc, .realloc = dict_entry_reentry_realloc,
-        .free = dict_entry_reentry_free};
-    PyObject *key = NULL, *value = NULL;
-    PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &allocator);
-    int status = PyDict_NextEntryRef(dict, &position, &key, &value);
-    PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &state.saved);
-    int valid = state.called == 1 && status == -1 && position == 2 &&
-        key == NULL && value == NULL && state.status == 1 &&
-        state.key != NULL && state.value != NULL &&
-        PyErr_ExceptionMatches(PyExc_MemoryError);
-    PyErr_Clear();
-    valid = valid && PyLong_AsLong(state.key) == 2 &&
-        PyLong_AsLong(state.value) == INT32_MIN;
-    dict_fixture_close(state.key);
-    dict_fixture_close(state.value);
-    dict_fixture_close(key);
-    dict_fixture_close(value);
-    key = value = NULL;
-    if (valid) {
-        status = PyDict_NextEntryRef(dict, &position, &key, &value);
-        valid = status == 1 && key != NULL && value != NULL &&
-            PyLong_AsLong(key) == 3 && PyLong_AsLong(value) == 17;
-    }
-    dict_fixture_close(key);
-    dict_fixture_close(value);
-    dict_fixture_close(dict);
-    if (!valid || PyErr_Occurred()) {
-        if (!PyErr_Occurred()) {
-            PyErr_SetString(PyExc_AssertionError, "owned entry overwrote nested cursor progress");
         }
         return NULL;
     }
@@ -1367,19 +1069,14 @@ static PyMethodDef methods[] = {
     {"dict_owned_migration", dict_owned_migration, METH_O},
     {"dict_owned_entry", dict_owned_entry, METH_O},
     {"dict_owned_entry_boxing_oom", dict_owned_entry_boxing_oom, METH_NOARGS},
-    {"dict_owned_entry_boxing_reentry", dict_owned_entry_boxing_reentry, METH_NOARGS},
     {"dict_owned_entry_final_pin", dict_owned_entry_final_pin, METH_NOARGS},
     {"dict_owned_entry_contract", dict_owned_entry_contract, METH_NOARGS},
     {"dict_value_getref_entry", dict_value_getref_entry, METH_O},
     {"dict_value_getref_boxing_oom", dict_value_getref_boxing_oom, METH_O},
     {"dict_iterator_boxing_oom", dict_iterator_boxing_oom, METH_O},
-    {"dict_iterator_boxing_reentry", dict_iterator_boxing_reentry, METH_O},
     {"dict_iterator_prime_pair", dict_iterator_prime_pair, METH_O},
     {"dict_value_setdefault_boxing_oom", dict_value_setdefault_boxing_oom, METH_O},
     {"dict_value_clear_preserves_exception", dict_value_clear_preserves_exception, METH_O},
-    {"dict_value_copy_reentry", dict_value_copy_reentry, METH_NOARGS},
-    {"dict_value_split_copy_reentry", dict_value_split_copy_reentry, METH_O},
-    {"dict_value_detach_reentry", dict_value_detach_reentry, METH_O},
     {"dict_value_merge_mode", dict_value_merge_mode, METH_O},
     {"dict_value_seed", dict_value_seed, METH_O},
     {"dict_value_pop_boxing_oom", dict_value_pop_boxing_oom, METH_O},

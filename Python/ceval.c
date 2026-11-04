@@ -837,6 +837,20 @@ value_operation_begin(PyThreadState *tstate, _PyInterpreterFrame *frame,
         frame->instr_ptr - exec->words, next - exec->words, {-1, -1}, -1};
 }
 
+/* Raise the SystemError of a failed revalidation. An operation error can be
+ * pending; it becomes the SystemError's __cause__ (as in
+ * _Py_CheckFunctionResult) instead of being discarded. */
+static void
+value_revalidation_error(const char *message)
+{
+    if (PyErr_Occurred()) {
+        _PyErr_FormatFromCause(PyExc_SystemError, "%s", message);
+    }
+    else {
+        PyErr_SetString(PyExc_SystemError, message);
+    }
+}
+
 static int
 value_operation_restore2(_PyValueOperation *operation,
                          PyValue *first, PyValue *second)
@@ -844,7 +858,7 @@ value_operation_restore2(_PyValueOperation *operation,
     _PyInterpreterFrame *frame = operation->frame;
     if (operation->tstate->current_frame != frame ||
         _PyFrame_GetCode(frame) != operation->code) {
-        PyErr_SetString(PyExc_SystemError, "dictionary store changed the active frame");
+        value_revalidation_error("dictionary store changed the active frame");
         return -1;
     }
     int nlocals = operation->code->co_nlocalsplus;
@@ -854,7 +868,7 @@ value_operation_restore2(_PyValueOperation *operation,
         int slot = operation->input_slots[i];
         if (slot < 0 || slot >= nslots ||
             (slot >= nlocals && !PyValue_IsNull(slots[slot]))) {
-            PyErr_SetString(PyExc_SystemError, "dictionary store changed an input home");
+            value_revalidation_error("dictionary store changed an input home");
             return -1;
         }
     }
@@ -948,7 +962,7 @@ value_operation_restore1(_PyValueOperation *operation, PyValue *owner)
         slot >= _PyFrame_NumSlots(frame) ||
         (slot >= operation->code->co_nlocalsplus &&
          !PyValue_IsNull(_PyFrame_Slots(frame)[slot]))) {
-        PyErr_SetString(PyExc_SystemError, "attribute operation changed its input home");
+        value_revalidation_error("attribute operation changed its input home");
         return -1;
     }
     if (slot >= operation->code->co_nlocalsplus) {
@@ -1562,7 +1576,7 @@ refresh_after_cleanup:
      * Python can change instrumentation or replace the executing copy. Do
      * not decode the next handler until those have finished. */
     if (tstate->current_frame != frame || _PyFrame_GetCode(frame) != code) {
-        PyErr_SetString(PyExc_SystemError, "value bridge changed the active frame");
+        value_revalidation_error("value bridge changed the active frame");
         drop_failed_value(failed_result);
         return -1;
     }
@@ -1659,8 +1673,8 @@ call_transaction_refresh(_PyCallTransaction *call, _PyInstr **next)
         status = value_operation_refresh(op, next, NULL);
         if (op->tstate->current_frame != op->frame ||
             _PyFrame_GetCode(op->frame) != op->code) {
-            PyErr_SetString(PyExc_SystemError,
-                            "call preparation changed the active frame");
+            value_revalidation_error(
+                "call preparation changed the active frame");
             return -1;
         }
         /* Check the refresh's decode against the current executing copy
@@ -2151,7 +2165,7 @@ native_call_finish(_PyNativeCallPublication *state, _PyNativeScope *scope,
     _PyInterpreterFrame *frame = state->frame;
     if (state->tstate->current_frame != frame ||
         _PyFrame_GetCode(frame) != state->code) {
-        PyErr_SetString(PyExc_SystemError, "native cleanup changed the active frame");
+        value_revalidation_error("native cleanup changed the active frame");
         return -1;
     }
     uintptr_t epoch = _Py_atomic_load_uintptr_relaxed(&state->tstate->eval_breaker) &

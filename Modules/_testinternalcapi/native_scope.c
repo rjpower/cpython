@@ -223,6 +223,43 @@ native_scope_primary_error(PyObject *Py_UNUSED(module), PyObject *argument)
     return scope_mechanism(argument, 1, 1, 1);
 }
 
+/* End a scope with an exception pending, when the staged result is the only
+ * owner of factory()'s result. Its release can run a raising __del__; End
+ * must leave the pending exception in place. */
+static PyObject *
+native_scope_end_pending(PyObject *Py_UNUSED(module), PyObject *factory)
+{
+    _PyNativeScope scope;
+    PyValue input = PyValue_NULL;
+    PyValue destination = PyValue_NULL;
+    Publication state = {.destination = &destination};
+    if (_PyNativeScope_Begin(&scope, PyThreadState_Get(), &input, 0, 0,
+                             PyValue_NULL, NULL) < 0 ||
+        _PyNativeScope_StageResult(&scope, PyObject_CallNoArgs(factory),
+                                   &scope.result) < 0)
+    {
+        _PyNativeResult_Abort(&scope.result, publish_state, &state);
+        _PyNativeScope_End(&scope);
+        return NULL;
+    }
+    PyErr_SetString(PyExc_ValueError, "native scope primary failure");
+    PyObject *primary = PyErr_GetRaisedException();
+    PyErr_SetRaisedException(Py_NewRef(primary));
+    _PyNativeResult_Abort(&scope.result, publish_state, &state);
+    int status = _PyNativeScope_End(&scope);
+    PyObject *raised = PyErr_GetRaisedException();
+    int valid = status < 0 && raised == primary;
+    Py_XDECREF(raised);
+    if (!valid) {
+        Py_DECREF(primary);
+        PyErr_SetString(PyExc_AssertionError,
+                        "native scope End changed the pending exception");
+        return NULL;
+    }
+    PyErr_SetRaisedException(primary);
+    return NULL;
+}
+
 static PyObject *
 native_scope_echo(PyObject *Py_UNUSED(module), PyObject *argument)
 {
@@ -880,6 +917,7 @@ static PyMethodDef methods[] = {
     {"native_scope_abort", native_scope_abort, METH_O},
     {"native_scope_cleanup_error", native_scope_cleanup_error, METH_O},
     {"native_scope_primary_error", native_scope_primary_error, METH_O},
+    {"native_scope_end_pending", native_scope_end_pending, METH_O},
     {"native_scope_echo", native_scope_echo, METH_O},
     {"native_scope_noargs", native_scope_noargs, METH_NOARGS},
     {"native_scope_raise", native_scope_raise, METH_O},

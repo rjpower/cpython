@@ -1,6 +1,6 @@
 # Project status
 
-Status as of 2026-11-04 01:05 PST, from the coordinator fact sheet. Update this
+Status as of 2026-11-04 04:10 PST, from the coordinator fact sheet. Update this
 page at each landing.
 
 ## Outcome and next milestone
@@ -38,7 +38,7 @@ v2 phase A) addressed, then the qualified baseline.
 
 ## Position
 
-- Runtime branch `boil/pyvalue-rc-universal`, HEAD `c8a0b4dc54c`.
+- Runtime branch `boil/pyvalue-rc-universal`, HEAD `54825c08a1a`.
 - Landed 2026-11-03: native boundary P3 (`56ff66a596b`, `643c69c7244`,
   `6d39221996d`) and P4 (`2558376b321`, post-review fixes `fdd7fed3216`);
   representation steps 1 (`f129780a9a7`), 2 (`f7dfc5b961f`), 3 (`dbce7b1260d`,
@@ -50,17 +50,26 @@ v2 phase A) addressed, then the qualified baseline.
   `Include/internal`; `48bb4d6d1d3` `PyValue_ERROR` removed).
 - Landed 2026-11-04: step 5 review fixes (`c4b01b23a54`); steps 6a
   (`cedd72de803`, 648 save/restore sites removed by
-  `Tools/build/sweep_value_saves.py`), 6b (`f9bd0364fd9`, 834 helper calls
+  `Tools/build/sweep_value_saves.py`, deleted in step 7d and kept in the
+  history at `fbe866fae0a`), 6b (`f9bd0364fd9`, 834 helper calls
   inlined, 12 helpers deleted) and 6c (`fbe866fae0a`, 368 redundant
   `|| PyErr_Occurred()` terms); `PyDict_Pop` takes its status from the
   operation (`c8a0b4dc54c`; it failed whenever an exception was pending, which
   crashed release builds when an error path freed an interned string).
   Save/restore sites: 766 before step 6, 117 after.
-- Suites at `c8a0b4dc54c`, debug and release alike: run=51,511, failures=12.
-  Failing files: test_capi (3: test_getitem_with_error,
-  test_is_unique_temporary, test_unicode.test_new), test_pyvalue_dict_vm (4),
-  test_pyvalue_native_scope (5). `make check-value-api`: 177 units, 0
-  findings.
+- Landed 2026-11-04 (continued): representation step 7 (`ab07912b7cb` status
+  APIs take their status from the operation, 88 of 89; `1a5600cc9f5` residue
+  saves; `13ae4cfddda` reentry defences back to upstream form; `78908a19694`
+  `_PyValue_RestoreException` deleted; `1a9d0a6fbbe` perf trampoline watcher
+  fix). `PyErr_Occurred()` over files in both trees: 4,163 before step 7,
+  3,068 after (upstream 3,083); `|| PyErr_Occurred()` 386 to 28 (28).
+  Register IR v2 step B0a (`54825c08a1a`): the generated instruction contract
+  table; the passes, assembler, `dis` and verifier read it; compiled output
+  unchanged.
+- Suites at `54825c08a1a`, debug and release alike: run=51,538, failures=11.
+  Failing files: test_capi (2: test_is_unique_temporary,
+  test_unicode.test_new), test_pyvalue_dict_vm (4), test_pyvalue_native_scope
+  (5). `make check-value-api`: 177 units, 0 findings.
 - All 67 shared modules whose third-party headers exist build. The decimal,
   tkinter, ssl, sqlite and zstd headers are not installed on this host.
 
@@ -68,23 +77,18 @@ v2 phase A) addressed, then the qualified baseline.
 
 Running now:
 
-1. Official re-measure of `c8a0b4dc54c` against `1f19952778d` and upstream:
-   kernels, the pyperformance subset, RSS, dispatch, boxes, and the triage's
-   cost attribution, in one quiet window.
-2. Representation step 7: status APIs that fail only because an exception is
-   pending (90 functions in the census), the 117 remaining save/restore sites,
-   the leftover reentry defences, and `_PyValue_RestoreException` deleted.
-3. Register IR v2 step B0a: the generated instruction contract table, in its
-   own worktree.
+1. Representation step 8: the step 7 review follow-ups, a home checker that
+   counts stores, canonical construction and bit-compare `is`.
+2. Register IR v2 steps A1 (the value record only in handlers that box,
+   driven by the contract's BOXES effect) and A2 (no PC out-parameter), in
+   their own worktree.
 
 Next, in order:
 
-4. Representation step 8, then 9a/9b (int51)
-   ([packet](design/proposals/pyvalue-representation-packet.md)).
-5. Register IR v2 ([packet](design/proposals/register-ir-v2-packet.md),
-   accepted, about 117 agent-hours): A1/A2 after step 7, A5a after step 8,
-   A5b after 9a, A3a-A3c (tail calls become the only backend) after 9b.
-6. Value API V1 follow-ups (box-site annotations in the interpreter files,
+3. Register IR v2 A5a after step 8; representation 9a/9b (int51); A5b after
+   9a; A3a-A3c (tail calls become the only backend) after 9b
+   ([packet](design/proposals/register-ir-v2-packet.md)).
+4. Value API V1 follow-ups (box-site annotations in the interpreter files,
    `entry_unbox` counts, seven modules that define a bare `Py_BUILD_CORE`),
    then V2a-0 onwards.
 

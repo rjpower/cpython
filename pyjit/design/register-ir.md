@@ -1961,6 +1961,14 @@ places. Each is cheap to fix.
   verifier checks only in debug builds.
   - **Proposal.** Run `_PyRegCfg_Verify` over the stdlib in a test job of a
     release build, for example a `-X` option or a test-only API.
+  - **Done (register IR v2 step B0a, 2026-11-04).** Release builds run the
+    verifier, including the folded-load check against the contract, when
+    `PYTHONREGCFGVERIFY` is set. It is read once through the configuration,
+    so `-E` and `-I` turn it off, and is documented in
+    `Doc/using/cmdline.rst`. `test_ir_contract` runs it over a stdlib sample,
+    and over all of `Lib` under `-u cpu`. An environment variable was chosen
+    over a `-X` option because the verifier is a test-job tool, like the other
+    `PYTHON*` debugging variables.
 - **Liveness.** Consumed temporaries are NULL, which is more precise than V8
   or LuaJIT and right for RC timing. Locals stay live until they are
   overwritten, as Python requires. No clearing pass is needed; note 06 §13.4

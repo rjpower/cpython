@@ -207,8 +207,8 @@ static inline bool PyValue_IsPointerSpaceAt(const PyValue *ref) { return _PyValu
 static inline bool PyValue_IsInlineAt(const PyValue *ref) { return _PyValue_TopBitsAt(ref) >= (Py_DOUBLE_OFFSET >> 48); }
 
 // The bit that PyValue_Borrow() sets: Py_TAG_REFCNT on object values only.
-// PyValue_NULL, PyValue_ERROR and debug-wrap pointers (Py_TAG_INVALID) and
-// non-pointer values stay unchanged.
+// PyValue_NULL, debug-wrap pointers (Py_TAG_INVALID) and non-pointer values
+// stay unchanged.
 static inline uintptr_t
 _PyValue_BorrowBitAt(const PyValue *ref)
 {
@@ -348,14 +348,12 @@ _PyValue_IntFitsInline(int64_t v)
 }
 
 // Do a and b, which are different references, hold the same value?
-// Neither may be PyValue_NULL or PyValue_ERROR.
+// Neither may be PyValue_NULL.
 PyAPI_FUNC(int) _PyValue_IsSameValue(PyValue a, PyValue b);
 
 
 // Ownership discipline is explicit; no separate debug payload format exists.
 #define _Py_value_allow_borrows_outlive_close(ref) ((void)(ref))
-
-static const PyValue PyValue_ERROR = { .bits = Py_TAG_INVALID };
 
 /* Wrap a pointer in a stack ref.
  * The resulting stack reference is not safe and should only be used
@@ -385,15 +383,9 @@ PyValue_Unwrap(PyValue ref)
 }
 
 static inline bool
-PyValue_IsError(PyValue ref)
-{
-    return ref.bits == Py_TAG_INVALID;
-}
-
-static inline bool
 PyValue_IsValid(PyValue ref)
 {
-    /* Invalid values are ERROR and NULL */
+    /* NULL is invalid, and so are the bits Py_TAG_INVALID, which no value has */
     return ref.bits > Py_TAG_INVALID;
 }
 
@@ -951,11 +943,14 @@ PyValue_FromDouble(double value)
 }
 
 /* A new reference to the object that ref holds, a new box if ref holds an
-   inline value, or NULL with an exception set if boxing fails. For C code
-   that needs an object for a reference it does not own. */
+   inline value, or NULL with an exception set if boxing fails. ref must be a
+   language value and no exception may be set; debug builds check both
+   (pyjit/design/value-api.md, section 1.3). */
 static inline PyObject *
-PyValue_AsPyObjectNewBoxed(PyValue ref)
+PyValue_AsObject(PyValue ref)
 {
+    assert(PyValue_IsLanguageValue(ref));
+    assert(!PyErr_Occurred());
     if (PyValue_IsInline(ref)) {
         ref = PyValue_Box(ref);
         return PyValue_IsInline(ref) ? NULL : PyValue_AsKnownObjectSteal(ref);
@@ -971,7 +966,7 @@ _PyValue_BoxInto(const PyValue *src, PyObject **dst, Py_ssize_t n)
 {
     for (Py_ssize_t i = 0; i < n; i++) {
         if (PyValue_IsInline(src[i])) {
-            dst[i] = PyValue_AsPyObjectNewBoxed(src[i]);
+            dst[i] = PyValue_AsObject(src[i]);
             if (dst[i] == NULL) {
                 while (--i >= 0) {
                     if (PyValue_IsInline(src[i])) {

@@ -317,6 +317,9 @@ PyAPI_FUNC(PyObject *) _PyEval_GetAwaitable(PyObject *iterable, int oparg);
 PyAPI_FUNC(PyObject *) _PyEval_LoadName(PyThreadState *tstate, _PyInterpreterFrame *frame, PyObject *name);
 PyAPI_FUNC(int)
 _Py_Check_ArgsIterable(PyThreadState *tstate, PyObject *func, PyObject *args);
+/* The iterator of iterable (iterable itself if it is its own iterator or
+   the interpreter indexes it), or PyValue_NULL with an exception set.
+   Consumes iterable. */
 PyAPI_FUNC(PyValue) _PyEval_GetIter(PyValue iterable, PyValue *null_or_index, int yield_from);
 PyAPI_FUNC(int) _PyEval_StoreName(PyThreadState *tstate, PyValue v, PyObject *name, PyObject* ns);
 PyAPI_FUNC(PyObject *) _PyEval_BinarySlice(PyValue container, PyValue start, PyValue stop);
@@ -389,8 +392,10 @@ void _Py_unset_eval_breaker_bit_all(PyInterpreterState *interp, uintptr_t bit);
 extern int _PyRunRemoteDebugger(PyThreadState *tstate);
 #endif
 
-PyAPI_FUNC(PyValue)
-_PyForIter_VirtualIteratorNext(PyThreadState* tstate, struct _PyInterpreterFrame* frame, PyValue iter, PyValue *index_ptr);
+/* The next item of iter in *next (owned): 1 for an item, 0 at the end
+   (*next is PyValue_NULL, no exception set), -1 with an exception set. */
+PyAPI_FUNC(int)
+_PyForIter_VirtualIteratorNext(PyThreadState* tstate, struct _PyInterpreterFrame* frame, PyValue iter, PyValue *index_ptr, PyValue *next);
 
 /* Special methods used by LOAD_SPECIAL */
 #define SPECIAL___ENTER__   0

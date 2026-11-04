@@ -3112,7 +3112,7 @@ value_box_roundtrip(PyObject *self, PyObject *arg)
     PyValue dup = PyValue_DUP(ref);
     if (!PyValue_IsInline(ref) || PyValue_IsPointerSpace(ref)
         || PyValue_IsTaggedIndex(ref) || PyValue_IsNull(ref)
-        || PyValue_IsError(ref) || !PyValue_IsValid(ref)
+        || !PyValue_IsValid(ref)
         || PyValue_RefcountOnObject(ref)
         || PyValue_TYPE(ref) != Py_TYPE(arg)
         || !PyValue_Is(dup, ref) || !PyValue_Is(PyValue_Borrow(ref), ref)
@@ -3282,6 +3282,14 @@ pyvalue_err_format(PyObject *self, PyObject *args)
     return PyErr_Format(exception, format, PyValue_FromObjectBorrow(obj));
 }
 
+/* PyValue_AsObject() of a tagged index, which is no language value: an
+ * assertion failure in a debug build. */
+static PyObject *
+pyvalue_as_object_index(PyObject *self, PyObject *Py_UNUSED(ignored))
+{
+    return PyValue_AsObject(PyValue_TagIndex(7));
+}
+
 /* PyValue_AsKnownObjectBorrow(), or PyValue_AsKnownObjectSteal() if steal
  * is true, of an inline int: a fatal error in every build. */
 static PyObject *
@@ -3304,21 +3312,14 @@ pyvalue_internal_contract(PyObject *self, PyObject *unused)
     PyValue absent = PyValue_PrepareOwned(NULL);
     assert(PyValue_IsNull(absent));
     PyValue invalid[] = {
-        PyValue_NULL, PyValue_ERROR, PyValue_TagIndex(7),
+        PyValue_NULL, PyValue_TagIndex(7),
+#ifdef Py_DEBUG
         PyValue_Wrap((void *)0x1000),
+#endif
     };
     for (size_t i = 0; i < Py_ARRAY_LENGTH(invalid); i++) {
+        // PyValue_AsObject() asserts this.
         assert(!PyValue_IsLanguageValue(invalid[i]));
-        PyObject *object = PyValue_AsObject(invalid[i]);
-        if (object != NULL) {
-            Py_DECREF(object);
-            PyErr_SetString(PyExc_AssertionError, "internal value escaped");
-            return NULL;
-        }
-        if (!PyErr_ExceptionMatches(PyExc_SystemError)) {
-            return NULL;
-        }
-        PyErr_Clear();
     }
     PyObject *primary = PyObject_CallNoArgs(PyExc_ValueError);
     if (primary == NULL) {
@@ -4211,6 +4212,7 @@ static PyMethodDef module_functions[] = {
     {"pyvalue_entry_null", pyvalue_entry_null, METH_NOARGS, NULL},
     {"pyvalue_format", pyvalue_format, METH_VARARGS, NULL},
     {"pyvalue_err_format", pyvalue_err_format, METH_VARARGS, NULL},
+    {"pyvalue_as_object_index", pyvalue_as_object_index, METH_NOARGS, NULL},
     {"pyvalue_as_known_object_inline", pyvalue_as_known_object_inline, METH_O, NULL},
     {"jit_method_record_index", jit_method_record_index, METH_NOARGS, NULL},
     {"jit_method_cold_call", jit_method_cold_call, METH_VARARGS, NULL},

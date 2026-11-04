@@ -1619,9 +1619,10 @@ dummy_func(
                 DISPATCH_INLINED(gen_frame);
             }
             if (!PyValue_IsNull(null_or_index) && PyValue_IsNone(v)) {
-                PyValue item = _PyForIter_VirtualIteratorNext(tstate, frame, receiver, &null_or_index);
-                if (!PyValue_IsValid(item)) {
-                    if (PyValue_IsError(item)) {
+                PyValue item;
+                int found = _PyForIter_VirtualIteratorNext(tstate, frame, receiver, &null_or_index, &item);
+                if (found <= 0) {
+                    if (found < 0) {
                         ERROR_NO_POP();
                     }
                     JUMPBY(oparg);
@@ -3660,7 +3661,7 @@ dummy_func(
         op(_GET_ITER, (iterable -- iter, index_or_null)) {
             PyValue result = _PyEval_GetIter(iterable, &index_or_null, oparg);
             DEAD(iterable);
-            ERROR_IF(PyValue_IsError(result));
+            ERROR_IF(PyValue_IsNull(result));
             iter = result;
         }
 
@@ -3722,9 +3723,10 @@ dummy_func(
         }
 
         replaced op(_FOR_ITER, (iter, null_or_index -- iter, null_or_index, next)) {
-            PyValue item = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &null_or_index);
-            if (!PyValue_IsValid(item)) {
-                if (PyValue_IsError(item)) {
+            PyValue item;
+            int found = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &null_or_index, &item);
+            if (found <= 0) {
+                if (found < 0) {
                     ERROR_NO_POP();
                 }
                 // Jump forward by oparg and skip the following END_FOR
@@ -3764,9 +3766,10 @@ dummy_func(
             _FOR_ITER_VIRTUAL;
 
         inst(INSTRUMENTED_FOR_ITER, (unused/1, iter, null_or_index -- iter, null_or_index, next)) {
-            PyValue item = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &null_or_index);
-            if (!PyValue_IsValid(item)) {
-                if (PyValue_IsError(item)) {
+            PyValue item;
+            int found = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &null_or_index, &item);
+            if (found <= 0) {
+                if (found < 0) {
                     ERROR_NO_POP();
                 }
                 // Jump forward by oparg and skip the following END_FOR

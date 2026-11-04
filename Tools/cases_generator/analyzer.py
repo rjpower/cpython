@@ -732,7 +732,6 @@ NON_ESCAPING_FUNCTIONS = (
     # Boxing allocates an int or float, which runs no Python code and
     # cannot start a collection.
     "PyValue_Box",
-    "PyValue_IsError",
     "PyValue_IsValid",
     "PyValue_Wrap",
     "PyValue_Unwrap",

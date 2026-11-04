@@ -15124,7 +15124,7 @@ super_init_without_args(_PyInterpreterFrame *cframe, PyTypeObject **type_p,
     }
     else {
         // The argument may be an inline value, which this boxes.
-        firstarg = _PyValue_AsPyObjectNewBoxedAt(firstref, BOX_SITE_FRAME);
+        firstarg = _PyValue_AsObjectAt(firstref, BOX_SITE_FRAME);
         if (firstarg == NULL || PyErr_Occurred()) {
             goto cleanup;
         }

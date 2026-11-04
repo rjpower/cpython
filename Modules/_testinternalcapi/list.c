@@ -4,7 +4,7 @@
 #include "parts.h"
 #include "../_testcapi/util.h"    // NULLABLE
 
-#include "pycore_pyvalue.h"       // PyValue_AsObject()
+#include "pycore_value.h"         // PyValue_AsObject()
 
 
 static PyObject *

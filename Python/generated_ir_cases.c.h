@@ -9987,9 +9987,10 @@
             }
             // _FOR_ITER
             {
-                PyValue item = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &null_or_index);
-                if (!PyValue_IsValid(item)) {
-                    if (PyValue_IsError(item)) {
+                PyValue item;
+                int found = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &null_or_index, &item);
+                if (found <= 0) {
+                    if (found < 0) {
                         window[1] = _PyValue_Publish(&null_or_index);
                         JUMP_TO_LABEL(error);
                     }
@@ -10634,7 +10635,7 @@
             {
                 PyValue result = _PyEval_GetIter(iterable, &index_or_null, oparg);
                 IR_SLOT(IR_FIELD_B(this_instr)) = PyValue_NULL;
-                if (PyValue_IsError(result)) {
+                if (PyValue_IsNull(result)) {
                     JUMP_TO_LABEL(error);
                 }
                 iter = result;
@@ -11332,9 +11333,10 @@
             PyValue next;
             null_or_index = window[1];
             iter = window[0];
-            PyValue item = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &null_or_index);
-            if (!PyValue_IsValid(item)) {
-                if (PyValue_IsError(item)) {
+            PyValue item;
+            int found = _PyForIter_VirtualIteratorNext(tstate, frame, iter, &null_or_index, &item);
+            if (found <= 0) {
+                if (found < 0) {
                     window[1] = _PyValue_Publish(&null_or_index);
                     JUMP_TO_LABEL(error);
                 }
@@ -17853,9 +17855,10 @@
                     DISPATCH_INLINED(gen_frame);
                 }
                 if (!PyValue_IsNull(null_or_index) && PyValue_IsNone(v)) {
-                    PyValue item = _PyForIter_VirtualIteratorNext(tstate, frame, receiver, &null_or_index);
-                    if (!PyValue_IsValid(item)) {
-                        if (PyValue_IsError(item)) {
+                    PyValue item;
+                    int found = _PyForIter_VirtualIteratorNext(tstate, frame, receiver, &null_or_index, &item);
+                    if (found <= 0) {
+                        if (found < 0) {
                             window[1] = _PyValue_Publish(&null_or_index);
                             JUMP_TO_LABEL(error);
                         }

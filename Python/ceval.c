@@ -1366,7 +1366,7 @@ _PyEval_GetIter(PyValue iterable, PyValue *index_or_null, int yield_from)
                             "cannot 'yield from' a coroutine object "
                             "in a non-coroutine generator");
             PyValue_CLOSE(iterable);
-            return PyValue_ERROR;
+            return PyValue_NULL;
         }
         return iterable;
     }
@@ -1374,12 +1374,12 @@ _PyEval_GetIter(PyValue iterable, PyValue *index_or_null, int yield_from)
        iterable; PyObject_GetIter() raises the error. */
     iterable = PyValue_Box(iterable);
     if (PyValue_IsInline(iterable)) {
-        return PyValue_ERROR;
+        return PyValue_NULL;
     }
     PyObject *iter_o = PyObject_GetIter(PyValue_AsKnownObjectBorrow(iterable));
     PyValue_CLOSE(iterable);
     if (iter_o == NULL) {
-        return PyValue_ERROR;
+        return PyValue_NULL;
     }
     return PyValue_FromPyObjectSteal(iter_o);
 }
@@ -1406,7 +1406,7 @@ int _PyEval_StoreName(PyThreadState *tstate, PyValue v, PyObject *name, PyObject
         return error;
     }
 
-    PyObject *v_o = PyValue_AsPyObjectNewBoxed(v);
+    PyObject *v_o = PyValue_AsObject(v);
     if (v_o == NULL) {
         return -1;
     }
@@ -2916,7 +2916,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *c
                 goto kw_fail;
             }
 
-            PyObject *value = PyValue_AsPyObjectNewBoxed(value_value);
+            PyObject *value = PyValue_AsObject(value_value);
             if (value == NULL) {
                 goto kw_fail;
             }
@@ -4391,7 +4391,7 @@ static PyObject *
 borrow_or_box(PyValue ref, PyObject **box)
 {
     if (PyValue_IsInline(ref)) {
-        *box = PyValue_AsPyObjectNewBoxed(ref);
+        *box = PyValue_AsObject(ref);
         return *box;
     }
     *box = NULL;
@@ -5272,7 +5272,8 @@ found:
     return value;
 }
 
-PyValue _PyForIter_VirtualIteratorNext(PyThreadState* tstate, _PyInterpreterFrame* frame, PyValue iter, PyValue* index_ptr)
+int
+_PyForIter_VirtualIteratorNext(PyThreadState* tstate, _PyInterpreterFrame* frame, PyValue iter, PyValue* index_ptr, PyValue *next)
 {
     PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
     PyValue index = *index_ptr;
@@ -5281,26 +5282,29 @@ PyValue _PyForIter_VirtualIteratorNext(PyThreadState* tstate, _PyInterpreterFram
         assert(i >= 0);
         _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, i);
         i = next_index.index;
+        *next = next_index.value;
         if (PyValue_IsNull(next_index.value)) {
-            return i < 0 ? PyValue_ERROR : PyValue_NULL;
+            return i < 0 ? -1 : 0;
         }
         *index_ptr = PyValue_TagIndex(i);
-        return next_index.value;
+        return 1;
     }
-    PyObject *next = (*Py_TYPE(iter_o)->tp_iternext)(iter_o);
-    if (next == NULL) {
+    PyObject *next_o = (*Py_TYPE(iter_o)->tp_iternext)(iter_o);
+    if (next_o == NULL) {
+        *next = PyValue_NULL;
         if (_PyErr_Occurred(tstate)) {
             if (_PyErr_ExceptionMatches(tstate, PyExc_StopIteration)) {
                 _PyEval_MonitorRaise(tstate, frame, frame->instr_ptr);
                 _PyErr_Clear(tstate);
             }
             else {
-                return PyValue_ERROR;
+                return -1;
             }
         }
-        return PyValue_NULL;
+        return 0;
     }
-    return PyValue_FromPyObjectSteal(next);
+    *next = PyValue_FromPyObjectSteal(next_o);
+    return 1;
 }
 
 /* Check if a 'cls' provides the given special method. */

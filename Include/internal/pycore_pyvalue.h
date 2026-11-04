@@ -33,10 +33,6 @@ PyAPI_FUNC(PyValue) PyValue_PrepareOwned(PyObject *obj);
  * owning promotion or the last use; an immediate does not retain that owner. */
 PyAPI_FUNC(PyValue) PyValue_FromObjectBorrow(PyObject *obj);
 
-/* Return a new object reference, boxing a scalar as needed. NULL denotes a
- * real error with an exception set. No borrowed scalar box is cached. */
-PyAPI_FUNC(PyObject *) PyValue_AsObject(PyValue value);
-
 static inline int
 PyValue_IsObject(PyValue value)
 {

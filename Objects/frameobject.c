@@ -50,7 +50,7 @@ framelocalsproxy_getval(_PyInterpreterFrame *frame, PyCodeObject *co, int i)
     _PyLocals_Kind kind = _PyLocals_GetKind(co->co_localspluskinds, i);
 
     if (PyValue_IsInline(fast[i])) {
-        return _PyValue_AsPyObjectNewBoxedAt(fast[i], BOX_SITE_FRAME);
+        return _PyValue_AsObjectAt(fast[i], BOX_SITE_FRAME);
     }
     PyObject *value = PyValue_AsKnownObjectBorrow(fast[i]);
     PyObject *cell = NULL;
@@ -2375,7 +2375,7 @@ frame_get_var(_PyInterpreterFrame *frame, PyCodeObject *co, int i,
     PyObject *value = NULL;
     {
         if (PyValue_IsInline(frame->base[i])) {
-            value = _PyValue_AsPyObjectNewBoxedAt(frame->base[i], BOX_SITE_FRAME);
+            value = _PyValue_AsObjectAt(frame->base[i], BOX_SITE_FRAME);
             if (value == NULL) {
                 return -1;
             }

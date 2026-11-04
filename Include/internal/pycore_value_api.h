@@ -57,15 +57,6 @@ _PyValue_AsObjectAt(PyValue value, int site)
 }
 
 static inline PyObject *
-_PyValue_AsPyObjectNewBoxedAt(PyValue value, int site)
-{
-    int previous = _PyValue_SwapBoxSite(site);
-    PyObject *object = PyValue_AsPyObjectNewBoxed(value);
-    _PyValue_SwapBoxSite(previous);
-    return object;
-}
-
-static inline PyObject *
 _PyValueTemps_ObjectAt(_PyValueTemps *temps, PyValue value, int site)
 {
     int previous = _PyValue_SwapBoxSite(site);
@@ -84,8 +75,6 @@ _PyBorrow_TupleItemsAt(PyObject *tuple, Py_ssize_t n, int site)
 }
 #else
 #  define _PyValue_AsObjectAt(VALUE, SITE) PyValue_AsObject(VALUE)
-#  define _PyValue_AsPyObjectNewBoxedAt(VALUE, SITE) \
-        PyValue_AsPyObjectNewBoxed(VALUE)
 #  define _PyValueTemps_ObjectAt(TEMPS, VALUE, SITE) \
         _PyValueTemps_Object((TEMPS), (VALUE))
 #  define _PyBorrow_TupleItemsAt(TUPLE, N, SITE) \

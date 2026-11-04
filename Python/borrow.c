@@ -14,8 +14,8 @@
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_traceback.h"     // _Py_DumpStack()
 #include "pycore_tuple.h"         // PyTuple_GET_VALUE()
-#include "pycore_value.h"         // PyValue_AsPyObjectNewBoxed()
-#include "pycore_value_api.h"     // _PyValue_AsPyObjectNewBoxedAt()
+#include "pycore_value.h"         // PyValue_AsObject()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 #define BORROW_CHUNK_SLOTS 1024
 
@@ -312,8 +312,8 @@ _PyBorrow_Keep(PyObject *owned)
 static inline PyObject *
 borrow_box(PyValue value)
 {
-    return _PyValue_AsPyObjectNewBoxedAt(
-        value, _PyValue_BoxSiteOr(BOX_SITE_CALL_ADAPTER));
+    return _PyValue_AsObjectAt(value,
+                               _PyValue_BoxSiteOr(BOX_SITE_CALL_ADAPTER));
 }
 
 PyObject *const *

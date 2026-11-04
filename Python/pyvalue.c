@@ -29,23 +29,6 @@ PyValue_PrepareOwned(PyObject *obj)
     return _PyValue_Canonicalize(PyValue_FromPyObjectSteal(obj));
 }
 
-PyObject *
-PyValue_AsObject(PyValue value)
-{
-    if (!PyValue_IsLanguageValue(value)) {
-        PyErr_SetString(PyExc_SystemError, "internal PyValue is not a Python object");
-        return NULL;
-    }
-    PyObject *object = PyValue_AsPyObjectNewBoxed(value);
-    if (object != NULL && PyErr_Occurred()) {
-        PyObject *saved = PyErr_GetRaisedException();
-        Py_DECREF(object);
-        _PyValue_RestoreException(saved);
-        return NULL;
-    }
-    return object;
-}
-
 PyValue
 _PyValue_Canonicalize(PyValue source)
 {

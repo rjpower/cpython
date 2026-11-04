@@ -248,7 +248,7 @@ _PyNativeScope_Objects(_PyNativeScope *scope, PyObject *const **args)
                 scope->objects[i] = PyValue_AsKnownObjectBorrow(argument);
                 continue;
             }
-            scope->objects[i] = _PyValue_AsPyObjectNewBoxedAt(argument, BOX_SITE_CALL_ADAPTER);
+            scope->objects[i] = _PyValue_AsObjectAt(argument, BOX_SITE_CALL_ADAPTER);
             if (scope->objects[i] == NULL) {
                 return -1;
             }

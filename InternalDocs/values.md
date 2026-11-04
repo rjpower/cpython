@@ -9,8 +9,8 @@ collector. A value does not select a collector or a representation mode.
 Pointer payloads carry an ownership bit. `PyValue_Borrow` creates a view rooted
 by an existing owner; `PyValue_NewRef` creates an independent strong owner;
 `PyValue_Close` consumes one strong owner. Raw bit copies do not create owners.
-Scalars have no heap owner. `PyValue_NULL`, `PyValue_ERROR`, tagged iterator
-indices and wrapped internal pointers are internal states, not language values.
+Scalars have no heap owner. `PyValue_NULL`, tagged iterator indices and
+wrapped internal pointers are internal states, not language values.
 They must not cross the owning object bridge. Construction holes may be NULL,
 but a published language container must satisfy its own hole invariant.
 

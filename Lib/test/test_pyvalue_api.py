@@ -158,5 +158,14 @@ class KnownObjectCheckTests(unittest.TestCase):
                               err)
 
 
+class ObjectExitTests(unittest.TestCase):
+    @unittest.skipUnless(support.Py_DEBUG, "the check is in debug builds")
+    @support.requires_subprocess()
+    def test_internal_value_is_fatal(self):
+        code = "import _testinternalcapi; _testinternalcapi.pyvalue_as_object_index()"
+        _, _, err = assert_python_failure("-c", code)
+        self.assertIn(b"PyValue_IsLanguageValue", err)
+
+
 if __name__ == "__main__":
     unittest.main()

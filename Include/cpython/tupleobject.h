@@ -52,3 +52,6 @@ PyAPI_FUNC(void) PyTuple_SET_ITEM(PyObject *op, Py_ssize_t index, PyObject *valu
 PyAPI_FUNC(PyObject*) PyTuple_FromArray(
     PyObject *const *array,
     Py_ssize_t size);
+
+PyAPI_FUNC(PyValue) PyTuple_GetValue(PyObject *, Py_ssize_t);
+PyAPI_FUNC(int) PyTuple_SetValue(PyObject *, Py_ssize_t, PyValue);

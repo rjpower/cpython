@@ -26,9 +26,6 @@ PyAPI_DATA(PyTypeObject) PyListRevIter_Type;
 
 PyAPI_FUNC(PyObject *) PyList_New(Py_ssize_t size);
 PyAPI_FUNC(Py_ssize_t) PyList_Size(PyObject *);
-
-/* Owned value, or PyValue_NULL with an exception on invalid input. */
-PyAPI_FUNC(PyValue) PyList_GetValue(PyObject *, Py_ssize_t);
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 >= 0x030d0000
 PyAPI_FUNC(PyObject *) PyList_GetItemRef(PyObject *, Py_ssize_t);
 #endif

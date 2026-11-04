@@ -2987,14 +2987,9 @@ traverse_slots(PyTypeObject *type, PyObject *self, visitproc visit, void *arg)
     mp = _PyHeapType_GET_MEMBERS((PyHeapTypeObject *)type);
     for (i = 0; i < n; i++, mp++) {
         if (mp->type == _Py_T_VALUE || mp->type == _Py_T_VALUE_EX) {
-            PyValue value = *(PyValue *)_PyMember_GetOffset(self, mp);
-            assert(PyValue_IsHeapSafe(value));
-            if (PyValue_IsObject(value) && !PyValue_IsNull(value)) {
-                int err = visit(PyValue_AsPyObjectBorrow(value), arg);
-                if (err) {
-                    return err;
-                }
-            }
+            PyValue *slot = (PyValue *)_PyMember_GetOffset(self, mp);
+            assert(PyValue_IsHeapSafe(*slot));
+            _Py_VISIT_VALUE(*slot);
         }
         else if (mp->type == Py_T_OBJECT_EX) {
             void *addr = _PyMember_GetOffset(self, mp);

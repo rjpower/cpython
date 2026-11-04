@@ -31,8 +31,6 @@ PyAPI_DATA(PyTypeObject) PyTupleIter_Type;
 PyAPI_FUNC(PyObject *) PyTuple_New(Py_ssize_t size);
 PyAPI_FUNC(Py_ssize_t) PyTuple_Size(PyObject *);
 PyAPI_FUNC(PyObject *) PyTuple_GetItemRef(PyObject *, Py_ssize_t);
-PyAPI_FUNC(PyValue) PyTuple_GetValue(PyObject *, Py_ssize_t);
-PyAPI_FUNC(int) PyTuple_SetValue(PyObject *, Py_ssize_t, PyValue);
 PyAPI_FUNC(int) PyTuple_SetItem(PyObject *, Py_ssize_t, PyObject *);
 PyAPI_FUNC(PyObject *) PyTuple_GetSlice(PyObject *, Py_ssize_t, Py_ssize_t);
 PyAPI_FUNC(PyObject *) PyTuple_Pack(Py_ssize_t, ...);

@@ -24,19 +24,19 @@ PyAPI_FUNC(PyValue) PyValue_FromObjectBorrow(PyObject *obj);
  * real error with an exception set. No borrowed scalar box is cached. */
 PyAPI_FUNC(PyObject *) PyValue_AsObject(PyValue value);
 
-/* Borrowing changes only pointer ownership, never a scalar's bits. */
-static inline PyValue
-PyValue_Borrow(PyValue value)
-{
-    value.bits |= (uintptr_t)(value.bits < ((uintptr_t)1 << 48));
-    return value;
-}
-
 static inline int
 PyValue_IsObject(PyValue value)
 {
     return value.bits > 2 && value.bits < ((uintptr_t)1 << 48) &&
            (value.bits & 2) == 0;
+}
+
+/* Borrowing changes only object ownership: NULL, ERROR and scalar bits stay. */
+static inline PyValue
+PyValue_Borrow(PyValue value)
+{
+    value.bits |= (uintptr_t)PyValue_IsObject(value);
+    return value;
 }
 
 /* NewRef creates an independent owner for a pointer value. A raw bit copy

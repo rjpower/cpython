@@ -52,3 +52,6 @@ PyAPI_FUNC(void) PyList_SET_ITEM(PyObject *op, Py_ssize_t index, PyObject *value
 
 PyAPI_FUNC(int) PyList_Extend(PyObject *self, PyObject *iterable);
 PyAPI_FUNC(int) PyList_Clear(PyObject *self);
+
+/* Owned value, or PyValue_NULL with an exception on invalid input. */
+PyAPI_FUNC(PyValue) PyList_GetValue(PyObject *, Py_ssize_t);

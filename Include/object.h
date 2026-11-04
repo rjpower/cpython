@@ -312,11 +312,13 @@ typedef Py_hash_t (*hashfunc)(PyObject *);
 typedef PyObject *(*richcmpfunc) (PyObject *, PyObject *, int);
 typedef PyObject *(*getiterfunc) (PyObject *);
 typedef PyObject *(*iternextfunc) (PyObject *);
+#ifndef Py_LIMITED_API
 typedef struct {
     PyValue value;  /* Owned; NULL denotes exhaustion or an error. */
     Py_ssize_t index;  /* Negative only on error. */
 } _PyValueIndexPair;
 typedef _PyValueIndexPair (*_Py_iteritemfunc) (PyObject *, Py_ssize_t index);
+#endif
 typedef PyObject *(*descrgetfunc) (PyObject *, PyObject *, PyObject *);
 typedef int (*descrsetfunc) (PyObject *, PyObject *, PyObject *);
 typedef int (*initproc)(PyObject *, PyObject *, PyObject *);

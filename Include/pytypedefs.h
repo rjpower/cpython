@@ -16,7 +16,9 @@ typedef struct PyGetSetDef PyGetSetDef;
 typedef struct PyMemberDef PyMemberDef;
 typedef struct PySlot PySlot;
 
+#ifndef Py_LIMITED_API
 typedef struct { uintptr_t bits; } PyValue;
+#endif
 
 typedef struct _object PyObject;
 typedef struct _longobject PyLongObject;

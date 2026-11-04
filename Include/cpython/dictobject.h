@@ -103,3 +103,19 @@ PyAPI_FUNC(int) PyDict_Unwatch(int watcher_id, PyObject* dict);
 
 // Create a frozendict. Create an empty dictionary if iterable is NULL.
 PyAPI_FUNC(PyObject*) PyFrozenDict_New(PyObject *iterable);
+
+/* Canonical reads: inputs borrow; outputs own independent snapshots.
+ * Return 1/hit, 0/miss or end, -1/error. Initialize outputs to PyValue_NULL;
+ * preserve an exception pending on entry without running lookup callbacks.
+ * GetValue/GetValueString require valid result storage; key is a language
+ * value, or a NUL-terminated UTF-8 string, respectively. Close owned results.
+ * NextValue requires valid cursor storage and distinct optional key/value
+ * outputs. Error/end leave the cursor unchanged; success advances it once. */
+PyAPI_FUNC(int) PyDict_GetValue(PyObject *, PyValue, PyValue *);
+PyAPI_FUNC(int) PyDict_GetValueString(PyObject *, const char *, PyValue *);
+PyAPI_FUNC(int) PyDict_NextValue(PyObject *, Py_ssize_t *, PyValue *, PyValue *);
+/* Inputs borrow; setters promote before retaining. */
+PyAPI_FUNC(int) PyDict_SetValue(PyObject *, PyValue, PyValue);
+PyAPI_FUNC(int) PyDict_DelValue(PyObject *, PyValue);
+PyAPI_FUNC(int) PyDict_ContainsValue(PyObject *, PyValue);
+PyAPI_FUNC(int) PyDict_PopValue(PyObject *, PyValue, PyValue *);

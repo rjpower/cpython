@@ -913,8 +913,6 @@
     added = '3.2'
 [function.PyList_AsTuple]
     added = '3.2'
-[function.PyList_GetItem]
-    added = '3.2'
 [function.PyList_GetSlice]
     added = '3.2'
 [function.PyList_Insert]
@@ -1314,8 +1312,6 @@
     added = '3.2'
 [function.PyState_FindModule]
     added = '3.2'
-[function.PyStructSequence_GetItem]
-    added = '3.2'
 [function.PyStructSequence_New]
     added = '3.2'
 [function.PyStructSequence_NewType]
@@ -1381,8 +1377,6 @@
 [data.PyTraceBack_Type]
     added = '3.2'
 [data.PyTupleIter_Type]
-    added = '3.2'
-[function.PyTuple_GetItem]
     added = '3.2'
 [function.PyTuple_GetSlice]
     added = '3.2'
@@ -2554,6 +2548,8 @@
 [function.PyDict_GetItemRef]
     added = '3.13'
 [function.PyDict_GetItemStringRef]
+    added = '3.13'
+[function.PyDict_NextEntryRef]
     added = '3.13'
 [function.PyLong_AsInt]
     added = '3.13'

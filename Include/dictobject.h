@@ -19,21 +19,6 @@ PyAPI_DATA(PyTypeObject) PyDict_Type;
 #define PyDict_CheckExact(op) Py_IS_TYPE((op), &PyDict_Type)
 
 PyAPI_FUNC(PyObject *) PyDict_New(void);
-/* Canonical reads: inputs borrow; outputs own independent snapshots.
- * Return 1/hit, 0/miss or end, -1/error. Initialize outputs to PyValue_NULL;
- * preserve an exception pending on entry without running lookup callbacks.
- * GetValue/GetValueString require valid result storage; key is a language
- * value, or a NUL-terminated UTF-8 string, respectively. Close owned results.
- * NextValue requires valid cursor storage and distinct optional key/value
- * outputs. Error/end leave the cursor unchanged; success advances it once. */
-PyAPI_FUNC(int) PyDict_GetValue(PyObject *, PyValue, PyValue *);
-PyAPI_FUNC(int) PyDict_GetValueString(PyObject *, const char *, PyValue *);
-PyAPI_FUNC(int) PyDict_NextValue(PyObject *, Py_ssize_t *, PyValue *, PyValue *);
-/* Inputs borrow; setters promote before retaining. */
-PyAPI_FUNC(int) PyDict_SetValue(PyObject *, PyValue, PyValue);
-PyAPI_FUNC(int) PyDict_DelValue(PyObject *, PyValue);
-PyAPI_FUNC(int) PyDict_ContainsValue(PyObject *, PyValue);
-PyAPI_FUNC(int) PyDict_PopValue(PyObject *, PyValue, PyValue *);
 PyAPI_FUNC(int) PyDict_SetItem(PyObject *mp, PyObject *key, PyObject *item);
 PyAPI_FUNC(int) PyDict_DelItem(PyObject *mp, PyObject *key);
 PyAPI_FUNC(void) PyDict_Clear(PyObject *mp);

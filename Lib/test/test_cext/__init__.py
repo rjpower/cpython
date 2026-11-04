@@ -129,6 +129,7 @@ class TestPublicC(BaseTests, unittest.TestCase):
     def test_build_limited_c11(self):
         self.check_build('_test_cext_limited_c11', limited=True, std='c11')
 
+    @unittest.skip("the free-threaded ABI is unsupported by PyValue")
     def test_build_abi3t(self):
         # Test with Py_TARGET_ABI3T
         self.check_build('_test_cext_abi3t', abi3t=True)
@@ -170,6 +171,7 @@ class TestPublicCpp(BaseTests, unittest.TestCase):
     def test_build_limited_cpp03(self):
         self.check_build('_test_cppext_limited_cpp03', std='c++03', limited=True)
 
+    @unittest.skip("the free-threaded ABI is unsupported by PyValue")
     def test_build_abi3t(self):
         # Test with Py_TARGET_ABI3T
         self.check_build('_test_cppext_abi3t', abi3t=True)

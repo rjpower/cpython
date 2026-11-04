@@ -62,6 +62,7 @@ Related pages: [PyValue representation](pyvalue.md) (encoding, D1–D8),
 | R24 | Cost model: no claim about when kernels reach upstream; the measured box-site split by packet; the checkpoint gap is a per-word cost that the value API does not address; the checkpoint precedes V1 | Coordinator, 2026-11-03, after review 2. §6.2, §9 |
 | R25 | Counts from review 2's scripts (`build/pyjit-link-wave1/valueapi-r2-*.py`): 267 format calls need a value form; `PyLong_From*` 288, `FromLong` 147, `FromSsize_t` 73 | Coordinator, 2026-11-03, after review 2. §4, §7.7 |
 | R26 | Representation boundary: only the value headers, `pyvalue.c`, the JIT, the out-of-process readers and the encoding tests know the word's encoding. Public headers carry it as an opaque word: no inline decoding, five frozen public fields, exported operations. No encoding in an extension ABI. Enforced by `raw-bits` and `public-value` (A5b-3) | User direction, 2026-11-04. §1.6 |
+| R27 | No box inside the core. A box is made only at the compatibility boundary: an object-API call into the core from outside it (a thunk), and the two adapters, which call object slots of extension types and object-form natives. A heap int beyond int51 or any other object is an allocation, not a box. Every in-tree module is core (V6 covers all of `Modules/`, not only accelerators). Gate at V7: over the full suite and the kernels, the box counters record zero boxes at core sites; boxes appear only in the thunk and adapter classes, and only for extension types and object-form natives | User direction, 2026-11-04. §1.1, §6, §9 |
 
 ## Challenges to the brief
 
@@ -161,6 +162,13 @@ its Python operands with an entry primitive, calls the value form and boxes a
 polymorphic result with the exit primitive; it calls no other thunk. The
 borrowed getters deleted in the link wave stay deleted. The two adapters are
 the only places where the core calls object-form code it does not own.
+
+**No box inside the core (R27).** The thunks and the two adapters are the
+only places where a value becomes a box. Core code, including every in-tree
+module, passes values to value forms. A heap int beyond int51, or any other
+object, is allocated as an object when it is created, which is not boxing.
+Until V7, boxes at core sites are migration debt. The box counters (§6)
+measure that debt per site class at each step. V7 gates on zero.
 
 ### 1.2 Positions
 
@@ -989,8 +997,8 @@ flowchart LR
 | **V4** | Container value forms primary; renames of §1.5; object getters and setters become thunks; the sweep tool below, with its ownership table and first-hour M/J measurement. **Heap homes adopt `PyValueField`** (A5b, in implementation, leaves the field type to V4): a load returns a `PyValueBorrow` and a store takes a `PyValue`, which closes the copy-of-home gap ([proposal](proposals/register-ir-v2-a5b.md) §2.3). Rule 3 drops the `Borrowed` suffix | V2b | M/J split reported; container value forms complete | `test_list`, `test_tuple`, `test_dict`, `test_set`, `test_structseq`, `test_capi.test_list`, `.test_dict`, `.test_tuple`, `.test_set` | ≈6 |
 | **V5** | §7.4 hot and warm fields become `PyValue` homes, with traverse, clear, dealloc, `_Py_T_VALUE` members, `__reduce__` and the home checker. The new homes use `PyValueField` (see V4) | V2a-1 | Field-store box count near zero on the benchmarks | `test_range`, `test_slice`, `test_exceptions`, `test_asyncgen`, `test_iter`, `test_context`, `test_ordered_dict`, `test_tstring`, `test_pickle`, `test_gc` | ≈8 |
 | **VS** | Sweep each core file once for every family whose mechanism has landed: the calls of §7.1 and the families of §7.7. M sites by the tool, J sites by agents. Mark each family when its last core caller is swept, `PyObject_IsTrue`, `_PyNumber_Index` and `PyArg_*` included. Batches by directory: `Objects/`, `Python/`, then `Parser/` and the compiler (C6) | V3a, V4 | Every family with a landed mechanism marked | full suite per batch | ≈30 plus the judgement list |
-| **V6** | Port `Modules/` accelerators in box-count order; each adds `Py_VALUE_CORE` | VS | Each ported module calls no thunk | each module's tests | per module |
-| **V7** | Families whose mechanism landed after VS reached them (V3b, V5), generator fixes; every object function with a value form is marked; measure the release check of `PyValue_AsKnownObject*` and decide whether it stays | All above | No `Py_VALUE_CORE` unit calls a marked function | full suite | ≈4 |
+| **V6** | Port every in-tree `Modules/` unit, accelerators first in box-count order (R27); each adds `Py_VALUE_CORE` | VS | Each ported module calls no thunk | each module's tests | per module |
+| **V7** | Families whose mechanism landed after VS reached them (V3b, V5), generator fixes; every object function with a value form is marked; measure the release check of `PyValue_AsKnownObject*` and decide whether it stays | All above | No `Py_VALUE_CORE` unit calls a marked function; zero boxes at core sites over the suite and the kernels (R27) | full suite | ≈4 |
 
 **Sweep tool (V4, R23).** Clang 21 is installed, with `intercept-build`;
 Coccinelle and the libclang Python bindings are not.

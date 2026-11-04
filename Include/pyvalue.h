@@ -40,13 +40,21 @@ PyValue_IsObject(PyValue value)
 }
 
 /* NewRef creates an independent owner for a pointer value. A raw bit copy
- * merely aliases the existing owner. Scalars require no runtime call. */
+ * merely aliases the existing owner. Scalars require no runtime call.
+ * Immortal objects keep the no-count tag, so each has one encoding and
+ * exact-bit tests such as PyValue_IsNone() hold for every owner. */
 static inline PyValue
 PyValue_NewRef(PyValue value)
 {
     if (PyValue_IsObject(value)) {
-        value.bits &= ~(uintptr_t)1;
-        Py_INCREF((PyObject *)value.bits);
+        PyObject *obj = (PyObject *)(value.bits & ~(uintptr_t)1);
+        if (_Py_IsImmortal(obj)) {
+            value.bits = (uintptr_t)obj | 1;
+        }
+        else {
+            Py_INCREF(obj);
+            value.bits = (uintptr_t)obj;
+        }
     }
     return value;
 }

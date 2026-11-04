@@ -36,6 +36,13 @@ The public handle is an opaque context-resolved reference, not PyValue bits or a
 
 The backend must implement Field traversal/clear and Global isolation in the existing reference-counted runtime. There is no permanent scalar box cache, boxed core mode, or arbitrary lifetime extension. Extension-owned payload may be exposed through declared shapes; builtin container layouts remain private. [Fields](https://docs.hpyproject.org/en/latest/api-reference/hpy-field.html), [globals](https://docs.hpyproject.org/en/latest/api-reference/hpy-global.html), [type definitions](https://docs.hpyproject.org/en/latest/api-reference/hpy-type.html).
 
+> **Superseded in part.** [native-boundary.md](native-boundary.md) replaces the
+> explicit caller-owned scope and owner-scope rules in this section and the
+> two that follow (through the parser-scope paragraph) with a per-thread borrow
+> stack. Handwritten `PyArg_*` callers keep working unchanged.
+> `PySequence_Fast_ITEMS` and `PySequence_Fast_GET_ITEM` are deleted. Read that
+> design first; this text is kept until it is rewritten.
+
 A call transaction publishes coherent IN_CALL state before any preparation can
 allocate or call out: the call-site PC, numeric operand/destination offsets and
 owning evaluated homes are valid. Method expansion, monitoring and expanded-call

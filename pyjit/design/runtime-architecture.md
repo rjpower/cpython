@@ -33,6 +33,9 @@ flowchart TD
 | [Interpreter](handler-and-observer-contract.md) | bytecodes and cases generators → ceval; dispatch, frames, effects, specialization and observation |
 | [Values and objects](values-and-object-protocol.md) | Canonical scalar/object encoding, managed storage, attributes and ownership boundaries |
 | [Memory and lifetimes](gc-roots-and-lifetimes.md) | Reference counting, cyclic traversal, release/reentry and weakref/finalization contracts |
+| [PyValue](pyvalue.md) | Canonical spec for the eight-byte value: as-built encoding, comparison with other engines, prioritised gaps |
+| [Native boundary](native-boundary.md) | Canonical spec for native calls: per-thread borrow stack, parser entry points, Clinic output |
+| [Register IR](register-ir.md) | Canonical spec for the register IR as built, compared with V8 Ignition and LuaJIT |
 | [Extension API](extension-api.md) | Owning, fallible rebuilt-source bridges and gradual opaque handle adoption |
 | [Method/tracing JIT](jit-e2e-system.md) | Shared semantic helpers, typed SSA, effects, state recovery, backend and code lifetime |
 | [JIT feedback and attribute IR](jit-ir-feedback/design.md) | Receiver/descriptor/storage facts, guards and dictionary prediction |

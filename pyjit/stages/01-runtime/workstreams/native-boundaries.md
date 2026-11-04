@@ -1,7 +1,13 @@
 # Native parsers and extension boundaries
 
-Parent: [runtime integration](../README.md). Owner role: Sol design/independent
-review, Luna mechanical packets, coordinator coherent composition and gates.
+Parent: [runtime integration](../README.md). Owner role: design and review agents,
+worker agents for mechanical packets, coordinator coherent composition and gates.
+
+> **Superseded 2026-11-03.** [native-boundary.md](../../../design/native-boundary.md)
+> replaces the explicit owner-scope approach below with an implicit per-thread
+> borrow stack. The four frozen FORMAT templates (B1, B2, C, public wrappers)
+> are withdrawn. Work now follows packets P1 to P4 in that design. The text
+> below is history until this page is rewritten.
 
 The argument-scope export provider is committed as checkpoint56. It retains
 actual buffer exports through End. Its expanded C fixture compiles; fourteen

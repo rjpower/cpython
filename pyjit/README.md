@@ -24,6 +24,7 @@ flowchart TD
 | [Status](STATUS.md) | What works, what blocks us, and what happens next? |
 | [Roadmap](ROADMAP.md) | What must each stage deliver? |
 | [Architecture](design/runtime-architecture.md) | How do values, IR, interpreter, memory and JIT fit together? |
+| [PyValue](design/pyvalue.md), [native boundary](design/native-boundary.md), [register IR](design/register-ir.md) | What are the canonical specs for the value, the C boundary and the IR? Read them after the architecture page. |
 | [Process](PROCESS.md) and [gates](design/validation.md) | How do we admit a change? |
 | [Standing direction](GOAL.md) | Which decisions must survive a handoff? |
 | [Experiment index](issues/README.md) and [log](WORKLOG.md) | Where is the detailed evidence? |

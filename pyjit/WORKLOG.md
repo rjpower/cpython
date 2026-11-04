@@ -92,3 +92,13 @@ verbatim; new checkpoint transcripts do not belong here.
 - 2026-11-03 — [Export lifetime E](issues/pyvalue-rc-restoration/native-parsers/status.md): checkpoint56 `6bf198d1ef5`, fixture TU/object clean, getargs twelve errors unchanged; fourteen fixture methods unexecuted.
 - 2026-11-03 — [Merged diagnostic v22](issues/pyvalue-rc-restoration/merged-build/status.md): checkpoint56 plus held typeobject, 247 observations/173 objects, all 7,362 inputs unchanged; no executable.
 - 2026-11-03 — [Documentation hierarchy](issues/documentation-hierarchy/README.md): renamed project root to pyjit; project/stage/workstream/experiment views and exact coordinator handoff, frozen evidence and user changes preserved; no runtime-source change.
+- 2026-11-03 — Process change: propose, peer review, implement, test, post-review, integrate; designs and reviews are short markdown, Git commits are the identity (no seals or receipt JSON), workers never commit, every C review includes a release-mode compile; see [PROCESS](PROCESS.md).
+- 2026-11-03 — Type graph/MRO/cache projection: checkpoint57 `5e977ec8cbb`, admitted after independent review; no runtime execution.
+- 2026-11-03 — Wave 1 core ports: `337dd518abb`, `5c250397c43`, `494e53f657a`, `bd1520443fd`, `abc8631ce60`; about 50 files moved off deleted borrowed getters, each independently reviewed; new helpers `_PyTuple_ReplaceTakeRef`, `_PyDict_NextBorrowed`, `_PySet_NextBorrowed`.
+- 2026-11-03 — PyValue immortal tag: `271f4e435e5` keeps the no-count tag in `PyValue_NewRef`, removing a second encoding of None/True/False.
+- 2026-11-03 — Marshal: `6ea1e52db4a` stops the set writer on iteration error.
+- 2026-11-03 — Wave 2 extension modules: `62fee2c1656`, `c7194ad146e`, `570b81e0e7a` (stdlib accelerators, pickle, ctypes); not yet linked or run.
+- 2026-11-03 — System modules: `0b7f39711d0` (remote debugging, select, socket, curses, termios, posixsubprocess, resource, multibytecodec); not yet linked or run.
+- 2026-11-03 — Decision: [native-boundary design](design/native-boundary.md) replaces explicit `_PyArg_OwnerScope` with a per-thread borrow stack, withdraws the four frozen FORMAT templates, deletes `PySequence_Fast_ITEMS`/`GET_ITEM`; packets P1 to P4; under independent review.
+- 2026-11-03 — Designs written: [pyvalue](design/pyvalue.md) (12 gaps, under review) and [register IR](design/register-ir.md) (in progress; copy-propagation `f_locals` deviation noted on the interim build).
+- 2026-11-03 — Build state: debug (merged v23) and new release build `pyvalue-rc-release-20261103` fail only in `Python/getargs.c` for the core; no executable, no runtime test, no timing. Upstream control `3a440b65695` built and passes `test_int`.

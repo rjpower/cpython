@@ -1,49 +1,66 @@
 # Project status
 
-Status captured for the November 3, 2026 handoff. Runtime workers are stopped;
-no background compilation, timing or scheduled reporting is claimed.
+Status as of 2026-11-03 16:20 PST, from the coordinator fact sheet. Update this
+page at each landing.
 
 ## Outcome and next milestone
 
-The qualified interim interpreter has register IR and inline frame values but
-boxed heap fields. The universal-value source is checkpoint56; its latest
-completed merged build has **247 compiler-error observations, 173 objects and
-no executable**. All 7,362 source inputs stayed unchanged during that build.
-The build completed at **2026-11-03 01:46 UTC**; this handoff is not a newer build.
-
-Compiler observations include cascades. They are not independent edits or a
-completion percentage. Component C/object passes and reference tests do not
-establish candidate execution. No restored-runtime timing exists.
+The restored universal-value runtime has not linked. There is no executable, no
+runtime test and no timing for it. Any performance claim about it is premature.
 
 The next milestone is a linked, qualified universal-value register interpreter,
-followed by a matched JIT-off comparison against interim RC and upstream.
+followed by a matched JIT-off comparison against the interim runtime and upstream.
 
-## Stage view
+## Position
 
-| Stage | State | Next outcome |
-| --- | --- | --- |
-| [1. Runtime integration](stages/01-runtime/README.md) | In progress; current critical path | Close consumer/parser/ownership gaps and link |
-| [2. Interpreter baseline](stages/02-baseline/README.md) | Blocked by runtime integration | Qualify and measure the unified interpreter |
-| [3. Shared compiler and method JIT](stages/03-method-jit/README.md) | Selected design; prior prototype evidence | Resume coherent native implementation after the baseline |
-| [4. Tracing JIT](stages/04-tracing-jit/README.md) | Selected direction; deferred | Reuse shared IR, recovery and backend for hot traces |
-| [5. Extension ecosystem](stages/05-extensions/README.md) | Baseline ports active; broader migration pending | Owning bridges and an opaque API for rebuilt extensions |
+- Runtime branch `boil/pyvalue-rc-universal`, HEAD `0ab5bc42f61`. Checkpoint56
+  was `6bf198d1ef5`; checkpoint57 (`5e977ec8cbb`) admitted the held type
+  graph/MRO/cache projection.
+- Wave 1 ported about 50 core files off the deleted borrowed getters. Wave 2
+  ported stdlib accelerators, pickle and ctypes. Commit `0b7f39711d0` then
+  landed the system modules (remote debugging, select, socket, curses, termios,
+  posixsubprocess, resource, multibytecodec).
+- `0ab5bc42f61` landed the test and C API modules.
 
-## Current workstream handoffs
+## What blocks the next step
 
-These are handoffs, not running agent assignments. The next coordinator assigns
-new bounded tasks after checking actual state.
+Debug `make -k python` (merged v23) fails only in `Python/getargs.c` (11 errors
+plus one `pymacro.h` expansion). A scratch link test showed that getargs.c's
+calls to deleted getters are the only undefined symbols. The release build shows
+the same core errors. Shared modules fail only in Argument Clinic generated
+headers and `Include/internal/pycore_modsupport.h:168`. All of this belongs to
+the [native-boundary](design/native-boundary.md) redesign.
 
-| Workstream | Ready or completed | Next gate |
-| --- | --- | --- |
-| [Consumer ports](stages/01-runtime/workstreams/consumers.md) | Datetime, itertools and enum full C files/objects pass; map reduction ported | Continue remaining builtin, exception, atexit, startup and bundled consumers |
-| [Type system](stages/01-runtime/workstreams/type-system.md) | Held projection materialized; lookup design accepted with exact erratum; guard design frozen | Fresh projection gates/commit; finish guard peer review; prepare lookup bulk implementation |
-| [Native boundaries](stages/01-runtime/workstreams/native-boundaries.md) | Export provider committed; B1/B2/C/public wrapper templates frozen | Independent coherent design review and remaining caller/Clinic recipes |
-| [Integration](stages/01-runtime/workstreams/integration.md) | Source checkpoint56 and merged v22 recorded | Integrate reviewed packets, rebuild, then qualify the linked candidate |
+## Active work packets
 
-The largest remaining concerns are the parser/caller closure, consumer ports,
-and concrete type lookup/version contracts. There is no reliable count of edits
-left or defensible completion date from the compiler-error total alone.
+- Native boundary P1 (borrow stack and getargs) and P2 (entry points):
+  implementation is running while the design is under independent review. Nothing
+  commits until review findings are folded in. P3 (remove owner scope from
+  Clinic and nine files) and P4 (FASTCALL boxing onto the stack) follow.
+- [PyValue](design/pyvalue.md): under independent review. Pre-baseline
+  hardening packet: G2, G3, G4, G6.1, G10, G11 (G1 is fixed).
+- [Register IR](design/register-ir.md): spec being written. Its author reports a
+  copy-propagation `f_locals` deviation on the interim build (`x + g()` returns
+  100 where upstream returns 1).
 
-Exact commits, paths, packet seals, known failures and the next execution sequence
-are in [HANDOFF](HANDOFF.md). The [short log](WORKLOG.md) records concluded
-experiments; individual records own their detailed evidence.
+After P1 and P2: first link, then first execution (`_freeze_module`), then the
+bring-up ladder, hardening, Clinic P3 and shared modules, test-suite triage, a
+release build and measurement.
+
+## Measurement setup
+
+- Debug build: `build/pyvalue-rc-debug-20261102-v1`. Release build directory:
+  `build/pyvalue-rc-release-20261103` (mimalloc, computed gotos, shapes, -O3).
+  Neither has produced an executable.
+- Upstream control: `build/upstream-release-3a440b6` (`3a440b65695`, -O3). It
+  passes `test_int`. The harness time metric works. The instruction metric is
+  blocked by `kernel.perf_event_paranoid=4`; the user was asked to lower it.
+
+## Stages
+
+Stage 1 ([runtime integration](stages/01-runtime/README.md)) is the critical
+path. Stage 2 ([baseline](stages/02-baseline/README.md)) is blocked by it.
+Stages [3](stages/03-method-jit/README.md), [4](stages/04-tracing-jit/README.md)
+and [5](stages/05-extensions/README.md) are deferred or waiting on the
+native-boundary design. See [HANDOFF](HANDOFF.md), [PROCESS](PROCESS.md) and
+[WORKLOG](WORKLOG.md).

@@ -201,8 +201,7 @@ pymain_sys_path_add_path0(PyObject *path0)
     PyInterpreterState *interp = _PyInterpreterState_GET();
     PyObject *sysdict = interp->sysdict;
     if (sysdict != NULL) {
-        sys_path = PyDict_GetItemWithError(sysdict, &_Py_ID(path));
-        if (sys_path == NULL && PyErr_Occurred()) {
+        if (PyDict_GetItemRef(sysdict, &_Py_ID(path), &sys_path) < 0) {
             return -1;
         }
     }
@@ -215,8 +214,10 @@ pymain_sys_path_add_path0(PyObject *path0)
     }
 
     if (PyList_Insert(sys_path, 0, path0)) {
+        Py_DECREF(sys_path);
         return -1;
     }
+    Py_DECREF(sys_path);
     return 0;
 }
 

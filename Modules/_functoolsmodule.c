@@ -6,7 +6,7 @@
 #include "pycore_object.h"        // _PyObject_GC_TRACK
 #include "pycore_pyatomic_ft_wrappers.h"
 #include "pycore_pystate.h"       // _PyThreadState_GET()
-#include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_tuple.h"         // _PyTuple_Recycle()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 #include "pycore_value.h"         // PyValue
 
@@ -171,12 +171,18 @@ partial_new(PyTypeObject *type, PyObject *args, PyObject *kw)
                         "type 'partial' takes at least one argument");
         return NULL;
     }
-    func = PyTuple_GET_ITEM(args, 0);
+    func = PyTuple_GetItemRef(args, 0);
+    if (func == NULL) {
+        return NULL;
+    }
     if (!PyCallable_Check(func)) {
+        Py_DECREF(func);
         PyErr_SetString(PyExc_TypeError,
                         "the first argument must be callable");
         return NULL;
     }
+    /* A callable is never an inline scalar, and args keeps it alive. */
+    Py_DECREF(func);
 
     _functools_state *state = get_functools_state_by_type(type);
     if (state == NULL) {
@@ -185,22 +191,31 @@ partial_new(PyTypeObject *type, PyObject *args, PyObject *kw)
     phold = state->placeholder;
 
     /* Placeholder restrictions */
-    if (new_nargs && PyTuple_GET_ITEM(args, new_nargs) == phold) {
-        PyErr_SetString(PyExc_TypeError,
-                        "trailing Placeholders are not allowed");
-        return NULL;
+    if (new_nargs) {
+        PyValue last = PyTuple_GET_VALUE(args, new_nargs);
+        if (PyValue_IsObject(last) && PyValue_AsPyObjectBorrow(last) == phold) {
+            PyErr_SetString(PyExc_TypeError,
+                            "trailing Placeholders are not allowed");
+            return NULL;
+        }
     }
 
     /* keyword Placeholder prohibition */
     if (kw != NULL) {
-        PyObject *key, *val;
+        PyObject *val;
         Py_ssize_t pos = 0;
-        while (PyDict_Next(kw, &pos, &key, &val)) {
-            if (val == phold) {
+        int status;
+        while ((status = PyDict_NextEntryRef(kw, &pos, NULL, &val)) > 0) {
+            int is_phold = (val == phold);
+            Py_DECREF(val);
+            if (is_phold) {
                 PyErr_SetString(PyExc_TypeError,
                                 "Placeholder cannot be passed as a keyword argument");
                 return NULL;
             }
+        }
+        if (status < 0) {
+            return NULL;
         }
     }
 
@@ -240,7 +255,8 @@ partial_new(PyTypeObject *type, PyObject *args, PyObject *kw)
     /* Count placeholders */
     Py_ssize_t phcount = 0;
     for (Py_ssize_t i = 0; i < new_nargs - 1; i++) {
-        if (PyTuple_GET_ITEM(new_args, i) == phold) {
+        PyValue item = PyTuple_GET_VALUE(new_args, i);
+        if (PyValue_IsObject(item) && PyValue_AsPyObjectBorrow(item) == phold) {
             phcount++;
         }
     }
@@ -260,18 +276,24 @@ partial_new(PyTypeObject *type, PyObject *args, PyObject *kw)
         }
         for (Py_ssize_t i = 0, j = 0; i < tot_nargs; i++) {
             if (i < npargs) {
-                item = PyTuple_GET_ITEM(pto_args, i);
-                if (j < new_nargs && item == phold) {
-                    item = PyTuple_GET_ITEM(new_args, j);
+                item = PyTuple_GetItemRef(pto_args, i);
+                if (item != NULL && j < new_nargs && item == phold) {
+                    Py_DECREF(item);
+                    item = PyTuple_GetItemRef(new_args, j);
                     j++;
                     pto_phcount--;
                 }
             }
             else {
-                item = PyTuple_GET_ITEM(new_args, j);
+                item = PyTuple_GetItemRef(new_args, j);
                 j++;
             }
-            Py_INCREF(item);
+            if (item == NULL) {
+                Py_DECREF(tot_args);
+                Py_DECREF(new_args);
+                Py_DECREF(pto);
+                return NULL;
+            }
             PyTuple_SET_ITEM(tot_args, i, item);
         }
         pto->args = tot_args;
@@ -388,30 +410,26 @@ partial_vectorcall(PyObject *self, PyObject *const *args,
     PyObject *partial_args = Py_NewRef(pto->args);
     PyObject *partial_keywords = Py_NewRef(pto->kw);
 
-    PyObject **pto_args = _PyTuple_ITEMS(partial_args);
     Py_ssize_t pto_nargs = PyTuple_GET_SIZE(partial_args);
     Py_ssize_t pto_nkwds = PyDict_GET_SIZE(partial_keywords);
     Py_ssize_t nkwds = kwnames == NULL ? 0 : PyTuple_GET_SIZE(kwnames);
-    Py_ssize_t nargskw = nargs + nkwds;
 
     /* Special cases */
     if (!pto_nkwds) {
-        /* Fast path if we're called without arguments */
-        if (nargskw == 0) {
-            result = _PyObject_VectorcallTstate(tstate, partial_function, pto_args,
-                                                pto_nargs, NULL);
-            goto done;
-        }
-
         /* Use PY_VECTORCALL_ARGUMENTS_OFFSET to prepend a single
          * positional argument. */
         if (pto_nargs == 1 && (nargsf & PY_VECTORCALL_ARGUMENTS_OFFSET)) {
+            PyObject *first = PyTuple_GetItemRef(partial_args, 0);
+            if (first == NULL) {
+                goto done;
+            }
             PyObject **newargs = (PyObject **)args - 1;
             PyObject *tmp = newargs[0];
-            newargs[0] = pto_args[0];
+            newargs[0] = first;
             result = _PyObject_VectorcallTstate(tstate, partial_function, newargs,
                                                 nargs + 1, kwnames);
             newargs[0] = tmp;
+            Py_DECREF(first);
             goto done;
         }
     }
@@ -447,12 +465,21 @@ partial_vectorcall(PyObject *self, PyObject *const *args,
         }
     }
 
+    /* The stack owns each of its first nstack entries; until the tail keys
+     * move into tot_kwnames, nstack also covers their temporary slots. */
+    Py_ssize_t nstack = init_stack_size;
+    for (Py_ssize_t i = 0; i < nstack; i++) {
+        stack[i] = NULL;
+    }
+
     /* Copy keywords to stack */
     if (!pto_nkwds) {
         tot_kwnames = kwnames;
         if (nkwds) {
             /* if !pto_nkwds & nkwds, then simply append kw */
-            memcpy(stack + tot_nargs, args + nargs, nkwds * sizeof(PyObject*));
+            for (Py_ssize_t i = 0; i < nkwds; i++) {
+                stack[tot_nargs + i] = Py_NewRef(args[nargs + i]);
+            }
         }
     }
     else {
@@ -463,27 +490,37 @@ partial_vectorcall(PyObject *self, PyObject *const *args,
         /* Merge kw to pto_kw or add to tail (if not duplicate) */
         Py_ssize_t n_tail = 0;
         for (Py_ssize_t i = 0; i < nkwds; ++i) {
-            key = PyTuple_GET_ITEM(kwnames, i);
+            /* A key may be an inline scalar; the callee rejects non-str. */
+            key = PyTuple_GetItemRef(kwnames, i);
+            if (key == NULL) {
+                Py_XDECREF(pto_kw_merged);
+                goto clean_stack;
+            }
             val = args[nargs + i];
             int contains = PyDict_Contains(partial_keywords, key);
             if (contains < 0) {
+                Py_DECREF(key);
+                Py_XDECREF(pto_kw_merged);
                 goto clean_stack;
             }
             else if (contains == 1) {
                 if (pto_kw_merged == NULL) {
                     pto_kw_merged = PyDict_Copy(partial_keywords);
                     if (pto_kw_merged == NULL) {
+                        Py_DECREF(key);
                         goto clean_stack;
                     }
                 }
-                if (PyDict_SetItem(pto_kw_merged, key, val) < 0) {
+                int err = PyDict_SetItem(pto_kw_merged, key, val);
+                Py_DECREF(key);
+                if (err < 0) {
                     Py_DECREF(pto_kw_merged);
                     goto clean_stack;
                 }
             }
             else {
                 /* Copy keyword tail to stack */
-                stack[tot_nargs + pto_nkwds + n_tail] = val;
+                stack[tot_nargs + pto_nkwds + n_tail] = Py_NewRef(val);
                 stack[tot_nargskw + n_tail] = key;
                 n_tail++;
             }
@@ -497,24 +534,32 @@ partial_vectorcall(PyObject *self, PyObject *const *args,
             goto clean_stack;
         }
         for (Py_ssize_t i = 0; i < n_tail; ++i) {
-            key = Py_NewRef(stack[tot_nargskw + i]);
+            /* The tuple takes over the owned key. */
+            key = stack[tot_nargskw + i];
+            stack[tot_nargskw + i] = NULL;
             PyTuple_SET_ITEM(tot_kwnames, pto_nkwds + i, key);
         }
+        nstack = tot_nargskw - n_merges;
 
         /* Copy pto_keywords with overlapping call keywords merged
          * Note, tail is already coppied. */
         Py_ssize_t pos = 0, i = 0;
         PyObject *keyword_dict = n_merges ? pto_kw_merged : partial_keywords;
+        int status;
         Py_BEGIN_CRITICAL_SECTION(keyword_dict);
-        while (PyDict_Next(keyword_dict, &pos, &key, &val)) {
+        while ((status = PyDict_NextEntryRef(keyword_dict, &pos, &key, &val)) > 0) {
             assert(i < pto_nkwds);
-            PyTuple_SET_ITEM(tot_kwnames, i, Py_NewRef(key));
+            PyTuple_SET_ITEM(tot_kwnames, i, key);
             stack[tot_nargs + i] = val;
             i++;
         }
         Py_END_CRITICAL_SECTION();
-        assert(i == pto_nkwds);
         Py_XDECREF(pto_kw_merged);
+        if (status < 0) {
+            Py_DECREF(tot_kwnames);
+            goto clean_stack;
+        }
+        assert(i == pto_nkwds);
 
         /* Resize Stack if the removing overallocation saves some noticable memory
          * NOTE: This whole block can be removed without breaking anything */
@@ -534,32 +579,49 @@ partial_vectorcall(PyObject *self, PyObject *const *args,
     if (pto_phcount) {
         Py_ssize_t j = 0;       // New args index
         for (Py_ssize_t i = 0; i < pto_nargs; i++) {
-            if (pto_args[i] == pto->placeholder) {
-                stack[i] = args[j];
+            PyObject *item = PyTuple_GetItemRef(partial_args, i);
+            if (item == NULL) {
+                goto clean_kwnames;
+            }
+            if (item == pto->placeholder) {
+                Py_DECREF(item);
+                item = Py_NewRef(args[j]);
                 j += 1;
             }
-            else {
-                stack[i] = pto_args[i];
-            }
+            stack[i] = item;
         }
         assert(j == pto_phcount);
         /* Add remaining args from new_args */
         if (nargs > pto_phcount) {
-            memcpy(stack + pto_nargs, args + j, (nargs - j) * sizeof(PyObject*));
+            for (Py_ssize_t i = j; i < nargs; i++) {
+                stack[pto_nargs + i - j] = Py_NewRef(args[i]);
+            }
         }
     }
     else {
-        memcpy(stack, pto_args, pto_nargs * sizeof(PyObject*));
-        memcpy(stack + pto_nargs, args, nargs * sizeof(PyObject*));
+        for (Py_ssize_t i = 0; i < pto_nargs; i++) {
+            stack[i] = PyTuple_GetItemRef(partial_args, i);
+            if (stack[i] == NULL) {
+                goto clean_kwnames;
+            }
+        }
+        for (Py_ssize_t i = 0; i < nargs; i++) {
+            stack[pto_nargs + i] = Py_NewRef(args[i]);
+        }
     }
 
     result = _PyObject_VectorcallTstate(tstate, partial_function, stack,
                                         tot_nargs, tot_kwnames);
+
+ clean_kwnames:
     if (pto_nkwds) {
         Py_DECREF(tot_kwnames);
     }
 
  clean_stack:
+    for (Py_ssize_t i = 0; i < nstack; i++) {
+        Py_XDECREF(stack[i]);
+    }
     if (stack != small_stack) {
         PyMem_Free(stack);
     }
@@ -644,18 +706,27 @@ partial_call(PyObject *self, PyObject *args, PyObject *kwargs)
         PyObject *item;
         Py_ssize_t j = 0;   // New args index
         for (Py_ssize_t i = 0; i < pto_nargs; i++) {
-            item = PyTuple_GET_ITEM(pto_args, i);
-            if (item == pto->placeholder) {
-                item = PyTuple_GET_ITEM(args, j);
+            item = PyTuple_GetItemRef(pto_args, i);
+            if (item != NULL && item == pto->placeholder) {
+                Py_DECREF(item);
+                item = PyTuple_GetItemRef(args, j);
                 j += 1;
             }
-            Py_INCREF(item);
+            if (item == NULL) {
+                Py_DECREF(tot_args);
+                Py_XDECREF(tot_kw);
+                return NULL;
+            }
             PyTuple_SET_ITEM(tot_args, i, item);
         }
         assert(j == pto_phcount);
         for (Py_ssize_t i = pto_nargs; i < tot_nargs; i++) {
-            item = PyTuple_GET_ITEM(args, j);
-            Py_INCREF(item);
+            item = PyTuple_GetItemRef(args, j);
+            if (item == NULL) {
+                Py_DECREF(tot_args);
+                Py_XDECREF(tot_kw);
+                return NULL;
+            }
             PyTuple_SET_ITEM(tot_args, i, item);
             j += 1;
         }
@@ -735,25 +806,33 @@ partial_repr(PyObject *self)
     /* Pack positional arguments */
     n = PyTuple_GET_SIZE(args);
     for (i = 0; i < n; i++) {
-        Py_SETREF(arglist, PyUnicode_FromFormat("%U, %R", arglist,
-                                        PyTuple_GET_ITEM(args, i)));
+        PyObject *arg = PyTuple_GetItemRef(args, i);
+        if (arg == NULL) {
+            goto done;
+        }
+        Py_SETREF(arglist, PyUnicode_FromFormat("%U, %R", arglist, arg));
+        Py_DECREF(arg);
         if (arglist == NULL) {
             goto done;
         }
     }
     /* Pack keyword arguments */
     int error = 0;
+    i = 0;
     Py_BEGIN_CRITICAL_SECTION(kw);
-    for (i = 0; PyDict_Next(kw, &i, &key, &value);) {
-        /* Prevent key.__str__ from deleting the value. */
-        Py_INCREF(value);
+    while ((status = PyDict_NextEntryRef(kw, &i, &key, &value)) > 0) {
+        /* The owned entry keeps key.__str__ from deleting the value. */
         Py_SETREF(arglist, PyUnicode_FromFormat("%U, %S=%R", arglist,
                                                 key, value));
+        Py_DECREF(key);
         Py_DECREF(value);
         if (arglist == NULL) {
             error = 1;
             break;
         }
+    }
+    if (status < 0) {
+        error = 1;
     }
     Py_END_CRITICAL_SECTION();
     if (error) {
@@ -819,15 +898,21 @@ partial_setstate(PyObject *self, PyObject *state)
     }
 
     Py_ssize_t nargs = PyTuple_GET_SIZE(fnargs);
-    if (nargs && PyTuple_GET_ITEM(fnargs, nargs - 1) == pto->placeholder) {
-        PyErr_SetString(PyExc_TypeError,
-                        "trailing Placeholders are not allowed");
-        return NULL;
+    if (nargs) {
+        PyValue last = PyTuple_GET_VALUE(fnargs, nargs - 1);
+        if (PyValue_IsObject(last) &&
+            PyValue_AsPyObjectBorrow(last) == pto->placeholder) {
+            PyErr_SetString(PyExc_TypeError,
+                            "trailing Placeholders are not allowed");
+            return NULL;
+        }
     }
     /* Count placeholders */
     Py_ssize_t phcount = 0;
     for (Py_ssize_t i = 0; i < nargs - 1; i++) {
-        if (PyTuple_GET_ITEM(fnargs, i) == pto->placeholder) {
+        PyValue item = PyTuple_GET_VALUE(fnargs, i);
+        if (PyValue_IsObject(item) &&
+            PyValue_AsPyObjectBorrow(item) == pto->placeholder) {
             phcount++;
         }
     }
@@ -1128,8 +1213,12 @@ _functools_reduce_impl(PyObject *module, PyObject *func, PyObject *seq,
         else {
             /* Update the args tuple in-place */
             assert(Py_REFCNT(args) == 1);
-            Py_XSETREF(_PyTuple_ITEMS(args)[0], result);
-            Py_XSETREF(_PyTuple_ITEMS(args)[1], op2);
+            /* PyTuple_SetItem steals both references, even on failure. */
+            int err = PyTuple_SetItem(args, 0, result);
+            result = NULL;
+            if (PyTuple_SetItem(args, 1, op2) < 0 || err < 0) {
+                goto Fail;
+            }
             if ((result = PyObject_Call(func, args, NULL)) == NULL) {
                 goto Fail;
             }

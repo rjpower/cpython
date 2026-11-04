@@ -699,7 +699,13 @@ run_at_forkers(PyObject *lst, int reverse)
                 PyList_Reverse(cpy);
             for (i = 0; i < PyList_GET_SIZE(cpy); i++) {
                 PyObject *func, *res;
-                func = PyList_GET_ITEM(cpy, i);
+                func = PyList_GetItemRef(cpy, i);
+                if (func == NULL) {
+                    PyErr_FormatUnraisable("Exception ignored in atfork "
+                                           "callback while reading list %R",
+                                           lst);
+                    continue;
+                }
                 res = _PyObject_CallNoArgs(func);
                 if (res == NULL) {
                     PyErr_FormatUnraisable("Exception ignored "
@@ -708,6 +714,7 @@ run_at_forkers(PyObject *lst, int reverse)
                 else {
                     Py_DECREF(res);
                 }
+                Py_DECREF(func);
             }
             Py_DECREF(cpy);
         }
@@ -2601,9 +2608,21 @@ statresult_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
        st_?time might be set to None. Initialize it
        from the int slots.  */
     for (i = 7; i <= 9; i++) {
-        if (result->ob_item[i+3] == Py_None) {
+        PyObject *time_obj = PyStructSequence_GetItemRef((PyObject *)result, i+3);
+        if (time_obj == NULL) {
+            Py_DECREF(result);
+            return NULL;
+        }
+        int is_none = (time_obj == Py_None);
+        Py_DECREF(time_obj);
+        if (is_none) {
+            PyObject *int_obj = PyStructSequence_GetItemRef((PyObject *)result, i);
+            if (int_obj == NULL) {
+                Py_DECREF(result);
+                return NULL;
+            }
             Py_DECREF(Py_None);
-            result->ob_item[i+3] = Py_NewRef(result->ob_item[i]);
+            PyStructSequence_SetItem((PyObject *)result, i+3, int_obj);
         }
     }
     return (PyObject*)result;
@@ -7046,10 +7065,18 @@ split_py_long_to_s_and_ns(PyObject *module, PyObject *py_long, time_t *s, long *
                      _PyType_Name(Py_TYPE(py_long)), _PyType_Name(Py_TYPE(divmod)));
         goto exit;
     }
-    *s = _PyLong_AsTime_t(PyTuple_GET_ITEM(divmod, 0));
+    PyObject *sec = PyTuple_GetItemRef(divmod, 0);
+    if (sec == NULL)
+        goto exit;
+    *s = _PyLong_AsTime_t(sec);
+    Py_DECREF(sec);
     if ((*s == -1) && PyErr_Occurred())
         goto exit;
-    *ns = PyLong_AsLong(PyTuple_GET_ITEM(divmod, 1));
+    PyObject *nsec = PyTuple_GetItemRef(divmod, 1);
+    if (nsec == NULL)
+        goto exit;
+    *ns = PyLong_AsLong(nsec);
+    Py_DECREF(nsec);
     if ((*ns == -1) && PyErr_Occurred())
         goto exit;
 
@@ -7130,10 +7157,22 @@ os_utime_impl(PyObject *module, path_t *path, PyObject *times, PyObject *ns,
             return NULL;
         }
         utime.now = 0;
-        if (_PyTime_ObjectToTimespec(PyTuple_GET_ITEM(times, 0),
-                                     &a_sec, &a_nsec, _PyTime_ROUND_FLOOR) == -1 ||
-            _PyTime_ObjectToTimespec(PyTuple_GET_ITEM(times, 1),
-                                     &m_sec, &m_nsec, _PyTime_ROUND_FLOOR) == -1) {
+        PyObject *atime = PyTuple_GetItemRef(times, 0);
+        if (atime == NULL) {
+            return NULL;
+        }
+        PyObject *mtime = PyTuple_GetItemRef(times, 1);
+        if (mtime == NULL) {
+            Py_DECREF(atime);
+            return NULL;
+        }
+        int err = (_PyTime_ObjectToTimespec(atime, &a_sec, &a_nsec,
+                                            _PyTime_ROUND_FLOOR) == -1 ||
+                   _PyTime_ObjectToTimespec(mtime, &m_sec, &m_nsec,
+                                            _PyTime_ROUND_FLOOR) == -1);
+        Py_DECREF(atime);
+        Py_DECREF(mtime);
+        if (err) {
             return NULL;
         }
         utime.atime_s = a_sec;
@@ -7148,10 +7187,22 @@ os_utime_impl(PyObject *module, path_t *path, PyObject *times, PyObject *ns,
             return NULL;
         }
         utime.now = 0;
-        if (!split_py_long_to_s_and_ns(module, PyTuple_GET_ITEM(ns, 0),
-                                      &utime.atime_s, &utime.atime_ns) ||
-            !split_py_long_to_s_and_ns(module, PyTuple_GET_ITEM(ns, 1),
-                                       &utime.mtime_s, &utime.mtime_ns)) {
+        PyObject *ns_atime = PyTuple_GetItemRef(ns, 0);
+        if (ns_atime == NULL) {
+            return NULL;
+        }
+        PyObject *ns_mtime = PyTuple_GetItemRef(ns, 1);
+        if (ns_mtime == NULL) {
+            Py_DECREF(ns_atime);
+            return NULL;
+        }
+        int ok = (split_py_long_to_s_and_ns(module, ns_atime,
+                                            &utime.atime_s, &utime.atime_ns) &&
+                  split_py_long_to_s_and_ns(module, ns_mtime,
+                                            &utime.mtime_s, &utime.mtime_ns));
+        Py_DECREF(ns_atime);
+        Py_DECREF(ns_mtime);
+        if (!ok) {
             return NULL;
         }
     }
@@ -7800,14 +7851,23 @@ parse_file_actions(PyObject *file_actions,
     }
 
     for (Py_ssize_t i = 0; i < PySequence_Fast_GET_SIZE(seq); ++i) {
-        file_action = PySequence_Fast_GET_ITEM(seq, i);
-        Py_INCREF(file_action);
+        /* PySequence_Fast returns an exact list or tuple. */
+        file_action = PyList_CheckExact(seq) ? PyList_GetItemRef(seq, i)
+                                             : PyTuple_GetItemRef(seq, i);
+        if (file_action == NULL) {
+            goto fail;
+        }
         if (!PyTuple_Check(file_action) || !PyTuple_GET_SIZE(file_action)) {
             PyErr_SetString(PyExc_TypeError,
                 "Each file_actions element must be a non-empty tuple");
             goto fail;
         }
-        long tag = PyLong_AsLong(PyTuple_GET_ITEM(file_action, 0));
+        PyObject *tag_item = PyTuple_GetItemRef(file_action, 0);
+        if (tag_item == NULL) {
+            goto fail;
+        }
+        long tag = PyLong_AsLong(tag_item);
+        Py_DECREF(tag_item);
         if (tag == -1 && PyErr_Occurred()) {
             goto fail;
         }
@@ -7902,7 +7962,7 @@ parse_file_actions(PyObject *file_actions,
 
 fail:
     Py_DECREF(seq);
-    Py_DECREF(file_action);
+    Py_XDECREF(file_action);
     (void)posix_spawn_file_actions_destroy(file_actionsp);
     return -1;
 }
@@ -8807,7 +8867,13 @@ os_sched_param_impl(PyTypeObject *type, PyObject *sched_priority)
 static PyObject *
 os_sched_param_reduce(PyObject *self, PyObject *Py_UNUSED(dummy))
 {
-    return Py_BuildValue("(O(O))", Py_TYPE(self), PyStructSequence_GetItem(self, 0));
+    PyObject *priority = PyStructSequence_GetItemRef(self, 0);
+    if (priority == NULL) {
+        return NULL;
+    }
+    PyObject *res = Py_BuildValue("(O(O))", Py_TYPE(self), priority);
+    Py_DECREF(priority);
+    return res;
 }
 
 static PyMethodDef os_sched_param_reduce_method = {
@@ -8837,7 +8903,12 @@ convert_sched_param(PyObject *module, PyObject *param, struct sched_param *res)
         PyErr_SetString(PyExc_TypeError, "must have a sched_param object");
         return 0;
     }
-    priority = PyLong_AsLong(PyStructSequence_GET_ITEM(param, 0));
+    PyObject *priority_obj = PyStructSequence_GetItemRef(param, 0);
+    if (priority_obj == NULL) {
+        return 0;
+    }
+    priority = PyLong_AsLong(priority_obj);
+    Py_DECREF(priority_obj);
     if (priority == -1 && PyErr_Occurred())
         return 0;
     if (priority > INT_MAX || priority < INT_MIN) {

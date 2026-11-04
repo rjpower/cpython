@@ -474,11 +474,25 @@ future_schedule_callbacks(asyncio_state *state, FutureObj *fut)
     Py_ssize_t n = PyList_GET_SIZE(callbacks);
     for (Py_ssize_t i = 0; i < n; i++) {
         assert(PyList_GET_SIZE(callbacks) == n);
-        PyObject *cb_tup = PyList_GET_ITEM(callbacks, i);
-        PyObject *cb = PyTuple_GET_ITEM(cb_tup, 0);
-        PyObject *ctx = PyTuple_GET_ITEM(cb_tup, 1);
+        PyObject *cb_tup = PyList_GetItemRef(callbacks, i);
+        if (cb_tup == NULL) {
+            Py_DECREF(callbacks);
+            return -1;
+        }
+        PyObject *cb = PyTuple_GetItemRef(cb_tup, 0);
+        PyObject *ctx = PyTuple_GetItemRef(cb_tup, 1);
+        Py_DECREF(cb_tup);
+        if (cb == NULL || ctx == NULL) {
+            Py_XDECREF(cb);
+            Py_XDECREF(ctx);
+            Py_DECREF(callbacks);
+            return -1;
+        }
 
-        if (call_soon(state, fut->fut_loop, cb, (PyObject *)fut, ctx)) {
+        int err = call_soon(state, fut->fut_loop, cb, (PyObject *)fut, ctx);
+        Py_DECREF(cb);
+        Py_DECREF(ctx);
+        if (err) {
             Py_DECREF(callbacks);
             return -1;
         }
@@ -1164,11 +1178,17 @@ _asyncio_Future_remove_done_callback_impl(FutureObj *self, PyTypeObject *cls,
     }
 
     if (len == 1) {
-        PyObject *cb_tup = PyList_GET_ITEM(self->fut_callbacks, 0);
-        Py_INCREF(cb_tup);
-        int cmp = PyObject_RichCompareBool(
-            PyTuple_GET_ITEM(cb_tup, 0), fn, Py_EQ);
+        PyObject *cb_tup = PyList_GetItemRef(self->fut_callbacks, 0);
+        if (cb_tup == NULL) {
+            return NULL;
+        }
+        PyObject *cb = PyTuple_GetItemRef(cb_tup, 0);
         Py_DECREF(cb_tup);
+        if (cb == NULL) {
+            return NULL;
+        }
+        int cmp = PyObject_RichCompareBool(cb, fn, Py_EQ);
+        Py_DECREF(cb);
         if (cmp == -1) {
             return NULL;
         }
@@ -1192,9 +1212,17 @@ _asyncio_Future_remove_done_callback_impl(FutureObj *self, PyTypeObject *cls,
          self->fut_callbacks != NULL && i < PyList_GET_SIZE(self->fut_callbacks);
          i++) {
         int ret;
-        PyObject *item = PyList_GET_ITEM(self->fut_callbacks, i);
-        Py_INCREF(item);
-        ret = PyObject_RichCompareBool(PyTuple_GET_ITEM(item, 0), fn, Py_EQ);
+        PyObject *item = PyList_GetItemRef(self->fut_callbacks, i);
+        if (item == NULL) {
+            goto fail;
+        }
+        PyObject *cb = PyTuple_GetItemRef(item, 0);
+        if (cb == NULL) {
+            Py_DECREF(item);
+            goto fail;
+        }
+        ret = PyObject_RichCompareBool(cb, fn, Py_EQ);
+        Py_DECREF(cb);
         if (ret == 0) {
             if (j < len) {
                 PyList_SET_ITEM(newlist, j, item);
@@ -1477,8 +1505,11 @@ _asyncio_Future__callbacks_get_impl(FutureObj *self)
 
     if (self->fut_callbacks != NULL) {
         for (Py_ssize_t j = 0; j < PyList_GET_SIZE(self->fut_callbacks); j++) {
-            PyObject *cb = PyList_GET_ITEM(self->fut_callbacks, j);
-            Py_INCREF(cb);
+            PyObject *cb = PyList_GetItemRef(self->fut_callbacks, j);
+            if (cb == NULL) {
+                Py_DECREF(callbacks);
+                return NULL;
+            }
             PyList_SET_ITEM(callbacks, i, cb);
             i++;
         }
@@ -4104,8 +4135,16 @@ _asyncio_all_tasks_impl(PyObject *module, PyObject *loop)
     }
 
     for (Py_ssize_t i = 0; i < PyList_GET_SIZE(tasks); i++) {
-        PyObject *task = PyList_GET_ITEM(tasks, i);
-        if (add_one_task(state, res, task, loop) < 0) {
+        PyObject *task = PyList_GetItemRef(tasks, i);
+        if (task == NULL) {
+            Py_DECREF(res);
+            Py_DECREF(tasks);
+            Py_DECREF(loop);
+            return NULL;
+        }
+        int err = add_one_task(state, res, task, loop);
+        Py_DECREF(task);
+        if (err < 0) {
             Py_DECREF(res);
             Py_DECREF(tasks);
             Py_DECREF(loop);

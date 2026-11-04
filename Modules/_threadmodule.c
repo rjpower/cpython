@@ -1877,8 +1877,12 @@ local_getattro(PyObject *op, PyObject *name)
 static PyObject *
 clear_locals(PyObject *locals_and_key, PyObject *dummyweakref)
 {
-    PyObject *localweakref = PyTuple_GetItem(locals_and_key, 0);
+    PyObject *localweakref = PyTuple_GetItemRef(locals_and_key, 0);
+    if (localweakref == NULL) {
+        return NULL;
+    }
     localobject *self = localobject_CAST(_PyWeakref_GET_REF(localweakref));
+    Py_DECREF(localweakref);
     if (self == NULL) {
         Py_RETURN_NONE;
     }
@@ -1886,11 +1890,16 @@ clear_locals(PyObject *locals_and_key, PyObject *dummyweakref)
     /* If the thread-local object is still alive and not being cleared,
        remove the corresponding local dict */
     if (self->localdicts != NULL) {
-        PyObject *key = PyTuple_GetItem(locals_and_key, 1);
+        PyObject *key = PyTuple_GetItemRef(locals_and_key, 1);
+        if (key == NULL) {
+            Py_DECREF(self);
+            return NULL;
+        }
         if (PyDict_Pop(self->localdicts, key, NULL) < 0) {
             PyErr_FormatUnraisable("Exception ignored while clearing "
                                    "thread local %R", (PyObject *)self);
         }
+        Py_DECREF(key);
     }
     if (self->thread_watchdogs != NULL) {
         if (PySet_Discard(self->thread_watchdogs, dummyweakref) < 0) {
@@ -2376,49 +2385,62 @@ _thread__excepthook(PyObject *module, PyObject *args)
         return NULL;
     }
 
-    /* Borrowed reference */
-    PyObject *exc_type = PyStructSequence_GET_ITEM(args, 0);
+    PyObject *exc_type = PyStructSequence_GetItemRef(args, 0);
+    if (exc_type == NULL) {
+        return NULL;
+    }
     if (exc_type == PyExc_SystemExit) {
         /* silently ignore SystemExit */
+        Py_DECREF(exc_type);
         Py_RETURN_NONE;
     }
 
-    /* Borrowed references */
-    PyObject *exc_value = PyStructSequence_GET_ITEM(args, 1);
-    PyObject *exc_tb = PyStructSequence_GET_ITEM(args, 2);
-    PyObject *thread = PyStructSequence_GET_ITEM(args, 3);
+    PyObject *exc_value = PyStructSequence_GetItemRef(args, 1);
+    PyObject *exc_tb = PyStructSequence_GetItemRef(args, 2);
+    PyObject *thread = PyStructSequence_GetItemRef(args, 3);
+    PyObject *file = NULL;
+    PyObject *result = NULL;
+    if (exc_value == NULL || exc_tb == NULL || thread == NULL) {
+        goto done;
+    }
 
-    PyObject *file;
     if (PySys_GetOptionalAttr( &_Py_ID(stderr), &file) < 0) {
-        return NULL;
+        goto done;
     }
     if (file == NULL || file == Py_None) {
         Py_XDECREF(file);
+        file = NULL;
         if (thread == Py_None) {
             /* do nothing if sys.stderr is None and thread is None */
-            Py_RETURN_NONE;
+            result = Py_None;
+            goto done;
         }
 
         file = PyObject_GetAttrString(thread, "_stderr");
         if (file == NULL) {
-            return NULL;
+            goto done;
         }
         if (file == Py_None) {
-            Py_DECREF(file);
             /* do nothing if sys.stderr is None and sys.stderr was None
                when the thread was created */
-            Py_RETURN_NONE;
+            result = Py_None;
+            goto done;
         }
     }
 
-    int res = thread_excepthook_file(file, exc_type, exc_value, exc_tb,
-                                     thread);
-    Py_DECREF(file);
-    if (res < 0) {
-        return NULL;
+    if (thread_excepthook_file(file, exc_type, exc_value, exc_tb,
+                               thread) < 0) {
+        goto done;
     }
+    result = Py_None;
 
-    Py_RETURN_NONE;
+done:
+    Py_XDECREF(file);
+    Py_DECREF(exc_type);
+    Py_XDECREF(exc_value);
+    Py_XDECREF(exc_tb);
+    Py_XDECREF(thread);
+    return Py_XNewRef(result);
 }
 
 /*[clinic input]

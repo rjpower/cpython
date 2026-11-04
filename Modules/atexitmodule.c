@@ -124,14 +124,23 @@ atexit_callfuncs(struct atexit_state *state)
     }
 
     for (Py_ssize_t i = 0; i < PyList_GET_SIZE(copy); ++i) {
-        // We don't have to worry about evil borrowed references, because
-        // no other threads can access this list.
-        PyObject *tuple = PyList_GET_ITEM(copy, i);
+        PyObject *tuple = PyList_GetItemRef(copy, i);
+        if (tuple == NULL) {
+            PyErr_FormatUnraisable("Exception ignored while "
+                                   "reading atexit callbacks");
+            continue;
+        }
         assert(PyTuple_CheckExact(tuple));
 
-        PyObject *func = PyTuple_GET_ITEM(tuple, 0);
-        PyObject *args = PyTuple_GET_ITEM(tuple, 1);
-        PyObject *kwargs = PyTuple_GET_ITEM(tuple, 2);
+        PyObject *func = PyTuple_GetItemRef(tuple, 0);
+        PyObject *args = PyTuple_GetItemRef(tuple, 1);
+        PyObject *kwargs = PyTuple_GetItemRef(tuple, 2);
+        Py_DECREF(tuple);
+        if (func == NULL || args == NULL || kwargs == NULL) {
+            PyErr_FormatUnraisable("Exception ignored while "
+                                   "reading atexit callbacks");
+            goto next;
+        }
 
         PyObject *res = PyObject_Call(func,
                                       args,
@@ -143,6 +152,10 @@ atexit_callfuncs(struct atexit_state *state)
         else {
             Py_DECREF(res);
         }
+next:
+        Py_XDECREF(func);
+        Py_XDECREF(args);
+        Py_XDECREF(kwargs);
     }
 
     Py_DECREF(copy);
@@ -257,10 +270,18 @@ static int
 atexit_unregister_locked(PyObject *callbacks, PyObject *func)
 {
     for (Py_ssize_t i = PyList_GET_SIZE(callbacks) - 1; i >= 0; --i) {
-        PyObject *tuple = Py_NewRef(PyList_GET_ITEM(callbacks, i));
+        PyObject *tuple = PyList_GetItemRef(callbacks, i);
+        if (tuple == NULL) {
+            return -1;
+        }
         assert(PyTuple_CheckExact(tuple));
-        PyObject *to_compare = PyTuple_GET_ITEM(tuple, 0);
+        PyObject *to_compare = PyTuple_GetItemRef(tuple, 0);
+        if (to_compare == NULL) {
+            Py_DECREF(tuple);
+            return -1;
+        }
         int cmp = PyObject_RichCompareBool(func, to_compare, Py_EQ);
+        Py_DECREF(to_compare);
         if (cmp < 0) {
             Py_DECREF(tuple);
             return -1;
@@ -272,7 +293,14 @@ atexit_unregister_locked(PyObject *callbacks, PyObject *func)
             Py_ssize_t j = PyList_GET_SIZE(callbacks) - 1;
             j = Py_MIN(j, i);
             for (; j >= 0; --j) {
-                if (PyList_GET_ITEM(callbacks, j) == tuple) {
+                PyObject *item = PyList_GetItemRef(callbacks, j);
+                if (item == NULL) {
+                    Py_DECREF(tuple);
+                    return -1;
+                }
+                int same = (item == tuple);
+                Py_DECREF(item);
+                if (same) {
                     // We found the callback index! For real!
                     if (PyList_SetSlice(callbacks, j, j + 1, NULL) < 0) {
                         Py_DECREF(tuple);

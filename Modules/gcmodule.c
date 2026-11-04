@@ -275,18 +275,25 @@ static int
 append_referrents(PyObject *result, PyObject *args)
 {
     for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(args); i++) {
-        PyObject *obj = PyTuple_GET_ITEM(args, i);
+        PyObject *obj = PyTuple_GetItemRef(args, i);
+        if (obj == NULL) {
+            return -1;
+        }
         if (!_PyObject_IS_GC(obj)) {
+            Py_DECREF(obj);
             continue;
         }
 
         traverseproc traverse = Py_TYPE(obj)->tp_traverse;
         if (!traverse) {
+            Py_DECREF(obj);
             continue;
         }
         if (traverse(obj, referentsvisit, result)) {
+            Py_DECREF(obj);
             return -1;
         }
+        Py_DECREF(obj);
     }
     return 0;
 }

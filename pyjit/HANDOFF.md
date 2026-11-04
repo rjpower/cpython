@@ -80,12 +80,17 @@ so pystats dispatch counts do not see it. A `pybuilddir.txt` of `none` makes a
 release build 5 to 12x slower; check it. `perf` is blocked
 (`perf_event_paranoid=4`); `tools/sampler/` has an LD_PRELOAD SIGPROF sampler.
 
-Running now: integration of representation 9a/9b (`STEP9-BRIEF.md`,
-`repr-step9-notes.md`, review `review-repr-step9.md`) and the failures
-triage (`FAILURES-BRIEF.md`, `failures-notes.md`, review
-`review-failures.md`) onto A5a in the shared tree, by the step 9 agent.
+Running now, briefs in `build/pyjit-link-wave1/`: the re-measure
+(`REMEASURE2-BRIEF.md`; it times in a quiet window), A5b phase 1, the
+typed-borrow proposal (`A5B-BRIEF.md`; writes
+`pyjit/design/proposals/register-ir-v2-a5b.md`), and a Sonnet design-doc sync
+for A5a and int51.
 
 Landed on the runtime branch, newest first:
+
+- `5de7bd62ef9`, `80bb9c84701`, `bf0639df819`: release-order fixes and stale
+  fork tests (9 of 11 long-standing failures); int51 in the trace JIT (9b)
+  and in the runtime and interpreter (9a).
 
 - `3e28e1755bd`, `d60d3be46d6`, `3c7ac067f7f`: register IR v2 A5a
   (post-review generator rules; no frame slot holds a borrow; the checker).
@@ -196,16 +201,13 @@ overwritten.
 
 ## Next steps
 
-1. Commit the step 9 and failures integration as three commits
-   (`repr-step9a-int`, `repr-step9b-int`, `failures-int`); then a Sonnet
-   design-doc sync from the A5a and step 9 notes' proposed sentences.
-2. Then A5b (with the constructor renames deferred from step 8), then
-   A3a-A3c, the G2 experiment, B0b and the format steps B2-B7
+1. Review the A5b proposal (critical review; it changes every core
+   signature that takes a borrow), then send phase 2; integrate the
+   re-measure report and the doc sync.
+2. Then A3a-A3c, the G2 experiment, B0b and the format steps B2-B7
    ([packet](design/proposals/register-ir-v2-packet.md)).
 3. Value API V1 follow-ups (`FOLLOWUPS.md`), then V2a-0 onwards.
-4. The remaining 11 failures (test_capi 2, test_pyvalue_dict_vm 4,
-   test_pyvalue_native_scope 5): the triage is running; route its proposals
-   for A5a to that agent.
+4. The two `test_capi` refcount failures: open for IR v2 B5 (call forms).
 
 Use the time metric; the instruction-count metric needs `perf_event_paranoid`
 lowered, which the user has not done. Do not present host controls, object files

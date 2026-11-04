@@ -1,6 +1,6 @@
 # Project status
 
-Status as of 2026-11-04 09:30 PST, from the coordinator fact sheet. Update this
+Status as of 2026-11-04 10:10 PST, from the coordinator fact sheet. Update this
 page at each landing.
 
 ## Outcome and next milestone
@@ -38,7 +38,7 @@ v2 phase A) addressed, then the qualified baseline.
 
 ## Position
 
-- Runtime branch `boil/pyvalue-rc-universal`, HEAD `3e28e1755bd`.
+- Runtime branch `boil/pyvalue-rc-universal`, HEAD `5de7bd62ef9`.
 - Landed 2026-11-03: native boundary P3 (`56ff66a596b`, `643c69c7244`,
   `6d39221996d`) and P4 (`2558376b321`, post-review fixes `fdd7fed3216`);
   representation steps 1 (`f129780a9a7`), 2 (`f7dfc5b961f`), 3 (`dbce7b1260d`,
@@ -96,10 +96,20 @@ v2 phase A) addressed, then the qualified baseline.
   post-review: the generator follows copies and object pointers of in-place
   inputs. Release loop 308,756 to 279,995 B; kernel time 0.939-0.949 of
   `c8637fe7c6b` (information, not a gate).
-- Suites at `3e28e1755bd`, debug and release alike: run=51,557, failures=11.
-  Failing files: test_capi (2: test_is_unique_temporary,
-  test_unicode.test_new), test_pyvalue_dict_vm (4), test_pyvalue_native_scope
-  (5). `make check-value-api`: 177 units, 0 findings.
+- Landed 2026-11-04 (continued): representation step 9a (`bf0639df819`,
+  inline ints are int51; numeric guards inline-only; magic 64404) and 9b
+  (`80bb9c84701`, the trace JIT carries scaled int64 scalars). The review's
+  differential fuzzer (160,000 operator cases, 3,680 random traced loops)
+  matched upstream everywhere. Kernel time 0.964 of `c8637fe7c6b`
+  (information, not a gate). `5de7bd62ef9`: release order around calls
+  matches upstream (temporaries cleared from the highest slot down; a call's
+  local result stored after the window retires and after the periodic
+  check; `CALL_NON_PY_GENERAL` has upstream's periodic check), and five fork
+  tests check the current rules: 9 of the 11 long-standing failures fixed.
+- Suites at `5de7bd62ef9`, debug and release alike: run=51,571, failures=2,
+  both in test_capi (test_is_unique_temporary, test_unicode.test_new): a local
+  passed to a call reads `sys.getrefcount` 2 against upstream's 1, because
+  the call window owns a copy; open for IR v2 B5 (register-ir.md G4). `make check-value-api`: 177 units, 0 findings.
 - All 67 shared modules whose third-party headers exist build. The decimal,
   tkinter, ssl, sqlite and zstd headers are not installed on this host.
 
@@ -107,16 +117,16 @@ v2 phase A) addressed, then the qualified baseline.
 
 Running now:
 
-1. Integration of representation steps 9a and 9b (int51 inline ints in the
-   runtime, interpreter and trace JIT; numeric guards inline-only; reviewed,
-   kernel time 0.964 of base) and the failures triage (9 of the 11 fixed:
-   two release-order bugs, a periodic-check order bug, stale fork tests;
-   the two `test_capi` refcount tests stay open for B5) onto A5a.
+1. Re-measure against upstream at `5de7bd62ef9`, with the cost attribution
+   (brief `REMEASURE2-BRIEF.md`).
+2. Register IR v2 A5b phase 1: the typed-borrow design proposal
+   (`A5B-BRIEF.md`), reviewed before implementation.
+3. Design-doc sync for A5a and int51.
 
 Next, in order:
 
-4. A5b after 9a and A5a; A3a-A3c (tail calls become the only backend) after
-   9b ([packet](design/proposals/register-ir-v2-packet.md)).
+4. A5b implementation; then A3a-A3c (tail calls become the only backend)
+   ([packet](design/proposals/register-ir-v2-packet.md)).
 5. Value API V1 follow-ups (box-site annotations in the interpreter files,
    `entry_unbox` counts, seven modules that define a bare `Py_BUILD_CORE`),
    then V2a-0 onwards.

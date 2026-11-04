@@ -151,25 +151,24 @@ costs, then the qualified baseline.
 
 ## Active work packets
 
-Running now:
+Running now, in parallel (briefs in `build/pyjit-link-wave1/`):
 
-1. Register IR v2 A5b, the typed borrow
-   ([proposal](design/proposals/register-ir-v2-a5b.md), revision 3, accepted
-   after two reviews; `A5B-PHASE2-BRIEF.md`). Four diffs, each post-reviewed
-   and then integrated: A5b-1 types and readers (landed), A5b-2 the generator, A5b-3 the heap side, A5b-4 renames.
-   Budget 21.5 h, in its own worktree. **Paused 2026-11-04 14:05:** the
-   agent was stopped during A5b-2 (generator rewritten, tests written, gcc
-   debug built; release and clang builds, step tests and measurements left).
-   Its work is preserved uncommitted in `build/worktrees/irv2-a5b`, with
-   `irv2-a5b-notes.md` and `progress-irv2-a5b.txt`. Resume on direction.
+1. Register IR v2 A5b, the typed borrow, resumed from A5b-2
+   (`A5B-RESUME-BRIEF.md`; [proposal](design/proposals/register-ir-v2-a5b.md),
+   revision 3). The worktree `build/worktrees/irv2-a5b` moves onto the shared
+   HEAD first. A5b-3 adds the representation-boundary lints (value-api.md
+   R26). About 14.5 h left. Each increment is post-reviewed and then
+   integrated.
+2. Removal of upstream CPython's JIT remnants (`jit_publish.c`, `jit_unwind.c`),
+   with `sys._jit` reporting the fork's JIT (`JITREM-BRIEF.md`; own worktree).
+3. Proposal for A3a-A3c, tail calls as the only backend (`A3-BRIEF.md`). It
+   decides whether the fork's JIT leaves the build until the IR settles.
+4. Proposal for the value API's route to R27 (no box inside the core) and
+   step V2a-0 (`V2A0-BRIEF.md`).
 
-Next, in order:
-
-2. A3a-A3c (tail calls become the only backend; `clang-21` and gcc 15.2 are
-   installed) ([packet](design/proposals/register-ir-v2-packet.md)).
-3. Value API V1 follow-ups (box-site annotations in the interpreter files,
-   `entry_unbox` counts, seven modules that define a bare `Py_BUILD_CORE`),
-   then V2a-0 onwards.
+Next: critical reviews of proposals 3 and 4, then their implementation where
+files allow; the `BUILD_SLICE` value form after A5b-2 lands; value API V1
+follow-ups.
 
 ## Design decisions
 

@@ -25,8 +25,6 @@ ALLOWED_STATIC_PREFIXES = ('mi_', '_mi_')
 # "Legacy": some old symbols are prefixed by "PY_".
 EXCEPTIONS = frozenset({
     'PY_TIMEOUT_MAX',
-    '__jit_debug_descriptor',
-    '__jit_debug_register_code',
 })
 
 IGNORED_EXTENSION = "_ctypes_test"

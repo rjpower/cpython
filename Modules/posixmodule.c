@@ -20,7 +20,6 @@
 #include "pycore_fileutils.h"     // _Py_closerange()
 #include "pycore_import.h"        // _PyImport_AcquireLock()
 #include "pycore_initconfig.h"    // _PyStatus_EXCEPTION()
-#include "pycore_jit_unwind.h"    // _Py_jit_debug_mutex
 #include "pycore_lock.h"          // PyMutex_LockFast()
 #include "pycore_long.h"          // _PyLong_IsNegative()
 #include "pycore_moduleobject.h"  // _PyModule_GetState()
@@ -793,13 +792,6 @@ PyOS_AfterFork_Child(void)
     if (_PyStatus_EXCEPTION(status)) {
         goto fatal_error;
     }
-
-#if defined(PY_HAVE_JIT_GDB_UNWIND)
-    // The child can inherit this mutex locked if another thread held it at
-    // fork(), but the child itself cannot be inside gdb_jit_register_code().
-    // Reinitialize it before any executor cleanup can unregister JIT code.
-    _Py_jit_debug_mutex = (PyMutex){0};
-#endif
 
     // Thread-state cleanup can run finalizers that issue warnings.
     _PyWarnings_AfterFork(tstate->interp);

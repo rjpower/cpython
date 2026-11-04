@@ -191,6 +191,7 @@ extern _PyJitAction _PyJit_AfterHelper(_PyJitContext *, _PyJitAction, const _PyJ
 extern _PyJitAction _PyJit_ExitBefore(_PyJitContext *, const _PyJitDecodedOp *);
 PyAPI_FUNC(int) _PyJit_CompileCode(PyCodeObject *);
 PyAPI_FUNC(int) _PyJit_SetNaturalAdmission(int);
+extern int _PyJit_NaturalAdmissionEnabled(void);
 PyAPI_FUNC(PyObject *) _PyJit_CodeInfo(PyCodeObject *);
 
 typedef struct _PyJitTestRequest {

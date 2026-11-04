@@ -2216,10 +2216,6 @@
 /* Define if you have a working iconv() function. */
 #undef _Py_HAVE_ICONV
 
-/* Define to 1 if libgcc __register_frame and __deregister_frame are linkable.
-   */
-#undef _Py_HAVE_LIBGCC_EH_FRAME_REGISTRATION
-
 /* Define if you have the 'PR_SET_VMA_ANON_NAME' constant. */
 #undef _Py_HAVE_PR_SET_VMA_ANON_NAME
 

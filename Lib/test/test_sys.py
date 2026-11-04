@@ -2473,11 +2473,23 @@ this is invalid python code
 
 class TestSysJIT(unittest.TestCase):
 
-    def test_jit_stub(self):
-        # This interpreter has no JIT; sys._jit still exists so that tools
-        # which probe it keep working.
-        self.assertIs(sys._jit.is_available(), False)
+    def test_available(self):
+        _testinternalcapi = import_helper.import_module("_testinternalcapi")
+        self.assertIs(sys._jit.is_available(),
+                      _testinternalcapi.JIT_BASELINE_SUPPORTED)
+
+    def test_enabled(self):
+        _testinternalcapi = import_helper.import_module("_testinternalcapi")
+        # Natural admission is off by default.
         self.assertIs(sys._jit.is_enabled(), False)
+        previous = _testinternalcapi.jit_method_natural(True)
+        self.addCleanup(_testinternalcapi.jit_method_natural, previous)
+        self.assertIs(sys._jit.is_enabled(), sys._jit.is_available())
+        _testinternalcapi.jit_method_natural(False)
+        self.assertIs(sys._jit.is_enabled(), False)
+
+    def test_active(self):
+        # Always False: the JIT keeps no per-frame native-execution flag.
         self.assertIs(sys._jit.is_active(), False)
 
 

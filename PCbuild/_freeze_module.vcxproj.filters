@@ -265,9 +265,6 @@
     <ClCompile Include="..\Objects\iterobject.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\Python\jit_publish.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\Objects\lazyimportobject.c">
       <Filter>Source Files</Filter>
     </ClCompile>

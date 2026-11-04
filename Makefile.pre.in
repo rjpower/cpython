@@ -494,7 +494,6 @@ PYTHON_OBJS=	\
 		Python/jit_record.o \
 		Python/jit_ir.o \
 		Python/jit_regalloc.o \
-		Python/jit_publish.o \
 		Python/legacy_tracing.o \
 		Python/lock.o \
 		Python/marshal.o \
@@ -541,7 +540,6 @@ PYTHON_OBJS=	\
 		Python/suggestions.o \
 		Python/perf_trampoline.o \
 		Python/perf_jit_trampoline.o \
-		Python/jit_unwind.o \
 		Python/remote_debugging.o \
 		Python/$(DYNLOADFILE) \
 		$(LIBOBJS) \

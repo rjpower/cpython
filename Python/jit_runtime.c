@@ -1113,6 +1113,12 @@ _PyJit_SetNaturalAdmission(int enabled)
     return previous;
 }
 
+int
+_PyJit_NaturalAdmissionEnabled(void)
+{
+    return natural_admission;
+}
+
 
 static int
 take_bootstrap_cooldown(void)

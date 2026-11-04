@@ -1415,7 +1415,8 @@ always available. Unless explicitly noted otherwise, all variables are read-only
 
       ``sys._jit`` is not guaranteed to exist or behave the same way in all
       Python implementations, versions, or build configurations.  This
-      CPython has no JIT compiler, so all three functions return ``False``.
+      fork reports its own JIT: a whole-method baseline compiler and a
+      tracing front end, which are currently compiled out of the build.
 
    .. versionadded:: 3.14
 
@@ -1428,11 +1429,15 @@ always available. Unless explicitly noted otherwise, all variables are read-only
 
       Return ``True`` if JIT compilation is enabled for the current Python
       process (implies :func:`sys._jit.is_available`), and ``False`` otherwise.
+      Compilation is enabled when natural admission of hot calls and loops is
+      on, which it is not by default.
 
    .. function:: _jit.is_active()
 
       Return ``True`` if the topmost Python frame is currently executing JIT
-      code (implies :func:`sys._jit.is_enabled`), and ``False`` otherwise.
+      code (implies :func:`sys._jit.is_enabled`), and ``False`` otherwise.  The
+      JIT keeps no per-frame record of running native code, so this always
+      returns ``False`` for now.
 
 .. data:: last_exc
 

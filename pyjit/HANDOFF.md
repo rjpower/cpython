@@ -71,10 +71,12 @@ and shapes. Read the build directories for the exact commands.
 
 The runtime tree has no held modifications. Debug and release builds link and
 run. All 67 shared modules whose third-party headers exist build; the decimal,
-tkinter, ssl, sqlite and zstd headers are not installed on this host. Suites
-at `b9d3e3a3c9b`, gcc debug and release: run=51,810, failures=0
-(`make check-value-api`: 169 units, 0 failing findings, 5 deferred; the
-two test_capi failures were fixed in `c6fb9beb79f`). The
+tkinter, ssl, sqlite and zstd headers are not installed on this host. Runtime
+HEAD is `9563654f360`. Full suites last passed at `01e8f3bc4ea` (M2), gcc
+debug and release: 51,977 tests each, 0 failures. Later landings ran their step
+tests and a smoke set on both builds; full suites run at integration points
+only. Magic number: 64407 (B4), set by the coordinator with
+`tools/bump_magic.py`. The
 fork's JIT source is deleted (A3 step 1; history keeps it) until the JIT
 stage. Tail calls are the only interpreter backend; `--with-computed-gotos`
 no longer exists, and `PY_TAIL_CALL_CC` in sysconfig names the convention.
@@ -237,12 +239,10 @@ overwritten.
 
 ## Next steps
 
-1. A5b: post-review and integrate each increment as it is ready (A5b-1 to
-   A5b-4). When it lands, the doc edits listed in FOLLOWUPS.md ("Docs when
-   A5b lands").
-2. Then A3a-A3c, the G2 experiment, B0b and the format steps B2-B7
-   ([packet](design/proposals/register-ir-v2-packet.md)).
-3. Value API V1 follow-ups (`FOLLOWUPS.md`), then V2a-0 onwards.
+1. In flight: B5 (post-review), B5b (being built), B6 (moving onto B4), I4
+   then I3 (one lead), W4-0 (module value homes), the I2/I1 post-review.
+2. I5 after B5 lands, then W2, W4, W5 and the R27 gate.
+3. G2 (the A4 vs B3 prototype) has not started.
 4. Follow-ups in `build/pyjit-link-wave1/FOLLOWUPS.md`.
 5. After the interpreter checkpoint: return `co_code` and `.pyc` to stack
    bytecode with the IR as a hidden cache

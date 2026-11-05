@@ -1,6 +1,6 @@
 # Project status
 
-Status as of 2026-11-04 (PST), after the landings through `b9d3e3a3c9b`. Update this
+Status as of 2026-11-05 (PST), after the landings through `9563654f360`. Update this
 page at each landing.
 
 ## Outcome and next milestone
@@ -57,7 +57,8 @@ costs, then the qualified baseline.
 
 ## Position
 
-- Runtime branch `boil/pyvalue-rc-universal`, HEAD `b9d3e3a3c9b`.
+- Runtime branch `boil/pyvalue-rc-universal`, HEAD `9563654f360`. The 15
+  landings since `b9d3e3a3c9b` are in the table under "Active work packets".
 - Landed 2026-11-03: native boundary P3 (`56ff66a596b`, `643c69c7244`,
   `6d39221996d`) and P4 (`2558376b321`, post-review fixes `fdd7fed3216`);
   representation steps 1 (`f129780a9a7`), 2 (`f7dfc5b961f`), 3 (`dbce7b1260d`,
@@ -259,24 +260,57 @@ costs, then the qualified baseline.
 
 ## Active work packets
 
+Landed since `b9d3e3a3c9b`, oldest first (2026-11-04 to 2026-11-05):
+
+| Commit | Step | Change |
+|---|---|---|
+| `9f40967b7e3` | value API G-1 | Box primitives take `_PyBoxAt` (owner, site, kind) in stats builds. |
+| `c0d363672a5` | register IR B-pin | Handler numbers live in a checked-in table; magic stays 64404. |
+| `edfbcc58928` | value API V2a-1a | int, float, bool and None value slots, digit-span kernels; 1.4 million differential cases match. |
+| `2759372ebc7` | register IR B1 | "Too many temporaries" is a SyntaxError that names the limit. |
+| `53c8c8ad715` | register IR B2 | `NOT_TAKEN` and four dead handlers gone; jumps fire `BRANCH_LEFT`; Lib has 82,051 fewer static words (1.74%). Magic 64405. |
+| `13053640663` | value API M1b | Subscript, item, contains, iteration and send dispatch on values. |
+| `01e8f3bc4ea` | value API M2 | Attribute, descriptor and getset dispatch on value receivers. |
+| `e891a10794e` | value API W1 batch-10 | The 44 deferred container sites use value forms. |
+| `d68db1c040e` | register IR B7 | Scalar constants live in hidden frame slots; Lib has 0.34% fewer static words. Magic 64406. |
+| `342ff1b1b31` | value API I2 | Slices build and subscript on values. |
+| `1dadf75de5a` | value API I1 | Operator, comparison, truth and conversion handlers run on values. |
+| `c59b17d7836` | value API G | R27 box checker `check_r27.py`; stats summary attributes box sites. |
+| `9fdea3b9310` | fix | Regenerated `test_frozenmain.h` for magic 64406. |
+| `e1572ec086c` | value API V2a-1a-iii | Python classes get value sides for operator, compare, hash, repr and item slots. |
+| `9563654f360` | register IR B4 | Feedback entries sized by kind, binary-search lookup, NOFB handlers gone; feedback memory on Lib falls 24%. Magic 64407. |
+
+Validation:
+
+- The full suites last passed at `01e8f3bc4ea` (M2): 51,977 tests each on
+  release and debug, 0 failures.
+- Since then each landing ran its step tests and a smoke set on both builds.
+  Full suites run only at integration points (user rule, 2026-11-05; see
+  [PROCESS](PROCESS.md)).
+- Magic numbers: 64405 after B2, 64406 after B7, 64407 after B4. The coordinator
+  bumps the number once per format landing with `tools/bump_magic.py`.
+- B7 left `Programs/test_frozenmain.h` stale (marshal layout). `9fdea3b9310`
+  regenerated it. The landing script now regenerates it and runs `test_embed`.
+
+User decisions, 2026-11-05:
+
+- Do not harden against hand-crafted code objects or marshal streams.
+- After the interpreter checkpoint, `co_code` and `.pyc` return to stack
+  bytecode with the IR as a hidden cache
+  ([proposal](design/proposals/stack-bytecode-recovery.md)).
+
 In flight (briefs in `build/pyjit-link-wave1/`):
 
-1. G-1 (box primitives take `_PyBoxAt` in stats builds; the kind becomes a
-   parameter; stats builds use `-fno-optimize-sibling-calls`): lands next. The
-   first full R27 gate run is in `build/g-stats-runs/gate1`.
-2. V2a-1a (int, float, bool, None value slots, digit-span kernels), after G-1.
-   Its review found a wrong `pow(negative, e, m)` residue for 31-to-60-bit
-   moduli and a shift error type, both fixed. 1.4 million differential cases
-   match upstream.
-3. M1b and M2 (iteration and attribute dispatchers), after V2a-1a. Being
-   rebased onto it, with two merge must-fixes from review.
-4. Then the rest of G (`check_r27.py`), W1's deferred batch-10, I1 to I5, W2,
-   W4, W5 and the R27 gate.
-5. IR side: [register-ir-v2-b-numbering.md](design/proposals/register-ir-v2-b-numbering.md)
-   (accepted) pins handler numbers, so the B steps develop in parallel. The
-   critical path is about 16.5 h, against 34.5 h sequential. B-pin goes first.
+1. B5 (discarded call results, no `PUSH_NULL`; -43,271 static words, -4.3% on
+   Lib): in post-review.
+2. B5b (unpack to locals, append sources): being built.
+3. B6 (fused compare-and-jump): moving onto B4.
+4. I4, then I3 (one lead).
+5. W4-0 (module value homes).
+6. I2/I1 post-review.
 
-Next: the measurement after A3 step 2, then the [plan](design/proposals/value-api-v2a0.md).
+Next: I5 after B5 lands, then W2, W4, W5 and the R27 gate. G2 (the A4 vs B3
+prototype) has not started.
 
 ## Design decisions
 

@@ -548,11 +548,11 @@ Static frequencies are percentages of all 4.57M words in the Lib corpus (§2.3).
   `_PyIR_MaxForward` lower to exercise this path.
 - A generator that returns into a `FOR_ITER` or `SEND` resumes at the exit,
   which `ceval.c:_PyEval_GeneratorReturnTarget` reads from the caller's word.
-- `NOT_TAKEN` (80,618 static words, 1.8%) follows every conditional jump,
-  for the `BRANCH_LEFT` monitoring event. On the fall-through path the jump skips it by testing the next word's
-  handler (`bytecodes.c:_POP_JUMP_IF_FALSE`,
-  `JUMPBY(INSTR_OPCODE(next_instr) == NOT_TAKEN)`). It costs 8 bytes and one
-  load and compare, but no dispatch.
+- `NOT_TAKEN` (80,618 static words, 1.8%) followed every conditional jump in
+  the measured baseline, for the `BRANCH_LEFT` monitoring event. B2 removed it
+  (§1.11). The jump skipped it on the fall-through path by testing the next
+  word's handler (`JUMPBY(INSTR_OPCODE(next_instr) == NOT_TAKEN)`). It cost 8
+  bytes and one load and compare, but no dispatch.
 - `JUMP_BACKWARD` = `_CHECK_PERIODIC` + jump. Every back edge loads the eval
   breaker. `JUMP_BACKWARD_NO_INTERRUPT` (in `yield from` and `await` loops) does
   not.
@@ -706,6 +706,13 @@ opcodes live in the side arrays of `_PyCoMonitoringData`, indexed by word.
 instrumentation version is stale. Per-instruction events fire once per word, so
 a folded load produces no event. This is a deliberate difference from the stack
 machine.
+
+`NOT_TAKEN` is gone (B2). A conditional jump fires `BRANCH_LEFT` itself on the
+fall-through, at its own offset with the next word as destination, and
+`BRANCH_RIGHT` where it jumps. The `END_SEND` that ends an `async for` send loop
+fires `BRANCH_LEFT` too. `_PyCoMonitoringData.left_tools` holds the
+`BRANCH_LEFT` tools of such instructions, so a tool can disable one of two
+events at a location and keep the other.
 
 Instrumentation is current for every running frame, as upstream keeps it.
 Setting events re-instruments every code object with a frame on a thread's
@@ -1987,14 +1994,16 @@ places. Each is cheap to fix.
     |---|---|---|
     | (a) Hard limit: every site gets an entry; `SyntaxError` past 4,095 sites | −7 (NOFB) | 84 generated code objects fail to compile. Rejected by the limits rule (§1.14): real code reaches this limit. |
     | (b) The first version: operands into the word, `COMPARE_OP` and `CONTAINS_OP` one generic handler per operation | −7, +14 (6 compare operations × the bool bit, plus 2), multiplied again by G3's fused forms | `LOAD_ATTR` names at 11 bits (method bit in the oparg): six generated code objects fail. Rejected: it multiplies handlers, against the lesson of G2 and G6. |
-    | (c) Operands into the word where a field is free; compare operations stay in their entries, which are assigned first; later sites share entry 0 | −7, +1 (`LOAD_ATTR`'s method bit becomes a second generic head; its specialisations already split) | Names at 12 bits: one generated code object (4,685 names) reaches the limit, and the compiler lowers its later name accesses to an intrinsic call (§1.14, O4). Compare and contains sites past the entry limit lower to `CALL_INTRINSIC_2` (below). |
+    | (c) Operands into the word where a field is free; compare operations stay in their entries, which are assigned first; later sites share entry 0 | −7, +0 as built (B4): `LOAD_ATTR` keeps one head, and D holds `name<<1\|method` | As built, names below index 2,048 are direct. One generated code object (4,685 names) reaches the limit, and the compiler lowers longer names to `LOAD_CONST name; CALL_INTRINSIC_2 GETATTR` (`SETATTR` for stores). `LOAD_SUPER_ATTR` stores `name<<2\|flags` in D and declines the optimisation past name index 1,024 (§1.14, O4). Compare and contains sites past the entry limit lower to `CALL_INTRINSIC_2` (below). |
 
   - **Proposal (IR v2): option (c).** `LOAD_GLOBAL` takes its name in CD
     (24 bits); `LOAD_ATTR`, `STORE_ATTR` and `LOAD_SUPER_ATTR` take it in D
-    (12 bits). `COMPARE_OP` and `CONTAINS_OP` keep the operation in the entry
+    (12 bits). As built (B4), `LOAD_ATTR` has one head: D holds
+    `name<<1|method`, so names below index 2,048 are direct; `LOAD_SUPER_ATTR`
+    names below 1,024. `COMPARE_OP` and `CONTAINS_OP` keep the operation in the entry
     (`FBARG`) and get their entries before any other site. Every other site
     past the limit shares entry 0, which needs no other handler because no
-    other operand lives in an entry. Then NOFB goes. Names past 4,095 in
+    other operand lives in an entry. Then NOFB goes. Names past the D limit in
     one code object (decided 2026-11-03, O4): the compiler lowers the
     access to an existing general form, an intrinsic call that takes the
     name from a slot loaded from the constants, so valid Python still

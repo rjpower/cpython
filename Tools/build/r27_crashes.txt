@@ -1,0 +1,70 @@
+# Tests whose child processes leave a run marker without a dump: workers that
+# a test terminates or kills, or that die on a signal. check_r27.py --gate
+# accepts a leftover marker only for a test listed here. Seeded from the first
+# gate run (G); each tag shows its marker count there.
+# 2 marker(s) in the first run
+
+# 9 marker(s) in the first run
+test.test_asyncio.test_events
+# 10 marker(s) in the first run
+test.test_asyncio.test_subprocess
+# 32 marker(s) in the first run
+test.test_concurrent_futures.test_deadlock
+# 1 marker(s) in the first run
+test.test_concurrent_futures.test_init
+# 31 marker(s) in the first run
+test.test_concurrent_futures.test_process_pool
+# 11 marker(s) in the first run
+test.test_multiprocessing_fork.test_manager
+# 7 marker(s) in the first run
+test.test_multiprocessing_fork.test_misc
+# 25 marker(s) in the first run
+test.test_multiprocessing_fork.test_processes
+# 11 marker(s) in the first run
+test.test_multiprocessing_forkserver.test_manager
+# 13 marker(s) in the first run
+test.test_multiprocessing_forkserver.test_misc
+# 31 marker(s) in the first run
+test.test_multiprocessing_forkserver.test_processes
+# 11 marker(s) in the first run
+test.test_multiprocessing_spawn.test_manager
+# 12 marker(s) in the first run
+test.test_multiprocessing_spawn.test_misc
+# 29 marker(s) in the first run
+test.test_multiprocessing_spawn.test_processes
+# 2 marker(s) in the first run
+test.test_os.test_posix
+# 19 marker(s) in the first run
+test_capi
+# 5 marker(s) in the first run
+test_cmd_line
+# 1 marker(s) in the first run
+test_embed
+# 45 marker(s) in the first run
+test_external_inspection
+# 20 marker(s) in the first run
+test_faulthandler
+# 5 marker(s) in the first run
+test_gc_stats
+# 1 marker(s) in the first run
+test_gc_verify
+# 1 marker(s) in the first run
+test_httpservers
+# 166 marker(s) in the first run
+test_multiprocessing_main_handling
+# 24 marker(s) in the first run
+test_profiling
+# 2 marker(s) in the first run
+test_pyvalue_api
+# 19 marker(s) in the first run
+test_subprocess
+# 1 marker(s) in the first run
+test_support
+# 2 marker(s) in the first run
+test_sys
+# 2 marker(s) in the first run
+test_threading
+# 2 marker(s) in the first run
+test_tracemalloc
+# 1 marker(s) in the first run
+test_venv

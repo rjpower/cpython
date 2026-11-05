@@ -20,6 +20,7 @@ import json
 from operator import itemgetter
 import os
 from pathlib import Path
+import re
 import sys
 import textwrap
 from typing import Any, Callable, TextIO, TypeAlias
@@ -77,6 +78,69 @@ def _load_metadata_from_source():
     }
 
 
+BOX_OBJECT_RE = re.compile(r"Box object \[(\d+)\]: (.*?)(?: build-id=\S*)?$")
+BOX_OWNER_RE = re.compile(
+    r"Box owner \((?P<kind>[^,]+), (?P<site>[^)]+)\) "
+    r"(?P<owner>\S+) at (?P<at>\S+)"
+)
+# Folded keys for what is per-dump: object indices differ between dumps.
+BOX_BY_OBJECT = "Box owners by object|"
+BOX_BY_OWNER = "Box owner table|"
+
+
+def _split_address(text: str, objects: dict[int, str]) -> tuple[str, str]:
+    """(object basename, offset) of "I+0xOFF", "?0xADDR", "-" or "foreign"."""
+    if text in ("-", "foreign"):
+        return text, ""
+    if text.startswith("?"):
+        return "?", text[1:]
+    index, _, offset = text.partition("+")
+    return objects.get(int(index), "?"), offset
+
+
+def _load_dump(filename: Path, stats: collections.Counter[str]) -> None:
+    """Add one dump to stats.
+
+    Plain "key: integer" lines are summed by key. The "Box object [i]" lines
+    name the objects of this dump only, so the "Box owner (" lines are folded
+    per dump into object basenames before they are summed.
+    """
+    objects: dict[int, str] = {}
+    owners: list[tuple[re.Match, int]] = []
+    with open(filename) as fd:
+        for line in fd:
+            if m := BOX_OBJECT_RE.match(line.strip()):
+                objects[int(m.group(1))] = os.path.basename(m.group(2))
+                continue
+            key, sep, value = line.rpartition(":")
+            if not sep:
+                print(
+                    f"Unparsable line: '{line.strip()}' in {filename}",
+                    file=sys.stderr,
+                )
+                continue
+            try:
+                count = int(value)
+            except ValueError:
+                # Not a counter (for example "Box owner" text lines).
+                print(
+                    f"Unparsable line: '{line.strip()}' in {filename}",
+                    file=sys.stderr,
+                )
+                continue
+            if m := BOX_OWNER_RE.match(key.strip()):
+                owners.append((m, count))
+            else:
+                stats[key.strip()] += count
+    for m, count in owners:
+        owner, owner_off = _split_address(m["owner"], objects)
+        at, at_off = _split_address(m["at"], objects)
+        stats[f"{BOX_BY_OBJECT}{m['kind']}|{owner}"] += count
+        stats[
+            f"{BOX_BY_OWNER}{m['kind']}|{m['site']}|{owner}|{owner_off}|{at}|{at_off}"
+        ] += count
+
+
 def load_raw_data(input: Path) -> RawData:
     if input.is_file():
         with open(input, "r") as fd:
@@ -90,18 +154,11 @@ def load_raw_data(input: Path) -> RawData:
     elif input.is_dir():
         stats = collections.Counter[str]()
 
-        for filename in input.iterdir():
-            with open(filename) as fd:
-                for line in fd:
-                    try:
-                        key, value = line.split(":")
-                    except ValueError:
-                        print(
-                            f"Unparsable line: '{line.strip()}' in {filename}",
-                            file=sys.stderr,
-                        )
-                        continue
-                    stats[key.strip()] += int(value)
+        for filename in sorted(input.iterdir()):
+            # The directory also holds .run, .spawn, build-ids and objects/.
+            if filename.suffix != ".txt" or not filename.is_file():
+                continue
+            _load_dump(filename, stats)
             stats["__nfiles__"] += 1
 
         data = dict(stats)
@@ -434,17 +491,17 @@ class Stats:
                 result[label] = (value, den)
         return result
 
-    def get_box_stats(self) -> list[tuple[str, int, int]]:
-        """(site class, boxes, entry unboxes) in the order of the dump."""
+    def get_box_stats(self) -> list[tuple[str, int]]:
+        """(site class, boxes) in the order of the dump."""
         boxes = "Boxing by site ("
-        unboxes = "Entry unboxing by site ("
-        sites = {}
-        for key, value in self._data.items():
-            if key.startswith(boxes):
-                sites.setdefault(key[len(boxes) : -1], [0, 0])[0] = value
-            elif key.startswith(unboxes):
-                sites.setdefault(key[len(unboxes) : -1], [0, 0])[1] = value
-        return [(site, box, unbox) for site, (box, unbox) in sites.items()]
+        return [
+            (key[len(boxes) : -1], value)
+            for key, value in self._data.items()
+            if key.startswith(boxes)
+        ]
+
+    def get_entry_unboxes(self) -> int:
+        return self._data.get("Entry unboxing", 0)
 
     def get_box_kind_stats(self) -> list[tuple[str, int]]:
         """(kind, boxes) in the order of the dump."""
@@ -454,6 +511,25 @@ class Stats:
             for key, value in self._data.items()
             if key.startswith(prefix)
         ]
+
+    def get_owner_object_stats(self) -> dict[tuple[str, str], int]:
+        """(kind, owner object basename) -> boxes."""
+        result = {}
+        for key, value in self._data.items():
+            if key.startswith(BOX_BY_OBJECT):
+                kind, owner = key[len(BOX_BY_OBJECT) :].split("|")
+                result[kind, owner] = value
+        return result
+
+    def get_owner_table(self) -> list[tuple[tuple[str, ...], int]]:
+        """((kind, site, owner, owner offset, at, at offset), boxes), largest first."""
+        rows = [
+            (tuple(key[len(BOX_BY_OWNER) :].split("|")), value)
+            for key, value in self._data.items()
+            if key.startswith(BOX_BY_OWNER)
+        ]
+        rows.sort(key=lambda row: (-row[1], row[0]))
+        return rows
 
     def get_gc_stats(self) -> list[dict[str, int]]:
         gc_stats: list[dict[str, int]] = []
@@ -1021,30 +1097,38 @@ def object_stats_section() -> Section:
 def box_stats_section() -> Section:
     def calc_box_table(stats: Stats) -> Rows:
         box_stats = stats.get_box_stats()
-        total = sum(box for _, box, _ in box_stats)
+        total = sum(box for _, box in box_stats)
         return [
-            (site, Count(box), Ratio(box, total), Count(unbox))
-            for site, box, unbox in box_stats
-            if box or unbox
+            (site, Count(box), Ratio(box, total))
+            for site, box in box_stats
+            if box
         ]
+
+    def calc_entry_unbox_table(stats: Stats) -> Rows:
+        return [("Entry unboxes", Count(stats.get_entry_unboxes()))]
 
     return Section(
         "Boxing by site",
         "Boxes of inline values by site class",
         [
             Table(
-                ("Site class", "Boxes:", "Ratio:", "Entry unboxes:"),
+                ("Site class", "Boxes:", "Ratio:"),
                 calc_box_table,
                 JoinMode.CHANGE,
-            )
+            ),
+            Table(
+                ("", "Count:"),
+                calc_entry_unbox_table,
+                JoinMode.CHANGE,
+            ),
         ],
         doc="""
         Boxes made for an inline int or float, by the class of the site that
         needed an object (pyjit/design/value-api.md, section 6.1). The boxes
         add up to "Inline int boxes" + "Inline float boxes" in the object
         stats; "unattributed" boxes come from sites that name no class yet.
-        "Entry unboxes" counts exact int and float objects that canonical
-        entry turned into inline values. Classes with no counts are omitted.
+        Classes with no counts are omitted. "Entry unboxes" counts exact int
+        and float objects that canonical entry turned into inline values.
         """,
     )
 
@@ -1070,8 +1154,97 @@ def box_kind_section() -> Section:
         (pyjit/design/proposals/value-api-v2a0.md, section 4.7): "core" for
         value-native code, "thunk" for an object function that returns the
         inline result of its value dispatcher, "slot adapter" for an object
-        slot called with an inline operand, and "call adapter" for the call
-        adapter's class. They add up to the boxes of the site table.
+        slot called with an inline operand, and "call adapter" for a native
+        call's argument vector. They add up to the boxes of the site table.
+        """,
+    )
+
+
+def box_owner_object_section() -> Section:
+    def calc_table(stats: Stats) -> Rows:
+        by_object = stats.get_owner_object_stats()
+        total = sum(by_object.values())
+        return [
+            (kind, owner, Count(boxes), Ratio(boxes, total))
+            for (kind, owner), boxes in sorted(
+                by_object.items(), key=lambda item: (-item[1], item[0])
+            )
+        ]
+
+    return Section(
+        "Boxes by owner object",
+        "Boxes by kind and the object that owns the code",
+        [
+            Table(
+                ("Kind", "Owner object", "Boxes:", "Ratio:"),
+                calc_table,
+                JoinMode.CHANGE,
+            )
+        ],
+        doc="""
+        Boxes in the owner table by kind and the basename of the object file
+        (executable or extension) holding the owning entry or adapter. "-"
+        is a CORE box, "foreign" an owner outside the runtime's tables, and
+        "?" an address in no loaded object. Boxes dropped by a full table are
+        not here; see "Box owner health".
+        """,
+    )
+
+
+def box_owner_table_section() -> Section:
+    def calc_table(stats: Stats) -> Rows:
+        return [
+            (*key, Count(boxes))
+            for key, boxes in stats.get_owner_table()[:30]
+        ]
+
+    return Section(
+        "Box owner table",
+        "The 30 most frequent box owner keys",
+        [
+            Table(
+                (
+                    "Kind",
+                    "Site",
+                    "Owner object",
+                    "Owner offset",
+                    "At object",
+                    "At offset",
+                    "Boxes:",
+                ),
+                calc_table,
+                JoinMode.CHANGE,
+            )
+        ],
+        doc="""
+        Offsets are ELF virtual addresses within the object; resolve them with
+        Tools/build/check_r27.py.
+        """,
+    )
+
+
+def box_owner_health_section() -> Section:
+    def calc_table(stats: Stats) -> Rows:
+        rows = [("Owner table entries", Count(stats.get("Box owner entries")))]
+        for kind in ("core", "thunk", "slot adapter", "call adapter"):
+            rows.append(
+                (
+                    f"Owners dropped ({kind})",
+                    Count(stats.get(f"Box owners dropped ({kind})")),
+                )
+            )
+        rows.append(("Object box cached", Count(stats.get("Object box cached"))))
+        rows.append(("Stats resets", Count(stats.get("Stats resets"))))
+        rows.append(("Number of dumps", Count(stats.get("__nfiles__"))))
+        return rows
+
+    return Section(
+        "Box owner health",
+        "Owner table occupancy, drops, cache hits and resets",
+        [Table(("", "Count:"), calc_table, JoinMode.CHANGE)],
+        doc="""
+        Entries are summed over dumps. A drop is a box the owner table had no
+        room for; it still counts in the kind and site tables.
         """,
     )
 
@@ -1152,6 +1325,9 @@ LAYOUT = [
     object_stats_section(),
     box_stats_section(),
     box_kind_section(),
+    box_owner_object_section(),
+    box_owner_table_section(),
+    box_owner_health_section(),
     gc_stats_section(),
     rare_event_section(),
     meta_stats_section(),

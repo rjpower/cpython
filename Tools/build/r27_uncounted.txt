@@ -1,0 +1,283 @@
+# Tests that launch a build product that will not count its boxes (the
+# regrtest worker's audit hook lists each launch; Tools/build/check_r27.py
+# --gate fails on a test missing here). One tag per line; the comment above it
+# gives the reason. Seeded from the first gate run (G); a new entry needs a
+# reviewed line with its reason.
+# Launches without a tag: the pty REPL tests start `python -i -u` with the
+# environment dropped (gate2: 37 launches).
+<untagged>
+
+# no -X pystats and -E or -I ignores PYTHONSTATS (4)
+test.test_asyncio.test_base_events
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test.test_asyncio.test_eager_task_factory
+# no -X pystats and -E or -I ignores PYTHONSTATS (6)
+test.test_asyncio.test_tasks
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test.test_concurrent_futures.test_interpreter_pool
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test.test_concurrent_futures.test_shutdown
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test.test_future_stmt.test_future
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test.test_inspect.test_inspect
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test.test_io.test_fileio
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test.test_io.test_general
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test.test_io.test_textio
+# no -X pystats and -E or -I ignores PYTHONSTATS (6)
+test.test_multiprocessing_fork.test_misc
+# no -X pystats and -E or -I ignores PYTHONSTATS (4)
+test.test_multiprocessing_fork.test_processes
+# no -X pystats and -E or -I ignores PYTHONSTATS (6)
+test.test_multiprocessing_forkserver.test_misc
+# no -X pystats and -E or -I ignores PYTHONSTATS (4)
+test.test_multiprocessing_forkserver.test_processes
+# no -X pystats and -E or -I ignores PYTHONSTATS (6)
+test.test_multiprocessing_spawn.test_misc
+# no -X pystats and -E or -I ignores PYTHONSTATS (4)
+test.test_multiprocessing_spawn.test_processes
+# no -X pystats and -E or -I ignores PYTHONSTATS (22)
+test.test_os.test_posix
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test.test_pydoc.test_pydoc
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test___all__
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test__colorize
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_annotationlib
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_argparse
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_array
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_ast
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_atexit
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_base64
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_bdb
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_builtin
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_bytes
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_c_locale_coercion
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_calendar
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_capi
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_cmd
+# no -X pystats and -E or -I ignores PYTHONSTATS (22)
+test_cmd_line
+# no -X pystats and -E or -I ignores PYTHONSTATS (4)
+test_cmd_line_script
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_code
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_code_module
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_compile
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_compileall
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_coroutines
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_csv
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_ctypes
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_dataclasses
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_datetime
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_descr
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_dict
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_difflib
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_doctest
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_email
+# no -X pystats and PYTHONSTATS unset or environment dropped (72)
+test_embed
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_enum
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_eof
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_exceptions
+# no -X pystats and -E or -I ignores PYTHONSTATS (4)
+test_faulthandler
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_frame
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_fstring
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_functools
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_gc
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_gc_verify
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_gettext
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_graphlib
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_gzip
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_hash
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_httpservers
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_import
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_importlib
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_interpreters
+# no -X pystats and -E or -I ignores PYTHONSTATS (4)
+test_ir_contract
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_itertools
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_json
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_lazy_import
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_linecache
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_list
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_locale
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_logging
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_marshal
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_mimetypes
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_module
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_monitoring
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_multiprocessing_main_handling
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_ntpath
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_optparse
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_pathlib
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_pdb
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_perf_profiler
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_pickle
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_posixpath
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_pprint
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_profile
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_profiling
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_pstats
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_py_compile
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_pystats
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_pyvalue_api
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_pyvalue_release
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_pyvalue_sysflags
+# no -X pystats and -E or -I ignores PYTHONSTATS (170); no -X pystats and PYTHONSTATS unset or environment dropped (4)
+test_regrtest
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_repl
+# no -X pystats and -E or -I ignores PYTHONSTATS (8)
+test_runpy
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_sax
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_script_helper
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_select
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_shlex
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_shutil
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_signal
+# no -X pystats and -E or -I ignores PYTHONSTATS (12)
+test_site
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_socket
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_source_encoding
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_str
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_string
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_struct
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_structseq
+# no -X pystats and PYTHONSTATS unset or environment dropped (10); no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_subprocess
+# no -X pystats and PYTHONSTATS unset or environment dropped (8); no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_support
+# no -X pystats and -E or -I ignores PYTHONSTATS (4)
+test_sys
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_tabnanny
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_tagged_values
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_tarfile
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_tempfile
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_threading
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_tokenize
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_tomllib
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_tools
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_trace
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_traceback
+# no -X pystats and -E or -I ignores PYTHONSTATS (4)
+test_tracemalloc
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_tstring
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_types
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_typing
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_unicodedata
+# no -X pystats and -E or -I ignores PYTHONSTATS (9)
+test_unittest
+# no -X pystats and -E or -I ignores PYTHONSTATS (6)
+test_utf8_mode
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_warnings
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_weakref
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_zipfile
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_zipimport_support
+# no -X pystats and -E or -I ignores PYTHONSTATS (2)
+test_zoneinfo

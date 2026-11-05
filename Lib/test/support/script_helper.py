@@ -91,6 +91,24 @@ class _PythonRunResult(collections.namedtuple("_PythonRunResult",
                              f"---")
 
 
+def _pystats_options(isolated):
+    """Options that keep a -I or -E child counting in a stats build.
+
+    -I and -E ignore PYTHONSTATS, so a child would not count. When the parent
+    dumps into a directory, the child is told to start stats and to dump into
+    the same directory (-X pystats_dir survives -E and -I).
+    """
+    # Only under the stats gate, whose regrtest workers carry a tag.
+    if (not isolated or not hasattr(sys, '_stats_on')
+            or not os.environ.get('PYTHON_PYSTATS_TAG')):
+        return []
+    stats_dir = (sys._xoptions.get('pystats_dir')
+                 or os.environ.get('PYTHON_PYSTATS_DIR'))
+    if not stats_dir or stats_dir is True:
+        return []
+    return ['-X', 'pystats', '-X', f'pystats_dir={stats_dir}']
+
+
 # Executing the interpreter in a subprocess
 @support.requires_subprocess()
 def run_python_until_end(*args, **env_vars):
@@ -123,6 +141,7 @@ def run_python_until_end(*args, **env_vars):
     elif not env_vars and not env_required:
         # ignore Python environment variables
         cmd_line.append('-E')
+    cmd_line.extend(_pystats_options(isolated or not env_vars and not env_required))
 
     # But a special flag that can be set to override -- in this case, the
     # caller is responsible to pass the full environment.
@@ -203,6 +222,7 @@ def spawn_python(*args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, **kw):
     cmd_line = [sys.executable]
     if not interpreter_requires_environment():
         cmd_line.append('-E')
+        cmd_line.extend(_pystats_options(True))
     cmd_line.extend(args)
     # Under Fedora (?), GNU readline can output junk on stderr when initialized,
     # depending on the TERM setting.  Setting TERM=vt100 is supposed to disable

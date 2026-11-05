@@ -159,7 +159,7 @@ costs, then the qualified baseline.
   `TAKE` and `OWNER` where a view becomes an owner; S3, S7 and the spend
   rules fail closed. Post-review found three fail-open rules (none fired on
   `bytecodes.c`); all 12 findings fixed before landing. Generated release
-  order unchanged. Suite (A5b's T_2, gcc debug): run=51,621+, failures=2.
+  order unchanged. Suite (A5b's T_2 before the fixes, gcc debug): run=51,621, failures=2; the shared tree's full debug suite runs after landing.
 - Landed 2026-11-04 (continued): value API M4a (`df1503353d7`): the value
   field contract tested on a type with fields of each kind;
   `structseq.__reduce__` stores by value. Suite (M4's T_1): run=51,631,

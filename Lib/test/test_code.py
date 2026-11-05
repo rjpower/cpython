@@ -1575,6 +1575,54 @@ class ConstSlotsTest(unittest.TestCase):
         self.assertTrue(fib.__code__.co_constslots)
         self.assertEqual(fib(15), 610)
 
+    def test_call_without_arguments_from_generator_frame(self):
+        # A call that the interpreter specializes and that a generator or
+        # coroutine makes pushes its callee's frame apart from the caller's
+        # window.  With no self and no arguments, the callee's first slot is
+        # a constant slot, which the push must leave alone.
+        counter = 0
+
+        def callee():
+            nonlocal counter
+            counter = 0
+            while counter < 10:
+                counter += 1
+            return counter
+
+        code = callee.__code__
+        self.assertEqual(code.co_nlocals, 0)
+        self.assertEqual(self.slots(code)[0][0], 0)
+
+        def gen():
+            for _ in range(50):
+                yield callee()
+        self.assertEqual(sum(gen()), 500)
+
+        async def inner():
+            nonlocal counter
+            counter = 0
+            await suspend()
+            while counter < 10:
+                counter += 1
+            return counter
+
+        async def outer():
+            total = 0
+            for _ in range(50):
+                total += await inner()
+            return total
+
+        @types.coroutine
+        def suspend():
+            yield
+
+        coro = outer()
+        try:
+            while True:
+                coro.send(None)
+        except StopIteration as e:
+            self.assertEqual(e.value, 500)
+
     def test_slot_limit(self):
         # More distinct constants than the frame can hold: the rest keep
         # their loads

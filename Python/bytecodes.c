@@ -4336,7 +4336,11 @@ dummy_func(
                 // the value stack.
                 pushed_frame = _PyFrame_PushUnchecked(tstate, callable, oparg + has_self, frame);
                 PyValue *first_non_self_local = pushed_frame->base + has_self;
-                pushed_frame->base[0] = self_or_null;
+                // Without a self, slot 0 may be a constant slot that
+                // _PyFrame_Initialize filled: it is not ours to write
+                if (has_self) {
+                    pushed_frame->base[0] = self_or_null;
+                }
                 for (int i = 0; i < oparg; i++) {
                     first_non_self_local[i] = args[i];
                 }

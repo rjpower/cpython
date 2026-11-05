@@ -4902,7 +4902,9 @@
                 else {
                     pushed_frame = _PyFrame_PushUnchecked(tstate, callable, oparg + has_self, frame);
                     PyValue *first_non_self_local = pushed_frame->base + has_self;
-                    pushed_frame->base[0] = self_or_null;
+                    if (has_self) {
+                        pushed_frame->base[0] = self_or_null;
+                    }
                     for (int i = 0; i < oparg; i++) {
                         first_non_self_local[i] = args[i];
                     }
@@ -7274,7 +7276,9 @@
                 else {
                     pushed_frame = _PyFrame_PushUnchecked(tstate, callable, oparg + has_self, frame);
                     PyValue *first_non_self_local = pushed_frame->base + has_self;
-                    pushed_frame->base[0] = self_or_null;
+                    if (has_self) {
+                        pushed_frame->base[0] = self_or_null;
+                    }
                     for (int i = 0; i < oparg; i++) {
                         first_non_self_local[i] = args[i];
                     }

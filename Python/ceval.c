@@ -4376,7 +4376,8 @@ _PyEval_UnpackIndices(PyObject *start, PyObject *stop,
    An int or float operand may be inline (see pycore_value.h). Bounds that
    are inline ints or None slice a list, tuple or str without boxes, and
    isinstance() of an inline value against a type needs no box. Other
-   operands are boxed for the duration of the call. */
+   bounds go into a slice object by value, and the item is read or stored
+   through _PyValue_GetItem() or _PyValue_SetItem(): no bound is boxed. */
 
 /* The bounds of a slice with no step, as PySlice_Unpack() gives them, if
    start and stop are each an inline int or None, and one is an inline int. */

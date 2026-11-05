@@ -15,6 +15,10 @@ try:
     import _testcapi
 except ImportError:
     _testcapi = None
+try:
+    import _testinternalcapi
+except ImportError:
+    _testinternalcapi = None
 
 N = 2000
 STATS = hasattr(sys, "_stats_on")
@@ -667,6 +671,74 @@ class StoreGlobalTests(unittest.TestCase):
         self.assertEqual(boxes(store_global_loop, N), 0)
 
 
+# Generic handlers of the value dispatchers: (name, setup, body, operands).
+# The body runs in a loop over range(n) with the operand a; none of these
+# makes a box of an inline int, float, bool or None operand.
+INT, FLOAT, BOOL, NONE = 3, 1.5, True, None
+GENERIC_CASES = [
+    ("slice read", "L = list(range(10))", "x = L[1:a]", (INT, BOOL, NONE)),
+    ("slice read from", "L = list(range(10))", "x = L[a:]", (INT, BOOL, NONE)),
+    ("slice tuple", "L = tuple(range(10))", "x = L[1:a]", (INT, NONE)),
+    ("slice str", "L = 'abcdefghij'", "x = L[1:a]", (INT, NONE)),
+    ("slice store", "L = list(range(10)); M = [1, 2]", "L[a:3] = M",
+     (INT, NONE)),
+    ("build slice", "L = list(range(10))", "x = L[1:a:2]", (INT, BOOL, NONE)),
+    ("compare", "", "x = a < 2.5", (INT, FLOAT, BOOL)),
+    ("compare eq", "", "x = a == None", (INT, FLOAT, BOOL, NONE)),
+    ("compare branch", "", "if a < 2.5: pass", (INT, FLOAT, BOOL)),
+    ("contains set", "S = {1, 2}", "x = a in S", (INT, FLOAT, BOOL, NONE)),
+    ("contains dict", "S = {1: 2}", "x = a in S", (INT, FLOAT, BOOL, NONE)),
+    ("negative", "", "x = -a", (INT, FLOAT, BOOL)),
+    ("positive", "", "x = +a", (INT, FLOAT, BOOL)),
+    ("invert", "", "x = ~a", (INT,)),
+    ("not", "", "x = not a", (INT, FLOAT, BOOL, NONE)),
+    ("to bool", "", "if a: pass", (INT, FLOAT, BOOL, NONE)),
+    ("and", "", "x = a and 3", (INT, FLOAT, BOOL, NONE)),
+    ("str", "", "x = str(a)", (INT, FLOAT, BOOL, NONE)),
+    ("format", "", "x = f'{a}'", (INT, FLOAT, BOOL, NONE)),
+    ("convert str", "", "x = f'{a!s}'", (INT, FLOAT, BOOL, NONE)),
+    ("convert repr", "", "x = f'{a!r}'", (INT, FLOAT, BOOL, NONE)),
+    ("convert ascii", "", "x = f'{a!a}'", (INT, FLOAT, BOOL, NONE)),
+    ("binary op int", "", "x = a + 2", (INT, FLOAT, BOOL)),
+    ("binary op float", "", "x = a * 1.5", (INT, FLOAT, BOOL)),
+    ("binary op power", "", "x = a ** 2", (INT, FLOAT)),
+]
+
+
+def generic_loop(setup, body):
+    namespace = {}
+    source = "def f(n, a):\n    %s\n    for i in range(n):\n        %s\n" % (
+        setup or "pass", body)
+    exec(source, namespace)
+    return namespace["f"]
+
+
+class GenericHandlerTests(unittest.TestCase):
+    @unittest.skipUnless(STATS, "needs a Py_STATS build")
+    def test_no_box(self):
+        for name, setup, body, operands in GENERIC_CASES:
+            func = generic_loop(setup, body)
+            for a in operands:
+                with self.subTest(case=name, operand=a):
+                    # A few boxes of the setup, none for each of the N passes
+                    self.assertLess(boxes(func, N, a), 50)
+
+    def test_results_match_the_object_api(self):
+        # Warmed sites, so that the specialised and generic handlers both run.
+        for _ in range(3):
+            for a in (3, -3, 2**49, 1.5, True, None):
+                if a is not None:
+                    self.assertEqual(a < 2.5, float(a) < 2.5)
+                    self.assertEqual(-a, 0 - a)
+                    self.assertEqual(a + 2, a.__add__(2))
+                self.assertEqual(a in {1, None}, a is None or a == 1)
+                self.assertEqual(not a, not bool(a))
+                self.assertEqual(f"{a}", str(a))
+                self.assertEqual(f"{a!r}", repr(a))
+            self.assertEqual(~3, -4)
+            self.assertEqual((1.5 and 3), 3)
+
+
 class CompareTests(unittest.TestCase):
     def test_mixed_results(self):
         # i < 0.5 only for 0; 0.5 < i for i >= 1; never equal; i >= 0.5 for i >= 1
@@ -856,6 +928,343 @@ class AttributeAndImportTests(unittest.TestCase):
         for a in (3, 2.5, True):
             with self.subTest(operand=a):
                 self.assertEqual(boxes(get_attr_loop, N, a), 0)
+
+
+def list_store_loop(n):
+    L = [0] * 10
+    for i in range(n):
+        L[-1] = i
+        L[i % 10] = i
+
+
+def dict_store_loop(n):
+    d = {}
+    for i in range(n):
+        d[i % 7] = i
+        del d[i % 7]
+
+
+class SetDel:
+    def __init__(self):
+        self.seen = []
+
+    def __setitem__(self, key, value):
+        self.seen.append((key, value))
+
+    def __delitem__(self, key):
+        self.seen.append((key,))
+
+
+def user_item_loop(n, obj):
+    for i in range(n):
+        obj[i] = i
+        del obj[i]
+
+
+def gen_ints(n):
+    for i in range(n):
+        yield i
+
+
+def gen_floats(n):
+    for i in range(n):
+        yield i + 0.5
+
+
+def drain(gen):
+    for x in gen:
+        pass
+
+
+def delegate(n):
+    result = yield from gen_ints(n)
+    return result
+
+
+def inner_returns(n):
+    yield 1
+    return 5
+
+
+def delegated_return(n):
+    total = 0
+    for i in range(n):
+        total += (yield from inner_returns(1))
+    return total
+
+
+def drive(n):
+    # a generator that returns an inline value, consumed by yield from
+    g = delegated_return(n)
+    for x in g:
+        pass
+
+
+class SubjectClass:
+    __match_args__ = ("a", "b")
+
+    def __init__(self):
+        self.a = 1
+        self.b = 2.5
+
+
+def match_inline_loop(n, subject):
+    count = 0
+    for i in range(n):
+        match subject:
+            case int(x):
+                count += 1
+            case float(real=r):
+                count += 1
+            case _:
+                pass
+    return count
+
+
+def match_keys_loop(n, d):
+    count = 0
+    for i in range(n):
+        match d:
+            case {1: a, 2: b}:
+                count += 1
+    return count
+
+
+class SuperBase:
+    def value(self):
+        return 7
+
+    @property
+    def prop(self):
+        return 2.5
+
+
+class SuperDerived(SuperBase):
+    def read(self):
+        # The class attribute and the property reach the value dispatcher
+        # through an object lookup that boxes an inline result (M2).
+        return super().prop
+
+    def method(self):
+        return super().value()
+
+
+def super_loop(n, obj):
+    for i in range(n):
+        obj.method()
+
+
+class ExitAndHandlerBoxTests(unittest.TestCase):
+    @unittest.skipUnless(STATS, "needs a Py_STATS build")
+    def test_item_stores_and_deletes_make_no_box(self):
+        for loop in (list_store_loop, dict_store_loop):
+            with self.subTest(loop=loop.__name__):
+                self.assertEqual(boxes(loop, N), 0)
+
+    @unittest.skipUnless(STATS, "needs a Py_STATS build")
+    def test_for_iter_over_generators_makes_no_box(self):
+        for make in (gen_ints, gen_floats, delegate):
+            with self.subTest(gen=make.__name__):
+                self.assertEqual(
+                    boxes(drain, None, fresh=lambda: (make(N),)), 0)
+
+    @unittest.skipUnless(STATS, "needs a Py_STATS build")
+    def test_yield_from_return_makes_no_box(self):
+        # One box of harness setup is allowed
+        self.assertLess(boxes(drive, N), 10)
+
+    @unittest.skipUnless(STATS, "needs a Py_STATS build")
+    def test_match_inline_subject_makes_no_box(self):
+        for subject in (3, 2.5):
+            with self.subTest(subject=subject):
+                self.assertEqual(boxes(match_inline_loop, N, subject), 0)
+
+    @unittest.skipUnless(STATS, "needs a Py_STATS build")
+    def test_match_keys_makes_no_box(self):
+        self.assertEqual(boxes(match_keys_loop, N, {1: 2.5, 2: 3}), 0)
+
+    @unittest.skipUnless(STATS, "needs a Py_STATS build")
+    def test_super_reads_make_no_box(self):
+        self.assertEqual(boxes(super_loop, N, SuperDerived()), 0)
+
+
+class HandlerResultTests(unittest.TestCase):
+    def test_item_stores(self):
+        L = [0, 1, 2]
+        L[-1] = 5
+        L[0] = 2.5
+        self.assertEqual(L, [2.5, 1, 5])
+        for key, exc in ((3, IndexError), (-4, IndexError)):
+            with self.assertRaises(exc):
+                L[key] = 1
+            with self.assertRaises(exc):
+                del L[key]
+        d = {}
+        d[3] = 4
+        d[2.5] = True
+        self.assertEqual(d, {3: 4, 2.5: True})
+        del d[3]
+        with self.assertRaises(KeyError):
+            del d[3]
+        obj = SetDel()
+        user_item_loop(2, obj)
+        self.assertEqual(obj.seen, [(0, 0), (0,), (1, 1), (1,)])
+
+        class SubList(list):
+            def __setitem__(self, key, value):
+                super().__setitem__(key, value * 2)
+
+        sub = SubList([0, 0])
+        sub[-1] = 4
+        self.assertEqual(sub, [0, 8])
+
+    def test_generator_values(self):
+        self.assertEqual(list(gen_ints(3)), [0, 1, 2])
+        self.assertEqual(list(gen_floats(2)), [0.5, 1.5])
+        self.assertEqual(list(delegate(3)), [0, 1, 2])
+        g = delegated_return(3)
+        self.assertEqual(list(g), [1, 1, 1])
+        g = delegated_return(2)
+        next(g)
+        next(g)
+        with self.assertRaises(StopIteration) as cm:
+            next(g)
+        self.assertEqual(cm.exception.value, 10)
+
+    def test_send_into_delegate(self):
+        def echo():
+            received = []
+            while len(received) < 3:
+                received.append((yield len(received)))
+            return received
+
+        def outer():
+            r = yield from echo()
+            return r
+
+        g = outer()
+        self.assertEqual(next(g), 0)
+        self.assertEqual(g.send(10), 1)
+        self.assertEqual(g.send(2.5), 2)
+        with self.assertRaises(StopIteration) as cm:
+            g.send(True)
+        self.assertEqual(cm.exception.value, [10, 2.5, True])
+
+    def test_match(self):
+        self.assertEqual(match_inline_loop(3, 3), 3)
+        self.assertEqual(match_inline_loop(3, 2.5), 3)
+        self.assertEqual(match_inline_loop(3, "x"), 0)
+        self.assertEqual(match_keys_loop(3, {1: 2.5, 2: 3}), 3)
+        self.assertEqual(match_keys_loop(3, {1: 2.5}), 0)
+        self.assertEqual(match_keys_loop(3, {2: 2.5, 1: 3, 5: 6}), 3)
+
+        class Missing(dict):
+            def get(self, key, default=None):
+                return 10 if key == 1 else default
+
+        self.assertEqual(match_keys_loop(2, Missing()), 0)
+        match SubjectClass():
+            case SubjectClass(a, b):
+                self.assertEqual((a, b), (1, 2.5))
+        match 5:
+            case int(x):
+                self.assertEqual(x, 5)
+
+    def test_super_with_inline_self(self):
+        self.assertEqual(super(bool, True).real, 1)
+        self.assertEqual(super(bool, False).real, 0)
+        o = SuperDerived()
+        self.assertEqual(o.read(), 2.5)
+        self.assertEqual(o.method(), 7)
+
+    def test_import_level_reaches_custom_import(self):
+        import builtins
+        seen = []
+        real = builtins.__import__
+
+        def spy(name, globals=None, locals=None, fromlist=(), level=0):
+            seen.append((name, level, type(level)))
+            return real(name, globals, locals, fromlist, level)
+
+        namespace = {"__name__": "pkg.mod", "__package__": "pkg"}
+        builtins.__import__ = spy
+        try:
+            exec("import os\nfrom os import path", namespace)
+            try:
+                exec("from . import nothing", namespace)
+            except ImportError:
+                pass
+            try:
+                exec("from .. import nothing", namespace)
+            except ImportError:
+                pass
+        finally:
+            builtins.__import__ = real
+        levels = [(name, level) for name, level, kind in seen]
+        self.assertIn(("os", 0), levels)
+        self.assertIn(("", 1), levels)
+        self.assertIn(("", 2), levels)
+        self.assertTrue(all(kind is int for _, _, kind in seen))
+
+    def test_import_returning_inline_value(self):
+        import builtins
+        real = builtins.__import__
+
+        def inline(name, globals=None, locals=None, fromlist=(), level=0):
+            return 5
+
+        namespace = {}
+        builtins.__import__ = inline
+        try:
+            exec("import anything\nfrom anything import real", namespace)
+        finally:
+            builtins.__import__ = real
+        self.assertEqual(namespace["anything"], 5)
+        # int.real of the inline value 5
+        self.assertEqual(namespace["real"], 5)
+
+    @unittest.skipIf(_testinternalcapi is None, "needs _testinternalcapi")
+    def test_pep523_hook_returns_inline_values(self):
+        def returns_int():
+            return 5
+
+        def returns_float():
+            return 2.5
+
+        def gen():
+            yield 1
+            yield 2.5
+            return 7
+
+        def delegator():
+            r = yield from gen()
+            return r
+
+        async def coro():
+            return 3
+
+        records = []
+        _testinternalcapi.set_eval_frame_record(records)
+        try:
+            results = (returns_int(), returns_float(), list(gen()))
+            g = delegator()
+            g = delegator()
+            seen = [next(g), next(g)]
+            try:
+                next(g)
+            except StopIteration as e:
+                final = e.value
+            c = coro()
+            try:
+                c.send(None)
+            except StopIteration as e:
+                coro_result = e.value
+        finally:
+            _testinternalcapi.set_eval_frame_default()
+        self.assertEqual(results, (5, 2.5, [1, 2.5]))
+        self.assertEqual((seen, final, coro_result), ([1, 2.5], 7, 3))
+        self.assertIn("returns_int", records)
+        self.assertIn("gen", records)
 
 
 if __name__ == "__main__":

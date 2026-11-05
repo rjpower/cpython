@@ -295,6 +295,40 @@ class SliceTest(unittest.TestCase):
         self.assertEqual([0, 1, 2, 3][Index(1):Index(3)], [1, 2])
         self.assertEqual(slice(Index(2**60)).indices(5), (0, 5, 1))
 
+    def test_inline_bounds(self):
+        # Bounds that are inline ints, None, huge ints or objects with
+        # __index__ give what the slice object gives.
+        class Index:
+            def __init__(self, v):
+                self.v = v
+            def __index__(self):
+                return self.v
+
+        seq = list(range(10))
+        bounds = [None, 0, 1, 3, -1, -3, 9, 10, 11, -11, 2**62, -2**62,
+                  2**64, -2**64, True, Index(2), Index(-2)]
+        for kind in (list, tuple, str, bytes, bytearray):
+            data = (kind(seq) if kind in (list, tuple)
+                    else 'abcdefghij' if kind is str
+                    else kind(b'abcdefghij'))
+            for start in bounds:
+                for stop in bounds:
+                    with self.subTest(kind=kind, start=start, stop=stop):
+                        self.assertEqual(data[start:stop],
+                                         data[slice(start, stop)])
+                        copy = list(data) if kind is list else None
+                        if copy is not None:
+                            copy[start:stop] = [7]
+                            expected = list(data)
+                            expected[slice(start, stop)] = [7]
+                            self.assertEqual(copy, expected)
+        for kind in (list, tuple, str):
+            data = kind(seq) if kind is not str else 'abcdefghij'
+            with self.assertRaisesRegex(ValueError, "slice step cannot be zero"):
+                data[1:5:0]
+            with self.assertRaises(TypeError):
+                data[1.5:3]
+
     def test_setslice_without_getslice(self):
         tmp = []
         class X(object):

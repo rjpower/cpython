@@ -503,7 +503,7 @@ class AnalyzerTests(unittest.TestCase):
             ("finish_displaced_local(tstate, value_temps, ir_displaced);", False),
             ("ir_obj_left = _PyValueTemps_Box(value_temps, left);", True),
             ("value_reader_complete(&s, next_instr, value_temps, &r);", False),
-            ("value_subscript(op, l, r, value_temps);", True),
+            ("_PyValueTemps_Object(value_temps, l);", True),
             ("spam(value_temps);", True),
             ("value_temps->count++;", True),
             ("_PyValueTemps *t = value_temps;", True),

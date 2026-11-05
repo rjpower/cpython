@@ -1144,7 +1144,8 @@ bytearray___init___impl(PyByteArrayObject *self, PyValueBorrow arg,
             PyValue ref = (PyValue_IsObject(arg) && PyList_CheckExact(PyValue_AsKnownObjectBorrow(arg))) ? PyList_GetValue(PyValue_AsKnownObjectBorrow(arg), i)
                                                  : PyTuple_GetValue(PyValue_AsKnownObjectBorrow(arg), i);
             PyObject *item = PyValue_IsNull(ref) ? NULL
-                : _PyValue_AsObjectAt(ref, PyList_CheckExact(arg)
+                : _PyValue_AsObjectAt(ref, PyList_CheckExact(
+                                          PyValue_AsKnownObjectBorrow(arg))
                                       ? BOX_SITE_LIST : BOX_SITE_TUPLE);
             PyValue_XCLOSE(ref);
             if (item == NULL) {

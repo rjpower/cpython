@@ -2407,9 +2407,9 @@ sys__stats_on_impl(PyObject *module)
 /*[clinic end generated code: output=ac4ed0551ec2c343 input=43b5bfe145299e55]*/
 {
     if (_Py_StatsOn() < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -2423,7 +2423,7 @@ sys__stats_off_impl(PyObject *module)
 /*[clinic end generated code: output=b68b1e902f87f6fe input=d1a84c60c56cbce2]*/
 {
     _Py_StatsOff();
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -2437,7 +2437,7 @@ sys__stats_clear_impl(PyObject *module)
 /*[clinic end generated code: output=f4b18a14e4272513 input=3e03f2654f44da96]*/
 {
     _Py_StatsClear();
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]

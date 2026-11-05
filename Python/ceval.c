@@ -2210,11 +2210,11 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     activation.previous = tstate_impl->eval_activation;
     tstate_impl->eval_activation = &activation;
 #if _Py_STACK_GROWS_DOWN
-    assert(_Py_get_machine_stack_pointer() < (uintptr_t)&activation);
+    assert(_Py_get_machine_stack_pointer() <= (uintptr_t)&activation);
     assert(activation.previous == NULL ||
            (uintptr_t)&activation < (uintptr_t)activation.previous);
 #else
-    assert(_Py_get_machine_stack_pointer() > (uintptr_t)&activation);
+    assert(_Py_get_machine_stack_pointer() >= (uintptr_t)&activation);
     assert(activation.previous == NULL ||
            (uintptr_t)&activation > (uintptr_t)activation.previous);
 #endif

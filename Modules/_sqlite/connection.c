@@ -35,11 +35,15 @@
 #include "prepare_protocol.h"
 #include "util.h"
 
+#include "pycore_list.h"          // PyList_AppendValue()
+#include "pycore_long_value.h"    // _PyValue_AsLongAndOverflow()
 #include "pycore_modsupport.h"    // _PyArg_NoKeywords()
 #include "pycore_pyerrors.h"      // _PyErr_ChainExceptions1()
 #include "pycore_pylifecycle.h"   // _Py_IsInterpreterFinalizing()
+#include "pycore_tuple.h"         // PyTuple_SET_VALUE()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL
 #include "pycore_value.h"         // PyValue
+#include "pycore_value_ops.h"     // _PyValue_GetAttr()
 
 #include <stdbool.h>
 
@@ -71,13 +75,15 @@ get_isolation_level(const char *level)
 }
 
 static int
-isolation_level_converter(PyObject *str_or_none, const char **result)
+isolation_level_converter(PyValueBorrow str_or_none, const char **result)
 {
-    if (Py_IsNone(str_or_none)) {
+    if (PyValue_IsNone(str_or_none)) {
         *result = NULL;
     }
-    else if (PyUnicode_Check(str_or_none)) {
-        const char *str = _PyUnicode_AsUTF8NoNUL(str_or_none);
+    else if (PyValue_IsObject(str_or_none)
+             && PyUnicode_Check(PyValue_AsKnownObjectBorrow(str_or_none))) {
+        const char *str = _PyUnicode_AsUTF8NoNUL(
+            PyValue_AsKnownObjectBorrow(str_or_none));
         if (str == NULL) {
             return 0;
         }
@@ -96,19 +102,19 @@ isolation_level_converter(PyObject *str_or_none, const char **result)
 }
 
 static int
-autocommit_converter(PyObject *val, enum autocommit_mode *result)
+autocommit_converter(PyValueBorrow val, enum autocommit_mode *result)
 {
-    if (Py_IsTrue(val)) {
+    if (PyValue_Is(val, PyValue_True)) {
         *result = AUTOCOMMIT_ENABLED;
         return 1;
     }
-    if (Py_IsFalse(val)) {
+    if (PyValue_Is(val, PyValue_False)) {
         *result = AUTOCOMMIT_DISABLED;
         return 1;
     }
-    if (PyLong_Check(val)) {
+    if (PyValue_LongCheck(val)) {
         int overflow;
-        long value = PyLong_AsLongAndOverflow(val, &overflow);
+        long value = _PyValue_AsLongAndOverflow(val, &overflow);
         if (value == -1 && PyErr_Occurred()) {
             return 0;
         }
@@ -125,20 +131,41 @@ autocommit_converter(PyObject *val, enum autocommit_mode *result)
 }
 
 static int
-sqlite3_int64_converter(PyObject *obj, sqlite3_int64 *result)
+sqlite3_int64_converter(PyValueBorrow obj, sqlite3_int64 *result)
 {
-    if (!PyLong_Check(obj)) {
+    if (!PyValue_LongCheck(obj)) {
         PyErr_SetString(PyExc_TypeError, "expected 'int'");
         return 0;
     }
-    *result = _pysqlite_long_as_int64(obj);
+    PyObject *obj_obj = _PyValue_AsObjectAt(obj, BOX_SITE_PARSER);
+    if (obj_obj == NULL) {
+        return 0;
+    }
+    *result = _pysqlite_long_as_int64(obj_obj);
+    Py_DECREF(obj_obj);
     if (PyErr_Occurred()) {
         return 0;
     }
     return 1;
 }
 
-#define clinic_state() (pysqlite_get_state_by_type(Py_TYPE(self)))
+/* The generated parsers hold self as a value; the other generated code holds
+   it as an object. */
+static inline PyTypeObject *
+type_of_object(PyObject *self)
+{
+    return Py_TYPE(self);
+}
+
+static inline PyTypeObject *
+type_of_borrow(PyValueBorrow self)
+{
+    return PyValue_TYPE(self);
+}
+
+#define clinic_state() \
+    (pysqlite_get_state_by_type(_Generic((self), PyValueBorrow: type_of_borrow, \
+                                                 default: type_of_object)(self)))
 #include "clinic/connection.c.h"
 #undef clinic_state
 
@@ -246,12 +273,19 @@ pysqlite_connection_init_impl(pysqlite_Connection *self,
                               enum autocommit_mode autocommit)
 /*[clinic end generated code: output=a315b6cd150a1ac1 input=5ca4883d8747a49b]*/
 {
-    if (PySys_Audit("sqlite3.connect", "O", database) < 0) {
+    PyObject *database_obj = _PyValue_AsObjectAt(database, BOX_SITE_PARSER);
+    if (database_obj == NULL) {
+        return -1;
+    }
+    if (PySys_Audit("sqlite3.connect", "O", database_obj) < 0) {
+        Py_DECREF(database_obj);
         return -1;
     }
 
     PyObject *bytes;
-    if (!PyUnicode_FSConverter(database, &bytes)) {
+    int converted = PyUnicode_FSConverter(database_obj, &bytes);
+    Py_DECREF(database_obj);
+    if (!converted) {
         return -1;
     }
 
@@ -544,22 +578,30 @@ pysqlite_connection_cursor_impl(pysqlite_Connection *self,
     PyObject* cursor;
 
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    if (factory == NULL) {
-        factory = (PyObject *)self->state->CursorType;
+    PyObject *factory_obj;
+    if (PyValue_IsNull(factory)) {
+        factory_obj = Py_NewRef((PyObject *)self->state->CursorType);
+    }
+    else {
+        factory_obj = _PyValue_AsObjectAt(factory, BOX_SITE_PARSER);
+        if (factory_obj == NULL) {
+            return PyValue_NULL;
+        }
     }
 
-    cursor = PyObject_CallOneArg(factory, (PyObject *)self);
+    cursor = PyObject_CallOneArg(factory_obj, (PyObject *)self);
+    Py_DECREF(factory_obj);
     if (cursor == NULL)
-        return NULL;
+        return PyValue_NULL;
     if (!PyObject_TypeCheck(cursor, self->state->CursorType)) {
         PyErr_Format(PyExc_TypeError,
                      "factory must return a cursor, not %.100s",
                      Py_TYPE(cursor)->tp_name);
         Py_DECREF(cursor);
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (cursor && self->row_factory != Py_None) {
@@ -567,7 +609,7 @@ pysqlite_connection_cursor_impl(pysqlite_Connection *self,
         Py_XSETREF(((pysqlite_Cursor *)cursor)->row_factory, self->row_factory);
     }
 
-    return cursor;
+    return _PyValue_FromObjectResult(cursor);
 }
 
 static PyObject *
@@ -636,7 +678,7 @@ blobopen_impl(pysqlite_Connection *self, const char *table, const char *col,
 /*[clinic end generated code: output=024e6f17644ef598 input=cc3d4b47dac08401]*/
 {
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     int rc;
@@ -648,11 +690,11 @@ blobopen_impl(pysqlite_Connection *self, const char *table, const char *col,
 
     if (rc == SQLITE_MISUSE) {
         set_error_from_code(self->state, rc);
-        return NULL;
+        return PyValue_NULL;
     }
     else if (rc != SQLITE_OK) {
         set_error_from_db(self->state, self->db);
-        return NULL;
+        return PyValue_NULL;
     }
 
     pysqlite_Blob *obj = PyObject_GC_New(pysqlite_Blob, self->state->BlobType);
@@ -672,17 +714,17 @@ blobopen_impl(pysqlite_Connection *self, const char *table, const char *col,
     if (weakref == NULL) {
         goto error;
     }
-    rc = PyList_Append(self->blobs, weakref);
+    rc = PyList_AppendValue(self->blobs, PyValue_FromObjectBorrow(weakref));
     Py_DECREF(weakref);
     if (rc < 0) {
         goto error;
     }
 
-    return (PyObject *)obj;
+    return _PyValue_FromObjectResult((PyObject *)obj);
 
 error:
     Py_XDECREF(obj);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -698,7 +740,7 @@ pysqlite_connection_close_impl(pysqlite_Connection *self)
 /*[clinic end generated code: output=cf1c16491bbf01aa input=b3ed5b74f6fefc06]*/
 {
     if (!pysqlite_check_thread(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (!self->initialized) {
@@ -706,16 +748,16 @@ pysqlite_connection_close_impl(pysqlite_Connection *self)
         pysqlite_state *state = pysqlite_get_state_by_type(tp);
         PyErr_SetString(state->ProgrammingError,
                         "Base Connection.__init__ not called.");
-        return NULL;
+        return PyValue_NULL;
     }
 
     pysqlite_close_all_blobs(self);
     Py_CLEAR(self->statement_cache);
     if (connection_close(self) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*
@@ -754,25 +796,25 @@ pysqlite_connection_commit_impl(pysqlite_Connection *self)
 /*[clinic end generated code: output=9e56cbd0dfed32f4 input=c8793c97c3446065]*/
 {
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (self->autocommit == AUTOCOMMIT_LEGACY) {
         if (!sqlite3_get_autocommit(self->db)) {
             if (connection_exec_stmt(self, "COMMIT") < 0) {
-                return NULL;
+                return PyValue_NULL;
             }
         }
     }
     else if (self->autocommit == AUTOCOMMIT_DISABLED) {
         if (connection_exec_stmt(self, "COMMIT") < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
         if (connection_exec_stmt(self, "BEGIN") < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -788,25 +830,25 @@ pysqlite_connection_rollback_impl(pysqlite_Connection *self)
 /*[clinic end generated code: output=4fc72dc45d5759e2 input=7f60a2f1076f16b3]*/
 {
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (self->autocommit == AUTOCOMMIT_LEGACY) {
         if (!sqlite3_get_autocommit(self->db)) {
             if (connection_exec_stmt(self, "ROLLBACK") < 0) {
-                return NULL;
+                return PyValue_NULL;
             }
         }
     }
     else if (self->autocommit == AUTOCOMMIT_DISABLED) {
         if (connection_exec_stmt(self, "ROLLBACK") < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
         if (connection_exec_stmt(self, "BEGIN") < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static int
@@ -919,7 +961,7 @@ _pysqlite_build_py_params(sqlite3_context *context, int argc,
             goto error;
         }
 
-        PyTuple_SET_ITEM(args, i, cur_py_value);
+        PyTuple_SET_VALUE(args, i, PyValue_PrepareOwned(cur_py_value));
     }
 
     return args;
@@ -1019,7 +1061,10 @@ step_callback(sqlite3_context *context, int argc, sqlite3_value **params)
         }
     }
 
-    stepmethod = PyObject_GetAttr(*aggregate_instance, ctx->state->str_step);
+    PyValue stepmethod_v = _PyValue_GetAttr(
+        PyValue_FromObjectBorrow(*aggregate_instance), ctx->state->str_step);
+    stepmethod = PyValue_IsNull(stepmethod_v) ? NULL
+                      : _PyValue_AsObjectStealAt(stepmethod_v, BOX_SITE_ATTRIBUTE);
     if (!stepmethod) {
         set_sqlite_error(context,
                 "user-defined aggregate's 'step' method not defined");
@@ -1110,7 +1155,7 @@ error:
  * pointer.
  */
 static callback_context *
-create_callback_context(PyTypeObject *cls, PyObject *callable)
+create_callback_context(PyTypeObject *cls, PyValueBorrow callable)
 {
     callback_context *ctx = PyMem_Malloc(sizeof(callback_context));
     if (ctx == NULL) {
@@ -1118,9 +1163,15 @@ create_callback_context(PyTypeObject *cls, PyObject *callable)
         return NULL;
     }
 
+    PyObject *callable_obj = _PyValue_AsObjectAt(callable, BOX_SITE_FIELD);
+    if (callable_obj == NULL) {
+        PyMem_Free(ctx);
+        return NULL;
+    }
+
     PyObject *module = PyType_GetModule(cls);
     ctx->refcount = 1;
-    ctx->callable = Py_NewRef(callable);
+    ctx->callable = callable_obj;
     ctx->module = Py_NewRef(module);
     ctx->state = pysqlite_get_state(module);
     return ctx;
@@ -1219,10 +1270,10 @@ pysqlite_connection_create_function_impl(pysqlite_Connection *self,
     int flags = SQLITE_UTF8;
 
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (check_num_params(self, narg, "narg") < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (deterministic) {
@@ -1230,7 +1281,7 @@ pysqlite_connection_create_function_impl(pysqlite_Connection *self,
     }
     callback_context *ctx = create_callback_context(cls, func);
     if (ctx == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     rc = sqlite3_create_function_v2(self->db, name, narg, flags, ctx,
                                     func_callback,
@@ -1241,9 +1292,9 @@ pysqlite_connection_create_function_impl(pysqlite_Connection *self,
     if (rc != SQLITE_OK) {
         /* Workaround for SQLite bug: no error code or string is available here */
         PyErr_SetString(self->OperationalError, "Error creating function");
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 #ifdef HAVE_WINDOW_FUNCTIONS
@@ -1267,7 +1318,10 @@ inverse_callback(sqlite3_context *context, int argc, sqlite3_value **params)
     assert(cls != NULL);
     assert(*cls != NULL);
 
-    PyObject *method = PyObject_GetAttr(*cls, ctx->state->str_inverse);
+    PyValue method_v = _PyValue_GetAttr(PyValue_FromObjectBorrow(*cls),
+                                        ctx->state->str_inverse);
+    PyObject *method = PyValue_IsNull(method_v) ? NULL
+                      : _PyValue_AsObjectStealAt(method_v, BOX_SITE_ATTRIBUTE);
     if (method == NULL) {
         set_sqlite_error(context,
                 "user-defined aggregate's 'inverse' method not defined");
@@ -1365,25 +1419,25 @@ create_window_function_impl(pysqlite_Connection *self, PyTypeObject *cls,
         PyErr_SetString(self->NotSupportedError,
                         "create_window_function() requires "
                         "SQLite 3.25.0 or higher");
-        return NULL;
+        return PyValue_NULL;
     }
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (check_num_params(self, num_params, "num_params") < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     int flags = SQLITE_UTF8;
     int rc;
-    if (Py_IsNone(aggregate_class)) {
+    if (PyValue_IsNone(aggregate_class)) {
         rc = sqlite3_create_window_function(self->db, name, num_params, flags,
                                             0, 0, 0, 0, 0, 0);
     }
     else {
         callback_context *ctx = create_callback_context(cls, aggregate_class);
         if (ctx == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
         rc = sqlite3_create_window_function(self->db, name, num_params, flags,
                                             ctx,
@@ -1398,9 +1452,9 @@ create_window_function_impl(pysqlite_Connection *self, PyTypeObject *cls,
         /* Errors are not set on the database connection; use result code
          * instead. */
         set_error_from_code(self->state, rc);
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 #endif
 
@@ -1426,15 +1480,15 @@ pysqlite_connection_create_aggregate_impl(pysqlite_Connection *self,
     int rc;
 
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (check_num_params(self, n_arg, "n_arg") < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     callback_context *ctx = create_callback_context(cls, aggregate_class);
     if (ctx == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     rc = sqlite3_create_function_v2(self->db, name, n_arg, SQLITE_UTF8, ctx,
                                     0,
@@ -1444,9 +1498,9 @@ pysqlite_connection_create_aggregate_impl(pysqlite_Connection *self,
     if (rc != SQLITE_OK) {
         /* Workaround for SQLite bug: no error code or string is available here */
         PyErr_SetString(self->OperationalError, "Error creating aggregate");
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static int
@@ -1505,7 +1559,7 @@ progress_callback(void *ctx_vp)
         rc = -1;
     }
     else {
-        rc = PyObject_IsTrue(ret);
+        rc = _PyValue_IsTrue(PyValue_FromObjectBorrow(ret));
         Py_DECREF(ret);
     }
     if (rc < 0) {
@@ -1589,18 +1643,18 @@ pysqlite_connection_set_authorizer_impl(pysqlite_Connection *self,
 /*[clinic end generated code: output=eea85a993ddc69bc input=e76469ab0bb1bbcd]*/
 {
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     int rc;
-    if (callable == Py_None) {
+    if (PyValue_IsNone(callable)) {
         rc = sqlite3_set_authorizer(self->db, NULL, NULL);
         set_callback_context(&self->authorizer_ctx, NULL);
     }
     else {
         callback_context *ctx = create_callback_context(cls, callable);
         if (ctx == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
         rc = sqlite3_set_authorizer(self->db, authorizer_callback, ctx);
         set_callback_context(&self->authorizer_ctx, ctx);
@@ -1609,9 +1663,9 @@ pysqlite_connection_set_authorizer_impl(pysqlite_Connection *self,
         PyErr_SetString(self->OperationalError,
                         "Error setting authorizer callback");
         set_callback_context(&self->authorizer_ctx, NULL);
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -1640,10 +1694,10 @@ pysqlite_connection_set_progress_handler_impl(pysqlite_Connection *self,
 /*[clinic end generated code: output=9e9374101d8136ea input=fd0d5abb004f370f]*/
 {
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    if (callable == Py_None) {
+    if (PyValue_IsNone(callable)) {
         /* None clears the progress handler previously set */
         sqlite3_progress_handler(self->db, 0, 0, (void*)0);
         set_callback_context(&self->progress_ctx, NULL);
@@ -1651,12 +1705,12 @@ pysqlite_connection_set_progress_handler_impl(pysqlite_Connection *self,
     else {
         callback_context *ctx = create_callback_context(cls, callable);
         if (ctx == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
         sqlite3_progress_handler(self->db, n, progress_callback, ctx);
         set_callback_context(&self->progress_ctx, ctx);
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -1677,10 +1731,10 @@ pysqlite_connection_set_trace_callback_impl(pysqlite_Connection *self,
 /*[clinic end generated code: output=688cea14fdd953f4 input=edfd7d890200a9cb]*/
 {
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    if (callable == Py_None) {
+    if (PyValue_IsNone(callable)) {
         /*
          * None clears the trace callback previously set
          *
@@ -1694,13 +1748,13 @@ pysqlite_connection_set_trace_callback_impl(pysqlite_Connection *self,
     else {
         callback_context *ctx = create_callback_context(cls, callable);
         if (ctx == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
         sqlite3_trace_v2(self->db, SQLITE_TRACE_STMT, trace_callback, ctx);
         set_callback_context(&self->trace_ctx, ctx);
     }
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 #ifdef PY_SQLITE_ENABLE_LOAD_EXTENSION
@@ -1843,14 +1897,15 @@ pysqlite_connection_set_isolation_level(PyObject *op,
         self->isolation_level = NULL;
 
         // Execute a COMMIT to re-enable autocommit mode
-        PyObject *res = pysqlite_connection_commit_impl(self);
-        if (res == NULL) {
+        PyValue res = pysqlite_connection_commit_impl(self);
+        if (PyValue_IsNull(res)) {
             return -1;
         }
-        Py_DECREF(res);
+        PyValue_CLOSE(res);
         return 0;
     }
-    if (!isolation_level_converter(isolation_level, &self->isolation_level)) {
+    if (!isolation_level_converter(PyValue_FromObjectBorrow(isolation_level),
+                                   &self->isolation_level)) {
         return -1;
     }
     return 0;
@@ -1898,12 +1953,24 @@ pysqlite_connection_execute_impl(pysqlite_Connection *self, PyObject *sql,
 {
     PyObject* result = 0;
 
-    PyObject *cursor = pysqlite_connection_cursor_impl(self, NULL);
+    PyValue cursor_v = pysqlite_connection_cursor_impl(self, PyValue_Borrow(PyValue_NULL));
+    PyObject *cursor = PyValue_IsNull(cursor_v)
+        ? NULL : PyValue_AsKnownObjectSteal(cursor_v);
     if (!cursor) {
         goto error;
     }
 
-    result = _pysqlite_query_execute((pysqlite_Cursor *)cursor, 0, sql, parameters);
+    PyObject *parameters_obj = NULL;
+    if (!PyValue_IsNull(parameters)) {
+        parameters_obj = _PyValue_AsObjectAt(parameters, BOX_SITE_PARSER);
+        if (parameters_obj == NULL) {
+            Py_CLEAR(cursor);
+            goto error;
+        }
+    }
+    result = _pysqlite_query_execute((pysqlite_Cursor *)cursor, 0, sql,
+                                     parameters_obj);
+    Py_XDECREF(parameters_obj);
     if (!result) {
         Py_CLEAR(cursor);
     }
@@ -1911,7 +1978,7 @@ pysqlite_connection_execute_impl(pysqlite_Connection *self, PyObject *sql,
 error:
     Py_XDECREF(result);
 
-    return cursor;
+    return _PyValue_FromObjectResult(cursor);
 }
 
 /*[clinic input]
@@ -1931,12 +1998,21 @@ pysqlite_connection_executemany_impl(pysqlite_Connection *self,
 {
     PyObject* result = 0;
 
-    PyObject *cursor = pysqlite_connection_cursor_impl(self, NULL);
+    PyValue cursor_v = pysqlite_connection_cursor_impl(self, PyValue_Borrow(PyValue_NULL));
+    PyObject *cursor = PyValue_IsNull(cursor_v)
+        ? NULL : PyValue_AsKnownObjectSteal(cursor_v);
     if (!cursor) {
         goto error;
     }
 
-    result = _pysqlite_query_execute((pysqlite_Cursor *)cursor, 1, sql, parameters);
+    PyObject *parameters_obj = _PyValue_AsObjectAt(parameters, BOX_SITE_PARSER);
+    if (parameters_obj == NULL) {
+        Py_CLEAR(cursor);
+        goto error;
+    }
+    result = _pysqlite_query_execute((pysqlite_Cursor *)cursor, 1, sql,
+                                     parameters_obj);
+    Py_DECREF(parameters_obj);
     if (!result) {
         Py_CLEAR(cursor);
     }
@@ -1944,7 +2020,7 @@ pysqlite_connection_executemany_impl(pysqlite_Connection *self,
 error:
     Py_XDECREF(result);
 
-    return cursor;
+    return _PyValue_FromObjectResult(cursor);
 }
 
 /*[clinic input]
@@ -1963,13 +2039,21 @@ pysqlite_connection_executescript_impl(pysqlite_Connection *self,
 {
     PyObject* result = 0;
 
-    PyObject *cursor = pysqlite_connection_cursor_impl(self, NULL);
+    PyValue cursor_v = pysqlite_connection_cursor_impl(self, PyValue_Borrow(PyValue_NULL));
+    PyObject *cursor = PyValue_IsNull(cursor_v)
+        ? NULL : PyValue_AsKnownObjectSteal(cursor_v);
     if (!cursor) {
         goto error;
     }
 
     PyObject *meth = self->state->str_executescript;  // borrowed ref.
-    result = PyObject_CallMethodObjArgs(cursor, meth, script_obj, NULL);
+    PyObject *script = _PyValue_AsObjectAt(script_obj, BOX_SITE_PARSER);
+    if (script == NULL) {
+        Py_CLEAR(cursor);
+        goto error;
+    }
+    result = PyObject_CallMethodObjArgs(cursor, meth, script, NULL);
+    Py_DECREF(script);
     if (!result) {
         Py_CLEAR(cursor);
     }
@@ -1977,7 +2061,7 @@ pysqlite_connection_executescript_impl(pysqlite_Connection *self,
 error:
     Py_XDECREF(result);
 
-    return cursor;
+    return _PyValue_FromObjectResult(cursor);
 }
 
 /* ------------------------- COLLATION CODE ------------------------ */
@@ -2061,7 +2145,7 @@ pysqlite_connection_interrupt_impl(pysqlite_Connection *self)
     retval = Py_NewRef(Py_None);
 
 finally:
-    return retval;
+    return _PyValue_FromObjectResult(retval);
 }
 
 /* Function author: Paul Kippes <kippesp@gmail.com>
@@ -2084,7 +2168,7 @@ pysqlite_connection_iterdump_impl(pysqlite_Connection *self,
 /*[clinic end generated code: output=077af41e83fb40ac input=4ae6d9a898f108df]*/
 {
     if (!pysqlite_check_connection(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyObject *iterdump = PyImport_ImportModuleAttrString(MODULE_NAME ".dump", "_iterdump");
@@ -2093,19 +2177,26 @@ pysqlite_connection_iterdump_impl(pysqlite_Connection *self,
             PyErr_SetString(self->OperationalError,
                             "Failed to obtain _iterdump() reference");
         }
-        return NULL;
+        return PyValue_NULL;
     }
-    PyObject *args[3] = {NULL, (PyObject *)self, filter};
+    PyObject *filter_obj = _PyValue_AsObjectAt(filter, BOX_SITE_PARSER);
+    if (filter_obj == NULL) {
+        Py_DECREF(iterdump);
+        return PyValue_NULL;
+    }
+    PyObject *args[3] = {NULL, (PyObject *)self, filter_obj};
     PyObject *kwnames = Py_BuildValue("(s)", "filter");
     if (!kwnames) {
         Py_DECREF(iterdump);
-        return NULL;
+        Py_DECREF(filter_obj);
+        return PyValue_NULL;
     }
     Py_ssize_t nargsf = 1 | PY_VECTORCALL_ARGUMENTS_OFFSET;
     PyObject *retval = PyObject_Vectorcall(iterdump, args + 1, nargsf, kwnames);
     Py_DECREF(iterdump);
     Py_DECREF(kwnames);
-    return retval;
+    Py_DECREF(filter_obj);
+    return _PyValue_FromObjectResult(retval);
 }
 
 /*[clinic input]
@@ -2134,21 +2225,24 @@ pysqlite_connection_backup_impl(pysqlite_Connection *self,
     sqlite3_backup *bck_handle;
 
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (!pysqlite_check_connection(target)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (target == self) {
         PyErr_SetString(PyExc_ValueError, "target cannot be the same connection instance");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    if (progress != Py_None && !PyCallable_Check(progress)) {
+    /* an inline int or float is never callable */
+    if (!PyValue_IsNone(progress)
+        && !(PyValue_IsObject(progress)
+             && PyCallable_Check(PyValue_AsKnownObjectBorrow(progress)))) {
         PyErr_SetString(PyExc_TypeError, "progress argument must be a callable");
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (pages == 0) {
@@ -2163,7 +2257,7 @@ pysqlite_connection_backup_impl(pysqlite_Connection *self,
 
     if (bck_handle == NULL) {
         set_error_from_db(self->state, bck_conn);
-        return NULL;
+        return PyValue_NULL;
     }
 
     do {
@@ -2171,17 +2265,17 @@ pysqlite_connection_backup_impl(pysqlite_Connection *self,
         rc = sqlite3_backup_step(bck_handle, pages);
         Py_END_ALLOW_THREADS
 
-        if (progress != Py_None) {
+        if (!PyValue_IsNone(progress)) {
             int remaining = sqlite3_backup_remaining(bck_handle);
             int pagecount = sqlite3_backup_pagecount(bck_handle);
-            PyObject *res = PyObject_CallFunction(progress, "iii", rc,
+            PyObject *res = PyObject_CallFunction(PyValue_AsKnownObjectBorrow(progress), "iii", rc,
                                                   remaining, pagecount);
             if (res == NULL) {
                 /* Callback failed: abort backup and bail. */
                 Py_BEGIN_ALLOW_THREADS
                 sqlite3_backup_finish(bck_handle);
                 Py_END_ALLOW_THREADS
-                return NULL;
+                return PyValue_NULL;
             }
             Py_DECREF(res);
         }
@@ -2201,10 +2295,10 @@ pysqlite_connection_backup_impl(pysqlite_Connection *self,
 
     if (rc != SQLITE_OK) {
         set_error_from_db(self->state, bck_conn);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -2226,24 +2320,25 @@ pysqlite_connection_create_collation_impl(pysqlite_Connection *self,
 /*[clinic end generated code: output=ffebfa7028f3d629 input=f67ecd2e31e61ad3]*/
 {
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     callback_context *ctx = NULL;
     int rc;
     int flags = SQLITE_UTF8;
-    if (callable == Py_None) {
+    if (PyValue_IsNone(callable)) {
         rc = sqlite3_create_collation_v2(self->db, name, flags,
                                          NULL, NULL, NULL);
     }
     else {
-        if (!PyCallable_Check(callable)) {
+        if (!(PyValue_IsObject(callable)
+              && PyCallable_Check(PyValue_AsKnownObjectBorrow(callable)))) {
             PyErr_SetString(PyExc_TypeError, "parameter must be callable");
-            return NULL;
+            return PyValue_NULL;
         }
         ctx = create_callback_context(cls, callable);
         if (ctx == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
         rc = sqlite3_create_collation_v2(self->db, name, flags, ctx,
                                          &collation_callback,
@@ -2255,14 +2350,14 @@ pysqlite_connection_create_collation_impl(pysqlite_Connection *self,
          * called if sqlite3_create_collation_v2() fails, so we have to free
          * the context before returning.
          */
-        if (callable != Py_None) {
+        if (!PyValue_IsNone(callable)) {
             decref_callback_context(ctx);
         }
         set_error_from_db(self->state, self->db);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 #ifdef PY_SQLITE_HAVE_SERIALIZE
@@ -2286,7 +2381,7 @@ serialize_impl(pysqlite_Connection *self, const char *name)
 /*[clinic end generated code: output=cf22f4f3e0adfa7e input=7e48654e8e082fa8]*/
 {
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* If SQLite has a contiguous memory representation of the database, we can
@@ -2307,13 +2402,13 @@ serialize_impl(pysqlite_Connection *self, const char *name)
     if (data == NULL) {
         PyErr_Format(self->OperationalError, "unable to serialize '%s'",
                      name);
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *res = PyBytes_FromStringAndSize(data, (Py_ssize_t)size);
     if (!(flags & SQLITE_SERIALIZE_NOCOPY)) {
         sqlite3_free((void *)data);
     }
-    return res;
+    return _PyValue_FromObjectResult(res);
 }
 
 /*[clinic input]
@@ -2343,7 +2438,7 @@ deserialize_impl(pysqlite_Connection *self, Py_buffer *data,
 /*[clinic end generated code: output=768ab5bf54a557ab input=5d20e028d98c0686]*/
 {
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* Transfer ownership of the buffer to SQLite:
@@ -2359,13 +2454,13 @@ deserialize_impl(pysqlite_Connection *self, Py_buffer *data,
      */
     if (data->len > 9223372036854775807) {  // (1 << 63) - 1
         PyErr_SetString(PyExc_OverflowError, "'data' is too large");
-        return NULL;
+        return PyValue_NULL;
     }
 
     sqlite3_int64 size = (sqlite3_int64)data->len;
     unsigned char *buf = sqlite3_malloc64(size);
     if (buf == NULL) {
-        return PyErr_NoMemory();
+        return _PyValue_FromObjectResult(PyErr_NoMemory());
     }
 
     const unsigned int flags = SQLITE_DESERIALIZE_FREEONCLOSE |
@@ -2378,9 +2473,9 @@ deserialize_impl(pysqlite_Connection *self, Py_buffer *data,
 
     if (rc != SQLITE_OK) {
         set_error_from_db(self->state, self->db);
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 #endif  // PY_SQLITE_HAVE_SERIALIZE
 
@@ -2398,9 +2493,9 @@ pysqlite_connection_enter_impl(pysqlite_Connection *self)
 /*[clinic end generated code: output=174b2525da622bae input=127d7a4f17e86d8f]*/
 {
     if (!pysqlite_check_connection(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return Py_NewRef((PyObject *)self);
+    return _PyValue_FromObjectResult(Py_NewRef((PyObject *)self));
 }
 
 /*[clinic input]
@@ -2424,9 +2519,10 @@ pysqlite_connection_exit_impl(pysqlite_Connection *self,
 /*[clinic end generated code: output=a5e3375a14d1551d input=8fdb0392ee6f3466]*/
 {
     int commit = 0;
-    PyObject* result;
+    PyValue result;
 
-    if (exc_type == Py_None && exc_value == Py_None && exc_tb == Py_None) {
+    if (PyValue_IsNone(exc_type) && PyValue_IsNone(exc_value)
+        && PyValue_IsNone(exc_tb)) {
         commit = 1;
         result = pysqlite_connection_commit_impl(self);
     }
@@ -2434,25 +2530,25 @@ pysqlite_connection_exit_impl(pysqlite_Connection *self,
         result = pysqlite_connection_rollback_impl(self);
     }
 
-    if (result == NULL) {
+    if (PyValue_IsNull(result)) {
         if (commit) {
             /* Commit failed; try to rollback in order to unlock the database.
              * If rollback also fails, chain the exceptions. */
             PyObject *exc = PyErr_GetRaisedException();
             result = pysqlite_connection_rollback_impl(self);
-            if (result == NULL) {
+            if (PyValue_IsNull(result)) {
                 _PyErr_ChainExceptions1(exc);
             }
             else {
-                Py_DECREF(result);
+                PyValue_CLOSE(result);
                 PyErr_SetRaisedException(exc);
             }
         }
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_DECREF(result);
+    PyValue_CLOSE(result);
 
-    Py_RETURN_FALSE;
+    return PyValue_False;
 }
 
 /*[clinic input]
@@ -2477,15 +2573,15 @@ setlimit_impl(pysqlite_Connection *self, int category, int limit)
 /*[clinic end generated code: output=5f532bc4fba656b0 input=5c2e430091206677]*/
 {
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     int old_limit = sqlite3_limit(self->db, category, limit);
     if (old_limit < 0) {
         PyErr_SetString(self->ProgrammingError, "'category' is out of bounds");
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromLong(old_limit);
+    return _PyValue_FromObjectResult(PyLong_FromLong(old_limit));
 }
 
 /*[clinic input]
@@ -2565,23 +2661,23 @@ setconfig_impl(pysqlite_Connection *self, int op, int enable)
 /*[clinic end generated code: output=3e51be018f5d32c5 input=a10f1539c2d7da6b]*/
 {
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (!is_int_config(op)) {
-        return PyErr_Format(PyExc_ValueError, "unknown config 'op': %d", op);
+        return _PyValue_FromObjectResult(PyErr_Format(PyExc_ValueError, "unknown config 'op': %d", op));
     }
 
     int actual;
     int rc = sqlite3_db_config(self->db, op, enable, &actual);
     if (rc != SQLITE_OK) {
         set_error_from_db(self->state, self->db);
-        return NULL;
+        return PyValue_NULL;
     }
     if (enable != actual) {
         PyErr_SetString(self->state->OperationalError, "Unable to set config");
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -2643,7 +2739,7 @@ set_autocommit(PyObject *op, PyObject *val, void *Py_UNUSED(closure))
     if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self)) {
         return -1;
     }
-    if (!autocommit_converter(val, &self->autocommit)) {
+    if (!autocommit_converter(PyValue_FromObjectBorrow(val), &self->autocommit)) {
         return -1;
     }
     if (self->autocommit == AUTOCOMMIT_ENABLED) {

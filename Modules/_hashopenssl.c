@@ -1152,18 +1152,18 @@ _hashlib_HASHXOF_digest_impl(HASHobject *self, Py_ssize_t length)
     EVP_MD_CTX *temp_ctx;
 
     if (length == 0) {
-        return Py_GetConstant(Py_CONSTANT_EMPTY_BYTES);
+        return _PyValue_FromObjectResult(Py_GetConstant(Py_CONSTANT_EMPTY_BYTES));
     }
 
     PyBytesWriter *writer = PyBytesWriter_Create(length);
     if (writer == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     temp_ctx = py_wrapper_EVP_MD_CTX_new();
     if (temp_ctx == NULL) {
         PyBytesWriter_Discard(writer);
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (_hashlib_HASH_copy_locked(self, temp_ctx) < 0) {
@@ -1178,12 +1178,12 @@ _hashlib_HASHXOF_digest_impl(HASHobject *self, Py_ssize_t length)
     }
 
     EVP_MD_CTX_free(temp_ctx);
-    return PyBytesWriter_Finish(writer);
+    return _PyValue_FromObjectResult(PyBytesWriter_Finish(writer));
 
 error:
     PyBytesWriter_Discard(writer);
     EVP_MD_CTX_free(temp_ctx);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -1203,19 +1203,19 @@ _hashlib_HASHXOF_hexdigest_impl(HASHobject *self, Py_ssize_t length)
     PyObject *retval;
 
     if (length == 0) {
-        return Py_GetConstant(Py_CONSTANT_EMPTY_STR);
+        return _PyValue_FromObjectResult(Py_GetConstant(Py_CONSTANT_EMPTY_STR));
     }
 
     digest = (unsigned char*)PyMem_Malloc(length);
     if (digest == NULL) {
         (void)PyErr_NoMemory();
-        return NULL;
+        return PyValue_NULL;
     }
 
     temp_ctx = py_wrapper_EVP_MD_CTX_new();
     if (temp_ctx == NULL) {
         PyMem_Free(digest);
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* Get the raw (binary) digest value */
@@ -1231,12 +1231,12 @@ _hashlib_HASHXOF_hexdigest_impl(HASHobject *self, Py_ssize_t length)
 
     retval = _Py_strhex((const char *)digest, length);
     PyMem_Free(digest);
-    return retval;
+    return _PyValue_FromObjectResult(retval);
 
 error:
     PyMem_Free(digest);
     EVP_MD_CTX_free(temp_ctx);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyMethodDef HASHXOFobject_methods[] = {
@@ -1942,16 +1942,16 @@ _hashlib_hmac_singleshot_impl(PyObject *module, Py_buffer *key,
         return PyValue_NULL;
     }
 
-    PyObject *digest = _PyValue_AsObjectAt(digest_v, BOX_SITE_PARSER);
-    if (digest == NULL) {
+    PyObject *digest_obj = _PyValue_AsObjectAt(digest, BOX_SITE_PARSER);
+    if (digest_obj == NULL) {
         return PyValue_NULL;
     }
 
 #ifdef Py_HAS_OPENSSL3_SUPPORT
-    digest_name = get_openssl_digest_name(state, digest, Py_ht_mac, &evp);
+    digest_name = get_openssl_digest_name(state, digest_obj, Py_ht_mac, &evp);
     if (digest_name == NULL) {
         assert(evp == NULL);
-        Py_DECREF(digest);
+        Py_DECREF(digest_obj);
         return PyValue_NULL;
     }
     assert(evp != NULL);
@@ -1969,9 +1969,9 @@ _hashlib_hmac_singleshot_impl(PyObject *module, Py_buffer *key,
     PY_EVP_MD_free(evp);
     assert(md_len < (size_t)PY_SSIZE_T_MAX);
 #else
-    evp = get_openssl_evp_md(state, digest, Py_ht_mac);
+    evp = get_openssl_evp_md(state, digest_obj, Py_ht_mac);
     if (evp == NULL) {
-        Py_DECREF(digest);
+        Py_DECREF(digest_obj);
         return PyValue_NULL;
     }
     is_xof = PY_EVP_MD_xof(evp);
@@ -1989,7 +1989,7 @@ _hashlib_hmac_singleshot_impl(PyObject *module, Py_buffer *key,
     if (result == NULL) {
         if (is_xof) {
             /* use a better default error message if an XOF is used */
-            raise_unsupported_algorithm_error(state, digest);
+            raise_unsupported_algorithm_error(state, digest_obj);
         }
         else {
 #ifdef Py_HAS_OPENSSL3_SUPPORT
@@ -1998,10 +1998,10 @@ _hashlib_hmac_singleshot_impl(PyObject *module, Py_buffer *key,
             notify_ssl_error_occurred_in(Py_STRINGIFY(HMAC));
 #endif
         }
-        Py_DECREF(digest);
+        Py_DECREF(digest_obj);
         return PyValue_NULL;
     }
-    Py_DECREF(digest);
+    Py_DECREF(digest_obj);
     return _PyValue_FromObjectResult(PyBytes_FromStringAndSize((const char*)md, md_len));
 }
 

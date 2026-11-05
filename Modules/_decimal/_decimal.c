@@ -119,8 +119,6 @@ typedef struct {
     binaryfunc _py_long_floor_divide;
     ternaryfunc _py_long_power;
     unaryfunc _py_float_abs;
-    PyCFunction _py_long_bit_length;
-    PyCFunction _py_float_as_integer_ratio;
 } decimal_state;
 
 static inline decimal_state *
@@ -2708,7 +2706,7 @@ PyDecType_FromFloatExact(PyTypeObject *type, PyObject *v,
     }
 
     /* float as integer ratio: numerator/denominator */
-    n_d = state->_py_float_as_integer_ratio(tmp, NULL);
+    n_d = PyObject_CallMethod(tmp, "as_integer_ratio", NULL);
     Py_DECREF(tmp);
     if (n_d == NULL) {
         return NULL;
@@ -2722,7 +2720,7 @@ PyDecType_FromFloatExact(PyTypeObject *type, PyObject *v,
         return NULL;
     }
 
-    tmp = state->_py_long_bit_length(d, NULL);
+    tmp = PyObject_CallMethod(d, "bit_length", NULL);
     Py_DECREF(d);
     if (tmp == NULL) {
         Py_DECREF(n);
@@ -7762,30 +7760,6 @@ static struct int_constmap int_constants [] = {
     do { if ((expr) == NULL) goto error; } while (0)
 
 
-static PyCFunction
-cfunc_noargs(PyTypeObject *t, const char *name)
-{
-    struct PyMethodDef *m;
-
-    if (t->tp_methods == NULL) {
-        goto error;
-    }
-
-    for (m = t->tp_methods; m->ml_name != NULL; m++) {
-        if (strcmp(name, m->ml_name) == 0) {
-            if (!(m->ml_flags & METH_NOARGS)) {
-                goto error;
-            }
-            return m->ml_meth;
-        }
-    }
-
-error:
-    PyErr_Format(PyExc_RuntimeError,
-        "internal error: could not find method %s", name);
-    return NULL;
-}
-
 PyDoc_STRVAR(libmpdec_version_info__doc__,
 "decimal.libmpdec_version_info\n\
 \n\
@@ -7921,10 +7895,6 @@ _decimal_exec(PyObject *m)
     state->_py_long_floor_divide = PyLong_Type.tp_as_number->nb_floor_divide;
     state->_py_long_power = PyLong_Type.tp_as_number->nb_power;
     state->_py_float_abs = PyFloat_Type.tp_as_number->nb_absolute;
-    ASSIGN_PTR(state->_py_float_as_integer_ratio,
-               cfunc_noargs(&PyFloat_Type, "as_integer_ratio"));
-    ASSIGN_PTR(state->_py_long_bit_length,
-               cfunc_noargs(&PyLong_Type, "bit_length"));
 
 
     /* Init types */

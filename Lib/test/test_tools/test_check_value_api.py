@@ -147,6 +147,17 @@ class TextRuleTests(unittest.TestCase):
             self.assertEqual(check_value_api.unchecked_value_units(
                 tmp, {"Modules/shared.c"}), [])
 
+    def test_included_source_is_not_unchecked(self):
+        # A source that a unit includes textually is checked with that unit.
+        with tempfile.TemporaryDirectory() as tmp:
+            os.makedirs(f"{tmp}/Modules/sub")
+            with open(f"{tmp}/Modules/unit.c", "w") as f:
+                f.write('#define Py_VALUE_CORE 1\n#include "sub/part.c"\n')
+            with open(f"{tmp}/Modules/sub/part.c", "w") as f:
+                f.write("#define Py_VALUE_CORE 1\n")
+            self.assertEqual(check_value_api.unchecked_value_units(
+                tmp, {"Modules/unit.c"}), [])
+
 
 if __name__ == "__main__":
     unittest.main()

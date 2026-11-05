@@ -29,6 +29,11 @@
 #include "row.h"
 #include "cursor.h"
 
+#include "pycore_list.h"          // PyList_AppendValue()
+#include "pycore_tuple.h"         // PyTuple_GetValue()
+#include "pycore_value.h"         // PyValue
+#include "pycore_value_ops.h"     // _PyValue_RichCompareBool()
+
 #define clinic_state() (pysqlite_get_state_by_type(type))
 #include "clinic/row.c.h"
 #undef clinic_state
@@ -96,25 +101,30 @@ pysqlite_row_new_impl(PyTypeObject *type, pysqlite_Cursor *cursor,
 
     self = (pysqlite_Row *) type->tp_alloc(type, 0);
     if (self == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     self->data = Py_NewRef(data);
     self->description = Py_NewRef(cursor->description);
 
-    return (PyObject *) self;
+    return _PyValue_FromObjectResult((PyObject *) self);
 }
 
 static PyObject *
 pysqlite_row_item(PyObject *op, Py_ssize_t idx)
 {
     pysqlite_Row *self = _pysqlite_Row_CAST(op);
-    return PyTuple_GetItemRef(self->data, idx);
+    PyValue item = PyTuple_GetValue(self->data, idx);
+    if (PyValue_IsNull(item)) {
+        return NULL;
+    }
+    return _PyValue_AsObjectStealAt(item, BOX_SITE_SEQUENCE);
 }
 
 static int
 equal_ignore_case(PyObject *left, PyObject *right)
 {
-    int eq = PyObject_RichCompareBool(left, right, Py_EQ);
+    int eq = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(left),
+                                      PyValue_FromObjectBorrow(right), Py_EQ);
     if (eq) { /* equal or error */
         return eq;
     }
@@ -146,13 +156,17 @@ pysqlite_row_subscript(PyObject *op, PyObject *idx)
     pysqlite_Row *self = _pysqlite_Row_CAST(op);
 
     if (PyLong_Check(idx)) {
-        _idx = PyNumber_AsSsize_t(idx, PyExc_IndexError);
+        _idx = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(idx), PyExc_IndexError);
         if (_idx == -1 && PyErr_Occurred())
             return NULL;
         if (_idx < 0)
            _idx += PyTuple_GET_SIZE(self->data);
 
-        return PyTuple_GetItemRef(self->data, _idx);
+        PyValue item = PyTuple_GetValue(self->data, _idx);
+        if (PyValue_IsNull(item)) {
+            return NULL;
+        }
+        return _PyValue_AsObjectStealAt(item, BOX_SITE_TUPLE);
     } else if (PyUnicode_Check(idx)) {
         if (Py_IsNone(self->description)) {
             PyErr_Format(PyExc_IndexError, "No item with key %R", idx);
@@ -161,12 +175,17 @@ pysqlite_row_subscript(PyObject *op, PyObject *idx)
         Py_ssize_t nitems = PyTuple_GET_SIZE(self->description);
 
         for (Py_ssize_t i = 0; i < nitems; i++) {
-            PyObject *descr = PyTuple_GetItemRef(self->description, i);
-            if (descr == NULL) {
+            PyValue descr = PyTuple_GetValue(self->description, i);
+            if (PyValue_IsNull(descr)) {
                 return NULL;
             }
-            PyObject *obj = PyTuple_GetItemRef(descr, 0);
-            Py_DECREF(descr);
+            /* a description item is a tuple (name, None, ...) */
+            PyValue name = PyTuple_GetValue(PyValue_AsKnownObjectBorrow(descr), 0);
+            PyValue_CLOSE(descr);
+            if (PyValue_IsNull(name)) {
+                return NULL;
+            }
+            PyObject *obj = _PyValue_AsObjectStealAt(name, BOX_SITE_TUPLE);
             if (obj == NULL) {
                 return NULL;
             }
@@ -177,7 +196,11 @@ pysqlite_row_subscript(PyObject *op, PyObject *idx)
             }
             if (eq) {
                 /* found item */
-                return PyTuple_GetItemRef(self->data, i);
+                PyValue item = PyTuple_GetValue(self->data, i);
+                if (PyValue_IsNull(item)) {
+                    return NULL;
+                }
+                return _PyValue_AsObjectStealAt(item, BOX_SITE_TUPLE);
             }
         }
 
@@ -185,7 +208,12 @@ pysqlite_row_subscript(PyObject *op, PyObject *idx)
         return NULL;
     }
     else if (PySlice_Check(idx)) {
-        return PyObject_GetItem(self->data, idx);
+        PyValue item = _PyValue_GetItem(PyValue_FromObjectBorrow(self->data),
+                                        PyValue_FromObjectBorrow(idx));
+        if (PyValue_IsNull(item)) {
+            return NULL;
+        }
+        return _PyValue_AsObjectStealAt(item, BOX_SITE_SEQUENCE);
     }
     else {
         PyErr_SetString(PyExc_IndexError, "Index must be int or string");
@@ -212,52 +240,52 @@ pysqlite_row_keys_impl(pysqlite_Row *self)
 {
     PyObject *list = PyList_New(0);
     if (!list) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (Py_IsNone(self->description)) {
-        return list;
+        return _PyValue_FromObjectResult(list);
     }
 
     Py_ssize_t nitems = PyTuple_GET_SIZE(self->description);
     for (Py_ssize_t i = 0; i < nitems; i++) {
-        PyObject *descr = PyTuple_GetItemRef(self->description, i);
-        if (descr == NULL) {
+        PyValue descr = PyTuple_GetValue(self->description, i);
+        if (PyValue_IsNull(descr)) {
             Py_DECREF(list);
-            return NULL;
+            return PyValue_NULL;
         }
-        PyObject *name = PyTuple_GetItemRef(descr, 0);
-        Py_DECREF(descr);
-        if (name == NULL) {
+        PyValue name = PyTuple_GetValue(PyValue_AsKnownObjectBorrow(descr), 0);
+        PyValue_CLOSE(descr);
+        if (PyValue_IsNull(name)) {
             Py_DECREF(list);
-            return NULL;
+            return PyValue_NULL;
         }
-        int rc = PyList_Append(list, name);
-        Py_DECREF(name);
+        int rc = PyList_AppendValue(list, name);
+        PyValue_CLOSE(name);
         if (rc < 0) {
             Py_DECREF(list);
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
-    return list;
+    return _PyValue_FromObjectResult(list);
 }
 
 static PyObject *
 pysqlite_iter(PyObject *op)
 {
     pysqlite_Row *self = _pysqlite_Row_CAST(op);
-    return PyObject_GetIter(self->data);
+    return _PyValue_GetIter(PyValue_FromObjectBorrow(self->data));
 }
 
 static Py_hash_t
 pysqlite_row_hash(PyObject *op)
 {
     pysqlite_Row *self = _pysqlite_Row_CAST(op);
-    Py_hash_t hash_description = PyObject_Hash(self->description);
+    Py_hash_t hash_description = _PyValue_Hash(PyValue_FromObjectBorrow(self->description));
     if (hash_description == -1) {
         return -1;
     }
-    Py_hash_t hash_data = PyObject_Hash(self->data);
+    Py_hash_t hash_data = _PyValue_Hash(PyValue_FromObjectBorrow(self->data));
     if (hash_data == -1) {
         return -1;
     }
@@ -274,12 +302,19 @@ pysqlite_row_richcompare(PyObject *op, PyObject *opother, int opid)
     pysqlite_state *state = pysqlite_get_state_by_type(Py_TYPE(self));
     if (PyObject_TypeCheck(opother, state->RowType)) {
         pysqlite_Row *other = (pysqlite_Row *)opother;
-        int eq = PyObject_RichCompareBool(self->description, other->description, Py_EQ);
+        int eq = _PyValue_RichCompareBool(PyValue_FromObjectBorrow(self->description),
+                                          PyValue_FromObjectBorrow(other->description), Py_EQ);
         if (eq < 0) {
             return NULL;
         }
         if (eq) {
-            return PyObject_RichCompare(self->data, other->data, opid);
+            PyValue res = _PyValue_RichCompare(
+                PyValue_FromObjectBorrow(self->data),
+                PyValue_FromObjectBorrow(other->data), opid);
+            if (PyValue_IsNull(res)) {
+                return NULL;
+            }
+            return _PyValue_AsObjectStealAt(res, BOX_SITE_COMPARE);
         }
         return PyBool_FromLong(opid != Py_EQ);
     }

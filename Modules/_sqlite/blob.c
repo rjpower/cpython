@@ -5,7 +5,9 @@
 #define Py_VALUE_CORE 1
 #include "blob.h"
 #include "util.h"
+#include "pycore_list.h"          // PyList_GetValue()
 #include "pycore_value.h"         // PyValue
+#include "pycore_value_ops.h"     // _PyValue_AsSsize_t()
 #include "pycore_weakref.h"    // FT_CLEAR_WEAKREFS()
 
 #define clinic_state() (pysqlite_get_state_by_type(Py_TYPE(self)))
@@ -101,24 +103,25 @@ blob_close_impl(pysqlite_Blob *self)
     if (!pysqlite_check_connection(self->connection) ||
         !pysqlite_check_thread(self->connection))
     {
-        return NULL;
+        return PyValue_NULL;
     }
     close_blob(self);
-    Py_RETURN_NONE;
+    return PyValue_None;
 };
 
 void
 pysqlite_close_all_blobs(pysqlite_Connection *self)
 {
     for (Py_ssize_t i = 0; i < PyList_GET_SIZE(self->blobs); i++) {
-        PyObject *weakref = PyList_GetItemRef(self->blobs, i);
-        if (weakref == NULL) {
+        PyValue weakref = PyList_GetValue(self->blobs, i);
+        if (PyValue_IsNull(weakref)) {
             PyErr_Clear();
             continue;
         }
         PyObject *blob;
-        int alive = PyWeakref_GetRef(weakref, &blob);
-        Py_DECREF(weakref);
+        /* the list holds only weakref objects */
+        int alive = PyWeakref_GetRef(PyValue_AsKnownObjectBorrow(weakref), &blob);
+        PyValue_CLOSE(weakref);
         if (!alive) {
             continue;
         }
@@ -206,7 +209,7 @@ blob_read_impl(pysqlite_Blob *self, int length)
 /*[clinic end generated code: output=202cbab71f35c6a0 input=6b745ad37720e556]*/
 {
     if (!check_blob(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* Make sure we never read past "EOB". Also read the rest of the blob if a
@@ -219,15 +222,15 @@ blob_read_impl(pysqlite_Blob *self, int length)
 
     assert(length >= 0);
     if (length == 0) {
-        return Py_GetConstant(Py_CONSTANT_EMPTY_BYTES);
+        return _PyValue_FromObjectResult(Py_GetConstant(Py_CONSTANT_EMPTY_BYTES));
     }
 
     PyObject *buffer = read_multiple(self, length, self->offset);
     if (buffer == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     self->offset += length;
-    return buffer;
+    return _PyValue_FromObjectResult(buffer);
 };
 
 static int
@@ -272,15 +275,15 @@ blob_write_impl(pysqlite_Blob *self, Py_buffer *data)
 /*[clinic end generated code: output=4516ebf6aa6dbf0e input=0d372cb0240a5d49]*/
 {
     if (!check_blob(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     int rc = inner_write(self, data->buf, data->len, self->offset);
     if (rc < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     self->offset += (int)data->len;
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 
@@ -304,7 +307,7 @@ blob_seek_impl(pysqlite_Blob *self, int offset, int origin)
 /*[clinic end generated code: output=508a7aa4a9c675a7 input=84aea1b6b48607dd]*/
 {
     if (!check_blob(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     int blob_len = sqlite3_blob_bytes(self->blob);
@@ -327,20 +330,20 @@ blob_seek_impl(pysqlite_Blob *self, int offset, int origin)
             PyErr_SetString(PyExc_ValueError,
                             "'origin' should be os.SEEK_SET, os.SEEK_CUR, or "
                             "os.SEEK_END");
-            return NULL;
+            return PyValue_NULL;
     }
 
     if (offset < 0 || offset > blob_len) {
         PyErr_SetString(PyExc_ValueError, "offset out of blob range");
-        return NULL;
+        return PyValue_NULL;
     }
 
     self->offset = offset;
-    Py_RETURN_NONE;
+    return PyValue_None;
 
 overflow:
     PyErr_SetString(PyExc_OverflowError, "seek offset results in overflow");
-    return NULL;
+    return PyValue_NULL;
 }
 
 
@@ -355,9 +358,9 @@ blob_tell_impl(pysqlite_Blob *self)
 /*[clinic end generated code: output=b71af175191fe9d8 input=7e34057aa303612c]*/
 {
     if (!check_blob(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyLong_FromLong(self->offset);
+    return _PyValue_FromObjectResult(PyLong_FromLong(self->offset));
 }
 
 
@@ -372,9 +375,9 @@ blob_enter_impl(pysqlite_Blob *self)
 /*[clinic end generated code: output=af81346a33c318fd input=fe4842c3c582d5a7]*/
 {
     if (!check_blob(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return Py_NewRef(self);
+    return _PyValue_FromObjectResult(Py_NewRef(self));
 }
 
 
@@ -395,10 +398,10 @@ blob_exit_impl(pysqlite_Blob *self, PyValueBorrow type, PyValueBorrow val,
 /*[clinic end generated code: output=3977951f385c77d3 input=575d9ecea205f35f]*/
 {
     if (!check_blob(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
     close_blob(self);
-    Py_RETURN_FALSE;
+    return PyValue_False;
 }
 
 static Py_ssize_t
@@ -414,7 +417,8 @@ blob_length(PyObject *op)
 static Py_ssize_t
 get_subscript_index(pysqlite_Blob *self, PyObject *item)
 {
-    Py_ssize_t i = PyNumber_AsSsize_t(item, PyExc_IndexError);
+    Py_ssize_t i = _PyValue_AsSsize_t(PyValue_FromObjectBorrow(item),
+                                      PyExc_IndexError);
     if (i == -1 && PyErr_Occurred()) {
         return -1;
     }

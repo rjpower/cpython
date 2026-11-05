@@ -134,7 +134,8 @@ static PyValue
 _ssl_Certificate_get_info_impl(PySSLCertificate *self)
 /*[clinic end generated code: output=313cbcb143f4acf3 input=ba2c1694b39d0778]*/
 {
-    return _decode_certificate(get_state_cert(self), self->cert);
+    return _PyValue_FromObjectResult(
+        _decode_certificate(get_state_cert(self), self->cert));
 }
 
 static PyObject*

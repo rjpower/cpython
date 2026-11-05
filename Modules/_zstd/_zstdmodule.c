@@ -481,7 +481,8 @@ _zstd_get_param_bounds_impl(PyObject *module, int parameter, int is_compress)
         }
     }
 
-    return Py_BuildValue("ii", bound.lowerBound, bound.upperBound);
+    return _PyValue_FromObjectResult(
+        Py_BuildValue("ii", bound.lowerBound, bound.upperBound));
 }
 
 /*[clinic input]
@@ -583,7 +584,7 @@ _zstd_set_parameter_types_impl(PyObject *module, PyObject *c_parameter_type,
     Py_INCREF(d_parameter_type);
     Py_XSETREF(mod_state->DParameter_type, (PyTypeObject*)d_parameter_type);
 
-    _PyValue_FromObjectResult(Py_RETURN_NONE);
+    return PyValue_None;
 }
 
 static PyMethodDef _zstd_methods[] = {

@@ -619,11 +619,19 @@ readline_append_history_file_impl(PyObject *module, int nelements,
     PyObject *filename_bytes;
     const char *filename;
     int err;
-    if (filename_obj != Py_None) {
-        if (!PyUnicode_FSConverter(filename_obj, &filename_bytes))
+    if (!PyValue_IsNone(filename_obj)) {
+        PyObject *filename_arg = _PyValue_AsObjectAt(filename_obj, BOX_SITE_PARSER);
+        if (filename_arg == NULL) {
             return PyValue_NULL;
+        }
+        if (!PyUnicode_FSConverter(filename_arg, &filename_bytes)) {
+            Py_DECREF(filename_arg);
+            return PyValue_NULL;
+        }
         filename = PyBytes_AS_STRING(filename_bytes);
-        if (PySys_Audit("open", "OCi", filename_obj, 'a', 0) < 0) {
+        int audit = PySys_Audit("open", "OCi", filename_arg, 'a', 0);
+        Py_DECREF(filename_arg);
+        if (audit < 0) {
             Py_DECREF(filename_bytes);
             return PyValue_NULL;
         }
@@ -1421,7 +1429,7 @@ on_completion_display_matches_hook(char **matches,
         s = decode(matches[i+1]);
         if (s == NULL)
             goto error;
-        PyList_SET_ITEM(m, i, s);
+        PyList_SET_VALUE(m, i, PyValue_PrepareOwned(s));
     }
     sub = decode(matches[0]);
     r = PyObject_CallFunction(state->completion_display_matches_hook,

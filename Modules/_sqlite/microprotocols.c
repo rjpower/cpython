@@ -29,6 +29,10 @@
 #define Py_VALUE_CORE 1
 #include <Python.h>
 
+#include "pycore_dict.h"          // PyDict_SetValue()
+#include "pycore_tuple.h"         // _PyTuple_PackValues()
+#include "pycore_value.h"         // PyValue
+
 #include "cursor.h"
 #include "microprotocols.h"
 #include "prepare_protocol.h"
@@ -61,12 +65,15 @@ pysqlite_microprotocols_add(pysqlite_state *state, PyTypeObject *type,
 
     assert(type != NULL);
     assert(proto != NULL);
-    key = PyTuple_Pack(2, (PyObject *)type, proto);
+    key = _PyTuple_PackValues(
+        2, (PyValueBorrow[]){PyValue_FromObjectBorrow((PyObject *)type),
+                             PyValue_FromObjectBorrow(proto)});
     if (!key) {
         return -1;
     }
 
-    rc = PyDict_SetItem(state->psyco_adapters, key, cast);
+    rc = PyDict_SetValue(state->psyco_adapters, PyValue_FromObjectBorrow(key),
+                         PyValue_FromObjectBorrow(cast));
     Py_DECREF(key);
 
     return rc;
@@ -85,15 +92,26 @@ pysqlite_microprotocols_adapt(pysqlite_state *state, PyObject *obj,
        way to get a quotable object to be its instance */
 
     /* look for an adapter in the registry */
-    key = PyTuple_Pack(2, (PyObject *)Py_TYPE(obj), proto);
+    key = _PyTuple_PackValues(
+        2, (PyValueBorrow[]){PyValue_FromObjectBorrow((PyObject *)Py_TYPE(obj)),
+                             PyValue_FromObjectBorrow(proto)});
     if (!key) {
         return NULL;
     }
-    if (PyDict_GetItemRef(state->psyco_adapters, key, &adapter) < 0) {
+    PyValue adapter_v;
+    if (PyDict_GetValue(state->psyco_adapters, PyValue_FromObjectBorrow(key),
+                        &adapter_v) < 0) {
         Py_DECREF(key);
         return NULL;
     }
     Py_DECREF(key);
+    adapter = NULL;
+    if (!PyValue_IsNull(adapter_v)) {
+        adapter = _PyValue_AsObjectStealAt(adapter_v, BOX_SITE_DICT);
+        if (adapter == NULL) {
+            return NULL;
+        }
+    }
     if (adapter) {
         adapted = PyObject_CallOneArg(adapter, obj);
         Py_DECREF(adapter);

@@ -31,8 +31,12 @@
 #include "module.h"
 #include "util.h"
 
+#include "pycore_dict.h"          // PyDict_GetValue()
+#include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_pyerrors.h"      // _PyErr_FormatFromCause()
+#include "pycore_tuple.h"         // PyTuple_GetValue()
 #include "pycore_value.h"         // PyValue
+#include "pycore_value_ops.h"     // _PyValue_GetIter()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
 typedef enum {
@@ -230,12 +234,17 @@ _pysqlite_get_converter(pysqlite_state *state, const char *keystr,
         return NULL;
     }
 
-    int rc = PyDict_GetItemRef(state->converters, upcase_key, &retval);
+    PyValue converter;
+    int rc = PyDict_GetValue(state->converters, PyValue_FromObjectBorrow(upcase_key),
+                             &converter);
     Py_DECREF(upcase_key);
     if (rc < 0) {
         return NULL;
     }
-
+    if (PyValue_IsNull(converter)) {
+        return NULL;
+    }
+    retval = _PyValue_AsObjectStealAt(converter, BOX_SITE_DICT);
     return retval;
 }
 
@@ -306,8 +315,9 @@ pysqlite_build_row_cast_map(pysqlite_Cursor* self)
             }
         }
 
-        int rc = PyList_Append(self->row_cast_map,
-                               converter ? converter : Py_None);
+        int rc = PyList_AppendValue(
+            self->row_cast_map,
+            PyValue_FromObjectBorrow(converter ? converter : Py_None));
         Py_XDECREF(converter);
         if (rc != 0) {
             Py_CLEAR(self->row_cast_map);
@@ -374,7 +384,11 @@ _pysqlite_fetch_one_row(pysqlite_Cursor* self)
                 && self->row_cast_map != NULL
                 && i < PyList_GET_SIZE(self->row_cast_map))
         {
-            converter = PyList_GetItemRef(self->row_cast_map, i);
+            PyValue converter_v = PyList_GetValue(self->row_cast_map, i);
+            if (PyValue_IsNull(converter_v)) {
+                goto error;
+            }
+            converter = _PyValue_AsObjectStealAt(converter_v, BOX_SITE_LIST);
             if (converter == NULL) {
                 goto error;
             }
@@ -470,7 +484,7 @@ _pysqlite_fetch_one_row(pysqlite_Cursor* self)
         if (!converted) {
             goto error;
         }
-        PyTuple_SET_ITEM(row, i, converted);
+        PyTuple_SET_VALUE(row, i, PyValue_PrepareOwned(converted));
     }
 
     if (PyErr_Occurred())
@@ -709,13 +723,19 @@ bind_parameters(pysqlite_state *state, pysqlite_Statement *self,
                 return;
             }
 
+            PyValue param_v;
             if (PyTuple_CheckExact(parameters)) {
-                current_param = PyTuple_GetItemRef(parameters, i);
+                param_v = PyTuple_GetValue(parameters, i);
             } else if (PyList_CheckExact(parameters)) {
-                current_param = PyList_GetItemRef(parameters, i);
+                param_v = PyList_GetValue(parameters, i);
             } else {
-                current_param = PySequence_GetItem(parameters, i);
+                param_v = _PyValue_SequenceGetItem(
+                    PyValue_FromObjectBorrow(parameters), i);
             }
+            if (PyValue_IsNull(param_v)) {
+                return;
+            }
+            current_param = _PyValue_AsObjectStealAt(param_v, BOX_SITE_SEQUENCE);
             if (!current_param) {
                 return;
             }
@@ -825,7 +845,7 @@ _pysqlite_query_execute(pysqlite_Cursor* self, int multiple, PyObject* operation
             parameters_iter = Py_NewRef(second_argument);
         } else {
             /* sequence */
-            parameters_iter = PyObject_GetIter(second_argument);
+            parameters_iter = _PyValue_GetIter(PyValue_FromObjectBorrow(second_argument));
             if (!parameters_iter) {
                 goto error;
             }
@@ -844,13 +864,14 @@ _pysqlite_query_execute(pysqlite_Cursor* self, int multiple, PyObject* operation
         } else {
             Py_INCREF(second_argument);
         }
-        if (PyList_Append(parameters_list, second_argument) != 0) {
+        if (PyList_AppendValue(parameters_list,
+                               PyValue_FromObjectBorrow(second_argument)) != 0) {
             Py_DECREF(second_argument);
             goto error;
         }
         Py_DECREF(second_argument);
 
-        parameters_iter = PyObject_GetIter(parameters_list);
+        parameters_iter = _PyValue_GetIter(PyValue_FromObjectBorrow(parameters_list));
         if (!parameters_iter) {
             goto error;
         }
@@ -957,14 +978,15 @@ _pysqlite_query_execute(pysqlite_Cursor* self, int multiple, PyObject* operation
                 if (column_name == NULL) {
                     goto error;
                 }
-                PyObject *descriptor = PyTuple_Pack(7, column_name,
-                                                    Py_None, Py_None, Py_None,
-                                                    Py_None, Py_None, Py_None);
+                PyValueBorrow none = PyValue_Borrow(PyValue_None);
+                PyObject *descriptor = _PyTuple_PackValues(
+                    7, (PyValueBorrow[]){PyValue_FromObjectBorrow(column_name),
+                                         none, none, none, none, none, none});
                 Py_DECREF(column_name);
                 if (descriptor == NULL) {
                     goto error;
                 }
-                PyTuple_SET_ITEM(self->description, i, descriptor);
+                PyTuple_SET_VALUE(self->description, i, PyValue_PrepareOwned(descriptor));
             }
         }
 
@@ -1047,7 +1069,16 @@ pysqlite_cursor_execute_impl(pysqlite_Cursor *self, PyObject *sql,
                              PyValueBorrow parameters)
 /*[clinic end generated code: output=22322b53fb390d53 input=a8e0200a11627f94]*/
 {
-    return _pysqlite_query_execute(self, 0, sql, parameters);
+    PyObject *parameters_obj = NULL;
+    if (!PyValue_IsNull(parameters)) {
+        parameters_obj = _PyValue_AsObjectAt(parameters, BOX_SITE_PARSER);
+        if (parameters_obj == NULL) {
+            return PyValue_NULL;
+        }
+    }
+    PyObject *res = _pysqlite_query_execute(self, 0, sql, parameters_obj);
+    Py_XDECREF(parameters_obj);
+    return _PyValue_FromObjectResult(res);
 }
 
 /*[clinic input]
@@ -1065,7 +1096,13 @@ pysqlite_cursor_executemany_impl(pysqlite_Cursor *self, PyObject *sql,
                                  PyValueBorrow seq_of_parameters)
 /*[clinic end generated code: output=ca1c214fafefdf61 input=0d0a52e5eb7ccd35]*/
 {
-    return _pysqlite_query_execute(self, 1, sql, seq_of_parameters);
+    PyObject *seq_obj = _PyValue_AsObjectAt(seq_of_parameters, BOX_SITE_PARSER);
+    if (seq_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *res = _pysqlite_query_execute(self, 1, sql, seq_obj);
+    Py_DECREF(seq_obj);
+    return _PyValue_FromObjectResult(res);
 }
 
 /*[clinic input]
@@ -1083,7 +1120,7 @@ pysqlite_cursor_executescript_impl(pysqlite_Cursor *self,
 /*[clinic end generated code: output=6bc781c8e36450f1 input=78f093be415a8a2c]*/
 {
     if (!check_cursor(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     size_t sql_len = strlen(sql_script);
@@ -1092,7 +1129,7 @@ pysqlite_cursor_executescript_impl(pysqlite_Cursor *self,
     if (sql_len > (unsigned)max_length) {
         PyErr_SetString(self->connection->DataError,
                         "query string is too large");
-        return NULL;
+        return PyValue_NULL;
     }
 
     // Commit if needed
@@ -1138,11 +1175,11 @@ pysqlite_cursor_executescript_impl(pysqlite_Cursor *self,
         sql_script = tail;
     }
 
-    return Py_NewRef((PyObject *)self);
+    return _PyValue_FromObjectResult(Py_NewRef((PyObject *)self));
 
 error:
     set_error_from_db(self->connection->state, db);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyObject *
@@ -1215,10 +1252,10 @@ pysqlite_cursor_fetchone_impl(pysqlite_Cursor *self)
 
     row = pysqlite_cursor_iternext((PyObject *)self);
     if (!row && !PyErr_Occurred()) {
-        Py_RETURN_NONE;
+        return PyValue_None;
     }
 
-    return row;
+    return _PyValue_FromObjectResult(row);
 }
 
 /*[clinic input]
@@ -1239,11 +1276,11 @@ pysqlite_cursor_fetchmany_impl(pysqlite_Cursor *self, uint32_t maxrows)
 
     list = PyList_New(0);
     if (!list) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     while (maxrows > 0 && (row = pysqlite_cursor_iternext((PyObject *)self))) {
-        int rc = PyList_Append(list, row);
+        int rc = PyList_AppendValue(list, PyValue_FromObjectBorrow(row));
         Py_DECREF(row);
         if (rc < 0) {
             break;
@@ -1253,9 +1290,9 @@ pysqlite_cursor_fetchmany_impl(pysqlite_Cursor *self, uint32_t maxrows)
 
     if (PyErr_Occurred()) {
         Py_DECREF(list);
-        return NULL;
+        return PyValue_NULL;
     } else {
-        return list;
+        return _PyValue_FromObjectResult(list);
     }
 }
 
@@ -1274,11 +1311,11 @@ pysqlite_cursor_fetchall_impl(pysqlite_Cursor *self)
 
     list = PyList_New(0);
     if (!list) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     while ((row = pysqlite_cursor_iternext((PyObject *)self))) {
-        if (PyList_Append(list, row) < 0) {
+        if (PyList_AppendValue(list, PyValue_FromObjectBorrow(row)) < 0) {
             Py_DECREF(row);
             break;
         }
@@ -1287,9 +1324,9 @@ pysqlite_cursor_fetchall_impl(pysqlite_Cursor *self)
 
     if (PyErr_Occurred()) {
         Py_DECREF(list);
-        return NULL;
+        return PyValue_NULL;
     } else {
-        return list;
+        return _PyValue_FromObjectResult(list);
     }
 }
 
@@ -1307,7 +1344,7 @@ pysqlite_cursor_setinputsizes_impl(pysqlite_Cursor *self,
                                    PyValueBorrow sizes)
 /*[clinic end generated code: output=4437be8d019f9fbd input=de7950a3aec79bdf]*/
 {
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -1325,7 +1362,7 @@ pysqlite_cursor_setoutputsize_impl(pysqlite_Cursor *self, PyValueBorrow size,
                                    PyValueBorrow column)
 /*[clinic end generated code: output=94ac584c2bee94f4 input=607a6bece8bbb273]*/
 {
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -1339,7 +1376,7 @@ pysqlite_cursor_close_impl(pysqlite_Cursor *self)
 /*[clinic end generated code: output=89608b93f895fde6 input=08b36552dbb9a986]*/
 {
     if (!check_cursor_locked(self)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (!self->connection) {
@@ -1347,10 +1384,10 @@ pysqlite_cursor_close_impl(pysqlite_Cursor *self)
         pysqlite_state *state = pysqlite_get_state_by_type(tp);
         PyErr_SetString(state->ProgrammingError,
                         "Base Cursor.__init__ not called.");
-        return NULL;
+        return PyValue_NULL;
     }
     if (!pysqlite_check_thread(self->connection) || !pysqlite_check_connection(self->connection)) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (self->statement) {
@@ -1361,13 +1398,13 @@ pysqlite_cursor_close_impl(pysqlite_Cursor *self)
         Py_CLEAR(self->statement);
         if (rc != SQLITE_OK) {
             cursor_cannot_reset_stmt_error(self, 0);
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
     self->closed = 1;
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]

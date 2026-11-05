@@ -501,6 +501,7 @@ def deferred_units(entries):
 
 
 VALUE_CORE_LINE = re.compile(r"^[ \t]*#[ \t]*define[ \t]+Py_VALUE_CORE\b", re.M)
+INCLUDED_SOURCE = re.compile(r'^[ \t]*#[ \t]*include[ \t]+"([^"]+\.c)"', re.M)
 
 
 def unchecked_value_units(srcdir, checked):
@@ -510,9 +511,18 @@ def unchecked_value_units(srcdir, checked):
     recorded with sharedmods; one whose library the host lacks is absent
     legitimately, so this is a note, not a failure."""
     findings = []
+    # A source that a unit includes textually (_ssl.c includes _ssl/cert.c)
+    # is preprocessed into that unit, so it is checked with it.
+    included = set()
+    for rel in checked:
+        unit = Path(srcdir, rel)
+        if not unit.is_file():
+            continue
+        for name in INCLUDED_SOURCE.findall(unit.read_text(errors="replace")):
+            included.add(str(Path(rel).parent / name))
     for path in sorted(Path(srcdir, "Modules").rglob("*.c")):
         rel = str(path.relative_to(srcdir))
-        if rel in checked:
+        if rel in checked or rel in included:
             continue
         m = VALUE_CORE_LINE.search(path.read_text(errors="replace"))
         if m is not None:

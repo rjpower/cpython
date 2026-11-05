@@ -661,24 +661,15 @@ static PyObject *
 make_version_info(PyTypeObject *type, int major, int minor, int patch)
 {
     PyObject *version;
-    int pos = 0;
 
     version = PyStructSequence_New(type);
     if (version == NULL) {
         return NULL;
     }
 
-#define SetItem(VALUE) \
-    PyStructSequence_SET_ITEM(version, pos++, VALUE); \
-    if (PyErr_Occurred()) { \
-        Py_DECREF(version); \
-        return NULL; \
-    }
-
-    SetItem(PyLong_FromLong(major))
-    SetItem(PyLong_FromLong(minor))
-    SetItem(PyLong_FromLong(patch))
-#undef SetItem
+    PyStructSequence_SET_VALUE(version, 0, PyValue_FromInt64(major));
+    PyStructSequence_SET_VALUE(version, 1, PyValue_FromInt64(minor));
+    PyStructSequence_SET_VALUE(version, 2, PyValue_FromInt64(patch));
 
     return version;
 }

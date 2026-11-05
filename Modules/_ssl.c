@@ -4456,7 +4456,7 @@ set_post_handshake_auth(PyObject *op, PyObject *arg, void *Py_UNUSED(closure))
         PyErr_SetString(PyExc_AttributeError, "cannot delete attribute");
         return -1;
     }
-    int pha = PyObject_IsTrue(arg);
+    int pha = _PyValue_IsTrue(PyValue_FromObjectBorrow(arg));
 
     if (pha == -1) {
         return -1;

@@ -27,6 +27,10 @@
 
 #define Py_VALUE_CORE 1
 #include "connection.h"
+#include "pycore_dict.h"          // PyDict_SetValue()
+#include "pycore_tuple.h"         // PyTuple_GetValue()
+#include "pycore_value.h"         // PyValue
+
 #include "statement.h"
 #include "cursor.h"
 #include "prepare_protocol.h"
@@ -39,7 +43,23 @@
 #error "SQLite 3.15.2 or higher required"
 #endif
 
-#define clinic_state() (pysqlite_get_state(module))
+/* The generated parsers hold the module as a value; the other generated
+   code holds it as an object. */
+static inline PyObject *
+module_of_object(PyObject *module)
+{
+    return module;
+}
+
+static inline PyObject *
+module_of_borrow(PyValueBorrow module)
+{
+    return PyValue_AsKnownObjectBorrow(module);
+}
+
+#define clinic_state() \
+    (pysqlite_get_state(_Generic((module), PyValueBorrow: module_of_borrow, \
+                                           default: module_of_object)(module)))
 #include "clinic/module.c.h"
 #undef clinic_state
 
@@ -75,12 +95,14 @@ pysqlite_connect(PyObject *module, PyObject *const *args, Py_ssize_t nargsf,
     }
     if (kwnames != NULL) {
         for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(kwnames); i++) {
-            PyObject *item = PyTuple_GetItemRef(kwnames, i);
-            if (item == NULL) {
+            PyValue item = PyTuple_GetValue(kwnames, i);
+            if (PyValue_IsNull(item)) {
                 return NULL;
             }
-            int is_factory = PyUnicode_EqualToUTF8(item, "factory");
-            Py_DECREF(item);
+            /* keyword names are str */
+            int is_factory = PyUnicode_EqualToUTF8(
+                PyValue_AsKnownObjectBorrow(item), "factory");
+            PyValue_CLOSE(item);
             if (is_factory) {
                 factory = args[nargs + i];
                 break;
@@ -104,9 +126,9 @@ pysqlite_complete_statement_impl(PyObject *module, const char *statement)
 /*[clinic end generated code: output=a69b5ca0bc8587a9 input=ac45d257375bb828]*/
 {
     if (sqlite3_complete(statement)) {
-        return Py_NewRef(Py_True);
+        return _PyValue_FromObjectResult(Py_NewRef(Py_True));
     } else {
-        return Py_NewRef(Py_False);
+        return _PyValue_FromObjectResult(Py_NewRef(Py_False));
     }
 }
 
@@ -137,12 +159,17 @@ pysqlite_register_adapter_impl(PyObject *module, PyTypeObject *type,
 
     pysqlite_state *state = pysqlite_get_state(module);
     PyObject *protocol = (PyObject *)state->PrepareProtocolType;
-    rc = pysqlite_microprotocols_add(state, type, protocol, caster);
+    PyObject *caster_obj = _PyValue_AsObjectAt(caster, BOX_SITE_PARSER);
+    if (caster_obj == NULL) {
+        return PyValue_NULL;
+    }
+    rc = pysqlite_microprotocols_add(state, type, protocol, caster_obj);
+    Py_DECREF(caster_obj);
     if (rc == -1) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -161,7 +188,7 @@ pysqlite_register_converter_impl(PyObject *module, PyObject *orig_name,
 /*[clinic end generated code: output=12c986dc1cd60800 input=159a444971b40378]*/
 {
     PyObject* name = NULL;
-    PyObject* retval = NULL;
+    PyValue retval = PyValue_NULL;
 
     /* convert the name to upper case */
     pysqlite_state *state = pysqlite_get_state(module);
@@ -170,11 +197,12 @@ pysqlite_register_converter_impl(PyObject *module, PyObject *orig_name,
         goto error;
     }
 
-    if (PyDict_SetItem(state->converters, name, callable) != 0) {
+    if (PyDict_SetValue(state->converters, PyValue_FromObjectBorrow(name),
+                        callable) != 0) {
         goto error;
     }
 
-    retval = Py_NewRef(Py_None);
+    retval = PyValue_None;
 error:
     Py_XDECREF(name);
     return retval;
@@ -196,7 +224,7 @@ pysqlite_enable_callback_trace_impl(PyObject *module, int enable)
     pysqlite_state *state = pysqlite_get_state(module);
     state->enable_callback_tracebacks = enable;
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -216,7 +244,30 @@ pysqlite_adapt_impl(PyObject *module, PyValueBorrow obj, PyValueBorrow proto,
 /*[clinic end generated code: output=1ed477114c16cc7e input=a53dc9993e81e15f]*/
 {
     pysqlite_state *state = pysqlite_get_state(module);
-    return pysqlite_microprotocols_adapt(state, obj, proto, alt);
+    PyObject *obj_obj = _PyValue_AsObjectAt(obj, BOX_SITE_PARSER);
+    if (obj_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *proto_obj = _PyValue_AsObjectAt(proto, BOX_SITE_PARSER);
+    if (proto_obj == NULL) {
+        Py_DECREF(obj_obj);
+        return PyValue_NULL;
+    }
+    PyObject *alt_obj = NULL;
+    if (!PyValue_IsNull(alt)) {
+        alt_obj = _PyValue_AsObjectAt(alt, BOX_SITE_PARSER);
+        if (alt_obj == NULL) {
+            Py_DECREF(obj_obj);
+            Py_DECREF(proto_obj);
+            return PyValue_NULL;
+        }
+    }
+    PyObject *adapted = pysqlite_microprotocols_adapt(state, obj_obj,
+                                                      proto_obj, alt_obj);
+    Py_DECREF(obj_obj);
+    Py_DECREF(proto_obj);
+    Py_XDECREF(alt_obj);
+    return _PyValue_FromObjectResult(adapted);
 }
 
 static int converters_init(PyObject* module)
@@ -438,7 +489,7 @@ add_keyword_tuple(PyObject *module)
         if (!kwd) {
             goto error;
         }
-        PyTuple_SET_ITEM(keywords, i, kwd);
+        PyTuple_SET_VALUE(keywords, i, PyValue_PrepareOwned(kwd));
     }
     return PyModule_Add(module, "SQLITE_KEYWORDS", keywords);
 
@@ -473,7 +524,6 @@ static PyObject *
 make_sqlite_version_info(PyTypeObject *type, int number)
 {
     PyObject *version;
-    int pos = 0;
     int major = number / 1000000;
     int minor = (number % 1000000) / 1000;
     int patch = number % 1000;
@@ -483,17 +533,9 @@ make_sqlite_version_info(PyTypeObject *type, int number)
         return NULL;
     }
 
-#define SetItem(VALUE) \
-    PyStructSequence_SET_ITEM(version, pos++, VALUE); \
-    if (PyErr_Occurred()) { \
-        Py_DECREF(version); \
-        return NULL; \
-    }
-
-    SetItem(PyLong_FromLong(major))
-    SetItem(PyLong_FromLong(minor))
-    SetItem(PyLong_FromLong(patch))
-#undef SetItem
+    PyStructSequence_SET_VALUE(version, 0, PyValue_FromInt64(major));
+    PyStructSequence_SET_VALUE(version, 1, PyValue_FromInt64(minor));
+    PyStructSequence_SET_VALUE(version, 2, PyValue_FromInt64(patch));
 
     return version;
 }

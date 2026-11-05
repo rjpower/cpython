@@ -172,7 +172,7 @@ scope_mechanism(PyObject *argument, int abort_result, int cleanup_error,
         PyValue_CLEAR(destination);
         return NULL;
     }
-    PyObject *result = PyValue_AsObject(destination);
+    PyObject *result = _PyValue_AsObjectAt(destination, BOX_SITE_TEST);
     PyValue_CLEAR(destination);
     return result;
 
@@ -364,7 +364,7 @@ gateway_mechanism(PyObject *argument)
     _PyNativeResult_Publish(&scope.result, &destination, publish_state, &state);
     _PyNativeScope_End(&scope);
     Py_CLEAR(callable);
-    PyObject *result = PyValue_AsObject(destination);
+    PyObject *result = _PyValue_AsObjectAt(destination, BOX_SITE_TEST);
     PyValue_CLEAR(destination);
     return result;
 
@@ -554,7 +554,7 @@ vector_mechanism(PyObject *callable, const PyValue *values,
     _PyNativeResult_Publish(&scope.result, &destination,
                             publish_state, &publication);
     _PyNativeScope_End(&scope);
-    PyObject *result = PyValue_AsObject(destination);
+    PyObject *result = _PyValue_AsObjectAt(destination, BOX_SITE_TEST);
     PyValue_CLEAR(destination);
     return result;
 

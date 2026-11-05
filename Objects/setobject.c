@@ -3349,7 +3349,7 @@ _PySet_NextEntryRef(PyObject *set, Py_ssize_t *pos, PyObject **key, Py_hash_t *h
         return status;
     }
     /* A failed box consumes the entry, as in the set iterator. */
-    PyObject *boxed = _PyValue_THUNK_EXIT(value);
+    PyObject *boxed = _PyValue_THUNK_EXIT(value, BOX_SITE_SET);
     if (boxed == NULL) {
         return -1;
     }

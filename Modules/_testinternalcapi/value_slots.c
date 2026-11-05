@@ -1351,13 +1351,14 @@ object_slot(PyObject *Py_UNUSED(module), PyObject *args)
 }
 
 /* The object of a value-slot result. It also checks that PyValue_Is()
- * tells NotImplemented as identity does, which the dispatchers rely on. */
-static PyObject *
+ * tells NotImplemented as identity does, which the dispatchers rely on.
+ * A compatibility entry: its box belongs to its caller, a test helper. */
+Py_VALUE_ENTRY static PyObject *
 value_result(PyValue result)
 {
     int is_notimpl = (!PyValue_IsNull(result)
                       && PyValue_Is(result, PyValue_NotImplemented));
-    PyObject *obj = _PyValue_THUNK_EXIT(result);
+    PyObject *obj = _PyValue_THUNK_EXIT(result, BOX_SITE_UNATTRIBUTED);
     if (obj != NULL && is_notimpl != (obj == Py_NotImplemented)) {
         Py_DECREF(obj);
         PyErr_SetString(PyExc_AssertionError,

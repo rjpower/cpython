@@ -55,7 +55,7 @@ type_cache_lookup(PyObject *Py_UNUSED(self), PyObject *args)
         _PyTypeCache_Lookup((PyTypeObject *)type_obj, name);
     Py_DECREF(name);
     PyObject *value = PyValue_IsNull(r.value)
-        ? Py_NewRef(Py_None) : PyValue_AsObject(r.value);
+        ? Py_NewRef(Py_None) : _PyValue_AsObjectAt(r.value, BOX_SITE_TEST);
     PyValue_XCLOSE(r.value);
     if (value == NULL) {
         return NULL;

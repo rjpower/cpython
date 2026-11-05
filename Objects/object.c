@@ -781,7 +781,7 @@ call_repr(PyTypeObject *t, reprfunc slot, int row, PyValueBorrow v)
         _PyType_CHECK_VALUE_ROW(t, row);
         return f(v);
     }
-    PyObject *a = _PyValue_AdapterBox(v, BOX_SITE_REPR);
+    PyObject *a = _PyValue_AdapterBox(v, BOX_SITE_REPR, slot);
     if (a == NULL) {
         return NULL;
     }
@@ -1115,11 +1115,11 @@ call_richcompare(PyTypeObject *t, richcmpfunc slot,
         _PyType_CHECK_VALUE_ROW(t, row);
         return f(v, w, op);
     }
-    PyObject *a = _PyValue_AdapterBox(v, BOX_SITE_COMPARE);
+    PyObject *a = _PyValue_AdapterBox(v, BOX_SITE_COMPARE, slot);
     if (a == NULL) {
         return PyValue_NULL;
     }
-    PyObject *b = _PyValue_AdapterBox(w, BOX_SITE_COMPARE);
+    PyObject *b = _PyValue_AdapterBox(w, BOX_SITE_COMPARE, slot);
     if (b == NULL) {
         _PyValue_AdapterRelease(v, a);
         return PyValue_NULL;
@@ -1207,7 +1207,8 @@ PyObject *
 PyObject_RichCompare(PyObject *v, PyObject *w, int op)
 {
     return _PyValue_THUNK_EXIT(
-        (_PyValue_RichCompare)(_Py_VALUE_ARG(v), _Py_VALUE_ARG(w), op));
+        (_PyValue_RichCompare)(_Py_VALUE_ARG(v), _Py_VALUE_ARG(w), op),
+        BOX_SITE_COMPARE);
 }
 
 /* Perform a rich comparison with integer result, returning -1 for error,
@@ -2121,7 +2122,7 @@ call_bool(PyTypeObject *t, inquiry slot, PyValueBorrow v)
         _PyType_CHECK_VALUE_ROW(t, row);
         return f(v);
     }
-    PyObject *a = _PyValue_AdapterBox(v, BOX_SITE_NUMBER);
+    PyObject *a = _PyValue_AdapterBox(v, BOX_SITE_NUMBER, slot);
     if (a == NULL) {
         return -1;
     }

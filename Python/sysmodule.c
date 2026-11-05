@@ -2308,8 +2308,8 @@ static int
 sys__stats_dump_impl(PyObject *module)
 /*[clinic end generated code: output=6e346b4ba0de4489 input=7f3b7758cb59d2ff]*/
 {
-    int res = _Py_PrintSpecializationStats(1);
-    _Py_StatsClear();
+    int res = _Py_StatsDumpClear();
+    _Py_StatsMarkerCreate();
     return res;
 }
 #endif   // Py_STATS

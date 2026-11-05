@@ -43,15 +43,39 @@ typedef struct {
   freelistentry_t *entries;
   int first_available;
   int entries_malloced;
+#ifdef Py_STATS
+  const void *owner;   // the entry's caller, for the boxes of tuple items
+#endif
 } freelist_t;
 
 #define STATIC_FREELIST_ENTRIES 8
 
+/* The owner of the parser's boxes: the caller of the exported PyArg_* entry
+   (Py_VALUE_ENTRY), which the entry captures in its own body and passes down
+   to the static functions.  Stats builds only; elsewhere every signature is
+   the one without it. */
+#ifdef Py_STATS
+#  define PARSER_OWNER_PARAM , const void *owner
+#  define PARSER_OWNER_ARG(OWNER) , OWNER
+#  define PARSER_OWNER_INIT(FREELIST) ((FREELIST).owner = owner)
+#  define PARSER_AT(OWNER) \
+       _PyBox_AT(BOX_SITE_PARSER, BOX_KIND_THUNK, (OWNER))
+#else
+#  define PARSER_OWNER_PARAM
+#  define PARSER_OWNER_ARG(OWNER)
+#  define PARSER_OWNER_INIT(FREELIST)
+#  define PARSER_AT(OWNER)
+#endif
+// The entry's caller, as the argument of the static helpers.
+#define PARSER_CALLER() PARSER_OWNER_ARG(_Py_BOX_CALLER())
+
 /* Forward */
 static int vgetargs1_impl(PyObject *args, PyObject *tuple,
                           PyObject *const *stack, Py_ssize_t nargs,
-                          const char *format, va_list *p_va, int flags);
-static int vgetargs1(PyObject *, const char *, va_list *, int);
+                          const char *format, va_list *p_va, int flags
+                          PARSER_OWNER_PARAM);
+static int vgetargs1(PyObject *, const char *, va_list *, int
+                     PARSER_OWNER_PARAM);
 static void seterror(Py_ssize_t, const char *, int *, const char *, const char *);
 static const char *convertitem(PyObject *, const char **, va_list *, int, int *,
                                char *, size_t, freelist_t *);
@@ -65,82 +89,83 @@ static int getbuffer(PyObject *, Py_buffer *, const char**);
 static int
 vgetargskeywords(PyObject *args, PyObject *kwargs,
                  const char *format, const char * const *kwlist,
-                 va_list *p_va, int flags);
+                 va_list *p_va, int flags PARSER_OWNER_PARAM);
 static int
 vgetargskeywords_impl(PyObject *const *args, PyObject *tuple, Py_ssize_t nargs,
                       PyObject *kwargs, PyObject *kwnames,
                       const char *format, const char * const *kwlist,
-                      va_list *p_va, int flags);
+                      va_list *p_va, int flags PARSER_OWNER_PARAM);
 static int vgetargskeywordsfast(PyObject *, PyObject *,
-                            struct _PyArg_Parser *, va_list *, int);
+                            struct _PyArg_Parser *, va_list *, int
+                            PARSER_OWNER_PARAM);
 static int vgetargskeywordsfast_impl(PyObject *const *args, PyObject *tuple,
                           Py_ssize_t nargs,
                           PyObject *keywords, PyObject *kwnames,
                           struct _PyArg_Parser *parser,
-                          va_list *p_va, int flags);
+                          va_list *p_va, int flags PARSER_OWNER_PARAM);
 static const char *skipitem(const char **, va_list *, int);
 
-int
+Py_VALUE_ENTRY int
 PyArg_Parse(PyObject *args, const char *format, ...)
 {
     int retval;
     va_list va;
 
     va_start(va, format);
-    retval = vgetargs1(args, format, &va, FLAG_COMPAT);
+    retval = vgetargs1(args, format, &va, FLAG_COMPAT PARSER_CALLER());
     va_end(va);
     return retval;
 }
 
-PyAPI_FUNC(int)
+Py_VALUE_ENTRY PyAPI_FUNC(int)
 _PyArg_Parse_SizeT(PyObject *args, const char *format, ...)
 {
     int retval;
     va_list va;
 
     va_start(va, format);
-    retval = vgetargs1(args, format, &va, FLAG_COMPAT);
+    retval = vgetargs1(args, format, &va, FLAG_COMPAT PARSER_CALLER());
     va_end(va);
     return retval;
 }
 
 
-int
+Py_VALUE_ENTRY int
 PyArg_ParseTuple(PyObject *args, const char *format, ...)
 {
     int retval;
     va_list va;
 
     va_start(va, format);
-    retval = vgetargs1(args, format, &va, 0);
+    retval = vgetargs1(args, format, &va, 0 PARSER_CALLER());
     va_end(va);
     return retval;
 }
 
-int
+Py_VALUE_ENTRY int
 _PyArg_ParseTuple_SizeT(PyObject *args, const char *format, ...)
 {
     int retval;
     va_list va;
 
     va_start(va, format);
-    retval = vgetargs1(args, format, &va, 0);
+    retval = vgetargs1(args, format, &va, 0 PARSER_CALLER());
     va_end(va);
     return retval;
 }
 
 
-int
+Py_VALUE_ENTRY int
 PyArg_ParseArray(PyObject *const *args, Py_ssize_t nargs, const char *format, ...)
 {
     va_list va;
     va_start(va, format);
-    int retval = vgetargs1_impl(NULL, NULL, args, nargs, format, &va, 0);
+    int retval = vgetargs1_impl(NULL, NULL, args, nargs, format, &va, 0 PARSER_CALLER());
     va_end(va);
     return retval;
 }
 
-int
+Py_VALUE_ENTRY int
 PyArg_ParseArrayAndKeywords(PyObject *const *args, Py_ssize_t nargs,
                             PyObject *kwnames,
                             const char *format,
@@ -158,13 +183,13 @@ PyArg_ParseArrayAndKeywords(PyObject *const *args, Py_ssize_t nargs,
     va_list va;
     va_start(va, kwlist);
     int retval = vgetargskeywords_impl(args, NULL, nargs, NULL, kwnames,
-                                       format, kwlist, &va, 0);
+                                       format, kwlist, &va, 0 PARSER_CALLER());
     va_end(va);
     return retval;
 }
 
 
-int
+Py_VALUE_ENTRY int
 PyArg_VaParse(PyObject *args, const char *format, va_list va)
 {
     va_list lva;
@@ -172,12 +197,12 @@ PyArg_VaParse(PyObject *args, const char *format, va_list va)
 
     va_copy(lva, va);
 
-    retval = vgetargs1(args, format, &lva, 0);
+    retval = vgetargs1(args, format, &lva, 0 PARSER_CALLER());
     va_end(lva);
     return retval;
 }
 
-int
+Py_VALUE_ENTRY int
 _PyArg_VaParse_SizeT(PyObject *args, const char *format, va_list va)
 {
     va_list lva;
@@ -185,7 +210,7 @@ _PyArg_VaParse_SizeT(PyObject *args, const char *format, va_list va)
 
     va_copy(lva, va);
 
-    retval = vgetargs1(args, format, &lva, 0);
+    retval = vgetargs1(args, format, &lva, 0 PARSER_CALLER());
     va_end(lva);
     return retval;
 }
@@ -252,7 +277,7 @@ cleanreturn(int retval, freelist_t *freelist)
 static int
 vgetargs1_impl(PyObject *compat_args, PyObject *tuple,
                PyObject *const *stack, Py_ssize_t nargs, const char *format,
-               va_list *p_va, int flags)
+               va_list *p_va, int flags PARSER_OWNER_PARAM)
 {
     char msgbuf[256];
     int levels[32];
@@ -274,6 +299,7 @@ vgetargs1_impl(PyObject *compat_args, PyObject *tuple,
     freelist.entries = static_entries;
     freelist.first_available = 0;
     freelist.entries_malloced = 0;
+    PARSER_OWNER_INIT(freelist);
 
     flags = flags & ~FLAG_COMPAT;
 
@@ -386,7 +412,7 @@ vgetargs1_impl(PyObject *compat_args, PyObject *tuple,
 
     if (tuple != NULL) {
         assert(!compat);
-        stack = _PyBorrow_TupleItemsAt(tuple, nargs, BOX_SITE_PARSER);
+        stack = _PyBorrow_TupleItemsFor(tuple, nargs, PARSER_AT(owner));
         if (stack == NULL) {
             return cleanreturn(0, &freelist);
         }
@@ -417,7 +443,8 @@ vgetargs1_impl(PyObject *compat_args, PyObject *tuple,
 }
 
 static int
-vgetargs1(PyObject *args, const char *format, va_list *p_va, int flags)
+vgetargs1(PyObject *args, const char *format, va_list *p_va, int flags
+          PARSER_OWNER_PARAM)
 {
     PyObject *tuple;
     Py_ssize_t nargs;
@@ -439,7 +466,8 @@ vgetargs1(PyObject *args, const char *format, va_list *p_va, int flags)
         nargs = 0;
     }
 
-    return vgetargs1_impl(args, tuple, NULL, nargs, format, p_va, flags);
+    return vgetargs1_impl(args, tuple, NULL, nargs, format, p_va, flags
+                          PARSER_OWNER_ARG(owner));
 }
 
 static void
@@ -598,7 +626,7 @@ converttuple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
     }
 
     len = PyTuple_GET_SIZE(arg);
-    PyObject *const *items = len == n ? _PyBorrow_TupleItemsAt(arg, n, BOX_SITE_PARSER) : NULL;
+    PyObject *const *items = len == n ? _PyBorrow_TupleItemsFor(arg, n, PARSER_AT(freelist->owner)) : NULL;
     if (!istuple) {
         Py_DECREF(arg);            /* the run owns the elements */
     }
@@ -1421,7 +1449,7 @@ getbuffer(PyObject *arg, Py_buffer *view, const char **errmsg)
    Geoff Philbrick <philbric@delphi.hks.com> */
 
 /* Return false (0) for error, else true. */
-int
+Py_VALUE_ENTRY int
 PyArg_ParseTupleAndKeywords(PyObject *args,
                             PyObject *keywords,
                             const char *format,
@@ -1440,12 +1468,12 @@ PyArg_ParseTupleAndKeywords(PyObject *args,
     }
 
     va_start(va, kwlist);
-    retval = vgetargskeywords(args, keywords, format, kwlist, &va, 0);
+    retval = vgetargskeywords(args, keywords, format, kwlist, &va, 0 PARSER_CALLER());
     va_end(va);
     return retval;
 }
 
-int
+Py_VALUE_ENTRY int
 _PyArg_ParseTupleAndKeywords_SizeT(PyObject *args,
                                   PyObject *keywords,
                                   const char *format,
@@ -1465,13 +1493,13 @@ _PyArg_ParseTupleAndKeywords_SizeT(PyObject *args,
 
     va_start(va, kwlist);
     retval = vgetargskeywords(args, keywords, format,
-                              kwlist, &va, 0);
+                              kwlist, &va, 0 PARSER_CALLER());
     va_end(va);
     return retval;
 }
 
 
-int
+Py_VALUE_ENTRY int
 PyArg_VaParseTupleAndKeywords(PyObject *args,
                               PyObject *keywords,
                               const char *format,
@@ -1491,12 +1519,12 @@ PyArg_VaParseTupleAndKeywords(PyObject *args,
 
     va_copy(lva, va);
 
-    retval = vgetargskeywords(args, keywords, format, kwlist, &lva, 0);
+    retval = vgetargskeywords(args, keywords, format, kwlist, &lva, 0 PARSER_CALLER());
     va_end(lva);
     return retval;
 }
 
-int
+Py_VALUE_ENTRY int
 _PyArg_VaParseTupleAndKeywords_SizeT(PyObject *args,
                                     PyObject *keywords,
                                     const char *format,
@@ -1517,12 +1545,12 @@ _PyArg_VaParseTupleAndKeywords_SizeT(PyObject *args,
     va_copy(lva, va);
 
     retval = vgetargskeywords(args, keywords, format,
-                              kwlist, &lva, 0);
+                              kwlist, &lva, 0 PARSER_CALLER());
     va_end(lva);
     return retval;
 }
 
-PyAPI_FUNC(int)
+Py_VALUE_ENTRY PyAPI_FUNC(int)
 _PyArg_ParseTupleAndKeywordsFast(PyObject *args, PyObject *keywords,
                             struct _PyArg_Parser *parser, ...)
 {
@@ -1530,12 +1558,12 @@ _PyArg_ParseTupleAndKeywordsFast(PyObject *args, PyObject *keywords,
     va_list va;
 
     va_start(va, parser);
-    retval = vgetargskeywordsfast(args, keywords, parser, &va, 0);
+    retval = vgetargskeywordsfast(args, keywords, parser, &va, 0 PARSER_CALLER());
     va_end(va);
     return retval;
 }
 
-int
+Py_VALUE_ENTRY int
 _PyArg_ParseTupleAndKeywordsFast_SizeT(PyObject *args, PyObject *keywords,
                             struct _PyArg_Parser *parser, ...)
 {
@@ -1543,12 +1571,12 @@ _PyArg_ParseTupleAndKeywordsFast_SizeT(PyObject *args, PyObject *keywords,
     va_list va;
 
     va_start(va, parser);
-    retval = vgetargskeywordsfast(args, keywords, parser, &va, 0);
+    retval = vgetargskeywordsfast(args, keywords, parser, &va, 0 PARSER_CALLER());
     va_end(va);
     return retval;
 }
 
-int
+Py_VALUE_ENTRY int
 _PyArg_ParseStackAndKeywords(PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames,
                   struct _PyArg_Parser *parser, ...)
 {
@@ -1556,12 +1584,12 @@ _PyArg_ParseStackAndKeywords(PyObject *const *args, Py_ssize_t nargs, PyObject *
     va_list va;
 
     va_start(va, parser);
-    retval = vgetargskeywordsfast_impl(args, NULL, nargs, NULL, kwnames, parser, &va, 0);
+    retval = vgetargskeywordsfast_impl(args, NULL, nargs, NULL, kwnames, parser, &va, 0 PARSER_CALLER());
     va_end(va);
     return retval;
 }
 
-int
+Py_VALUE_ENTRY int
 _PyArg_ParseStackAndKeywords_SizeT(PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames,
                         struct _PyArg_Parser *parser, ...)
 {
@@ -1569,7 +1597,7 @@ _PyArg_ParseStackAndKeywords_SizeT(PyObject *const *args, Py_ssize_t nargs, PyOb
     va_list va;
 
     va_start(va, parser);
-    retval = vgetargskeywordsfast_impl(args, NULL, nargs, NULL, kwnames, parser, &va, 0);
+    retval = vgetargskeywordsfast_impl(args, NULL, nargs, NULL, kwnames, parser, &va, 0 PARSER_CALLER());
     va_end(va);
     return retval;
 }
@@ -1697,7 +1725,7 @@ static int
 vgetargskeywords_impl(PyObject *const *args, PyObject *tuple, Py_ssize_t nargs,
                       PyObject *kwargs, PyObject *kwnames,
                       const char *format, const char * const *kwlist,
-                      va_list *p_va, int flags)
+                      va_list *p_va, int flags PARSER_OWNER_PARAM)
 {
     char msgbuf[512];
     int levels[32];
@@ -1714,6 +1742,7 @@ vgetargskeywords_impl(PyObject *const *args, PyObject *tuple, Py_ssize_t nargs,
     freelist.entries = static_entries;
     freelist.first_available = 0;
     freelist.entries_malloced = 0;
+    PARSER_OWNER_INIT(freelist);
 
     assert(args != NULL || tuple != NULL || nargs == 0);
     assert(tuple == NULL || kwnames == NULL);
@@ -1781,8 +1810,9 @@ vgetargskeywords_impl(PyObject *const *args, PyObject *tuple, Py_ssize_t nargs,
     }
     if (tuple != NULL) {
         /* nargs <= len, an int, after the arity check above. */
-        args = _PyBorrow_TupleItemsAt(
-            tuple, keywords_positional_limit(format, (int)nargs), BOX_SITE_PARSER);
+        args = _PyBorrow_TupleItemsFor(
+            tuple, keywords_positional_limit(format, (int)nargs),
+            PARSER_AT(owner));
         if (args == NULL) {
             return cleanreturn(0, &freelist);
         }
@@ -1869,7 +1899,7 @@ vgetargskeywords_impl(PyObject *const *args, PyObject *tuple, Py_ssize_t nargs,
                         return cleanreturn(0, &freelist);
                     }
                     if (found > 0) {
-                        PyObject *owned = _PyValue_AsObjectAt(owned_v, BOX_SITE_DICT);
+                        PyObject *owned = _PyValue_AsObjectFor(owned_v, PARSER_AT(owner));
                         PyValue_CLOSE(owned_v);
                         if (owned == NULL) {
                             return cleanreturn(0, &freelist);
@@ -2003,7 +2033,7 @@ vgetargskeywords_impl(PyObject *const *args, PyObject *tuple, Py_ssize_t nargs,
                 if (r == 0) {
                     break;
                 }
-                PyObject *owned = _PyValue_AsObjectAt(owned_v, BOX_SITE_DICT);
+                PyObject *owned = _PyValue_AsObjectFor(owned_v, PARSER_AT(owner));
                 PyValue_CLOSE(owned_v);
                 if (owned == NULL) {
                     return cleanreturn(0, &freelist);
@@ -2082,10 +2112,11 @@ vgetargskeywords_impl(PyObject *const *args, PyObject *tuple, Py_ssize_t nargs,
 static int
 vgetargskeywords(PyObject *argstuple, PyObject *kwargs,
                  const char *format, const char * const *kwlist,
-                 va_list *p_va, int flags)
+                 va_list *p_va, int flags PARSER_OWNER_PARAM)
 {
     return vgetargskeywords_impl(NULL, argstuple, PyTuple_GET_SIZE(argstuple),
-                                 kwargs, NULL, format, kwlist, p_va, flags);
+                                 kwargs, NULL, format, kwlist, p_va, flags
+                                 PARSER_OWNER_ARG(owner));
 }
 
 static int
@@ -2362,7 +2393,7 @@ vgetargskeywordsfast_impl(PyObject *const *args, PyObject *tuple,
                           Py_ssize_t nargs,
                           PyObject *kwargs, PyObject *kwnames,
                           struct _PyArg_Parser *parser,
-                          va_list *p_va, int flags)
+                          va_list *p_va, int flags PARSER_OWNER_PARAM)
 {
     PyObject *kwtuple;
     char msgbuf[512];
@@ -2380,6 +2411,7 @@ vgetargskeywordsfast_impl(PyObject *const *args, PyObject *tuple,
     freelist.entries = static_entries;
     freelist.first_available = 0;
     freelist.entries_malloced = 0;
+    PARSER_OWNER_INIT(freelist);
 
     assert(kwargs == NULL || PyDict_Check(kwargs));
     assert(kwargs == NULL || kwnames == NULL);
@@ -2456,7 +2488,7 @@ vgetargskeywordsfast_impl(PyObject *const *args, PyObject *tuple,
         return cleanreturn(0, &freelist);
     }
     if (tuple != NULL) {
-        args = _PyBorrow_TupleItemsAt(tuple, nargs, BOX_SITE_PARSER);
+        args = _PyBorrow_TupleItemsFor(tuple, nargs, PARSER_AT(owner));
         if (args == NULL) {
             return cleanreturn(0, &freelist);
         }
@@ -2491,7 +2523,7 @@ vgetargskeywordsfast_impl(PyObject *const *args, PyObject *tuple,
                     return cleanreturn(0, &freelist);
                 }
                 if (found > 0) {
-                    PyObject *owned = _PyValue_AsObjectAt(owned_v, BOX_SITE_DICT);
+                    PyObject *owned = _PyValue_AsObjectFor(owned_v, PARSER_AT(owner));
                     PyValue_CLOSE(owned_v);
                     if (owned == NULL) {
                         return cleanreturn(0, &freelist);
@@ -2610,7 +2642,8 @@ vgetargskeywordsfast_impl(PyObject *const *args, PyObject *tuple,
 
 static int
 vgetargskeywordsfast(PyObject *args, PyObject *keywords,
-                     struct _PyArg_Parser *parser, va_list *p_va, int flags)
+                     struct _PyArg_Parser *parser, va_list *p_va, int flags
+                     PARSER_OWNER_PARAM)
 {
     if (args == NULL
         || !PyTuple_Check(args)
@@ -2621,13 +2654,14 @@ vgetargskeywordsfast(PyObject *args, PyObject *keywords,
     }
 
     return vgetargskeywordsfast_impl(NULL, args, PyTuple_GET_SIZE(args),
-                                     keywords, NULL, parser, p_va, flags);
+                                     keywords, NULL, parser, p_va, flags
+                                     PARSER_OWNER_ARG(owner));
 }
 
 
 #undef _PyArg_UnpackKeywords
 
-PyObject * const *
+Py_VALUE_ENTRY PyObject * const *
 _PyArg_UnpackKeywords(PyObject *const *args, Py_ssize_t nargs,
                       PyObject *kwargs, PyObject *kwnames,
                       struct _PyArg_Parser *parser,
@@ -2640,6 +2674,9 @@ _PyArg_UnpackKeywords(PyObject *const *args, Py_ssize_t nargs,
     int reqlimit = minkw ? maxpos + minkw : minpos;
     Py_ssize_t nkwargs;
     PyObject * const *kwstack = NULL;
+#ifdef Py_STATS
+    const void *owner = _Py_BOX_CALLER();
+#endif
 
     assert(kwargs == NULL || PyDict_Check(kwargs));
     assert(kwargs == NULL || kwnames == NULL);
@@ -2750,7 +2787,7 @@ _PyArg_UnpackKeywords(PyObject *const *args, Py_ssize_t nargs,
                 /* A dict value may be a fresh box of an inline value: the
                    borrow stack keeps it for the caller's borrowed buffer. */
                 if (found > 0) {
-                    current_arg = _PyValue_AsObjectAt(current_v, BOX_SITE_DICT);
+                    current_arg = _PyValue_AsObjectFor(current_v, PARSER_AT(owner));
                     PyValue_CLOSE(current_v);
                     if (current_arg == NULL) {
                         return NULL;
@@ -3367,7 +3404,7 @@ unpack_stack(PyObject *const *args, Py_ssize_t nargs, const char *name,
     return 1;
 }
 
-int
+Py_VALUE_ENTRY int
 PyArg_UnpackTuple(PyObject *args, const char *name, Py_ssize_t min, Py_ssize_t max, ...)
 {
     PyObject *const *stack;
@@ -3385,7 +3422,7 @@ PyArg_UnpackTuple(PyObject *args, const char *name, Py_ssize_t min, Py_ssize_t m
     if (!_PyArg_CheckPositional(name, nargs, min, max)) {
         return 0;
     }
-    stack = _PyBorrow_TupleItemsAt(args, nargs, BOX_SITE_PARSER);
+    stack = _PyBorrow_TupleItemsFor(args, nargs, PARSER_AT(_Py_BOX_CALLER()));
     if (stack == NULL) {
         return 0;
     }

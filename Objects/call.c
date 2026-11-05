@@ -245,7 +245,7 @@ PyVectorcall_Function(PyObject *callable)
 }
 
 
-PyObject *
+Py_VALUE_ENTRY PyObject *
 PyVectorcall_Call(PyObject *callable, PyObject *tuple, PyObject *kwargs)
 {
     PyThreadState *tstate = _PyThreadState_GET();
@@ -280,7 +280,7 @@ PyVectorcall_Call(PyObject *callable, PyObject *tuple, PyObject *kwargs)
             kwnames);
         _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
     }
-    return _PyValue_THUNK_EXIT(res);
+    return _PyValue_THUNK_EXIT(res, BOX_SITE_CALL);
 }
 
 
@@ -294,7 +294,7 @@ PyObject_Vectorcall(PyObject *callable, PyObject *const *args,
 }
 
 
-PyObject *
+Py_VALUE_ENTRY PyObject *
 _PyObject_Call(PyThreadState *tstate, PyObject *callable,
                PyObject *args, PyObject *kwargs)
 {
@@ -306,7 +306,8 @@ _PyObject_Call(PyThreadState *tstate, PyObject *callable,
     assert(kwargs == NULL || PyDict_Check(kwargs));
     EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_API, callable);
     return _PyValue_THUNK_EXIT(
-        _PyValue_Call(tstate, PyValue_FromObjectBorrow(callable), args, kwargs));
+        _PyValue_Call(tstate, PyValue_FromObjectBorrow(callable), args, kwargs),
+        BOX_SITE_CALL);
 }
 
 PyObject *
@@ -397,6 +398,14 @@ _PyEval_EvalFrameValue(PyThreadState *tstate, _PyInterpreterFrame *frame)
    word: no box), the instance's value vectorcall runs with the offset
    flag, and an inline result is boxed on the way out (kind THUNK). Core
    code never calls a thunk; the object call API and extensions do. */
+/* The thunk boxes for the caller of the exported wrapper, so the wrapper is
+   the entry and the body is inlined into it. */
+#ifdef Py_STATS
+#  define _PyValue_THUNK_INLINE static inline Py_ALWAYS_INLINE
+#else
+#  define _PyValue_THUNK_INLINE static inline
+#endif
+
 #ifdef Py_DEBUG
 void
 _PyValue_CheckInstanceInvariant(PyObject *callable)
@@ -410,7 +419,7 @@ _PyValue_CheckInstanceInvariant(PyObject *callable)
 }
 #endif
 
-static inline PyObject *
+_PyValue_THUNK_INLINE PyObject *
 value_vectorcall_thunk(PyObject *callable, PyObject *const *args,
                        size_t nargsf, PyObject *kwnames)
 {
@@ -463,11 +472,11 @@ value_vectorcall_thunk(PyObject *callable, PyObject *const *args,
     if (buf != small) {
         PyMem_Free(buf);
     }
-    return _PyValue_THUNK_EXIT(res);
+    return _PyValue_THUNK_EXIT(res, BOX_SITE_CALL);
 }
 
 #define _Py_VALUE_VECTORCALL_THUNK(NAME) \
-    PyObject * \
+    Py_VALUE_ENTRY PyObject * \
     NAME(PyObject *callable, PyObject *const *args, size_t nargsf, \
          PyObject *kwnames) \
     { \
@@ -536,7 +545,7 @@ PyObject_CallObject(PyObject *callable, PyObject *args)
 
 
 /* Call callable(obj, *args, **kwargs). */
-PyObject *
+Py_VALUE_ENTRY PyObject *
 _PyObject_Call_Prepend(PyThreadState *tstate, PyObject *callable,
                        PyObject *obj, PyObject *args, PyObject *kwargs)
 {
@@ -585,7 +594,7 @@ _PyObject_Call_Prepend(PyThreadState *tstate, PyObject *callable,
     if (buf != small) {
         PyMem_Free(buf);
     }
-    return _PyValue_THUNK_EXIT(res);
+    return _PyValue_THUNK_EXIT(res, BOX_SITE_CALL);
 }
 
 
@@ -613,7 +622,8 @@ _PyObject_CallFunctionVa(PyThreadState *tstate, PyObject *callable,
     EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_API, callable);
     if (nargs == 1 && PyTuple_Check(stack[0])) {
         Py_ssize_t count = PyTuple_GET_SIZE(stack[0]);
-        PyObject *const *args = _PyBorrow_TupleItems(stack[0], count);
+        PyObject *const *args = _PyBorrow_TupleItemsFor(
+            stack[0], count, _PyBox_CALL_ADAPTER(callable));
         if (args == NULL) {
             goto done;
         }
@@ -729,7 +739,8 @@ callmethod(PyThreadState *tstate, PyObject *obj, PyObject *name,
     Py_ssize_t count = nargs;
     if (nargs == 1 && PyTuple_Check(built[0])) {
         count = PyTuple_GET_SIZE(built[0]);
-        args = _PyBorrow_TupleItems(built[0], count);
+        args = _PyBorrow_TupleItemsFor(built[0], count,
+                                       _PyBox_CALL_ADAPTER(callable));
         if (args == NULL) {
             goto done;
         }
@@ -1182,7 +1193,11 @@ _PyStack_UnpackDict(PyThreadState *tstate,
         PyObject *pair = PyValue_AsKnownObjectBorrow(PyList_GET_VALUE(items, i));
         PyObject *key = PyValue_AsKnownObjectBorrow(PyTuple_GET_VALUE(pair, 0));
         PyTuple_SET_VALUE(kwnames, i, PyValue_DUP(PyValue_FromObjectBorrow(key)));
-        stack[nargs + i] = _PyValue_AsObjectAt(PyTuple_GET_VALUE(pair, 1), BOX_SITE_CALL_ADAPTER);
+        // The callee is not known here: the function names itself.
+        stack[nargs + i] = _PyValue_AsObjectFor(
+            PyTuple_GET_VALUE(pair, 1),
+            _PyBox_AT(BOX_SITE_CALL_ADAPTER, BOX_KIND_CALL_ADAPTER,
+                      _Py_FUNC_ADDR(_PyStack_UnpackDict)));
         if (stack[nargs + i] == NULL) {
             goto error;
         }
@@ -1251,7 +1266,8 @@ _PyValue_CallAdapter(PyThreadState *tstate, PyObject *callable,
        borrow stack (kind CALL_ADAPTER); it has its own offset slot. */
     _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     PyObject *res = NULL;
-    PyObject **vector = _PyBorrow_ValueVector(args, total);
+    PyObject **vector = _PyBorrow_ValueVectorFor(args, total,
+                                                  _PyBox_CALL_ADAPTER(callable));
     if (vector != NULL) {
         res = of(callable, vector, nargs | PY_VECTORCALL_ARGUMENTS_OFFSET,
                  kwnames);
@@ -1536,7 +1552,7 @@ _PyValue_InstanceVectorcall(PyThreadState *tstate, PyObject *callable,
     return _PyValue_CallAdapter(tstate, callable, of, args, nargsf, kwnames);
 }
 
-PyObject *
+Py_VALUE_ENTRY PyObject *
 _PyValue_TpCallThunk(PyObject *callable, PyObject *args, PyObject *kwargs)
 {
     PyThreadState *tstate = _PyThreadState_GET();
@@ -1560,5 +1576,46 @@ _PyValue_TpCallThunk(PyObject *callable, PyObject *args, PyObject *kwargs)
         _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
     }
     _PyValue_ASSERT_RESULT(tstate, res);
-    return _PyValue_THUNK_EXIT(res);
+    return _PyValue_THUNK_EXIT(res, BOX_SITE_CALL);
 }
+
+#ifdef Py_STATS
+/* The owner of a call adapter's boxes (pyjit/design/proposals/value-api-g.md,
+   section 1.2): the C entry of the callee, which receives the objects. A
+   Python function's entry is _PyFunction_Vectorcall(), in the core. */
+const void *
+_PyCall_BoxOwner(PyObject *callable)
+{
+    PyTypeObject *tp = Py_TYPE(callable);
+    if (PyCFunction_Check(callable)) {
+        return _Py_FUNC_ADDR(((PyCFunctionObject *)callable)->m_ml->ml_meth);
+    }
+    if (tp == &PyMethodDescr_Type || tp == &PyClassMethodDescr_Type) {
+        PyMethodDef *def = ((PyMethodDescrObject *)callable)->d_method;
+        return _Py_FUNC_ADDR(def->ml_meth);
+    }
+    if (tp == &PyWrapperDescr_Type) {
+        return ((PyWrapperDescrObject *)callable)->d_wrapped;
+    }
+    if (PyMethod_Check(callable)) {
+        return _PyCall_BoxOwner(PyMethod_GET_FUNCTION(callable));
+    }
+    if (PyType_Check(callable)) {
+        PyTypeObject *type = (PyTypeObject *)callable;
+        if (type->tp_vectorcall != NULL) {
+            return _Py_FUNC_ADDR(type->tp_vectorcall);
+        }
+        if (type->tp_init != NULL
+            && type->tp_init != PyBaseObject_Type.tp_init)
+        {
+            return _Py_FUNC_ADDR(type->tp_init);
+        }
+        return _Py_FUNC_ADDR(type->tp_new);
+    }
+    vectorcallfunc func = PyVectorcall_Function(callable);
+    if (func != NULL) {
+        return _Py_FUNC_ADDR(func);
+    }
+    return _Py_FUNC_ADDR(tp->tp_call);
+}
+#endif

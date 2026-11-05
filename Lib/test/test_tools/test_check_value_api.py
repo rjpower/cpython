@@ -73,6 +73,15 @@ class TextRuleTests(unittest.TestCase):
                                                          scan_bits)
                 self.assertEqual(len(findings), count, findings)
 
+    def test_box_text_self_tests(self):
+        # test-site and boundary-site, including the non-CORE kind tokens
+        # and the parenthesised callee that names no For form.
+        for name, (path, text, count) in (
+                check_value_api.BOX_TEXT_TESTS.items()):
+            with self.subTest(unit=name):
+                findings = check_value_api.box_text(path, text)
+                self.assertEqual(len(findings), count, findings)
+
     def test_public_value_self_tests(self):
         for name, (text, count) in check_value_api.PUBLIC_VALUE_TESTS.items():
             with self.subTest(unit=name):

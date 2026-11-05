@@ -78,14 +78,24 @@ Py_BUILD_CORE_MODULE, or one that defines Py_VALUE_CORE (Include/pyport.h).
   a bulk wave (pyjit/design/proposals/value-api-v2a0.md, section 1.5).
   Reported, not failing; the R27 gate needs none.
 
+* compat-body (second pass, -DPy_STATS, ENTRY_UNITS): a core box form
+  (PyValue_AsObject, PyValue_Box, _PyValueTemps_Object,
+  _PyValue_BoxInlineValue) or _PyValue_AdapterBox in the body of a
+  Py_VALUE_ENTRY function.
+* compat-capture (second pass): __builtin_return_address, or a call of
+  _PyValue_THUNK_EXIT, outside the body of a Py_VALUE_ENTRY function, and a
+  call from one such function to another.
+* test-site, boundary-site (text, and the box-kind matcher of the second
+  pass): value-api-g.md, section 1.7; see BOX_TEXT_RULES.
+
 The functions that Py_VALUE_COMPAT marks need no other rule here: calling
 one from a value-native unit is a compile error.
 
 The script reads compile_commands.json, which intercept-build records while
 the units compile, and runs clang-query over every value-native unit, then
 the text rules over the tree. Before that it runs its self-tests: units
-that must make each rule fire (SELF_TESTS, RAW_BITS_TEXT_TESTS and
-PUBLIC_VALUE_TESTS), a unit that calls the marked probe declaration in
+that must make each rule fire (SELF_TESTS, ENTRY_TESTS, RAW_BITS_TEXT_TESTS,
+BOX_TEXT_TESTS and PUBLIC_VALUE_TESTS), a unit that calls the marked probe declaration in
 Include/internal/pycore_value_api.h, which must fail to compile, and the
 typed-borrow units (BORROW_TESTS): each misuse of a PyValueBorrow must fail
 to compile, and the readers must accept owners and borrows alike.
@@ -96,6 +106,7 @@ Exit status: 0 if the self-tests pass and no rule fails; 1 otherwise.
 import argparse
 import bisect
 import concurrent.futures
+import fnmatch
 import glob
 import json
 import os
@@ -308,18 +319,78 @@ RAW_BITS_MESSAGES = {
 }
 # The functions that box an inline value, which a thunk body must not call
 # directly: the primitives and the helpers built on them.
-BOX_PRIMITIVES = ("PyValue_AsObject", "_PyValue_AsObjectAt",
-                  "_PyValue_AsObjectKind", "_PyValue_AsObjectAtKind",
-                  "_PyValue_BoxInlineValue", "PyValue_Box",
-                  "_PyValue_BoxInto", "_PyValueTemps_Object",
-                  "_PyValueTemps_ObjectAt", "_PyBorrow_TupleItems",
-                  "_PyBorrow_TupleItemsAt", "_PyValue_AdapterBox")
+# The At forms are macros over these functions; the For forms state a
+# boundary box, which a compatibility entry makes.
+BOX_PRIMITIVES = ("PyValue_AsObject", "_PyValue_BoxInlineValue",
+                  "PyValue_Box", "_PyValue_BoxInto", "_PyValueTemps_Object",
+                  "_PyBorrow_TupleItems", "_PyValue_AdapterBox")
 COMPAT_BODY_MATCHER = (
     "callExpr(callee(functionDecl(hasAnyName({names}))), hasAncestor("
     'functionDecl(isDefinition(), hasAttr("attr::Unavailable"))))'
     '.bind("compat_box")'.format(
         names=", ".join(f'"{name}"' for name in BOX_PRIMITIVES))
 )
+# The second pass (Py_STATS), over the units that define a Py_VALUE_ENTRY
+# (pyjit/design/proposals/value-api-g.md, section 1.3). Py_VALUE_ENTRY and
+# _Py_BOX_CALLER() exist only under Py_STATS, so the first pass cannot see
+# them. An entry is a definition that carries attr::Annotate (clang's mark;
+# the attribute of a declaration reaches its definition).
+ENTRY = 'functionDecl(isDefinition(), hasAttr("attr::Annotate"))'
+CORE_BOX_CALLEES = ("PyValue_AsObject", "PyValue_Box", "_PyValueTemps_Object",
+                    "_PyValue_BoxInlineValue", "_PyValue_AdapterBox")
+# The THUNK forms: _PyValue_THUNK_EXIT() is a function whose definition
+# is the macro's own; the capture is __builtin_return_address, which the
+# THUNK_AT macro expands in the caller (_PyValue_THUNK_NEW() has no
+# function, only that capture and _PyValue_AsObjectFor).
+THUNK_FUNCTIONS = ("_PyValue_THUNK_EXIT", "_PyValue_THUNK_New")
+BOX_KINDS_BOUNDARY = ("BOX_KIND_THUNK", "BOX_KIND_SLOT_ADAPTER",
+                      "BOX_KIND_CALL_ADAPTER")
+ENTRY_MATCHERS = {
+    "entry_box": (
+        "callExpr(callee(functionDecl(hasAnyName({names}))), "
+        "hasAncestor({entry})).bind(\"entry_box\")".format(
+            names=", ".join(f'"{n}"' for n in CORE_BOX_CALLEES),
+            entry=ENTRY)),
+    "capture": (
+        "callExpr(anyOf(callee(functionDecl(hasName("
+        '"__builtin_return_address"))), callee(functionDecl(hasAnyName({t})))'
+        "), unless(hasAncestor({entry})), unless(hasAncestor(functionDecl("
+        "isDefinition(), hasAnyName({t})))), "
+        # The debug builds' borrow-stack push site is no box owner.
+        "unless(isExpandedFromMacro(\"BORROW_PUSH_SITE\")))"
+        ".bind(\"capture\")".format(
+            t=", ".join(f'"{n}"' for n in THUNK_FUNCTIONS), entry=ENTRY)),
+    "nested": (
+        'callExpr(callee(functionDecl(hasAttr("attr::Annotate"))), '
+        "hasAncestor({entry})).bind(\"nested\")".format(entry=ENTRY)),
+    # A _PyBoxAt with a kind other than CORE (0), outside the THUNK kind
+    # (1) in an entry. The kinds are macros (BOX_KIND_*), so the matcher
+    # reads the literal's third initializer, which also catches a literal 2
+    # or 3. parse_output reports it when the expansion site is not a
+    # boundary file; the THUNK, For and adapter macros expand in the files
+    # that may use them. See BOX_TEXT_RULES for why the text rule exists too.
+    "kind": (
+        'compoundLiteralExpr(hasType(asString("_PyBoxAt")), has(initListExpr('
+        "hasInit(2, ignoringParenImpCasts(integerLiteral(unless(equals(0)))))"
+        ")), unless(allOf(hasAncestor({entry}), has(initListExpr(hasInit(2, "
+        "ignoringParenImpCasts(integerLiteral(equals(1))))))))"
+        ").bind(\"kind\")".format(entry=ENTRY)),
+}
+ENTRY_EXTRA = ("-DPy_STATS",)
+# The units that define a function marked Py_VALUE_ENTRY, whose bodies the
+# second pass reads (value-api-g.md, section 1.3). A wave that marks a
+# function in another unit adds the unit here.
+ENTRY_UNITS = tuple(f"Objects/{n}.c" for n in (
+    "abstract", "object", "typeobject", "dictobject", "listobject",
+    "setobject", "cellobject", "structseq", "tupleobject")) + (
+    "Python/borrow.c", "Python/getargs.c")
+ENTRY_QUERY = "\n".join([
+    "set output diag",
+    "enable output dump",
+    "set traversal AsIs",
+    *(f"match {m}" for m in ENTRY_MATCHERS.values()),
+    "",
+])
 QUERY = "\n".join([
     "set output diag",
     "enable output dump",
@@ -409,6 +480,30 @@ def deferred_units(entries):
                 "deferred", "Py_VALUE_DEFER_MARKS: the compatibility marks "
                 "do not apply in this unit", False))
     return findings
+
+
+# Units that test the compatibility API, whose boxes are not debt
+# (pyjit/design/proposals/value-api-g.md, section 1.8): fnmatch patterns over
+# source paths relative to the source directory. W4 shares the list.
+COMPAT_TEST_UNITS = (
+    "Modules/_testcapi*",
+    "Modules/_testlimitedcapi*",
+    "Modules/xx*",
+    "Modules/_testbuffer.c",
+    "Modules/_testmultiphase.c",
+    "Modules/_testsinglephase.c",
+    "Modules/_testimportmultiple.c",
+    "Modules/_ctypes/_ctypes_test*",
+    "Lib/test/test_cext/*",
+    "Lib/test/test_cppext/*",
+)
+
+
+def is_compat_test_unit(relpath):
+    """Whether a source path relative to the source directory is listed."""
+    relpath = str(relpath).replace(os.sep, "/")
+    return any(fnmatch.fnmatchcase(relpath, pattern)
+               for pattern in COMPAT_TEST_UNITS)
 
 
 def unit_kind(entry):
@@ -672,6 +767,26 @@ def parse_output(text, kind, directory):
                 path, line, column, "slot-read",
                 f"read of {field} ({family} family)",
                 family in MARKED_SLOT_FAMILIES))
+        elif binding == "entry_box":
+            findings.append(Finding(
+                path, line, column, "compat-body",
+                "core box form in a Py_VALUE_ENTRY body; box through "
+                "_PyValue_THUNK_EXIT() or _PyValue_THUNK_NEW()", True))
+        elif binding == "capture":
+            findings.append(Finding(
+                path, line, column, "compat-capture",
+                "a caller capture outside a Py_VALUE_ENTRY body", True))
+        elif binding == "nested":
+            findings.append(Finding(
+                path, line, column, "compat-capture",
+                "a Py_VALUE_ENTRY function calls another: the outer entry "
+                "would become the owner", True))
+        elif binding == "kind":
+            if not boundary_allowed(path):
+                findings.append(Finding(
+                    path, line, column, "boundary-site",
+                    "a boundary box kind written outside the boundary "
+                    "files", True))
         elif binding == "compat_box":
             findings.append(Finding(
                 path, line, column, "compat-body",
@@ -696,12 +811,12 @@ def compile_flags(entry):
     return flags
 
 
-def run_query(clang_query, query_file, entry, kind):
+def run_query(clang_query, query_file, entry, kind, extra=()):
     path = Path(entry["directory"], entry["file"])
     # Clang parses a unit that GCC compiles: silence its notes on GCC-only
     # options.
     proc = subprocess.run(
-        [clang_query, "-f", query_file, str(path), "--", *compile_flags(entry),
+        [clang_query, "-f", query_file, str(path), "--", *compile_flags(entry), *extra,
          "-Wno-unknown-warning-option", "-Wno-ignored-optimization-argument"],
         cwd=entry["directory"], capture_output=True, text=True)
     errors = [line for line in proc.stdout.splitlines()
@@ -709,15 +824,15 @@ def run_query(clang_query, query_file, entry, kind):
     return path, parse_output(proc.stdout, kind, entry["directory"]), errors
 
 
-def check_units(clang_query, entries, jobs):
+def check_units(clang_query, entries, jobs, query=QUERY, extra=()):
     with tempfile.TemporaryDirectory() as tmp:
         query_file = os.path.join(tmp, "query.txt")
-        Path(query_file).write_text(QUERY)
+        Path(query_file).write_text(query)
         findings = set()
         errors = []
         with concurrent.futures.ThreadPoolExecutor(jobs) as pool:
             futures = [pool.submit(run_query, clang_query, query_file,
-                                   entry, kind)
+                                   entry, kind, extra)
                        for entry, kind in entries]
             for future in futures:
                 path, unit_findings, unit_errors = future.result()
@@ -941,6 +1056,80 @@ def check_call_text(srcdir):
         text = Path(srcdir, path).read_text(errors="replace")
         findings.extend(window_read_text(path, text))
         findings.extend(vectorcall_thunk_text(path, text))
+    return findings
+
+
+# The box text rules (value-api-g.md, section 1.7). Each rule names tokens
+# and the files, as fnmatch patterns over paths relative to the source tree,
+# that may spell them. Adding a file takes a line in the design.
+#
+# boundary-site is keyed on what makes a box a boundary box, the non-CORE
+# kind tokens, as well as on the names of the For forms: a callee in
+# parentheses, (PyValue_AsObject)(v, _PyBox_AT(s, BOX_KIND_CALL_ADAPTER, x)),
+# names no For form but still states the kind. The tokens are read after
+# comments and literals are blanked, with no regard to the callee's spelling,
+# so that form fails. The ENTRY_MATCHERS["kind"] AST matcher repeats the
+# check on the expanded units of the second pass (a kind reached through a
+# macro that is spelled elsewhere), which is why both exist.
+BOX_SCAN_DIRS = ("Include", "Objects", "Python", "Parser", "Modules")
+BOUNDARY_FILES = (
+    "Include/internal/pycore_value.h", "Include/internal/pycore_borrow.h",
+    "Include/internal/pycore_value_slots.h",
+    "Include/internal/pycore_value_api.h", "Python/borrow.c",
+    "Python/getargs.c", "Python/native_scope.c", "Objects/call.c",
+    "Objects/abstract.c", "Objects/object.c", "Modules/_ctypes/*",
+    "Modules/_testinternalcapi/value_boxes.c",
+    # The container getters (PyList_GetItemRef, the PyDict_GetItemRef family)
+    # pass the THUNK box argument of their entry to a static helper that
+    # core callers share (value-api-g.md, section 1.3); added to the table.
+    "Objects/dictobject.c", "Objects/listobject.c",
+    # The call adapters name the callee that receives the boxed self.
+    "Objects/methodobject.c", "Objects/descrobject.c")
+STATS_FILES = ("Include/cpython/pystats.h", "Python/pystats.c")
+BOX_TEXT_RULES = (
+    ("test-site", ("BOX_SITE_TEST",),
+     (*STATS_FILES, "Modules/_testinternalcapi*")),
+    ("boundary-site", ("_Py_BOX_OWNER_FOREIGN",),
+     ("Include/internal/pycore_value.h", "Modules/_ctypes/*",
+      "Modules/_testinternalcapi/value_boxes.c")),
+    ("boundary-site",
+     ("_PyValue_AsObjectFor", "_PyBorrow_TupleItemsFor",
+      "_PyBorrow_ValueVectorFor", "_PyValue_AdapterBox"),
+     BOUNDARY_FILES),
+    ("boundary-site", BOX_KINDS_BOUNDARY, (*BOUNDARY_FILES, *STATS_FILES)),
+)
+
+
+def boundary_allowed(path):
+    """Whether path (relative to the source tree) may state a boundary
+    box kind."""
+    return any(fnmatch.fnmatchcase(path, p)
+               for p in (*BOUNDARY_FILES, *STATS_FILES))
+
+
+def box_text(path, text):
+    """The test-site and boundary-site findings of one file's text."""
+    if path.split("/")[0] not in BOX_SCAN_DIRS:
+        return []
+    code = strip_c(text)
+    line_of = lines_of(code)
+    findings = []
+    for rule, tokens, allowed in BOX_TEXT_RULES:
+        if any(fnmatch.fnmatchcase(path, p) for p in allowed):
+            continue
+        for m in re.finditer(r"\b(?:{})\b".format("|".join(tokens)), code):
+            column = m.start() - code.rfind("\n", 0, m.start())
+            findings.append(Finding(
+                path, line_of(m.start()), column, rule,
+                f"{m[0]} outside the files that may spell it", True))
+    return findings
+
+
+def check_box_text(srcdir):
+    findings = []
+    for path in source_files(srcdir):
+        findings.extend(box_text(
+            path, Path(srcdir, path).read_text(errors="replace")))
     return findings
 
 
@@ -1347,12 +1536,85 @@ SELF_TESTS = {
         #include "pycore_value_slots.h"
         Py_VALUE_COMPAT(g) PyObject *f(PyValue v);
         PyObject *f(PyValue v) {
-            return _PyValue_THUNK_EXIT(v);
+            return _PyValue_THUNK_EXIT(v, BOX_SITE_NUMBER);
         }""", "compat-body", 0),
     "compat_body_unmarked": ("""
         PyObject *f(PyValue v) {
             return PyValue_AsObject(v);
         }""", "compat-body", 0),
+}
+# The second pass (Py_STATS): name -> (body, rule, number of findings, path).
+# The path, relative to the source tree, is where the unit is taken to be
+# written; it defaults to a file outside the boundary files.
+ENTRY_TESTS = {
+    "entry_body_core_box": ("""
+        Py_VALUE_ENTRY PyObject *f(PyValue v);
+        PyObject *f(PyValue v) {
+            return PyValue_AsObject(v);
+        }""", "compat-body", 1),
+    "entry_body_adapter_box": ("""
+        #include "pycore_value_slots.h"
+        Py_VALUE_ENTRY PyObject *f(PyValue v);
+        PyObject *f(PyValue v) {
+            return _PyValue_AdapterBox(v, BOX_SITE_NUMBER, f);
+        }""", "compat-body", 1),
+    "entry_body_thunk": ("""
+        #include "pycore_value_slots.h"
+        Py_VALUE_ENTRY PyObject *f(PyValue v);
+        PyObject *f(PyValue v) {
+            return _PyValue_THUNK_NEW(v, BOX_SITE_NUMBER);
+        }""", "compat-body", 0),
+    "entry_body_unmarked_core_box": ("""
+        PyObject *f(PyValue v) {
+            return PyValue_AsObject(v);
+        }""", "compat-body", 0),
+    "capture_in_unmarked": ("""
+        #include "pycore_value_slots.h"
+        PyObject *f(PyValue v) {
+            return _PyValue_THUNK_EXIT(v, BOX_SITE_NUMBER);
+        }""", "compat-capture", 1),
+    "capture_new_in_unmarked": ("""
+        #include "pycore_value_slots.h"
+        PyObject *f(PyValue v) {
+            return _PyValue_THUNK_NEW(v, BOX_SITE_NUMBER);
+        }""", "compat-capture", 1),
+    "capture_return_address_in_unmarked": ("""
+        const void *f(void) { return __builtin_return_address(0); }
+        """, "compat-capture", 1),
+    "capture_in_entry": ("""
+        #include "pycore_value_slots.h"
+        Py_VALUE_ENTRY PyObject *f(PyValue v);
+        PyObject *f(PyValue v) {
+            return _PyValue_THUNK_EXIT(v, BOX_SITE_NUMBER);
+        }
+        Py_VALUE_ENTRY const void *g(void);
+        const void *g(void) { return __builtin_return_address(0); }
+        """, "compat-capture", 0),
+    "entry_calls_entry": ("""
+        Py_VALUE_ENTRY int g(void);
+        int g(void) { return 1; }
+        Py_VALUE_ENTRY int f(void);
+        int f(void) { return g(); }""", "compat-capture", 1),
+    "unmarked_calls_entry": ("""
+        Py_VALUE_ENTRY int g(void);
+        int g(void) { return 1; }
+        int f(void) { return g(); }""", "compat-capture", 0),
+    "kind_literal_outside": ("""
+        PyObject *f(PyValue v) {
+            return (PyValue_AsObject)(PyValue_Borrow(v), _PyBox_AT(
+                BOX_SITE_NUMBER, BOX_KIND_CALL_ADAPTER, NULL));
+        }""", "boundary-site", 1),
+    "kind_core_outside": ("""
+        PyObject *f(PyValue v) {
+            return (PyValue_AsObject)(PyValue_Borrow(v),
+                                      _PyBox_CORE(BOX_SITE_NUMBER));
+        }""", "boundary-site", 0),
+    "kind_thunk_macro_outside": ("""
+        #include "pycore_value_slots.h"
+        Py_VALUE_ENTRY PyObject *f(PyValue v);
+        PyObject *f(PyValue v) {
+            return _PyValue_THUNK_NEW(v, BOX_SITE_NUMBER);
+        }""", "boundary-site", 0),
 }
 # The rules whose findings report and do not fail.
 REPORT_RULES = frozenset({"slot-read", "home-copy"})
@@ -1467,6 +1729,57 @@ CALL_TEXT_TESTS = {
         """, "vectorcall-thunk", 0),
 }
 
+# Box text rules: name -> (path, text, number of findings).
+BOX_TEXT_TESTS = {
+    "test_site_outside": ("Objects/spam.c",
+                          "int x = BOX_SITE_TEST;\n", 1),
+    "test_site_in_test_module": ("Modules/_testinternalcapi/list.c",
+                                 "int x = BOX_SITE_TEST;\n", 0),
+    "test_site_in_pystats": ("Python/pystats.c",
+                             "int x = BOX_SITE_TEST;\n", 0),
+    "test_site_in_comment": ("Objects/spam.c",
+                             '/* BOX_SITE_TEST */ char *s = "BOX_SITE_TEST";\n',
+                             0),
+    "test_site_in_lib_test": ("Lib/test/test_cext/spam.c",
+                              "int x = BOX_SITE_TEST;\n", 0),
+    "foreign_outside": ("Python/spam.c",
+                        "const void *x = _Py_BOX_OWNER_FOREIGN;\n", 1),
+    "foreign_in_ctypes": ("Modules/_ctypes/cfield.c",
+                          "const void *x = _Py_BOX_OWNER_FOREIGN;\n", 0),
+    "foreign_in_value_boxes": ("Modules/_testinternalcapi/value_boxes.c",
+                               "const void *x = _Py_BOX_OWNER_FOREIGN;\n",
+                               0),
+    "foreign_in_other_test_file": ("Modules/_testinternalcapi/list.c",
+                                   "const void *x = _Py_BOX_OWNER_FOREIGN;\n",
+                                   1),
+    "for_form_outside": ("Objects/setobject.c",
+                         "x = _PyValue_AsObjectFor(v, at);\n", 1),
+    "borrow_for_outside": ("Objects/tupleobject.c",
+                           "x = _PyBorrow_TupleItemsFor(v, at);\n"
+                           "y = _PyBorrow_ValueVectorFor(v, at);\n", 2),
+    "adapter_box_outside": ("Objects/typeobject.c",
+                            "x = _PyValue_AdapterBox(v);\n", 1),
+    "for_form_in_call": ("Objects/call.c",
+                         "x = _PyValue_AsObjectFor(v, at);\n", 0),
+    "for_form_in_value_api": ("Include/internal/pycore_value_api.h",
+                              "x = _PyValue_AdapterBox(v);\n", 0),
+    "kind_literal_outside": (
+        "Objects/typeobject.c",
+        "x = (PyValue_AsObject)(v, _PyBox_AT(s, BOX_KIND_CALL_ADAPTER, o));\n",
+        1),
+    "kind_thunk_and_slot_outside": (
+        "Python/ceval.c",
+        "a = BOX_KIND_THUNK;\nb = BOX_KIND_SLOT_ADAPTER;\n", 2),
+    "kind_core_outside": ("Objects/typeobject.c",
+                          "x = _PyBox_AT(s, BOX_KIND_CORE, NULL);\n", 0),
+    "kind_in_borrow": ("Python/borrow.c",
+                       "x = _PyBox_AT(s, BOX_KIND_CALL_ADAPTER, o);\n", 0),
+    "kind_in_comment": ("Objects/typeobject.c",
+                        "/* BOX_KIND_THUNK */ // BOX_KIND_CALL_ADAPTER\n", 0),
+    "kind_longer_name": ("Objects/typeobject.c",
+                         "int BOX_KIND_THUNKS = 0;\n", 0),
+}
+
 # Public header texts -> number of public-value findings.
 PUBLIC_VALUE_TESTS = {
     "opaque_value_slots": ("""
@@ -1577,13 +1890,16 @@ def text_self_test():
     cases = [(name, "raw-bits", raw_bits_text(path, text, scan_bits), count)
              for name, (path, text, scan_bits, count)
              in RAW_BITS_TEXT_TESTS.items()]
+    cases += [(name, "box-text", box_text(path, text), count)
+              for name, (path, text, count) in BOX_TEXT_TESTS.items()]
     cases += [(name, "public-value", check_public_header(name, text), count)
               for name, (text, count) in PUBLIC_VALUE_TESTS.items()]
     cases += [(name, rule, window_read_text(path, text)
                + vectorcall_thunk_text(path, text), count)
               for name, (path, text, rule, count) in CALL_TEXT_TESTS.items()]
     for name, rule, got, count in cases:
-        got = [f for f in got if f.rule == rule] if rule != "raw-bits" else got
+        got = ([f for f in got if f.rule == rule]
+               if rule not in ("raw-bits", "box-text") else got)
         if len(got) != count:
             failures.append(f"self-test {name}: expected {count} {rule} "
                             f"findings, got {len(got)}: "
@@ -1741,6 +2057,28 @@ def self_test(clang_query, template, compiler, cxx, jobs):
                 print(f"self-test {name}: {len(got)} {rule} finding(s), "
                       "as expected")
 
+        entries = []
+        expected = {}
+        for name, (body, rule, count) in ENTRY_TESTS.items():
+            path = Path(tmp, f"{name}.c")
+            path.write_text(SELF_TEST_HEADER + body + "\n")
+            entries.append(({**template, "file": str(path)}, "core"))
+            expected[str(path)] = (name, rule, count)
+        findings, errors = check_units(clang_query, entries, jobs,
+                                       ENTRY_QUERY, ENTRY_EXTRA)
+        failures.extend(errors)
+        for path, (name, rule, count) in expected.items():
+            got = [f for f in findings
+                   if f.path == display_path(path, template["directory"])
+                   and f.rule == rule]
+            if len(got) != count:
+                failures.append(f"self-test {name}: expected {count} "
+                                f"{rule} findings, got {len(got)}: "
+                                + "; ".join(str(f) for f in got))
+            else:
+                print(f"self-test {name}: {len(got)} {rule} finding(s), "
+                      "as expected")
+
         # Py_VALUE_COMPAT: a call of a marked function from a value-native
         # unit does not compile; from a module unit it does.
         flags = compile_flags(template)
@@ -1866,14 +2204,26 @@ def main():
                for entry, kind in entries.values()}
     text_findings = (check_raw_bits_text(SRCDIR, checked)
                      + check_public_headers(SRCDIR)
-                     + check_call_text(SRCDIR))
+                     + check_call_text(SRCDIR)
+                     + check_box_text(SRCDIR))
+    entry_entries = []
+    for entry in database:
+        path = display_path(entry["file"], entry["directory"])
+        if path in ENTRY_UNITS:
+            entry_entries.append((entry, "core"))
     if args.files:
         wanted = {os.path.normpath(os.path.abspath(f)) for f in args.files}
         entries = {p: e for p, e in entries.items() if p in wanted}
+        entry_entries = [(e, k) for e, k in entry_entries
+                         if os.path.normpath(Path(e["directory"], e["file"]))
+                         in wanted]
         text_findings = [f for f in text_findings
                          if str(SRCDIR / f.path) in wanted]
     findings, errors = check_units(clang_query, entries.values(), args.jobs)
-    findings = sorted({*findings, *text_findings,
+    entry_findings, entry_errors = check_units(
+        clang_query, entry_entries, args.jobs, ENTRY_QUERY, ENTRY_EXTRA)
+    errors += entry_errors
+    findings = sorted({*findings, *entry_findings, *text_findings,
                        *deferred_units(entries.values())})
     for finding in findings:
         print(finding)

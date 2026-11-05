@@ -45,11 +45,10 @@
 
 #define EVAL_CALL_KINDS 10
 
-/* Classes of the sites that box an inline value or that canonical entry
-   unboxes (pyjit/design/value-api.md, section 6.1). A site names its class
-   with _PyValue_AsObjectAt() or another At form of
-   Include/internal/pycore_value_api.h; a box made outside such a call is
-   unattributed. Compatibility exits are split by family. */
+/* Classes of the sites that box an inline value (pyjit/design/value-api.md,
+   section 6.1). A site names its class with _PyValue_AsObjectAt() or another
+   At or For form of Include/internal/pycore_value.h; a box made through the
+   plain forms is unattributed. Compatibility exits are split by family. */
 #define BOX_SITE_UNATTRIBUTED 0
 #define BOX_SITE_NUMBER 1
 #define BOX_SITE_COMPARE 2
@@ -69,14 +68,16 @@
 #define BOX_SITE_FIELD 16         // object fields
 #define BOX_SITE_FRAME 17         // frame locals
 #define BOX_SITE_COMPILER 18      // compiler constants
+#define BOX_SITE_TEST 19          // _testinternalcapi's deliberate boxes
 
-#define BOX_SITE_KINDS 19
+#define BOX_SITE_KINDS 20
 
 /* Kinds of boxes (pyjit/design/proposals/value-api-v2a0.md, section 4.7):
    a box of the core, of a thunk's exit (an object API returning a value
    slot's result), of the slot adapter (an object slot called with inline
-   operands), or of the call adapter (the BOX_SITE_CALL_ADAPTER class). A
-   box primitive's caller passes the kind, as it passes the site class. */
+   operands), or of the call adapter (a native call's argument vector). A
+   box primitive's caller passes the kind, as it passes the site class
+   (_PyBoxAt in Include/internal/pycore_value.h). */
 #define BOX_KIND_CORE 0
 #define BOX_KIND_THUNK 1
 #define BOX_KIND_SLOT_ADAPTER 2
@@ -149,9 +150,11 @@ typedef struct _object_stats {
     uint64_t inline_array_boxes;
     /* Boxes by site class (BOX_SITE_*), which add up to inline_int_boxes +
        inline_float_boxes, and exact int and float objects that canonical
-       entry made inline, by the same classes. */
+       entry made inline. */
     uint64_t box[BOX_SITE_KINDS];
-    uint64_t entry_unbox[BOX_SITE_KINDS];
+    uint64_t entry_unbox;
+    // Boxes that returned a cached small int; they are boxes (G12).
+    uint64_t box_cached;
     // The same boxes by kind (BOX_KIND_*).
     uint64_t box_kind[BOX_KINDS];
     /* Temporary value used during GC */

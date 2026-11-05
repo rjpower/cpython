@@ -2190,6 +2190,21 @@ case "$withval" in
 esac
 ],
 [AC_MSG_RESULT([no])])
+
+# A pystats build is the build that gate R27 runs (Tools/build/check_r27.py):
+# it attributes each box to the code that made it, from return addresses.
+# Cross-unit inlining, a shared libpython and per-thread statistics would
+# each make that attribution wrong, and a sibling call would hand an entry's
+# return address to its caller's caller.
+AS_VAR_IF([enable_pystats], [yes], [
+  AS_VAR_IF([Py_LTO], [true],
+    [AC_MSG_ERROR([--enable-pystats does not work with --with-lto])])
+  AS_VAR_IF([enable_shared], [yes],
+    [AC_MSG_ERROR([--enable-pystats does not work with --enable-shared])])
+  AS_VAR_IF([disable_gil], [yes],
+    [AC_MSG_ERROR([--enable-pystats does not work with --disable-gil])])
+  CFLAGS="$CFLAGS -fno-optimize-sibling-calls"
+])
 if test "$Py_LTO" = 'true' ; then
   case $ac_cv_cc_name in
     clang)

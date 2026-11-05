@@ -58,7 +58,7 @@ PyAPI_FUNC(int) _Py_convert_optional_to_non_negative_ssize_t(PyObject *, void *)
 
 // Same as PyNumber_Index() but can return an instance of a subclass of int.
 // Export for 'math' shared extension.
-PyAPI_FUNC(PyObject*) _PyNumber_Index(PyObject *o);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject*) _PyNumber_Index(PyObject *o);
 
 typedef struct {
     PyObject *object;

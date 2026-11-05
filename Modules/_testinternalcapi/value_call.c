@@ -137,14 +137,14 @@ vc_int_method(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
     if (items == NULL) {
         return PyValue_NULL;
     }
-    PyObject *first = PyValue_AsObject(self);
+    PyObject *first = _PyValue_AsObjectAt(self, BOX_SITE_TEST);
     if (first == NULL) {
         Py_DECREF(items);
         return PyValue_NULL;
     }
     PyTuple_SET_ITEM(items, 0, first);
     for (Py_ssize_t i = 0; i < nargs; i++) {
-        PyObject *item = PyValue_AsObject(PyValue_Borrow(args[i]));
+        PyObject *item = _PyValue_AsObjectAt(PyValue_Borrow(args[i]), BOX_SITE_TEST);
         if (item == NULL) {
             Py_DECREF(items);
             return PyValue_NULL;
@@ -263,7 +263,7 @@ value_result(PyValue result)
     if (PyValue_IsNull(result)) {
         return NULL;
     }
-    PyObject *obj = PyValue_AsObject(PyValue_Borrow(result));
+    PyObject *obj = _PyValue_AsObjectAt(result, BOX_SITE_TEST);
     PyValue_CLOSE(result);
     return obj;
 }

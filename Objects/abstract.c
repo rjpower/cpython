@@ -990,13 +990,13 @@ value_type_error(const char *msg, PyValueBorrow v)
    The result becomes a value through PyValue_FromObjectSteal(), which
    makes an exact int or float inline. */
 
-#define adapter_box(v) _PyValue_AdapterBox((v), BOX_SITE_NUMBER)
+#define adapter_box(v, f) _PyValue_AdapterBox((v), BOX_SITE_NUMBER, (f))
 #define adapter_release(v, obj) _PyValue_AdapterRelease((v), (obj))
 
 static PyValue
 adapt_unary(unaryfunc f, PyValueBorrow v)
 {
-    PyObject *a = adapter_box(v);
+    PyObject *a = adapter_box(v, f);
     if (a == NULL) {
         return PyValue_NULL;
     }
@@ -1008,11 +1008,11 @@ adapt_unary(unaryfunc f, PyValueBorrow v)
 static PyValue
 adapt_binary(binaryfunc f, PyValueBorrow v, PyValueBorrow w)
 {
-    PyObject *a = adapter_box(v);
+    PyObject *a = adapter_box(v, f);
     if (a == NULL) {
         return PyValue_NULL;
     }
-    PyObject *b = adapter_box(w);
+    PyObject *b = adapter_box(w, f);
     if (b == NULL) {
         adapter_release(v, a);
         return PyValue_NULL;
@@ -1027,16 +1027,16 @@ static PyValue
 adapt_ternary(ternaryfunc f, PyValueBorrow v, PyValueBorrow w,
               PyValueBorrow z)
 {
-    PyObject *a = adapter_box(v);
+    PyObject *a = adapter_box(v, f);
     if (a == NULL) {
         return PyValue_NULL;
     }
-    PyObject *b = adapter_box(w);
+    PyObject *b = adapter_box(w, f);
     if (b == NULL) {
         adapter_release(v, a);
         return PyValue_NULL;
     }
-    PyObject *c = adapter_box(z);
+    PyObject *c = adapter_box(z, f);
     if (c == NULL) {
         adapter_release(w, b);
         adapter_release(v, a);
@@ -1053,7 +1053,7 @@ adapt_ternary(ternaryfunc f, PyValueBorrow v, PyValueBorrow w,
 static PyValue
 adapt_concat(binaryfunc f, PyObject *seq, PyValueBorrow w)
 {
-    PyObject *b = adapter_box(w);
+    PyObject *b = adapter_box(w, f);
     if (b == NULL) {
         return PyValue_NULL;
     }
@@ -1196,7 +1196,7 @@ binary_op1(PyValueBorrow v, PyValueBorrow w, const int op_slot,
 // BINARY_OP1() for object operands, with an object result.
 #define OBJECT_BINARY_OP1(v, w, op, op_name) \
     _PyValue_THUNK_EXIT(BINARY_OP1(_Py_VALUE_ARG(v), _Py_VALUE_ARG(w), \
-                                   op, op_name))
+                                   op, op_name), BOX_SITE_NUMBER)
 
 static PyValue
 binop_type_error(PyValueBorrow v, PyValueBorrow w, const char *op_name)
@@ -1342,7 +1342,8 @@ ternary_op(PyValueBorrow v,
     PyObject * \
     func(PyObject *v, PyObject *w) { \
         return _PyValue_THUNK_EXIT( \
-            (_PyValue_##name)(_Py_VALUE_ARG(v), _Py_VALUE_ARG(w))); \
+            (_PyValue_##name)(_Py_VALUE_ARG(v), _Py_VALUE_ARG(w)), \
+            BOX_SITE_NUMBER); \
     }
 
 BINARY_FUNC(PyNumber_Or, Or, nb_or, "|")
@@ -1380,7 +1381,7 @@ PyObject *
 PyNumber_Add(PyObject *v, PyObject *w)
 {
     return _PyValue_THUNK_EXIT(
-        (_PyValue_Add)(_Py_VALUE_ARG(v), _Py_VALUE_ARG(w)));
+        (_PyValue_Add)(_Py_VALUE_ARG(v), _Py_VALUE_ARG(w)), BOX_SITE_NUMBER);
 }
 
 /* seq * n; seq holds a sequence, an object. sq_repeat has no value side. */
@@ -1429,7 +1430,8 @@ PyObject *
 PyNumber_Multiply(PyObject *v, PyObject *w)
 {
     return _PyValue_THUNK_EXIT(
-        (_PyValue_Multiply)(_Py_VALUE_ARG(v), _Py_VALUE_ARG(w)));
+        (_PyValue_Multiply)(_Py_VALUE_ARG(v), _Py_VALUE_ARG(w)),
+        BOX_SITE_NUMBER);
 }
 
 BINARY_FUNC(PyNumber_MatrixMultiply, MatrixMultiply, nb_matrix_multiply, "@")
@@ -1448,7 +1450,8 @@ PyObject *
 PyNumber_Power(PyObject *v, PyObject *w, PyObject *z)
 {
     return _PyValue_THUNK_EXIT((_PyValue_Power)(
-        _Py_VALUE_ARG(v), _Py_VALUE_ARG(w), _Py_VALUE_ARG(z)));
+        _Py_VALUE_ARG(v), _Py_VALUE_ARG(w), _Py_VALUE_ARG(z)),
+        BOX_SITE_NUMBER);
 }
 
 PyObject *
@@ -1502,7 +1505,7 @@ binary_iop1(PyValueBorrow v, PyValueBorrow w, const int iop_slot,
 // BINARY_IOP1() for object operands, with an object result.
 #define OBJECT_BINARY_IOP1(v, w, iop, op, op_name) \
     _PyValue_THUNK_EXIT(BINARY_IOP1(_Py_VALUE_ARG(v), _Py_VALUE_ARG(w), \
-                                    iop, op, op_name))
+                                    iop, op, op_name), BOX_SITE_NUMBER)
 
 static PyValue
 binary_iop(PyValueBorrow v, PyValueBorrow w, const int iop_slot,
@@ -1550,7 +1553,8 @@ ternary_iop(PyValueBorrow v, PyValueBorrow w, PyValueBorrow z,
     PyObject * \
     func(PyObject *v, PyObject *w) { \
         return _PyValue_THUNK_EXIT( \
-            (_PyValue_InPlace##name)(_Py_VALUE_ARG(v), _Py_VALUE_ARG(w))); \
+            (_PyValue_InPlace##name)(_Py_VALUE_ARG(v), _Py_VALUE_ARG(w)), \
+            BOX_SITE_NUMBER); \
     }
 
 INPLACE_BINOP(PyNumber_InPlaceOr, Or, nb_inplace_or, nb_or, "|=")
@@ -1595,7 +1599,8 @@ PyObject *
 PyNumber_InPlaceAdd(PyObject *v, PyObject *w)
 {
     return _PyValue_THUNK_EXIT(
-        (_PyValue_InPlaceAdd)(_Py_VALUE_ARG(v), _Py_VALUE_ARG(w)));
+        (_PyValue_InPlaceAdd)(_Py_VALUE_ARG(v), _Py_VALUE_ARG(w)),
+        BOX_SITE_NUMBER);
 }
 
 PyValue
@@ -1631,7 +1636,8 @@ PyObject *
 PyNumber_InPlaceMultiply(PyObject *v, PyObject *w)
 {
     return _PyValue_THUNK_EXIT(
-        (_PyValue_InPlaceMultiply)(_Py_VALUE_ARG(v), _Py_VALUE_ARG(w)));
+        (_PyValue_InPlaceMultiply)(_Py_VALUE_ARG(v), _Py_VALUE_ARG(w)),
+        BOX_SITE_NUMBER);
 }
 
 PyValue
@@ -1646,7 +1652,8 @@ PyObject *
 PyNumber_InPlacePower(PyObject *v, PyObject *w, PyObject *z)
 {
     return _PyValue_THUNK_EXIT((_PyValue_InPlacePower)(
-        _Py_VALUE_ARG(v), _Py_VALUE_ARG(w), _Py_VALUE_ARG(z)));
+        _Py_VALUE_ARG(v), _Py_VALUE_ARG(w), _Py_VALUE_ARG(z)),
+        BOX_SITE_NUMBER);
 }
 
 PyObject *
@@ -1682,7 +1689,8 @@ _PyNumber_InPlacePowerNoMod(PyObject *lhs, PyObject *rhs)
                                                                          \
     PyObject *                                                           \
     func(PyObject *o) {                                                  \
-        return _PyValue_THUNK_EXIT((_PyValue_##name)(_Py_VALUE_ARG(o))); \
+        return _PyValue_THUNK_EXIT((_PyValue_##name)(_Py_VALUE_ARG(o)), \
+                                   BOX_SITE_NUMBER); \
     }
 
 UNARY_FUNC(PyNumber_Negative, Negative, nb_negative, __neg__, "unary -")
@@ -1766,7 +1774,8 @@ PyValue
 PyObject *
 _PyNumber_Index(PyObject *item)
 {
-    return _PyValue_THUNK_EXIT((_PyValue_Index)(_Py_VALUE_ARG(item)));
+    return _PyValue_THUNK_EXIT((_PyValue_Index)(_Py_VALUE_ARG(item)),
+                               BOX_SITE_NUMBER);
 }
 
 /* Return an exact Python int from the object item.
@@ -1950,7 +1959,8 @@ PyValue
 PyObject *
 PyNumber_Long(PyObject *o)
 {
-    return _PyValue_THUNK_EXIT((_PyValue_Long)(_Py_VALUE_ARG(o)));
+    return _PyValue_THUNK_EXIT((_PyValue_Long)(_Py_VALUE_ARG(o)),
+                               BOX_SITE_NUMBER);
 }
 
 PyValue
@@ -2028,7 +2038,8 @@ PyValue
 PyObject *
 PyNumber_Float(PyObject *o)
 {
-    return _PyValue_THUNK_EXIT((_PyValue_Float)(_Py_VALUE_ARG(o)));
+    return _PyValue_THUNK_EXIT((_PyValue_Float)(_Py_VALUE_ARG(o)),
+                               BOX_SITE_NUMBER);
 }
 
 
@@ -2091,7 +2102,7 @@ PySequence_Length(PyObject *s)
 }
 #define PySequence_Length PySequence_Size
 
-PyObject *
+Py_VALUE_ENTRY PyObject *
 PySequence_Concat(PyObject *s, PyObject *o)
 {
     if (s == NULL || o == NULL) {
@@ -2117,7 +2128,7 @@ PySequence_Concat(PyObject *s, PyObject *o)
     return type_error("'%.200s' object can't be concatenated", s);
 }
 
-PyObject *
+Py_VALUE_ENTRY PyObject *
 PySequence_Repeat(PyObject *o, Py_ssize_t count)
 {
     if (o == NULL) {
@@ -2148,7 +2159,7 @@ PySequence_Repeat(PyObject *o, Py_ssize_t count)
     return type_error("'%.200s' object can't be repeated", o);
 }
 
-PyObject *
+Py_VALUE_ENTRY PyObject *
 PySequence_InPlaceConcat(PyObject *s, PyObject *o)
 {
     if (s == NULL || o == NULL) {
@@ -2177,7 +2188,7 @@ PySequence_InPlaceConcat(PyObject *s, PyObject *o)
     return type_error("'%.200s' object can't be concatenated", s);
 }
 
-PyObject *
+Py_VALUE_ENTRY PyObject *
 PySequence_InPlaceRepeat(PyObject *o, Py_ssize_t count)
 {
     if (o == NULL) {

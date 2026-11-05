@@ -291,7 +291,24 @@ extern "C" {
  * A unit that defines Py_VALUE_DEFER_MARKS before including Python.h sees no
  * mark: the defer line of a bulk wave (value-api-v2a0.md, section 1.5), for a
  * unit that another step is rewriting. Tools/build/check_value_api.py lists
- * the deferred units; the R27 gate needs none. */
+ * the deferred units; the R27 gate needs none.
+ *
+ * One mark, two strengths (pyjit/design/proposals/value-api-g.md, section
+ * 1.3). Py_VALUE_ENTRY on a declaration (or on the definition of a function
+ * without one) makes the function a compatibility entry: its boxes belong to
+ * its caller, which it captures with the THUNK forms of
+ * pycore_value_slots.h. In stats builds the entry must not be inlined, cloned
+ * or merged, so that its return address is its caller's call; elsewhere the
+ * mark is empty. Py_VALUE_COMPAT(REPLACEMENT) is Py_VALUE_ENTRY plus the
+ * unavailable attribute in value-native units. A wave that ports an entry's
+ * callers replaces the one token with the other. */
+#if defined(Py_STATS) && defined(__clang__)
+#  define Py_VALUE_ENTRY __attribute__((noinline, annotate("Py_VALUE_ENTRY")))
+#elif defined(Py_STATS) && defined(__GNUC__)
+#  define Py_VALUE_ENTRY __attribute__((noinline, noipa))
+#else
+#  define Py_VALUE_ENTRY
+#endif
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_BUILTIN) \
     && !defined(Py_BUILD_CORE_MODULE) && !defined(Py_VALUE_CORE)
 #  define Py_VALUE_CORE 1
@@ -300,13 +317,13 @@ extern "C" {
 #  if !defined(__clang__) && !(defined(__GNUC__) && __GNUC__ >= 12)
 #    error "value-native units need __attribute__((unavailable)): Clang or GCC 12+"
 #  elif defined(Py_VALUE_DEFER_MARKS)
-#    define Py_VALUE_COMPAT(REPLACEMENT)
+#    define Py_VALUE_COMPAT(REPLACEMENT) Py_VALUE_ENTRY
 #  else
-#    define Py_VALUE_COMPAT(REPLACEMENT) \
+#    define Py_VALUE_COMPAT(REPLACEMENT) Py_VALUE_ENTRY \
          __attribute__((unavailable("compatibility API; use " #REPLACEMENT)))
 #  endif
 #else
-#  define Py_VALUE_COMPAT(REPLACEMENT)
+#  define Py_VALUE_COMPAT(REPLACEMENT) Py_VALUE_ENTRY
 #endif
 
 

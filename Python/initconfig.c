@@ -484,6 +484,7 @@ static const char usage_xoptions[] =
 "         code tree; also #e{PYTHONPYCACHEPREFIX}\n"
 #ifdef Py_STATS
 "#s{-X} #L{pystats}: enable pystats collection at startup; also #e{PYTHONSTATS}\n"
+"#s{-X} #L{pystats_dir}#b{=DIR}: write pystats dumps to DIR; also #e{PYTHON_PYSTATS_DIR}\n"
 #endif
 "#s{-X} #L{showrefcount}: output the total reference count and number of used\n"
 "         memory blocks when the program finishes or after each statement in\n"

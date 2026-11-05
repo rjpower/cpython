@@ -289,6 +289,14 @@ struct pyruntimestate {
        a pointer type.
        */
 
+#ifdef Py_STATS
+    // The counters and owner table of deleted interpreters, which the dump
+    // of the process adds (Python/pystats.c). Not in a dump of the main
+    // interpreter before it.
+    PyMutex pystats_accum_mutex;
+    struct _PyBoxAccum *pystats_accum;
+#endif
+
     /* _PyRuntimeState.interpreters.main */
     PyInterpreterState _main_interpreter;
     // _main_interpreter should be the last field of _PyRuntimeState.

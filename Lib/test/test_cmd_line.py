@@ -178,7 +178,8 @@ class CmdLineTest(unittest.TestCase):
     def test_showrefcount(self):
         # normally the refcount is hidden
         # (assert_python_ok() enables faulthandler)
-        code = 'import sys; print(sys._xoptions)'
+        code = ('import sys; print({k: v for k, v in sys._xoptions.items() '
+                'if not k.startswith("pystats")})')
         proc = assert_python_ok('-c', code)
         self.assertEqual(proc.out.rstrip(), b"{'faulthandler': True}")
         self.assertEqual(proc.err, b'')
@@ -1435,7 +1436,13 @@ class CmdLineTest(unittest.TestCase):
                 config_names = (config_names,)
             if isinstance(options, str):
                 options = (options,)
-            expr = ', '.join(f'config_get({name!a})' for name in config_names)
+            def get(name):
+                if name == 'xoptions':
+                    # Stats builds may add -X pystats and -X pystats_dir.
+                    return ("{k: v for k, v in config_get('xoptions').items()"
+                            " if not k.startswith('pystats')}")
+                return f'config_get({name!a})'
+            expr = ', '.join(get(name) for name in config_names)
             code = f'from _testcapi import config_get; print({expr})'
             args = options + ("-c", code)
             proc = assert_python_ok(*args)

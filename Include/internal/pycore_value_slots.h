@@ -9,7 +9,7 @@ extern "C" {
 #endif
 
 #include "pycore_value.h"         // PyValue_NotImplemented
-#include "pycore_value_api.h"     // _PyValue_AsObjectKind()
+#include "pycore_value_api.h"     // _PyBorrow_TupleItemsFor()
 
 /* Value slots (pyjit/design/value-api.md, section 2;
  * pyjit/design/proposals/value-api-v2a0.md, section 4).
@@ -255,20 +255,29 @@ _PyValue_FromObjectResult(PyObject *obj)
 }
 
 /* The object that a thunk returns for the owned value result: the object,
- * a new box of an inline value (kind THUNK), or NULL with an exception
- * set. */
+ * a new box of an inline value, or NULL with an exception set.
+ *
+ * The THUNK forms (pyjit/design/proposals/value-api-g.md, section 1.2): a
+ * compatibility entry, marked Py_VALUE_ENTRY, boxes for its caller. In
+ * stats builds the macro captures the entry's caller (_Py_BOX_CALLER()) where
+ * it expands, in the entry's own body, so the box is of kind THUNK, owned by
+ * that caller, under the family's site class. Only the bodies of marked
+ * functions may use them (compat-capture in Tools/build/check_value_api.py).
+ * _PyValue_THUNK_NEW() and _PyValue_THUNK_AT() are in pycore_value_api.h. */
 static inline PyObject *
-_PyValue_THUNK_EXIT(PyValue result)
+_PyValue_THUNK_EXIT(PyValue result _PyBox_AT_PARAM)
 {
     if (PyValue_IsNull(result)) {
         return NULL;
     }
     if (PyValue_IsInline(result)) {
         // An inline value owns nothing, so there is nothing to release.
-        return _PyValue_AsObjectKind(result, BOX_KIND_THUNK);
+        return _PyValue_AsObjectFor(result, at);
     }
     return PyValue_AsKnownObjectSteal(result);
 }
+#define _PyValue_THUNK_EXIT(RESULT, SITE) \
+    (_PyValue_THUNK_EXIT)((RESULT) _PyBox_AT_ARG(_PyValue_THUNK_AT(SITE)))
 
 /* The borrowed value of an object argument of a thunk. */
 #define _Py_VALUE_ARG(OBJ) PyValue_FromObjectBorrow(OBJ)
@@ -276,15 +285,16 @@ _PyValue_THUNK_EXIT(PyValue result)
 /* The adapter (D9): the object argument of an object slot that a value
  * dispatcher calls because the value slot of the row is 0. An argument that
  * holds an object lends it; an inline one is boxed, of kind SLOT_ADAPTER
- * under site class site, and _PyValue_AdapterRelease() releases the box
- * after the call. A failed box gives NULL with the exception set. */
+ * under site class SITE, owned by the object slot SLOTFN, and
+ * _PyValue_AdapterRelease() releases the box after the call. A failed box
+ * gives NULL with the exception set. */
 static inline PyObject *
-_PyValue_AdapterBox(PyValueBorrow v, int site)
+_PyValue_AdapterBox(PyValueBorrow v _PyBox_AT_PARAM)
 {
     if (!PyValue_IsInline(v)) {
         return PyValue_AsKnownObjectBorrow(v);
     }
-    return _PyValue_AsObjectAtKind(v, site, BOX_KIND_SLOT_ADAPTER);
+    return _PyValue_AsObjectFor(v, at);
 }
 
 static inline void
@@ -294,14 +304,11 @@ _PyValue_AdapterRelease(PyValueBorrow v, PyObject *obj)
         Py_DECREF(obj);
     }
 }
-#ifdef Py_STATS
-#  define _PyValue_AdapterBox(V, SITE) \
-        (_PyValue_AdapterBox)(PyValue_Borrow(V), SITE)
-#else
-   // Without stats there are no site classes (BOX_SITE_*).
-#  define _PyValue_AdapterBox(V, SITE) \
-        (_PyValue_AdapterBox)(PyValue_Borrow(V), 0)
-#endif
+#define _PyValue_ADAPTER_AT(SITE, SLOTFN) \
+    _PyBox_AT((SITE), BOX_KIND_SLOT_ADAPTER, _Py_FUNC_ADDR(SLOTFN))
+#define _PyValue_AdapterBox(V, SITE, SLOTFN) \
+    (_PyValue_AdapterBox)(PyValue_Borrow(V) \
+                          _PyBox_AT_ARG(_PyValue_ADAPTER_AT(SITE, SLOTFN)))
 #define _PyValue_AdapterRelease(V, OBJ) \
     (_PyValue_AdapterRelease)(PyValue_Borrow(V), OBJ)
 
@@ -316,63 +323,67 @@ _PyValue_AdapterRelease(PyValueBorrow v, PyObject *obj)
  * two form a pair. */
 
 #define _Py_VALUE_THUNK_UNARY(name, valuefn) \
-    static PyObject * \
+    Py_VALUE_ENTRY static PyObject * \
     name(PyObject *self) \
     { \
-        return _PyValue_THUNK_EXIT((valuefn)(_Py_VALUE_ARG(self))); \
+        return _PyValue_THUNK_EXIT((valuefn)(_Py_VALUE_ARG(self)), \
+                                   BOX_SITE_NUMBER); \
     }
 
 #define _Py_VALUE_THUNK_BINARY(name, valuefn) \
-    static PyObject * \
+    Py_VALUE_ENTRY static PyObject * \
     name(PyObject *left, PyObject *right) \
     { \
         return _PyValue_THUNK_EXIT( \
-            (valuefn)(_Py_VALUE_ARG(left), _Py_VALUE_ARG(right))); \
+            (valuefn)(_Py_VALUE_ARG(left), _Py_VALUE_ARG(right)), \
+            BOX_SITE_NUMBER); \
     }
 
 #define _Py_VALUE_THUNK_TERNARY(name, valuefn) \
-    static PyObject * \
+    Py_VALUE_ENTRY static PyObject * \
     name(PyObject *base, PyObject *exponent, PyObject *modulus) \
     { \
         return _PyValue_THUNK_EXIT( \
             (valuefn)(_Py_VALUE_ARG(base), _Py_VALUE_ARG(exponent), \
-                      _Py_VALUE_ARG(modulus))); \
+                      _Py_VALUE_ARG(modulus)), BOX_SITE_NUMBER); \
     }
 
 #define _Py_VALUE_THUNK_INQUIRY(name, valuefn) \
-    static int \
+    Py_VALUE_ENTRY static int \
     name(PyObject *self) \
     { \
         return (valuefn)(_Py_VALUE_ARG(self)); \
     }
 
 #define _Py_VALUE_THUNK_RICHCMP(name, valuefn) \
-    static PyObject * \
+    Py_VALUE_ENTRY static PyObject * \
     name(PyObject *left, PyObject *right, int op) \
     { \
         return _PyValue_THUNK_EXIT( \
-            (valuefn)(_Py_VALUE_ARG(left), _Py_VALUE_ARG(right), op)); \
+            (valuefn)(_Py_VALUE_ARG(left), _Py_VALUE_ARG(right), op), \
+            BOX_SITE_COMPARE); \
     }
 
 #define _Py_VALUE_THUNK_HASH(name, valuefn) \
-    static Py_hash_t \
+    Py_VALUE_ENTRY static Py_hash_t \
     name(PyObject *self) \
     { \
         return (valuefn)(_Py_VALUE_ARG(self)); \
     }
 
 #define _Py_VALUE_THUNK_REPR(name, valuefn) \
-    static PyObject * \
+    Py_VALUE_ENTRY static PyObject * \
     name(PyObject *self) \
     { \
         return (valuefn)(_Py_VALUE_ARG(self)); \
     }
 
 #define _Py_VALUE_THUNK_CONCAT(name, valuefn) \
-    static PyObject * \
+    Py_VALUE_ENTRY static PyObject * \
     name(PyObject *self, PyObject *other) \
     { \
-        return _PyValue_THUNK_EXIT((valuefn)(self, _Py_VALUE_ARG(other))); \
+        return _PyValue_THUNK_EXIT((valuefn)(self, _Py_VALUE_ARG(other)), \
+                                   BOX_SITE_SEQUENCE); \
     }
 
 
@@ -417,8 +428,8 @@ _PyValue_AdapterRelease(PyValueBorrow v, PyObject *obj)
         if (PyValue_IsInline(base) || PyValue_IsInline(exponent)) { \
             return PyValue_NotImplemented; \
         } \
-        PyObject *modulus_object = \
-            _PyValue_AsObjectKind(modulus, BOX_KIND_SLOT_ADAPTER); \
+        PyObject *modulus_object = _PyValue_AsObjectFor( \
+            modulus, _PyValue_ADAPTER_AT(BOX_SITE_UNATTRIBUTED, (objfn))); \
         if (modulus_object == NULL) { \
             return PyValue_NULL; \
         } \

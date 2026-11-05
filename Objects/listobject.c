@@ -300,13 +300,14 @@ PyList_GetItemRef(PyObject *op, Py_ssize_t i)
     }
     /* NULL is an unpublished slot (no exception) or a failed box of an
        inline item (exception set). */
-    return _PyValue_THUNK_EXIT(_PyList_GetValue((PyListObject *)op, i));
+    return _PyValue_THUNK_EXIT(_PyList_GetValue((PyListObject *)op, i),
+                              BOX_SITE_LIST);
 }
 
-PyObject *
+Py_VALUE_ENTRY PyObject *
 _PyList_GetItemRef(PyListObject *list, Py_ssize_t i)
 {
-    return _PyValue_THUNK_EXIT(_PyList_GetValue(list, i));
+    return _PyValue_THUNK_EXIT(_PyList_GetValue(list, i), BOX_SITE_LIST);
 }
 
 

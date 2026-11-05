@@ -135,9 +135,9 @@ PyObject *
         return NULL;
     }
     if (PyValue_IsInline(res)) {
-        /* A comparison that returned an exact int or float: an object
-           result of a value dispatcher, so a box of kind THUNK. */
-        return _PyValue_AsObjectAtKind(res, BOX_SITE_COMPARE, BOX_KIND_THUNK);
+        /* A comparison that returned an exact int or float, for the
+           interpreter or tuple_richcompare(): a CORE box. */
+        return _PyValue_AsObjectAt(res, BOX_SITE_COMPARE);
     }
     return PyValue_AsKnownObjectSteal(res);
 }
@@ -171,13 +171,7 @@ _PyValue_GenericHash(PyValueBorrow value)
         return PyObject_GenericHash(PyValue_AsKnownObjectBorrow(value));
     }
     /* object.__hash__() of an exact int or float, whose own types hash by
-       value: as the object form, the identity hash of the object that it
-       is given, here a box for the object function (kind SLOT_ADAPTER). */
-    PyObject *box = _PyValue_AsObjectKind(value, BOX_KIND_SLOT_ADAPTER);
-    if (box == NULL) {
-        return -1;
-    }
-    Py_hash_t hash = PyObject_GenericHash(box);
-    Py_DECREF(box);
-    return hash;
+       value: the identity hash that PyObject_GenericHash() gives any box of
+       the value, without a box. */
+    return Py_HashPointer((void *)_PyValue_Identity(value));
 }

@@ -1,5 +1,7 @@
 #include "Python.h"
 
+#include "pycore_dict.h"          // PyDict_SetValueString()
+#include "pycore_value.h"         // PyValue_FromObjectBorrow()
 #include "pycore_opcode_metadata.h" // _PyOpcode_Caches
 #include "pycore_pyatomic_ft_wrappers.h"
 #include "pycore_pylifecycle.h"     // _PyOS_URandomNonblock()
@@ -7,10 +9,16 @@
 #include "pycore_initconfig.h"      // _PyStatus_OK()
 #include "pycore_pystate.h"         // _PyThreadState_GET()
 #include "pycore_runtime.h"         // NUM_GENERATIONS
+#include "osdefs.h"                 // MAXPATHLEN
 
 #include <stdlib.h> // rand()
 
 #ifdef Py_STATS
+
+static uint64_t stats_resets;
+static void run_marker_create(PyInterpreterState *interp);
+static void run_marker_remove(PyInterpreterState *interp);
+static void box_owners_clear(PyInterpreterState *interp);
 
 PyStats *
 _PyStats_GetLocal(void)
@@ -38,7 +46,7 @@ _PyStats_GetLocal(void)
             Py_DECREF(res); \
             return NULL; \
         } \
-        if (PyDict_SetItemString(res, #field, val) == -1) { \
+        if (PyDict_SetValueString(res, #field, PyValue_FromObjectBorrow(val)) == -1) { \
             Py_DECREF(res); \
             Py_DECREF(val); \
             return NULL; \
@@ -71,9 +79,10 @@ stats_to_dict(SpecializationStats *stats)
             Py_DECREF(failure_kinds);
             return NULL;
         }
-        PyTuple_SET_ITEM(failure_kinds, i, stat);
+        PyTuple_SET_VALUE(failure_kinds, i, PyValue_FromObjectSteal(stat));
     }
-    if (PyDict_SetItemString(res, "failure_kinds", failure_kinds)) {
+    if (PyDict_SetValueString(res, "failure_kinds",
+                              PyValue_FromObjectBorrow(failure_kinds))) {
         Py_DECREF(res);
         Py_DECREF(failure_kinds);
         return NULL;
@@ -95,7 +104,7 @@ add_stat_dict(
     if (d == NULL) {
         return -1;
     }
-    int err = PyDict_SetItemString(res, name, d);
+    int err = PyDict_SetValueString(res, name, PyValue_FromObjectBorrow(d));
     Py_DECREF(d);
     return err;
 }
@@ -257,6 +266,7 @@ static const char *const box_site_names[BOX_SITE_KINDS] = {
     [BOX_SITE_FIELD] = "field",
     [BOX_SITE_FRAME] = "frame",
     [BOX_SITE_COMPILER] = "compiler",
+    [BOX_SITE_TEST] = "test",
 };
 
 static const char *const box_kind_names[BOX_KINDS] = {
@@ -281,10 +291,8 @@ print_box_stats(FILE *out, ObjectStats *stats)
         fprintf(out, "Boxing by site (%s): %" PRIu64 "\n",
                 box_site_names[i], stats->box[i]);
     }
-    for (int i = 0; i < BOX_SITE_KINDS; i++) {
-        fprintf(out, "Entry unboxing by site (%s): %" PRIu64 "\n",
-                box_site_names[i], stats->entry_unbox[i]);
-    }
+    fprintf(out, "Entry unboxing: %" PRIu64 "\n", stats->entry_unbox);
+    fprintf(out, "Object box cached: %" PRIu64 "\n", stats->box_cached);
 }
 
 static void
@@ -413,8 +421,9 @@ merge_object_stats(ObjectStats *dest, const ObjectStats *src)
     dest->inline_array_boxes += src->inline_array_boxes;
     for (int i = 0; i < BOX_SITE_KINDS; i++) {
         dest->box[i] += src->box[i];
-        dest->entry_unbox[i] += src->entry_unbox[i];
     }
+    dest->entry_unbox += src->entry_unbox;
+    dest->box_cached += src->box_cached;
     for (int i = 0; i < BOX_KINDS; i++) {
         dest->box_kind[i] += src->box_kind[i];
     }
@@ -577,7 +586,11 @@ int
 _Py_StatsOn(void)
 {
     PyThreadState *tstate = _PyThreadState_GET();
-    return stats_toggle_on_off(tstate, 1);
+    int res = stats_toggle_on_off(tstate, 1);
+    if (res == 0) {
+        run_marker_create(tstate->interp);
+    }
+    return res;
 }
 
 void
@@ -585,12 +598,537 @@ _Py_StatsOff(void)
 {
     PyThreadState *tstate = _PyThreadState_GET();
     stats_toggle_on_off(tstate, 0);
+    stats_resets++;
 }
 
+static void
+stats_clear_all(void)
+{
+    stats_zero_all();
+    PyThreadState *tstate = _PyThreadState_GET();
+    if (tstate != NULL) {
+        box_owners_clear(tstate->interp);
+    }
+}
+
+// sys._stats_clear(): a reset, which the dump lists.
 void
 _Py_StatsClear(void)
 {
-    stats_zero_all();
+    stats_clear_all();
+    stats_resets++;
+}
+
+/* The owners of the boxes, and the accounting of the processes that make them
+   (pyjit/design/proposals/value-api-g.md, section 1.4). */
+
+typedef struct {
+    const void *owner, *pc;   // inside the owning code
+    uint64_t count;
+    uint8_t kind, site;
+} _PyBoxOwnerEntry;
+
+#define BOX_OWNERS_BITS 16
+#define BOX_OWNERS_SIZE (1 << BOX_OWNERS_BITS)
+#define BOX_OWNERS_PROBE 64
+
+struct _PyBoxOwners {
+    uint64_t dropped[BOX_KINDS];
+    _PyBoxOwnerEntry entries[BOX_OWNERS_SIZE];
+};
+
+struct _PyBoxAccum {
+    ObjectStats objects;
+    struct _PyBoxOwners *owners;
+};
+
+// ObjectStats is a struct of uint64_t counters.
+static_assert(sizeof(ObjectStats) % sizeof(uint64_t) == 0,
+              "ObjectStats holds only uint64_t counters");
+static void
+object_stats_add(ObjectStats *dest, const ObjectStats *src)
+{
+    uint64_t *d = (uint64_t *)dest;
+    const uint64_t *s = (const uint64_t *)src;
+    for (size_t i = 0; i < sizeof(ObjectStats) / sizeof(uint64_t); i++) {
+        d[i] += s[i];
+    }
+}
+
+
+static void
+box_owners_add(struct _PyBoxOwners *owners, uint8_t site, uint8_t kind,
+               const void *owner, const void *pc, uint64_t count)
+{
+    uint64_t h = (uint64_t)(uintptr_t)owner * 0x9E3779B97F4A7C15ULL
+                 ^ (uint64_t)(uintptr_t)pc * 0xC2B2AE3D27D4EB4FULL
+                 ^ (uint64_t)(kind << 8 | site);
+    h ^= h >> 29;
+    for (int i = 0; i < BOX_OWNERS_PROBE; i++) {
+        _PyBoxOwnerEntry *e = &owners->entries[(h + i) & (BOX_OWNERS_SIZE - 1)];
+        if (e->count == 0) {
+            e->owner = owner;
+            e->pc = pc;
+            e->kind = kind;
+            e->site = site;
+            e->count = count;
+            return;
+        }
+        if (e->owner == owner && e->pc == pc && e->kind == kind
+            && e->site == site)
+        {
+            e->count += count;
+            return;
+        }
+    }
+    owners->dropped[kind] += count;
+}
+
+static void
+box_owners_merge(struct _PyBoxOwners *dest, const struct _PyBoxOwners *src)
+{
+    for (int k = 0; k < BOX_KINDS; k++) {
+        dest->dropped[k] += src->dropped[k];
+    }
+    for (size_t i = 0; i < BOX_OWNERS_SIZE; i++) {
+        const _PyBoxOwnerEntry *e = &src->entries[i];
+        if (e->count != 0) {
+            box_owners_add(dest, e->site, e->kind, e->owner, e->pc, e->count);
+        }
+    }
+}
+
+void
+_PyStats_BoxOwner(uint8_t site, uint8_t kind, const void *owner,
+                  const void *pc)
+{
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    if (interp->box_owners == NULL) {
+        interp->box_owners = PyMem_RawCalloc(1, sizeof(struct _PyBoxOwners));
+        if (interp->box_owners == NULL) {
+            return;
+        }
+    }
+    box_owners_add(interp->box_owners, site, kind, owner, pc, 1);
+}
+
+static void
+box_owners_clear(PyInterpreterState *interp)
+{
+    if (interp->box_owners != NULL) {
+        memset(interp->box_owners, 0, sizeof(struct _PyBoxOwners));
+    }
+}
+
+// A deleted interpreter hands its counters and table to the runtime.
+void
+_PyStats_InterpFini(PyInterpreterState *interp)
+{
+    if (interp != _PyInterpreterState_Main()
+        && (interp->pystats_struct != NULL || interp->box_owners != NULL))
+    {
+        PyMutex_Lock(&_PyRuntime.pystats_accum_mutex);
+        struct _PyBoxAccum *accum = _PyRuntime.pystats_accum;
+        if (accum == NULL) {
+            accum = PyMem_RawCalloc(1, sizeof(struct _PyBoxAccum));
+            _PyRuntime.pystats_accum = accum;
+        }
+        if (accum != NULL) {
+            if (interp->pystats_struct != NULL) {
+                object_stats_add(&accum->objects,
+                                 &interp->pystats_struct->object_stats);
+            }
+            if (interp->box_owners != NULL) {
+                if (accum->owners == NULL) {
+                    accum->owners = PyMem_RawCalloc(
+                        1, sizeof(struct _PyBoxOwners));
+                }
+                if (accum->owners != NULL) {
+                    box_owners_merge(accum->owners, interp->box_owners);
+                }
+            }
+        }
+        PyMutex_Unlock(&_PyRuntime.pystats_accum_mutex);
+    }
+    PyMem_RawFree(interp->box_owners);
+    interp->box_owners = NULL;
+}
+
+// Add the accumulator to the interpreter that dumps, then empty it.
+static void
+accum_into(PyInterpreterState *interp, PyStats *stats)
+{
+    PyMutex_Lock(&_PyRuntime.pystats_accum_mutex);
+    struct _PyBoxAccum *accum = _PyRuntime.pystats_accum;
+    if (accum != NULL) {
+        object_stats_add(&stats->object_stats, &accum->objects);
+        memset(&accum->objects, 0, sizeof(accum->objects));
+        if (accum->owners != NULL) {
+            if (interp->box_owners == NULL) {
+                interp->box_owners = PyMem_RawCalloc(
+                    1, sizeof(struct _PyBoxOwners));
+            }
+            if (interp->box_owners != NULL) {
+                box_owners_merge(interp->box_owners, accum->owners);
+            }
+            memset(accum->owners, 0, sizeof(struct _PyBoxOwners));
+        }
+    }
+    PyMutex_Unlock(&_PyRuntime.pystats_accum_mutex);
+}
+
+/* ---- The dump directory, run markers ---- */
+
+#define STATS_DIR_DEFAULT_POSIX "/tmp/py_stats"
+
+// The dump directory: -X pystats_dir, else PYTHON_PYSTATS_DIR, else the
+// shared default. Both are read under -E and -I.
+static void
+stats_dump_dir(PyInterpreterState *interp, char *buf, size_t size)
+{
+# ifdef MS_WINDOWS
+    const char *dirname = "c:\\temp\\py_stats";
+# else
+    const char *dirname = STATS_DIR_DEFAULT_POSIX;
+# endif
+    const char *env_dir = getenv("PYTHON_PYSTATS_DIR");
+    if (env_dir != NULL && env_dir[0] != '\0') {
+        dirname = env_dir;
+    }
+    const PyWideStringList *xoptions = &interp->config.xoptions;
+    for (Py_ssize_t i = 0; i < xoptions->length; i++) {
+        const wchar_t *item = xoptions->items[i];
+        if (wcsncmp(item, L"pystats_dir=", 12) == 0 && item[12] != L'\0') {
+            char tmp[MAXPATHLEN + 1];
+            size_t n = wcstombs(tmp, item + 12, sizeof(tmp));
+            if (n != (size_t)-1 && n < sizeof(tmp)) {
+                PyOS_snprintf(buf, size, "%s", tmp);
+                return;
+            }
+        }
+    }
+    PyOS_snprintf(buf, size, "%s", dirname);
+}
+
+/* A unique 40-digit name. It cannot use os.urandom's source, which needs a
+   thread state, and the marker is made during interpreter creation. The
+   process id and the clock make it unique among the processes of a run. */
+static void
+stats_random_stem(char *hex_name)
+{
+    static unsigned int serial;
+    struct timespec now;
+    clock_gettime(CLOCK_REALTIME, &now);
+    unsigned long long ns = (unsigned long long)now.tv_sec * 1000000000ULL
+                            + (unsigned long long)now.tv_nsec;
+    unsigned int pid =
+#ifndef MS_WINDOWS
+        (unsigned int)getpid();
+#else
+        0;
+#endif
+    snprintf(hex_name, 41, "%016llx%08x%08x%08x", ns, pid, serial++,
+             (unsigned int)(uintptr_t)hex_name);
+}
+
+#ifndef MS_WINDOWS
+// The run marker of this process: <stem>.run, replaced by its dump.
+static char run_stem[41];
+static pid_t run_pid;
+
+static void
+run_marker_create(PyInterpreterState *interp)
+{
+    if (run_pid == getpid() && run_stem[0] != '\0') {
+        return;
+    }
+    char dir[MAXPATHLEN + 1], path[MAXPATHLEN + 1];
+    stats_dump_dir(interp, dir, sizeof(dir));
+    char stem[41];
+    stats_random_stem(stem);
+    int len = PyOS_snprintf(path, sizeof(path), "%s/%s.run", dir, stem);
+    if (len <= 0 || (size_t)len >= sizeof(path)) {
+        return;
+    }
+    FILE *f = fopen(path, "w");
+    if (f == NULL) {
+        return;
+    }
+    const char *tag = getenv("PYTHON_PYSTATS_TAG");
+    fprintf(f, "pid: %d\nppid: %d\ntag: %s\nargv: ", (int)getpid(),
+            (int)getppid(), tag != NULL ? tag : "");
+    FILE *cmd = fopen("/proc/self/cmdline", "r");
+    if (cmd != NULL) {
+        int c;
+        while ((c = fgetc(cmd)) != EOF) {
+            fputc(c == '\0' ? ' ' : c, f);
+        }
+        fclose(cmd);
+    }
+    fputc('\n', f);
+    fclose(f);
+    memcpy(run_stem, stem, sizeof(stem));
+    run_pid = getpid();
+}
+
+static void
+run_marker_remove(PyInterpreterState *interp)
+{
+    if (run_pid == getpid() && run_stem[0] != '\0') {
+        char dir[MAXPATHLEN + 1], path[MAXPATHLEN + 1];
+        stats_dump_dir(interp, dir, sizeof(dir));
+        PyOS_snprintf(path, sizeof(path), "%s/%s.run", dir, run_stem);
+        unlink(path);
+    }
+    run_stem[0] = '\0';
+}
+#else
+static void run_marker_create(PyInterpreterState *interp) { (void)interp; }
+static void run_marker_remove(PyInterpreterState *interp) { (void)interp; }
+#endif
+
+void
+_Py_StatsMarkerCreate(void)
+{
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    if (interp->pystats_enabled) {
+        run_marker_create(interp);
+    }
+}
+
+/* ---- Objects: where a stored address lives ---- */
+
+#ifdef __linux__
+#include <link.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+#define STATS_OBJ_SEGMENTS 16
+
+typedef struct {
+    char *path;
+    uintptr_t bias;
+    char build_id[129];
+    uintptr_t lo[STATS_OBJ_SEGMENTS], hi[STATS_OBJ_SEGMENTS];
+    int nseg;
+    int index;
+} stats_obj;
+
+typedef struct {
+    stats_obj *v;
+    size_t n, cap;
+} stats_objs;
+
+static int
+stats_objs_collect(struct dl_phdr_info *info, size_t size, void *data)
+{
+    stats_objs *objs = data;
+    if (objs->n == objs->cap) {
+        size_t cap = objs->cap ? objs->cap * 2 : 64;
+        stats_obj *v = PyMem_RawRealloc(objs->v, cap * sizeof(stats_obj));
+        if (v == NULL) {
+            return 1;
+        }
+        objs->v = v;
+        objs->cap = cap;
+    }
+    stats_obj *o = &objs->v[objs->n];
+    memset(o, 0, sizeof(*o));
+    o->index = -1;
+    o->bias = info->dlpi_addr;
+    char exe[MAXPATHLEN + 1];
+    const char *name = info->dlpi_name;
+    if (name == NULL || name[0] == '\0') {
+        ssize_t n = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
+        if (n < 0) {
+            n = 0;
+        }
+        exe[n] = '\0';
+        name = exe;
+    }
+    size_t len = strlen(name) + 1;
+    o->path = PyMem_RawMalloc(len);
+    if (o->path == NULL) {
+        return 1;
+    }
+    memcpy(o->path, name, len);
+    for (int i = 0; i < info->dlpi_phnum; i++) {
+        const ElfW(Phdr) *ph = &info->dlpi_phdr[i];
+        if (ph->p_type == PT_LOAD && o->nseg < STATS_OBJ_SEGMENTS) {
+            o->lo[o->nseg] = info->dlpi_addr + ph->p_vaddr;
+            o->hi[o->nseg] = o->lo[o->nseg] + ph->p_memsz;
+            o->nseg++;
+        }
+        else if (ph->p_type == PT_NOTE) {
+            const char *p = (const char *)(info->dlpi_addr + ph->p_vaddr);
+            const char *end = p + ph->p_memsz;
+            while (p + sizeof(ElfW(Nhdr)) <= end) {
+                const ElfW(Nhdr) *nh = (const ElfW(Nhdr) *)p;
+                const char *nm = p + sizeof(*nh);
+                const char *desc = nm + ((nh->n_namesz + 3) & ~3u);
+                if (nh->n_type == NT_GNU_BUILD_ID && nh->n_namesz == 4
+                    && memcmp(nm, "GNU", 4) == 0 && nh->n_descsz <= 64)
+                {
+                    for (unsigned j = 0; j < nh->n_descsz; j++) {
+                        sprintf(o->build_id + 2*j, "%02x",
+                                (unsigned char)desc[j]);
+                    }
+                }
+                p = desc + ((nh->n_descsz + 3) & ~3u);
+            }
+        }
+    }
+    objs->n++;
+    return 0;
+}
+
+static stats_obj *
+stats_objs_find(stats_objs *objs, uintptr_t addr)
+{
+    for (size_t i = 0; i < objs->n; i++) {
+        stats_obj *o = &objs->v[i];
+        for (int s = 0; s < o->nseg; s++) {
+            if (o->lo[s] <= addr && addr < o->hi[s]) {
+                return o;
+            }
+        }
+    }
+    return NULL;
+}
+
+// Copy an object outside the build to <dir>/objects/<build-id>, once, so
+// that a test's temporary extension stays resolvable after it is deleted.
+static void
+stats_preserve_object(const char *dir, const stats_obj *o, const char *exedir)
+{
+    if (o->build_id[0] == '\0'
+        || strncmp(o->path, exedir, strlen(exedir)) == 0)
+    {
+        return;
+    }
+    char objdir[MAXPATHLEN + 1], dest[MAXPATHLEN + 1], tmp[MAXPATHLEN + 1];
+    PyOS_snprintf(objdir, sizeof(objdir), "%s/objects", dir);
+    mkdir(objdir, 0777);
+    PyOS_snprintf(dest, sizeof(dest), "%s/%s", objdir, o->build_id);
+    if (access(dest, F_OK) == 0) {
+        return;
+    }
+    PyOS_snprintf(tmp, sizeof(tmp), "%s.%d.tmp", dest, (int)getpid());
+    int in = open(o->path, O_RDONLY);
+    if (in < 0) {
+        return;
+    }
+    int out = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    if (out >= 0) {
+        char chunk[65536];
+        ssize_t n;
+        int ok = 1;
+        while ((n = read(in, chunk, sizeof(chunk))) > 0) {
+            if (write(out, chunk, n) != n) {
+                ok = 0;
+                break;
+            }
+        }
+        close(out);
+        if (ok && n == 0) {
+            rename(tmp, dest);
+        }
+        else {
+            unlink(tmp);
+        }
+    }
+    close(in);
+}
+#endif  // __linux__
+
+// "IDX+0xOFF" for an address, assigning object indices; "?" in no object.
+#ifdef __linux__
+static void
+format_addr(stats_objs *objs, int *next, uintptr_t addr, char *buf,
+            size_t size)
+{
+    stats_obj *o = stats_objs_find(objs, addr);
+    if (o == NULL) {
+        PyOS_snprintf(buf, size, "?");
+        return;
+    }
+    if (o->index < 0) {
+        o->index = (*next)++;
+    }
+    PyOS_snprintf(buf, size, "%d+0x%" PRIxPTR, o->index, addr - o->bias);
+}
+#endif
+
+static void
+print_box_owners(FILE *out, PyInterpreterState *interp, const char *dir)
+{
+    for (int k = 0; k < BOX_KINDS; k++) {
+        fprintf(out, "Box owners dropped (%s): %" PRIu64 "\n",
+                box_kind_names[k],
+                interp->box_owners != NULL ? interp->box_owners->dropped[k] : 0);
+    }
+    fprintf(out, "Stats resets: %" PRIu64 "\n", stats_resets);
+    stats_resets = 0;
+    if (interp->box_owners == NULL) {
+        return;
+    }
+#ifdef __linux__
+    stats_objs objs = {0};
+    dl_iterate_phdr(stats_objs_collect, &objs);
+    int next = 0;
+    char a[64], b[64];
+    for (int pass = 0; pass < 2; pass++) {
+        for (size_t i = 0; i < BOX_OWNERS_SIZE; i++) {
+            const _PyBoxOwnerEntry *e = &interp->box_owners->entries[i];
+            if (e->count == 0) {
+                continue;
+            }
+            uintptr_t owner = (uintptr_t)e->owner;
+            if (owner > 1) {
+                format_addr(&objs, &next, owner, a, sizeof(a));
+            }
+            else {
+                PyOS_snprintf(a, sizeof(a), owner == 0 ? "-" : "foreign");
+            }
+            format_addr(&objs, &next, (uintptr_t)e->pc, b, sizeof(b));
+            if (pass == 1) {
+                fprintf(out, "Box owner (%s, %s) %s at %s: %" PRIu64 "\n",
+                        box_kind_names[e->kind], box_site_names[e->site],
+                        a, b, e->count);
+            }
+        }
+        if (pass == 0) {
+            char exe[MAXPATHLEN + 1];
+            ssize_t n = readlink("/proc/self/exe", exe, sizeof(exe) - 1);
+            exe[n < 0 ? 0 : n] = '\0';
+            char *slash = strrchr(exe, '/');
+            if (slash != NULL) {
+                *slash = '\0';
+            }
+            for (size_t j = 0; j < objs.n; j++) {
+                stats_obj *o = &objs.v[j];
+                if (o->index >= 0) {
+                    fprintf(out, "Box object [%d]: %s build-id=%s\n",
+                            o->index, o->path, o->build_id);
+                    stats_preserve_object(dir, o, exe);
+                }
+            }
+        }
+    }
+    for (size_t j = 0; j < objs.n; j++) {
+        PyMem_RawFree(objs.v[j].path);
+    }
+    PyMem_RawFree(objs.v);
+#else
+    for (size_t i = 0; i < BOX_OWNERS_SIZE; i++) {
+        const _PyBoxOwnerEntry *e = &interp->box_owners->entries[i];
+        if (e->count != 0) {
+            fprintf(out, "Box owner (%s, %s) ? at ?: %" PRIu64 "\n",
+                    box_kind_names[e->kind], box_site_names[e->site],
+                    e->count);
+        }
+    }
+#endif
 }
 
 static int
@@ -611,12 +1149,14 @@ _Py_PrintSpecializationStats(int to_file)
     assert(to_file);
     stats_merge_all();
     PyThreadState *tstate = _PyThreadState_GET();
-    STATS_LOCK(tstate->interp);
-    PyStats *stats = tstate->interp->pystats_struct;
+    PyInterpreterState *interp = tstate->interp;
+    STATS_LOCK(interp);
+    PyStats *stats = interp->pystats_struct;
     if (stats == NULL) {
-        STATS_UNLOCK(tstate->interp);
+        STATS_UNLOCK(interp);
         return 0;
     }
+    accum_into(interp, stats);
 #define MEM_IS_ZERO(DATA) mem_is_zero((unsigned char*)DATA, sizeof(*(DATA)))
     int is_zero = (
         MEM_IS_ZERO(stats->gc_stats)  // is a pointer
@@ -625,51 +1165,98 @@ _Py_PrintSpecializationStats(int to_file)
         && MEM_IS_ZERO(&stats->object_stats)
     );
 #undef MEM_IS_ZERO
-    STATS_UNLOCK(tstate->interp);
+    STATS_UNLOCK(interp);
     if (is_zero) {
         // gh-108753: -X pystats command line was used, but then _stats_off()
         // and _stats_clear() have been called: in this case, avoid printing
         // useless "all zeros" statistics.
+        run_marker_remove(interp);
         return 0;
     }
 
     FILE *out = stderr;
-    if (to_file) {
-        /* Write to a file instead of stderr. */
-# ifdef MS_WINDOWS
-        const char *dirname = "c:\\temp\\py_stats\\";
-# else
-        const char *dirname = "/tmp/py_stats/";
-# endif
-        /* Use random 160 bit number as file name,
-        * to avoid both accidental collisions and
-        * symlink attacks. */
-        unsigned char rand[20];
-        char hex_name[41];
-        _PyOS_URandomNonblock(rand, 20);
-        for (int i = 0; i < 20; i++) {
-            hex_name[2*i] = Py_hexdigits[rand[i]&15];
-            hex_name[2*i+1] = Py_hexdigits[(rand[i]>>4)&15];
-        }
-        hex_name[40] = '\0';
-        char buf[64];
-        assert(strlen(dirname) + 40 + strlen(".txt") < 64);
-        sprintf(buf, "%s%s.txt", dirname, hex_name);
-        FILE *fout = fopen(buf, "w");
-        if (fout) {
-            out = fout;
-        }
+    char dir[MAXPATHLEN + 1] = "";
+    char tmp_path[MAXPATHLEN + 1] = "", final_path[MAXPATHLEN + 1] = "";
+    stats_dump_dir(interp, dir, sizeof(dir));
+    /* The file is named by the run marker's stem, which it replaces, so
+       that a process that never dumps is the marker left over. It is written
+       as <stem>.tmp and renamed, so that a reader never sees half a dump. */
+    char stem[41];
+#ifndef MS_WINDOWS
+    if (run_pid == getpid() && run_stem[0] != '\0') {
+        memcpy(stem, run_stem, sizeof(stem));
     }
-    else {
-        fprintf(out, "Specialization stats:\n");
+    else
+#endif
+    {
+        stats_random_stem(stem);
     }
-    STATS_LOCK(tstate->interp);
+    int len = PyOS_snprintf(tmp_path, sizeof(tmp_path), "%s/%s.tmp", dir,
+                            stem);
+    int len2 = PyOS_snprintf(final_path, sizeof(final_path), "%s/%s.txt", dir,
+                             stem);
+    FILE *fout = (len > 0 && (size_t)len < sizeof(tmp_path)
+                  && len2 > 0 && (size_t)len2 < sizeof(final_path))
+                 ? fopen(tmp_path, "w") : NULL;
+    if (fout) {
+        out = fout;
+    }
+    STATS_LOCK(interp);
+    fprintf(out, "Stats process: pid=%d tag=%s\n",
+#ifndef MS_WINDOWS
+            (int)getpid(),
+#else
+            0,
+#endif
+            getenv("PYTHON_PYSTATS_TAG") != NULL
+                ? getenv("PYTHON_PYSTATS_TAG") : "");
     print_stats(out, stats);
-    STATS_UNLOCK(tstate->interp);
+    print_box_owners(out, interp, dir);
+    STATS_UNLOCK(interp);
     if (out != stderr) {
         fclose(out);
+        if (rename(tmp_path, final_path) == 0) {
+            run_marker_remove(interp);
+        }
     }
     return 1;
+}
+
+// Dump, then clear without counting a reset: nothing is lost.
+int
+_Py_StatsDumpClear(void)
+{
+    int res = _Py_PrintSpecializationStats(1);
+    stats_clear_all();
+    return res;
+}
+
+// A forked child counts for itself: the parent's counts are its parent's.
+void
+_Py_StatsAfterFork(void)
+{
+    PyInterpreterState *interp = _PyInterpreterState_GET();
+    if (interp->pystats_struct != NULL) {
+        memset(interp->pystats_struct, 0, sizeof(PyStats));
+    }
+    box_owners_clear(interp);
+    PyMutex_Lock(&_PyRuntime.pystats_accum_mutex);
+    if (_PyRuntime.pystats_accum != NULL) {
+        if (_PyRuntime.pystats_accum->owners != NULL) {
+            memset(_PyRuntime.pystats_accum->owners, 0,
+                   sizeof(struct _PyBoxOwners));
+        }
+        memset(&_PyRuntime.pystats_accum->objects, 0,
+               sizeof(ObjectStats));
+    }
+    PyMutex_Unlock(&_PyRuntime.pystats_accum_mutex);
+    stats_resets = 0;
+#ifndef MS_WINDOWS
+    run_stem[0] = '\0';
+#endif
+    if (interp->pystats_enabled) {
+        run_marker_create(interp);
+    }
 }
 
 PyStatus
@@ -683,6 +1270,7 @@ _PyStats_InterpInit(PyInterpreterState *interp)
         if (interp->pystats_struct == NULL) {
             return _PyStatus_ERR("out-of-memory while initializing interpreter");
         }
+        run_marker_create(interp);
     }
     return _PyStatus_OK();
 }

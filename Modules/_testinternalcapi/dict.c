@@ -712,7 +712,7 @@ dict_public_value_read(PyObject *module, PyObject *const *args, Py_ssize_t nargs
         goto done;
     }
     if (!PyValue_IsNull(value)) {
-        object = PyValue_AsObject(value);
+        object = _PyValue_AsObjectAt(value, BOX_SITE_TEST);
         if (object == NULL) {
             goto done;
         }
@@ -760,13 +760,13 @@ dict_public_value_next(PyObject *module, PyObject *const *args, Py_ssize_t nargs
         goto done;
     }
     if (!PyValue_IsNull(key)) {
-        key_object = PyValue_AsObject(key);
+        key_object = _PyValue_AsObjectAt(key, BOX_SITE_TEST);
         if (key_object == NULL) {
             goto done;
         }
     }
     if (!PyValue_IsNull(value)) {
-        value_object = PyValue_AsObject(value);
+        value_object = _PyValue_AsObjectAt(value, BOX_SITE_TEST);
         if (value_object == NULL || PyErr_Occurred()) {
             goto done;
         }
@@ -854,8 +854,8 @@ dict_public_value_pending(PyObject *module, PyObject *const *args, Py_ssize_t na
         }
         goto done;
     }
-    first_object = PyValue_IsNull(first) ? Py_NewRef(Py_None) : PyValue_AsObject(first);
-    second_object = PyValue_IsNull(second) ? Py_NewRef(Py_None) : PyValue_AsObject(second);
+    first_object = PyValue_IsNull(first) ? Py_NewRef(Py_None) : _PyValue_AsObjectAt(first, BOX_SITE_TEST);
+    second_object = PyValue_IsNull(second) ? Py_NewRef(Py_None) : _PyValue_AsObjectAt(second, BOX_SITE_TEST);
     if (first_object != NULL && second_object != NULL) {
         report = Py_BuildValue("iOO", status, first_object, second_object);
     }
@@ -903,7 +903,7 @@ dict_public_value_retirement(PyObject *module, PyObject *const *args, Py_ssize_t
     PyObject *object = NULL, *report = NULL;
     if (status >= 0 && !PyErr_Occurred()) {
         if (!PyValue_IsNull(value)) {
-            object = PyValue_AsObject(value);
+            object = _PyValue_AsObjectAt(value, BOX_SITE_TEST);
             if (object == NULL || PyErr_Occurred()) {
                 goto done;
             }

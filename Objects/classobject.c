@@ -36,15 +36,14 @@ PyMethod_Function(PyObject *im)
     return ((PyMethodObject *)im)->im_func;
 }
 
-PyObject *
+Py_VALUE_ENTRY PyObject *
 PyMethod_GetSelfRef(PyObject *im)
 {
     if (!PyMethod_Check(im)) {
         PyErr_BadInternalCall();
         return NULL;
     }
-    return _PyValue_AsObjectKind(((PyMethodObject *)im)->im_self,
-                                 BOX_KIND_THUNK);
+    return _PyValue_THUNK_NEW(((PyMethodObject *)im)->im_self, BOX_SITE_FIELD);
 }
 
 PyAPI_FUNC(PyObject *)
@@ -113,7 +112,7 @@ static PyObject *
 method___reduce___impl(PyMethodObject *self)
 /*[clinic end generated code: output=6c04506d0fa6fdcb input=143a0bf5e96de6e8]*/
 {
-    PyObject *funcself = PyValue_AsObject(self->im_self);
+    PyObject *funcself = _PyValue_AsObjectAt(self->im_self, BOX_SITE_FIELD);
     if (funcself == NULL) {
         return NULL;
     }
@@ -287,7 +286,7 @@ method_repr(PyObject *op)
     PyObject *funcname, *result;
     const char *defname = "?";
 
-    PyObject *self = PyValue_AsObject(a->im_self);
+    PyObject *self = _PyValue_AsObjectAt(a->im_self, BOX_SITE_REPR);
     if (self == NULL) {
         return NULL;
     }

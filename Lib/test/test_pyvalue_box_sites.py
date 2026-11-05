@@ -17,7 +17,8 @@ except ImportError:
 
 N = 2000
 STATS = hasattr(sys, "_stats_on")
-STATS_DIR = "/tmp/py_stats"
+# The dump directory of this process (Python/pystats.c).
+STATS_DIR = os.environ.get("PYTHON_PYSTATS_DIR") or "/tmp/py_stats"
 BOX_LINES = ("Object inline int boxes:", "Object inline float boxes:")
 
 
@@ -36,7 +37,16 @@ def _stats(func, make_args):
     func(*args)
     sys._stats_off()
     sys._stats_dump()
-    new = set(os.listdir(STATS_DIR)) - before
+    # The directory may be shared with other processes, and holds markers
+    # (.run, .spawn) beside the dumps: take this process's dump.
+    mine = f"Stats process: pid={os.getpid()} "
+    new = []
+    for name in set(os.listdir(STATS_DIR)) - before:
+        if not name.endswith(".txt"):
+            continue
+        with open(os.path.join(STATS_DIR, name)) as stream:
+            if stream.readline().startswith(mine):
+                new.append(name)
     assert len(new) == 1, new
     path = os.path.join(STATS_DIR, new.pop())
     counters = {}

@@ -18,7 +18,7 @@ list_get_item(PyObject *Py_UNUSED(module), PyObject *args)
         return NULL;
     }
     NULLABLE(obj);
-    return PyValue_AsObject(PyList_GET_VALUE(obj, i));
+    return _PyValue_AsObjectAt(PyList_GET_VALUE(obj, i), BOX_SITE_TEST);
 }
 
 static PyObject *
@@ -29,7 +29,7 @@ list_get_value(PyObject *Py_UNUSED(module), PyObject *args)
     if (!PyArg_ParseTuple(args, "On", &obj, &index)) return NULL;
     PyValue value = PyList_GetValue(obj, index);
     if (!PyValue_IsLanguageValue(value)) return NULL;
-    PyObject *result = PyValue_AsObject(value);
+    PyObject *result = _PyValue_AsObjectAt(value, BOX_SITE_TEST);
     PyValue_XCLOSE(value);
     return result;
 }
@@ -46,7 +46,7 @@ list_get_value_and_clear(PyObject *Py_UNUSED(module), PyObject *args)
         PyValue_XCLOSE(value);
         return NULL;
     }
-    PyObject *result = PyValue_AsObject(value);
+    PyObject *result = _PyValue_AsObjectAt(value, BOX_SITE_TEST);
     PyValue_XCLOSE(value);
     return result;
 }

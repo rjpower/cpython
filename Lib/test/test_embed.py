@@ -100,9 +100,11 @@ def getpath_which(program_name):
 
 def remove_python_envvars():
     env = dict(os.environ)
-    # Remove PYTHON* environment variables to get deterministic environment
+    # Remove PYTHON* environment variables to get deterministic environment,
+    # except the stats dump directory, which keeps the dumps of the
+    # configurations that turn stats on out of the shared default (Py_STATS).
     for key in list(env):
-        if key.startswith('PYTHON'):
+        if key.startswith('PYTHON') and key != 'PYTHON_PYSTATS_DIR':
             del env[key]
     return env
 

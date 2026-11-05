@@ -121,7 +121,7 @@ PyTuple_GetValue(PyObject *op, Py_ssize_t i)
 PyObject *
 PyTuple_GetItemRef(PyObject *op, Py_ssize_t i)
 {
-    return _PyValue_THUNK_EXIT(PyTuple_GetValue(op, i));
+    return _PyValue_THUNK_EXIT(PyTuple_GetValue(op, i), BOX_SITE_TUPLE);
 }
 
 void

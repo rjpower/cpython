@@ -154,17 +154,13 @@ class PairTableTests(unittest.TestCase):
     def test_object_hash_of_inline_values(self):
         # object.__hash__ applied to an exact int or float calls the pair's
         # value wrapper, so _PyValue_GenericHash() gets an inline value. It
-        # hashes a box of it, as PyObject_GenericHash() hashes the object
-        # that it is given.
+        # hashes the value's identity without a box, as
+        # PyObject_GenericHash() hashes any box of the value.
         generichash = _testcapi.object_generichash
-        # A small int boxes to its cached object.
-        self.assertEqual(object.__hash__(1), object.__hash__(1))
-        self.assertEqual(object.__hash__(1), generichash(1))
-        # Other inline values box to a new object each time, so the hash is
-        # that of the box, as id() is.
-        for x in (1000, -2**50, 2.5, -0.0):
+        for x in (1, 1000, -2**50, 2.5, -0.0):
             with self.subTest(x=x):
-                self.assertIsInstance(object.__hash__(x), int)
+                self.assertEqual(object.__hash__(x), object.__hash__(x))
+                self.assertEqual(object.__hash__(x), generichash(x))
         # A value that holds an object hashes that object.
         for x in (2**60, float('nan'), 'string'):
             with self.subTest(x=x):

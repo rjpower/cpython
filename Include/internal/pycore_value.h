@@ -16,6 +16,38 @@ extern "C" {
 
 #include <stdbool.h>              // bool
 
+/* The box argument (pyjit/design/proposals/value-api-g.md, section 1.1).
+ * In stats builds every box primitive takes a _PyBoxAt: the site class
+ * (BOX_SITE_*), the kind (BOX_KIND_*) and the owner, the code that the box
+ * serves (NULL for a CORE box, whose site the primitive records). Elsewhere
+ * _PyBox_AT() expands to nothing, so an owner expression is never evaluated
+ * and every signature is the one without stats. Only the boundary-site files
+ * (Tools/build/check_value_api.py) state a kind other than CORE. */
+#ifdef Py_STATS
+typedef struct _PyBoxAt {
+    const void *owner;
+    uint8_t site;
+    uint8_t kind;
+} _PyBoxAt;
+#  define _PyBox_AT(SITE, KIND, OWNER) ((_PyBoxAt){(OWNER), (SITE), (KIND)})
+#  define _PyBox_AT_PARAM , _PyBoxAt at
+#  define _PyBox_AT_ARG(AT) , AT
+/* The caller of the enclosing function, inside its call instruction (a
+   return address minus one). Only compatibility entries (Py_VALUE_ENTRY)
+   capture it, through the THUNK forms of pycore_value_slots.h. */
+#  define _Py_BOX_CALLER() \
+       ((const void *)((const char *)__builtin_return_address(0) - 1))
+#  define _Py_FUNC_ADDR(F) ((const void *)(uintptr_t)(F))
+#else
+#  define _PyBox_AT(SITE, KIND, OWNER)
+#  define _PyBox_AT_PARAM
+#  define _PyBox_AT_ARG(AT)
+#endif
+// The owner of a box that a foreign exit makes (ctypes until W4).
+#define _Py_BOX_OWNER_FOREIGN ((const void *)(uintptr_t)1)
+// The argument of a CORE box under site class SITE.
+#define _PyBox_CORE(SITE) _PyBox_AT((SITE), BOX_KIND_CORE, NULL)
+
 /* The canonical form of source, with the same ownership: an exact int or
  * float whose value can be held inline becomes that inline value, and a box
  * that source owned is released at once (see "Release contract" below).
@@ -57,18 +89,23 @@ _PyValue_MayDealloc(PyValueBorrow owner)
 #define _PyValue_MayDealloc(V0) (_PyValue_MayDealloc)(PyValue_Borrow(V0))
 
 PyAPI_FUNC(void) _PyValueTemps_CloseNonempty(_PyValueTemps *temps);
-PyAPI_FUNC(PyObject *) _PyValueTemps_Box(_PyValueTemps *temps, PyValueBorrow value);
-#define _PyValueTemps_Box(V0, V1) (_PyValueTemps_Box)(V0, PyValue_Borrow(V1))
+PyAPI_FUNC(PyObject *) _PyValueTemps_Box(_PyValueTemps *temps,
+                                         PyValueBorrow value _PyBox_AT_PARAM);
+#define _PyValueTemps_Box(V0, V1) (_PyValueTemps_Box)(V0, PyValue_Borrow(V1) \
+        _PyBox_AT_ARG(_PyBox_CORE(BOX_SITE_UNATTRIBUTED)))
 
 static inline PyObject *
-_PyValueTemps_Object(_PyValueTemps *temps, PyValueBorrow value)
+_PyValueTemps_Object(_PyValueTemps *temps, PyValueBorrow value _PyBox_AT_PARAM)
 {
     if (PyValue_IsObject(value)) {
         return (PyObject *)(value.bits & ~(uintptr_t)1);
     }
-    return _PyValueTemps_Box(temps, value);
+    return (_PyValueTemps_Box)(temps, PyValue_Borrow(value) _PyBox_AT_ARG(at));
 }
-#define _PyValueTemps_Object(V0, V1) (_PyValueTemps_Object)(V0, PyValue_Borrow(V1))
+#define _PyValueTemps_Object(V0, V1) (_PyValueTemps_Object)(V0, \
+        PyValue_Borrow(V1) _PyBox_AT_ARG(_PyBox_CORE(BOX_SITE_UNATTRIBUTED)))
+#define _PyValueTemps_ObjectAt(V0, V1, SITE) (_PyValueTemps_Object)(V0, \
+        PyValue_Borrow(V1) _PyBox_AT_ARG(_PyBox_CORE(SITE)))
 
 static inline void
 _PyValueTemps_Close(_PyValueTemps *temps)
@@ -337,8 +374,11 @@ PyValue_IncrementTaggedIndexNoOverflow(PyValue r)
     return r;
 }
 
-PyAPI_FUNC(PyValue) _PyValue_BoxInlineValue(PyValueBorrow ref);
-#define _PyValue_BoxInlineValue(V0) (_PyValue_BoxInlineValue)(PyValue_Borrow(V0))
+/* The box primitive. at (stats builds) names the site class, the kind and
+   the owner of the box; the same-name macro boxes as CORE, unattributed. */
+PyAPI_FUNC(PyValue) _PyValue_BoxInlineValue(PyValueBorrow ref _PyBox_AT_PARAM);
+#define _PyValue_BoxInlineValue(V0) (_PyValue_BoxInlineValue)( \
+        PyValue_Borrow(V0) _PyBox_AT_ARG(_PyBox_CORE(BOX_SITE_UNATTRIBUTED)))
 
 /* If ref holds an inline value, return an owned reference to a new box with
    the same value; return any other ref unchanged. On failure, set an exception
@@ -716,11 +756,18 @@ _PyObject_IsSame(PyObject *a, PyObject *b)
            && _PyObject_ValueIdentity(a) == _PyObject_ValueIdentity(b);
 }
 
-#ifdef Py_STATS
-// The current thread's box-site class, or fallback if none is set
-// (Include/internal/pycore_value_api.h).
-PyAPI_FUNC(int) _PyValue_BoxSiteOr(int fallback);
-#endif
+/* The identity of a value, inline or not (see "Value identity"): the
+   encoding of an inline value, else that of the object it holds, which is
+   what _PyObject_ValueIdentity() gives for any box of the same value. */
+static inline uintptr_t
+_PyValue_Identity(PyValueBorrow value)
+{
+    if (PyValue_IsInline(value)) {
+        return (uintptr_t)_PyValue_BITS(value);
+    }
+    return _PyObject_ValueIdentity(PyValue_AsKnownObjectBorrow(value));
+}
+#define _PyValue_Identity(V0) (_PyValue_Identity)(PyValue_Borrow(V0))
 
 /* The borrowed canonical value of obj, which its owner keeps alive: an
    inline int or float, the tagged word of an immortal, or the plain pointer,
@@ -738,10 +785,7 @@ PyValue_FromObjectBorrow(PyObject *obj)
     if (_PyValue_IsNumberType(Py_TYPE(obj))) {
         uintptr_t identity = _PyObject_ValueIdentity(obj);
         if (identity >= Py_DOUBLE_OFFSET) {
-#ifdef Py_STATS
-            _Py_STATS_EXPR(object_stats.entry_unbox[
-                _PyValue_BoxSiteOr(BOX_SITE_UNATTRIBUTED)]++);
-#endif
+            OBJECT_STAT_INC(entry_unbox);
             value.bits = identity;
             return value;
         }
@@ -1112,16 +1156,38 @@ PyValue_FromDouble(double value)
    1.3). An exception may be pending, as for any upstream API that allocates:
    a failed box replaces it. */
 static inline PyObject *
-PyValue_AsObject(PyValueBorrow ref)
+PyValue_AsObject(PyValueBorrow ref _PyBox_AT_PARAM)
 {
     assert(PyValue_IsLanguageValue(ref));
     if (PyValue_IsInline(ref)) {
-        PyValue box = _PyValue_BoxInlineValue(ref);
+        PyValue box = (_PyValue_BoxInlineValue)(PyValue_Borrow(ref)
+                                                _PyBox_AT_ARG(at));
         return PyValue_IsInline(box) ? NULL : PyValue_AsKnownObjectSteal(box);
     }
     return PyValue_AsPyObjectNew(ref);
 }
-#define PyValue_AsObject(V0) (PyValue_AsObject)(PyValue_Borrow(V0))
+#define PyValue_AsObject(V0) (PyValue_AsObject)(PyValue_Borrow(V0) \
+        _PyBox_AT_ARG(_PyBox_CORE(BOX_SITE_UNATTRIBUTED)))
+/* PyValue_AsObject() of a CORE box under site class SITE (BOX_SITE_*). */
+#define _PyValue_AsObjectAt(V0, SITE) (PyValue_AsObject)(PyValue_Borrow(V0) \
+        _PyBox_AT_ARG(_PyBox_CORE(SITE)))
+
+/* PyValue_AsObject() of a boundary box, whose kind and owner at states: a
+   thunk exit, an adapter or a foreign exit. In stats builds, a function of
+   its own name, so that the lint can tell it from the CORE forms; it inlines
+   to the same code. Elsewhere it is PyValue_AsObject(), so that release
+   builds compile the code they compiled before the argument. */
+#ifdef Py_STATS
+static inline PyObject *
+_PyValue_AsObjectFor(PyValueBorrow ref, _PyBoxAt at)
+{
+    return (PyValue_AsObject)(ref, at);
+}
+#  define _PyValue_AsObjectFor(V0, AT) \
+       (_PyValue_AsObjectFor)(PyValue_Borrow(V0), AT)
+#else
+#  define _PyValue_AsObjectFor(V0, AT) PyValue_AsObject(V0)
+#endif
 
 /* For each inline value src[i], store a new box in dst[i]; leave the other
    elements of dst alone. Return 0, or -1 with an exception set and no boxes

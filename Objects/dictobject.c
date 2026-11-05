@@ -2122,9 +2122,10 @@ _PyDict_LookupIndex(PyDictObject *mp, PyObject *key)
 }
 
 
+/* The entries below pass the box argument of their caller (THUNK). */
 static int
 dict_getitemref_owned(PyObject *op, PyObject *key, Py_hash_t hash,
-                      PyObject **result)
+                      PyObject **result _PyBox_AT_PARAM)
 {
     *result = NULL;
     Py_INCREF(op);
@@ -2142,7 +2143,7 @@ dict_getitemref_owned(PyObject *op, PyObject *key, Py_hash_t hash,
     }
     status = _PyDict_GetValue_KnownHash(op, query, hash, &value);
     if (status == 1) {
-        object = _PyValue_AsObjectAt(value, BOX_SITE_DICT);
+        object = _PyValue_AsObjectFor(value, at);
         if (object == NULL) {
             status = -1;
         }
@@ -2168,7 +2169,9 @@ int
 _PyDict_GetItemRef_KnownHash_LockHeld(PyDictObject *op, PyObject *key,
                                       Py_hash_t hash, PyObject **result)
 {
-    return dict_getitemref_owned((PyObject *)op, key, hash, result);
+    return dict_getitemref_owned(
+        (PyObject *)op, key, hash, result
+        _PyBox_AT_ARG(_PyValue_THUNK_AT(BOX_SITE_DICT)));
 }
 
 /* Gets an item and provides a new reference if the value is present.
@@ -2179,7 +2182,9 @@ int
 _PyDict_GetItemRef_KnownHash(PyDictObject *op, PyObject *key,
                             Py_hash_t hash, PyObject **result)
 {
-    return dict_getitemref_owned((PyObject *)op, key, hash, result);
+    return dict_getitemref_owned(
+        (PyObject *)op, key, hash, result
+        _PyBox_AT_ARG(_PyValue_THUNK_AT(BOX_SITE_DICT)));
 }
 
 int
@@ -2190,7 +2195,8 @@ PyDict_GetItemRef(PyObject *op, PyObject *key, PyObject **result)
         PyErr_BadInternalCall();
         return -1;
     }
-    return dict_getitemref_owned(op, key, -1, result);
+    return dict_getitemref_owned(
+        op, key, -1, result _PyBox_AT_ARG(_PyValue_THUNK_AT(BOX_SITE_DICT)));
 }
 
 int
@@ -2199,7 +2205,9 @@ _PyDict_GetItemRef_Unicode_LockHeld(PyDictObject *op, PyObject *key,
 {
     ASSERT_DICT_LOCKED(op);
     assert(PyUnicode_CheckExact(key));
-    return dict_getitemref_owned((PyObject *)op, key, -1, result);
+    return dict_getitemref_owned(
+        (PyObject *)op, key, -1, result
+        _PyBox_AT_ARG(_PyValue_THUNK_AT(BOX_SITE_DICT)));
 }
 
 
@@ -2980,12 +2988,27 @@ _PyDict_NextBorrowed(PyObject *op, Py_ssize_t *ppos, PyValueBorrow *pkey,
     return 1;
 }
 
+/* A snapshot's value as a new reference to an object: the box argument is
+   that of the entry that calls (THUNK, owned by its caller). */
+static inline PyObject *
+dict_exit_owned(PyValue value _PyBox_AT_PARAM)
+{
+    if (PyValue_IsNull(value)) {
+        return NULL;
+    }
+    if (PyValue_IsInline(value)) {
+        return _PyValue_AsObjectFor(value, at);
+    }
+    return PyValue_AsKnownObjectSteal(value);
+}
+
 /* The object form of _PyDict_NextValue(), the body of the two thunks
-   below: owned object snapshots, boxed through the thunk exit. */
+   below: owned object snapshots, boxed through the thunk exit. The box
+   argument is that of the entry that calls (THUNK, owned by its caller). */
 static int
 dict_next_entry_ref(PyObject *op, Py_ssize_t *position,
                     PyObject **out_key, PyObject **out_value,
-                    Py_hash_t *out_hash)
+                    Py_hash_t *out_hash _PyBox_AT_PARAM)
 {
     if (out_key != NULL) {
         *out_key = NULL;
@@ -3010,14 +3033,14 @@ dict_next_entry_ref(PyObject *op, Py_ssize_t *position,
                                    out_value != NULL ? &value : NULL, &hash);
     PyObject *key_object = NULL, *value_object = NULL;
     if (status > 0 && out_key != NULL) {
-        key_object = _PyValue_THUNK_EXIT(key);
+        key_object = dict_exit_owned(key _PyBox_AT_ARG(at));
         key = PyValue_NULL;
         if (key_object == NULL) {
             status = -1;
         }
     }
     if (status > 0 && out_value != NULL) {
-        value_object = _PyValue_THUNK_EXIT(value);
+        value_object = dict_exit_owned(value _PyBox_AT_ARG(at));
         value = PyValue_NULL;
         if (value_object == NULL) {
             status = -1;
@@ -3047,14 +3070,18 @@ _PyDict_NextEntryRefKnownHash(PyObject *op, Py_ssize_t *position,
                               PyObject **key, PyObject **value,
                               Py_hash_t *hash)
 {
-    return dict_next_entry_ref(op, position, key, value, hash);
+    return dict_next_entry_ref(
+        op, position, key, value, hash
+        _PyBox_AT_ARG(_PyValue_THUNK_AT(BOX_SITE_DICT)));
 }
 
 int
 PyDict_NextEntryRef(PyObject *op, Py_ssize_t *position,
                     PyObject **key, PyObject **value)
 {
-    return dict_next_entry_ref(op, position, key, value, NULL);
+    return dict_next_entry_ref(
+        op, position, key, value, NULL
+        _PyBox_AT_ARG(_PyValue_THUNK_AT(BOX_SITE_DICT)));
 }
 
 
@@ -4580,7 +4607,7 @@ int
 
 static int
 dict_setdefault_object_owned(PyObject *op, PyObject *key, PyObject *default_value,
-                            PyObject **result)
+                            PyObject **result _PyBox_AT_PARAM)
 {
     if (result != NULL) {
         *result = NULL;
@@ -4616,7 +4643,7 @@ dict_setdefault_object_owned(PyObject *op, PyObject *key, PyObject *default_valu
         default_value = NULL;
     }
     else if (status == 1 && result != NULL) {
-        object = _PyValue_AsObjectAt(output, BOX_SITE_DICT);
+        object = _PyValue_AsObjectFor(output, at);
         if (object == NULL) {
             status = -1;
         }
@@ -4644,7 +4671,9 @@ PyDict_SetDefaultRef(PyObject *d, PyObject *key, PyObject *default_value,
 {
     int res;
     Py_BEGIN_CRITICAL_SECTION(d);
-    res = dict_setdefault_object_owned(d, key, default_value, result);
+    res = dict_setdefault_object_owned(
+        d, key, default_value, result
+        _PyBox_AT_ARG(_PyValue_THUNK_AT(BOX_SITE_DICT)));
     Py_END_CRITICAL_SECTION();
     return res;
 }
@@ -4669,7 +4698,10 @@ dict_setdefault_impl(PyDictObject *self, PyObject *key,
 /*[clinic end generated code: output=f8c1101ebf69e220 input=9237af9a0a224302]*/
 {
     PyObject *val;
-    if (dict_setdefault_object_owned((PyObject *)self, key, default_value, &val) < 0) {
+    if (dict_setdefault_object_owned(
+            (PyObject *)self, key, default_value, &val
+            _PyBox_AT_ARG(_PyBox_CORE(BOX_SITE_DICT))) < 0)
+    {
         return NULL;
     }
     return val;
@@ -5279,7 +5311,9 @@ PyDict_GetItemStringRef(PyObject *v, const char *key, PyObject **result)
         res = -1;
     }
     else {
-        res = dict_getitemref_owned(v, key_obj, -1, result);
+        res = dict_getitemref_owned(
+            v, key_obj, -1, result
+            _PyBox_AT_ARG(_PyValue_THUNK_AT(BOX_SITE_DICT)));
     }
     Py_DECREF(key_obj);
     return res;

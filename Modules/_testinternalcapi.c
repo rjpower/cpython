@@ -318,7 +318,7 @@ classify_stack_addresses(PyObject *self, PyObject *args)
             Py_DECREF(fast);
             return NULL;
         }
-        PyObject *object = PyValue_AsObject(item);
+        PyObject *object = _PyValue_AsObjectAt(item, BOX_SITE_TEST);
         PyValue_XCLOSE(item);
         if (object == NULL) {
             Py_DECREF(labels);
@@ -3209,7 +3209,7 @@ pyvalue_contract(PyObject *self, PyObject *arg)
     PyValue duplicate = PyValue_XDUP(PyValue_Borrow(value));
     assert(PyValue_Is(value, duplicate));
     assert(PyValue_IsLanguageValue(value));
-    PyObject *object = PyValue_AsObject(duplicate);
+    PyObject *object = _PyValue_AsObjectAt(duplicate, BOX_SITE_TEST);
     PyValue_XCLOSE(duplicate);
     PyValue_XCLOSE(value);
     if (object == NULL) {
@@ -3278,7 +3278,7 @@ pyvalue_from_object_borrow_inline(PyObject *self, PyObject *obj)
 {
     PyValueBorrow value = PyValue_FromObjectBorrow(obj);
     PyValueBorrow expected = PyValue_FromObjectBorrow(obj);
-    PyObject *back = PyValue_AsObject(value);
+    PyObject *back = _PyValue_AsObjectAt(value, BOX_SITE_TEST);
     if (back == NULL) {
         return NULL;
     }
@@ -3298,7 +3298,7 @@ pyvalue_from_object_known(PyObject *self, PyObject *obj)
         PyErr_SetString(PyExc_AssertionError, "not an owner's word");
         return NULL;
     }
-    return PyValue_AsObject(value);
+    return _PyValue_AsObjectAt(value, BOX_SITE_TEST);
 }
 
 static PyObject *
@@ -3348,7 +3348,7 @@ pyvalue_err_format(PyObject *self, PyObject *args)
 static PyObject *
 pyvalue_as_object_index(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
-    return PyValue_AsObject(PyValue_TagIndex(7));
+    return _PyValue_AsObjectAt(PyValue_TagIndex(7), BOX_SITE_TEST);
 }
 
 /* PyValue_AsKnownObjectBorrow(), or PyValue_AsKnownObjectSteal() if steal
@@ -4071,7 +4071,7 @@ constant_value_key(PyObject *module, PyObject *args)
         PyValue_CLOSE(input);
         return NULL;
     }
-    PyObject *object = PyValue_AsObject(input);
+    PyObject *object = _PyValue_AsObjectAt(input, BOX_SITE_TEST);
     PyValue_CLOSE(input);
     if (object == NULL) {
         PyValue_CLOSE(key);

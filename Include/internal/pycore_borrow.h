@@ -61,8 +61,8 @@ PyAPI_FUNC(PyObject *) _PyBorrow_Keep(PyObject *owned);
  * allocated.  Then return NULL with MemoryError set; items already pushed
  * stay until the scope exits.  The run is read-only and has no slot before
  * element 0: never pass PY_VECTORCALL_ARGUMENTS_OFFSET with it. */
-PyAPI_FUNC(PyObject *const *) _PyBorrow_TupleItems(PyObject *tuple,
-                                                   Py_ssize_t n);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *const *) _PyBorrow_TupleItems(
+    PyObject *tuple, Py_ssize_t n);
 
 /* Build a vectorcall argument vector for values[0..n) on the stack and return
  * it; the callee may use PY_VECTORCALL_ARGUMENTS_OFFSET.  As upstream passes
@@ -73,8 +73,8 @@ PyAPI_FUNC(PyObject *const *) _PyBorrow_TupleItems(PyObject *tuple,
  * borrowed slots when it releases.  Failure is as for TupleItems.  The caller
  * must hold its own scope around the vector and exit it after the call:
  * unlike the other pushes, this one does not ask the eval loop to release. */
-PyAPI_FUNC(PyObject **) _PyBorrow_ValueVector(const PyValue *values,
-                                              Py_ssize_t n);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject **) _PyBorrow_ValueVector(
+    const PyValue *values, Py_ssize_t n);
 
 /* Ask the innermost eval loop to release the entries above its floor at the
  * next instruction boundary.  No-op outside any eval loop. */

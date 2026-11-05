@@ -18,6 +18,7 @@
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_ceval.h"         // _PyEval_ReInitThreads()
 #include "pycore_fileutils.h"     // _Py_closerange()
+#include "pycore_pystats.h"       // _Py_StatsDumpClear()
 #include "pycore_import.h"        // _PyImport_AcquireLock()
 #include "pycore_initconfig.h"    // _PyStatus_EXCEPTION()
 #include "pycore_lock.h"          // PyMutex_LockFast()
@@ -823,6 +824,10 @@ PyOS_AfterFork_Child(void)
     if (_PyStatus_EXCEPTION(status)) {
         goto fatal_error;
     }
+
+#ifdef Py_STATS
+    _Py_StatsAfterFork();
+#endif
 
     run_at_forkers(tstate->interp->after_forkers_child, 0);
     return;
@@ -7312,6 +7317,9 @@ static PyObject *
 os__exit_impl(PyObject *module, int status)
 /*[clinic end generated code: output=116e52d9c2260d54 input=c35d282acfebe8fd]*/
 {
+#ifdef Py_STATS
+    _Py_StatsDumpClear();   // the exit skips finalization
+#endif
     _exit(status);
     return NULL; /* Make gcc -Wall happy */
 }
@@ -7554,6 +7562,9 @@ os_execv_impl(PyObject *module, path_t *path, PyObject *argv)
         return NULL;
     }
 
+#ifdef Py_STATS
+    _Py_StatsDumpClear();   // the new image counts for itself
+#endif
     _Py_BEGIN_SUPPRESS_IPH
 #ifdef HAVE_WEXECV
     _wexecv(path->wide, argvlist);
@@ -7563,6 +7574,9 @@ os_execv_impl(PyObject *module, path_t *path, PyObject *argv)
     _Py_END_SUPPRESS_IPH
 
     /* If we get here it's definitely an error */
+#ifdef Py_STATS
+    _Py_StatsMarkerCreate();   // this process goes on counting
+#endif
 
     posix_path_error(path);
     free_string_array(argvlist, argc);
@@ -7637,6 +7651,9 @@ os_execve_impl(PyObject *module, path_t *path, PyObject *argv, PyObject *env)
         goto fail_1;
     }
 
+#ifdef Py_STATS
+    _Py_StatsDumpClear();   // the new image counts for itself
+#endif
     _Py_BEGIN_SUPPRESS_IPH
 #ifdef HAVE_FEXECVE
     if (path->is_fd)
@@ -7651,6 +7668,9 @@ os_execve_impl(PyObject *module, path_t *path, PyObject *argv, PyObject *env)
     _Py_END_SUPPRESS_IPH
 
     /* If we get here it's definitely an error */
+#ifdef Py_STATS
+    _Py_StatsMarkerCreate();   // this process goes on counting
+#endif
 
     posix_path_error(path);
   fail_1:

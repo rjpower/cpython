@@ -39,79 +39,61 @@ _PyValue_FromObjectKnown(PyObject *obj)
 }
 
 
-#ifdef Py_STATS
 /* Box counters (section 6.1). A boxing call names the class of its site
-   (BOX_SITE_* in Include/cpython/pystats.h) with an At form below; the
-   class holds on the thread for the duration of that call, and
-   _PyValue_BoxInlineValue() counts each box under it. Builds without
-   Py_STATS drop the class. */
+   (BOX_SITE_* in Include/cpython/pystats.h) with an At form, such as
+   _PyValue_AsObjectAt() in pycore_value.h, and a boundary box states its
+   kind and owner with a For form (_PyBox_AT() in pycore_value.h). Builds
+   without Py_STATS drop the argument. */
 
-// Set the current thread's site class and return the previous one.
-PyAPI_FUNC(int) _PyValue_SwapBoxSite(int site);
-// _PyValue_BoxSiteOr(), the current class, is in pycore_value.h.
-// Set the current thread's box kind (BOX_KIND_*) and return the previous.
-PyAPI_FUNC(int) _PyValue_SwapBoxKind(int kind);
-
-static inline PyObject *
-_PyValue_AsObjectAt(PyValueBorrow value, int site)
-{
-    int previous = _PyValue_SwapBoxSite(site);
-    PyObject *object = PyValue_AsObject(value);
-    _PyValue_SwapBoxSite(previous);
-    return object;
-}
-#define _PyValue_AsObjectAt(V0, V1) (_PyValue_AsObjectAt)(PyValue_Borrow(V0), V1)
-
-/* PyValue_AsObject() under a box kind (BOX_KIND_*) and, with the At form, a
-   site class: the kind argument of the box primitive. */
-static inline PyObject *
-_PyValue_AsObjectKind(PyValueBorrow value, int kind)
-{
-    int previous = _PyValue_SwapBoxKind(kind);
-    PyObject *object = PyValue_AsObject(value);
-    _PyValue_SwapBoxKind(previous);
-    return object;
-}
-#define _PyValue_AsObjectKind(V0, V1) (_PyValue_AsObjectKind)(PyValue_Borrow(V0), V1)
-
-static inline PyObject *
-_PyValue_AsObjectAtKind(PyValueBorrow value, int site, int kind)
-{
-    int previous = _PyValue_SwapBoxKind(kind);
-    PyObject *object = _PyValue_AsObjectAt(value, site);
-    _PyValue_SwapBoxKind(previous);
-    return object;
-}
-#define _PyValue_AsObjectAtKind(V0, V1, V2) \
-    (_PyValue_AsObjectAtKind)(PyValue_Borrow(V0), V1, V2)
-
-static inline PyObject *
-_PyValueTemps_ObjectAt(_PyValueTemps *temps, PyValueBorrow value, int site)
-{
-    int previous = _PyValue_SwapBoxSite(site);
-    PyObject *object = _PyValueTemps_Object(temps, value);
-    _PyValue_SwapBoxSite(previous);
-    return object;
-}
-#define _PyValueTemps_ObjectAt(V0, V1, V2) (_PyValueTemps_ObjectAt)(V0, PyValue_Borrow(V1), V2)
-
-static inline PyObject *const *
-_PyBorrow_TupleItemsAt(PyObject *tuple, Py_ssize_t n, int site)
-{
-    int previous = _PyValue_SwapBoxSite(site);
-    PyObject *const *items = _PyBorrow_TupleItems(tuple, n);
-    _PyValue_SwapBoxSite(previous);
-    return items;
-}
+/* The borrow entries of the call adapter (pycore_borrow.h) with a stated
+   box argument: the argument parser's owner, or the callee's C entry
+   (_PyCall_BoxOwner()). Without one, an entry's boxes are of kind THUNK
+   (_PyBorrow_TupleItems) or CALL_ADAPTER (_PyBorrow_ValueVector), owned by
+   its caller. */
+#ifdef Py_STATS
+PyAPI_FUNC(PyObject *const *) _PyBorrow_TupleItemsFor(PyObject *tuple,
+                                                      Py_ssize_t n,
+                                                      _PyBoxAt at);
+PyAPI_FUNC(PyObject **) _PyBorrow_ValueVectorFor(const PyValue *values,
+                                                 Py_ssize_t n, _PyBoxAt at);
+/* The C entry that a call adapter's boxes serve, for a callable: a
+   function's ml_meth, a wrapper's d_wrapped, a type's tp_vectorcall,
+   tp_init or tp_new, else its vectorcall function or tp_call. Runs no
+   Python and counts nothing. */
+PyAPI_FUNC(const void *) _PyCall_BoxOwner(PyObject *callable);
 #else
-#  define _PyValue_AsObjectAt(VALUE, SITE) PyValue_AsObject(VALUE)
-#  define _PyValue_AsObjectKind(VALUE, KIND) PyValue_AsObject(VALUE)
-#  define _PyValue_AsObjectAtKind(VALUE, SITE, KIND) PyValue_AsObject(VALUE)
-#  define _PyValueTemps_ObjectAt(TEMPS, VALUE, SITE) \
-        _PyValueTemps_Object((TEMPS), (VALUE))
-#  define _PyBorrow_TupleItemsAt(TUPLE, N, SITE) \
+#  define _PyBorrow_TupleItemsFor(TUPLE, N, AT) \
         _PyBorrow_TupleItems((TUPLE), (N))
+#  define _PyBorrow_ValueVectorFor(VALUES, N, AT) \
+        _PyBorrow_ValueVector((VALUES), (N))
 #endif
+/* The THUNK forms of a compatibility entry (Py_VALUE_ENTRY), which boxes for
+   its caller (pyjit/design/proposals/value-api-g.md, section 1.2): kind
+   THUNK, owned by the entry's caller, which the macro captures where it
+   expands, in the entry's own body. Only the bodies of marked functions may
+   use them (compat-capture in Tools/build/check_value_api.py).
+   _PyValue_THUNK_NEW() is a new reference to the object that V holds, or a
+   box of it; _PyValue_THUNK_AT() is the box argument itself, which an entry
+   passes to a static helper that it shares with core callers.
+   _PyValue_THUNK_EXIT() is in pycore_value_slots.h. */
+#define _PyValue_THUNK_AT(SITE) \
+    _PyBox_AT((SITE), BOX_KIND_THUNK, _Py_BOX_CALLER())
+/* An inline function behind a macro, as _PyValue_THUNK_EXIT() is, so that
+   builds without stats do not expand it to PyValue_AsObject() in the body
+   of a compatibility entry (compat-body). The macro captures the owner. */
+static inline PyObject *
+_PyValue_THUNK_New(PyValueBorrow value _PyBox_AT_PARAM)
+{
+    return _PyValue_AsObjectFor(value, at);
+}
+#define _PyValue_THUNK_NEW(V, SITE) \
+    (_PyValue_THUNK_New)(PyValue_Borrow(V) \
+                         _PyBox_AT_ARG(_PyValue_THUNK_AT(SITE)))
+
+// The box argument of a call adapter whose callee is CALLABLE.
+#define _PyBox_CALL_ADAPTER(CALLABLE) \
+    _PyBox_AT(BOX_SITE_CALL_ADAPTER, BOX_KIND_CALL_ADAPTER, \
+              _PyCall_BoxOwner(CALLABLE))
 
 
 /* The marked declaration that Tools/build/check_value_api.py calls from a

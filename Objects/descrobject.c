@@ -650,7 +650,8 @@ wrapperdescr_value_raw_call(PyWrapperDescrObject *descr, PyValueBorrow self,
 
     _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
     PyObject *res = NULL;
-    PyObject *obj = _PyValue_AdapterBox(self, BOX_SITE_CALL);
+    PyObject *obj = _PyValue_AdapterBox(self, BOX_SITE_CALL,
+                                       descr->d_base->wrapper);
     if (obj == NULL) {
         goto exit_scope;
     }
@@ -1548,7 +1549,7 @@ static PyObject *
 wrapper_repr(PyObject *self)
 {
     wrapperobject *wp = (wrapperobject *)self;
-    PyObject *obj = PyValue_AsObject(wp->self);
+    PyObject *obj = _PyValue_AsObjectAt(wp->self, BOX_SITE_REPR);
     if (obj == NULL) {
         return NULL;
     }
@@ -1565,7 +1566,7 @@ static PyObject *
 wrapper_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
 {
     wrapperobject *wp = (wrapperobject *)self;
-    PyObject *obj = PyValue_AsObject(wp->self);
+    PyObject *obj = _PyValue_AsObjectAt(wp->self, BOX_SITE_FIELD);
     if (obj == NULL) {
         return NULL;
     }

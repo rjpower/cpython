@@ -14,6 +14,7 @@
 #include "pycore_freelist.h"      // _PyObject_ClearFreeLists()
 #include "pycore_gc_trace.h"      // _PyGC_TRACE_CAPTURE_THREAD()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
+#include "pycore_pystats.h"       // _PyStats_InterpFini()
 #include "pycore_interpframe.h"   // _PyThreadState_HasStackSpace()
 #include "pycore_object.h"        // _Py_ClearImmortal()
 #include "pycore_obmalloc.h"      // _PyMem_obmalloc_state_on_heap()
@@ -479,6 +480,7 @@ free_interpreter(PyInterpreterState *interp)
     }
 #endif
 #ifdef Py_STATS
+    _PyStats_InterpFini(interp);
     if (interp->pystats_struct) {
         PyMem_RawFree(interp->pystats_struct);
         interp->pystats_struct = NULL;

@@ -136,7 +136,8 @@ PyStructSequence_SET_VALUE(PyObject *op, Py_ssize_t index, PyValue value)
 PyObject *
 PyStructSequence_GetItemRef(PyObject *op, Py_ssize_t index)
 {
-    return _PyValue_THUNK_EXIT(PyValue_XDUP(PyStructSequence_GET_VALUE(op, index)));
+    return _PyValue_THUNK_EXIT(
+        PyValue_XDUP(PyStructSequence_GET_VALUE(op, index)), BOX_SITE_CELL);
 }
 
 

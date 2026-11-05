@@ -400,12 +400,12 @@ PyAPI_FUNC(unsigned int) PyType_ClearCache(void);
 PyAPI_FUNC(void) PyType_Modified(PyTypeObject *);
 
 /* Generic operations on objects */
-PyAPI_FUNC(PyObject *) PyObject_Repr(PyObject *);
-PyAPI_FUNC(PyObject *) PyObject_Str(PyObject *);
-PyAPI_FUNC(PyObject *) PyObject_ASCII(PyObject *);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyObject_Repr(PyObject *);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyObject_Str(PyObject *);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyObject_ASCII(PyObject *);
 PyAPI_FUNC(PyObject *) PyObject_Bytes(PyObject *);
-PyAPI_FUNC(PyObject *) PyObject_RichCompare(PyObject *, PyObject *, int);
-PyAPI_FUNC(int) PyObject_RichCompareBool(PyObject *, PyObject *, int);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyObject_RichCompare(PyObject *, PyObject *, int);
+Py_VALUE_ENTRY PyAPI_FUNC(int) PyObject_RichCompareBool(PyObject *, PyObject *, int);
 PyAPI_FUNC(PyObject *) PyObject_GetAttrString(PyObject *, const char *);
 PyAPI_FUNC(int) PyObject_SetAttrString(PyObject *, const char *, PyObject *);
 PyAPI_FUNC(int) PyObject_DelAttrString(PyObject *v, const char *name);
@@ -428,10 +428,10 @@ PyAPI_FUNC(int) PyObject_GenericSetAttr(PyObject *, PyObject *, PyObject *);
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 >= 0x03030000
 PyAPI_FUNC(int) PyObject_GenericSetDict(PyObject *, PyObject *, void *);
 #endif
-PyAPI_FUNC(Py_hash_t) PyObject_Hash(PyObject *);
+Py_VALUE_ENTRY PyAPI_FUNC(Py_hash_t) PyObject_Hash(PyObject *);
 PyAPI_FUNC(Py_hash_t) PyObject_HashNotImplemented(PyObject *);
-PyAPI_FUNC(int) PyObject_IsTrue(PyObject *);
-PyAPI_FUNC(int) PyObject_Not(PyObject *);
+Py_VALUE_ENTRY PyAPI_FUNC(int) PyObject_IsTrue(PyObject *);
+Py_VALUE_ENTRY PyAPI_FUNC(int) PyObject_Not(PyObject *);
 PyAPI_FUNC(int) PyCallable_Check(PyObject *);
 PyAPI_FUNC(void) PyObject_ClearWeakRefs(PyObject *);
 

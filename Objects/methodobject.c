@@ -11,7 +11,7 @@
 #include "pycore_pyerrors.h"
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_value.h"         // PyValue_Is()
-#include "pycore_value_api.h"     // _PyValue_AsObjectAtKind()
+#include "pycore_value_api.h"     // _PyValue_AsObjectFor()
 #include "pycore_value_call.h"    // METH_VALUE
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
@@ -158,7 +158,7 @@ PyCFunction_GetFunction(PyObject *op)
     return PyCFunction_GET_FUNCTION(op);
 }
 
-PyObject *
+Py_VALUE_ENTRY PyObject *
 PyCFunction_GetSelfRef(PyObject *op)
 {
     if (!PyCFunction_Check(op)) {
@@ -169,7 +169,7 @@ PyCFunction_GetSelfRef(PyObject *op)
     if (PyValue_IsNull(self)) {
         return NULL;
     }
-    return _PyValue_AsObjectKind(self, BOX_KIND_THUNK);
+    return _PyValue_THUNK_NEW(self, BOX_SITE_FIELD);
 }
 
 PyObject *
@@ -182,8 +182,7 @@ _PyCFunction_SelfObject(PyObject *func)
     if (PyValue_IsObject(self)) {
         return PyValue_AsKnownObjectBorrow(self);
     }
-    PyObject *box = _PyValue_AsObjectAtKind(self, BOX_SITE_CALL_ADAPTER,
-                                            BOX_KIND_CALL_ADAPTER);
+    PyObject *box = _PyValue_AsObjectFor(self, _PyBox_CALL_ADAPTER(func));
     if (box == NULL) {
         return NULL;
     }
@@ -274,7 +273,7 @@ meth_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
         return PyUnicode_FromString(m->m_ml->ml_name);
     }
 
-    PyObject *obj = PyValue_AsObject(m->m_self);
+    PyObject *obj = _PyValue_AsObjectAt(m->m_self, BOX_SITE_FIELD);
     if (obj == NULL) {
         return NULL;
     }
@@ -372,7 +371,7 @@ meth_get__self__(PyObject *meth, void *closure)
     if (PyValue_IsNull(self)) {
         Py_RETURN_NONE;
     }
-    return PyValue_AsObject(self);
+    return _PyValue_AsObjectAt(self, BOX_SITE_FIELD);
 }
 
 static PyGetSetDef meth_getsets[] = {
@@ -400,7 +399,7 @@ meth_repr(PyObject *self)
                                     m->m_ml->ml_name);
     }
 
-    PyObject *obj = PyValue_AsObject(m->m_self);
+    PyObject *obj = _PyValue_AsObjectAt(m->m_self, BOX_SITE_REPR);
     if (obj == NULL) {
         return NULL;
     }

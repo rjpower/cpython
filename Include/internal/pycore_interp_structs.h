@@ -1030,6 +1030,8 @@ struct _is {
     int pystats_enabled;
     // allocated when (and if) stats are first enabled
     PyStats *pystats_struct;
+    // the owners of the boxes (Python/pystats.c), allocated at the first box
+    struct _PyBoxOwners *box_owners;
 #ifdef Py_GIL_DISABLED
     // held when pystats related interpreter state is being updated
     PyMutex pystats_mutex;

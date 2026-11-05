@@ -72,7 +72,7 @@ exit:
 PyObject *
 PyCell_Get(PyObject *op)
 {
-    return _PyValue_THUNK_EXIT(PyCell_GetValue(op));
+    return _PyValue_THUNK_EXIT(PyCell_GetValue(op), BOX_SITE_CELL);
 }
 
 PyValue

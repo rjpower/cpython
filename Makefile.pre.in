@@ -993,6 +993,19 @@ check-value-api: compile_commands.json
 	$(PYTHON_FOR_REGEN) $(srcdir)/Tools/build/check_value_api.py \
 		--cdb compile_commands.json --cc "$(CC)" --cxx "$(CXX)"
 
+# The R27 gate (pyjit/design/proposals/value-api-g.md): the suite of this
+# build, with every box attributed to the code that made it. Only a
+# --enable-pystats build can run it. The report is a record until W5 turns
+# the gate on. DUMPS and SUITE_REPORT may be overridden.
+.PHONY: check-r27
+check-r27: all
+	@if ! grep -q "define Py_STATS 1" pyconfig.h; then \
+		echo "check-r27 needs a build configured --enable-pystats"; exit 1; fi
+	$(RUNSHARED) ./$(BUILDPYTHON) $(srcdir)/Tools/build/check_r27.py suite \
+		--build . --src $(srcdir) -o r27-suite.json
+	$(RUNSHARED) ./$(BUILDPYTHON) $(srcdir)/Tools/build/check_r27.py report \
+		--suite r27-suite.json
+
 # intercept-build records the compile commands as the units compile, so the
 # core objects are compiled once more under it. A build started with
 # "intercept-build make" records the database on the way.

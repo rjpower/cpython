@@ -4,7 +4,7 @@
 #include "pycore_methodobject.h"  // _PyCFunction_GET_SELF_VALUE()
 #include "pycore_native_scope.h"
 #include "pycore_tuple.h"
-#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_api.h"     // _PyBorrow_ValueVectorFor()
 
 
 static void
@@ -52,8 +52,11 @@ _PyNativeScope_Begin(_PyNativeScope *scope, PyThreadState *tstate,
            keeps it alive until End.  Box an inline value now; End releases
            the box. */
         if (PyValue_IsInline(args[0])) {
-            scope->argument_box = _PyValue_AsObjectAt(args[0],
-                                                      BOX_SITE_CALL_ADAPTER);
+            /* The callee is not known here: the scope names itself. */
+            scope->argument_box = _PyValue_AsObjectFor(
+                args[0],
+                _PyBox_AT(BOX_SITE_CALL_ADAPTER, BOX_KIND_CALL_ADAPTER,
+                          _Py_FUNC_ADDR(_PyNativeScope_Begin)));
             if (scope->argument_box == NULL) {
                 return -1;
             }
@@ -118,7 +121,8 @@ begin_vector(_PyNativeScope *scope, PyThreadState *tstate,
     /* Boxing can fail to allocate.  On failure the partial run stays above
        the mark and End releases it. */
     scope->mark = _PyBorrowScope_Enter(tstate);
-    PyObject **objects = _PyBorrow_ValueVector(effective_args, total_count);
+    PyObject **objects = _PyBorrow_ValueVectorFor(
+        effective_args, total_count, _PyBox_CALL_ADAPTER(callable));
     if (objects == NULL) {
         return -1;
     }
@@ -192,7 +196,8 @@ _PyNativeScope_Objects(_PyNativeScope *scope, PyObject *const **args)
     assert(!scope->ended);
     *args = scope->objects;
     if (!PyValue_IsNull(scope->receiver) && scope->receiver_object == NULL) {
-        scope->receiver_object = _PyValue_AsObjectAt(scope->receiver, BOX_SITE_CALL_ADAPTER);
+        scope->receiver_object = _PyValue_AsObjectFor(
+            scope->receiver, _PyBox_CALL_ADAPTER(scope->callable));
         if (scope->receiver_object == NULL) {
             return -1;
         }

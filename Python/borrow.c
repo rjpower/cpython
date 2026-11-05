@@ -15,7 +15,7 @@
 #include "pycore_traceback.h"     // _Py_DumpStack()
 #include "pycore_tuple.h"         // PyTuple_GET_VALUE()
 #include "pycore_value.h"         // PyValue_AsObject()
-#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_api.h"     // _PyValue_THUNK_AT()
 
 #define BORROW_CHUNK_SLOTS 1024
 
@@ -307,19 +307,22 @@ _PyBorrow_Keep(PyObject *owned)
     return owned;
 }
 
-#define borrow_box(V0) (borrow_box)(PyValue_Borrow(V0))
+/* The two borrow entries box for their caller (pyjit/design/proposals/
+   value-api-g.md, section 1.2). In stats builds each entry states the box
+   argument of its own caller and shares its body, a static function that
+   takes the argument, with its For form; elsewhere the body is the entry. */
+#ifdef Py_STATS
+#  define BORROW_STATIC static
+#  define BORROW_BODY(NAME) NAME##_body
+#else
+#  define BORROW_STATIC
+#  define BORROW_BODY(NAME) NAME
+#endif
+#define borrow_box(V0) _PyValue_AsObjectFor((V0), at)
 
-/* A box for the call adapter. A caller that names another site class, such
-   as the argument parser, keeps it (pycore_value_api.h). */
-static inline PyObject *
-(borrow_box)(PyValueBorrow value)
-{
-    return _PyValue_AsObjectAt(value,
-                               _PyValue_BoxSiteOr(BOX_SITE_CALL_ADAPTER));
-}
-
-PyObject *const *
-_PyBorrow_TupleItems(PyObject *tuple, Py_ssize_t n)
+BORROW_STATIC PyObject *const *
+BORROW_BODY(_PyBorrow_TupleItems)(PyObject *tuple, Py_ssize_t n
+                                  _PyBox_AT_PARAM)
 {
     assert(PyTuple_Check(tuple));
     assert(0 <= n && n <= PyTuple_GET_SIZE(tuple));
@@ -349,8 +352,9 @@ _PyBorrow_TupleItems(PyObject *tuple, Py_ssize_t n)
     return run;
 }
 
-PyObject **
-_PyBorrow_ValueVector(const PyValue *values, Py_ssize_t n)
+BORROW_STATIC PyObject **
+BORROW_BODY(_PyBorrow_ValueVector)(const PyValue *values, Py_ssize_t n
+                                   _PyBox_AT_PARAM)
 {
     assert(n >= 0);
     assert(!PyErr_Occurred());
@@ -396,6 +400,38 @@ _PyBorrow_ValueVector(const PyValue *values, Py_ssize_t n)
     BORROW_CHECK_SIZE(tstate, s);
     return vector;
 }
+
+#ifdef Py_STATS
+/* A Clinic or parser tuple view boxes for the function that parses: kind
+   THUNK, owned by the caller. */
+PyObject *const *
+_PyBorrow_TupleItems(PyObject *tuple, Py_ssize_t n)
+{
+    return _PyBorrow_TupleItems_body(
+        tuple, n, _PyValue_THUNK_AT(BOX_SITE_CALL_ADAPTER));
+}
+
+PyObject *const *
+_PyBorrow_TupleItemsFor(PyObject *tuple, Py_ssize_t n, _PyBoxAt at)
+{
+    return _PyBorrow_TupleItems_body(tuple, n, at);
+}
+
+// A vector whose caller does not name the callee: owned by the caller.
+PyObject **
+_PyBorrow_ValueVector(const PyValue *values, Py_ssize_t n)
+{
+    return _PyBorrow_ValueVector_body(
+        values, n, _PyBox_AT(BOX_SITE_CALL_ADAPTER, BOX_KIND_CALL_ADAPTER,
+                             _Py_BOX_CALLER()));
+}
+
+PyObject **
+_PyBorrow_ValueVectorFor(const PyValue *values, Py_ssize_t n, _PyBoxAt at)
+{
+    return _PyBorrow_ValueVector_body(values, n, at);
+}
+#endif
 
 
 void

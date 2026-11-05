@@ -450,101 +450,101 @@ PyAPI_FUNC(int) PyNumber_Check(PyObject *o);
 /* Returns the result of adding o1 and o2, or NULL on failure.
 
    This is the equivalent of the Python expression: o1 + o2. */
-PyAPI_FUNC(PyObject *) PyNumber_Add(PyObject *o1, PyObject *o2);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_Add(PyObject *o1, PyObject *o2);
 
 /* Returns the result of subtracting o2 from o1, or NULL on failure.
 
    This is the equivalent of the Python expression: o1 - o2. */
-PyAPI_FUNC(PyObject *) PyNumber_Subtract(PyObject *o1, PyObject *o2);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_Subtract(PyObject *o1, PyObject *o2);
 
 /* Returns the result of multiplying o1 and o2, or NULL on failure.
 
    This is the equivalent of the Python expression: o1 * o2. */
-PyAPI_FUNC(PyObject *) PyNumber_Multiply(PyObject *o1, PyObject *o2);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_Multiply(PyObject *o1, PyObject *o2);
 
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 >= 0x03050000
 /* This is the equivalent of the Python expression: o1 @ o2. */
-PyAPI_FUNC(PyObject *) PyNumber_MatrixMultiply(PyObject *o1, PyObject *o2);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_MatrixMultiply(PyObject *o1, PyObject *o2);
 #endif
 
 /* Returns the result of dividing o1 by o2 giving an integral result,
    or NULL on failure.
 
    This is the equivalent of the Python expression: o1 // o2. */
-PyAPI_FUNC(PyObject *) PyNumber_FloorDivide(PyObject *o1, PyObject *o2);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_FloorDivide(PyObject *o1, PyObject *o2);
 
 /* Returns the result of dividing o1 by o2 giving a float result, or NULL on
    failure.
 
    This is the equivalent of the Python expression: o1 / o2. */
-PyAPI_FUNC(PyObject *) PyNumber_TrueDivide(PyObject *o1, PyObject *o2);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_TrueDivide(PyObject *o1, PyObject *o2);
 
 /* Returns the remainder of dividing o1 by o2, or NULL on failure.
 
    This is the equivalent of the Python expression: o1 % o2. */
-PyAPI_FUNC(PyObject *) PyNumber_Remainder(PyObject *o1, PyObject *o2);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_Remainder(PyObject *o1, PyObject *o2);
 
 /* See the built-in function divmod.
 
    Returns NULL on failure.
 
    This is the equivalent of the Python expression: divmod(o1, o2). */
-PyAPI_FUNC(PyObject *) PyNumber_Divmod(PyObject *o1, PyObject *o2);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_Divmod(PyObject *o1, PyObject *o2);
 
 /* See the built-in function pow. Returns NULL on failure.
 
    This is the equivalent of the Python expression: pow(o1, o2, o3),
    where o3 is optional. */
-PyAPI_FUNC(PyObject *) PyNumber_Power(PyObject *o1, PyObject *o2,
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_Power(PyObject *o1, PyObject *o2,
                                       PyObject *o3);
 
 /* Returns the negation of o on success, or NULL on failure.
 
  This is the equivalent of the Python expression: -o. */
-PyAPI_FUNC(PyObject *) PyNumber_Negative(PyObject *o);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_Negative(PyObject *o);
 
 /* Returns the positive of o on success, or NULL on failure.
 
    This is the equivalent of the Python expression: +o. */
-PyAPI_FUNC(PyObject *) PyNumber_Positive(PyObject *o);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_Positive(PyObject *o);
 
 /* Returns the absolute value of 'o', or NULL on failure.
 
    This is the equivalent of the Python expression: abs(o). */
-PyAPI_FUNC(PyObject *) PyNumber_Absolute(PyObject *o);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_Absolute(PyObject *o);
 
 /* Returns the bitwise negation of 'o' on success, or NULL on failure.
 
    This is the equivalent of the Python expression: ~o. */
-PyAPI_FUNC(PyObject *) PyNumber_Invert(PyObject *o);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_Invert(PyObject *o);
 
 /* Returns the result of left shifting o1 by o2 on success, or NULL on failure.
 
    This is the equivalent of the Python expression: o1 << o2. */
-PyAPI_FUNC(PyObject *) PyNumber_Lshift(PyObject *o1, PyObject *o2);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_Lshift(PyObject *o1, PyObject *o2);
 
 /* Returns the result of right shifting o1 by o2 on success, or NULL on
    failure.
 
    This is the equivalent of the Python expression: o1 >> o2. */
-PyAPI_FUNC(PyObject *) PyNumber_Rshift(PyObject *o1, PyObject *o2);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_Rshift(PyObject *o1, PyObject *o2);
 
 /* Returns the result of bitwise and of o1 and o2 on success, or NULL on
    failure.
 
    This is the equivalent of the Python expression: o1 & o2. */
-PyAPI_FUNC(PyObject *) PyNumber_And(PyObject *o1, PyObject *o2);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_And(PyObject *o1, PyObject *o2);
 
 /* Returns the bitwise exclusive or of o1 by o2 on success, or NULL on failure.
 
    This is the equivalent of the Python expression: o1 ^ o2. */
-PyAPI_FUNC(PyObject *) PyNumber_Xor(PyObject *o1, PyObject *o2);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_Xor(PyObject *o1, PyObject *o2);
 
 /* Returns the result of bitwise or on o1 and o2 on success, or NULL on
    failure.
 
    This is the equivalent of the Python expression: o1 | o2. */
-PyAPI_FUNC(PyObject *) PyNumber_Or(PyObject *o1, PyObject *o2);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_Or(PyObject *o1, PyObject *o2);
 
 /* Returns 1 if obj is an index integer (has the nb_index slot of the
    tp_as_number structure filled in), and 0 otherwise. */
@@ -560,19 +560,19 @@ PyAPI_FUNC(PyObject *) PyNumber_Index(PyObject *o);
    If an overflow error occurs while converting the int to Py_ssize_t, then the
    second argument 'exc' is the error-type to return.  If it is NULL, then the
    overflow error is cleared and the value is clipped. */
-PyAPI_FUNC(Py_ssize_t) PyNumber_AsSsize_t(PyObject *o, PyObject *exc);
+Py_VALUE_ENTRY PyAPI_FUNC(Py_ssize_t) PyNumber_AsSsize_t(PyObject *o, PyObject *exc);
 
 /* Returns the object 'o' converted to an integer object on success, or NULL
    on failure.
 
    This is the equivalent of the Python expression: int(o). */
-PyAPI_FUNC(PyObject *) PyNumber_Long(PyObject *o);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_Long(PyObject *o);
 
 /* Returns the object 'o' converted to a float object on success, or NULL
   on failure.
 
   This is the equivalent of the Python expression: float(o). */
-PyAPI_FUNC(PyObject *) PyNumber_Float(PyObject *o);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_Float(PyObject *o);
 
 
 /* --- In-place variants of (some of) the above number protocol functions -- */
@@ -581,82 +581,82 @@ PyAPI_FUNC(PyObject *) PyNumber_Float(PyObject *o);
    on failure.
 
    This is the equivalent of the Python expression: o1 += o2. */
-PyAPI_FUNC(PyObject *) PyNumber_InPlaceAdd(PyObject *o1, PyObject *o2);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_InPlaceAdd(PyObject *o1, PyObject *o2);
 
 /* Returns the result of subtracting o2 from o1, possibly in-place or
    NULL on failure.
 
    This is the equivalent of the Python expression: o1 -= o2. */
-PyAPI_FUNC(PyObject *) PyNumber_InPlaceSubtract(PyObject *o1, PyObject *o2);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_InPlaceSubtract(PyObject *o1, PyObject *o2);
 
 /* Returns the result of multiplying o1 by o2, possibly in-place, or NULL on
    failure.
 
    This is the equivalent of the Python expression: o1 *= o2. */
-PyAPI_FUNC(PyObject *) PyNumber_InPlaceMultiply(PyObject *o1, PyObject *o2);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_InPlaceMultiply(PyObject *o1, PyObject *o2);
 
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 >= 0x03050000
 /* This is the equivalent of the Python expression: o1 @= o2. */
-PyAPI_FUNC(PyObject *) PyNumber_InPlaceMatrixMultiply(PyObject *o1, PyObject *o2);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_InPlaceMatrixMultiply(PyObject *o1, PyObject *o2);
 #endif
 
 /* Returns the result of dividing o1 by o2 giving an integral result, possibly
    in-place, or NULL on failure.
 
    This is the equivalent of the Python expression: o1 /= o2. */
-PyAPI_FUNC(PyObject *) PyNumber_InPlaceFloorDivide(PyObject *o1,
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_InPlaceFloorDivide(PyObject *o1,
                                                    PyObject *o2);
 
 /* Returns the result of dividing o1 by o2 giving a float result, possibly
    in-place, or null on failure.
 
    This is the equivalent of the Python expression: o1 /= o2. */
-PyAPI_FUNC(PyObject *) PyNumber_InPlaceTrueDivide(PyObject *o1,
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_InPlaceTrueDivide(PyObject *o1,
                                                   PyObject *o2);
 
 /* Returns the remainder of dividing o1 by o2, possibly in-place, or NULL on
    failure.
 
    This is the equivalent of the Python expression: o1 %= o2. */
-PyAPI_FUNC(PyObject *) PyNumber_InPlaceRemainder(PyObject *o1, PyObject *o2);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_InPlaceRemainder(PyObject *o1, PyObject *o2);
 
 /* Returns the result of raising o1 to the power of o2, possibly in-place,
    or NULL on failure.
 
    This is the equivalent of the Python expression: o1 **= o2,
    or o1 = pow(o1, o2, o3) if o3 is present. */
-PyAPI_FUNC(PyObject *) PyNumber_InPlacePower(PyObject *o1, PyObject *o2,
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_InPlacePower(PyObject *o1, PyObject *o2,
                                              PyObject *o3);
 
 /* Returns the result of left shifting o1 by o2, possibly in-place, or NULL
    on failure.
 
    This is the equivalent of the Python expression: o1 <<= o2. */
-PyAPI_FUNC(PyObject *) PyNumber_InPlaceLshift(PyObject *o1, PyObject *o2);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_InPlaceLshift(PyObject *o1, PyObject *o2);
 
 /* Returns the result of right shifting o1 by o2, possibly in-place or NULL
    on failure.
 
    This is the equivalent of the Python expression: o1 >>= o2. */
-PyAPI_FUNC(PyObject *) PyNumber_InPlaceRshift(PyObject *o1, PyObject *o2);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_InPlaceRshift(PyObject *o1, PyObject *o2);
 
 /* Returns the result of bitwise and of o1 and o2, possibly in-place, or NULL
    on failure.
 
    This is the equivalent of the Python expression: o1 &= o2. */
-PyAPI_FUNC(PyObject *) PyNumber_InPlaceAnd(PyObject *o1, PyObject *o2);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_InPlaceAnd(PyObject *o1, PyObject *o2);
 
 /* Returns the bitwise exclusive or of o1 by o2, possibly in-place, or NULL
    on failure.
 
    This is the equivalent of the Python expression: o1 ^= o2. */
-PyAPI_FUNC(PyObject *) PyNumber_InPlaceXor(PyObject *o1, PyObject *o2);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_InPlaceXor(PyObject *o1, PyObject *o2);
 
 /* Returns the result of bitwise or of o1 and o2, possibly in-place,
    or NULL on failure.
 
    This is the equivalent of the Python expression: o1 |= o2. */
-PyAPI_FUNC(PyObject *) PyNumber_InPlaceOr(PyObject *o1, PyObject *o2);
+Py_VALUE_ENTRY PyAPI_FUNC(PyObject *) PyNumber_InPlaceOr(PyObject *o1, PyObject *o2);
 
 /* Returns the integer n converted to a string with a base, with a base
    marker of 0b, 0o or 0x prefixed if applicable.

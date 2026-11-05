@@ -9043,6 +9043,29 @@ printf "%s\n" "no" >&6; } ;;
 esac
 fi
 
+# A pystats build is the build that gate R27 runs (Tools/build/check_r27.py):
+# it attributes each box to the code that made it, from return addresses.
+# Cross-unit inlining, a shared libpython and per-thread statistics would
+# each make that attribution wrong, and a sibling call would hand an entry's
+# return address to its caller's caller.
+if test "x$enable_pystats" = xyes
+then :
+
+  if test "x$Py_LTO" = xtrue
+then :
+  as_fn_error $? "--enable-pystats does not work with --with-lto" "$LINENO" 5
+fi
+  if test "x$enable_shared" = xyes
+then :
+  as_fn_error $? "--enable-pystats does not work with --enable-shared" "$LINENO" 5
+fi
+  if test "x$disable_gil" = xyes
+then :
+  as_fn_error $? "--enable-pystats does not work with --disable-gil" "$LINENO" 5
+fi
+  CFLAGS="$CFLAGS -fno-optimize-sibling-calls"
+
+fi
 if test "$Py_LTO" = 'true' ; then
   case $ac_cv_cc_name in
     clang)

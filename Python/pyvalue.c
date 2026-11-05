@@ -6,8 +6,9 @@
 #include "pycore_initconfig.h"    // _Py_GetEnv()
 #include "pycore_pyerrors.h"
 #include "pycore_pystate.h"       // _Py_GetConfig()
+#include "pycore_pystats.h"     // _PyStats_BoxOwner()
 #include "pycore_value.h"
-#include "pycore_value_api.h"     // _PyValue_SwapBoxSite()
+#include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
 
 PyValue
 PyValue_PrepareOwned(PyObject *obj)
@@ -56,9 +57,9 @@ _PyValue_Canonicalize(PyValue source)
 }
 
 PyObject *
-(_PyValueTemps_Box)(_PyValueTemps *temps, PyValueBorrow value)
+(_PyValueTemps_Box)(_PyValueTemps *temps, PyValueBorrow value _PyBox_AT_PARAM)
 {
-    PyObject *box = PyValue_AsObject(value);
+    PyObject *box = (PyValue_AsObject)(PyValue_Borrow(value) _PyBox_AT_ARG(at));
     if (box == NULL) {
         return NULL;
     }
@@ -82,53 +83,30 @@ _PyValueTemps_CloseNonempty(_PyValueTemps *temps)
 // The tag bits (Py_TAG_BITS) of an object pointer must be clear.
 static_assert(_Alignof(PyObject) >= 8, "PyObject must be 8-byte aligned");
 
-#ifdef Py_STATS
-/* The site class of the current thread's boxes, set by the At forms of
-   pycore_value_api.h for the duration of a boxing call. */
-static _Py_thread_local int box_site = BOX_SITE_UNATTRIBUTED;
-
-int
-_PyValue_SwapBoxSite(int site)
-{
-    assert(0 <= site && site < BOX_SITE_KINDS);
-    int previous = box_site;
-    box_site = site;
-    return previous;
-}
-
-int
-_PyValue_BoxSiteOr(int fallback)
-{
-    return box_site != BOX_SITE_UNATTRIBUTED ? box_site : fallback;
-}
-
-/* The kind of the current thread's boxes (BOX_KIND_*), set as the site
-   class is, by the Kind forms of pycore_value_api.h for one boxing call. */
-static _Py_thread_local int box_kind = BOX_KIND_CORE;
-
-int
-_PyValue_SwapBoxKind(int kind)
-{
-    assert(0 <= kind && kind < BOX_KINDS);
-    int previous = box_kind;
-    box_kind = kind;
-    return previous;
-}
-#endif
-
 // Out of line, so that the test before each call is all that hot paths carry.
 Py_NO_INLINE PyValue
-(_PyValue_BoxInlineValue)(PyValueBorrow ref)
+(_PyValue_BoxInlineValue)(PyValueBorrow ref _PyBox_AT_PARAM)
 {
     assert(PyValue_IsInline(ref));
-    OBJECT_STAT_INC(box[box_site]);
-    // The call adapter's class is its kind.
-    OBJECT_STAT_INC(box_kind[box_site == BOX_SITE_CALL_ADAPTER
-                             ? BOX_KIND_CALL_ADAPTER : box_kind]);
+#ifdef Py_STATS
+    assert(at.site < BOX_SITE_KINDS && at.kind < BOX_KINDS);
+    OBJECT_STAT_INC(box[at.site]);
+    OBJECT_STAT_INC(box_kind[at.kind]);
+    if (_PyStats_GET() != NULL) {
+        _PyStats_BoxOwner(at.site, at.kind, at.owner, _Py_BOX_CALLER());
+    }
+#endif
     PyObject *box;
     if (PyValue_IsInlineInt(ref)) {
         OBJECT_STAT_INC(inline_int_boxes);
         box = PyLong_FromLongLong(PyValue_InlineInt64(ref));
+#ifdef Py_STATS
+        if (-_PY_NSMALLNEGINTS <= PyValue_InlineInt64(ref)
+            && PyValue_InlineInt64(ref) < _PY_NSMALLPOSINTS)
+        {
+            OBJECT_STAT_INC(box_cached);
+        }
+#endif
     }
     else {
         OBJECT_STAT_INC(inline_float_boxes);

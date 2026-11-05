@@ -379,6 +379,11 @@ flowchart LR
   (I5 and W2), and the `PyMethod_New` and `PyCMethod_New` callers (W2). The
   rule checks names, not reachability; the gate's THUNK count by owner
   (step G) is the check that none remains after W2 and I5.
+* **Thunk creators added by I5 (`d686623e3fb`).** `Python/instrumentation.c`
+  and `Python/legacy_tracing.c` create thunks: the branch handler of
+  `sys.monitoring` and the legacy trace handlers are value-vectorcall types of
+  their own, and each stores `_PyValue_VectorcallThunk` as its object field.
+  Both files are in `THUNK_FILES` of `check_value_api.py`.
 * **Calls from object-form natives** reach value callables through a D8
   thunk or `_PyValue_Call`, with no box on entry and a box on exit only for
   an inline result.
@@ -405,7 +410,13 @@ so a handler that inlines it adds no canary.
 
 M3a changes neither: all ten callers of the three entry points
 (`pycore_instruments.h:56–65`) are in `ceval.c` and `bytecodes.c`. What I5
-builds, for its brief:
+builds, for its brief (**landed in `d686623e3fb`, 2026-11-05**; every row
+below is built):
+
+`Python/legacy_tracing.c` is a boundary file of `check_value_api.py`: its
+`trace_adapter` and `profile_adapter` carry the `PyEval_SetTrace` and
+`PyEval_SetProfile` function and box the argument word for it, which is a
+boundary box. It is also a thunk creator (§1.7).
 
 | Part | I5 |
 |---|---|

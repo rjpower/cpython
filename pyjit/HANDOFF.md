@@ -72,10 +72,11 @@ and shapes. Read the build directories for the exact commands.
 The runtime tree has no held modifications. Debug and release builds link and
 run. All 67 shared modules whose third-party headers exist build; the decimal,
 tkinter, ssl, sqlite and zstd headers are not installed on this host. Runtime
-HEAD is `9563654f360`. Full suites last passed at `01e8f3bc4ea` (M2), gcc
-debug and release: 51,977 tests each, 0 failures. Later landings ran their step
-tests and a smoke set on both builds; full suites run at integration points
-only. Magic number: 64407 (B4), set by the coordinator with
+HEAD is `d686623e3fb` (I5). Full suites last ran at the integration point
+`8eee8081ca0`, gcc debug and release: 52,178 tests each; the two failures were
+stale tests, fixed in `a1ecc0eb4f3`. I5 ran its step tests and a smoke set on
+both builds; full suites run at integration points only. Magic number: 64410
+(B5b), set by the coordinator with
 `tools/bump_magic.py`. The
 fork's JIT source is deleted (A3 step 1; history keeps it) until the JIT
 stage. Tail calls are the only interpreter backend; `--with-computed-gotos`
@@ -98,17 +99,23 @@ release build 5 to 12x slower; check it. `perf` is blocked
 
 In flight, briefs in `build/pyjit-link-wave1/`:
 
-- G-1 (box primitives take `_PyBoxAt` in stats builds; stats builds use
-  `-fno-optimize-sibling-calls`): lands next. First R27 gate run:
-  `build/g-stats-runs/gate1`.
-- V2a-1a (int, float, bool, None value slots, digit-span kernels), after G-1.
-  Review fixes done; 1.4 million differential cases match upstream.
-- M1b and M2 (iteration and attribute dispatchers), after V2a-1a; being
-  rebased, with two merge must-fixes.
-- Then the rest of G (`check_r27.py`), W1's deferred batch-10, I1 to I5, W2,
-  W4, W5 and the R27 gate.
-- IR side: `design/proposals/register-ir-v2-b-numbering.md` (accepted) pins
-  handler numbers so the B steps develop in parallel; B-pin goes first.
+- W2, the core wave, is running. W2a is Clinic regeneration and slots; W2b is
+  callers, fields and the deferred `ceval.c` sites. W4 starts from W2a.
+- G2 has A4 and B3 prototypes off-tree. Open question 9 is answered (a
+  fixed-dst rule removes 9 to 14% of class tests at no word cost); the
+  decision stays between A4 and B3.
+
+Landed since `b9d3e3a3c9b`: the table in [STATUS](STATUS.md) lists all 27.
+The newest, first:
+
+- `d686623e3fb`: I5, calls, monitoring and tracing on values.
+- `a1ecc0eb4f3`: two stale tests fixed after the integration point.
+- `8eee8081ca0`: B5b, unpack into locals and append from fields (magic 64410).
+- `1a9b96b1000`: W4-0, module value homes.
+- `5c94f78a582`, `b904ab8f014`, `1996cbbb080`: the interpreter returns a value;
+  I3 and I4 handlers on values.
+- `56906c53125`: B7 fix, the self slot of a pushed frame.
+- `1fc13423e46`, `4eeb6ea2ff2`: B5 (magic 64409) and B6 (magic 64408).
 
 Landed since `f7d374b1f92`, newest first:
 
@@ -239,12 +246,12 @@ overwritten.
 
 ## Next steps
 
-1. In flight: B5 (post-review), B5b (being built), B6 (moving onto B4), I4
-   then I3 (one lead), W4-0 (module value homes), the I2/I1 post-review.
-2. I5 after B5 lands, then W2, W4, W5 and the R27 gate.
-3. G2 (the A4 vs B3 prototype) has not started.
+1. W2a, then W2b. W4 starts from W2a.
+2. W5 and the R27 gate.
+3. G2's timed decision between A4 and B3, on a quiet host.
 4. Follow-ups in `build/pyjit-link-wave1/FOLLOWUPS.md`.
-5. After the interpreter checkpoint: return `co_code` and `.pyc` to stack
+5. Then the checkpoint measurement.
+6. After the checkpoint: return `co_code` and `.pyc` to stack
    bytecode with the IR as a hidden cache
    ([proposal](design/proposals/stack-bytecode-recovery.md), user decision
    2026-11-05).

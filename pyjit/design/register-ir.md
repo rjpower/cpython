@@ -1509,6 +1509,25 @@ owner asks for no intermediate performance gates).
       the destinations of the hottest producers as temporaries (the packet's
       open question 9), the class test leaves those handlers without a bit or
       a parameter.
+    - **Open question 9, counted (2026-11-05;** `build/pyjit-link-wave1/g2-q9.md`,
+      base `a1ecc0eb4f3`**).**
+      - Over all of Lib, 4.8% of dst writes name a local (144,234 of
+        2,981,060) and 14.3% of named sources do.
+      - On the eight kernels, a word runs 1.79 class tests: 0.88 on dsts
+        and 0.91 on sources. Half the tests guard sources, which a dst
+        rule cannot touch.
+      - A fixed-dst rule for handlers that write a temporary at least 99% of
+        the time removes 17.8 dst tests per 100 words (10% of all tests) and
+        adds 0.01 `STORE_FAST` words; the 99.9% rule removes 9% at no
+        word. So the rules that cost no word remove 9 to 14% of the tests.
+        Question 9's six handlers and their specialisations remove 28% but
+        add 4.21 words per 100, because `x = self.x` writes a local one time
+        in four to five. Fixing every dst removes 49% and adds 11.48.
+      - The decision stays between A4 and B3, which also cover source tests.
+      - `LOAD_FAST_BORROW` writes a temporary in all 239,424 static and all
+        dynamic cases (6% of all tests). Its handler needs no bit or
+        parameter if the verifier rejects a local dst for it. That fits
+        either winner.
     - D4 lands in two steps whichever way G2 goes: A5a for frame homes after
       representation step 8, A5b for the typed borrow after 9a (IR-D3).
   - **Decision rule.** Run the control and the temporary bits on the matched
@@ -1581,6 +1600,9 @@ owner asks for no intermediate performance gates).
   - Per-instruction monitoring sees one word fewer. That is consistent with
     load folding.
 - **When.** IR v2, before baseline (IR-D1).
+- **Status (2026-11-05).** B6 landed (`4eeb6ea2ff2`, magic 64408): `COMPARE_OP_JUMP`, `CONTAINS_OP_JUMP` and
+  `IS_OP_JUMP` words fuse 12,989 pairs on Lib and leave 118. The
+  jump distance of forward handlers is signed.
 
 ### G4. Window outputs carry extra words: receiver NULL, discarded results, unpack stores
 
@@ -1674,6 +1696,23 @@ owner asks for no intermediate performance gates).
   - The verifier must prove `PUSH_NULL`'s slot NULL where it is omitted.
   - The unpack handlers grow a store loop with releases.
 - **When.** IR v2, before baseline (IR-D1).
+- **Status (2026-11-05).**
+  - B5 landed (`1fc13423e46`, magic 64409): discarded call results have no
+    destination and every `PUSH_NULL` is elided. On Lib `PUSH_NULL` falls from
+    17,461 words to 0.
+  - B5's `POP_TOP` fold is partial. A call folds its `POP_TOP` only when
+    another word of the same line follows, because bdb and pdb stop at the first
+    word after `pdb.set_trace()` and a folded `POP_TOP` moved that stop one line
+    late. Lib keeps 30,021 `POP_TOP` words, against 12,677 with the full fold and
+    38,503 before B5. Revisit with the stack-bytecode recovery, where line
+    events map through the pcmap.
+  - B5b landed (`8eee8081ca0`, magic 64410): unpack writes consecutive locals
+    and `LIST_APPEND`, `SET_ADD` and `MAP_ADD` read their items from fields.
+    It converts 2,408 of 3,343 unpack sites (72%) on non-test Lib and removes
+    5,415 static words. The unpack keeps window style with a dst run: the
+    handler unpacks into its window, then stores each element, so a failure
+    leaves the locals untouched. This is not the direct collect-then-store
+    form above.
 
 ### G5. Feedback layout and lifetime
 

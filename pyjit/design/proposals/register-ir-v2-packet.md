@@ -1437,3 +1437,6 @@ Edits to other documents, for the coordinator:
      `LOAD_FAST_BORROW` destinations) skips `test` directories and
      `idlelib`; this proposal's 232,433 covers all of Lib. The decision
      needs one file set, and dynamic counts on the kernels beside it.
+   - **Counted 2026-11-05** ([register-ir.md](../register-ir.md) G2): rules
+     that cost no word remove 9 to 14% of the class tests. Half the tests
+     guard sources, so the decision stays between A4 and B3.

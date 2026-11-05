@@ -1,6 +1,6 @@
 # Project status
 
-Status as of 2026-11-05 (PST), after the landings through `9563654f360`. Update this
+Status as of 2026-11-05 (PST), after the landings through `d686623e3fb`. Update this
 page at each landing.
 
 ## Outcome and next milestone
@@ -57,7 +57,7 @@ costs, then the qualified baseline.
 
 ## Position
 
-- Runtime branch `boil/pyvalue-rc-universal`, HEAD `9563654f360`. The 15
+- Runtime branch `boil/pyvalue-rc-universal`, HEAD `d686623e3fb` (I5). The 27
   landings since `b9d3e3a3c9b` are in the table under "Active work packets".
 - Landed 2026-11-03: native boundary P3 (`56ff66a596b`, `643c69c7244`,
   `6d39221996d`) and P4 (`2558376b321`, post-review fixes `fdd7fed3216`);
@@ -279,16 +279,29 @@ Landed since `b9d3e3a3c9b`, oldest first (2026-11-04 to 2026-11-05):
 | `9fdea3b9310` | fix | Regenerated `test_frozenmain.h` for magic 64406. |
 | `e1572ec086c` | value API V2a-1a-iii | Python classes get value sides for operator, compare, hash, repr and item slots. |
 | `9563654f360` | register IR B4 | Feedback entries sized by kind, binary-search lookup, NOFB handlers gone; feedback memory on Lib falls 24%. Magic 64407. |
+| `4eeb6ea2ff2` | register IR B6 | A compare and its conditional jump on one line become one `COMPARE_OP_JUMP`, `CONTAINS_OP_JUMP` or `IS_OP_JUMP` word; on Lib 12,989 pairs fuse and 118 stay apart. Forward jumps decode a signed distance. Magic 64408. |
+| `1fc13423e46` | register IR B5 | A call whose result a `POP_TOP` discards, with a word of the line after it, has no destination; every `PUSH_NULL` is elided (17,461 words to 0 on Lib; `POP_TOP` 38,503 to 30,021). `f_lineno` models stack slots from the words. Magic 64409. |
+| `56906c53125` | fix (B7) | A pushed frame writes its self slot only when the call has a self. A specialised call from a coroutine had erased a hidden constant (asyncio `test_shield_effect` segfault). |
+| `64eab46d9da` | fix | `test_code` drops `PUSH_NULL` from its list of artificial instructions. |
+| `1996cbbb080` | value API I4 | Attribute, `super` and import handlers call the value dispatchers; `import x` in a loop makes no box. |
+| `b904ab8f014` | value API I3 | Subscript store and delete, `FOR_ITER`, `SEND`, `GET_LEN`, `MATCH_KEYS` and `MATCH_CLASS` call the value dispatchers. |
+| `5c94f78a582` | value API I3, `INTERPRETER_EXIT` | The evaluation loop returns `PyValue`; only `_PyEval_EvalFrameDefault`, the PEP 523 path and the perf trampoline box the result. |
+| `e94ed139c64` | tests | `test_pyvalue_box_sites` covers the I1 to I4 handlers; two stale descriptions corrected. |
+| `1a9b96b1000` | value API W4-0 | Fields of eight modules (deque, itertools, `_pickle`, `_functools`, `_operator`, `_queue`, `_asyncio`, `_elementtree`) are value homes; `_PyValue_AsObjectStealAt` boxes at object exits. |
+| `8eee8081ca0` | register IR B5b | `UNPACK_SEQUENCE` and `UNPACK_EX` write consecutive locals (2,408 of 3,343 unpack sites on non-test Lib); `LIST_APPEND`, `SET_ADD` and `MAP_ADD` read their items from fields. Lib loses 5,415 static words. Magic 64410. |
+| `a1ecc0eb4f3` | tests | Two stale tests fixed after the integration point's full suites (hidden constant slots; the code constructor's new optional arguments). |
+| `d686623e3fb` | value API I5 | Call handlers, monitoring and tracing run on values; seven boxing call helpers and the vector halves of the native scope are deleted. The monitored kernel makes 0 boxes (was 4,000). |
 
 Validation:
 
-- The full suites last passed at `01e8f3bc4ea` (M2): 51,977 tests each on
-  release and debug, 0 failures.
-- Since then each landing ran its step tests and a smoke set on both builds.
-  Full suites run only at integration points (user rule, 2026-11-05; see
-  [PROCESS](PROCESS.md)).
-- Magic numbers: 64405 after B2, 64406 after B7, 64407 after B4. The coordinator
-  bumps the number once per format landing with `tools/bump_magic.py`.
+- Integration point, 2026-11-05: the full suites at `8eee8081ca0`, release and
+  debug, ran 52,178 tests each. Two failed, both stale tests; `a1ecc0eb4f3`
+  fixed them. (Earlier full pass: `01e8f3bc4ea`, M2, 51,977 tests each.)
+- I5 ran its step tests and a smoke set on both builds. Full suites run only at
+  integration points (user rule, 2026-11-05; see [PROCESS](PROCESS.md)).
+- Magic numbers: 64405 after B2, 64406 after B7, 64407 after B4, 64408 after
+  B6, 64409 after B5, 64410 after B5b. The coordinator bumps the number once per
+  format landing with `tools/bump_magic.py`.
 - B7 left `Programs/test_frozenmain.h` stale (marshal layout). `9fdea3b9310`
   regenerated it. The landing script now regenerates it and runs `test_embed`.
 
@@ -301,16 +314,18 @@ User decisions, 2026-11-05:
 
 In flight (briefs in `build/pyjit-link-wave1/`):
 
-1. B5 (discarded call results, no `PUSH_NULL`; -43,271 static words, -4.3% on
-   Lib): in post-review.
-2. B5b (unpack to locals, append sources): being built.
-3. B6 (fused compare-and-jump): moving onto B4.
-4. I4, then I3 (one lead).
-5. W4-0 (module value homes).
-6. I2/I1 post-review.
+1. W2, the core wave, is running. It lands in two parts. W2a is Clinic
+   regeneration and slots. W2b is callers, fields and the deferred `ceval.c`
+   sites. W4 starts from W2a.
+2. G2 has the A4 and B3 prototypes off-tree. Open question 9 is counted: a
+   fixed-dst rule removes 9 to 14% of class tests at no word cost, so the
+   decision stays between A4 and B3
+   ([register-ir.md](design/register-ir.md) G2).
 
-Next: I5 after B5 lands, then W2, W4, W5 and the R27 gate. G2 (the A4 vs B3
-prototype) has not started.
+Next: W2a, W2b, W4, W5 and the R27 gate. G2's timed decision runs on a quiet
+host. Then the checkpoint measurement. After the checkpoint comes the
+stack-bytecode recovery
+([proposal](design/proposals/stack-bytecode-recovery.md)).
 
 ## Design decisions
 

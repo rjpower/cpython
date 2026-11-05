@@ -344,42 +344,6 @@ _Py_CheckRecursiveCall(PyThreadState *tstate, const char *where)
 }
 
 
-const binaryfunc _PyEval_BinaryOps[] = {
-    [NB_ADD] = PyNumber_Add,
-    [NB_AND] = PyNumber_And,
-    [NB_FLOOR_DIVIDE] = PyNumber_FloorDivide,
-    [NB_LSHIFT] = PyNumber_Lshift,
-    [NB_MATRIX_MULTIPLY] = PyNumber_MatrixMultiply,
-    [NB_MULTIPLY] = PyNumber_Multiply,
-    [NB_REMAINDER] = PyNumber_Remainder,
-    [NB_OR] = PyNumber_Or,
-    [NB_POWER] = _PyNumber_PowerNoMod,
-    [NB_RSHIFT] = PyNumber_Rshift,
-    [NB_SUBTRACT] = PyNumber_Subtract,
-    [NB_TRUE_DIVIDE] = PyNumber_TrueDivide,
-    [NB_XOR] = PyNumber_Xor,
-    [NB_INPLACE_ADD] = PyNumber_InPlaceAdd,
-    [NB_INPLACE_AND] = PyNumber_InPlaceAnd,
-    [NB_INPLACE_FLOOR_DIVIDE] = PyNumber_InPlaceFloorDivide,
-    [NB_INPLACE_LSHIFT] = PyNumber_InPlaceLshift,
-    [NB_INPLACE_MATRIX_MULTIPLY] = PyNumber_InPlaceMatrixMultiply,
-    [NB_INPLACE_MULTIPLY] = PyNumber_InPlaceMultiply,
-    [NB_INPLACE_REMAINDER] = PyNumber_InPlaceRemainder,
-    [NB_INPLACE_OR] = PyNumber_InPlaceOr,
-    [NB_INPLACE_POWER] = _PyNumber_InPlacePowerNoMod,
-    [NB_INPLACE_RSHIFT] = PyNumber_InPlaceRshift,
-    [NB_INPLACE_SUBTRACT] = PyNumber_InPlaceSubtract,
-    [NB_INPLACE_TRUE_DIVIDE] = PyNumber_InPlaceTrueDivide,
-    [NB_INPLACE_XOR] = PyNumber_InPlaceXor,
-    [NB_SUBSCR] = PyObject_GetItem,
-};
-
-const conversion_func _PyEval_ConversionFuncs[4] = {
-    [FVC_STR] = PyObject_Str,
-    [FVC_REPR] = PyObject_Repr,
-    [FVC_ASCII] = PyObject_ASCII
-};
-
 const _Py_SpecialMethod _Py_SpecialMethods[] = {
     [SPECIAL___ENTER__] = {
         .name = &_Py_ID(__enter__),
@@ -1012,61 +976,44 @@ value_load_attribute(PyThreadState *tstate, PyValue owner, PyObject *object,
     return loaded;
 }
 
+/* container[key] for BINARY_OP's NB_SUBSCR: an exact dict, and an exact list
+ * or tuple indexed by an inline int in range, as list_subscript() and
+ * tuple_subscript() do, read the item as a value; anything else is
+ * _PyValue_GetItem(). A dict miss raises KeyError with the key as it is.
+ * The caller holds an owner of both. */
 static PyValue
-value_binary_operation(int operation, PyValue left, PyValue right,
-                       _PyValueTemps *temps)
+value_subscript(PyValue container, PyValue key)
 {
-    /* Inputs are independent owning snapshots before either conversion can
-     * allocate. The dictionary's native entry needs no scalar object view. */
-    if (operation == NB_SUBSCR && PyValue_IsObject(left)) {
-        PyObject *container = PyValue_AsKnownObjectBorrow(left);
-        if (PyAnyDict_CheckExact(container)) {
+    if (PyValue_IsObject(container)) {
+        PyObject *o = PyValue_AsKnownObjectBorrow(container);
+        if (PyAnyDict_CheckExact(o)) {
             PyValue result = PyValue_NULL;
-            int found = PyDict_GetValue(container, right, &result);
+            int found = PyDict_GetValue(o, key, &result);
             if (found != 0) {
                 return result;
             }
             /* Exact dictionaries have no __missing__. Do not repeat a hash
              * or equality callback just to construct the missing-key error. */
-            PyObject *key = _PyValueTemps_Object(temps, right);
-            if (key == NULL) {
-                return PyValue_NULL;
-            }
-            _PyErr_SetKeyError(key);
+            _PyErr_SetKeyErrorValue(key);
             return PyValue_NULL;
         }
-    }
-    /* An exact list or tuple indexed by an inline int in range, as
-     * list_subscript() and tuple_subscript() do: no box of the index or of
-     * the item. Any other index takes the generic path, which raises. */
-    if (operation == NB_SUBSCR && PyValue_IsInlineInt(right)
-        && PyValue_IsObject(left)) {
-        PyObject *container = PyValue_AsKnownObjectBorrow(left);
-        int is_list = PyList_CheckExact(container);
-        if (is_list || PyTuple_CheckExact(container)) {
-            Py_ssize_t size = Py_SIZE(container);
-            Py_ssize_t index = PyValue_InlineInt64(right);
-            if (index < 0) {
-                index += size;
-            }
-            if (0 <= index && index < size) {
-                return is_list
-                    ? _PyList_GetValue((PyListObject *)container, index)
-                    : PyTuple_GetValue(container, index);
+        if (PyValue_IsInlineInt(key)) {
+            int is_list = PyList_CheckExact(o);
+            if (is_list || PyTuple_CheckExact(o)) {
+                Py_ssize_t size = Py_SIZE(o);
+                Py_ssize_t index = PyValue_InlineInt64(key);
+                if (index < 0) {
+                    index += size;
+                }
+                if (0 <= index && index < size) {
+                    return is_list
+                        ? _PyList_GetValue((PyListObject *)o, index)
+                        : PyTuple_GetValue(o, index);
+                }
             }
         }
     }
-    PyObject *left_obj = _PyValueTemps_Object(temps, left);
-    if (left_obj == NULL) {
-        return PyValue_NULL;
-    }
-    PyObject *right_obj = _PyValueTemps_Object(temps, right);
-    if (right_obj == NULL) {
-        return PyValue_NULL;
-    }
-    assert(_PyEval_BinaryOps[operation] != NULL);
-    PyObject *result = _PyEval_BinaryOps[operation](left_obj, right_obj);
-    return result == NULL ? PyValue_NULL : PyValue_FromObjectSteal(result);
+    return _PyValue_GetItem(container, key);
 }
 
 /* The wrappers below keep a runtime-API out-parameter in their own C frame,
@@ -1504,11 +1451,7 @@ _PyEval_GetIter(PyValue iterable, int yield_from)
     }
     /* Pop iterable, and push iterator then NULL. An int or float is not
        iterable; PyObject_GetIter() raises the error. */
-    iterable = PyValue_Box(iterable);
-    if (PyValue_IsInline(iterable)) {
-        return result;
-    }
-    PyObject *iter_o = PyObject_GetIter(PyValue_AsKnownObjectBorrow(iterable));
+    PyObject *iter_o = _PyValue_GetIter(iterable);
     PyValue_CLOSE(iterable);
     if (iter_o == NULL) {
         return result;

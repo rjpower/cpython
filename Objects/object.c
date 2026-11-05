@@ -2238,7 +2238,7 @@ call_bool(PyTypeObject *t, inquiry slot, PyValueBorrow v)
 }
 
 int
-(_PyValue_IsTrue)(PyValueBorrow v)
+(_PyValue_IsTrueSlow)(PyValueBorrow v)
 {
     Py_ssize_t res;
     PyTypeObject *tp = PyValue_TYPE(v);

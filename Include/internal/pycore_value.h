@@ -207,9 +207,9 @@ _PyValue_Publish(PyValue *source)
   (null_or_index) or the saved lasti during exception unwinding. It never
   reaches Python code and must not be converted to a PyObject *.
 
-  An inline value must be boxed with PyValue_Box() before it is
-  converted to a PyObject *. The cases generator does this for instruction
-  inputs; see "Inline values" in
+  An inline value must be boxed (_PyValueTemps_Box(), or an adapter's box)
+  before it is converted to a PyObject *. The cases generator does this for
+  instruction inputs; see "Inline values" in
   Tools/cases_generator/interpreter_definition.md.
 
   Ordinary debug and release builds use this same payload. Other word
@@ -379,23 +379,6 @@ PyValue_IncrementTaggedIndexNoOverflow(PyValue r)
 PyAPI_FUNC(PyValue) _PyValue_BoxInlineValue(PyValueBorrow ref _PyBox_AT_PARAM);
 #define _PyValue_BoxInlineValue(V0) (_PyValue_BoxInlineValue)( \
         PyValue_Borrow(V0) _PyBox_AT_ARG(_PyBox_CORE(BOX_SITE_UNATTRIBUTED)))
-
-/* If ref holds an inline value, return an owned reference to a new box with
-   the same value; return any other ref unchanged. On failure, set an exception
-   and return ref unchanged, so the result is still inline. Scalar
-   constructors, and the allocator hooks under them, run no Python (the
-   release contract below), unless they fail with an exception pending: the
-   MemoryError replaces that exception, and releasing it can run Python
-   (__del__ of a frame local its traceback held), as an upstream allocation
-   failure does.
-
-   Callers pass and assign the value (x = PyValue_Box(x)) rather than its
-   address, so that x can stay in a register. */
-static inline PyValue
-PyValue_Box(PyValue ref)
-{
-    return PyValue_IsInline(ref) ? _PyValue_BoxInlineValue(ref) : ref;
-}
 
 /* Value identity (boil/design/02-tagged-values.md, section 3)
 
@@ -720,7 +703,7 @@ PyValue_AsKnownObjectSteal(PyValue ref)
    local: the value may hold no object. */
 
 /* The pointer value of obj, owning what obj owned, never inline. Only for
-   boxes, which are pointers by definition (PyValue_Box()), and for the
+   boxes, which are pointers by definition, and for the
    canonical constructors themselves: a home never receives a box. */
 static inline PyValue
 _PyValue_PointerSteal(PyObject *obj)

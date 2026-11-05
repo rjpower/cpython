@@ -267,10 +267,6 @@ PyAPI_FUNC(int) _PyEval_RaiseAsyncExc(PyThreadState *tstate);
 
 extern PyObject * _PyEval_GetFrameLocals(void);
 
-typedef PyObject *(*conversion_func)(PyObject *);
-
-PyAPI_DATA(const binaryfunc) _PyEval_BinaryOps[];
-PyAPI_DATA(const conversion_func) _PyEval_ConversionFuncs[];
 
 typedef struct _special_method {
     PyObject *name;

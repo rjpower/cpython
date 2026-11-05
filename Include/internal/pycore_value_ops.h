@@ -157,7 +157,27 @@ PyAPI_FUNC(PyValue) _PyObject_ValueRichCompare(PyValueBorrow v,
                                                PyValueBorrow w, int op);
 PyAPI_FUNC(PyObject *) _PyObject_ValueStr(PyValueBorrow v);
 
-PyAPI_FUNC(int) _PyValue_IsTrue(PyValueBorrow v);
+/* PyObject_IsTrue(): the truth of v, or -1 with an exception set. The
+   bool, None, int and float arms are inline for every caller; any other
+   value takes the out-of-line path (nb_bool, mp_length, sq_length). */
+PyAPI_FUNC(int) _PyValue_IsTrueSlow(PyValueBorrow v);
+static inline int
+(_PyValue_IsTrue)(PyValueBorrow v)
+{
+    if (PyValue_IsTrue(v)) {
+        return 1;
+    }
+    if (PyValue_IsFalse(v) || PyValue_IsNone(v)) {
+        return 0;
+    }
+    if (PyValue_IsInlineInt(v)) {
+        return PyValue_InlineInt64(v) != 0;
+    }
+    if (PyValue_IsInlineFloat(v)) {
+        return PyValue_InlineFloat(v) != 0.0;
+    }
+    return _PyValue_IsTrueSlow(v);
+}
 PyAPI_FUNC(int) _PyValue_Not(PyValueBorrow v);
 #define _PyValue_IsTrue(V) (_PyValue_IsTrue)(PyValue_Borrow(V))
 #define _PyValue_Not(V) (_PyValue_Not)(PyValue_Borrow(V))

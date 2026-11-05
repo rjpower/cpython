@@ -417,8 +417,7 @@ dummy_func(
                 res = PyValue_FromDoubleNotNaN(-PyValue_InlineFloat(value));
             }
             else {
-                PyObject *res_o = PyNumber_Negative(PyValue_AsKnownObjectBorrow(value));
-                res = res_o == NULL ? PyValue_NULL : PyValue_FromObjectSteal(res_o);
+                res = _PyValue_Negative(value);
             }
             if (PyValue_IsNull(res)) {
                 ERROR_NO_POP();
@@ -430,7 +429,7 @@ dummy_func(
         // UNARY_NOT tests the truth of any value: the compiler drops the
         // TO_BOOL before it (Python/flowgraph.c).  A bool is the fast path.
         inst(UNARY_NOT, (value -- res)) {
-            int truth = _PyValue_Truth(value);
+            int truth = _PyValue_IsTrue(value);
             PyValue_CLOSE(value);
             ERROR_IF(truth < 0);
             res = truth ? PyValue_False : PyValue_True;
@@ -461,16 +460,7 @@ dummy_func(
         // Floats do not specialize, so inline values are tested here
         // without a box.
         inline_ok op(_TO_BOOL, (value -- res)) {
-            int err;
-            if (PyValue_IsInlineInt(value)) {
-                err = PyValue_InlineInt64(value) != 0;
-            }
-            else if (PyValue_IsInlineFloat(value)) {
-                err = PyValue_InlineFloat(value) != 0.0;
-            }
-            else {
-                err = PyObject_IsTrue(PyValue_AsKnownObjectBorrow(value));
-            }
+            int err = _PyValue_IsTrue(value);
             PyValue_CLOSE(value);
             ERROR_IF(err < 0);
             res = err ? PyValue_True : PyValue_False;
@@ -580,11 +570,10 @@ dummy_func(
         macro(UNARY_INVERT) = _UNARY_INVERT + POP_TOP;
 
         op(_UNARY_INVERT, (value -- res, v)) {
-            PyObject *res_o = PyNumber_Invert(PyValue_AsKnownObjectBorrow(value));
-            if (res_o == NULL) {
+            res = _PyValue_Invert(value);
+            if (PyValue_IsNull(res)) {
                 ERROR_NO_POP();
             }
-            res = PyValue_FromObjectSteal(res_o);
             v = value;
             DEAD(value);
         }
@@ -1205,7 +1194,7 @@ dummy_func(
             INPUTS_DEAD();
             SYNC_SP();
             STAT_INC(BINARY_OP, hit);
-            PyValue pending = value_binary_operation(NB_SUBSCR, held_dict, held_sub, value_temps);
+            PyValue pending = value_subscript(held_dict, held_sub);
             if (PyValue_IsNull(pending)) {
                 IR_RESTORE_VALUE_INPUTS(held_dict, held_sub);
                 value_operation_close3(held_sub, held_dict, PyValue_NULL);
@@ -1370,15 +1359,28 @@ dummy_func(
             ERROR_IF(err);
         }
 
-        op(_CALL_INTRINSIC_1, (value -- res, v)) {
+        inline_ok op(_CALL_INTRINSIC_1, (value -- res, v)) {
             assert(oparg <= MAX_INTRINSIC_1);
-            PyObject *res_o = _PyIntrinsics_UnaryFunctions[oparg].func(tstate, PyValue_AsKnownObjectBorrow(value));
-            if (res_o == NULL) {
-                ERROR_NO_POP();
+            if (oparg == INTRINSIC_UNARY_POSITIVE) {
+                res = _PyValue_Positive(value);
+                if (PyValue_IsNull(res)) {
+                    ERROR_NO_POP();
+                }
+            }
+            else {
+                // The other intrinsics take objects
+                PyObject *value_o = _PyValueTemps_Object(value_temps, value);
+                if (value_o == NULL) {
+                    ERROR_NO_POP();
+                }
+                PyObject *res_o = _PyIntrinsics_UnaryFunctions[oparg].func(tstate, value_o);
+                if (res_o == NULL) {
+                    ERROR_NO_POP();
+                }
+                res = PyValue_FromObjectSteal(res_o);
             }
             v = value;
             DEAD(value);
-            res = PyValue_FromObjectSteal(res_o);
         }
 
         macro(CALL_INTRINSIC_1) = _CALL_INTRINSIC_1 + POP_TOP;
@@ -3102,33 +3104,17 @@ dummy_func(
 
         op(_COMPARE_OP, (left, right -- res)) {
             assert((oparg >> 5) <= Py_GE);
-            PyObject *res_o;
-            if (PyValue_IsInline(left) && PyValue_IsInline(right)) {
-                // Two inline numbers compare as their boxes do (exactly, as
-                // an int51 is exact in a double) and run no Python code.
-                res_o = _PyValue_RichCompareObject(left, right, oparg >> 5);
-            }
-            else {
-                PyObject *left_o = _PyValueTemps_Object(value_temps, left);
-                if (left_o == NULL) {
-                    ERROR_NO_POP();
-                }
-                PyObject *right_o = _PyValueTemps_Object(value_temps, right);
-                if (right_o == NULL) {
-                    ERROR_NO_POP();
-                }
-                res_o = PyObject_RichCompare(left_o, right_o, oparg >> 5);
-            }
+            PyValue cmp = _PyValue_RichCompare(left, right, oparg >> 5);
             DECREF_INPUTS();
-            ERROR_IF(res_o == NULL);
+            ERROR_IF(PyValue_IsNull(cmp));
             if (oparg & 16) {
-                int res_bool = PyObject_IsTrue(res_o);
-                Py_DECREF(res_o);
+                int res_bool = _PyValue_IsTrue(cmp);
+                PyValue_CLOSE(cmp);
                 ERROR_IF(res_bool < 0);
                 res = res_bool ? PyValue_True : PyValue_False;
             }
             else {
-                res = PyValue_FromObjectSteal(res_o);
+                res = cmp;
             }
         }
 
@@ -3210,10 +3196,7 @@ dummy_func(
         };
 
         op(_CONTAINS_OP, (left, right -- b, l, r)) {
-            PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
-            PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
-
-            int res = PySequence_Contains(right_o, left_o);
+            int res = _PyValue_Contains(right, left);
             if (res < 0) {
                 ERROR_NO_POP();
             }
@@ -3511,7 +3494,7 @@ dummy_func(
         inst(JUMP_IF_FALSE_OR_POP, (cond -- res)) {
             // Taken before the truth test, which can run code
             PyValue held = TAKE(cond);
-            int truth = _PyValue_Truth(held);
+            int truth = _PyValue_IsTrue(held);
             if (truth < 0) {
                 PyValue_CLOSE(held);
                 ERROR_NO_POP();
@@ -3529,7 +3512,7 @@ dummy_func(
         inst(JUMP_IF_TRUE_OR_POP, (cond -- res)) {
             // Taken before the truth test, which can run code
             PyValue held = TAKE(cond);
-            int truth = _PyValue_Truth(held);
+            int truth = _PyValue_IsTrue(held);
             if (truth < 0) {
                 PyValue_CLOSE(held);
                 ERROR_NO_POP();
@@ -4362,11 +4345,9 @@ dummy_func(
         }
 
         op(_CALL_STR_1, (callable, null, arg -- res, a)) {
-            PyObject *arg_o = PyValue_AsKnownObjectBorrow(arg);
-
             assert(oparg == 1);
             STAT_INC(CALL, hit);
-            PyObject *res_o = PyObject_Str(arg_o);
+            PyObject *res_o = _PyValue_Str(arg);
             if (res_o == NULL) {
                 ERROR_NO_POP();
             }
@@ -5242,21 +5223,34 @@ dummy_func(
         }
 
         inst(CONVERT_VALUE, (value -- result)) {
-            conversion_func conv_fn;
             assert(oparg >= FVC_STR && oparg <= FVC_ASCII);
-            conv_fn = _PyEval_ConversionFuncs[oparg];
-            PyObject *result_o = conv_fn(PyValue_AsKnownObjectBorrow(value));
+            PyObject *result_o;
+            if (oparg == FVC_STR) {
+                result_o = _PyValue_Str(value);
+            }
+            else if (oparg == FVC_REPR) {
+                result_o = _PyValue_Repr(value);
+            }
+            else {
+                result_o = _PyValue_ASCII(value);
+            }
             PyValue_CLOSE(value);
             ERROR_IF(result_o == NULL);
             result = PyValue_FromObjectSteal(result_o);
         }
 
-        inst(FORMAT_SIMPLE, (value -- res)) {
-            PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
+        inline_ok inst(FORMAT_SIMPLE, (value -- res)) {
             /* If value is a unicode object, then we know the result
-             * of format(value) is value itself. */
-            if (!PyUnicode_CheckExact(value_o)) {
-                PyObject *res_o = PyObject_Format(value_o, NULL);
+             * of format(value) is value itself. An inline int or float
+             * formats as it prints: format(x, "") is str(x). */
+            if (PyValue_IsInline(value)) {
+                PyObject *res_o = _PyValue_Str(value);
+                PyValue_CLOSE(value);
+                ERROR_IF(res_o == NULL);
+                res = PyValue_FromObjectSteal(res_o);
+            }
+            else if (!PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value))) {
+                PyObject *res_o = PyObject_Format(PyValue_AsKnownObjectBorrow(value), NULL);
                 PyValue_CLOSE(value);
                 ERROR_IF(res_o == NULL);
                 res = PyValue_FromObjectSteal(res_o);
@@ -5297,7 +5291,10 @@ dummy_func(
             PyValue held_right = TAKE(rhs);
             INPUTS_DEAD();
             SYNC_SP();
-            PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
+            PyValue pending = oparg == NB_SUBSCR
+                ? value_subscript(held_left, held_right)
+                : _PyValue_BinaryOps[oparg](PyValue_Borrow(held_left),
+                                            PyValue_Borrow(held_right));
             if (PyValue_IsNull(pending)) {
                 IR_RESTORE_VALUE_INPUTS(held_left, held_right);
                 value_operation_close3(held_right, held_left, PyValue_NULL);
@@ -5420,7 +5417,7 @@ dummy_func(
         inst(INSTRUMENTED_JUMP_IF_FALSE_OR_POP, (cond -- res)) {
             // Taken before the truth test, which can run code
             PyValue held = TAKE(cond);
-            int truth = _PyValue_Truth(held);
+            int truth = _PyValue_IsTrue(held);
             if (truth < 0) {
                 PyValue_CLOSE(held);
                 ERROR_NO_POP();
@@ -5439,7 +5436,7 @@ dummy_func(
         inst(INSTRUMENTED_JUMP_IF_TRUE_OR_POP, (cond -- res)) {
             // Taken before the truth test, which can run code
             PyValue held = TAKE(cond);
-            int truth = _PyValue_Truth(held);
+            int truth = _PyValue_IsTrue(held);
             if (truth < 0) {
                 PyValue_CLOSE(held);
                 ERROR_NO_POP();

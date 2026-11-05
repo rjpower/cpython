@@ -528,26 +528,6 @@ _PyIR_AdoptTemp(PyValueBorrow view)
 #define IR_TAKE(V, OWN) \
     (PyValue_IsNull(OWN) ? PyValue_XDUP(V) : (OWN))
 
-/* The truth of a value, as TO_BOOL tests it, or -1 with an exception set */
-static inline int
-_PyValue_Truth(PyValueBorrow ref)
-{
-    if (PyValue_IsTrue(ref)) {
-        return 1;
-    }
-    if (PyValue_IsFalse(ref) || PyValue_IsNone(ref)) {
-        return 0;
-    }
-    if (PyValue_IsInlineInt(ref)) {
-        return PyValue_InlineInt64(ref) != 0;
-    }
-    if (PyValue_IsInlineFloat(ref)) {
-        return PyValue_InlineFloat(ref) != 0.0;
-    }
-    return PyObject_IsTrue(PyValue_AsKnownObjectBorrow(ref));
-}
-#define _PyValue_Truth(V0) (_PyValue_Truth)(PyValue_Borrow(V0))
-
 /* A handler writes a temporary into a slot that holds NULL. */
 #define IR_STORE_TEMP(SLOT, V) \
     do { \

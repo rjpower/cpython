@@ -549,7 +549,11 @@ INPLACE_READERS = {
     "PyValue_AsKnownObjectBorrow", "PyValue_TYPE",
     "PyValue_BoolCheck", "PyValue_FloatOperandValues", "PyValue_InlineFloat",
     "PyValue_InlineInt64", "_PyValue_IntScaled", "PyValue_LongCheckExact",
-    "_PyValue_Truth",
+    # The value dispatchers (pycore_value_ops.h): they read their operands
+    # as values and take a count of what they keep
+    "_PyValue_Contains", "_PyValue_Invert", "_PyValue_IsTrue",
+    "_PyValue_Negative", "_PyValue_Positive", "_PyValue_RichCompare",
+    "_PyValue_Str", "_PyValue_Repr", "_PyValue_ASCII",
     # Value-form container calls: they only read their key argument
     "PyDict_ContainsValue", "PySet_ContainsValue", "PyDict_DelValue",
     "_PyValue_RichCompareObject",
@@ -608,19 +612,19 @@ OBJECT_READERS = {
     # The value-form container calls (they read the container object and
     # the key as a value)
     "PyDict_ContainsValue", "PyDict_DelValue", "PySet_ContainsValue",
-    "PyFunction_New", "PyNumber_Invert", "PyNumber_Negative",
-    "PyObject_DelItem", "PyObject_Format", "PyObject_IsTrue",
-    "PyObject_RichCompare", "PySequence_Contains", "PyUnicode_Concat",
+    "PyFunction_New",
+    "PyObject_DelItem", "PyObject_Format", "PyUnicode_Concat",
+
     "_PyDict_SetValue_Take2", "_PyEval_CheckExceptStarTypeValid",
     "_PyEval_CheckExceptTypeValid", "value_exception_group_match",
     "_PyEval_GetAwaitable", "_PyLazyImport_Reify", "_PyList_SliceSubscript",
     "value_mapping_get_optional_item", "_PySet_Contains", "_PyTemplate_Build",
     "_PyUnicode_Equal", "_Py_call_instrumentation_arg",
     "monitor_stop_iteration",
-    # The indirect calls of BINARY_OP_EXTEND, CONVERT_VALUE and
+    # The indirect calls of BINARY_OP_EXTEND and
     # CALL_INTRINSIC_*, through tables of functions that read their
     # operands, and of GET_AITER, through the type's am_aiter slot
-    "action", "conv_fn", "func", "getter",
+    "action", "func", "getter",
 }
 # The names of OBJECT_READERS that S3 let receive the object of a view,
 # collected while this is a set

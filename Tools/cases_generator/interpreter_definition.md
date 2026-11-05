@@ -250,8 +250,11 @@ emits one of two checks for that input, marked unlikely:
 * In a guard, a uop that may deopt or exit but does not escape and only peeks
   at its inputs, it exits if the input is not a pointer. The guard then sees
   only objects, and the specialized family member never meets an inline value.
-* In any other uop, it boxes an inline value with `x = PyValue_Box(x)`.
-  If boxing fails, it jumps to `error` with all inputs still on the stack.
+* In any other uop, it boxes an inline value into the handler's
+  `value_temps` (`ir_obj_x = _PyValueTemps_Box(value_temps, x)`), and the
+  uop reads the box through the object local `ir_obj_x`; the input keeps its
+  inline value. If boxing fails, it jumps to `error` with all inputs still
+  on the stack.
   In `Py_STATS` builds each box counts towards the instruction's `boxes`
   statistic.
   The box is written back to the input's stack slot when the uop peeks at the

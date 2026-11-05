@@ -93,7 +93,7 @@ Py_BUILD_CORE_MODULE, or one that defines Py_VALUE_CORE (Include/pyport.h).
   Reported, not failing; the R27 gate needs none.
 
 * compat-body (second pass, -DPy_STATS, ENTRY_UNITS): a core box form
-  (PyValue_AsObject, PyValue_Box, _PyValueTemps_Object,
+  (PyValue_AsObject, _PyValueTemps_Object,
   _PyValue_BoxInlineValue) or _PyValue_AdapterBox in the body of a
   Py_VALUE_ENTRY function.
 * compat-capture (second pass): __builtin_return_address, or a call of
@@ -340,7 +340,7 @@ RAW_BITS_MESSAGES = {
 # The At forms are macros over these functions; the For forms state a
 # boundary box, which a compatibility entry makes.
 BOX_PRIMITIVES = ("PyValue_AsObject", "_PyValue_BoxInlineValue",
-                  "PyValue_Box", "_PyValue_BoxInto", "_PyValueTemps_Object",
+                  "_PyValue_BoxInto", "_PyValueTemps_Object",
                   "_PyBorrow_TupleItems", "_PyValue_AdapterBox")
 COMPAT_BODY_MATCHER = (
     "callExpr(callee(functionDecl(hasAnyName({names}))), hasAncestor("
@@ -354,7 +354,7 @@ COMPAT_BODY_MATCHER = (
 # them. An entry is a definition that carries attr::Annotate (clang's mark;
 # the attribute of a declaration reaches its definition).
 ENTRY = 'functionDecl(isDefinition(), hasAttr("attr::Annotate"))'
-CORE_BOX_CALLEES = ("PyValue_AsObject", "PyValue_Box", "_PyValueTemps_Object",
+CORE_BOX_CALLEES = ("PyValue_AsObject", "_PyValueTemps_Object",
                     "_PyValue_BoxInlineValue", "_PyValue_AdapterBox")
 # The THUNK forms: _PyValue_THUNK_EXIT() is a function whose definition
 # is the macro's own; the capture is __builtin_return_address, which the
@@ -1548,7 +1548,7 @@ SELF_TESTS = {
     "compat_body_helper_box": ("""
         Py_VALUE_COMPAT(g) PyObject *f(PyValue v);
         PyObject *f(PyValue v) {
-            return PyValue_AsKnownObjectSteal(PyValue_Box(v));
+            return PyValue_AsKnownObjectSteal(_PyValue_BoxInlineValue(v));
         }""", "compat-body", 1),
     "compat_body_thunk_exit": ("""
         #include "pycore_value_slots.h"

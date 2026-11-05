@@ -713,7 +713,7 @@ NON_ESCAPING_FUNCTIONS = (
     "_PyValue_IntScaled",
     "_PyValue_FromIntScaled",
     "PyValue_LongCheckExact",
-    # Allocate an int; see PyValue_Box below.
+    # Allocate an int; see the boxing entries below.
     "PyValue_FromInt64",
     "_PyValue_BoxInt64",
     "_PyValue_MultiplyInt64",
@@ -728,12 +728,9 @@ NON_ESCAPING_FUNCTIONS = (
     "PyValue_FloatOperandsCheck",
     "PyValue_NumberAsDouble",
     "PyValue_FloatOperandValues",
-    # Allocate an int or float; see PyValue_Box below.
+    # Allocate an int or float; see the boxing entries below.
     "PyValue_FromDouble",
     "_PyValue_LshiftInt64",
-    # Boxing allocates an int or float, which runs no Python code and
-    # cannot start a collection.
-    "PyValue_Box",
     # Box an inline value the same way, into a temporary that the handler's
     # value_temps owns.
     "_PyValueTemps_Box",

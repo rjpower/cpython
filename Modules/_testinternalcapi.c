@@ -3145,7 +3145,7 @@ value_box_roundtrip(PyObject *self, PyObject *arg)
         return NULL;
     }
     PyValue_CLOSE(dup);
-    PyValue boxed = PyValue_Box(ref);
+    PyValue boxed = _PyValue_BoxInlineValue(ref);
     if (PyValue_IsInline(boxed)) {
         return NULL;
     }
@@ -3267,7 +3267,7 @@ pyvalue_append_box(PyObject *self, PyObject *args)
         PyErr_SetString(PyExc_ValueError, "the value has no inline form");
         return NULL;
     }
-    PyValue box = PyValue_Box(PyValue_DUP(ref));
+    PyValue box = _PyValue_BoxInlineValue(ref);
     if (PyValue_IsInline(box)) {
         return NULL;
     }

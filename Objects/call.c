@@ -381,15 +381,7 @@ _PyFunction_ValueVectorcall(PyThreadState *tstate, PyObject *func,
         return PyValue_NULL;
     }
     EVAL_CALL_STAT_INC(EVAL_CALL_VECTOR);
-    return _PyEval_EvalFrameValue(tstate, frame);
-}
-
-PyValue
-_PyEval_EvalFrameValue(PyThreadState *tstate, _PyInterpreterFrame *frame)
-{
-    /* INTERPRETER_EXIT boxes the result until I3 makes it return the word;
-       a PEP 523 hook returns an object, permanently. Steal it back. */
-    return _PyValue_FromObjectResult(_PyEval_EvalFrame(tstate, frame, 0));
+    return _PyEval_EvalFrameValue(tstate, frame, 0);
 }
 
 /* The object vectorcall of a core callable with a value vectorcall (D8):

@@ -128,11 +128,14 @@ _PyEval_EvalFrame(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwfl
     return result;
 }
 
-/* Run frame and return its result as a value (body in Objects/call.c).
-   Until I3 makes INTERPRETER_EXIT return the word, and permanently for a
-   frame run by a PEP 523 hook, it converts the object result by steal. */
+/* Run frame and return its result as a value, PyValue_NULL with an exception
+   set on error (Python/ceval.c).  INTERPRETER_EXIT hands the value on as it
+   is; a frame run by a PEP 523 hook returns an object, which it steals back.
+   _PyEval_EvalFrame() and _PyEval_EvalFrameDefault() are for callers that
+   need an object: PyEval_EvalFrame(), the hook itself. */
 extern PyValue _PyEval_EvalFrameValue(PyThreadState *tstate,
-                                      _PyInterpreterFrame *frame);
+                                      _PyInterpreterFrame *frame,
+                                      int throwflag);
 
 extern PyObject*
 _PyEval_Vector(PyThreadState *tstate,

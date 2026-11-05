@@ -1450,8 +1450,10 @@ dummy_func(
             /* Restore previous frame and return. */
             tstate->current_frame = frame->previous;
             assert(!_PyErr_Occurred(tstate));
-            PyObject *result = PyValue_AsObject(retval);
-            DECREF_INPUTS();
+            // The value goes to the caller of the evaluation loop as it is:
+            // an inline value is not boxed here
+            PyValue result = TAKE(retval);
+            INPUTS_DEAD();
             assert(frame == &IR_ACTIVATION()->entry.frame);
             LLTRACE_RESUME_FRAME();
             return result;
@@ -5654,7 +5656,7 @@ dummy_func(
                 /* Restore previous frame and exit */
                 tstate->current_frame = frame->previous;
                 assert(frame == &IR_ACTIVATION()->entry.frame);
-                return NULL;
+                return PyValue_NULL;
             }
             // The caller's instr_ptr is the word that pushed the frame, and
             // error takes the word that raised as the one before next_instr.

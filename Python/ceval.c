@@ -2300,7 +2300,7 @@ native_call_builtin_o(PyThreadState *tstate, _PyInterpreterFrame *frame,
    bug; both compilers take this path, so there is one form.  The object
    check (a3/step2/objcheck.sh) refuses any other non-tail call to a
    _TAIL_CALL_* function. */
-static Py_NO_INLINE PyObject *
+static Py_NO_INLINE PyValue
 enter_handlers(py_tail_call_funcptr handler, TAIL_CALL_PARAMS)
 {
     return handler(TAIL_CALL_ARGS);
@@ -2311,10 +2311,10 @@ enter_handlers(py_tail_call_funcptr handler, TAIL_CALL_PARAMS)
    handler, and the handlers run the frames by tail calls until one of them
    returns.  It keeps an external name so that debuggers and profilers
    (Tools/gdb/libpython.py) can find its frames. */
-PyObject *_PyEval_EvalFrameLoop(PyThreadState *tstate,
-                                _PyInterpreterFrame *frame, int throwflag);
+PyValue _PyEval_EvalFrameLoop(PyThreadState *tstate,
+                              _PyInterpreterFrame *frame, int throwflag);
 
-Py_NO_INLINE PyObject* _Py_HOT_FUNCTION DONT_SLP_VECTORIZE
+Py_NO_INLINE PyValue _Py_HOT_FUNCTION DONT_SLP_VECTORIZE
 _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
     _Py_EnsureTstateNotNULL(tstate);
@@ -2328,7 +2328,7 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     if (_Py_EnterRecursiveCallTstate(tstate, "")) {
         assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
         _PyEval_FrameClearAndPop(tstate, frame);
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* The activation's record, linked from the thread state until it
@@ -2377,7 +2377,7 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     frame->previous = &entry->frame;
     tstate->current_frame = frame;
 
-    PyObject *result;
+    PyValue result;
     if (throwflag) {
         /* support for generator.throw() */
         if (_Py_EnterRecursivePy(tstate)) {
@@ -2416,7 +2416,7 @@ early_exit:
     /* Restore previous frame and exit */
     tstate->current_frame = frame->previous;
     tstate_impl->eval_activation = activation.previous;
-    return NULL;
+    return PyValue_NULL;
 }
 
 
@@ -2434,8 +2434,8 @@ early_exit:
  * has returned.  So the floor is set here, around the loop, and not in
  * _PyEval_EvalFrame(): a PEP 523 hook runs C code between the two, and
  * anything it pushed would be released while still live. */
-PyObject *
-_PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
+static PyValue
+eval_frame_default_value(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
 {
     _Py_EnsureTstateNotNULL(tstate);
     _PyBorrowStack *borrow = &((_PyThreadStateImpl *)tstate)->borrow;
@@ -2447,7 +2447,7 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
                                                     _PY_BORROW_RELEASE_BIT);
     PyObject **floor = borrow->top;
     borrow->eval_floor = floor;
-    PyObject *result = _PyEval_EvalFrameLoop(tstate, frame, throwflag);
+    PyValue result = _PyEval_EvalFrameLoop(tstate, frame, throwflag);
     assert(borrow->eval_floor == floor);
     _PyBorrowScope_Exit(tstate, floor);
     borrow->eval_floor = outer_floor;
@@ -2459,6 +2459,34 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int 
         _PyBorrow_RequestRelease(tstate);
     }
     return result;
+}
+
+/* The evaluation loop for callers that take the value of the frame as it is
+ * (the value vectorcall of a Python function, generators).  A PEP 523 hook
+ * returns an object, which it steals back. */
+PyValue
+_PyEval_EvalFrameValue(PyThreadState *tstate, _PyInterpreterFrame *frame,
+                       int throwflag)
+{
+    if (tstate->interp->eval_frame == NULL) {
+        EVAL_CALL_STAT_INC(EVAL_CALL_TOTAL);
+        return eval_frame_default_value(tstate, frame, throwflag);
+    }
+    return _PyValue_FromObjectResult(_PyEval_EvalFrame(tstate, frame, throwflag));
+}
+
+/* The exported evaluation loop and the PEP 523 default: an object result,
+ * which boxes an inline value. */
+PyObject *
+_PyEval_EvalFrameDefault(PyThreadState *tstate, _PyInterpreterFrame *frame, int throwflag)
+{
+    PyValue result = eval_frame_default_value(tstate, frame, throwflag);
+    if (PyValue_IsNull(result)) {
+        return NULL;
+    }
+    PyObject *object = PyValue_AsObject(result);
+    PyValue_CLOSE(result);
+    return object;
 }
 
 #if defined(__GNUC__) || defined(__clang__)

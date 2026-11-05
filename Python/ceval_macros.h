@@ -95,9 +95,11 @@
 #       define Py_PRESERVE_NONE_CC
 #   endif
 #endif
-typedef PyObject *(Py_PRESERVE_NONE_CC *py_tail_call_funcptr)(TAIL_CALL_PARAMS);
+/* A handler returns the value of the frame that INTERPRETER_EXIT leaves, or
+ * PyValue_NULL with an exception set. */
+typedef PyValue (Py_PRESERVE_NONE_CC *py_tail_call_funcptr)(TAIL_CALL_PARAMS);
 
-#define TARGET(op) Py_NO_INLINE PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_##op(TAIL_CALL_PARAMS)
+#define TARGET(op) Py_NO_INLINE PyValue Py_PRESERVE_NONE_CC _TAIL_CALL_##op(TAIL_CALL_PARAMS)
 #define LABEL(name) TARGET(name)
 
 #define DISPATCH_GOTO() \

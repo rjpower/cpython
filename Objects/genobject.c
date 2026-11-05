@@ -4,7 +4,7 @@
 
 #include "Python.h"
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
-#include "pycore_ceval.h"         // _PyEval_EvalFrame()
+#include "pycore_ceval.h"         // _PyEval_EvalFrameValue()
 #include "pycore_frame.h"         // _PyInterpreterFrame
 #include "pycore_freelist.h"      // _Py_FREELIST_FREE()
 #include "pycore_gc.h"            // _PyGC_CLEAR_FINALIZED()
@@ -302,7 +302,7 @@ static _PyStatusValue
     }
 
     EVAL_CALL_STAT_INC(EVAL_CALL_GENERATOR);
-    PyObject *result = _PyEval_EvalFrame(tstate, frame, exc);
+    PyValue result = _PyEval_EvalFrameValue(tstate, frame, exc);
     assert(tstate->exc_info == prev_exc_info);
 #ifndef Py_GIL_DISABLED
     assert(gen->gi_exc_state.previous_item == NULL);
@@ -311,26 +311,24 @@ static _PyStatusValue
 #endif
 
     // The generator_return_kind field is used to distinguish between a
-    // yield and a return from within _PyEval_EvalFrame(). Earlier versions
+    // yield and a return from within _PyEval_EvalFrameValue(). Earlier versions
     // of CPython (prior to 3.15) used gi_frame_state for this purpose, but
     // that requires the GIL for thread-safety.
     int return_kind = ((_PyThreadStateImpl *)tstate)->generator_return_kind;
 
-    // The eval loop returns an object until INTERPRETER_EXIT returns the
-    // word (I3 or I5); an exact int or float becomes inline here.
     if (return_kind == GENERATOR_YIELD) {
-        assert(result != NULL && !_PyErr_Occurred(tstate));
+        assert(!PyValue_IsNull(result) && !_PyErr_Occurred(tstate));
 #ifndef Py_GIL_DISABLED
         assert(FRAME_STATE_SUSPENDED(gen->gi_frame_state));
 #endif
-        return (_PyStatusValue){PYGEN_NEXT, PyValue_FromObjectSteal(result)};
+        return (_PyStatusValue){PYGEN_NEXT, result};
     }
 
     assert(return_kind == GENERATOR_RETURN);
     assert(gen->gi_exc_state.exc_value == NULL);
     assert(FT_ATOMIC_LOAD_INT8_RELAXED(gen->gi_frame_state) == FRAME_CLEARED);
 
-    if (result == NULL) {
+    if (PyValue_IsNull(result)) {
         assert(!PyErr_ExceptionMatches(PyExc_StopIteration));
         assert(!PyAsyncGen_CheckExact(gen) ||
             !PyErr_ExceptionMatches(PyExc_StopAsyncIteration));
@@ -339,15 +337,14 @@ static _PyStatusValue
 
     /* The generator just returned (as opposed to yielding): it is
      * exhausted. */
-    assert(result == Py_None || !PyAsyncGen_CheckExact(gen));
-    if (result == Py_None && !PyAsyncGen_CheckExact(gen) &&
+    assert(PyValue_IsNone(result) || !PyAsyncGen_CheckExact(gen));
+    if (PyValue_IsNone(result) && !PyAsyncGen_CheckExact(gen) &&
         PyValue_IsNull(arg))
     {
         /* No value if called by gen_iternext_value() */
-        Py_DECREF(result);
         return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
     }
-    return (_PyStatusValue){PYGEN_RETURN, PyValue_FromObjectSteal(result)};
+    return (_PyStatusValue){PYGEN_RETURN, result};
 }
 #define gen_send_value_ex(GEN, ARG, EXC) \
     (gen_send_value_ex)(GEN, PyValue_Borrow(ARG), EXC)

@@ -4,17 +4,18 @@ Reads the instruction definitions from Python/bytecodes.c and writes
 
 - Python/generated_ir_cases.c.h, one handler per instruction, #included in
   ceval.c;
-- Python/ir_targets.h, the computed-goto and tail-call tables, indexed by
-  handler.
+- Python/ir_targets.h, the prototypes of the handlers and labels and the
+  table of handlers, indexed by handler.
 
 Design note boil/design/06-architecture-v2.md describes the IR, and
 Include/internal/pycore_ir.h the word layout. In short, an instruction is one
 64-bit word: a 16-bit handler index and four 12-bit fields A, B, C and D, of
 which C and D also form a 24-bit field CD. A field names a frame slot, the
 feedback entry (its index in the block's feedback vector) or the oparg.
-Handlers read the fields they use with IR_FIELD_A(this_instr) and so on,
-from the word in memory or from ir_word, which dispatch loads, depending on
-the build (Python/ceval_macros.h).
+Each handler and label is a C function, which dispatches to the next by a
+guaranteed tail call (Python/ceval_macros.h).  Handlers read the fields they
+use with IR_A(ir_word) and so on, from ir_word, the word that dispatch loads
+and passes on.
 
 The format of each instruction follows from its stack effect:
 
@@ -65,8 +66,8 @@ Invariants:
   that reads the stack may run.
 - Instruction macros of the DSL (generators_common.STACK_INSTRUCTION_MACROS)
   expand to the IR forms of IR_INSTRUCTION_MACROS.
-- A family head marks its PREDICTED_ label with IR_PREDICTED()
-  (Python/ceval_macros.h).
+- A specialisation deoptimises by a tail call to its family head, which
+  runs the word again (JUMP_TO_PREDICTED, Python/ceval_macros.h).
 """
 
 import argparse
@@ -135,9 +136,9 @@ def first_ir_only_handler(analysis: Analysis) -> int:
     return 1 + max((p.opcode for p in analysis.pseudos.values()), default=255)
 
 # The fields of the word, and the C expressions that read them in a handler
-# (Python/ceval_macros.h), from this_instr, which every handler defines.
+# (Include/internal/pycore_ir.h), from ir_word, which every handler receives.
 FIELDS = ("A", "B", "C", "D")
-FIELD_VARS = {f: f"IR_FIELD_{f}(this_instr)" for f in FIELDS}
+FIELD_VARS = {f: f"IR_{f}(ir_word)" for f in FIELDS}
 
 
 def owner_name(field: str) -> str:
@@ -1686,7 +1687,7 @@ def base_formats(analysis: Analysis) -> dict[str, IRFormat]:
 def field_expr(loc: str) -> str:
     "The C expression of the field at loc, in a handler"
     if loc == LOC_CD:
-        return "IR_FIELD_CD(this_instr)"
+        return "IR_CD(ir_word)"
     return FIELD_VARS[loc.removeprefix("_PyIR_LOC_")]
 
 
@@ -3572,15 +3573,12 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     out.emit("\n")
     out.emit(f"TARGET({name}) {{\n")
     bridge_bound = value_bridge_bound(name, inst)
-    out.emit(f"#if _Py_TAIL_CALL_INTERP\n")
     out.emit(f"int opcode = {name};\n")
     out.emit(f"(void)(opcode);\n")
-    out.emit("_PyInterpreterFrame *frame = tstate->current_frame;\n")
     if not record:
-        # A tail-called handler is a function of its own
+        # No value record: the dispatch macros finish no bridges
         out.emit("_PyValueTemps *const value_temps = NULL;\n")
         out.emit("(void)value_temps;\n")
-    out.emit(f"#endif\n")
     if inst.properties.needs_prev:
         out.emit(f"_PyIRWord* const prev_instr = frame->instr_ptr;\n")
     if not is_target:
@@ -3598,19 +3596,14 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
     out.emit(f"next_instr += 1;\n")
     out.emit(f"INSTRUCTION_STATS({inst.name});\n")
     if is_target:
-        out.emit(f"IR_PREDICTED({name});\n")
         qualifier = "" if transaction or inst.name == "BINARY_OP" or name in ("CALL", "CALL_KW", "STORE_SUBSCR", "LOAD_GLOBAL", "LOAD_GLOBAL_NOFB", "LOAD_ATTR", "LOAD_ATTR_NOFB", "STORE_ATTR", "STORE_ATTR_NOFB") else "const "
         out.emit(f"_PyIRWord* {qualifier}this_instr = next_instr - 1;\n")
         out.emit("(void)this_instr;\n")
     if record:
-        # The eval function declares one array for all handlers. A tail-called
-        # handler is its own function, so it keeps its own.
-        out.emit("#if _Py_TAIL_CALL_INTERP\n")
+        # The handler's value record, the box area (R27 deletes it)
         out.emit(f"PyObject *value_boxes[{bridge_bound}];\n")
         out.emit("_PyValueTemps value_owners;\n")
-        out.emit("#endif\n")
         out.emit(f"value_owners = (_PyValueTemps){{value_boxes, 0, {bridge_bound}}};\n")
-    if record:
         out.emit("_PyValueTemps *value_temps = &value_owners;\n")
     if fmt.store_dst:
         # The old value of a local that dst names, released after the
@@ -3737,23 +3730,13 @@ def generate_ir_labels(analysis: Analysis, emitter: Emitter) -> None:
     for name, label in analysis.labels.items():
         emitter.emit(f"LABEL({name})\n")
         emitter.emit("{\n")
-        emitter.emit("TAIL_CALL_LOAD_FRAME();\n")
+        emitter.emit("_PyValueTemps *const value_temps = NULL;\n")
         storage = Storage(IRStack(), [], [], 0, False)
         if label.spilled:
             storage.spilled = 1
             storage.stack.physical_sp = None
         emitter.emit_tokens(label, storage, None)
         emitter.emit("}\n\n")
-
-
-def max_bridge_bound(analysis: Analysis, boxing: set[str]) -> int:
-    "The capacity of the eval function's box array, which the handlers that box share"
-    # An input in which no handler boxes, such as labels alone, still
-    # declares a nonempty array.
-    return max((value_bridge_bound(name, inst)
-                for name, inst in handler_instructions(analysis).items()
-                if name in boxing),
-               default=1)
 
 
 # The columns of the instruction contract (pycore_ir.h, _PyIRFormat) that
@@ -4059,39 +4042,11 @@ def generate_ir(filenames: list[str], analysis: Analysis, outfile: TextIO,
     boxing = boxing_handlers(analysis, formats)
     write_header(__file__, filenames, outfile)
     outfile.write(f"""
-#if !_Py_TAIL_CALL_INTERP
-#if !USE_COMPUTED_GOTOS
-    dispatch_opcode:
-        switch (opcode)
-#endif
-        {{
-            /* One scratch area serves every handler that boxes; each resets
-               value_owners. */
-            PyObject *value_boxes[{max_bridge_bound(analysis, boxing)}];
-            _PyValueTemps value_owners;
-#endif /* _Py_TAIL_CALL_INTERP */
             {INSTRUCTION_START_MARKER}
 """)
     generate_ir_cases(analysis, formats, boxing, outfile, lines)
     outfile.write(f"""
             {INSTRUCTION_END_MARKER}
-#if !_Py_TAIL_CALL_INTERP
-#if USE_COMPUTED_GOTOS
-        _unknown_opcode:
-#else
-        default:
-#endif
-            /* Tell C compilers not to hold the opcode variable in the loop.
-               next_instr points the current instruction without TARGET(). */
-            opcode = IR_HANDLER(*next_instr);
-            {UNKNOWN_OPCODE_HANDLER}
-
-        }}
-
-        /* This should never be reached. Every opcode should end with DISPATCH()
-           or goto error. */
-        Py_UNREACHABLE();
-#endif /* _Py_TAIL_CALL_INTERP */
         {LABEL_START_MARKER}
 """)
     out = CWriter(outfile, 2, lines)
@@ -4111,20 +4066,11 @@ def num_handlers(analysis: Analysis) -> int:
 
 def generate_ir_targets(filenames: list[str], analysis: Analysis,
                         outfile: TextIO) -> None:
-    "The dispatch tables, indexed by handler"
+    "The prototypes of the handlers and labels, and the dispatch table"
     ids = handler_ids(analysis)
     n = num_handlers(analysis)
     write_header(__file__, filenames, outfile)
     out = CWriter(outfile, 0, False)
-    targets = ["&&_unknown_opcode,\n"] * n
-    for name, i in ids.items():
-        targets[i] = f"&&TARGET_{name},\n"
-    out.emit("#if !_Py_TAIL_CALL_INTERP\n")
-    out.emit(f"static void *opcode_targets[{n}] = {{\n")
-    for target in targets:
-        out.emit(target)
-    out.emit("};\n")
-    out.emit("#else /* _Py_TAIL_CALL_INTERP */\n")
     out.emit(f"static py_tail_call_funcptr instruction_funcptr_handler_table[{n}];\n")
     out.emit("\n")
     for name in analysis.labels:
@@ -4135,7 +4081,7 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
     out.emit("\n")
     out.emit(function_proto("UNKNOWN_OPCODE"))
     out.emit(" {\n")
-    out.emit("TAIL_CALL_LOAD_FRAME();\n")
+    out.emit("_PyValueTemps *const value_temps = NULL;\n")
     out.emit("int opcode = IR_HANDLER(*next_instr);\n")
     out.emit(UNKNOWN_OPCODE_HANDLER)
     out.emit("}\n")
@@ -4146,7 +4092,6 @@ def generate_ir_targets(filenames: list[str], analysis: Analysis,
         name = by_index.get(i, "UNKNOWN_OPCODE")
         out.emit(f"[{i}] = _TAIL_CALL_{name},\n")
     out.emit("};\n")
-    out.emit("#endif /* _Py_TAIL_CALL_INTERP */\n")
 
 
 def generate_ir_from_files(filenames: list[str], outfilename: str,

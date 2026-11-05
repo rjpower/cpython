@@ -1996,9 +1996,6 @@
 /* Define to 1 if your <sys/time.h> declares 'struct tm'. */
 #undef TM_IN_SYS_TIME
 
-/* Define if you want to use computed gotos in ceval.c. */
-#undef USE_COMPUTED_GOTOS
-
 /* Enable extensions on AIX, Interix, z/OS.  */
 #ifndef _ALL_SOURCE
 # undef _ALL_SOURCE
@@ -2236,9 +2233,6 @@
 
 /* Define to 1 if the machine stack grows down (default); 0 if it grows up. */
 #undef _Py_STACK_GROWS_DOWN
-
-/* Define if you want to use tail-calling interpreters in CPython. */
-#undef _Py_TAIL_CALL_INTERP
 
 /* Define to 1 if frame unwinding via pointers is expected to work, 0 if not.
    Leave undefined if unknown. */

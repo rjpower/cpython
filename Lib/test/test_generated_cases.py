@@ -286,20 +286,15 @@ class TestIRCases(unittest.TestCase):
     """
         output = """
         TARGET(OP) {
-            #if _Py_TAIL_CALL_INTERP
             int opcode = OP;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
-            #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
-            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[5];
             _PyValueTemps value_owners;
-            #endif
             value_owners = (_PyValueTemps){value_boxes, 0, 5};
             _PyValueTemps *value_temps = &value_owners;
             PyValue ir_displaced = PyValue_NULL;
@@ -313,8 +308,8 @@ class TestIRCases(unittest.TestCase):
             (void)ir_own_C;
             PyObject *ir_obj_left = NULL;
             PyObject *ir_obj_right = NULL;
-            right = IR_VIEW(IR_FIELD_C(this_instr));
-            left = IR_VIEW(IR_FIELD_B(this_instr));
+            right = IR_VIEW(IR_C(ir_word));
+            left = IR_VIEW(IR_B(ir_word));
             if (Py_UNLIKELY(PyValue_IsInline(left))) {
                 ir_obj_left = _PyValueTemps_Box(value_temps, left);
                 if (ir_obj_left == NULL) {
@@ -338,15 +333,15 @@ class TestIRCases(unittest.TestCase):
             PyObject *l = ir_obj_left;
             PyObject *r = ir_obj_right;
             PyObject *o = spam_call(l, r);
-            ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), right);
+            ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), right);
             PyValue_XCLOSE(ir_own_C);
-            ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), left);
+            ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), left);
             PyValue_XCLOSE(ir_own_B);
             if (o == NULL) {
                 JUMP_TO_LABEL(error);
             }
             res = PyValue_FromPyObjectSteal(o);
-            IR_STORE_DST(IR_FIELD_A(this_instr), res);
+            IR_STORE_DST(IR_A(ir_word), res);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -445,12 +440,12 @@ class TestIRCases(unittest.TestCase):
         close = self.handler(output, "OP_CLOSE")
         self.assertIn("PyValueBorrow value;", close)
         self.assertIn("PyValue ir_own_A = PyValue_NULL;", close)
-        self.assertIn("value = IR_VIEW(IR_FIELD_A(this_instr));", close)
-        self.assertIn("ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), value);\n"
+        self.assertIn("value = IR_VIEW(IR_A(ir_word));", close)
+        self.assertIn("ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), value);\n"
                       "            PyValue_XCLOSE(ir_own_A);", close)
         # No release of a view
         self.assertNotRegex(output, r"\n\s*(_?PyValue_\w*CLOSE\w*)\(value")
-        self.assertIn("ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), value);\n"
+        self.assertIn("ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), value);\n"
                       "            res = IR_TAKE(value, ir_own_B);",
                       self.handler(output, "OP_HELD"))
         self.assertIn("PyValue_AsKnownObjectSteal(IR_TAKE(value, ir_own_B))",
@@ -490,7 +485,7 @@ class TestIRCases(unittest.TestCase):
         output = self.handler(self.ir_output(input), "OP")
         self.assertEqual(output.count("IR_CONSUME_INPUT"), 1)
         consume = output.index(
-            "ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), copy);")
+            "ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), copy);")
         self.assertLess(output.index("// _FIRST"), consume)
         self.assertLess(consume, output.index("// _SECOND"))
         self.assertIn("res = IR_TAKE(copy, ir_own_B);", output)
@@ -507,7 +502,7 @@ class TestIRCases(unittest.TestCase):
         }
     """
         output = self.handler(self.ir_output(input), "OP")
-        self.assertIn("ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), value);\n"
+        self.assertIn("ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), value);\n"
                       "            PyValue held = ir_own_A;", output)
         self.assertIn("retire_published_values(", output)
         gap = """
@@ -1053,11 +1048,11 @@ class TestIRCases(unittest.TestCase):
         store = self.handler(output, "STORE")
         # A view's release is its owner's: the value of a temporary, which
         # the consume adopts, and NULL for a local
-        self.assertIn("ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), owner);\n"
+        self.assertIn("ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), owner);\n"
                       "            PyValue_XCLOSE(ir_own_A);", store)
-        self.assertIn("ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), value);\n"
+        self.assertIn("ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), value);\n"
                       "            PyValue_XCLOSE(ir_own_B);", store)
-        self.assertIn("ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), cond);",
+        self.assertIn("ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), cond);",
                       self.handler(output, "BRANCH"))
         self.assertNotIn("stack_pointer", output)
 
@@ -1094,15 +1089,15 @@ class TestIRCases(unittest.TestCase):
         # PAIR never pushes its first output alone
         self.assertTrue(formats["PAIR"].store_dst)
         output = self.ir_output(input)
-        self.assertIn("IR_STORE_DST(IR_FIELD_A(this_instr), res);",
+        self.assertIn("IR_STORE_DST(IR_A(ir_word), res);",
                       self.handler(output, "OP"))
-        self.assertIn("IR_STORE_DST(IR_FIELD_A(this_instr), attr);",
+        self.assertIn("IR_STORE_DST(IR_A(ir_word), attr);",
                       self.handler(output, "ATTR"))
         self.assertNotIn("IR_STORE_DST", self.handler(output, "ALIAS"))
-        self.assertIn("IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);",
+        self.assertIn("IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);",
                       self.handler(output, "ALIAS"))
         self.assertNotIn("IR_STORE_DST", self.handler(output, "PAIR"))
-        self.assertIn("assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));",
+        self.assertIn("assert(!IR_IS_LOCAL(IR_A(ir_word)));",
                       self.handler(output, "PAIR"))
 
     def test_unused_outputs_pass_through(self):
@@ -1133,13 +1128,10 @@ class TestIRCases(unittest.TestCase):
     """
         output = """
         TARGET(OP) {
-            #if _Py_TAIL_CALL_INTERP
             int opcode = OP;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
             _PyValueTemps *const value_temps = NULL;
             (void)value_temps;
-            #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -1147,9 +1139,9 @@ class TestIRCases(unittest.TestCase):
             INSTRUCTION_STATS(OP);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            int oparg = (int)IR_FIELD_C(this_instr);
+            int oparg = (int)IR_C(ir_word);
             (void)oparg;
-            PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
+            PyValue *window = &IR_SLOT(IR_B(ir_word));
             (void)window;
             PyValue callable;
             PyValue *args;
@@ -1159,7 +1151,7 @@ class TestIRCases(unittest.TestCase):
             res = SPAM(callable, args, oparg);
             IR_CLEAR_SLOTS(&window[1], oparg);
             IR_PUBLISH_TEMP(window[0], res);
-            IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
+            IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -1384,27 +1376,21 @@ class TestIRCases(unittest.TestCase):
     """
         output = """
         TARGET(OP) {
-            #if _Py_TAIL_CALL_INTERP
             int opcode = OP;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
-            #endif
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
-            IR_PREDICTED(OP);
             _PyIRWord* const this_instr = next_instr - 1;
             (void)this_instr;
-            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[6];
             _PyValueTemps value_owners;
-            #endif
             value_owners = (_PyValueTemps){value_boxes, 0, 6};
             _PyValueTemps *value_temps = &value_owners;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_FIELD_C(this_instr));
-            int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
+            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_C(ir_word));
+            int oparg = IR_FB_ARG(fb, IR_C(ir_word));
             (void)oparg;
             PyValueBorrow owner;
             PyValue res;
@@ -1420,7 +1406,7 @@ class TestIRCases(unittest.TestCase):
             }
             // _OP
             {
-                owner = IR_VIEW(IR_FIELD_B(this_instr));
+                owner = IR_VIEW(IR_B(ir_word));
                 if (Py_UNLIKELY(PyValue_IsInline(owner))) {
                     ir_obj_owner = _PyValueTemps_Box(value_temps, owner);
                     if (ir_obj_owner == NULL) {
@@ -1433,10 +1419,10 @@ class TestIRCases(unittest.TestCase):
                 }
                 PyObject *o = ir_obj_owner;
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
-                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), owner);
+                ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 PyValue_XCLOSE(ir_own_B);
             }
-            IR_STORE_DST(IR_FIELD_A(this_instr), res);
+            IR_STORE_DST(IR_A(ir_word), res);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -1446,26 +1432,21 @@ class TestIRCases(unittest.TestCase):
         }
 
         TARGET(OP_NOFB) {
-            #if _Py_TAIL_CALL_INTERP
             int opcode = OP_NOFB;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
-            #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(OP);
-            #if _Py_TAIL_CALL_INTERP
             PyObject *value_boxes[6];
             _PyValueTemps value_owners;
-            #endif
             value_owners = (_PyValueTemps){value_boxes, 0, 6};
             _PyValueTemps *value_temps = &value_owners;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(0);
-            int oparg = (int)IR_FIELD_CD(this_instr);
+            int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValueBorrow owner;
             PyValue res;
@@ -1481,7 +1462,7 @@ class TestIRCases(unittest.TestCase):
             }
             // _OP
             {
-                owner = IR_VIEW(IR_FIELD_B(this_instr));
+                owner = IR_VIEW(IR_B(ir_word));
                 if (Py_UNLIKELY(PyValue_IsInline(owner))) {
                     ir_obj_owner = _PyValueTemps_Box(value_temps, owner);
                     if (ir_obj_owner == NULL) {
@@ -1494,10 +1475,10 @@ class TestIRCases(unittest.TestCase):
                 }
                 PyObject *o = ir_obj_owner;
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
-                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), owner);
+                ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 PyValue_XCLOSE(ir_own_B);
             }
-            IR_STORE_DST(IR_FIELD_A(this_instr), res);
+            IR_STORE_DST(IR_A(ir_word), res);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -1507,13 +1488,10 @@ class TestIRCases(unittest.TestCase):
         }
 
         TARGET(OP_SPECIALIZED) {
-            #if _Py_TAIL_CALL_INTERP
             int opcode = OP_SPECIALIZED;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
             _PyValueTemps *const value_temps = NULL;
             (void)value_temps;
-            #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -1521,7 +1499,7 @@ class TestIRCases(unittest.TestCase):
             INSTRUCTION_STATS(OP_SPECIALIZED);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_FIELD_C(this_instr));
+            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_C(ir_word));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
             PyValueBorrow owner;
@@ -1530,7 +1508,7 @@ class TestIRCases(unittest.TestCase):
             (void)ir_own_B;
             // _GUARD
             {
-                owner = IR_VIEW(IR_FIELD_B(this_instr));
+                owner = IR_VIEW(IR_B(ir_word));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(OP);
@@ -1547,10 +1525,10 @@ class TestIRCases(unittest.TestCase):
             {
                 PyObject *o = PyValue_AsKnownObjectBorrow(owner);
                 res = SPAM(o, GETITEM(FRAME_CO_NAMES, oparg));
-                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), owner);
+                ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 _PyValue_XCLOSE_POINTER(ir_own_B);
             }
-            IR_STORE_DST(IR_FIELD_A(this_instr), res);
+            IR_STORE_DST(IR_A(ir_word), res);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -1580,13 +1558,10 @@ class TestIRCases(unittest.TestCase):
     """
         output = """
         TARGET(OP) {
-            #if _Py_TAIL_CALL_INTERP
             int opcode = OP;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
             _PyValueTemps *const value_temps = NULL;
             (void)value_temps;
-            #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -1594,22 +1569,22 @@ class TestIRCases(unittest.TestCase):
             INSTRUCTION_STATS(OP);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_FIELD_D(this_instr));
-            int oparg = IR_FB_ARG(fb, IR_FIELD_D(this_instr));
+            _PyFb_OP *fb = (_PyFb_OP *)IR_FB(IR_D(ir_word));
+            int oparg = IR_FB_ARG(fb, IR_D(ir_word));
             (void)oparg;
             PyValue left;
             PyValue right;
             PyValue res;
-            right = IR_SLOT(IR_FIELD_C(this_instr));
-            left = IR_SLOT(IR_FIELD_B(this_instr));
+            right = IR_SLOT(IR_C(ir_word));
+            left = IR_SLOT(IR_B(ir_word));
             uint32_t counter = fb->counter;
             (void)counter;
             _PyFbHeader *feedback = ((_PyFbHeader *)fb);
             ADVANCE_ADAPTIVE_COUNTER(feedback);
             res = SPAM(left, right, oparg);
-            IR_SLOT(IR_FIELD_B(this_instr)) = PyValue_NULL;
-            IR_SLOT(IR_FIELD_C(this_instr)) = PyValue_NULL;
-            IR_STORE_DST(IR_FIELD_A(this_instr), res);
+            IR_SLOT(IR_B(ir_word)) = PyValue_NULL;
+            IR_SLOT(IR_C(ir_word)) = PyValue_NULL;
+            IR_STORE_DST(IR_A(ir_word), res);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -1619,13 +1594,10 @@ class TestIRCases(unittest.TestCase):
         }
 
         TARGET(OP_NOFB) {
-            #if _Py_TAIL_CALL_INTERP
             int opcode = OP_NOFB;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
             _PyValueTemps *const value_temps = NULL;
             (void)value_temps;
-            #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -1634,21 +1606,21 @@ class TestIRCases(unittest.TestCase):
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_OP *fb = (_PyFb_OP *)IR_FB(0);
-            int oparg = (int)IR_FIELD_D(this_instr);
+            int oparg = (int)IR_D(ir_word);
             (void)oparg;
             PyValue left;
             PyValue right;
             PyValue res;
-            right = IR_SLOT(IR_FIELD_C(this_instr));
-            left = IR_SLOT(IR_FIELD_B(this_instr));
+            right = IR_SLOT(IR_C(ir_word));
+            left = IR_SLOT(IR_B(ir_word));
             uint32_t counter = fb->counter;
             (void)counter;
             _PyFbHeader *feedback = ((_PyFbHeader *)fb);
             ADVANCE_ADAPTIVE_COUNTER(feedback);
             res = SPAM(left, right, oparg);
-            IR_SLOT(IR_FIELD_B(this_instr)) = PyValue_NULL;
-            IR_SLOT(IR_FIELD_C(this_instr)) = PyValue_NULL;
-            IR_STORE_DST(IR_FIELD_A(this_instr), res);
+            IR_SLOT(IR_B(ir_word)) = PyValue_NULL;
+            IR_SLOT(IR_C(ir_word)) = PyValue_NULL;
+            IR_STORE_DST(IR_A(ir_word), res);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -1706,13 +1678,10 @@ class TestIRCases(unittest.TestCase):
     """
         output = """
         TARGET(IR_PASS) {
-            #if _Py_TAIL_CALL_INTERP
             int opcode = IR_PASS;
             (void)(opcode);
-            _PyInterpreterFrame *frame = tstate->current_frame;
             _PyValueTemps *const value_temps = NULL;
             (void)value_temps;
-            #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
@@ -1948,7 +1917,7 @@ class TestIRCases(unittest.TestCase):
         self.assertIn("INSTRUCTION_STATS(BINARY_OP);", generic)
         handler = code[code.index("TARGET(BINARY_OP_ADD_INT)"):]
         handler = handler[:handler.index("DISPATCH();")]
-        self.assertIn("IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));", handler)
+        self.assertIn("IR_DEOPT_BINARY_OP(IR_D(ir_word));", handler)
         self.assertNotIn("JUMP_TO_PREDICTED", handler)
 
         out = io.StringIO()

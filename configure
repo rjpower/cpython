@@ -834,6 +834,7 @@ ENSUREPIP
 CFLAGS_CEVAL
 SRCDIRS
 THREADHEADERS
+PY_TAIL_CALL_CC
 PANEL_LIBS
 PANEL_CFLAGS
 CURSES_LIBS
@@ -1152,8 +1153,6 @@ with_platlibdir
 with_wheel_pkg_dir
 with_readline
 with_curses
-with_computed_gotos
-with_tail_call_interp
 with_shapes
 with_remote_debug
 with_ensurepip
@@ -1990,10 +1989,6 @@ Optional Packages:
                           select the curses backend for the curses and
                           _curses_panel modules, or disable them (default:
                           auto)
-  --with-computed-gotos   enable computed gotos in evaluation loop (enabled by
-                          default on supported compilers)
-  --with-tail-call-interp enable tail-calling interpreter in evaluation loop
-                          and rest of CPython
   --with-shapes           guard instance attribute access on per-type shapes
                           (default is no)
   --with-remote-debug     enable remote debugging support (default is yes)
@@ -8742,6 +8737,10 @@ fi
 
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $disable_gil" >&5
 printf "%s\n" "$disable_gil" >&6; }
+if test "x$disable_gil" = xyes
+then :
+  as_fn_error $? "--disable-gil is not supported: the free-threaded build is not built or tested in this tree (pyjit/design/pyvalue.md D6)" "$LINENO" 5
+fi
 
 if test "$disable_gil" = "yes"
 then
@@ -34736,38 +34735,7 @@ printf "%s\n" "#define HAVE_BROKEN_MBSTOWCS 1" >>confdefs.h
 
 fi
 
-# Check for --with-computed-gotos
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for --with-computed-gotos" >&5
-printf %s "checking for --with-computed-gotos... " >&6; }
-
-# Check whether --with-computed-gotos was given.
-if test ${with_computed_gotos+y}
-then :
-  withval=$with_computed_gotos;
-if test "$withval" = yes
-then
-
-printf "%s\n" "#define USE_COMPUTED_GOTOS 1" >>confdefs.h
-
-  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: yes" >&5
-printf "%s\n" "yes" >&6; }
-fi
-if test "$withval" = no
-then
-
-printf "%s\n" "#define USE_COMPUTED_GOTOS 0" >>confdefs.h
-
-  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
-printf "%s\n" "no" >&6; }
-fi
-
-else case e in #(
-  e) { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no value specified" >&5
-printf "%s\n" "no value specified" >&6; } ;;
-esac
-fi
-
-
+# Compiler support for computed gotos; used by Modules/_sre/sre_lib.h.
 { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether $CC supports computed gotos" >&5
 printf %s "checking whether $CC supports computed gotos... " >&6; }
 if test ${ac_cv_computed_gotos+y}
@@ -34776,11 +34744,7 @@ then :
 else case e in #(
   e) if test "$cross_compiling" = yes
 then :
-  if test "${with_computed_gotos+set}" = set; then
-   ac_cv_computed_gotos="$with_computed_gotos -- configured --with(out)-computed-gotos"
- else
-   ac_cv_computed_gotos=no
- fi
+  ac_cv_computed_gotos=no
 else case e in #(
   e) cat confdefs.h - <<_ACEOF >conftest.$ac_ext
 /* end confdefs.h.  */
@@ -34819,36 +34783,163 @@ printf "%s\n" "#define HAVE_COMPUTED_GOTOS 1" >>confdefs.h
 
 esac
 
-# Check for --with-tail-call-interp
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for --with-tail-call-interp" >&5
-printf %s "checking for --with-tail-call-interp... " >&6; }
-
-# Check whether --with-tail-call-interp was given.
-if test ${with_tail_call_interp+y}
+# The interpreter is built from tail-calling handlers; every handler ends in
+# a guaranteed (musttail) call of the next one.
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether $CC supports musttail calls" >&5
+printf %s "checking whether $CC supports musttail calls... " >&6; }
+if test ${ac_cv_musttail+y}
 then :
-  withval=$with_tail_call_interp;
-if test "$withval" = yes
-then
-
-printf "%s\n" "#define _Py_TAIL_CALL_INTERP 1" >>confdefs.h
-
-  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: yes" >&5
-printf "%s\n" "yes" >&6; }
-fi
-if test "$withval" = no
-then
-
-printf "%s\n" "#define _Py_TAIL_CALL_INTERP 0" >>confdefs.h
-
-  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
-printf "%s\n" "no" >&6; }
-fi
-
+  printf %s "(cached) " >&6
 else case e in #(
-  e) { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no value specified" >&5
-printf "%s\n" "no value specified" >&6; } ;;
+  e) cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+static int g(int x);
+static int f(int x)
+{
+    if (x <= 0) {
+        return x;
+    }
+    __attribute__((musttail)) return g(x - 1);
+}
+static int g(int x)
+{
+    if (x <= 0) {
+        return x;
+    }
+    __attribute__((musttail)) return f(x - 1);
+}
+
+int
+main (void)
+{
+return f(4);
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"
+then :
+  ac_cv_musttail=yes
+else case e in #(
+  e) ac_cv_musttail=no ;;
 esac
 fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext ;;
+esac
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ac_cv_musttail" >&5
+printf "%s\n" "$ac_cv_musttail" >&6; }
+if test "x$ac_cv_musttail" = xyes
+then :
+
+else case e in #(
+  e) as_fn_error $? "the interpreter needs a C compiler with the musttail attribute (GCC 15 or Clang 13 and later)" "$LINENO" 5 ;;
+esac
+fi
+
+# The calling convention of the handlers, chosen like Py_PRESERVE_NONE_CC in
+# Python/ceval_macros.h.
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for the tail-call calling convention" >&5
+printf %s "checking for the tail-call calling convention... " >&6; }
+if test ${ac_cv_tail_call_cc+y}
+then :
+  printf %s "(cached) " >&6
+else case e in #(
+  e) cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+#if !defined(__has_attribute)
+#  error "no __has_attribute"
+#elif !__has_attribute(preserve_none)
+#  error "no preserve_none"
+#endif
+
+int
+main (void)
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"
+then :
+  ac_cv_tail_call_cc=preserve_none
+else case e in #(
+  e) cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+#if !defined(__has_attribute)
+#  error "no __has_attribute"
+#elif !__has_attribute(no_callee_saved_registers)
+#  error "no no_callee_saved_registers"
+#endif
+
+int
+main (void)
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"
+then :
+  ac_cv_tail_call_cc=no_callee_saved_registers
+else case e in #(
+  e) ac_cv_tail_call_cc=none ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext
+if test "$ac_cv_tail_call_cc" = none; then
+  py_tail_call_attr=""
+else
+  py_tail_call_attr="__attribute__(($ac_cv_tail_call_cc))"
+fi
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+static int $py_tail_call_attr g(int x);
+static int $py_tail_call_attr f(int x)
+{
+    if (x <= 0) {
+        return x;
+    }
+    __attribute__((musttail)) return g(x - 1);
+}
+static int $py_tail_call_attr g(int x)
+{
+    if (x <= 0) {
+        return x;
+    }
+    __attribute__((musttail)) return f(x - 1);
+}
+
+int
+main (void)
+{
+return f(4);
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"
+then :
+
+else case e in #(
+  e) as_fn_error $? "$CC accepts the $ac_cv_tail_call_cc attribute but not together with musttail" "$LINENO" 5 ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam conftest.$ac_ext ;;
+esac
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ac_cv_tail_call_cc" >&5
+printf "%s\n" "$ac_cv_tail_call_cc" >&6; }
+PY_TAIL_CALL_CC=$ac_cv_tail_call_cc
 
 
 # The interpreter runs code objects as the register IR of
@@ -35052,57 +35143,6 @@ printf "%s\n" "#define HAVE_GLIBC_MEMMOVE_BUG 1" >>confdefs.h
 
 fi
 
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking if we need to manually block large inlining in ceval.c" >&5
-printf %s "checking if we need to manually block large inlining in ceval.c... " >&6; }
-if test "$cross_compiling" = yes
-then :
-  block_huge_inlining_in_ceval=undefined
-else case e in #(
-  e) cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-
-int main(void) {
-// See gh-148284: Clang 22 seems to have interactions with inlining
-// and the stackref buffer which cause 40 kB of stack usage on x86-64
-// in buggy versions of _PyEval_EvalFrameDefault() in computed goto
-// interpreter. The normal usage seen is normally 1-2 kB.
-#if defined(__clang__) && (__clang_major__ == 22)
-    return 1;
-#else
-    return 0;
-#endif
-}
-
-_ACEOF
-if ac_fn_c_try_run "$LINENO"
-then :
-  block_huge_inlining_in_ceval=no
-else case e in #(
-  e) block_huge_inlining_in_ceval=yes ;;
-esac
-fi
-rm -f core *.core core.conftest.* gmon.out bb.out conftest$ac_exeext \
-  conftest.$ac_objext conftest.beam conftest.$ac_ext ;;
-esac
-fi
-
-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $block_huge_inlining_in_ceval" >&5
-printf "%s\n" "$block_huge_inlining_in_ceval" >&6; }
-
-if test "$block_huge_inlining_in_ceval" = yes && test "$ac_cv_computed_gotos" = yes; then
-    # gh-148284: Suppress inlining of functions whose stack size exceeds
-    # 512 bytes. This number should be tuned to follow the C stack
-    # consumption in _PyEval_EvalFrameDefault() on computed goto
-    # interpreter.
-    CFLAGS_CEVAL="$CFLAGS_CEVAL -finline-max-stacksize=512"
-fi
-if test "$ac_cv_cc_name" = "gcc" && test "$ac_cv_computed_gotos" = yes; then
-    # GCC's global common subexpression elimination keeps values shared
-    # between the handlers of the computed-goto loop live and spills the
-    # interpreter's frame, word pointer and slots to make room.  The GCC
-    # manual advises -fno-gcse for computed gotos.
-    CFLAGS_CEVAL="$CFLAGS_CEVAL -fno-gcse"
-fi
 
 
 if test "$ac_cv_gcc_asm_for_x87" = yes; then

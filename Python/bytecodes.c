@@ -45,7 +45,6 @@
 #include "setobject.h"
 
 
-#define USE_COMPUTED_GOTOS 0
 #include "ceval_macros.h"
 
 /* Flow control macros */
@@ -1473,9 +1472,6 @@ dummy_func(
             assert(!_PyErr_Occurred(tstate));
             PyObject *result = PyValue_AsObject(retval);
             DECREF_INPUTS();
-#if !_Py_TAIL_CALL_INTERP
-            assert(frame == &entry.frame);
-#endif
             LLTRACE_RESUME_FRAME();
             return result;
         }
@@ -1862,9 +1858,6 @@ dummy_func(
 
         tier1 inst(CLEANUP_THROW, (sub_iter, null_in, last_sent_val, exc_value_st -- none, null_out, value)) {
             PyObject *exc_value = PyValue_AsKnownObjectBorrow(exc_value_st);
-            #if !_Py_TAIL_CALL_INTERP
-            assert(throwflag);
-            #endif
             assert(exc_value && PyExceptionInstance_Check(exc_value));
             int matches = PyErr_GivenExceptionMatches(exc_value, PyExc_StopIteration);
             if (matches) {
@@ -5664,9 +5657,7 @@ dummy_func(
             }
 #endif
             RELOAD_STACK();
-#if _Py_TAIL_CALL_INTERP
             int opcode;
-#endif
             DISPATCH();
         }
 
@@ -5687,9 +5678,6 @@ dummy_func(
             if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
                 /* Restore previous frame and exit */
                 tstate->current_frame = frame->previous;
-#if !_Py_TAIL_CALL_INTERP
-                assert(frame == &entry.frame);
-#endif
                 return NULL;
             }
             // The caller's instr_ptr is the word that pushed the frame, and
@@ -5721,9 +5709,7 @@ dummy_func(
             assert(!_PyErr_Occurred(tstate));
         #endif
             RELOAD_STACK();
-#if _Py_TAIL_CALL_INTERP
             int opcode;
-#endif
             DISPATCH();
         }
 

@@ -1346,11 +1346,6 @@ const _PyInstr *_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS_PTR = (_PyInstr*)_Py_INT
 /* This setting is reversed below following _PyEval_EvalFrameDefault */
 #endif
 
-#if _Py_TAIL_CALL_INTERP
-#include "ir_targets.h"
-#include "generated_ir_cases.c.h"
-#endif
-
 
 PyValue
 _PyEval_GetIter(PyValue iterable, PyValue *index_or_null, int yield_from)
@@ -2175,9 +2170,15 @@ native_call_finish(_PyNativeCallPublication *state, _PyNativeScope *scope,
     return 0;
 }
 
+/* The handlers, after the helpers that they call, and their table */
+#include "ir_targets.h"
+#include "generated_ir_cases.c.h"
+
 /* The evaluation loop.  _PyEval_EvalFrameDefault() wraps each activation in
-   its borrow floor.  The loop keeps an external name so that debuggers and
-   profilers (Tools/gdb/libpython.py) can find its frames. */
+   its borrow floor.  The loop sets up the activation and calls the first
+   handler, and the handlers run the frames by tail calls until one of them
+   returns.  It keeps an external name so that debuggers and profilers
+   (Tools/gdb/libpython.py) can find its frames. */
 PyObject *_PyEval_EvalFrameLoop(PyThreadState *tstate,
                                 _PyInterpreterFrame *frame, int throwflag);
 
@@ -2188,23 +2189,10 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
     check_invalid_reentrancy();
     CALL_STAT_INC(pyeval_calls);
 
-#if USE_COMPUTED_GOTOS && !_Py_TAIL_CALL_INTERP
-/* Import the static jump table */
-#include "ir_targets.h"
-#endif
-
 #ifdef Py_STATS
     int lastopcode = 0;
 #endif
-#if !_Py_TAIL_CALL_INTERP
-    int opcode;        /* Current handler */
-    _PyIRWord ir_word = 0;  /* Its word, from which the handler takes its fields */
-#endif
     _PyEntryFrame entry;
-    /* A handler that boxes inline inputs for an object API (the contract's
-     * BOXES) declares its own value record; everywhere else, labels
-     * included, there is none, and the dispatch macros finish no bridges. */
-    _PyValueTemps *const value_temps = NULL;
 
     if (_Py_EnterRecursiveCallTstate(tstate, "")) {
         assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
@@ -2212,10 +2200,6 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
         return NULL;
     }
 
-    /* Local "register" variables.
-     * These are cached values from the frame and code object.  */
-    _PyInstr *next_instr;
-    PyValue *slots;
     entry.stack[0] = PyValue_NULL;
 #if defined(Py_DEBUG)
     /* Set these to invalid but identifiable values for debugging. */
@@ -2251,31 +2235,19 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
         }
         /* Because this avoids the RESUME, we need to update instrumentation */
         _Py_Instrument(_PyFrame_GetCode(frame), tstate->interp);
-        next_instr = frame->instr_ptr;
+        _PyInstr *next_instr = frame->instr_ptr;
         monitor_throw(tstate, frame, next_instr);
-        slots = _PyFrame_Slots(frame);
-#if _Py_TAIL_CALL_INTERP
-#   if Py_STATS
-        return _TAIL_CALL_error(slots, tstate, next_instr, TAIL_CALL_NO_OPERANDS, lastopcode);
-#   else
-        return _TAIL_CALL_error(slots, tstate, next_instr, TAIL_CALL_NO_OPERANDS);
-#   endif
-#else
-        goto error;
-#endif
+        PyValue *slots = _PyFrame_Slots(frame);
+        _PyIRWord ir_word = 0;
+        return _TAIL_CALL_error(TAIL_CALL_ARGS);
     }
-
-#if _Py_TAIL_CALL_INTERP
-#   if Py_STATS
-        return _TAIL_CALL_start_frame(NULL, tstate, NULL, TAIL_CALL_NO_OPERANDS, lastopcode);
-#   else
-        return _TAIL_CALL_start_frame(NULL, tstate, NULL, TAIL_CALL_NO_OPERANDS);
-#   endif
-#else
-    goto start_frame;
-#       include "generated_ir_cases.c.h"
-#endif
-
+    {
+        /* start_frame takes its word and slots from the frame */
+        PyValue *slots = NULL;
+        _PyInstr *next_instr = NULL;
+        _PyIRWord ir_word = 0;
+        return _TAIL_CALL_start_frame(TAIL_CALL_ARGS);
+    }
 
 early_exit:
     assert(_PyErr_Occurred(tstate));

@@ -431,6 +431,9 @@ General Options
    .. c:macro:: Py_GIL_DISABLED
       :no-typesetting:
 
+   Not supported: configure stops with an error, because the free-threaded
+   build is not built or tested in this tree.
+
    Enables support for running Python without the :term:`global interpreter
    lock` (GIL): :term:`free-threaded build`.
 
@@ -774,20 +777,10 @@ also be used to improve performance.
 
    .. versionadded:: 3.12
 
-.. option:: --with-computed-gotos
-
-   Enable computed gotos in evaluation loop (enabled by default on supported
-   compilers).
-
-.. option:: --with-tail-call-interp
-
-   Enable interpreters using tail calls in CPython. If enabled, enabling PGO
-   (:option:`--enable-optimizations`) is highly recommended. This option specifically
-   requires a C compiler with proper tail call support, and the
-   `preserve_none <https://clang.llvm.org/docs/AttributeReference.html#preserve-none>`_
-   calling convention. For example, Clang 19 and newer supports this feature.
-
-   .. versionadded:: 3.14
+The interpreter is always built as tail-calling handlers: each bytecode
+handler is a C function and dispatch is a guaranteed (``musttail``) tail call.
+Configure stops if the C compiler lacks the ``musttail`` attribute (GCC 15 or
+Clang 13 and later).
 
 .. option:: --without-frame-pointers
 

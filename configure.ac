@@ -1987,6 +1987,8 @@ AC_ARG_ENABLE([gil],
   [AS_VAR_IF([enable_gil], [yes], [disable_gil=no], [disable_gil=yes])], [disable_gil=no]
 )
 AC_MSG_RESULT([$disable_gil])
+AS_VAR_IF([disable_gil], [yes],
+  [AC_MSG_ERROR([--disable-gil is not supported: the free-threaded build is not built or tested in this tree (pyjit/design/pyvalue.md D6)])])
 
 if test "$disable_gil" = "yes"
 then
@@ -7886,30 +7888,7 @@ then
    wide chars that would be converted.])
 fi
 
-# Check for --with-computed-gotos
-AC_MSG_CHECKING([for --with-computed-gotos])
-AC_ARG_WITH(
-  [computed-gotos],
-  [AS_HELP_STRING(
-    [--with-computed-gotos],
-    [enable computed gotos in evaluation loop (enabled by default on supported compilers)]
-  )],
-[
-if test "$withval" = yes
-then
-  AC_DEFINE([USE_COMPUTED_GOTOS], [1],
-  [Define if you want to use computed gotos in ceval.c.])
-  AC_MSG_RESULT([yes])
-fi
-if test "$withval" = no
-then
-  AC_DEFINE([USE_COMPUTED_GOTOS], [0],
-  [Define if you want to use computed gotos in ceval.c.])
-  AC_MSG_RESULT([no])
-fi
-],
-[AC_MSG_RESULT([no value specified])])
-
+# Compiler support for computed gotos; used by Modules/_sre/sre_lib.h.
 AC_CACHE_CHECK([whether $CC supports computed gotos], [ac_cv_computed_gotos],
 AC_RUN_IFELSE([AC_LANG_SOURCE([[[
 int main(int argc, char **argv)
@@ -7925,39 +7904,84 @@ LABEL2:
 ]]])],
 [ac_cv_computed_gotos=yes],
 [ac_cv_computed_gotos=no],
-[if test "${with_computed_gotos+set}" = set; then
-   ac_cv_computed_gotos="$with_computed_gotos -- configured --with(out)-computed-gotos"
- else
-   ac_cv_computed_gotos=no
- fi]))
+[ac_cv_computed_gotos=no]))
 case "$ac_cv_computed_gotos" in yes*)
   AC_DEFINE([HAVE_COMPUTED_GOTOS], [1],
   [Define if the C compiler supports computed gotos.])
 esac
 
-# Check for --with-tail-call-interp
-AC_MSG_CHECKING([for --with-tail-call-interp])
-AC_ARG_WITH(
-  [tail-call-interp],
-  [AS_HELP_STRING(
-    [--with-tail-call-interp],
-    [enable tail-calling interpreter in evaluation loop and rest of CPython]
-  )],
-[
-if test "$withval" = yes
-then
-  AC_DEFINE([_Py_TAIL_CALL_INTERP], [1],
-  [Define if you want to use tail-calling interpreters in CPython.])
-  AC_MSG_RESULT([yes])
+# The interpreter is built from tail-calling handlers; every handler ends in
+# a guaranteed (musttail) call of the next one.
+AC_CACHE_CHECK([whether $CC supports musttail calls], [ac_cv_musttail],
+[AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+static int g(int x);
+static int f(int x)
+{
+    if (x <= 0) {
+        return x;
+    }
+    __attribute__((musttail)) return g(x - 1);
+}
+static int g(int x)
+{
+    if (x <= 0) {
+        return x;
+    }
+    __attribute__((musttail)) return f(x - 1);
+}
+]], [[return f(4);]])],
+[ac_cv_musttail=yes],
+[ac_cv_musttail=no])])
+AS_VAR_IF([ac_cv_musttail], [yes], [],
+  [AC_MSG_ERROR([the interpreter needs a C compiler with the musttail attribute (GCC 15 or Clang 13 and later)])])
+
+# The calling convention of the handlers, chosen like Py_PRESERVE_NONE_CC in
+# Python/ceval_macros.h.
+AC_CACHE_CHECK([for the tail-call calling convention], [ac_cv_tail_call_cc],
+[AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#if !defined(__has_attribute)
+#  error "no __has_attribute"
+#elif !__has_attribute(preserve_none)
+#  error "no preserve_none"
+#endif
+]], [[]])],
+[ac_cv_tail_call_cc=preserve_none],
+[AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#if !defined(__has_attribute)
+#  error "no __has_attribute"
+#elif !__has_attribute(no_callee_saved_registers)
+#  error "no no_callee_saved_registers"
+#endif
+]], [[]])],
+[ac_cv_tail_call_cc=no_callee_saved_registers],
+[ac_cv_tail_call_cc=none])])
+dnl The chosen attribute must work together with musttail.
+if test "$ac_cv_tail_call_cc" = none; then
+  py_tail_call_attr=""
+else
+  py_tail_call_attr="__attribute__(($ac_cv_tail_call_cc))"
 fi
-if test "$withval" = no
-then
-  AC_DEFINE([_Py_TAIL_CALL_INTERP], [0],
-  [Define if you want to use tail-calling interpreters in CPython.])
-  AC_MSG_RESULT([no])
-fi
-],
-[AC_MSG_RESULT([no value specified])])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+static int $py_tail_call_attr g(int x);
+static int $py_tail_call_attr f(int x)
+{
+    if (x <= 0) {
+        return x;
+    }
+    __attribute__((musttail)) return g(x - 1);
+}
+static int $py_tail_call_attr g(int x)
+{
+    if (x <= 0) {
+        return x;
+    }
+    __attribute__((musttail)) return f(x - 1);
+}
+]], [[return f(4);]])],
+[],
+[AC_MSG_ERROR([$CC accepts the $ac_cv_tail_call_cc attribute but not together with musttail])])])
+PY_TAIL_CALL_CC=$ac_cv_tail_call_cc
+AC_SUBST([PY_TAIL_CALL_CC])
 
 # The interpreter runs code objects as the register IR of
 # Include/internal/pycore_ir.h; the macro tells extensions and sysconfig.
@@ -8093,39 +8117,6 @@ if test "$have_glibc_memmove_bug" = yes; then
      for memmove and bcopy.])
 fi
 
-AC_MSG_CHECKING([if we need to manually block large inlining in ceval.c])
-AC_RUN_IFELSE([AC_LANG_SOURCE([[
-int main(void) {
-// See gh-148284: Clang 22 seems to have interactions with inlining
-// and the stackref buffer which cause 40 kB of stack usage on x86-64
-// in buggy versions of _PyEval_EvalFrameDefault() in computed goto
-// interpreter. The normal usage seen is normally 1-2 kB.
-#if defined(__clang__) && (__clang_major__ == 22)
-    return 1;
-#else
-    return 0;
-#endif
-}
-]])],
-[block_huge_inlining_in_ceval=no],
-[block_huge_inlining_in_ceval=yes],
-[block_huge_inlining_in_ceval=undefined])
-AC_MSG_RESULT([$block_huge_inlining_in_ceval])
-
-if test "$block_huge_inlining_in_ceval" = yes && test "$ac_cv_computed_gotos" = yes; then
-    # gh-148284: Suppress inlining of functions whose stack size exceeds
-    # 512 bytes. This number should be tuned to follow the C stack
-    # consumption in _PyEval_EvalFrameDefault() on computed goto
-    # interpreter.
-    CFLAGS_CEVAL="$CFLAGS_CEVAL -finline-max-stacksize=512"
-fi
-if test "$ac_cv_cc_name" = "gcc" && test "$ac_cv_computed_gotos" = yes; then
-    # GCC's global common subexpression elimination keeps values shared
-    # between the handlers of the computed-goto loop live and spills the
-    # interpreter's frame, word pointer and slots to make room.  The GCC
-    # manual advises -fno-gcse for computed gotos.
-    CFLAGS_CEVAL="$CFLAGS_CEVAL -fno-gcse"
-fi
 AC_SUBST([CFLAGS_CEVAL])
 
 if test "$ac_cv_gcc_asm_for_x87" = yes; then

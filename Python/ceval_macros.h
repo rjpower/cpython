@@ -1,40 +1,5 @@
 // Macros and other things needed by ceval.c, and bytecodes.c
 
-/* Computed GOTOs, or
-       the-optimization-commonly-but-improperly-known-as-"threaded code"
-   using gcc's labels-as-values extension
-   (http://gcc.gnu.org/onlinedocs/gcc/Labels-as-Values.html).
-
-   The traditional bytecode evaluation loop uses a "switch" statement, which
-   decent compilers will optimize as a single indirect branch instruction
-   combined with a lookup table of jump addresses. However, since the
-   indirect jump instruction is shared by all opcodes, the CPU will have a
-   hard time making the right prediction for where to jump next (actually,
-   it will be always wrong except in the uncommon case of a sequence of
-   several identical opcodes).
-
-   "Threaded code" in contrast, uses an explicit jump table and an explicit
-   indirect jump instruction at the end of each opcode. Since the jump
-   instruction is at a different address for each opcode, the CPU will make a
-   separate prediction for each of these instructions, which is equivalent to
-   predicting the second opcode of each opcode pair. These predictions have
-   a much better chance to turn out valid, especially in small bytecode loops.
-
-   A mispredicted branch on a modern CPU flushes the whole pipeline and
-   can cost several CPU cycles (depending on the pipeline depth),
-   and potentially many more instructions (depending on the pipeline width).
-   A correctly predicted branch, however, is nearly free.
-
-   At the time of this writing, the "threaded code" version is up to 15-20%
-   faster than the normal "switch" version, depending on the compiler and the
-   CPU architecture.
-
-   NOTE: care must be taken that the compiler doesn't try to "optimize" the
-   indirect jumps by sharing them between all opcodes. Such optimizations
-   can be disabled on gcc by using the -fno-gcse flag (or possibly
-   -fno-crossjumping).
-*/
-
 /* Use macros rather than inline functions, to make it as clear as possible
  * to the C compiler that the tracing check is a simple test then branch.
  * We want to be sure that the compiler knows this before it generates
@@ -55,18 +20,6 @@
 #  define Py_UNLIKELY(x) (x)
 #endif
 
-#ifdef HAVE_COMPUTED_GOTOS
-    #ifndef USE_COMPUTED_GOTOS
-    #define USE_COMPUTED_GOTOS 1
-    #endif
-#else
-    #if defined(USE_COMPUTED_GOTOS) && USE_COMPUTED_GOTOS
-    #error "Computed gotos are not supported on this compiler."
-    #endif
-    #undef USE_COMPUTED_GOTOS
-    #define USE_COMPUTED_GOTOS 0
-#endif
-
 #ifdef Py_STATS
 /* The handlers of the register IR that have no opcode have no statistics. */
 #define INSTRUCTION_STATS(op) \
@@ -82,167 +35,97 @@
 #define INSTRUCTION_STATS(op) ((void)0)
 #endif
 
-/* The word that dispatch loads, from which the handler extracts its fields
- * (Include/internal/pycore_ir.h). */
-#   define TAIL_CALL_OPERANDS _PyIRWord ir_word
-#   define TAIL_CALL_OPERAND_ARGS ir_word
-#   define TAIL_CALL_NO_OPERANDS 0
-
+/* The interpreter is a set of handlers, one C function per handler index
+ * and per label, which dispatch to the next by a guaranteed tail call
+ * (musttail) through instruction_funcptr_handler_table.  They pass the
+ * interpreter's state in registers (pyjit/design/proposals/
+ * register-ir-v2-a3.md, section 2):
+ *
+ *   frame       the executing frame, tstate->current_frame; a handler that
+ *               switches frames assigns it before it dispatches;
+ *   slots       its slots, _PyFrame_Slots(frame);
+ *   tstate      the thread state;
+ *   next_instr  the word to run next;
+ *   ir_word     the word of the instruction, which dispatch loads and from
+ *               which the handler decodes its fields, IR_A(ir_word) and so
+ *               on (Include/internal/pycore_ir.h);
+ *   lastopcode  under Py_STATS, the previous handler, for pair counts.
+ *
+ * A handler that runs another on the same word, as INSTRUMENTED_LINE does
+ * and a specialisation that deoptimises to its family head, passes ir_word
+ * on, so the other handler finds the same fields. */
 #ifdef Py_STATS
-#   define TAIL_CALL_PARAMS PyValue *slots, PyThreadState *tstate, _PyInstr *next_instr, TAIL_CALL_OPERANDS, int lastopcode
-#   define TAIL_CALL_ARGS slots, tstate, next_instr, TAIL_CALL_OPERAND_ARGS, lastopcode
+#   define TAIL_CALL_PARAMS _PyInterpreterFrame *frame, PyValue *slots, \
+        PyThreadState *tstate, _PyInstr *next_instr, _PyIRWord ir_word, \
+        int lastopcode
+#   define TAIL_CALL_ARGS frame, slots, tstate, next_instr, ir_word, lastopcode
+#   define TAIL_CALL_ARGS_AT(INSTR) \
+        frame, slots, tstate, (INSTR), ir_word, lastopcode
 #else
-#   define TAIL_CALL_PARAMS PyValue *slots, PyThreadState *tstate, _PyInstr *next_instr, TAIL_CALL_OPERANDS
-#   define TAIL_CALL_ARGS slots, tstate, next_instr, TAIL_CALL_OPERAND_ARGS
+#   define TAIL_CALL_PARAMS _PyInterpreterFrame *frame, PyValue *slots, \
+        PyThreadState *tstate, _PyInstr *next_instr, _PyIRWord ir_word
+#   define TAIL_CALL_ARGS frame, slots, tstate, next_instr, ir_word
+#   define TAIL_CALL_ARGS_AT(INSTR) frame, slots, tstate, (INSTR), ir_word
 #endif
 
-#if _Py_TAIL_CALL_INTERP
-#   if defined(__clang__) || defined(__GNUC__)
-#       if !_Py__has_attribute(preserve_none) || !_Py__has_attribute(musttail)
-#           error "This compiler does not have support for efficient tail calling."
-#       endif
-#   elif defined(_MSC_VER) && (_MSC_VER < 1950)
+/* The calling convention of the handlers.  Only the attribute differs
+ * between the arms, which configure records as PY_TAIL_CALL_CC
+ * (preserve_none, no_callee_saved_registers or none).  MSVC comes first,
+ * because _Py__has_attribute is 0 there; it is untested.  preserve_none
+ * (Clang, and GCC once it ships it) keeps the state in registers that
+ * survive C calls; GCC's no_callee_saved_registers keeps it in the argument
+ * registers.  The last arm is plain musttail, which configure accepts and
+ * the measurement harness refuses. */
+#if defined(_MSC_VER) && !defined(__clang__)
+#   if _MSC_VER < 1950
 #       error "You need at least VS 2026 / PlatformToolset v145 for tail calling."
 #   endif
-#   if defined(_MSC_VER) && !defined(__clang__)
-#      define Py_MUSTTAIL [[msvc::musttail]]
-#      define Py_PRESERVE_NONE_CC __preserve_none
-#   else
-#       define Py_MUSTTAIL __attribute__((musttail))
+#   define Py_MUSTTAIL [[msvc::musttail]]
+#   define Py_PRESERVE_NONE_CC __preserve_none
+#else
+#   if !_Py__has_attribute(musttail)
+#       error "The interpreter needs a C compiler with the musttail attribute."
+#   endif
+#   define Py_MUSTTAIL __attribute__((musttail))
+#   if _Py__has_attribute(preserve_none)
 #       define Py_PRESERVE_NONE_CC __attribute__((preserve_none))
-#   endif
-    typedef PyObject *(Py_PRESERVE_NONE_CC *py_tail_call_funcptr)(TAIL_CALL_PARAMS);
-
-#   define TARGET(op) Py_NO_INLINE PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_##op(TAIL_CALL_PARAMS)
-/* A handler finds the frame in the thread state, which is not one of the
- * registers that the handlers pass on. */
-#   define TAIL_CALL_LOAD_FRAME() \
-        _PyInterpreterFrame *frame = tstate->current_frame; \
-        _PyValueTemps *const value_temps = NULL
-
-#   define DISPATCH_GOTO() \
-        do { \
-            Py_MUSTTAIL return (instruction_funcptr_handler_table[opcode])(TAIL_CALL_ARGS); \
-        } while (0)
-#   define JUMP_TO_LABEL(name) \
-        do { \
-            if (value_temps != NULL && value_temps->count != 0) { \
-                int value_had_error = PyErr_Occurred() != NULL; \
-                if (finish_value_bridges(tstate, frame, next_instr, value_temps) < 0 && !value_had_error) { \
-                    next_instr = frame->instr_ptr + 1; \
-                    Py_MUSTTAIL return (_TAIL_CALL_error)(TAIL_CALL_ARGS); \
-                } \
-            } \
-            Py_MUSTTAIL return (_TAIL_CALL_##name)(TAIL_CALL_ARGS); \
-        } while (0)
-#   ifdef Py_STATS
-#       define JUMP_TO_PREDICTED(name) \
-            do { \
-                assert(value_temps == NULL || value_temps->count == 0); \
-                Py_MUSTTAIL return (_TAIL_CALL_##name)(slots, tstate, this_instr, TAIL_CALL_OPERAND_ARGS, lastopcode); \
-            } while (0)
+#   elif _Py__has_attribute(no_callee_saved_registers)
+#       define Py_PRESERVE_NONE_CC __attribute__((no_callee_saved_registers))
 #   else
-#       define JUMP_TO_PREDICTED(name) \
-            do { \
-                assert(value_temps == NULL || value_temps->count == 0); \
-                Py_MUSTTAIL return (_TAIL_CALL_##name)(slots, tstate, this_instr, TAIL_CALL_OPERAND_ARGS); \
-            } while (0)
+#       define Py_PRESERVE_NONE_CC
 #   endif
-#    define LABEL(name) TARGET(name)
-#elif USE_COMPUTED_GOTOS
-#  define TARGET(op) TARGET_##op:
-#  define DISPATCH_GOTO() goto *opcode_targets[opcode]
-#  define JUMP_TO_LABEL(name) do { \
+#endif
+typedef PyObject *(Py_PRESERVE_NONE_CC *py_tail_call_funcptr)(TAIL_CALL_PARAMS);
+
+#define TARGET(op) Py_NO_INLINE PyObject *Py_PRESERVE_NONE_CC _TAIL_CALL_##op(TAIL_CALL_PARAMS)
+#define LABEL(name) TARGET(name)
+
+#define DISPATCH_GOTO() \
+    do { \
+        Py_MUSTTAIL return (instruction_funcptr_handler_table[opcode])(TAIL_CALL_ARGS); \
+    } while (0)
+#define JUMP_TO_LABEL(name) \
+    do { \
         if (value_temps != NULL && value_temps->count != 0) { \
             int value_had_error = PyErr_Occurred() != NULL; \
             if (finish_value_bridges(tstate, frame, next_instr, value_temps) < 0 && !value_had_error) { \
-                next_instr = frame->instr_ptr + 1; goto error; \
+                next_instr = frame->instr_ptr + 1; \
+                Py_MUSTTAIL return (_TAIL_CALL_error)(TAIL_CALL_ARGS); \
             } \
         } \
-        goto name; \
+        Py_MUSTTAIL return (_TAIL_CALL_##name)(TAIL_CALL_ARGS); \
     } while (0)
-#  define JUMP_TO_PREDICTED(name) do { \
+/* A specialisation deoptimises to its family head, which runs the word
+ * again from its start. */
+#define JUMP_TO_PREDICTED(name) \
+    do { \
         assert(value_temps == NULL || value_temps->count == 0); \
-        goto PREDICTED_##name; \
+        Py_MUSTTAIL return (_TAIL_CALL_##name)(TAIL_CALL_ARGS_AT(this_instr)); \
     } while (0)
-#  define LABEL(name) name:
-#  define TAIL_CALL_LOAD_FRAME() ((void)0)
-#else
-#  define TARGET(op) case op: TARGET_##op:
-#  define DISPATCH_GOTO() goto dispatch_opcode
-#  define JUMP_TO_LABEL(name) do { \
-        if (value_temps != NULL && value_temps->count != 0) { \
-            int value_had_error = PyErr_Occurred() != NULL; \
-            if (finish_value_bridges(tstate, frame, next_instr, value_temps) < 0 && !value_had_error) { \
-                next_instr = frame->instr_ptr + 1; goto error; \
-            } \
-        } \
-        goto name; \
-    } while (0)
-#  define JUMP_TO_PREDICTED(name) do { \
-        assert(value_temps == NULL || value_temps->count == 0); \
-        goto PREDICTED_##name; \
-    } while (0)
-#  define LABEL(name) name:
-#  define TAIL_CALL_LOAD_FRAME() ((void)0)
-#endif
 
-/* Dispatch loads the word of the instruction into ir_word and takes the
- * handler from it.  A handler reads field A, B, C or D, or CD, of its word W,
- * which is this_instr, as IR_FIELD_A(W) and so on.  A handler that runs
- * another on the same word, as INSTRUMENTED_LINE does and a specialisation
- * that deoptimises to its family head's PREDICTED_ label, leaves ir_word as
- * it is, so the other handler finds the same fields.
- *
- * Fields never change once a block is lowered, so with the GIL the
- * computed-goto build reads each from W in memory, with a 16-bit load and a
- * shift or a mask.  Decoding ir_word instead keeps it live through the
- * handler and costs a copy, a shift and a mask per field; GCC then keeps
- * next_instr on the stack, which adds a load and a store to every handler.
- * The tail-call build, which receives ir_word as an argument, and the
- * free-threaded build, which loads it atomically, decode ir_word. */
-#if USE_COMPUTED_GOTOS && !_Py_TAIL_CALL_INTERP \
-    && !defined(Py_GIL_DISABLED) && PY_LITTLE_ENDIAN
-/* The unsigned integer of N bytes at byte K of the word at W */
-static inline uintptr_t
-ir_bytes_at(const _PyIRWord *w, int k, int n)
-{
-    if (n == 2) {
-        uint16_t v;
-        memcpy(&v, (const char *)w + k, sizeof(v));
-        return v;
-    }
-    uint32_t v;
-    memcpy(&v, (const char *)w + k, sizeof(v));
-    return v;
-}
-/* In a debug build, the field in memory is the one in ir_word */
-static inline uintptr_t
-ir_check_field(uintptr_t field, uint64_t expected)
-{
-    assert(field == expected);
-    (void)expected;
-    return field;
-}
-#  define IR_MEMORY_FIELD(W, K, N, SHIFT, MASK, F) \
-    ir_check_field((ir_bytes_at((W), (K), (N)) >> (SHIFT)) & (MASK), F(ir_word))
-#  define IR_FIELD_A(W) IR_MEMORY_FIELD(W, 2, 2, 0, IR_FIELD_MAX, IR_A)
-#  define IR_FIELD_B(W) IR_MEMORY_FIELD(W, 3, 2, 4, IR_FIELD_MAX, IR_B)
-#  define IR_FIELD_C(W) IR_MEMORY_FIELD(W, 5, 2, 0, IR_FIELD_MAX, IR_C)
-#  define IR_FIELD_D(W) IR_MEMORY_FIELD(W, 6, 2, 4, IR_FIELD_MAX, IR_D)
-#  define IR_FIELD_CD(W) IR_MEMORY_FIELD(W, 4, 4, 8, IR_CD_MAX, IR_CD)
-#else
-#  define IR_FIELD_A(W) IR_A(ir_word)
-#  define IR_FIELD_B(W) IR_B(ir_word)
-#  define IR_FIELD_C(W) IR_C(ir_word)
-#  define IR_FIELD_D(W) IR_D(ir_word)
-#  define IR_FIELD_CD(W) IR_CD(ir_word)
-#endif
-#define IR_PREDICTED(op) PREDICTED_##op:
-
-/* PRE_DISPATCH_GOTO() does lltrace if enabled. Normally a no-op */
+/* PRE_DISPATCH_GOTO() checks the handlers' state and does lltrace if
+ * enabled, in a debug build.  Normally a no-op. */
 #ifdef Py_DEBUG
-/* The tail-call handlers find the frame in tstate->current_frame. */
 #define PRE_DISPATCH_GOTO() \
     assert(frame == tstate->current_frame); \
     if (frame->lltrace >= 5) { \
@@ -585,7 +468,7 @@ gen_try_set_executing(PyGenObject *gen)
     Py_TYPE(ITER)->_tp_iteritem((ITER), (INDEX))
 
 /* Operands of the register IR handlers (Tools/cases_generator/ir_generator.py).
- * F is a field, IR_FIELD_A(this_instr) and so on. */
+ * F is a field, IR_A(ir_word) and so on. */
 
 /* The slot that a slot field names, an lvalue.  `slots` is the frame's
  * slots, _PyFrame_Slots(frame), which the handlers keep in a register. */

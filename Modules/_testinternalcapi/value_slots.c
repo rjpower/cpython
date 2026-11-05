@@ -1527,6 +1527,43 @@ bool_result(int res)
     return res < 0 ? NULL : PyBool_FromLong(res);
 }
 
+/* value_container(op, container, key[, value]): the value dispatcher of
+ * "getitem", "setitem", "delitem" or "contains", with the key and value as
+ * borrowed values (an exact int or float that fits is inline). */
+static PyObject *
+value_container(PyObject *Py_UNUSED(module), PyObject *const *args,
+                Py_ssize_t nargs)
+{
+    if (nargs < 3 || nargs > 4 || !PyUnicode_Check(args[0])) {
+        PyErr_SetString(PyExc_TypeError,
+                        "value_container(op, container, key[, value])");
+        return NULL;
+    }
+    const char *op = PyUnicode_AsUTF8(args[0]);
+    if (op == NULL) {
+        return NULL;
+    }
+    PyValueBorrow container = _Py_VALUE_ARG(args[1]);
+    PyValueBorrow key = _Py_VALUE_ARG(args[2]);
+    if (strcmp(op, "getitem") == 0 && nargs == 3) {
+        PyValue result = (_PyValue_GetItem)(container, key);
+        return PyValue_IsNull(result) ? NULL : value_result(result);
+    }
+    if (strcmp(op, "setitem") == 0 && nargs == 4) {
+        return (_PyValue_SetItem)(container, key, _Py_VALUE_ARG(args[3])) < 0
+            ? NULL : Py_NewRef(Py_None);
+    }
+    if (strcmp(op, "delitem") == 0 && nargs == 3) {
+        return (_PyValue_DelItem)(container, key) < 0
+            ? NULL : Py_NewRef(Py_None);
+    }
+    if (strcmp(op, "contains") == 0 && nargs == 3) {
+        return bool_result((_PyValue_Contains)(container, key));
+    }
+    PyErr_Format(PyExc_ValueError, "unknown container operation %s", op);
+    return NULL;
+}
+
 static PyObject *
 value_dispatch(PyObject *Py_UNUSED(module), PyObject *const *args,
                Py_ssize_t nargs)
@@ -2596,6 +2633,7 @@ static PyMethodDef methods[] = {
     {"wrapper_pair", wrapper_pair, METH_O},
     {"call_value_slot", _PyCFunction_CAST(call_value_slot), METH_FASTCALL},
     {"value_dispatch", _PyCFunction_CAST(value_dispatch), METH_FASTCALL},
+    {"value_container", _PyCFunction_CAST(value_container), METH_FASTCALL},
     {"make_invalid_value_type", make_invalid_value_type, METH_O},
     {"int_span_path", int_span_path, METH_VARARGS},
     {"value_extract", value_extract, METH_VARARGS},

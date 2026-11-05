@@ -3449,32 +3449,96 @@ done:
     return result;
 }
 
-/* Clone of vectorcall_method() that returns NotImplemented
- * when the lookup fails. */
-static PyObject *
-vectorcall_maybe(PyThreadState *tstate, PyObject *name,
-                 PyObject *const *args, Py_ssize_t nargs)
+/* The value twins of vectorcall_unbound(), vectorcall_method() and
+   vectorcall_maybe(), for the value sides of the slot_* functions (V2a-1a
+   part iii). args is a window of borrowed words (_PyValue_WindowPut): the
+   caller's operands stay owned by the caller for the whole call, so an
+   inline operand reaches the dunder without a box. args[0] is the receiver,
+   whose type has the slot_* function and so is a heap type: an object. The
+   dunder is looked up on that receiver, as the object forms do, and called
+   through the value vectorcall. */
+static PyValue
+vectorcall_unbound_value(PyThreadState *tstate, int unbound, PyObject *func,
+                         const PyValue *args, Py_ssize_t nargs)
+{
+    size_t nargsf = nargs;
+    if (!unbound) {
+        /* Skip self argument, freeing up args[0] to use for
+         * PY_VECTORCALL_ARGUMENTS_OFFSET */
+        args++;
+        nargsf = nargsf - 1 + PY_VECTORCALL_ARGUMENTS_OFFSET;
+    }
+    EVAL_CALL_STAT_INC_IF_FUNCTION(EVAL_CALL_SLOT, func);
+    return _PyValue_VectorcallTstate(tstate, PyValue_FromObjectBorrow(func),
+                                     args, nargsf, NULL);
+}
+
+static PyValue
+vectorcall_method_value(PyObject *name, const PyValue *args, Py_ssize_t nargs)
 {
     assert(nargs >= 1);
-
-    PyObject *self_owner = NULL;
-    PyObject *result = NULL;
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyObject *self_owner = Py_NewRef(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
     PyObject *func = NULL;
-    int unbound = -1;
+    PyValue result = PyValue_NULL;
+    int unbound = lookup_method(self_owner, name, &func);
+    if (unbound >= 0) {
+        result = vectorcall_unbound_value(tstate, unbound, func, args, nargs);
+    }
+    Py_XDECREF(func);
+    Py_DECREF(self_owner);
+    return result;
+}
 
-    self_owner = Py_NewRef(args[0]);
-    unbound = lookup_maybe_method(self_owner, name, &func);
+/* Gives NotImplemented when the lookup fails, as vectorcall_maybe(). */
+static PyValue
+vectorcall_maybe_value(PyThreadState *tstate, PyObject *name,
+                       const PyValue *args, Py_ssize_t nargs)
+{
+    assert(nargs >= 1);
+    PyObject *self_owner = Py_NewRef(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+    PyObject *func = NULL;
+    PyValue result = PyValue_NULL;
+    int unbound = lookup_maybe_method(self_owner, name, &func);
     if (unbound < 0) {
         if (!PyErr_Occurred()) {
-            result = Py_NewRef(Py_NotImplemented);
+            result = PyValue_NotImplemented;
         }
-        goto done;
     }
-    result = vectorcall_unbound(tstate, unbound, func, args, nargs);
-
-done:
+    else {
+        result = vectorcall_unbound_value(tstate, unbound, func, args, nargs);
+    }
     Py_XDECREF(func);
-    Py_CLEAR(self_owner);
+    Py_DECREF(self_owner);
+    return result;
+}
+
+/* The value twin of maybe_call_special_no_args() and
+   maybe_call_special_one_arg(): PyValue_NULL without an exception if the
+   method is missing (or is None, with attr_is_none). */
+static PyValue
+maybe_call_special_value(PyObject *attr, const PyValue *args, Py_ssize_t nargs,
+                         int *attr_is_none)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    PyObject *self_owner = Py_NewRef(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+    PyObject *func = NULL;
+    PyValue result = PyValue_NULL;
+    if (attr_is_none != NULL) {
+        *attr_is_none = 0;
+    }
+    int unbound = lookup_maybe_method(self_owner, attr, &func);
+    if (unbound >= 0) {
+        if (attr_is_none != NULL) {
+            *attr_is_none = (func == Py_None);
+        }
+        if (func != Py_None || attr_is_none == NULL) {
+            result = vectorcall_unbound_value(tstate, unbound, func, args,
+                                              nargs);
+        }
+    }
+    Py_XDECREF(func);
+    Py_DECREF(self_owner);
     return result;
 }
 
@@ -12306,31 +12370,15 @@ add_tp_new_wrapper(PyTypeObject *type)
 /* Slot wrappers that call the corresponding __foo__ slot.  See comments
    below at override_slots() for more explanation. */
 
-#define SLOT0(FUNCNAME, DUNDER) \
-static PyObject * \
-FUNCNAME(PyObject *self) \
-{ \
-    PyObject* stack[1] = {self}; \
-    return vectorcall_method(&_Py_ID(DUNDER), stack, 1); \
-}
-
-#define SLOT1(FUNCNAME, DUNDER, ARG1TYPE) \
-static PyObject * \
-FUNCNAME(PyObject *self, ARG1TYPE arg1) \
-{ \
-    PyObject* stack[2] = {self, arg1}; \
-    return vectorcall_method(&_Py_ID(DUNDER), stack, 2); \
-}
-
 /* Boolean helper for SLOT1BINFULL().
    right.__class__ is a nontrivial subclass of left.__class__. */
 static int
-method_is_overloaded(PyObject *left, PyObject *right, PyObject *name)
+method_is_overloaded(PyTypeObject *left, PyTypeObject *right, PyObject *name)
 {
     PyObject *a, *b;
     int ok;
 
-    if (PyObject_GetOptionalAttr((PyObject *)(Py_TYPE(right)), name, &b) < 0) {
+    if (PyObject_GetOptionalAttr((PyObject *)right, name, &b) < 0) {
         return -1;
     }
     if (b == NULL) {
@@ -12338,7 +12386,7 @@ method_is_overloaded(PyObject *left, PyObject *right, PyObject *name)
         return 0;
     }
 
-    if (PyObject_GetOptionalAttr((PyObject *)(Py_TYPE(left)), name, &a) < 0) {
+    if (PyObject_GetOptionalAttr((PyObject *)left, name, &a) < 0) {
         Py_DECREF(b);
         return -1;
     }
@@ -12355,51 +12403,88 @@ method_is_overloaded(PyObject *left, PyObject *right, PyObject *name)
 }
 
 
-#define SLOT1BINFULL(FUNCNAME, TESTFUNC, SLOTNAME, DUNDER, RDUNDER) \
-static PyObject * \
-FUNCNAME(PyObject *self, PyObject *other) \
+/* The value side of a binary slot_* function: it keeps SLOT1BINFULL()'s
+   two-sided logic and passes both operands to the dunder as values, so an
+   inline operand (the int of `1 + obj`) reaches __radd__ without a box. The
+   object slot is the thunk of the value side, and TESTFUNC is that object
+   slot: "the other type's slot is this function" compares object slots
+   (value-api-v2a0.md, D8). A type with the slot_* function is a heap type,
+   so the operand that receives the call is an object. */
+#define SLOT1BINFULL_VALUE(VALUEFUNC, TESTFUNC, SLOTNAME, DUNDER, RDUNDER) \
+static PyValue \
+VALUEFUNC(PyValueBorrow self, PyValueBorrow other) \
 { \
-    PyObject* stack[2]; \
+    PyValue stack[2]; \
     PyThreadState *tstate = _PyThreadState_GET(); \
-    int do_other = !Py_IS_TYPE(self, Py_TYPE(other)) && \
-        Py_TYPE(other)->tp_as_number != NULL && \
-        Py_TYPE(other)->tp_as_number->SLOTNAME == TESTFUNC; \
-    if (Py_TYPE(self)->tp_as_number != NULL && \
-        Py_TYPE(self)->tp_as_number->SLOTNAME == TESTFUNC) { \
-        PyObject *r; \
-        if (do_other && PyType_IsSubtype(Py_TYPE(other), Py_TYPE(self))) { \
-            int ok = method_is_overloaded(self, other, &_Py_ID(RDUNDER)); \
+    PyTypeObject *self_type = PyValue_TYPE(self); \
+    PyTypeObject *other_type = PyValue_TYPE(other); \
+    int do_other = self_type != other_type && \
+        other_type->tp_as_number != NULL && \
+        other_type->tp_as_number->SLOTNAME == TESTFUNC; \
+    if (self_type->tp_as_number != NULL && \
+        self_type->tp_as_number->SLOTNAME == TESTFUNC) { \
+        PyValue r; \
+        if (do_other && PyType_IsSubtype(other_type, self_type)) { \
+            int ok = method_is_overloaded(self_type, other_type, \
+                                          &_Py_ID(RDUNDER)); \
             if (ok < 0) { \
-                return NULL; \
+                return PyValue_NULL; \
             } \
             if (ok) { \
-                stack[0] = other; \
-                stack[1] = self; \
-                r = vectorcall_maybe(tstate, &_Py_ID(RDUNDER), stack, 2); \
-                if (r != Py_NotImplemented) \
+                _PyValue_WindowPut(&stack[0], other); \
+                _PyValue_WindowPut(&stack[1], self); \
+                r = vectorcall_maybe_value(tstate, &_Py_ID(RDUNDER), \
+                                           stack, 2); \
+                if (!PyValue_Is(r, PyValue_NotImplemented)) \
                     return r; \
-                Py_DECREF(r); \
+                PyValue_CLOSE(r); \
                 do_other = 0; \
             } \
         } \
-        stack[0] = self; \
-        stack[1] = other; \
-        r = vectorcall_maybe(tstate, &_Py_ID(DUNDER), stack, 2); \
-        if (r != Py_NotImplemented || \
-            Py_IS_TYPE(other, Py_TYPE(self))) \
+        _PyValue_WindowPut(&stack[0], self); \
+        _PyValue_WindowPut(&stack[1], other); \
+        r = vectorcall_maybe_value(tstate, &_Py_ID(DUNDER), stack, 2); \
+        if (!PyValue_Is(r, PyValue_NotImplemented) || \
+            self_type == other_type) \
             return r; \
-        Py_DECREF(r); \
+        PyValue_CLOSE(r); \
     } \
     if (do_other) { \
-        stack[0] = other; \
-        stack[1] = self; \
-        return vectorcall_maybe(tstate, &_Py_ID(RDUNDER), stack, 2); \
+        _PyValue_WindowPut(&stack[0], other); \
+        _PyValue_WindowPut(&stack[1], self); \
+        return vectorcall_maybe_value(tstate, &_Py_ID(RDUNDER), stack, 2); \
     } \
-    Py_RETURN_NOTIMPLEMENTED; \
+    return PyValue_NotImplemented; \
 }
 
 #define SLOT1BIN(FUNCNAME, SLOTNAME, DUNDER, RDUNDER) \
-    SLOT1BINFULL(FUNCNAME, FUNCNAME, SLOTNAME, DUNDER, RDUNDER)
+    static PyValue FUNCNAME##_value(PyValueBorrow, PyValueBorrow); \
+    _Py_VALUE_THUNK_BINARY(FUNCNAME, FUNCNAME##_value) \
+    SLOT1BINFULL_VALUE(FUNCNAME##_value, FUNCNAME, SLOTNAME, DUNDER, RDUNDER)
+
+/* The in-place forms: the receiver is the heap-type operand, the other is
+   any value. */
+#define SLOT1INPLACE(FUNCNAME, DUNDER) \
+static PyValue \
+FUNCNAME##_value(PyValueBorrow self, PyValueBorrow arg1) \
+{ \
+    PyValue stack[2]; \
+    _PyValue_WindowPut(&stack[0], self); \
+    _PyValue_WindowPut(&stack[1], arg1); \
+    return vectorcall_method_value(&_Py_ID(DUNDER), stack, 2); \
+} \
+_Py_VALUE_THUNK_BINARY(FUNCNAME, FUNCNAME##_value)
+
+/* The unary forms; a dunder's result can be inline. */
+#define SLOT0UNARY(FUNCNAME, DUNDER) \
+static PyValue \
+FUNCNAME##_value(PyValueBorrow self) \
+{ \
+    PyValue stack[1]; \
+    _PyValue_WindowPut(&stack[0], self); \
+    return vectorcall_method_value(&_Py_ID(DUNDER), stack, 1); \
+} \
+_Py_VALUE_THUNK_UNARY(FUNCNAME, FUNCNAME##_value)
 
 static Py_ssize_t
 slot_sq_length(PyObject *self)
@@ -12429,95 +12514,133 @@ slot_sq_length(PyObject *self)
     return len;
 }
 
-static PyObject *
-slot_sq_item(PyObject *self, Py_ssize_t i)
+/* The value sides of the key, index and value slots (value-api-m1b-m2.md,
+   B8): the receiver is the heap-type instance, an object; the key, index or
+   value goes to the dunder as a word, so an inline operand needs no box. A
+   PyValue_NULL value deletes. */
+static PyValue slot_sq_item_value(PyObject *, Py_ssize_t);
+
+_Py_VALUE_THUNK_ITEM(slot_sq_item, slot_sq_item_value)
+
+static PyValue
+slot_sq_item_value(PyObject *self, Py_ssize_t i)
 {
-    PyObject *ival = PyLong_FromSsize_t(i);
-    if (ival == NULL) {
-        return NULL;
+    PyValue ival = PyValue_FromInt64(i);
+    if (PyValue_IsNull(ival)) {
+        return PyValue_NULL;
     }
-    PyObject *stack[2] = {self, ival};
-    PyObject *retval = vectorcall_method(&_Py_ID(__getitem__), stack, 2);
-    Py_DECREF(ival);
+    PyValue stack[2];
+    _PyValue_WindowPut(&stack[0], _PyValue_FromObjectKnown(self));
+    _PyValue_WindowPut(&stack[1], ival);
+    PyValue retval = vectorcall_method_value(&_Py_ID(__getitem__), stack, 2);
+    PyValue_CLOSE(ival);
     return retval;
 }
 
-static int
-slot_sq_ass_item(PyObject *self, Py_ssize_t index, PyObject *value)
-{
-    PyObject *stack[3];
-    PyObject *res;
-    PyObject *index_obj;
+static int slot_sq_ass_item_value(PyObject *, Py_ssize_t, PyValueBorrow);
 
-    index_obj = PyLong_FromSsize_t(index);
-    if (index_obj == NULL) {
+_Py_VALUE_THUNK_ASSITEM(slot_sq_ass_item, slot_sq_ass_item_value)
+
+static int
+slot_sq_ass_item_value(PyObject *self, Py_ssize_t index, PyValueBorrow value)
+{
+    PyValue stack[3];
+    PyValue res;
+    PyValue index_value = PyValue_FromInt64(index);
+    if (PyValue_IsNull(index_value)) {
         return -1;
     }
 
-    stack[0] = self;
-    stack[1] = index_obj;
-    if (value == NULL) {
-        res = vectorcall_method(&_Py_ID(__delitem__), stack, 2);
+    _PyValue_WindowPut(&stack[0], _PyValue_FromObjectKnown(self));
+    _PyValue_WindowPut(&stack[1], index_value);
+    if (PyValue_IsNull(value)) {
+        res = vectorcall_method_value(&_Py_ID(__delitem__), stack, 2);
     }
     else {
-        stack[2] = value;
-        res = vectorcall_method(&_Py_ID(__setitem__), stack, 3);
+        _PyValue_WindowPut(&stack[2], value);
+        res = vectorcall_method_value(&_Py_ID(__setitem__), stack, 3);
     }
-    Py_DECREF(index_obj);
+    PyValue_CLOSE(index_value);
 
-    if (res == NULL) {
+    if (PyValue_IsNull(res)) {
         return -1;
     }
-    Py_DECREF(res);
+    PyValue_CLOSE(res);
     return 0;
 }
 
+static int slot_sq_contains_value(PyObject *, PyValueBorrow);
+
+_Py_VALUE_THUNK_CONTAINS(slot_sq_contains, slot_sq_contains_value)
+
 static int
-slot_sq_contains(PyObject *self, PyObject *value)
+slot_sq_contains_value(PyObject *self, PyValueBorrow value)
 {
     int attr_is_none = 0;
-    PyObject *res = maybe_call_special_one_arg(self, &_Py_ID(__contains__), value,
-                                               &attr_is_none);
+    PyValue stack[2];
+    _PyValue_WindowPut(&stack[0], _PyValue_FromObjectKnown(self));
+    _PyValue_WindowPut(&stack[1], value);
+    PyValue res = maybe_call_special_value(&_Py_ID(__contains__), stack, 2,
+                                           &attr_is_none);
     if (attr_is_none) {
         PyErr_Format(PyExc_TypeError,
             "'%.200s' object is not a container",
             Py_TYPE(self)->tp_name);
         return -1;
     }
-    else if (res == NULL && PyErr_Occurred()) {
+    else if (PyValue_IsNull(res) && PyErr_Occurred()) {
         return -1;
     }
-    else if (res == NULL) {
-        return (int)_PySequence_IterSearch(self, value, PY_ITERSEARCH_CONTAINS);
+    else if (PyValue_IsNull(res)) {
+        return (int)_PyValue_IterSearch(_PyValue_FromObjectKnown(self), value,
+                                        PY_ITERSEARCH_CONTAINS);
     }
-    int result = PyObject_IsTrue(res);
-    Py_DECREF(res);
+    int result = _PyValue_IsTrue(res);
+    PyValue_CLOSE(res);
     return result;
 }
 
 #define slot_mp_length slot_sq_length
 
-SLOT1(slot_mp_subscript, __getitem__, PyObject *)
+static PyValue slot_mp_subscript_value(PyObject *, PyValueBorrow);
+
+_Py_VALUE_THUNK_SUBSCRIPT(slot_mp_subscript, slot_mp_subscript_value)
+
+static PyValue
+slot_mp_subscript_value(PyObject *self, PyValueBorrow key)
+{
+    PyValue stack[2];
+    _PyValue_WindowPut(&stack[0], _PyValue_FromObjectKnown(self));
+    _PyValue_WindowPut(&stack[1], key);
+    return vectorcall_method_value(&_Py_ID(__getitem__), stack, 2);
+}
+
+static int slot_mp_ass_subscript_value(PyObject *, PyValueBorrow,
+                                       PyValueBorrow);
+
+_Py_VALUE_THUNK_ASSSUBSCRIPT(slot_mp_ass_subscript,
+                             slot_mp_ass_subscript_value)
 
 static int
-slot_mp_ass_subscript(PyObject *self, PyObject *key, PyObject *value)
+slot_mp_ass_subscript_value(PyObject *self, PyValueBorrow key,
+                            PyValueBorrow value)
 {
-    PyObject *stack[3];
-    PyObject *res;
+    PyValue stack[3];
+    PyValue res;
 
-    stack[0] = self;
-    stack[1] = key;
-    if (value == NULL) {
-        res = vectorcall_method(&_Py_ID(__delitem__), stack, 2);
+    _PyValue_WindowPut(&stack[0], _PyValue_FromObjectKnown(self));
+    _PyValue_WindowPut(&stack[1], key);
+    if (PyValue_IsNull(value)) {
+        res = vectorcall_method_value(&_Py_ID(__delitem__), stack, 2);
     }
     else {
-        stack[2] = value;
-        res = vectorcall_method(&_Py_ID(__setitem__), stack, 3);
+        _PyValue_WindowPut(&stack[2], value);
+        res = vectorcall_method_value(&_Py_ID(__setitem__), stack, 3);
     }
 
-    if (res == NULL)
+    if (PyValue_IsNull(res))
         return -1;
-    Py_DECREF(res);
+    PyValue_CLOSE(res);
     return 0;
 }
 
@@ -12530,196 +12653,257 @@ SLOT1BIN(slot_nb_divmod, nb_divmod, __divmod__, __rdivmod__)
 
 static PyObject *slot_nb_power(PyObject *, PyObject *, PyObject *);
 
-SLOT1BINFULL(slot_nb_power_binary, slot_nb_power, nb_power, __pow__, __rpow__)
+SLOT1BINFULL_VALUE(slot_nb_power_binary_value, slot_nb_power, nb_power,
+                   __pow__, __rpow__)
 
-static PyObject *
-slot_nb_power(PyObject *self, PyObject *other, PyObject *modulus)
+static PyValue slot_nb_power_value(PyValueBorrow, PyValueBorrow, PyValueBorrow);
+
+_Py_VALUE_THUNK_TERNARY(slot_nb_power, slot_nb_power_value)
+
+static PyValue
+slot_nb_power_value(PyValueBorrow self, PyValueBorrow other,
+                    PyValueBorrow modulus)
 {
-    if (modulus == Py_None)
-        return slot_nb_power_binary(self, other);
+    if (PyValue_Is(modulus, _PyValue_FromObjectKnown(Py_None)))
+        return slot_nb_power_binary_value(self, other);
 
     /* The following code is a copy of SLOT1BINFULL, but for three arguments. */
-    PyObject* stack[3];
+    PyValue stack[3];
     PyThreadState *tstate = _PyThreadState_GET();
-    int do_other = !Py_IS_TYPE(self, Py_TYPE(other)) &&
-        Py_TYPE(other)->tp_as_number != NULL &&
-        Py_TYPE(other)->tp_as_number->nb_power == slot_nb_power;
-    if (Py_TYPE(self)->tp_as_number != NULL &&
-        Py_TYPE(self)->tp_as_number->nb_power == slot_nb_power) {
-        PyObject *r;
-        if (do_other && PyType_IsSubtype(Py_TYPE(other), Py_TYPE(self))) {
-            int ok = method_is_overloaded(self, other, &_Py_ID(__rpow__));
+    PyTypeObject *self_type = PyValue_TYPE(self);
+    PyTypeObject *other_type = PyValue_TYPE(other);
+    int do_other = self_type != other_type &&
+        other_type->tp_as_number != NULL &&
+        other_type->tp_as_number->nb_power == slot_nb_power;
+    if (self_type->tp_as_number != NULL &&
+        self_type->tp_as_number->nb_power == slot_nb_power) {
+        PyValue r;
+        if (do_other && PyType_IsSubtype(other_type, self_type)) {
+            int ok = method_is_overloaded(self_type, other_type,
+                                          &_Py_ID(__rpow__));
             if (ok < 0) {
-                return NULL;
+                return PyValue_NULL;
             }
             if (ok) {
-                stack[0] = other;
-                stack[1] = self;
-                stack[2] = modulus;
-                r = vectorcall_maybe(tstate, &_Py_ID(__rpow__), stack, 3);
-                if (r != Py_NotImplemented)
+                _PyValue_WindowPut(&stack[0], other);
+                _PyValue_WindowPut(&stack[1], self);
+                _PyValue_WindowPut(&stack[2], modulus);
+                r = vectorcall_maybe_value(tstate, &_Py_ID(__rpow__), stack, 3);
+                if (!PyValue_Is(r, PyValue_NotImplemented))
                     return r;
-                Py_DECREF(r);
+                PyValue_CLOSE(r);
                 do_other = 0;
             }
         }
-        stack[0] = self;
-        stack[1] = other;
-        stack[2] = modulus;
-        r = vectorcall_maybe(tstate, &_Py_ID(__pow__), stack, 3);
-        if (r != Py_NotImplemented ||
-            Py_IS_TYPE(other, Py_TYPE(self)))
+        _PyValue_WindowPut(&stack[0], self);
+        _PyValue_WindowPut(&stack[1], other);
+        _PyValue_WindowPut(&stack[2], modulus);
+        r = vectorcall_maybe_value(tstate, &_Py_ID(__pow__), stack, 3);
+        if (!PyValue_Is(r, PyValue_NotImplemented) ||
+            self_type == other_type)
             return r;
-        Py_DECREF(r);
+        PyValue_CLOSE(r);
     }
     if (do_other) {
-        stack[0] = other;
-        stack[1] = self;
-        stack[2] = modulus;
-        return vectorcall_maybe(tstate, &_Py_ID(__rpow__), stack, 3);
+        _PyValue_WindowPut(&stack[0], other);
+        _PyValue_WindowPut(&stack[1], self);
+        _PyValue_WindowPut(&stack[2], modulus);
+        return vectorcall_maybe_value(tstate, &_Py_ID(__rpow__), stack, 3);
     }
-    Py_RETURN_NOTIMPLEMENTED;
+    return PyValue_NotImplemented;
 }
 
-SLOT0(slot_nb_negative, __neg__)
-SLOT0(slot_nb_positive, __pos__)
-SLOT0(slot_nb_absolute, __abs__)
+SLOT0UNARY(slot_nb_negative, __neg__)
+SLOT0UNARY(slot_nb_positive, __pos__)
+SLOT0UNARY(slot_nb_absolute, __abs__)
+
+static int slot_nb_bool_value(PyValueBorrow);
+
+_Py_VALUE_THUNK_INQUIRY(slot_nb_bool, slot_nb_bool_value)
 
 static int
-slot_nb_bool(PyObject *self)
+slot_nb_bool_value(PyValueBorrow self)
 {
+    PyObject *self_object = PyValue_AsKnownObjectBorrow(self);
     int using_len = 0;
     int attr_is_none = 0;
-    PyObject *value = maybe_call_special_no_args(self, &_Py_ID(__bool__),
-                                                 &attr_is_none);
+    PyValue stack[1];
+    _PyValue_WindowPut(&stack[0], self);
+    PyValue value = maybe_call_special_value(&_Py_ID(__bool__), stack, 1,
+                                             &attr_is_none);
     if (attr_is_none) {
         PyErr_Format(PyExc_TypeError,
                      "'%.200s' cannot be interpreted as a boolean",
-                     Py_TYPE(self)->tp_name);
+                     Py_TYPE(self_object)->tp_name);
         return -1;
     }
-    else if (value == NULL && !PyErr_Occurred()) {
-        value = _PyObject_MaybeCallSpecialNoArgs(self, &_Py_ID(__len__));
-        if (value == NULL && !PyErr_Occurred()) {
+    else if (PyValue_IsNull(value) && !PyErr_Occurred()) {
+        value = maybe_call_special_value(&_Py_ID(__len__), stack, 1, NULL);
+        if (PyValue_IsNull(value) && !PyErr_Occurred()) {
             return 1;
         }
         using_len = 1;
     }
 
-    if (value == NULL) {
+    if (PyValue_IsNull(value)) {
         return -1;
     }
 
     int result;
     if (using_len) {
-        /* bool type enforced by slot_nb_len */
-        result = PyObject_IsTrue(value);
+        /* __len__ result: _PyValue_IsTrue tests it for non-zero */
+        result = _PyValue_IsTrue(value);
     }
-    else if (PyBool_Check(value)) {
-        result = PyObject_IsTrue(value);
+    else if (PyValue_IsObject(value) &&
+             PyBool_Check(PyValue_AsKnownObjectBorrow(value))) {
+        result = PyValue_AsKnownObjectBorrow(value) == Py_True;
     }
     else {
         PyErr_Format(PyExc_TypeError,
-                     "%T.__bool__() must return a bool, not %T",
-                     self, value);
+                     "%T.__bool__() must return a bool, not %N",
+                     self_object, (PyObject *)PyValue_TYPE(value));
         result = -1;
     }
-    Py_DECREF(value);
+    PyValue_CLOSE(value);
     return result;
 }
 
 
-static PyObject *
-slot_nb_index(PyObject *self)
-{
-    PyObject *stack[1] = {self};
-    return vectorcall_method(&_Py_ID(__index__), stack, 1);
-}
+SLOT0UNARY(slot_nb_index, __index__)
 
 
-SLOT0(slot_nb_invert, __invert__)
+SLOT0UNARY(slot_nb_invert, __invert__)
 SLOT1BIN(slot_nb_lshift, nb_lshift, __lshift__, __rlshift__)
 SLOT1BIN(slot_nb_rshift, nb_rshift, __rshift__, __rrshift__)
 SLOT1BIN(slot_nb_and, nb_and, __and__, __rand__)
 SLOT1BIN(slot_nb_xor, nb_xor, __xor__, __rxor__)
 SLOT1BIN(slot_nb_or, nb_or, __or__, __ror__)
 
-SLOT0(slot_nb_int, __int__)
-SLOT0(slot_nb_float, __float__)
-SLOT1(slot_nb_inplace_add, __iadd__, PyObject *)
-SLOT1(slot_nb_inplace_subtract, __isub__, PyObject *)
-SLOT1(slot_nb_inplace_multiply, __imul__, PyObject *)
-SLOT1(slot_nb_inplace_matrix_multiply, __imatmul__, PyObject *)
-SLOT1(slot_nb_inplace_remainder, __imod__, PyObject *)
-/* Can't use SLOT1 here, because nb_inplace_power is ternary */
-static PyObject *
-slot_nb_inplace_power(PyObject *self, PyObject * arg1, PyObject *arg2)
+SLOT0UNARY(slot_nb_int, __int__)
+SLOT0UNARY(slot_nb_float, __float__)
+SLOT1INPLACE(slot_nb_inplace_add, __iadd__)
+SLOT1INPLACE(slot_nb_inplace_subtract, __isub__)
+SLOT1INPLACE(slot_nb_inplace_multiply, __imul__)
+SLOT1INPLACE(slot_nb_inplace_matrix_multiply, __imatmul__)
+SLOT1INPLACE(slot_nb_inplace_remainder, __imod__)
+/* Can't use SLOT1INPLACE here, because nb_inplace_power is ternary */
+static PyValue
+slot_nb_inplace_power_value(PyValueBorrow self, PyValueBorrow arg1,
+                            PyValueBorrow arg2)
 {
-    PyObject *stack[2] = {self, arg1};
-    return vectorcall_method(&_Py_ID(__ipow__), stack, 2);
+    PyValue stack[2];
+    _PyValue_WindowPut(&stack[0], self);
+    _PyValue_WindowPut(&stack[1], arg1);
+    return vectorcall_method_value(&_Py_ID(__ipow__), stack, 2);
 }
-SLOT1(slot_nb_inplace_lshift, __ilshift__, PyObject *)
-SLOT1(slot_nb_inplace_rshift, __irshift__, PyObject *)
-SLOT1(slot_nb_inplace_and, __iand__, PyObject *)
-SLOT1(slot_nb_inplace_xor, __ixor__, PyObject *)
-SLOT1(slot_nb_inplace_or, __ior__, PyObject *)
+_Py_VALUE_THUNK_TERNARY(slot_nb_inplace_power, slot_nb_inplace_power_value)
+SLOT1INPLACE(slot_nb_inplace_lshift, __ilshift__)
+SLOT1INPLACE(slot_nb_inplace_rshift, __irshift__)
+SLOT1INPLACE(slot_nb_inplace_and, __iand__)
+SLOT1INPLACE(slot_nb_inplace_xor, __ixor__)
+SLOT1INPLACE(slot_nb_inplace_or, __ior__)
 SLOT1BIN(slot_nb_floor_divide, nb_floor_divide,
          __floordiv__, __rfloordiv__)
 SLOT1BIN(slot_nb_true_divide, nb_true_divide, __truediv__, __rtruediv__)
-SLOT1(slot_nb_inplace_floor_divide, __ifloordiv__, PyObject *)
-SLOT1(slot_nb_inplace_true_divide, __itruediv__, PyObject *)
+SLOT1INPLACE(slot_nb_inplace_floor_divide, __ifloordiv__)
+SLOT1INPLACE(slot_nb_inplace_true_divide, __itruediv__)
+
+/* The value sides of repr and str return a str object; any other result
+   is boxed for the dispatcher, which raises its TypeError. */
+static PyObject *
+slot_result_object(PyValue result)
+{
+    if (PyValue_IsNull(result)) {
+        return NULL;
+    }
+    PyObject *object = _PyValue_AsObjectAt(result, BOX_SITE_REPR);
+    PyValue_CLOSE(result);
+    return object;
+}
+
+static PyObject *slot_tp_repr_value(PyValueBorrow);
+
+_Py_VALUE_THUNK_REPR(slot_tp_repr, slot_tp_repr_value)
 
 static PyObject *
-slot_tp_repr(PyObject *self)
+slot_tp_repr_value(PyValueBorrow self)
 {
-    PyObject *res = _PyObject_MaybeCallSpecialNoArgs(self, &_Py_ID(__repr__));
-    if (res != NULL) {
-        return res;
+    PyValue stack[1];
+    _PyValue_WindowPut(&stack[0], self);
+    PyValue res = maybe_call_special_value(&_Py_ID(__repr__), stack, 1, NULL);
+    if (!PyValue_IsNull(res)) {
+        return slot_result_object(res);
     }
     else if (PyErr_Occurred()) {
         return NULL;
     }
+    PyObject *self_object = PyValue_AsKnownObjectBorrow(self);
     return PyUnicode_FromFormat("<%s object at %p>",
-                                Py_TYPE(self)->tp_name, self);
+                                Py_TYPE(self_object)->tp_name, self_object);
 }
 
-SLOT0(slot_tp_str, __str__)
+static PyObject *slot_tp_str_value(PyValueBorrow);
+
+_Py_VALUE_THUNK_REPR(slot_tp_str, slot_tp_str_value)
+
+static PyObject *
+slot_tp_str_value(PyValueBorrow self)
+{
+    PyValue stack[1];
+    _PyValue_WindowPut(&stack[0], self);
+    return slot_result_object(
+        vectorcall_method_value(&_Py_ID(__str__), stack, 1));
+}
+
+static Py_hash_t slot_tp_hash_value(PyValueBorrow);
+
+_Py_VALUE_THUNK_HASH(slot_tp_hash, slot_tp_hash_value)
 
 static Py_hash_t
-slot_tp_hash(PyObject *self)
+slot_tp_hash_value(PyValueBorrow self)
 {
-    PyObject *res;
     int attr_is_none = 0;
-    res  = maybe_call_special_no_args(self, &_Py_ID(__hash__), &attr_is_none);
-    if (attr_is_none || res == NULL) {
+    PyValue stack[1];
+    _PyValue_WindowPut(&stack[0], self);
+    PyValue res = maybe_call_special_value(&_Py_ID(__hash__), stack, 1,
+                                           &attr_is_none);
+    if (attr_is_none || PyValue_IsNull(res)) {
         if (PyErr_Occurred()) {
             return -1;
         }
-        return PyObject_HashNotImplemented(self);
+        return _PyValue_HashNotImplemented(self);
     }
-    if (!PyLong_Check(res)) {
-        Py_DECREF(res);
+    /* An inline int is its own hash. */
+    if (PyValue_IsInlineInt(res)) {
+        Py_hash_t h = (Py_hash_t)PyValue_InlineInt64(res);
+        /* -1 is reserved for errors. */
+        return h == -1 ? -2 : h;
+    }
+    if (!PyValue_IsObject(res) ||
+        !PyLong_Check(PyValue_AsKnownObjectBorrow(res))) {
+        PyValue_CLOSE(res);
         PyErr_SetString(PyExc_TypeError,
                         "__hash__ method should return an integer");
         return -1;
     }
+    PyObject *res_object = PyValue_AsKnownObjectBorrow(res);
     /* Transform the PyLong `res` to a Py_hash_t `h`.  For an existing
        hashable Python object x, hash(x) will always lie within the range of
        Py_hash_t.  Therefore our transformation must preserve values that
        already lie within this range, to ensure that if x.__hash__() returns
        hash(y) then hash(x) == hash(y). */
-    Py_ssize_t h = PyLong_AsSsize_t(res);
+    Py_ssize_t h = PyLong_AsSsize_t(res_object);
     if (h == -1 && PyErr_Occurred()) {
         /* res was not within the range of a Py_hash_t, so we're free to
            use any sufficiently bit-mixing transformation;
            long.__hash__ will do nicely. */
         PyErr_Clear();
-        h = PyLong_Type.tp_hash(res);
+        h = PyLong_Type.tp_hash(res_object);
     }
     /* -1 is reserved for errors. */
     if (h == -1)
         h = -2;
-    Py_DECREF(res);
+    PyValue_CLOSE(res);
     return h;
 }
 
@@ -12874,24 +13058,28 @@ _Py_slot_tp_getattr_hook(PyObject *self, PyObject *name)
         _Py_slot_tp_getattr_hook_value(_Py_VALUE_ARG(self), name), BOX_SITE_ATTRIBUTE);
 }
 
-static int
-slot_tp_setattro(PyObject *self, PyObject *name, PyObject *value)
-{
-    PyObject *stack[3];
-    PyObject *res;
+static int slot_tp_setattro_value(PyValueBorrow, PyObject *, PyValueBorrow);
 
-    stack[0] = self;
-    stack[1] = name;
-    if (value == NULL) {
-        res = vectorcall_method(&_Py_ID(__delattr__), stack, 2);
+_Py_VALUE_THUNK_SETATTRO(slot_tp_setattro, slot_tp_setattro_value)
+
+static int
+slot_tp_setattro_value(PyValueBorrow self, PyObject *name, PyValueBorrow value)
+{
+    PyValue stack[3];
+    PyValue res;
+
+    _PyValue_WindowPut(&stack[0], self);
+    _PyValue_WindowPut(&stack[1], PyValue_FromObjectBorrow(name));
+    if (PyValue_IsNull(value)) {
+        res = vectorcall_method_value(&_Py_ID(__delattr__), stack, 2);
     }
     else {
-        stack[2] = value;
-        res = vectorcall_method(&_Py_ID(__setattr__), stack, 3);
+        _PyValue_WindowPut(&stack[2], value);
+        res = vectorcall_method_value(&_Py_ID(__setattr__), stack, 3);
     }
-    if (res == NULL)
+    if (PyValue_IsNull(res))
         return -1;
-    Py_DECREF(res);
+    PyValue_CLOSE(res);
     return 0;
 }
 
@@ -12904,15 +13092,22 @@ static PyObject *name_op[] = {
     &_Py_ID(__ge__),
 };
 
-static PyObject *
-slot_tp_richcompare(PyObject *self, PyObject *other, int op)
+static PyValue slot_tp_richcompare_value(PyValueBorrow, PyValueBorrow, int);
+
+_Py_VALUE_THUNK_RICHCMP(slot_tp_richcompare, slot_tp_richcompare_value)
+
+static PyValue
+slot_tp_richcompare_value(PyValueBorrow self, PyValueBorrow other, int op)
 {
-    PyObject *res = _PyObject_MaybeCallSpecialOneArg(self, name_op[op], other);
-    if (res == NULL) {
+    PyValue stack[2];
+    _PyValue_WindowPut(&stack[0], self);
+    _PyValue_WindowPut(&stack[1], other);
+    PyValue res = maybe_call_special_value(name_op[op], stack, 2, NULL);
+    if (PyValue_IsNull(res)) {
         if (PyErr_Occurred()) {
-            return NULL;
+            return PyValue_NULL;
         }
-        Py_RETURN_NOTIMPLEMENTED;
+        return PyValue_NotImplemented;
     }
     return res;
 }
@@ -12978,14 +13173,18 @@ _PyType_HasSlotTpIternext(PyTypeObject *type)
     return type->tp_iternext == slot_tp_iternext;
 }
 
-static PyObject *
-slot_tp_descr_get(PyObject *self, PyObject *obj, PyObject *type)
+static PyValue slot_tp_descr_get_value(PyObject *, PyValueBorrow, PyObject *);
+
+_Py_VALUE_THUNK_DESCRGET(slot_tp_descr_get, slot_tp_descr_get_value)
+
+static PyValue
+slot_tp_descr_get_value(PyObject *self, PyValueBorrow obj, PyObject *type)
 {
     PyTypeObject *tp = Py_TYPE(self);
     PyObject *get = _PyType_LookupRef(tp, &_Py_ID(__get__));
     if (get == NULL && PyErr_Occurred()) {
         /* Boxing an inline class attribute failed. */
-        return NULL;
+        return PyValue_NULL;
     }
     if (get == NULL) {
 #ifndef Py_GIL_DISABLED
@@ -12995,36 +13194,44 @@ slot_tp_descr_get(PyObject *self, PyObject *obj, PyObject *type)
                                   NULL, NULL);
         }
 #endif
-        return Py_NewRef(self);
+        return PyValue_DUP(_PyValue_FromObjectKnown(self));
     }
-    if (obj == NULL)
-        obj = Py_None;
     if (type == NULL)
         type = Py_None;
-    PyObject *stack[3] = {self, obj, type};
-    PyObject *res = PyObject_Vectorcall(get, stack, 3, NULL);
+    PyValue stack[3];
+    _PyValue_WindowPut(&stack[0], _PyValue_FromObjectKnown(self));
+    _PyValue_WindowPut(&stack[1], PyValue_IsNull(obj)
+                       ? _PyValue_FromObjectKnown(Py_None) : obj);
+    _PyValue_WindowPut(&stack[2], PyValue_FromObjectBorrow(type));
+    PyValue res = _PyValue_Vectorcall(PyValue_FromObjectBorrow(get), stack, 3,
+                                      NULL);
     Py_DECREF(get);
     return res;
 }
 
-static int
-slot_tp_descr_set(PyObject *self, PyObject *target, PyObject *value)
-{
-    PyObject* stack[3];
-    PyObject *res;
+static int slot_tp_descr_set_value(PyObject *, PyValueBorrow, PyValueBorrow);
 
-    stack[0] = self;
-    stack[1] = target;
-    if (value == NULL) {
-        res = vectorcall_method(&_Py_ID(__delete__), stack, 2);
+_Py_VALUE_THUNK_DESCRSET(slot_tp_descr_set, slot_tp_descr_set_value)
+
+static int
+slot_tp_descr_set_value(PyObject *self, PyValueBorrow target,
+                        PyValueBorrow value)
+{
+    PyValue stack[3];
+    PyValue res;
+
+    _PyValue_WindowPut(&stack[0], _PyValue_FromObjectKnown(self));
+    _PyValue_WindowPut(&stack[1], target);
+    if (PyValue_IsNull(value)) {
+        res = vectorcall_method_value(&_Py_ID(__delete__), stack, 2);
     }
     else {
-        stack[2] = value;
-        res = vectorcall_method(&_Py_ID(__set__), stack, 3);
+        _PyValue_WindowPut(&stack[2], value);
+        res = vectorcall_method_value(&_Py_ID(__set__), stack, 3);
     }
-    if (res == NULL)
+    if (PyValue_IsNull(res))
         return -1;
-    Py_DECREF(res);
+    PyValue_CLOSE(res);
     return 0;
 }
 
@@ -13778,6 +13985,60 @@ slotdef_value_function(const pytype_slotdef *p)
     if (p->function == (void *)_Py_slot_tp_getattr_hook) {
         return _Py_VALUE_SLOT_INIT(getattro, _Py_slot_tp_getattr_hook_value);
     }
+    /* The slot_* functions whose value sides call their dunders through the
+       value vectorcall (V2a-1a part iii). */
+#define SLOT_VALUE_PAIR(FIELD, FUNC) \
+    if (p->function == (void *)FUNC) { \
+        return _Py_VALUE_SLOT_INIT(FIELD, FUNC##_value); \
+    }
+    SLOT_VALUE_PAIR(nb_add, slot_nb_add)
+    SLOT_VALUE_PAIR(nb_subtract, slot_nb_subtract)
+    SLOT_VALUE_PAIR(nb_multiply, slot_nb_multiply)
+    SLOT_VALUE_PAIR(nb_matrix_multiply, slot_nb_matrix_multiply)
+    SLOT_VALUE_PAIR(nb_remainder, slot_nb_remainder)
+    SLOT_VALUE_PAIR(nb_divmod, slot_nb_divmod)
+    SLOT_VALUE_PAIR(nb_power, slot_nb_power)
+    SLOT_VALUE_PAIR(nb_lshift, slot_nb_lshift)
+    SLOT_VALUE_PAIR(nb_rshift, slot_nb_rshift)
+    SLOT_VALUE_PAIR(nb_and, slot_nb_and)
+    SLOT_VALUE_PAIR(nb_xor, slot_nb_xor)
+    SLOT_VALUE_PAIR(nb_or, slot_nb_or)
+    SLOT_VALUE_PAIR(nb_floor_divide, slot_nb_floor_divide)
+    SLOT_VALUE_PAIR(nb_true_divide, slot_nb_true_divide)
+    SLOT_VALUE_PAIR(nb_negative, slot_nb_negative)
+    SLOT_VALUE_PAIR(nb_positive, slot_nb_positive)
+    SLOT_VALUE_PAIR(nb_absolute, slot_nb_absolute)
+    SLOT_VALUE_PAIR(nb_invert, slot_nb_invert)
+    SLOT_VALUE_PAIR(nb_int, slot_nb_int)
+    SLOT_VALUE_PAIR(nb_float, slot_nb_float)
+    SLOT_VALUE_PAIR(nb_index, slot_nb_index)
+    SLOT_VALUE_PAIR(nb_bool, slot_nb_bool)
+    SLOT_VALUE_PAIR(nb_inplace_add, slot_nb_inplace_add)
+    SLOT_VALUE_PAIR(nb_inplace_subtract, slot_nb_inplace_subtract)
+    SLOT_VALUE_PAIR(nb_inplace_multiply, slot_nb_inplace_multiply)
+    SLOT_VALUE_PAIR(nb_inplace_matrix_multiply, slot_nb_inplace_matrix_multiply)
+    SLOT_VALUE_PAIR(nb_inplace_remainder, slot_nb_inplace_remainder)
+    SLOT_VALUE_PAIR(nb_inplace_power, slot_nb_inplace_power)
+    SLOT_VALUE_PAIR(nb_inplace_lshift, slot_nb_inplace_lshift)
+    SLOT_VALUE_PAIR(nb_inplace_rshift, slot_nb_inplace_rshift)
+    SLOT_VALUE_PAIR(nb_inplace_and, slot_nb_inplace_and)
+    SLOT_VALUE_PAIR(nb_inplace_xor, slot_nb_inplace_xor)
+    SLOT_VALUE_PAIR(nb_inplace_or, slot_nb_inplace_or)
+    SLOT_VALUE_PAIR(nb_inplace_floor_divide, slot_nb_inplace_floor_divide)
+    SLOT_VALUE_PAIR(nb_inplace_true_divide, slot_nb_inplace_true_divide)
+    SLOT_VALUE_PAIR(richcompare, slot_tp_richcompare)
+    SLOT_VALUE_PAIR(item, slot_sq_item)
+    SLOT_VALUE_PAIR(ass_item, slot_sq_ass_item)
+    SLOT_VALUE_PAIR(contains, slot_sq_contains)
+    SLOT_VALUE_PAIR(subscript, slot_mp_subscript)
+    SLOT_VALUE_PAIR(ass_subscript, slot_mp_ass_subscript)
+    SLOT_VALUE_PAIR(setattro, slot_tp_setattro)
+    SLOT_VALUE_PAIR(descr_get, slot_tp_descr_get)
+    SLOT_VALUE_PAIR(descr_set, slot_tp_descr_set)
+    SLOT_VALUE_PAIR(hash, slot_tp_hash)
+    SLOT_VALUE_PAIR(repr, slot_tp_repr)
+    SLOT_VALUE_PAIR(str, slot_tp_str)
+#undef SLOT_VALUE_PAIR
     return NULL;
 }
 

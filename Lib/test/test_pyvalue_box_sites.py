@@ -9,6 +9,7 @@ make no box of an inline int; other builds skip that check.
 import os
 import sys
 import unittest
+from test.support import import_helper
 
 try:
     import _testcapi
@@ -727,6 +728,89 @@ class CompareTests(unittest.TestCase):
     @unittest.skipUnless(STATS, "needs a Py_STATS build")
     def test_no_box(self):
         self.assertEqual(boxes(compare_mixed, N), 0)
+
+
+class Dunders:
+    """A Python class whose dunders take their operands and return None."""
+
+    def __add__(self, o): return None
+    def __radd__(self, o): return None
+    def __iadd__(self, o): return self
+    def __lt__(self, o): return True
+    def __contains__(self, o): return True
+    def __getitem__(self, k): return None
+    def __setitem__(self, k, v): pass
+    def __delitem__(self, k): pass
+    def __setattr__(self, name, v): pass
+
+
+class Descr:
+    def __get__(self, obj, owner=None): return None
+    def __set__(self, obj, v): pass
+
+
+class HasDescr:
+    d = Descr()
+
+
+def loop_of(call):
+    """A loop of N iterations of call(a, i); i is inline."""
+    def loop(n):
+        for i in range(n):
+            call(i)
+    return loop
+
+
+class PythonClassSlotTests(unittest.TestCase):
+    """The value slot_* functions pass an inline operand to a dunder.
+
+    Each case calls a value dispatcher from C with a Python-class operand
+    and an inline int. The call into the C function boxes each inline
+    argument (the harness's own boxes), and the slot adds none.
+    """
+
+    def setUp(self):
+        _testinternalcapi = import_helper.import_module('_testinternalcapi')
+        self.dispatch = _testinternalcapi.value_dispatch
+        self.container = _testinternalcapi.value_container
+        self.setattr = _testinternalcapi.value_setattr
+
+    def test_results(self):
+        a = Dunders()
+        self.assertEqual(self.dispatch("Add", a, 1), (None, False))
+        self.assertEqual(self.dispatch("Add", 1, a), (None, False))
+        self.assertEqual(self.dispatch("Add", 2.5, a), (None, False))
+        self.assertEqual(self.dispatch("InPlaceAdd", a, 1)[0], a)
+        self.assertTrue(self.dispatch("RichCompareBool", a, 3, 0))
+        self.assertIsNone(self.container("getitem", a, 3))
+        self.assertIsNone(self.container("setitem", a, 3, 4))
+        self.assertIsNone(self.container("delitem", a, 3))
+        self.assertTrue(self.container("contains", a, 3))
+        self.setattr(a, "x", 5)
+        self.setattr(HasDescr(), "d", 5)
+
+    @unittest.skipUnless(STATS, "needs a Py_STATS build")
+    def test_no_box(self):
+        a = Dunders()
+        h = HasDescr()
+        d, c, sa = self.dispatch, self.container, self.setattr
+        # (name, call, boxes that the call itself makes: each inline argument,
+        # and value_setattr's METH_VARARGS parser boxes its value again)
+        cases = [
+            ("add", lambda i: d("Add", a, i), 1),
+            ("radd", lambda i: d("Add", i, a), 1),
+            ("inplace", lambda i: d("InPlaceAdd", a, i), 1),
+            ("compare", lambda i: d("RichCompareBool", a, i, 0), 2),
+            ("getitem", lambda i: c("getitem", a, i), 1),
+            ("setitem", lambda i: c("setitem", a, i, i), 2),
+            ("delitem", lambda i: c("delitem", a, i), 1),
+            ("contains", lambda i: c("contains", a, i), 1),
+            ("setattr", lambda i: sa(a, "x", i), 2),
+            ("descr_set", lambda i: sa(h, "d", i), 2),
+        ]
+        for name, call, inline_args in cases:
+            with self.subTest(case=name):
+                self.assertEqual(boxes(loop_of(call), N), N * inline_args)
 
 
 if __name__ == "__main__":

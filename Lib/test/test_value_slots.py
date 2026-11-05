@@ -563,7 +563,8 @@ class UpdateSlotTests(unittest.TestCase):
             def __sub__(self, o):
                 return 'S'
 
-        self.assertEqual(value_slot(S, 'nb_subtract'), 0)
+        self.assertNotIn(value_slot(S, 'nb_subtract'),
+                         (0, self.split_pair[1]))
         self.assertNotEqual(object_slot(S, 'nb_subtract'), self.split_pair[0])
         self.assertEqual(S(1) - 1, 'S')
 
@@ -578,7 +579,8 @@ class UpdateSlotTests(unittest.TestCase):
             pass
 
         S.__sub__ = lambda self, o: 'S'
-        self.assertEqual(value_slot(S, 'nb_subtract'), 0)
+        self.assertNotIn(value_slot(S, 'nb_subtract'),
+                         (0, self.split_pair[1]))
         self.assertNotEqual(object_slot(S, 'nb_subtract'), self.split_pair[0])
         self.assertEqual(S(1) - 1, 'S')
         del S.__sub__
@@ -593,7 +595,8 @@ class UpdateSlotTests(unittest.TestCase):
             pass
 
         B.__sub__ = lambda self, o: 'B'
-        self.assertEqual(value_slot(C, 'nb_subtract'), 0)
+        self.assertNotIn(value_slot(C, 'nb_subtract'),
+                         (0, self.split_pair[1]))
         self.assertEqual(C(1) - 1, 'B')
         del B.__sub__
         self.assertEqual(pair(C), self.split_pair)
@@ -602,7 +605,8 @@ class UpdateSlotTests(unittest.TestCase):
         class S(Split):
             __rsub__ = lambda self, o: 'r'
 
-        self.assertEqual(value_slot(S, 'nb_subtract'), 0)
+        self.assertNotIn(value_slot(S, 'nb_subtract'),
+                         (0, self.split_pair[1]))
         self.assertEqual(1 - S(1), 'r')
         # The generic slot finds Split's __sub__ by lookup.
         self.assertEqual((S(7) - 2).value, 5)
@@ -2619,6 +2623,59 @@ class GetAttroPairTests(unittest.TestCase):
         self.assertEqual(value_getattr(C(), 'anything'), (1000, True))
 
 
+class RoundTripIdentityTests(unittest.TestCase):
+    """Round-trip identity (value-api.md, section 1.3): Python code compares
+    inline values by value identity, through every boundary that a value
+    crosses, including the value slot_* functions of Python classes."""
+
+    def test_list_item(self):
+        x = [1000, 2.5]
+        for i in range(2):
+            self.assertIs(x[i], x[i])
+
+    def test_attribute(self):
+        class C:
+            pass
+        o = C()
+        o.x = 1000
+        self.assertIs(o.x, o.x)
+        value_setattr(o, 'y', 1000)
+        self.assertIs(value_getattr(o, 'y')[0], o.y)
+
+    def test_dunder_operand(self):
+        big = 1000
+        seen = []
+
+        class C:
+            def __radd__(self, other):
+                seen.append(other)
+            def __add__(self, other):
+                seen.append(other)
+            def __getitem__(self, key):
+                seen.append(key)
+            def __setitem__(self, key, value):
+                seen.extend((key, value))
+            def __contains__(self, key):
+                seen.append(key)
+                return True
+            def __lt__(self, other):
+                seen.append(other)
+                return True
+
+        c = C()
+        for op in (lambda: big + c, lambda: c + big, lambda: c[big],
+                   lambda: c.__setitem__(big, big), lambda: big in c,
+                   lambda: c < big):
+            seen.clear()
+            op()
+            for item in seen:
+                self.assertIs(item, big)
+        for f in (2.5, 1.5):
+            seen.clear()
+            f + c
+            self.assertIs(seen[0], f)
+
+
 class DescrGetDeletedTests(unittest.TestCase):
     def test_non_data_descriptor(self):
         class Desc:
@@ -2628,9 +2685,8 @@ class DescrGetDeletedTests(unittest.TestCase):
             d = Desc()
         self.assertEqual(Owner().d, 1000)
         self.assertEqual(value_getattr(Owner(), 'd'), (1000, True))
-        # slot_tp_descr_get has no value side until M2-d.
         self.assertNotEqual(object_slot(Desc, 'descr_get'), 0)
-        self.assertEqual(value_slot(Desc, 'descr_get'), 0)
+        self.assertNotEqual(value_slot(Desc, 'descr_get'), 0)
         del Desc.__get__
         self.assertIsInstance(Owner().d, Desc)
         self.assertIsInstance(value_getattr(Owner(), 'd')[0], Desc)
@@ -2656,8 +2712,7 @@ class DescrGetDeletedTests(unittest.TestCase):
         self.assertIs(value_getattr(o, 'd')[0], Owner.__dict__['d'])
         self.assertEqual(value_slot(Desc, 'descr_get'), 0)
         self.assertEqual(object_slot(Desc, 'descr_get'), 0)
-        # slot_tp_descr_set has no value side until M2-d.
-        self.assertEqual(value_slot(Desc, 'descr_set'), 0)
+        self.assertNotEqual(value_slot(Desc, 'descr_set'), 0)
         self.assertNotEqual(object_slot(Desc, 'descr_set'), 0)
         o.d = 6
         self.assertEqual(stored, [5, 2.5, 6])
@@ -2755,6 +2810,141 @@ class AttributeSlotWrapperTests(unittest.TestCase):
         self.assertEqual(value_getattr(o, 'x'), (2.5, True))
         with self.assertRaisesRegex(AttributeError, 'cannot delete x'):
             descr.__delete__(o)
+
+
+class PythonClassValueSideTests(unittest.TestCase):
+    """Value sides of the slot wrappers of Python classes (V2a-1a-iii)."""
+
+    OPERANDS = (3, -4, 2.5, 2**70)
+
+    def test_pow(self):
+        class C:
+            def __pow__(self, other, mod=None):
+                return ('pow', other, mod)
+            def __rpow__(self, other, mod=None):
+                return ('rpow', other, mod)
+            def __ipow__(self, other, mod=None):
+                return ('ipow', other, mod)
+        c = C()
+        for x in self.OPERANDS:
+            with self.subTest(x=x):
+                self.assertEqual(c ** x, ('pow', x, None))
+                self.assertEqual(pow(c, x, 7), ('pow', x, 7))
+                self.assertEqual(x ** c, ('rpow', x, None))
+                if isinstance(x, int):
+                    self.assertEqual(pow(x, c, 7), ('rpow', x, 7))
+                d = c
+                d **= x
+                self.assertEqual(d, ('ipow', x, None))
+
+    def test_ipow_modulus_is_rejected(self):
+        class C:
+            def __ipow__(self, other):
+                return 'ipow'
+        c = C()
+        c **= 2
+        self.assertEqual(c, 'ipow')
+        with self.assertRaises(TypeError):
+            pow(C(), 2, 5)
+
+    def test_unary(self):
+        class C:
+            def __init__(self, v):
+                self.v = v
+            def __neg__(self): return -self.v
+            def __pos__(self): return +self.v
+            def __invert__(self): return ~self.v
+            def __abs__(self): return abs(self.v)
+        for v in (5, -5, 0, 2**70):
+            c = C(v)
+            for op in (operator.neg, operator.pos, operator.invert, abs):
+                with self.subTest(v=v, op=op):
+                    self.assertEqual(op(c), op(v))
+        for v in (2.5, -2.5):
+            c = C(v)
+            for op in (operator.neg, operator.pos, abs):
+                with self.subTest(v=v, op=op):
+                    self.assertEqual(op(c), op(v))
+
+    def test_bool(self):
+        class C:
+            def __init__(self, r):
+                self.r = r
+            def __bool__(self):
+                return self.r
+        self.assertIs(bool(C(True)), True)
+        self.assertIs(bool(C(False)), False)
+        for bad in (1, 0, 2.5, None, 'x', 2**70):
+            with self.subTest(bad=bad):
+                with self.assertRaisesRegex(TypeError, r'__bool__\(\) must return a bool'):
+                    bool(C(bad))
+
+    def test_hash(self):
+        class C:
+            def __init__(self, r):
+                self.r = r
+            def __hash__(self):
+                return self.r
+        # A result that fits Py_ssize_t is used as is (-1 becomes -2);
+        # a larger one is hashed.
+        for r, expected in ((0, 0), (5, 5), (-1, -2), (-2, -2),
+                            (2**62, 2**62), (2**63, hash(2**63)),
+                            (2**100, hash(2**100)), (True, 1)):
+            with self.subTest(r=r):
+                self.assertEqual(hash(C(r)), expected)
+        for bad in (2.5, None, 'x'):
+            with self.subTest(bad=bad):
+                with self.assertRaisesRegex(TypeError, r'__hash__ method should return an integer'):
+                    hash(C(bad))
+
+    def test_repr_str_errors(self):
+        class C:
+            def __init__(self, r):
+                self.r = r
+            def __repr__(self):
+                return self.r
+        class D(C):
+            def __str__(self):
+                return self.r
+        self.assertEqual(repr(C('x')), 'x')
+        for bad in (5, 2.5, None):
+            with self.subTest(bad=bad):
+                with self.assertRaisesRegex(TypeError, r'__repr__\(\) must return a str'):
+                    repr(C(bad))
+                with self.assertRaisesRegex(TypeError, r'__str__\(\) must return a str'):
+                    str(D(bad))
+
+    def test_reflected_subclass_priority(self):
+        class Base:
+            def __add__(self, other): return 'base add'
+            def __radd__(self, other): return 'base radd'
+        class Sub(Base):
+            def __radd__(self, other): return 'sub radd'
+        class Plain(Base):
+            pass
+        self.assertEqual(Base() + Sub(), 'sub radd')
+        self.assertEqual(Base() + Plain(), 'base add')
+        self.assertEqual(Sub() + Sub(), 'base add')
+        for x in self.OPERANDS:
+            with self.subTest(x=x):
+                self.assertEqual(x + Sub(), 'sub radd')
+                self.assertEqual(Sub() + x, 'base add')
+
+    def test_contains_fallbacks(self):
+        class Iter:
+            def __iter__(self):
+                return iter((1, 2.5, 2**70))
+        class Item:
+            def __getitem__(self, i):
+                if i >= 3:
+                    raise IndexError
+                return (1, 2.5, 2**70)[i]
+        for cls in (Iter, Item):
+            for x, expected in ((1, True), (2.5, True), (2**70, True),
+                                (4, False), (0.5, False)):
+                with self.subTest(cls=cls.__name__, x=x):
+                    self.assertIs(x in cls(), expected)
+                    self.assertIs(x not in cls(), not expected)
 
 
 if __name__ == '__main__':

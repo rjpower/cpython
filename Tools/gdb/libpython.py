@@ -1882,7 +1882,61 @@ class Frame(object):
             'gc_collect_young', 'gc_collect_increment',
         )
 
+    def _activation_innermost_frame(self):
+        '''Innermost Python frame of the activation run by this
+        _PyEval_EvalFrameLoop frame.
+
+        The handlers of the tail-calling interpreter run the Python frames, so
+        the loop's own "frame" local goes stale.  Each loop keeps a local
+        "activation" record, linked from the thread state (innermost first)
+        through eval_activation / previous.  The innermost Python frame of the
+        newest activation is tstate->current_frame; the innermost frame of an
+        older activation is where the next-newer activation's entry frame
+        resumes (entry.frame.previous).
+
+        Return (found, frame): found is False if the record cannot be read
+        (older builds), in which case frame is meaningless.
+        '''
+        if self._gdbframe.name() != EVALFRAME:
+            return False, None
+        try:
+            activation = self._gdbframe.read_var('activation')
+            if activation.is_optimized_out or activation.address is None:
+                return False, None
+            target = int(activation.address)
+
+            try:
+                tstate = self._gdbframe.read_var('tstate')
+                if tstate.is_optimized_out:
+                    tstate = None
+            except ValueError:
+                tstate = None
+            if tstate is None:
+                tstate = PyFramePtr.get_thread_state()
+            if tstate is None:
+                return False, None
+            impl = tstate.cast(gdb.lookup_type('_PyThreadStateImpl').pointer())
+
+            newer = None
+            act = impl.dereference()['eval_activation']
+            while int(act) != 0:
+                if int(act) == target:
+                    if newer is None:
+                        return True, tstate.dereference()['current_frame']
+                    return True, newer.dereference()['entry']['frame']['previous']
+                newer = act
+                act = act.dereference()['previous']
+        except (ValueError, gdb.error):
+            return False, None
+        return False, None
+
     def get_pyop(self):
+        found, activation_frame = self._activation_innermost_frame()
+        if found:
+            if int(activation_frame) == 0:
+                return None
+            frame = PyFramePtr(activation_frame)
+            return None if frame.is_optimized_out() else frame
         try:
             frame = self._gdbframe.read_var('frame')
             frame = PyFramePtr(frame)

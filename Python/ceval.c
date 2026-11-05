@@ -2072,8 +2072,11 @@ retire_published_values(PyThreadState *tstate, _PyInterpreterFrame *frame,
 }
 
 /* Release the local that a handler's result displaced (IR_STORE_DST),
- * then its input boxes, and refresh: the release can run Python. */
-static int
+ * then its input boxes, and refresh: the release can run Python.  Out of
+ * line, so that the address of displaced is taken in this function's frame
+ * and not in the handler's, which would then need a frame and a canary on
+ * every entry (register-ir-v2-a3.md, 3.4). */
+static Py_NO_INLINE int
 finish_displaced_local(PyThreadState *tstate, _PyInterpreterFrame *frame,
                        _PyInstr *next, _PyValueTemps *temps,
                        PyValue displaced)
@@ -2192,7 +2195,6 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
 #ifdef Py_STATS
     int lastopcode = 0;
 #endif
-    _PyEntryFrame entry;
 
     if (_Py_EnterRecursiveCallTstate(tstate, "")) {
         assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
@@ -2200,36 +2202,55 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
         return NULL;
     }
 
-    entry.stack[0] = PyValue_NULL;
+    /* The activation's record, linked from the thread state until it
+     * returns.  It lies on this C stack between the stack pointer and the
+     * record of the activation that this one runs inside. */
+    _PyThreadStateImpl *tstate_impl = (_PyThreadStateImpl *)tstate;
+    _PyEvalActivation activation;
+    activation.previous = tstate_impl->eval_activation;
+    tstate_impl->eval_activation = &activation;
+#if _Py_STACK_GROWS_DOWN
+    assert(_Py_get_machine_stack_pointer() < (uintptr_t)&activation);
+    assert(activation.previous == NULL ||
+           (uintptr_t)&activation < (uintptr_t)activation.previous);
+#else
+    assert(_Py_get_machine_stack_pointer() > (uintptr_t)&activation);
+    assert(activation.previous == NULL ||
+           (uintptr_t)&activation > (uintptr_t)activation.previous);
+#endif
+    _PyEntryFrame *entry = &activation.entry;
+
+    entry->stack[0] = PyValue_NULL;
 #if defined(Py_DEBUG)
     /* Set these to invalid but identifiable values for debugging. */
-    entry.frame.f_funcobj = (PyValue){.bits = 0xaaa0};
-    entry.frame.f_locals = (PyObject*)0xaaa1;
-    entry.frame.frame_obj = (PyFrameObject*)0xaaa2;
-    entry.frame.f_globals = (PyObject*)0xaaa3;
-    entry.frame.f_builtins = (PyObject*)0xaaa4;
+    entry->frame.f_funcobj = (PyValue){.bits = 0xaaa0};
+    entry->frame.f_locals = (PyObject*)0xaaa1;
+    entry->frame.frame_obj = (PyFrameObject*)0xaaa2;
+    entry->frame.f_globals = (PyObject*)0xaaa3;
+    entry->frame.f_builtins = (PyObject*)0xaaa4;
 #endif
-    entry.frame.f_executable = PyValue_None;
-    entry.frame.base = entry.frame.owned_slots;
+    entry->frame.f_executable = PyValue_None;
+    entry->frame.base = entry->frame.owned_slots;
     /* A return or a yield resumes the entry frame at the word after its
      * instr_ptr, the first INTERPRETER_EXIT */
-    entry.frame.instr_ptr = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
-    entry.frame.ir_words = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
-    entry.frame.ir_feedback = NULL;
-    entry.frame.owner = FRAME_OWNED_BY_INTERPRETER;
-    entry.frame.visited = 0;
-    /* What the frame returns or yields lands in entry.stack[0] */
-    entry.frame.return_slot = 1;
+    entry->frame.instr_ptr = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
+    entry->frame.ir_words = (_PyInstr *)_Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS;
+    entry->frame.ir_feedback = NULL;
+    entry->frame.owner = FRAME_OWNED_BY_INTERPRETER;
+    entry->frame.visited = 0;
+    /* What the frame returns or yields lands in entry->stack[0] */
+    entry->frame.return_slot = 1;
 #ifdef Py_DEBUG
-    entry.frame.lltrace = 0;
+    entry->frame.lltrace = 0;
 #endif
     /* Push frame */
-    entry.frame.previous = tstate->current_frame;
-    frame->previous = &entry.frame;
+    entry->frame.previous = tstate->current_frame;
+    frame->previous = &entry->frame;
     tstate->current_frame = frame;
 
-    /* support for generator.throw() */
+    PyObject *result;
     if (throwflag) {
+        /* support for generator.throw() */
         if (_Py_EnterRecursivePy(tstate)) {
             goto early_exit;
         }
@@ -2239,15 +2260,20 @@ _PyEval_EvalFrameLoop(PyThreadState *tstate, _PyInterpreterFrame *frame, int thr
         monitor_throw(tstate, frame, next_instr);
         PyValue *slots = _PyFrame_Slots(frame);
         _PyIRWord ir_word = 0;
-        return _TAIL_CALL_error(TAIL_CALL_ARGS);
+        result = _TAIL_CALL_error(TAIL_CALL_ARGS);
     }
-    {
+    else {
         /* start_frame takes its word and slots from the frame */
         PyValue *slots = NULL;
         _PyInstr *next_instr = NULL;
         _PyIRWord ir_word = 0;
-        return _TAIL_CALL_start_frame(TAIL_CALL_ARGS);
+        result = _TAIL_CALL_start_frame(TAIL_CALL_ARGS);
     }
+    /* The handler that returned, INTERPRETER_EXIT or exit_unwind_notrace,
+     * left the entry frame */
+    assert(tstate_impl->eval_activation == &activation);
+    tstate_impl->eval_activation = activation.previous;
+    return result;
 
 early_exit:
     assert(_PyErr_Occurred(tstate));
@@ -2257,9 +2283,10 @@ early_exit:
     _PyInterpreterFrame *dying = frame;
     frame = tstate->current_frame = dying->previous;
     _PyEval_FrameClearAndPop(tstate, dying);
-    assert(frame->owner == FRAME_OWNED_BY_INTERPRETER);
+    assert(frame == &entry->frame);
     /* Restore previous frame and exit */
     tstate->current_frame = frame->previous;
+    tstate_impl->eval_activation = activation.previous;
     return NULL;
 }
 

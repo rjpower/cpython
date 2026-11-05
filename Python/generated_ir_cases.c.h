@@ -11422,6 +11422,7 @@
             PyObject *result = PyValue_AsObject(retval);
             ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), retval);
             PyValue_XCLOSE(ir_own_A);
+            assert(frame == &IR_ACTIVATION()->entry.frame);
             LLTRACE_RESUME_FRAME();
             return result;
         }
@@ -18740,6 +18741,7 @@
                 _PyEval_FrameClearAndPop(tstate, dying);
                 if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
                     tstate->current_frame = frame->previous;
+                    assert(frame == &IR_ACTIVATION()->entry.frame);
                     return NULL;
                 }
                 next_instr = frame->instr_ptr + 1;slots = _PyFrame_Slots(frame);

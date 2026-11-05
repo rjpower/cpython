@@ -1472,6 +1472,7 @@ dummy_func(
             assert(!_PyErr_Occurred(tstate));
             PyObject *result = PyValue_AsObject(retval);
             DECREF_INPUTS();
+            assert(frame == &IR_ACTIVATION()->entry.frame);
             LLTRACE_RESUME_FRAME();
             return result;
         }
@@ -5678,6 +5679,7 @@ dummy_func(
             if (frame->owner == FRAME_OWNED_BY_INTERPRETER) {
                 /* Restore previous frame and exit */
                 tstate->current_frame = frame->previous;
+                assert(frame == &IR_ACTIVATION()->entry.frame);
                 return NULL;
             }
             // The caller's instr_ptr is the word that pushed the frame, and

@@ -123,11 +123,26 @@ typedef PyObject *(Py_PRESERVE_NONE_CC *py_tail_call_funcptr)(TAIL_CALL_PARAMS);
         Py_MUSTTAIL return (_TAIL_CALL_##name)(TAIL_CALL_ARGS_AT(this_instr)); \
     } while (0)
 
+/* The activation of the evaluation loop that runs the handler
+ * (_PyEvalActivation, Python/ceval.h) */
+#define IR_ACTIVATION() (((_PyThreadStateImpl *)tstate)->eval_activation)
+
+/* Whether frame runs the executing copy of its code, as it must at every
+ * dispatch (pyjit/design/register-ir.md 1.10).  An entry frame runs the
+ * trampoline's words and has no code. */
+#define IR_EXECUTING_COPY_OK(frame) \
+    ((frame)->owner == FRAME_OWNED_BY_INTERPRETER || \
+     (_PyFrame_GetCode(frame)->_co_exec != NULL && \
+      (frame)->ir_words == _PyFrame_GetCode(frame)->_co_exec->words))
+
 /* PRE_DISPATCH_GOTO() checks the handlers' state and does lltrace if
- * enabled, in a debug build.  Normally a no-op. */
+ * enabled, in a debug build.  Normally a no-op.  frame is a parameter of
+ * the handlers, so the first check fails if a handler switches frames
+ * without passing the new one on. */
 #ifdef Py_DEBUG
 #define PRE_DISPATCH_GOTO() \
     assert(frame == tstate->current_frame); \
+    assert(IR_EXECUTING_COPY_OK(frame)); \
     if (frame->lltrace >= 5) { \
         lltrace_instruction(frame, next_instr, opcode); }
 #else

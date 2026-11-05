@@ -71,7 +71,7 @@ _PyValueTemps_Close(_PyValueTemps *temps)
  * inline value too.  A borrowed box stays in *source: its owner (an input
  * box in _PyValueTemps, for example) keeps it alive for the C code that
  * still reads it as an object. */
-static inline PyValue
+static inline Py_ALWAYS_INLINE PyValue
 _PyValue_Publish(PyValue *source)
 {
     if (PyValue_IsObject(*source)) {

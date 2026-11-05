@@ -75,6 +75,11 @@ typedef struct _PyThreadStateImpl {
 
     _PyBorrowStack borrow;
 
+    // The innermost activation of the evaluation loop (Python/ceval.h,
+    // _PyEvalActivation), or NULL.  Stack-switching code saves and restores
+    // it with current_frame.
+    struct _PyEvalActivation *eval_activation;
+
     // Distinguishes between yield and return from PyEval_EvalFrame().
     // See gen_send_ex2() in Objects/genobject.c
     enum {

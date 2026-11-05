@@ -335,6 +335,17 @@ typedef struct {
     PyValue stack[1];
 } _PyEntryFrame;
 
+/* The state of one activation of the evaluation loop that persists across
+ * its handlers: a local of _PyEval_EvalFrameLoop, linked from the thread
+ * state (_PyThreadStateImpl.eval_activation) while it runs.  No handler
+ * keeps state of its own here.  gdb walks the chain (Tools/gdb/libpython.py):
+ * the innermost Python frame of an activation is tstate->current_frame for
+ * the newest, and entry.frame.previous of the next newer one otherwise. */
+typedef struct _PyEvalActivation {
+    struct _PyEvalActivation *previous;   /* restored when this one exits */
+    _PyEntryFrame entry;                   /* its entry frame */
+} _PyEvalActivation;
+
 static int
 do_monitor_exc(PyThreadState *tstate, _PyInterpreterFrame *frame,
                _PyInstr *instr, int event)

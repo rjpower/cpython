@@ -588,6 +588,10 @@ INPLACE_READERS = {
     "_PySuper_LookupValue", "value_import_level", "super_call",
     "_PyValue_GetItem", "_PyValue_SetItem", "_PyValue_DelItem",
     "_PyValue_Size", "_PyValue_GetOptionalItem", "_PyValue_Send",
+    # Monitoring events (pycore_instruments.h): their arguments are
+    # borrows for the call
+    "_Py_call_instrumentation_arg", "_Py_call_instrumentation_2args",
+    "_Py_call_instrumentation_exc2",
     # Value-form container calls: they only read their key argument
     "PyDict_ContainsValue", "PySet_ContainsValue", "PyDict_DelValue",
     "_PyValue_RichCompareObject",
@@ -653,7 +657,7 @@ OBJECT_READERS = {
     "_PyEval_CheckExceptTypeValid", "value_exception_group_match",
     "_PyEval_GetAwaitable", "_PyList_SliceSubscript",
     "value_load_from_dict", "_PySet_Contains", "_PyTemplate_Build",
-    "_PyUnicode_Equal", "_Py_call_instrumentation_arg",
+    "_PyUnicode_Equal",
     "monitor_stop_iteration",
     # The indirect calls of BINARY_OP_EXTEND and
     # CALL_INTRINSIC_*, through tables of functions that read their

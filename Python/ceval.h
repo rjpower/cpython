@@ -365,7 +365,8 @@ do_monitor_exc(PyThreadState *tstate, _PyInterpreterFrame *frame,
     }
     PyObject *exc = PyErr_GetRaisedException();
     assert(exc != NULL);
-    int err = _Py_call_instrumentation_arg(tstate, event, frame, instr, exc);
+    int err = _Py_call_instrumentation_arg(
+        tstate, event, frame, instr, PyValue_FromObjectBorrow(exc));
     if (err == 0) {
         PyErr_SetRaisedException(exc);
     }
@@ -403,7 +404,8 @@ monitor_handled(PyThreadState *tstate,
     if (no_tools_for_local_event(tstate, frame, PY_MONITORING_EVENT_EXCEPTION_HANDLED)) {
         return 0;
     }
-    return _Py_call_instrumentation_arg(tstate, PY_MONITORING_EVENT_EXCEPTION_HANDLED, frame, instr, exc);
+    return _Py_call_instrumentation_arg(tstate, PY_MONITORING_EVENT_EXCEPTION_HANDLED, frame, instr,
+        PyValue_FromObjectBorrow(exc));
 }
 
 static void

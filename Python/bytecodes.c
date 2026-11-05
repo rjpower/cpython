@@ -1499,11 +1499,10 @@ dummy_func(
 
         // The value is taken before the event, which can run code
         tier1 op(_RETURN_VALUE_EVENT, (val -- taken)) {
-            PyObject *val_o = PyValue_AsKnownObjectBorrow(val);
             PyValue held = TAKE(val);
             int err = _Py_call_instrumentation_arg(
                     tstate, PY_MONITORING_EVENT_PY_RETURN,
-                    frame, this_instr, val_o);
+                    frame, this_instr, held);
             if (err) {
                 PyValue_CLOSE(held);
                 ERROR_IF(true);
@@ -1765,7 +1764,7 @@ dummy_func(
         tier1 op(_YIELD_VALUE_EVENT, (val -- val)) {
             int err = _Py_call_instrumentation_arg(
                     tstate, PY_MONITORING_EVENT_PY_YIELD,
-                    frame, this_instr, PyValue_AsKnownObjectBorrow(val));
+                    frame, this_instr, val);
             if (err) {
                 RELOAD_STACK();
                 ERROR_NO_POP();
@@ -2496,7 +2495,8 @@ dummy_func(
                 PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
                 int err = _Py_call_instrumentation_2args(
                         tstate, PY_MONITORING_EVENT_CALL,
-                        frame, this_instr, global_super, arg);
+                        frame, this_instr, PyValue_FromObjectBorrow(global_super),
+                        PyValue_FromObjectBorrow(arg));
                 if (err) {
                     DECREF_INPUTS();
                     ERROR_IF(true);
@@ -2510,12 +2510,14 @@ dummy_func(
                 if (PyValue_IsNull(super)) {
                     _Py_call_instrumentation_exc2(
                         tstate, PY_MONITORING_EVENT_C_RAISE,
-                        frame, this_instr, global_super, arg);
+                        frame, this_instr, PyValue_FromObjectBorrow(global_super),
+                        PyValue_FromObjectBorrow(arg));
                 }
                 else {
                     int err = _Py_call_instrumentation_2args(
                         tstate, PY_MONITORING_EVENT_C_RETURN,
-                        frame, this_instr, global_super, arg);
+                        frame, this_instr, PyValue_FromObjectBorrow(global_super),
+                        PyValue_FromObjectBorrow(arg));
                     if (err < 0) {
                         PyValue_CLEAR(super);
                     }
@@ -4562,15 +4564,13 @@ dummy_func(
                 total_args++;
             }
             STAT_INC(CALL, hit);
-            PyObject *res_o = _Py_CallBuiltinClass_Value(
-                callable,
-                arguments,
-                total_args);
-            if (res_o == NULL) {
+            PyValue result = _PyValue_VectorcallTstate(
+                tstate, callable, arguments, total_args, NULL);
+            if (PyValue_IsNull(result)) {
                 ERROR_NO_POP();
             }
             PyValue temp = callable;
-            callable = PyValue_FromObjectSteal(res_o);
+            callable = result;
             PyValue_CLOSE(temp);
         }
 
@@ -4639,16 +4639,13 @@ dummy_func(
                 total_args++;
             }
             STAT_INC(CALL, hit);
-            PyObject *res_o = _Py_BuiltinCallFast_Value(
-                callable,
-                arguments,
-                total_args
-            );
-            if (res_o == NULL) {
+            PyValue result = _PyValue_VectorcallTstate(
+                tstate, callable, arguments, total_args, NULL);
+            if (PyValue_IsNull(result)) {
                 ERROR_NO_POP();
             }
             PyValue temp = callable;
-            callable = PyValue_FromObjectSteal(res_o);
+            callable = result;
             PyValue_CLOSE(temp);
         }
 
@@ -4677,12 +4674,13 @@ dummy_func(
                 total_args++;
             }
             STAT_INC(CALL, hit);
-            PyObject *res_o = _Py_BuiltinCallFastWithKeywords_Value(callable, arguments, total_args);
-            if (res_o == NULL) {
+            PyValue result = _PyValue_VectorcallTstate(
+                tstate, callable, arguments, total_args, NULL);
+            if (PyValue_IsNull(result)) {
                 ERROR_NO_POP();
             }
             PyValue temp = callable;
-            callable = PyValue_FromObjectSteal(res_o);
+            callable = result;
             PyValue_CLOSE(temp);
         }
 
@@ -4713,8 +4711,7 @@ dummy_func(
         op(_CALL_LEN, (callable, null, arg -- res, a, c)) {
             /* len(o) */
             STAT_INC(CALL, hit);
-            PyObject *arg_o = PyValue_AsKnownObjectBorrow(arg);
-            Py_ssize_t len_i = PyObject_Length(arg_o);
+            Py_ssize_t len_i = _PyValue_Size(arg);
             if (len_i < 0) {
                 ERROR_NO_POP();
             }
@@ -4882,34 +4879,20 @@ dummy_func(
         }
 
         op(_CALL_METHOD_DESCRIPTOR_FAST_WITH_KEYWORDS, (callable, self_or_null, args[oparg] -- callable, self_or_null, args[oparg])) {
-            PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-            PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
-
             int total_args = oparg;
             PyValue *arguments = args;
             if (!PyValue_IsNull(self_or_null)) {
                 arguments--;
                 total_args++;
             }
-            PyObject *self = _PyValueTemps_Object(value_temps, arguments[0]);
-            if (self == NULL) {
-                ERROR_NO_POP();
-            }
-            assert(self != NULL);
             STAT_INC(CALL, hit);
-            PyCFunctionFastWithKeywords cfunc = _PyCFunctionFastWithKeywords_CAST(method->d_method->ml_meth);
-            PyObject *res_o = _PyCallMethodDescriptorFastWithKeywords_Value(
-                callable,
-                cfunc,
-                self,
-                arguments,
-                total_args
-            );
-            if (res_o == NULL) {
+            PyValue result = _PyValue_VectorcallTstate(
+                tstate, callable, arguments, total_args, NULL);
+            if (PyValue_IsNull(result)) {
                 ERROR_NO_POP();
             }
             PyValue temp = callable;
-            callable = PyValue_FromObjectSteal(res_o);
+            callable = result;
             PyValue_CLOSE(temp);
         }
 
@@ -4992,34 +4975,20 @@ dummy_func(
         }
 
         op(_CALL_METHOD_DESCRIPTOR_FAST, (callable, self_or_null, args[oparg] -- callable, self_or_null, args[oparg])) {
-            PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-            PyMethodDescrObject *method = (PyMethodDescrObject *)callable_o;
-
             int total_args = oparg;
             PyValue *arguments = args;
             if (!PyValue_IsNull(self_or_null)) {
                 arguments--;
                 total_args++;
             }
-            PyObject *self = _PyValueTemps_Object(value_temps, arguments[0]);
-            if (self == NULL) {
-                ERROR_NO_POP();
-            }
-            assert(self != NULL);
             STAT_INC(CALL, hit);
-            PyCFunctionFast cfunc = _PyCFunctionFast_CAST(method->d_method->ml_meth);
-            PyObject *res_o = _PyCallMethodDescriptorFast_Value(
-                callable,
-                cfunc,
-                self,
-                arguments,
-                total_args
-            );
-            if (res_o == NULL) {
+            PyValue result = _PyValue_VectorcallTstate(
+                tstate, callable, arguments, total_args, NULL);
+            if (PyValue_IsNull(result)) {
                 ERROR_NO_POP();
             }
             PyValue temp = callable;
-            callable = PyValue_FromObjectSteal(res_o);
+            callable = result;
             PyValue_CLOSE(temp);
         }
 

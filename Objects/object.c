@@ -1811,30 +1811,6 @@ _PyStatusValue
     return r;
 }
 
-// Look up a method on `*self` (the value of obj) by `name`: the thunk of
-// _PyValue_GetMethod(). Status 1 leaves `*self` as the "self" argument to
-// pass, status 0 and -1 clear it; `*method` is the result.
-int
-_PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
-                        PyObject *name, PyValue *method, PyObject *obj)
-{
-    assert(PyValue_IsNull(*method));
-    assert(PyValue_Is(*self, PyValue_FromObjectBorrow(obj)));
-    PyValue original_self = *self;
-    *self = PyValue_NULL;
-    _PyStatusValue r = (_PyValue_GetMethod)(PyValue_Borrow(original_self),
-                                            name);
-    /* The caller owns the receiver until both output homes publish. */
-    *method = _PyValue_Publish(&r.value);
-    if (r.status == 1) {
-        *self = _PyValue_Publish(&original_self);
-    }
-    else {
-        PyValue_XCLOSE(original_self);
-    }
-    return r.status;
-}
-
 PyValue
 (_PyValue_DescrGet)(PyObject *descr, PyValueBorrow obj, PyTypeObject *type)
 {

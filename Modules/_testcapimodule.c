@@ -2090,6 +2090,17 @@ error_func(PyObject *obj, PyFrameObject *f, int what, PyObject *arg)
 }
 
 static PyObject *
+setprofile_to_record(PyObject *self, PyObject *list)
+{
+    if (!PyList_Check(list)) {
+        PyErr_SetString(PyExc_TypeError, "argument must be a list");
+        return NULL;
+    }
+    PyEval_SetProfile(record_func, list);
+    Py_RETURN_NONE;
+}
+
+static PyObject *
 settrace_to_error(PyObject *self, PyObject *list)
 {
     if (!PyList_Check(list)) {
@@ -2098,6 +2109,34 @@ settrace_to_error(PyObject *self, PyObject *list)
     }
     PyEval_SetTrace(error_func, list);
     Py_RETURN_NONE;
+}
+
+/* Call the thread's installed trace function through the public field, as
+   a debugger or coverage tool that reads tstate->c_tracefunc does:
+   (what, arg) with the current frame. Returns the function's result, or
+   None if no trace function is installed. */
+static PyObject *
+call_c_tracefunc(PyObject *self, PyObject *args)
+{
+    int what;
+    PyObject *arg;
+    if (!PyArg_ParseTuple(args, "iO", &what, &arg)) {
+        return NULL;
+    }
+    PyThreadState *tstate = PyThreadState_Get();
+    if (tstate->c_tracefunc == NULL) {
+        Py_RETURN_NONE;
+    }
+    PyFrameObject *frame = PyEval_GetFrame();
+    if (frame == NULL) {
+        PyErr_SetString(PyExc_SystemError, "no frame");
+        return NULL;
+    }
+    int err = tstate->c_tracefunc(tstate->c_traceobj, frame, what, arg);
+    if (err) {
+        return NULL;
+    }
+    return PyLong_FromLong(err);
 }
 
 static PyObject *
@@ -3048,6 +3087,8 @@ static PyMethodDef TestMethods[] = {
     {"test_code_api", test_code_api, METH_NOARGS, NULL},
     {"settrace_to_error", settrace_to_error, METH_O, NULL},
     {"settrace_to_record", settrace_to_record, METH_O, NULL},
+    {"setprofile_to_record", setprofile_to_record, METH_O, NULL},
+    {"call_c_tracefunc", call_c_tracefunc, METH_VARARGS, NULL},
     {"test_macros", test_macros, METH_NOARGS, NULL},
     {"test_weakref_capi", test_weakref_capi, METH_NOARGS},
     {"function_set_warning", function_set_warning, METH_NOARGS},

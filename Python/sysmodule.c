@@ -41,6 +41,7 @@ Data members:
 #include "pycore_tuple.h"         // _PyTuple_PackValues()
 #include "pycore_unicodeobject.h" // _PyUnicode_InternImmortal()
 #include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
+#include "pycore_value_call.h"    // _PyValue_VectorcallTstate()
 
 #include "pydtrace.h"             // PyDTrace_AUDIT()
 #include "osdefs.h"               // DELIM
@@ -1077,38 +1078,40 @@ static PyObject *whatstrings[8] = {
 };
 
 
-static PyObject *
+static PyValue
 call_trampoline(PyThreadState *tstate, PyObject* callback,
-                PyFrameObject *frame, int what, PyObject *arg)
+                PyFrameObject *frame, int what, PyValueBorrow arg)
 {
     /* call the Python-level function */
-    if (arg == NULL) {
-        arg = Py_None;
-    }
-    PyObject *args[3] = {(PyObject *)frame, whatstrings[what], arg};
-    PyObject *result = _PyObject_VectorcallTstate(tstate, callback, args, 3, NULL);
-
+    PyValue args[3];
+    _PyValue_WindowPut(&args[0], PyValue_FromObjectBorrow(frame));
+    _PyValue_WindowPut(&args[1], PyValue_FromObjectBorrow(whatstrings[what]));
+    _PyValue_WindowPut(&args[2],
+                       PyValue_IsNull(arg) ? PyValue_Borrow(PyValue_None) : arg);
+    PyValue callable;
+    _PyValue_WindowPut(&callable, PyValue_FromObjectBorrow(callback));
+    PyValue result = _PyValue_VectorcallTstate(tstate, callable, args, 3, NULL);
     return result;
 }
 
 static int
 profile_trampoline(PyObject *self, PyFrameObject *frame,
-                   int what, PyObject *arg)
+                   int what, PyValueBorrow arg)
 {
     PyThreadState *tstate = _PyThreadState_GET();
-    PyObject *result = call_trampoline(tstate, self, frame, what, arg);
-    if (result == NULL) {
+    PyValue result = call_trampoline(tstate, self, frame, what, arg);
+    if (PyValue_IsNull(result)) {
         _PyEval_SetProfile(tstate, NULL, NULL);
         return -1;
     }
 
-    Py_DECREF(result);
+    PyValue_CLOSE(result);
     return 0;
 }
 
 static int
 trace_trampoline(PyObject *self, PyFrameObject *frame,
-                 int what, PyObject *arg)
+                 int what, PyValueBorrow arg)
 {
     PyObject *callback;
     if (what == PyTrace_CALL) {
@@ -1122,20 +1125,48 @@ trace_trampoline(PyObject *self, PyFrameObject *frame,
     }
 
     PyThreadState *tstate = _PyThreadState_GET();
-    PyObject *result = call_trampoline(tstate, callback, frame, what, arg);
-    if (result == NULL) {
+    PyValue result = call_trampoline(tstate, callback, frame, what, arg);
+    if (PyValue_IsNull(result)) {
         _PyEval_SetTrace(tstate, NULL, NULL);
         Py_CLEAR(frame->f_trace);
         return -1;
     }
 
-    if (result != Py_None) {
-        Py_XSETREF(frame->f_trace, result);
+    if (!PyValue_IsNone(result)) {
+        /* f_trace is an object: box an inline result. */
+        PyObject *obj = PyValue_AsObject(result);
+        PyValue_CLOSE(result);
+        if (obj == NULL) {
+            _PyEval_SetTrace(tstate, NULL, NULL);
+            Py_CLEAR(frame->f_trace);
+            return -1;
+        }
+        Py_XSETREF(frame->f_trace, obj);
     }
     else {
-        Py_DECREF(result);
+        PyValue_CLOSE(result);
     }
     return 0;
+}
+
+/* The object forms that tstate->c_tracefunc and c_profilefunc show to
+   readers of the public fields. */
+static int
+profile_trampoline_object(PyObject *self, PyFrameObject *frame,
+                          int what, PyObject *arg)
+{
+    PyValueBorrow warg = arg == NULL
+        ? PyValue_Borrow(PyValue_NULL) : PyValue_FromObjectBorrow(arg);
+    return profile_trampoline(self, frame, what, warg);
+}
+
+static int
+trace_trampoline_object(PyObject *self, PyFrameObject *frame,
+                        int what, PyObject *arg)
+{
+    PyValueBorrow warg = arg == NULL
+        ? PyValue_Borrow(PyValue_NULL) : PyValue_FromObjectBorrow(arg);
+    return trace_trampoline(self, frame, what, warg);
 }
 
 /*[clinic input]
@@ -1161,7 +1192,8 @@ sys_settrace(PyObject *module, PyObject *function)
         }
     }
     else {
-        if (_PyEval_SetTrace(tstate, trace_trampoline, function) < 0) {
+        if (_PyEval_SetTraceValue(tstate, trace_trampoline,
+                                 trace_trampoline_object, function) < 0) {
             return NULL;
         }
     }
@@ -1186,15 +1218,17 @@ sys__settraceallthreads(PyObject *module, PyObject *arg)
 /*[clinic end generated code: output=161cca30207bf3ca input=e5750f5dc01142eb]*/
 {
     PyObject* argument = NULL;
-    Py_tracefunc func = NULL;
+    _Py_valuetracefunc vfunc = NULL;
+    Py_tracefunc ofunc = NULL;
 
     if (arg != Py_None) {
-        func = trace_trampoline;
+        vfunc = trace_trampoline;
+        ofunc = trace_trampoline_object;
         argument = arg;
     }
 
     PyInterpreterState *interp = _PyInterpreterState_GET();
-    if (_PyEval_SetTraceAllThreads(interp, func, argument) < 0) {
+    if (_PyEval_SetTraceValueAllThreads(interp, vfunc, ofunc, argument) < 0) {
         return NULL;
     }
     Py_RETURN_NONE;
@@ -1243,7 +1277,8 @@ sys_setprofile(PyObject *module, PyObject *function)
         }
     }
     else {
-        if (_PyEval_SetProfile(tstate, profile_trampoline, function) < 0) {
+        if (_PyEval_SetProfileValue(tstate, profile_trampoline,
+                                   profile_trampoline_object, function) < 0) {
             return NULL;
         }
     }
@@ -1268,15 +1303,17 @@ sys__setprofileallthreads(PyObject *module, PyObject *arg)
 /*[clinic end generated code: output=2d61319e27b309fe input=9a3dc3352c63b471]*/
 {
     PyObject* argument = NULL;
-    Py_tracefunc func = NULL;
+    _Py_valuetracefunc vfunc = NULL;
+    Py_tracefunc ofunc = NULL;
 
     if (arg != Py_None) {
-        func = profile_trampoline;
+        vfunc = profile_trampoline;
+        ofunc = profile_trampoline_object;
         argument = arg;
     }
 
     PyInterpreterState *interp = _PyInterpreterState_GET();
-    if (_PyEval_SetProfileAllThreads(interp, func, argument) < 0) {
+    if (_PyEval_SetProfileValueAllThreads(interp, vfunc, ofunc, argument) < 0) {
         return NULL;
     }
     Py_RETURN_NONE;

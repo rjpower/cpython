@@ -22,12 +22,21 @@ extern "C" {
 /* Forward declarations */
 struct _ceval_runtime_state;
 
+/* Install a trace or profile function. func and arg are the extension's
+ * (PyEval_SetTrace()): the thread's value function is an adapter that boxes
+ * the argument word and calls func. The Value forms install vfunc, which
+ * reads the word as it is; ofunc is the object form that the public
+ * tstate->c_tracefunc/c_profilefunc show to readers (NULL with vfunc NULL). */
 // Export for '_lsprof' shared extension
 PyAPI_FUNC(int) _PyEval_SetProfile(PyThreadState *tstate, Py_tracefunc func, PyObject *arg);
 extern int _PyEval_SetProfileAllThreads(PyInterpreterState *interp, Py_tracefunc func, PyObject *arg);
+extern int _PyEval_SetProfileValue(PyThreadState *tstate, _Py_valuetracefunc vfunc, Py_tracefunc ofunc, PyObject *arg);
+extern int _PyEval_SetProfileValueAllThreads(PyInterpreterState *interp, _Py_valuetracefunc vfunc, Py_tracefunc ofunc, PyObject *arg);
 
 extern int _PyEval_SetTrace(PyThreadState *tstate, Py_tracefunc func, PyObject *arg);
 extern int _PyEval_SetTraceAllThreads(PyInterpreterState *interp, Py_tracefunc func, PyObject *arg);
+extern int _PyEval_SetTraceValue(PyThreadState *tstate, _Py_valuetracefunc vfunc, Py_tracefunc ofunc, PyObject *arg);
+extern int _PyEval_SetTraceValueAllThreads(PyInterpreterState *interp, _Py_valuetracefunc vfunc, Py_tracefunc ofunc, PyObject *arg);
 
 extern int _PyEval_SetOpcodeTrace(PyFrameObject *f, bool enable);
 
@@ -409,58 +418,6 @@ extern int _PyRunRemoteDebugger(PyThreadState *tstate);
 PyAPI_DATA(const _PyInstr *) _Py_INTERPRETER_TRAMPOLINE_INSTRUCTIONS_PTR;
 
 /* Helper functions for large uops */
-
-PyAPI_FUNC(PyObject *)
-_Py_VectorCall_ValueSteal(
-    PyValue callable,
-    PyValue *arguments,
-    int total_args,
-    PyValue kwnames);
-
-PyAPI_FUNC(PyObject*)
-_Py_VectorCallInstrumentation_ValueSteal(
-    PyValue callable,
-    PyValue* arguments,
-    int total_args,
-    PyValue kwnames,
-    bool call_instrumentation,
-    _PyInterpreterFrame* frame,
-    _PyInstr* this_instr,
-    PyThreadState* tstate);
-
-PyAPI_FUNC(PyObject *)
-_Py_BuiltinCallFast_Value(
-    PyValue callable,
-    PyValue *arguments,
-    int total_args);
-
-PyAPI_FUNC(PyObject *)
-_Py_BuiltinCallFastWithKeywords_Value(
-    PyValue callable,
-    PyValue *arguments,
-    int total_args);
-
-PyAPI_FUNC(PyObject *)
-_PyCallMethodDescriptorFast_Value(
-    PyValue callable,
-    PyCFunctionFast cfunc,
-    PyObject *self,
-    PyValue *arguments,
-    int total_args);
-
-PyAPI_FUNC(PyObject *)
-_PyCallMethodDescriptorFastWithKeywords_Value(
-    PyValue callable,
-    PyCFunctionFastWithKeywords cfunc,
-    PyObject *self,
-    PyValue *arguments,
-    int total_args);
-
-PyAPI_FUNC(PyObject *)
-_Py_CallBuiltinClass_Value(
-    PyValue callable,
-    PyValue *arguments,
-    int total_args);
 
 PyAPI_FUNC(PyObject *)
 _Py_BuildString_ValueSteal(

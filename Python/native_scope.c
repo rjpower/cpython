@@ -1,10 +1,8 @@
 #include "Python.h"
 
-#include "pycore_borrow.h"        // _PyBorrow_ValueVector()
-#include "pycore_methodobject.h"  // _PyCFunction_GET_SELF_VALUE()
+#include "pycore_borrow.h"        // _PyBorrowScope_Exit()
 #include "pycore_native_scope.h"
-#include "pycore_tuple.h"
-#include "pycore_value_api.h"     // _PyBorrow_ValueVectorFor()
+#include "pycore_value_api.h"     // _PyBox_AT()
 
 
 static void
@@ -67,127 +65,6 @@ _PyNativeScope_Begin(_PyNativeScope *scope, PyThreadState *tstate,
         }
     }
     return 0;
-}
-
-static int
-begin_vector(_PyNativeScope *scope, PyThreadState *tstate,
-             PyObject *callable, const PyValue *effective_args,
-             Py_ssize_t positional_count, Py_ssize_t total_count,
-             PyObject *kwnames, int cfunction)
-{
-    initialize_scope(scope, tstate);
-    scope->vector = cfunction ? 1 : 2;
-    if (tstate == NULL || callable == NULL ||
-        (cfunction && !PyCFunction_Check(callable)) ||
-        positional_count < 0 || total_count < positional_count ||
-        (total_count != 0 && effective_args == NULL) ||
-        (kwnames != NULL && !PyTuple_Check(kwnames)))
-    {
-        PyErr_SetString(PyExc_SystemError, "invalid native vector scope arguments");
-        return -1;
-    }
-    Py_ssize_t nkw = kwnames == NULL ? 0 : PyTuple_GET_SIZE(kwnames);
-    if (nkw != total_count - positional_count) {
-        PyErr_SetString(PyExc_SystemError, "native vector keyword count mismatch");
-        return -1;
-    }
-    for (Py_ssize_t i = 0; i < nkw; i++) {
-        PyValueBorrow name = PyTuple_GET_VALUE(kwnames, i);
-        if (!PyValue_IsObject(name) ||
-            !PyUnicode_Check(_PyTuple_GET_OBJECT(kwnames, i)))
-        {
-            PyErr_SetString(PyExc_TypeError, "keywords must be strings");
-            return -1;
-        }
-    }
-    for (Py_ssize_t i = 0; i < total_count; i++) {
-        if (!PyValue_IsLanguageValue(effective_args[i])) {
-            PyErr_SetString(PyExc_SystemError,
-                            "native vector arguments must be language values");
-            return -1;
-        }
-    }
-    /* These INCREFs cannot reenter. All metadata and the producer's owning
-     * window remain rooted while the arguments are boxed. */
-    scope->callable = Py_NewRef(callable);
-    scope->kwnames = Py_XNewRef(kwnames);
-    if (cfunction) {
-        /* The bound self, which may be absent. _PyNativeScope_Objects()
-           boxes an inline one at the call adapter site. */
-        scope->receiver = PyValue_XDUP(_PyCFunction_GET_SELF_VALUE(callable));
-        scope->defining_class = (PyTypeObject *)Py_XNewRef(
-            (PyObject *)PyCFunction_GET_CLASS(callable));
-    }
-    /* Boxing can fail to allocate.  On failure the partial run stays above
-       the mark and End releases it. */
-    scope->mark = _PyBorrowScope_Enter(tstate);
-    PyObject **objects = _PyBorrow_ValueVectorFor(
-        effective_args, total_count, _PyBox_CALL_ADAPTER(callable));
-    if (objects == NULL) {
-        return -1;
-    }
-    scope->objects = objects;
-    scope->nargs = total_count;
-    scope->positional_count = positional_count;
-    return 0;
-}
-
-int
-_PyNativeScope_BeginVector(_PyNativeScope *scope, PyThreadState *tstate,
-                           PyObject *callable, const PyValue *args,
-                           Py_ssize_t positional, Py_ssize_t total,
-                           PyObject *kwnames)
-{
-    return begin_vector(scope, tstate, callable, args, positional, total, kwnames, 1);
-}
-
-int
-_PyNativeScope_BeginObjectVector(_PyNativeScope *scope, PyThreadState *tstate,
-                                PyObject *callable, const PyValue *args,
-                                Py_ssize_t positional, Py_ssize_t total,
-                                PyObject *kwnames)
-{
-    return begin_vector(scope, tstate, callable, args, positional, total, kwnames, 0);
-}
-
-int
-_PyNativeScope_BeginTupleCall(_PyNativeScope *scope, PyThreadState *tstate,
-                            PyObject *callable, PyObject *args, PyObject *kwargs)
-{
-    initialize_scope(scope, tstate);
-    scope->vector = 3;
-    if (tstate == NULL || callable == NULL || args == NULL || !PyTuple_Check(args) ||
-        (kwargs != NULL && !PyDict_Check(kwargs))) {
-        PyErr_SetString(PyExc_SystemError, "invalid native tuple-call arguments");
-        return -1;
-    }
-    scope->callable = Py_NewRef(callable);
-    scope->callargs = Py_NewRef(args);
-    scope->kwargs = Py_XNewRef(kwargs);
-    return 0;
-}
-
-int
-_PyNativeScope_InvokeObjectVector(_PyNativeScope *scope)
-{
-    assert((scope->vector == 1 || scope->vector == 2) && !scope->ended);
-    assert(scope->result.state == _Py_NATIVE_RESULT_EMPTY);
-    PyObject *const *args;
-    if (_PyNativeScope_Objects(scope, &args) < 0) {
-        return -1;
-    }
-    PyObject *result = PyObject_Vectorcall(scope->callable, args,
-                                         scope->positional_count, scope->kwnames);
-    return _PyNativeScope_StageResult(scope, result, &scope->result);
-}
-
-int
-_PyNativeScope_InvokeTupleCall(_PyNativeScope *scope)
-{
-    assert(scope->vector == 3 && !scope->ended);
-    assert(scope->result.state == _Py_NATIVE_RESULT_EMPTY);
-    PyObject *result = PyObject_Call(scope->callable, scope->callargs, scope->kwargs);
-    return _PyNativeScope_StageResult(scope, result, &scope->result);
 }
 
 int
@@ -274,20 +151,11 @@ _PyNativeScope_End(_PyNativeScope *scope)
     out->state = _Py_NATIVE_RESULT_DRAINED;
     PyValue_CLEAR(out->value);
     PyValue_CLEAR(out->displaced);
-    if (scope->mark != NULL) {
-        /* Releases the boxes of inline arguments. */
-        _PyBorrowScope_Exit(scope->tstate, scope->mark);
-    }
     scope->argument_objects[0] = NULL;
     Py_CLEAR(scope->argument_box);
     Py_CLEAR(scope->receiver_object);
     PyValue_CLEAR(scope->receiver);
-    Py_CLEAR(scope->defining_class);
-    Py_CLEAR(scope->kwnames);
-    Py_CLEAR(scope->kwargs);
-    Py_CLEAR(scope->callargs);
     Py_CLEAR(scope->callable);
-    scope->mark = NULL;
     scope->objects = NULL;
     scope->nargs = 0;
 }

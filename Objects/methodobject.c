@@ -529,36 +529,6 @@ cfunction_enter_call(PyThreadState *tstate, PyObject *func)
 }
 
 int
-_PyCFunction_CanCallScoped(PyObject *callable)
-{
-    if (callable == NULL || !PyCFunction_Check(callable)) {
-        return 0;
-    }
-    vectorcallfunc expected;
-    switch (PyCFunction_GET_FLAGS(callable) & _Py_METH_CALL_FLAGS) {
-        case METH_NOARGS:
-            expected = cfunction_vectorcall_NOARGS;
-            break;
-        case METH_O:
-            expected = cfunction_vectorcall_O;
-            break;
-        case METH_FASTCALL:
-            expected = cfunction_vectorcall_FASTCALL;
-            break;
-        case METH_FASTCALL | METH_KEYWORDS:
-            expected = cfunction_vectorcall_FASTCALL_KEYWORDS;
-            break;
-        case METH_METHOD | METH_FASTCALL | METH_KEYWORDS:
-            expected = cfunction_vectorcall_FASTCALL_KEYWORDS_METHOD;
-            break;
-        default:
-            /* Including METH_VALUE: its object vectorcall is the thunk. */
-            return 0;
-    }
-    return _PyCFunctionObject_CAST(callable)->vectorcall == expected;
-}
-
-int
 _PyCFunction_CallScoped(_PyNativeScope *scope, PyObject *callable,
                        _PyNativeResult *out)
 {
@@ -567,9 +537,6 @@ _PyCFunction_CallScoped(_PyNativeScope *scope, PyObject *callable,
     assert(out->state == _Py_NATIVE_RESULT_EMPTY);
     /* As cfunction_call() and cfunction_check_kwargs() assert. */
     assert(!_PyErr_Occurred(scope->tstate));
-    if (scope->vector && !_PyCFunction_CanCallScoped(callable)) {
-        return 1;
-    }
     if (!PyCFunction_Check(callable)) {
         PyErr_SetString(PyExc_SystemError, "scoped call requires a C function");
         return -1;
@@ -582,27 +549,13 @@ _PyCFunction_CallScoped(_PyNativeScope *scope, PyObject *callable,
         return -1;
     }
     int flags = PyCFunction_GET_FLAGS(callable) & _Py_METH_CALL_FLAGS;
-    if (!scope->vector && flags != METH_NOARGS && flags != METH_O) {
+    if (flags != METH_NOARGS && flags != METH_O) {
         PyErr_SetString(PyExc_SystemError,
-                        "variable C calls require a vector native scope");
-        return -1;
-    }
-    if (flags != METH_NOARGS && flags != METH_O && flags != METH_FASTCALL &&
-        flags != (METH_FASTCALL | METH_KEYWORDS) &&
-        flags != (METH_METHOD | METH_FASTCALL | METH_KEYWORDS))
-    {
-        PyErr_SetString(PyExc_SystemError,
-                        "unsupported scoped C function convention");
-        return -1;
-    }
-    if (!(flags & METH_KEYWORDS) &&
-        cfunction_check_kwargs(scope->tstate, callable, scope->kwnames))
-    {
+                        "a native scope calls METH_NOARGS and METH_O functions only");
         return -1;
     }
     Py_ssize_t expected = flags == METH_NOARGS ? 0 : 1;
-    if ((flags == METH_NOARGS || flags == METH_O) &&
-        scope->positional_count != expected)
+    if (scope->positional_count != expected)
     {
         PyObject *funcstr = _PyObject_FunctionStr(callable);
         if (funcstr != NULL) {
@@ -621,16 +574,13 @@ _PyCFunction_CallScoped(_PyNativeScope *scope, PyObject *callable,
         return -1;
     }
     /* VM self_or_null belongs to the argument window. This receiver is the
-     * C function's independently pinned bound self, which may be absent. A
-     * vector scope captured it at Begin; a fixed scope captures it here. */
-    if (!scope->vector) {
-        if (!PyValue_IsNull(scope->receiver)) {
-            PyErr_SetString(PyExc_SystemError,
-                            "scoped C receiver must be captured by the gateway");
-            return -1;
-        }
-        scope->receiver = PyValue_XDUP(_PyCFunction_GET_SELF_VALUE(callable));
+     * C function's independently pinned bound self, which may be absent. */
+    if (!PyValue_IsNull(scope->receiver)) {
+        PyErr_SetString(PyExc_SystemError,
+                        "scoped C receiver must be captured by the gateway");
+        return -1;
     }
+    scope->receiver = PyValue_XDUP(_PyCFunction_GET_SELF_VALUE(callable));
     if (_Py_EnterRecursiveCallTstate(scope->tstate, " while calling a Python object")) {
         return -1;
     }
@@ -642,24 +592,8 @@ _PyCFunction_CallScoped(_PyNativeScope *scope, PyObject *callable,
     PyCFunction method = PyCFunction_GET_FUNCTION(callable);
     PyObject *result;
     _PyBorrowMark mark = _PyBorrowScope_Enter(scope->tstate);
-    if (flags == METH_NOARGS || flags == METH_O) {
-        result = _PyCFunction_TrampolineCall(
-            method, scope->receiver_object, flags == METH_O ? args[0] : NULL);
-    }
-    else if (flags == METH_FASTCALL) {
-        result = _PyCFunctionFast_CAST(method)(scope->receiver_object, args,
-                                              scope->positional_count);
-    }
-    else if (flags == (METH_FASTCALL | METH_KEYWORDS)) {
-        result = _PyCFunctionFastWithKeywords_CAST(method)(
-            scope->receiver_object, args, scope->positional_count,
-            scope->kwnames);
-    }
-    else {
-        PyCMethod meth = (PyCMethod)(void(*)(void))method;
-        result = meth(scope->receiver_object, scope->defining_class, args,
-                      scope->positional_count, scope->kwnames);
-    }
+    result = _PyCFunction_TrampolineCall(
+        method, scope->receiver_object, flags == METH_O ? args[0] : NULL);
     _PyBorrowScope_Exit(scope->tstate, mark);
     _Py_LeaveRecursiveCallTstate(scope->tstate);
     /* The standard check of a C function's return, as every other call path

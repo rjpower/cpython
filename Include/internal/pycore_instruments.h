@@ -52,17 +52,29 @@ _Py_call_instrumentation_jump(
     _PyInstr *instr, PyThreadState *tstate, int event,
     _PyInterpreterFrame *frame, _PyInstr *src, _PyInstr *dest);
 
+/* The arguments are borrowed for the call; the macros take owners and
+   borrows alike. An absent argument is PyValue_FromObjectBorrow(
+   &_PyInstrumentation_MISSING). */
 PyAPI_FUNC(int)
-_Py_call_instrumentation_arg(PyThreadState *tstate, int event,
-    _PyInterpreterFrame *frame, _PyInstr *instr, PyObject *arg);
+(_Py_call_instrumentation_arg)(PyThreadState *tstate, int event,
+    _PyInterpreterFrame *frame, _PyInstr *instr, PyValueBorrow arg);
 
 PyAPI_FUNC(int)
-_Py_call_instrumentation_2args(PyThreadState *tstate, int event,
-    _PyInterpreterFrame *frame, _PyInstr *instr, PyObject *arg0, PyObject *arg1);
+(_Py_call_instrumentation_2args)(PyThreadState *tstate, int event,
+    _PyInterpreterFrame *frame, _PyInstr *instr,
+    PyValueBorrow arg0, PyValueBorrow arg1);
 
 PyAPI_FUNC(void)
-_Py_call_instrumentation_exc2(PyThreadState *tstate, int event,
-    _PyInterpreterFrame *frame, _PyInstr *instr, PyObject *arg0, PyObject *arg1);
+(_Py_call_instrumentation_exc2)(PyThreadState *tstate, int event,
+    _PyInterpreterFrame *frame, _PyInstr *instr,
+    PyValueBorrow arg0, PyValueBorrow arg1);
+
+#define _Py_call_instrumentation_arg(T, E, F, I, A) \
+    (_Py_call_instrumentation_arg)(T, E, F, I, PyValue_Borrow(A))
+#define _Py_call_instrumentation_2args(T, E, F, I, A, B) \
+    (_Py_call_instrumentation_2args)(T, E, F, I, PyValue_Borrow(A), PyValue_Borrow(B))
+#define _Py_call_instrumentation_exc2(T, E, F, I, A, B) \
+    (_Py_call_instrumentation_exc2)(T, E, F, I, PyValue_Borrow(A), PyValue_Borrow(B))
 
 PyAPI_DATA(PyObject) _PyInstrumentation_MISSING;
 PyAPI_DATA(PyObject) _PyInstrumentation_DISABLE;

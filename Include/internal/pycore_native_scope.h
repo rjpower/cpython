@@ -25,30 +25,23 @@ typedef struct {
     _PyNativeResultState state;
 } _PyNativeResult;
 
-/* The caller owns the workspace through End.  Arguments that are objects
- * are passed as borrowed pointers, as upstream passes its evaluation stack;
- * only inline values are boxed.  A fixed scope keeps its one argument's
- * object in the struct, and argument_box owns the box of an inline one.  A
- * vector scope keeps its argument vector on the borrow stack
- * (_PyBorrow_ValueVector), above `mark`; End exits to the mark.  The scope
+/* The caller owns the workspace through End.  The argument of a fixed scope
+ * is passed as a borrowed pointer, as upstream passes its evaluation stack;
+ * only an inline value is boxed, and argument_box owns that box.  The scope
  * holds no borrowed value (PyValueBorrow lives in C locals only), and no
- * pointer refers to the native body's C stack. */
+ * pointer refers to the native body's C stack.  Variable calls do not use a
+ * scope: the interpreter's call transaction calls the value vectorcall
+ * (pycore_value_call.h) on the window. */
 typedef struct {
     PyThreadState *tstate;
     PyValue receiver;
     PyObject *receiver_object;
     PyObject *argument_objects[1];
-    PyObject *argument_box;     // fixed scopes only
+    PyObject *argument_box;
     PyObject **objects;
-    _PyBorrowMark mark;         // vector scopes only
     PyObject *callable;
-    PyObject *kwnames;
-    PyObject *callargs;
-    PyObject *kwargs;
-    PyTypeObject *defining_class;
     Py_ssize_t nargs;
     Py_ssize_t positional_count;
-    int vector;
     int ended;
     _PyNativeResult result;
 } _PyNativeScope;
@@ -66,25 +59,6 @@ PyAPI_FUNC(int) _PyNativeScope_Begin(
     _PyNativeScope *scope, PyThreadState *tstate,
     const PyValue *args, Py_ssize_t positional_count, Py_ssize_t total_count,
     PyValue self_or_null, PyObject *kwnames);
-/* effective_args is an owning window that stays alive and unchanged until
- * End; total includes the keyword tail.  The vector borrows its objects and
- * boxes inline values.  The C callable and all invocation metadata are pinned
- * first.  Callers do not pass the OFFSET flag with the objects. */
-PyAPI_FUNC(int) _PyNativeScope_BeginVector(
-    _PyNativeScope *scope, PyThreadState *tstate, PyObject *callable,
-    const PyValue *effective_args, Py_ssize_t positional_count,
-    Py_ssize_t total_count, PyObject *kwnames);
-/* Generic adapters retain the actual invocation inputs through Publish/Abort
- * and End. The object vector has no writable prefix/OFFSET flag.
- * InvokeObjectVector also accepts a BeginVector scope after NOT_INVOKED,
- * retaining its captured owners rather than draining and replaying capture. */
-PyAPI_FUNC(int) _PyNativeScope_BeginObjectVector(
-    _PyNativeScope *, PyThreadState *, PyObject *, const PyValue *,
-    Py_ssize_t, Py_ssize_t, PyObject *);
-PyAPI_FUNC(int) _PyNativeScope_BeginTupleCall(
-    _PyNativeScope *, PyThreadState *, PyObject *, PyObject *, PyObject *);
-PyAPI_FUNC(int) _PyNativeScope_InvokeObjectVector(_PyNativeScope *);
-PyAPI_FUNC(int) _PyNativeScope_InvokeTupleCall(_PyNativeScope *);
 PyAPI_FUNC(int) _PyNativeScope_Objects(
     _PyNativeScope *scope, PyObject *const **args);
 /* Consumes owned_result, including when an error is already pending. */
@@ -102,12 +76,7 @@ PyAPI_FUNC(void) _PyNativeResult_Abort(
  * state after End. */
 PyAPI_FUNC(void) _PyNativeScope_End(_PyNativeScope *scope);
 
-/* Pure eligibility: supported flags AND their standard vectorcall target. */
-PyAPI_FUNC(int) _PyCFunction_CanCallScoped(PyObject *callable);
-/* out must be &scope->result. 0 = staged success, -1 = failure. A vector
- * scope alone may return +1 = NOT_INVOKED, with EMPTY result and no error.
- * The caller can use InvokeObjectVector in the same scope; it must never
- * replay a completed body. Fixed Begin keeps its 0/-1 ABI. */
+/* out must be &scope->result. 0 = staged success, -1 = failure. */
 PyAPI_FUNC(int) _PyCFunction_CallScoped(
     _PyNativeScope *scope, PyObject *callable, _PyNativeResult *out);
 

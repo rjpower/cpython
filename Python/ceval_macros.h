@@ -424,21 +424,6 @@ static inline void _Py_LeaveRecursiveCallPy(PyThreadState *tstate)  {
 
 #define _PyGC_CLEAR_ARRAY(ARR) ((void)0)
 
-/* Open a borrow scope and push the argument window onto it as an object
- * vector (with the PY_VECTORCALL_ARGUMENTS_OFFSET slot before it).  The scope
- * is also the native call boundary: CLEANUP releases the vector and whatever
- * the callee left on the stack.  Run CLEANUP on every path, including after
- * CONVERSION_FAILED. */
-#define VALUES_TO_PYOBJECTS(ARGS, ARG_COUNT, NAME) \
-    PyThreadState *NAME##_tstate = _PyThreadState_GET(); \
-    _PyBorrowMark NAME##_mark = _PyBorrowScope_Enter(NAME##_tstate); \
-    PyObject **NAME = _PyValueArray_ToObjectVector((ARGS), (ARG_COUNT));
-
-#define VALUES_TO_PYOBJECTS_CLEANUP(NAME, RESULT) \
-    _PyBorrowScope_Exit(NAME##_tstate, NAME##_mark);
-
-#define CONVERSION_FAILED(NAME) ((NAME) == NULL)
-
 #define IS_PEP523_HOOKED(tstate) (tstate->interp->eval_frame != NULL)
 
 static inline int

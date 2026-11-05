@@ -1731,6 +1731,64 @@ class TraceTestCase(unittest.TestCase):
             sys.settrace(None)
 
     @support.cpython_only
+    def test_c_tracefunc_reader_sys_settrace(self):
+        # Code that reads tstate->c_tracefunc and calls it directly sees the
+        # same events, arguments and return handling as the interpreter.
+        _testcapi = import_helper.import_module('_testcapi')
+        events = []
+
+        def tracer(frame, event, arg):
+            events.append((event, arg))
+            return tracer
+
+        self.assertIsNone(_testcapi.call_c_tracefunc(0, 42))
+        sys.settrace(tracer)
+        try:
+            frame = sys._getframe()
+            frame.f_trace = None
+            self.assertEqual(_testcapi.call_c_tracefunc(0, 12345678901), 0)
+            self.assertIs(frame.f_trace, tracer)
+            self.assertEqual(_testcapi.call_c_tracefunc(0, 42), 0)
+            self.assertEqual(_testcapi.call_c_tracefunc(0, 2.5), 0)
+        finally:
+            sys.settrace(None)
+        self.assertIn(('call', 12345678901), events)
+        self.assertIn(('call', 42), events)
+        self.assertIn(('call', 2.5), events)
+        self.assertIsNone(_testcapi.call_c_tracefunc(0, 42))
+
+    @support.cpython_only
+    def test_c_tracefunc_reader_pyeval_settrace(self):
+        _testcapi = import_helper.import_module('_testcapi')
+        events = []
+        _testcapi.settrace_to_record(events)
+        try:
+            self.assertEqual(_testcapi.call_c_tracefunc(3, 42), 0)
+            self.assertEqual(_testcapi.call_c_tracefunc(3, 7.5), 0)
+        finally:
+            sys.settrace(None)
+        direct = [arg for (what, line, arg) in events
+                  if what == 3 and arg in (42, 7.5)]
+        self.assertEqual(direct, [42, 7.5])
+
+    def test_clear_trace_inside_callback(self):
+        calls = []
+
+        def tracer(frame, event, arg):
+            calls.append(event)
+            sys.settrace(None)
+            return None
+
+        def func():
+            return 1
+
+        sys.settrace(tracer)
+        func()
+        func()
+        self.assertEqual(sys.gettrace(), None)
+        self.assertEqual(calls, ['call'])
+
+    @support.cpython_only
     def test_testcapi_settrace_error(self):
 
         # Skip this test if the _testcapi module isn't available.

@@ -16,6 +16,7 @@
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_runtime_structs.h" // _PyCoMonitoringData
 #include "pycore_tuple.h"         // _PyTuple_FromArraySteal()
+#include "pycore_value_call.h"    // _PyValue_VectorcallTstate()
 
 #include "opcode_ids.h"
 
@@ -1079,10 +1080,21 @@ remove_per_instruction_tools(PyCodeObject * code, int offset, int tools)
 }
 
 
+/* A borrowed object as a word of a vectorcall window: the window's owner
+ * (the caller) keeps the object alive and nothing closes the word. */
+static inline PyValue
+_borrowed_word_impl(PyObject *obj)
+{
+    PyValue word;
+    _PyValue_WindowFromObjects(&word, &obj, 1);
+    return word;
+}
+#define _borrowed_word(obj) _borrowed_word_impl(_PyObject_CAST(obj))
+
 /* Return 1 if DISABLE returned, -1 if error, 0 otherwise */
 static int
 call_one_instrument(
-    PyInterpreterState *interp, PyThreadState *tstate, PyObject **args,
+    PyInterpreterState *interp, PyThreadState *tstate, const PyValue *args,
     size_t nargsf, int8_t tool, int event)
 {
     assert(0 <= tool && tool < 8);
@@ -1094,17 +1106,19 @@ call_one_instrument(
     int old_what = tstate->what_event;
     tstate->what_event = event;
     tstate->tracing++;
-    PyObject *res = _PyObject_VectorcallTstate(tstate, instrument, args, nargsf, NULL);
+    PyValue res = _PyValue_VectorcallTstate(
+        tstate, _borrowed_word(instrument), args, nargsf, NULL);
     tstate->tracing--;
     tstate->what_event = old_what;
-    if (res == NULL) {
+    if (PyValue_IsNull(res)) {
         return -1;
     }
-    if (res == &_PyInstrumentation_DISABLE) {
-        assert(_Py_IsImmortal(res));
+    if (PyValue_IsObject(res) &&
+        PyValue_AsKnownObjectBorrow(res) == &_PyInstrumentation_DISABLE) {
+        assert(_Py_IsImmortal(&_PyInstrumentation_DISABLE));
         return 1;
     }
-    Py_DECREF(res);
+    PyValue_CLOSE(res);
     return 0;
 }
 
@@ -1284,29 +1298,26 @@ remove_local_tool(PyCodeObject *code, PyInterpreterState *interp,
 static int
 call_instrumentation_vector(
     _PyInstr *instr, PyThreadState *tstate, int event,
-    _PyInterpreterFrame *frame, _PyInstr *arg2, Py_ssize_t nargs, PyObject *args[])
+    _PyInterpreterFrame *frame, _PyInstr *arg2, Py_ssize_t nargs, PyValue args[])
 {
     if (tstate->tracing) {
         return 0;
     }
     assert(!_PyErr_Occurred(tstate));
-    assert(args[0] == NULL);
+    assert(PyValue_IsNull(args[0]));
     PyCodeObject *code = _PyFrame_GetCode(frame);
-    assert(args[1] == NULL);
-    args[1] = (PyObject *)code;
+    assert(PyValue_IsNull(args[1]));
+    /* A borrowed word: the frame owns the code for the call. */
+    args[1] = _borrowed_word(code);
     int offset = instr_offset(frame, instr);
     /* Offsets visible to users are word indices, like those of dis and of
-     * the line and exception tables. */
-    PyObject *arg2_obj = PyLong_FromLong(instr_offset(frame, arg2));
-    if (arg2_obj == NULL) {
-        return -1;
-    }
-    assert(args[2] == NULL);
-    args[2] = arg2_obj;
+     * the line and exception tables. They are inline ints: no allocation. */
+    assert(PyValue_IsNull(args[2]));
+    args[2] = PyValue_FromInt64(instr_offset(frame, arg2));
     PyInterpreterState *interp = tstate->interp;
     uint8_t tools = get_tools_for_instruction(code, interp, offset, event);
     size_t nargsf = (size_t) nargs | PY_VECTORCALL_ARGUMENTS_OFFSET;
-    PyObject **callargs = &args[1];
+    PyValue *callargs = &args[1];
     int err = 0;
     while (tools) {
         int tool = most_significant_bit(tools);
@@ -1346,7 +1357,6 @@ call_instrumentation_vector(
             }
         }
     }
-    Py_DECREF(arg2_obj);
     return err;
 }
 
@@ -1355,26 +1365,34 @@ _Py_call_instrumentation(
     PyThreadState *tstate, int event,
     _PyInterpreterFrame *frame, _PyInstr *instr)
 {
-    PyObject *args[3] = { NULL, NULL, NULL };
+    PyValue args[3] = { PyValue_NULL, PyValue_NULL, PyValue_NULL };
     return call_instrumentation_vector(instr, tstate, event, frame, instr, 2, args);
 }
 
 Py_NO_INLINE int
-_Py_call_instrumentation_arg(
+(_Py_call_instrumentation_arg)(
     PyThreadState *tstate, int event,
-    _PyInterpreterFrame *frame, _PyInstr *instr, PyObject *arg)
+    _PyInterpreterFrame *frame, _PyInstr *instr, PyValueBorrow arg)
 {
-    PyObject *args[4] = { NULL, NULL, NULL, arg };
-    return call_instrumentation_vector(instr, tstate, event, frame, instr, 3, args);
+    PyValue args[4] = { PyValue_NULL, PyValue_NULL, PyValue_NULL,
+                        PyValue_XDUP(arg) };
+    int err = call_instrumentation_vector(instr, tstate, event, frame, instr, 3, args);
+    PyValue_XCLOSE(args[3]);
+    return err;
 }
 
 Py_NO_INLINE int
-_Py_call_instrumentation_2args(
+(_Py_call_instrumentation_2args)(
     PyThreadState *tstate, int event,
-    _PyInterpreterFrame *frame, _PyInstr *instr, PyObject *arg0, PyObject *arg1)
+    _PyInterpreterFrame *frame, _PyInstr *instr,
+    PyValueBorrow arg0, PyValueBorrow arg1)
 {
-    PyObject *args[5] = { NULL, NULL, NULL, arg0, arg1 };
-    return call_instrumentation_vector(instr, tstate, event, frame, instr, 4, args);
+    PyValue args[5] = { PyValue_NULL, PyValue_NULL, PyValue_NULL,
+                        PyValue_XDUP(arg0), PyValue_XDUP(arg1) };
+    int err = call_instrumentation_vector(instr, tstate, event, frame, instr, 4, args);
+    PyValue_XCLOSE(args[4]);
+    PyValue_XCLOSE(args[3]);
+    return err;
 }
 
 Py_NO_INLINE _PyInstr *
@@ -1395,14 +1413,10 @@ _Py_call_instrumentation_jump(
         }
     }
     int to = dest_offset(frame, dest);
-    PyObject *to_obj = PyLong_FromLong(to);
-    if (to_obj == NULL) {
-        return NULL;
-    }
-    PyObject *args[4] = { NULL, NULL, NULL, to_obj };
+    PyValue args[4] = { PyValue_NULL, PyValue_NULL, PyValue_NULL,
+                        PyValue_FromInt64(to) };
     _PyInstr *instr_ptr = frame->instr_ptr;
     int err = call_instrumentation_vector(instr, tstate, event, frame, src, 3, args);
-    Py_DECREF(to_obj);
     if (err) {
         return NULL;
     }
@@ -1416,7 +1430,7 @@ _Py_call_instrumentation_jump(
 static void
 call_instrumentation_vector_protected(
     PyThreadState *tstate, int event,
-    _PyInterpreterFrame *frame, _PyInstr *instr, Py_ssize_t nargs, PyObject *args[])
+    _PyInterpreterFrame *frame, _PyInstr *instr, Py_ssize_t nargs, PyValue args[])
 {
     assert(_PyErr_Occurred(tstate));
     PyObject *exc = _PyErr_GetRaisedException(tstate);
@@ -1431,13 +1445,17 @@ call_instrumentation_vector_protected(
 }
 
 Py_NO_INLINE void
-_Py_call_instrumentation_exc2(
+(_Py_call_instrumentation_exc2)(
     PyThreadState *tstate, int event,
-    _PyInterpreterFrame *frame, _PyInstr *instr, PyObject *arg0, PyObject *arg1)
+    _PyInterpreterFrame *frame, _PyInstr *instr,
+    PyValueBorrow arg0, PyValueBorrow arg1)
 {
     assert(_PyErr_Occurred(tstate));
-    PyObject *args[5] = { NULL, NULL, NULL, arg0, arg1 };
+    PyValue args[5] = { PyValue_NULL, PyValue_NULL, PyValue_NULL,
+                        PyValue_XDUP(arg0), PyValue_XDUP(arg1) };
     call_instrumentation_vector_protected(tstate, event, frame, instr, 4, args);
+    PyValue_XCLOSE(args[4]);
+    PyValue_XCLOSE(args[3]);
 }
 
 int
@@ -1484,7 +1502,7 @@ _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
     /* Special case sys.settrace to avoid boxing the line number,
      * only to immediately unbox it. */
     if (tools & (1 << PY_MONITORING_SYS_TRACE_ID)) {
-        if (tstate->c_tracefunc != NULL) {
+        if (((_PyThreadStateImpl *)tstate)->value_tracefunc != NULL) {
             PyFrameObject *frame_obj = _PyFrame_GetFrameObject(frame);
             if (frame_obj == NULL) {
                 return -1;
@@ -1495,10 +1513,12 @@ _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
                 int old_what = tstate->what_event;
                 tstate->what_event = PY_MONITORING_EVENT_LINE;
                 tstate->tracing++;
-                /* Call c_tracefunc directly, having set the line number. */
+                /* Call value_tracefunc directly, having set the line number. */
                 Py_INCREF(frame_obj);
                 frame_obj->f_lineno = line;
-                int err = tstate->c_tracefunc(tstate->c_traceobj, frame_obj, PyTrace_LINE, Py_None);
+                int err = ((_PyThreadStateImpl *)tstate)->value_tracefunc(
+                    tstate->c_traceobj, frame_obj, PyTrace_LINE,
+                    PyValue_Borrow(PyValue_None));
                 frame_obj->f_lineno = 0;
                 tstate->tracing--;
                 tstate->what_event = old_what;
@@ -1513,11 +1533,8 @@ _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
     if (tools == 0) {
         goto done;
     }
-    PyObject *line_obj = PyLong_FromLong(line);
-    if (line_obj == NULL) {
-        return -1;
-    }
-    PyObject *args[3] = { NULL, (PyObject *)code, line_obj };
+    PyValue args[3] = { PyValue_NULL, _borrowed_word(code),
+                        PyValue_FromInt64(line) };
     do {
         int tool = most_significant_bit(tools);
         assert(tool >= 0 && tool < PY_MONITORING_SYS_PROFILE_ID);
@@ -1531,7 +1548,6 @@ _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
         }
         else if (res < 0) {
             /* error */
-            Py_DECREF(line_obj);
             return -1;
         }
         else {
@@ -1542,7 +1558,6 @@ _Py_call_instrumentation_line(PyThreadState *tstate, _PyInterpreterFrame* frame,
             _PyEval_StartTheWorld(interp);
         }
     } while (tools);
-    Py_DECREF(line_obj);
     uint8_t original_opcode;
 done:
     original_opcode = _PyCode_GetOriginalOpcode(line_data, i);
@@ -1575,11 +1590,8 @@ _Py_call_instrumentation_instruction(PyThreadState *tstate, _PyInterpreterFrame*
         (interp->monitors.tools[PY_MONITORING_EVENT_INSTRUCTION] |
          code->_co_monitoring->local_monitors.tools[PY_MONITORING_EVENT_INSTRUCTION]
         );
-    PyObject *offset_obj = PyLong_FromLong(offset);
-    if (offset_obj == NULL) {
-        return -1;
-    }
-    PyObject *args[3] = { NULL, (PyObject *)code, offset_obj };
+    PyValue args[3] = { PyValue_NULL, _borrowed_word(code),
+                        PyValue_FromInt64(offset) };
     while (tools) {
         int tool = most_significant_bit(tools);
         assert(tool >= 0 && tool < 8);
@@ -1593,7 +1605,6 @@ _Py_call_instrumentation_instruction(PyThreadState *tstate, _PyInterpreterFrame*
         }
         else if (res < 0) {
             /* error */
-            Py_DECREF(offset_obj);
             return -1;
         }
         else {
@@ -1604,7 +1615,6 @@ _Py_call_instrumentation_instruction(PyThreadState *tstate, _PyInterpreterFrame*
             _PyEval_StartTheWorld(interp);
         }
     }
-    Py_DECREF(offset_obj);
     assert(next_opcode != 0);
     return next_opcode;
 }
@@ -2666,7 +2676,7 @@ monitoring__all_events_impl(PyObject *module)
         }
         PyObject *tools_obj = PyLong_FromLong(tools);
         assert(tools_obj != NULL);
-        int err = PyDict_SetValueString(res, event_names[e], PyValue_FromObjectBorrow(tools_obj));
+        int err = PyDict_SetValueString(res, event_names[e], _borrowed_word(tools_obj));
         Py_DECREF(tools_obj);
         if (err < 0) {
             Py_DECREF(res);
@@ -2755,29 +2765,24 @@ error:
 
 static int
 capi_call_instrumentation(PyMonitoringState *state, PyObject *codelike, int32_t offset,
-                          PyObject **args, Py_ssize_t nargs, int event)
+                          PyValue *args, Py_ssize_t nargs, int event)
 {
     PyThreadState *tstate = _PyThreadState_GET();
     PyInterpreterState *interp = tstate->interp;
 
     uint8_t tools = state->active;
-    assert(args[1] == NULL);
-    args[1] = codelike;
+    assert(PyValue_IsNull(args[1]));
+    args[1] = _borrowed_word(codelike);
     if (offset < 0) {
         PyErr_SetString(PyExc_ValueError, "offset must be non-negative");
         return -1;
     }
-    PyObject *offset_obj = NULL;
     if (event != PY_MONITORING_EVENT_LINE) {
-        offset_obj = PyLong_FromLong(offset);
-        if (offset_obj == NULL) {
-            return -1;
-        }
-        assert(args[2] == NULL);
-        args[2] = offset_obj;
+        assert(PyValue_IsNull(args[2]));
+        args[2] = PyValue_FromInt64(offset);
     }
     size_t nargsf = (size_t) nargs | PY_VECTORCALL_ARGUMENTS_OFFSET;
-    PyObject **callargs = &args[1];
+    PyValue *callargs = &args[1];
     int err = 0;
 
     while (tools) {
@@ -2810,7 +2815,6 @@ capi_call_instrumentation(PyMonitoringState *state, PyObject *codelike, int32_t 
             }
         }
     }
-    Py_XDECREF(offset_obj);
     return err;
 }
 
@@ -2842,7 +2846,7 @@ int
 _PyMonitoring_FirePyStartEvent(PyMonitoringState *state, PyObject *codelike, int32_t offset)
 {
     assert(state->active);
-    PyObject *args[3] = { NULL, NULL, NULL };
+    PyValue args[3] = { PyValue_NULL, PyValue_NULL, PyValue_NULL };
     return capi_call_instrumentation(state, codelike, offset, args, 2,
                                      PY_MONITORING_EVENT_PY_START);
 }
@@ -2851,7 +2855,7 @@ int
 _PyMonitoring_FirePyResumeEvent(PyMonitoringState *state, PyObject *codelike, int32_t offset)
 {
     assert(state->active);
-    PyObject *args[3] = { NULL, NULL, NULL };
+    PyValue args[3] = { PyValue_NULL, PyValue_NULL, PyValue_NULL };
     return capi_call_instrumentation(state, codelike, offset, args, 2,
                                      PY_MONITORING_EVENT_PY_RESUME);
 }
@@ -2863,7 +2867,7 @@ _PyMonitoring_FirePyReturnEvent(PyMonitoringState *state, PyObject *codelike, in
                                 PyObject* retval)
 {
     assert(state->active);
-    PyObject *args[4] = { NULL, NULL, NULL, retval };
+    PyValue args[4] = { PyValue_NULL, PyValue_NULL, PyValue_NULL, _borrowed_word(retval) };
     return capi_call_instrumentation(state, codelike, offset, args, 3,
                                      PY_MONITORING_EVENT_PY_RETURN);
 }
@@ -2873,7 +2877,7 @@ _PyMonitoring_FirePyYieldEvent(PyMonitoringState *state, PyObject *codelike, int
                                PyObject* retval)
 {
     assert(state->active);
-    PyObject *args[4] = { NULL, NULL, NULL, retval };
+    PyValue args[4] = { PyValue_NULL, PyValue_NULL, PyValue_NULL, _borrowed_word(retval) };
     return capi_call_instrumentation(state, codelike, offset, args, 3,
                                      PY_MONITORING_EVENT_PY_YIELD);
 }
@@ -2883,7 +2887,7 @@ _PyMonitoring_FireCallEvent(PyMonitoringState *state, PyObject *codelike, int32_
                             PyObject* callable, PyObject *arg0)
 {
     assert(state->active);
-    PyObject *args[5] = { NULL, NULL, NULL, callable, arg0 };
+    PyValue args[5] = { PyValue_NULL, PyValue_NULL, PyValue_NULL, _borrowed_word(callable), _borrowed_word(arg0) };
     return capi_call_instrumentation(state, codelike, offset, args, 4,
                                      PY_MONITORING_EVENT_CALL);
 }
@@ -2893,15 +2897,9 @@ _PyMonitoring_FireLineEvent(PyMonitoringState *state, PyObject *codelike, int32_
                             int lineno)
 {
     assert(state->active);
-    PyObject *lno = PyLong_FromLong(lineno);
-    if (lno == NULL) {
-        return -1;
-    }
-    PyObject *args[3] = { NULL, NULL, lno };
-    int res= capi_call_instrumentation(state, codelike, offset, args, 2,
-                                       PY_MONITORING_EVENT_LINE);
-    Py_DECREF(lno);
-    return res;
+    PyValue args[3] = { PyValue_NULL, PyValue_NULL, PyValue_FromInt64(lineno) };
+    return capi_call_instrumentation(state, codelike, offset, args, 2,
+                                     PY_MONITORING_EVENT_LINE);
 }
 
 int
@@ -2909,7 +2907,7 @@ _PyMonitoring_FireJumpEvent(PyMonitoringState *state, PyObject *codelike, int32_
                             PyObject *target_offset)
 {
     assert(state->active);
-    PyObject *args[4] = { NULL, NULL, NULL, target_offset };
+    PyValue args[4] = { PyValue_NULL, PyValue_NULL, PyValue_NULL, _borrowed_word(target_offset) };
     return capi_call_instrumentation(state, codelike, offset, args, 3,
                                      PY_MONITORING_EVENT_JUMP);
 }
@@ -2919,7 +2917,7 @@ _PyMonitoring_FireBranchEvent(PyMonitoringState *state, PyObject *codelike, int3
                               PyObject *target_offset)
 {
     assert(state->active);
-    PyObject *args[4] = { NULL, NULL, NULL, target_offset };
+    PyValue args[4] = { PyValue_NULL, PyValue_NULL, PyValue_NULL, _borrowed_word(target_offset) };
     return capi_call_instrumentation(state, codelike, offset, args, 3,
                                      PY_MONITORING_EVENT_BRANCH_RIGHT);
 }
@@ -2929,7 +2927,7 @@ _PyMonitoring_FireBranchRightEvent(PyMonitoringState *state, PyObject *codelike,
                               PyObject *target_offset)
 {
     assert(state->active);
-    PyObject *args[4] = { NULL, NULL, NULL, target_offset };
+    PyValue args[4] = { PyValue_NULL, PyValue_NULL, PyValue_NULL, _borrowed_word(target_offset) };
     return capi_call_instrumentation(state, codelike, offset, args, 3,
                                      PY_MONITORING_EVENT_BRANCH_RIGHT);
 }
@@ -2939,7 +2937,7 @@ _PyMonitoring_FireBranchLeftEvent(PyMonitoringState *state, PyObject *codelike, 
                               PyObject *target_offset)
 {
     assert(state->active);
-    PyObject *args[4] = { NULL, NULL, NULL, target_offset };
+    PyValue args[4] = { PyValue_NULL, PyValue_NULL, PyValue_NULL, _borrowed_word(target_offset) };
     return capi_call_instrumentation(state, codelike, offset, args, 3,
                                      PY_MONITORING_EVENT_BRANCH_LEFT);
 }
@@ -2949,7 +2947,7 @@ _PyMonitoring_FireCReturnEvent(PyMonitoringState *state, PyObject *codelike, int
                                PyObject *retval)
 {
     assert(state->active);
-    PyObject *args[4] = { NULL, NULL, NULL, retval };
+    PyValue args[4] = { PyValue_NULL, PyValue_NULL, PyValue_NULL, _borrowed_word(retval) };
     return capi_call_instrumentation(state, codelike, offset, args, 3,
                                      PY_MONITORING_EVENT_C_RETURN);
 }
@@ -2988,7 +2986,7 @@ _PyMonitoring_FirePyThrowEvent(PyMonitoringState *state, PyObject *codelike, int
     if (exception_event_setup(&exc, event) < 0) {
         return -1;
     }
-    PyObject *args[4] = { NULL, NULL, NULL, exc };
+    PyValue args[4] = { PyValue_NULL, PyValue_NULL, PyValue_NULL, _borrowed_word(exc) };
     int err = capi_call_instrumentation(state, codelike, offset, args, 3, event);
     return exception_event_teardown(err, exc);
 }
@@ -3002,7 +3000,7 @@ _PyMonitoring_FireRaiseEvent(PyMonitoringState *state, PyObject *codelike, int32
     if (exception_event_setup(&exc, event) < 0) {
         return -1;
     }
-    PyObject *args[4] = { NULL, NULL, NULL, exc };
+    PyValue args[4] = { PyValue_NULL, PyValue_NULL, PyValue_NULL, _borrowed_word(exc) };
     int err = capi_call_instrumentation(state, codelike, offset, args, 3, event);
     return exception_event_teardown(err, exc);
 }
@@ -3016,7 +3014,7 @@ _PyMonitoring_FireCRaiseEvent(PyMonitoringState *state, PyObject *codelike, int3
     if (exception_event_setup(&exc, event) < 0) {
         return -1;
     }
-    PyObject *args[4] = { NULL, NULL, NULL, exc };
+    PyValue args[4] = { PyValue_NULL, PyValue_NULL, PyValue_NULL, _borrowed_word(exc) };
     int err = capi_call_instrumentation(state, codelike, offset, args, 3, event);
     return exception_event_teardown(err, exc);
 }
@@ -3030,7 +3028,7 @@ _PyMonitoring_FireReraiseEvent(PyMonitoringState *state, PyObject *codelike, int
     if (exception_event_setup(&exc, event) < 0) {
         return -1;
     }
-    PyObject *args[4] = { NULL, NULL, NULL, exc };
+    PyValue args[4] = { PyValue_NULL, PyValue_NULL, PyValue_NULL, _borrowed_word(exc) };
     int err = capi_call_instrumentation(state, codelike, offset, args, 3, event);
     return exception_event_teardown(err, exc);
 }
@@ -3044,7 +3042,7 @@ _PyMonitoring_FireExceptionHandledEvent(PyMonitoringState *state, PyObject *code
     if (exception_event_setup(&exc, event) < 0) {
         return -1;
     }
-    PyObject *args[4] = { NULL, NULL, NULL, exc };
+    PyValue args[4] = { PyValue_NULL, PyValue_NULL, PyValue_NULL, _borrowed_word(exc) };
     int err = capi_call_instrumentation(state, codelike, offset, args, 3, event);
     return exception_event_teardown(err, exc);
 }
@@ -3058,7 +3056,7 @@ _PyMonitoring_FirePyUnwindEvent(PyMonitoringState *state, PyObject *codelike, in
     if (exception_event_setup(&exc, event) < 0) {
         return -1;
     }
-    PyObject *args[4] = { NULL, NULL, NULL, exc };
+    PyValue args[4] = { PyValue_NULL, PyValue_NULL, PyValue_NULL, _borrowed_word(exc) };
     int err = capi_call_instrumentation(state, codelike, offset, args, 3, event);
     return exception_event_teardown(err, exc);
 }
@@ -3074,7 +3072,7 @@ _PyMonitoring_FireStopIterationEvent(PyMonitoringState *state, PyObject *codelik
     if (exception_event_setup(&exc, event) < 0) {
         return -1;
     }
-    PyObject *args[4] = { NULL, NULL, NULL, exc };
+    PyValue args[4] = { PyValue_NULL, PyValue_NULL, PyValue_NULL, _borrowed_word(exc) };
     int err = capi_call_instrumentation(state, codelike, offset, args, 3, event);
     Py_DECREF(exc);
     return exception_event_teardown(err, NULL);
@@ -3087,6 +3085,7 @@ _PyMonitoring_FireStopIterationEvent(PyMonitoringState *state, PyObject *codelik
 typedef struct _PyLegacyBranchEventHandler {
     PyObject_HEAD
     vectorcallfunc vectorcall;
+    _Py_vectorcallvaluefunc value_vectorcall;
     PyObject *handler;
     bool right;
     int tool_id;
@@ -3117,15 +3116,16 @@ static PyTypeObject _PyLegacyBranchEventHandler_Type = {
     .tp_dealloc = dealloc_branch_handler,
     .tp_traverse = traverse_branch_handler,
     .tp_vectorcall_offset = offsetof(_PyLegacyBranchEventHandler, vectorcall),
+    .tp_value_vectorcall_offset = offsetof(_PyLegacyBranchEventHandler, value_vectorcall),
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE |
         Py_TPFLAGS_HAVE_VECTORCALL | Py_TPFLAGS_DISALLOW_INSTANTIATION,
     .tp_call = PyVectorcall_Call,
 };
 
 
-static PyObject *
+static PyValue
 branch_handler_vectorcall(
-    PyObject *op, PyObject *const *args,
+    PyThreadState *tstate, PyObject *op, const PyValue *args,
     size_t nargsf, PyObject *kwnames
 ) {
     _PyLegacyBranchEventHandler *self = _PyLegacyBranchEventHandler_CAST(op);
@@ -3133,21 +3133,33 @@ branch_handler_vectorcall(
     // The spec (PEP 669) allows spurious events after a DISABLE,
     // so a best effort is good enough.
     assert(PyVectorcall_NARGS(nargsf) >= 3);
-    PyCodeObject *code = (PyCodeObject *)args[0];
-    int src_offset = PyLong_AsLong(args[1]);
-    if (PyErr_Occurred()) {
-        return NULL;
+    PyCodeObject *code = (PyCodeObject *)PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    /* The interpreter passes an inline int, but PyMonitoring_FireBranch*Event
+     * callers can pass any int object. */
+    int src_offset;
+    if (PyValue_IsInlineInt(PyValue_Borrow(args[1]))) {
+        src_offset = (int)PyValue_InlineInt64(PyValue_Borrow(args[1]));
     }
+    else {
+        src_offset = PyLong_AsInt(
+            PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])));
+        if (src_offset == -1 && PyErr_Occurred()) {
+            return PyValue_NULL;
+        }
+    }
+    PyValue disable = _borrowed_word(&_PyInstrumentation_DISABLE);
     if (src_offset < 0 || src_offset >= Py_SIZE(code) || code->_co_exec == NULL) {
-        return &_PyInstrumentation_DISABLE;
+        return disable;
     }
     int opcode = word_opcode(exec_words(code), src_offset);
     if (!is_instrumented(opcode)) {
         /* Already disabled */
-        return &_PyInstrumentation_DISABLE;
+        return disable;
     }
-    PyObject *res = PyObject_Vectorcall(self->handler, args, nargsf, kwnames);
-    if (res == &_PyInstrumentation_DISABLE) {
+    PyValue res = _PyValue_VectorcallTstate(
+        tstate, _borrowed_word(self->handler), args, nargsf, kwnames);
+    if (PyValue_IsObject(res) &&
+        PyValue_AsKnownObjectBorrow(res) == &_PyInstrumentation_DISABLE) {
         int offset;
         int other_event;
         if (opcode == FOR_ITER) {
@@ -3187,7 +3199,8 @@ static PyObject *make_branch_handler(int tool_id, PyObject *handler, bool right)
     if (callback == NULL) {
         return NULL;
     }
-    callback->vectorcall = branch_handler_vectorcall;
+    callback->vectorcall = _PyValue_VectorcallThunk;
+    callback->value_vectorcall = branch_handler_vectorcall;
     callback->handler = Py_NewRef(handler);
     callback->right = right;
     callback->tool_id = tool_id;

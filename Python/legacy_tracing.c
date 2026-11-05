@@ -7,7 +7,11 @@
 #include "pycore_ceval.h"         // export _PyEval_SetProfile()
 #include "pycore_frame.h"         // PyFrameObject members
 #include "pycore_interpframe.h"   // _PyFrame_GetCode()
+#include "pycore_tstate.h"        // _PyThreadStateImpl
 #include "pycore_tuple.h"         // _PyTuple_PackValues()
+#include "pycore_value_api.h"     // _PyBox_CALL_ADAPTER()
+#include "pycore_value_call.h"    // _PyValue_VectorcallThunk()
+#include "pycore_value_ops.h"     // _PyValue_DescrGet()
 
 #include "opcode.h"
 #include <stddef.h>
@@ -16,115 +20,125 @@
 typedef struct _PyLegacyEventHandler {
     PyObject_HEAD
     vectorcallfunc vectorcall;
+    _Py_vectorcallvaluefunc value_vectorcall;
     int event;
 } _PyLegacyEventHandler;
 
 #define _PyLegacyEventHandler_CAST(op)  ((_PyLegacyEventHandler *)(op))
 
-/* The Py_tracefunc function expects the following arguments:
+/* The handlers are value functions: the event arguments are words (the code
+ * object, inline ints for offsets and lines) and the result is an owned word.
+ *
+ * The _Py_valuetracefunc function expects the following arguments:
  *   obj: the trace object (PyObject *)
  *   frame: the current frame (PyFrameObject *)
  *   kind: the kind of event, see PyTrace_XXX #defines (int)
- *   arg: The arg (a PyObject *)
+ *   arg: The arg, a borrowed word (PyValue_NULL for none)
  */
 
-static PyObject *
-call_profile_func(_PyLegacyEventHandler *self, PyObject *arg)
+static PyValue
+call_profile_func(_PyLegacyEventHandler *self, PyValueBorrow arg)
 {
     PyThreadState *tstate = _PyThreadState_GET();
-    if (tstate->c_profilefunc == NULL) {
-        Py_RETURN_NONE;
+    _Py_valuetracefunc profilefunc =
+        ((_PyThreadStateImpl *)tstate)->value_profilefunc;
+    if (profilefunc == NULL) {
+        return PyValue_None;
     }
     PyFrameObject *frame = PyEval_GetFrame();
     if (frame == NULL) {
         PyErr_SetString(PyExc_SystemError,
                         "Missing frame when calling profile function.");
-        return NULL;
+        return PyValue_NULL;
     }
     Py_INCREF(frame);
-    int err = tstate->c_profilefunc(tstate->c_profileobj, frame, self->event, arg);
+    int err = profilefunc(tstate->c_profileobj, frame, self->event, arg);
     Py_DECREF(frame);
     if (err) {
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
-static PyObject *
+static PyValue
 sys_profile_start(
-    PyObject *callable, PyObject *const *args,
+    PyThreadState *tstate, PyObject *callable, const PyValue *args,
     size_t nargsf, PyObject *kwnames
 ) {
     _PyLegacyEventHandler *self = _PyLegacyEventHandler_CAST(callable);
     assert(kwnames == NULL);
     assert(PyVectorcall_NARGS(nargsf) == 2);
-    return call_profile_func(self, Py_None);
+    return call_profile_func(self, PyValue_Borrow(PyValue_None));
 }
 
-static PyObject *
+static PyValue
 sys_profile_throw(
-    PyObject *callable, PyObject *const *args,
+    PyThreadState *tstate, PyObject *callable, const PyValue *args,
     size_t nargsf, PyObject *kwnames
 ) {
     _PyLegacyEventHandler *self = _PyLegacyEventHandler_CAST(callable);
     assert(kwnames == NULL);
     assert(PyVectorcall_NARGS(nargsf) == 3);
-    return call_profile_func(self, Py_None);
+    return call_profile_func(self, PyValue_Borrow(PyValue_None));
 }
 
-static PyObject *
+static PyValue
 sys_profile_return(
-    PyObject *callable, PyObject *const *args,
+    PyThreadState *tstate, PyObject *callable, const PyValue *args,
     size_t nargsf, PyObject *kwnames
 ) {
     _PyLegacyEventHandler *self = _PyLegacyEventHandler_CAST(callable);
     assert(kwnames == NULL);
     assert(PyVectorcall_NARGS(nargsf) == 3);
-    return call_profile_func(self, args[2]);
+    return call_profile_func(self, PyValue_Borrow(args[2]));
 }
 
-static PyObject *
+static PyValue
 sys_profile_unwind(
-    PyObject *callable, PyObject *const *args,
+    PyThreadState *tstate, PyObject *callable, const PyValue *args,
     size_t nargsf, PyObject *kwnames
 ) {
-     _PyLegacyEventHandler *self = _PyLegacyEventHandler_CAST(callable);
+    _PyLegacyEventHandler *self = _PyLegacyEventHandler_CAST(callable);
     assert(kwnames == NULL);
     assert(PyVectorcall_NARGS(nargsf) == 3);
-   return call_profile_func(self, NULL);
+    return call_profile_func(self, PyValue_Borrow(PyValue_NULL));
 }
 
-static PyObject *
+static PyValue
 sys_profile_call_or_return(
-    PyObject *op, PyObject *const *args,
+    PyThreadState *tstate, PyObject *op, const PyValue *args,
     size_t nargsf, PyObject *kwnames
 ) {
     _PyLegacyEventHandler *self = _PyLegacyEventHandler_CAST(op);
     assert(kwnames == NULL);
     assert(PyVectorcall_NARGS(nargsf) == 4);
-    PyObject *callable = args[2];
+    if (!PyValue_IsObject(PyValue_Borrow(args[2]))) {
+        return PyValue_None;
+    }
+    PyObject *callable = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[2]));
     if (PyCFunction_Check(callable)) {
-        return call_profile_func(self, callable);
+        return call_profile_func(self, PyValue_Borrow(args[2]));
     }
     if (Py_TYPE(callable) == &PyMethodDescr_Type) {
-        PyObject *self_arg = args[3];
+        PyValueBorrow self_arg = PyValue_Borrow(args[3]);
         /* For backwards compatibility need to
          * convert to builtin method */
 
         /* If no arg, skip */
-        if (self_arg == &_PyInstrumentation_MISSING) {
-            Py_RETURN_NONE;
+        if (PyValue_IsObject(self_arg) &&
+            PyValue_AsKnownObjectBorrow(self_arg) == &_PyInstrumentation_MISSING) {
+            return PyValue_None;
         }
-        PyObject *meth = Py_TYPE(callable)->tp_descr_get(
-            callable, self_arg, (PyObject*)Py_TYPE(self_arg));
-        if (meth == NULL) {
-            return NULL;
+        PyValue meth = _PyValue_DescrGet(callable, self_arg,
+                                         PyValue_TYPE(self_arg));
+        if (PyValue_IsNull(meth)) {
+            return PyValue_NULL;
         }
-        PyObject *res =  call_profile_func(self, meth);
-        Py_DECREF(meth);
+        PyValue res = call_profile_func(self, PyValue_Borrow(meth));
+        PyValue_CLOSE(meth);
         return res;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static int
@@ -175,44 +189,46 @@ _PyEval_SetOpcodeTrace(PyFrameObject *frame, bool enable)
     return res;
 }
 
-static PyObject *
-call_trace_func(_PyLegacyEventHandler *self, PyObject *arg)
+static PyValue
+call_trace_func(_PyLegacyEventHandler *self, PyValueBorrow arg)
 {
     PyThreadState *tstate = _PyThreadState_GET();
-    if (tstate->c_tracefunc == NULL) {
-        Py_RETURN_NONE;
+    _Py_valuetracefunc tracefunc =
+        ((_PyThreadStateImpl *)tstate)->value_tracefunc;
+    if (tracefunc == NULL) {
+        return PyValue_None;
     }
     PyFrameObject *frame = PyEval_GetFrame();
     if (frame == NULL) {
         PyErr_SetString(PyExc_SystemError,
                         "Missing frame when calling trace function.");
-        return NULL;
+        return PyValue_NULL;
     }
     if (frame->f_trace_opcodes) {
         if (_PyEval_SetOpcodeTrace(frame, true) != 0) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
     Py_INCREF(frame);
-    int err = tstate->c_tracefunc(tstate->c_traceobj, frame, self->event, arg);
+    int err = tracefunc(tstate->c_traceobj, frame, self->event, arg);
     frame->f_lineno = 0;
     Py_DECREF(frame);
     if (err) {
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
-static PyObject *
+static PyValue
 sys_trace_exception_func(
-    PyObject *callable, PyObject *const *args,
+    PyThreadState *tstate, PyObject *callable, const PyValue *args,
     size_t nargsf, PyObject *kwnames
 ) {
     _PyLegacyEventHandler *self = _PyLegacyEventHandler_CAST(callable);
     assert(kwnames == NULL);
     assert(PyVectorcall_NARGS(nargsf) == 3);
-    PyObject *exc = args[2];
+    PyObject *exc = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[2]));
     assert(PyExceptionInstance_Check(exc));
     PyObject *type = (PyObject *)Py_TYPE(exc);
     PyObject *tb = PyException_GetTraceback(exc);
@@ -222,75 +238,73 @@ sys_trace_exception_func(
     PyObject *tuple = _PyTuple_PackValues(3, (PyValueBorrow[]){PyValue_FromObjectBorrow(type), PyValue_FromObjectBorrow(exc), PyValue_FromObjectBorrow(tb)});
     Py_DECREF(tb);
     if (tuple == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
-    PyObject *res = call_trace_func(self, tuple);
+    PyValue res = call_trace_func(self, PyValue_FromObjectBorrow(tuple));
     Py_DECREF(tuple);
     return res;
 }
 
-static PyObject *
+static PyValue
 sys_trace_start(
-    PyObject *callable, PyObject *const *args,
+    PyThreadState *tstate, PyObject *callable, const PyValue *args,
     size_t nargsf, PyObject *kwnames
 ) {
     _PyLegacyEventHandler *self = _PyLegacyEventHandler_CAST(callable);
     assert(kwnames == NULL);
     assert(PyVectorcall_NARGS(nargsf) == 2);
-    return call_trace_func(self, Py_None);
+    return call_trace_func(self, PyValue_Borrow(PyValue_None));
 }
 
-static PyObject *
+static PyValue
 sys_trace_throw(
-    PyObject *callable, PyObject *const *args,
+    PyThreadState *tstate, PyObject *callable, const PyValue *args,
     size_t nargsf, PyObject *kwnames
 ) {
     _PyLegacyEventHandler *self = _PyLegacyEventHandler_CAST(callable);
     assert(kwnames == NULL);
     assert(PyVectorcall_NARGS(nargsf) == 3);
-    return call_trace_func(self, Py_None);
+    return call_trace_func(self, PyValue_Borrow(PyValue_None));
 }
 
-static PyObject *
+static PyValue
 sys_trace_unwind(
-    PyObject *callable, PyObject *const *args,
+    PyThreadState *tstate, PyObject *callable, const PyValue *args,
     size_t nargsf, PyObject *kwnames
 ) {
     _PyLegacyEventHandler *self = _PyLegacyEventHandler_CAST(callable);
     assert(kwnames == NULL);
     assert(PyVectorcall_NARGS(nargsf) == 3);
-    return call_trace_func(self, NULL);
+    return call_trace_func(self, PyValue_Borrow(PyValue_NULL));
 }
 
-static PyObject *
+static PyValue
 sys_trace_return(
-    PyObject *callable, PyObject *const *args,
+    PyThreadState *tstate, PyObject *callable, const PyValue *args,
     size_t nargsf, PyObject *kwnames
 ) {
     _PyLegacyEventHandler *self = _PyLegacyEventHandler_CAST(callable);
     assert(!PyErr_Occurred());
     assert(kwnames == NULL);
     assert(PyVectorcall_NARGS(nargsf) == 3);
-    assert(PyCode_Check(args[0]));
-    PyObject *val = args[2];
-    PyObject *res = call_trace_func(self, val);
-    return res;
+    assert(PyCode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]))));
+    return call_trace_func(self, PyValue_Borrow(args[2]));
 }
 
-static PyObject *
+static PyValue
 sys_trace_yield(
-    PyObject *callable, PyObject *const *args,
+    PyThreadState *tstate, PyObject *callable, const PyValue *args,
     size_t nargsf, PyObject *kwnames
 ) {
     _PyLegacyEventHandler *self = _PyLegacyEventHandler_CAST(callable);
     assert(kwnames == NULL);
     assert(PyVectorcall_NARGS(nargsf) == 3);
-    return call_trace_func(self, args[2]);
+    return call_trace_func(self, PyValue_Borrow(args[2]));
 }
 
-static PyObject *
+static PyValue
 sys_trace_instruction_func(
-    PyObject *callable, PyObject *const *args,
+    PyThreadState *tstate, PyObject *callable, const PyValue *args,
     size_t nargsf, PyObject *kwnames
 ) {
     _PyLegacyEventHandler *self = _PyLegacyEventHandler_CAST(callable);
@@ -300,95 +314,123 @@ sys_trace_instruction_func(
     if (frame == NULL) {
         PyErr_SetString(PyExc_SystemError,
                         "Missing frame when calling trace function.");
-        return NULL;
+        return PyValue_NULL;
     }
-    PyThreadState *tstate = _PyThreadState_GET();
-    if (!tstate->c_tracefunc || !frame->f_trace_opcodes) {
+    _Py_valuetracefunc tracefunc =
+        ((_PyThreadStateImpl *)tstate)->value_tracefunc;
+    if (!tracefunc || !frame->f_trace_opcodes) {
         if (_PyEval_SetOpcodeTrace(frame, false) != 0) {
-            return NULL;
+            return PyValue_NULL;
         }
-        Py_RETURN_NONE;
+        return PyValue_None;
     }
     Py_INCREF(frame);
-    int err = tstate->c_tracefunc(tstate->c_traceobj, frame, self->event, Py_None);
+    int err = tracefunc(tstate->c_traceobj, frame, self->event, PyValue_Borrow(PyValue_None));
     frame->f_lineno = 0;
     Py_DECREF(frame);
     if (err) {
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
-static PyObject *
+static PyValue
 trace_line(
     PyThreadState *tstate, _PyLegacyEventHandler *self,
     PyFrameObject *frame, int line
 ) {
     if (!frame->f_trace_lines) {
-        Py_RETURN_NONE;
+        return PyValue_None;
     }
     if (line < 0) {
-        Py_RETURN_NONE;
+        return PyValue_None;
     }
     Py_INCREF(frame);
     frame->f_lineno = line;
-    int err = tstate->c_tracefunc(tstate->c_traceobj, frame, self->event, Py_None);
+    int err = ((_PyThreadStateImpl *)tstate)->value_tracefunc(
+        tstate->c_traceobj, frame, self->event, PyValue_Borrow(PyValue_None));
     frame->f_lineno = 0;
     Py_DECREF(frame);
     if (err) {
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
-static PyObject *
+/* Read an offset or line argument. The interpreter passes inline ints, but
+ * PyMonitoring_Fire*Event callers can pass any int object. */
+static int
+offset_from_word(PyValueBorrow word, int *out)
+{
+    if (PyValue_IsInlineInt(word)) {
+        *out = (int)PyValue_InlineInt64(word);
+        return 0;
+    }
+    int value = PyLong_AsInt(PyValue_AsKnownObjectBorrow(word));
+    if (value == -1 && PyErr_Occurred()) {
+        return -1;
+    }
+    *out = value;
+    return 0;
+}
+
+static PyValue
 sys_trace_line_func(
-    PyObject *callable, PyObject *const *args,
+    PyThreadState *tstate, PyObject *callable, const PyValue *args,
     size_t nargsf, PyObject *kwnames
 ) {
     _PyLegacyEventHandler *self = _PyLegacyEventHandler_CAST(callable);
     assert(kwnames == NULL);
-    PyThreadState *tstate = _PyThreadState_GET();
-    if (tstate->c_tracefunc == NULL) {
-        Py_RETURN_NONE;
+    if (((_PyThreadStateImpl *)tstate)->value_tracefunc == NULL) {
+        return PyValue_None;
     }
     assert(PyVectorcall_NARGS(nargsf) == 2);
-    int line = PyLong_AsInt(args[1]);
+    int line;
+    if (offset_from_word(PyValue_Borrow(args[1]), &line) < 0) {
+        return PyValue_NULL;
+    }
     assert(line >= 0);
     PyFrameObject *frame = PyEval_GetFrame();
     if (frame == NULL) {
         PyErr_SetString(PyExc_SystemError,
                         "Missing frame when calling trace function.");
-        return NULL;
+        return PyValue_NULL;
     }
-    assert(args[0] == (PyObject *)_PyFrame_GetCode(frame->f_frame));
+    assert(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]))
+           == (PyObject *)_PyFrame_GetCode(frame->f_frame));
     return trace_line(tstate, self, frame, line);
 }
 
 /* sys.settrace generates line events for all backward
  * edges, even if on the same line.
  * Handle that case here */
-static PyObject *
+static PyValue
 sys_trace_jump_func(
-    PyObject *callable, PyObject *const *args,
+    PyThreadState *tstate, PyObject *callable, const PyValue *args,
     size_t nargsf, PyObject *kwnames
 ) {
     _PyLegacyEventHandler *self = _PyLegacyEventHandler_CAST(callable);
     assert(kwnames == NULL);
-    PyThreadState *tstate = _PyThreadState_GET();
-    if (tstate->c_tracefunc == NULL) {
-        Py_RETURN_NONE;
+    if (((_PyThreadStateImpl *)tstate)->value_tracefunc == NULL) {
+        return PyValue_None;
     }
     assert(PyVectorcall_NARGS(nargsf) == 3);
-    int from = PyLong_AsInt(args[1]);
+    int from, to;
+    if (offset_from_word(PyValue_Borrow(args[1]), &from) < 0 ||
+        offset_from_word(PyValue_Borrow(args[2]), &to) < 0) {
+        return PyValue_NULL;
+    }
     assert(from >= 0);
-    int to = PyLong_AsInt(args[2]);
     assert(to >= 0);
+    /* Immortal: the borrowed word is a valid result. */
+    PyValue disable;
+    _PyValue_WindowPut(&disable,
+                       PyValue_FromObjectBorrow(&_PyInstrumentation_DISABLE));
     if (to > from) {
         /* Forward jump */
-        return &_PyInstrumentation_DISABLE;
+        return disable;
     }
-    PyCodeObject *code = (PyCodeObject *)args[0];
+    PyCodeObject *code = (PyCodeObject *)PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
     assert(PyCode_Check(code));
     /* We can call _Py_Instrumentation_GetLine because we always set
     * line events for tracing */
@@ -396,16 +438,16 @@ sys_trace_jump_func(
     int from_line = _Py_Instrumentation_GetLine(code, code->_co_monitoring->lines, from);
     if (to_line != from_line) {
         /* Will be handled by target INSTRUMENTED_LINE */
-        return &_PyInstrumentation_DISABLE;
+        return disable;
     }
     PyFrameObject *frame = PyEval_GetFrame();
     if (frame == NULL) {
         PyErr_SetString(PyExc_SystemError,
                         "Missing frame when calling trace function.");
-        return NULL;
+        return PyValue_NULL;
     }
     if (!frame->f_trace_lines) {
-        Py_RETURN_NONE;
+        return PyValue_None;
     }
     return trace_line(tstate, self, frame, to_line);
 }
@@ -415,20 +457,23 @@ PyTypeObject _PyLegacyEventHandler_Type = {
     "sys.legacy_event_handler",
     sizeof(_PyLegacyEventHandler),
     .tp_vectorcall_offset = offsetof(_PyLegacyEventHandler, vectorcall),
+    .tp_value_vectorcall_offset =
+        offsetof(_PyLegacyEventHandler, value_vectorcall),
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE |
         Py_TPFLAGS_HAVE_VECTORCALL | Py_TPFLAGS_DISALLOW_INSTANTIATION,
     .tp_call = PyVectorcall_Call,
 };
 
 static int
-set_callbacks(int tool, vectorcallfunc vectorcall, int legacy_event, int event1, int event2)
+set_callbacks(int tool, _Py_vectorcallvaluefunc vectorcall, int legacy_event, int event1, int event2)
 {
     _PyLegacyEventHandler *callback =
         PyObject_NEW(_PyLegacyEventHandler, &_PyLegacyEventHandler_Type);
     if (callback == NULL) {
         return -1;
     }
-    callback->vectorcall = vectorcall;
+    callback->vectorcall = _PyValue_VectorcallThunk;
+    callback->value_vectorcall = vectorcall;
     callback->event = legacy_event;
     Py_XDECREF(_PyMonitoring_RegisterCallback(tool, event1, (PyObject *)callback));
     if (event2 >= 0) {
@@ -496,11 +541,52 @@ setup_profile_callbacks(void *Py_UNUSED(arg))
     return 0;
 }
 
-static PyObject *
-swap_profile_func_arg(PyThreadState *tstate, Py_tracefunc func, PyObject *arg)
+/* The value trace function of an extension's Py_tracefunc: box the argument
+ * word and call the function. The function is read from the thread state
+ * before the call, because the callee may clear it. */
+static int
+call_object_tracefunc(Py_tracefunc func, PyObject *obj, PyFrameObject *frame,
+                      int what, PyValueBorrow arg)
 {
-    int delta = (func != NULL) - (tstate->c_profilefunc != NULL);
-    tstate->c_profilefunc = func;
+    if (PyValue_IsNull(arg)) {
+        return func(obj, frame, what, NULL);
+    }
+    if (PyValue_IsObject(arg)) {
+        return func(obj, frame, what, PyValue_AsKnownObjectBorrow(arg));
+    }
+    PyObject *boxed = _PyValue_AsObjectFor(
+        arg, _PyBox_AT(BOX_SITE_CALL_ADAPTER, BOX_KIND_CALL_ADAPTER,
+                       _Py_FUNC_ADDR(func)));
+    if (boxed == NULL) {
+        return -1;
+    }
+    int err = func(obj, frame, what, boxed);
+    Py_DECREF(boxed);
+    return err;
+}
+
+static int
+trace_adapter(PyObject *obj, PyFrameObject *frame, int what, PyValueBorrow arg)
+{
+    Py_tracefunc func = _PyThreadState_GET()->c_tracefunc;
+    return call_object_tracefunc(func, obj, frame, what, arg);
+}
+
+static int
+profile_adapter(PyObject *obj, PyFrameObject *frame, int what, PyValueBorrow arg)
+{
+    Py_tracefunc func = _PyThreadState_GET()->c_profilefunc;
+    return call_object_tracefunc(func, obj, frame, what, arg);
+}
+
+static PyObject *
+swap_profile_func_arg(PyThreadState *tstate, _Py_valuetracefunc vfunc,
+                      Py_tracefunc ofunc, PyObject *arg)
+{
+    assert((vfunc != NULL) == (ofunc != NULL));
+    int delta = (ofunc != NULL) - (tstate->c_profilefunc != NULL);
+    tstate->c_profilefunc = ofunc;
+    ((_PyThreadStateImpl *)tstate)->value_profilefunc = vfunc;
     PyObject *old_profileobj = tstate->c_profileobj;
     tstate->c_profileobj = Py_XNewRef(arg);
     tstate->interp->sys_profiling_threads += delta;
@@ -523,7 +609,8 @@ set_monitoring_profile_events(PyInterpreterState *interp)
 }
 
 int
-_PyEval_SetProfile(PyThreadState *tstate, Py_tracefunc func, PyObject *arg)
+_PyEval_SetProfileValue(PyThreadState *tstate, _Py_valuetracefunc vfunc,
+                          Py_tracefunc ofunc, PyObject *arg)
 {
     assert(is_tstate_valid(tstate));
     /* The caller must hold a thread state */
@@ -543,7 +630,7 @@ _PyEval_SetProfile(PyThreadState *tstate, Py_tracefunc func, PyObject *arg)
     }
 
     _PyEval_StopTheWorld(interp);
-    PyObject *old_profileobj = swap_profile_func_arg(tstate, func, arg);
+    PyObject *old_profileobj = swap_profile_func_arg(tstate, vfunc, ofunc, arg);
     int ret = set_monitoring_profile_events(interp);
     _PyEval_StartTheWorld(interp);
     Py_XDECREF(old_profileobj);  // needs to be decref'd outside of stop-the-world
@@ -551,7 +638,9 @@ _PyEval_SetProfile(PyThreadState *tstate, Py_tracefunc func, PyObject *arg)
 }
 
 int
-_PyEval_SetProfileAllThreads(PyInterpreterState *interp, Py_tracefunc func, PyObject *arg)
+_PyEval_SetProfileValueAllThreads(PyInterpreterState *interp,
+                                   _Py_valuetracefunc vfunc, Py_tracefunc ofunc,
+                                   PyObject *arg)
 {
     PyThreadState *current_tstate = _PyThreadState_GET();
     assert(is_tstate_valid(current_tstate));
@@ -580,7 +669,7 @@ _PyEval_SetProfileAllThreads(PyInterpreterState *interp, Py_tracefunc func, PyOb
         return -1;
     }
     _Py_FOR_EACH_TSTATE_UNLOCKED(interp, tstate) {
-        PyObject *old = swap_profile_func_arg(tstate, func, arg);
+        PyObject *old = swap_profile_func_arg(tstate, vfunc, ofunc, arg);
         PyTuple_SET_VALUE(old_profileobjs, --num_thread_states, PyValue_PrepareOwned(old));
     }
     HEAD_UNLOCK(&_PyRuntime);
@@ -645,10 +734,13 @@ setup_trace_callbacks(void *Py_UNUSED(arg))
 }
 
 static PyObject *
-swap_trace_func_arg(PyThreadState *tstate, Py_tracefunc func, PyObject *arg)
+swap_trace_func_arg(PyThreadState *tstate, _Py_valuetracefunc vfunc,
+                    Py_tracefunc ofunc, PyObject *arg)
 {
-    int delta = (func != NULL) - (tstate->c_tracefunc != NULL);
-    tstate->c_tracefunc = func;
+    assert((vfunc != NULL) == (ofunc != NULL));
+    int delta = (ofunc != NULL) - (tstate->c_tracefunc != NULL);
+    tstate->c_tracefunc = ofunc;
+    ((_PyThreadStateImpl *)tstate)->value_tracefunc = vfunc;
     PyObject *old_traceobj = tstate->c_traceobj;
     tstate->c_traceobj = Py_XNewRef(arg);
     tstate->interp->sys_tracing_threads += delta;
@@ -688,7 +780,8 @@ maybe_set_opcode_trace(PyThreadState *tstate)
 }
 
 int
-_PyEval_SetTrace(PyThreadState *tstate, Py_tracefunc func, PyObject *arg)
+_PyEval_SetTraceValue(PyThreadState *tstate, _Py_valuetracefunc vfunc,
+                        Py_tracefunc ofunc, PyObject *arg)
 {
     assert(is_tstate_valid(tstate));
     /* The caller must hold a thread state */
@@ -709,7 +802,7 @@ _PyEval_SetTrace(PyThreadState *tstate, Py_tracefunc func, PyObject *arg)
 
     int err = 0;
     _PyEval_StopTheWorld(interp);
-    PyObject *old_traceobj = swap_trace_func_arg(tstate, func, arg);
+    PyObject *old_traceobj = swap_trace_func_arg(tstate, vfunc, ofunc, arg);
     err = set_monitoring_trace_events(interp);
     if (err != 0) {
         goto done;
@@ -724,7 +817,9 @@ done:
 }
 
 int
-_PyEval_SetTraceAllThreads(PyInterpreterState *interp, Py_tracefunc func, PyObject *arg)
+_PyEval_SetTraceValueAllThreads(PyInterpreterState *interp,
+                                 _Py_valuetracefunc vfunc, Py_tracefunc ofunc,
+                                 PyObject *arg)
 {
     PyThreadState *current_tstate = _PyThreadState_GET();
     assert(is_tstate_valid(current_tstate));
@@ -753,7 +848,7 @@ _PyEval_SetTraceAllThreads(PyInterpreterState *interp, Py_tracefunc func, PyObje
         return -1;
     }
     _Py_FOR_EACH_TSTATE_UNLOCKED(interp, tstate) {
-        PyObject *old = swap_trace_func_arg(tstate, func, arg);
+        PyObject *old = swap_trace_func_arg(tstate, vfunc, ofunc, arg);
         PyTuple_SET_VALUE(old_trace_objs, --num_thread_states, PyValue_PrepareOwned(old));
     }
     if (interp->sys_tracing_threads) {
@@ -772,4 +867,32 @@ _PyEval_SetTraceAllThreads(PyInterpreterState *interp, Py_tracefunc func, PyObje
     _PyEval_StartTheWorld(interp);
     Py_XDECREF(old_trace_objs);  // needs to be decref'd outside of stop-the-world
     return err;
+}
+
+int
+_PyEval_SetProfile(PyThreadState *tstate, Py_tracefunc func, PyObject *arg)
+{
+    return _PyEval_SetProfileValue(
+        tstate, func ? profile_adapter : NULL, func, arg);
+}
+
+int
+_PyEval_SetProfileAllThreads(PyInterpreterState *interp, Py_tracefunc func, PyObject *arg)
+{
+    return _PyEval_SetProfileValueAllThreads(
+        interp, func ? profile_adapter : NULL, func, arg);
+}
+
+int
+_PyEval_SetTrace(PyThreadState *tstate, Py_tracefunc func, PyObject *arg)
+{
+    return _PyEval_SetTraceValue(
+        tstate, func ? trace_adapter : NULL, func, arg);
+}
+
+int
+_PyEval_SetTraceAllThreads(PyInterpreterState *interp, Py_tracefunc func, PyObject *arg)
+{
+    return _PyEval_SetTraceValueAllThreads(
+        interp, func ? trace_adapter : NULL, func, arg);
 }

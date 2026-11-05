@@ -9,6 +9,7 @@
 #include "ceval.h"
 #include "pycore_long.h"
 #include "pycore_native_scope.h"
+#include "pycore_value_call.h"    // _PyValue_VectorcallTstate()
 
 #ifdef HAVE_PTHREAD_NP_H
 #  include <pthread_np.h>         // pthread_attr_get_np()
@@ -718,18 +719,6 @@ PyEval_EvalFrameEx(PyFrameObject *f, int throwflag)
     return _PyEval_EvalFrame(tstate, f->f_frame, throwflag);
 }
 
-/* The object vector for VALUES_TO_PYOBJECTS (Python/ceval_macros.h), on the
- * borrow stack in the caller's scope.  It borrows the window's objects, as
- * upstream passes its stack.  Window slots are private evaluated operands
- * that own their values (pyjit/design/pyvalue.md D4), so the window stays
- * valid if the callee replaces the local or container it was read from. */
-static PyObject **
-_PyValueArray_ToObjectVector(PyValue *input, Py_ssize_t nargs)
-{
-    _PyValue_RecheckWindow(input, nargs);
-    return _PyBorrow_ValueVector(input, nargs);
-}
-
 static void
 clear_value_arguments(PyValue *arguments, int count)
 {
@@ -992,223 +981,23 @@ value_exception_group_match(_PyInterpreterFrame *frame, PyObject *exc_value,
 /* Helper functions to keep the size of the largest uops down */
 
 PyObject *
-_Py_VectorCall_ValueSteal(
-    PyValue callable,
-    PyValue *arguments,
-    int total_args,
-    PyValue kwnames)
-{
-    PyObject *res;
-    VALUES_TO_PYOBJECTS(arguments, total_args, args_o);
-    if (CONVERSION_FAILED(args_o)) {
-        res = NULL;
-        VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
-        goto cleanup;
-    }
-    PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-    PyObject *kwnames_o = PyValue_AsKnownObjectBorrow(kwnames);
-    int positional_args = total_args;
-    if (kwnames_o != NULL) {
-        positional_args -= (int)PyTuple_GET_SIZE(kwnames_o);
-    }
-    res = PyObject_Vectorcall(
-        callable_o, args_o,
-        positional_args | PY_VECTORCALL_ARGUMENTS_OFFSET,
-        kwnames_o);
-    VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
-    assert((res != NULL) ^ (PyErr_Occurred() != NULL));
-cleanup:
-    ;
-    PyValue_XCLOSE(kwnames);
-    clear_value_arguments(arguments, total_args);
-    PyValue_CLOSE(callable);
-    return res;
-}
-
-PyObject*
-_Py_VectorCallInstrumentation_ValueSteal(
-    PyValue callable,
-    PyValue* arguments,
-    int total_args,
-    PyValue kwnames,
-    bool call_instrumentation,
-    _PyInterpreterFrame* frame,
-    _PyInstr* this_instr,
-    PyThreadState* tstate)
-{
-    PyObject* res;
-    VALUES_TO_PYOBJECTS(arguments, total_args, args_o);
-    if (CONVERSION_FAILED(args_o)) {
-        res = NULL;
-        VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
-        goto cleanup;
-    }
-    PyObject* callable_o = PyValue_AsKnownObjectBorrow(callable);
-    PyObject* kwnames_o = PyValue_AsKnownObjectBorrow(kwnames);
-    int positional_args = total_args;
-    if (kwnames_o != NULL) {
-        positional_args -= (int)PyTuple_GET_SIZE(kwnames_o);
-    }
-    res = PyObject_Vectorcall(
-        callable_o, args_o,
-        positional_args | PY_VECTORCALL_ARGUMENTS_OFFSET,
-        kwnames_o);
-    if (call_instrumentation) {
-        PyObject* arg = total_args == 0 ?
-            &_PyInstrumentation_MISSING : args_o[0];
-        if (res == NULL) {
-            _Py_call_instrumentation_exc2(
-                tstate, PY_MONITORING_EVENT_C_RAISE,
-                frame, this_instr, callable_o, arg);
-        }
-        else {
-            int err = _Py_call_instrumentation_2args(
-                tstate, PY_MONITORING_EVENT_C_RETURN,
-                frame, this_instr, callable_o, arg);
-            if (err < 0) {
-                Py_CLEAR(res);
-            }
-        }
-    }
-    VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
-    assert((res != NULL) ^ (PyErr_Occurred() != NULL));
-cleanup:
-    ;
-    PyValue_XCLOSE(kwnames);
-    clear_value_arguments(arguments, total_args);
-    PyValue_CLOSE(callable);
-    return res;
-}
-
-PyObject *
-_Py_BuiltinCallFast_Value(
-    PyValue callable,
-    PyValue *arguments,
-    int total_args)
-{
-    PyObject *res;
-    VALUES_TO_PYOBJECTS(arguments, total_args, args_o);
-    if (CONVERSION_FAILED(args_o)) {
-        res = NULL;
-        VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
-        return res;
-    }
-    PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-    PyCFunction cfunc = PyCFunction_GET_FUNCTION(callable_o);
-    PyObject *self_o = _PyCFunction_SelfObject(callable_o);
-    res = self_o == NULL && PyErr_Occurred() ? NULL :
-        _PyCFunctionFast_CAST(cfunc)(self_o, args_o, total_args);
-    VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
-    assert((res != NULL) ^ (PyErr_Occurred() != NULL));
-    return res;
-}
-
-PyObject *
-_Py_BuiltinCallFastWithKeywords_Value(
-    PyValue callable,
-    PyValue *arguments,
-    int total_args)
-{
-    PyObject *res;
-    VALUES_TO_PYOBJECTS(arguments, total_args, args_o);
-    if (CONVERSION_FAILED(args_o)) {
-        res = NULL;
-        VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
-        return res;
-    }
-    PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-    PyCFunctionFastWithKeywords cfunc =
-        _PyCFunctionFastWithKeywords_CAST(PyCFunction_GET_FUNCTION(callable_o));
-    PyObject *self_o = _PyCFunction_SelfObject(callable_o);
-    res = self_o == NULL && PyErr_Occurred() ? NULL :
-        cfunc(self_o, args_o, total_args, NULL);
-    VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
-    assert((res != NULL) ^ (PyErr_Occurred() != NULL));
-    return res;
-}
-
-PyObject *
-_PyCallMethodDescriptorFast_Value(
-    PyValue callable,
-    PyCFunctionFast cfunc,
-    PyObject *self,
-    PyValue *arguments,
-    int total_args)
-{
-    PyObject *res;
-    VALUES_TO_PYOBJECTS(arguments, total_args, args_o);
-    if (CONVERSION_FAILED(args_o)) {
-        res = NULL;
-        VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
-        return res;
-    }
-    assert(PyValue_Is(PyValue_FromObjectBorrow(self), arguments[0]));
-
-    res = cfunc(self, (args_o + 1), total_args - 1);
-    VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
-    assert((res != NULL) ^ (PyErr_Occurred() != NULL));
-    return res;
-}
-
-PyObject *
-_PyCallMethodDescriptorFastWithKeywords_Value(
-    PyValue callable,
-    PyCFunctionFastWithKeywords cfunc,
-    PyObject *self,
-    PyValue *arguments,
-    int total_args)
-{
-    PyObject *res;
-    VALUES_TO_PYOBJECTS(arguments, total_args, args_o);
-    if (CONVERSION_FAILED(args_o)) {
-        res = NULL;
-        VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
-        return res;
-    }
-    assert(PyValue_Is(PyValue_FromObjectBorrow(self), arguments[0]));
-
-    res = cfunc(self, (args_o + 1), total_args-1, NULL);
-    VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
-    assert((res != NULL) ^ (PyErr_Occurred() != NULL));
-    return res;
-}
-
-PyObject *
-_Py_CallBuiltinClass_Value(
-    PyValue callable,
-    PyValue *arguments,
-    int total_args)
-{
-    PyObject *res;
-    VALUES_TO_PYOBJECTS(arguments, total_args, args_o);
-    if (CONVERSION_FAILED(args_o)) {
-        res = NULL;
-        VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
-        return res;
-    }
-    PyTypeObject *tp = (PyTypeObject *)PyValue_AsKnownObjectBorrow(callable);
-    res = tp->tp_vectorcall((PyObject *)tp, args_o, total_args | PY_VECTORCALL_ARGUMENTS_OFFSET, NULL);
-    VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
-    assert((res != NULL) ^ (PyErr_Occurred() != NULL));
-    return res;
-}
-
-PyObject *
 _Py_BuildString_ValueSteal(
     PyValue *arguments,
     int total_args)
 {
-    PyObject *res;
-    VALUES_TO_PYOBJECTS(arguments, total_args, args_o);
-    if (CONVERSION_FAILED(args_o)) {
-        res = NULL;
-        VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
-        goto cleanup;
+    /* The pieces are str objects (constants and the results of FORMAT_*),
+     * never inline words: the join reads the window's objects in place on
+     * the borrow stack. */
+    PyThreadState *tstate = _PyThreadState_GET();
+    _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
+    _PyValue_RecheckWindow(arguments, total_args);
+    PyObject **objects = _PyBorrow_ValueVector(arguments, total_args);
+    PyObject *res = NULL;
+    if (objects != NULL) {
+        res = _PyUnicode_JoinArray(&_Py_STR(empty), objects, total_args);
     }
-    res = _PyUnicode_JoinArray(&_Py_STR(empty), args_o, total_args);
-    VALUES_TO_PYOBJECTS_CLEANUP(args_o, res);
+    _PyBorrowScope_Exit(tstate, mark);
     assert((res != NULL) ^ (PyErr_Occurred() != NULL));
-cleanup:
     clear_value_arguments(arguments, total_args);
     return res;
 }
@@ -1722,7 +1511,18 @@ done:
     return status;
 }
 
-/* The CALL event of an instrumented call. */
+/* The word of an immortal or caller-pinned object for a monitoring argument:
+ * uncounted, never closed. */
+static inline PyValue
+borrowed_word(PyObject *obj)
+{
+    PyValue word;
+    _PyValue_WindowFromObjects(&word, &obj, 1);
+    return word;
+}
+
+/* The CALL event of an instrumented call. The function and the first
+ * argument are read as words: an inline first argument is not boxed. */
 static int
 call_transaction_monitor(PyThreadState *tstate, _PyInterpreterFrame *frame,
                          _PyInstr *current, int base, int argument_count,
@@ -1743,24 +1543,15 @@ call_transaction_monitor(PyThreadState *tstate, _PyInterpreterFrame *frame,
     else if (argument_count) {
         first = PyValue_DUP(homes[2]);
     }
-    PyObject *function_object = NULL, *argument = NULL;
     int status = -1;
-    function_object = PyValue_AsObject(function);
-    if (function_object == NULL) {
-        goto done;
+    if (call_transaction_refresh(tstate, frame, current) >= 0) {
+        status = _Py_call_instrumentation_2args(
+            tstate, PY_MONITORING_EVENT_CALL, frame,
+            frame->instr_ptr, function,
+            PyValue_IsNull(first)
+                ? borrowed_word(&_PyInstrumentation_MISSING) : first);
     }
-    argument = PyValue_IsNull(first) ? Py_NewRef(&_PyInstrumentation_MISSING)
-                                   : PyValue_AsObject(first);
-    if (argument == NULL || call_transaction_refresh(tstate, frame, current) < 0) {
-        goto done;
-    }
-    status = _Py_call_instrumentation_2args(
-        tstate, PY_MONITORING_EVENT_CALL, frame,
-        frame->instr_ptr, function_object, argument);
-done:
-    Py_CLEAR(argument);
-    Py_CLEAR(function_object);
-    PyValue_CLEAR(first);
+    PyValue_XCLOSE(first);
     PyValue_CLEAR(function);
     if (call_transaction_refresh(tstate, frame, current) < 0) {
         return -1;
@@ -1850,16 +1641,23 @@ call_transaction_retire(PyValue *retired, int count, PyValue *small)
  * folded LOCAL destination gets the result after the window retires and
  * the periodic check passes; on failure the result is left in window[0].
  * The producer must not move window[0] afterward, even on an error edge
- * after cleanup. */
+ * after cleanup.
+ *
+ * The call is the value vectorcall (or the tuple call) on the window's
+ * words: a callee with a value form sees an inline argument as it is, and
+ * the call adapter of an object-form callee boxes it (pycore_value_call.h).
+ * The window keeps its owners until the result is published. */
 static int
 call_transaction_native(_PyCallTransaction *call)
 {
     PyValue small[8];
     PyValue *retired = small;
     PyValue local_result = PyValue_NULL;
-    int retired_count = 0, scope_started = 0, call_status = -1, to_local = 0;
-    PyObject *callable = NULL, *monitor_argument = NULL;
-    _PyNativeScope scope;
+    PyValue result = PyValue_NULL;
+    PyValue displaced = PyValue_NULL;
+    PyValue callable = PyValue_NULL;
+    PyValue monitor_argument = PyValue_NULL;
+    int retired_count = 0, call_status = -1, to_local = 0;
     call->effects = 1;
     if (call->instrumented && !call->monitored &&
         call_record_monitor(call) < 0) {
@@ -1875,18 +1673,36 @@ call_transaction_native(_PyCallTransaction *call)
         }
     }
     PyValue *homes = _PyFrame_Slots(call->frame) + call->base;
-    callable = PyValue_AsObject(homes[0]);
-    if (callable == NULL || call_record_refresh(call) < 0) {
-        goto done;
+    /* The call pins its callable: the window's owner can be replaced while
+     * the callee runs. */
+    callable = PyValue_DUP(homes[0]);
+    if (call->instrumented) {
+        PyValue first = PyValue_NULL;
+        if (call->kind == CALL_TRANSACTION_EX) {
+            PyObject *tuple = PyValue_AsKnownObjectBorrow(homes[2]);
+            if (PyTuple_GET_SIZE(tuple)) {
+                first = PyValue_DUP(PyTuple_GET_VALUE(tuple, 0));
+            }
+        }
+        else {
+            int offset = PyValue_IsNull(homes[1]) ? 2 : 1;
+            int total = call->argument_count + 2 - offset;
+            if (total) {
+                first = PyValue_DUP(homes[offset]);
+            }
+        }
+        /* MISSING is immortal: the word needs no count. */
+        monitor_argument = PyValue_IsNull(first)
+            ? borrowed_word(&_PyInstrumentation_MISSING) : first;
+    }
+    if (call_record_refresh(call) < 0) {
+        goto abort;
     }
     homes = _PyFrame_Slots(call->frame) + call->base;
-    scope_started = 1;
-    int status;
     if (call->kind == CALL_TRANSACTION_EX) {
         PyObject *tuple = PyValue_AsKnownObjectBorrow(homes[2]);
         PyObject *kwargs = PyValue_AsKnownObjectBorrow(homes[3]);
-        status = _PyNativeScope_BeginTupleCall(
-            &scope, call->tstate, callable, tuple, kwargs);
+        result = _PyValue_Call(call->tstate, callable, tuple, kwargs);
     }
     else {
         int offset = PyValue_IsNull(homes[1]) ? 2 : 1;
@@ -1894,59 +1710,21 @@ call_transaction_native(_PyCallTransaction *call)
         PyObject *names = call->kind == CALL_TRANSACTION_KEYWORDS
             ? PyValue_AsKnownObjectBorrow(homes[call->count - 1]) : NULL;
         Py_ssize_t positional = total - (names == NULL ? 0 : PyTuple_GET_SIZE(names));
-        if (_PyCFunction_CanCallScoped(callable)) {
-            status = _PyNativeScope_BeginVector(
-                &scope, call->tstate, callable, homes + offset,
-                positional, total, names);
-        }
-        else {
-            status = _PyNativeScope_BeginObjectVector(
-                &scope, call->tstate, callable, homes + offset,
-                positional, total, names);
-        }
-    }
-    if (status < 0 || call_record_refresh(call) < 0) {
-        goto abort;
-    }
-    if (call->kind != CALL_TRANSACTION_EX) {
-        PyObject *const *objects;
-        if (_PyNativeScope_Objects(&scope, &objects) < 0) {
-            goto abort;
-        }
-        if (call->instrumented) {
-            monitor_argument = Py_NewRef(scope.nargs ? objects[0]
-                                                    : &_PyInstrumentation_MISSING);
-        }
-    }
-    else if (call->instrumented) {
-        PyValueBorrow first = PyTuple_GET_SIZE(scope.callargs)
-            ? PyTuple_GET_VALUE(scope.callargs, 0) : PyValue_Borrow(PyValue_NULL);
-        monitor_argument = PyValue_IsNull(first)
-            ? Py_NewRef(&_PyInstrumentation_MISSING) : PyValue_AsObject(first);
-        if (monitor_argument == NULL) {
-            goto abort;
-        }
-    }
-    if (call_record_refresh(call) < 0) {
-        goto abort;
-    }
-    if (call->kind == CALL_TRANSACTION_EX) {
-        status = _PyNativeScope_InvokeTupleCall(&scope);
-    }
-    else {
-        status = scope.vector == 1
-            ? _PyCFunction_CallScoped(&scope, scope.callable, &scope.result) : 1;
-        if (status == 1) {
-            /* NOT_INVOKED may change adapters, never replay preparation. */
-            status = _PyNativeScope_InvokeObjectVector(&scope);
-        }
+        /* With an empty self slot (offset 2) the callee may use it as
+         * the slot before the arguments. */
+        size_t nargsf = (size_t)positional
+            | (offset == 2 ? PY_VECTORCALL_ARGUMENTS_OFFSET : 0);
+        result = _PyValue_VectorcallTstate(call->tstate, callable,
+                                           homes + offset, nargsf, names);
     }
     /* The call can run Python: refresh before monitoring reads the frame. */
     int refreshed = call_record_refresh(call);
+    int failed_call = PyValue_IsNull(result);
     if (call->instrumented &&
-        !(call->kind == CALL_TRANSACTION_EX &&
-          (PyFunction_Check(callable) || PyMethod_Check(callable)))) {
-        if (status < 0 || refreshed < 0) {
+        !(call->kind == CALL_TRANSACTION_EX && PyValue_IsObject(callable) &&
+          (PyFunction_Check(PyValue_AsKnownObjectBorrow(callable)) ||
+           PyMethod_Check(PyValue_AsKnownObjectBorrow(callable))))) {
+        if (failed_call || refreshed < 0) {
             _Py_call_instrumentation_exc2(
                 call->tstate, PY_MONITORING_EVENT_C_RAISE,
                 call->frame, call->frame->instr_ptr,
@@ -1956,10 +1734,10 @@ call_transaction_native(_PyCallTransaction *call)
                      call->tstate, PY_MONITORING_EVENT_C_RETURN,
                      call->frame, call->frame->instr_ptr,
                      callable, monitor_argument) < 0) {
-            status = -1;
+            failed_call = 1;
         }
     }
-    if (status < 0 || refreshed < 0 ||
+    if (failed_call || refreshed < 0 ||
         call_record_refresh(call) < 0) {
         goto abort;
     }
@@ -1968,21 +1746,34 @@ call_transaction_native(_PyCallTransaction *call)
     // IR_NO_DST: the result waits in local_result until it is released
     to_local = call->destination < _PyFrame_GetCode(call->frame)->co_nlocalsplus
                || call->destination == IR_NO_DST;
-    _PyNativeResult_Publish(&scope.result,
-        to_local ? &local_result
-                 : _PyFrame_Slots(call->frame) + call->destination,
-        call_transaction_publish_pc, call);
+    _PyValue_CheckHome(result);
+    if (to_local) {
+        local_result = result;
+    }
+    else {
+        PyValue *home = _PyFrame_Slots(call->frame) + call->destination;
+        _PyValue_RecheckHome(*home);
+        displaced = *home;
+        *home = result;
+    }
+    result = PyValue_NULL;
+    call_transaction_publish_pc(call);
     call_status = 0;
-    goto end_scope;
+    goto done;
 abort:
-    _PyNativeResult_Abort(&scope.result, call_transaction_publish_pc, call);
-end_scope:
-    _PyNativeScope_End(&scope);
+    PyValue_XCLOSE(result);
+    call_transaction_publish_pc(call);
 done:
-    assert(scope_started || retired_count == 0);
-    Py_CLEAR(monitor_argument);
-    Py_CLEAR(callable);
-    call_transaction_retire(retired, retired_count, small);
+    assert(retired_count == 0 || retired != NULL);
+    PyValue_XCLOSE(displaced);
+    if (!PyValue_IsObject(monitor_argument) ||
+        PyValue_AsKnownObjectBorrow(monitor_argument) != &_PyInstrumentation_MISSING) {
+        PyValue_XCLOSE(monitor_argument);
+    }
+    PyValue_XCLOSE(callable);
+    if (retired != NULL) {
+        call_transaction_retire(retired, retired_count, small);
+    }
     int failed = call_record_refresh(call);
     if (call_status < 0) {
         assert(PyValue_IsNull(local_result));
@@ -2016,10 +1807,10 @@ done:
         }
         PyValue *home = _PyFrame_Slots(call->frame) + call->destination;
         // a move: replaced below
-        PyValue displaced = *home;
+        PyValue displaced_local = *home;
         *home = local_result;
         _PyValue_CheckHome(*home);
-        PyValue_XCLOSE(displaced);
+        PyValue_XCLOSE(displaced_local);
         failed = call_record_refresh(call);
     }
     return failed;

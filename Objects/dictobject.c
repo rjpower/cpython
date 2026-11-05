@@ -1377,7 +1377,7 @@ _Py_dict_lookup_threadsafe_value(PyDictObject *mp, PyObject *key, Py_hash_t hash
 
 
 // Looks up the unicode key `key` in the dictionary. Note that `*method` may
-// already contain a valid value! See _PyObject_GetMethodValue().
+// already contain a valid value! See _PyValue_GetMethod().
 int
 _PyDict_GetMethodValue(PyDictObject *mp, PyObject *key, PyValue *method)
 {

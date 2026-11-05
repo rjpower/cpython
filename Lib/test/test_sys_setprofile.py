@@ -3,6 +3,7 @@ import pprint
 import sys
 import unittest
 from test import support
+from test.support import import_helper
 
 
 class TestGetProfile(unittest.TestCase):
@@ -536,6 +537,27 @@ class TestEdgeCases(unittest.TestCase):
              'c_call'
             ]
         )
+
+    @support.cpython_only
+    def test_c_profilefunc_call_arg_is_none(self):
+        # PyTrace_CALL always passes Py_None to a PyEval_SetProfile function.
+        _testcapi = import_helper.import_module('_testcapi')
+        PyTrace_CALL, PyTrace_RETURN = 0, 3
+        events = []
+
+        def body():
+            return 5
+
+        _testcapi.setprofile_to_record(events)
+        try:
+            body()
+        finally:
+            sys.setprofile(None)
+        calls = [arg for (what, line, arg) in events if what == PyTrace_CALL]
+        self.assertTrue(calls)
+        self.assertEqual(calls, [None] * len(calls))
+        self.assertIn(5, [arg for (what, line, arg) in events
+                          if what == PyTrace_RETURN])
 
 
 if __name__ == "__main__":

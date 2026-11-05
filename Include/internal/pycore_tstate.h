@@ -8,6 +8,7 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
+#include "pycore_typedefs.h"      // _Py_valuetracefunc
 #include "pycore_brc.h"             // struct _brc_thread_state
 #include "pycore_freelist_state.h"  // struct _Py_freelists
 #include "pycore_interpframe_structs.h"  // _PyInterpreterFrame
@@ -142,6 +143,12 @@ typedef struct _PyThreadStateImpl {
 #if defined(Py_REF_DEBUG) && defined(Py_GIL_DISABLED)
     Py_ssize_t reftotal;  // this thread's total refcount operations
 #endif
+
+    // The functions that the event handlers call (set with
+    // c_tracefunc/c_profilefunc, which stay for readers of the public
+    // fields): non-NULL if and only if the public one is.
+    _Py_valuetracefunc value_tracefunc;
+    _Py_valuetracefunc value_profilefunc;
 
 #ifdef Py_GIL_DISABLED
     // gh-144438: Add padding to ensure that the fields above don't share a

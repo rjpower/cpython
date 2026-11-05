@@ -951,9 +951,6 @@ PyAPI_FUNC(PyObject *) _PyType_LookupRefAndVersion(PyTypeObject *, PyObject *,
 extern unsigned int
 _PyType_LookupValueAndVersion(PyTypeObject *type, PyObject *name, PyValue *out);
 
-extern int _PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
-    PyObject *name, PyValue *method, PyObject *obj_view);
-
 // Cache the provided init method in the specialization cache of type if the
 // provided type version matches the current version of the type.
 //

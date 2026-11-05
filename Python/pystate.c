@@ -1743,10 +1743,12 @@ PyThreadState_Clear(PyThreadState *tstate)
     if (tstate->c_profilefunc != NULL) {
         FT_ATOMIC_ADD_SSIZE(tstate->interp->sys_profiling_threads, -1);
         tstate->c_profilefunc = NULL;
+        ((_PyThreadStateImpl *)tstate)->value_profilefunc = NULL;
     }
     if (tstate->c_tracefunc != NULL) {
         FT_ATOMIC_ADD_SSIZE(tstate->interp->sys_tracing_threads, -1);
         tstate->c_tracefunc = NULL;
+        ((_PyThreadStateImpl *)tstate)->value_tracefunc = NULL;
     }
 
     Py_CLEAR(tstate->c_profileobj);

@@ -701,9 +701,13 @@ callmethod(PyThreadState *tstate, PyObject *obj, PyObject *name,
     _PyCValue self, method;
     _PyThreadState_PushCValue(tstate, &self);
     _PyThreadState_PushCValue(tstate, &method);
-    self.ref = PyValue_DUP(PyValue_FromObjectBorrow(obj));
-    if (_PyObject_GetMethodValue(tstate, &self.ref, name, &method.ref, obj) < 0) {
+    _PyStatusValue found = _PyValue_GetMethod(PyValue_FromObjectBorrow(obj), name);
+    if (found.status < 0) {
         goto done;
+    }
+    method.ref = _PyValue_Publish(&found.value);
+    if (found.status == 1) {
+        self.ref = PyValue_DUP(PyValue_FromObjectBorrow(obj));
     }
     PyObject *callable = _PyValueTemps_ObjectAt(&temps, method.ref, BOX_SITE_CALL);
     if (callable == NULL) {
@@ -1009,9 +1013,13 @@ PyObject_VectorcallMethod(PyObject *name, PyObject *const *args,
     _PyCValue self, method;
     _PyThreadState_PushCValue(tstate, &self);
     _PyThreadState_PushCValue(tstate, &method);
-    self.ref = PyValue_DUP(PyValue_FromObjectBorrow(args[0]));
-    if (_PyObject_GetMethodValue(tstate, &self.ref, name, &method.ref, args[0]) < 0) {
+    _PyStatusValue found = _PyValue_GetMethod(PyValue_FromObjectBorrow(args[0]), name);
+    if (found.status < 0) {
         goto done;
+    }
+    method.ref = _PyValue_Publish(&found.value);
+    if (found.status == 1) {
+        self.ref = PyValue_DUP(PyValue_FromObjectBorrow(args[0]));
     }
     PyObject *callable = _PyValueTemps_ObjectAt(&temps, method.ref, BOX_SITE_CALL);
     if (callable == NULL) {
@@ -1057,9 +1065,13 @@ PyObject_CallMethodObjArgs(PyObject *obj, PyObject *name, ...)
     _PyCValue self, method;
     _PyThreadState_PushCValue(tstate, &self);
     _PyThreadState_PushCValue(tstate, &method);
-    self.ref = PyValue_DUP(PyValue_FromObjectBorrow(obj));
-    if (_PyObject_GetMethodValue(tstate, &self.ref, name, &method.ref, obj) < 0) {
+    _PyStatusValue found = _PyValue_GetMethod(PyValue_FromObjectBorrow(obj), name);
+    if (found.status < 0) {
         goto done;
+    }
+    method.ref = _PyValue_Publish(&found.value);
+    if (found.status == 1) {
+        self.ref = PyValue_DUP(PyValue_FromObjectBorrow(obj));
     }
     PyObject *callable = _PyValueTemps_ObjectAt(&temps, method.ref, BOX_SITE_CALL);
     if (callable == NULL) {

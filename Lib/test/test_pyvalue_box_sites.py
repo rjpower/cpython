@@ -867,7 +867,7 @@ class PythonClassSlotTests(unittest.TestCase):
         h = HasDescr()
         d, c, sa = self.dispatch, self.container, self.setattr
         # (name, call, boxes that the call itself makes: each inline argument,
-        # and value_setattr's METH_VARARGS parser boxes its value again)
+        # boxed once by the call adapter of the object-form test function)
         cases = [
             ("add", lambda i: d("Add", a, i), 1),
             ("radd", lambda i: d("Add", i, a), 1),
@@ -877,8 +877,8 @@ class PythonClassSlotTests(unittest.TestCase):
             ("setitem", lambda i: c("setitem", a, i, i), 2),
             ("delitem", lambda i: c("delitem", a, i), 1),
             ("contains", lambda i: c("contains", a, i), 1),
-            ("setattr", lambda i: sa(a, "x", i), 2),
-            ("descr_set", lambda i: sa(h, "d", i), 2),
+            ("setattr", lambda i: sa(a, "x", i), 1),
+            ("descr_set", lambda i: sa(h, "d", i), 1),
         ]
         for name, call, inline_args in cases:
             with self.subTest(case=name):
@@ -1265,6 +1265,87 @@ class HandlerResultTests(unittest.TestCase):
         self.assertEqual((seen, final, coro_result), ([1, 2.5], 7, 3))
         self.assertIn("returns_int", records)
         self.assertIn("gen", records)
+
+
+class CallAndEventTests(unittest.TestCase):
+    """Generic calls and monitoring and trace events pass inline words.
+
+    A callee with a value vectorcall sees an inline int argument as it is,
+    in a positional, keyword or star call, and the events of sys.monitoring
+    and sys.settrace pass an inline return value to a Python callback
+    without a box.
+    """
+
+    def test_value_vectorcall_callee_results(self):
+        _testinternalcapi = import_helper.import_module("_testinternalcapi")
+        o = _testinternalcapi.VCall()
+        self.assertEqual(o(1, 2), ("value-marker", 2))
+        self.assertEqual(o(1, k=2), ("value-marker", 1))
+        self.assertEqual(o(*(1, 2, 3)), ("value-marker", 3))
+
+    @unittest.skipUnless(STATS, "needs a Py_STATS build")
+    def test_value_vectorcall_callee_no_box(self):
+        _testinternalcapi = import_helper.import_module("_testinternalcapi")
+        o = _testinternalcapi.VCall()
+
+        def positional(n):
+            for i in range(n):
+                o(i, i)
+
+        def keyword(n):
+            for i in range(n):
+                o(i, k=i)
+
+        def star(n):
+            t = (1, 2)
+            for i in range(n):
+                o(*t)
+
+        for loop in (positional, keyword, star):
+            with self.subTest(loop=loop.__name__):
+                self.assertEqual(boxes(loop, N), 0)
+
+    @unittest.skipUnless(STATS, "needs a Py_STATS build")
+    def test_monitoring_return_event_no_box(self):
+        events = sys.monitoring.events
+        tool = sys.monitoring.PROFILER_ID
+
+        def callback(code, offset, retval):
+            pass
+
+        def f(x):
+            return x
+
+        def loop(n):
+            for i in range(n):
+                f(i)
+
+        sys.monitoring.use_tool_id(tool, "box-sites")
+        try:
+            sys.monitoring.register_callback(tool, events.PY_RETURN, callback)
+            sys.monitoring.set_events(tool, events.PY_RETURN)
+            self.assertEqual(boxes(loop, N), 0)
+        finally:
+            sys.monitoring.set_events(tool, 0)
+            sys.monitoring.free_tool_id(tool)
+
+    @unittest.skipUnless(STATS, "needs a Py_STATS build")
+    def test_settrace_return_event_no_box(self):
+        def tracer(frame, event, arg):
+            return tracer
+
+        def f(x):
+            return x
+
+        def loop(n):
+            for i in range(n):
+                f(i)
+
+        sys.settrace(tracer)
+        try:
+            self.assertEqual(boxes(loop, N), 0)
+        finally:
+            sys.settrace(None)
 
 
 if __name__ == "__main__":

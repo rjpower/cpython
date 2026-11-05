@@ -1031,6 +1031,9 @@ THUNK_FILES = (
     # The test helpers: a spec type that stores the thunk, and an accessor
     # that compares against both.
     "Modules/_testinternalcapi/value_call.c",
+    # The legacy trace handlers and the branch handler of sys.monitoring
+    # are value-vectorcall types of their own.
+    "Python/instrumentation.c", "Python/legacy_tracing.c",
 )
 FUNCTION_VECTORCALL_FILES = (
     "Objects/call.c", "Objects/funcobject.c", "Python/bytecodes.c",
@@ -1102,7 +1105,10 @@ BOUNDARY_FILES = (
     # core callers share (value-api-g.md, section 1.3); added to the table.
     "Objects/dictobject.c", "Objects/listobject.c",
     # The call adapters name the callee that receives the boxed self.
-    "Objects/methodobject.c", "Objects/descrobject.c")
+    "Objects/methodobject.c", "Objects/descrobject.c",
+    # The adapter of PyEval_SetTrace()/SetProfile(): the C-API entry that
+    # boxes the argument word for the extension's Py_tracefunc.
+    "Python/legacy_tracing.c")
 STATS_FILES = ("Include/cpython/pystats.h", "Python/pystats.c")
 BOX_TEXT_RULES = (
     ("test-site", ("BOX_SITE_TEST",),

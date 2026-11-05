@@ -2725,6 +2725,40 @@ class TestRegressions(MonitoringTestBase, unittest.TestCase):
             sys.monitoring.register_callback(TEST_TOOL, E.BRANCH_LEFT, None)
 
 
+class TestEventOffsets(MonitoringTestBase, unittest.TestCase):
+    """Offsets reach callbacks as exact ints, whatever their representation."""
+
+    def test_offsets_are_exact_ints(self):
+        got = []
+        events = sys.monitoring.events
+
+        def instruction(code, offset):
+            got.append(offset)
+
+        def jump(code, offset, destination):
+            got.extend((offset, destination))
+
+        def func():
+            for _ in range(3):
+                pass
+
+        tool = TEST_TOOL
+        sys.monitoring.register_callback(tool, events.INSTRUCTION, instruction)
+        sys.monitoring.register_callback(tool, events.JUMP, jump)
+        sys.monitoring.set_events(tool, events.INSTRUCTION | events.JUMP)
+        try:
+            func()
+        finally:
+            sys.monitoring.set_events(tool, 0)
+            sys.monitoring.register_callback(tool, events.INSTRUCTION, None)
+            sys.monitoring.register_callback(tool, events.JUMP, None)
+        self.assertTrue(got)
+        for offset in got:
+            self.assertIs(type(offset), int)
+            if offset < 256:
+                self.assertIs(offset, offset * 1)
+
+
 class TestOptimizer(MonitoringTestBase, unittest.TestCase):
 
     def test_for_loop(self):

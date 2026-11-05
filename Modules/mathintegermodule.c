@@ -64,15 +64,10 @@ math_integer_gcd_impl(PyObject *module, const PyValue *args,
         return PyValue_FromInt64(0);
     }
 
-    PyValue res_v = _PyValue_Index(PyValue_Borrow(args[0]));
+    PyValue res_v = _PyValue_IndexExact(PyValue_Borrow(args[0]));
 
     PyObject *res = PyValue_IsNull(res_v) ? NULL : _PyValue_AsObjectStealAt(res_v, BOX_SITE_NUMBER);
 
-    if (res != NULL && !PyLong_CheckExact(res)) {
-
-        Py_SETREF(res, _PyLong_Copy((PyLongObject *)res));
-
-    }
     if (res == NULL) {
         return PyValue_NULL;
     }
@@ -156,11 +151,8 @@ math_integer_lcm_impl(PyObject *module, const PyValue *args,
     if (args_length == 0) {
         return PyValue_FromInt64(1);
     }
-    PyValue res_v = _PyValue_Index(PyValue_Borrow(args[0]));
+    PyValue res_v = _PyValue_IndexExact(PyValue_Borrow(args[0]));
     res = PyValue_IsNull(res_v) ? NULL : _PyValue_AsObjectStealAt(res_v, BOX_SITE_NUMBER);
-    if (res != NULL && !PyLong_CheckExact(res)) {
-        Py_SETREF(res, _PyLong_Copy((PyLongObject *)res));
-    }
     if (res == NULL) {
         return PyValue_NULL;
     }
@@ -172,11 +164,8 @@ math_integer_lcm_impl(PyObject *module, const PyValue *args,
 
     PyObject *zero = _PyLong_GetZero();  // borrowed ref
     for (i = 1; i < args_length; i++) {
-        PyValue x_v = _PyValue_Index(PyValue_Borrow(args[i]));
+        PyValue x_v = _PyValue_IndexExact(PyValue_Borrow(args[i]));
         x = PyValue_IsNull(x_v) ? NULL : _PyValue_AsObjectStealAt(x_v, BOX_SITE_NUMBER);
-        if (x != NULL && !PyLong_CheckExact(x)) {
-            Py_SETREF(x, _PyLong_Copy((PyLongObject *)x));
-        }
         if (x == NULL) {
             Py_DECREF(res);
             return PyValue_NULL;
@@ -1108,19 +1097,13 @@ math_integer_perm_impl(PyObject *module, PyValueBorrow n_arg,
     if (PyValue_IsNone(k_arg)) {
         return math_integer_factorial_impl(module, n_arg);
     }
-    PyValue n_v = _PyValue_Index(n_arg);
+    PyValue n_v = _PyValue_IndexExact(n_arg);
     n = PyValue_IsNull(n_v) ? NULL : _PyValue_AsObjectStealAt(n_v, BOX_SITE_NUMBER);
-    if (n != NULL && !PyLong_CheckExact(n)) {
-        Py_SETREF(n, _PyLong_Copy((PyLongObject *)n));
-    }
     if (n == NULL) {
         return PyValue_NULL;
     }
-    PyValue k_v = _PyValue_Index(k_arg);
+    PyValue k_v = _PyValue_IndexExact(k_arg);
     k = PyValue_IsNull(k_v) ? NULL : _PyValue_AsObjectStealAt(k_v, BOX_SITE_NUMBER);
-    if (k != NULL && !PyLong_CheckExact(k)) {
-        Py_SETREF(k, _PyLong_Copy((PyLongObject *)k));
-    }
     if (k == NULL) {
         Py_DECREF(n);
         return PyValue_NULL;
@@ -1209,23 +1192,15 @@ math_integer_comb_impl(PyObject *module, PyValueBorrow n_arg,
     int overflow, cmp;
     long long ki, ni;
 
-    PyValue n_v = _PyValue_Index(n_arg);
+    PyValue n_v = _PyValue_IndexExact(n_arg);
 
     n = PyValue_IsNull(n_v) ? NULL : _PyValue_AsObjectStealAt(n_v, BOX_SITE_NUMBER);
 
-    if (n != NULL && !PyLong_CheckExact(n)) {
-
-        Py_SETREF(n, _PyLong_Copy((PyLongObject *)n));
-
-    }
     if (n == NULL) {
         return PyValue_NULL;
     }
-    PyValue k_v = _PyValue_Index(k_arg);
+    PyValue k_v = _PyValue_IndexExact(k_arg);
     k = PyValue_IsNull(k_v) ? NULL : _PyValue_AsObjectStealAt(k_v, BOX_SITE_NUMBER);
-    if (k != NULL && !PyLong_CheckExact(k)) {
-        Py_SETREF(k, _PyLong_Copy((PyLongObject *)k));
-    }
     if (k == NULL) {
         Py_DECREF(n);
         return PyValue_NULL;

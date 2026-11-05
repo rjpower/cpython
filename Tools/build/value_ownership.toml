@@ -556,7 +556,7 @@ result = "new"
 
 [[row]]
 object = "PyNumber_Index"
-value = "_PyValue_Index"
+value = "_PyValue_IndexExact"
 family = "number"
 args = ["borrow"]
 result = "new"

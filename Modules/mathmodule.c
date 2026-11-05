@@ -3132,17 +3132,10 @@ math_nextafter_impl(PyObject *module, double x, double y,
         // fast path: we default to one step.
         return PyValue_FromDouble(nextafter(x, y));
     }
-    PyValue steps_index_v = _PyValue_Index(steps);
+    PyValue steps_index_v = _PyValue_IndexExact(steps);
     PyObject *steps_index = PyValue_IsNull(steps_index_v) ? NULL : _PyValue_AsObjectStealAt(steps_index_v, BOX_SITE_NUMBER);
     if (steps_index == NULL) {
         return PyValue_NULL;
-    }
-    /* PyNumber_Index() returned an exact int, copying a subclass instance. */
-    if (!PyLong_CheckExact(steps_index)) {
-        Py_SETREF(steps_index, _PyLong_Copy((PyLongObject *)steps_index));
-        if (steps_index == NULL) {
-            return PyValue_NULL;
-        }
     }
     assert(PyLong_CheckExact(steps_index));
     if (_PyLong_IsNegative((PyLongObject *)steps_index)) {

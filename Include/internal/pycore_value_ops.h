@@ -116,14 +116,17 @@ PyAPI_FUNC(PyValue) _PyValue_Invert(PyValueBorrow v);
 #define _PyValue_Absolute(V) (_PyValue_Absolute)(PyValue_Borrow(V))
 #define _PyValue_Invert(V) (_PyValue_Invert)(PyValue_Borrow(V))
 
-/* _PyNumber_Index(): an int, possibly of a subclass; PyNumber_Long() and
-   PyNumber_Float(); PyNumber_AsSsize_t(), which reads an inline int
+/* _PyNumber_Index(): an int, possibly of a subclass. PyNumber_Index(): an
+   exact int, copying a subclass instance (_PyValue_IndexExact). PyNumber_Long()
+   and PyNumber_Float(); PyNumber_AsSsize_t(), which reads an inline int
    directly. */
 PyAPI_FUNC(PyValue) _PyValue_Index(PyValueBorrow v);
+PyAPI_FUNC(PyValue) _PyValue_IndexExact(PyValueBorrow v);
 PyAPI_FUNC(PyValue) _PyValue_Long(PyValueBorrow v);
 PyAPI_FUNC(PyValue) _PyValue_Float(PyValueBorrow v);
 PyAPI_FUNC(Py_ssize_t) _PyValue_AsSsize_t(PyValueBorrow v, PyObject *exc);
 #define _PyValue_Index(V) (_PyValue_Index)(PyValue_Borrow(V))
+#define _PyValue_IndexExact(V) (_PyValue_IndexExact)(PyValue_Borrow(V))
 #define _PyValue_Long(V) (_PyValue_Long)(PyValue_Borrow(V))
 #define _PyValue_Float(V) (_PyValue_Float)(PyValue_Borrow(V))
 #define _PyValue_AsSsize_t(V, E) (_PyValue_AsSsize_t)(PyValue_Borrow(V), E)

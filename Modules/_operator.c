@@ -711,7 +711,7 @@ static PyValue
 _operator_index_impl(PyObject *module, PyValueBorrow a)
 /*[clinic end generated code: output=f78df7277497b4c9 input=6f54d50ea64a579c]*/
 {
-    return _PyValue_Index(a);
+    return _PyValue_IndexExact(a);
 }
 
 /*[clinic input]

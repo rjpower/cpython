@@ -2946,6 +2946,57 @@ class PythonClassValueSideTests(unittest.TestCase):
                     self.assertIs(x in cls(), expected)
                     self.assertIs(x not in cls(), not expected)
 
+class IndexExactTests(unittest.TestCase):
+    """PyNumber_Index() gives an exact int (a subclass instance is copied);
+    _PyNumber_Index() may give the subclass. The value forms keep the
+    difference: _PyValue_IndexExact() and _PyValue_Index()."""
+
+    class MyInt(int):
+        pass
+
+    def test_operator_index(self):
+        for value in (5, self.MyInt(5), True, 2**70, self.MyInt(2**70)):
+            with self.subTest(value=value):
+                result = operator.index(value)
+                self.assertIs(type(result), int)
+                self.assertEqual(result, int(value))
+
+    def test_math_integer_functions(self):
+        MyInt = self.MyInt
+        self.assertIs(type(math.gcd(MyInt(12))), int)
+        self.assertIs(type(math.gcd(MyInt(12), MyInt(18))), int)
+        self.assertEqual(math.gcd(MyInt(12), MyInt(18)), 6)
+        self.assertIs(type(math.lcm(MyInt(4))), int)
+        self.assertEqual(math.lcm(MyInt(4), MyInt(6)), 12)
+        self.assertEqual(math.comb(MyInt(5), MyInt(2)), 10)
+        self.assertEqual(math.perm(MyInt(5), MyInt(2)), 20)
+        self.assertEqual(math.comb(MyInt(2**70), MyInt(1)), 2**70)
+
+    def test_nextafter_steps(self):
+        MyInt = self.MyInt
+        self.assertEqual(math.nextafter(1.0, 2.0, steps=MyInt(1)),
+                         math.nextafter(1.0, 2.0))
+        self.assertEqual(math.nextafter(1.0, 2.0, steps=MyInt(0)), 1.0)
+        self.assertEqual(math.nextafter(1.0, 2.0, steps=MyInt(2**70)), 2.0)
+        with self.assertRaisesRegex(ValueError, "non-negative"):
+            math.nextafter(1.0, 2.0, steps=MyInt(-1))
+
+    def test_enumerate_start(self):
+        for start in (self.MyInt(2**70), self.MyInt(5)):
+            with self.subTest(start=start):
+                index, _ = next(enumerate('a', start))
+                self.assertIs(type(index), int)
+                self.assertEqual(index, int(start))
+
+    def test_index_result_of_a_subclass(self):
+        class Holder:
+            def __index__(self):
+                return IndexExactTests.MyInt(7)
+        with self.assertWarns(DeprecationWarning):
+            result = operator.index(Holder())
+        self.assertIs(type(result), int)
+        self.assertEqual(result, 7)
+
 
 if __name__ == '__main__':
     unittest.main()

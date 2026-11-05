@@ -558,7 +558,7 @@ PyAPI_FUNC(int) PyIndex_Check(PyObject *);
 
 /* Returns the object 'o' converted to a Python int, or NULL with an exception
    raised on failure. */
-Py_VALUE_COMPAT(_PyValue_Index)
+Py_VALUE_COMPAT(_PyValue_IndexExact)
 PyAPI_FUNC(PyObject *) PyNumber_Index(PyObject *o);
 
 /* Returns the object 'o' converted to Py_ssize_t by going through

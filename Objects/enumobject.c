@@ -70,7 +70,7 @@ enum_new_impl(PyTypeObject *type, PyValueBorrow iterable,
     if (en == NULL)
         return PyValue_NULL;
     if (!PyValue_IsNull(start)) {
-        PyValue index = _PyValue_Index(start);
+        PyValue index = _PyValue_IndexExact(start);
         if (PyValue_IsNull(index)) {
             Py_DECREF(en);
             return PyValue_NULL;

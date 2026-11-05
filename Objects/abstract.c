@@ -2108,19 +2108,30 @@ _PyNumber_Index(PyObject *item)
                                BOX_SITE_NUMBER);
 }
 
-/* Return an exact Python int from the object item.
+/* Return an exact Python int from the object item: an inline int or an
+   exact int is itself, a subclass instance (or an __index__ result of a
+   subclass) is copied.
    Raise TypeError if the result is not an int
    or if the object cannot be interpreted as an index.
 */
+PyValue
+(_PyValue_IndexExact)(PyValueBorrow item)
+{
+    PyValue result = (_PyValue_Index)(item);
+    if (PyValue_IsNull(result) || value_long_check_exact(result)) {
+        return result;
+    }
+    PyObject *copy = (PyObject *)_PyLong_Copy(
+        (PyLongObject *)PyValue_AsKnownObjectBorrow(result));
+    PyValue_CLOSE(result);
+    return _PyValue_FromObjectResult(copy);
+}
+
 PyObject *
 PyNumber_Index(PyObject *item)
 {
-    PyObject *result = _PyValue_THUNK_EXIT((_PyValue_Index)(_Py_VALUE_ARG(item)),
-                                           BOX_SITE_NUMBER);
-    if (result != NULL && !PyLong_CheckExact(result)) {
-        Py_SETREF(result, _PyLong_Copy((PyLongObject *)result));
-    }
-    return result;
+    return _PyValue_THUNK_EXIT((_PyValue_IndexExact)(_Py_VALUE_ARG(item)),
+                               BOX_SITE_NUMBER);
 }
 
 /* Return an error on Overflow only if err is not NULL*/

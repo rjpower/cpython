@@ -84,7 +84,7 @@ PyDoc_STRVAR(OrderedDict___sizeof____doc__,
 "\n");
 
 #define ORDEREDDICT___SIZEOF___METHODDEF    \
-    {"__sizeof__", _PyCFunction_CAST(OrderedDict___sizeof__), METH_VALUE, OrderedDict___sizeof____doc__},
+    {"__sizeof__", _PyCFunction_CAST(OrderedDict___sizeof__), METH_VALUE|METH_NOARGS, OrderedDict___sizeof____doc__},
 
 static Py_ssize_t
 OrderedDict___sizeof___impl(PyODictObject *self);
@@ -95,9 +95,6 @@ OrderedDict___sizeof__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs
     PyValue return_value = PyValue_NULL;
     Py_ssize_t _return_value;
 
-    if (!_PyArg_CheckArityValueMethod(&PyODict_Type, "__sizeof__", nargs, kwnames, 0)) {
-        goto exit;
-    }
     Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
     _return_value = OrderedDict___sizeof___impl((PyODictObject *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
@@ -117,7 +114,7 @@ PyDoc_STRVAR(OrderedDict___reduce____doc__,
 "Return state information for pickling");
 
 #define ORDEREDDICT___REDUCE___METHODDEF    \
-    {"__reduce__", _PyCFunction_CAST(OrderedDict___reduce__), METH_VALUE, OrderedDict___reduce____doc__},
+    {"__reduce__", _PyCFunction_CAST(OrderedDict___reduce__), METH_VALUE|METH_NOARGS, OrderedDict___reduce____doc__},
 
 static PyValue
 OrderedDict___reduce___impl(PyODictObject *od);
@@ -127,12 +124,8 @@ OrderedDict___reduce__(PyValueBorrow od, const PyValue *args, Py_ssize_t nargs, 
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyODict_Type, "__reduce__", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = OrderedDict___reduce___impl((PyODictObject *)PyValue_AsKnownObjectBorrow(od));
 
-exit:
     return return_value;
 }
 
@@ -343,7 +336,7 @@ PyDoc_STRVAR(OrderedDict_clear__doc__,
 "Remove all items from ordered dict.");
 
 #define ORDEREDDICT_CLEAR_METHODDEF    \
-    {"clear", _PyCFunction_CAST(OrderedDict_clear), METH_VALUE, OrderedDict_clear__doc__},
+    {"clear", _PyCFunction_CAST(OrderedDict_clear), METH_VALUE|METH_NOARGS, OrderedDict_clear__doc__},
 
 static PyValue
 OrderedDict_clear_impl(PyODictObject *self);
@@ -353,14 +346,10 @@ OrderedDict_clear(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyO
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyODict_Type, "clear", nargs, kwnames, 0)) {
-        goto exit;
-    }
     Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
     return_value = OrderedDict_clear_impl((PyODictObject *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
-exit:
     return return_value;
 }
 
@@ -371,7 +360,7 @@ PyDoc_STRVAR(OrderedDict_copy__doc__,
 "A shallow copy of ordered dict.");
 
 #define ORDEREDDICT_COPY_METHODDEF    \
-    {"copy", _PyCFunction_CAST(OrderedDict_copy), METH_VALUE, OrderedDict_copy__doc__},
+    {"copy", _PyCFunction_CAST(OrderedDict_copy), METH_VALUE|METH_NOARGS, OrderedDict_copy__doc__},
 
 static PyValue
 OrderedDict_copy_impl(PyObject *od);
@@ -381,14 +370,10 @@ OrderedDict_copy(PyValueBorrow od, const PyValue *args, Py_ssize_t nargs, PyObje
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyODict_Type, "copy", nargs, kwnames, 0)) {
-        goto exit;
-    }
     Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(od));
     return_value = OrderedDict_copy_impl(PyValue_AsKnownObjectBorrow(od));
     Py_END_CRITICAL_SECTION();
 
-exit:
     return return_value;
 }
 
@@ -475,4 +460,4 @@ odictiter_iternext(PyObject *self)
 
     return return_value;
 }
-/*[clinic end generated code: output=b7d1168dd196452a input=a9049054013a1b77]*/
+/*[clinic end generated code: output=031bf732d100b7e6 input=a9049054013a1b77]*/

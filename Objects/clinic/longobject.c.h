@@ -96,7 +96,7 @@ PyDoc_STRVAR(int___getnewargs____doc__,
 "\n");
 
 #define INT___GETNEWARGS___METHODDEF    \
-    {"__getnewargs__", _PyCFunction_CAST(int___getnewargs__), METH_VALUE, int___getnewargs____doc__},
+    {"__getnewargs__", _PyCFunction_CAST(int___getnewargs__), METH_VALUE|METH_NOARGS, int___getnewargs____doc__},
 
 static PyValue
 int___getnewargs___impl(PyValueBorrow self);
@@ -106,12 +106,8 @@ int___getnewargs__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, Py
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyLong_Type, "__getnewargs__", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = int___getnewargs___impl(self);
 
-exit:
     return return_value;
 }
 
@@ -122,7 +118,7 @@ PyDoc_STRVAR(int___format____doc__,
 "Convert to a string according to format_spec.");
 
 #define INT___FORMAT___METHODDEF    \
-    {"__format__", _PyCFunction_CAST(int___format__), METH_VALUE, int___format____doc__},
+    {"__format__", _PyCFunction_CAST(int___format__), METH_VALUE|METH_O, int___format____doc__},
 
 static PyValue
 int___format___impl(PyValueBorrow self, PyObject *format_spec);
@@ -133,9 +129,6 @@ int___format__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObje
     PyValue return_value = PyValue_NULL;
     PyObject *format_spec;
 
-    if (!_PyArg_CheckArityValueMethod(&PyLong_Type, "__format__", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         _PyArg_BadArgumentValue("__format__", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
@@ -195,7 +188,7 @@ PyDoc_STRVAR(int___sizeof____doc__,
 "Returns size in memory, in bytes.");
 
 #define INT___SIZEOF___METHODDEF    \
-    {"__sizeof__", _PyCFunction_CAST(int___sizeof__), METH_VALUE, int___sizeof____doc__},
+    {"__sizeof__", _PyCFunction_CAST(int___sizeof__), METH_VALUE|METH_NOARGS, int___sizeof____doc__},
 
 static Py_ssize_t
 int___sizeof___impl(PyValueBorrow self);
@@ -206,9 +199,6 @@ int___sizeof__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObje
     PyValue return_value = PyValue_NULL;
     Py_ssize_t _return_value;
 
-    if (!_PyArg_CheckArityValueMethod(&PyLong_Type, "__sizeof__", nargs, kwnames, 0)) {
-        goto exit;
-    }
     _return_value = int___sizeof___impl(self);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
@@ -231,7 +221,7 @@ PyDoc_STRVAR(int_bit_length__doc__,
 "6");
 
 #define INT_BIT_LENGTH_METHODDEF    \
-    {"bit_length", _PyCFunction_CAST(int_bit_length), METH_VALUE, int_bit_length__doc__},
+    {"bit_length", _PyCFunction_CAST(int_bit_length), METH_VALUE|METH_NOARGS, int_bit_length__doc__},
 
 static PyValue
 int_bit_length_impl(PyValueBorrow self);
@@ -241,12 +231,8 @@ int_bit_length(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObje
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyLong_Type, "bit_length", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = int_bit_length_impl(self);
 
-exit:
     return return_value;
 }
 
@@ -264,7 +250,7 @@ PyDoc_STRVAR(int_bit_count__doc__,
 "3");
 
 #define INT_BIT_COUNT_METHODDEF    \
-    {"bit_count", _PyCFunction_CAST(int_bit_count), METH_VALUE, int_bit_count__doc__},
+    {"bit_count", _PyCFunction_CAST(int_bit_count), METH_VALUE|METH_NOARGS, int_bit_count__doc__},
 
 static PyValue
 int_bit_count_impl(PyValueBorrow self);
@@ -274,12 +260,8 @@ int_bit_count(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObjec
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyLong_Type, "bit_count", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = int_bit_count_impl(self);
 
-exit:
     return return_value;
 }
 
@@ -299,7 +281,7 @@ PyDoc_STRVAR(int_as_integer_ratio__doc__,
 "(0, 1)");
 
 #define INT_AS_INTEGER_RATIO_METHODDEF    \
-    {"as_integer_ratio", _PyCFunction_CAST(int_as_integer_ratio), METH_VALUE, int_as_integer_ratio__doc__},
+    {"as_integer_ratio", _PyCFunction_CAST(int_as_integer_ratio), METH_VALUE|METH_NOARGS, int_as_integer_ratio__doc__},
 
 static PyValue
 int_as_integer_ratio_impl(PyValueBorrow self);
@@ -309,12 +291,8 @@ int_as_integer_ratio(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, 
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyLong_Type, "as_integer_ratio", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = int_as_integer_ratio_impl(self);
 
-exit:
     return return_value;
 }
 
@@ -529,7 +507,7 @@ PyDoc_STRVAR(int_is_integer__doc__,
 "Returns True. Exists for duck type compatibility with float.is_integer.");
 
 #define INT_IS_INTEGER_METHODDEF    \
-    {"is_integer", _PyCFunction_CAST(int_is_integer), METH_VALUE, int_is_integer__doc__},
+    {"is_integer", _PyCFunction_CAST(int_is_integer), METH_VALUE|METH_NOARGS, int_is_integer__doc__},
 
 static PyValue
 int_is_integer_impl(PyValueBorrow self);
@@ -539,12 +517,8 @@ int_is_integer(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObje
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyLong_Type, "is_integer", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = int_is_integer_impl(self);
 
-exit:
     return return_value;
 }
-/*[clinic end generated code: output=4e8bba3046218a13 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=af77cde67210caf8 input=a9049054013a1b77]*/

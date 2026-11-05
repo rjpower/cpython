@@ -12,7 +12,7 @@ preserve
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
-#include "pycore_modsupport.h"    // _PyArg_CheckArityValue()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 #include "pycore_value_call.h"    // METH_VALUE
@@ -26,7 +26,7 @@ PyDoc_STRVAR(bytes___bytes____doc__,
 "Convert this value to exact type bytes.");
 
 #define BYTES___BYTES___METHODDEF    \
-    {"__bytes__", _PyCFunction_CAST(bytes___bytes__), METH_VALUE, bytes___bytes____doc__},
+    {"__bytes__", _PyCFunction_CAST(bytes___bytes__), METH_VALUE|METH_NOARGS, bytes___bytes____doc__},
 
 static PyValue
 bytes___bytes___impl(PyBytesObject *self);
@@ -36,12 +36,8 @@ bytes___bytes__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObj
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyBytes_Type, "__bytes__", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = bytes___bytes___impl((PyBytesObject *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -141,7 +137,7 @@ PyDoc_STRVAR(bytes_partition__doc__,
 "original bytes object and two empty bytes objects.");
 
 #define BYTES_PARTITION_METHODDEF    \
-    {"partition", _PyCFunction_CAST(bytes_partition), METH_VALUE, bytes_partition__doc__},
+    {"partition", _PyCFunction_CAST(bytes_partition), METH_VALUE|METH_O, bytes_partition__doc__},
 
 static PyValue
 bytes_partition_impl(PyBytesObject *self, Py_buffer *sep);
@@ -152,9 +148,6 @@ bytes_partition(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObj
     PyValue return_value = PyValue_NULL;
     Py_buffer sep = {NULL, NULL};
 
-    if (!_PyArg_CheckArityValueMethod(&PyBytes_Type, "partition", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[0]))->tp_name);
         goto exit;
@@ -188,7 +181,7 @@ PyDoc_STRVAR(bytes_rpartition__doc__,
 "empty bytes objects and the original bytes object.");
 
 #define BYTES_RPARTITION_METHODDEF    \
-    {"rpartition", _PyCFunction_CAST(bytes_rpartition), METH_VALUE, bytes_rpartition__doc__},
+    {"rpartition", _PyCFunction_CAST(bytes_rpartition), METH_VALUE|METH_O, bytes_rpartition__doc__},
 
 static PyValue
 bytes_rpartition_impl(PyBytesObject *self, Py_buffer *sep);
@@ -199,9 +192,6 @@ bytes_rpartition(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyOb
     PyValue return_value = PyValue_NULL;
     Py_buffer sep = {NULL, NULL};
 
-    if (!_PyArg_CheckArityValueMethod(&PyBytes_Type, "rpartition", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[0]))->tp_name);
         goto exit;
@@ -319,7 +309,7 @@ PyDoc_STRVAR(bytes_join__doc__,
 "Example: b\'.\'.join([b\'ab\', b\'pq\', b\'rs\']) -> b\'ab.pq.rs\'.");
 
 #define BYTES_JOIN_METHODDEF    \
-    {"join", _PyCFunction_CAST(bytes_join), METH_VALUE, bytes_join__doc__},
+    {"join", _PyCFunction_CAST(bytes_join), METH_VALUE|METH_O, bytes_join__doc__},
 
 static PyValue
 bytes_join_impl(PyBytesObject *self, PyValueBorrow iterable_of_bytes);
@@ -330,13 +320,9 @@ bytes_join(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *
     PyValue return_value = PyValue_NULL;
     PyValueBorrow iterable_of_bytes;
 
-    if (!_PyArg_CheckArityValueMethod(&PyBytes_Type, "join", nargs, kwnames, 1)) {
-        goto exit;
-    }
     iterable_of_bytes = PyValue_Borrow(args[0]);
     return_value = bytes_join_impl((PyBytesObject *)PyValue_AsKnownObjectBorrow(self), iterable_of_bytes);
 
-exit:
     return return_value;
 }
 
@@ -962,7 +948,7 @@ PyDoc_STRVAR(bytes_removeprefix__doc__,
 "bytes.");
 
 #define BYTES_REMOVEPREFIX_METHODDEF    \
-    {"removeprefix", _PyCFunction_CAST(bytes_removeprefix), METH_VALUE, bytes_removeprefix__doc__},
+    {"removeprefix", _PyCFunction_CAST(bytes_removeprefix), METH_VALUE|METH_O, bytes_removeprefix__doc__},
 
 static PyValue
 bytes_removeprefix_impl(PyBytesObject *self, Py_buffer *prefix);
@@ -973,9 +959,6 @@ bytes_removeprefix(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, Py
     PyValue return_value = PyValue_NULL;
     Py_buffer prefix = {NULL, NULL};
 
-    if (!_PyArg_CheckArityValueMethod(&PyBytes_Type, "removeprefix", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[0]))->tp_name);
         goto exit;
@@ -1005,7 +988,7 @@ PyDoc_STRVAR(bytes_removesuffix__doc__,
 "original bytes.");
 
 #define BYTES_REMOVESUFFIX_METHODDEF    \
-    {"removesuffix", _PyCFunction_CAST(bytes_removesuffix), METH_VALUE, bytes_removesuffix__doc__},
+    {"removesuffix", _PyCFunction_CAST(bytes_removesuffix), METH_VALUE|METH_O, bytes_removesuffix__doc__},
 
 static PyValue
 bytes_removesuffix_impl(PyBytesObject *self, Py_buffer *suffix);
@@ -1016,9 +999,6 @@ bytes_removesuffix(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, Py
     PyValue return_value = PyValue_NULL;
     Py_buffer suffix = {NULL, NULL};
 
-    if (!_PyArg_CheckArityValueMethod(&PyBytes_Type, "removesuffix", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[0]))->tp_name);
         goto exit;
@@ -1315,7 +1295,7 @@ PyDoc_STRVAR(bytes_fromhex__doc__,
 "Example: bytes.fromhex(\'B9 01EF\') -> b\'\\\\xb9\\\\x01\\\\xef\'.");
 
 #define BYTES_FROMHEX_METHODDEF    \
-    {"fromhex", _PyCFunction_CAST(bytes_fromhex), METH_VALUE|METH_CLASS, bytes_fromhex__doc__},
+    {"fromhex", _PyCFunction_CAST(bytes_fromhex), METH_VALUE|METH_O|METH_CLASS, bytes_fromhex__doc__},
 
 static PyValue
 bytes_fromhex_impl(PyTypeObject *type, PyValueBorrow string);
@@ -1326,13 +1306,9 @@ bytes_fromhex(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyObjec
     PyValue return_value = PyValue_NULL;
     PyValueBorrow string;
 
-    if (!_PyArg_CheckArityValueMethod(&PyBytes_Type, "fromhex", nargs, kwnames, 1)) {
-        goto exit;
-    }
     string = PyValue_Borrow(args[0]);
     return_value = bytes_fromhex_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), string);
 
-exit:
     return return_value;
 }
 
@@ -1538,4 +1514,4 @@ bytes_vectorcall(PyThreadState *tstate, PyObject *type, const PyValue *args,
     Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
     return bytes_new_value(_PyType_CAST(type), args, nargs, kwnames);
 }
-/*[clinic end generated code: output=1b986714ed78e1c4 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=9984901600c7a796 input=a9049054013a1b77]*/

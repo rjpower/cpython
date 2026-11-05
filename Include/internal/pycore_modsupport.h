@@ -114,28 +114,12 @@ PyAPI_FUNC(int) _PyArg_NoKwnamesValue(const char *funcstr, PyObject *kwnames);
 #define _PyArg_NoKwnamesValue(funcstr, kwnames) \
     ((kwnames) == NULL || _PyArg_NoKwnamesValue((funcstr), (kwnames)))
 
-// The arity check of a METH_VALUE function shaped as METH_NOARGS (expected
-// 0) or METH_O (expected 1), with their messages.
-PyAPI_FUNC(int) _PyArg_CheckArityValue(const char *funcstr, Py_ssize_t nargs,
-                                       PyObject *kwnames, Py_ssize_t expected);
-#define _PyArg_CheckArityValue(funcstr, nargs, kwnames, expected) \
-    (((nargs) == (expected) && (kwnames) == NULL) \
-     || _PyArg_CheckArityValue((funcstr), (nargs), (kwnames), (expected)))
-
-// The same two checks for a method of the static type tp, named as its
+// The same check for a method of the static type tp, named as its
 // descriptor's __qualname__ shows it ("TypeVar.__reduce__()").
 PyAPI_FUNC(int) _PyArg_NoKwnamesValueMethod(PyTypeObject *tp, const char *name,
                                             PyObject *kwnames);
 #define _PyArg_NoKwnamesValueMethod(tp, name, kwnames) \
     ((kwnames) == NULL || _PyArg_NoKwnamesValueMethod((tp), (name), (kwnames)))
-PyAPI_FUNC(int) _PyArg_CheckArityValueMethod(PyTypeObject *tp, const char *name,
-                                             Py_ssize_t nargs,
-                                             PyObject *kwnames,
-                                             Py_ssize_t expected);
-#define _PyArg_CheckArityValueMethod(tp, name, nargs, kwnames, expected) \
-    (((nargs) == (expected) && (kwnames) == NULL) \
-     || _PyArg_CheckArityValueMethod((tp), (name), (nargs), (kwnames), \
-                                     (expected)))
 
 // _PyEval_SliceIndex() and _PyEval_SliceIndexNotNone() of a value: the
 // slice_index converter.

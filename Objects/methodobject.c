@@ -45,6 +45,12 @@ static PyValue cfunction_value_vectorcall(
 static PyValue cfunction_value_vectorcall_METHOD(
     PyThreadState *tstate, PyObject *func, const PyValue *args, size_t nargsf,
     PyObject *kwnames);
+static PyValue cfunction_value_vectorcall_NOARGS(
+    PyThreadState *tstate, PyObject *func, const PyValue *args, size_t nargsf,
+    PyObject *kwnames);
+static PyValue cfunction_value_vectorcall_O(
+    PyThreadState *tstate, PyObject *func, const PyValue *args, size_t nargsf,
+    PyObject *kwnames);
 
 
 PyObject *
@@ -101,6 +107,14 @@ PyObject *
             break;
         case METH_VALUE | METH_METHOD:
             value_vectorcall = cfunction_value_vectorcall_METHOD;
+            vectorcall = _PyValue_VectorcallThunk;
+            break;
+        case METH_VALUE | METH_NOARGS:
+            value_vectorcall = cfunction_value_vectorcall_NOARGS;
+            vectorcall = _PyValue_VectorcallThunk;
+            break;
+        case METH_VALUE | METH_O:
+            value_vectorcall = cfunction_value_vectorcall_O;
             vectorcall = _PyValue_VectorcallThunk;
             break;
         default:
@@ -836,4 +850,49 @@ cfunction_value_vectorcall_METHOD(PyThreadState *tstate, PyObject *func,
                           kwnames);
     _Py_LeaveRecursiveCallTstate(tstate);
     return result;
+}
+
+/* METH_VALUE | METH_NOARGS and METH_VALUE | METH_O: the trampolines of
+ * cfunction_vectorcall_NOARGS and _O, which check the keywords and the number
+ * of arguments before the call, with the same messages. */
+static PyValue
+cfunction_value_vectorcall_checked(PyThreadState *tstate, PyObject *func,
+                                   const PyValue *args, size_t nargsf,
+                                   PyObject *kwnames, Py_ssize_t expected)
+{
+    if (cfunction_check_kwargs(tstate, func, kwnames)) {
+        return PyValue_NULL;
+    }
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    if (nargs != expected) {
+        PyObject *funcstr = _PyObject_FunctionStr(func);
+        if (funcstr != NULL) {
+            _PyErr_Format(tstate, PyExc_TypeError,
+                          expected == 0
+                          ? "%U takes no arguments (%zd given)"
+                          : "%U takes exactly one argument (%zd given)",
+                          funcstr, nargs);
+            Py_DECREF(funcstr);
+        }
+        return PyValue_NULL;
+    }
+    return cfunction_value_vectorcall(tstate, func, args, nargsf, kwnames);
+}
+
+static PyValue
+cfunction_value_vectorcall_NOARGS(PyThreadState *tstate, PyObject *func,
+                                  const PyValue *args, size_t nargsf,
+                                  PyObject *kwnames)
+{
+    return cfunction_value_vectorcall_checked(tstate, func, args, nargsf,
+                                              kwnames, 0);
+}
+
+static PyValue
+cfunction_value_vectorcall_O(PyThreadState *tstate, PyObject *func,
+                             const PyValue *args, size_t nargsf,
+                             PyObject *kwnames)
+{
+    return cfunction_value_vectorcall_checked(tstate, func, args, nargsf,
+                                              kwnames, 1);
 }

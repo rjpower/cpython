@@ -12,7 +12,7 @@ preserve
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
-#include "pycore_modsupport.h"    // _PyArg_CheckArityValue()
+#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 #include "pycore_value_call.h"    // METH_VALUE
@@ -26,7 +26,7 @@ PyDoc_STRVAR(EncodingMap_size__doc__,
 "Return the size (in bytes) of this object.");
 
 #define ENCODINGMAP_SIZE_METHODDEF    \
-    {"size", _PyCFunction_CAST(EncodingMap_size), METH_VALUE, EncodingMap_size__doc__},
+    {"size", _PyCFunction_CAST(EncodingMap_size), METH_VALUE|METH_NOARGS, EncodingMap_size__doc__},
 
 static PyValue
 EncodingMap_size_impl(struct encoding_map *self);
@@ -36,12 +36,8 @@ EncodingMap_size(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyOb
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&EncodingMapType, "size", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = EncodingMap_size_impl((struct encoding_map *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -55,7 +51,7 @@ PyDoc_STRVAR(unicode_title__doc__,
 "remaining cased characters have lower case.");
 
 #define UNICODE_TITLE_METHODDEF    \
-    {"title", _PyCFunction_CAST(unicode_title), METH_VALUE, unicode_title__doc__},
+    {"title", _PyCFunction_CAST(unicode_title), METH_VALUE|METH_NOARGS, unicode_title__doc__},
 
 static PyValue
 unicode_title_impl(PyObject *self);
@@ -65,12 +61,8 @@ unicode_title(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObjec
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "title", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = unicode_title_impl(PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -84,7 +76,7 @@ PyDoc_STRVAR(unicode_capitalize__doc__,
 "rest lower case.");
 
 #define UNICODE_CAPITALIZE_METHODDEF    \
-    {"capitalize", _PyCFunction_CAST(unicode_capitalize), METH_VALUE, unicode_capitalize__doc__},
+    {"capitalize", _PyCFunction_CAST(unicode_capitalize), METH_VALUE|METH_NOARGS, unicode_capitalize__doc__},
 
 static PyValue
 unicode_capitalize_impl(PyObject *self);
@@ -94,12 +86,8 @@ unicode_capitalize(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, Py
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "capitalize", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = unicode_capitalize_impl(PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -110,7 +98,7 @@ PyDoc_STRVAR(unicode_casefold__doc__,
 "Return a version of the string suitable for caseless comparisons.");
 
 #define UNICODE_CASEFOLD_METHODDEF    \
-    {"casefold", _PyCFunction_CAST(unicode_casefold), METH_VALUE, unicode_casefold__doc__},
+    {"casefold", _PyCFunction_CAST(unicode_casefold), METH_VALUE|METH_NOARGS, unicode_casefold__doc__},
 
 static PyValue
 unicode_casefold_impl(PyObject *self);
@@ -120,12 +108,8 @@ unicode_casefold(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyOb
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "casefold", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = unicode_casefold_impl(PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -539,7 +523,7 @@ PyDoc_STRVAR(unicode_isascii__doc__,
 "Empty string is ASCII too.");
 
 #define UNICODE_ISASCII_METHODDEF    \
-    {"isascii", _PyCFunction_CAST(unicode_isascii), METH_VALUE, unicode_isascii__doc__},
+    {"isascii", _PyCFunction_CAST(unicode_isascii), METH_VALUE|METH_NOARGS, unicode_isascii__doc__},
 
 static PyValue
 unicode_isascii_impl(PyObject *self);
@@ -549,12 +533,8 @@ unicode_isascii(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObj
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "isascii", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = unicode_isascii_impl(PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -568,7 +548,7 @@ PyDoc_STRVAR(unicode_islower__doc__,
 "lowercase and there is at least one cased character in the string.");
 
 #define UNICODE_ISLOWER_METHODDEF    \
-    {"islower", _PyCFunction_CAST(unicode_islower), METH_VALUE, unicode_islower__doc__},
+    {"islower", _PyCFunction_CAST(unicode_islower), METH_VALUE|METH_NOARGS, unicode_islower__doc__},
 
 static PyValue
 unicode_islower_impl(PyObject *self);
@@ -578,12 +558,8 @@ unicode_islower(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObj
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "islower", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = unicode_islower_impl(PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -597,7 +573,7 @@ PyDoc_STRVAR(unicode_isupper__doc__,
 "uppercase and there is at least one cased character in the string.");
 
 #define UNICODE_ISUPPER_METHODDEF    \
-    {"isupper", _PyCFunction_CAST(unicode_isupper), METH_VALUE, unicode_isupper__doc__},
+    {"isupper", _PyCFunction_CAST(unicode_isupper), METH_VALUE|METH_NOARGS, unicode_isupper__doc__},
 
 static PyValue
 unicode_isupper_impl(PyObject *self);
@@ -607,12 +583,8 @@ unicode_isupper(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObj
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "isupper", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = unicode_isupper_impl(PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -626,7 +598,7 @@ PyDoc_STRVAR(unicode_istitle__doc__,
 "follow uncased characters and lowercase characters only cased ones.");
 
 #define UNICODE_ISTITLE_METHODDEF    \
-    {"istitle", _PyCFunction_CAST(unicode_istitle), METH_VALUE, unicode_istitle__doc__},
+    {"istitle", _PyCFunction_CAST(unicode_istitle), METH_VALUE|METH_NOARGS, unicode_istitle__doc__},
 
 static PyValue
 unicode_istitle_impl(PyObject *self);
@@ -636,12 +608,8 @@ unicode_istitle(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObj
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "istitle", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = unicode_istitle_impl(PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -655,7 +623,7 @@ PyDoc_STRVAR(unicode_isspace__doc__,
 "whitespace and there is at least one character in the string.");
 
 #define UNICODE_ISSPACE_METHODDEF    \
-    {"isspace", _PyCFunction_CAST(unicode_isspace), METH_VALUE, unicode_isspace__doc__},
+    {"isspace", _PyCFunction_CAST(unicode_isspace), METH_VALUE|METH_NOARGS, unicode_isspace__doc__},
 
 static PyValue
 unicode_isspace_impl(PyObject *self);
@@ -665,12 +633,8 @@ unicode_isspace(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObj
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "isspace", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = unicode_isspace_impl(PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -684,7 +648,7 @@ PyDoc_STRVAR(unicode_isalpha__doc__,
 "alphabetic and there is at least one character in the string.");
 
 #define UNICODE_ISALPHA_METHODDEF    \
-    {"isalpha", _PyCFunction_CAST(unicode_isalpha), METH_VALUE, unicode_isalpha__doc__},
+    {"isalpha", _PyCFunction_CAST(unicode_isalpha), METH_VALUE|METH_NOARGS, unicode_isalpha__doc__},
 
 static PyValue
 unicode_isalpha_impl(PyObject *self);
@@ -694,12 +658,8 @@ unicode_isalpha(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObj
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "isalpha", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = unicode_isalpha_impl(PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -713,7 +673,7 @@ PyDoc_STRVAR(unicode_isalnum__doc__,
 "alpha-numeric and there is at least one character in the string.");
 
 #define UNICODE_ISALNUM_METHODDEF    \
-    {"isalnum", _PyCFunction_CAST(unicode_isalnum), METH_VALUE, unicode_isalnum__doc__},
+    {"isalnum", _PyCFunction_CAST(unicode_isalnum), METH_VALUE|METH_NOARGS, unicode_isalnum__doc__},
 
 static PyValue
 unicode_isalnum_impl(PyObject *self);
@@ -723,12 +683,8 @@ unicode_isalnum(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObj
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "isalnum", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = unicode_isalnum_impl(PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -742,7 +698,7 @@ PyDoc_STRVAR(unicode_isdecimal__doc__,
 "decimal and there is at least one character in the string.");
 
 #define UNICODE_ISDECIMAL_METHODDEF    \
-    {"isdecimal", _PyCFunction_CAST(unicode_isdecimal), METH_VALUE, unicode_isdecimal__doc__},
+    {"isdecimal", _PyCFunction_CAST(unicode_isdecimal), METH_VALUE|METH_NOARGS, unicode_isdecimal__doc__},
 
 static PyValue
 unicode_isdecimal_impl(PyObject *self);
@@ -752,12 +708,8 @@ unicode_isdecimal(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyO
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "isdecimal", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = unicode_isdecimal_impl(PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -771,7 +723,7 @@ PyDoc_STRVAR(unicode_isdigit__doc__,
 "digits and there is at least one character in the string.");
 
 #define UNICODE_ISDIGIT_METHODDEF    \
-    {"isdigit", _PyCFunction_CAST(unicode_isdigit), METH_VALUE, unicode_isdigit__doc__},
+    {"isdigit", _PyCFunction_CAST(unicode_isdigit), METH_VALUE|METH_NOARGS, unicode_isdigit__doc__},
 
 static PyValue
 unicode_isdigit_impl(PyObject *self);
@@ -781,12 +733,8 @@ unicode_isdigit(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObj
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "isdigit", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = unicode_isdigit_impl(PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -800,7 +748,7 @@ PyDoc_STRVAR(unicode_isnumeric__doc__,
 "there is at least one character in the string.");
 
 #define UNICODE_ISNUMERIC_METHODDEF    \
-    {"isnumeric", _PyCFunction_CAST(unicode_isnumeric), METH_VALUE, unicode_isnumeric__doc__},
+    {"isnumeric", _PyCFunction_CAST(unicode_isnumeric), METH_VALUE|METH_NOARGS, unicode_isnumeric__doc__},
 
 static PyValue
 unicode_isnumeric_impl(PyObject *self);
@@ -810,12 +758,8 @@ unicode_isnumeric(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyO
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "isnumeric", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = unicode_isnumeric_impl(PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -829,7 +773,7 @@ PyDoc_STRVAR(unicode_isidentifier__doc__,
 "identifier, such as \"def\" or \"class\".");
 
 #define UNICODE_ISIDENTIFIER_METHODDEF    \
-    {"isidentifier", _PyCFunction_CAST(unicode_isidentifier), METH_VALUE, unicode_isidentifier__doc__},
+    {"isidentifier", _PyCFunction_CAST(unicode_isidentifier), METH_VALUE|METH_NOARGS, unicode_isidentifier__doc__},
 
 static PyValue
 unicode_isidentifier_impl(PyObject *self);
@@ -839,12 +783,8 @@ unicode_isidentifier(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, 
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "isidentifier", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = unicode_isidentifier_impl(PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -857,7 +797,7 @@ PyDoc_STRVAR(unicode_isprintable__doc__,
 "A character is printable if repr() may use it in its output.");
 
 #define UNICODE_ISPRINTABLE_METHODDEF    \
-    {"isprintable", _PyCFunction_CAST(unicode_isprintable), METH_VALUE, unicode_isprintable__doc__},
+    {"isprintable", _PyCFunction_CAST(unicode_isprintable), METH_VALUE|METH_NOARGS, unicode_isprintable__doc__},
 
 static PyValue
 unicode_isprintable_impl(PyObject *self);
@@ -867,12 +807,8 @@ unicode_isprintable(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, P
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "isprintable", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = unicode_isprintable_impl(PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -888,7 +824,7 @@ PyDoc_STRVAR(unicode_join__doc__,
 "Example: \'.\'.join([\'ab\', \'pq\', \'rs\']) -> \'ab.pq.rs\'");
 
 #define UNICODE_JOIN_METHODDEF    \
-    {"join", _PyCFunction_CAST(unicode_join), METH_VALUE, unicode_join__doc__},
+    {"join", _PyCFunction_CAST(unicode_join), METH_VALUE|METH_O, unicode_join__doc__},
 
 static PyValue
 unicode_join_impl(PyObject *self, PyValueBorrow iterable);
@@ -899,13 +835,9 @@ unicode_join(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject
     PyValue return_value = PyValue_NULL;
     PyValueBorrow iterable;
 
-    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "join", nargs, kwnames, 1)) {
-        goto exit;
-    }
     iterable = PyValue_Borrow(args[0]);
     return_value = unicode_join_impl(PyValue_AsKnownObjectBorrow(self), iterable);
 
-exit:
     return return_value;
 }
 
@@ -969,7 +901,7 @@ PyDoc_STRVAR(unicode_lower__doc__,
 "Return a copy of the string converted to lowercase.");
 
 #define UNICODE_LOWER_METHODDEF    \
-    {"lower", _PyCFunction_CAST(unicode_lower), METH_VALUE, unicode_lower__doc__},
+    {"lower", _PyCFunction_CAST(unicode_lower), METH_VALUE|METH_NOARGS, unicode_lower__doc__},
 
 static PyValue
 unicode_lower_impl(PyObject *self);
@@ -979,12 +911,8 @@ unicode_lower(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObjec
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "lower", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = unicode_lower_impl(PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -1208,7 +1136,7 @@ PyDoc_STRVAR(unicode_removeprefix__doc__,
 "string.");
 
 #define UNICODE_REMOVEPREFIX_METHODDEF    \
-    {"removeprefix", _PyCFunction_CAST(unicode_removeprefix), METH_VALUE, unicode_removeprefix__doc__},
+    {"removeprefix", _PyCFunction_CAST(unicode_removeprefix), METH_VALUE|METH_O, unicode_removeprefix__doc__},
 
 static PyValue
 unicode_removeprefix_impl(PyObject *self, PyObject *prefix);
@@ -1219,9 +1147,6 @@ unicode_removeprefix(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, 
     PyValue return_value = PyValue_NULL;
     PyObject *prefix;
 
-    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "removeprefix", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         _PyArg_BadArgumentValue("removeprefix", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
@@ -1248,7 +1173,7 @@ PyDoc_STRVAR(unicode_removesuffix__doc__,
 "the original string.");
 
 #define UNICODE_REMOVESUFFIX_METHODDEF    \
-    {"removesuffix", _PyCFunction_CAST(unicode_removesuffix), METH_VALUE, unicode_removesuffix__doc__},
+    {"removesuffix", _PyCFunction_CAST(unicode_removesuffix), METH_VALUE|METH_O, unicode_removesuffix__doc__},
 
 static PyValue
 unicode_removesuffix_impl(PyObject *self, PyObject *suffix);
@@ -1259,9 +1184,6 @@ unicode_removesuffix(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, 
     PyValue return_value = PyValue_NULL;
     PyObject *suffix;
 
-    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "removesuffix", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         _PyArg_BadArgumentValue("removesuffix", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
@@ -1560,7 +1482,7 @@ PyDoc_STRVAR(unicode_partition__doc__,
 "the original string and two empty strings.");
 
 #define UNICODE_PARTITION_METHODDEF    \
-    {"partition", _PyCFunction_CAST(unicode_partition), METH_VALUE, unicode_partition__doc__},
+    {"partition", _PyCFunction_CAST(unicode_partition), METH_VALUE|METH_O, unicode_partition__doc__},
 
 static PyValue
 unicode_partition_impl(PyObject *self, PyValueBorrow sep);
@@ -1571,13 +1493,9 @@ unicode_partition(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyO
     PyValue return_value = PyValue_NULL;
     PyValueBorrow sep;
 
-    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "partition", nargs, kwnames, 1)) {
-        goto exit;
-    }
     sep = PyValue_Borrow(args[0]);
     return_value = unicode_partition_impl(PyValue_AsKnownObjectBorrow(self), sep);
 
-exit:
     return return_value;
 }
 
@@ -1596,7 +1514,7 @@ PyDoc_STRVAR(unicode_rpartition__doc__,
 "empty strings and the original string.");
 
 #define UNICODE_RPARTITION_METHODDEF    \
-    {"rpartition", _PyCFunction_CAST(unicode_rpartition), METH_VALUE, unicode_rpartition__doc__},
+    {"rpartition", _PyCFunction_CAST(unicode_rpartition), METH_VALUE|METH_O, unicode_rpartition__doc__},
 
 static PyValue
 unicode_rpartition_impl(PyObject *self, PyValueBorrow sep);
@@ -1607,13 +1525,9 @@ unicode_rpartition(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, Py
     PyValue return_value = PyValue_NULL;
     PyValueBorrow sep;
 
-    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "rpartition", nargs, kwnames, 1)) {
-        goto exit;
-    }
     sep = PyValue_Borrow(args[0]);
     return_value = unicode_rpartition_impl(PyValue_AsKnownObjectBorrow(self), sep);
 
-exit:
     return return_value;
 }
 
@@ -1775,7 +1689,7 @@ PyDoc_STRVAR(unicode_swapcase__doc__,
 "Convert uppercase characters to lowercase and lowercase characters to uppercase.");
 
 #define UNICODE_SWAPCASE_METHODDEF    \
-    {"swapcase", _PyCFunction_CAST(unicode_swapcase), METH_VALUE, unicode_swapcase__doc__},
+    {"swapcase", _PyCFunction_CAST(unicode_swapcase), METH_VALUE|METH_NOARGS, unicode_swapcase__doc__},
 
 static PyValue
 unicode_swapcase_impl(PyObject *self);
@@ -1785,12 +1699,8 @@ unicode_swapcase(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyOb
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "swapcase", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = unicode_swapcase_impl(PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -1877,7 +1787,7 @@ PyDoc_STRVAR(unicode_translate__doc__,
 "None are deleted.");
 
 #define UNICODE_TRANSLATE_METHODDEF    \
-    {"translate", _PyCFunction_CAST(unicode_translate), METH_VALUE, unicode_translate__doc__},
+    {"translate", _PyCFunction_CAST(unicode_translate), METH_VALUE|METH_O, unicode_translate__doc__},
 
 static PyValue
 unicode_translate_impl(PyObject *self, PyValueBorrow table);
@@ -1888,13 +1798,9 @@ unicode_translate(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyO
     PyValue return_value = PyValue_NULL;
     PyValueBorrow table;
 
-    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "translate", nargs, kwnames, 1)) {
-        goto exit;
-    }
     table = PyValue_Borrow(args[0]);
     return_value = unicode_translate_impl(PyValue_AsKnownObjectBorrow(self), table);
 
-exit:
     return return_value;
 }
 
@@ -1905,7 +1811,7 @@ PyDoc_STRVAR(unicode_upper__doc__,
 "Return a copy of the string converted to uppercase.");
 
 #define UNICODE_UPPER_METHODDEF    \
-    {"upper", _PyCFunction_CAST(unicode_upper), METH_VALUE, unicode_upper__doc__},
+    {"upper", _PyCFunction_CAST(unicode_upper), METH_VALUE|METH_NOARGS, unicode_upper__doc__},
 
 static PyValue
 unicode_upper_impl(PyObject *self);
@@ -1915,12 +1821,8 @@ unicode_upper(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObjec
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "upper", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = unicode_upper_impl(PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -1933,7 +1835,7 @@ PyDoc_STRVAR(unicode_zfill__doc__,
 "The string is never truncated.");
 
 #define UNICODE_ZFILL_METHODDEF    \
-    {"zfill", _PyCFunction_CAST(unicode_zfill), METH_VALUE, unicode_zfill__doc__},
+    {"zfill", _PyCFunction_CAST(unicode_zfill), METH_VALUE|METH_O, unicode_zfill__doc__},
 
 static PyValue
 unicode_zfill_impl(PyObject *self, Py_ssize_t width);
@@ -1944,9 +1846,6 @@ unicode_zfill(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObjec
     PyValue return_value = PyValue_NULL;
     Py_ssize_t width;
 
-    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "zfill", nargs, kwnames, 1)) {
-        goto exit;
-    }
     {
         Py_ssize_t ival = -1;
         PyValue iobj = _PyValue_Index(PyValue_Borrow(args[0]));
@@ -2080,7 +1979,7 @@ PyDoc_STRVAR(unicode___format____doc__,
 "Return a formatted version of the string as described by format_spec.");
 
 #define UNICODE___FORMAT___METHODDEF    \
-    {"__format__", _PyCFunction_CAST(unicode___format__), METH_VALUE, unicode___format____doc__},
+    {"__format__", _PyCFunction_CAST(unicode___format__), METH_VALUE|METH_O, unicode___format____doc__},
 
 static PyValue
 unicode___format___impl(PyObject *self, PyObject *format_spec);
@@ -2091,9 +1990,6 @@ unicode___format__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, Py
     PyValue return_value = PyValue_NULL;
     PyObject *format_spec;
 
-    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "__format__", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         _PyArg_BadArgumentValue("__format__", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
@@ -2116,7 +2012,7 @@ PyDoc_STRVAR(unicode_sizeof__doc__,
 "Return the size of the string in memory, in bytes.");
 
 #define UNICODE_SIZEOF_METHODDEF    \
-    {"__sizeof__", _PyCFunction_CAST(unicode_sizeof), METH_VALUE, unicode_sizeof__doc__},
+    {"__sizeof__", _PyCFunction_CAST(unicode_sizeof), METH_VALUE|METH_NOARGS, unicode_sizeof__doc__},
 
 static PyValue
 unicode_sizeof_impl(PyObject *self);
@@ -2126,12 +2022,8 @@ unicode_sizeof(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObje
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "__sizeof__", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = unicode_sizeof_impl(PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -2233,4 +2125,4 @@ unicode_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
     return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
-/*[clinic end generated code: output=2e37876f5aeb6bc7 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=7df2f63d25ecaa9a input=a9049054013a1b77]*/

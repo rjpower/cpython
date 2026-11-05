@@ -30,11 +30,19 @@ extern "C" {
  * call API. */
 
 /* METH_VALUE (section 1.5): a call convention of its own, disjoint from
- * METH_FASTCALL, METH_O and METH_NOARGS. Valid alone or with METH_METHOD,
- * and with METH_CLASS, METH_STATIC, METH_COEXIST. ml_meth is a
- * _PyCFunctionValue, or a _PyCMethodValue with METH_METHOD, cast through
- * PyCFunction. The function checks its own arity. Include/methodobject.h
- * reserves the bit. */
+ * METH_FASTCALL and the object forms of METH_O and METH_NOARGS. Valid alone,
+ * with METH_METHOD, with METH_NOARGS or METH_O (see below), and with
+ * METH_CLASS, METH_STATIC, METH_COEXIST. ml_meth is a _PyCFunctionValue, or
+ * a _PyCMethodValue with METH_METHOD, cast through PyCFunction. Include/
+ * methodobject.h reserves the bit.
+ *
+ * METH_VALUE | METH_NOARGS and METH_VALUE | METH_O are the fixed-arity
+ * forms: the vectorcall of the function (or of its method descriptor) checks
+ * the keywords and the number of arguments before it calls ml_meth, as the
+ * object forms' trampolines do, and with their messages: the name comes from
+ * _PyObject_FunctionStr() of the function or descriptor that was called, so a
+ * bound method names type(self) and a descriptor names its defining class.
+ * Any other METH_VALUE function checks its own arguments. */
 #define METH_VALUE 0x0400
 
 typedef PyValue (*_PyCFunctionValue)(

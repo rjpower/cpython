@@ -206,6 +206,19 @@ def value_static_type(f: Function) -> str | None:
     return cls.type_object
 
 
+def heap_type_name(cls: Class) -> str | None:
+    """The runtime name of a class whose type object is not a C name.
+
+    A class line whose type object is "heap_type:TypeVar" has no static type
+    to read the name from (a heap type made from a spec), so the line gives
+    the name that its methods' __qualname__ shows.
+    """
+    prefix = 'heap_type:'
+    if cls.type_object.startswith(prefix):
+        return cls.type_object[len(prefix):]
+    return None
+
+
 def value_funcstr(f: Function) -> str:
     """The name of the function as _PyObject_FunctionStr() shows it.
 
@@ -216,7 +229,7 @@ def value_funcstr(f: Function) -> str:
     if f.cls is not None:
         parent: Class | None = f.cls
         while isinstance(parent, Class):
-            names.append(parent.name)
+            names.append(heap_type_name(parent) or parent.name)
             parent = parent.cls
     else:
         module = f.module
@@ -2048,27 +2061,6 @@ class ParseArgsCodeGen:
                                          condition=include.condition)
         return code
 
-    def _value_check_arity(self, nargs: int) -> str:
-        """The check of a function shaped as METH_NOARGS or METH_O.
-
-        It reproduces the message of the convention it replaces.
-        """
-        self.codegen.add_include('pycore_modsupport.h',
-                                 '_PyArg_CheckArityValue()')
-        static_type = value_static_type(self.func)
-        if static_type is not None:
-            return libclinic.normalize_snippet(f"""
-                if (!_PyArg_CheckArityValueMethod({static_type}, "{self.func.name}", nargs, kwnames, {nargs})) {{{{
-                    goto exit;
-                }}}}
-                """, indent=4)
-        funcstr = value_funcstr(self.func)
-        return libclinic.normalize_snippet(f"""
-            if (!_PyArg_CheckArityValue("{funcstr}", nargs, kwnames, {nargs})) {{{{
-                goto exit;
-            }}}}
-            """, indent=4)
-
     def _value_no_kwnames(self) -> str:
         """Reject keywords as the convention the function replaces does.
 
@@ -2191,7 +2183,8 @@ class ParseArgsCodeGen:
                     }}
                     """, indent=4))
             else:
-                parser_code.append(self._value_check_arity(0))
+                # The vectorcall checks the keywords and the arity.
+                self.flags += "|METH_NOARGS"
         elif self.var_keyword is not None:
             # **kwargs takes every keyword: the parameters before it are
             # positional-only.
@@ -2200,7 +2193,8 @@ class ParseArgsCodeGen:
             parser_code.extend(self._check_positional('nargs'))
             parser_code.extend(self._value_parse_positional())
         elif self.use_meth_o():
-            parser_code.append(self._value_check_arity(1))
+            # The vectorcall checks the keywords and the arity.
+            self.flags += "|METH_O"
             parser_code.append(libclinic.normalize_snippet(
                 self._value_parse_arg(0, self.parameters[0],
                                       'PyValue_Borrow(args[0])',

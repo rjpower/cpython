@@ -6,7 +6,7 @@ preserve
 #  error "value-emission Clinic output requires Py_VALUE_CORE"
 #endif
 
-#include "pycore_modsupport.h"    // _PyArg_CheckArityValue()
+#include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_value_call.h"    // METH_VALUE
 #include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
@@ -17,7 +17,7 @@ PyDoc_STRVAR(method___reduce____doc__,
 "\n");
 
 #define METHOD___REDUCE___METHODDEF    \
-    {"__reduce__", _PyCFunction_CAST(method___reduce__), METH_VALUE, method___reduce____doc__},
+    {"__reduce__", _PyCFunction_CAST(method___reduce__), METH_VALUE|METH_NOARGS, method___reduce____doc__},
 
 static PyValue
 method___reduce___impl(PyMethodObject *self);
@@ -27,12 +27,8 @@ method___reduce__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyO
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyMethod_Type, "__reduce__", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = method___reduce___impl((PyMethodObject *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -134,4 +130,4 @@ instancemethod_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
     return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
-/*[clinic end generated code: output=c3aa9bd587ee8272 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=6608d5135f975fb5 input=a9049054013a1b77]*/

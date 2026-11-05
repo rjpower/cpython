@@ -7,7 +7,6 @@ preserve
 #endif
 
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
-#include "pycore_modsupport.h"    // _PyArg_CheckArityValue()
 #include "pycore_value_call.h"    // METH_VALUE
 
 PyDoc_STRVAR(frame_locals__doc__,
@@ -253,7 +252,7 @@ PyDoc_STRVAR(frame_clear__doc__,
 "Clear all references held by the frame.");
 
 #define FRAME_CLEAR_METHODDEF    \
-    {"clear", _PyCFunction_CAST(frame_clear), METH_VALUE, frame_clear__doc__},
+    {"clear", _PyCFunction_CAST(frame_clear), METH_VALUE|METH_NOARGS, frame_clear__doc__},
 
 static PyValue
 frame_clear_impl(PyFrameObject *self);
@@ -263,14 +262,10 @@ frame_clear(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject 
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyFrame_Type, "clear", nargs, kwnames, 0)) {
-        goto exit;
-    }
     Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
     return_value = frame_clear_impl((PyFrameObject *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
-exit:
     return return_value;
 }
 
@@ -281,7 +276,7 @@ PyDoc_STRVAR(frame___sizeof____doc__,
 "Return the size of the frame in memory, in bytes.");
 
 #define FRAME___SIZEOF___METHODDEF    \
-    {"__sizeof__", _PyCFunction_CAST(frame___sizeof__), METH_VALUE, frame___sizeof____doc__},
+    {"__sizeof__", _PyCFunction_CAST(frame___sizeof__), METH_VALUE|METH_NOARGS, frame___sizeof____doc__},
 
 static PyValue
 frame___sizeof___impl(PyFrameObject *self);
@@ -291,14 +286,10 @@ frame___sizeof__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyOb
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyFrame_Type, "__sizeof__", nargs, kwnames, 0)) {
-        goto exit;
-    }
     Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
     return_value = frame___sizeof___impl((PyFrameObject *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
-exit:
     return return_value;
 }
 
@@ -336,4 +327,4 @@ frame_repr(PyObject *self)
 
 #define FRAME_F_GENERATOR_GETSETDEF {"f_generator", (getter)frame_generator_get, (setter)NULL, frame_generator__doc__},
 
-/*[clinic end generated code: output=fd54efb905582958 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=fd3350fe5a13f607 input=a9049054013a1b77]*/

@@ -7,7 +7,7 @@ preserve
 #endif
 
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
-#include "pycore_modsupport.h"    // _PyArg_CheckArityValue()
+#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
 #include "pycore_value_call.h"    // METH_VALUE
 
 static PyObject *
@@ -34,7 +34,7 @@ PyDoc_STRVAR(set_pop__doc__,
 "Raises KeyError if the set is empty.");
 
 #define SET_POP_METHODDEF    \
-    {"pop", _PyCFunction_CAST(set_pop), METH_VALUE, set_pop__doc__},
+    {"pop", _PyCFunction_CAST(set_pop), METH_VALUE|METH_NOARGS, set_pop__doc__},
 
 static PyValue
 set_pop_impl(PySetObject *so);
@@ -44,14 +44,10 @@ set_pop(PyValueBorrow so, const PyValue *args, Py_ssize_t nargs, PyObject *kwnam
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PySet_Type, "pop", nargs, kwnames, 0)) {
-        goto exit;
-    }
     Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(so));
     return_value = set_pop_impl((PySetObject *)PyValue_AsKnownObjectBorrow(so));
     Py_END_CRITICAL_SECTION();
 
-exit:
     return return_value;
 }
 
@@ -93,7 +89,7 @@ PyDoc_STRVAR(set_copy__doc__,
 "Return a shallow copy of a set.");
 
 #define SET_COPY_METHODDEF    \
-    {"copy", _PyCFunction_CAST(set_copy), METH_VALUE, set_copy__doc__},
+    {"copy", _PyCFunction_CAST(set_copy), METH_VALUE|METH_NOARGS, set_copy__doc__},
 
 static PyValue
 set_copy_impl(PySetObject *so);
@@ -103,14 +99,10 @@ set_copy(PyValueBorrow so, const PyValue *args, Py_ssize_t nargs, PyObject *kwna
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PySet_Type, "copy", nargs, kwnames, 0)) {
-        goto exit;
-    }
     Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(so));
     return_value = set_copy_impl((PySetObject *)PyValue_AsKnownObjectBorrow(so));
     Py_END_CRITICAL_SECTION();
 
-exit:
     return return_value;
 }
 
@@ -121,7 +113,7 @@ PyDoc_STRVAR(frozenset_copy__doc__,
 "Return a shallow copy of a set.");
 
 #define FROZENSET_COPY_METHODDEF    \
-    {"copy", _PyCFunction_CAST(frozenset_copy), METH_VALUE, frozenset_copy__doc__},
+    {"copy", _PyCFunction_CAST(frozenset_copy), METH_VALUE|METH_NOARGS, frozenset_copy__doc__},
 
 static PyValue
 frozenset_copy_impl(PySetObject *so);
@@ -131,14 +123,10 @@ frozenset_copy(PyValueBorrow so, const PyValue *args, Py_ssize_t nargs, PyObject
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyFrozenSet_Type, "copy", nargs, kwnames, 0)) {
-        goto exit;
-    }
     Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(so));
     return_value = frozenset_copy_impl((PySetObject *)PyValue_AsKnownObjectBorrow(so));
     Py_END_CRITICAL_SECTION();
 
-exit:
     return return_value;
 }
 
@@ -149,7 +137,7 @@ PyDoc_STRVAR(set_clear__doc__,
 "Remove all elements from this set.");
 
 #define SET_CLEAR_METHODDEF    \
-    {"clear", _PyCFunction_CAST(set_clear), METH_VALUE, set_clear__doc__},
+    {"clear", _PyCFunction_CAST(set_clear), METH_VALUE|METH_NOARGS, set_clear__doc__},
 
 static PyValue
 set_clear_impl(PySetObject *so);
@@ -159,14 +147,10 @@ set_clear(PyValueBorrow so, const PyValue *args, Py_ssize_t nargs, PyObject *kwn
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PySet_Type, "clear", nargs, kwnames, 0)) {
-        goto exit;
-    }
     Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(so));
     return_value = set_clear_impl((PySetObject *)PyValue_AsKnownObjectBorrow(so));
     Py_END_CRITICAL_SECTION();
 
-exit:
     return return_value;
 }
 
@@ -270,7 +254,7 @@ PyDoc_STRVAR(set_isdisjoint__doc__,
 "Return True if two sets have a null intersection.");
 
 #define SET_ISDISJOINT_METHODDEF    \
-    {"isdisjoint", _PyCFunction_CAST(set_isdisjoint), METH_VALUE, set_isdisjoint__doc__},
+    {"isdisjoint", _PyCFunction_CAST(set_isdisjoint), METH_VALUE|METH_O, set_isdisjoint__doc__},
 
 static PyValue
 set_isdisjoint_impl(PySetObject *so, PyValueBorrow other);
@@ -281,15 +265,11 @@ set_isdisjoint(PyValueBorrow so, const PyValue *args, Py_ssize_t nargs, PyObject
     PyValue return_value = PyValue_NULL;
     PyValueBorrow other;
 
-    if (!_PyArg_CheckArityValueMethod(&PySet_Type, "isdisjoint", nargs, kwnames, 1)) {
-        goto exit;
-    }
     other = PyValue_Borrow(args[0]);
     Py_BEGIN_CRITICAL_SECTION2(PyValue_AsKnownObjectBorrow(so), PyValue_AsKnownObjectBorrow(other));
     return_value = set_isdisjoint_impl((PySetObject *)PyValue_AsKnownObjectBorrow(so), other);
     Py_END_CRITICAL_SECTION2();
 
-exit:
     return return_value;
 }
 
@@ -362,7 +342,7 @@ PyDoc_STRVAR(set_symmetric_difference_update__doc__,
 "Update the set, keeping only elements found in either set, but not in both.");
 
 #define SET_SYMMETRIC_DIFFERENCE_UPDATE_METHODDEF    \
-    {"symmetric_difference_update", _PyCFunction_CAST(set_symmetric_difference_update), METH_VALUE, set_symmetric_difference_update__doc__},
+    {"symmetric_difference_update", _PyCFunction_CAST(set_symmetric_difference_update), METH_VALUE|METH_O, set_symmetric_difference_update__doc__},
 
 static PyValue
 set_symmetric_difference_update_impl(PySetObject *so, PyValueBorrow other);
@@ -373,13 +353,9 @@ set_symmetric_difference_update(PyValueBorrow so, const PyValue *args, Py_ssize_
     PyValue return_value = PyValue_NULL;
     PyValueBorrow other;
 
-    if (!_PyArg_CheckArityValueMethod(&PySet_Type, "symmetric_difference_update", nargs, kwnames, 1)) {
-        goto exit;
-    }
     other = PyValue_Borrow(args[0]);
     return_value = set_symmetric_difference_update_impl((PySetObject *)PyValue_AsKnownObjectBorrow(so), other);
 
-exit:
     return return_value;
 }
 
@@ -390,7 +366,7 @@ PyDoc_STRVAR(set_symmetric_difference__doc__,
 "Return a new set with elements in either the set or other but not both.");
 
 #define SET_SYMMETRIC_DIFFERENCE_METHODDEF    \
-    {"symmetric_difference", _PyCFunction_CAST(set_symmetric_difference), METH_VALUE, set_symmetric_difference__doc__},
+    {"symmetric_difference", _PyCFunction_CAST(set_symmetric_difference), METH_VALUE|METH_O, set_symmetric_difference__doc__},
 
 static PyValue
 set_symmetric_difference_impl(PySetObject *so, PyValueBorrow other);
@@ -401,15 +377,11 @@ set_symmetric_difference(PyValueBorrow so, const PyValue *args, Py_ssize_t nargs
     PyValue return_value = PyValue_NULL;
     PyValueBorrow other;
 
-    if (!_PyArg_CheckArityValueMethod(&PySet_Type, "symmetric_difference", nargs, kwnames, 1)) {
-        goto exit;
-    }
     other = PyValue_Borrow(args[0]);
     Py_BEGIN_CRITICAL_SECTION2(PyValue_AsKnownObjectBorrow(so), PyValue_AsKnownObjectBorrow(other));
     return_value = set_symmetric_difference_impl((PySetObject *)PyValue_AsKnownObjectBorrow(so), other);
     Py_END_CRITICAL_SECTION2();
 
-exit:
     return return_value;
 }
 
@@ -420,7 +392,7 @@ PyDoc_STRVAR(set_issubset__doc__,
 "Report whether another set contains this set.");
 
 #define SET_ISSUBSET_METHODDEF    \
-    {"issubset", _PyCFunction_CAST(set_issubset), METH_VALUE, set_issubset__doc__},
+    {"issubset", _PyCFunction_CAST(set_issubset), METH_VALUE|METH_O, set_issubset__doc__},
 
 static PyValue
 set_issubset_impl(PySetObject *so, PyValueBorrow other);
@@ -431,15 +403,11 @@ set_issubset(PyValueBorrow so, const PyValue *args, Py_ssize_t nargs, PyObject *
     PyValue return_value = PyValue_NULL;
     PyValueBorrow other;
 
-    if (!_PyArg_CheckArityValueMethod(&PySet_Type, "issubset", nargs, kwnames, 1)) {
-        goto exit;
-    }
     other = PyValue_Borrow(args[0]);
     Py_BEGIN_CRITICAL_SECTION2(PyValue_AsKnownObjectBorrow(so), PyValue_AsKnownObjectBorrow(other));
     return_value = set_issubset_impl((PySetObject *)PyValue_AsKnownObjectBorrow(so), other);
     Py_END_CRITICAL_SECTION2();
 
-exit:
     return return_value;
 }
 
@@ -450,7 +418,7 @@ PyDoc_STRVAR(set_issuperset__doc__,
 "Report whether this set contains another set.");
 
 #define SET_ISSUPERSET_METHODDEF    \
-    {"issuperset", _PyCFunction_CAST(set_issuperset), METH_VALUE, set_issuperset__doc__},
+    {"issuperset", _PyCFunction_CAST(set_issuperset), METH_VALUE|METH_O, set_issuperset__doc__},
 
 static PyValue
 set_issuperset_impl(PySetObject *so, PyValueBorrow other);
@@ -461,15 +429,11 @@ set_issuperset(PyValueBorrow so, const PyValue *args, Py_ssize_t nargs, PyObject
     PyValue return_value = PyValue_NULL;
     PyValueBorrow other;
 
-    if (!_PyArg_CheckArityValueMethod(&PySet_Type, "issuperset", nargs, kwnames, 1)) {
-        goto exit;
-    }
     other = PyValue_Borrow(args[0]);
     Py_BEGIN_CRITICAL_SECTION2(PyValue_AsKnownObjectBorrow(so), PyValue_AsKnownObjectBorrow(other));
     return_value = set_issuperset_impl((PySetObject *)PyValue_AsKnownObjectBorrow(so), other);
     Py_END_CRITICAL_SECTION2();
 
-exit:
     return return_value;
 }
 
@@ -482,7 +446,7 @@ PyDoc_STRVAR(set_add__doc__,
 "This has no effect if the element is already present.");
 
 #define SET_ADD_METHODDEF    \
-    {"add", _PyCFunction_CAST(set_add), METH_VALUE, set_add__doc__},
+    {"add", _PyCFunction_CAST(set_add), METH_VALUE|METH_O, set_add__doc__},
 
 static PyValue
 set_add_impl(PySetObject *so, PyValueBorrow key);
@@ -493,15 +457,11 @@ set_add(PyValueBorrow so, const PyValue *args, Py_ssize_t nargs, PyObject *kwnam
     PyValue return_value = PyValue_NULL;
     PyValueBorrow key;
 
-    if (!_PyArg_CheckArityValueMethod(&PySet_Type, "add", nargs, kwnames, 1)) {
-        goto exit;
-    }
     key = PyValue_Borrow(args[0]);
     Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(so));
     return_value = set_add_impl((PySetObject *)PyValue_AsKnownObjectBorrow(so), key);
     Py_END_CRITICAL_SECTION();
 
-exit:
     return return_value;
 }
 
@@ -512,7 +472,7 @@ PyDoc_STRVAR(set___contains____doc__,
 "x.__contains__(y) <==> y in x.");
 
 #define SET___CONTAINS___METHODDEF    \
-    {"__contains__", _PyCFunction_CAST(set___contains__), METH_VALUE|METH_COEXIST, set___contains____doc__},
+    {"__contains__", _PyCFunction_CAST(set___contains__), METH_VALUE|METH_O|METH_COEXIST, set___contains____doc__},
 
 static PyValue
 set___contains___impl(PySetObject *so, PyValueBorrow key);
@@ -523,13 +483,9 @@ set___contains__(PyValueBorrow so, const PyValue *args, Py_ssize_t nargs, PyObje
     PyValue return_value = PyValue_NULL;
     PyValueBorrow key;
 
-    if (!_PyArg_CheckArityValueMethod(&PySet_Type, "__contains__", nargs, kwnames, 1)) {
-        goto exit;
-    }
     key = PyValue_Borrow(args[0]);
     return_value = set___contains___impl((PySetObject *)PyValue_AsKnownObjectBorrow(so), key);
 
-exit:
     return return_value;
 }
 
@@ -540,7 +496,7 @@ PyDoc_STRVAR(frozenset___contains____doc__,
 "x.__contains__(y) <==> y in x.");
 
 #define FROZENSET___CONTAINS___METHODDEF    \
-    {"__contains__", _PyCFunction_CAST(frozenset___contains__), METH_VALUE|METH_COEXIST, frozenset___contains____doc__},
+    {"__contains__", _PyCFunction_CAST(frozenset___contains__), METH_VALUE|METH_O|METH_COEXIST, frozenset___contains____doc__},
 
 static PyValue
 frozenset___contains___impl(PySetObject *so, PyValueBorrow key);
@@ -551,13 +507,9 @@ frozenset___contains__(PyValueBorrow so, const PyValue *args, Py_ssize_t nargs, 
     PyValue return_value = PyValue_NULL;
     PyValueBorrow key;
 
-    if (!_PyArg_CheckArityValueMethod(&PyFrozenSet_Type, "__contains__", nargs, kwnames, 1)) {
-        goto exit;
-    }
     key = PyValue_Borrow(args[0]);
     return_value = frozenset___contains___impl((PySetObject *)PyValue_AsKnownObjectBorrow(so), key);
 
-exit:
     return return_value;
 }
 
@@ -570,7 +522,7 @@ PyDoc_STRVAR(set_remove__doc__,
 "If the element is not a member, raise a KeyError.");
 
 #define SET_REMOVE_METHODDEF    \
-    {"remove", _PyCFunction_CAST(set_remove), METH_VALUE, set_remove__doc__},
+    {"remove", _PyCFunction_CAST(set_remove), METH_VALUE|METH_O, set_remove__doc__},
 
 static PyValue
 set_remove_impl(PySetObject *so, PyValueBorrow key);
@@ -581,15 +533,11 @@ set_remove(PyValueBorrow so, const PyValue *args, Py_ssize_t nargs, PyObject *kw
     PyValue return_value = PyValue_NULL;
     PyValueBorrow key;
 
-    if (!_PyArg_CheckArityValueMethod(&PySet_Type, "remove", nargs, kwnames, 1)) {
-        goto exit;
-    }
     key = PyValue_Borrow(args[0]);
     Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(so));
     return_value = set_remove_impl((PySetObject *)PyValue_AsKnownObjectBorrow(so), key);
     Py_END_CRITICAL_SECTION();
 
-exit:
     return return_value;
 }
 
@@ -603,7 +551,7 @@ PyDoc_STRVAR(set_discard__doc__,
 "an exception when an element is missing from the set.");
 
 #define SET_DISCARD_METHODDEF    \
-    {"discard", _PyCFunction_CAST(set_discard), METH_VALUE, set_discard__doc__},
+    {"discard", _PyCFunction_CAST(set_discard), METH_VALUE|METH_O, set_discard__doc__},
 
 static PyValue
 set_discard_impl(PySetObject *so, PyValueBorrow key);
@@ -614,15 +562,11 @@ set_discard(PyValueBorrow so, const PyValue *args, Py_ssize_t nargs, PyObject *k
     PyValue return_value = PyValue_NULL;
     PyValueBorrow key;
 
-    if (!_PyArg_CheckArityValueMethod(&PySet_Type, "discard", nargs, kwnames, 1)) {
-        goto exit;
-    }
     key = PyValue_Borrow(args[0]);
     Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(so));
     return_value = set_discard_impl((PySetObject *)PyValue_AsKnownObjectBorrow(so), key);
     Py_END_CRITICAL_SECTION();
 
-exit:
     return return_value;
 }
 
@@ -633,7 +577,7 @@ PyDoc_STRVAR(set___reduce____doc__,
 "Return state information for pickling.");
 
 #define SET___REDUCE___METHODDEF    \
-    {"__reduce__", _PyCFunction_CAST(set___reduce__), METH_VALUE, set___reduce____doc__},
+    {"__reduce__", _PyCFunction_CAST(set___reduce__), METH_VALUE|METH_NOARGS, set___reduce____doc__},
 
 static PyValue
 set___reduce___impl(PySetObject *so);
@@ -643,14 +587,10 @@ set___reduce__(PyValueBorrow so, const PyValue *args, Py_ssize_t nargs, PyObject
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PySet_Type, "__reduce__", nargs, kwnames, 0)) {
-        goto exit;
-    }
     Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(so));
     return_value = set___reduce___impl((PySetObject *)PyValue_AsKnownObjectBorrow(so));
     Py_END_CRITICAL_SECTION();
 
-exit:
     return return_value;
 }
 
@@ -661,7 +601,7 @@ PyDoc_STRVAR(set___sizeof____doc__,
 "S.__sizeof__() -> size of S in memory, in bytes.");
 
 #define SET___SIZEOF___METHODDEF    \
-    {"__sizeof__", _PyCFunction_CAST(set___sizeof__), METH_VALUE, set___sizeof____doc__},
+    {"__sizeof__", _PyCFunction_CAST(set___sizeof__), METH_VALUE|METH_NOARGS, set___sizeof____doc__},
 
 static PyValue
 set___sizeof___impl(PySetObject *so);
@@ -671,14 +611,10 @@ set___sizeof__(PyValueBorrow so, const PyValue *args, Py_ssize_t nargs, PyObject
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PySet_Type, "__sizeof__", nargs, kwnames, 0)) {
-        goto exit;
-    }
     Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(so));
     return_value = set___sizeof___impl((PySetObject *)PyValue_AsKnownObjectBorrow(so));
     Py_END_CRITICAL_SECTION();
 
-exit:
     return return_value;
 }
-/*[clinic end generated code: output=28e904028eff7443 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=69976d8cc62dae23 input=a9049054013a1b77]*/

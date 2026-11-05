@@ -6,6 +6,7 @@ Modules/_testinternalcapi/value_call.c.
 """
 
 import enum
+import functools
 import gc
 import sys
 import unittest
@@ -37,6 +38,7 @@ METH_KEYWORDS = 0x0002
 METH_NOARGS = 0x0004
 METH_O = 0x0008
 METH_FASTCALL = 0x0080
+METH_METHOD = 0x0200
 
 Py_TPFLAGS_HAVE_VECTORCALL = 1 << 11
 
@@ -152,6 +154,52 @@ class MethodDescriptorMessageTests(unittest.TestCase):
         with self.assertRaisesRegex(
                 TypeError, r"unbound method str\.lower\(\) needs an argument"):
             str.lower()
+
+    def test_arity_message_names_the_defining_class(self):
+        # A call through the method descriptor names the class that
+        # defines the method.
+        def call(obj):
+            obj.__getstate__(1)
+
+        for f in (call, lambda obj: object.__getstate__(obj, 1),
+                  lambda obj: functools.partial(object.__getstate__, obj)(1)):
+            with self.subTest(f=f):
+                with self.assertRaisesRegex(
+                        TypeError, r"^object\.__getstate__\(\) takes no "
+                                   r"arguments \(1 given\)$"):
+                    f(5)
+
+    def test_arity_message_of_a_bound_method_names_type_of_self(self):
+        # The bound builtin method names type(self).
+        class IntSub(int):
+            pass
+
+        for obj in (5, IntSub(5), None, 1.5, ()):
+            name = type(obj).__qualname__.replace(".", r"\.")
+            with self.subTest(obj=obj):
+                with self.assertRaisesRegex(
+                        TypeError, rf"^{name}\.__getstate__\(\) takes no "
+                                   r"arguments \(1 given\)$"):
+                    obj.__getstate__.__call__(1)
+        with self.assertRaisesRegex(
+                TypeError, r"^int\.__format__\(\) takes exactly one "
+                           r"argument \(0 given\)$"):
+            getattr(5, "__format__")()
+        with self.assertRaisesRegex(
+                TypeError, r"^int\.__getstate__\(\) takes no "
+                           r"keyword arguments$"):
+            getattr(5, "__getstate__")(a=1)
+
+    def test_typevar_arity_message(self):
+        import typing
+        T = typing.TypeVar("T")
+        for f in (T.__typing_subst__,
+                  lambda: typing.TypeVar.__typing_subst__(T)):
+            with self.subTest(f=f):
+                with self.assertRaisesRegex(
+                        TypeError, r"^TypeVar\.__typing_subst__\(\) takes "
+                                   r"exactly one argument"):
+                    f()
 
 
 class ProfilerNameTests(unittest.TestCase):
@@ -304,13 +352,20 @@ class ValueBuiltinTests(unittest.TestCase):
         self.assertEqual(d(2**100), ((2**100,), False))
 
     def test_bad_flags(self):
-        for name, flag in (('METH_O', METH_O),
-                           ('METH_FASTCALL', METH_FASTCALL),
+        for name, flag in (('METH_FASTCALL', METH_FASTCALL),
                            ('METH_VARARGS', METH_VARARGS),
-                           ('METH_NOARGS', METH_NOARGS)):
+                           ('METH_NOARGS | METH_O', METH_NOARGS | METH_O),
+                           ('METH_NOARGS | METH_METHOD',
+                            METH_NOARGS | METH_METHOD),
+                           ('METH_O | METH_METHOD', METH_O | METH_METHOD)):
             with self.subTest(flag=name):
                 for exc in bad_flags(flag):
                     self.assertIsInstance(exc, SystemError)
+
+    def test_fixed_arity_flags(self):
+        for name, flag in (('METH_O', METH_O), ('METH_NOARGS', METH_NOARGS)):
+            with self.subTest(flag=name):
+                self.assertEqual(bad_flags(flag), (None, None))
 
     def test_arity_noargs(self):
         with self.assertRaises(TypeError) as ours:

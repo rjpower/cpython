@@ -220,7 +220,7 @@ PyDoc_STRVAR(InstructionSequenceType_new_label__doc__,
 "Return a new label.");
 
 #define INSTRUCTIONSEQUENCETYPE_NEW_LABEL_METHODDEF    \
-    {"new_label", _PyCFunction_CAST(InstructionSequenceType_new_label), METH_VALUE, InstructionSequenceType_new_label__doc__},
+    {"new_label", _PyCFunction_CAST(InstructionSequenceType_new_label), METH_VALUE|METH_NOARGS, InstructionSequenceType_new_label__doc__},
 
 static int
 InstructionSequenceType_new_label_impl(_PyInstructionSequence *self);
@@ -231,9 +231,6 @@ InstructionSequenceType_new_label(PyValueBorrow self, const PyValue *args, Py_ss
     PyValue return_value = PyValue_NULL;
     int _return_value;
 
-    if (!_PyArg_CheckArityValueMethod(&_PyInstructionSequence_Type, "new_label", nargs, kwnames, 0)) {
-        goto exit;
-    }
     _return_value = InstructionSequenceType_new_label_impl((_PyInstructionSequence *)PyValue_AsKnownObjectBorrow(self));
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
@@ -309,7 +306,7 @@ PyDoc_STRVAR(InstructionSequenceType_get_nested__doc__,
 "Add a nested sequence.");
 
 #define INSTRUCTIONSEQUENCETYPE_GET_NESTED_METHODDEF    \
-    {"get_nested", _PyCFunction_CAST(InstructionSequenceType_get_nested), METH_VALUE, InstructionSequenceType_get_nested__doc__},
+    {"get_nested", _PyCFunction_CAST(InstructionSequenceType_get_nested), METH_VALUE|METH_NOARGS, InstructionSequenceType_get_nested__doc__},
 
 static PyValue
 InstructionSequenceType_get_nested_impl(_PyInstructionSequence *self);
@@ -319,12 +316,8 @@ InstructionSequenceType_get_nested(PyValueBorrow self, const PyValue *args, Py_s
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&_PyInstructionSequence_Type, "get_nested", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = InstructionSequenceType_get_nested_impl((_PyInstructionSequence *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -335,7 +328,7 @@ PyDoc_STRVAR(InstructionSequenceType_get_instructions__doc__,
 "Return the instructions as a list of tuples or labels.");
 
 #define INSTRUCTIONSEQUENCETYPE_GET_INSTRUCTIONS_METHODDEF    \
-    {"get_instructions", _PyCFunction_CAST(InstructionSequenceType_get_instructions), METH_VALUE, InstructionSequenceType_get_instructions__doc__},
+    {"get_instructions", _PyCFunction_CAST(InstructionSequenceType_get_instructions), METH_VALUE|METH_NOARGS, InstructionSequenceType_get_instructions__doc__},
 
 static PyValue
 InstructionSequenceType_get_instructions_impl(_PyInstructionSequence *self);
@@ -345,12 +338,8 @@ InstructionSequenceType_get_instructions(PyValueBorrow self, const PyValue *args
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&_PyInstructionSequence_Type, "get_instructions", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = InstructionSequenceType_get_instructions_impl((_PyInstructionSequence *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
-/*[clinic end generated code: output=06924b10927dbb88 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=aed7a05146bf87db input=a9049054013a1b77]*/

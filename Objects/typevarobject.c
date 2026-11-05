@@ -21,15 +21,15 @@ value_emission
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
-class typevar "typevarobject *" "static_type_unavailable"
-class paramspec "paramspecobject *" "static_type_unavailable"
-class paramspecargs "paramspecattrobject *" "static_type_unavailable"
-class paramspeckwargs "paramspecattrobject *" "static_type_unavailable"
-class typevartuple "typevartupleobject *" "static_type_unavailable"
-class typealias "typealiasobject *" "static_type_unavailable"
+class typevar "typevarobject *" "heap_type:TypeVar"
+class paramspec "paramspecobject *" "heap_type:ParamSpec"
+class paramspecargs "paramspecattrobject *" "heap_type:ParamSpecArgs"
+class paramspeckwargs "paramspecattrobject *" "heap_type:ParamSpecKwargs"
+class typevartuple "typevartupleobject *" "heap_type:TypeVarTuple"
+class typealias "typealiasobject *" "heap_type:TypeAliasType"
 class Generic "PyObject *" "&PyGeneric_Type"
 [clinic start generated code]*/
-/*[clinic end generated code: output=da39a3ee5e6b4b0d input=749ad6ed8eda35fb]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=2d16c81753a81414]*/
 
 typedef struct {
     PyObject_HEAD

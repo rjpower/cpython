@@ -140,7 +140,7 @@ PyDoc_STRVAR(typevar_typing_subst__doc__,
 "\n");
 
 #define TYPEVAR_TYPING_SUBST_METHODDEF    \
-    {"__typing_subst__", _PyCFunction_CAST(typevar_typing_subst), METH_VALUE, typevar_typing_subst__doc__},
+    {"__typing_subst__", _PyCFunction_CAST(typevar_typing_subst), METH_VALUE|METH_O, typevar_typing_subst__doc__},
 
 static PyValue
 typevar_typing_subst_impl(typevarobject *self, PyValueBorrow arg);
@@ -151,13 +151,9 @@ typevar_typing_subst(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, 
     PyValue return_value = PyValue_NULL;
     PyValueBorrow arg;
 
-    if (!_PyArg_CheckArityValue("typevar.__typing_subst__()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     arg = PyValue_Borrow(args[0]);
     return_value = typevar_typing_subst_impl((typevarobject *)PyValue_AsKnownObjectBorrow(self), arg);
 
-exit:
     return return_value;
 }
 
@@ -180,7 +176,7 @@ typevar_typing_prepare_subst(PyValueBorrow self, const PyValue *args, Py_ssize_t
     PyValueBorrow alias;
     PyValueBorrow __clinic_args;
 
-    if (!_PyArg_NoKwnamesValue("typevar.__typing_prepare_subst__()", kwnames)) {
+    if (!_PyArg_NoKwnamesValue("TypeVar.__typing_prepare_subst__()", kwnames)) {
         goto exit;
     }
     if (!_PyArg_CheckPositional("__typing_prepare_subst__", nargs, 2, 2)) {
@@ -200,7 +196,7 @@ PyDoc_STRVAR(typevar_reduce__doc__,
 "\n");
 
 #define TYPEVAR_REDUCE_METHODDEF    \
-    {"__reduce__", _PyCFunction_CAST(typevar_reduce), METH_VALUE, typevar_reduce__doc__},
+    {"__reduce__", _PyCFunction_CAST(typevar_reduce), METH_VALUE|METH_NOARGS, typevar_reduce__doc__},
 
 static PyValue
 typevar_reduce_impl(typevarobject *self);
@@ -210,12 +206,8 @@ typevar_reduce(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObje
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("typevar.__reduce__()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = typevar_reduce_impl((typevarobject *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -225,7 +217,7 @@ PyDoc_STRVAR(typevar_has_default__doc__,
 "\n");
 
 #define TYPEVAR_HAS_DEFAULT_METHODDEF    \
-    {"has_default", _PyCFunction_CAST(typevar_has_default), METH_VALUE, typevar_has_default__doc__},
+    {"has_default", _PyCFunction_CAST(typevar_has_default), METH_VALUE|METH_NOARGS, typevar_has_default__doc__},
 
 static PyValue
 typevar_has_default_impl(typevarobject *self);
@@ -235,12 +227,8 @@ typevar_has_default(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, P
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("typevar.has_default()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = typevar_has_default_impl((typevarobject *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -502,7 +490,7 @@ PyDoc_STRVAR(paramspec_typing_subst__doc__,
 "\n");
 
 #define PARAMSPEC_TYPING_SUBST_METHODDEF    \
-    {"__typing_subst__", _PyCFunction_CAST(paramspec_typing_subst), METH_VALUE, paramspec_typing_subst__doc__},
+    {"__typing_subst__", _PyCFunction_CAST(paramspec_typing_subst), METH_VALUE|METH_O, paramspec_typing_subst__doc__},
 
 static PyValue
 paramspec_typing_subst_impl(paramspecobject *self, PyValueBorrow arg);
@@ -513,13 +501,9 @@ paramspec_typing_subst(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs
     PyValue return_value = PyValue_NULL;
     PyValueBorrow arg;
 
-    if (!_PyArg_CheckArityValue("paramspec.__typing_subst__()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     arg = PyValue_Borrow(args[0]);
     return_value = paramspec_typing_subst_impl((paramspecobject *)PyValue_AsKnownObjectBorrow(self), arg);
 
-exit:
     return return_value;
 }
 
@@ -542,7 +526,7 @@ paramspec_typing_prepare_subst(PyValueBorrow self, const PyValue *args, Py_ssize
     PyValueBorrow alias;
     PyValueBorrow __clinic_args;
 
-    if (!_PyArg_NoKwnamesValue("paramspec.__typing_prepare_subst__()", kwnames)) {
+    if (!_PyArg_NoKwnamesValue("ParamSpec.__typing_prepare_subst__()", kwnames)) {
         goto exit;
     }
     if (!_PyArg_CheckPositional("__typing_prepare_subst__", nargs, 2, 2)) {
@@ -562,7 +546,7 @@ PyDoc_STRVAR(paramspec_reduce__doc__,
 "\n");
 
 #define PARAMSPEC_REDUCE_METHODDEF    \
-    {"__reduce__", _PyCFunction_CAST(paramspec_reduce), METH_VALUE, paramspec_reduce__doc__},
+    {"__reduce__", _PyCFunction_CAST(paramspec_reduce), METH_VALUE|METH_NOARGS, paramspec_reduce__doc__},
 
 static PyValue
 paramspec_reduce_impl(paramspecobject *self);
@@ -572,12 +556,8 @@ paramspec_reduce(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyOb
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("paramspec.__reduce__()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = paramspec_reduce_impl((paramspecobject *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -587,7 +567,7 @@ PyDoc_STRVAR(paramspec_has_default__doc__,
 "\n");
 
 #define PARAMSPEC_HAS_DEFAULT_METHODDEF    \
-    {"has_default", _PyCFunction_CAST(paramspec_has_default), METH_VALUE, paramspec_has_default__doc__},
+    {"has_default", _PyCFunction_CAST(paramspec_has_default), METH_VALUE|METH_NOARGS, paramspec_has_default__doc__},
 
 static PyValue
 paramspec_has_default_impl(paramspecobject *self);
@@ -597,12 +577,8 @@ paramspec_has_default(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("paramspec.has_default()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = paramspec_has_default_impl((paramspecobject *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -720,7 +696,7 @@ PyDoc_STRVAR(typevartuple_typing_subst__doc__,
 "\n");
 
 #define TYPEVARTUPLE_TYPING_SUBST_METHODDEF    \
-    {"__typing_subst__", _PyCFunction_CAST(typevartuple_typing_subst), METH_VALUE, typevartuple_typing_subst__doc__},
+    {"__typing_subst__", _PyCFunction_CAST(typevartuple_typing_subst), METH_VALUE|METH_O, typevartuple_typing_subst__doc__},
 
 static PyValue
 typevartuple_typing_subst_impl(typevartupleobject *self, PyValueBorrow arg);
@@ -731,13 +707,9 @@ typevartuple_typing_subst(PyValueBorrow self, const PyValue *args, Py_ssize_t na
     PyValue return_value = PyValue_NULL;
     PyValueBorrow arg;
 
-    if (!_PyArg_CheckArityValue("typevartuple.__typing_subst__()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     arg = PyValue_Borrow(args[0]);
     return_value = typevartuple_typing_subst_impl((typevartupleobject *)PyValue_AsKnownObjectBorrow(self), arg);
 
-exit:
     return return_value;
 }
 
@@ -761,7 +733,7 @@ typevartuple_typing_prepare_subst(PyValueBorrow self, const PyValue *args, Py_ss
     PyValueBorrow alias;
     PyValueBorrow __clinic_args;
 
-    if (!_PyArg_NoKwnamesValue("typevartuple.__typing_prepare_subst__()", kwnames)) {
+    if (!_PyArg_NoKwnamesValue("TypeVarTuple.__typing_prepare_subst__()", kwnames)) {
         goto exit;
     }
     if (!_PyArg_CheckPositional("__typing_prepare_subst__", nargs, 2, 2)) {
@@ -781,7 +753,7 @@ PyDoc_STRVAR(typevartuple_reduce__doc__,
 "\n");
 
 #define TYPEVARTUPLE_REDUCE_METHODDEF    \
-    {"__reduce__", _PyCFunction_CAST(typevartuple_reduce), METH_VALUE, typevartuple_reduce__doc__},
+    {"__reduce__", _PyCFunction_CAST(typevartuple_reduce), METH_VALUE|METH_NOARGS, typevartuple_reduce__doc__},
 
 static PyValue
 typevartuple_reduce_impl(typevartupleobject *self);
@@ -791,12 +763,8 @@ typevartuple_reduce(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, P
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("typevartuple.__reduce__()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = typevartuple_reduce_impl((typevartupleobject *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -806,7 +774,7 @@ PyDoc_STRVAR(typevartuple_has_default__doc__,
 "\n");
 
 #define TYPEVARTUPLE_HAS_DEFAULT_METHODDEF    \
-    {"has_default", _PyCFunction_CAST(typevartuple_has_default), METH_VALUE, typevartuple_has_default__doc__},
+    {"has_default", _PyCFunction_CAST(typevartuple_has_default), METH_VALUE|METH_NOARGS, typevartuple_has_default__doc__},
 
 static PyValue
 typevartuple_has_default_impl(typevartupleobject *self);
@@ -816,12 +784,8 @@ typevartuple_has_default(PyValueBorrow self, const PyValue *args, Py_ssize_t nar
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("typevartuple.has_default()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = typevartuple_has_default_impl((typevartupleobject *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -831,7 +795,7 @@ PyDoc_STRVAR(typealias_reduce__doc__,
 "\n");
 
 #define TYPEALIAS_REDUCE_METHODDEF    \
-    {"__reduce__", _PyCFunction_CAST(typealias_reduce), METH_VALUE, typealias_reduce__doc__},
+    {"__reduce__", _PyCFunction_CAST(typealias_reduce), METH_VALUE|METH_NOARGS, typealias_reduce__doc__},
 
 static PyValue
 typealias_reduce_impl(typealiasobject *self);
@@ -841,12 +805,8 @@ typealias_reduce(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyOb
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("typealias.__reduce__()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = typealias_reduce_impl((typealiasobject *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -936,4 +896,4 @@ typealias_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
     return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
-/*[clinic end generated code: output=6b34476d4ddeea80 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=2cf8cf4d8bd4101f input=a9049054013a1b77]*/

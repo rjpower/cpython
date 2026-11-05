@@ -11,7 +11,7 @@ preserve
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_long_value.h"    // _PyValue_AsInt()
-#include "pycore_modsupport.h"    // _PyArg_CheckArityValue()
+#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
 #include "pycore_runtime.h"       // _Py_SINGLETON()
 #include "pycore_tuple.h"         // _PyTuple_FromValueArray()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
@@ -25,7 +25,7 @@ PyDoc_STRVAR(object_converter__doc__,
 "\n");
 
 #define OBJECT_CONVERTER_METHODDEF    \
-    {"object_converter", _PyCFunction_CAST(object_converter), METH_VALUE, object_converter__doc__},
+    {"object_converter", _PyCFunction_CAST(object_converter), METH_VALUE|METH_O, object_converter__doc__},
 
 static PyValue
 object_converter_impl(PyObject *module, PyValueBorrow a);
@@ -36,13 +36,9 @@ object_converter(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, Py
     PyValue return_value = PyValue_NULL;
     PyValueBorrow a;
 
-    if (!_PyArg_CheckArityValue("_testclinic_value.object_converter()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     a = PyValue_Borrow(args[0]);
     return_value = object_converter_impl(PyValue_AsKnownObjectBorrow(module), a);
 
-exit:
     return return_value;
 }
 
@@ -384,7 +380,7 @@ PyDoc_STRVAR(unicode_converter__doc__,
 "\n");
 
 #define UNICODE_CONVERTER_METHODDEF    \
-    {"unicode_converter", _PyCFunction_CAST(unicode_converter), METH_VALUE, unicode_converter__doc__},
+    {"unicode_converter", _PyCFunction_CAST(unicode_converter), METH_VALUE|METH_O, unicode_converter__doc__},
 
 static PyValue
 unicode_converter_impl(PyObject *module, PyObject *a);
@@ -395,9 +391,6 @@ unicode_converter(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, P
     PyValue return_value = PyValue_NULL;
     PyObject *a;
 
-    if (!_PyArg_CheckArityValue("_testclinic_value.unicode_converter()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         _PyArg_BadArgumentValue("unicode_converter", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
@@ -464,7 +457,7 @@ PyDoc_STRVAR(str_none_converter__doc__,
 "\n");
 
 #define STR_NONE_CONVERTER_METHODDEF    \
-    {"str_none_converter", _PyCFunction_CAST(str_none_converter), METH_VALUE, str_none_converter__doc__},
+    {"str_none_converter", _PyCFunction_CAST(str_none_converter), METH_VALUE|METH_O, str_none_converter__doc__},
 
 static PyValue
 str_none_converter_impl(PyObject *module, const char *a);
@@ -475,9 +468,6 @@ str_none_converter(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, 
     PyValue return_value = PyValue_NULL;
     const char *a;
 
-    if (!_PyArg_CheckArityValue("_testclinic_value.str_none_converter()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         _PyArg_BadArgumentValue("str_none_converter", "argument", "str or None", PyValue_Borrow(args[0]));
         goto exit;
@@ -507,7 +497,7 @@ PyDoc_STRVAR(py_buffer_converter__doc__,
 "\n");
 
 #define PY_BUFFER_CONVERTER_METHODDEF    \
-    {"py_buffer_converter", _PyCFunction_CAST(py_buffer_converter), METH_VALUE, py_buffer_converter__doc__},
+    {"py_buffer_converter", _PyCFunction_CAST(py_buffer_converter), METH_VALUE|METH_O, py_buffer_converter__doc__},
 
 static PyValue
 py_buffer_converter_impl(PyObject *module, Py_buffer *a);
@@ -518,9 +508,6 @@ py_buffer_converter(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs,
     PyValue return_value = PyValue_NULL;
     Py_buffer a = {NULL, NULL};
 
-    if (!_PyArg_CheckArityValue("_testclinic_value.py_buffer_converter()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[0]))->tp_name);
         goto exit;
@@ -545,7 +532,7 @@ PyDoc_STRVAR(subclass_tuple__doc__,
 "\n");
 
 #define SUBCLASS_TUPLE_METHODDEF    \
-    {"subclass_tuple", _PyCFunction_CAST(subclass_tuple), METH_VALUE, subclass_tuple__doc__},
+    {"subclass_tuple", _PyCFunction_CAST(subclass_tuple), METH_VALUE|METH_O, subclass_tuple__doc__},
 
 static PyValue
 subclass_tuple_impl(PyObject *module, PyObject *a);
@@ -556,9 +543,6 @@ subclass_tuple(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyOb
     PyValue return_value = PyValue_NULL;
     PyObject *a;
 
-    if (!_PyArg_CheckArityValue("_testclinic_value.subclass_tuple()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), &PyTuple_Type)) {
         _PyArg_BadArgumentValue("subclass_tuple", "argument", "tuple", PyValue_Borrow(args[0]));
         goto exit;
@@ -576,7 +560,7 @@ PyDoc_STRVAR(subclass_long__doc__,
 "\n");
 
 #define SUBCLASS_LONG_METHODDEF    \
-    {"subclass_long", _PyCFunction_CAST(subclass_long), METH_VALUE, subclass_long__doc__},
+    {"subclass_long", _PyCFunction_CAST(subclass_long), METH_VALUE|METH_O, subclass_long__doc__},
 
 static PyValue
 subclass_long_impl(PyObject *module, PyValueBorrow a);
@@ -587,9 +571,6 @@ subclass_long(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObj
     PyValue return_value = PyValue_NULL;
     PyValueBorrow a;
 
-    if (!_PyArg_CheckArityValue("_testclinic_value.subclass_long()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), &PyLong_Type)) {
         _PyArg_BadArgumentValue("subclass_long", "argument", "int", PyValue_Borrow(args[0]));
         goto exit;
@@ -607,7 +588,7 @@ PyDoc_STRVAR(ret_bool__doc__,
 "\n");
 
 #define RET_BOOL_METHODDEF    \
-    {"ret_bool", _PyCFunction_CAST(ret_bool), METH_VALUE, ret_bool__doc__},
+    {"ret_bool", _PyCFunction_CAST(ret_bool), METH_VALUE|METH_O, ret_bool__doc__},
 
 static int
 ret_bool_impl(PyObject *module, int a);
@@ -619,9 +600,6 @@ ret_bool(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *
     int a;
     int _return_value;
 
-    if (!_PyArg_CheckArityValue("_testclinic_value.ret_bool()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     a = _PyValue_IsTrue(PyValue_Borrow(args[0]));
     if (a < 0) {
         goto exit;
@@ -642,7 +620,7 @@ PyDoc_STRVAR(ret_int__doc__,
 "\n");
 
 #define RET_INT_METHODDEF    \
-    {"ret_int", _PyCFunction_CAST(ret_int), METH_VALUE, ret_int__doc__},
+    {"ret_int", _PyCFunction_CAST(ret_int), METH_VALUE|METH_O, ret_int__doc__},
 
 static int
 ret_int_impl(PyObject *module, int a);
@@ -654,9 +632,6 @@ ret_int(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *k
     int a;
     int _return_value;
 
-    if (!_PyArg_CheckArityValue("_testclinic_value.ret_int()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     a = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (a == -1 && PyErr_Occurred()) {
         goto exit;
@@ -677,7 +652,7 @@ PyDoc_STRVAR(ret_ssize_t__doc__,
 "\n");
 
 #define RET_SSIZE_T_METHODDEF    \
-    {"ret_ssize_t", _PyCFunction_CAST(ret_ssize_t), METH_VALUE, ret_ssize_t__doc__},
+    {"ret_ssize_t", _PyCFunction_CAST(ret_ssize_t), METH_VALUE|METH_O, ret_ssize_t__doc__},
 
 static Py_ssize_t
 ret_ssize_t_impl(PyObject *module, Py_ssize_t a);
@@ -689,9 +664,6 @@ ret_ssize_t(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObjec
     Py_ssize_t a;
     Py_ssize_t _return_value;
 
-    if (!_PyArg_CheckArityValue("_testclinic_value.ret_ssize_t()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     {
         Py_ssize_t ival = -1;
         PyValue iobj = _PyValue_Index(PyValue_Borrow(args[0]));
@@ -720,7 +692,7 @@ PyDoc_STRVAR(ret_double__doc__,
 "\n");
 
 #define RET_DOUBLE_METHODDEF    \
-    {"ret_double", _PyCFunction_CAST(ret_double), METH_VALUE, ret_double__doc__},
+    {"ret_double", _PyCFunction_CAST(ret_double), METH_VALUE|METH_O, ret_double__doc__},
 
 static double
 ret_double_impl(PyObject *module, double a);
@@ -732,9 +704,6 @@ ret_double(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject
     double a;
     double _return_value;
 
-    if (!_PyArg_CheckArityValue("_testclinic_value.ret_double()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     a = _PyValue_AsDouble(PyValue_Borrow(args[0]));
     if (a == -1.0 && PyErr_Occurred()) {
         goto exit;
@@ -755,7 +724,7 @@ PyDoc_STRVAR(test_empty_function__doc__,
 "\n");
 
 #define TEST_EMPTY_FUNCTION_METHODDEF    \
-    {"test_empty_function", _PyCFunction_CAST(test_empty_function), METH_VALUE, test_empty_function__doc__},
+    {"test_empty_function", _PyCFunction_CAST(test_empty_function), METH_VALUE|METH_NOARGS, test_empty_function__doc__},
 
 static PyValue
 test_empty_function_impl(PyObject *module);
@@ -765,12 +734,8 @@ test_empty_function(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs,
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("_testclinic_value.test_empty_function()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = test_empty_function_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -1204,7 +1169,7 @@ PyDoc_STRVAR(_testclinic_value_Pair_get__doc__,
 "\n");
 
 #define _TESTCLINIC_VALUE_PAIR_GET_METHODDEF    \
-    {"get", _PyCFunction_CAST(_testclinic_value_Pair_get), METH_VALUE, _testclinic_value_Pair_get__doc__},
+    {"get", _PyCFunction_CAST(_testclinic_value_Pair_get), METH_VALUE|METH_NOARGS, _testclinic_value_Pair_get__doc__},
 
 static PyValue
 _testclinic_value_Pair_get_impl(PairObject *self);
@@ -1214,12 +1179,8 @@ _testclinic_value_Pair_get(PyValueBorrow self, const PyValue *args, Py_ssize_t n
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&Pair_Type, "get", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = _testclinic_value_Pair_get_impl((PairObject *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -1340,4 +1301,4 @@ _testclinic_value_Probe_where(PyValueBorrow self, PyTypeObject *cls, const PyVal
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=9bb35f21f2a59f80 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=5697ab7b16fa9427 input=a9049054013a1b77]*/

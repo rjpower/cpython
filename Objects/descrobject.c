@@ -585,7 +585,23 @@ method_check_value_args(PyObject *func, const PyValue *args, Py_ssize_t nargs)
     return descr_check_value((PyDescrObject *)func, PyValue_Borrow(args[0]));
 }
 
-/* METH_VALUE: the callee checks its own arity and keywords. */
+/* METH_VALUE: the callee checks its own arity and keywords, except for the
+   fixed-arity forms below. */
+/* The call of a checked method: args[0] is a valid self. */
+static inline PyValue
+method_value_invoke(PyThreadState *tstate, PyObject *func,
+                    const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    _PyCFunctionValue meth = (_PyCFunctionValue)method_enter_call(tstate, func);
+    if (meth == NULL) {
+        return PyValue_NULL;
+    }
+    PyValue result = meth(PyValue_Borrow(args[0]), args + 1, nargs - 1,
+                          kwnames);
+    _Py_LeaveRecursiveCallTstate(tstate);
+    return result;
+}
+
 static PyValue
 method_value_vectorcall_descr(PyThreadState *tstate, PyObject *func,
                               const PyValue *args, size_t nargsf,
@@ -595,14 +611,7 @@ method_value_vectorcall_descr(PyThreadState *tstate, PyObject *func,
     if (method_check_value_args(func, args, nargs) < 0) {
         return PyValue_NULL;
     }
-    _PyCFunctionValue meth = (_PyCFunctionValue)method_enter_call(tstate, func);
-    if (meth == NULL) {
-        return PyValue_NULL;
-    }
-    PyValue result = meth(PyValue_Borrow(args[0]), args + 1, nargs - 1,
-                          kwnames);
-    _Py_LeaveRecursiveCallTstate(tstate);
-    return result;
+    return method_value_invoke(tstate, func, args, nargs, kwnames);
 }
 
 static PyValue
@@ -623,6 +632,61 @@ method_value_vectorcall_descr_METHOD(PyThreadState *tstate, PyObject *func,
                           args + 1, nargs - 1, kwnames);
     _Py_LeaveRecursiveCallTstate(tstate);
     return result;
+}
+
+
+/* METH_VALUE | METH_NOARGS and METH_VALUE | METH_O: the trampolines of
+   method_vectorcall_NOARGS and _O, which check the self, the keywords and
+   the number of arguments before the call, with the same messages. */
+static PyValue
+method_value_vectorcall_descr_checked(PyThreadState *tstate, PyObject *func,
+                                      const PyValue *args, size_t nargsf,
+                                      PyObject *kwnames, Py_ssize_t expected)
+{
+    Py_ssize_t nargs = PyVectorcall_NARGS(nargsf);
+    if (method_check_value_args(func, args, nargs) < 0) {
+        return PyValue_NULL;
+    }
+    if (kwnames && PyTuple_GET_SIZE(kwnames)) {
+        PyObject *funcstr = _PyObject_FunctionStr(func);
+        if (funcstr != NULL) {
+            PyErr_Format(PyExc_TypeError,
+                         "%U takes no keyword arguments", funcstr);
+            Py_DECREF(funcstr);
+        }
+        return PyValue_NULL;
+    }
+    if (nargs != expected + 1) {
+        PyObject *funcstr = _PyObject_FunctionStr(func);
+        if (funcstr != NULL) {
+            PyErr_Format(PyExc_TypeError,
+                         expected == 0
+                         ? "%U takes no arguments (%zd given)"
+                         : "%U takes exactly one argument (%zd given)",
+                         funcstr, nargs - 1);
+            Py_DECREF(funcstr);
+        }
+        return PyValue_NULL;
+    }
+    return method_value_invoke(tstate, func, args, nargs, kwnames);
+}
+
+static PyValue
+method_value_vectorcall_descr_NOARGS(PyThreadState *tstate, PyObject *func,
+                                     const PyValue *args, size_t nargsf,
+                                     PyObject *kwnames)
+{
+    return method_value_vectorcall_descr_checked(tstate, func, args, nargsf,
+                                                 kwnames, 0);
+}
+
+static PyValue
+method_value_vectorcall_descr_O(PyThreadState *tstate, PyObject *func,
+                                const PyValue *args, size_t nargsf,
+                                PyObject *kwnames)
+{
+    return method_value_vectorcall_descr_checked(tstate, func, args, nargsf,
+                                                 kwnames, 1);
 }
 
 
@@ -1171,6 +1235,14 @@ PyDescr_NewMethod(PyTypeObject *type, PyMethodDef *method)
             break;
         case METH_VALUE | METH_METHOD:
             value_vectorcall = method_value_vectorcall_descr_METHOD;
+            vectorcall = _PyValue_VectorcallThunk;
+            break;
+        case METH_VALUE | METH_NOARGS:
+            value_vectorcall = method_value_vectorcall_descr_NOARGS;
+            vectorcall = _PyValue_VectorcallThunk;
+            break;
+        case METH_VALUE | METH_O:
+            value_vectorcall = method_value_vectorcall_descr_O;
             vectorcall = _PyValue_VectorcallThunk;
             break;
         default:

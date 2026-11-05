@@ -67,7 +67,7 @@ PyDoc_STRVAR(tuple_count__doc__,
 "Return number of occurrences of value.");
 
 #define TUPLE_COUNT_METHODDEF    \
-    {"count", _PyCFunction_CAST(tuple_count), METH_VALUE, tuple_count__doc__},
+    {"count", _PyCFunction_CAST(tuple_count), METH_VALUE|METH_O, tuple_count__doc__},
 
 static PyValue
 tuple_count_impl(PyTupleObject *self, PyValueBorrow value);
@@ -78,13 +78,9 @@ tuple_count(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject 
     PyValue return_value = PyValue_NULL;
     PyValueBorrow value;
 
-    if (!_PyArg_CheckArityValueMethod(&PyTuple_Type, "count", nargs, kwnames, 1)) {
-        goto exit;
-    }
     value = PyValue_Borrow(args[0]);
     return_value = tuple_count_impl((PyTupleObject *)PyValue_AsKnownObjectBorrow(self), value);
 
-exit:
     return return_value;
 }
 
@@ -163,7 +159,7 @@ PyDoc_STRVAR(tuple___getnewargs____doc__,
 "\n");
 
 #define TUPLE___GETNEWARGS___METHODDEF    \
-    {"__getnewargs__", _PyCFunction_CAST(tuple___getnewargs__), METH_VALUE, tuple___getnewargs____doc__},
+    {"__getnewargs__", _PyCFunction_CAST(tuple___getnewargs__), METH_VALUE|METH_NOARGS, tuple___getnewargs____doc__},
 
 static PyValue
 tuple___getnewargs___impl(PyTupleObject *self);
@@ -173,12 +169,8 @@ tuple___getnewargs__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, 
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyTuple_Type, "__getnewargs__", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = tuple___getnewargs___impl((PyTupleObject *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
-/*[clinic end generated code: output=0916111a9cb7ba8c input=a9049054013a1b77]*/
+/*[clinic end generated code: output=8bc3f238c6c6fc38 input=a9049054013a1b77]*/

@@ -11,7 +11,7 @@ preserve
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_modsupport.h"    // _PyArg_CheckArityValue()
+#include "pycore_modsupport.h"    // _PyArg_BadArgument()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_value_call.h"    // METH_VALUE
 #include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
@@ -23,7 +23,7 @@ PyDoc_STRVAR(complex_conjugate__doc__,
 "Return the complex conjugate of its argument. (3-4j).conjugate() == 3+4j.");
 
 #define COMPLEX_CONJUGATE_METHODDEF    \
-    {"conjugate", _PyCFunction_CAST(complex_conjugate), METH_VALUE, complex_conjugate__doc__},
+    {"conjugate", _PyCFunction_CAST(complex_conjugate), METH_VALUE|METH_NOARGS, complex_conjugate__doc__},
 
 static PyValue
 complex_conjugate_impl(PyComplexObject *self);
@@ -33,12 +33,8 @@ complex_conjugate(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyO
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyComplex_Type, "conjugate", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = complex_conjugate_impl((PyComplexObject *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -48,7 +44,7 @@ PyDoc_STRVAR(complex___getnewargs____doc__,
 "\n");
 
 #define COMPLEX___GETNEWARGS___METHODDEF    \
-    {"__getnewargs__", _PyCFunction_CAST(complex___getnewargs__), METH_VALUE, complex___getnewargs____doc__},
+    {"__getnewargs__", _PyCFunction_CAST(complex___getnewargs__), METH_VALUE|METH_NOARGS, complex___getnewargs____doc__},
 
 static PyValue
 complex___getnewargs___impl(PyComplexObject *self);
@@ -58,12 +54,8 @@ complex___getnewargs__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyComplex_Type, "__getnewargs__", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = complex___getnewargs___impl((PyComplexObject *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -74,7 +66,7 @@ PyDoc_STRVAR(complex___format____doc__,
 "Convert to a string according to format_spec.");
 
 #define COMPLEX___FORMAT___METHODDEF    \
-    {"__format__", _PyCFunction_CAST(complex___format__), METH_VALUE, complex___format____doc__},
+    {"__format__", _PyCFunction_CAST(complex___format__), METH_VALUE|METH_O, complex___format____doc__},
 
 static PyValue
 complex___format___impl(PyComplexObject *self, PyObject *format_spec);
@@ -85,9 +77,6 @@ complex___format__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, Py
     PyValue return_value = PyValue_NULL;
     PyObject *format_spec;
 
-    if (!_PyArg_CheckArityValueMethod(&PyComplex_Type, "__format__", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         _PyArg_BadArgumentValue("__format__", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
@@ -110,7 +99,7 @@ PyDoc_STRVAR(complex___complex____doc__,
 "Convert this value to exact type complex.");
 
 #define COMPLEX___COMPLEX___METHODDEF    \
-    {"__complex__", _PyCFunction_CAST(complex___complex__), METH_VALUE, complex___complex____doc__},
+    {"__complex__", _PyCFunction_CAST(complex___complex__), METH_VALUE|METH_NOARGS, complex___complex____doc__},
 
 static PyValue
 complex___complex___impl(PyComplexObject *self);
@@ -120,12 +109,8 @@ complex___complex__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, P
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyComplex_Type, "__complex__", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = complex___complex___impl((PyComplexObject *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -219,7 +204,7 @@ PyDoc_STRVAR(complex_from_number__doc__,
 "Convert number to a complex floating-point number.");
 
 #define COMPLEX_FROM_NUMBER_METHODDEF    \
-    {"from_number", _PyCFunction_CAST(complex_from_number), METH_VALUE|METH_CLASS, complex_from_number__doc__},
+    {"from_number", _PyCFunction_CAST(complex_from_number), METH_VALUE|METH_O|METH_CLASS, complex_from_number__doc__},
 
 static PyValue
 complex_from_number_impl(PyTypeObject *type, PyValueBorrow number);
@@ -230,13 +215,9 @@ complex_from_number(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, P
     PyValue return_value = PyValue_NULL;
     PyValueBorrow number;
 
-    if (!_PyArg_CheckArityValueMethod(&PyComplex_Type, "from_number", nargs, kwnames, 1)) {
-        goto exit;
-    }
     number = PyValue_Borrow(args[0]);
     return_value = complex_from_number_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), number);
 
-exit:
     return return_value;
 }
-/*[clinic end generated code: output=af82d863503c1b14 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=b4dad85f4cec787b input=a9049054013a1b77]*/

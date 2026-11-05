@@ -131,7 +131,7 @@ PyDoc_STRVAR(py_list_clear__doc__,
 "Remove all items from list.");
 
 #define PY_LIST_CLEAR_METHODDEF    \
-    {"clear", _PyCFunction_CAST(py_list_clear), METH_VALUE, py_list_clear__doc__},
+    {"clear", _PyCFunction_CAST(py_list_clear), METH_VALUE|METH_NOARGS, py_list_clear__doc__},
 
 static PyValue
 py_list_clear_impl(PyListObject *self);
@@ -141,14 +141,10 @@ py_list_clear(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObjec
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyList_Type, "clear", nargs, kwnames, 0)) {
-        goto exit;
-    }
     Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
     return_value = py_list_clear_impl((PyListObject *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
-exit:
     return return_value;
 }
 
@@ -159,7 +155,7 @@ PyDoc_STRVAR(list_copy__doc__,
 "Return a shallow copy of the list.");
 
 #define LIST_COPY_METHODDEF    \
-    {"copy", _PyCFunction_CAST(list_copy), METH_VALUE, list_copy__doc__},
+    {"copy", _PyCFunction_CAST(list_copy), METH_VALUE|METH_NOARGS, list_copy__doc__},
 
 static PyValue
 list_copy_impl(PyListObject *self);
@@ -169,14 +165,10 @@ list_copy(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *k
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyList_Type, "copy", nargs, kwnames, 0)) {
-        goto exit;
-    }
     Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
     return_value = list_copy_impl((PyListObject *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
-exit:
     return return_value;
 }
 
@@ -187,7 +179,7 @@ PyDoc_STRVAR(list_append__doc__,
 "Append object to the end of the list.");
 
 #define LIST_APPEND_METHODDEF    \
-    {"append", _PyCFunction_CAST(list_append), METH_VALUE, list_append__doc__},
+    {"append", _PyCFunction_CAST(list_append), METH_VALUE|METH_O, list_append__doc__},
 
 static PyValue
 list_append_impl(PyListObject *self, PyValueBorrow object);
@@ -198,15 +190,11 @@ list_append(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject 
     PyValue return_value = PyValue_NULL;
     PyValueBorrow object;
 
-    if (!_PyArg_CheckArityValueMethod(&PyList_Type, "append", nargs, kwnames, 1)) {
-        goto exit;
-    }
     object = PyValue_Borrow(args[0]);
     Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
     return_value = list_append_impl((PyListObject *)PyValue_AsKnownObjectBorrow(self), object);
     Py_END_CRITICAL_SECTION();
 
-exit:
     return return_value;
 }
 
@@ -217,7 +205,7 @@ PyDoc_STRVAR(list_extend__doc__,
 "Extend list by appending elements from the iterable.");
 
 #define LIST_EXTEND_METHODDEF    \
-    {"extend", _PyCFunction_CAST(list_extend), METH_VALUE, list_extend__doc__},
+    {"extend", _PyCFunction_CAST(list_extend), METH_VALUE|METH_O, list_extend__doc__},
 
 static PyValue
 list_extend_impl(PyListObject *self, PyValueBorrow iterable);
@@ -228,13 +216,9 @@ list_extend(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject 
     PyValue return_value = PyValue_NULL;
     PyValueBorrow iterable;
 
-    if (!_PyArg_CheckArityValueMethod(&PyList_Type, "extend", nargs, kwnames, 1)) {
-        goto exit;
-    }
     iterable = PyValue_Borrow(args[0]);
     return_value = list_extend_impl((PyListObject *)PyValue_AsKnownObjectBorrow(self), iterable);
 
-exit:
     return return_value;
 }
 
@@ -371,7 +355,7 @@ PyDoc_STRVAR(list_reverse__doc__,
 "Reverse *IN PLACE*.");
 
 #define LIST_REVERSE_METHODDEF    \
-    {"reverse", _PyCFunction_CAST(list_reverse), METH_VALUE, list_reverse__doc__},
+    {"reverse", _PyCFunction_CAST(list_reverse), METH_VALUE|METH_NOARGS, list_reverse__doc__},
 
 static PyValue
 list_reverse_impl(PyListObject *self);
@@ -381,14 +365,10 @@ list_reverse(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyList_Type, "reverse", nargs, kwnames, 0)) {
-        goto exit;
-    }
     Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
     return_value = list_reverse_impl((PyListObject *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
-exit:
     return return_value;
 }
 
@@ -448,7 +428,7 @@ PyDoc_STRVAR(list_count__doc__,
 "Return number of occurrences of value.");
 
 #define LIST_COUNT_METHODDEF    \
-    {"count", _PyCFunction_CAST(list_count), METH_VALUE, list_count__doc__},
+    {"count", _PyCFunction_CAST(list_count), METH_VALUE|METH_O, list_count__doc__},
 
 static PyValue
 list_count_impl(PyListObject *self, PyValueBorrow value);
@@ -459,13 +439,9 @@ list_count(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *
     PyValue return_value = PyValue_NULL;
     PyValueBorrow value;
 
-    if (!_PyArg_CheckArityValueMethod(&PyList_Type, "count", nargs, kwnames, 1)) {
-        goto exit;
-    }
     value = PyValue_Borrow(args[0]);
     return_value = list_count_impl((PyListObject *)PyValue_AsKnownObjectBorrow(self), value);
 
-exit:
     return return_value;
 }
 
@@ -478,7 +454,7 @@ PyDoc_STRVAR(list_remove__doc__,
 "Raises ValueError if the value is not present.");
 
 #define LIST_REMOVE_METHODDEF    \
-    {"remove", _PyCFunction_CAST(list_remove), METH_VALUE, list_remove__doc__},
+    {"remove", _PyCFunction_CAST(list_remove), METH_VALUE|METH_O, list_remove__doc__},
 
 static PyValue
 list_remove_impl(PyListObject *self, PyValueBorrow value);
@@ -489,15 +465,11 @@ list_remove(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject 
     PyValue return_value = PyValue_NULL;
     PyValueBorrow value;
 
-    if (!_PyArg_CheckArityValueMethod(&PyList_Type, "remove", nargs, kwnames, 1)) {
-        goto exit;
-    }
     value = PyValue_Borrow(args[0]);
     Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
     return_value = list_remove_impl((PyListObject *)PyValue_AsKnownObjectBorrow(self), value);
     Py_END_CRITICAL_SECTION();
 
-exit:
     return return_value;
 }
 
@@ -564,7 +536,7 @@ PyDoc_STRVAR(list___sizeof____doc__,
 "Return the size of the list in memory, in bytes.");
 
 #define LIST___SIZEOF___METHODDEF    \
-    {"__sizeof__", _PyCFunction_CAST(list___sizeof__), METH_VALUE, list___sizeof____doc__},
+    {"__sizeof__", _PyCFunction_CAST(list___sizeof__), METH_VALUE|METH_NOARGS, list___sizeof____doc__},
 
 static PyValue
 list___sizeof___impl(PyListObject *self);
@@ -574,12 +546,8 @@ list___sizeof__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObj
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyList_Type, "__sizeof__", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = list___sizeof___impl((PyListObject *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -590,7 +558,7 @@ PyDoc_STRVAR(list___reversed____doc__,
 "Return a reverse iterator over the list.");
 
 #define LIST___REVERSED___METHODDEF    \
-    {"__reversed__", _PyCFunction_CAST(list___reversed__), METH_VALUE, list___reversed____doc__},
+    {"__reversed__", _PyCFunction_CAST(list___reversed__), METH_VALUE|METH_NOARGS, list___reversed____doc__},
 
 static PyValue
 list___reversed___impl(PyListObject *self);
@@ -600,12 +568,8 @@ list___reversed__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyO
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyList_Type, "__reversed__", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = list___reversed___impl((PyListObject *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
-/*[clinic end generated code: output=481f6095cb6adaf5 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=126234ec0b98a2f0 input=a9049054013a1b77]*/

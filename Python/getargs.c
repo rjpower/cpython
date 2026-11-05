@@ -2907,33 +2907,7 @@ _PyArg_NoKwnamesValue(const char *funcstr, PyObject *kwnames)
     return 0;
 }
 
-#undef _PyArg_CheckArityValue
-
-int
-_PyArg_CheckArityValue(const char *funcstr, Py_ssize_t nargs,
-                       PyObject *kwnames, Py_ssize_t expected)
-{
-    assert(expected == 0 || expected == 1);
-    if (!_PyArg_NoKwnamesValue(funcstr, kwnames)) {
-        return 0;
-    }
-    if (nargs == expected) {
-        return 1;
-    }
-    if (expected == 0) {
-        PyErr_Format(PyExc_TypeError,
-                     "%.200s takes no arguments (%zd given)", funcstr, nargs);
-    }
-    else {
-        PyErr_Format(PyExc_TypeError,
-                     "%.200s takes exactly one argument (%zd given)",
-                     funcstr, nargs);
-    }
-    return 0;
-}
-
 #undef _PyArg_NoKwnamesValueMethod
-#undef _PyArg_CheckArityValueMethod
 
 /* "<type>.<name>()", where <type> is the type's own name. */
 static void
@@ -2949,16 +2923,6 @@ _PyArg_NoKwnamesValueMethod(PyTypeObject *tp, const char *name,
     char funcstr[256];
     method_funcstr(funcstr, sizeof(funcstr), tp, name);
     return _PyArg_NoKwnamesValue(funcstr, kwnames);
-}
-
-int
-_PyArg_CheckArityValueMethod(PyTypeObject *tp, const char *name,
-                             Py_ssize_t nargs, PyObject *kwnames,
-                             Py_ssize_t expected)
-{
-    char funcstr[256];
-    method_funcstr(funcstr, sizeof(funcstr), tp, name);
-    return _PyArg_CheckArityValue(funcstr, nargs, kwnames, expected);
 }
 
 int

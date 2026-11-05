@@ -200,7 +200,7 @@ PyDoc_STRVAR(builtin_abs__doc__,
 "Return the absolute value of the argument.");
 
 #define BUILTIN_ABS_METHODDEF    \
-    {"abs", _PyCFunction_CAST(builtin_abs), METH_VALUE, builtin_abs__doc__},
+    {"abs", _PyCFunction_CAST(builtin_abs), METH_VALUE|METH_O, builtin_abs__doc__},
 
 static PyValue
 builtin_abs_impl(PyObject *module, PyValueBorrow number);
@@ -211,13 +211,9 @@ builtin_abs(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObjec
     PyValue return_value = PyValue_NULL;
     PyValueBorrow number;
 
-    if (!_PyArg_CheckArityValue("abs()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     number = PyValue_Borrow(args[0]);
     return_value = builtin_abs_impl(PyValue_AsKnownObjectBorrow(module), number);
 
-exit:
     return return_value;
 }
 
@@ -230,7 +226,7 @@ PyDoc_STRVAR(builtin_all__doc__,
 "If the iterable is empty, return True.");
 
 #define BUILTIN_ALL_METHODDEF    \
-    {"all", _PyCFunction_CAST(builtin_all), METH_VALUE, builtin_all__doc__},
+    {"all", _PyCFunction_CAST(builtin_all), METH_VALUE|METH_O, builtin_all__doc__},
 
 static PyValue
 builtin_all_impl(PyObject *module, PyValueBorrow iterable);
@@ -241,13 +237,9 @@ builtin_all(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObjec
     PyValue return_value = PyValue_NULL;
     PyValueBorrow iterable;
 
-    if (!_PyArg_CheckArityValue("all()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     iterable = PyValue_Borrow(args[0]);
     return_value = builtin_all_impl(PyValue_AsKnownObjectBorrow(module), iterable);
 
-exit:
     return return_value;
 }
 
@@ -260,7 +252,7 @@ PyDoc_STRVAR(builtin_any__doc__,
 "If the iterable is empty, return False.");
 
 #define BUILTIN_ANY_METHODDEF    \
-    {"any", _PyCFunction_CAST(builtin_any), METH_VALUE, builtin_any__doc__},
+    {"any", _PyCFunction_CAST(builtin_any), METH_VALUE|METH_O, builtin_any__doc__},
 
 static PyValue
 builtin_any_impl(PyObject *module, PyValueBorrow iterable);
@@ -271,13 +263,9 @@ builtin_any(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObjec
     PyValue return_value = PyValue_NULL;
     PyValueBorrow iterable;
 
-    if (!_PyArg_CheckArityValue("any()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     iterable = PyValue_Borrow(args[0]);
     return_value = builtin_any_impl(PyValue_AsKnownObjectBorrow(module), iterable);
 
-exit:
     return return_value;
 }
 
@@ -293,7 +281,7 @@ PyDoc_STRVAR(builtin_ascii__doc__,
 "to that returned by repr() in Python 2.");
 
 #define BUILTIN_ASCII_METHODDEF    \
-    {"ascii", _PyCFunction_CAST(builtin_ascii), METH_VALUE, builtin_ascii__doc__},
+    {"ascii", _PyCFunction_CAST(builtin_ascii), METH_VALUE|METH_O, builtin_ascii__doc__},
 
 static PyValue
 builtin_ascii_impl(PyObject *module, PyValueBorrow obj);
@@ -304,13 +292,9 @@ builtin_ascii(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObj
     PyValue return_value = PyValue_NULL;
     PyValueBorrow obj;
 
-    if (!_PyArg_CheckArityValue("ascii()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     obj = PyValue_Borrow(args[0]);
     return_value = builtin_ascii_impl(PyValue_AsKnownObjectBorrow(module), obj);
 
-exit:
     return return_value;
 }
 
@@ -324,7 +308,7 @@ PyDoc_STRVAR(builtin_bin__doc__,
 "   \'0b1010101010101010101010\'");
 
 #define BUILTIN_BIN_METHODDEF    \
-    {"bin", _PyCFunction_CAST(builtin_bin), METH_VALUE, builtin_bin__doc__},
+    {"bin", _PyCFunction_CAST(builtin_bin), METH_VALUE|METH_O, builtin_bin__doc__},
 
 static PyValue
 builtin_bin_impl(PyObject *module, PyValueBorrow integer);
@@ -335,13 +319,9 @@ builtin_bin(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObjec
     PyValue return_value = PyValue_NULL;
     PyValueBorrow integer;
 
-    if (!_PyArg_CheckArityValue("bin()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     integer = PyValue_Borrow(args[0]);
     return_value = builtin_bin_impl(PyValue_AsKnownObjectBorrow(module), integer);
 
-exit:
     return return_value;
 }
 
@@ -355,7 +335,7 @@ PyDoc_STRVAR(builtin_callable__doc__,
 "__call__() method.");
 
 #define BUILTIN_CALLABLE_METHODDEF    \
-    {"callable", _PyCFunction_CAST(builtin_callable), METH_VALUE, builtin_callable__doc__},
+    {"callable", _PyCFunction_CAST(builtin_callable), METH_VALUE|METH_O, builtin_callable__doc__},
 
 static PyValue
 builtin_callable_impl(PyObject *module, PyValueBorrow obj);
@@ -366,13 +346,9 @@ builtin_callable(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, Py
     PyValue return_value = PyValue_NULL;
     PyValueBorrow obj;
 
-    if (!_PyArg_CheckArityValue("callable()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     obj = PyValue_Borrow(args[0]);
     return_value = builtin_callable_impl(PyValue_AsKnownObjectBorrow(module), obj);
 
-exit:
     return return_value;
 }
 
@@ -436,7 +412,7 @@ PyDoc_STRVAR(builtin_chr__doc__,
 "Return a Unicode string of one character with ordinal i; 0 <= i <= 0x10ffff.");
 
 #define BUILTIN_CHR_METHODDEF    \
-    {"chr", _PyCFunction_CAST(builtin_chr), METH_VALUE, builtin_chr__doc__},
+    {"chr", _PyCFunction_CAST(builtin_chr), METH_VALUE|METH_O, builtin_chr__doc__},
 
 static PyValue
 builtin_chr_impl(PyObject *module, PyValueBorrow i);
@@ -447,13 +423,9 @@ builtin_chr(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObjec
     PyValue return_value = PyValue_NULL;
     PyValueBorrow i;
 
-    if (!_PyArg_CheckArityValue("chr()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     i = PyValue_Borrow(args[0]);
     return_value = builtin_chr_impl(PyValue_AsKnownObjectBorrow(module), i);
 
-exit:
     return return_value;
 }
 
@@ -827,7 +799,7 @@ PyDoc_STRVAR(builtin_globals__doc__,
 "current global scope and vice-versa.");
 
 #define BUILTIN_GLOBALS_METHODDEF    \
-    {"globals", _PyCFunction_CAST(builtin_globals), METH_VALUE, builtin_globals__doc__},
+    {"globals", _PyCFunction_CAST(builtin_globals), METH_VALUE|METH_NOARGS, builtin_globals__doc__},
 
 static PyValue
 builtin_globals_impl(PyObject *module);
@@ -837,12 +809,8 @@ builtin_globals(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyO
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("globals()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = builtin_globals_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -892,7 +860,7 @@ PyDoc_STRVAR(builtin_id__doc__,
 "a number derived from the value.)");
 
 #define BUILTIN_ID_METHODDEF    \
-    {"id", _PyCFunction_CAST(builtin_id), METH_VALUE, builtin_id__doc__},
+    {"id", _PyCFunction_CAST(builtin_id), METH_VALUE|METH_O, builtin_id__doc__},
 
 static PyValue
 builtin_id_impl(PyModuleDef *self, PyValueBorrow v);
@@ -903,13 +871,9 @@ builtin_id(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *
     PyValue return_value = PyValue_NULL;
     PyValueBorrow v;
 
-    if (!_PyArg_CheckArityValue("id()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     v = PyValue_Borrow(args[0]);
     return_value = builtin_id_impl((PyModuleDef *)PyValue_AsKnownObjectBorrow(self), v);
 
-exit:
     return return_value;
 }
 
@@ -998,7 +962,7 @@ PyDoc_STRVAR(builtin_hash__doc__,
 "unhashable object raises TypeError.");
 
 #define BUILTIN_HASH_METHODDEF    \
-    {"hash", _PyCFunction_CAST(builtin_hash), METH_VALUE, builtin_hash__doc__},
+    {"hash", _PyCFunction_CAST(builtin_hash), METH_VALUE|METH_O, builtin_hash__doc__},
 
 static PyValue
 builtin_hash_impl(PyObject *module, PyValueBorrow obj);
@@ -1009,13 +973,9 @@ builtin_hash(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObje
     PyValue return_value = PyValue_NULL;
     PyValueBorrow obj;
 
-    if (!_PyArg_CheckArityValue("hash()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     obj = PyValue_Borrow(args[0]);
     return_value = builtin_hash_impl(PyValue_AsKnownObjectBorrow(module), obj);
 
-exit:
     return return_value;
 }
 
@@ -1029,7 +989,7 @@ PyDoc_STRVAR(builtin_hex__doc__,
 "   \'0xc0ffee\'");
 
 #define BUILTIN_HEX_METHODDEF    \
-    {"hex", _PyCFunction_CAST(builtin_hex), METH_VALUE, builtin_hex__doc__},
+    {"hex", _PyCFunction_CAST(builtin_hex), METH_VALUE|METH_O, builtin_hex__doc__},
 
 static PyValue
 builtin_hex_impl(PyObject *module, PyValueBorrow integer);
@@ -1040,13 +1000,9 @@ builtin_hex(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObjec
     PyValue return_value = PyValue_NULL;
     PyValueBorrow integer;
 
-    if (!_PyArg_CheckArityValue("hex()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     integer = PyValue_Borrow(args[0]);
     return_value = builtin_hex_impl(PyValue_AsKnownObjectBorrow(module), integer);
 
-exit:
     return return_value;
 }
 
@@ -1127,7 +1083,7 @@ PyDoc_STRVAR(builtin_len__doc__,
 "Return the number of items in a container.");
 
 #define BUILTIN_LEN_METHODDEF    \
-    {"len", _PyCFunction_CAST(builtin_len), METH_VALUE, builtin_len__doc__},
+    {"len", _PyCFunction_CAST(builtin_len), METH_VALUE|METH_O, builtin_len__doc__},
 
 static PyValue
 builtin_len_impl(PyObject *module, PyValueBorrow obj);
@@ -1138,13 +1094,9 @@ builtin_len(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObjec
     PyValue return_value = PyValue_NULL;
     PyValueBorrow obj;
 
-    if (!_PyArg_CheckArityValue("len()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     obj = PyValue_Borrow(args[0]);
     return_value = builtin_len_impl(PyValue_AsKnownObjectBorrow(module), obj);
 
-exit:
     return return_value;
 }
 
@@ -1160,7 +1112,7 @@ PyDoc_STRVAR(builtin_locals__doc__,
 "guarantees.");
 
 #define BUILTIN_LOCALS_METHODDEF    \
-    {"locals", _PyCFunction_CAST(builtin_locals), METH_VALUE, builtin_locals__doc__},
+    {"locals", _PyCFunction_CAST(builtin_locals), METH_VALUE|METH_NOARGS, builtin_locals__doc__},
 
 static PyValue
 builtin_locals_impl(PyObject *module);
@@ -1170,12 +1122,8 @@ builtin_locals(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyOb
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("locals()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = builtin_locals_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -1189,7 +1137,7 @@ PyDoc_STRVAR(builtin_oct__doc__,
 "   \'0o1234567\'");
 
 #define BUILTIN_OCT_METHODDEF    \
-    {"oct", _PyCFunction_CAST(builtin_oct), METH_VALUE, builtin_oct__doc__},
+    {"oct", _PyCFunction_CAST(builtin_oct), METH_VALUE|METH_O, builtin_oct__doc__},
 
 static PyValue
 builtin_oct_impl(PyObject *module, PyValueBorrow integer);
@@ -1200,13 +1148,9 @@ builtin_oct(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObjec
     PyValue return_value = PyValue_NULL;
     PyValueBorrow integer;
 
-    if (!_PyArg_CheckArityValue("oct()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     integer = PyValue_Borrow(args[0]);
     return_value = builtin_oct_impl(PyValue_AsKnownObjectBorrow(module), integer);
 
-exit:
     return return_value;
 }
 
@@ -1223,7 +1167,7 @@ PyDoc_STRVAR(builtin_ord__doc__,
 "single byte value.");
 
 #define BUILTIN_ORD_METHODDEF    \
-    {"ord", _PyCFunction_CAST(builtin_ord), METH_VALUE, builtin_ord__doc__},
+    {"ord", _PyCFunction_CAST(builtin_ord), METH_VALUE|METH_O, builtin_ord__doc__},
 
 static PyValue
 builtin_ord_impl(PyObject *module, PyValueBorrow c);
@@ -1234,13 +1178,9 @@ builtin_ord(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObjec
     PyValue return_value = PyValue_NULL;
     PyValueBorrow c;
 
-    if (!_PyArg_CheckArityValue("ord()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     c = PyValue_Borrow(args[0]);
     return_value = builtin_ord_impl(PyValue_AsKnownObjectBorrow(module), c);
 
-exit:
     return return_value;
 }
 
@@ -1451,7 +1391,7 @@ PyDoc_STRVAR(builtin_repr__doc__,
 "For many object types, including most builtins, eval(repr(obj)) == obj.");
 
 #define BUILTIN_REPR_METHODDEF    \
-    {"repr", _PyCFunction_CAST(builtin_repr), METH_VALUE, builtin_repr__doc__},
+    {"repr", _PyCFunction_CAST(builtin_repr), METH_VALUE|METH_O, builtin_repr__doc__},
 
 static PyValue
 builtin_repr_impl(PyObject *module, PyValueBorrow obj);
@@ -1462,13 +1402,9 @@ builtin_repr(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObje
     PyValue return_value = PyValue_NULL;
     PyValueBorrow obj;
 
-    if (!_PyArg_CheckArityValue("repr()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     obj = PyValue_Borrow(args[0]);
     return_value = builtin_repr_impl(PyValue_AsKnownObjectBorrow(module), obj);
 
-exit:
     return return_value;
 }
 
@@ -1717,4 +1653,4 @@ builtin_issubclass(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=54d1675e4963a1ce input=a9049054013a1b77]*/
+/*[clinic end generated code: output=94598f06ec1ea778 input=a9049054013a1b77]*/

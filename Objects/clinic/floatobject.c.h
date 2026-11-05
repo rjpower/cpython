@@ -6,7 +6,7 @@ preserve
 #  error "value-emission Clinic output requires Py_VALUE_CORE"
 #endif
 
-#include "pycore_modsupport.h"    // _PyArg_CheckArityValue()
+#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 #include "pycore_value_call.h"    // METH_VALUE
@@ -19,7 +19,7 @@ PyDoc_STRVAR(float_is_integer__doc__,
 "Return True if the float is an integer.");
 
 #define FLOAT_IS_INTEGER_METHODDEF    \
-    {"is_integer", _PyCFunction_CAST(float_is_integer), METH_VALUE, float_is_integer__doc__},
+    {"is_integer", _PyCFunction_CAST(float_is_integer), METH_VALUE|METH_NOARGS, float_is_integer__doc__},
 
 static PyValue
 float_is_integer_impl(PyValueBorrow self);
@@ -29,12 +29,8 @@ float_is_integer(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyOb
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyFloat_Type, "is_integer", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = float_is_integer_impl(self);
 
-exit:
     return return_value;
 }
 
@@ -45,7 +41,7 @@ PyDoc_STRVAR(float___trunc____doc__,
 "Return the Integral closest to x between 0 and x.");
 
 #define FLOAT___TRUNC___METHODDEF    \
-    {"__trunc__", _PyCFunction_CAST(float___trunc__), METH_VALUE, float___trunc____doc__},
+    {"__trunc__", _PyCFunction_CAST(float___trunc__), METH_VALUE|METH_NOARGS, float___trunc____doc__},
 
 static PyValue
 float___trunc___impl(PyValueBorrow self);
@@ -55,12 +51,8 @@ float___trunc__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObj
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyFloat_Type, "__trunc__", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = float___trunc___impl(self);
 
-exit:
     return return_value;
 }
 
@@ -71,7 +63,7 @@ PyDoc_STRVAR(float___floor____doc__,
 "Return the floor as an Integral.");
 
 #define FLOAT___FLOOR___METHODDEF    \
-    {"__floor__", _PyCFunction_CAST(float___floor__), METH_VALUE, float___floor____doc__},
+    {"__floor__", _PyCFunction_CAST(float___floor__), METH_VALUE|METH_NOARGS, float___floor____doc__},
 
 static PyValue
 float___floor___impl(PyValueBorrow self);
@@ -81,12 +73,8 @@ float___floor__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObj
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyFloat_Type, "__floor__", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = float___floor___impl(self);
 
-exit:
     return return_value;
 }
 
@@ -97,7 +85,7 @@ PyDoc_STRVAR(float___ceil____doc__,
 "Return the ceiling as an Integral.");
 
 #define FLOAT___CEIL___METHODDEF    \
-    {"__ceil__", _PyCFunction_CAST(float___ceil__), METH_VALUE, float___ceil____doc__},
+    {"__ceil__", _PyCFunction_CAST(float___ceil__), METH_VALUE|METH_NOARGS, float___ceil____doc__},
 
 static PyValue
 float___ceil___impl(PyValueBorrow self);
@@ -107,12 +95,8 @@ float___ceil__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObje
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyFloat_Type, "__ceil__", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = float___ceil___impl(self);
 
-exit:
     return return_value;
 }
 
@@ -160,7 +144,7 @@ PyDoc_STRVAR(float_conjugate__doc__,
 "Return self, the complex conjugate of any float.");
 
 #define FLOAT_CONJUGATE_METHODDEF    \
-    {"conjugate", _PyCFunction_CAST(float_conjugate), METH_VALUE, float_conjugate__doc__},
+    {"conjugate", _PyCFunction_CAST(float_conjugate), METH_VALUE|METH_NOARGS, float_conjugate__doc__},
 
 static PyValue
 float_conjugate_impl(PyValueBorrow self);
@@ -170,12 +154,8 @@ float_conjugate(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObj
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyFloat_Type, "conjugate", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = float_conjugate_impl(self);
 
-exit:
     return return_value;
 }
 
@@ -191,7 +171,7 @@ PyDoc_STRVAR(float_hex__doc__,
 "\'0x1.921f9f01b866ep+1\'");
 
 #define FLOAT_HEX_METHODDEF    \
-    {"hex", _PyCFunction_CAST(float_hex), METH_VALUE, float_hex__doc__},
+    {"hex", _PyCFunction_CAST(float_hex), METH_VALUE|METH_NOARGS, float_hex__doc__},
 
 static PyValue
 float_hex_impl(PyValueBorrow self);
@@ -201,12 +181,8 @@ float_hex(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *k
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyFloat_Type, "hex", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = float_hex_impl(self);
 
-exit:
     return return_value;
 }
 
@@ -222,7 +198,7 @@ PyDoc_STRVAR(float_fromhex__doc__,
 "-5e-324");
 
 #define FLOAT_FROMHEX_METHODDEF    \
-    {"fromhex", _PyCFunction_CAST(float_fromhex), METH_VALUE|METH_CLASS, float_fromhex__doc__},
+    {"fromhex", _PyCFunction_CAST(float_fromhex), METH_VALUE|METH_O|METH_CLASS, float_fromhex__doc__},
 
 static PyValue
 float_fromhex_impl(PyTypeObject *type, PyValueBorrow string);
@@ -233,13 +209,9 @@ float_fromhex(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyObjec
     PyValue return_value = PyValue_NULL;
     PyValueBorrow string;
 
-    if (!_PyArg_CheckArityValueMethod(&PyFloat_Type, "fromhex", nargs, kwnames, 1)) {
-        goto exit;
-    }
     string = PyValue_Borrow(args[0]);
     return_value = float_fromhex_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), string);
 
-exit:
     return return_value;
 }
 
@@ -260,7 +232,7 @@ PyDoc_STRVAR(float_as_integer_ratio__doc__,
 "(-1, 4)");
 
 #define FLOAT_AS_INTEGER_RATIO_METHODDEF    \
-    {"as_integer_ratio", _PyCFunction_CAST(float_as_integer_ratio), METH_VALUE, float_as_integer_ratio__doc__},
+    {"as_integer_ratio", _PyCFunction_CAST(float_as_integer_ratio), METH_VALUE|METH_NOARGS, float_as_integer_ratio__doc__},
 
 static PyValue
 float_as_integer_ratio_impl(PyValueBorrow self);
@@ -270,12 +242,8 @@ float_as_integer_ratio(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyFloat_Type, "as_integer_ratio", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = float_as_integer_ratio_impl(self);
 
-exit:
     return return_value;
 }
 
@@ -350,7 +318,7 @@ PyDoc_STRVAR(float_from_number__doc__,
 "Convert real number to a floating-point number.");
 
 #define FLOAT_FROM_NUMBER_METHODDEF    \
-    {"from_number", _PyCFunction_CAST(float_from_number), METH_VALUE|METH_CLASS, float_from_number__doc__},
+    {"from_number", _PyCFunction_CAST(float_from_number), METH_VALUE|METH_O|METH_CLASS, float_from_number__doc__},
 
 static PyValue
 float_from_number_impl(PyTypeObject *type, PyValueBorrow number);
@@ -361,13 +329,9 @@ float_from_number(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyO
     PyValue return_value = PyValue_NULL;
     PyValueBorrow number;
 
-    if (!_PyArg_CheckArityValueMethod(&PyFloat_Type, "from_number", nargs, kwnames, 1)) {
-        goto exit;
-    }
     number = PyValue_Borrow(args[0]);
     return_value = float_from_number_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), number);
 
-exit:
     return return_value;
 }
 
@@ -377,7 +341,7 @@ PyDoc_STRVAR(float___getnewargs____doc__,
 "\n");
 
 #define FLOAT___GETNEWARGS___METHODDEF    \
-    {"__getnewargs__", _PyCFunction_CAST(float___getnewargs__), METH_VALUE, float___getnewargs____doc__},
+    {"__getnewargs__", _PyCFunction_CAST(float___getnewargs__), METH_VALUE|METH_NOARGS, float___getnewargs____doc__},
 
 static PyValue
 float___getnewargs___impl(PyValueBorrow self);
@@ -387,12 +351,8 @@ float___getnewargs__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, 
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyFloat_Type, "__getnewargs__", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = float___getnewargs___impl(self);
 
-exit:
     return return_value;
 }
 
@@ -412,7 +372,7 @@ PyDoc_STRVAR(float___getformat____doc__,
 "used by the C type named by typestr.");
 
 #define FLOAT___GETFORMAT___METHODDEF    \
-    {"__getformat__", _PyCFunction_CAST(float___getformat__), METH_VALUE|METH_CLASS, float___getformat____doc__},
+    {"__getformat__", _PyCFunction_CAST(float___getformat__), METH_VALUE|METH_O|METH_CLASS, float___getformat____doc__},
 
 static PyValue
 float___getformat___impl(PyTypeObject *type, const char *typestr);
@@ -423,9 +383,6 @@ float___getformat__(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, P
     PyValue return_value = PyValue_NULL;
     const char *typestr;
 
-    if (!_PyArg_CheckArityValueMethod(&PyFloat_Type, "__getformat__", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         _PyArg_BadArgumentValue("__getformat__", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
@@ -451,7 +408,7 @@ PyDoc_STRVAR(float___format____doc__,
 "Formats the float according to format_spec.");
 
 #define FLOAT___FORMAT___METHODDEF    \
-    {"__format__", _PyCFunction_CAST(float___format__), METH_VALUE, float___format____doc__},
+    {"__format__", _PyCFunction_CAST(float___format__), METH_VALUE|METH_O, float___format____doc__},
 
 static PyValue
 float___format___impl(PyValueBorrow self, PyObject *format_spec);
@@ -462,9 +419,6 @@ float___format__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyOb
     PyValue return_value = PyValue_NULL;
     PyObject *format_spec;
 
-    if (!_PyArg_CheckArityValueMethod(&PyFloat_Type, "__format__", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         _PyArg_BadArgumentValue("__format__", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
@@ -479,4 +433,4 @@ float___format__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyOb
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=068aa090c7589151 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=07225286e2b679ee input=a9049054013a1b77]*/

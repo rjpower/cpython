@@ -28,7 +28,7 @@ PyDoc_STRVAR(m_p_object__doc__,
 "\n");
 
 #define M_P_OBJECT_METHODDEF    \
-    {"p_object", _PyCFunction_CAST(m_p_object), METH_VALUE, m_p_object__doc__},
+    {"p_object", _PyCFunction_CAST(m_p_object), METH_VALUE|METH_O, m_p_object__doc__},
 
 static PyValue
 m_p_object_impl(PyObject *module, PyValueBorrow a);
@@ -39,19 +39,15 @@ m_p_object(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject
     PyValue return_value = PyValue_NULL;
     PyValueBorrow a;
 
-    if (!_PyArg_CheckArityValue("m.p_object()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     a = PyValue_Borrow(args[0]);
     return_value = m_p_object_impl(PyValue_AsKnownObjectBorrow(module), a);
 
-exit:
     return return_value;
 }
 
 static PyValue
 m_p_object_impl(PyObject *module, PyValueBorrow a)
-/*[clinic end generated code: output=fc2533748096e8c2 input=6e2bfb9410f7ba39]*/
+/*[clinic end generated code: output=c373497afd26aa11 input=6e2bfb9410f7ba39]*/
 
 
 /*[clinic input]
@@ -66,7 +62,7 @@ PyDoc_STRVAR(m_p_object_converter__doc__,
 "\n");
 
 #define M_P_OBJECT_CONVERTER_METHODDEF    \
-    {"p_object_converter", _PyCFunction_CAST(m_p_object_converter), METH_VALUE, m_p_object_converter__doc__},
+    {"p_object_converter", _PyCFunction_CAST(m_p_object_converter), METH_VALUE|METH_O, m_p_object_converter__doc__},
 
 static PyValue
 m_p_object_converter_impl(PyObject *module, PyObject *a);
@@ -77,9 +73,6 @@ m_p_object_converter(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs
     PyValue return_value = PyValue_NULL;
     PyObject *a;
 
-    if (!_PyArg_CheckArityValue("m.p_object_converter()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!value_conv(PyValue_Borrow(args[0]), &a)) {
         goto exit;
     }
@@ -91,7 +84,7 @@ exit:
 
 static PyValue
 m_p_object_converter_impl(PyObject *module, PyObject *a)
-/*[clinic end generated code: output=fcb6a6c45f0c3096 input=42840537ef813516]*/
+/*[clinic end generated code: output=1ee76bb97cee3bfa input=42840537ef813516]*/
 
 
 /*[clinic input]
@@ -106,7 +99,7 @@ PyDoc_STRVAR(m_p_subclass_str__doc__,
 "\n");
 
 #define M_P_SUBCLASS_STR_METHODDEF    \
-    {"p_subclass_str", _PyCFunction_CAST(m_p_subclass_str), METH_VALUE, m_p_subclass_str__doc__},
+    {"p_subclass_str", _PyCFunction_CAST(m_p_subclass_str), METH_VALUE|METH_O, m_p_subclass_str__doc__},
 
 static PyValue
 m_p_subclass_str_impl(PyObject *module, PyObject *a);
@@ -117,9 +110,6 @@ m_p_subclass_str(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, Py
     PyValue return_value = PyValue_NULL;
     PyObject *a;
 
-    if (!_PyArg_CheckArityValue("m.p_subclass_str()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), &PyUnicode_Type)) {
         _PyArg_BadArgumentValue("p_subclass_str", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
@@ -133,7 +123,7 @@ exit:
 
 static PyValue
 m_p_subclass_str_impl(PyObject *module, PyObject *a)
-/*[clinic end generated code: output=c230348500e69567 input=5f4d91ab070d4160]*/
+/*[clinic end generated code: output=e706eca12e6ad3c7 input=5f4d91ab070d4160]*/
 
 
 /*[clinic input]
@@ -148,7 +138,7 @@ PyDoc_STRVAR(m_p_subclass_long__doc__,
 "\n");
 
 #define M_P_SUBCLASS_LONG_METHODDEF    \
-    {"p_subclass_long", _PyCFunction_CAST(m_p_subclass_long), METH_VALUE, m_p_subclass_long__doc__},
+    {"p_subclass_long", _PyCFunction_CAST(m_p_subclass_long), METH_VALUE|METH_O, m_p_subclass_long__doc__},
 
 static PyValue
 m_p_subclass_long_impl(PyObject *module, PyValueBorrow a);
@@ -159,9 +149,6 @@ m_p_subclass_long(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, P
     PyValue return_value = PyValue_NULL;
     PyValueBorrow a;
 
-    if (!_PyArg_CheckArityValue("m.p_subclass_long()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), &PyLong_Type)) {
         _PyArg_BadArgumentValue("p_subclass_long", "argument", "int", PyValue_Borrow(args[0]));
         goto exit;
@@ -175,7 +162,7 @@ exit:
 
 static PyValue
 m_p_subclass_long_impl(PyObject *module, PyValueBorrow a)
-/*[clinic end generated code: output=83e00c5ac234588e input=6c71b0d1a15fc934]*/
+/*[clinic end generated code: output=f49df4d26dc271fd input=6c71b0d1a15fc934]*/
 
 
 /*[clinic input]
@@ -280,7 +267,7 @@ PyDoc_STRVAR(m_p_int__doc__,
 "\n");
 
 #define M_P_INT_METHODDEF    \
-    {"p_int", _PyCFunction_CAST(m_p_int), METH_VALUE, m_p_int__doc__},
+    {"p_int", _PyCFunction_CAST(m_p_int), METH_VALUE|METH_O, m_p_int__doc__},
 
 static PyValue
 m_p_int_impl(PyObject *module, int a);
@@ -291,9 +278,6 @@ m_p_int(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *k
     PyValue return_value = PyValue_NULL;
     int a;
 
-    if (!_PyArg_CheckArityValue("m.p_int()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     a = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (a == -1 && PyErr_Occurred()) {
         goto exit;
@@ -306,7 +290,7 @@ exit:
 
 static PyValue
 m_p_int_impl(PyObject *module, int a)
-/*[clinic end generated code: output=1734bfd6aceafe3e input=eec185b4787c9f62]*/
+/*[clinic end generated code: output=db905ba84493fb9d input=eec185b4787c9f62]*/
 
 
 /*[clinic input]
@@ -321,7 +305,7 @@ PyDoc_STRVAR(m_p_long__doc__,
 "\n");
 
 #define M_P_LONG_METHODDEF    \
-    {"p_long", _PyCFunction_CAST(m_p_long), METH_VALUE, m_p_long__doc__},
+    {"p_long", _PyCFunction_CAST(m_p_long), METH_VALUE|METH_O, m_p_long__doc__},
 
 static PyValue
 m_p_long_impl(PyObject *module, long a);
@@ -332,9 +316,6 @@ m_p_long(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *
     PyValue return_value = PyValue_NULL;
     long a;
 
-    if (!_PyArg_CheckArityValue("m.p_long()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     a = _PyValue_AsLong(PyValue_Borrow(args[0]));
     if (a == -1 && PyErr_Occurred()) {
         goto exit;
@@ -347,7 +328,7 @@ exit:
 
 static PyValue
 m_p_long_impl(PyObject *module, long a)
-/*[clinic end generated code: output=100f1ecead65eff0 input=a3821cd31266be05]*/
+/*[clinic end generated code: output=1876d382862f62d3 input=a3821cd31266be05]*/
 
 
 /*[clinic input]
@@ -362,7 +343,7 @@ PyDoc_STRVAR(m_p_ssize_t__doc__,
 "\n");
 
 #define M_P_SSIZE_T_METHODDEF    \
-    {"p_ssize_t", _PyCFunction_CAST(m_p_ssize_t), METH_VALUE, m_p_ssize_t__doc__},
+    {"p_ssize_t", _PyCFunction_CAST(m_p_ssize_t), METH_VALUE|METH_O, m_p_ssize_t__doc__},
 
 static PyValue
 m_p_ssize_t_impl(PyObject *module, Py_ssize_t a);
@@ -373,9 +354,6 @@ m_p_ssize_t(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObjec
     PyValue return_value = PyValue_NULL;
     Py_ssize_t a;
 
-    if (!_PyArg_CheckArityValue("m.p_ssize_t()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     {
         Py_ssize_t ival = -1;
         PyValue iobj = _PyValue_Index(PyValue_Borrow(args[0]));
@@ -396,7 +374,7 @@ exit:
 
 static PyValue
 m_p_ssize_t_impl(PyObject *module, Py_ssize_t a)
-/*[clinic end generated code: output=483e42b761a7e2d2 input=bac9c380f01f94bd]*/
+/*[clinic end generated code: output=8cd5e0f30a9690a2 input=bac9c380f01f94bd]*/
 
 
 /*[clinic input]
@@ -411,7 +389,7 @@ PyDoc_STRVAR(m_p_ssize_t_nonneg__doc__,
 "\n");
 
 #define M_P_SSIZE_T_NONNEG_METHODDEF    \
-    {"p_ssize_t_nonneg", _PyCFunction_CAST(m_p_ssize_t_nonneg), METH_VALUE, m_p_ssize_t_nonneg__doc__},
+    {"p_ssize_t_nonneg", _PyCFunction_CAST(m_p_ssize_t_nonneg), METH_VALUE|METH_O, m_p_ssize_t_nonneg__doc__},
 
 static PyValue
 m_p_ssize_t_nonneg_impl(PyObject *module, Py_ssize_t a);
@@ -422,9 +400,6 @@ m_p_ssize_t_nonneg(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, 
     PyValue return_value = PyValue_NULL;
     Py_ssize_t a;
 
-    if (!_PyArg_CheckArityValue("m.p_ssize_t_nonneg()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     {
         Py_ssize_t ival = -1;
         PyValue iobj = _PyValue_Index(PyValue_Borrow(args[0]));
@@ -450,7 +425,7 @@ exit:
 
 static PyValue
 m_p_ssize_t_nonneg_impl(PyObject *module, Py_ssize_t a)
-/*[clinic end generated code: output=acec123210428528 input=a96c2fa19e8b457f]*/
+/*[clinic end generated code: output=886348a97554d436 input=a96c2fa19e8b457f]*/
 
 
 /*[clinic input]
@@ -520,7 +495,7 @@ PyDoc_STRVAR(m_p_slice_index__doc__,
 "\n");
 
 #define M_P_SLICE_INDEX_METHODDEF    \
-    {"p_slice_index", _PyCFunction_CAST(m_p_slice_index), METH_VALUE, m_p_slice_index__doc__},
+    {"p_slice_index", _PyCFunction_CAST(m_p_slice_index), METH_VALUE|METH_O, m_p_slice_index__doc__},
 
 static PyValue
 m_p_slice_index_impl(PyObject *module, Py_ssize_t a);
@@ -531,9 +506,6 @@ m_p_slice_index(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyO
     PyValue return_value = PyValue_NULL;
     Py_ssize_t a;
 
-    if (!_PyArg_CheckArityValue("m.p_slice_index()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!_PyArg_SliceIndexValue(PyValue_Borrow(args[0]), &a)) {
         goto exit;
     }
@@ -545,7 +517,7 @@ exit:
 
 static PyValue
 m_p_slice_index_impl(PyObject *module, Py_ssize_t a)
-/*[clinic end generated code: output=be51ea78571a5510 input=fe61552ba797c26a]*/
+/*[clinic end generated code: output=863435230abd2860 input=fe61552ba797c26a]*/
 
 
 /*[clinic input]
@@ -560,7 +532,7 @@ PyDoc_STRVAR(m_p_slice_index_int__doc__,
 "\n");
 
 #define M_P_SLICE_INDEX_INT_METHODDEF    \
-    {"p_slice_index_int", _PyCFunction_CAST(m_p_slice_index_int), METH_VALUE, m_p_slice_index_int__doc__},
+    {"p_slice_index_int", _PyCFunction_CAST(m_p_slice_index_int), METH_VALUE|METH_O, m_p_slice_index_int__doc__},
 
 static PyValue
 m_p_slice_index_int_impl(PyObject *module, Py_ssize_t a);
@@ -571,9 +543,6 @@ m_p_slice_index_int(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs,
     PyValue return_value = PyValue_NULL;
     Py_ssize_t a;
 
-    if (!_PyArg_CheckArityValue("m.p_slice_index_int()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!_PyArg_SliceIndexNotNoneValue(PyValue_Borrow(args[0]), &a)) {
         goto exit;
     }
@@ -585,7 +554,7 @@ exit:
 
 static PyValue
 m_p_slice_index_int_impl(PyObject *module, Py_ssize_t a)
-/*[clinic end generated code: output=01872d557ac8c909 input=02e8a255649c9deb]*/
+/*[clinic end generated code: output=3fd8d1f39c926387 input=02e8a255649c9deb]*/
 
 
 /*[clinic input]
@@ -600,7 +569,7 @@ PyDoc_STRVAR(m_p_bool__doc__,
 "\n");
 
 #define M_P_BOOL_METHODDEF    \
-    {"p_bool", _PyCFunction_CAST(m_p_bool), METH_VALUE, m_p_bool__doc__},
+    {"p_bool", _PyCFunction_CAST(m_p_bool), METH_VALUE|METH_O, m_p_bool__doc__},
 
 static PyValue
 m_p_bool_impl(PyObject *module, int a);
@@ -611,9 +580,6 @@ m_p_bool(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *
     PyValue return_value = PyValue_NULL;
     int a;
 
-    if (!_PyArg_CheckArityValue("m.p_bool()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     a = _PyValue_IsTrue(PyValue_Borrow(args[0]));
     if (a < 0) {
         goto exit;
@@ -626,7 +592,7 @@ exit:
 
 static PyValue
 m_p_bool_impl(PyObject *module, int a)
-/*[clinic end generated code: output=0485df8e8f8949ce input=44aa563200b9abfd]*/
+/*[clinic end generated code: output=938626acad070ab9 input=44aa563200b9abfd]*/
 
 
 /*[clinic input]
@@ -641,7 +607,7 @@ PyDoc_STRVAR(m_p_bool_int__doc__,
 "\n");
 
 #define M_P_BOOL_INT_METHODDEF    \
-    {"p_bool_int", _PyCFunction_CAST(m_p_bool_int), METH_VALUE, m_p_bool_int__doc__},
+    {"p_bool_int", _PyCFunction_CAST(m_p_bool_int), METH_VALUE|METH_O, m_p_bool_int__doc__},
 
 static PyValue
 m_p_bool_int_impl(PyObject *module, int a);
@@ -652,9 +618,6 @@ m_p_bool_int(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObje
     PyValue return_value = PyValue_NULL;
     int a;
 
-    if (!_PyArg_CheckArityValue("m.p_bool_int()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     a = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (a == -1 && PyErr_Occurred()) {
         goto exit;
@@ -667,7 +630,7 @@ exit:
 
 static PyValue
 m_p_bool_int_impl(PyObject *module, int a)
-/*[clinic end generated code: output=95ee5807e6eaa25f input=1ab5dba2d89caeb5]*/
+/*[clinic end generated code: output=a745df742ee81840 input=1ab5dba2d89caeb5]*/
 
 
 /*[clinic input]
@@ -682,7 +645,7 @@ PyDoc_STRVAR(m_p_double__doc__,
 "\n");
 
 #define M_P_DOUBLE_METHODDEF    \
-    {"p_double", _PyCFunction_CAST(m_p_double), METH_VALUE, m_p_double__doc__},
+    {"p_double", _PyCFunction_CAST(m_p_double), METH_VALUE|METH_O, m_p_double__doc__},
 
 static PyValue
 m_p_double_impl(PyObject *module, double a);
@@ -693,9 +656,6 @@ m_p_double(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject
     PyValue return_value = PyValue_NULL;
     double a;
 
-    if (!_PyArg_CheckArityValue("m.p_double()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     a = _PyValue_AsDouble(PyValue_Borrow(args[0]));
     if (a == -1.0 && PyErr_Occurred()) {
         goto exit;
@@ -708,7 +668,7 @@ exit:
 
 static PyValue
 m_p_double_impl(PyObject *module, double a)
-/*[clinic end generated code: output=938664fba86358db input=834dc585c8d682b1]*/
+/*[clinic end generated code: output=00ce356153f0ceb6 input=834dc585c8d682b1]*/
 
 
 /*[clinic input]
@@ -723,7 +683,7 @@ PyDoc_STRVAR(m_p_unicode__doc__,
 "\n");
 
 #define M_P_UNICODE_METHODDEF    \
-    {"p_unicode", _PyCFunction_CAST(m_p_unicode), METH_VALUE, m_p_unicode__doc__},
+    {"p_unicode", _PyCFunction_CAST(m_p_unicode), METH_VALUE|METH_O, m_p_unicode__doc__},
 
 static PyValue
 m_p_unicode_impl(PyObject *module, PyObject *a);
@@ -734,9 +694,6 @@ m_p_unicode(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObjec
     PyValue return_value = PyValue_NULL;
     PyObject *a;
 
-    if (!_PyArg_CheckArityValue("m.p_unicode()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         _PyArg_BadArgumentValue("p_unicode", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
@@ -754,7 +711,7 @@ exit:
 
 static PyValue
 m_p_unicode_impl(PyObject *module, PyObject *a)
-/*[clinic end generated code: output=8705f0d019c4f3bf input=dc63b84c18564b5e]*/
+/*[clinic end generated code: output=8f1091796aa7c1f4 input=dc63b84c18564b5e]*/
 
 
 /*[clinic input]
@@ -769,7 +726,7 @@ PyDoc_STRVAR(m_p_str__doc__,
 "\n");
 
 #define M_P_STR_METHODDEF    \
-    {"p_str", _PyCFunction_CAST(m_p_str), METH_VALUE, m_p_str__doc__},
+    {"p_str", _PyCFunction_CAST(m_p_str), METH_VALUE|METH_O, m_p_str__doc__},
 
 static PyValue
 m_p_str_impl(PyObject *module, const char *a);
@@ -780,9 +737,6 @@ m_p_str(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *k
     PyValue return_value = PyValue_NULL;
     const char *a;
 
-    if (!_PyArg_CheckArityValue("m.p_str()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         _PyArg_BadArgumentValue("p_str", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
@@ -803,7 +757,7 @@ exit:
 
 static PyValue
 m_p_str_impl(PyObject *module, const char *a)
-/*[clinic end generated code: output=a0e770d1b04967f5 input=300c1b82e89a8602]*/
+/*[clinic end generated code: output=8a312eceaadd8eac input=300c1b82e89a8602]*/
 
 
 /*[clinic input]
@@ -818,7 +772,7 @@ PyDoc_STRVAR(m_p_str_none__doc__,
 "\n");
 
 #define M_P_STR_NONE_METHODDEF    \
-    {"p_str_none", _PyCFunction_CAST(m_p_str_none), METH_VALUE, m_p_str_none__doc__},
+    {"p_str_none", _PyCFunction_CAST(m_p_str_none), METH_VALUE|METH_O, m_p_str_none__doc__},
 
 static PyValue
 m_p_str_none_impl(PyObject *module, const char *a);
@@ -829,9 +783,6 @@ m_p_str_none(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObje
     PyValue return_value = PyValue_NULL;
     const char *a;
 
-    if (!_PyArg_CheckArityValue("m.p_str_none()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         _PyArg_BadArgumentValue("p_str_none", "argument", "str or None", PyValue_Borrow(args[0]));
         goto exit;
@@ -857,7 +808,7 @@ exit:
 
 static PyValue
 m_p_str_none_impl(PyObject *module, const char *a)
-/*[clinic end generated code: output=863ebe3e5c79d6b1 input=e4c918eeb5121afa]*/
+/*[clinic end generated code: output=b2c88e45dc623495 input=e4c918eeb5121afa]*/
 
 
 /*[clinic input]
@@ -872,7 +823,7 @@ PyDoc_STRVAR(m_p_fs_decoded__doc__,
 "\n");
 
 #define M_P_FS_DECODED_METHODDEF    \
-    {"p_fs_decoded", _PyCFunction_CAST(m_p_fs_decoded), METH_VALUE, m_p_fs_decoded__doc__},
+    {"p_fs_decoded", _PyCFunction_CAST(m_p_fs_decoded), METH_VALUE|METH_O, m_p_fs_decoded__doc__},
 
 static PyValue
 m_p_fs_decoded_impl(PyObject *module, PyObject *a);
@@ -883,9 +834,6 @@ m_p_fs_decoded(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyOb
     PyValue return_value = PyValue_NULL;
     PyObject *a = NULL;
 
-    if (!_PyArg_CheckArityValue("m.p_fs_decoded()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         PyErr_Format(PyExc_TypeError, "expected str, bytes or os.PathLike object, not %.200s", PyValue_TYPE(PyValue_Borrow(args[0]))->tp_name);
         goto exit;
@@ -904,7 +852,7 @@ exit:
 
 static PyValue
 m_p_fs_decoded_impl(PyObject *module, PyObject *a)
-/*[clinic end generated code: output=446449e7d9c83379 input=4c11647e9a9556e8]*/
+/*[clinic end generated code: output=2242d6413f5baec8 input=4c11647e9a9556e8]*/
 
 
 /*[clinic input]
@@ -919,7 +867,7 @@ PyDoc_STRVAR(m_p_buffer__doc__,
 "\n");
 
 #define M_P_BUFFER_METHODDEF    \
-    {"p_buffer", _PyCFunction_CAST(m_p_buffer), METH_VALUE, m_p_buffer__doc__},
+    {"p_buffer", _PyCFunction_CAST(m_p_buffer), METH_VALUE|METH_O, m_p_buffer__doc__},
 
 static PyValue
 m_p_buffer_impl(PyObject *module, Py_buffer *a);
@@ -930,9 +878,6 @@ m_p_buffer(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject
     PyValue return_value = PyValue_NULL;
     Py_buffer a = {NULL, NULL};
 
-    if (!_PyArg_CheckArityValue("m.p_buffer()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[0]))->tp_name);
         goto exit;
@@ -953,7 +898,7 @@ exit:
 
 static PyValue
 m_p_buffer_impl(PyObject *module, Py_buffer *a)
-/*[clinic end generated code: output=ba437e620e7e36aa input=db645b20e4afb265]*/
+/*[clinic end generated code: output=178a3308dd993bb0 input=db645b20e4afb265]*/
 
 
 /*[clinic input]
@@ -968,7 +913,7 @@ PyDoc_STRVAR(m_p_buffer_str__doc__,
 "\n");
 
 #define M_P_BUFFER_STR_METHODDEF    \
-    {"p_buffer_str", _PyCFunction_CAST(m_p_buffer_str), METH_VALUE, m_p_buffer_str__doc__},
+    {"p_buffer_str", _PyCFunction_CAST(m_p_buffer_str), METH_VALUE|METH_O, m_p_buffer_str__doc__},
 
 static PyValue
 m_p_buffer_str_impl(PyObject *module, Py_buffer *a);
@@ -979,9 +924,6 @@ m_p_buffer_str(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyOb
     PyValue return_value = PyValue_NULL;
     Py_buffer a = {NULL, NULL};
 
-    if (!_PyArg_CheckArityValue("m.p_buffer_str()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[0]))->tp_name);
         goto exit;
@@ -1014,7 +956,7 @@ exit:
 
 static PyValue
 m_p_buffer_str_impl(PyObject *module, Py_buffer *a)
-/*[clinic end generated code: output=d70312c020ebf7f3 input=b8a9c925ed941387]*/
+/*[clinic end generated code: output=d1cc5619b389b414 input=b8a9c925ed941387]*/
 
 
 /*[clinic input]
@@ -1029,7 +971,7 @@ PyDoc_STRVAR(m_p_buffer_rw__doc__,
 "\n");
 
 #define M_P_BUFFER_RW_METHODDEF    \
-    {"p_buffer_rw", _PyCFunction_CAST(m_p_buffer_rw), METH_VALUE, m_p_buffer_rw__doc__},
+    {"p_buffer_rw", _PyCFunction_CAST(m_p_buffer_rw), METH_VALUE|METH_O, m_p_buffer_rw__doc__},
 
 static PyValue
 m_p_buffer_rw_impl(PyObject *module, Py_buffer *a);
@@ -1040,9 +982,6 @@ m_p_buffer_rw(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObj
     PyValue return_value = PyValue_NULL;
     Py_buffer a = {NULL, NULL};
 
-    if (!_PyArg_CheckArityValue("m.p_buffer_rw()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         _PyArg_BadArgumentValue("p_buffer_rw", "argument", "read-write bytes-like object", PyValue_Borrow(args[0]));
         goto exit;
@@ -1064,7 +1003,7 @@ exit:
 
 static PyValue
 m_p_buffer_rw_impl(PyObject *module, Py_buffer *a)
-/*[clinic end generated code: output=f392e3f511bb9012 input=4d663d5036cca93e]*/
+/*[clinic end generated code: output=aff884ce1d3ed099 input=4d663d5036cca93e]*/
 
 
 /*[clinic input]
@@ -1079,7 +1018,7 @@ PyDoc_STRVAR(m_p_int_str__doc__,
 "\n");
 
 #define M_P_INT_STR_METHODDEF    \
-    {"p_int_str", _PyCFunction_CAST(m_p_int_str), METH_VALUE, m_p_int_str__doc__},
+    {"p_int_str", _PyCFunction_CAST(m_p_int_str), METH_VALUE|METH_O, m_p_int_str__doc__},
 
 static PyValue
 m_p_int_str_impl(PyObject *module, int a);
@@ -1090,9 +1029,6 @@ m_p_int_str(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObjec
     PyValue return_value = PyValue_NULL;
     int a;
 
-    if (!_PyArg_CheckArityValue("m.p_int_str()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         _PyArg_BadArgumentValue("p_int_str", "argument", "a unicode character", PyValue_Borrow(args[0]));
         goto exit;
@@ -1117,7 +1053,7 @@ exit:
 
 static PyValue
 m_p_int_str_impl(PyObject *module, int a)
-/*[clinic end generated code: output=5a37c1cc8c567f80 input=51e83a237518dfbc]*/
+/*[clinic end generated code: output=2ef3dd13e280f96a input=51e83a237518dfbc]*/
 
 
 /*[clinic input]
@@ -1282,7 +1218,7 @@ PyDoc_STRVAR(m_s_noargs__doc__,
 "\n");
 
 #define M_S_NOARGS_METHODDEF    \
-    {"s_noargs", _PyCFunction_CAST(m_s_noargs), METH_VALUE, m_s_noargs__doc__},
+    {"s_noargs", _PyCFunction_CAST(m_s_noargs), METH_VALUE|METH_NOARGS, m_s_noargs__doc__},
 
 static PyValue
 m_s_noargs_impl(PyObject *module);
@@ -1292,18 +1228,14 @@ m_s_noargs(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("m.s_noargs()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = m_s_noargs_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
 static PyValue
 m_s_noargs_impl(PyObject *module)
-/*[clinic end generated code: output=ad76be7a132cc0a0 input=fc7deed602049763]*/
+/*[clinic end generated code: output=c4d98ca3ee1a2561 input=fc7deed602049763]*/
 
 
 /*[clinic input]
@@ -1316,7 +1248,7 @@ PyDoc_STRVAR(m_T_s_noargs__doc__,
 "\n");
 
 #define M_T_S_NOARGS_METHODDEF    \
-    {"s_noargs", _PyCFunction_CAST(m_T_s_noargs), METH_VALUE, m_T_s_noargs__doc__},
+    {"s_noargs", _PyCFunction_CAST(m_T_s_noargs), METH_VALUE|METH_NOARGS, m_T_s_noargs__doc__},
 
 static PyValue
 m_T_s_noargs_impl(TestObj *self);
@@ -1326,18 +1258,14 @@ m_T_s_noargs(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("T.s_noargs()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = m_T_s_noargs_impl((TestObj *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
 static PyValue
 m_T_s_noargs_impl(TestObj *self)
-/*[clinic end generated code: output=45efb73cf2b166a0 input=74cc8df829870cdd]*/
+/*[clinic end generated code: output=aa0c7daa89a5ab82 input=74cc8df829870cdd]*/
 
 
 /*[clinic input]
@@ -1352,7 +1280,7 @@ PyDoc_STRVAR(m_s_one__doc__,
 "\n");
 
 #define M_S_ONE_METHODDEF    \
-    {"s_one", _PyCFunction_CAST(m_s_one), METH_VALUE, m_s_one__doc__},
+    {"s_one", _PyCFunction_CAST(m_s_one), METH_VALUE|METH_O, m_s_one__doc__},
 
 static PyValue
 m_s_one_impl(PyObject *module, PyValueBorrow a);
@@ -1363,19 +1291,15 @@ m_s_one(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *k
     PyValue return_value = PyValue_NULL;
     PyValueBorrow a;
 
-    if (!_PyArg_CheckArityValue("m.s_one()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     a = PyValue_Borrow(args[0]);
     return_value = m_s_one_impl(PyValue_AsKnownObjectBorrow(module), a);
 
-exit:
     return return_value;
 }
 
 static PyValue
 m_s_one_impl(PyObject *module, PyValueBorrow a)
-/*[clinic end generated code: output=ae7938d62b5d7e79 input=5747c9b4ff7ea891]*/
+/*[clinic end generated code: output=0707875a9b3d592c input=5747c9b4ff7ea891]*/
 
 
 /*[clinic input]
@@ -1390,7 +1314,7 @@ PyDoc_STRVAR(m_T_s_one__doc__,
 "\n");
 
 #define M_T_S_ONE_METHODDEF    \
-    {"s_one", _PyCFunction_CAST(m_T_s_one), METH_VALUE, m_T_s_one__doc__},
+    {"s_one", _PyCFunction_CAST(m_T_s_one), METH_VALUE|METH_O, m_T_s_one__doc__},
 
 static PyValue
 m_T_s_one_impl(TestObj *self, PyValueBorrow a);
@@ -1401,19 +1325,15 @@ m_T_s_one(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *k
     PyValue return_value = PyValue_NULL;
     PyValueBorrow a;
 
-    if (!_PyArg_CheckArityValue("T.s_one()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     a = PyValue_Borrow(args[0]);
     return_value = m_T_s_one_impl((TestObj *)PyValue_AsKnownObjectBorrow(self), a);
 
-exit:
     return return_value;
 }
 
 static PyValue
 m_T_s_one_impl(TestObj *self, PyValueBorrow a)
-/*[clinic end generated code: output=622518f73fd46ce2 input=0f24fa955ffed3c2]*/
+/*[clinic end generated code: output=0fc89752c50fdc76 input=0f24fa955ffed3c2]*/
 
 
 /*[clinic input]
@@ -1813,7 +1733,7 @@ PyDoc_STRVAR(m_T_s_classmethod__doc__,
 "\n");
 
 #define M_T_S_CLASSMETHOD_METHODDEF    \
-    {"s_classmethod", _PyCFunction_CAST(m_T_s_classmethod), METH_VALUE|METH_CLASS, m_T_s_classmethod__doc__},
+    {"s_classmethod", _PyCFunction_CAST(m_T_s_classmethod), METH_VALUE|METH_O|METH_CLASS, m_T_s_classmethod__doc__},
 
 static PyValue
 m_T_s_classmethod_impl(PyTypeObject *type, PyValueBorrow a);
@@ -1824,19 +1744,15 @@ m_T_s_classmethod(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyO
     PyValue return_value = PyValue_NULL;
     PyValueBorrow a;
 
-    if (!_PyArg_CheckArityValue("T.s_classmethod()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     a = PyValue_Borrow(args[0]);
     return_value = m_T_s_classmethod_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), a);
 
-exit:
     return return_value;
 }
 
 static PyValue
 m_T_s_classmethod_impl(PyTypeObject *type, PyValueBorrow a)
-/*[clinic end generated code: output=08d28a2929d3984c input=678963802e343cb6]*/
+/*[clinic end generated code: output=f2cdb7d42a6777ad input=678963802e343cb6]*/
 
 
 /*[clinic input]
@@ -1903,7 +1819,7 @@ PyDoc_STRVAR(m_I_s_method__doc__,
 "\n");
 
 #define M_I_S_METHOD_METHODDEF    \
-    {"s_method", _PyCFunction_CAST(m_I_s_method), METH_VALUE, m_I_s_method__doc__},
+    {"s_method", _PyCFunction_CAST(m_I_s_method), METH_VALUE|METH_O, m_I_s_method__doc__},
 
 static PyValue
 m_I_s_method_impl(PyValueBorrow self, PyValueBorrow a);
@@ -1914,19 +1830,15 @@ m_I_s_method(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject
     PyValue return_value = PyValue_NULL;
     PyValueBorrow a;
 
-    if (!_PyArg_CheckArityValueMethod(&PyLong_Type, "s_method", nargs, kwnames, 1)) {
-        goto exit;
-    }
     a = PyValue_Borrow(args[0]);
     return_value = m_I_s_method_impl(self, a);
 
-exit:
     return return_value;
 }
 
 static PyValue
 m_I_s_method_impl(PyValueBorrow self, PyValueBorrow a)
-/*[clinic end generated code: output=75b489e8c39e7e4c input=ae2d1fc6c27d2088]*/
+/*[clinic end generated code: output=f0796687398cd456 input=ae2d1fc6c27d2088]*/
 
 
 /*[clinic input]
@@ -1939,7 +1851,7 @@ PyDoc_STRVAR(m_I_s_noargs__doc__,
 "\n");
 
 #define M_I_S_NOARGS_METHODDEF    \
-    {"s_noargs", _PyCFunction_CAST(m_I_s_noargs), METH_VALUE, m_I_s_noargs__doc__},
+    {"s_noargs", _PyCFunction_CAST(m_I_s_noargs), METH_VALUE|METH_NOARGS, m_I_s_noargs__doc__},
 
 static PyValue
 m_I_s_noargs_impl(PyValueBorrow self);
@@ -1949,18 +1861,14 @@ m_I_s_noargs(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyLong_Type, "s_noargs", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = m_I_s_noargs_impl(self);
 
-exit:
     return return_value;
 }
 
 static PyValue
 m_I_s_noargs_impl(PyValueBorrow self)
-/*[clinic end generated code: output=7965a4ad87e44b82 input=9be02c32b2b0e415]*/
+/*[clinic end generated code: output=63b9f7d087a58751 input=9be02c32b2b0e415]*/
 
 
 /*[clinic input]
@@ -1976,7 +1884,7 @@ PyDoc_STRVAR(m_T_s_critical__doc__,
 "\n");
 
 #define M_T_S_CRITICAL_METHODDEF    \
-    {"s_critical", _PyCFunction_CAST(m_T_s_critical), METH_VALUE, m_T_s_critical__doc__},
+    {"s_critical", _PyCFunction_CAST(m_T_s_critical), METH_VALUE|METH_O, m_T_s_critical__doc__},
 
 static PyValue
 m_T_s_critical_impl(TestObj *self, PyValueBorrow a);
@@ -1987,21 +1895,17 @@ m_T_s_critical(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObje
     PyValue return_value = PyValue_NULL;
     PyValueBorrow a;
 
-    if (!_PyArg_CheckArityValue("T.s_critical()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     a = PyValue_Borrow(args[0]);
     Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
     return_value = m_T_s_critical_impl((TestObj *)PyValue_AsKnownObjectBorrow(self), a);
     Py_END_CRITICAL_SECTION();
 
-exit:
     return return_value;
 }
 
 static PyValue
 m_T_s_critical_impl(TestObj *self, PyValueBorrow a)
-/*[clinic end generated code: output=95a53f4ae6f999c4 input=a528b101e7e82724]*/
+/*[clinic end generated code: output=44af9b51c69d501b input=a528b101e7e82724]*/
 
 /*[clinic input]
 @critical_section a
@@ -2016,7 +1920,7 @@ PyDoc_STRVAR(m_T_s_critical_target__doc__,
 "\n");
 
 #define M_T_S_CRITICAL_TARGET_METHODDEF    \
-    {"s_critical_target", _PyCFunction_CAST(m_T_s_critical_target), METH_VALUE, m_T_s_critical_target__doc__},
+    {"s_critical_target", _PyCFunction_CAST(m_T_s_critical_target), METH_VALUE|METH_O, m_T_s_critical_target__doc__},
 
 static PyValue
 m_T_s_critical_target_impl(TestObj *self, PyValueBorrow a);
@@ -2027,21 +1931,17 @@ m_T_s_critical_target(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
     PyValue return_value = PyValue_NULL;
     PyValueBorrow a;
 
-    if (!_PyArg_CheckArityValue("T.s_critical_target()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     a = PyValue_Borrow(args[0]);
     Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(a));
     return_value = m_T_s_critical_target_impl((TestObj *)PyValue_AsKnownObjectBorrow(self), a);
     Py_END_CRITICAL_SECTION();
 
-exit:
     return return_value;
 }
 
 static PyValue
 m_T_s_critical_target_impl(TestObj *self, PyValueBorrow a)
-/*[clinic end generated code: output=4701cefff9868bd9 input=9a6ff0a463de3d69]*/
+/*[clinic end generated code: output=982c0c5e18b0c9d2 input=9a6ff0a463de3d69]*/
 
 /*[clinic input]
 @critical_section self a
@@ -2056,7 +1956,7 @@ PyDoc_STRVAR(m_T_s_critical_two__doc__,
 "\n");
 
 #define M_T_S_CRITICAL_TWO_METHODDEF    \
-    {"s_critical_two", _PyCFunction_CAST(m_T_s_critical_two), METH_VALUE, m_T_s_critical_two__doc__},
+    {"s_critical_two", _PyCFunction_CAST(m_T_s_critical_two), METH_VALUE|METH_O, m_T_s_critical_two__doc__},
 
 static PyValue
 m_T_s_critical_two_impl(TestObj *self, PyValueBorrow a);
@@ -2067,21 +1967,17 @@ m_T_s_critical_two(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, Py
     PyValue return_value = PyValue_NULL;
     PyValueBorrow a;
 
-    if (!_PyArg_CheckArityValue("T.s_critical_two()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     a = PyValue_Borrow(args[0]);
     Py_BEGIN_CRITICAL_SECTION2(PyValue_AsKnownObjectBorrow(self), PyValue_AsKnownObjectBorrow(a));
     return_value = m_T_s_critical_two_impl((TestObj *)PyValue_AsKnownObjectBorrow(self), a);
     Py_END_CRITICAL_SECTION2();
 
-exit:
     return return_value;
 }
 
 static PyValue
 m_T_s_critical_two_impl(TestObj *self, PyValueBorrow a)
-/*[clinic end generated code: output=477d1106f27e2b25 input=5279915e942e1458]*/
+/*[clinic end generated code: output=b43c86d76cdf594a input=5279915e942e1458]*/
 
 
 /*[clinic input]
@@ -2178,7 +2074,7 @@ PyDoc_STRVAR(m_r_bool__doc__,
 "\n");
 
 #define M_R_BOOL_METHODDEF    \
-    {"r_bool", _PyCFunction_CAST(m_r_bool), METH_VALUE, m_r_bool__doc__},
+    {"r_bool", _PyCFunction_CAST(m_r_bool), METH_VALUE|METH_NOARGS, m_r_bool__doc__},
 
 static int
 m_r_bool_impl(PyObject *module);
@@ -2189,9 +2085,6 @@ m_r_bool(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *
     PyValue return_value = PyValue_NULL;
     int _return_value;
 
-    if (!_PyArg_CheckArityValue("m.r_bool()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     _return_value = m_r_bool_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
@@ -2204,7 +2097,7 @@ exit:
 
 static int
 m_r_bool_impl(PyObject *module)
-/*[clinic end generated code: output=7b797c474c0c9f79 input=3ffe2ef2ea564c9f]*/
+/*[clinic end generated code: output=1c697d0b63bf690e input=3ffe2ef2ea564c9f]*/
 
 
 /*[clinic input]
@@ -2217,7 +2110,7 @@ PyDoc_STRVAR(m_r_int__doc__,
 "\n");
 
 #define M_R_INT_METHODDEF    \
-    {"r_int", _PyCFunction_CAST(m_r_int), METH_VALUE, m_r_int__doc__},
+    {"r_int", _PyCFunction_CAST(m_r_int), METH_VALUE|METH_NOARGS, m_r_int__doc__},
 
 static int
 m_r_int_impl(PyObject *module);
@@ -2228,9 +2121,6 @@ m_r_int(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *k
     PyValue return_value = PyValue_NULL;
     int _return_value;
 
-    if (!_PyArg_CheckArityValue("m.r_int()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     _return_value = m_r_int_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
@@ -2243,7 +2133,7 @@ exit:
 
 static int
 m_r_int_impl(PyObject *module)
-/*[clinic end generated code: output=77a8bc40ac831ea5 input=f6e04136f0c29ef6]*/
+/*[clinic end generated code: output=c9731dcff133c7bd input=f6e04136f0c29ef6]*/
 
 
 /*[clinic input]
@@ -2256,7 +2146,7 @@ PyDoc_STRVAR(m_r_py_ssize_t__doc__,
 "\n");
 
 #define M_R_PY_SSIZE_T_METHODDEF    \
-    {"r_py_ssize_t", _PyCFunction_CAST(m_r_py_ssize_t), METH_VALUE, m_r_py_ssize_t__doc__},
+    {"r_py_ssize_t", _PyCFunction_CAST(m_r_py_ssize_t), METH_VALUE|METH_NOARGS, m_r_py_ssize_t__doc__},
 
 static Py_ssize_t
 m_r_py_ssize_t_impl(PyObject *module);
@@ -2267,9 +2157,6 @@ m_r_py_ssize_t(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyOb
     PyValue return_value = PyValue_NULL;
     Py_ssize_t _return_value;
 
-    if (!_PyArg_CheckArityValue("m.r_py_ssize_t()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     _return_value = m_r_py_ssize_t_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
@@ -2282,7 +2169,7 @@ exit:
 
 static Py_ssize_t
 m_r_py_ssize_t_impl(PyObject *module)
-/*[clinic end generated code: output=150d6db82581be86 input=853f6b73cb788e76]*/
+/*[clinic end generated code: output=31acf16eb8a5354d input=853f6b73cb788e76]*/
 
 
 /*[clinic input]
@@ -2295,7 +2182,7 @@ PyDoc_STRVAR(m_r_double__doc__,
 "\n");
 
 #define M_R_DOUBLE_METHODDEF    \
-    {"r_double", _PyCFunction_CAST(m_r_double), METH_VALUE, m_r_double__doc__},
+    {"r_double", _PyCFunction_CAST(m_r_double), METH_VALUE|METH_NOARGS, m_r_double__doc__},
 
 static double
 m_r_double_impl(PyObject *module);
@@ -2306,9 +2193,6 @@ m_r_double(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject
     PyValue return_value = PyValue_NULL;
     double _return_value;
 
-    if (!_PyArg_CheckArityValue("m.r_double()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     _return_value = m_r_double_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == -1.0) && PyErr_Occurred()) {
         goto exit;
@@ -2321,7 +2205,7 @@ exit:
 
 static double
 m_r_double_impl(PyObject *module)
-/*[clinic end generated code: output=40c3302b88557abc input=e64f22ac6e6c71de]*/
+/*[clinic end generated code: output=d9cbe3081ddd9c1e input=e64f22ac6e6c71de]*/
 
 
 /*[clinic input]
@@ -2334,7 +2218,7 @@ PyDoc_STRVAR(m_r_long__doc__,
 "\n");
 
 #define M_R_LONG_METHODDEF    \
-    {"r_long", _PyCFunction_CAST(m_r_long), METH_VALUE, m_r_long__doc__},
+    {"r_long", _PyCFunction_CAST(m_r_long), METH_VALUE|METH_NOARGS, m_r_long__doc__},
 
 static long
 m_r_long_impl(PyObject *module);
@@ -2345,9 +2229,6 @@ m_r_long(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *
     PyValue return_value = PyValue_NULL;
     long _return_value;
 
-    if (!_PyArg_CheckArityValue("m.r_long()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     _return_value = m_r_long_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
@@ -2360,7 +2241,7 @@ exit:
 
 static long
 m_r_long_impl(PyObject *module)
-/*[clinic end generated code: output=856ec36b2b896c32 input=5cd21e679694bc0d]*/
+/*[clinic end generated code: output=a95cca61ccc20400 input=5cd21e679694bc0d]*/
 
 
 /*[clinic input]
@@ -2373,7 +2254,7 @@ PyDoc_STRVAR(m_r_unsigned_long__doc__,
 "\n");
 
 #define M_R_UNSIGNED_LONG_METHODDEF    \
-    {"r_unsigned_long", _PyCFunction_CAST(m_r_unsigned_long), METH_VALUE, m_r_unsigned_long__doc__},
+    {"r_unsigned_long", _PyCFunction_CAST(m_r_unsigned_long), METH_VALUE|METH_NOARGS, m_r_unsigned_long__doc__},
 
 static unsigned long
 m_r_unsigned_long_impl(PyObject *module);
@@ -2384,9 +2265,6 @@ m_r_unsigned_long(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, P
     PyValue return_value = PyValue_NULL;
     unsigned long _return_value;
 
-    if (!_PyArg_CheckArityValue("m.r_unsigned_long()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     _return_value = m_r_unsigned_long_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == (unsigned long)-1) && PyErr_Occurred()) {
         goto exit;
@@ -2401,7 +2279,7 @@ exit:
 
 static unsigned long
 m_r_unsigned_long_impl(PyObject *module)
-/*[clinic end generated code: output=93711a9786695546 input=dc087f072849e06b]*/
+/*[clinic end generated code: output=59417007fb31720c input=dc087f072849e06b]*/
 
 
 /*[clinic input]
@@ -2414,7 +2292,7 @@ PyDoc_STRVAR(m_r_size_t__doc__,
 "\n");
 
 #define M_R_SIZE_T_METHODDEF    \
-    {"r_size_t", _PyCFunction_CAST(m_r_size_t), METH_VALUE, m_r_size_t__doc__},
+    {"r_size_t", _PyCFunction_CAST(m_r_size_t), METH_VALUE|METH_NOARGS, m_r_size_t__doc__},
 
 static size_t
 m_r_size_t_impl(PyObject *module);
@@ -2425,9 +2303,6 @@ m_r_size_t(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject
     PyValue return_value = PyValue_NULL;
     size_t _return_value;
 
-    if (!_PyArg_CheckArityValue("m.r_size_t()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     _return_value = m_r_size_t_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == (size_t)-1) && PyErr_Occurred()) {
         goto exit;
@@ -2442,7 +2317,7 @@ exit:
 
 static size_t
 m_r_size_t_impl(PyObject *module)
-/*[clinic end generated code: output=83a02249ffac1150 input=2932238de30af1f7]*/
+/*[clinic end generated code: output=41071c2934059ad0 input=2932238de30af1f7]*/
 
 
 /*[clinic input]
@@ -2455,7 +2330,7 @@ PyDoc_STRVAR(m_r_float__doc__,
 "\n");
 
 #define M_R_FLOAT_METHODDEF    \
-    {"r_float", _PyCFunction_CAST(m_r_float), METH_VALUE, m_r_float__doc__},
+    {"r_float", _PyCFunction_CAST(m_r_float), METH_VALUE|METH_NOARGS, m_r_float__doc__},
 
 static float
 m_r_float_impl(PyObject *module);
@@ -2466,9 +2341,6 @@ m_r_float(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject 
     PyValue return_value = PyValue_NULL;
     float _return_value;
 
-    if (!_PyArg_CheckArityValue("m.r_float()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     _return_value = m_r_float_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == -1.0) && PyErr_Occurred()) {
         goto exit;
@@ -2481,7 +2353,7 @@ exit:
 
 static float
 m_r_float_impl(PyObject *module)
-/*[clinic end generated code: output=6dff11d928acb18e input=a57dc6b7adb09707]*/
+/*[clinic end generated code: output=75a9546d0a345177 input=a57dc6b7adb09707]*/
 
 
 /*[clinic input]

@@ -133,7 +133,7 @@ PyDoc_STRVAR(sys_displayhook__doc__,
 "Print an object to sys.stdout and also save it in builtins._");
 
 #define SYS_DISPLAYHOOK_METHODDEF    \
-    {"displayhook", _PyCFunction_CAST(sys_displayhook), METH_VALUE, sys_displayhook__doc__},
+    {"displayhook", _PyCFunction_CAST(sys_displayhook), METH_VALUE|METH_O, sys_displayhook__doc__},
 
 static PyValue
 sys_displayhook_impl(PyObject *module, PyValueBorrow o);
@@ -144,13 +144,9 @@ sys_displayhook(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyO
     PyValue return_value = PyValue_NULL;
     PyValueBorrow o;
 
-    if (!_PyArg_CheckArityValue("sys.displayhook()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     o = PyValue_Borrow(args[0]);
     return_value = sys_displayhook_impl(PyValue_AsKnownObjectBorrow(module), o);
 
-exit:
     return return_value;
 }
 
@@ -201,7 +197,7 @@ PyDoc_STRVAR(sys_exception__doc__,
 "if no such exception exists.");
 
 #define SYS_EXCEPTION_METHODDEF    \
-    {"exception", _PyCFunction_CAST(sys_exception), METH_VALUE, sys_exception__doc__},
+    {"exception", _PyCFunction_CAST(sys_exception), METH_VALUE|METH_NOARGS, sys_exception__doc__},
 
 static PyValue
 sys_exception_impl(PyObject *module);
@@ -211,12 +207,8 @@ sys_exception(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObj
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys.exception()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys_exception_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -230,7 +222,7 @@ PyDoc_STRVAR(sys_exc_info__doc__,
 "clause in the current stack frame or in an older stack frame.");
 
 #define SYS_EXC_INFO_METHODDEF    \
-    {"exc_info", _PyCFunction_CAST(sys_exc_info), METH_VALUE, sys_exc_info__doc__},
+    {"exc_info", _PyCFunction_CAST(sys_exc_info), METH_VALUE|METH_NOARGS, sys_exc_info__doc__},
 
 static PyValue
 sys_exc_info_impl(PyObject *module);
@@ -240,12 +232,8 @@ sys_exc_info(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObje
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys.exc_info()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys_exc_info_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -264,7 +252,7 @@ PyDoc_STRVAR(sys_unraisablehook__doc__,
 "* object: Object causing the exception, can be None.");
 
 #define SYS_UNRAISABLEHOOK_METHODDEF    \
-    {"unraisablehook", _PyCFunction_CAST(sys_unraisablehook), METH_VALUE, sys_unraisablehook__doc__},
+    {"unraisablehook", _PyCFunction_CAST(sys_unraisablehook), METH_VALUE|METH_O, sys_unraisablehook__doc__},
 
 static PyValue
 sys_unraisablehook_impl(PyObject *module, PyValueBorrow unraisable);
@@ -275,13 +263,9 @@ sys_unraisablehook(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, 
     PyValue return_value = PyValue_NULL;
     PyValueBorrow unraisable;
 
-    if (!_PyArg_CheckArityValue("sys.unraisablehook()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     unraisable = PyValue_Borrow(args[0]);
     return_value = sys_unraisablehook_impl(PyValue_AsKnownObjectBorrow(module), unraisable);
 
-exit:
     return return_value;
 }
 
@@ -332,7 +316,7 @@ PyDoc_STRVAR(sys_getdefaultencoding__doc__,
 "Return the current default encoding used by the Unicode implementation.");
 
 #define SYS_GETDEFAULTENCODING_METHODDEF    \
-    {"getdefaultencoding", _PyCFunction_CAST(sys_getdefaultencoding), METH_VALUE, sys_getdefaultencoding__doc__},
+    {"getdefaultencoding", _PyCFunction_CAST(sys_getdefaultencoding), METH_VALUE|METH_NOARGS, sys_getdefaultencoding__doc__},
 
 static PyValue
 sys_getdefaultencoding_impl(PyObject *module);
@@ -342,12 +326,8 @@ sys_getdefaultencoding(PyValueBorrow module, const PyValue *args, Py_ssize_t nar
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys.getdefaultencoding()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys_getdefaultencoding_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -358,7 +338,7 @@ PyDoc_STRVAR(sys_getfilesystemencoding__doc__,
 "Return the encoding used to convert Unicode filenames to OS filenames.");
 
 #define SYS_GETFILESYSTEMENCODING_METHODDEF    \
-    {"getfilesystemencoding", _PyCFunction_CAST(sys_getfilesystemencoding), METH_VALUE, sys_getfilesystemencoding__doc__},
+    {"getfilesystemencoding", _PyCFunction_CAST(sys_getfilesystemencoding), METH_VALUE|METH_NOARGS, sys_getfilesystemencoding__doc__},
 
 static PyValue
 sys_getfilesystemencoding_impl(PyObject *module);
@@ -368,12 +348,8 @@ sys_getfilesystemencoding(PyValueBorrow module, const PyValue *args, Py_ssize_t 
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys.getfilesystemencoding()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys_getfilesystemencoding_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -384,7 +360,7 @@ PyDoc_STRVAR(sys_getfilesystemencodeerrors__doc__,
 "Return the error mode used Unicode to OS filename conversion.");
 
 #define SYS_GETFILESYSTEMENCODEERRORS_METHODDEF    \
-    {"getfilesystemencodeerrors", _PyCFunction_CAST(sys_getfilesystemencodeerrors), METH_VALUE, sys_getfilesystemencodeerrors__doc__},
+    {"getfilesystemencodeerrors", _PyCFunction_CAST(sys_getfilesystemencodeerrors), METH_VALUE|METH_NOARGS, sys_getfilesystemencodeerrors__doc__},
 
 static PyValue
 sys_getfilesystemencodeerrors_impl(PyObject *module);
@@ -394,12 +370,8 @@ sys_getfilesystemencodeerrors(PyValueBorrow module, const PyValue *args, Py_ssiz
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys.getfilesystemencodeerrors()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys_getfilesystemencodeerrors_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -414,7 +386,7 @@ PyDoc_STRVAR(sys_intern__doc__,
 "the previously interned string object with the same value.");
 
 #define SYS_INTERN_METHODDEF    \
-    {"intern", _PyCFunction_CAST(sys_intern), METH_VALUE, sys_intern__doc__},
+    {"intern", _PyCFunction_CAST(sys_intern), METH_VALUE|METH_O, sys_intern__doc__},
 
 static PyValue
 sys_intern_impl(PyObject *module, PyObject *s);
@@ -425,9 +397,6 @@ sys_intern(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject
     PyValue return_value = PyValue_NULL;
     PyObject *s;
 
-    if (!_PyArg_CheckArityValue("sys.intern()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         _PyArg_BadArgumentValue("intern", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
@@ -450,7 +419,7 @@ PyDoc_STRVAR(sys__is_interned__doc__,
 "Return True if the given string is \"interned\".");
 
 #define SYS__IS_INTERNED_METHODDEF    \
-    {"_is_interned", _PyCFunction_CAST(sys__is_interned), METH_VALUE, sys__is_interned__doc__},
+    {"_is_interned", _PyCFunction_CAST(sys__is_interned), METH_VALUE|METH_O, sys__is_interned__doc__},
 
 static int
 sys__is_interned_impl(PyObject *module, PyObject *string);
@@ -462,9 +431,6 @@ sys__is_interned(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, Py
     PyObject *string;
     int _return_value;
 
-    if (!_PyArg_CheckArityValue("sys._is_interned()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         _PyArg_BadArgumentValue("_is_interned", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
@@ -493,7 +459,7 @@ PyDoc_STRVAR(sys__is_immortal__doc__,
 "This function should be used for specialized purposes only.");
 
 #define SYS__IS_IMMORTAL_METHODDEF    \
-    {"_is_immortal", _PyCFunction_CAST(sys__is_immortal), METH_VALUE, sys__is_immortal__doc__},
+    {"_is_immortal", _PyCFunction_CAST(sys__is_immortal), METH_VALUE|METH_O, sys__is_immortal__doc__},
 
 static int
 sys__is_immortal_impl(PyObject *module, PyValueBorrow op);
@@ -505,9 +471,6 @@ sys__is_immortal(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, Py
     PyValueBorrow op;
     int _return_value;
 
-    if (!_PyArg_CheckArityValue("sys._is_immortal()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     op = PyValue_Borrow(args[0]);
     _return_value = sys__is_immortal_impl(PyValue_AsKnownObjectBorrow(module), op);
     if ((_return_value == -1) && PyErr_Occurred()) {
@@ -529,7 +492,7 @@ PyDoc_STRVAR(sys_settrace__doc__,
 "in the library manual.");
 
 #define SYS_SETTRACE_METHODDEF    \
-    {"settrace", _PyCFunction_CAST(sys_settrace), METH_VALUE, sys_settrace__doc__},
+    {"settrace", _PyCFunction_CAST(sys_settrace), METH_VALUE|METH_O, sys_settrace__doc__},
 
 static PyValue
 sys_settrace_impl(PyObject *module, PyValueBorrow function);
@@ -540,13 +503,9 @@ sys_settrace(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObje
     PyValue return_value = PyValue_NULL;
     PyValueBorrow function;
 
-    if (!_PyArg_CheckArityValue("sys.settrace()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     function = PyValue_Borrow(args[0]);
     return_value = sys_settrace_impl(PyValue_AsKnownObjectBorrow(module), function);
 
-exit:
     return return_value;
 }
 
@@ -560,7 +519,7 @@ PyDoc_STRVAR(sys__settraceallthreads__doc__,
 "in the library manual.");
 
 #define SYS__SETTRACEALLTHREADS_METHODDEF    \
-    {"_settraceallthreads", _PyCFunction_CAST(sys__settraceallthreads), METH_VALUE, sys__settraceallthreads__doc__},
+    {"_settraceallthreads", _PyCFunction_CAST(sys__settraceallthreads), METH_VALUE|METH_O, sys__settraceallthreads__doc__},
 
 static PyValue
 sys__settraceallthreads_impl(PyObject *module, PyValueBorrow arg);
@@ -571,13 +530,9 @@ sys__settraceallthreads(PyValueBorrow module, const PyValue *args, Py_ssize_t na
     PyValue return_value = PyValue_NULL;
     PyValueBorrow arg;
 
-    if (!_PyArg_CheckArityValue("sys._settraceallthreads()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     arg = PyValue_Borrow(args[0]);
     return_value = sys__settraceallthreads_impl(PyValue_AsKnownObjectBorrow(module), arg);
 
-exit:
     return return_value;
 }
 
@@ -590,7 +545,7 @@ PyDoc_STRVAR(sys_gettrace__doc__,
 "See the debugger chapter in the library manual.");
 
 #define SYS_GETTRACE_METHODDEF    \
-    {"gettrace", _PyCFunction_CAST(sys_gettrace), METH_VALUE, sys_gettrace__doc__},
+    {"gettrace", _PyCFunction_CAST(sys_gettrace), METH_VALUE|METH_NOARGS, sys_gettrace__doc__},
 
 static PyValue
 sys_gettrace_impl(PyObject *module);
@@ -600,12 +555,8 @@ sys_gettrace(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObje
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys.gettrace()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys_gettrace_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -619,7 +570,7 @@ PyDoc_STRVAR(sys_setprofile__doc__,
 "chapter in the library manual.");
 
 #define SYS_SETPROFILE_METHODDEF    \
-    {"setprofile", _PyCFunction_CAST(sys_setprofile), METH_VALUE, sys_setprofile__doc__},
+    {"setprofile", _PyCFunction_CAST(sys_setprofile), METH_VALUE|METH_O, sys_setprofile__doc__},
 
 static PyValue
 sys_setprofile_impl(PyObject *module, PyValueBorrow function);
@@ -630,13 +581,9 @@ sys_setprofile(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyOb
     PyValue return_value = PyValue_NULL;
     PyValueBorrow function;
 
-    if (!_PyArg_CheckArityValue("sys.setprofile()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     function = PyValue_Borrow(args[0]);
     return_value = sys_setprofile_impl(PyValue_AsKnownObjectBorrow(module), function);
 
-exit:
     return return_value;
 }
 
@@ -650,7 +597,7 @@ PyDoc_STRVAR(sys__setprofileallthreads__doc__,
 "chapter in the library manual.");
 
 #define SYS__SETPROFILEALLTHREADS_METHODDEF    \
-    {"_setprofileallthreads", _PyCFunction_CAST(sys__setprofileallthreads), METH_VALUE, sys__setprofileallthreads__doc__},
+    {"_setprofileallthreads", _PyCFunction_CAST(sys__setprofileallthreads), METH_VALUE|METH_O, sys__setprofileallthreads__doc__},
 
 static PyValue
 sys__setprofileallthreads_impl(PyObject *module, PyValueBorrow arg);
@@ -661,13 +608,9 @@ sys__setprofileallthreads(PyValueBorrow module, const PyValue *args, Py_ssize_t 
     PyValue return_value = PyValue_NULL;
     PyValueBorrow arg;
 
-    if (!_PyArg_CheckArityValue("sys._setprofileallthreads()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     arg = PyValue_Borrow(args[0]);
     return_value = sys__setprofileallthreads_impl(PyValue_AsKnownObjectBorrow(module), arg);
 
-exit:
     return return_value;
 }
 
@@ -680,7 +623,7 @@ PyDoc_STRVAR(sys_getprofile__doc__,
 "See the profiler chapter in the library manual.");
 
 #define SYS_GETPROFILE_METHODDEF    \
-    {"getprofile", _PyCFunction_CAST(sys_getprofile), METH_VALUE, sys_getprofile__doc__},
+    {"getprofile", _PyCFunction_CAST(sys_getprofile), METH_VALUE|METH_NOARGS, sys_getprofile__doc__},
 
 static PyValue
 sys_getprofile_impl(PyObject *module);
@@ -690,12 +633,8 @@ sys_getprofile(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyOb
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys.getprofile()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys_getprofile_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -713,7 +652,7 @@ PyDoc_STRVAR(sys_setswitchinterval__doc__,
 "A typical value is 0.005 (5 milliseconds).");
 
 #define SYS_SETSWITCHINTERVAL_METHODDEF    \
-    {"setswitchinterval", _PyCFunction_CAST(sys_setswitchinterval), METH_VALUE, sys_setswitchinterval__doc__},
+    {"setswitchinterval", _PyCFunction_CAST(sys_setswitchinterval), METH_VALUE|METH_O, sys_setswitchinterval__doc__},
 
 static PyValue
 sys_setswitchinterval_impl(PyObject *module, double interval);
@@ -724,9 +663,6 @@ sys_setswitchinterval(PyValueBorrow module, const PyValue *args, Py_ssize_t narg
     PyValue return_value = PyValue_NULL;
     double interval;
 
-    if (!_PyArg_CheckArityValue("sys.setswitchinterval()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     interval = _PyValue_AsDouble(PyValue_Borrow(args[0]));
     if (interval == -1.0 && PyErr_Occurred()) {
         goto exit;
@@ -744,7 +680,7 @@ PyDoc_STRVAR(sys_getswitchinterval__doc__,
 "Return the current thread switch interval; see sys.setswitchinterval().");
 
 #define SYS_GETSWITCHINTERVAL_METHODDEF    \
-    {"getswitchinterval", _PyCFunction_CAST(sys_getswitchinterval), METH_VALUE, sys_getswitchinterval__doc__},
+    {"getswitchinterval", _PyCFunction_CAST(sys_getswitchinterval), METH_VALUE|METH_NOARGS, sys_getswitchinterval__doc__},
 
 static double
 sys_getswitchinterval_impl(PyObject *module);
@@ -755,9 +691,6 @@ sys_getswitchinterval(PyValueBorrow module, const PyValue *args, Py_ssize_t narg
     PyValue return_value = PyValue_NULL;
     double _return_value;
 
-    if (!_PyArg_CheckArityValue("sys.getswitchinterval()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     _return_value = sys_getswitchinterval_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == -1.0) && PyErr_Occurred()) {
         goto exit;
@@ -779,7 +712,7 @@ PyDoc_STRVAR(sys_setrecursionlimit__doc__,
 "dependent.");
 
 #define SYS_SETRECURSIONLIMIT_METHODDEF    \
-    {"setrecursionlimit", _PyCFunction_CAST(sys_setrecursionlimit), METH_VALUE, sys_setrecursionlimit__doc__},
+    {"setrecursionlimit", _PyCFunction_CAST(sys_setrecursionlimit), METH_VALUE|METH_O, sys_setrecursionlimit__doc__},
 
 static PyValue
 sys_setrecursionlimit_impl(PyObject *module, int new_limit);
@@ -790,9 +723,6 @@ sys_setrecursionlimit(PyValueBorrow module, const PyValue *args, Py_ssize_t narg
     PyValue return_value = PyValue_NULL;
     int new_limit;
 
-    if (!_PyArg_CheckArityValue("sys.setrecursionlimit()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     new_limit = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (new_limit == -1 && PyErr_Occurred()) {
         goto exit;
@@ -875,7 +805,7 @@ PyDoc_STRVAR(sys_get_coroutine_origin_tracking_depth__doc__,
 "Check status of origin tracking for coroutine objects in this thread.");
 
 #define SYS_GET_COROUTINE_ORIGIN_TRACKING_DEPTH_METHODDEF    \
-    {"get_coroutine_origin_tracking_depth", _PyCFunction_CAST(sys_get_coroutine_origin_tracking_depth), METH_VALUE, sys_get_coroutine_origin_tracking_depth__doc__},
+    {"get_coroutine_origin_tracking_depth", _PyCFunction_CAST(sys_get_coroutine_origin_tracking_depth), METH_VALUE|METH_NOARGS, sys_get_coroutine_origin_tracking_depth__doc__},
 
 static int
 sys_get_coroutine_origin_tracking_depth_impl(PyObject *module);
@@ -886,9 +816,6 @@ sys_get_coroutine_origin_tracking_depth(PyValueBorrow module, const PyValue *arg
     PyValue return_value = PyValue_NULL;
     int _return_value;
 
-    if (!_PyArg_CheckArityValue("sys.get_coroutine_origin_tracking_depth()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     _return_value = sys_get_coroutine_origin_tracking_depth_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
@@ -973,7 +900,7 @@ PyDoc_STRVAR(sys_get_asyncgen_hooks__doc__,
 "This returns a namedtuple of the form (firstiter, finalizer).");
 
 #define SYS_GET_ASYNCGEN_HOOKS_METHODDEF    \
-    {"get_asyncgen_hooks", _PyCFunction_CAST(sys_get_asyncgen_hooks), METH_VALUE, sys_get_asyncgen_hooks__doc__},
+    {"get_asyncgen_hooks", _PyCFunction_CAST(sys_get_asyncgen_hooks), METH_VALUE|METH_NOARGS, sys_get_asyncgen_hooks__doc__},
 
 static PyValue
 sys_get_asyncgen_hooks_impl(PyObject *module);
@@ -983,12 +910,8 @@ sys_get_asyncgen_hooks(PyValueBorrow module, const PyValue *args, Py_ssize_t nar
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys.get_asyncgen_hooks()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys_get_asyncgen_hooks_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -1003,7 +926,7 @@ PyDoc_STRVAR(sys_getrecursionlimit__doc__,
 "of the C stack and crashing Python.");
 
 #define SYS_GETRECURSIONLIMIT_METHODDEF    \
-    {"getrecursionlimit", _PyCFunction_CAST(sys_getrecursionlimit), METH_VALUE, sys_getrecursionlimit__doc__},
+    {"getrecursionlimit", _PyCFunction_CAST(sys_getrecursionlimit), METH_VALUE|METH_NOARGS, sys_getrecursionlimit__doc__},
 
 static PyValue
 sys_getrecursionlimit_impl(PyObject *module);
@@ -1013,12 +936,8 @@ sys_getrecursionlimit(PyValueBorrow module, const PyValue *args, Py_ssize_t narg
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys.getrecursionlimit()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys_getrecursionlimit_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -1041,7 +960,7 @@ PyDoc_STRVAR(sys_getwindowsversion__doc__,
 "intended for identifying the OS rather than feature detection.");
 
 #define SYS_GETWINDOWSVERSION_METHODDEF    \
-    {"getwindowsversion", _PyCFunction_CAST(sys_getwindowsversion), METH_VALUE, sys_getwindowsversion__doc__},
+    {"getwindowsversion", _PyCFunction_CAST(sys_getwindowsversion), METH_VALUE|METH_NOARGS, sys_getwindowsversion__doc__},
 
 static PyValue
 sys_getwindowsversion_impl(PyObject *module);
@@ -1051,12 +970,8 @@ sys_getwindowsversion(PyValueBorrow module, const PyValue *args, Py_ssize_t narg
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys.getwindowsversion()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys_getwindowsversion_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -1079,7 +994,7 @@ PyDoc_STRVAR(sys_setdlopenflags__doc__,
 "os.RTLD_LAZY).");
 
 #define SYS_SETDLOPENFLAGS_METHODDEF    \
-    {"setdlopenflags", _PyCFunction_CAST(sys_setdlopenflags), METH_VALUE, sys_setdlopenflags__doc__},
+    {"setdlopenflags", _PyCFunction_CAST(sys_setdlopenflags), METH_VALUE|METH_O, sys_setdlopenflags__doc__},
 
 static PyValue
 sys_setdlopenflags_impl(PyObject *module, int new_val);
@@ -1090,9 +1005,6 @@ sys_setdlopenflags(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, 
     PyValue return_value = PyValue_NULL;
     int new_val;
 
-    if (!_PyArg_CheckArityValue("sys.setdlopenflags()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     new_val = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (new_val == -1 && PyErr_Occurred()) {
         goto exit;
@@ -1116,7 +1028,7 @@ PyDoc_STRVAR(sys_getdlopenflags__doc__,
 "The flag constants are defined in the os module.");
 
 #define SYS_GETDLOPENFLAGS_METHODDEF    \
-    {"getdlopenflags", _PyCFunction_CAST(sys_getdlopenflags), METH_VALUE, sys_getdlopenflags__doc__},
+    {"getdlopenflags", _PyCFunction_CAST(sys_getdlopenflags), METH_VALUE|METH_NOARGS, sys_getdlopenflags__doc__},
 
 static PyValue
 sys_getdlopenflags_impl(PyObject *module);
@@ -1126,12 +1038,8 @@ sys_getdlopenflags(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, 
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys.getdlopenflags()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys_getdlopenflags_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -1145,7 +1053,7 @@ PyDoc_STRVAR(sys_mdebug__doc__,
 "\n");
 
 #define SYS_MDEBUG_METHODDEF    \
-    {"mdebug", _PyCFunction_CAST(sys_mdebug), METH_VALUE, sys_mdebug__doc__},
+    {"mdebug", _PyCFunction_CAST(sys_mdebug), METH_VALUE|METH_O, sys_mdebug__doc__},
 
 static PyValue
 sys_mdebug_impl(PyObject *module, int flag);
@@ -1156,9 +1064,6 @@ sys_mdebug(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject
     PyValue return_value = PyValue_NULL;
     int flag;
 
-    if (!_PyArg_CheckArityValue("sys.mdebug()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     flag = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (flag == -1 && PyErr_Occurred()) {
         goto exit;
@@ -1178,7 +1083,7 @@ PyDoc_STRVAR(sys_get_int_max_str_digits__doc__,
 "Return the maximum string digits limit for non-binary int<->str conversions.");
 
 #define SYS_GET_INT_MAX_STR_DIGITS_METHODDEF    \
-    {"get_int_max_str_digits", _PyCFunction_CAST(sys_get_int_max_str_digits), METH_VALUE, sys_get_int_max_str_digits__doc__},
+    {"get_int_max_str_digits", _PyCFunction_CAST(sys_get_int_max_str_digits), METH_VALUE|METH_NOARGS, sys_get_int_max_str_digits__doc__},
 
 static PyValue
 sys_get_int_max_str_digits_impl(PyObject *module);
@@ -1188,12 +1093,8 @@ sys_get_int_max_str_digits(PyValueBorrow module, const PyValue *args, Py_ssize_t
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys.get_int_max_str_digits()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys_get_int_max_str_digits_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -1329,7 +1230,7 @@ PyDoc_STRVAR(sys_getrefcount__doc__,
 "getrefcount().");
 
 #define SYS_GETREFCOUNT_METHODDEF    \
-    {"getrefcount", _PyCFunction_CAST(sys_getrefcount), METH_VALUE, sys_getrefcount__doc__},
+    {"getrefcount", _PyCFunction_CAST(sys_getrefcount), METH_VALUE|METH_O, sys_getrefcount__doc__},
 
 static Py_ssize_t
 sys_getrefcount_impl(PyObject *module, PyValueBorrow object);
@@ -1341,9 +1242,6 @@ sys_getrefcount(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyO
     PyValueBorrow object;
     Py_ssize_t _return_value;
 
-    if (!_PyArg_CheckArityValue("sys.getrefcount()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     object = PyValue_Borrow(args[0]);
     _return_value = sys_getrefcount_impl(PyValue_AsKnownObjectBorrow(module), object);
     if ((_return_value == -1) && PyErr_Occurred()) {
@@ -1363,7 +1261,7 @@ PyDoc_STRVAR(sys_gettotalrefcount__doc__,
 "\n");
 
 #define SYS_GETTOTALREFCOUNT_METHODDEF    \
-    {"gettotalrefcount", _PyCFunction_CAST(sys_gettotalrefcount), METH_VALUE, sys_gettotalrefcount__doc__},
+    {"gettotalrefcount", _PyCFunction_CAST(sys_gettotalrefcount), METH_VALUE|METH_NOARGS, sys_gettotalrefcount__doc__},
 
 static Py_ssize_t
 sys_gettotalrefcount_impl(PyObject *module);
@@ -1374,9 +1272,6 @@ sys_gettotalrefcount(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs
     PyValue return_value = PyValue_NULL;
     Py_ssize_t _return_value;
 
-    if (!_PyArg_CheckArityValue("sys.gettotalrefcount()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     _return_value = sys_gettotalrefcount_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
@@ -1396,7 +1291,7 @@ PyDoc_STRVAR(sys_getallocatedblocks__doc__,
 "Return the number of memory blocks currently allocated.");
 
 #define SYS_GETALLOCATEDBLOCKS_METHODDEF    \
-    {"getallocatedblocks", _PyCFunction_CAST(sys_getallocatedblocks), METH_VALUE, sys_getallocatedblocks__doc__},
+    {"getallocatedblocks", _PyCFunction_CAST(sys_getallocatedblocks), METH_VALUE|METH_NOARGS, sys_getallocatedblocks__doc__},
 
 static Py_ssize_t
 sys_getallocatedblocks_impl(PyObject *module);
@@ -1407,9 +1302,6 @@ sys_getallocatedblocks(PyValueBorrow module, const PyValue *args, Py_ssize_t nar
     PyValue return_value = PyValue_NULL;
     Py_ssize_t _return_value;
 
-    if (!_PyArg_CheckArityValue("sys.getallocatedblocks()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     _return_value = sys_getallocatedblocks_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
@@ -1542,7 +1434,7 @@ PyDoc_STRVAR(sys__current_frames__doc__,
 "This function should be used for specialized purposes only.");
 
 #define SYS__CURRENT_FRAMES_METHODDEF    \
-    {"_current_frames", _PyCFunction_CAST(sys__current_frames), METH_VALUE, sys__current_frames__doc__},
+    {"_current_frames", _PyCFunction_CAST(sys__current_frames), METH_VALUE|METH_NOARGS, sys__current_frames__doc__},
 
 static PyValue
 sys__current_frames_impl(PyObject *module);
@@ -1552,12 +1444,8 @@ sys__current_frames(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs,
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys._current_frames()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys__current_frames_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -1570,7 +1458,7 @@ PyDoc_STRVAR(sys__current_exceptions__doc__,
 "This function should be used for specialized purposes only.");
 
 #define SYS__CURRENT_EXCEPTIONS_METHODDEF    \
-    {"_current_exceptions", _PyCFunction_CAST(sys__current_exceptions), METH_VALUE, sys__current_exceptions__doc__},
+    {"_current_exceptions", _PyCFunction_CAST(sys__current_exceptions), METH_VALUE|METH_NOARGS, sys__current_exceptions__doc__},
 
 static PyValue
 sys__current_exceptions_impl(PyObject *module);
@@ -1580,12 +1468,8 @@ sys__current_exceptions(PyValueBorrow module, const PyValue *args, Py_ssize_t na
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys._current_exceptions()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys__current_exceptions_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -1641,7 +1525,7 @@ PyDoc_STRVAR(sys__debugmallocstats__doc__,
 "checks.");
 
 #define SYS__DEBUGMALLOCSTATS_METHODDEF    \
-    {"_debugmallocstats", _PyCFunction_CAST(sys__debugmallocstats), METH_VALUE, sys__debugmallocstats__doc__},
+    {"_debugmallocstats", _PyCFunction_CAST(sys__debugmallocstats), METH_VALUE|METH_NOARGS, sys__debugmallocstats__doc__},
 
 static PyValue
 sys__debugmallocstats_impl(PyObject *module);
@@ -1651,12 +1535,8 @@ sys__debugmallocstats(PyValueBorrow module, const PyValue *args, Py_ssize_t narg
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys._debugmallocstats()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys__debugmallocstats_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -1667,7 +1547,7 @@ PyDoc_STRVAR(sys__clear_type_cache__doc__,
 "Clear the internal type lookup cache.");
 
 #define SYS__CLEAR_TYPE_CACHE_METHODDEF    \
-    {"_clear_type_cache", _PyCFunction_CAST(sys__clear_type_cache), METH_VALUE, sys__clear_type_cache__doc__},
+    {"_clear_type_cache", _PyCFunction_CAST(sys__clear_type_cache), METH_VALUE|METH_NOARGS, sys__clear_type_cache__doc__},
 
 static PyValue
 sys__clear_type_cache_impl(PyObject *module);
@@ -1677,12 +1557,8 @@ sys__clear_type_cache(PyValueBorrow module, const PyValue *args, Py_ssize_t narg
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys._clear_type_cache()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys__clear_type_cache_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -1693,7 +1569,7 @@ PyDoc_STRVAR(sys__clear_internal_caches__doc__,
 "Clear all internal performance-related caches.");
 
 #define SYS__CLEAR_INTERNAL_CACHES_METHODDEF    \
-    {"_clear_internal_caches", _PyCFunction_CAST(sys__clear_internal_caches), METH_VALUE, sys__clear_internal_caches__doc__},
+    {"_clear_internal_caches", _PyCFunction_CAST(sys__clear_internal_caches), METH_VALUE|METH_NOARGS, sys__clear_internal_caches__doc__},
 
 static PyValue
 sys__clear_internal_caches_impl(PyObject *module);
@@ -1703,12 +1579,8 @@ sys__clear_internal_caches(PyValueBorrow module, const PyValue *args, Py_ssize_t
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys._clear_internal_caches()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys__clear_internal_caches_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -1719,7 +1591,7 @@ PyDoc_STRVAR(sys_is_finalizing__doc__,
 "Return True if Python is exiting.");
 
 #define SYS_IS_FINALIZING_METHODDEF    \
-    {"is_finalizing", _PyCFunction_CAST(sys_is_finalizing), METH_VALUE, sys_is_finalizing__doc__},
+    {"is_finalizing", _PyCFunction_CAST(sys_is_finalizing), METH_VALUE|METH_NOARGS, sys_is_finalizing__doc__},
 
 static PyValue
 sys_is_finalizing_impl(PyObject *module);
@@ -1729,12 +1601,8 @@ sys_is_finalizing(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, P
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys.is_finalizing()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys_is_finalizing_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -1747,7 +1615,7 @@ PyDoc_STRVAR(sys__stats_on__doc__,
 "Turns on stats gathering (stats gathering is off by default).");
 
 #define SYS__STATS_ON_METHODDEF    \
-    {"_stats_on", _PyCFunction_CAST(sys__stats_on), METH_VALUE, sys__stats_on__doc__},
+    {"_stats_on", _PyCFunction_CAST(sys__stats_on), METH_VALUE|METH_NOARGS, sys__stats_on__doc__},
 
 static PyValue
 sys__stats_on_impl(PyObject *module);
@@ -1757,12 +1625,8 @@ sys__stats_on(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObj
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys._stats_on()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys__stats_on_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -1777,7 +1641,7 @@ PyDoc_STRVAR(sys__stats_off__doc__,
 "Turns off stats gathering (stats gathering is off by default).");
 
 #define SYS__STATS_OFF_METHODDEF    \
-    {"_stats_off", _PyCFunction_CAST(sys__stats_off), METH_VALUE, sys__stats_off__doc__},
+    {"_stats_off", _PyCFunction_CAST(sys__stats_off), METH_VALUE|METH_NOARGS, sys__stats_off__doc__},
 
 static PyValue
 sys__stats_off_impl(PyObject *module);
@@ -1787,12 +1651,8 @@ sys__stats_off(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyOb
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys._stats_off()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys__stats_off_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -1807,7 +1667,7 @@ PyDoc_STRVAR(sys__stats_clear__doc__,
 "Clears the stats.");
 
 #define SYS__STATS_CLEAR_METHODDEF    \
-    {"_stats_clear", _PyCFunction_CAST(sys__stats_clear), METH_VALUE, sys__stats_clear__doc__},
+    {"_stats_clear", _PyCFunction_CAST(sys__stats_clear), METH_VALUE|METH_NOARGS, sys__stats_clear__doc__},
 
 static PyValue
 sys__stats_clear_impl(PyObject *module);
@@ -1817,12 +1677,8 @@ sys__stats_clear(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, Py
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys._stats_clear()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys__stats_clear_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -1840,7 +1696,7 @@ PyDoc_STRVAR(sys__stats_dump__doc__,
 "was off.");
 
 #define SYS__STATS_DUMP_METHODDEF    \
-    {"_stats_dump", _PyCFunction_CAST(sys__stats_dump), METH_VALUE, sys__stats_dump__doc__},
+    {"_stats_dump", _PyCFunction_CAST(sys__stats_dump), METH_VALUE|METH_NOARGS, sys__stats_dump__doc__},
 
 static int
 sys__stats_dump_impl(PyObject *module);
@@ -1851,9 +1707,6 @@ sys__stats_dump(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyO
     PyValue return_value = PyValue_NULL;
     int _return_value;
 
-    if (!_PyArg_CheckArityValue("sys._stats_dump()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     _return_value = sys__stats_dump_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
@@ -1875,7 +1728,7 @@ PyDoc_STRVAR(sys_getandroidapilevel__doc__,
 "Return the build time API version of Android as an integer.");
 
 #define SYS_GETANDROIDAPILEVEL_METHODDEF    \
-    {"getandroidapilevel", _PyCFunction_CAST(sys_getandroidapilevel), METH_VALUE, sys_getandroidapilevel__doc__},
+    {"getandroidapilevel", _PyCFunction_CAST(sys_getandroidapilevel), METH_VALUE|METH_NOARGS, sys_getandroidapilevel__doc__},
 
 static PyValue
 sys_getandroidapilevel_impl(PyObject *module);
@@ -1885,12 +1738,8 @@ sys_getandroidapilevel(PyValueBorrow module, const PyValue *args, Py_ssize_t nar
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys.getandroidapilevel()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys_getandroidapilevel_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -1903,7 +1752,7 @@ PyDoc_STRVAR(sys_activate_stack_trampoline__doc__,
 "Activate stack profiler trampoline *backend*.");
 
 #define SYS_ACTIVATE_STACK_TRAMPOLINE_METHODDEF    \
-    {"activate_stack_trampoline", _PyCFunction_CAST(sys_activate_stack_trampoline), METH_VALUE, sys_activate_stack_trampoline__doc__},
+    {"activate_stack_trampoline", _PyCFunction_CAST(sys_activate_stack_trampoline), METH_VALUE|METH_O, sys_activate_stack_trampoline__doc__},
 
 static PyValue
 sys_activate_stack_trampoline_impl(PyObject *module, const char *backend);
@@ -1914,9 +1763,6 @@ sys_activate_stack_trampoline(PyValueBorrow module, const PyValue *args, Py_ssiz
     PyValue return_value = PyValue_NULL;
     const char *backend;
 
-    if (!_PyArg_CheckArityValue("sys.activate_stack_trampoline()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         _PyArg_BadArgumentValue("activate_stack_trampoline", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
@@ -1944,7 +1790,7 @@ PyDoc_STRVAR(sys_deactivate_stack_trampoline__doc__,
 "If no stack profiler is activated, this function has no effect.");
 
 #define SYS_DEACTIVATE_STACK_TRAMPOLINE_METHODDEF    \
-    {"deactivate_stack_trampoline", _PyCFunction_CAST(sys_deactivate_stack_trampoline), METH_VALUE, sys_deactivate_stack_trampoline__doc__},
+    {"deactivate_stack_trampoline", _PyCFunction_CAST(sys_deactivate_stack_trampoline), METH_VALUE|METH_NOARGS, sys_deactivate_stack_trampoline__doc__},
 
 static PyValue
 sys_deactivate_stack_trampoline_impl(PyObject *module);
@@ -1954,12 +1800,8 @@ sys_deactivate_stack_trampoline(PyValueBorrow module, const PyValue *args, Py_ss
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys.deactivate_stack_trampoline()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys_deactivate_stack_trampoline_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -1970,7 +1812,7 @@ PyDoc_STRVAR(sys_is_stack_trampoline_active__doc__,
 "Return *True* if a stack profiler trampoline is active.");
 
 #define SYS_IS_STACK_TRAMPOLINE_ACTIVE_METHODDEF    \
-    {"is_stack_trampoline_active", _PyCFunction_CAST(sys_is_stack_trampoline_active), METH_VALUE, sys_is_stack_trampoline_active__doc__},
+    {"is_stack_trampoline_active", _PyCFunction_CAST(sys_is_stack_trampoline_active), METH_VALUE|METH_NOARGS, sys_is_stack_trampoline_active__doc__},
 
 static PyValue
 sys_is_stack_trampoline_active_impl(PyObject *module);
@@ -1980,12 +1822,8 @@ sys_is_stack_trampoline_active(PyValueBorrow module, const PyValue *args, Py_ssi
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys.is_stack_trampoline_active()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys_is_stack_trampoline_active_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -1996,7 +1834,7 @@ PyDoc_STRVAR(sys_is_remote_debug_enabled__doc__,
 "Return True if remote debugging is enabled, False otherwise.");
 
 #define SYS_IS_REMOTE_DEBUG_ENABLED_METHODDEF    \
-    {"is_remote_debug_enabled", _PyCFunction_CAST(sys_is_remote_debug_enabled), METH_VALUE, sys_is_remote_debug_enabled__doc__},
+    {"is_remote_debug_enabled", _PyCFunction_CAST(sys_is_remote_debug_enabled), METH_VALUE|METH_NOARGS, sys_is_remote_debug_enabled__doc__},
 
 static PyValue
 sys_is_remote_debug_enabled_impl(PyObject *module);
@@ -2006,12 +1844,8 @@ sys_is_remote_debug_enabled(PyValueBorrow module, const PyValue *args, Py_ssize_
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys.is_remote_debug_enabled()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys_is_remote_debug_enabled_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -2169,7 +2003,7 @@ PyDoc_STRVAR(sys__get_cpu_count_config__doc__,
 "Private function for getting PyConfig.cpu_count");
 
 #define SYS__GET_CPU_COUNT_CONFIG_METHODDEF    \
-    {"_get_cpu_count_config", _PyCFunction_CAST(sys__get_cpu_count_config), METH_VALUE, sys__get_cpu_count_config__doc__},
+    {"_get_cpu_count_config", _PyCFunction_CAST(sys__get_cpu_count_config), METH_VALUE|METH_NOARGS, sys__get_cpu_count_config__doc__},
 
 static int
 sys__get_cpu_count_config_impl(PyObject *module);
@@ -2180,9 +2014,6 @@ sys__get_cpu_count_config(PyValueBorrow module, const PyValue *args, Py_ssize_t 
     PyValue return_value = PyValue_NULL;
     int _return_value;
 
-    if (!_PyArg_CheckArityValue("sys._get_cpu_count_config()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     _return_value = sys__get_cpu_count_config_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
@@ -2200,7 +2031,7 @@ PyDoc_STRVAR(sys__baserepl__doc__,
 "Private function for getting the base REPL");
 
 #define SYS__BASEREPL_METHODDEF    \
-    {"_baserepl", _PyCFunction_CAST(sys__baserepl), METH_VALUE, sys__baserepl__doc__},
+    {"_baserepl", _PyCFunction_CAST(sys__baserepl), METH_VALUE|METH_NOARGS, sys__baserepl__doc__},
 
 static PyValue
 sys__baserepl_impl(PyObject *module);
@@ -2210,12 +2041,8 @@ sys__baserepl(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObj
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys._baserepl()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys__baserepl_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -2226,7 +2053,7 @@ PyDoc_STRVAR(sys__is_gil_enabled__doc__,
 "Return True if the GIL is currently enabled and False otherwise.");
 
 #define SYS__IS_GIL_ENABLED_METHODDEF    \
-    {"_is_gil_enabled", _PyCFunction_CAST(sys__is_gil_enabled), METH_VALUE, sys__is_gil_enabled__doc__},
+    {"_is_gil_enabled", _PyCFunction_CAST(sys__is_gil_enabled), METH_VALUE|METH_NOARGS, sys__is_gil_enabled__doc__},
 
 static int
 sys__is_gil_enabled_impl(PyObject *module);
@@ -2237,9 +2064,6 @@ sys__is_gil_enabled(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs,
     PyValue return_value = PyValue_NULL;
     int _return_value;
 
-    if (!_PyArg_CheckArityValue("sys._is_gil_enabled()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     _return_value = sys__is_gil_enabled_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
@@ -2324,7 +2148,7 @@ PyDoc_STRVAR(sys_get_lazy_imports_filter__doc__,
 "Returns the filter callable or None if no filter is set.");
 
 #define SYS_GET_LAZY_IMPORTS_FILTER_METHODDEF    \
-    {"get_lazy_imports_filter", _PyCFunction_CAST(sys_get_lazy_imports_filter), METH_VALUE, sys_get_lazy_imports_filter__doc__},
+    {"get_lazy_imports_filter", _PyCFunction_CAST(sys_get_lazy_imports_filter), METH_VALUE|METH_NOARGS, sys_get_lazy_imports_filter__doc__},
 
 static PyValue
 sys_get_lazy_imports_filter_impl(PyObject *module);
@@ -2334,12 +2158,8 @@ sys_get_lazy_imports_filter(PyValueBorrow module, const PyValue *args, Py_ssize_
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys.get_lazy_imports_filter()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys_get_lazy_imports_filter_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -2418,7 +2238,7 @@ PyDoc_STRVAR(sys_get_lazy_imports__doc__,
 "Returns \"normal\" if only explicitly marked imports are lazy.");
 
 #define SYS_GET_LAZY_IMPORTS_METHODDEF    \
-    {"get_lazy_imports", _PyCFunction_CAST(sys_get_lazy_imports), METH_VALUE, sys_get_lazy_imports__doc__},
+    {"get_lazy_imports", _PyCFunction_CAST(sys_get_lazy_imports), METH_VALUE|METH_NOARGS, sys_get_lazy_imports__doc__},
 
 static PyValue
 sys_get_lazy_imports_impl(PyObject *module);
@@ -2428,12 +2248,8 @@ sys_get_lazy_imports(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("sys.get_lazy_imports()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = sys_get_lazy_imports_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -2444,7 +2260,7 @@ PyDoc_STRVAR(_jit_is_available__doc__,
 "Return True if the current Python executable supports JIT compilation, and False otherwise.");
 
 #define _JIT_IS_AVAILABLE_METHODDEF    \
-    {"is_available", _PyCFunction_CAST(_jit_is_available), METH_VALUE, _jit_is_available__doc__},
+    {"is_available", _PyCFunction_CAST(_jit_is_available), METH_VALUE|METH_NOARGS, _jit_is_available__doc__},
 
 static int
 _jit_is_available_impl(PyObject *module);
@@ -2455,9 +2271,6 @@ _jit_is_available(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, P
     PyValue return_value = PyValue_NULL;
     int _return_value;
 
-    if (!_PyArg_CheckArityValue("_jit.is_available()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     _return_value = _jit_is_available_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
@@ -2475,7 +2288,7 @@ PyDoc_STRVAR(_jit_is_enabled__doc__,
 "Return True if JIT compilation is enabled for the current Python process (implies sys._jit.is_available()), and False otherwise.");
 
 #define _JIT_IS_ENABLED_METHODDEF    \
-    {"is_enabled", _PyCFunction_CAST(_jit_is_enabled), METH_VALUE, _jit_is_enabled__doc__},
+    {"is_enabled", _PyCFunction_CAST(_jit_is_enabled), METH_VALUE|METH_NOARGS, _jit_is_enabled__doc__},
 
 static int
 _jit_is_enabled_impl(PyObject *module);
@@ -2486,9 +2299,6 @@ _jit_is_enabled(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyO
     PyValue return_value = PyValue_NULL;
     int _return_value;
 
-    if (!_PyArg_CheckArityValue("_jit.is_enabled()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     _return_value = _jit_is_enabled_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
@@ -2506,7 +2316,7 @@ PyDoc_STRVAR(_jit_is_active__doc__,
 "Return True if the topmost Python frame is currently executing JIT code (implies sys._jit.is_enabled()), and False otherwise.");
 
 #define _JIT_IS_ACTIVE_METHODDEF    \
-    {"is_active", _PyCFunction_CAST(_jit_is_active), METH_VALUE, _jit_is_active__doc__},
+    {"is_active", _PyCFunction_CAST(_jit_is_active), METH_VALUE|METH_NOARGS, _jit_is_active__doc__},
 
 static int
 _jit_is_active_impl(PyObject *module);
@@ -2517,9 +2327,6 @@ _jit_is_active(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyOb
     PyValue return_value = PyValue_NULL;
     int _return_value;
 
-    if (!_PyArg_CheckArityValue("_jit.is_active()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     _return_value = _jit_is_active_impl(PyValue_AsKnownObjectBorrow(module));
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
@@ -2569,4 +2376,4 @@ exit:
 #ifndef SYS_GETANDROIDAPILEVEL_METHODDEF
     #define SYS_GETANDROIDAPILEVEL_METHODDEF
 #endif /* !defined(SYS_GETANDROIDAPILEVEL_METHODDEF) */
-/*[clinic end generated code: output=67f5b48f0c6bbf62 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=93f085c1b1e158d7 input=a9049054013a1b77]*/

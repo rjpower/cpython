@@ -4627,9 +4627,11 @@ dummy_func(
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             EXIT_IF(!PyCFunction_CheckExact(callable_o));
             int flags = PyCFunction_GET_FLAGS(callable_o) & _Py_METH_CALL_FLAGS;
-            /* A METH_VALUE function reaches the same value vectorcall: it
-               takes no keyword flag, and CALL passes no keywords. */
-            EXIT_IF(flags != METH_FASTCALL && flags != METH_VALUE);
+            /* A METH_VALUE function (alone or with METH_NOARGS or METH_O)
+               reaches the same value vectorcall: it takes no keyword flag,
+               and CALL passes no keywords. */
+            EXIT_IF(flags != METH_FASTCALL
+                    && (flags & ~(METH_NOARGS | METH_O)) != METH_VALUE);
         }
 
         op(_CALL_BUILTIN_FAST, (callable, self_or_null, args[oparg] -- callable, self_or_null, args[oparg])) {
@@ -4966,7 +4968,8 @@ dummy_func(
             /* Builtin METH_FASTCALL methods, without keywords */
             EXIT_IF(!Py_IS_TYPE(method, &PyMethodDescr_Type));
             int flags = method->d_method->ml_flags & _Py_METH_CALL_FLAGS;
-            EXIT_IF(flags != METH_FASTCALL && flags != METH_VALUE);
+            EXIT_IF(flags != METH_FASTCALL
+                    && (flags & ~(METH_NOARGS | METH_O)) != METH_VALUE);
             int total_args = oparg;
             if (!PyValue_IsNull(self_or_null)) {
                 total_args++;

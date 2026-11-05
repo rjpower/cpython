@@ -161,7 +161,7 @@ PyDoc_STRVAR(memoryview_release__doc__,
 "Release the underlying buffer exposed by the memoryview object.");
 
 #define MEMORYVIEW_RELEASE_METHODDEF    \
-    {"release", _PyCFunction_CAST(memoryview_release), METH_VALUE, memoryview_release__doc__},
+    {"release", _PyCFunction_CAST(memoryview_release), METH_VALUE|METH_NOARGS, memoryview_release__doc__},
 
 static PyValue
 memoryview_release_impl(PyMemoryViewObject *self);
@@ -171,12 +171,8 @@ memoryview_release(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, Py
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyMemoryView_Type, "release", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = memoryview_release_impl((PyMemoryViewObject *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -311,7 +307,7 @@ PyDoc_STRVAR(memoryview_toreadonly__doc__,
 "Return a readonly version of the memoryview.");
 
 #define MEMORYVIEW_TOREADONLY_METHODDEF    \
-    {"toreadonly", _PyCFunction_CAST(memoryview_toreadonly), METH_VALUE, memoryview_toreadonly__doc__},
+    {"toreadonly", _PyCFunction_CAST(memoryview_toreadonly), METH_VALUE|METH_NOARGS, memoryview_toreadonly__doc__},
 
 static PyValue
 memoryview_toreadonly_impl(PyMemoryViewObject *self);
@@ -321,12 +317,8 @@ memoryview_toreadonly(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs,
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyMemoryView_Type, "toreadonly", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = memoryview_toreadonly_impl((PyMemoryViewObject *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -337,7 +329,7 @@ PyDoc_STRVAR(memoryview_tolist__doc__,
 "Return the data in the buffer as a list of elements.");
 
 #define MEMORYVIEW_TOLIST_METHODDEF    \
-    {"tolist", _PyCFunction_CAST(memoryview_tolist), METH_VALUE, memoryview_tolist__doc__},
+    {"tolist", _PyCFunction_CAST(memoryview_tolist), METH_VALUE|METH_NOARGS, memoryview_tolist__doc__},
 
 static PyValue
 memoryview_tolist_impl(PyMemoryViewObject *self);
@@ -347,12 +339,8 @@ memoryview_tolist(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyO
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyMemoryView_Type, "tolist", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = memoryview_tolist_impl((PyMemoryViewObject *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -537,7 +525,7 @@ PyDoc_STRVAR(memoryview_count__doc__,
 "Count the number of occurrences of a value.");
 
 #define MEMORYVIEW_COUNT_METHODDEF    \
-    {"count", _PyCFunction_CAST(memoryview_count), METH_VALUE, memoryview_count__doc__},
+    {"count", _PyCFunction_CAST(memoryview_count), METH_VALUE|METH_O, memoryview_count__doc__},
 
 static PyValue
 memoryview_count_impl(PyMemoryViewObject *self, PyValueBorrow value);
@@ -548,13 +536,9 @@ memoryview_count(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyOb
     PyValue return_value = PyValue_NULL;
     PyValueBorrow value;
 
-    if (!_PyArg_CheckArityValueMethod(&PyMemoryView_Type, "count", nargs, kwnames, 1)) {
-        goto exit;
-    }
     value = PyValue_Borrow(args[0]);
     return_value = memoryview_count_impl((PyMemoryViewObject *)PyValue_AsKnownObjectBorrow(self), value);
 
-exit:
     return return_value;
 }
 
@@ -606,4 +590,4 @@ skip_optional:
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=b89f7d8b7b08494e input=a9049054013a1b77]*/
+/*[clinic end generated code: output=ffdbd8c6d8280b4a input=a9049054013a1b77]*/

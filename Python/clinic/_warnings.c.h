@@ -12,7 +12,7 @@ preserve
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
-#include "pycore_modsupport.h"    // _PyArg_CheckArityValue()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
 #include "pycore_value_call.h"    // METH_VALUE
 #include "pycore_value_ops.h"     // _PyValue_Index()
 
@@ -22,7 +22,7 @@ PyDoc_STRVAR(warnings_acquire_lock__doc__,
 "\n");
 
 #define WARNINGS_ACQUIRE_LOCK_METHODDEF    \
-    {"_acquire_lock", _PyCFunction_CAST(warnings_acquire_lock), METH_VALUE, warnings_acquire_lock__doc__},
+    {"_acquire_lock", _PyCFunction_CAST(warnings_acquire_lock), METH_VALUE|METH_NOARGS, warnings_acquire_lock__doc__},
 
 static PyValue
 warnings_acquire_lock_impl(PyObject *module);
@@ -32,12 +32,8 @@ warnings_acquire_lock(PyValueBorrow module, const PyValue *args, Py_ssize_t narg
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("_warnings._acquire_lock()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = warnings_acquire_lock_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -47,7 +43,7 @@ PyDoc_STRVAR(warnings_release_lock__doc__,
 "\n");
 
 #define WARNINGS_RELEASE_LOCK_METHODDEF    \
-    {"_release_lock", _PyCFunction_CAST(warnings_release_lock), METH_VALUE, warnings_release_lock__doc__},
+    {"_release_lock", _PyCFunction_CAST(warnings_release_lock), METH_VALUE|METH_NOARGS, warnings_release_lock__doc__},
 
 static PyValue
 warnings_release_lock_impl(PyObject *module);
@@ -57,12 +53,8 @@ warnings_release_lock(PyValueBorrow module, const PyValue *args, Py_ssize_t narg
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("_warnings._release_lock()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = warnings_release_lock_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -273,7 +265,7 @@ PyDoc_STRVAR(warnings_filters_mutated_lock_held__doc__,
 "\n");
 
 #define WARNINGS_FILTERS_MUTATED_LOCK_HELD_METHODDEF    \
-    {"_filters_mutated_lock_held", _PyCFunction_CAST(warnings_filters_mutated_lock_held), METH_VALUE, warnings_filters_mutated_lock_held__doc__},
+    {"_filters_mutated_lock_held", _PyCFunction_CAST(warnings_filters_mutated_lock_held), METH_VALUE|METH_NOARGS, warnings_filters_mutated_lock_held__doc__},
 
 static PyValue
 warnings_filters_mutated_lock_held_impl(PyObject *module);
@@ -283,12 +275,8 @@ warnings_filters_mutated_lock_held(PyValueBorrow module, const PyValue *args, Py
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("_warnings._filters_mutated_lock_held()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = warnings_filters_mutated_lock_held_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
-/*[clinic end generated code: output=011614eeed161b88 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=a99e727f480b37b1 input=a9049054013a1b77]*/

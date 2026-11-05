@@ -52,7 +52,7 @@ PyDoc_STRVAR(monitoring_clear_tool_id__doc__,
 "\n");
 
 #define MONITORING_CLEAR_TOOL_ID_METHODDEF    \
-    {"clear_tool_id", _PyCFunction_CAST(monitoring_clear_tool_id), METH_VALUE, monitoring_clear_tool_id__doc__},
+    {"clear_tool_id", _PyCFunction_CAST(monitoring_clear_tool_id), METH_VALUE|METH_O, monitoring_clear_tool_id__doc__},
 
 static PyValue
 monitoring_clear_tool_id_impl(PyObject *module, int tool_id);
@@ -63,9 +63,6 @@ monitoring_clear_tool_id(PyValueBorrow module, const PyValue *args, Py_ssize_t n
     PyValue return_value = PyValue_NULL;
     int tool_id;
 
-    if (!_PyArg_CheckArityValue("monitoring.clear_tool_id()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     tool_id = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (tool_id == -1 && PyErr_Occurred()) {
         goto exit;
@@ -82,7 +79,7 @@ PyDoc_STRVAR(monitoring_free_tool_id__doc__,
 "\n");
 
 #define MONITORING_FREE_TOOL_ID_METHODDEF    \
-    {"free_tool_id", _PyCFunction_CAST(monitoring_free_tool_id), METH_VALUE, monitoring_free_tool_id__doc__},
+    {"free_tool_id", _PyCFunction_CAST(monitoring_free_tool_id), METH_VALUE|METH_O, monitoring_free_tool_id__doc__},
 
 static PyValue
 monitoring_free_tool_id_impl(PyObject *module, int tool_id);
@@ -93,9 +90,6 @@ monitoring_free_tool_id(PyValueBorrow module, const PyValue *args, Py_ssize_t na
     PyValue return_value = PyValue_NULL;
     int tool_id;
 
-    if (!_PyArg_CheckArityValue("monitoring.free_tool_id()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     tool_id = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (tool_id == -1 && PyErr_Occurred()) {
         goto exit;
@@ -112,7 +106,7 @@ PyDoc_STRVAR(monitoring_get_tool__doc__,
 "\n");
 
 #define MONITORING_GET_TOOL_METHODDEF    \
-    {"get_tool", _PyCFunction_CAST(monitoring_get_tool), METH_VALUE, monitoring_get_tool__doc__},
+    {"get_tool", _PyCFunction_CAST(monitoring_get_tool), METH_VALUE|METH_O, monitoring_get_tool__doc__},
 
 static PyValue
 monitoring_get_tool_impl(PyObject *module, int tool_id);
@@ -123,9 +117,6 @@ monitoring_get_tool(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs,
     PyValue return_value = PyValue_NULL;
     int tool_id;
 
-    if (!_PyArg_CheckArityValue("monitoring.get_tool()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     tool_id = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (tool_id == -1 && PyErr_Occurred()) {
         goto exit;
@@ -183,7 +174,7 @@ PyDoc_STRVAR(monitoring_get_events__doc__,
 "\n");
 
 #define MONITORING_GET_EVENTS_METHODDEF    \
-    {"get_events", _PyCFunction_CAST(monitoring_get_events), METH_VALUE, monitoring_get_events__doc__},
+    {"get_events", _PyCFunction_CAST(monitoring_get_events), METH_VALUE|METH_O, monitoring_get_events__doc__},
 
 static int
 monitoring_get_events_impl(PyObject *module, int tool_id);
@@ -195,9 +186,6 @@ monitoring_get_events(PyValueBorrow module, const PyValue *args, Py_ssize_t narg
     int tool_id;
     int _return_value;
 
-    if (!_PyArg_CheckArityValue("monitoring.get_events()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     tool_id = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (tool_id == -1 && PyErr_Occurred()) {
         goto exit;
@@ -338,7 +326,7 @@ PyDoc_STRVAR(monitoring_restart_events__doc__,
 "\n");
 
 #define MONITORING_RESTART_EVENTS_METHODDEF    \
-    {"restart_events", _PyCFunction_CAST(monitoring_restart_events), METH_VALUE, monitoring_restart_events__doc__},
+    {"restart_events", _PyCFunction_CAST(monitoring_restart_events), METH_VALUE|METH_NOARGS, monitoring_restart_events__doc__},
 
 static PyValue
 monitoring_restart_events_impl(PyObject *module);
@@ -348,12 +336,8 @@ monitoring_restart_events(PyValueBorrow module, const PyValue *args, Py_ssize_t 
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("monitoring.restart_events()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = monitoring_restart_events_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -363,7 +347,7 @@ PyDoc_STRVAR(monitoring__all_events__doc__,
 "\n");
 
 #define MONITORING__ALL_EVENTS_METHODDEF    \
-    {"_all_events", _PyCFunction_CAST(monitoring__all_events), METH_VALUE, monitoring__all_events__doc__},
+    {"_all_events", _PyCFunction_CAST(monitoring__all_events), METH_VALUE|METH_NOARGS, monitoring__all_events__doc__},
 
 static PyValue
 monitoring__all_events_impl(PyObject *module);
@@ -373,12 +357,8 @@ monitoring__all_events(PyValueBorrow module, const PyValue *args, Py_ssize_t nar
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("monitoring._all_events()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = monitoring__all_events_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
-/*[clinic end generated code: output=f56d42624617d0bc input=a9049054013a1b77]*/
+/*[clinic end generated code: output=1c87ef01c6b96fda input=a9049054013a1b77]*/

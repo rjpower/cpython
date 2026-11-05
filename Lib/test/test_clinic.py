@@ -6041,15 +6041,14 @@ class ValueEmissionTests(unittest.TestCase):
                 a: object
                 /
         """)
-        self.assertIn('_PyCFunction_CAST(m_f), METH_VALUE, m_f__doc__}', generated)
+        self.assertIn('_PyCFunction_CAST(m_f), METH_VALUE|METH_O, m_f__doc__}', generated)
         self.assertNotIn('METH_FASTCALL', generated)
-        self.assertNotIn('METH_O', generated)
 
     def test_method_is_meth_value(self):
         generated = self.generate("""
             m.T.f
         """)
-        self.assertIn('METH_VALUE, m_T_f__doc__}', generated)
+        self.assertIn('METH_VALUE|METH_NOARGS, m_T_f__doc__}', generated)
         self.assertNotIn('METH_VALUE|METH_METHOD', generated)
 
     def test_defining_class_is_meth_value_method(self):
@@ -6108,7 +6107,8 @@ class ValueEmissionTests(unittest.TestCase):
         generated = self.generate("""
             m.f
         """)
-        self.assertIn('_PyArg_CheckArityValue("m.f()", nargs, kwnames, 0)', generated)
+        self.assertIn('METH_VALUE|METH_NOARGS, ', generated)
+        self.assertNotIn('_PyArg_CheckArityValue', generated)
 
     def test_arity_one_object(self):
         generated = self.generate("""
@@ -6116,7 +6116,8 @@ class ValueEmissionTests(unittest.TestCase):
                 a: object
                 /
         """)
-        self.assertIn('_PyArg_CheckArityValue("m.f()", nargs, kwnames, 1)', generated)
+        self.assertIn('METH_VALUE|METH_O, ', generated)
+        self.assertNotIn('_PyArg_CheckArityValue', generated)
 
     def test_arity_positional_only(self):
         generated = self.generate("""
@@ -6133,7 +6134,8 @@ class ValueEmissionTests(unittest.TestCase):
         generated = self.generate("""
             m.T.f
         """)
-        self.assertIn('_PyArg_CheckArityValue("T.f()", nargs, kwnames, 0)', generated)
+        self.assertIn('METH_VALUE|METH_NOARGS, ', generated)
+        self.assertNotIn('_PyArg_CheckArityValue', generated)
 
     def test_arity_builtins_module(self):
         generated = self.generate("""
@@ -6141,7 +6143,8 @@ class ValueEmissionTests(unittest.TestCase):
                 a: object
                 /
         """, preamble='module builtins')
-        self.assertIn('_PyArg_CheckArityValue("f()", nargs, kwnames, 1)', generated)
+        self.assertIn('METH_VALUE|METH_O, ', generated)
+        self.assertNotIn('_PyArg_CheckArityValue', generated)
 
     def test_optional_ssize_t(self):
         for args, converter in [
@@ -6354,15 +6357,16 @@ class ValueEmissionTests(unittest.TestCase):
         generated = self.generate("""
             f as m_f
         """, preamble='')
-        self.assertIn('_PyArg_CheckArityValue("f()", nargs, kwnames, 0)', generated)
+        self.assertIn('METH_VALUE|METH_NOARGS, ', generated)
+        self.assertNotIn('_PyArg_CheckArityValue', generated)
 
     def test_arity_method_of_static_type(self):
-        # The runtime type name, not the Clinic class name.
+        # The vectorcall names the runtime type, not the Clinic class.
         generated = self.generate("""
             m.T.meth
         """, preamble='module m\nclass m.T "TestObj *" "&TestType"')
-        self.assertIn('_PyArg_CheckArityValueMethod(&TestType, "meth", nargs, kwnames, 0)',
-                      generated)
+        self.assertIn('METH_VALUE|METH_NOARGS, ', generated)
+        self.assertNotIn('_PyArg_CheckArityValue', generated)
 
     def test_critical_section_targets_are_objects(self):
         generated = self.generate("""
@@ -6381,11 +6385,13 @@ class ValueEmissionTests(unittest.TestCase):
                 a: object
                 /
         """, preamble='module builtins')
-        self.assertIn('_PyArg_CheckArityValue("f()", nargs, kwnames, 1)', generated)
+        self.assertIn('METH_VALUE|METH_O, ', generated)
+        self.assertNotIn('_PyArg_CheckArityValue', generated)
         generated = self.generate("""
             f as m_f
         """)
-        self.assertIn('_PyArg_CheckArityValue("m.f()", nargs, kwnames, 0)', generated)
+        self.assertIn('METH_VALUE|METH_NOARGS, ', generated)
+        self.assertNotIn('_PyArg_CheckArityValue', generated)
 
     def test_refused_converter_without_value_form(self):
         self.refused("""

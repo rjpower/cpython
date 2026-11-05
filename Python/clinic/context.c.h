@@ -59,7 +59,7 @@ PyDoc_STRVAR(_contextvars_Context_items__doc__,
 "The result is returned as a list of 2-tuples (variable, value).");
 
 #define _CONTEXTVARS_CONTEXT_ITEMS_METHODDEF    \
-    {"items", _PyCFunction_CAST(_contextvars_Context_items), METH_VALUE, _contextvars_Context_items__doc__},
+    {"items", _PyCFunction_CAST(_contextvars_Context_items), METH_VALUE|METH_NOARGS, _contextvars_Context_items__doc__},
 
 static PyValue
 _contextvars_Context_items_impl(PyContext *self);
@@ -69,12 +69,8 @@ _contextvars_Context_items(PyValueBorrow self, const PyValue *args, Py_ssize_t n
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyContext_Type, "items", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = _contextvars_Context_items_impl((PyContext *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -85,7 +81,7 @@ PyDoc_STRVAR(_contextvars_Context_keys__doc__,
 "Return a list of all variables in the context object.");
 
 #define _CONTEXTVARS_CONTEXT_KEYS_METHODDEF    \
-    {"keys", _PyCFunction_CAST(_contextvars_Context_keys), METH_VALUE, _contextvars_Context_keys__doc__},
+    {"keys", _PyCFunction_CAST(_contextvars_Context_keys), METH_VALUE|METH_NOARGS, _contextvars_Context_keys__doc__},
 
 static PyValue
 _contextvars_Context_keys_impl(PyContext *self);
@@ -95,12 +91,8 @@ _contextvars_Context_keys(PyValueBorrow self, const PyValue *args, Py_ssize_t na
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyContext_Type, "keys", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = _contextvars_Context_keys_impl((PyContext *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -111,7 +103,7 @@ PyDoc_STRVAR(_contextvars_Context_values__doc__,
 "Return a list of all variables\' values in the context object.");
 
 #define _CONTEXTVARS_CONTEXT_VALUES_METHODDEF    \
-    {"values", _PyCFunction_CAST(_contextvars_Context_values), METH_VALUE, _contextvars_Context_values__doc__},
+    {"values", _PyCFunction_CAST(_contextvars_Context_values), METH_VALUE|METH_NOARGS, _contextvars_Context_values__doc__},
 
 static PyValue
 _contextvars_Context_values_impl(PyContext *self);
@@ -121,12 +113,8 @@ _contextvars_Context_values(PyValueBorrow self, const PyValue *args, Py_ssize_t 
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyContext_Type, "values", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = _contextvars_Context_values_impl((PyContext *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -137,7 +125,7 @@ PyDoc_STRVAR(_contextvars_Context_copy__doc__,
 "Return a shallow copy of the context object.");
 
 #define _CONTEXTVARS_CONTEXT_COPY_METHODDEF    \
-    {"copy", _PyCFunction_CAST(_contextvars_Context_copy), METH_VALUE, _contextvars_Context_copy__doc__},
+    {"copy", _PyCFunction_CAST(_contextvars_Context_copy), METH_VALUE|METH_NOARGS, _contextvars_Context_copy__doc__},
 
 static PyValue
 _contextvars_Context_copy_impl(PyContext *self);
@@ -147,12 +135,8 @@ _contextvars_Context_copy(PyValueBorrow self, const PyValue *args, Py_ssize_t na
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyContext_Type, "copy", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = _contextvars_Context_copy_impl((PyContext *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -213,7 +197,7 @@ PyDoc_STRVAR(_contextvars_ContextVar_set__doc__,
 "its previous value via the `ContextVar.reset()` method.");
 
 #define _CONTEXTVARS_CONTEXTVAR_SET_METHODDEF    \
-    {"set", _PyCFunction_CAST(_contextvars_ContextVar_set), METH_VALUE, _contextvars_ContextVar_set__doc__},
+    {"set", _PyCFunction_CAST(_contextvars_ContextVar_set), METH_VALUE|METH_O, _contextvars_ContextVar_set__doc__},
 
 static PyValue
 _contextvars_ContextVar_set_impl(PyContextVar *self, PyValueBorrow value);
@@ -224,13 +208,9 @@ _contextvars_ContextVar_set(PyValueBorrow self, const PyValue *args, Py_ssize_t 
     PyValue return_value = PyValue_NULL;
     PyValueBorrow value;
 
-    if (!_PyArg_CheckArityValueMethod(&PyContextVar_Type, "set", nargs, kwnames, 1)) {
-        goto exit;
-    }
     value = PyValue_Borrow(args[0]);
     return_value = _contextvars_ContextVar_set_impl((PyContextVar *)PyValue_AsKnownObjectBorrow(self), value);
 
-exit:
     return return_value;
 }
 
@@ -244,7 +224,7 @@ PyDoc_STRVAR(_contextvars_ContextVar_reset__doc__,
 "`ContextVar.set()` that created the token was used.");
 
 #define _CONTEXTVARS_CONTEXTVAR_RESET_METHODDEF    \
-    {"reset", _PyCFunction_CAST(_contextvars_ContextVar_reset), METH_VALUE, _contextvars_ContextVar_reset__doc__},
+    {"reset", _PyCFunction_CAST(_contextvars_ContextVar_reset), METH_VALUE|METH_O, _contextvars_ContextVar_reset__doc__},
 
 static PyValue
 _contextvars_ContextVar_reset_impl(PyContextVar *self, PyValueBorrow token);
@@ -255,13 +235,9 @@ _contextvars_ContextVar_reset(PyValueBorrow self, const PyValue *args, Py_ssize_
     PyValue return_value = PyValue_NULL;
     PyValueBorrow token;
 
-    if (!_PyArg_CheckArityValueMethod(&PyContextVar_Type, "reset", nargs, kwnames, 1)) {
-        goto exit;
-    }
     token = PyValue_Borrow(args[0]);
     return_value = _contextvars_ContextVar_reset_impl((PyContextVar *)PyValue_AsKnownObjectBorrow(self), token);
 
-exit:
     return return_value;
 }
 
@@ -272,7 +248,7 @@ PyDoc_STRVAR(token_enter__doc__,
 "Enter into Token context manager.");
 
 #define TOKEN_ENTER_METHODDEF    \
-    {"__enter__", _PyCFunction_CAST(token_enter), METH_VALUE, token_enter__doc__},
+    {"__enter__", _PyCFunction_CAST(token_enter), METH_VALUE|METH_NOARGS, token_enter__doc__},
 
 static PyValue
 token_enter_impl(PyContextToken *self);
@@ -282,12 +258,8 @@ token_enter(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject 
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValueMethod(&PyContextToken_Type, "__enter__", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = token_enter_impl((PyContextToken *)PyValue_AsKnownObjectBorrow(self));
 
-exit:
     return return_value;
 }
 
@@ -326,4 +298,4 @@ token_exit(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=228ffb56048c09fa input=a9049054013a1b77]*/
+/*[clinic end generated code: output=0ac27faa8eb137f3 input=a9049054013a1b77]*/

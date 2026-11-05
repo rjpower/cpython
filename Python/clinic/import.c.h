@@ -12,7 +12,7 @@ preserve
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_long_value.h"    // _PyValue_AsInt()
-#include "pycore_modsupport.h"    // _PyArg_CheckArityValue()
+#include "pycore_modsupport.h"    // _PyArg_NoKwnamesValue()
 #include "pycore_value_call.h"    // METH_VALUE
 #include "pycore_value_ops.h"     // _PyValue_IsTrue()
 
@@ -25,7 +25,7 @@ PyDoc_STRVAR(_imp_lock_held__doc__,
 "On platforms without threads, return False.");
 
 #define _IMP_LOCK_HELD_METHODDEF    \
-    {"lock_held", _PyCFunction_CAST(_imp_lock_held), METH_VALUE, _imp_lock_held__doc__},
+    {"lock_held", _PyCFunction_CAST(_imp_lock_held), METH_VALUE|METH_NOARGS, _imp_lock_held__doc__},
 
 static PyValue
 _imp_lock_held_impl(PyObject *module);
@@ -35,12 +35,8 @@ _imp_lock_held(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyOb
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("_imp.lock_held()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = _imp_lock_held_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -55,7 +51,7 @@ PyDoc_STRVAR(_imp_acquire_lock__doc__,
 "nothing.");
 
 #define _IMP_ACQUIRE_LOCK_METHODDEF    \
-    {"acquire_lock", _PyCFunction_CAST(_imp_acquire_lock), METH_VALUE, _imp_acquire_lock__doc__},
+    {"acquire_lock", _PyCFunction_CAST(_imp_acquire_lock), METH_VALUE|METH_NOARGS, _imp_acquire_lock__doc__},
 
 static PyValue
 _imp_acquire_lock_impl(PyObject *module);
@@ -65,12 +61,8 @@ _imp_acquire_lock(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, P
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("_imp.acquire_lock()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = _imp_acquire_lock_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -83,7 +75,7 @@ PyDoc_STRVAR(_imp_release_lock__doc__,
 "On platforms without threads, this function does nothing.");
 
 #define _IMP_RELEASE_LOCK_METHODDEF    \
-    {"release_lock", _PyCFunction_CAST(_imp_release_lock), METH_VALUE, _imp_release_lock__doc__},
+    {"release_lock", _PyCFunction_CAST(_imp_release_lock), METH_VALUE|METH_NOARGS, _imp_release_lock__doc__},
 
 static PyValue
 _imp_release_lock_impl(PyObject *module);
@@ -93,12 +85,8 @@ _imp_release_lock(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, P
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("_imp.release_lock()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = _imp_release_lock_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -160,7 +148,7 @@ PyDoc_STRVAR(_imp_create_builtin__doc__,
 "Create an extension module.");
 
 #define _IMP_CREATE_BUILTIN_METHODDEF    \
-    {"create_builtin", _PyCFunction_CAST(_imp_create_builtin), METH_VALUE, _imp_create_builtin__doc__},
+    {"create_builtin", _PyCFunction_CAST(_imp_create_builtin), METH_VALUE|METH_O, _imp_create_builtin__doc__},
 
 static PyValue
 _imp_create_builtin_impl(PyObject *module, PyValueBorrow spec);
@@ -171,13 +159,9 @@ _imp_create_builtin(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs,
     PyValue return_value = PyValue_NULL;
     PyValueBorrow spec;
 
-    if (!_PyArg_CheckArityValue("_imp.create_builtin()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     spec = PyValue_Borrow(args[0]);
     return_value = _imp_create_builtin_impl(PyValue_AsKnownObjectBorrow(module), spec);
 
-exit:
     return return_value;
 }
 
@@ -188,7 +172,7 @@ PyDoc_STRVAR(_imp_extension_suffixes__doc__,
 "Returns the list of file suffixes used to identify extension modules.");
 
 #define _IMP_EXTENSION_SUFFIXES_METHODDEF    \
-    {"extension_suffixes", _PyCFunction_CAST(_imp_extension_suffixes), METH_VALUE, _imp_extension_suffixes__doc__},
+    {"extension_suffixes", _PyCFunction_CAST(_imp_extension_suffixes), METH_VALUE|METH_NOARGS, _imp_extension_suffixes__doc__},
 
 static PyValue
 _imp_extension_suffixes_impl(PyObject *module);
@@ -198,12 +182,8 @@ _imp_extension_suffixes(PyValueBorrow module, const PyValue *args, Py_ssize_t na
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("_imp.extension_suffixes()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = _imp_extension_suffixes_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -214,7 +194,7 @@ PyDoc_STRVAR(_imp_init_frozen__doc__,
 "Initializes a frozen module.");
 
 #define _IMP_INIT_FROZEN_METHODDEF    \
-    {"init_frozen", _PyCFunction_CAST(_imp_init_frozen), METH_VALUE, _imp_init_frozen__doc__},
+    {"init_frozen", _PyCFunction_CAST(_imp_init_frozen), METH_VALUE|METH_O, _imp_init_frozen__doc__},
 
 static PyValue
 _imp_init_frozen_impl(PyObject *module, PyObject *name);
@@ -225,9 +205,6 @@ _imp_init_frozen(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, Py
     PyValue return_value = PyValue_NULL;
     PyObject *name;
 
-    if (!_PyArg_CheckArityValue("_imp.init_frozen()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         _PyArg_BadArgumentValue("init_frozen", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
@@ -376,7 +353,7 @@ PyDoc_STRVAR(_imp_is_frozen_package__doc__,
 "Returns True if the module name is of a frozen package.");
 
 #define _IMP_IS_FROZEN_PACKAGE_METHODDEF    \
-    {"is_frozen_package", _PyCFunction_CAST(_imp_is_frozen_package), METH_VALUE, _imp_is_frozen_package__doc__},
+    {"is_frozen_package", _PyCFunction_CAST(_imp_is_frozen_package), METH_VALUE|METH_O, _imp_is_frozen_package__doc__},
 
 static PyValue
 _imp_is_frozen_package_impl(PyObject *module, PyObject *name);
@@ -387,9 +364,6 @@ _imp_is_frozen_package(PyValueBorrow module, const PyValue *args, Py_ssize_t nar
     PyValue return_value = PyValue_NULL;
     PyObject *name;
 
-    if (!_PyArg_CheckArityValue("_imp.is_frozen_package()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         _PyArg_BadArgumentValue("is_frozen_package", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
@@ -412,7 +386,7 @@ PyDoc_STRVAR(_imp_is_builtin__doc__,
 "Returns True if the module name corresponds to a built-in module.");
 
 #define _IMP_IS_BUILTIN_METHODDEF    \
-    {"is_builtin", _PyCFunction_CAST(_imp_is_builtin), METH_VALUE, _imp_is_builtin__doc__},
+    {"is_builtin", _PyCFunction_CAST(_imp_is_builtin), METH_VALUE|METH_O, _imp_is_builtin__doc__},
 
 static PyValue
 _imp_is_builtin_impl(PyObject *module, PyObject *name);
@@ -423,9 +397,6 @@ _imp_is_builtin(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyO
     PyValue return_value = PyValue_NULL;
     PyObject *name;
 
-    if (!_PyArg_CheckArityValue("_imp.is_builtin()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         _PyArg_BadArgumentValue("is_builtin", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
@@ -448,7 +419,7 @@ PyDoc_STRVAR(_imp_is_frozen__doc__,
 "Returns True if the module name corresponds to a frozen module.");
 
 #define _IMP_IS_FROZEN_METHODDEF    \
-    {"is_frozen", _PyCFunction_CAST(_imp_is_frozen), METH_VALUE, _imp_is_frozen__doc__},
+    {"is_frozen", _PyCFunction_CAST(_imp_is_frozen), METH_VALUE|METH_O, _imp_is_frozen__doc__},
 
 static PyValue
 _imp_is_frozen_impl(PyObject *module, PyObject *name);
@@ -459,9 +430,6 @@ _imp_is_frozen(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyOb
     PyValue return_value = PyValue_NULL;
     PyObject *name;
 
-    if (!_PyArg_CheckArityValue("_imp.is_frozen()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
         _PyArg_BadArgumentValue("is_frozen", "argument", "str", PyValue_Borrow(args[0]));
         goto exit;
@@ -484,7 +452,7 @@ PyDoc_STRVAR(_imp__frozen_module_names__doc__,
 "Returns the list of available frozen modules.");
 
 #define _IMP__FROZEN_MODULE_NAMES_METHODDEF    \
-    {"_frozen_module_names", _PyCFunction_CAST(_imp__frozen_module_names), METH_VALUE, _imp__frozen_module_names__doc__},
+    {"_frozen_module_names", _PyCFunction_CAST(_imp__frozen_module_names), METH_VALUE|METH_NOARGS, _imp__frozen_module_names__doc__},
 
 static PyValue
 _imp__frozen_module_names_impl(PyObject *module);
@@ -494,12 +462,8 @@ _imp__frozen_module_names(PyValueBorrow module, const PyValue *args, Py_ssize_t 
 {
     PyValue return_value = PyValue_NULL;
 
-    if (!_PyArg_CheckArityValue("_imp._frozen_module_names()", nargs, kwnames, 0)) {
-        goto exit;
-    }
     return_value = _imp__frozen_module_names_impl(PyValue_AsKnownObjectBorrow(module));
 
-exit:
     return return_value;
 }
 
@@ -513,7 +477,7 @@ PyDoc_STRVAR(_imp__override_frozen_modules_for_tests__doc__,
 "See frozen_modules() in Lib/test/support/import_helper.py.");
 
 #define _IMP__OVERRIDE_FROZEN_MODULES_FOR_TESTS_METHODDEF    \
-    {"_override_frozen_modules_for_tests", _PyCFunction_CAST(_imp__override_frozen_modules_for_tests), METH_VALUE, _imp__override_frozen_modules_for_tests__doc__},
+    {"_override_frozen_modules_for_tests", _PyCFunction_CAST(_imp__override_frozen_modules_for_tests), METH_VALUE|METH_O, _imp__override_frozen_modules_for_tests__doc__},
 
 static PyValue
 _imp__override_frozen_modules_for_tests_impl(PyObject *module, int override);
@@ -524,9 +488,6 @@ _imp__override_frozen_modules_for_tests(PyValueBorrow module, const PyValue *arg
     PyValue return_value = PyValue_NULL;
     int override;
 
-    if (!_PyArg_CheckArityValue("_imp._override_frozen_modules_for_tests()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     override = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (override == -1 && PyErr_Occurred()) {
         goto exit;
@@ -546,7 +507,7 @@ PyDoc_STRVAR(_imp__override_multi_interp_extensions_check__doc__,
 "(-1: \"never\", 1: \"always\", 0: no override)");
 
 #define _IMP__OVERRIDE_MULTI_INTERP_EXTENSIONS_CHECK_METHODDEF    \
-    {"_override_multi_interp_extensions_check", _PyCFunction_CAST(_imp__override_multi_interp_extensions_check), METH_VALUE, _imp__override_multi_interp_extensions_check__doc__},
+    {"_override_multi_interp_extensions_check", _PyCFunction_CAST(_imp__override_multi_interp_extensions_check), METH_VALUE|METH_O, _imp__override_multi_interp_extensions_check__doc__},
 
 static PyValue
 _imp__override_multi_interp_extensions_check_impl(PyObject *module,
@@ -558,9 +519,6 @@ _imp__override_multi_interp_extensions_check(PyValueBorrow module, const PyValue
     PyValue return_value = PyValue_NULL;
     int override;
 
-    if (!_PyArg_CheckArityValue("_imp._override_multi_interp_extensions_check()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     override = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (override == -1 && PyErr_Occurred()) {
         goto exit;
@@ -622,7 +580,7 @@ PyDoc_STRVAR(_imp_exec_dynamic__doc__,
 "Initialize an extension module.");
 
 #define _IMP_EXEC_DYNAMIC_METHODDEF    \
-    {"exec_dynamic", _PyCFunction_CAST(_imp_exec_dynamic), METH_VALUE, _imp_exec_dynamic__doc__},
+    {"exec_dynamic", _PyCFunction_CAST(_imp_exec_dynamic), METH_VALUE|METH_O, _imp_exec_dynamic__doc__},
 
 static int
 _imp_exec_dynamic_impl(PyObject *module, PyValueBorrow mod);
@@ -634,9 +592,6 @@ _imp_exec_dynamic(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, P
     PyValueBorrow mod;
     int _return_value;
 
-    if (!_PyArg_CheckArityValue("_imp.exec_dynamic()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     mod = PyValue_Borrow(args[0]);
     _return_value = _imp_exec_dynamic_impl(PyValue_AsKnownObjectBorrow(module), mod);
     if ((_return_value == -1) && PyErr_Occurred()) {
@@ -657,7 +612,7 @@ PyDoc_STRVAR(_imp_exec_builtin__doc__,
 "Initialize a built-in module.");
 
 #define _IMP_EXEC_BUILTIN_METHODDEF    \
-    {"exec_builtin", _PyCFunction_CAST(_imp_exec_builtin), METH_VALUE, _imp_exec_builtin__doc__},
+    {"exec_builtin", _PyCFunction_CAST(_imp_exec_builtin), METH_VALUE|METH_O, _imp_exec_builtin__doc__},
 
 static int
 _imp_exec_builtin_impl(PyObject *module, PyValueBorrow mod);
@@ -669,9 +624,6 @@ _imp_exec_builtin(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, P
     PyValueBorrow mod;
     int _return_value;
 
-    if (!_PyArg_CheckArityValue("_imp.exec_builtin()", nargs, kwnames, 1)) {
-        goto exit;
-    }
     mod = PyValue_Borrow(args[0]);
     _return_value = _imp_exec_builtin_impl(PyValue_AsKnownObjectBorrow(module), mod);
     if ((_return_value == -1) && PyErr_Occurred()) {
@@ -804,4 +756,4 @@ exit:
 #ifndef _IMP_EXEC_DYNAMIC_METHODDEF
     #define _IMP_EXEC_DYNAMIC_METHODDEF
 #endif /* !defined(_IMP_EXEC_DYNAMIC_METHODDEF) */
-/*[clinic end generated code: output=f2196195106a8002 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=c1ba05c1eb4862e7 input=a9049054013a1b77]*/

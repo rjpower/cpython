@@ -12,14 +12,12 @@ initialize_scope(_PyNativeScope *scope, PyThreadState *tstate)
     *scope = (_PyNativeScope){
         .tstate = tstate,
         .receiver = PyValue_NULL,
-        .argument = PyValue_NULL,
         .result = {
             .value = PyValue_NULL,
             .displaced = PyValue_NULL,
             .state = _Py_NATIVE_RESULT_EMPTY,
         },
     };
-    scope->arguments = &scope->argument;
     scope->objects = scope->argument_objects;
 }
 
@@ -46,13 +44,23 @@ _PyNativeScope_Begin(_PyNativeScope *scope, PyThreadState *tstate,
     scope->nargs = total_count;
     scope->positional_count = positional_count;
     if (!PyValue_IsNull(self_or_null)) {
-        scope->receiver = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(self_or_null));
+        scope->receiver = PyValue_DUP(self_or_null);
     }
     if (total_count != 0) {
-        /* Borrow what the window owns, as upstream passes its stack; take an
-           owner only for a value the window itself borrows. */
-        scope->argument = PyValue_IsHeapSafe(args[0])
-            ? _PyValue_BorrowTagged(args[0]) : PyValue_MakeHeapSafe(args[0]);
+        /* Pass an object borrowed, as upstream passes its stack: the caller
+           keeps it alive until End.  Box an inline value now; End releases
+           the box. */
+        if (PyValue_IsInline(args[0])) {
+            scope->argument_box = _PyValue_AsObjectAt(args[0],
+                                                      BOX_SITE_CALL_ADAPTER);
+            if (scope->argument_box == NULL) {
+                return -1;
+            }
+            scope->objects[0] = scope->argument_box;
+        }
+        else {
+            scope->objects[0] = PyValue_AsKnownObjectBorrow(args[0]);
+        }
     }
     return 0;
 }
@@ -80,7 +88,7 @@ begin_vector(_PyNativeScope *scope, PyThreadState *tstate,
         return -1;
     }
     for (Py_ssize_t i = 0; i < nkw; i++) {
-        PyValue name = PyTuple_GET_VALUE(kwnames, i);
+        PyValueBorrow name = PyTuple_GET_VALUE(kwnames, i);
         if (!PyValue_IsObject(name) ||
             !PyUnicode_Check(_PyTuple_GET_OBJECT(kwnames, i)))
         {
@@ -89,11 +97,9 @@ begin_vector(_PyNativeScope *scope, PyThreadState *tstate,
         }
     }
     for (Py_ssize_t i = 0; i < total_count; i++) {
-        if (!PyValue_IsLanguageValue(effective_args[i]) ||
-            !PyValue_IsHeapSafe(effective_args[i]))
-        {
+        if (!PyValue_IsLanguageValue(effective_args[i])) {
             PyErr_SetString(PyExc_SystemError,
-                            "native vector arguments must be strong values");
+                            "native vector arguments must be language values");
             return -1;
         }
     }
@@ -108,7 +114,6 @@ begin_vector(_PyNativeScope *scope, PyThreadState *tstate,
     }
     /* Boxing can fail to allocate.  On failure the partial run stays above
        the mark and End releases it. */
-    scope->arguments = NULL;
     scope->mark = _PyBorrowScope_Enter(tstate);
     PyObject **objects = _PyBorrow_ValueVector(effective_args, total_count);
     if (objects == NULL) {
@@ -189,24 +194,8 @@ _PyNativeScope_Objects(_PyNativeScope *scope, PyObject *const **args)
             return -1;
         }
     }
-    if (scope->mark != NULL) {
-        /* A vector scope boxed its arguments in Begin. */
-        return 0;
-    }
-    /* Pass objects borrowed; box inline values (End releases the boxes). */
-    for (Py_ssize_t i = 0; i < scope->nargs; i++) {
-        if (scope->objects[i] == NULL) {
-            PyValue argument = scope->arguments[i];
-            if (!PyValue_IsInline(argument)) {
-                scope->objects[i] = PyValue_AsKnownObjectBorrow(argument);
-                continue;
-            }
-            scope->objects[i] = _PyValue_AsObjectAt(argument, BOX_SITE_CALL_ADAPTER);
-            if (scope->objects[i] == NULL) {
-                return -1;
-            }
-        }
-    }
+    /* Begin set the arguments' objects: borrowed, or boxes of inline
+       values that End releases. */
     return 0;
 }
 
@@ -241,10 +230,10 @@ _PyNativeResult_Publish(_PyNativeResult *out, PyValue *destination,
     assert(!PyErr_Occurred());
     assert(publish_state != NULL);
     assert(PyValue_IsLanguageValue(out->value));
-    assert(PyValue_IsHeapSafe(out->value));
+    _PyValue_CheckHome(out->value);
     assert(PyValue_IsNull(*destination) ||
-           (PyValue_IsLanguageValue(*destination) &&
-            PyValue_IsHeapSafe(*destination)));
+           PyValue_IsLanguageValue(*destination));
+    _PyValue_RecheckHome(*destination);
     out->displaced = *destination;
     *destination = out->value;
     out->value = PyValue_NULL;
@@ -281,20 +270,9 @@ _PyNativeScope_End(_PyNativeScope *scope)
         /* Releases the boxes of inline arguments. */
         _PyBorrowScope_Exit(scope->tstate, scope->mark);
     }
-    else {
-        for (Py_ssize_t i = scope->nargs; i-- > 0;) {
-            if (PyValue_IsInline(scope->arguments[i])) {
-                Py_CLEAR(scope->objects[i]);
-            }
-            scope->objects[i] = NULL;
-        }
-    }
+    scope->argument_objects[0] = NULL;
+    Py_CLEAR(scope->argument_box);
     Py_CLEAR(scope->receiver_object);
-    if (scope->mark == NULL) {
-        for (Py_ssize_t i = scope->nargs; i-- > 0;) {
-            PyValue_CLEAR(scope->arguments[i]);
-        }
-    }
     PyValue_CLEAR(scope->receiver);
     Py_CLEAR(scope->defining_class);
     Py_CLEAR(scope->kwnames);
@@ -302,7 +280,6 @@ _PyNativeScope_End(_PyNativeScope *scope)
     Py_CLEAR(scope->callargs);
     Py_CLEAR(scope->callable);
     scope->mark = NULL;
-    scope->arguments = NULL;
     scope->objects = NULL;
     scope->nargs = 0;
 }

@@ -192,7 +192,7 @@ partial_new(PyTypeObject *type, PyObject *args, PyObject *kw)
 
     /* Placeholder restrictions */
     if (new_nargs) {
-        PyValue last = PyTuple_GET_VALUE(args, new_nargs);
+        PyValueBorrow last = PyTuple_GET_VALUE(args, new_nargs);
         if (PyValue_IsObject(last) && PyValue_AsKnownObjectBorrow(last) == phold) {
             PyErr_SetString(PyExc_TypeError,
                             "trailing Placeholders are not allowed");
@@ -255,7 +255,7 @@ partial_new(PyTypeObject *type, PyObject *args, PyObject *kw)
     /* Count placeholders */
     Py_ssize_t phcount = 0;
     for (Py_ssize_t i = 0; i < new_nargs - 1; i++) {
-        PyValue item = PyTuple_GET_VALUE(new_args, i);
+        PyValueBorrow item = PyTuple_GET_VALUE(new_args, i);
         if (PyValue_IsObject(item) && PyValue_AsKnownObjectBorrow(item) == phold) {
             phcount++;
         }
@@ -899,7 +899,7 @@ partial_setstate(PyObject *self, PyObject *state)
 
     Py_ssize_t nargs = PyTuple_GET_SIZE(fnargs);
     if (nargs) {
-        PyValue last = PyTuple_GET_VALUE(fnargs, nargs - 1);
+        PyValueBorrow last = PyTuple_GET_VALUE(fnargs, nargs - 1);
         if (PyValue_IsObject(last) &&
             PyValue_AsKnownObjectBorrow(last) == pto->placeholder) {
             PyErr_SetString(PyExc_TypeError,
@@ -910,7 +910,7 @@ partial_setstate(PyObject *self, PyObject *state)
     /* Count placeholders */
     Py_ssize_t phcount = 0;
     for (Py_ssize_t i = 0; i < nargs - 1; i++) {
-        PyValue item = PyTuple_GET_VALUE(fnargs, i);
+        PyValueBorrow item = PyTuple_GET_VALUE(fnargs, i);
         if (PyValue_IsObject(item) &&
             PyValue_AsKnownObjectBorrow(item) == pto->placeholder) {
             phcount++;
@@ -1348,14 +1348,14 @@ lru_cache_make_key(PyObject *kwd_mark, PyObject *args,
     /* short path, key will match args anyway, which is a tuple */
     if (!typed && !kwds_size) {
         if (PyTuple_GET_SIZE(args) == 1) {
-            value = PyTuple_GET_VALUE(args, 0);
-            if (PyValue_IsInlineInt(value) ||
-                (PyValue_IsObject(value) &&
-                 (PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value)) ||
-                  PyLong_CheckExact(PyValue_AsKnownObjectBorrow(value))))) {
+            PyValueBorrow arg_value = PyTuple_GET_VALUE(args, 0);
+            if (PyValue_IsInlineInt(arg_value) ||
+                (PyValue_IsObject(arg_value) &&
+                 (PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(arg_value)) ||
+                  PyLong_CheckExact(PyValue_AsKnownObjectBorrow(arg_value))))) {
                 /* For common scalar keys, save space by
                    dropping the enclosing args tuple  */
-                return PyValue_AsObject(value);
+                return PyValue_AsObject(arg_value);
             }
         }
         return Py_NewRef(args);

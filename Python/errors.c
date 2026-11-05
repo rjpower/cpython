@@ -354,7 +354,7 @@ PyErr_GivenExceptionMatches(PyObject *err, PyObject *exc)
         int res = 0;
         Py_ssize_t n = PyTuple_GET_SIZE(exc);
         for (Py_ssize_t i = 0; i < n; i++) {
-            PyValue candidate = PyTuple_GET_VALUE(exc, i);
+            PyValueBorrow candidate = PyTuple_GET_VALUE(exc, i);
             /* Inline scalars have no exception hierarchy or object pointer.
              * Keep identity comparison pure while an error may be pending. */
             int matches = PyValue_IsObject(candidate) ?

@@ -307,10 +307,12 @@ _PyBorrow_Keep(PyObject *owned)
     return owned;
 }
 
+#define borrow_box(V0) (borrow_box)(PyValue_Borrow(V0))
+
 /* A box for the call adapter. A caller that names another site class, such
    as the argument parser, keeps it (pycore_value_api.h). */
 static inline PyObject *
-borrow_box(PyValue value)
+(borrow_box)(PyValueBorrow value)
 {
     return _PyValue_AsObjectAt(value,
                                _PyValue_BoxSiteOr(BOX_SITE_CALL_ADAPTER));
@@ -357,7 +359,7 @@ _PyBorrow_ValueVector(const PyValue *values, Py_ssize_t n)
     Py_ssize_t boxes = 0;
     for (Py_ssize_t i = 0; i < n; i++) {
         assert(PyValue_IsLanguageValue(values[i]));
-        assert(PyValue_IsHeapSafe(values[i]));
+        _PyValue_RecheckHome(values[i]);
         boxes += PyValue_IsInline(values[i]);
     }
     /* The OFFSET slot, the vector, its skip entry and the boxes share one

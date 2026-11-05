@@ -9,7 +9,7 @@
 #include "pycore_pyerrors.h"      // _Py_FatalErrorFormat()
 #include "pycore_pymem.h"
 #include "pycore_pystate.h"       // _PyInterpreterState_GET
-#include "pycore_pyvalue.h"       // Py_PTR_LIMIT
+#include "pycore_pyvalue.h"       // _PyValue_InPointerSpace()
 #include "pycore_stats.h"         // OBJECT_STAT_INC_COND()
 
 #include <stdlib.h>               // malloc()
@@ -17,13 +17,13 @@
 #include <stdio.h>                // fopen(), fgets(), sscanf()
 #include <errno.h>                // errno
 
-/* A PyValue holds an object address in 48 bits (Py_PTR_LIMIT), so memory the
-   process takes from the OS must lie below it. Check where the memory comes
+/* A PyValue holds an object address in 48 bits, so memory the process takes
+   from the OS must lie in the pointer space. Check where the memory comes
    from rather than per object. */
 static inline void
 check_address_limit(void *address, size_t size)
 {
-    if (address != NULL && (uintptr_t)address + size > Py_PTR_LIMIT) {
+    if (address != NULL && !_PyValue_InPointerSpace(address, size)) {
         Py_FatalError("memory address beyond the 48 bits a PyValue can hold");
     }
 }

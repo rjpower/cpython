@@ -761,7 +761,7 @@ static PyObject *
 codegen_list_name(PyObject *list, Py_ssize_t index)
 {
     /* These private compiler lists retain only Unicode names. */
-    PyValue value = PyList_GET_VALUE(list, index);
+    PyValueBorrow value = PyList_GET_VALUE(list, index);
     assert(PyValue_IsObject(value));
     PyObject *name = PyValue_AsKnownObjectBorrow(value);
     assert(PyUnicode_CheckExact(name));
@@ -787,7 +787,7 @@ codegen_rename_annotations_format_param(PyCodeObject *co)
     }
     PyTuple_SET_ITEM(new_names, 0, Py_NewRef(&_Py_ID(format)));
     for (int i = 1; i < size; i++) {
-        PyValue item = PyTuple_GET_VALUE(co->co_localsplusnames, i);
+        PyValueBorrow item = PyTuple_GET_VALUE(co->co_localsplusnames, i);
         PyTuple_SET_VALUE(new_names, i, PyValue_DUP(item));
     }
     Py_SETREF(co->co_localsplusnames, new_names);
@@ -844,7 +844,7 @@ codegen_deferred_annotations_body(compiler *c, location loc,
         // NOTE: ref of mangled can be leaked on ADDOP* and VISIT macros due to early returns
         // fixing would require an overhaul of these macros
 
-        PyValue cond_index = PyList_GET_VALUE(conditional_annotation_indices, i);
+        PyValueBorrow cond_index = PyList_GET_VALUE(conditional_annotation_indices, i);
         assert(PyValue_LongCheckExact(cond_index));
         long idx = PyValue_IsInlineInt(cond_index) ? PyValue_InlineInt64(cond_index) :
                    PyLong_AsLong(PyValue_AsKnownObjectBorrow(cond_index));

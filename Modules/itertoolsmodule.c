@@ -395,9 +395,9 @@ pairwise_next(PyObject *op)
         PyValue last_old = _PyTuple_CAST(result)->ob_item[0];
         PyValue last_new = _PyTuple_CAST(result)->ob_item[1];
         _PyTuple_CAST(result)->ob_item[0] =
-            PyValue_MakeHeapSafe(PyValue_FromObjectBorrow(old));
+            PyValue_DUP(PyValue_FromObjectBorrow(old));
         _PyTuple_CAST(result)->ob_item[1] =
-            PyValue_MakeHeapSafe(PyValue_FromObjectBorrow(new));
+            PyValue_DUP(PyValue_FromObjectBorrow(new));
         PyValue_CLOSE(last_old);
         PyValue_CLOSE(last_new);
         // bpo-42536: The GC may have untracked this result tuple. Since we're
@@ -2232,8 +2232,8 @@ product_next_impl(productobject *self)
             pool = _PyTuple_GET_OBJECT(pools, i);
             if (PyTuple_GET_SIZE(pool) == 0)
                 goto empty;
-            elem = PyTuple_GET_VALUE(pool, 0);
-            PyTuple_SET_VALUE(result, i, PyValue_MakeHeapSafe(elem));
+            elem = PyValue_DUP(PyTuple_GET_VALUE(pool, 0));
+            PyTuple_SET_VALUE(result, i, elem);
         }
     } else {
         Py_ssize_t *indices = lz->indices;
@@ -2263,15 +2263,15 @@ product_next_impl(productobject *self)
             if (indices[i] == PyTuple_GET_SIZE(pool)) {
                 /* Roll-over and advance to next pool */
                 indices[i] = 0;
-                elem = PyTuple_GET_VALUE(pool, 0);
+                elem = PyValue_DUP(PyTuple_GET_VALUE(pool, 0));
                 oldelem = _PyTuple_CAST(result)->ob_item[i];
-                _PyTuple_CAST(result)->ob_item[i] = PyValue_MakeHeapSafe(elem);
+                _PyTuple_CAST(result)->ob_item[i] = elem;
                 PyValue_CLOSE(oldelem);
             } else {
                 /* No rollover. Just increment and stop here. */
-                elem = PyTuple_GET_VALUE(pool, indices[i]);
+                elem = PyValue_DUP(PyTuple_GET_VALUE(pool, indices[i]));
                 oldelem = _PyTuple_CAST(result)->ob_item[i];
-                _PyTuple_CAST(result)->ob_item[i] = PyValue_MakeHeapSafe(elem);
+                _PyTuple_CAST(result)->ob_item[i] = elem;
                 PyValue_CLOSE(oldelem);
                 break;
             }
@@ -2462,8 +2462,8 @@ combinations_next_impl(combinationsobject *self)
         co->result = result;
         for (i=0; i<r ; i++) {
             index = indices[i];
-            elem = PyTuple_GET_VALUE(pool, index);
-            PyTuple_SET_VALUE(result, i, PyValue_MakeHeapSafe(elem));
+            elem = PyValue_DUP(PyTuple_GET_VALUE(pool, index));
+            PyTuple_SET_VALUE(result, i, elem);
         }
     } else {
         /* Copy the previous result tuple or re-use it if available */
@@ -2508,9 +2508,9 @@ combinations_next_impl(combinationsobject *self)
            starting with i, the leftmost index that changed */
         for ( ; i<r ; i++) {
             index = indices[i];
-            elem = PyTuple_GET_VALUE(pool, index);
+            elem = PyValue_DUP(PyTuple_GET_VALUE(pool, index));
             oldelem = _PyTuple_CAST(result)->ob_item[i];
-            _PyTuple_CAST(result)->ob_item[i] = PyValue_MakeHeapSafe(elem);
+            _PyTuple_CAST(result)->ob_item[i] = elem;
             PyValue_CLOSE(oldelem);
         }
     }
@@ -2688,7 +2688,7 @@ cwr_next_impl(cwrobject *self)
 /*[clinic end generated code: output=760ddcfbf905ee37 input=d9ed46a28a5bb29a]*/
 {
     cwrobject *co = self;
-    PyValue elem;
+    PyValueBorrow elem;
     PyValue oldelem;
     PyObject *pool = co->pool;
     Py_ssize_t *indices = co->indices;
@@ -2710,7 +2710,7 @@ cwr_next_impl(cwrobject *self)
             elem = PyTuple_GET_VALUE(pool, 0);
             for (i=0; i<r ; i++) {
                 assert(indices[i] == 0);
-                PyTuple_SET_VALUE(result, i, PyValue_MakeHeapSafe(elem));
+                PyTuple_SET_VALUE(result, i, PyValue_DUP(elem));
             }
         }
     } else {
@@ -2750,7 +2750,7 @@ cwr_next_impl(cwrobject *self)
         for ( ; i<r ; i++) {
             indices[i] = index;
             oldelem = _PyTuple_CAST(result)->ob_item[i];
-            _PyTuple_CAST(result)->ob_item[i] = PyValue_MakeHeapSafe(elem);
+            _PyTuple_CAST(result)->ob_item[i] = PyValue_DUP(elem);
             PyValue_CLOSE(oldelem);
         }
     }
@@ -2972,8 +2972,8 @@ permutations_next_impl(permutationsobject *self)
         po->result = result;
         for (i=0; i<r ; i++) {
             index = indices[i];
-            elem = PyTuple_GET_VALUE(pool, index);
-            PyTuple_SET_VALUE(result, i, PyValue_MakeHeapSafe(elem));
+            elem = PyValue_DUP(PyTuple_GET_VALUE(pool, index));
+            PyTuple_SET_VALUE(result, i, elem);
         }
     } else {
         if (n == 0)
@@ -3016,9 +3016,9 @@ permutations_next_impl(permutationsobject *self)
                     /* start with i, the leftmost element that changed */
                     /* yield tuple(pool[k] for k in indices[:r]) */
                     index = indices[k];
-                    elem = PyTuple_GET_VALUE(pool, index);
+                    elem = PyValue_DUP(PyTuple_GET_VALUE(pool, index));
                     oldelem = _PyTuple_CAST(result)->ob_item[k];
-                    _PyTuple_CAST(result)->ob_item[k] = PyValue_MakeHeapSafe(elem);
+                    _PyTuple_CAST(result)->ob_item[k] = elem;
                     PyValue_CLOSE(oldelem);
                 }
                 break;
@@ -3856,7 +3856,7 @@ struct ziplongestobject {
 static inline PyObject *
 ittuple_get_iterator(PyObject *ittuple, Py_ssize_t i)
 {
-    PyValue it = PyTuple_GET_VALUE(ittuple, i);
+    PyValueBorrow it = PyTuple_GET_VALUE(ittuple, i);
     return PyValue_IsNull(it) ? NULL : PyValue_AsKnownObjectBorrow(it);
 }
 

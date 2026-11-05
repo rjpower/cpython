@@ -122,11 +122,15 @@ list_unpublished_nulls(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(args))
     PyObject *obj = PyList_New(3);
     if (obj == NULL) return NULL;
     int valid = 1;
-    // PyValue_NULL is zero.
+    // PyValue_NULL is zero: the word's bytes, which this module may not read
+    // as bits (pyjit/design/value-api.md, section 1.6).
+    static const unsigned char zero[sizeof(PyValue)];
     for (Py_ssize_t i = 0; i < 3; i++) {
-        valid &= ((PyListObject *)obj)->ob_item[i].bits == 0;
+        valid &= memcmp(&((PyListObject *)obj)->ob_item[i], zero,
+                        sizeof(PyValue)) == 0;
         PyValue value = PyList_GetValue(obj, i);
-        valid &= value.bits == 0 && !PyErr_Occurred();
+        valid &= memcmp(&value, zero, sizeof(PyValue)) == 0
+                 && !PyErr_Occurred();
         PyObject *object = PyList_GetItemRef(obj, i);
         valid &= object == NULL && !PyErr_Occurred();
         Py_XDECREF(object);

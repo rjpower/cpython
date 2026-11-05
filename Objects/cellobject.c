@@ -13,16 +13,16 @@
 PyObject *
 PyCell_New(PyObject *obj)
 {
-    return PyCell_NewValue(obj == NULL ? PyValue_NULL :
+    return PyCell_NewValue(obj == NULL ? PyValue_Borrow(PyValue_NULL) :
                             PyValue_FromObjectBorrow(obj));
 }
 
 PyObject *
-PyCell_NewValue(PyValue value)
+(PyCell_NewValue)(PyValueBorrow value)
 {
     assert(PyValue_IsLanguageValue(value) || PyValue_IsNull(value));
     /* Retain the input before allocation can invalidate its source. */
-    PyValue owner = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(value));
+    PyValue owner = PyValue_XDUP(value);
     PyCellObject *op;
 
     op = (PyCellObject *)PyObject_GC_New(PyCellObject, &PyCell_Type);
@@ -62,7 +62,7 @@ cell_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         goto exit;
     }
     return_value = PyCell_NewValue(nargs ? PyTuple_GET_VALUE(args, 0) :
-                                         PyValue_NULL);
+                                         PyValue_Borrow(PyValue_NULL));
 
 exit:
     return return_value;
@@ -97,19 +97,19 @@ PyCell_GetValue(PyObject *op)
 int
 PyCell_Set(PyObject *op, PyObject *value)
 {
-    return PyCell_SetValue(op, value == NULL ? PyValue_NULL :
+    return PyCell_SetValue(op, value == NULL ? PyValue_Borrow(PyValue_NULL) :
                             PyValue_FromObjectBorrow(value));
 }
 
 int
-PyCell_SetValue(PyObject *op, PyValue value)
+(PyCell_SetValue)(PyObject *op, PyValueBorrow value)
 {
     if (!PyCell_Check(op)) {
         PyErr_BadInternalCall();
         return -1;
     }
     _PyCell_SetValue((PyCellObject *)op,
-                     PyValue_MakeHeapSafe(_PyValue_BorrowTagged(value)));
+                     PyValue_XDUP(value));
     return 0;
 }
 
@@ -161,7 +161,7 @@ cell_repr(PyObject *self)
     if (PyValue_IsNull(ref)) {
         return PyUnicode_FromFormat("<cell at %p: empty>", self);
     }
-    uintptr_t identity = PyValue_IsInline(ref) ? ref.bits :
+    uintptr_t identity = PyValue_IsInline(ref) ? _PyValue_Word(ref) :
                           (uintptr_t)PyValue_AsKnownObjectBorrow(ref);
     PyObject *res = PyUnicode_FromFormat("<cell at %p: %.80s object at %p>",
                                         self, PyValue_TYPE(ref)->tp_name,

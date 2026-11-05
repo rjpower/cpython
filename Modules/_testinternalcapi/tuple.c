@@ -42,7 +42,7 @@ tuple_value_layout(PyObject *Py_UNUSED(module), PyObject *obj)
     }
     for (Py_ssize_t i = 0; i < size; i++) {
         PyValue value = _PyTuple_CAST(obj)->ob_item[i];
-        assert(PyValue_IsHeapSafe(value));
+        _PyValue_RecheckHome(value);
         char kind = PyValue_IsInlineInt(value) ? 'i' :
                     PyValue_IsInlineFloat(value) ? 'f' :
                     PyValue_IsObject(value) ? 'o' : '?';
@@ -70,7 +70,7 @@ cell_value_kind(PyObject *Py_UNUSED(module), PyObject *obj)
         return NULL;
     }
     PyValue value = ((PyCellObject *)obj)->ob_ref;
-    assert(PyValue_IsHeapSafe(value));
+    _PyValue_RecheckHome(value);
     const char *kind = PyValue_IsNull(value) ? "n" :
                        PyValue_IsInlineInt(value) ? "i" :
                        PyValue_IsInlineFloat(value) ? "f" : "o";
@@ -258,7 +258,7 @@ static PyObject *
 value_member_kind(PyObject *self, PyObject *Py_UNUSED(args))
 {
     PyValue value = ((ValueMember *)self)->value;
-    assert(PyValue_IsHeapSafe(value));
+    _PyValue_RecheckHome(value);
     const char *kind = PyValue_IsNull(value) ? "n" :
                        PyValue_IsInlineInt(value) ? "i" :
                        PyValue_IsInlineFloat(value) ? "f" : "o";

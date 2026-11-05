@@ -638,7 +638,7 @@ callmethod(PyThreadState *tstate, PyObject *obj, PyObject *name,
     _PyCValue self, method;
     _PyThreadState_PushCValue(tstate, &self);
     _PyThreadState_PushCValue(tstate, &method);
-    self.ref = PyValue_FromPyObjectBorrow(obj);
+    self.ref = PyValue_DUP(PyValue_FromObjectBorrow(obj));
     if (_PyObject_GetMethodValue(tstate, &self.ref, name, &method.ref, obj) < 0) {
         goto done;
     }
@@ -945,7 +945,7 @@ PyObject_VectorcallMethod(PyObject *name, PyObject *const *args,
     _PyCValue self, method;
     _PyThreadState_PushCValue(tstate, &self);
     _PyThreadState_PushCValue(tstate, &method);
-    self.ref = PyValue_FromPyObjectBorrow(args[0]);
+    self.ref = PyValue_DUP(PyValue_FromObjectBorrow(args[0]));
     if (_PyObject_GetMethodValue(tstate, &self.ref, name, &method.ref, args[0]) < 0) {
         goto done;
     }
@@ -993,7 +993,7 @@ PyObject_CallMethodObjArgs(PyObject *obj, PyObject *name, ...)
     _PyCValue self, method;
     _PyThreadState_PushCValue(tstate, &self);
     _PyThreadState_PushCValue(tstate, &method);
-    self.ref = PyValue_FromPyObjectBorrow(obj);
+    self.ref = PyValue_DUP(PyValue_FromObjectBorrow(obj));
     if (_PyObject_GetMethodValue(tstate, &self.ref, name, &method.ref, obj) < 0) {
         goto done;
     }
@@ -1093,7 +1093,7 @@ _PyStack_UnpackDict(PyThreadState *tstate,
     /* Snapshot shape is checked before allocating or boxing keyword values. */
     for (Py_ssize_t i = 0; i < nkwargs; i++) {
         PyObject *pair = PyValue_AsKnownObjectBorrow(PyList_GET_VALUE(items, i));
-        PyValue key = PyTuple_GET_VALUE(pair, 0);
+        PyValueBorrow key = PyTuple_GET_VALUE(pair, 0);
         if (!PyValue_IsObject(key) || !PyUnicode_Check(PyValue_AsKnownObjectBorrow(key))) {
             _PyErr_SetString(tstate, PyExc_TypeError, "keywords must be strings");
             goto error;

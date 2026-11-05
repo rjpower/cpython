@@ -153,7 +153,7 @@ static int
 validate_code_name_tuple(PyObject *tuple)
 {
     for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(tuple); i++) {
-        PyValue value = PyTuple_GET_VALUE(tuple, i);
+        PyValueBorrow value = PyTuple_GET_VALUE(tuple, i);
         if (!PyValue_IsObject(value) ||
             !PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value))) {
             PyErr_SetString(PyExc_SystemError, "non-string found in code slot");
@@ -767,7 +767,7 @@ inline_const_fits(_PyIRWord word, PyObject *consts)
     if (index >= PyTuple_GET_SIZE(consts)) {
         return 0;
     }
-    PyValue value = PyTuple_GET_VALUE(consts, index);
+    PyValueBorrow value = PyTuple_GET_VALUE(consts, index);
     if (IR_HANDLER(word) == LOAD_CONST_INLINE_INT) {
         return PyValue_IsInlineInt(value);
     }
@@ -3079,13 +3079,19 @@ PyTypeObject PyCode_Type = {
  * other API
  ******************/
 
+static PyValue constant_key_tuple(PyValueBorrow first, PyValueBorrow second,
+                                  PyValueBorrow tag);
+#define constant_key_tuple(V0, V1, V2) \
+    (constant_key_tuple)(PyValue_Borrow(V0), PyValue_Borrow(V1), PyValue_Borrow(V2))
+
 static PyValue
-constant_key_tuple(PyValue first, PyValue second, PyValue tag)
+(constant_key_tuple)(PyValueBorrow first, PyValueBorrow second,
+                     PyValueBorrow tag)
 {
     /* The private array owns every element across tuple allocation. NULL1
        selects a pair; a language None is the distinct negative-zero tag. */
     PyValue items[3] = {PyValue_DUP(first), PyValue_DUP(second),
-                        PyValue_IsNull(tag) ? tag : PyValue_DUP(tag)};
+                        PyValue_XDUP(tag)};
     Py_ssize_t count = PyValue_IsNull(tag) ? 2 : 3;
     PyObject *tuple = _PyTuple_FromValueArray(items, count);
     for (Py_ssize_t i = 0; i < count; i++) {
@@ -3094,8 +3100,11 @@ constant_key_tuple(PyValue first, PyValue second, PyValue tag)
     return tuple == NULL ? PyValue_NULL : PyValue_FromPyObjectSteal(tuple);
 }
 
-PyValue
-_PyCode_ConstantValueKey(PyValue constant)
+static PyValue constant_value_key(PyValueBorrow constant);
+#define constant_value_key(V0) (constant_value_key)(PyValue_Borrow(V0))
+
+static PyValue
+(constant_value_key)(PyValueBorrow constant)
 {
     assert(PyValue_IsLanguageValue(constant));
     PyValue value = PyValue_DUP(constant);
@@ -3115,8 +3124,9 @@ _PyCode_ConstantValueKey(PyValue constant)
     // An inline float, or a NaN, which is boxed.
     else if (PyValue_IsInlineFloat(value) || (op != NULL && PyFloat_CheckExact(op))) {
         double d = op != NULL ? PyFloat_AS_DOUBLE(op) : PyValue_InlineFloat(value);
-        PyValue tag = d == 0.0 && copysign(1.0, d) < 0.0
-                      ? PyValue_FromObjectBorrow(Py_None) : PyValue_NULL;
+        PyValueBorrow tag = d == 0.0 && copysign(1.0, d) < 0.0
+                      ? PyValue_FromObjectBorrow(Py_None)
+                      : PyValue_Borrow(PyValue_NULL);
         key = constant_key_tuple(
             PyValue_FromObjectBorrow((PyObject *)&PyFloat_Type), value, tag);
     }
@@ -3124,7 +3134,7 @@ _PyCode_ConstantValueKey(PyValue constant)
         Py_complex z = PyComplex_AsCComplex(op);
         bool real_negative = z.real == 0.0 && copysign(1.0, z.real) < 0.0;
         bool imag_negative = z.imag == 0.0 && copysign(1.0, z.imag) < 0.0;
-        PyValue tag = PyValue_NULL;
+        PyValueBorrow tag = PyValue_Borrow(PyValue_NULL);
         if (real_negative && imag_negative) {
             tag = PyValue_FromObjectBorrow(Py_True);
         }
@@ -3145,7 +3155,7 @@ _PyCode_ConstantValueKey(PyValue constant)
         }
         for (Py_ssize_t i = 0; i < len; i++) {
             PyValue item = PyTuple_GetValue(op, i);
-            PyValue item_key = _PyCode_ConstantValueKey(item);
+            PyValue item_key = constant_value_key(item);
             PyValue_CLOSE(item);
             if (PyValue_IsNull(item_key)) {
                 Py_DECREF(tuple);
@@ -3166,7 +3176,7 @@ _PyCode_ConstantValueKey(PyValue constant)
         PyValue item;
         int status;
         while ((status = _PySet_NextValue(op, &pos, &item, NULL)) > 0) {
-            PyValue item_key = _PyCode_ConstantValueKey(item);
+            PyValue item_key = constant_value_key(item);
             PyValue_CLOSE(item);
             if (PyValue_IsNull(item_key)) {
                 Py_DECREF(set);
@@ -3192,7 +3202,7 @@ _PyCode_ConstantValueKey(PyValue constant)
         PyValue keys[3] = {PyValue_NULL, PyValue_NULL, PyValue_NULL};
         PyValue *fields[3] = {&slice->start, &slice->stop, &slice->step};
         for (int i = 0; i < 3; i++) {
-            keys[i] = _PyCode_ConstantValueKey(*fields[i]);
+            keys[i] = constant_value_key(*fields[i]);
             if (PyValue_IsNull(keys[i])) {
                 goto slice_done;
             }
@@ -3221,10 +3231,16 @@ done:
     return key;
 }
 
+PyValue
+_PyCode_ConstantValueKey(PyValue constant)
+{
+    return constant_value_key(constant);
+}
+
 PyObject *
 _PyCode_ConstantKey(PyObject *op)
 {
-    PyValue key = _PyCode_ConstantValueKey(PyValue_FromObjectBorrow(op));
+    PyValue key = constant_value_key(PyValue_FromObjectBorrow(op));
     if (PyValue_IsNull(key)) {
         return NULL;
     }

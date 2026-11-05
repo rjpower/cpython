@@ -485,7 +485,7 @@ _PyGC_VisitFrameStack(_PyInterpreterFrame *frame, visitproc visit, void *arg)
     /* all slots; _Py_VISIT_VALUE skips NULL, indices and inline values */
     for (; ref < end; ref++) {
         if (!PyValue_IsTaggedIndex(*ref)) {
-            _PyValue_RecheckFrameHome(*ref);
+            _PyValue_RecheckHome(*ref);
         }
         _Py_VISIT_VALUE(*ref);
     }
@@ -1693,7 +1693,7 @@ referrersvisit(PyObject* obj, void *arg)
     Py_ssize_t i;
     for (i = 0; i < PyTuple_GET_SIZE(objs); i++) {
         // Compare identity only: a scalar stored inline cannot be a referent.
-        PyValue item = PyTuple_GET_VALUE(objs, i);
+        PyValueBorrow item = PyTuple_GET_VALUE(objs, i);
         if (PyValue_IsObject(item) && PyValue_AsKnownObjectBorrow(item) == obj) {
             return 1;
         }

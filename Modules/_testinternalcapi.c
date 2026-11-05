@@ -41,7 +41,7 @@
 #include "pycore_regcfg.h"        // _PyRegPass_SetKeepAcrossCode()
 #include "pycore_runtime_structs.h" // _PY_NSMALLPOSINTS
 #include "pycore_unicodeobject.h" // _PyUnicode_TransformDecimalAndSpaceToASCII()
-#include "pycore_value.h"         // PyValue_IsHeapSafe()
+#include "pycore_value.h"         // _PyValue_RecheckHome()
 #include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
 #include "pycore_tuple.h"       // _PyTuple_GET_OBJECT()
 
@@ -1199,7 +1199,7 @@ set_eval_frame_interp(PyObject *self, PyObject *args)
 {
     if (PyTuple_GET_SIZE(args) == 1) {
         module_state *state = get_module_state(self);
-        PyValue item = PyTuple_GET_VALUE(args, 0);
+        PyValueBorrow item = PyTuple_GET_VALUE(args, 0);
         if (!PyValue_IsObject(item) ||
             !PyList_Check(PyValue_AsKnownObjectBorrow(item))) {
             PyErr_SetString(PyExc_TypeError, "argument must be a list");
@@ -2207,7 +2207,7 @@ get_object_dict_values(PyObject *self, PyObject *obj)
     for(int i = 0; i < size; i++) {
         PyValue item = values->values[i];
         PyTuple_SET_VALUE(res, i, PyValue_IsNull(item)
-            ? PyValue_FromObjectBorrow(&_Py_STR(anon_null))
+            ? PyValue_DUP(PyValue_FromObjectBorrow(&_Py_STR(anon_null)))
             : PyValue_NewRef(item));
     }
     return res;
@@ -3118,8 +3118,8 @@ value_box_roundtrip(PyObject *self, PyObject *arg)
         || !PyValue_IsValid(ref)
         || PyValue_RefcountOnObject(ref)
         || PyValue_TYPE(ref) != Py_TYPE(arg)
-        || !PyValue_Is(dup, ref) || !PyValue_Is(_PyValue_BorrowTagged(ref), ref)
-        || !PyValue_Is(PyValue_BorrowAt(&ref), ref)
+        || !PyValue_Is(dup, ref) || !PyValue_Is(PyValue_Borrow(ref), ref)
+        || !PyValue_Is(PyValue_Borrow(ref), ref)
         || !PyValue_IsInlineAt(&ref) || PyValue_IsPointerSpaceAt(&ref)
         || PyValue_Is(ref, PyValue_None))
     {
@@ -3206,7 +3206,7 @@ pyvalue_contract(PyObject *self, PyObject *arg)
     PyValue value = PyValue_PrepareOwned(Py_NewRef(arg));
     const char *kind = PyValue_IsInlineInt(value) ? "int51" :
                        PyValue_IsInlineFloat(value) ? "float64" : "object";
-    PyValue duplicate = PyValue_NewRef(_PyValue_BorrowTagged(value));
+    PyValue duplicate = PyValue_NewRef(PyValue_Borrow(value));
     assert(PyValue_Is(value, duplicate));
     assert(PyValue_IsLanguageValue(value));
     PyObject *object = PyValue_AsObject(duplicate);
@@ -3243,12 +3243,12 @@ pyvalue_append_box(PyObject *self, PyObject *args)
     if (!PyArg_ParseTuple(args, "O!O", &PyList_Type, &list, &value)) {
         return NULL;
     }
-    PyValue ref = PyValue_FromObjectBorrow(value);
+    PyValueBorrow ref = PyValue_FromObjectBorrow(value);
     if (!PyValue_IsInline(ref)) {
         PyErr_SetString(PyExc_ValueError, "the value has no inline form");
         return NULL;
     }
-    PyValue box = PyValue_Box(ref);
+    PyValue box = PyValue_Box(PyValue_DUP(ref));
     if (PyValue_IsInline(box)) {
         return NULL;
     }
@@ -3262,7 +3262,7 @@ pyvalue_append_box(PyObject *self, PyObject *args)
  * value format conversions. */
 
 static const char *
-pyvalue_kind(PyValue value)
+pyvalue_kind(PyValueBorrow value)
 {
     if (PyValue_IsInlineInt(value)) {
         return "int";
@@ -3276,8 +3276,8 @@ pyvalue_kind(PyValue value)
 static PyObject *
 pyvalue_from_object_borrow_inline(PyObject *self, PyObject *obj)
 {
-    PyValue value = _PyValue_FromObjectBorrowInline(obj);
-    PyValue expected = PyValue_FromObjectBorrow(obj);
+    PyValueBorrow value = PyValue_FromObjectBorrow(obj);
+    PyValueBorrow expected = PyValue_FromObjectBorrow(obj);
     PyObject *back = PyValue_AsObject(value);
     if (back == NULL) {
         return NULL;
@@ -3286,15 +3286,16 @@ pyvalue_from_object_borrow_inline(PyObject *self, PyObject *obj)
                          value.bits == expected.bits ? Py_True : Py_False);
 }
 
-/* The round trip of obj through the typed entry, which must give a
- * no-count reference to obj itself. Debug builds abort when obj is an exact
- * int or float. */
+/* The round trip of obj through the typed entry, which must give a borrow
+ * of obj itself with an owner's word: tagged only if obj is immortal (B1).
+ * Debug builds abort when obj is an exact int or float. */
 static PyObject *
 pyvalue_from_object_known(PyObject *self, PyObject *obj)
 {
-    PyValue value = _PyValue_FromObjectKnown(obj);
-    if (value.bits != ((uintptr_t)obj | Py_TAG_REFCNT)) {
-        PyErr_SetString(PyExc_AssertionError, "not a no-count reference");
+    PyValueBorrow value = _PyValue_FromObjectKnown(obj);
+    uintptr_t tag = _Py_IsImmortal(obj) ? Py_TAG_REFCNT : 0;
+    if (value.bits != ((uintptr_t)obj | tag)) {
+        PyErr_SetString(PyExc_AssertionError, "not an owner's word");
         return NULL;
     }
     return PyValue_AsObject(value);
@@ -3304,7 +3305,7 @@ static PyObject *
 pyvalue_entry_null(PyObject *self, PyObject *unused)
 {
     if (!PyValue_IsNull(_PyValue_FromObjectKnown(NULL))
-        || !PyValue_IsNull(_PyValue_FromObjectBorrowInline(NULL)))
+        || !PyValue_IsNull(PyValue_FromObjectBorrow(NULL)))
     {
         PyErr_SetString(PyExc_AssertionError, "NULL entry is not NULL");
         return NULL;
@@ -3872,7 +3873,7 @@ common_constant_storage(PyObject *module, PyObject *Py_UNUSED(args))
     for (int i = 0; i < NUM_COMMON_CONSTANTS; i++) {
         PyValue value = interp->common_consts[i];
         assert(PyValue_IsLanguageValue(value));
-        assert(PyValue_IsHeapSafe(value));
+        _PyValue_RecheckHome(value);
         inline_count += PyValue_IsInline(value);
         if (PyValue_IsObject(value)) {
             assert(_Py_IsImmortal(PyValue_AsKnownObjectBorrow(value)));
@@ -3896,8 +3897,9 @@ dict_vm_storage(PyObject *module, PyObject *arg)
     PyValue key, value;
     int status;
     while ((status = _PyDict_NextValue(arg, &pos, &key, &value, NULL)) > 0) {
-        assert(PyValue_IsLanguageValue(key) && PyValue_IsHeapSafe(key));
-        assert(PyValue_IsLanguageValue(value) && PyValue_IsHeapSafe(value));
+        assert(PyValue_IsLanguageValue(key) && PyValue_IsLanguageValue(value));
+        _PyValue_RecheckHome(key);
+        _PyValue_RecheckHome(value);
         count++;
         inline_keys += PyValue_IsInline(key);
         inline_values += PyValue_IsInline(value);
@@ -3926,7 +3928,7 @@ list_value_owner_closed(PyObject *capsule)
     assert(probe != NULL);
     probe->closed++;
     if (probe->list != NULL) {
-        PyValue value = PyList_GET_VALUE(probe->list, 0);
+        PyValueBorrow value = PyList_GET_VALUE(probe->list, 0);
         probe->saw_publication = PyValue_IsInlineInt(value) &&
                                  PyValue_InlineInt64(value) == 37;
     }
@@ -4034,7 +4036,7 @@ constant_value_key(PyObject *module, PyObject *args)
     }
     int fail = 0;
     if (count == 2) {
-        PyValue flag = PyTuple_GET_VALUE(args, 1);
+        PyValueBorrow flag = PyTuple_GET_VALUE(args, 1);
         if (!PyValue_BoolCheck(flag)) {
             PyErr_SetString(PyExc_TypeError, "failure flag must be bool");
             return NULL;

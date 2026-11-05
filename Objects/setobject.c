@@ -63,16 +63,16 @@ class setobject_converter(self_converter):
 /* Object used as dummy key to fill deleted entries */
 static PyObject _dummy_struct;
 
-#define dummy ((PyValue){.bits = (uintptr_t)&_dummy_struct + 1})
+#define dummy _PyValue_SENTINEL(&_dummy_struct)
 
 static inline int
 set_key_active(PyValue key)
 {
-    return !PyValue_IsNull(key) && key.bits != dummy.bits;
+    return !PyValue_IsNull(key) && !_PyValue_IsSameWord(key, dummy);
 }
 
 static inline int
-set_unicode_eq(PyValue left, PyValue right)
+(set_unicode_eq)(PyValueBorrow left, PyValueBorrow right)
 {
     if (!PyValue_IsObject(left) || !PyValue_IsObject(right)) {
         return 0;
@@ -82,6 +82,9 @@ set_unicode_eq(PyValue left, PyValue right)
     return PyUnicode_CheckExact(a) && PyUnicode_CheckExact(b) && unicode_eq(a, b);
 }
 
+#define set_unicode_eq(L, R) \
+    (set_unicode_eq)(PyValue_Borrow(L), PyValue_Borrow(R))
+
 #define SET_LOOKKEY_FOUND 1
 #define SET_LOOKKEY_NO_MATCH 0
 #define SET_LOOKKEY_ERROR (-1)
@@ -89,7 +92,7 @@ set_unicode_eq(PyValue left, PyValue right)
 #define SET_LOOKKEY_EMPTY (-3)
 
 typedef int (*compare_func)(PySetObject *so, setentry *table, setentry *ep,
-                            PyValue key, Py_hash_t hash);
+                            PyValueBorrow key, Py_hash_t hash);
 
 #ifdef Py_GIL_DISABLED
 
@@ -155,14 +158,14 @@ set_compare_threadsafe(PySetObject *so, setentry *table, setentry *ep,
 
 static inline Py_ALWAYS_INLINE int
 set_compare_entry_lock_held(PySetObject *so, setentry *table, setentry *entry,
-                            PyValue key, Py_hash_t hash)
+                            PyValueBorrow key, Py_hash_t hash)
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(so);
     if (entry->hash == 0 && PyValue_IsNull(entry->key))
         return SET_LOOKKEY_EMPTY;
     if (entry->hash == hash) {
         PyValue startkey = entry->key;
-        assert(startkey.bits != dummy.bits);
+        assert(!_PyValue_IsSameWord(startkey, dummy));
         if (PyValue_Is(startkey, key)) {
             return SET_LOOKKEY_FOUND;
         }
@@ -174,7 +177,7 @@ set_compare_entry_lock_held(PySetObject *so, setentry *table, setentry *entry,
         int cmp = _PyValue_RichCompareBool(startkey, key, Py_EQ);
         /* Compare the location while our snapshot still owns its object.
            If it is unchanged, the table retains an owner through CLOSE. */
-        int changed = table != so->table || entry->key.bits != startkey.bits;
+        int changed = table != so->table || !_PyValue_IsSameWord(entry->key, startkey);
         PyValue_XCLOSE(startkey);
         if (cmp < 0)
             return SET_LOOKKEY_ERROR;
@@ -192,7 +195,7 @@ set_compare_entry_lock_held(PySetObject *so, setentry *table, setentry *entry,
 // doesn't help much for frozensets.
 static inline Py_ALWAYS_INLINE int
 set_compare_frozenset(PySetObject *so, setentry *table, setentry *ep,
-                                 PyValue key, Py_hash_t hash)
+                                 PyValueBorrow key, Py_hash_t hash)
 {
     assert(PyFrozenSet_Check(so));
     PyValue startkey = ep->key;
@@ -243,8 +246,9 @@ set_zero_table(setentry *table, size_t size)
 #define PERTURB_SHIFT 5
 
 static int
-set_do_lookup(PySetObject *so, setentry *table, size_t mask, PyValue key,
-              Py_hash_t hash, setentry **epp, compare_func compare_entry)
+(set_do_lookup)(PySetObject *so, setentry *table, size_t mask,
+                PyValueBorrow key, Py_hash_t hash, setentry **epp,
+                compare_func compare_entry)
 {
     setentry *entry;
     size_t perturb = hash;
@@ -271,6 +275,9 @@ set_do_lookup(PySetObject *so, setentry *table, size_t mask, PyValue key,
     }
     Py_UNREACHABLE();
 }
+
+#define set_do_lookup(S, T, M, K, H, E, C) \
+    (set_do_lookup)(S, T, M, PyValue_Borrow(K), H, E, C)
 
 static int set_table_resize(PySetObject *, Py_ssize_t);
 
@@ -303,7 +310,7 @@ set_add_entry_takeref(PySetObject *so, PyValue key, Py_hash_t hash)
                 goto found_unused_or_dummy;
             if (entry->hash == hash) {
                 PyValue startkey = entry->key;
-                assert(startkey.bits != dummy.bits);
+                assert(!_PyValue_IsSameWord(startkey, dummy));
                 if (PyValue_Is(startkey, key))
                     goto found_active;
                 if (set_unicode_eq(startkey, key))
@@ -312,7 +319,7 @@ set_add_entry_takeref(PySetObject *so, PyValue key, Py_hash_t hash)
                 startkey = PyValue_DUP(startkey);
                 cmp = _PyValue_RichCompareBool(startkey, key, Py_EQ);
                 int changed = table != so->table ||
-                              entry->key.bits != startkey.bits;
+                              !_PyValue_IsSameWord(entry->key, startkey);
                 PyValue_XCLOSE(startkey);
                 if (cmp > 0)
                     goto found_active;
@@ -323,7 +330,7 @@ set_add_entry_takeref(PySetObject *so, PyValue key, Py_hash_t hash)
                 mask = so->mask;
             }
             else if (entry->hash == -1) {
-                assert(entry->key.bits == dummy.bits);
+                assert(_PyValue_IsSameWord(entry->key, dummy));
                 freeslot = entry;
             }
             entry++;
@@ -362,13 +369,14 @@ set_add_entry_takeref(PySetObject *so, PyValue key, Py_hash_t hash)
 }
 
 static int
-set_add_entry(PySetObject *so, PyValue key, Py_hash_t hash)
+(set_add_entry)(PySetObject *so, PyValueBorrow key, Py_hash_t hash)
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(so);
 
     return set_add_entry_takeref(so,
-                                PyValue_MakeHeapSafe(_PyValue_BorrowTagged(key)), hash);
+                                PyValue_DUP(key), hash);
 }
+#define set_add_entry(S, K, H) (set_add_entry)(S, PyValue_Borrow(K), H)
 
 static void
 set_unhashable_type(PyObject *key)
@@ -389,7 +397,6 @@ set_unhashable_type(PyObject *key)
 int
 _PySet_AddValueTakeRef(PySetObject *so, PyValue key)
 {
-    key = PyValue_MakeHeapSafe(key);
     Py_hash_t hash = _PyValue_Hash(key);
     if (hash == -1) {
         set_unhashable_type(PyValue_AsKnownObjectBorrow(key));
@@ -446,7 +453,8 @@ set_insert_clean(setentry *table, size_t mask, PyValue key, Py_hash_t hash)
 /* ======================================================================== */
 
 static int
-set_lookkey(PySetObject *so, PyValue key, Py_hash_t hash, setentry **epp)
+(set_lookkey)(PySetObject *so, PyValueBorrow key, Py_hash_t hash,
+              setentry **epp)
 {
     int status;
     if (PyFrozenSet_CheckExact(so)) {
@@ -466,6 +474,7 @@ set_lookkey(PySetObject *so, PyValue key, Py_hash_t hash, setentry **epp)
            status == SET_LOOKKEY_ERROR);
     return status;
 }
+#define set_lookkey(S, K, H, E) (set_lookkey)(S, PyValue_Borrow(K), H, E)
 
 #ifdef Py_GIL_DISABLED
 static int
@@ -601,7 +610,7 @@ set_table_resize(PySetObject *so, Py_ssize_t minused)
 }
 
 static int
-set_contains_entry(PySetObject *so, PyValue key, Py_hash_t hash)
+(set_contains_entry)(PySetObject *so, PyValueBorrow key, Py_hash_t hash)
 {
 #ifdef Py_GIL_DISABLED
     return set_lookkey_threadsafe(so, key, hash);
@@ -611,11 +620,14 @@ set_contains_entry(PySetObject *so, PyValue key, Py_hash_t hash)
 #endif
 }
 
+#define set_contains_entry(S, K, H) \
+    (set_contains_entry)(S, PyValue_Borrow(K), H)
+
 #define DISCARD_NOTFOUND 0
 #define DISCARD_FOUND 1
 
 static int
-set_discard_entry(PySetObject *so, PyValue key, Py_hash_t hash)
+(set_discard_entry)(PySetObject *so, PyValueBorrow key, Py_hash_t hash)
 {
     setentry *entry;
     PyValue old_key;
@@ -634,6 +646,8 @@ set_discard_entry(PySetObject *so, PyValue key, Py_hash_t hash)
     PyValue_XCLOSE(old_key);
     return DISCARD_FOUND;
 }
+#define set_discard_entry(S, K, H) \
+    (set_discard_entry)(S, PyValue_Borrow(K), H)
 
 static int
 set_add_key(PySetObject *so, PyObject *key)
@@ -659,9 +673,9 @@ static int
 #define set_contains_value(S, K) (set_contains_value)(S, PyValue_Borrow(K))
 
 static int
-set_discard_value(PySetObject *so, PyValue key)
+(set_discard_value)(PySetObject *so, PyValueBorrow borrowed)
 {
-    key = PyValue_NewRef(key);
+    PyValue key = PyValue_NewRef(borrowed);
     Py_hash_t hash = _PyValue_Hash(key);
     if (hash == -1) {
         set_unhashable_type(PyValue_AsKnownObjectBorrow(key));
@@ -672,6 +686,7 @@ set_discard_value(PySetObject *so, PyValue key)
     PyValue_XCLOSE(key);
     return result;
 }
+#define set_discard_value(S, K) (set_discard_value)(S, PyValue_Borrow(K))
 
 static int
 set_contains_key(PySetObject *so, PyObject *key)
@@ -3309,14 +3324,14 @@ _PySet_NextValue(PyObject *set, Py_ssize_t *pos, PyValue *key, Py_hash_t *hash)
 }
 
 int
-_PySet_NextBorrowed(PyObject *set, Py_ssize_t *pos, PyValue *key)
+_PySet_NextBorrowed(PyObject *set, Py_ssize_t *pos, PyValueBorrow *key)
 {
     assert(PyAnySet_Check(set));
     setentry *entry;
     if (!set_next((PySetObject *)set, pos, &entry)) {
         return 0;
     }
-    *key = _PyValue_BorrowTagged(entry->key);
+    *key = PyValue_Borrow(entry->key);
     return 1;
 }
 

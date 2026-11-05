@@ -29,7 +29,7 @@
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_runtime_init.h"  // _PyRuntimeState_INIT
 #include "pycore_setobject.h"     // _PySet_NextBorrowed()
-#include "pycore_value.h"      // PyValue_FromPyObjectBorrow()
+#include "pycore_value.h"      // PyValue_FromObjectBorrow()
 #include "pycore_stats.h"         // _PyStats_InterpInit()
 #include "pycore_sysmodule.h"     // _PySys_ClearAttrString()
 #include "pycore_traceback.h"     // PyUnstable_TracebackThreads()
@@ -655,7 +655,7 @@ init_interp_create_gil(PyThreadState *tstate, int gil)
 }
 
 static int
-builtins_dict_watcher(PyDict_WatchEvent event, PyObject *dict, PyValue key, PyValue new_value)
+builtins_dict_watcher(PyDict_WatchEvent event, PyObject *dict, PyValueBorrow key, PyValueBorrow new_value)
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
     RARE_EVENT_INTERP_INC(interp, builtin_dict);
@@ -905,7 +905,7 @@ pycore_init_builtins(PyThreadState *tstate)
     for (int i = 0; i < NUM_COMMON_CONSTANTS; i++) {
         assert(common_objs[i] != NULL);
         _Py_SetImmortal(common_objs[i]);
-        interp->common_consts[i] = PyValue_FromObjectBorrow(common_objs[i]);
+        interp->common_consts[i] = PyValue_DUP(PyValue_FromObjectBorrow(common_objs[i]));
     }
 
     /* The static types' dicts keep these descriptors alive; the cache
@@ -2123,6 +2123,7 @@ static void
 finalize_interp_clear(PyThreadState *tstate)
 {
     int is_main_interp = _Py_IsMainInterpreter(tstate->interp);
+    tstate->interp->clearing_immortals = 1;
 
     _PyXI_Fini(tstate->interp);
     _PyExc_ClearExceptionGroupType(tstate->interp);
@@ -3579,7 +3580,7 @@ release_dict_lock_for_dump(PyObject *obj)
 /* The object behind a borrowed dict or set view, or NULL for an inline
  * scalar. Allocation-free, for the fault dump below. */
 static PyObject *
-dump_object_view(PyValue value)
+dump_object_view(PyValueBorrow value)
 {
     return PyValue_IsObject(value) ? PyValue_AsKnownObjectBorrow(value) : NULL;
 }
@@ -3602,7 +3603,7 @@ _Py_DumpExtensionModules(int fd, PyInterpreterState *interp)
     }
 
     Py_ssize_t pos;
-    PyValue key_value, value_value;
+    PyValueBorrow key_value, value_value;
     PyObject *key, *value;
 
     // Avoid PyDict_GetItemString() which calls PyUnicode_FromString(),
@@ -3655,7 +3656,7 @@ _Py_DumpExtensionModules(int fd, PyInterpreterState *interp)
             int is_stdlib_ext = 0;
 
             Py_ssize_t i = 0;
-            PyValue item_value;
+            PyValueBorrow item_value;
             // if stdlib_module_names is not NULL, it is always a frozenset.
             while (_PySet_NextBorrowed(stdlib_module_names, &i, &item_value)) {
                 PyObject *item = dump_object_view(item_value);

@@ -8,7 +8,7 @@
 static PyObject *
 dict_value_seed(PyObject *Py_UNUSED(module), PyObject *key)
 {
-    PyValue owned_key = PyValue_MakeHeapSafe(PyValue_FromObjectBorrow(key));
+    PyValue owned_key = PyValue_DUP(PyValue_FromObjectBorrow(key));
     PyObject *dict = PyDict_New();
     if (dict == NULL) {
         PyValue_CLOSE(owned_key);
@@ -66,7 +66,7 @@ dict_value_pop_boxing_oom(PyObject *module, PyObject *key)
     if (dict == NULL) {
         return NULL;
     }
-    PyValue query = PyValue_MakeHeapSafe(PyValue_FromObjectBorrow(key));
+    PyValue query = PyValue_DUP(PyValue_FromObjectBorrow(key));
     Py_hash_t hash = PyObject_Hash(key);
     if (hash == -1) {
         PyValue_CLOSE(query);
@@ -819,7 +819,7 @@ dict_public_value_pending(PyObject *module, PyObject *const *args, Py_ssize_t na
     if (marker == NULL) {
         return NULL;
     }
-    PyValue key = PyValue_FromObjectBorrow(args[1]);
+    PyValueBorrow key = PyValue_FromObjectBorrow(args[1]);
     PyValue first = PyValue_NULL, second = PyValue_NULL;
     Py_ssize_t position = 0;
     int status;
@@ -888,8 +888,8 @@ dict_public_value_retirement(PyObject *module, PyObject *const *args, Py_ssize_t
     }
     /* Read both borrows without callbacks. Only the provider pins their owners;
      * hashing deliberately clears the holder and removes its last references. */
-    PyValue source = PyList_GET_VALUE(args[0], 0);
-    PyValue query = PyList_GET_VALUE(args[0], 1);
+    PyValueBorrow source = PyList_GET_VALUE(args[0], 0);
+    PyValueBorrow query = PyList_GET_VALUE(args[0], 1);
     if (!PyValue_IsObject(source)) {
         PyErr_SetString(PyExc_TypeError, "expected dictionary object");
         return NULL;

@@ -1408,9 +1408,7 @@ SLOT_VALUE_READS = {        # f(GETLOCAL(oparg), ...) reads the slot's value
     "PyValue_DUP", "PyValue_IsNull", "PyCell_NewValue",
     "PyValue_AsKnownObjectBorrow",
 }
-SLOT_ADDRESS_READS = {      # f(&GETLOCAL(oparg)) reads the slot in place
-    "PyValue_BorrowAt",
-}
+SLOT_ADDRESS_READS: set[str] = set()  # f(&GETLOCAL(oparg)) reads the slot in place
 SLOT_ADDRESS_WRITES = {     # f(&GETLOCAL(oparg), ...) may store to the slot
     "PyValue_BoxInto", "PyValue_Publish",
 }

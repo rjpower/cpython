@@ -17,9 +17,10 @@ extern "C" {
 
 /* Entry, typed (section 1.3): the borrowed value of obj, which must not be
    an exact int or float: a str, type, function, iterator or container. It
-   tags the pointer without loading the type; debug builds check the
-   precondition. NULL gives PyValue_NULL. */
-static inline PyValue
+   skips the type load of PyValue_FromObjectBorrow(), and tags the pointer
+   if obj is immortal; debug builds check the precondition. NULL gives
+   PyValue_NULL. */
+static inline PyValueBorrow
 _PyValue_FromObjectKnown(PyObject *obj)
 {
     assert((uintptr_t)obj < Py_PTR_LIMIT);
@@ -30,8 +31,11 @@ _PyValue_FromObjectKnown(PyObject *obj)
                  "be an exact int or float");
     }
 #endif
-    // The no-count tag, which NULL does not take.
-    return (PyValue){ .bits = (uintptr_t)obj | (uintptr_t)(obj != NULL) };
+    PyValueBorrow value = {(uintptr_t)obj};
+    if (obj != NULL && _Py_IsImmortal(obj)) {
+        value.bits |= Py_TAG_REFCNT;
+    }
+    return value;
 }
 
 
@@ -44,8 +48,7 @@ _PyValue_FromObjectKnown(PyObject *obj)
 
 // Set the current thread's site class and return the previous one.
 PyAPI_FUNC(int) _PyValue_SwapBoxSite(int site);
-// The current thread's site class, or fallback if none is set.
-PyAPI_FUNC(int) _PyValue_BoxSiteOr(int fallback);
+// _PyValue_BoxSiteOr(), the current class, is in pycore_value.h.
 
 static inline PyObject *
 _PyValue_AsObjectAt(PyValueBorrow value, int site)
@@ -82,30 +85,6 @@ _PyBorrow_TupleItemsAt(PyObject *tuple, Py_ssize_t n, int site)
 #  define _PyBorrow_TupleItemsAt(TUPLE, N, SITE) \
         _PyBorrow_TupleItems((TUPLE), (N))
 #endif
-
-
-/* Entry, borrowed (section 1.3): the canonical value of obj with no count.
-   The pointer case is inline: a type load, two compares and the tag. Only
-   an exact int or float calls PyValue_FromObjectBorrow(), which makes it
-   inline when it fits. NULL gives PyValue_NULL. */
-static inline PyValue
-_PyValue_FromObjectBorrowInline(PyObject *obj)
-{
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
-    if (!_PyValue_IsNumberType(Py_TYPE(obj))) {
-        return _PyValue_FromObjectKnown(obj);
-    }
-    PyValue value = PyValue_FromObjectBorrow(obj);
-#ifdef Py_STATS
-    if (PyValue_IsInline(value)) {
-        _Py_STATS_EXPR(object_stats.entry_unbox[
-            _PyValue_BoxSiteOr(BOX_SITE_UNATTRIBUTED)]++);
-    }
-#endif
-    return value;
-}
 
 
 /* The marked declaration that Tools/build/check_value_api.py calls from a

@@ -524,17 +524,9 @@ _PyIR_AdoptTemp(PyValueBorrow view)
 
 /* The DSL's TAKE(V) of view V, whose field's owner is OWN: a value with a
  * count of its own, for a home.  A local's (OWN is NULL) takes a new
- * count; a temporary's is the handler's.  A frame slot holds no borrow
- * (pyjit/design/pyvalue.md D4), so the result is heap safe; debug builds
- * check it until step A5b-3 merges the check into the home check. */
-static inline PyValue
-_PyIR_Take(PyValueBorrow view, PyValue owner)
-{
-    PyValue taken = PyValue_IsNull(owner) ? PyValue_XDUP(view) : owner;
-    assert(PyValue_IsHeapSafe(taken));
-    return taken;
-}
-#define IR_TAKE(V, OWN) _PyIR_Take(PyValue_Borrow(V), (OWN))
+ * count; a temporary's is the handler's. */
+#define IR_TAKE(V, OWN) \
+    (PyValue_IsNull(OWN) ? PyValue_XDUP(V) : (OWN))
 
 /* The truth of a value, as TO_BOOL tests it, or -1 with an exception set */
 static inline int
@@ -596,8 +588,7 @@ _PyValue_Truth(PyValueBorrow ref)
         if (IR_IS_LOCAL(F)) { \
             PyValue ir_old = IR_SLOT(F); \
             IR_SLOT(F) = _PyValue_Publish(&(V)); \
-            assert(PyValue_IsHeapSafe(IR_SLOT(F))); \
-            _PyValue_CheckFrameHome(IR_SLOT(F)); \
+            _PyValue_CheckHome(IR_SLOT(F)); \
             IR_RETIRE_LOCAL(ir_old); \
         } \
         else { \
@@ -628,8 +619,7 @@ _PyValue_Truth(PyValueBorrow ref)
         if (IR_IS_LOCAL(F)) { \
             PyValue ir_old = IR_SLOT(F); \
             IR_SLOT(F) = _PyValue_Publish(&(SLOT)); \
-            assert(PyValue_IsHeapSafe(IR_SLOT(F))); \
-            _PyValue_CheckFrameHome(IR_SLOT(F)); \
+            _PyValue_CheckHome(IR_SLOT(F)); \
             (SLOT) = PyValue_NULL; \
             IR_RETIRE_LOCAL(ir_old); \
         } \

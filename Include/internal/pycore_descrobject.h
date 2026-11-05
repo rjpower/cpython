@@ -28,7 +28,8 @@ PyAPI_FUNC(void *) _PyMember_GetOffset(PyObject *, PyMemberDef *);
 /* Value-field descriptors only. Get returns an independent owner; Set borrows
    its input and publishes a strong field before releasing the prior owner. */
 extern PyValue _PyMember_GetValue(PyObject *, PyMemberDef *);
-extern int _PyMember_SetValue(PyObject *, PyMemberDef *, PyValue);
+extern int _PyMember_SetValue(PyObject *, PyMemberDef *, PyValueBorrow);
+#define _PyMember_SetValue(O, M, V) (_PyMember_SetValue)(O, M, PyValue_Borrow(V))
 
 #ifdef __cplusplus
 }

@@ -1,10 +1,12 @@
 """The typed-borrow units of Tools/build/check_value_api.py, compiled with the
-compilers and flags that built this interpreter, and its public-value rule.
+compilers and flags that built this interpreter, and its text rules.
 
 Each misuse of a PyValueBorrow must fail to compile, and the readers must
 accept owners and borrows alike (pyjit/design/proposals/register-ir-v2-a5b.md,
-Appendix A). make check-value-api runs the same units, with the rest of the
-value-API lint, which needs clang-query.
+Appendix A). The text rules, raw-bits and public-value, hold for this source
+tree (pyjit/design/value-api.md, section 1.6). make check-value-api runs the
+same units and rules, with the rest of the value-API lint, which needs
+clang-query.
 """
 
 import shlex
@@ -55,19 +57,39 @@ class BorrowUnitTests(unittest.TestCase):
                    check_value_api.cxx_flags(self.flags), ".cpp")
 
 
-class PublicValueTests(unittest.TestCase):
-    """The public-value rule: public headers carry the word opaquely, and
-    the value slots are opaque storage."""
+class TextRuleTests(unittest.TestCase):
+    """raw-bits: only the value headers and the code that rule 1 lists know
+    the word's encoding. public-value: public headers carry the word
+    opaquely, and the value slots are opaque storage."""
 
-    def test_self_tests(self):
+    def setUp(self):
+        self.srcdir = sysconfig.get_config_var("srcdir")
+
+    def test_raw_bits_self_tests(self):
+        for name, (path, text, scan_bits, count) in (
+                check_value_api.RAW_BITS_TEXT_TESTS.items()):
+            with self.subTest(unit=name):
+                findings = check_value_api.raw_bits_text(path, text,
+                                                         scan_bits)
+                self.assertEqual(len(findings), count, findings)
+
+    def test_public_value_self_tests(self):
         for name, (text, count) in check_value_api.PUBLIC_VALUE_TESTS.items():
             with self.subTest(unit=name):
                 findings = check_value_api.check_public_header(name, text)
                 self.assertEqual(len(findings), count, findings)
 
+    def test_encoding_names_defined(self):
+        self.assertEqual(check_value_api.encoding_names_defined(self.srcdir),
+                         [])
+
+    def test_raw_bits(self):
+        # Without the compile database the text reads .bits in headers
+        # only; check_value_api.py decides the units with clang-query.
+        self.assertEqual(check_value_api.check_raw_bits_text(self.srcdir), [])
+
     def test_public_headers(self):
-        srcdir = sysconfig.get_config_var("srcdir")
-        self.assertEqual(check_value_api.check_public_headers(srcdir), [])
+        self.assertEqual(check_value_api.check_public_headers(self.srcdir), [])
 
 
 if __name__ == "__main__":

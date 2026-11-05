@@ -254,7 +254,7 @@ frame_disable_deferred_refcounting(_PyInterpreterFrame *frame)
     assert(frame->owner == FRAME_OWNED_BY_FRAME_OBJECT ||
            frame->owner == FRAME_OWNED_BY_GENERATOR);
 
-    frame->f_executable = PyValue_AsStrongReference(frame->f_executable);
+    frame->f_executable = frame->f_executable;
 
     if (frame->owner == FRAME_OWNED_BY_GENERATOR) {
         PyGenObject *gen = _PyGen_GetGeneratorFromFrame(frame);
@@ -265,11 +265,11 @@ frame_disable_deferred_refcounting(_PyInterpreterFrame *frame)
         }
     }
 
-    frame->f_funcobj = PyValue_AsStrongReference(frame->f_funcobj);
+    frame->f_funcobj = frame->f_funcobj;
     PyValue *end = frame->base + _PyFrame_NumSlots(frame);
     for (PyValue *ref = frame->base; ref < end; ref++) {
         if (PyValue_IsObject(*ref) && !PyValue_RefcountOnObject(*ref)) {
-            *ref = PyValue_AsStrongReference(*ref);
+            *ref = *ref;
         }
     }
 }

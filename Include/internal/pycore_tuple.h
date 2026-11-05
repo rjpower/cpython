@@ -40,14 +40,15 @@ PyAPI_FUNC(PyObject *) _PyTuple_FromPairSteal(PyObject *, PyObject *);
 extern _PyValueIndexPair _PyTuple_IterValue(PyObject *, Py_ssize_t);
 extern PyValue _PyTupleIter_NextValue(PyObject *);
 
-/* A borrow rooted by the tuple. Retain it before a callback can remove its
-   owner. Generic object-form reads use the owning PyTuple_GetItemRef(). */
-static inline PyValue
+/* A borrow rooted by the tuple. Retain it (PyValue_DUP()) before a callback
+   can remove its owner. Generic object-form reads use the owning
+   PyTuple_GetItemRef(). */
+static inline PyValueBorrow
 PyTuple_GET_VALUE(PyObject *op, Py_ssize_t index)
 {
     PyTupleObject *tuple = _PyTuple_CAST(op);
     assert(0 <= index && index < Py_SIZE(tuple));
-    return _PyValue_BorrowTagged(tuple->ob_item[index]);
+    return PyValue_Borrow(tuple->ob_item[index]);
 }
 #define PyTuple_GET_VALUE(op, index) \
     PyTuple_GET_VALUE(_PyObject_CAST(op), (index))
@@ -57,7 +58,7 @@ PyTuple_GET_VALUE(PyObject *op, Py_ssize_t index)
 static inline PyObject *
 _PyTuple_GET_OBJECT(PyObject *tuple, Py_ssize_t index)
 {
-    PyValue value = PyTuple_GET_VALUE(tuple, index);
+    PyValueBorrow value = PyTuple_GET_VALUE(tuple, index);
     assert(PyValue_IsObject(value));
     return PyValue_AsKnownObjectBorrow(value);
 }

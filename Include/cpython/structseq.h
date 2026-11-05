@@ -11,5 +11,5 @@ typedef PyTupleObject PyStructSequence;
 #define PyStructSequence_SET_ITEM PyStructSequence_SetItem
 
 /* Unchecked value reads borrow from the struct sequence; object reads own. */
-PyAPI_FUNC(PyValue) PyStructSequence_GET_VALUE(PyObject *, Py_ssize_t);
+PyAPI_FUNC(PyValueBorrow) PyStructSequence_GET_VALUE(PyObject *, Py_ssize_t);
 PyAPI_FUNC(void) PyStructSequence_SET_VALUE(PyObject *, Py_ssize_t, PyValue);

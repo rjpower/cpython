@@ -37,8 +37,9 @@ static inline Py_ssize_t PyList_GET_SIZE(PyObject *op) {
 }
 #define PyList_GET_SIZE(op) PyList_GET_SIZE(_PyObject_CAST(op))
 
-/* Borrow rooted by the list. Promote before retaining it across mutation. */
-PyAPI_FUNC(PyValue) PyList_GET_VALUE(PyObject *op, Py_ssize_t index);
+/* A borrow rooted by the list. Retain it (PyValue_DUP()) before a mutation
+   can remove its owner. */
+PyAPI_FUNC(PyValueBorrow) PyList_GET_VALUE(PyObject *op, Py_ssize_t index);
 #define PyList_GET_VALUE(op, index) \
     PyList_GET_VALUE(_PyObject_CAST(op), (index))
 

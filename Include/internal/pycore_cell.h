@@ -11,11 +11,11 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
-static inline PyValue
+static inline PyValueBorrow
 PyCell_GET_VALUE(PyObject *op)
 {
     assert(PyCell_Check(op));
-    return _PyValue_BorrowTagged(_Py_CAST(PyCellObject *, op)->ob_ref);
+    return PyValue_Borrow(_Py_CAST(PyCellObject *, op)->ob_ref);
 }
 #define PyCell_GET_VALUE(op) PyCell_GET_VALUE(_PyObject_CAST(op))
 
@@ -26,7 +26,7 @@ _PyCell_SwapValue(PyCellObject *cell, PyValue value)
 {
     assert(PyValue_IsLanguageValue(value) || PyValue_IsNull(value));
     PyValue previous = cell->ob_ref;
-    cell->ob_ref = PyValue_MakeHeapSafe(value);
+    cell->ob_ref = value;
     _PyValue_CheckHome(cell->ob_ref);
     return previous;
 }
@@ -39,13 +39,20 @@ _PyCell_SetValue(PyCellObject *cell, PyValue value)
     PyValue_XCLOSE(previous);
 }
 
+/* The value forms of PyCell_New() and PyCell_Set(): they borrow their input
+   (PyValue_NULL for an empty cell) and take a count of their own. Each has a
+   reader macro, so the core passes owners and borrows alike. */
+PyAPI_FUNC(PyObject *) PyCell_NewValue(PyValueBorrow);
+#define PyCell_NewValue(V) (PyCell_NewValue)(PyValue_Borrow(V))
+PyAPI_FUNC(int) PyCell_SetValue(PyObject *, PyValueBorrow);
+#define PyCell_SetValue(OP, V) (PyCell_SetValue)(OP, PyValue_Borrow(V))
+
 /* An independent owner, or NULL for an empty cell without an exception. */
 static inline PyValue
 _PyCell_GetValue(PyCellObject *cell)
 {
-    PyValue value = cell->ob_ref;
-    assert(PyValue_IsHeapSafe(value));
-    return PyValue_IsNull(value) ? value : PyValue_DUP(value);
+    _PyValue_RecheckHome(cell->ob_ref);
+    return PyValue_XDUP(cell->ob_ref);
 }
 
 #ifdef __cplusplus

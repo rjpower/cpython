@@ -249,10 +249,10 @@ list_get_item_ref(PyListObject *op, Py_ssize_t i)
     return PyValue_IsNull(value) ? NULL : _PyValue_AsObjectAt(value, BOX_SITE_LIST);
 }
 
-PyValue
+PyValueBorrow
 (PyList_GET_VALUE)(PyObject *op, Py_ssize_t index)
 {
-    return _PyValue_BorrowTagged(_PyList_CAST(op)->ob_item[index]);
+    return PyValue_Borrow(_PyList_CAST(op)->ob_item[index]);
 }
 
 PyValue
@@ -283,7 +283,6 @@ void
     PyListObject *self = _PyList_CAST(op);
     assert(index >= 0 && index < self->allocated);
     assert(PyValue_IsNull(value) || PyValue_IsLanguageValue(value));
-    assert(PyValue_IsHeapSafe(value));
     _PyValue_CheckHome(value);
     self->ob_item[index] = value;
 }
@@ -322,7 +321,6 @@ _PyList_GetItemRef(PyListObject *list, Py_ssize_t i)
 int
 _PyList_SetItemTakeValue(PyListObject *self, Py_ssize_t i, PyValue value)
 {
-    assert(PyValue_IsHeapSafe(value));
     assert(PyValue_IsNull(value) || PyValue_IsLanguageValue(value));
     if (!valid_index(i, Py_SIZE(self))) {
         PyValue_XCLOSE(value);
@@ -410,7 +408,6 @@ int
 _PyList_AppendTakeValue(PyListObject *self, PyValue value)
 {
     assert(PyValue_IsLanguageValue(value));
-    assert(PyValue_IsHeapSafe(value));
     Py_ssize_t n = Py_SIZE(self);
     if (self->allocated <= n && list_resize(self, n + 1) < 0) {
         PyValue_CLOSE(value);
@@ -525,7 +522,7 @@ list_length(PyObject *a)
 static int
 list_contains(PyObject *aa, PyObject *el)
 {
-    PyValue query = PyValue_FromObjectBorrow(el);
+    PyValueBorrow query = PyValue_FromObjectBorrow(el);
     PyListObject *self = (PyListObject *)aa;
     for (Py_ssize_t i = 0; i < Py_SIZE(self); i++) {
         PyValue item = PyValue_DUP(self->ob_item[i]);
@@ -1295,7 +1292,7 @@ list_pop_impl(PyListObject *self, Py_ssize_t index)
            can run Python (it may free a pending exception), but then the
            list is not touched. */
         if (self->ob_item != items || Py_SIZE(self) != size ||
-            _PyValue_BITS(items[index]) != _PyValue_BITS(value)) {
+            !_PyValue_IsSameWord(items[index], value)) {
             Py_DECREF(result);
             PyValue_CLOSE(value);
             continue;
@@ -2720,9 +2717,9 @@ list_sort_impl(PyListObject *self, PyObject *keyfunc, int reverse)
             /* Note: for lists of tuples, key is the first element of the tuple
              * lo.keys[i], not lo.keys[i] itself! We verify type-homogeneity
              * for lists of tuples in the if-statement directly above. */
-            PyValue key = (keys_are_in_tuples ?
+            PyValueBorrow key = (keys_are_in_tuples ?
                              PyTuple_GET_VALUE(PyValue_AsKnownObjectBorrow(lo.keys[i]), 0) :
-                             lo.keys[i]);
+                             PyValue_Borrow(lo.keys[i]));
 
             if (PyValue_TYPE(key) != key_type) {
                 keys_are_all_same_type = 0;
@@ -2977,7 +2974,7 @@ _PyList_FromValueStealOnSuccess(const PyValue *src, Py_ssize_t n)
     if (result == NULL) return NULL;
     for (Py_ssize_t i = 0; i < n; i++) {
         assert(PyValue_IsLanguageValue(src[i]));
-        result->ob_item[i] = PyValue_MakeHeapSafe(src[i]);
+        result->ob_item[i] = src[i];
         _PyValue_CheckHome(result->ob_item[i]);
     }
     return (PyObject *)result;
@@ -3003,7 +3000,7 @@ list_index_impl(PyListObject *self, PyObject *value, Py_ssize_t start,
 {
     if (start < 0) { start += Py_SIZE(self); if (start < 0) start = 0; }
     if (stop < 0) { stop += Py_SIZE(self); if (stop < 0) stop = 0; }
-    PyValue query = PyValue_FromObjectBorrow(value);
+    PyValueBorrow query = PyValue_FromObjectBorrow(value);
     for (Py_ssize_t i = start; i < stop && i < Py_SIZE(self); i++) {
         PyValue item = PyValue_DUP(self->ob_item[i]);
         int cmp = _PyValue_RichCompareBool(item, query, Py_EQ);
@@ -3029,7 +3026,7 @@ list_count_impl(PyListObject *self, PyObject *value)
 /*[clinic end generated code: output=eff66f14aef2df86 input=3bdc3a5e6f749565]*/
 {
     Py_ssize_t count = 0;
-    PyValue query = PyValue_FromObjectBorrow(value);
+    PyValueBorrow query = PyValue_FromObjectBorrow(value);
     for (Py_ssize_t i = 0; i < Py_SIZE(self); i++) {
         PyValue item = PyValue_DUP(self->ob_item[i]);
         int cmp = _PyValue_RichCompareBool(item, query, Py_EQ);
@@ -3056,7 +3053,7 @@ static PyObject *
 list_remove_impl(PyListObject *self, PyObject *value)
 /*[clinic end generated code: output=b9b76a6633b18778 input=26c813dbb95aa93b]*/
 {
-    PyValue query = PyValue_FromObjectBorrow(value);
+    PyValueBorrow query = PyValue_FromObjectBorrow(value);
     for (Py_ssize_t i = 0; i < Py_SIZE(self); i++) {
         PyValue item = PyValue_DUP(self->ob_item[i]);
         int cmp = _PyValue_RichCompareBool(item, query, Py_EQ);
@@ -3109,7 +3106,7 @@ list_richcompare_impl(PyObject *v, PyObject *w, int op)
     for (i = 0; i < Py_SIZE(vl) && i < Py_SIZE(wl); i++) {
         PyValue vitem = vl->ob_item[i];
         PyValue witem = wl->ob_item[i];
-        if (_PyValue_BITS(vitem) == _PyValue_BITS(witem)) {
+        if (_PyValue_IsSameWord(vitem, witem)) {
             continue;
         }
 

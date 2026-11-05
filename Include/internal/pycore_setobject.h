@@ -17,7 +17,7 @@ PyAPI_FUNC(int) _PySet_NextValue(
 
 // Borrowed iteration for core code that must not allocate, fail or touch
 // reference counts (fault dumps): 1 with a borrowed key view, 0 at the end.
-PyAPI_FUNC(int) _PySet_NextBorrowed(PyObject *set, Py_ssize_t *pos, PyValue *key);
+PyAPI_FUNC(int) _PySet_NextBorrowed(PyObject *set, Py_ssize_t *pos, PyValueBorrow *key);
 
 // Export for '_pickle' shared extension
 PyAPI_FUNC(int) _PySet_NextEntryRef(
@@ -34,8 +34,9 @@ PyAPI_DATA(PyObject *) _PySet_Dummy;
 
 PyAPI_FUNC(int) _PySet_Contains(PySetObject *so, PyObject *key);
 
-// The reader macro of PySet_ContainsValue() (Include/cpython/setobject.h):
-// the core passes owners and borrows alike.
+// Internal because only the core makes a PyValueBorrow; its reader macro
+// lets the core pass owners and borrows alike.
+PyAPI_FUNC(int) PySet_ContainsValue(PyObject *anyset, PyValueBorrow key);
 #define PySet_ContainsValue(S, K) (PySet_ContainsValue)(S, PyValue_Borrow(K))
 
 // Clears the set without acquiring locks. Used by _PyCode_Fini.

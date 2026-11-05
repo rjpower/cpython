@@ -44,28 +44,22 @@ return owning canonical values without boxing inline scalars. Inputs borrow;
 the caller closes each returned value with ``PyValue_Close``. A returned owner
 remains valid after the dictionary changes or is destroyed.
 
-All four functions preserve an exception already pending on entry and return
+Both functions preserve an exception already pending on entry and return
 ``-1`` without hashing, comparing or allocating. Output locations are initialized
 to ``PyValue_NULL`` before work. With no pending exception, ``1`` means a hit or
 entry, ``0`` means absence or iteration end, and ``-1`` means an exception.
 Cleanup errors also cause failure; no successful result has a pending exception.
 
-.. c:function:: int PyDict_GetValue(PyObject *p, PyValue key, PyValue *result)
-
-   Look up the language value *key*. Supply valid non-NULL *result* storage.
-   On a hit, return an independent owning snapshot in ``*result``; on absence
-   or error, leave it ``PyValue_NULL``. Hashing and equality have normal Python
-   dictionary semantics. The dictionary and query remain alive across callbacks.
+The forms that take a value as the key (``PyDict_GetValue``,
+``PyDict_SetValue``, ``PyDict_DelValue`` and ``PyDict_ContainsValue``) are
+internal to CPython: they take a borrowed value, which only the core makes.
 
 .. c:function:: int PyDict_GetValueString(PyObject *p, const char *key, PyValue *result)
 
-   As above, with a NUL-terminated UTF-8 key. Creating the Unicode query can fail.
-
-.. c:function:: int PyDict_ContainsValue(PyObject *p, PyValue key)
-
-   Report whether the language value *key* was found. Retire the selected owner
-   internally; do not return or box it. The result describes the completed
-   lookup, even if subsequent cleanup changes the dictionary.
+   Look up the NUL-terminated UTF-8 string *key*. Supply valid non-NULL
+   *result* storage. On a hit, return an independent owning snapshot in
+   ``*result``; on absence or error, leave it ``PyValue_NULL``. Creating the
+   Unicode query can fail.
 
 .. c:function:: int PyDict_NextValue(PyObject *p, Py_ssize_t *position, PyValue *key, PyValue *value)
 

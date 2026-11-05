@@ -2934,7 +2934,7 @@ update_code_filenames(PyCodeObject *co, PyObject *oldname, PyObject *newname)
     constants = co->co_consts;
     n = PyTuple_GET_SIZE(constants);
     for (i = 0; i < n; i++) {
-        PyValue value = PyTuple_GET_VALUE(constants, i);
+        PyValueBorrow value = PyTuple_GET_VALUE(constants, i);
         if (PyValue_IsObject(value) &&
             PyCode_Check(PyValue_AsKnownObjectBorrow(value))) {
             tmp = PyValue_AsKnownObjectBorrow(value);

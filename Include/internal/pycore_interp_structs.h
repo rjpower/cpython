@@ -851,6 +851,9 @@ struct _is {
     /* Has been fully initialized via pylifecycle.c. */
     int _ready;
     int finalizing;
+    /* Set when clearing begins at finalization, which makes some immortal
+       objects mortal again (_PyValue_ClearingImmortals()). */
+    int clearing_immortals;
 
     uintptr_t last_restart_version;
     struct pythreads {

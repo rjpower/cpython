@@ -497,7 +497,8 @@ _PyTok_DecoderHasBufferedInput(struct tok_state *tok)
         return -1;
     }
     /* The owned immutable tuple roots both words through this pure check. */
-    PyValue buffered = PyValue_NULL, flag = PyValue_NULL;
+    PyValueBorrow buffered = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow flag = PyValue_Borrow(PyValue_NULL);
     if (PyTuple_Check(state) && PyTuple_GET_SIZE(state) == 2) {
         buffered = PyTuple_GET_VALUE(state, 0);
         flag = PyTuple_GET_VALUE(state, 1);

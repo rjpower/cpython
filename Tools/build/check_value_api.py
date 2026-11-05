@@ -17,26 +17,44 @@ Py_BUILD_CORE_MODULE, or one that defines Py_VALUE_CORE (Include/pyport.h).
   (tp_as_number->nb_add, tp_richcompare, tp_iternext, tp_call and the rest).
   A read of a slot whose family is in MARKED_SLOT_FAMILIES fails; other reads
   are listed. Units that define Py_VALUE_ADAPTER are skipped.
-
+* raw-bits: knowledge of the word's encoding outside the code that may have
+  it (value-api.md, section 1.6, rule 1: ENCODING_FILES and
+  ENCODING_FUNCTIONS). In a value-native unit: a .bits or ->bits access of a
+  PyValue, PyValueBorrow or _PyValueGuarded; a brace initializer of one
+  ({x.bits}, (PyValue){...}) other than {0}, which zero-initializes; a
+  cast to a PyValue * or PyValueBorrow * from anything but void *, a byte
+  pointer or the same type, or from a word pointer to anything but those;
+  a union with a word member. A match inside a macro that one of those
+  files defines is theirs. In the text of every C file of the tree: an encoding constant
+  (ENCODING_NAMES), a (PyValue){ or (PyValueBorrow){ literal and, in a
+  header or a unit that clang-query does not check, a .bits or ->bits
+  access; the text covers the macro bodies that no unit expands.
 * public-value: the public headers (Include/ outside Include/internal/)
-  carry the word opaquely (value-api.md, section 1.6, rule 2). A header
-  fails if it decodes or builds a word inline (.bits, ->bits, a (PyValue){
-  or (PyValueBorrow){ literal), or if a struct field other than the five
-  frozen word fields names PyValue or PyValueBorrow: a word field or a typed
-  value signature. Value slots are opaque _Py_valuefunc storage, which the
-  rule accepts (pyjit/design/proposals/value-api-v2a0.md, D2). INTERIM:
-  a minimal text form for step V2a-0. A5b-3 (register-ir-v2-a5b.md, section
-  5.6) owns the rule: its public-value replaces check_public_header and
-  keeps the self-tests in PUBLIC_VALUE_TESTS; the known holes (macro
-  bodies, typedef aliases, pointer casts of a word) are left to it.
+  carry the word opaquely (rule 2). A struct field may name PyValue or
+  PyValueBorrow, directly or through a typedef, only if it is one of the
+  five frozen word fields (PUBLIC_WORD_FIELDS): no other word field, and no
+  typed value signature in a public layout. Value slots are opaque
+  _Py_valuefunc storage, which the rule accepts
+  (pyjit/design/proposals/value-api-v2a0.md, D2). An inline function may
+  return a word but not take one, and no function or macro body names a
+  value type: an inline accessor may only copy a word out of a field.
+  Comments and string literals are skipped; macro bodies are read.
+* borrow-field: a field, global, static or array of type PyValueBorrow. A
+  borrow lives only in C locals (pyjit/design/proposals/register-ir-v2-a5b.md,
+  L1 and R2-S1).
+* home-copy: a PyValue local initialised from a home (a field, an element
+  or *p). It is a move if the code stores that home afterwards; otherwise it
+  should be a PyValueBorrow (register-ir-v2-a5b.md, section 5.3). Reported,
+  not failing.
 
 The functions that Py_VALUE_COMPAT marks need no rule here: calling one from
 a value-native unit is a compile error.
 
 The script reads compile_commands.json, which intercept-build records while
-the units compile, and runs clang-query over every value-native unit. Before
-that it runs its self-tests: one-line units that must make each rule fire,
-a unit that calls the marked probe declaration in
+the units compile, and runs clang-query over every value-native unit, then
+the text rules over the tree. Before that it runs its self-tests: units
+that must make each rule fire (SELF_TESTS, RAW_BITS_TEXT_TESTS and
+PUBLIC_VALUE_TESTS), a unit that calls the marked probe declaration in
 Include/internal/pycore_value_api.h, which must fail to compile, and the
 typed-borrow units (BORROW_TESTS): each misuse of a PyValueBorrow must fail
 to compile, and the readers must accept owners and borrows alike.
@@ -45,6 +63,7 @@ Exit status: 0 if the self-tests pass and no rule fails; 1 otherwise.
 """
 
 import argparse
+import bisect
 import concurrent.futures
 import glob
 import json
@@ -111,16 +130,6 @@ SLOT_FAMILIES = {
 MARKED_SLOT_FAMILIES = frozenset()
 
 VALUE_TYPES = ("PyValue", "PyValueBorrow")
-
-# The public layouts that may hold a word (value-api.md, section 1.6, rule
-# 2), as (struct, field).
-PUBLIC_WORD_FIELDS = frozenset({
-    ("PyListObject", "ob_item"),
-    ("PyTupleObject", "ob_item"),
-    ("PyCellObject", "ob_ref"),
-    ("setentry", "key"),
-    ("_PyValueIndexPair", "value"),
-})
 PYVALUE_TYPES = tuple(f'asString("{const}{name}")' for name in VALUE_TYPES
                       for const in ("", "const "))
 VARIADIC_MATCHER = (
@@ -134,14 +143,114 @@ SLOT_READ_MATCHER = (
     '.bind("slot")'.format(
         names=", ".join(f'"{name}"' for name in sorted(SLOT_FAMILIES)))
 )
-QUERY = f"""\
-set output diag
-enable output dump
-set traversal IgnoreUnlessSpelledInSource
-match {VARIADIC_MATCHER}
-set traversal AsIs
-match {SLOT_READ_MATCHER}
-"""
+
+# Who may know the word's encoding (value-api.md, section 1.6, rule 1), as
+# paths relative to the source tree; one that ends in "/" or "_" is a
+# prefix.
+ENCODING_FILES = (
+    "Include/internal/pycore_pyvalue.h",
+    "Include/internal/pycore_value.h",
+    "Include/internal/pycore_value_api.h",
+    "Python/pyvalue.c",
+    # The JIT, which emits tag tests (Python/jit_*.c, Python/jit_x86.h).
+    "Python/jit_",
+    # The out-of-process readers, which get the layout through
+    # _Py_DebugOffsets.
+    "Include/internal/pycore_debug_offsets.h",
+    "Modules/_remote_debugging/",
+    # The encoding's own tests.
+    "Modules/_testinternalcapi.c",
+    "Modules/_testinternalcapi/",
+    # The type cache's guarded word (register-ir-v2-a5b.md, section 2.4).
+    "Include/internal/pycore_typecache.h",
+)
+# Functions outside those files that may: the generated code's one
+# count-free conversion of a borrow to an owner (register-ir-v2-a5b.md,
+# section 4.2), and the conversions between the addresses of the data stack,
+# which the public PyThreadState declares as PyObject **, and its slots
+# (Include/internal/pycore_interpframe.h).
+ENCODING_FUNCTIONS = ("_PyIR_AdoptTemp", "_PyDataStack_Slots",
+                      "_PyDataStack_Address")
+# The encoding constants of the value headers. The self-tests check that
+# each is still defined there, so that a rename cannot empty the rule.
+ENCODING_NAMES = (
+    "Py_PTR_LIMIT", "Py_INDEX_BASE", "Py_DOUBLE_OFFSET", "Py_INT_SHIFT",
+    "Py_INT_BASE", "Py_TAG_REFCNT", "Py_TAG_INVALID", "Py_TAG_BITS",
+    "Py_TAGGED_SHIFT", "Py_OWNED_MASK", "PyValue_NULL_BITS", "_PyValue_BITS",
+)
+ENCODING_HEADERS = ("Include/internal/pycore_pyvalue.h",
+                    "Include/internal/pycore_value.h")
+# The C files of the tree that the text rules read.
+SOURCE_DIRS = ("Include", "Objects", "Python", "Modules", "Parser",
+               "Programs", "PC")
+
+
+def type_names(*names):
+    return ", ".join(f'asString("{const}{name}")' for name in names
+                     for const in ("", "const "))
+
+
+def points_to(matcher):
+    return f"pointsTo(qualType({matcher}))"
+
+
+WORD = ("hasCanonicalType(anyOf("
+        f"{type_names('PyValue', 'PyValueBorrow', '_PyValueGuarded')}))")
+OWNER = f"hasCanonicalType(anyOf({type_names('PyValue')}))"
+BORROW = f"hasCanonicalType(anyOf({type_names('PyValueBorrow')}))"
+BYTE_POINTER = "pointsTo(voidType()), pointsTo(qualType(isAnyCharacter()))"
+NOT_ENCODING_FUNCTION = (
+    "unless(hasAncestor(functionDecl(hasAnyName({}))))".format(
+        ", ".join(f'"{name}"' for name in ENCODING_FUNCTIONS)))
+BORROW_STORAGE = (f"qualType(anyOf({BORROW}, hasCanonicalType(arrayType("
+                  f"hasElementType(qualType({BORROW}))))))")
+RAW_BITS_MATCHERS = (
+    f'memberExpr(member(hasName("bits")), hasObjectExpression(hasType('
+    f'qualType(anyOf({WORD}, {points_to(WORD)})))), {NOT_ENCODING_FUNCTION})'
+    '.bind("rawbits")',
+    # {0} zero-initializes, as static storage and calloc() do: the all-zero
+    # word is PyValue_NULL by contract.
+    f'initListExpr(hasType(qualType({WORD})), unless(hasInit(0, '
+    f'ignoringParenImpCasts(integerLiteral(equals(0))))), '
+    f'{NOT_ENCODING_FUNCTION}).bind("rawinit")',
+    *(f'explicitCastExpr(hasDestinationType({points_to(word)}), '
+      f'unless(hasSourceExpression(hasType(qualType(anyOf({BYTE_POINTER}, '
+      f'{points_to(word)}))))), {NOT_ENCODING_FUNCTION})'
+      '.bind("rawcast")' for word in (OWNER, BORROW)),
+    f'explicitCastExpr(hasSourceExpression(hasType({points_to(WORD)})), '
+    'hasDestinationType(pointerType()), unless(hasDestinationType(qualType('
+    f'anyOf({BYTE_POINTER}, {points_to(WORD)})))), '
+    f'{NOT_ENCODING_FUNCTION}).bind("rawcast")',
+    f'recordDecl(isUnion(), has(fieldDecl(hasType(qualType({WORD})))))'
+    '.bind("rawunion")',
+)
+BORROW_FIELD_MATCHERS = (
+    f'fieldDecl(hasType({BORROW_STORAGE})).bind("borrowfield")',
+    'varDecl(anyOf(hasGlobalStorage(), hasType(arrayType())), '
+    f'hasType({BORROW_STORAGE})).bind("borrowvar")',
+)
+HOME_COPY_MATCHER = (
+    f'varDecl(hasLocalStorage(), hasType(qualType({OWNER})), hasInitializer('
+    'ignoringParenImpCasts(anyOf(memberExpr(), arraySubscriptExpr(), '
+    'unaryOperator(hasOperatorName("*")))))).bind("homecopy")'
+)
+RAW_BITS_MESSAGES = {
+    "rawbits": "reads or writes a word's bits",
+    "rawinit": "builds a word from bits",
+    "rawcast": "casts between a word pointer and another pointer type",
+    "rawunion": "puns a word through a union",
+}
+QUERY = "\n".join([
+    "set output diag",
+    "enable output dump",
+    "set traversal IgnoreUnlessSpelledInSource",
+    f"match {VARIADIC_MATCHER}",
+    *(f"match {m}" for m in (*RAW_BITS_MATCHERS, *BORROW_FIELD_MATCHERS,
+                             HOME_COPY_MATCHER)),
+    "set traversal AsIs",
+    f"match {SLOT_READ_MATCHER}",
+    "",
+])
 
 FORMAT_SPEC = re.compile(
     r"%(?P<flags>[-0#]*)(?P<width>\*|\d*)(?:\.(?P<precision>\*|\d*))?"
@@ -366,6 +475,7 @@ def check_call(call):
 
 
 LOCATION = re.compile(r"^(.*?):(\d+):(\d+): note: \"(\w+)\" binds here")
+MACRO_NOTE = re.compile(r"^(.*?):\d+:\d+: note: expanded from macro '\w+'")
 SRCDIR = Path(__file__).resolve().parents[2]
 
 
@@ -376,6 +486,12 @@ def display_path(path, directory):
     if full.is_relative_to(SRCDIR):
         return str(full.relative_to(SRCDIR))
     return str(full)
+
+
+def encoding_allowed(path):
+    """Whether path, relative to the source tree, may know the encoding."""
+    return any(path == allowed or allowed.endswith(("/", "_"))
+               and path.startswith(allowed) for allowed in ENCODING_FILES)
 
 
 def parse_output(text, kind, directory):
@@ -391,8 +507,13 @@ def parse_output(text, kind, directory):
             continue
         path, line, column, binding = m[1], int(m[2]), int(m[3]), m[4]
         i += 1
+        # The files of the macros that the match is expanded from.
+        macro_paths = []
         while i < len(lines) and not lines[i].startswith(
                 f'Binding for "{binding}":'):
+            note = MACRO_NOTE.match(lines[i])
+            if note:
+                macro_paths.append(display_path(note[1], directory))
             i += 1
         i += 1
         dump = []
@@ -401,7 +522,23 @@ def parse_output(text, kind, directory):
             dump.append(lines[i])
             i += 1
         path = display_path(path, directory)
-        if binding == "variadic":
+        if binding in RAW_BITS_MESSAGES:
+            if not any(map(encoding_allowed, [path, *macro_paths])):
+                findings.append(Finding(path, line, column, "raw-bits",
+                                        RAW_BITS_MESSAGES[binding], True))
+        elif binding in ("borrowfield", "borrowvar"):
+            what = "field" if binding == "borrowfield" else "variable"
+            findings.append(Finding(
+                path, line, column, "borrow-field",
+                f"a PyValueBorrow {what} outside a C local", True))
+        elif binding == "homecopy" and not macro_paths:
+            # A copy that a macro declares is the macro's: the IR
+            # publication macros displace a slot's word and close it.
+            findings.append(Finding(
+                path, line, column, "home-copy",
+                "a PyValue local copied from a home: a PyValueBorrow unless "
+                "the home is stored afterwards", False))
+        elif binding == "variadic":
             for message in check_call(parse_call_dump(dump)):
                 findings.append(
                     Finding(path, line, column, "variadic", message, True))
@@ -463,6 +600,277 @@ def check_units(clang_query, entries, jobs):
         return sorted(findings), errors
 
 
+# The text rules. C_NOISE matches what they skip: comments, and string and
+# character literals.
+C_NOISE = re.compile(r"/\*.*?\*/|//[^\n]*|\"(?:\\.|[^\"\\\n])*\""
+                     r"|'(?:\\.|[^'\\\n])*'", re.S)
+
+
+def blank(m):
+    """The text of match m as spaces, with its newlines kept."""
+    return re.sub(r"[^\n]", " ", m[0])
+
+
+def strip_c(text):
+    """text with comments and literals blanked, keeping each remaining
+    character at its offset."""
+    return C_NOISE.sub(blank, text)
+
+
+def lines_of(text):
+    """The function from an offset in text to its line number."""
+    starts = [0] + [m.end() for m in re.finditer(r"\n", text)]
+    return lambda offset: bisect.bisect_right(starts, offset)
+
+
+ENCODING_NAME = re.compile(r"\b(?:{})\b".format("|".join(ENCODING_NAMES)))
+WORD_LITERAL = re.compile(r"\(\s*(?:const\s+)?(?:PyValue|PyValueBorrow)\s*\)"
+                          r"\s*\{")
+BITS_ACCESS = re.compile(r"(?:\.|->)\s*bits\b")
+
+
+def encoding_function_lines(text):
+    """The lines of the bodies of ENCODING_FUNCTIONS in text, in the
+    CPython layout: the name at the start of a line, the body up to the next
+    line that is a lone closing brace."""
+    lines = set()
+    for name in ENCODING_FUNCTIONS:
+        for m in re.finditer(rf"^{re.escape(name)}\s*\(", text, re.M):
+            end = re.compile(r"^\}", re.M).search(text, m.end())
+            first = text.count("\n", 0, m.start()) + 1
+            last = (text.count("\n", 0, end.start()) + 1 if end
+                    else text.count("\n") + 1)
+            lines.update(range(first, last + 1))
+    return lines
+
+
+def raw_bits_text(path, text, scan_bits):
+    """The raw-bits findings of the text of one C file, path relative to the
+    source tree. scan_bits: whether to look for .bits and ->bits, which
+    clang-query decides in the units it checks."""
+    if encoding_allowed(path):
+        return []
+    code = strip_c(text)
+    line_of = lines_of(code)
+    allowed_lines = encoding_function_lines(code)
+    patterns = [(ENCODING_NAME, "names the encoding constant {}"),
+                (WORD_LITERAL, "builds a word from bits")]
+    if scan_bits:
+        patterns.append((BITS_ACCESS, "reads or writes a word's bits"))
+    findings = []
+    for pattern, message in patterns:
+        for m in pattern.finditer(code):
+            line = line_of(m.start())
+            if line not in allowed_lines:
+                column = m.start() - code.rfind("\n", 0, m.start())
+                findings.append(Finding(path, line, column, "raw-bits",
+                                        message.format(m[0]), True))
+    return findings
+
+
+def source_files(srcdir):
+    """The C files of the tree that the text rules read, relative to it."""
+    found = []
+    for directory in SOURCE_DIRS:
+        for suffix in ("*.c", "*.h"):
+            found.extend(Path(srcdir, directory).rglob(suffix))
+    return sorted(str(p.relative_to(srcdir)) for p in found)
+
+
+def check_raw_bits_text(srcdir, checked_units=frozenset()):
+    """The raw-bits findings of the tree's text. checked_units: the paths of
+    the units that clang-query checks, whose .bits accesses it decides; a
+    caller with no database passes none and the text reads .bits in the
+    headers only."""
+    findings = []
+    for path in source_files(srcdir):
+        scan_bits = path.endswith(".h") or (
+            checked_units and path not in checked_units)
+        findings.extend(raw_bits_text(
+            path, Path(srcdir, path).read_text(errors="replace"), scan_bits))
+    return findings
+
+
+def encoding_names_defined(srcdir):
+    """Failures for the ENCODING_NAMES that no value header defines."""
+    text = "".join(Path(srcdir, h).read_text() for h in ENCODING_HEADERS)
+    return [f"raw-bits: ENCODING_NAMES lists {name}, which "
+            f"{' and '.join(ENCODING_HEADERS)} do not define"
+            for name in ENCODING_NAMES
+            if not re.search(rf"^\s*#\s*define\s+{name}\b", text, re.M)]
+
+
+# The public layouts that may hold a word (value-api.md, section 1.6, rule
+# 2), as (struct, field).
+PUBLIC_WORD_FIELDS = frozenset({
+    ("PyListObject", "ob_item"),
+    ("PyTupleObject", "ob_item"),
+    ("PyCellObject", "ob_ref"),
+    ("setentry", "key"),
+    ("_PyValueIndexPair", "value"),
+})
+PUBLIC_TOKEN = re.compile(r"->|[A-Za-z_]\w*|[{}();\[\].,*=]")
+# A preprocessor line, with its continuations.
+DIRECTIVE = re.compile(r"^[ \t]*#(?:\\\n|[^\n])*", re.M)
+
+
+def field_name(tokens):
+    """The name that a member declaration declares: the identifier after
+    the first '(*' of a function pointer, else the last identifier before a
+    '[' or the end."""
+    for i in range(len(tokens) - 2):
+        if tokens[i][1] == "(" and tokens[i + 1][1] == "*":
+            return tokens[i + 2][1]
+    names = [t for _, t in tokens if t == "[" or re.match(r"[A-Za-z_]", t)]
+    if "[" in names:
+        names = names[:names.index("[")]
+    return names[-1] if names else "?"
+
+
+def tokens_of(code):
+    """The tokens of stripped code outside preprocessor lines, as (offset,
+    text)."""
+    code = DIRECTIVE.sub(blank, code)
+    return [(m.start(), m[0]) for m in PUBLIC_TOKEN.finditer(code)]
+
+
+def public_aliases(code, known=frozenset()):
+    """The names that file-scope typedefs in stripped code give to a type
+    that names a value type or an alias in known: `typedef PyValue word;`,
+    or a typed value signature, `typedef PyValue (*f)(PyValueBorrow);`."""
+    aliases = set()
+    names = set(VALUE_TYPES) | set(known)
+    for m in re.finditer(r"\btypedef\b([^;{}]*);", DIRECTIVE.sub("", code)):
+        words = re.findall(r"[A-Za-z_]\w*", m[1])
+        if not words:
+            continue
+        declarator = [(0, t) for t in
+                      re.findall(r"->|[A-Za-z_]\w*|[()\[\]*,]", m[1])]
+        name = field_name(declarator)
+        if name in VALUE_TYPES:
+            continue
+        if names & set(words) - {name}:
+            aliases.add(name)
+            names.add(name)
+    return aliases
+
+
+def check_public_header(path, text, aliases=frozenset()):
+    """The public-value findings of one public header's text. aliases: the
+    value-type aliases that other public headers declare."""
+    code = strip_c(text)
+    line_of = lines_of(code)
+    value_names = set(VALUE_TYPES) | set(aliases)
+    value_names |= public_aliases(code, value_names)
+    findings = []
+
+    def fail(offset, message):
+        findings.append(Finding(path, line_of(offset), 1, "public-value",
+                                message, True))
+
+    for m in DIRECTIVE.finditer(code):
+        directive = re.match(r"\s*#\s*define\s+\w+(?:\([^)]*\))?", m[0])
+        if directive is None:
+            continue
+        for word in re.finditer(r"[A-Za-z_]\w*", m[0][directive.end():]):
+            if word[0] in value_names:
+                fail(m.start(), f"a public macro names {word[0]}: it may "
+                     "only call exported functions")
+                break
+
+    tokens = tokens_of(code)
+    # Each frame: [kind ("extern", "record", "function" or "block"), tag,
+    # member tokens, fields]. An extern "C" block is file scope.
+    frames = []
+    statement_start = 0
+    for i, (offset, token) in enumerate(tokens):
+        scope = [f for f in frames if f[0] != "extern"]
+        if token == "{":
+            words = [t for _, t in tokens[max(0, i - 3):i]]
+            if i and tokens[i - 1][1] == "extern":
+                frames.append(["extern", None, [], []])
+                statement_start = i + 1
+                continue
+            if any(w in ("struct", "union") for w in words):
+                tag = words[-1] if words[-1] not in ("struct", "union") \
+                    else None
+                frames.append(["record", tag, [], []])
+                continue
+            kind = "block"
+            if not scope and i and tokens[i - 1][1] == ")":
+                kind = "function"
+                # The parameters: the parenthesized group before the brace.
+                depth = 0
+                for k in range(i - 1, statement_start - 1, -1):
+                    depth += {")": 1, "(": -1}.get(tokens[k][1], 0)
+                    if depth == 0:
+                        break
+                taken = next((t for _, t in tokens[k:i]
+                              if t in value_names), None)
+                if taken:
+                    fail(offset, f"an inline function takes a {taken}: only "
+                         "an exported function may")
+            frames.append([kind, None, [], []])
+        elif token == "}":
+            if not frames:
+                continue
+            kind, tag, _, fields = frames.pop()
+            if kind == "record":
+                # The typedef name, if any, follows the brace.
+                after = [t for _, t in tokens[i + 1:i + 3]]
+                name = after[0] if after and re.match(r"[A-Za-z_]",
+                                                     after[0]) else tag
+                for field, line in fields:
+                    if (name, field) not in PUBLIC_WORD_FIELDS:
+                        findings.append(Finding(
+                            path, line, 1, "public-value",
+                            f"{name}.{field} holds a word or a value "
+                            "signature in a public layout", True))
+                if frames and frames[-1][0] == "record":
+                    frames[-1][2].clear()
+            if not [f for f in frames if f[0] != "extern"]:
+                statement_start = i + 1
+        elif frames and frames[-1][0] == "record":
+            members = frames[-1][2]
+            if token == ";":
+                where = [o for o, t in members if t in value_names]
+                if where:
+                    frames[-1][3].append((field_name(members),
+                                          line_of(where[0])))
+                members.clear()
+            else:
+                members.append((offset, token))
+        elif scope:
+            if token in value_names:
+                fail(offset, f"a public function body names {token}: an "
+                     "inline accessor may only copy a word out of a field")
+        elif token == ";":
+            statement_start = i + 1
+    return findings
+
+
+def public_headers(srcdir):
+    include = Path(srcdir, "Include")
+    return sorted([*include.glob("*.h"), *include.glob("cpython/*.h")])
+
+
+def check_public_headers(srcdir):
+    texts = {str(path.relative_to(srcdir)): path.read_text(errors="replace")
+             for path in public_headers(srcdir)}
+    codes = [strip_c(text) for text in texts.values()]
+    aliases = set()
+    while True:
+        found = set().union(*(public_aliases(code, aliases)
+                              for code in codes))
+        if found <= aliases:
+            break
+        aliases |= found
+    findings = []
+    for path, text in texts.items():
+        findings.extend(check_public_header(path, text, aliases))
+    return findings
+
+
 SELF_TESTS = {
     # unit text -> (rule, number of failing findings)
     "variadic_format": ("""
@@ -476,8 +884,8 @@ SELF_TESTS = {
         }""", "variadic", 1),
     "variadic_object_at_value_conversion": ("""
         PyObject *f(PyObject *o) {
-            PyValue v = PyValue_FromObjectBorrow(o);
-            return PyUnicode_FromFormat("%vR %vS", PyValue_Borrow(v), o);
+            PyValueBorrow v = PyValue_FromObjectBorrow(o);
+            return PyUnicode_FromFormat("%vR %vS", v, o);
         }""", "variadic", 1),
     "variadic_owner_at_value_conversion": ("""
         PyObject *f(PyValue v) {
@@ -501,8 +909,237 @@ SELF_TESTS = {
         PyObject *f(PyObject *o) {
             return Py_TYPE(o)->tp_as_number->nb_add(o, o);
         }""", "slot-read", 1),
+    "raw_bits_access": ("""
+        uintptr_t f(PyValue v, PyValueBorrow *p) {
+            return v.bits + p->bits;
+        }""", "raw-bits", 2),
+    "raw_bits_built": ("""
+        PyValue f(uintptr_t w, int c) {
+            PyValue v = {w};
+            PyValue zeros[2] = {0};
+            PyValue zero = {0};
+            (void)zeros; (void)zero;
+            return c ? v : (PyValue){1};
+        }""", "raw-bits", 2),
+    "raw_bits_casts": ("""
+        uintptr_t f(PyObject **objects, PyValue *p, PyValueBorrow *b,
+                    void *raw, char *bytes) {
+            PyValue *a = (PyValue *)objects;
+            PyValueBorrow *c = (PyValueBorrow *)p;
+            PyValue *d = (PyValue *)b;
+            uintptr_t w = *(uintptr_t *)p;
+            PyValue *e = (PyValue *)raw;
+            PyValue *g = (PyValue *)(bytes + 8);
+            const PyValue *h = (const PyValue *)p;
+            void *i = (void *)p;
+            unsigned char *j = (unsigned char *)&p[1];
+            (void)a; (void)c; (void)d; (void)e; (void)g; (void)h; (void)i;
+            (void)j;
+            return w;
+        }""", "raw-bits", 4),
+    "raw_bits_allowed_function": ("""
+        static inline PyValue *
+        _PyDataStack_Slots(PyObject **address)
+        {
+            return (PyValue *)address;
+        }
+        static inline PyValue *
+        other_slots(PyObject **address)
+        {
+            return (PyValue *)address;
+        }""", "raw-bits", 1),
+    "raw_bits_union": ("""
+        union pun { PyValue v; uintptr_t w; };
+        """, "raw-bits", 1),
+    "raw_bits_accessors": ("""
+        static PyObject dummy_struct;
+        int f(PyValue v, PyValueBorrow b) {
+            return PyValue_IsNull(v) + PyValue_IsInlineInt(b)
+                   + (_PyValue_Word(v) != 0)
+                   + _PyValue_IsSameWord(b, _PyValue_SENTINEL(&dummy_struct));
+        }""", "raw-bits", 0),
+    "borrow_field": ("""
+        struct holder { PyValueBorrow one; PyValueBorrow many[2]; };
+        static PyValueBorrow cached;
+        int f(PyValueBorrow p) {
+            PyValueBorrow local[2];
+            PyValueBorrow q = p;
+            (void)local;
+            return PyValue_IsNull(q) + PyValue_IsNull(cached);
+        }""", "borrow-field", 4),
+    "home_copy": ("""
+        int f(PyValue *p, PyListObject *l) {
+            PyValue a = p[0];
+            PyValue b = *p;
+            PyValue c = l->ob_item[1];
+            PyValue d = PyValue_DUP(p[0]);
+            int n = PyValue_IsNull(a) + PyValue_IsNull(b) + PyValue_IsNull(c);
+            PyValue_CLOSE(d);
+            return n;
+        }""", "home-copy", 3),
 }
+# The rules whose findings report and do not fail.
+REPORT_RULES = frozenset({"slot-read", "home-copy"})
 SELF_TEST_HEADER = '#include "Python.h"\n#include "pycore_value_api.h"\n'
+
+# The text of raw-bits: name -> (path, text, scan_bits, number of findings).
+RAW_BITS_TEXT_TESTS = {
+    "macro_bits": ("Include/internal/pycore_spam.h",
+                   "#define SPAM_BITS(v) ((v).bits)\n", True, 1),
+    "public_macro_bits": ("Include/cpython/spam.h",
+                          "#define PyValue_BITS(v) \\\n    ((v)->bits)\n",
+                          True, 1),
+    "literal": ("Objects/spam.c",
+                "static PyValueBorrow f(void) { return (PyValueBorrow){0}; }\n",
+                False, 1),
+    "constants": ("Objects/spam.c", """
+        int f(PyValue v, uintptr_t w) {
+            return (w & Py_TAG_REFCNT) + (_PyValue_BITS(v) > Py_INT_BASE);
+        }
+        """, False, 3),
+    "comments_and_strings": ("Include/spam.h", """
+        /* v.bits, (PyValue){0} and Py_TAG_BITS */
+        static const char *s = "p->bits Py_INT_SHIFT";
+        // (PyValueBorrow){x}
+        """, True, 0),
+    "unit_bits_left_to_clang_query": (
+        "Objects/spam.c", "int f(PyValue v) { return v.bits != 0; }\n",
+        False, 0),
+    "unchecked_unit_bits": (
+        "Modules/spam.c", "int f(PyValue v) { return v.bits != 0; }\n",
+        True, 1),
+    "value_header": ("Include/internal/pycore_value.h",
+                     "#define X(v) ((v).bits | Py_TAG_REFCNT)\n", True, 0),
+    "jit": ("Python/jit_spam.c", "int f(PyValue v) { return v.bits & 3; }\n",
+            True, 0),
+    "encoding_function": ("Python/ceval_macros.h", """\
+static inline PyValue
+_PyIR_AdoptTemp(PyValueBorrow view)
+{
+    PyValue owner = {view.bits};
+    return owner;
+}
+
+static inline uintptr_t
+spam(PyValueBorrow v)
+{
+    return v.bits;
+}
+""", True, 1),
+}
+
+# Public header texts -> number of public-value findings.
+PUBLIC_VALUE_TESTS = {
+    "opaque_value_slots": ("""
+        typedef void (*_Py_valuefunc)(void);
+        typedef struct _PyValueSlots {
+            _Py_valuefunc nb_add;
+            _Py_valuefunc hash;
+        } _PyValueSlots;
+        struct _typeobject {
+            void *_tp_cache;
+            _PyValueSlots tp_value;
+            Py_ssize_t tp_value_vectorcall_offset;
+            _Py_valuefunc tp_value_vectorcall;
+        };""", 0),
+    "frozen_word_fields": ("""
+        typedef struct {
+            PyObject_VAR_HEAD
+            PyValue *ob_item;
+            Py_ssize_t allocated;
+        } PyListObject;
+        typedef struct {
+            PyObject_HEAD
+            PyValue ob_ref;
+        } PyCellObject;""", 0),
+    "exported_value_functions": ("""
+        PyAPI_FUNC(PyValue) PyList_GetValue(PyObject *op, Py_ssize_t i);
+        PyAPI_FUNC(int) PyList_SetValue(PyObject *op, Py_ssize_t i,
+                                        PyValue value);
+        static inline PyValue
+        PyList_GET_VALUE(PyObject *op, Py_ssize_t i) {
+            return _PyList_CAST(op)->ob_item[i];
+        }""", 0),
+    "typed_value_slot": ("""
+        typedef struct _PyValueSlots {
+            PyValue (*nb_add)(PyValueBorrow, PyValueBorrow);
+        } _PyValueSlots;""", 1),
+    "word_field": ("""
+        struct _typeobject {
+            void *_tp_cache;
+            PyValue tp_cached_value;
+        };""", 1),
+    "inline_decoding": ("""
+        static inline int
+        PyValue_IsTagged(PyValue value) {
+            return (value.bits & 3) != 0;
+        }""", 1),
+    "inline_building": ("""
+        #define PyValue_FROM_BITS(B) ((PyValue){ .bits = (B) })
+        """, 1),
+    "alias_field": ("""
+        typedef PyValue word;
+        typedef struct { PyObject_HEAD word w; } PySpamObject;""", 1),
+    "alias_signature_field": ("""
+        typedef PyValue (*valuefunc)(PyValueBorrow);
+        struct spam { valuefunc f; };""", 1),
+    "alias_of_alias_field": ("""
+        typedef PyValue word;
+        typedef word words[2];
+        struct spam { words w; };""", 1),
+    "integer_pun": ("""
+        static inline uintptr_t
+        PyValue_WORD(PyValue word)
+        {
+            return *(uintptr_t *)&word;
+        }""", 1),
+    "body_names_value": ("""
+        static inline PyValue
+        PySpam_GET(PyObject *op)
+        {
+            PyValue v = ((PySpamObject *)op)->ob_item[0];
+            return v;
+        }""", 1),
+    "comments_skipped": ("""
+        /* struct { PyValue v; } and (PyValue){0} */
+        // a PyValue in a comment
+        struct spam { int n; };""", 0),
+    "extern_c_block": ("""
+        #ifdef __cplusplus
+        extern "C" {
+        #endif
+        PyAPI_FUNC(PyValue) PyList_GetValue(PyObject *, Py_ssize_t);
+        static inline PyValue
+        PySpam_GET(PyObject *op)
+        {
+            return ((PySpamObject *)op)->ob_item[0];
+        }
+        #ifdef __cplusplus
+        }
+        #endif""", 0),
+    "callback_parameter": ("""
+        typedef int (*PySpam_Callback)(PyObject *, PyValueBorrow key);
+        PyAPI_FUNC(int) PySpam_AddWatcher(PySpam_Callback callback);""", 0),
+}
+
+
+def text_self_test():
+    """Run the self-tests of the text rules. Return a list of failures."""
+    failures = encoding_names_defined(SRCDIR)
+    cases = [(name, "raw-bits", raw_bits_text(path, text, scan_bits), count)
+             for name, (path, text, scan_bits, count)
+             in RAW_BITS_TEXT_TESTS.items()]
+    cases += [(name, "public-value", check_public_header(name, text), count)
+              for name, (text, count) in PUBLIC_VALUE_TESTS.items()]
+    for name, rule, got, count in cases:
+        if len(got) != count:
+            failures.append(f"self-test {name}: expected {count} {rule} "
+                            f"findings, got {len(got)}: "
+                            + "; ".join(str(f) for f in got))
+        else:
+            print(f"self-test {name}: {len(got)} {rule} finding(s), "
+                  "as expected")
+    return failures
 
 # The typed borrow (pyjit/design/proposals/register-ir-v2-a5b.md, section 3.1
 # and Appendix A). Each unit with a pattern must fail to compile with an
@@ -563,6 +1200,23 @@ BORROW_TESTS = {
         }}""", r"passing argument 1 of '_PyValue_Publish' from incompatible "
               r"pointer type|incompatible pointer types passing "
               r"'PyValueBorrow \*' to parameter of type 'PyValue \*'"),
+    # Section 5.6: a producer's borrow passed to a stealing setter, against
+    # the real headers.
+    "borrow_element_stored": ("""
+        #include "pycore_tuple.h"
+        void f(PyObject *t, PyObject *u) {
+            PyTuple_SET_VALUE(t, 0, PyTuple_GET_VALUE(u, 0));  /* rejected */
+        }""", r"incompatible type for argument 3 of 'PyTuple_SET_VALUE'"
+              r"|passing 'PyValueBorrow' to parameter of incompatible type "
+              r"'PyValue'"),
+    "borrow_taken_by_dict": ("""
+        #include "pycore_dict.h"
+        int f(PyDictObject *d, PyValue k, PyObject *o) {
+            return _PyDict_SetValue_Take2(
+                d, k, PyValue_FromObjectBorrow(o));  /* rejected */
+        }""", r"incompatible type for argument 3 of '_PyDict_SetValue_Take2'"
+              r"|passing 'PyValueBorrow' to parameter of incompatible type "
+              r"'PyValue'"),
     "borrow_returned_as_owner": ("""
         PyValue f(PyValueBorrow b) {
             return b;  /* rejected */
@@ -608,163 +1262,6 @@ BORROW_CXX_TESTS = {
 }
 
 
-PUBLIC_TOKEN = re.compile(
-    r"/\*.*?\*/|//[^\n]*|\"(?:\\.|[^\"\\\n])*\"|'(?:\\.|[^'\\\n])*'"
-    r"|^[ \t]*#(?:\\\n|[^\n])*"
-    r"|(?P<token>->|[A-Za-z_]\w*|[{}();\[\].,*])", re.S | re.M)
-WORD_LITERAL = re.compile(r"\(\s*(?:PyValue|PyValueBorrow)\s*\)\s*\{")
-
-
-def field_name(tokens):
-    """The name that a member declaration declares: the identifier after
-    the first '(*' of a function pointer, else the last identifier before a
-    '[' or the end."""
-    for i in range(len(tokens) - 2):
-        if tokens[i][1] == "(" and tokens[i + 1][1] == "*":
-            return tokens[i + 2][1]
-    names = [t for _, t in tokens if t == "[" or re.match(r"[A-Za-z_]", t)]
-    if "[" in names:
-        names = names[:names.index("[")]
-    return names[-1] if names else "?"
-
-
-def check_public_header(path, text):
-    """The public-value findings of one public header's text. Interim until
-    A5b-3's public-value rule; see the module docstring."""
-    def line_of(offset):
-        return text.count("\n", 0, offset) + 1
-
-    findings = []
-    for m in WORD_LITERAL.finditer(text):
-        findings.append(Finding(path, line_of(m.start()), 1, "public-value",
-                                "a public header builds a word inline",
-                                True))
-    tokens = [(m.start(), m["token"]) for m in PUBLIC_TOKEN.finditer(text)
-              if m["token"]]
-    # Each frame: [is a struct or union body, tag, member tokens, fields]
-    frames = []
-    for i, (offset, token) in enumerate(tokens):
-        if token in (".", "->") and i + 1 < len(tokens) \
-                and tokens[i + 1][1] == "bits":
-            findings.append(Finding(path, line_of(offset), 1, "public-value",
-                                    "a public header decodes a word inline",
-                                    True))
-        if token == "{":
-            words = [t for _, t in tokens[max(0, i - 3):i]]
-            is_record = any(w in ("struct", "union") for w in words)
-            tag = words[-1] if is_record and words[-1] not in (
-                "struct", "union") else None
-            frames.append([is_record, tag, [], []])
-        elif token == "}":
-            if not frames:
-                continue
-            is_record, tag, _, fields = frames.pop()
-            if is_record:
-                # The typedef name, if any, follows the brace.
-                after = [t for _, t in tokens[i + 1:i + 3]]
-                name = after[0] if after and re.match(r"[A-Za-z_]",
-                                                     after[0]) else tag
-                for field, line in fields:
-                    if (name, field) not in PUBLIC_WORD_FIELDS:
-                        findings.append(Finding(
-                            path, line, 1, "public-value",
-                            f"{name}.{field} holds a word or a value "
-                            "signature in a public layout", True))
-                if frames and frames[-1][0]:
-                    frames[-1][2].clear()
-        elif frames and frames[-1][0]:
-            members = frames[-1][2]
-            if token == ";":
-                where = [o for o, t in members if t in VALUE_TYPES]
-                if where:
-                    frames[-1][3].append((field_name(members),
-                                          line_of(where[0])))
-                members.clear()
-            else:
-                members.append((offset, token))
-    return findings
-
-
-def public_headers(srcdir):
-    include = Path(srcdir, "Include")
-    return sorted([*include.glob("*.h"), *include.glob("cpython/*.h")])
-
-
-def check_public_headers(srcdir):
-    findings = []
-    for path in public_headers(srcdir):
-        findings.extend(check_public_header(
-            str(path.relative_to(srcdir)), path.read_text(errors="replace")))
-    return findings
-
-
-# Public header texts -> number of public-value findings.
-PUBLIC_VALUE_TESTS = {
-    "opaque_value_slots": ("""
-        typedef void (*_Py_valuefunc)(void);
-        typedef struct _PyValueSlots {
-            _Py_valuefunc nb_add;
-            _Py_valuefunc hash;
-        } _PyValueSlots;
-        struct _typeobject {
-            void *_tp_cache;
-            _PyValueSlots tp_value;
-            Py_ssize_t tp_value_vectorcall_offset;
-            _Py_valuefunc tp_value_vectorcall;
-        };""", 0),
-    "frozen_word_fields": ("""
-        typedef struct {
-            PyObject_VAR_HEAD
-            PyValue *ob_item;
-            Py_ssize_t allocated;
-        } PyListObject;
-        typedef struct {
-            PyObject_HEAD
-            PyValue ob_ref;
-        } PyCellObject;""", 0),
-    "exported_value_functions": ("""
-        PyAPI_FUNC(PyValue) PyList_GetValue(PyObject *op, Py_ssize_t i);
-        PyAPI_FUNC(int) PyList_SetValue(PyObject *op, Py_ssize_t i,
-                                        PyValue value);
-        static inline PyValue
-        PyList_GET_VALUE(PyObject *op, Py_ssize_t i) {
-            return _PyList_CAST(op)->ob_item[i];
-        }""", 0),
-    "typed_value_slot": ("""
-        typedef struct _PyValueSlots {
-            PyValue (*nb_add)(PyValueBorrow, PyValueBorrow);
-        } _PyValueSlots;""", 1),
-    "word_field": ("""
-        struct _typeobject {
-            void *_tp_cache;
-            PyValue tp_cached_value;
-        };""", 1),
-    "inline_decoding": ("""
-        static inline int
-        PyValue_IsTagged(PyValue value) {
-            return (value.bits & 3) != 0;
-        }""", 1),
-    "inline_building": ("""
-        #define PyValue_FROM_BITS(B) ((PyValue){ .bits = (B) })
-        """, 1),
-}
-
-
-def public_value_self_test():
-    """Run the public-value self-tests. Return a list of failures."""
-    failures = []
-    for name, (text, count) in PUBLIC_VALUE_TESTS.items():
-        got = check_public_header(name, text)
-        if len(got) != count:
-            failures.append(f"self-test {name}: expected {count} "
-                            f"public-value findings, got {len(got)}: "
-                            + "; ".join(str(f) for f in got))
-        else:
-            print(f"self-test {name}: {len(got)} public-value finding(s), "
-                  "as expected")
-    return failures
-
-
 def self_test(clang_query, template, compiler, cxx, jobs):
     """Run the self-tests with the flags of template, a core unit's entry.
     Return a list of failures."""
@@ -784,7 +1281,7 @@ def self_test(clang_query, template, compiler, cxx, jobs):
                    if f.path == display_path(path, template["directory"])
                    and f.rule == rule]
             if len(got) != max(count, 0) or (count and not all(
-                    f.fails or rule == "slot-read" for f in got)):
+                    f.fails or rule in REPORT_RULES for f in got)):
                 failures.append(f"self-test {name}: expected {count} "
                                 f"{rule} findings, got {len(got)}: "
                                 + "; ".join(str(f) for f in got))
@@ -905,7 +1402,7 @@ def main():
                     if entry["file"].endswith("Objects/object.c"))
     compiler = args.cc or entry_arguments(template)[0]
 
-    failures = public_value_self_test()
+    failures = text_self_test()
     failures += self_test(clang_query, template, compiler, args.cxx,
                           args.jobs)
     if failures or args.self_test_only:
@@ -913,13 +1410,17 @@ def main():
             print(failure)
         return 1 if failures else 0
 
+    checked = {display_path(entry["file"], entry["directory"])
+               for entry, kind in entries.values()}
+    text_findings = (check_raw_bits_text(SRCDIR, checked)
+                     + check_public_headers(SRCDIR))
     if args.files:
         wanted = {os.path.normpath(os.path.abspath(f)) for f in args.files}
         entries = {p: e for p, e in entries.items() if p in wanted}
+        text_findings = [f for f in text_findings
+                         if str(SRCDIR / f.path) in wanted]
     findings, errors = check_units(clang_query, entries.values(), args.jobs)
-    if not args.files:
-        findings = sorted(findings + check_public_headers(
-            Path(__file__).resolve().parents[2]))
+    findings = sorted({*findings, *text_findings})
     for finding in findings:
         print(finding)
     for error in errors:

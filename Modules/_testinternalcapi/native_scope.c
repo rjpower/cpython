@@ -115,7 +115,7 @@ scope_mechanism(PyObject *argument, int abort_result, int cleanup_error,
 {
     _PyNativeScope scope;
     PyObject *primary = NULL;
-    PyValue input = PyValue_MakeHeapSafe(PyValue_FromObjectBorrow(argument));
+    PyValue input = PyValue_DUP(PyValue_FromObjectBorrow(argument));
     int begun = _PyNativeScope_Begin(&scope, PyThreadState_Get(), &input,
                                     1, 1, PyValue_NULL, NULL);
     PyValue_CLOSE(input);
@@ -135,7 +135,7 @@ scope_mechanism(PyObject *argument, int abort_result, int cleanup_error,
         goto abort;
     }
     if (abort_result) {
-        destination = PyValue_MakeHeapSafe(PyValue_FromObjectBorrow(argument));
+        destination = PyValue_DUP(PyValue_FromObjectBorrow(argument));
         if (_PyNativeScope_StageResult(&scope, capsule, &scope.result) < 0) {
             goto abort;
         }
@@ -344,7 +344,7 @@ gateway_mechanism(PyObject *argument)
                                METH_NOARGS};
     _PyNativeScope scope;
     PyValue input = noargs ? PyValue_NULL :
-        PyValue_MakeHeapSafe(PyValue_FromObjectBorrow(argument));
+        PyValue_DUP(PyValue_FromObjectBorrow(argument));
     int begun = _PyNativeScope_Begin(&scope, PyThreadState_Get(), &input,
                                     !noargs, !noargs, PyValue_NULL, NULL);
     PyValue_XCLOSE(input);
@@ -425,15 +425,9 @@ static PyObject *
 native_scope_box_oom(PyObject *Py_UNUSED(module), PyObject *argument)
 {
     _PyNativeScope scope;
-    PyValue input = PyValue_MakeHeapSafe(PyValue_FromObjectBorrow(argument));
-    int begun = _PyNativeScope_Begin(&scope, PyThreadState_Get(), &input,
-                                    1, 1, PyValue_NULL, NULL);
-    PyValue_XCLOSE(input);
+    PyValue input = PyValue_DUP(PyValue_FromObjectBorrow(argument));
     PyValue destination = PyValue_NULL;
     Publication state = {.destination = &destination};
-    if (begun < 0) {
-        goto abort;
-    }
     BoxFailure failure = {0};
     PyMem_GetAllocator(PYMEM_DOMAIN_OBJ, &failure.saved);
     PyMemAllocatorEx failing = {
@@ -443,20 +437,22 @@ native_scope_box_oom(PyObject *Py_UNUSED(module), PyObject *argument)
         .realloc = fail_box_realloc,
         .free = fail_box_free,
     };
+    /* Begin boxes an inline argument at once, so the box's allocation is
+       the first, and it fails. */
     PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &failing);
-    PyObject *const *objects;
-    int status = _PyNativeScope_Objects(&scope, &objects);
+    int begun = _PyNativeScope_Begin(&scope, PyThreadState_Get(), &input,
+                                    1, 1, PyValue_NULL, NULL);
     PyMem_SetAllocator(PYMEM_DOMAIN_OBJ, &failure.saved);
-    if (status == 0 || !failure.consumed) {
+    if (begun == 0 || !failure.consumed) {
         PyErr_SetString(PyExc_AssertionError,
                         "argument did not allocate a scalar box");
     }
     else {
         assert(PyErr_ExceptionMatches(PyExc_MemoryError));
     }
-abort:
     _PyNativeResult_Abort(&scope.result, publish_state, &state);
     _PyNativeScope_End(&scope);
+    PyValue_XCLOSE(input);
     return NULL;
 }
 
@@ -600,7 +596,7 @@ native_scope_vector(PyObject *Py_UNUSED(module), PyObject *const *args,
         return PyErr_NoMemory();
     }
     for (Py_ssize_t i = 0; i < count; i++) {
-        values[i] = PyValue_MakeHeapSafe(PyValue_FromObjectBorrow(args[i + 1]));
+        values[i] = PyValue_DUP(PyValue_FromObjectBorrow(args[i + 1]));
     }
     PyObject *result = vector_mechanism(callable, values, npos, count,
                                         kwnames, 0);
@@ -768,11 +764,14 @@ native_scope_call_state(PyObject *Py_UNUSED(module), PyObject *code_object)
         PyValue value = _PyFrame_Slots(frame)[i];
         if (!PyValue_IsNull(value)) {
             present |= UINT64_C(1) << i;
-            if (PyValue_IsHeapSafe(value)) {
+            // The slot owns its value: a count, or none needed (H1).
+            if (PyValue_RefcountOnObject(value) || !PyValue_IsObject(value)
+                || _Py_IsImmortal(PyValue_AsKnownObjectBorrow(value)))
+            {
                 strong |= UINT64_C(1) << i;
             }
         }
-        snapshots[i] = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(value));
+        snapshots[i] = PyValue_XDUP(value);
     }
     int nlocals = code->co_nlocalsplus;
     PyObject *values = PyTuple_New(nslots);

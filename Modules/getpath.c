@@ -314,7 +314,7 @@ getpath_joinpath_impl(PyObject *module, PyObject *args)
 
     for (Py_ssize_t i = 0; i < n; ++i) {
         /* Borrowed from args; an inline scalar is neither str nor None. */
-        PyValue v = PyTuple_GET_VALUE(args, i);
+        PyValueBorrow v = PyTuple_GET_VALUE(args, i);
         PyObject *s = PyValue_IsObject(v) ? PyValue_AsKnownObjectBorrow(v) : NULL;
         Py_ssize_t cch;
         if (s == Py_None) {

@@ -8,9 +8,9 @@ extern "C" {
 #  error "this header requires Py_BUILD_CORE define"
 #endif
 
-/* One RC-aware value format on the supported private ABI. Borrowed pointer
- * values do not own a reference; storing one in a heap field requires an
- * explicit owning promotion. Inline values own no heap object. */
+/* One RC-aware value format on the supported private ABI. A borrow
+ * (PyValueBorrow) owns no reference; a home receives an owner, which
+ * PyValue_DUP() makes of a borrow. Inline values own no heap object. */
 #if SIZEOF_VOID_P != 8 || defined(Py_GIL_DISABLED)
 #  error "PyValue requires the 64-bit GIL private runtime"
 #endif
@@ -39,10 +39,6 @@ static_assert(((uintptr_t)0xFFF0 << 48) + Py_DOUBLE_OFFSET < Py_INT_BASE,
  * current exception unchanged ("Release contract" in
  * Include/internal/pycore_value.h). NULL gives PyValue_NULL. */
 PyAPI_FUNC(PyValue) PyValue_PrepareOwned(PyObject *obj);
-
-/* Borrowed canonical input. The source owner must stay live until an explicit
- * owning promotion or the last use; an immediate does not retain that owner. */
-PyAPI_FUNC(PyValue) PyValue_FromObjectBorrow(PyObject *obj);
 
 /* The view of an owner or a borrow, as a borrow: the same bits, at no cost.
  * Readers take a PyValueBorrow; each has a same-name macro that passes its
@@ -82,6 +78,15 @@ _PyValue_BorrowBorrowed(PyValueBorrow value)
                   PyValueBorrow: _PyValue_BorrowBorrowed)(V)
 #endif
 
+/* Whether the size bytes at address lie in the pointer space, so that a
+ * word can hold the address of an object among them: the allocator's check
+ * of the memory that it takes from the OS (Objects/obmalloc.c). */
+static inline bool
+_PyValue_InPointerSpace(const void *address, size_t size)
+{
+    return (uintptr_t)address + size <= Py_PTR_LIMIT;
+}
+
 static inline int
 PyValue_IsObject(PyValueBorrow value)
 {
@@ -90,25 +95,13 @@ PyValue_IsObject(PyValueBorrow value)
 }
 #define PyValue_IsObject(V0) (PyValue_IsObject)(PyValue_Borrow(V0))
 
-/* The tagging borrow: an object's bits with the no-count tag, as a
- * PyValue.  It remains only until register IR v2 step A5b-3 makes every
- * borrow a PyValueBorrow, and then it is deleted.  NULL, index and inline
- * scalar bits stay.  A borrow lives in a C variable, never in a frame slot or
- * a heap home (pyjit/design/pyvalue.md D4). */
-static inline PyValue
-_PyValue_BorrowTagged(PyValue value)
-{
-    value.bits |= (uintptr_t)PyValue_IsObject(value);
-    return value;
-}
-
 /* NewRef creates an independent owner for a pointer value. A raw bit copy
  * merely aliases the existing owner. Scalars require no runtime call.
  * Immortal objects keep the no-count tag, so each has one encoding and
  * exact-bit tests such as PyValue_IsNone() hold for every owner.  It reads
- * its argument, so it takes a borrow; unlike PyValue_XDUP(), it also counts
- * a borrow that carries the no-count tag on a mortal object, which the
- * tagging producers make until step A5b-3. */
+ * its argument, so it takes a borrow.  Since no word carries the no-count
+ * tag on a mortal object (H1), it equals PyValue_XDUP(); the two are to be
+ * merged (pyjit/design/proposals/register-ir-v2-a5b.md, section 7). */
 static inline PyValue
 PyValue_NewRef(PyValueBorrow value)
 {

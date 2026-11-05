@@ -177,7 +177,7 @@ _PyFrame_SetReturnValue(_PyInterpreterFrame *f, PyValue v)
 #endif
     PyValue old = f->base[f->return_slot];
     f->base[f->return_slot] = v;
-    _PyValue_CheckFrameHome(v);
+    _PyValue_CheckHome(v);
     PyValue_XCLOSE(old);
 }
 
@@ -219,12 +219,12 @@ static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *
 {
     // Read the layout before transferring the executable owner.
     int nslots = _PyFrame_NumSlots(src);
-    dest->f_executable = PyValue_MakeHeapSafe(src->f_executable);
+    dest->f_executable = src->f_executable;
     dest->base = dest->owned_slots;
     // Don't leave a dangling pointer to the old frame when creating generators
     // and coroutines:
     dest->previous = NULL;
-    dest->f_funcobj = PyValue_MakeHeapSafe(src->f_funcobj);
+    dest->f_funcobj = src->f_funcobj;
     dest->f_globals = src->f_globals;
     dest->f_builtins = src->f_builtins;
     dest->f_locals = src->f_locals;
@@ -243,7 +243,7 @@ static inline void _PyFrame_Copy(_PyInterpreterFrame *src, _PyInterpreterFrame *
 #endif
     // A move: the slots that src leaves behind may be the caller's
     for (int i = 0; i < nslots; i++) {
-        dest->base[i] = PyValue_MakeHeapSafe(src->base[i]);
+        dest->base[i] = src->base[i];
         src->base[i] = PyValue_NULL;
     }
 }
@@ -399,6 +399,24 @@ _PyFrame_HasHiddenLocals(_PyInterpreterFrame *frame);
 PyObject *
 _PyFrame_GetLocals(_PyInterpreterFrame *frame);
 
+/* The data stack is untyped memory in pointer-sized units, which the public
+ * PyThreadState and _PyStackChunk declare as PyObject *: frames take slots
+ * (words) from its bottom and headers from its top.  These convert between
+ * its addresses and slot addresses; they are the only casts between a
+ * PyValue * and another pointer type outside the value headers
+ * (Tools/build/check_value_api.py, raw-bits). */
+static inline PyValue *
+_PyDataStack_Slots(PyObject **address)
+{
+    return (PyValue *)address;
+}
+
+static inline PyObject **
+_PyDataStack_Address(PyValue *slots)
+{
+    return (PyObject **)slots;
+}
+
 static inline bool
 _PyThreadState_HasStackSpace(PyThreadState *tstate, int size)
 {
@@ -419,7 +437,7 @@ _PyThreadState_PushFrameUnchecked(PyThreadState *tstate, int nslots)
 {
     _PyInterpreterFrame *frame =
         (_PyInterpreterFrame *)(tstate->datastack_limit - FRAME_SPECIALS_SIZE);
-    frame->base = (PyValue *)tstate->datastack_top;
+    frame->base = _PyDataStack_Slots(tstate->datastack_top);
     frame->saved_top = frame->base;
     tstate->datastack_limit = (PyObject **)frame;
     tstate->datastack_top += nslots;
@@ -446,12 +464,14 @@ _PyThreadState_PopFrame(PyThreadState *tstate, _PyInterpreterFrame *frame)
     assert((PyObject **)frame == tstate->datastack_limit);
     // Only the frame that a chunk was allocated for has its first slot.  The
     // root chunk stays, for the next frame.
-    if (frame->base == (PyValue *)&chunk->data[0] && chunk->previous != NULL) {
+    if (frame->base == _PyDataStack_Slots(&chunk->data[0])
+        && chunk->previous != NULL)
+    {
         _PyThreadState_PopChunk(tstate, frame);
         return;
     }
     tstate->datastack_limit = (PyObject **)frame + FRAME_SPECIALS_SIZE;
-    tstate->datastack_top = (PyObject **)frame->saved_top;
+    tstate->datastack_top = _PyDataStack_Address(frame->saved_top);
     assert(tstate->datastack_top < tstate->datastack_limit);
 }
 
@@ -487,14 +507,14 @@ _PyFrame_PushOverlapping(PyThreadState *tstate, PyValue func,
     PyCodeObject *code = (PyCodeObject *)func_obj->func_code;
     assert(previous->owner == FRAME_OWNED_BY_THREAD);
     assert(base > previous->base &&
-           base <= (PyValue *)tstate->datastack_top);
+           base <= _PyDataStack_Slots(tstate->datastack_top));
     _PyInterpreterFrame *frame =
         (_PyInterpreterFrame *)(tstate->datastack_limit - FRAME_SPECIALS_SIZE);
-    frame->saved_top = (PyValue *)tstate->datastack_top;
+    frame->saved_top = _PyDataStack_Slots(tstate->datastack_top);
     tstate->datastack_limit = (PyObject **)frame;
     PyValue *end = base + _PyFrame_NumSlotsForCodeObject(code);
     if (end > frame->saved_top) {
-        tstate->datastack_top = (PyObject **)end;
+        tstate->datastack_top = _PyDataStack_Address(end);
     }
     assert(tstate->datastack_top < tstate->datastack_limit);
     _PyFrame_Initialize(tstate, frame, func, NULL, code, base, nargs, previous);

@@ -487,7 +487,7 @@ framelocalsproxy_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
                      PyTuple_GET_SIZE(args));
         return NULL;
     }
-    PyValue item_value = PyTuple_GET_VALUE(args, 0);
+    PyValueBorrow item_value = PyTuple_GET_VALUE(args, 0);
     if (!PyValue_IsObject(item_value) ||
         !PyFrame_Check(PyValue_AsKnownObjectBorrow(item_value))) {
         PyErr_Format(PyExc_TypeError, "expect frame, not %.200s",

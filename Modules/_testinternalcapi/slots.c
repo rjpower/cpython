@@ -31,7 +31,7 @@ slot_value_storage(PyObject *module, PyObject *args)
         return NULL;
     }
     PyValue value = *(PyValue *)_PyMember_GetOffset(obj, member);
-    assert(PyValue_IsHeapSafe(value));
+    _PyValue_RecheckHome(value);
     assert(PyValue_IsNull(value) || PyValue_IsLanguageValue(value));
     const char *kind = PyValue_IsNull(value) ? "empty" :
         PyValue_IsInlineInt(value) ? "int" :

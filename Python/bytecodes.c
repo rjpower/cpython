@@ -275,14 +275,14 @@ dummy_func(
 
         // The constant is an inline int.
         inst(LOAD_CONST_INLINE_INT, (-- value)) {
-            value = PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg);
+            value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
             assert(PyValue_IsInlineInt(value));
         }
 
         // The constant is an exact float other than NaN. Only builds with
         // inline values quicken to this.
         inst(LOAD_CONST_INLINE_FLOAT, (-- value)) {
-            value = PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg);
+            value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
             assert(PyValue_IsInlineFloat(value));
         }
 
@@ -306,7 +306,7 @@ dummy_func(
         op(_SWAP_FAST, (value -- trash)) {
             PyValue tmp = GETLOCAL(oparg);
             GETLOCAL(oparg) = value;
-            _PyValue_CheckFrameHome(value);
+            _PyValue_CheckHome(value);
             DEAD(value);
             trash = tmp;
         }
@@ -320,7 +320,7 @@ dummy_func(
             uint32_t oparg2 = oparg & 15;
             PyValue tmp = GETLOCAL(oparg1);
             GETLOCAL(oparg1) = value1;
-            _PyValue_CheckFrameHome(value1);
+            _PyValue_CheckHome(value1);
             DEAD(value1);
             value2 = PyValue_DUP(GETLOCAL(oparg2));
             PyValue_XCLOSE(tmp);
@@ -331,12 +331,12 @@ dummy_func(
             uint32_t oparg2 = oparg & 15;
             PyValue tmp = GETLOCAL(oparg1);
             GETLOCAL(oparg1) = value1;
-            _PyValue_CheckFrameHome(value1);
+            _PyValue_CheckHome(value1);
             DEAD(value1);
             PyValue_XCLOSE(tmp);
             tmp = GETLOCAL(oparg2);
             GETLOCAL(oparg2) = value2;
-            _PyValue_CheckFrameHome(value2);
+            _PyValue_CheckHome(value2);
             DEAD(value2);
             PyValue_XCLOSE(tmp);
         }
@@ -1143,7 +1143,7 @@ dummy_func(
             s = str_st;
             i = sub_st;
             INPUTS_DEAD();
-            res = PyValue_FromPyObjectBorrow(res_o);
+            res = PyValue_DUP(PyValue_FromObjectBorrow(res_o));
         }
 
         macro(BINARY_OP_SUBSCR_USTR_INT) =
@@ -1164,7 +1164,7 @@ dummy_func(
             s = str_st;
             i = sub_st;
             INPUTS_DEAD();
-            res = PyValue_FromPyObjectBorrow(res_o);
+            res = PyValue_DUP(PyValue_FromObjectBorrow(res_o));
         }
 
         op(_GUARD_NOS_TUPLE, (nos, unused -- nos, unused)) {
@@ -1290,7 +1290,7 @@ dummy_func(
         }
 
         inline_ok inst(SET_ADD, (set, unused[oparg-1], v -- set, unused[oparg-1])) {
-            PyValue item = PyValue_MakeHeapSafe(v);
+            PyValue item = v;
             DEAD(v);
             int err = _PySet_AddValueTakeRef((PySetObject *)PyValue_AsKnownObjectBorrow(set), item);
             ERROR_IF(err);
@@ -2393,7 +2393,7 @@ dummy_func(
                 values[i] = PyValue_NULL;
                 if (err == 0) {
                     err = _PySet_AddValueTakeRef((PySetObject *)set_o,
-                                                 PyValue_MakeHeapSafe(value));
+                                                 value);
                 }
                 else {
                     PyValue_CLOSE(value);
@@ -2498,8 +2498,8 @@ dummy_func(
             assert(PyDict_CheckExact(dict));
             /* dict[key] = value */
             // Do not DECREF INPUTS because the function steals the references
-            PyValue stored_key = PyValue_MakeHeapSafe(key);
-            PyValue stored_value = PyValue_MakeHeapSafe(value);
+            PyValue stored_key = key;
+            PyValue stored_value = value;
             DEAD(key);
             DEAD(value);
             int err = _PyDict_SetValue_Take2(
@@ -2855,7 +2855,7 @@ dummy_func(
 
             PyValue value = *(PyValue *)((char *)owner_o + index);
             EXIT_IF(PyValue_IsNull(value));
-            assert(PyValue_IsHeapSafe(value));
+            _PyValue_RecheckHome(value);
             attr = PyValue_DUP(value);
             PyValue receiver = OWNER(owner);
             STAT_INC(LOAD_ATTR, hit);

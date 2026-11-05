@@ -105,7 +105,7 @@ template_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     int last_was_str = 0;
 
     for (Py_ssize_t i = 0; i < argslen; i++) {
-        PyValue item_value = PyTuple_GET_VALUE(args, i);
+        PyValueBorrow item_value = PyTuple_GET_VALUE(args, i);
         PyTypeObject *itemtype = PyValue_TYPE(item_value);
         if (PyType_FastSubclass(itemtype, Py_TPFLAGS_UNICODE_SUBCLASS)) {
             if (!last_was_str) {
@@ -283,11 +283,11 @@ template_strings_concat(PyObject *left, PyObject *right)
 
     Py_ssize_t index = 0;
     for (Py_ssize_t i = 0; i < left_stringslen - 1; i++) {
-        PyTuple_SET_VALUE(newstrings, index++, PyTuple_GET_VALUE(left, i));
+        PyTuple_SET_VALUE(newstrings, index++, PyValue_DUP(PyTuple_GET_VALUE(left, i)));
     }
     PyTuple_SET_ITEM(newstrings, index++, concat);
     for (Py_ssize_t i = 1; i < right_stringslen; i++) {
-        PyTuple_SET_VALUE(newstrings, index++, PyTuple_GET_VALUE(right, i));
+        PyTuple_SET_VALUE(newstrings, index++, PyValue_DUP(PyTuple_GET_VALUE(right, i)));
     }
 
     return newstrings;

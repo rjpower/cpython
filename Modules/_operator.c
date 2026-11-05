@@ -1293,7 +1293,7 @@ attrgetter_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     /* prepare attr while checking args */
     PyInterpreterState *interp = _PyInterpreterState_GET();
     for (idx = 0; idx < nattrs; ++idx) {
-        PyValue candidate = PyTuple_GET_VALUE(args, idx);
+        PyValueBorrow candidate = PyTuple_GET_VALUE(args, idx);
         int dot_count;
 
         if (!PyValue_IsObject(candidate) ||
@@ -1727,7 +1727,7 @@ methodcaller_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         return NULL;
     }
 
-    PyValue candidate = PyTuple_GET_VALUE(args, 0);
+    PyValueBorrow candidate = PyTuple_GET_VALUE(args, 0);
     if (!PyValue_IsObject(candidate) ||
         !PyUnicode_Check(PyValue_AsKnownObjectBorrow(candidate))) {
         PyErr_SetString(PyExc_TypeError,

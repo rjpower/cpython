@@ -2302,7 +2302,7 @@ find_keyword(PyObject *kwnames, PyObject *const *kwstack, PyObject *key)
 
     nkwargs = PyTuple_GET_SIZE(kwnames);
     for (i = 0; i < nkwargs; i++) {
-        PyValue name = PyTuple_GET_VALUE(kwnames, i);
+        PyValueBorrow name = PyTuple_GET_VALUE(kwnames, i);
         if (!PyValue_IsObject(name) ||
             !PyUnicode_Check(PyValue_AsKnownObjectBorrow(name))) {
             PyErr_SetString(PyExc_TypeError, "keywords must be strings");
@@ -2318,7 +2318,7 @@ find_keyword(PyObject *kwnames, PyObject *const *kwstack, PyObject *key)
     }
 
     for (i = 0; i < nkwargs; i++) {
-        PyValue name = PyTuple_GET_VALUE(kwnames, i);
+        PyValueBorrow name = PyTuple_GET_VALUE(kwnames, i);
         if (!PyValue_IsObject(name) ||
             !PyUnicode_Check(PyValue_AsKnownObjectBorrow(name))) {
             PyErr_SetString(PyExc_TypeError, "keywords must be strings");

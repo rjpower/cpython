@@ -3276,7 +3276,7 @@
                 i = sub_st;
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), s);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), i);
-                res = PyValue_FromPyObjectBorrow(res_o);
+                res = PyValue_DUP(PyValue_FromObjectBorrow(res_o));
             }
             // _POP_TOP_INT
             {
@@ -3472,7 +3472,7 @@
                 i = sub_st;
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), s);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), i);
-                res = PyValue_FromPyObjectBorrow(res_o);
+                res = PyValue_DUP(PyValue_FromObjectBorrow(res_o));
             }
             // _POP_TOP_INT
             {
@@ -4263,7 +4263,7 @@
                 values[i] = PyValue_NULL;
                 if (err == 0) {
                     err = _PySet_AddValueTakeRef((PySetObject *)set_o,
-                        PyValue_MakeHeapSafe(value));
+                        value);
                 }
                 else {
                     PyValue_CLOSE(value);
@@ -12873,7 +12873,7 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                assert(PyValue_IsHeapSafe(value));
+                _PyValue_RecheckHome(value);
                 attr = PyValue_DUP(value);
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 PyValue receiver = ir_own_B;
@@ -13134,7 +13134,7 @@
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValue value;
-            value = PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg);
+            value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
             assert(PyValue_IsInlineFloat(value));
             IR_STORE_DST(IR_A(ir_word), value);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -13160,7 +13160,7 @@
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValue value;
-            value = PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg);
+            value = PyValue_DUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
             assert(PyValue_IsInlineInt(value));
             IR_STORE_DST(IR_A(ir_word), value);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -14568,8 +14568,8 @@
             dict_st = window[0];
             PyObject *dict = PyValue_AsKnownObjectBorrow(dict_st);
             assert(PyDict_CheckExact(dict));
-            PyValue stored_key = PyValue_MakeHeapSafe(key);
-            PyValue stored_value = PyValue_MakeHeapSafe(value);
+            PyValue stored_key = key;
+            PyValue stored_value = value;
             window[1 + (oparg - 1)] = PyValue_NULL;
             window[2 + (oparg - 1)] = PyValue_NULL;
             int err = _PyDict_SetValue_Take2(
@@ -16538,7 +16538,7 @@
             PyValue v;
             v = window[1 + (oparg-1)];
             set = window[0];
-            PyValue item = PyValue_MakeHeapSafe(v);
+            PyValue item = v;
             window[1 + (oparg-1)] = PyValue_NULL;
             int err = _PySet_AddValueTakeRef((PySetObject *)PyValue_AsKnownObjectBorrow(set), item);
             if (err) {
@@ -17345,7 +17345,7 @@
                 value = IR_SLOT(IR_A(ir_word));
                 PyValue tmp = GETLOCAL(oparg);
                 GETLOCAL(oparg) = value;
-                _PyValue_CheckFrameHome(value);
+                _PyValue_CheckHome(value);
                 IR_SLOT(IR_A(ir_word)) = PyValue_NULL;
                 trash = tmp;
             }
@@ -17378,7 +17378,7 @@
             uint32_t oparg2 = oparg & 15;
             PyValue tmp = GETLOCAL(oparg1);
             GETLOCAL(oparg1) = value1;
-            _PyValue_CheckFrameHome(value1);
+            _PyValue_CheckHome(value1);
             IR_SLOT(IR_B(ir_word)) = PyValue_NULL;
             value2 = PyValue_DUP(GETLOCAL(oparg2));
             IR_STORE_TEMP_DST(IR_A(ir_word), value2);
@@ -17412,12 +17412,12 @@
             uint32_t oparg2 = oparg & 15;
             PyValue tmp = GETLOCAL(oparg1);
             GETLOCAL(oparg1) = value1;
-            _PyValue_CheckFrameHome(value1);
+            _PyValue_CheckHome(value1);
             IR_SLOT(IR_B(ir_word)) = PyValue_NULL;
             PyValue_XCLOSE(tmp);
             tmp = GETLOCAL(oparg2);
             GETLOCAL(oparg2) = value2;
-            _PyValue_CheckFrameHome(value2);
+            _PyValue_CheckHome(value2);
             IR_SLOT(IR_A(ir_word)) = PyValue_NULL;
             PyValue_XCLOSE(tmp);
             DISPATCH();

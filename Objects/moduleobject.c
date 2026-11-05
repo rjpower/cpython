@@ -202,7 +202,7 @@ new_module_notrack(PyTypeObject *mt)
  */
 static int
 module_dict_watcher(PyDict_WatchEvent event, PyObject *dict,
-                    PyValue key, PyValue new_value)
+                    PyValueBorrow key, PyValueBorrow new_value)
 {
     assert(PyDict_Check(dict));
     // Only if a new lazy object shows up do we need to clear the dictionary. If

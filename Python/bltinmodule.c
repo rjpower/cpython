@@ -1256,7 +1256,7 @@ builtin_exec_impl(PyObject *module, PyObject *source, PyObject *globals,
                 && (PyTuple_GET_SIZE(closure) == num_free);
             if (closure_is_ok) {
                 for (Py_ssize_t i = 0; i < num_free; i++) {
-                    PyValue value = PyTuple_GET_VALUE(closure, i);
+                    PyValueBorrow value = PyTuple_GET_VALUE(closure, i);
                     if (PyValue_TYPE(value) != &PyCell_Type) {
                         closure_is_ok = 0;
                         break;
@@ -1695,8 +1695,8 @@ map_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
         return NULL;
     PyTuple_SET_ITEM(args, 0, Py_NewRef(lz->func));
     for (i = 0; i<numargs; i++){
-        PyValue it = PyTuple_GET_VALUE(lz->iters, i);
-        PyTuple_SET_VALUE(args, i+1, PyValue_MakeHeapSafe(it));
+        PyValueBorrow it = PyTuple_GET_VALUE(lz->iters, i);
+        PyTuple_SET_VALUE(args, i+1, PyValue_DUP(it));
     }
 
     if (lz->strict) {

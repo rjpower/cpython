@@ -83,8 +83,16 @@ PyAPI_FUNC(int) _PyDict_GetValue_KnownHash(PyObject *, PyValueBorrow, Py_hash_t,
 #define _PyDict_GetValue_KnownHash(D, K, H, R) \
     (_PyDict_GetValue_KnownHash)(D, PyValue_Borrow(K), H, R)
 
-/* The reader macros of the value-form calls of Include/cpython/dictobject.h:
-   the core passes owners and borrows alike. */
+/* The value forms that take a borrowed key: as PyDict_GetItemRef(),
+ * PyDict_SetItem(), PyDict_DelItem() and PyDict_Contains(). They are internal
+ * because only the core makes a PyValueBorrow. GetValue initializes its
+ * output to PyValue_NULL and returns 1 with an owned value, 0 if absent, or
+ * -1 with an exception; SetValue retains its borrowed inputs. Each has a
+ * reader macro, so the core passes owners and borrows alike. */
+PyAPI_FUNC(int) PyDict_GetValue(PyObject *, PyValueBorrow, PyValue *);
+PyAPI_FUNC(int) PyDict_SetValue(PyObject *, PyValueBorrow, PyValueBorrow);
+PyAPI_FUNC(int) PyDict_DelValue(PyObject *, PyValueBorrow);
+PyAPI_FUNC(int) PyDict_ContainsValue(PyObject *, PyValueBorrow);
 #define PyDict_GetValue(D, K, R) (PyDict_GetValue)(D, PyValue_Borrow(K), R)
 #define PyDict_SetValue(D, K, V) \
     (PyDict_SetValue)(D, PyValue_Borrow(K), PyValue_Borrow(V))
@@ -101,7 +109,7 @@ PyAPI_FUNC(int) _PyDict_NextValue(PyObject *, Py_ssize_t *, PyValue *, PyValue *
  * at the end. Never sets an exception. The views are valid only while the
  * entry stays in the dict, so the caller must not run code that can mutate
  * it between reading and using them. */
-PyAPI_FUNC(int) _PyDict_NextBorrowed(PyObject *, Py_ssize_t *, PyValue *, PyValue *);
+PyAPI_FUNC(int) _PyDict_NextBorrowed(PyObject *, Py_ssize_t *, PyValueBorrow *, PyValueBorrow *);
 /* Same owned-entry contract, with a snapshot of the cached source key hash. */
 PyAPI_FUNC(int) _PyDict_NextEntryRefKnownHash(
     PyObject *, Py_ssize_t *, PyObject **, PyObject **, Py_hash_t *);
@@ -110,9 +118,13 @@ PyAPI_FUNC(int) _PyDict_NextEntryRefKnownHash(
  * Return 0/-1. An error after publication does not roll back the mutation. */
 /* 0 inserted and 1 existing are BOTH successful; requested output is owned.
  * Only -1 is an error and guarantees NULL1 output. Inputs are borrowed. */
-PyAPI_FUNC(int) _PyDict_SetDefaultValue(PyObject *, PyValue, PyValue, PyValue *);
+PyAPI_FUNC(int) _PyDict_SetDefaultValue(PyObject *, PyValueBorrow, PyValueBorrow, PyValue *);
+#define _PyDict_SetDefaultValue(D, K, V, R) \
+    (_PyDict_SetDefaultValue)(D, PyValue_Borrow(K), PyValue_Borrow(V), R)
 
-PyAPI_FUNC(int) _PyDict_SetValue_KnownHash(PyObject *, PyValue, PyValue, Py_hash_t);
+PyAPI_FUNC(int) _PyDict_SetValue_KnownHash(PyObject *, PyValueBorrow, PyValueBorrow, Py_hash_t);
+#define _PyDict_SetValue_KnownHash(D, K, V, H) \
+    (_PyDict_SetValue_KnownHash)(D, PyValue_Borrow(K), PyValue_Borrow(V), H)
 PyAPI_FUNC(int) _PyDict_SetValue_Take2(PyDictObject *, PyValue, PyValue);
 PyAPI_FUNC(int) _PyDict_SetValue_Take2_KnownHash(PyDictObject *, PyValue, PyValue, Py_hash_t);
 /* Borrow independently owning snapshots with stable address/contents through
@@ -171,7 +183,8 @@ extern void _PyDictKeys_DecRef(PyDictKeysObject *keys);
  * -1 when no entry found, -3 when compare raises error.
  * Exported for external JIT support
  */
-PyAPI_FUNC(Py_ssize_t) _Py_dict_lookup(PyDictObject *mp, PyValue key, Py_hash_t hash, PyValue *value_addr);
+PyAPI_FUNC(Py_ssize_t) _Py_dict_lookup(PyDictObject *mp, PyValueBorrow key, Py_hash_t hash, PyValueBorrow *value_addr);
+#define _Py_dict_lookup(MP, K, H, V) (_Py_dict_lookup)(MP, PyValue_Borrow(K), H, V)
 extern Py_ssize_t _Py_dict_lookup_threadsafe_value(PyDictObject *mp, PyObject *key, Py_hash_t hash, PyValue *value_addr);
 
 extern int _PyDict_GetMethodValue(PyDictObject *dict, PyObject *name, PyValue *method);
@@ -402,14 +415,14 @@ PyAPI_FUNC(void)
 _PyDict_SendEvent(int watcher_bits,
                   PyDict_WatchEvent event,
                   PyDictObject *mp,
-                  PyValue key,
-                  PyValue value);
+                  PyValueBorrow key,
+                  PyValueBorrow value);
 
 static inline void
 _PyDict_NotifyEvent(PyDict_WatchEvent event,
                     PyDictObject *mp,
-                    PyValue key,
-                    PyValue value)
+                    PyValueBorrow key,
+                    PyValueBorrow value)
 {
     assert(Py_REFCNT((PyObject*)mp) > 0);
     int watcher_bits = FT_ATOMIC_LOAD_UINT64_ACQUIRE(mp->_ma_watcher_tag) & DICT_WATCHER_MASK;
@@ -418,6 +431,8 @@ _PyDict_NotifyEvent(PyDict_WatchEvent event,
         _PyDict_SendEvent(watcher_bits, event, mp, key, value);
     }
 }
+#define _PyDict_NotifyEvent(E, MP, K, V) \
+    (_PyDict_NotifyEvent)(E, MP, PyValue_Borrow(K), PyValue_Borrow(V))
 
 extern PyDictObject *_PyObject_MaterializeManagedDict(PyObject *obj);
 

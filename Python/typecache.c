@@ -105,7 +105,7 @@ _PyTypeCache_InitType(PyTypeObject *type)
 }
 
 static void
-cache_insert(struct type_cache *cache, PyObject *name, PyValue value)
+cache_insert(struct type_cache *cache, PyObject *name, _PyValueGuarded value)
 {
     Py_hash_t hash = PyUnstable_Unicode_GET_CACHED_HASH(name);
     assert(hash != -1);
@@ -113,7 +113,7 @@ cache_insert(struct type_cache *cache, PyObject *name, PyValue value)
     for (;;) {
         if (cache->hashtable[index].name == NULL) {
             Py_INCREF(name);
-            cache->hashtable[index].value = _PyValue_BorrowTagged(value);
+            cache->hashtable[index].value = value;
             FT_ATOMIC_STORE_PTR_RELEASE(cache->hashtable[index].name, name);
             cache->used++;
             cache->available--;
@@ -154,8 +154,8 @@ cache_resize(PyTypeObject *type, uint32_t size, unsigned int expected)
 }
 
 void
-_PyTypeCache_Insert(PyTypeObject *type, PyObject *name, PyValue value,
-                    unsigned int expected_version)
+(_PyTypeCache_Insert)(PyTypeObject *type, PyObject *name, PyValueBorrow value,
+                      unsigned int expected_version)
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
     if (!_PyType_MatchesVersion(interp, type, expected_version)) {
@@ -181,7 +181,7 @@ _PyTypeCache_Insert(PyTypeObject *type, PyObject *name, PyValue value,
             return;
         }
     }
-    cache_insert(cache, name, value);
+    cache_insert(cache, name, _PyValueGuarded_FromBorrow(value));
 }
 
 struct _PyTypeCacheLookupResult
@@ -205,9 +205,9 @@ _PyTypeCache_Lookup(PyTypeObject *type, PyObject *name)
         PyObject *entry_name = cache->hashtable[index].name;
         if (entry_name == name) {
             // Match before touching a potentially dead borrowed value.
-            // Promotion, including borrowed pointers, is nonallocating.
-            PyValue value = cache->hashtable[index].value;
-            PyValue owner = PyValue_IsNull(value) ? PyValue_NULL : PyValue_NewRef(value);
+            // Promotion is nonallocating.
+            PyValueBorrow value = _PyValueGuarded_Load(cache->hashtable[index].value);
+            PyValue owner = PyValue_XDUP(value);
             return (struct _PyTypeCacheLookupResult){owner, 1, version};
         }
         if (entry_name == NULL) {

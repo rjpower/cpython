@@ -91,7 +91,7 @@ typedef enum {
  * PyValue_NULL marks an absent event field. CLONED passes the source dict
  * as key. The dict metadata argument retains its existing lifetime rules. */
 typedef int(*PyDict_WatchCallback)(PyDict_WatchEvent event, PyObject* dict,
-                                 PyValue key, PyValue new_value);
+                                 PyValueBorrow key, PyValueBorrow new_value);
 
 // Register/unregister a dict-watcher callback
 PyAPI_FUNC(int) PyDict_AddWatcher(PyDict_WatchCallback callback);
@@ -104,18 +104,16 @@ PyAPI_FUNC(int) PyDict_Unwatch(int watcher_id, PyObject* dict);
 // Create a frozendict. Create an empty dictionary if iterable is NULL.
 PyAPI_FUNC(PyObject*) PyFrozenDict_New(PyObject *iterable);
 
-/* Canonical reads: inputs borrow; outputs own independent snapshots.
+/* Canonical reads: outputs own independent snapshots.
  * Return 1/hit, 0/miss or end, -1/error. Initialize outputs to PyValue_NULL;
  * preserve an exception pending on entry without running lookup callbacks.
- * GetValue/GetValueString require valid result storage; key is a language
- * value, or a NUL-terminated UTF-8 string, respectively. Close owned results.
+ * GetValueString requires valid result storage and a NUL-terminated UTF-8
+ * key. Close owned results.
  * NextValue requires valid cursor storage and distinct optional key/value
- * outputs. Error/end leave the cursor unchanged; success advances it once. */
-PyAPI_FUNC(int) PyDict_GetValue(PyObject *, PyValueBorrow, PyValue *);
+ * outputs. Error/end leave the cursor unchanged; success advances it once.
+ * The forms that take a PyValueBorrow key (GetValue, SetValue, DelValue,
+ * ContainsValue) are internal (pycore_dict.h): nothing outside the core
+ * makes a PyValueBorrow. */
 PyAPI_FUNC(int) PyDict_GetValueString(PyObject *, const char *, PyValue *);
 PyAPI_FUNC(int) PyDict_NextValue(PyObject *, Py_ssize_t *, PyValue *, PyValue *);
-/* Inputs borrow; setters promote before retaining. */
-PyAPI_FUNC(int) PyDict_SetValue(PyObject *, PyValueBorrow, PyValueBorrow);
-PyAPI_FUNC(int) PyDict_DelValue(PyObject *, PyValueBorrow);
-PyAPI_FUNC(int) PyDict_ContainsValue(PyObject *, PyValueBorrow);
 PyAPI_FUNC(int) PyDict_PopValue(PyObject *, PyValue, PyValue *);

@@ -239,7 +239,7 @@ Py_ssize_t
 _PyUnicode_InternedSize_Immortal(void)
 {
     PyObject *dict = get_interned_dict(_PyInterpreterState_GET());
-    PyValue keyval;
+    PyValueBorrow keyval;
     Py_ssize_t pos = 0;
     Py_ssize_t count = 0;
 
@@ -15098,7 +15098,7 @@ _PyUnicode_ClearInterned(PyInterpreterState *interp)
     Py_ssize_t total_length = 0;
 #endif
     Py_ssize_t pos = 0;
-    PyValue key;
+    PyValueBorrow key;
     while (_PyDict_NextBorrowed(interned, &pos, &key, NULL)) {
         // The interned dict holds only str keys, which have object form.
         PyObject *s = PyValue_AsKnownObjectBorrow(key);

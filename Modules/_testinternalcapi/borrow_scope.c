@@ -9,7 +9,7 @@
 #include "pycore_interp.h"        // _PyInterpreterState_SetEvalFrameFunc()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_tuple.h"         // PyTuple_GET_VALUE()
-#include "pycore_value.h"         // PyValue_MakeHeapSafe()
+#include "pycore_value.h"         // PyValue_DUP()
 
 
 static Py_ssize_t
@@ -552,7 +552,7 @@ borrow_grow_oom(PyObject *Py_UNUSED(module), PyObject *const *args,
             return PyErr_NoMemory();
         }
         for (Py_ssize_t i = 0; i < n; i++) {
-            values[i] = PyValue_MakeHeapSafe(PyTuple_GET_VALUE(tuple, i));
+            values[i] = PyValue_DUP(PyTuple_GET_VALUE(tuple, i));
         }
     }
     PyMemAllocatorEx failing = {

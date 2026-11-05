@@ -106,15 +106,15 @@ PyStructSequence_SetItem(PyObject *op, Py_ssize_t index, PyObject *value)
 #endif
     PyValue prepared = PyValue_PrepareOwned(value);
     assert(PyValue_IsNull(prepared) || PyValue_IsLanguageValue(prepared));
-    assert(PyValue_IsHeapSafe(prepared));
+    _PyValue_CheckHome(prepared);
     tuple->ob_item[index] = prepared;
 }
 
-PyValue
+PyValueBorrow
 PyStructSequence_GET_VALUE(PyObject *op, Py_ssize_t index)
 {
     assert(index >= 0 && index < REAL_SIZE(op));
-    return _PyValue_BorrowTagged(((PyStructSequence *)op)->ob_item[index]);
+    return PyValue_Borrow(((PyStructSequence *)op)->ob_item[index]);
 }
 
 void
@@ -122,7 +122,7 @@ PyStructSequence_SET_VALUE(PyObject *op, Py_ssize_t index, PyValue value)
 {
     assert(index >= 0 && index < REAL_SIZE(op));
     assert(PyValue_IsNull(value) || PyValue_IsLanguageValue(value));
-    assert(PyValue_IsHeapSafe(value));
+    _PyValue_CheckHome(value);
     ((PyStructSequence *)op)->ob_item[index] = value;
 }
 
@@ -255,8 +255,8 @@ structseq_new_impl(PyTypeObject *type, PyObject *arg, PyObject *dict)
         return NULL;
     }
     for (i = 0; i < len; ++i) {
-        PyValue value = PyList_Check(arg) ? PyList_GET_VALUE(arg, i) : PyTuple_GET_VALUE(arg, i);
-        res->ob_item[i] = PyValue_MakeHeapSafe(value);
+        PyValueBorrow value = PyList_Check(arg) ? PyList_GET_VALUE(arg, i) : PyTuple_GET_VALUE(arg, i);
+        res->ob_item[i] = PyValue_DUP(value);
     }
     Py_DECREF(arg);
     if (dict != NULL && PyDict_GET_SIZE(dict) > 0) {

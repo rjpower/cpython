@@ -533,7 +533,7 @@ static Py_ssize_t
 _odict_get_index_raw(PyODictObject *od, PyObject *key, Py_hash_t hash)
 {
     _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED(od);
-    PyValue value = PyValue_NULL;
+    PyValueBorrow value = PyValue_Borrow(PyValue_NULL);
     PyDictKeysObject *keys = ((PyDictObject *)od)->ma_keys;
     Py_ssize_t ix;
     ix = _Py_dict_lookup((PyDictObject *)od, PyValue_FromObjectBorrow(key),

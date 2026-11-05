@@ -533,8 +533,7 @@ _PyCFunction_CallScoped(_PyNativeScope *scope, PyObject *callable,
         return -1;
     }
     if (!scope->vector && self != NULL) {
-        scope->receiver = PyValue_MakeHeapSafe(
-            PyValue_FromObjectBorrow(self));
+        scope->receiver = PyValue_DUP(PyValue_FromObjectBorrow(self));
     }
     if (_Py_EnterRecursiveCallTstate(scope->tstate, " while calling a Python object")) {
         return -1;

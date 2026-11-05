@@ -591,6 +591,7 @@ init_interpreter(PyInterpreterState *interp,
         interp->dtoa = (struct _dtoa_state)_dtoa_state_INIT(interp);
     }
 
+    interp->clearing_immortals = 0;
     interp->_initialized = 1;
     return _PyStatus_OK();
 }
@@ -725,6 +726,7 @@ interpreter_clear(PyInterpreterState *interp, PyThreadState *tstate)
 {
     assert(interp != NULL);
     assert(tstate != NULL);
+    interp->clearing_immortals = 1;
     _PyRuntimeState *runtime = interp->runtime;
 
     /* XXX Conditions we need to enforce:
@@ -3123,7 +3125,8 @@ push_chunk(PyThreadState *tstate, int nslots)
     }
     // The root chunk's value stack starts empty
     PyValue *saved_top = new->previous == NULL ?
-        (PyValue *)&new->data[0] : (PyValue *)tstate->datastack_top;
+        _PyDataStack_Slots(&new->data[0])
+        : _PyDataStack_Slots(tstate->datastack_top);
     if (tstate->datastack_chunk) {
         // What popping the frame restores, with saved_top
         tstate->datastack_chunk->top = tstate->datastack_limit -
@@ -3132,10 +3135,10 @@ push_chunk(PyThreadState *tstate, int nslots)
     tstate->datastack_chunk = new;
     _PyInterpreterFrame *frame =
         (_PyInterpreterFrame *)(chunk_frames_end(new) - FRAME_SPECIALS_SIZE);
-    frame->base = (PyValue *)&new->data[0];
+    frame->base = _PyDataStack_Slots(&new->data[0]);
     frame->saved_top = saved_top;
     tstate->datastack_limit = (PyObject **)frame;
-    tstate->datastack_top = (PyObject **)(frame->base + nslots);
+    tstate->datastack_top = _PyDataStack_Address(frame->base + nslots);
     return frame;
 }
 
@@ -3166,7 +3169,7 @@ _PyThreadState_PopChunk(PyThreadState *tstate, _PyInterpreterFrame *frame)
         _PyObject_VirtualFree(cached, cached->size);
     }
     tstate->datastack_cached_chunk = chunk;
-    tstate->datastack_top = (PyObject **)frame->saved_top;
+    tstate->datastack_top = _PyDataStack_Address(frame->saved_top);
     assert(tstate->datastack_top < tstate->datastack_limit);
 }
 

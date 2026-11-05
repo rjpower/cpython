@@ -1755,7 +1755,7 @@ PyUnstable_Exc_PrepReraiseStar(PyObject *orig, PyObject *excs)
     Py_ssize_t numexcs = PyList_GET_SIZE(excs);
     for (Py_ssize_t i = 0; i < numexcs; i++) {
         /* A NULL slot or an inline value is not an exception. */
-        PyValue item = PyList_GET_VALUE(excs, i);
+        PyValueBorrow item = PyList_GET_VALUE(excs, i);
         PyObject *exc = PyValue_IsObject(item) ?
             PyValue_AsKnownObjectBorrow(item) : NULL;
         if (exc == NULL || !(PyExceptionInstance_Check(exc) || Py_IsNone(exc))) {

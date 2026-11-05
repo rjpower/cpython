@@ -2788,7 +2788,7 @@ PyUnstable_Object_IsUniqueReferencedTemporary(PyObject *op)
             continue;
         }
         if (op == PyValue_AsKnownObjectBorrow(ref)) {
-            return PyValue_IsHeapSafe(ref);
+            return PyValue_RefcountOnObject(ref);
         }
     }
     return 0;
@@ -3026,7 +3026,7 @@ _PyObject_DebugTypeStats(FILE *out)
 int
 Py_ReprEnter(PyObject *obj)
 {
-    PyValue value = PyValue_MakeHeapSafe(PyValue_FromObjectBorrow(obj));
+    PyValue value = PyValue_DUP(PyValue_FromObjectBorrow(obj));
     PyValue guard = PyValue_NULL;
     PyObject *list = NULL;
     PyObject *candidate = NULL;
@@ -3039,7 +3039,7 @@ Py_ReprEnter(PyObject *obj)
         goto done;
     }
     Py_INCREF(dict);
-    PyValue name = PyValue_FromObjectBorrow(&_Py_ID(Py_Repr));
+    PyValueBorrow name = PyValue_FromObjectBorrow(&_Py_ID(Py_Repr));
     Py_hash_t hash = PyObject_Hash(&_Py_ID(Py_Repr));
     if (hash == -1) {
         goto done;
@@ -3087,7 +3087,7 @@ void
 Py_ReprLeave(PyObject *obj)
 {
     PyObject *exc = PyErr_GetRaisedException();
-    PyValue value = PyValue_MakeHeapSafe(PyValue_FromObjectBorrow(obj));
+    PyValue value = PyValue_DUP(PyValue_FromObjectBorrow(obj));
     PyValue guard = PyValue_NULL;
     PyObject *list = NULL;
     PyObject *dict = PyThreadState_GetDict();

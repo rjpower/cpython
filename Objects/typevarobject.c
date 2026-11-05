@@ -437,7 +437,7 @@ contains_typevartuple(PyTupleObject *params)
     Py_ssize_t n = PyTuple_GET_SIZE(params);
     PyTypeObject *tp = _PyInterpreterState_GET()->cached_objects.typevartuple_type;
     for (Py_ssize_t i = 0; i < n; i++) {
-        PyValue param = PyTuple_GET_VALUE((PyObject *)params, i);
+        PyValueBorrow param = PyTuple_GET_VALUE((PyObject *)params, i);
         if (PyValue_TYPE(param) == tp) {
             return 1;
         }

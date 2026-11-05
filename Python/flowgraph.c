@@ -1360,12 +1360,15 @@ get_const_value(int opcode, int oparg, PyObject *co_consts)
 }
 
 static void *
-const_index_key(PyValue value)
+const_index_key(PyValueBorrow value)
 {
-    /* The table hashes/compares opaque words without dereferencing them.
+    /* The table hashes/compares opaque words without dereferencing them:
+       an object's address, whatever its tag, or an inline value's word.
        consts roots object identities until this index is destroyed. */
-    PyValue borrowed = _PyValue_BorrowTagged(value);
-    return (void *)(uintptr_t)borrowed.bits;
+    if (PyValue_IsObject(value)) {
+        return PyValue_AsKnownObjectBorrow(value);
+    }
+    return (void *)_PyValue_Word(value);
 }
 
 static Py_uhash_t
@@ -1813,7 +1816,7 @@ optimize_lists_and_sets(basicblock *bb, int i, int nextop,
  * Used to avoid creating constants which are slow to hash.
  */
 static Py_ssize_t
-const_folding_check_complexity(PyValue value, Py_ssize_t limit)
+const_folding_check_complexity(PyValueBorrow value, Py_ssize_t limit)
 {
     if (PyValue_IsObject(value) &&
         PyTuple_Check(PyValue_AsKnownObjectBorrow(value))) {

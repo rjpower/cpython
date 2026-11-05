@@ -81,7 +81,7 @@ symtable_list_item(PyObject *list, Py_ssize_t index)
 {
     /* The only producers store entry objects or directive tuples, never scalars.
      * The enclosing symbol table retains these lists throughout analysis. */
-    PyValue value = PyList_GET_VALUE(list, index);
+    PyValueBorrow value = PyList_GET_VALUE(list, index);
     assert(PyValue_IsObject(value));
     return PyValue_AsKnownObjectBorrow(value);
 }
@@ -694,7 +694,7 @@ error_at_directive(PySTEntryObject *ste, PyObject *name)
              * sentinels. These reads must retain the pending SyntaxError. */
             int coordinates[4];
             for (int j = 0; j < 4; j++) {
-                PyValue value = PyTuple_GET_VALUE(data, j + 1);
+                PyValueBorrow value = PyTuple_GET_VALUE(data, j + 1);
                 assert(PyValue_IsInlineInt(value));
                 coordinates[j] = (int)PyValue_InlineInt64(value);
             }

@@ -27,7 +27,7 @@ set_value_storage(PyObject *Py_UNUSED(module), PyObject *set)
             continue;
         }
         assert(PyValue_IsLanguageValue(entry->key));
-        assert(PyValue_IsHeapSafe(entry->key));
+        _PyValue_RecheckHome(entry->key);
         if (PyValue_IsInlineInt(entry->key)) {
             integers++;
         }
@@ -95,7 +95,10 @@ set_value_frozenset_tracking(PyObject *Py_UNUSED(module), PyObject *key)
         PyErr_SetString(PyExc_AssertionError, "invalid frozenset tracking fixture");
         return NULL;
     }
-    if (PySet_AddValue(frozen, PyValue_FromObjectBorrow(key)) < 0) {
+    PyValue key_value = PyValue_DUP(PyValue_FromObjectBorrow(key));
+    int add_status = PySet_AddValue(frozen, key_value);
+    PyValue_CLOSE(key_value);
+    if (add_status < 0) {
         Py_DECREF(frozen);
         return NULL;
     }

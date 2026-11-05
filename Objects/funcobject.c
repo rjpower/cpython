@@ -172,7 +172,7 @@ PyFunction_NewWithQualName(PyObject *code, PyObject *globals, PyObject *qualname
     PyObject *doc;
     if (code_obj->co_flags & CO_HAS_DOCSTRING) {
         assert(PyTuple_Size(consts) >= 1);
-        PyValue value = PyTuple_GET_VALUE(consts, 0);
+        PyValueBorrow value = PyTuple_GET_VALUE(consts, 0);
         doc = PyValue_IsObject(value)
             && PyUnicode_Check(PyValue_AsKnownObjectBorrow(value))
             ? PyValue_AsKnownObjectBorrow(value) : Py_None;
@@ -1147,7 +1147,7 @@ func_new_impl(PyTypeObject *type, PyCodeObject *code, PyObject *globals,
     if (nclosure) {
         Py_ssize_t i;
         for (i = 0; i < nclosure; i++) {
-            PyValue value = PyTuple_GET_VALUE(closure, i);
+            PyValueBorrow value = PyTuple_GET_VALUE(closure, i);
             if (!PyValue_IsObject(value)
                 || !PyCell_Check(PyValue_AsKnownObjectBorrow(value))) {
                 return PyErr_Format(PyExc_TypeError,

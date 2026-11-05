@@ -31,7 +31,7 @@ _init_dict_watch_events(void *arg)
 
 static int
 dict_watch_callback(PyDict_WatchEvent event, PyObject *dict,
-                    PyValue key, PyValue new_value)
+                    PyValueBorrow key, PyValueBorrow new_value)
 {
     PyObject *msg = NULL;
     PyObject *key_object = NULL, *value_object = NULL;
@@ -79,8 +79,8 @@ dict_watch_callback(PyDict_WatchEvent event, PyObject *dict,
 static int
 dict_watch_callback_second(PyDict_WatchEvent event,
                            PyObject *dict,
-                           PyValue key,
-                           PyValue new_value)
+                           PyValueBorrow key,
+                           PyValueBorrow new_value)
 {
     PyObject *msg = PyUnicode_FromString("second");
     if (msg == NULL) {
@@ -97,8 +97,8 @@ dict_watch_callback_second(PyDict_WatchEvent event,
 static int
 dict_watch_callback_error(PyDict_WatchEvent event,
                           PyObject *dict,
-                          PyValue key,
-                          PyValue new_value)
+                          PyValueBorrow key,
+                          PyValueBorrow new_value)
 {
     PyErr_SetString(PyExc_RuntimeError, "boom!");
     return -1;

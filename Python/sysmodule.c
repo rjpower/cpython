@@ -3449,8 +3449,8 @@ _PySys_SetFlagObj(Py_ssize_t pos, PyObject *value)
 
     for (Py_ssize_t i = 0; i < (Py_ssize_t)(Py_ARRAY_LENGTH(flags_fields) - 1); i++) {
         if (i != pos) {
-            PyValue old_value = PyStructSequence_GET_VALUE(old_flags, i);
-            PyValue owned = PyValue_MakeHeapSafe(old_value);
+            PyValueBorrow old_value = PyStructSequence_GET_VALUE(old_flags, i);
+            PyValue owned = PyValue_DUP(old_value);
             assert(PyValue_IsNull(PyStructSequence_GET_VALUE(new_flags, i)));
             PyStructSequence_SET_VALUE(new_flags, i, owned);
         }

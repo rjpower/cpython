@@ -43,7 +43,7 @@ _PyMember_GetValue(PyObject *obj, PyMemberDef *member)
         return PyValue_NULL;
     }
     PyValue value = *(PyValue *)_PyMember_GetOffset(obj, member);
-    assert(PyValue_IsHeapSafe(value));
+    _PyValue_RecheckHome(value);
     if (PyValue_IsNull(value)) {
         if (member->type == _Py_T_VALUE) {
             return PyValue_None;
@@ -57,7 +57,7 @@ _PyMember_GetValue(PyObject *obj, PyMemberDef *member)
 }
 
 int
-_PyMember_SetValue(PyObject *obj, PyMemberDef *member, PyValue value)
+(_PyMember_SetValue)(PyObject *obj, PyMemberDef *member, PyValueBorrow value)
 {
     assert(member->type == _Py_T_VALUE || member->type == _Py_T_VALUE_EX);
     assert(PyValue_IsLanguageValue(value) || PyValue_IsNull(value));
@@ -76,7 +76,7 @@ _PyMember_SetValue(PyObject *obj, PyMemberDef *member, PyValue value)
         PyErr_SetString(PyExc_AttributeError, member->name);
         return -1;
     }
-    *slot = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(value));
+    *slot = PyValue_XDUP(value);
     _PyValue_CheckHome(*slot);
     PyValue_XCLOSE(previous);
     return 0;
@@ -240,7 +240,7 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
     switch (l->type) {
     case _Py_T_VALUE:
     case _Py_T_VALUE_EX:
-        return _PyMember_SetValue(obj, l, v == NULL ? PyValue_NULL :
+        return _PyMember_SetValue(obj, l, v == NULL ? PyValue_Borrow(PyValue_NULL) :
                                   PyValue_FromObjectBorrow(v));
     case Py_T_BOOL:{
         if (!PyBool_Check(v)) {

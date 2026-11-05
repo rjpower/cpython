@@ -32,8 +32,8 @@ typedef struct _PyValueTemps {
     Py_ssize_t capacity;
 } _PyValueTemps;
 
-/* Can releasing owner deallocate its object? Releasing a scalar, a borrow,
- * an immortal or an owner that is not the last cannot run Python. */
+/* Can releasing owner deallocate its object? Releasing a scalar, an
+ * immortal or an owner that is not the last cannot run Python. */
 static inline int
 _PyValue_MayDealloc(PyValueBorrow owner)
 {
@@ -66,11 +66,9 @@ _PyValueTemps_Close(_PyValueTemps *temps)
     }
 }
 
-/* The canonical form of *source, for a home.  If *source owns a box whose
- * value is inline, the box is released at once and *source becomes that
- * inline value too.  A borrowed box stays in *source: its owner (an input
- * box in _PyValueTemps, for example) keeps it alive for the C code that
- * still reads it as an object. */
+/* The canonical form of *source, an owner, for a home.  If *source holds a
+ * box whose value is inline, *source becomes that inline value, and the box
+ * is released at once if *source owned a count of it. */
 static inline Py_ALWAYS_INLINE PyValue
 _PyValue_Publish(PyValue *source)
 {
@@ -79,9 +77,6 @@ _PyValue_Publish(PyValue *source)
         // A static immortal always carries the no-count tag.
         assert((source->bits & 1) || !_Py_IsStaticImmortal(obj));
         if (Py_IS_TYPE(obj, &PyLong_Type) || Py_IS_TYPE(obj, &PyFloat_Type)) {
-            if (source->bits & 1) {  // A borrow: the no-count tag
-                return _PyValue_Canonicalize(*source);
-            }
             *source = _PyValue_Canonicalize(*source);
         }
     }
@@ -133,8 +128,7 @@ _PyValue_Publish(PyValue *source)
     Top 16 bits     Low 48 bits         Meaning
     0x0000          0x000000000000      NULL
     0x0000          ptr, bit 0 = 0      owned reference to a mortal object
-    0x0000          ptr, bit 0 = 1      no count: an immortal object, or a
-                                        borrowed reference (C variables only)
+    0x0000          ptr, bit 0 = 1      no count: an immortal object
     0x0000          ptr | 2             PyValue_Wrap() pointer (debug builds;
                                         release builds wrap the bare pointer)
     0x0001          int48               index (Py_INDEX_BASE)
@@ -149,12 +143,12 @@ _PyValue_Publish(PyValue *source)
   always boxed, because some NaN images overlap the other regions.
 
   A pointer to an immortal object always has bit 0 set, so each value has
-  one encoding. A frame slot (a local, a cell or free variable, or a
-  temporary) never holds a borrow, so there bit 0 means immortal: a value
-  read from a slot without a count stays in a C variable, and a slot that
-  receives it takes a count (pyjit/design/pyvalue.md D4). A heap home holds
-  no borrow either, because its setter makes the value heap safe
-  (PyValue_MakeHeapSafe()).
+  one encoding, and bit 0 means immortal in every word (H1; during
+  finalization, which makes some immortals mortal again, a tagged word may
+  outlive its object's immortality). A borrow (PyValueBorrow) holds the
+  exact bits of an owner, without a tag of its own; it lives only in C
+  locals and parameters, and PyValue_DUP() makes an owner of it for a
+  home (pyjit/design/pyvalue.md D4).
 
   NULL is zero, so zero-filled memory holds NULL values: memory from a
   zeroing allocator needs no further initialization. The bits 1, 2 and 3
@@ -472,6 +466,13 @@ PyValue_IsNone(PyValueBorrow ref)
 }
 #define PyValue_IsNone(V0) (PyValue_IsNone)(PyValue_Borrow(V0))
 
+/* Whether this thread's interpreter has begun clearing at finalization
+   (finalize_interp_clear(), PyInterpreterState_Clear()), which makes some
+   immortal objects mortal again: interned strings, the bases and MROs of
+   static types, the common constants. A word tagged before then may now
+   point to a mortal object; H1 below holds until then. */
+PyAPI_FUNC(int) _PyValue_ClearingImmortals(void);
+
 #ifdef Py_DEBUG
 
 static inline void
@@ -491,6 +492,8 @@ PyValue_CheckValid(PyValueBorrow ref)
             assert(!_Py_IsStaticImmortal(obj));
             break;
         case Py_TAG_REFCNT:
+            // H1: tagged implies immortal (see _PyValue_IsHome()).
+            assert(_Py_IsImmortal(obj) || _PyValue_ClearingImmortals());
             break;
         default:
             assert(0);
@@ -505,35 +508,21 @@ PyValue_CheckValid(PyValueBorrow ref)
 
 #endif
 
-#ifdef Py_DEBUG
-/* Canonical form of a value held in a home (a frame slot, container element,
-   field, cell, dict key or value, or set key): an exact int that fits inline
-   and an exact non-NaN float are never held as pointers, and a pointer
-   without the no-count tag is never a static immortal. Debug builds only.
+/* The home check: the form of a value held in a home (a frame slot,
+   container element, field, cell, dict key or value, or set key).
 
-   A violation is a fatal error naming the call site and kind. With
-   _PYTHON_VALUE_HOME_REPORT set in the environment (read once, at the
-   first violation; -E and -I ignore it) it is only counted, by call site
-   and kind, readable through
-   _testinternalcapi.pyvalue_home_violations() and
-   pyvalue_home_violation_sites(): a census of the writers to fix.
+   - It is canonical: an exact int that fits inline and an exact non-NaN
+     float are never held as pointers.
+   - A pointer without the no-count tag is never a static immortal (H2).
+   - A pointer with the no-count tag is an immortal (H1), unless the
+     interpreter has begun clearing its immortals. H1 holds in every word,
+     of either type: a borrow carries its owner's exact bits (B1), so no
+     word is tagged on a mortal object (pyjit/design/pyvalue.md D4).
 
-   _PyValue_CheckHome() checks a store, and the count is of stores.
-   _PyValue_RecheckHome() checks a value already stored (the frame check, a
-   GC visit), which it may see many times: it counts apart, as a backstop
-   for a writer that has no store check. site is "file:line".
-
-   A frame slot (a local, a cell or free variable, or a temporary) also
-   never holds a borrow: there a pointer with the no-count tag is an
-   immortal (pyjit/design/pyvalue.md D4). _PyValue_CheckFrameHome(),
-   _PyValue_RecheckFrameHome() and _PyValue_CheckTemp() check that too. A
-   heap home holds no borrow because its setter makes the value heap safe
-   (PyValue_MakeHeapSafe()); its check does not test the tag. */
-PyAPI_FUNC(void) _PyValue_ReportHome(PyValue ref, const char *site,
-                                     int recheck);
-
+   The predicate exists in every build; the checks below report only in
+   debug builds. */
 static inline bool
-_PyValue_IsCanonicalHome(PyValue ref)
+_PyValue_IsHome(PyValueBorrow ref)
 {
     if (PyValue_IsNull(ref)) {
         return true;
@@ -545,46 +534,50 @@ _PyValue_IsCanonicalHome(PyValue ref)
         return true;
     }
     PyObject *obj = BITS_TO_PTR_MASKED(ref);
-    // A static immortal always carries the no-count tag.
-    if ((ref.bits & Py_TAG_BITS) == 0 && _Py_IsStaticImmortal(obj)) {
+    if ((ref.bits & Py_TAG_BITS) == 0) {
+        if (_Py_IsStaticImmortal(obj)) {
+            return false;
+        }
+    }
+    else if (!_Py_IsImmortal(obj) && !_PyValue_ClearingImmortals()) {
         return false;
     }
     return _PyObject_ValueIdentity(obj) == (uintptr_t)obj;
 }
+#define _PyValue_IsHome(V0) (_PyValue_IsHome)(PyValue_Borrow(V0))
 
-static inline bool
-_PyValue_IsFrameHome(PyValue ref)
-{
-    if (!_PyValue_IsCanonicalHome(ref)) {
-        return false;
-    }
-    return !PyValue_IsObject(ref) || (ref.bits & Py_TAG_REFCNT) == 0
-           || _Py_IsImmortal(BITS_TO_PTR_MASKED(ref));
-}
+#ifdef Py_DEBUG
+/* A violation of the home check is a fatal error naming the call site and
+   kind. With _PYTHON_VALUE_HOME_REPORT set in the environment (read once,
+   at the first violation; -E and -I ignore it) it is only counted, by call
+   site and kind, readable through
+   _testinternalcapi.pyvalue_home_violations() and
+   pyvalue_home_violation_sites(): a census of the writers to fix.
 
-#define _PyValue_CHECK_HOME(REF, TEST, RECHECK) \
+   _PyValue_CheckHome() checks a store, and the count is of stores.
+   _PyValue_RecheckHome() checks a value already stored (the frame check, a
+   GC visit), which it may see many times: it counts apart, as a backstop
+   for a writer that has no store check. site is "file:line". */
+PyAPI_FUNC(void) _PyValue_ReportHome(PyValueBorrow ref, const char *site,
+                                     int recheck);
+
+#define _PyValue_CHECK_HOME(REF, RECHECK) \
     do { \
-        PyValue _home_ref = (REF); \
-        if (!TEST(_home_ref)) { \
+        PyValueBorrow _home_ref = PyValue_Borrow(REF); \
+        if (!_PyValue_IsHome(_home_ref)) { \
             _PyValue_ReportHome(_home_ref, \
                                 __FILE__ ":" Py_STRINGIFY(__LINE__), \
                                 (RECHECK)); \
         } \
     } while (0)
-#define _PyValue_CheckHome(REF) \
-    _PyValue_CHECK_HOME(REF, _PyValue_IsCanonicalHome, 0)
-#define _PyValue_RecheckHome(REF) \
-    _PyValue_CHECK_HOME(REF, _PyValue_IsCanonicalHome, 1)
-#define _PyValue_CheckFrameHome(REF) \
-    _PyValue_CHECK_HOME(REF, _PyValue_IsFrameHome, 0)
-#define _PyValue_RecheckFrameHome(REF) \
-    _PyValue_CHECK_HOME(REF, _PyValue_IsFrameHome, 1)
+#define _PyValue_CheckHome(REF) _PyValue_CHECK_HOME(REF, 0)
+#define _PyValue_RecheckHome(REF) _PyValue_CHECK_HOME(REF, 1)
 /* A store to a frame temporary, which may also hold an index. */
 #define _PyValue_CheckTemp(REF) \
     do { \
-        PyValue _temp_ref = (REF); \
+        PyValueBorrow _temp_ref = PyValue_Borrow(REF); \
         if (!PyValue_IsTaggedIndex(_temp_ref)) { \
-            _PyValue_CheckFrameHome(_temp_ref); \
+            _PyValue_CheckHome(_temp_ref); \
         } \
     } while (0)
 /* The N temporaries at VALUES, a window that a handler consumes: they own
@@ -593,14 +586,12 @@ _PyValue_IsFrameHome(PyValue ref)
     do { \
         PyValue *_window_refs = (VALUES); \
         for (Py_ssize_t _i = 0; _i < (Py_ssize_t)(N); _i++) { \
-            _PyValue_RecheckFrameHome(_window_refs[_i]); \
+            _PyValue_RecheckHome(_window_refs[_i]); \
         } \
     } while (0)
 #else
 #define _PyValue_CheckHome(REF) ((void)0)
 #define _PyValue_RecheckHome(REF) ((void)0)
-#define _PyValue_CheckFrameHome(REF) ((void)0)
-#define _PyValue_RecheckFrameHome(REF) ((void)0)
 #define _PyValue_CheckTemp(REF) ((void)0)
 #define _PyValue_RecheckWindow(VALUES, N) ((void)0)
 #endif
@@ -652,16 +643,6 @@ PyValue_AsKnownObjectBorrow(PyValueBorrow ref)
 }
 #define PyValue_AsKnownObjectBorrow(V0) (PyValue_AsKnownObjectBorrow)(PyValue_Borrow(V0))
 
-/* The value in *ref, a frame slot, borrowed in a C variable: its bits. A
-   frame slot never holds a borrow (pyjit/design/pyvalue.md D4), so the
-   borrow is not tagged, and the C code must neither release it nor store
-   it (to keep it, PyValue_DUP() it). */
-static inline PyValue
-PyValue_BorrowAt(const PyValue *ref)
-{
-    return *ref;
-}
-
 /* The object that ref holds, owned: ref's count, or a new one if ref owns
    none. ref must hold an object, as for PyValue_AsKnownObjectBorrow(). */
 static inline PyObject *
@@ -679,11 +660,11 @@ PyValue_AsKnownObjectSteal(PyValue ref)
 }
 
 /* The canonical constructors (FromPyObjectSteal, FromPyObjectNew,
-   FromPyObjectBorrow) make an exact int that fits inline, or an exact float
+   FromObjectBorrow) make an exact int that fits inline, or an exact float
    other than NaN, an inline value: Steal frees the box at once (the release
-   contract under "Value identity"), New and Borrow leave it to its owner. Any other object
-   becomes a pointer, with the no-count tag if it is immortal (New, Steal) or
-   borrowed. Code that goes on to use the object keeps its PyObject * in a C
+   contract under "Value identity"), New and Borrow leave it to its owner.
+   Any other object becomes a pointer, with the no-count tag if it is
+   immortal. Code that goes on to use the object keeps its PyObject * in a C
    local: the value may hold no object. */
 
 /* The pointer value of obj, owning what obj owned, never inline. Only for
@@ -723,6 +704,41 @@ _PyObject_IsSame(PyObject *a, PyObject *b)
            && _PyObject_ValueIdentity(a) == _PyObject_ValueIdentity(b);
 }
 
+#ifdef Py_STATS
+// The current thread's box-site class, or fallback if none is set
+// (Include/internal/pycore_value_api.h).
+PyAPI_FUNC(int) _PyValue_BoxSiteOr(int fallback);
+#endif
+
+/* The borrowed canonical value of obj, which its owner keeps alive: the
+   exact bits that PyValue_FromPyObjectNew() would give it, with no count
+   taken (B1). NULL gives PyValue_NULL. PyValue_DUP() makes an owner of it.
+   Only an exact int or float calls out of line. */
+static inline PyValueBorrow
+PyValue_FromObjectBorrow(PyObject *obj)
+{
+    PyValueBorrow value = {(uintptr_t)obj};
+    if (obj == NULL) {
+        return value;
+    }
+    assert((uintptr_t)obj < Py_PTR_LIMIT);
+    if (_PyValue_IsNumberType(Py_TYPE(obj))) {
+        uintptr_t identity = _PyObject_ValueIdentity(obj);
+        if (identity >= Py_DOUBLE_OFFSET) {
+#ifdef Py_STATS
+            _Py_STATS_EXPR(object_stats.entry_unbox[
+                _PyValue_BoxSiteOr(BOX_SITE_UNATTRIBUTED)]++);
+#endif
+            value.bits = identity;
+            return value;
+        }
+    }
+    if (_Py_IsImmortal(obj)) {
+        value.bits |= Py_TAG_REFCNT;
+    }
+    return value;
+}
+
 static inline PyValue
 PyValue_FromPyObjectSteal(PyObject *obj)
 {
@@ -739,9 +755,11 @@ _PyValue_FromPyObjectNew(PyObject *obj)
     assert(obj != NULL);
     assert((uintptr_t)obj < Py_PTR_LIMIT);
     if (_PyValue_IsNumberType(Py_TYPE(obj))) {
-        PyValue value = PyValue_FromObjectBorrow(obj);
+        PyValueBorrow value = PyValue_FromObjectBorrow(obj);
         if (PyValue_IsInline(value)) {
-            return value;
+            // An inline value owns nothing: the borrow's word is an owner.
+            PyValue owned = {value.bits};
+            return owned;
         }
     }
     if (_Py_IsImmortal(obj)) {
@@ -753,17 +771,6 @@ _PyValue_FromPyObjectNew(PyObject *obj)
     return ref;
 }
 #define PyValue_FromPyObjectNew(obj) _PyValue_FromPyObjectNew(_PyObject_CAST(obj))
-
-static inline PyValue
-PyValue_FromPyObjectBorrow(PyObject *obj)
-{
-    assert(obj != NULL);
-    assert((uintptr_t)obj < Py_PTR_LIMIT);
-    if (_PyValue_IsNumberType(Py_TYPE(obj))) {
-        return PyValue_FromObjectBorrow(obj);
-    }
-    return (PyValue){ .bits = (uintptr_t)obj | Py_TAG_REFCNT};
-}
 
 static inline PyValue
 PyValue_DUP(PyValueBorrow ref)
@@ -793,41 +800,6 @@ PyValue_DupImmortal(PyValue ref)
     assert(!PyValue_RefcountOnObject(ref));
     assert(_Py_IsImmortal(BITS_TO_PTR_MASKED(ref)));
     return ref;
-}
-
-static inline bool
-PyValue_IsHeapSafe(PyValue ref)
-{
-    return (ref.bits & Py_TAG_BITS) != Py_TAG_REFCNT ||
-           !PyValue_IsPointerSpace(ref) || _Py_IsImmortal(BITS_TO_PTR_MASKED(ref));
-}
-
-static inline PyValue
-PyValue_MakeHeapSafe(PyValue ref)
-{
-    if (PyValue_IsHeapSafe(ref)) {
-        return ref;
-    }
-    PyObject *obj = BITS_TO_PTR_MASKED(ref);
-    Py_INCREF(obj);
-    ref.bits = (uintptr_t)obj;
-    PyValue_CheckValid(ref);
-    return ref;
-}
-
-static inline void
-_PyValue_OwnArray(PyValue *values, Py_ssize_t count)
-{
-    for (Py_ssize_t i = 0; i < count; i++) {
-        values[i] = PyValue_MakeHeapSafe(values[i]);
-    }
-}
-
-// Convert a possibly deferred reference to a strong reference.
-static inline PyValue
-PyValue_AsStrongReference(PyValue value)
-{
-    return PyValue_FromPyObjectSteal(PyValue_AsKnownObjectSteal(value));
 }
 
 static inline void
@@ -881,6 +853,36 @@ PyValue_Is(PyValueBorrow a, PyValueBorrow b)
     return ((a.bits ^ b.bits) & ~(uintptr_t)PyValue_IsPointerSpace(a)) == 0;
 }
 #define PyValue_Is(V0, V1) (PyValue_Is)(PyValue_Borrow(V0), PyValue_Borrow(V1))
+
+/* The word itself, for the few places outside the value headers that need
+   it (R26, pyjit/design/value-api.md section 1.6). Everything else reads a
+   value through the predicates and accessors above. */
+
+// The same word, tag included: a probe's fast test that a stored key is
+// the one it looks up, before it compares objects.
+static inline bool
+_PyValue_IsSameWord(PyValueBorrow a, PyValueBorrow b)
+{
+    return a.bits == b.bits;
+}
+#define _PyValue_IsSameWord(V0, V1) \
+    (_PyValue_IsSameWord)(PyValue_Borrow(V0), PyValue_Borrow(V1))
+
+// The word as an integer: for a debug dump, or a key made of a constant's
+// identity.
+static inline uintptr_t
+_PyValue_Word(PyValueBorrow value)
+{
+    return value.bits;
+}
+#define _PyValue_Word(V0) (_PyValue_Word)(PyValue_Borrow(V0))
+
+/* The value of OP, a static immortal object that C code uses as a sentinel
+   in a home, such as the set's dummy key: what PyValue_FromPyObjectNew()
+   gives it, as a constant expression. It owns no count and never reaches
+   Python. */
+#define _PyValue_SENTINEL(OP) \
+    ((PyValue){ .bits = (uintptr_t)(OP) | Py_TAG_REFCNT })
 
 
 

@@ -20,10 +20,9 @@ PyAPI_DATA(PyTypeObject) PyCell_Type;
 PyAPI_FUNC(PyObject *) PyCell_New(PyObject *);
 PyAPI_FUNC(PyObject *) PyCell_Get(PyObject *);
 PyAPI_FUNC(int) PyCell_Set(PyObject *, PyObject *);
-/* NewValue and SetValue borrow their input. GetValue returns an owner. */
-PyAPI_FUNC(PyObject *) PyCell_NewValue(PyValue);
+/* GetValue returns an owner. NewValue and SetValue, which take a borrowed
+   value, are internal (pycore_cell.h): only the core makes a PyValueBorrow. */
 PyAPI_FUNC(PyValue) PyCell_GetValue(PyObject *);
-PyAPI_FUNC(int) PyCell_SetValue(PyObject *, PyValue);
 
 #ifdef __cplusplus
 }

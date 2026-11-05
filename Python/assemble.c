@@ -722,7 +722,7 @@ choose_handler(_PyRegOp *op, PyObject *consts)
         return LOAD_SMALL_INT_INLINE;
     }
     if (opcode == LOAD_CONST) {
-        PyValue value = PyList_GET_VALUE(consts, oparg);
+        PyValueBorrow value = PyList_GET_VALUE(consts, oparg);
         if (PyValue_IsInlineInt(value)) {
             return LOAD_CONST_INLINE_INT;
         }

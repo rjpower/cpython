@@ -9,20 +9,6 @@
 #include "pycore_value_api.h"     // _PyValue_SwapBoxSite()
 
 PyValue
-PyValue_FromObjectBorrow(PyObject *obj)
-{
-    if (obj == NULL) {
-        return PyValue_NULL;
-    }
-    assert((uintptr_t)obj < Py_PTR_LIMIT);
-    uintptr_t identity = _PyObject_ValueIdentity(obj);
-    if (identity >= Py_DOUBLE_OFFSET) {
-        return (PyValue){.bits = identity};
-    }
-    return (PyValue){.bits = (uintptr_t)obj | Py_TAG_REFCNT};
-}
-
-PyValue
 PyValue_PrepareOwned(PyObject *obj)
 {
     if (obj == NULL) {
@@ -231,6 +217,14 @@ _PyValue_BoxDouble(double value)
     return PyValue_FromPyObjectSteal(op);
 }
 
+int
+_PyValue_ClearingImmortals(void)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    // Without a thread state, assume the worst: the check stays quiet.
+    return tstate == NULL || tstate->interp->clearing_immortals;
+}
+
 #ifdef Py_DEBUG
 #define HOME_SITE_MAX 256
 
@@ -240,7 +234,7 @@ enum {
     HOME_FLOAT_BOX,       // an exact non-NaN float held as a pointer
     HOME_STATIC_TAG0,     // a static immortal without the no-count tag
     HOME_NOT_VALUE,       // an index or a malformed pattern
-    HOME_TAGGED_MORTAL,   // in a frame slot, a mortal with the no-count tag
+    HOME_TAGGED_MORTAL,   // a mortal with the no-count tag (H1)
     HOME_KINDS
 };
 
@@ -260,7 +254,7 @@ static Py_ssize_t home_total;
 static Py_ssize_t home_dropped;
 
 static int
-home_kind(PyValue ref)
+home_kind(PyValueBorrow ref)
 {
     if (!PyValue_IsLanguageValue(ref)) {
         return HOME_NOT_VALUE;
@@ -270,7 +264,7 @@ home_kind(PyValue ref)
         return HOME_STATIC_TAG0;
     }
     if (_PyObject_ValueIdentity(obj) == (uintptr_t)obj) {
-        // Canonical, so a frame check failed: a borrow
+        // Canonical, so H1 failed: a tagged mortal
         return HOME_TAGGED_MORTAL;
     }
     return PyFloat_CheckExact(obj) ? HOME_FLOAT_BOX : HOME_INT_BOX;
@@ -292,7 +286,7 @@ home_report_only(void)
 }
 
 void
-_PyValue_ReportHome(PyValue ref, const char *site, int recheck)
+_PyValue_ReportHome(PyValueBorrow ref, const char *site, int recheck)
 {
     int kind = home_kind(ref);
     if (!home_report_only()) {

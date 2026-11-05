@@ -27,17 +27,18 @@ typedef struct {
 
 /* The caller owns the workspace through End.  Arguments that are objects
  * are passed as borrowed pointers, as upstream passes its evaluation stack;
- * only inline values are boxed.  A fixed scope keeps its one argument and
- * its box in the struct.  A vector scope keeps its argument vector on the
- * borrow stack (_PyBorrow_ValueVector), above `mark`; End exits to the mark.
- * No pointer refers to the native body's C stack. */
+ * only inline values are boxed.  A fixed scope keeps its one argument's
+ * object in the struct, and argument_box owns the box of an inline one.  A
+ * vector scope keeps its argument vector on the borrow stack
+ * (_PyBorrow_ValueVector), above `mark`; End exits to the mark.  The scope
+ * holds no borrowed value (PyValueBorrow lives in C locals only), and no
+ * pointer refers to the native body's C stack. */
 typedef struct {
     PyThreadState *tstate;
     PyValue receiver;
-    PyValue argument;
     PyObject *receiver_object;
     PyObject *argument_objects[1];
-    PyValue *arguments;         // fixed scopes only
+    PyObject *argument_box;     // fixed scopes only
     PyObject **objects;
     _PyBorrowMark mark;         // vector scopes only
     PyObject *callable;
@@ -57,9 +58,10 @@ typedef struct {
 typedef void (*_PyNativePublishState)(void *caller_state);
 
 /* The caller keeps the source argument alive until End; publication may move
- * it out of the window.  The scope borrows an owned argument and takes its
- * own owner only for a borrowed one.  This first slice accepts at most one
- * argument and no keyword tail. */
+ * it out of the window.  The scope passes an object argument borrowed, and
+ * boxes an inline one at once, which can fail with MemoryError; End
+ * releases the box.  This first slice accepts at most one argument and no
+ * keyword tail. */
 PyAPI_FUNC(int) _PyNativeScope_Begin(
     _PyNativeScope *scope, PyThreadState *tstate,
     const PyValue *args, Py_ssize_t positional_count, Py_ssize_t total_count,

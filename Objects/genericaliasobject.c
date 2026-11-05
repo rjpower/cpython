@@ -158,7 +158,7 @@ static Py_ssize_t
 tuple_index(PyObject *self, Py_ssize_t len, PyObject *item)
 {
     // Both are canonical, so `is` is a bit compare.
-    PyValue value = PyValue_FromPyObjectBorrow(item);
+    PyValueBorrow value = PyValue_FromObjectBorrow(item);
     for (Py_ssize_t i = 0; i < len; i++) {
         if (PyValue_Is(PyTuple_GET_VALUE(self, i), value)) {
             return i;
@@ -421,7 +421,7 @@ _unpack_args(PyObject *item)
                 PyTuple_Check(subargs) &&
                 !(PyTuple_GET_SIZE(subargs) &&
                   PyValue_Is(PyTuple_GET_VALUE(subargs, PyTuple_GET_SIZE(subargs)-1),
-                             PyValue_FromPyObjectBorrow(Py_Ellipsis))))
+                             PyValue_FromObjectBorrow(Py_Ellipsis))))
             {
                 int rc = PyList_SetSlice(newargs, PY_SSIZE_T_MAX, PY_SSIZE_T_MAX, subargs);
                 Py_DECREF(subargs);

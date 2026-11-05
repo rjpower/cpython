@@ -256,7 +256,7 @@ compiler_unit_capsule_clear(PyObject *capsule)
 static PyObject *
 compiler_metadata_item(PyObject *list, Py_ssize_t index)
 {
-    PyValue value = PyList_GET_VALUE(list, index);
+    PyValueBorrow value = PyList_GET_VALUE(list, index);
     assert(PyValue_IsObject(value));
     return PyValue_AsKnownObjectBorrow(value);
 }
@@ -419,11 +419,14 @@ constant_from_key(PyValue key)
     return PyValue_DUP(key);
 }
 
+#define const_cache_insert(V0, V1, V2) \
+    (const_cache_insert)(V0, PyValue_Borrow(V1), V2)
+
 /* Merge constant and return an owned canonical key.
  * If recursive, insert all elements if o is a tuple or frozen set.
  */
 static PyValue
-const_cache_insert(PyObject *const_cache, PyValue constant, bool recursive)
+(const_cache_insert)(PyObject *const_cache, PyValueBorrow constant, bool recursive)
 {
     assert(PyDict_CheckExact(const_cache));
     PyValue input = PyValue_DUP(constant);
@@ -541,7 +544,10 @@ dict_add_value(PyObject *dict, PyValue key)
 Py_ssize_t
 _PyCompile_DictAddObj(PyObject *dict, PyObject *o)
 {
-    return dict_add_value(dict, PyValue_FromObjectBorrow(o));
+    PyValue key = PyValue_DUP(PyValue_FromObjectBorrow(o));
+    Py_ssize_t index = dict_add_value(dict, key);
+    PyValue_CLOSE(key);
+    return index;
 }
 
 Py_ssize_t

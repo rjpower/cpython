@@ -102,7 +102,7 @@ static bool
 is_well_formed(PyValue ref, bool in_stack)
 {
     if (!PyValue_IsTaggedIndex(ref)) {
-        _PyValue_RecheckFrameHome(ref);
+        _PyValue_RecheckHome(ref);
     }
     if (PyValue_IsInlineInt(ref)) {
         return true;  // Every word in the int region is an int.
@@ -129,7 +129,7 @@ _PyValue_CheckFrame(_PyInterpreterFrame *frame)
         if (!is_well_formed(*sp, sp >= stack_base)) {
             _Py_FatalErrorFormat(__func__,
                 "malformed value 0x%" PRIx64 " in slot %d",
-                (uint64_t)_PyValue_BITS(*sp), (int)(sp - frame->base));
+                (uint64_t)_PyValue_Word(*sp), (int)(sp - frame->base));
         }
     }
 }

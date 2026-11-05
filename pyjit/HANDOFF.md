@@ -72,10 +72,11 @@ and shapes. Read the build directories for the exact commands.
 The runtime tree has no held modifications. Debug and release builds link and
 run. All 67 shared modules whose third-party headers exist build; the decimal,
 tkinter, ssl, sqlite and zstd headers are not installed on this host. Runtime
-HEAD is `d686623e3fb` (I5). Full suites last ran at the integration point
+HEAD is `d63c129b95f`. Full suites last ran at the integration point
 `8eee8081ca0`, gcc debug and release: 52,178 tests each; the two failures were
-stale tests, fixed in `a1ecc0eb4f3`. I5 ran its step tests and a smoke set on
-both builds; full suites run at integration points only. Magic number: 64410
+stale tests, fixed in `a1ecc0eb4f3`. Later landings ran their step tests and a
+smoke set on both builds (plus a stats-build compile since `71566e96043`),
+all passing with 0 lint findings; full suites run at integration points only. Magic number: 64410
 (B5b), set by the coordinator with
 `tools/bump_magic.py`. The
 fork's JIT source is deleted (A3 step 1; history keeps it) until the JIT
@@ -99,15 +100,25 @@ release build 5 to 12x slower; check it. `perf` is blocked
 
 In flight, briefs in `build/pyjit-link-wave1/`:
 
-- W2, the core wave, is running. W2a is Clinic regeneration and slots; W2b is
-  callers, fields and the deferred `ceval.c` sites. W4 starts from W2a.
+- W2b is running: core slots are done for list, tuple, dict, str and bytes;
+  callers are in progress. W4b (all other modules) is finishing.
 - G2 has A4 and B3 prototypes off-tree. Open question 9 is answered (a
   fixed-dst rule removes 9 to 14% of class tests at no word cost); the
   decision stays between A4 and B3.
 
-Landed since `b9d3e3a3c9b`: the table in [STATUS](STATUS.md) lists all 27.
+Landed since `b9d3e3a3c9b`: the table in [STATUS](STATUS.md) lists all 36.
 The newest, first:
 
+- `d63c129b95f`: `METH_VALUE` splits on `METH_KEYWORDS`; keyword check in the
+  trampoline; dict unhashable-key messages.
+- `28453e14972`: W4a post-review fixes; lint covers 203 units.
+- `1e19778c783`: `_PyValue_IndexExact`.
+- `71566e96043`: stats-build fix; every check now compiles a stats build.
+- `229065a3c2c`: W4a, accelerator modules.
+- `62bfae99844`: arity checks in the trampolines.
+- `f30173f3de3`: W2b marks.
+- `61872dc3152`: specializer reaches `METH_VALUE` callees again.
+- `ce9289e2ddb`: W2a, core Clinic with value emission.
 - `d686623e3fb`: I5, calls, monitoring and tracing on values.
 - `a1ecc0eb4f3`: two stale tests fixed after the integration point.
 - `8eee8081ca0`: B5b, unpack into locals and append from fields (magic 64410).
@@ -246,10 +257,11 @@ overwritten.
 
 ## Next steps
 
-1. W2a, then W2b. W4 starts from W2a.
+1. W2b and W4b finish.
 2. W5 and the R27 gate.
 3. G2's timed decision between A4 and B3, on a quiet host.
-4. Follow-ups in `build/pyjit-link-wave1/FOLLOWUPS.md`.
+4. Follow-ups in `build/pyjit-link-wave1/FOLLOWUPS.md`; post-reviews
+   `review-w2a.md` and `review-w4a.md` in the same directory.
 5. Then the checkpoint measurement.
 6. After the checkpoint: return `co_code` and `.pyc` to stack
    bytecode with the IR as a hidden cache

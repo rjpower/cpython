@@ -1,6 +1,6 @@
 # Project status
 
-Status as of 2026-11-05 (PST), after the landings through `d686623e3fb`. Update this
+Status as of 2026-11-05 (PST), after the landings through `d63c129b95f`. Update this
 page at each landing.
 
 ## Outcome and next milestone
@@ -57,7 +57,7 @@ costs, then the qualified baseline.
 
 ## Position
 
-- Runtime branch `boil/pyvalue-rc-universal`, HEAD `d686623e3fb` (I5). The 27
+- Runtime branch `boil/pyvalue-rc-universal`, HEAD `d63c129b95f`. The 36
   landings since `b9d3e3a3c9b` are in the table under "Active work packets".
 - Landed 2026-11-03: native boundary P3 (`56ff66a596b`, `643c69c7244`,
   `6d39221996d`) and P4 (`2558376b321`, post-review fixes `fdd7fed3216`);
@@ -291,14 +291,31 @@ Landed since `b9d3e3a3c9b`, oldest first (2026-11-04 to 2026-11-05):
 | `8eee8081ca0` | register IR B5b | `UNPACK_SEQUENCE` and `UNPACK_EX` write consecutive locals (2,408 of 3,343 unpack sites on non-test Lib); `LIST_APPEND`, `SET_ADD` and `MAP_ADD` read their items from fields. Lib loses 5,415 static words. Magic 64410. |
 | `a1ecc0eb4f3` | tests | Two stale tests fixed after the integration point's full suites (hidden constant slots; the code constructor's new optional arguments). |
 | `d686623e3fb` | value API I5 | Call handlers, monitoring and tracing run on values; seven boxing call helpers and the vector halves of the native scope are deleted. The monitored kernel makes 0 boxes (was 4,000). |
+| `ce9289e2ddb` | value API W2a | Core Argument Clinic output regenerated with value emission (`value_emission`). |
+| `61872dc3152` | fix (W2a) | The specializer reaches `METH_VALUE` callees again: `CALL_BUILTIN_FAST` and `CALL_METHOD_DESCRIPTOR_FAST`; `list.append` reaches `CALL_LIST_APPEND`. |
+| `f30173f3de3` | value API W2b marks | Object functions that have value forms are marked for the core callers. |
+| `62bfae99844` | fix (W2a review) | The trampolines check the arity of `METH_VALUE\|METH_NOARGS` and `METH_VALUE\|METH_O` functions. |
+| `229065a3c2c` | value API W4a | The accelerator modules (17) use Clinic value emission. |
+| `71566e96043` | fix | The `--enable-pystats` build had broken silently after W2a. Every landing check now also compiles a stats build. |
+| `1e19778c783` | value API W2b | `_PyValue_IndexExact`. `PyNumber_Index` keeps upstream's exact-int result; `_PyNumber_Index` stays `_PyValue_Index`. |
+| `28453e14972` | fix (W4a review) | Post-review fixes in the accelerator modules. The lint's compile database now records sharedmods: 203 units, up from 182. |
+| `d63c129b95f` | fix (W4a review) | `METH_VALUE` splits on `METH_KEYWORDS` as `METH_FASTCALL` does; the trampoline rejects keywords for positional functions; Clinic emits no keyword check; `METH_VALUE\|METH_METHOD` requires `METH_KEYWORDS`. Adds the dict unhashable-key messages. |
 
 Validation:
 
 - Integration point, 2026-11-05: the full suites at `8eee8081ca0`, release and
   debug, ran 52,178 tests each. Two failed, both stale tests; `a1ecc0eb4f3`
   fixed them. (Earlier full pass: `01e8f3bc4ea`, M2, 51,977 tests each.)
-- I5 ran its step tests and a smoke set on both builds. Full suites run only at
+- Every landing since I5 ran its step tests and a smoke set on both builds,
+  all passing, with 0 lint findings. Examples (run=): `index-exact` 6,003;
+  `w4a-review-fix` 10,421; `w4a-review-core` 8,546. Counts for the earlier
+  tags are in `build/pyjit-link-wave1/<tag>-int.log`. Since `71566e96043`
+  each check also compiles an `--enable-pystats` build. `check_value_api`
+  covers 203 units (182 before `28453e14972`). Full suites run only at
   integration points (user rule, 2026-11-05; see [PROCESS](PROCESS.md)).
+- Post-reviews: `build/pyjit-link-wave1/review-w2a.md` and `review-w4a.md`
+  (W4a: 6 must-fix, 5 should-fix; fixed in `1e19778c783`, `28453e14972` and `d63c129b95f`).
+  Follow-ups go to `FOLLOWUPS.md`.
 - Magic numbers: 64405 after B2, 64406 after B7, 64407 after B4, 64408 after
   B6, 64409 after B5, 64410 after B5b. The coordinator bumps the number once per
   format landing with `tools/bump_magic.py`.
@@ -314,16 +331,16 @@ User decisions, 2026-11-05:
 
 In flight (briefs in `build/pyjit-link-wave1/`):
 
-1. W2, the core wave, is running. It lands in two parts. W2a is Clinic
-   regeneration and slots. W2b is callers, fields and the deferred `ceval.c`
-   sites. W4 starts from W2a.
+1. W2b is running. W2a has landed; the core slots are done for list, tuple,
+   dict, str and bytes, and the callers are in progress. W4b (all other
+   modules) is finishing. W4a has landed.
 2. G2 has the A4 and B3 prototypes off-tree. Open question 9 is counted: a
    fixed-dst rule removes 9 to 14% of class tests at no word cost, so the
    decision stays between A4 and B3
    ([register-ir.md](design/register-ir.md) G2).
 
-Next: W2a, W2b, W4, W5 and the R27 gate. G2's timed decision runs on a quiet
-host. Then the checkpoint measurement. After the checkpoint comes the
+Next: W5 and the R27 gate after W2b and W4b. G2's timed decision runs on a
+quiet host. Then the checkpoint measurement. After the checkpoint comes the
 stack-bytecode recovery
 ([proposal](design/proposals/stack-bytecode-recovery.md)).
 

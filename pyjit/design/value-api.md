@@ -276,6 +276,13 @@ a `_testcapi` test that pins the round trips above, so a change is deliberate.
 * **`NotImplemented`.** `PyValue_NotImplemented` is the value of the static
   immortal `_Py_NotImplementedStruct`. Value slots return it; dispatchers
   compare it with `PyValue_Is` (identity of the word, ignoring the count bit).
+* **Rulings on marked functions and checks (coordinator, 2026-11-05).**
+  No file-local helper may rebuild a marked object function; object exits are
+  written inline at the site, and value-native consumers are preferred. A
+  check has one macro, with the failure value as an argument; there are no
+  twin `_V` macros. Argument checks (arity, keywords) live in the call
+  trampolines with upstream's messages, never in generated code with a rebuilt
+  name and never by rewriting messages after the call.
 
 ### 1.5 Naming
 
@@ -642,14 +649,22 @@ check of §4 finds new ones.
   of `self` (`PyMethod_GET_SELF`, `PyCFunction_GET_SELF` and kin) are
   deleted; `PyMethod_GetSelfRef` and `PyCFunction_GetSelfRef` replace them
   (D10).
-* **Builtins.** A new flag `METH_VALUE`, valid alone, not with `METH_FASTCALL |
-  METH_KEYWORDS` (D9: it carries no `METH_FASTCALL`, `METH_O` or `METH_NOARGS`
-  bit, so code that tests those bits never calls a value function with
-  object arguments; it combines with `METH_METHOD`, `METH_CLASS`,
-  `METH_STATIC` and `METH_COEXIST`): `PyValue (*)(PyValue self, const PyValue
-  *args, Py_ssize_t nargs, PyObject *kwnames)` in this sketch; the shipped
-  signatures are in value-api-m3.md §1.5. `self` is a value because
-  methods of `int` and `float` receive inline receivers.
+* **Builtins.** A new flag `METH_VALUE` (D9: it carries no `METH_FASTCALL`,
+  `METH_O` or `METH_NOARGS` bit, so code that tests those bits never calls a
+  value function with object arguments). The final convention is in
+  `Include/internal/pycore_value_call.h`; the keyword flag splits it as
+  `METH_FASTCALL` is split. `METH_VALUE` alone takes positional arguments:
+  the vectorcall of the function or its method descriptor rejects keywords
+  with upstream's message and calls `ml_meth` with `kwnames` NULL.
+  `METH_VALUE | METH_KEYWORDS` passes `kwnames` to `ml_meth`, which parses
+  them. `METH_VALUE | METH_METHOD` requires `METH_KEYWORDS`, as upstream's
+  `METH_METHOD` does. `METH_VALUE | METH_NOARGS` and `METH_VALUE | METH_O` are
+  the fixed-arity forms: the vectorcall checks keywords and arity before the
+  call, with the object forms' messages. All combine with `METH_CLASS`,
+  `METH_STATIC` and `METH_COEXIST`. The signature is `PyValue (*)(PyValueBorrow
+  self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)`
+  (value-api-m3.md §1.5). `self` is a value because methods of `int` and
+  `float` receive inline receivers.
 * **Object-form natives.** A builtin without `METH_VALUE`, an extension
   `tp_call`, or an extension type's vectorcall is reached through
   `_PyBorrow_ValueVector` inside a borrow scope (native-boundary P4). This

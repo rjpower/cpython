@@ -96,7 +96,12 @@ class CAPITest(unittest.TestCase):
         def new(size, maxchar):
             result = _unicode_new(size, maxchar)
             if size != 0:
-                refcnt = None if support.Py_GC else sys.getrefcount(result)
+                # Count the owners of result: the count sys.getrefcount()
+                # reports for a local passed to a call depends on the call
+                # form, so subtract what it reports for a fresh local.
+                probe = object()
+                refcnt = None if support.Py_GC else (
+                    sys.getrefcount(result) - sys.getrefcount(probe) + 1)
                 self.assert_is_mutable(result, refcnt)
             else:
                 self.assert_is_empty_singleton(result)

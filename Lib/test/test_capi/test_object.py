@@ -298,8 +298,11 @@ class CAPITest(unittest.TestCase):
         self.assertFalse(_testcapi.pyobject_is_unique_temporary(obj))
 
         def func(x):
-            # This relies on the LOAD_FAST_BORROW optimization (gh-130704)
-            self.assertEqual(sys.getrefcount(x), 1)
+            # x has one owner, its local.  Compare with a fresh local rather
+            # than a constant: the count that sys.getrefcount() reports for
+            # a local passed to a call depends on the call form.
+            probe = object()
+            self.assertEqual(sys.getrefcount(x), sys.getrefcount(probe))
             self.assertFalse(_testcapi.pyobject_is_unique_temporary(x))
 
         func(object())

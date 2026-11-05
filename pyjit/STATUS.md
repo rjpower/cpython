@@ -57,7 +57,7 @@ costs, then the qualified baseline.
 
 ## Position
 
-- Runtime branch `boil/pyvalue-rc-universal`, HEAD `36aa4a0345a`.
+- Runtime branch `boil/pyvalue-rc-universal`, HEAD `df1503353d7`.
 - Landed 2026-11-03: native boundary P3 (`56ff66a596b`, `643c69c7244`,
   `6d39221996d`) and P4 (`2558376b321`, post-review fixes `fdd7fed3216`);
   representation steps 1 (`f129780a9a7`), 2 (`f7dfc5b961f`), 3 (`dbce7b1260d`,
@@ -153,6 +153,16 @@ costs, then the qualified baseline.
   (`is_available` is `_PyJIT_BASELINE_SUPPORTED`, so False for now), with three
   new tests. `regen-configure` reproduces the edited `configure`. Targeted
   tests run=2,085, failures=2 (the known two); its own suites run=51,617,
+  failures=2.
+- Landed 2026-11-04 (continued): register IR v2 A5b-2 (`fc981364c56`): the
+  generator gives each handler input one C type, a view or an owner, with
+  `TAKE` and `OWNER` where a view becomes an owner; S3, S7 and the spend
+  rules fail closed. Post-review found three fail-open rules (none fired on
+  `bytecodes.c`); all 12 findings fixed before landing. Generated release
+  order unchanged. Suite (A5b's T_2, gcc debug): run=51,621+, failures=2.
+- Landed 2026-11-04 (continued): value API M4a (`df1503353d7`): the value
+  field contract tested on a type with fields of each kind;
+  `structseq.__reduce__` stores by value. Suite (M4's T_1): run=51,631,
   failures=2.
 - Suites at `faddfd1454d`, debug and release alike: run=51,615, failures=2
   (38 more skipped than at `a6002e5854b`: the JIT tests),

@@ -560,7 +560,7 @@ for an object's whole life.
 | Rule | Fires on |
 |---|---|
 | `borrow-field` | Any field, array, global or static of type `PyValueBorrow`; no exceptions after R2-S1. If the A5b-3 census finds another field, it is listed and the rule allows only that field |
-| `raw-bits` | `(PyValue){`, `(PyValueBorrow){`, `.bits =`, and casts to `PyValue *` or `PyValueBorrow *`, outside the owner headers, `_PyIR_AdoptTemp`, `pycore_typecache.h`, and an allowed list (`structmember.c`, the `STORE_ATTR_*` offset stores) |
+| `raw-bits` | `(PyValue){`, `(PyValueBorrow){`, `.bits =`, and casts to `PyValue *` or `PyValueBorrow *`, outside the owner headers, `_PyIR_AdoptTemp` and `pycore_typecache.h`. As built (A5b-3, A5b-4), a cast between a word pointer and a byte pointer is allowed everywhere, so `structmember.c` and the `STORE_ATTR_*` offset stores (byte offsets from a `char *`) need no entry; a word pointer made from the address of a non-word object or from a cast of another typed pointer, and a typed pointer made from a cast of a word pointer, fail, so a second cast cannot launder the first (value-api.md §1.6) |
 | `home-copy` | §5.3; reports only |
 | Negative units | Run under both `gcc` and `clang-21`. Each must fail with its expected diagnostic, matched by a pattern per compiler, as the `Py_VALUE_COMPAT` probe matches "unavailable". A unit that fails for any other reason fails the self-test. The units are the eight of Appendix A, plus `PyTuple_SET_VALUE(t, 0, PyTuple_GET_VALUE(u, 0))`, and `_PyDict_SetValue_Take2(d, k, PyValue_FromObjectBorrow(o))` against the real headers. One positive unit passes owners, borrows, `*p` and `slot[i]` to each reader family |
 

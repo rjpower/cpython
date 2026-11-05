@@ -333,9 +333,21 @@ elsewhere uses accessors. Three rules:
      and its version: `pycore_debug_offsets.h`, `Modules/_remote_debugging/`
      and `Tools/gdb/libpython.py`;
    - the encoding's own tests in `_testinternalcapi`;
-   - the generated-code exceptions that A5b's `raw-bits` rule already lists
-     (`_PyIR_AdoptTemp`, `pycore_typecache.h`, `structmember.c`, the
-     `STORE_ATTR_*` offset stores).
+   - the generated-code exception `_PyIR_AdoptTemp`, the type cache's
+     guarded word (`pycore_typecache.h`), and the data stack's address
+     conversions (`_PyDataStack_Slots`, `_PyDataStack_Address`).
+
+   A cast between a word pointer and a byte pointer (`void *`, `char *`) is
+   allowed everywhere, because code computes a word's address as a byte
+   offset: `structmember.c` and the `STORE_ATTR_*` offset stores add a
+   member offset to a `char *`, and `listobject.c` allocates with
+   `PyMem_*`. So these need no entry. A second cast must not launder the
+   first: the lint rejects a word pointer made from the address of a
+   non-word object or from a cast of a pointer to another type, and a
+   typed pointer made from a cast of a word pointer
+   (`*(PyValue *)(void *)&bits`, `*(uintptr_t *)(char *)&word`). A match
+   written in a value header's macro body is the header's; one written in
+   the macro's argument is the caller's.
 
    At `a6002e5854b` there are 21 other sites:
    - **Exact-word compares**, 12 in `setobject.c` and `dictobject.c`. They

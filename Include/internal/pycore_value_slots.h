@@ -45,11 +45,13 @@ typedef int (*_Py_asssubscriptvaluefunc)(PyObject *, PyValueBorrow,
 typedef PyValue (*_Py_itemvaluefunc)(PyObject *, Py_ssize_t);
 typedef int (*_Py_assitemvaluefunc)(PyObject *, Py_ssize_t, PyValueBorrow);
 typedef int (*_Py_containsvaluefunc)(PyObject *, PyValueBorrow);
-/* As am_send: PYGEN_NEXT with the item, PYGEN_RETURN with the return value,
-   PYGEN_ERROR with an exception set. */
-typedef PySendResult (*_Py_iternextvaluefunc)(PyObject *, PyValue *);
-typedef PySendResult (*_Py_sendvaluefunc)(PyObject *, PyValueBorrow,
-                                          PyValue *);
+/* iternext and send return _PyStatusValue (pycore_value.h), as am_send
+   does: PYGEN_NEXT with the item, PYGEN_RETURN with the return value,
+   PYGEN_ERROR with PyValue_NULL and an exception set. An iternext slot
+   returns PYGEN_RETURN with PyValue_NULL for a None return (R11); a send
+   slot returns the None. */
+typedef _PyStatusValue (*_Py_iternextvaluefunc)(PyObject *);
+typedef _PyStatusValue (*_Py_sendvaluefunc)(PyObject *, PyValueBorrow);
 /* The value vectorcall (value-api-m3.md, section 1.1): args is a window of
    words that the caller owns for the call; the callee borrows each one
    (PyValue_Borrow(args[i])) and takes a count (PyValue_DUP) to keep one.
@@ -110,10 +112,10 @@ typedef PyValue (*_Py_concatvaluefunc)(PyObject *, PyValueBorrow);
     X(nb_bool, as_number.nb_bool, INQUIRY, INQUIRY) \
     X(nb_index, as_number.nb_index, UNARY, UNARY) \
     X(getattro, ht_type.tp_getattro, GETATTRO, NONE) \
-    X(subscript, as_mapping.mp_subscript, SUBSCRIPT, NONE) \
-    X(ass_subscript, as_mapping.mp_ass_subscript, ASSSUBSCRIPT, NONE) \
-    X(contains, as_sequence.sq_contains, CONTAINS, NONE) \
-    X(iternext, ht_type.tp_iternext, ITERNEXT, NONE) \
+    X(subscript, as_mapping.mp_subscript, SUBSCRIPT, SUBSCRIPT) \
+    X(ass_subscript, as_mapping.mp_ass_subscript, ASSSUBSCRIPT, ASSSUBSCRIPT) \
+    X(contains, as_sequence.sq_contains, CONTAINS, CONTAINS) \
+    X(iternext, ht_type.tp_iternext, ITERNEXT, ITERNEXT) \
     X(call, ht_type.tp_call, VECTORCALL, CALL) \
     X(nb_power, as_number.nb_power, TERNARY, TERNARY) \
     X(nb_negative, as_number.nb_negative, UNARY, UNARY) \
@@ -150,8 +152,8 @@ typedef PyValue (*_Py_concatvaluefunc)(PyObject *, PyValueBorrow);
     X(setattro, ht_type.tp_setattro, SETATTRO, NONE) \
     X(descr_get, ht_type.tp_descr_get, DESCRGET, NONE) \
     X(descr_set, ht_type.tp_descr_set, DESCRSET, NONE) \
-    X(item, as_sequence.sq_item, ITEM, NONE) \
-    X(ass_item, as_sequence.sq_ass_item, ASSITEM, NONE) \
+    X(item, as_sequence.sq_item, ITEM, ITEM) \
+    X(ass_item, as_sequence.sq_ass_item, ASSITEM, ASSITEM) \
     X(send, as_async.am_send, SEND, NONE) \
     X(sq_concat, as_sequence.sq_concat, CONCAT, CONCAT) \
     X(sq_inplace_concat, as_sequence.sq_inplace_concat, CONCAT, CONCAT)
@@ -279,6 +281,44 @@ _PyValue_THUNK_EXIT(PyValue result _PyBox_AT_PARAM)
 #define _PyValue_THUNK_EXIT(RESULT, SITE) \
     (_PyValue_THUNK_EXIT)((RESULT) _PyBox_AT_ARG(_PyValue_THUNK_AT(SITE)))
 
+/* The object result and status of a thunk over a _PyStatusValue: r's value
+   becomes *result as for _PyValue_THUNK_EXIT() (PyValue_NULL stays NULL),
+   and the status is r's, or -1 if boxing the value fails. For the object
+   API's own signatures (PyIter_Send(), PyMapping_GetOptionalItem()). */
+/* _PyValue_THUNK_EXIT() with the box argument already made. */
+static inline PyObject *
+_PyValue_ThunkResult(PyValue result _PyBox_AT_PARAM)
+{
+    if (PyValue_IsNull(result)) {
+        return NULL;
+    }
+    if (PyValue_IsInline(result)) {
+        return _PyValue_AsObjectFor(result, at);
+    }
+    return PyValue_AsKnownObjectSteal(result);
+}
+
+static inline int
+_PyValue_THUNK_EXIT_STATUS(_PyStatusValue r, PyObject **result _PyBox_AT_PARAM)
+{
+    int is_null = PyValue_IsNull(r.value);
+    *result = _PyValue_ThunkResult(r.value _PyBox_AT_ARG(at));
+    return (*result == NULL && !is_null) ? -1 : r.status;
+}
+#define _PyValue_THUNK_EXIT_STATUS(R, RESULT, SITE) \
+    (_PyValue_THUNK_EXIT_STATUS)((R), (RESULT) \
+                                 _PyBox_AT_ARG(_PyValue_THUNK_AT(SITE)))
+
+/* The object result of a thunk over an iternext value slot (R11): the item
+   for PYGEN_NEXT; for PYGEN_RETURN, NULL with StopIteration(value) set if
+   the value is not PyValue_NULL (the value is closed), else NULL with
+   nothing set; NULL with the exception for PYGEN_ERROR. */
+PyAPI_FUNC(PyObject *) (_PyValue_IterNextThunkExit)(_PyStatusValue r
+                                                    _PyBox_AT_PARAM);
+#define _PyValue_IterNextThunkExit(R) \
+    (_PyValue_IterNextThunkExit)((R) \
+        _PyBox_AT_ARG(_PyValue_THUNK_AT(BOX_SITE_ITERATION)))
+
 /* The borrowed value of an object argument of a thunk. */
 #define _Py_VALUE_ARG(OBJ) PyValue_FromObjectBorrow(OBJ)
 
@@ -384,6 +424,63 @@ _PyValue_AdapterRelease(PyValueBorrow v, PyObject *obj)
     { \
         return _PyValue_THUNK_EXIT((valuefn)(self, _Py_VALUE_ARG(other)), \
                                    BOX_SITE_SEQUENCE); \
+    }
+
+/* The receivers of the subscript, item, contains, iternext and send
+   families stay objects (value-api-m1b-m2.md, section 1.1). A NULL value
+   argument of ASSSUBSCRIPT or ASSITEM, which deletes, becomes
+   PyValue_NULL. */
+
+#define _Py_VALUE_THUNK_SUBSCRIPT(name, valuefn) \
+    Py_VALUE_ENTRY static PyObject * \
+    name(PyObject *self, PyObject *key) \
+    { \
+        return _PyValue_THUNK_EXIT((valuefn)(self, _Py_VALUE_ARG(key)), \
+                                   BOX_SITE_SEQUENCE); \
+    }
+
+#define _Py_VALUE_THUNK_ITEM(name, valuefn) \
+    Py_VALUE_ENTRY static PyObject * \
+    name(PyObject *self, Py_ssize_t i) \
+    { \
+        return _PyValue_THUNK_EXIT((valuefn)(self, i), BOX_SITE_SEQUENCE); \
+    }
+
+#define _Py_VALUE_THUNK_ASSSUBSCRIPT(name, valuefn) \
+    Py_VALUE_ENTRY static int \
+    name(PyObject *self, PyObject *key, PyObject *value) \
+    { \
+        return (valuefn)(self, _Py_VALUE_ARG(key), _Py_VALUE_ARG(value)); \
+    }
+
+#define _Py_VALUE_THUNK_ASSITEM(name, valuefn) \
+    Py_VALUE_ENTRY static int \
+    name(PyObject *self, Py_ssize_t i, PyObject *value) \
+    { \
+        return (valuefn)(self, i, _Py_VALUE_ARG(value)); \
+    }
+
+#define _Py_VALUE_THUNK_CONTAINS(name, valuefn) \
+    Py_VALUE_ENTRY static int \
+    name(PyObject *self, PyObject *item) \
+    { \
+        return (valuefn)(self, _Py_VALUE_ARG(item)); \
+    }
+
+#define _Py_VALUE_THUNK_ITERNEXT(name, valuefn) \
+    Py_VALUE_ENTRY static PyObject * \
+    name(PyObject *self) \
+    { \
+        return _PyValue_IterNextThunkExit((valuefn)(self)); \
+    }
+
+#define _Py_VALUE_THUNK_SEND(name, valuefn) \
+    Py_VALUE_ENTRY static PySendResult \
+    name(PyObject *self, PyObject *arg, PyObject **result) \
+    { \
+        return (PySendResult)_PyValue_THUNK_EXIT_STATUS( \
+            (valuefn)(self, _Py_VALUE_ARG(arg)), result, \
+            BOX_SITE_ITERATION); \
     }
 
 

@@ -261,16 +261,24 @@ PyErr_SetObject(PyObject *exception, PyObject *value)
  *
  * If an exception is already set, override the exception. */
 void
-_PyErr_SetKeyError(PyObject *arg)
+(_PyErr_SetKeyErrorValue)(PyValueBorrow arg)
 {
     PyThreadState *tstate = _PyThreadState_GET();
 
-    // PyObject_CallOneArg() must not be called with an exception set,
+    // PyObject_Call() must not be called with an exception set,
     // otherwise _Py_CheckFunctionResult() can fail if the function returned
     // a result with an excception set.
     _PyErr_Clear(tstate);
 
-    PyObject *exc = PyObject_CallOneArg(PyExc_KeyError, arg);
+    // The args tuple holds the word: an inline key is not boxed.
+    PyValue key = PyValue_DUP(arg);
+    PyObject *args = _PyTuple_FromValueArray(&key, 1);
+    PyValue_CLOSE(key);
+    if (args == NULL) {
+        return;
+    }
+    PyObject *exc = PyObject_Call(PyExc_KeyError, args, NULL);
+    Py_DECREF(args);
     if (!exc) {
         /* caller will expect error to be set anyway */
         return;
@@ -278,6 +286,12 @@ _PyErr_SetKeyError(PyObject *arg)
 
     _PyErr_SetObject(tstate, (PyObject*)Py_TYPE(exc), exc);
     Py_DECREF(exc);
+}
+
+void
+_PyErr_SetKeyError(PyObject *arg)
+{
+    _PyErr_SetKeyErrorValue(PyValue_FromObjectBorrow(arg));
 }
 
 void

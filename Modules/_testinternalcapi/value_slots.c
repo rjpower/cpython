@@ -9,10 +9,12 @@
 #include "parts.h"
 
 #include "pycore_long_value.h"    // _PyLong_SpanPathBinary()
+#include "pycore_pyerrors.h"      // _PyErr_SetKeyErrorValue()
 #include "pycore_value.h"         // PyValue
 #include "pycore_value_ops.h"     // _PyValue_GenericHash()
 #include "pycore_value_slots.h"   // _Py_VALUE_SLOT_TABLE
 #include "pycore_slots.h"         // _Py_value_nb_add
+#include "pycore_tuple.h"         // _PyTuple_FromValueStealOnSuccess()
 
 #include <stddef.h>               // offsetof()
 #include <stdint.h>               // uintptr_t
@@ -1979,6 +1981,452 @@ value_construct(PyObject *Py_UNUSED(module), PyObject *args)
 }
 
 
+/* Iteration and subscript helpers for M1b (value-api-m1b-m2.md, section 1.6).
+ * These types have object slots only, as an extension writes them, so that
+ * the tests see how the core calls an iterator or container it does not
+ * know. */
+
+enum {
+    CITER_STOP,
+    CITER_NULL,
+    CITER_ERROR,
+};
+
+typedef struct {
+    PyObject_HEAD
+    int mode;
+    PyObject *value;
+} CIterObject;
+
+/* CIter(mode[, value]): "stop" raises StopIteration(value), or a bare
+ * StopIteration when value is None; "null" returns NULL with no exception
+ * set; "error" raises ValueError. Every call ends the iteration. */
+static PyObject *
+citer_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+{
+    const char *mode;
+    PyObject *value = Py_None;
+    if (kwds != NULL && PyDict_GET_SIZE(kwds) != 0) {
+        PyErr_SetString(PyExc_TypeError, "CIter takes no keyword arguments");
+        return NULL;
+    }
+    if (!PyArg_ParseTuple(args, "s|O:CIter", &mode, &value)) {
+        return NULL;
+    }
+    int code;
+    if (strcmp(mode, "stop") == 0) {
+        code = CITER_STOP;
+    }
+    else if (strcmp(mode, "null") == 0) {
+        code = CITER_NULL;
+    }
+    else if (strcmp(mode, "error") == 0) {
+        code = CITER_ERROR;
+    }
+    else {
+        PyErr_Format(PyExc_ValueError, "unknown mode %s", mode);
+        return NULL;
+    }
+    CIterObject *self = (CIterObject *)type->tp_alloc(type, 0);
+    if (self == NULL) {
+        return NULL;
+    }
+    self->mode = code;
+    self->value = Py_NewRef(value);
+    return (PyObject *)self;
+}
+
+static void
+citer_dealloc(PyObject *op)
+{
+    CIterObject *self = (CIterObject *)op;
+    Py_XDECREF(self->value);
+    Py_TYPE(op)->tp_free(op);
+}
+
+static PyObject *
+citer_iternext(PyObject *op)
+{
+    CIterObject *self = (CIterObject *)op;
+    switch (self->mode) {
+    case CITER_STOP:
+        if (self->value == Py_None) {
+            PyErr_SetNone(PyExc_StopIteration);
+        }
+        else {
+            PyErr_SetObject(PyExc_StopIteration, self->value);
+        }
+        return NULL;
+    case CITER_ERROR:
+        PyErr_SetString(PyExc_ValueError, "citer error");
+        return NULL;
+    default:
+        return NULL;
+    }
+}
+
+static PyTypeObject CIter_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testinternalcapi.CIter",
+    .tp_basicsize = sizeof(CIterObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_new = citer_new,
+    .tp_dealloc = citer_dealloc,
+    .tp_iter = PyObject_SelfIter,
+    .tp_iternext = citer_iternext,
+};
+
+/* The same without tp_iter: next() accepts it, iter() does not. */
+static PyTypeObject CIterBare_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testinternalcapi.CIterBare",
+    .tp_basicsize = sizeof(CIterObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_new = citer_new,
+    .tp_dealloc = citer_dealloc,
+    .tp_iternext = citer_iternext,
+};
+
+/* The result of o's tp_iternext as (item, exception): (item, None) for an
+ * item, (None, None) for NULL with nothing pending, (None, exc) for NULL
+ * with an exception. */
+static PyObject *
+iternext_call(PyObject *Py_UNUSED(module), PyObject *it)
+{
+    PyObject *item = Py_TYPE(it)->tp_iternext(it);
+    if (item != NULL) {
+        assert(!PyErr_Occurred());
+        return Py_BuildValue("(NO)", item, Py_None);
+    }
+    PyObject *exc = PyErr_GetRaisedException();
+    if (exc == NULL) {
+        return Py_BuildValue("(OO)", Py_None, Py_None);
+    }
+    return Py_BuildValue("(ON)", Py_None, exc);
+}
+
+/* PyIter_Send(it, arg) as (status, result): status is PYGEN_RETURN (0) or
+ * PYGEN_NEXT (1); an error is raised. */
+static PyObject *
+iter_send(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *it, *arg;
+    if (!PyArg_ParseTuple(args, "OO:iter_send", &it, &arg)) {
+        return NULL;
+    }
+    PyObject *result = NULL;
+    PySendResult status = PyIter_Send(it, arg, &result);
+    if (status == PYGEN_ERROR) {
+        assert(result == NULL);
+        return NULL;
+    }
+    return Py_BuildValue("(iN)", (int)status, result);
+}
+
+/* Raises KeyError for key as the interpreter does: args == (key,). */
+static PyObject *
+set_key_error_value(PyObject *Py_UNUSED(module), PyObject *key)
+{
+    _PyErr_SetKeyErrorValue(PyValue_FromObjectBorrow(key));
+    return NULL;
+}
+
+
+/* An extension type with only mp_subscript sees every key unchanged. One
+ * with only sq_item (and sq_length) gets an index-sized integer, a negative
+ * one adjusted by the length. Both answer (slot, key or index). */
+
+#define SEQONLY_LENGTH 10
+
+static PyObject *
+maponly_subscript(PyObject *Py_UNUSED(self), PyObject *key)
+{
+    return Py_BuildValue("(sO)", "mp", key);
+}
+
+static PyMappingMethods maponly_as_mapping = {
+    .mp_subscript = maponly_subscript,
+};
+
+static PyTypeObject MapOnly_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testinternalcapi.MapOnly",
+    .tp_basicsize = sizeof(PyObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_new = PyType_GenericNew,
+    .tp_as_mapping = &maponly_as_mapping,
+};
+
+static Py_ssize_t
+seqonly_length(PyObject *Py_UNUSED(self))
+{
+    return SEQONLY_LENGTH;
+}
+
+static PyObject *
+seqonly_item(PyObject *Py_UNUSED(self), Py_ssize_t i)
+{
+    return Py_BuildValue("(sn)", "sq", i);
+}
+
+static PySequenceMethods seqonly_as_sequence = {
+    .sq_length = seqonly_length,
+    .sq_item = seqonly_item,
+};
+
+static PyTypeObject SeqOnly_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testinternalcapi.SeqOnly",
+    .tp_basicsize = sizeof(PyObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_new = PyType_GenericNew,
+    .tp_as_sequence = &seqonly_as_sequence,
+};
+
+
+/* VMap and VItems: value subscript, assignment, item and contains slots
+ * (value-api-m1b-m2.md, section 1.3). A subscript answers (slot, key,
+ * whether the key arrived inline), an item (slot, index); assignments and
+ * deletions write .store, which contains reads. VMap is split: each side
+ * logs its own name, so a test sees which side a caller reached. VItems
+ * has only sequence slots, a length of 10, and object slots that are the
+ * thunks of its value slots. */
+
+#define VITEMS_LENGTH 10
+
+typedef struct {
+    PyObject_HEAD
+    PyObject *store;
+} VStoreObject;
+
+static PyObject *
+vstore_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+{
+    if (PyTuple_GET_SIZE(args) != 0
+        || (kwds != NULL && PyDict_GET_SIZE(kwds) != 0))
+    {
+        PyErr_Format(PyExc_TypeError, "%s takes no arguments",
+                     type->tp_name);
+        return NULL;
+    }
+    VStoreObject *self = (VStoreObject *)type->tp_alloc(type, 0);
+    if (self == NULL) {
+        return NULL;
+    }
+    self->store = PyDict_New();
+    if (self->store == NULL) {
+        Py_DECREF(self);
+        return NULL;
+    }
+    return (PyObject *)self;
+}
+
+static void
+vstore_dealloc(PyObject *op)
+{
+    Py_XDECREF(((VStoreObject *)op)->store);
+    Py_TYPE(op)->tp_free(op);
+}
+
+static PyValueBorrow
+vstore_store(PyObject *self)
+{
+    return _Py_VALUE_ARG(((VStoreObject *)self)->store);
+}
+
+// Write .store[key] = value, or delete it for PyValue_NULL.
+static int
+vstore_assign(PyObject *self, PyValueBorrow key, PyValueBorrow value)
+{
+    if (PyValue_IsNull(value)) {
+        return _PyValue_DelItem(vstore_store(self), key);
+    }
+    return _PyValue_SetItem(vstore_store(self), key, value);
+}
+
+static PyValue
+vmap_subscript_impl(PyValueBorrow key)
+{
+    PyObject *name = PyUnicode_FromString("subscript");
+    if (name == NULL) {
+        return PyValue_NULL;
+    }
+    PyValue answer[3] = {
+        PyValue_FromObjectSteal(name),
+        PyValue_DUP(key),
+        PyValue_FromObjectSteal(PyBool_FromLong(PyValue_IsInline(key))),
+    };
+    PyObject *res = _PyTuple_FromValueStealOnSuccess(answer, 3);
+    if (res == NULL) {
+        for (int i = 0; i < 3; i++) {
+            PyValue_CLOSE(answer[i]);
+        }
+        return PyValue_NULL;
+    }
+    return PyValue_FromObjectSteal(res);
+}
+
+Py_VALUE_ENTRY static PyObject *
+vmap_subscript(PyObject *Py_UNUSED(self), PyObject *key)
+{
+    if (log_call("VMap.subscript.object") < 0) {
+        return NULL;
+    }
+    return _PyValue_THUNK_EXIT(vmap_subscript_impl(_Py_VALUE_ARG(key)),
+                               BOX_SITE_SEQUENCE);
+}
+
+static PyValue
+vmap_subscript_value(PyObject *Py_UNUSED(self), PyValueBorrow key)
+{
+    if (log_call("VMap.subscript.value") < 0) {
+        return PyValue_NULL;
+    }
+    return vmap_subscript_impl(key);
+}
+
+static int
+vmap_ass_subscript(PyObject *self, PyObject *key, PyObject *value)
+{
+    if (log_call("VMap.ass_subscript.object") < 0) {
+        return -1;
+    }
+    return vstore_assign(self, _Py_VALUE_ARG(key), _Py_VALUE_ARG(value));
+}
+
+static int
+vmap_ass_subscript_value(PyObject *self, PyValueBorrow key,
+                         PyValueBorrow value)
+{
+    if (log_call("VMap.ass_subscript.value") < 0) {
+        return -1;
+    }
+    return vstore_assign(self, key, value);
+}
+
+static int
+vmap_contains(PyObject *self, PyObject *item)
+{
+    if (log_call("VMap.contains.object") < 0) {
+        return -1;
+    }
+    return _PyValue_Contains(vstore_store(self), _Py_VALUE_ARG(item));
+}
+
+static int
+vmap_contains_value(PyObject *self, PyValueBorrow item)
+{
+    if (log_call("VMap.contains.value") < 0) {
+        return -1;
+    }
+    return _PyValue_Contains(vstore_store(self), item);
+}
+
+static int
+vitems_contains_value(PyObject *self, PyValueBorrow item)
+{
+    if (log_call("VItems.contains") < 0) {
+        return -1;
+    }
+    return _PyValue_Contains(vstore_store(self), item);
+}
+
+_Py_VALUE_THUNK_CONTAINS(vitems_contains, vitems_contains_value)
+
+static PyValue
+vitems_item_value(PyObject *Py_UNUSED(self), Py_ssize_t i)
+{
+    if (log_call("VItems.item") < 0) {
+        return PyValue_NULL;
+    }
+    if (i < 0 || i >= VITEMS_LENGTH) {
+        PyErr_SetString(PyExc_IndexError, "VItems index out of range");
+        return PyValue_NULL;
+    }
+    return _PyValue_FromObjectResult(Py_BuildValue("(sn)", "item", i));
+}
+
+_Py_VALUE_THUNK_ITEM(vitems_item, vitems_item_value)
+
+static int
+vitems_ass_item_value(PyObject *self, Py_ssize_t i, PyValueBorrow value)
+{
+    if (log_call("VItems.ass_item") < 0) {
+        return -1;
+    }
+    PyObject *key = PyLong_FromSsize_t(i);
+    if (key == NULL) {
+        return -1;
+    }
+    int res = vstore_assign(self, _Py_VALUE_ARG(key), value);
+    Py_DECREF(key);
+    return res;
+}
+
+_Py_VALUE_THUNK_ASSITEM(vitems_ass_item, vitems_ass_item_value)
+
+static Py_ssize_t
+vitems_length(PyObject *Py_UNUSED(self))
+{
+    return VITEMS_LENGTH;
+}
+
+static PyMemberDef vstore_members[] = {
+    {"store", Py_T_OBJECT_EX, offsetof(VStoreObject, store), Py_READONLY},
+    {NULL},
+};
+
+static PyMappingMethods vmap_as_mapping = {
+    .mp_subscript = vmap_subscript,
+    .mp_ass_subscript = vmap_ass_subscript,
+};
+
+static PySequenceMethods vmap_as_sequence = {
+    .sq_contains = vmap_contains,
+};
+
+static PyTypeObject VMap_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testinternalcapi.VMap",
+    .tp_basicsize = sizeof(VStoreObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+    .tp_new = vstore_new,
+    .tp_dealloc = vstore_dealloc,
+    .tp_members = vstore_members,
+    .tp_as_mapping = &vmap_as_mapping,
+    .tp_as_sequence = &vmap_as_sequence,
+    .tp_value = {
+        .subscript = _Py_VALUE_SLOT_INIT(subscript, vmap_subscript_value),
+        .ass_subscript = _Py_VALUE_SLOT_INIT(ass_subscript,
+                                             vmap_ass_subscript_value),
+        .contains = _Py_VALUE_SLOT_INIT(contains, vmap_contains_value),
+    },
+};
+
+static PySequenceMethods vitems_as_sequence = {
+    .sq_length = vitems_length,
+    .sq_item = vitems_item,
+    .sq_ass_item = vitems_ass_item,
+    .sq_contains = vitems_contains,
+};
+
+static PyTypeObject VItems_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testinternalcapi.VItems",
+    .tp_basicsize = sizeof(VStoreObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+    .tp_new = vstore_new,
+    .tp_dealloc = vstore_dealloc,
+    .tp_members = vstore_members,
+    .tp_as_sequence = &vitems_as_sequence,
+    .tp_value = {
+        .item = _Py_VALUE_SLOT_INIT(item, vitems_item_value),
+        .ass_item = _Py_VALUE_SLOT_INIT(ass_item, vitems_ass_item_value),
+        .contains = _Py_VALUE_SLOT_INIT(contains, vitems_contains_value),
+    },
+};
+
+
 static PyMethodDef methods[] = {
     {"set_value_slots_log", set_value_slots_log, METH_O},
     {"value_slot_names", value_slot_names, METH_NOARGS},
@@ -1993,6 +2441,9 @@ static PyMethodDef methods[] = {
     {"value_extract", value_extract, METH_VARARGS},
     {"object_extract", object_extract, METH_VARARGS},
     {"value_construct", value_construct, METH_VARARGS},
+    {"iternext_call", iternext_call, METH_O},
+    {"iter_send", iter_send, METH_VARARGS},
+    {"set_key_error_value", set_key_error_value, METH_O},
     {NULL},
 };
 
@@ -2012,6 +2463,12 @@ _PyTestInternalCapi_Init_ValueSlots(PyObject *module)
         &Split_Type,
         &SplitSeq_Type,
         &VSeq_Type,
+        &CIter_Type,
+        &CIterBare_Type,
+        &MapOnly_Type,
+        &SeqOnly_Type,
+        &VMap_Type,
+        &VItems_Type,
     };
     for (size_t i = 0; i < Py_ARRAY_LENGTH(static_types); i++) {
         if (PyType_Ready(static_types[i]) < 0) {

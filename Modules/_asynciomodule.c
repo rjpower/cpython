@@ -14,6 +14,7 @@
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_runtime_init.h"  // _Py_ID()
 #include "pycore_tuple.h"         // _PyTuple_FromPair
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 #include <stddef.h>               // offsetof()
 
@@ -1887,7 +1888,8 @@ FutureIter_iternext(PyObject *it)
     PyObject *result;
     switch (FutureIter_am_send(it, Py_None, &result)) {
         case PYGEN_RETURN:
-            (void)_PyGen_SetStopIterationValue(result);
+            (void)_PyGen_SetStopIterationValue(
+                PyValue_FromObjectBorrow(result));
             Py_DECREF(result);
             return NULL;
         case PYGEN_NEXT:
@@ -3051,8 +3053,14 @@ gen_status_from_result(PyObject **result)
     if (*result != NULL) {
         return PYGEN_NEXT;
     }
-    if (_PyGen_FetchStopIterationValue(result) == 0) {
-        return PYGEN_RETURN;
+    PyValue value = _PyGen_FetchStopIterationValue();
+    if (!PyValue_IsNull(value)) {
+        // The task takes the return value as an object.
+        *result = _PyValue_AsObjectAt(value, BOX_SITE_ITERATION);
+        PyValue_CLOSE(value);
+        if (*result != NULL) {
+            return PYGEN_RETURN;
+        }
     }
 
     assert(PyErr_Occurred());

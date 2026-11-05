@@ -170,12 +170,6 @@ PyTuple_SetItem(PyObject *op, Py_ssize_t i, PyObject *item)
 }
 
 void
-_PyTuple_ReplaceTakeRef(PyObject *op, Py_ssize_t i, PyObject *item)
-{
-    _PyTuple_ReplaceTakeValue(op, i, PyValue_PrepareOwned(item));
-}
-
-void
 _PyTuple_ReplaceTakeValue(PyObject *op, Py_ssize_t i, PyValue value)
 {
     assert(PyTuple_CheckExact(op));
@@ -184,6 +178,12 @@ _PyTuple_ReplaceTakeValue(PyObject *op, Py_ssize_t i, PyValue value)
     _PyTuple_CAST(op)->ob_item[i] = value;
     _PyValue_CheckHome(_PyTuple_CAST(op)->ob_item[i]);
     PyValue_XCLOSE(old);
+}
+
+void
+_PyTuple_ReplaceTakeRef(PyObject *op, Py_ssize_t i, PyObject *item)
+{
+    _PyTuple_ReplaceTakeValue(op, i, PyValue_PrepareOwned(item));
 }
 
 void
@@ -1245,38 +1245,28 @@ tupleiter_traverse(PyObject *self, visitproc visit, void *arg)
     return 0;
 }
 
-PyValue
-_PyTupleIter_NextValue(PyObject *self)
+static _PyStatusValue
+tupleiter_next_value(PyObject *self)
 {
     _PyTupleIterObject *it = _PyTupleIterObject_CAST(self);
     PyTupleObject *seq = it->it_seq;
     if (seq == NULL) {
-        return PyValue_NULL;
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
     }
     assert(PyTuple_Check(seq));
     Py_ssize_t index = FT_ATOMIC_LOAD_SSIZE_RELAXED(it->it_index);
     if (index < PyTuple_GET_SIZE(seq)) {
         PyValue value = PyValue_DUP(seq->ob_item[index]);
         FT_ATOMIC_STORE_SSIZE_RELAXED(it->it_index, index + 1);
-        return value;
+        return (_PyStatusValue){PYGEN_NEXT, value};
     }
     it->it_seq = NULL;
     Py_DECREF(seq);
-    return PyValue_NULL;
+    return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
 }
 
-static PyObject *
-tupleiter_next(PyObject *self)
-{
-    /* A failed box consumes the item (see listiter_next()). */
-    PyValue value = _PyTupleIter_NextValue(self);
-    if (PyValue_IsNull(value)) {
-        return NULL;
-    }
-    PyObject *item = _PyValue_AsObjectAt(value, BOX_SITE_ITERATION);
-    PyValue_CLOSE(value);
-    return item;
-}
+/* A failed box consumes the item (see listiter_next()). */
+_Py_VALUE_THUNK_ITERNEXT(tupleiter_next, tupleiter_next_value)
 
 static PyObject *
 tupleiter_len(PyObject *self, PyObject *Py_UNUSED(ignored))
@@ -1376,6 +1366,9 @@ PyTypeObject PyTupleIter_Type = {
     tupleiter_next,                             /* tp_iternext */
     tupleiter_methods,                          /* tp_methods */
     0,
+    .tp_value = {
+        .iternext = _Py_VALUE_SLOT_INIT(iternext, tupleiter_next_value),
+    },
 };
 
 static PyObject *

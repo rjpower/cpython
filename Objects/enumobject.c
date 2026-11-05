@@ -8,6 +8,8 @@
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString
 #include "pycore_tuple.h"         // _PyTuple_Recycle()
 #include "pycore_value.h"         // PyValue_XCLOSE()
+#include "pycore_value_ops.h"     // _PyValue_IterStep()
+#include "pycore_value_slots.h"   // _Py_VALUE_THUNK_ITERNEXT()
 
 #include "clinic/enumobject.c.h"
 
@@ -133,8 +135,9 @@ increment_longindex_lock_held(enumobject *en)
     return next_index;
 }
 
-static PyObject *
-enum_next_long(enumobject *en, PyObject* next_item)
+// The (index, item) pair of a step past PY_SSIZE_T_MAX, taking next_item.
+static _PyStatusValue
+enum_next_long(enumobject *en, PyValue next_item)
 {
     PyObject *iterator_owner = Py_NewRef(en);
     PyObject *result = en->en_result;
@@ -152,9 +155,8 @@ enum_next_long(enumobject *en, PyObject* next_item)
         output = Py_NewRef(result);
         PyValue replacement_index = PyValue_PrepareOwned(next_index);
         next_index = NULL;
-        PyValue replacement_item = PyValue_PrepareOwned(next_item);
-        next_item = NULL;
-        // a move: replaced below
+        PyValue replacement_item = next_item;
+        next_item = PyValue_NULL;
         PyValue old_index = _PyTuple_CAST(result)->ob_item[0];
         // a move: replaced below
         PyValue old_item = _PyTuple_CAST(result)->ob_item[1];
@@ -166,57 +168,67 @@ enum_next_long(enumobject *en, PyObject* next_item)
         PyValue_XCLOSE(old_item);
     }
     else {
-        PyObject *transferred_index = next_index;
-        PyObject *transferred_item = next_item;
+        PyValue pair[2] = {PyValue_PrepareOwned(next_index), next_item};
         next_index = NULL;
-        next_item = NULL;
-        output = _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(transferred_index), PyValue_PrepareOwned(transferred_item));
+        next_item = PyValue_NULL;
+        output = _PyTuple_FromValueStealOnSuccess(pair, 2);
+        if (output == NULL) {
+            PyValue_CLOSE(pair[0]);
+            PyValue_CLOSE(pair[1]);
+        }
     }
 
 done:
     Py_CLEAR(next_index);
-    Py_CLEAR(next_item);
+    PyValue_XCLOSE(next_item);
     Py_CLEAR(iterator_owner);
-    return output;
+    if (output == NULL) {
+        return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
+    }
+    return (_PyStatusValue){PYGEN_NEXT, PyValue_FromObjectSteal(output)};
 }
 
-static PyObject *
-enum_next(PyObject *op)
+/* The value iternext slot of enumerate (R16): the inner iterator's end, with
+   its return value, or its error is enumerate's. The pair holds the index
+   and the item as words. */
+static _PyStatusValue
+enum_next_value(PyObject *op)
 {
     enumobject *en = _enumobject_CAST(op);
     PyObject *iterator_owner = Py_NewRef(en);
     PyObject *result = en->en_result;
-    PyObject *next_index = NULL;
-    PyObject *next_item = NULL;
-    PyObject *output = NULL;
+    PyValue next_index = PyValue_NULL;
+    PyValue next_item = PyValue_NULL;
+    _PyStatusValue output = {PYGEN_ERROR, PyValue_NULL};
 
     PyObject *it = en->en_sit;
-    next_item = (*Py_TYPE(it)->tp_iternext)(it);
-    if (next_item == NULL) {
+    _PyStatusValue step = _PyValue_IterStep(it);
+    if (step.status != PYGEN_NEXT) {
+        output = step;
         goto done;
     }
+    next_item = step.value;
 
     Py_ssize_t en_index = FT_ATOMIC_LOAD_SSIZE_RELAXED(en->en_index);
     if (en_index == PY_SSIZE_T_MAX) {
-        PyObject *transferred = next_item;
-        next_item = NULL;
+        PyValue transferred = next_item;
+        next_item = PyValue_NULL;
         output = enum_next_long(en, transferred);
         goto done;
     }
 
-    next_index = PyLong_FromSsize_t(en_index);
-    if (next_index == NULL) {
+    next_index = PyValue_FromInt64(en_index);
+    if (PyValue_IsNull(next_index)) {
         goto done;
     }
     FT_ATOMIC_STORE_SSIZE_RELAXED(en->en_index, en_index + 1);
 
     if (_PyObject_IsUniquelyReferenced(result)) {
-        output = Py_NewRef(result);
-        PyValue replacement_index = PyValue_PrepareOwned(next_index);
-        next_index = NULL;
-        PyValue replacement_item = PyValue_PrepareOwned(next_item);
-        next_item = NULL;
-        // a move: replaced below
+        PyObject *pair = Py_NewRef(result);
+        PyValue replacement_index = next_index;
+        next_index = PyValue_NULL;
+        PyValue replacement_item = next_item;
+        next_item = PyValue_NULL;
         PyValue old_index = _PyTuple_CAST(result)->ob_item[0];
         // a move: replaced below
         PyValue old_item = _PyTuple_CAST(result)->ob_item[1];
@@ -226,21 +238,27 @@ enum_next(PyObject *op)
         _PyTuple_Recycle(result);
         PyValue_XCLOSE(old_index);
         PyValue_XCLOSE(old_item);
+        output = (_PyStatusValue){PYGEN_NEXT, PyValue_FromObjectSteal(pair)};
     }
     else {
-        PyObject *transferred_index = next_index;
-        PyObject *transferred_item = next_item;
-        next_index = NULL;
-        next_item = NULL;
-        output = _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(transferred_index), PyValue_PrepareOwned(transferred_item));
+        PyValue items[2] = {next_index, next_item};
+        PyObject *pair = _PyTuple_FromValueStealOnSuccess(items, 2);
+        if (pair == NULL) {
+            goto done;
+        }
+        next_index = PyValue_NULL;
+        next_item = PyValue_NULL;
+        output = (_PyStatusValue){PYGEN_NEXT, PyValue_FromObjectSteal(pair)};
     }
 
 done:
-    Py_CLEAR(next_index);
-    Py_CLEAR(next_item);
+    PyValue_XCLOSE(next_index);
+    PyValue_XCLOSE(next_item);
     Py_CLEAR(iterator_owner);
     return output;
 }
+
+_Py_VALUE_THUNK_ITERNEXT(enum_next, enum_next_value)
 
 static PyObject *
 enum_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
@@ -310,7 +328,8 @@ PyTypeObject PyEnum_Type = {
     PyType_GenericAlloc,            /* tp_alloc */
     enum_new,                       /* tp_new */
     PyObject_GC_Del,                /* tp_free */
-    .tp_vectorcall = enum_vectorcall
+    .tp_vectorcall = enum_vectorcall,
+    .tp_value = { .iternext = _Py_VALUE_SLOT_INIT(iternext, enum_next_value) },
 };
 
 /* Reversed Object ***************************************************************/

@@ -1691,13 +1691,11 @@ PyObject_SelfIter(PyObject *obj)
    on every iteration.
  */
 
-PyObject *
+// The object side of the pair table's _PyValue_NextNotImplemented().
+Py_VALUE_ENTRY PyObject *
 _PyObject_NextNotImplemented(PyObject *self)
 {
-    PyErr_Format(PyExc_TypeError,
-                 "'%.200s' object is not iterable",
-                 Py_TYPE(self)->tp_name);
-    return NULL;
+    return _PyValue_IterNextThunkExit(_PyValue_NextNotImplemented(self));
 }
 
 

@@ -10,6 +10,7 @@ import itertools
 import math
 import opcode
 import operator
+import os
 import re
 import sys
 import unittest
@@ -1583,6 +1584,665 @@ class ObjectCompareTests(unittest.TestCase):
         self.assertIs(None == five, False)
         self.assertIs(None != five, True)
         self.assertIs(None == None, True)
+
+
+# M1b: the iteration contract and the object APIs over value slots
+# (pyjit/design/proposals/value-api-m1b-m2.md, sections 1.2 and 1.6). Each
+# expectation is upstream CPython's behaviour, which the step preserves.
+
+CIter = _testinternalcapi.CIter
+CIterBare = _testinternalcapi.CIterBare
+MapOnly = _testinternalcapi.MapOnly
+SeqOnly = _testinternalcapi.SeqOnly
+VMap = _testinternalcapi.VMap
+VItems = _testinternalcapi.VItems
+iternext_call = _testinternalcapi.iternext_call
+iter_send = _testinternalcapi.iter_send
+set_key_error_value = _testinternalcapi.set_key_error_value
+
+PYGEN_RETURN = 0
+PYGEN_NEXT = 1
+
+
+def returns_five():
+    return 5
+    yield
+
+
+def returns_none():
+    return None
+    yield
+
+
+def yields_then_returns_seven():
+    yield
+    return 7
+
+
+def echo():
+    x = yield
+    while True:
+        x = yield x
+
+
+def primed(gen):
+    next(gen)
+    return gen
+
+
+def stop_iteration_of(func, *args):
+    """The StopIteration that func(*args) raises."""
+    with unittest.TestCase().assertRaises(StopIteration) as cm:
+        func(*args)
+    return cm.exception
+
+
+class StopValueTests(unittest.TestCase):
+    """R16: a generator's return value reaches next()'s caller."""
+
+    wrappers = {
+        'map': lambda it: map(str, it),
+        'filter': lambda it: filter(None, it),
+        'zip first': lambda it: zip(it),
+        'zip first of two': lambda it: zip(it, iter([1])),
+        'zip later': lambda it: zip(iter([1]), it),
+        'enumerate': enumerate,
+    }
+
+    def test_return_value(self):
+        for name, wrap in self.wrappers.items():
+            with self.subTest(name):
+                exc = stop_iteration_of(next, wrap(returns_five()))
+                self.assertEqual(exc.value, 5)
+                self.assertEqual(exc.args, (5,))
+
+    def test_return_none(self):
+        for name, wrap in self.wrappers.items():
+            with self.subTest(name):
+                exc = stop_iteration_of(next, wrap(returns_none()))
+                self.assertIsNone(exc.value)
+                self.assertEqual(exc.args, ())
+
+    def test_consumers_end_quietly(self):
+        for name, wrap in self.wrappers.items():
+            with self.subTest(name):
+                self.assertEqual(list(wrap(returns_five())), [])
+                self.assertEqual(list(wrap(returns_none())), [])
+                self.assertEqual(next(wrap(returns_five()), 'd'), 'd')
+
+    def test_strict(self):
+        # An exhausted first argument with an empty second one is equal
+        # length: the generator's value is dropped and the end is bare.
+        exc = stop_iteration_of(next, zip(returns_five(), [], strict=True))
+        self.assertEqual(exc.args, ())
+        exc = stop_iteration_of(next, zip([], returns_five(), strict=True))
+        self.assertEqual(exc.args, ())
+        exc = stop_iteration_of(next, zip(returns_none(), [], strict=True))
+        self.assertEqual(exc.args, ())
+
+    def test_strict_lengths(self):
+        with self.assertRaisesRegex(
+                ValueError, r'zip\(\) argument 2 is shorter than argument 1'):
+            next(zip([1], returns_five(), strict=True))
+        with self.assertRaisesRegex(
+                ValueError, r'zip\(\) argument 2 is longer than argument 1'):
+            next(zip(returns_five(), [1], strict=True))
+        with self.assertRaisesRegex(
+                ValueError, r'map\(\) argument 2 is longer than argument 1'):
+            next(map(str, returns_five(), [1], strict=True))
+        with self.assertRaisesRegex(
+                ValueError, r'map\(\) argument 2 is shorter than argument 1'):
+            next(map(str, [1], returns_five(), strict=True))
+        exc = stop_iteration_of(
+            next, map(str, returns_five(), [], strict=True))
+        self.assertEqual(exc.args, ())
+
+
+class CIteratorTests(unittest.TestCase):
+    """Iterators that only have an object tp_iternext."""
+
+    def test_iter(self):
+        for args in (('stop', 7), ('null',), ('error',)):
+            with self.subTest(args):
+                it = CIter(*args)
+                self.assertIs(iter(it), it)
+
+    def test_without_tp_iter(self):
+        it = CIterBare('stop', 7)
+        self.assertEqual(stop_iteration_of(next, it).value, 7)
+        self.assertEqual(next(CIterBare('null'), 'd'), 'd')
+        with self.assertRaisesRegex(TypeError, 'is not iterable'):
+            iter(it)
+        with self.assertRaisesRegex(TypeError, 'is not iterable'):
+            list(it)
+
+    def test_stop_iteration_value(self):
+        exc = stop_iteration_of(next, CIter('stop', 7))
+        self.assertEqual(exc.value, 7)
+        self.assertEqual(exc.args, (7,))
+        exc = stop_iteration_of(next, CIter('stop'))
+        self.assertIsNone(exc.value)
+        self.assertEqual(exc.args, ())
+
+    def test_null_without_exception(self):
+        exc = stop_iteration_of(next, CIter('null'))
+        self.assertIsNone(exc.value)
+        self.assertEqual(exc.args, ())
+
+    def test_next_default(self):
+        sentinel = object()
+        self.assertIs(next(CIter('stop', 7), sentinel), sentinel)
+        self.assertIs(next(CIter('null'), sentinel), sentinel)
+        with self.assertRaises(ValueError):
+            next(CIter('error'), sentinel)
+
+    def test_for_and_list(self):
+        for args in (('stop', 7), ('null',)):
+            with self.subTest(args):
+                self.assertEqual(list(CIter(*args)), [])
+                self.assertEqual([x for x in CIter(*args)], [])
+                items = []
+                for x in CIter(*args):
+                    items.append(x)
+                self.assertEqual(items, [])
+        for func in (list, tuple, sum):
+            with self.subTest(func):
+                with self.assertRaises(ValueError):
+                    func(CIter('error'))
+        with self.assertRaises(ValueError):
+            for x in CIter('error'):
+                pass
+
+    def test_yield_from(self):
+        def delegate(it):
+            result = yield from it
+            return result
+
+        for args, expected in ((('stop', 7), 7), (('null',), None),
+                               (('stop',), None)):
+            with self.subTest(args):
+                gen = delegate(CIter(*args))
+                exc = stop_iteration_of(next, gen)
+                self.assertEqual(exc.value, expected)
+        with self.assertRaises(ValueError):
+            next(delegate(CIter('error')))
+
+    def test_zip_and_map(self):
+        for wrap in (lambda it: zip(it), lambda it: zip([1], it),
+                     lambda it: map(str, it), lambda it: filter(None, it),
+                     enumerate):
+            with self.subTest(wrap):
+                self.assertEqual(
+                    stop_iteration_of(next, wrap(CIter('stop', 7))).value, 7)
+                exc = stop_iteration_of(next, wrap(CIter('null')))
+                self.assertEqual(exc.args, ())
+                self.assertEqual(list(wrap(CIter('stop', 7))), [])
+                with self.assertRaises(ValueError):
+                    next(wrap(CIter('error')))
+        # strict mode drops the value, as it drops a generator's
+        exc = stop_iteration_of(
+            next, zip(CIter('stop', 7), [], strict=True))
+        self.assertEqual(exc.args, ())
+        with self.assertRaises(ValueError):
+            next(zip(CIter('error'), [], strict=True))
+
+    def test_iternext_from_c(self):
+        item, exc = iternext_call(CIter('stop', 7))
+        self.assertIsNone(item)
+        self.assertIs(type(exc), StopIteration)
+        self.assertEqual(exc.value, 7)
+        self.assertEqual(iternext_call(CIter('null')), (None, None))
+        item, exc = iternext_call(CIter('error'))
+        self.assertIs(type(exc), ValueError)
+
+    def test_send_from_c(self):
+        self.assertEqual(iter_send(CIter('stop', 7), None),
+                         (PYGEN_RETURN, 7))
+        self.assertEqual(iter_send(CIter('null'), None),
+                         (PYGEN_RETURN, None))
+        self.assertEqual(iter_send(iter([4, 5]), None), (PYGEN_NEXT, 4))
+        exhausted = iter([])
+        self.assertEqual(iter_send(exhausted, None), (PYGEN_RETURN, None))
+        with self.assertRaises(ValueError):
+            iter_send(CIter('error'), None)
+        with self.assertRaises(AttributeError):
+            iter_send(iter([4, 5]), 1000)
+
+
+class PythonNextTests(unittest.TestCase):
+    def test_stop_iteration_reaches_caller(self):
+        class Stops:
+            def __init__(self, exc):
+                self.exc = exc
+
+            def __iter__(self):
+                return self
+
+            def __next__(self):
+                raise self.exc
+
+        class MyStop(StopIteration):
+            pass
+
+        for exc in (StopIteration(7), MyStop(7)):
+            with self.subTest(type(exc)):
+                with self.assertRaises(StopIteration) as cm:
+                    next(Stops(exc))
+                self.assertIs(cm.exception, exc)
+                self.assertIs(type(cm.exception), type(exc))
+                self.assertEqual(cm.exception.value, 7)
+                with self.assertRaises(StopIteration) as cm:
+                    next(zip(Stops(exc)))
+                self.assertIs(cm.exception, exc)
+                self.assertEqual(next(Stops(exc), 'd'), 'd')
+                self.assertEqual(list(Stops(exc)), [])
+
+    def test_next_is_none(self):
+        class X:
+            __next__ = None
+
+        class Y:
+            def __iter__(self):
+                return self
+            __next__ = None
+
+        with self.assertRaisesRegex(TypeError,
+                                    "'NoneType' object is not callable"):
+            next(X())
+        with self.assertRaisesRegex(TypeError,
+                                    "'X' object is not iterable"):
+            iter(X())
+        with self.assertRaisesRegex(TypeError,
+                                    "'NoneType' object is not callable"):
+            list(Y())
+
+    def test_next_added_later(self):
+        class Z:
+            pass
+
+        z = Z()
+        with self.assertRaisesRegex(TypeError,
+                                    "'Z' object is not an iterator"):
+            next(z)
+        Z.__next__ = lambda self: 7
+        self.assertEqual(next(z), 7)
+        self.assertEqual(next(Z()), 7)
+
+    def test_next_added_to_base(self):
+        class Base:
+            pass
+
+        class Sub(Base):
+            pass
+
+        sub = Sub()
+        with self.assertRaisesRegex(TypeError,
+                                    "'Sub' object is not an iterator"):
+            next(sub)
+        Base.__next__ = lambda self: 8
+        self.assertEqual(next(sub), 8)
+        self.assertEqual(next(Base()), 8)
+        self.assertEqual(next(Sub()), 8)
+
+
+class SendAndGeneratorFromCTests(unittest.TestCase):
+    def test_generator_iternext(self):
+        self.assertEqual(iternext_call(returns_none()), (None, None))
+        item, exc = iternext_call(returns_five())
+        self.assertIsNone(item)
+        self.assertIs(type(exc), StopIteration)
+        self.assertEqual(exc.args, (5,))
+        self.assertEqual(iternext_call(primed(echo())), (None, None))
+
+        def one():
+            yield 1
+        self.assertEqual(iternext_call(one()), (1, None))
+
+    def test_send(self):
+        gen = primed(echo())
+        self.assertEqual(iter_send(gen, 1000), (PYGEN_NEXT, 1000))
+        self.assertEqual(iter_send(gen, None), (PYGEN_NEXT, None))
+        self.assertEqual(iter_send(gen, 2.5), (PYGEN_NEXT, 2.5))
+
+    def test_send_just_started(self):
+        with self.assertRaisesRegex(
+                TypeError, "can't send non-None value to a just-started"):
+            iter_send(echo(), 1000)
+        self.assertEqual(iter_send(echo(), None), (PYGEN_NEXT, None))
+
+    def test_send_return(self):
+        for arg in (1000, None):
+            with self.subTest(arg):
+                gen = primed(yields_then_returns_seven())
+                self.assertEqual(iter_send(gen, arg), (PYGEN_RETURN, 7))
+        self.assertEqual(iter_send(returns_five(), None), (PYGEN_RETURN, 5))
+        self.assertEqual(iter_send(returns_none(), None),
+                         (PYGEN_RETURN, None))
+
+    def test_async_generator_asend(self):
+        async def yields():
+            yield 1
+
+        async def ends():
+            return
+            yield
+
+        # The yielded value travels as the awaitable's StopIteration value
+        self.assertEqual(list(yields().asend(None)), [])
+        with self.assertRaises(StopAsyncIteration):
+            list(ends().asend(None))
+
+
+class ForLoopMonitoringTests(unittest.TestCase):
+    """The end of a for loop over a generator, as FOR_ITER reports it in
+    this tree (value-api-m1b-m2.md, section 1.2, FOR_ITER row): one RAISE
+    event with StopIteration(v) for a return value, none for a None return.
+    The base tree already does this; upstream's FOR_ITER_GEN path reports
+    STOP_ITERATION at END_FOR instead, which the register IR does not take
+    here."""
+
+    def record(self, gen_func):
+        monitoring = sys.monitoring
+        events = monitoring.events
+        tool = next(i for i in range(6) if monitoring.get_tool(i) is None)
+        seen = []
+
+        def on_raise(code, offset, exc):
+            seen.append(('raise', type(exc), exc.value))
+
+        def on_stop(code, offset, exc):
+            seen.append(('stop', type(exc), exc.value))
+
+        def loop():
+            for _ in gen_func():
+                pass
+
+        loop()
+        monitoring.use_tool_id(tool, 'test_value_slots')
+        try:
+            monitoring.register_callback(tool, events.RAISE, on_raise)
+            monitoring.register_callback(tool, events.STOP_ITERATION, on_stop)
+            monitoring.set_events(tool, events.RAISE | events.STOP_ITERATION)
+            loop()
+            monitoring.set_events(tool, 0)
+        finally:
+            monitoring.set_events(tool, 0)
+            monitoring.register_callback(tool, events.RAISE, None)
+            monitoring.register_callback(tool, events.STOP_ITERATION, None)
+            monitoring.free_tool_id(tool)
+        return seen
+
+    def test_return_value(self):
+        def gen():
+            yield 1
+            return 5
+
+        self.assertEqual(self.record(gen), [('raise', StopIteration, 5)])
+
+    def test_return_none(self):
+        def gen():
+            yield 1
+            return None
+
+        self.assertEqual(self.record(gen), [])
+
+
+class UnsupportedOperandTests(unittest.TestCase):
+    def test_object_errors(self):
+        five = 5
+        one = 1
+        number = 2.5
+        with self.assertRaisesRegex(TypeError,
+                                    "'int' object is not subscriptable"):
+            five[0]
+        with self.assertRaisesRegex(TypeError,
+                                    "object of type 'int' has no len"):
+            len(five)
+        with self.assertRaisesRegex(TypeError,
+                                    "'float' object is not iterable"):
+            iter(number)
+        with self.assertRaisesRegex(
+                TypeError,
+                "argument of type 'int' is not a container or iterable"):
+            one in five
+        with self.assertRaisesRegex(TypeError,
+                                    "'int' object is not an iterator"):
+            next(five)
+
+    def test_mapping_only(self):
+        obj = MapOnly()
+        two_pow_70 = 2**70
+        # mp_subscript sees the key as given: no index conversion
+        self.assertEqual(obj[-1], ('mp', -1))
+        self.assertEqual(obj[1000], ('mp', 1000))
+        self.assertEqual(obj[two_pow_70], ('mp', two_pow_70))
+        self.assertEqual(obj['a'], ('mp', 'a'))
+        with self.assertRaisesRegex(TypeError, 'has no len'):
+            len(obj)
+
+    def test_sequence_only(self):
+        obj = SeqOnly()
+        two_pow_70 = 2**70
+        one_float = 1.0
+        self.assertEqual(len(obj), 10)
+        # A negative index is adjusted by sq_length
+        self.assertEqual(obj[-1], ('sq', 9))
+        self.assertEqual(obj[-10], ('sq', 0))
+        self.assertEqual(obj[-11], ('sq', -1))
+        self.assertEqual(obj[1], ('sq', 1))
+        self.assertEqual(obj[1000], ('sq', 1000))
+        with self.assertRaisesRegex(
+                IndexError,
+                "cannot fit 'int' into an index-sized integer"):
+            obj[two_pow_70]
+        with self.assertRaisesRegex(
+                TypeError, "sequence index must be integer, not 'str'"):
+            obj['a']
+        with self.assertRaisesRegex(
+                TypeError, "sequence index must be integer, not 'float'"):
+            obj[one_float]
+
+
+class ItemValueSlotTests(unittest.TestCase):
+    """The value subscript, assignment, item and contains slots.
+
+    VMap's two sides log their own names; VItems's object slots are the
+    thunks of its value slots. A key reaches the value slot as a word: an
+    int or float inline.
+    """
+
+    def setUp(self):
+        self.log = []
+        set_logs(self, self.log)
+
+    def test_subscript_takes_the_word(self):
+        m = VMap()
+        big = 2**70
+        for key, inline in ((5, True), (2.5, True), (big, False),
+                            ('a', False)):
+            with self.subTest(key=key):
+                self.assertEqual(m[key], ('subscript', key, inline))
+                self.assertEqual(operator.getitem(m, key),
+                                 ('subscript', key, inline))
+        self.assertEqual(self.log, ['VMap.subscript.value'] * 8)
+
+    def test_assignment_deletion_and_contains(self):
+        m = VMap()
+        m[1] = 'one'
+        m[2.5] = 7
+        self.assertEqual(m.store, {1: 'one', 2.5: 7})
+        self.assertIn(1, m)
+        self.assertNotIn(3, m)
+        del m[1]
+        self.assertEqual(m.store, {2.5: 7})
+        with self.assertRaises(KeyError) as cm:
+            del m[1]
+        self.assertEqual(cm.exception.args, (1,))
+        self.assertEqual(self.log,
+                         ['VMap.ass_subscript.value'] * 2
+                         + ['VMap.contains.value'] * 2
+                         + ['VMap.ass_subscript.value'] * 2)
+
+    def test_mapping_wrappers(self):
+        # The slot wrappers of these families call the value side.
+        m = VMap()
+        self.assertEqual(VMap.__getitem__(m, 5), ('subscript', 5, True))
+        VMap.__setitem__(m, 5, 'x')
+        self.assertTrue(VMap.__contains__(m, 5))
+        VMap.__delitem__(m, 5)
+        self.assertEqual(m.store, {})
+        self.assertEqual(self.log, ['VMap.subscript.value',
+                                    'VMap.ass_subscript.value',
+                                    'VMap.contains.value',
+                                    'VMap.ass_subscript.value'])
+
+    def test_c_api(self):
+        m = VMap()
+        self.assertEqual(_testcapi.mapping_getoptionalitem(m, 5),
+                         ('subscript', 5, True))
+        s = VItems()
+        s[1] = 'one'
+        _testlimitedcapi = import_helper.import_module('_testlimitedcapi')
+        self.assertEqual(_testlimitedcapi.sequence_getitem(s, -1),
+                         ('item', 9))
+        self.assertEqual(self.log, ['VMap.subscript.value', 'VItems.ass_item',
+                                    'VItems.item'])
+
+    def test_item_index(self):
+        s = VItems()
+        # A negative index is adjusted by sq_length before the value slot.
+        self.assertEqual(s[-1], ('item', 9))
+        self.assertEqual(s[3], ('item', 3))
+        with self.assertRaisesRegex(IndexError, 'VItems index out of range'):
+            s[10]
+        with self.assertRaisesRegex(
+                IndexError, "cannot fit 'int' into an index-sized integer"):
+            s[2**70]
+        with self.assertRaisesRegex(
+                TypeError, "sequence index must be integer, not 'str'"):
+            s['a']
+        self.assertEqual(self.log, ['VItems.item'] * 3)
+
+    def test_item_assignment_and_wrappers(self):
+        s = VItems()
+        s[-1] = 'last'
+        s[0] = 'first'
+        del s[0]
+        self.assertEqual(s.store, {9: 'last'})
+        self.assertIn(9, s)
+        self.assertEqual(VItems.__getitem__(s, -2), ('item', 8))
+        VItems.__setitem__(s, -2, 'x')
+        VItems.__delitem__(s, -1)
+        self.assertEqual(s.store, {8: 'x'})
+        self.assertEqual(self.log,
+                         ['VItems.ass_item'] * 3 + ['VItems.contains',
+                          'VItems.item'] + ['VItems.ass_item'] * 2)
+
+    def test_python_subclass(self):
+        class Inherit(VMap):
+            pass
+
+        class Override(VMap):
+            def __getitem__(self, key):
+                return ('py', key)
+
+            def __contains__(self, item):
+                return item == 'py'
+
+        self.assertEqual(Inherit()[5], ('subscript', 5, True))
+        self.assertEqual(Override()[5], ('py', 5))
+        self.assertIn('py', Override())
+        self.assertNotIn(5, Override())
+        self.assertEqual(self.log, ['VMap.subscript.value'])
+
+
+class ThinFormTests(unittest.TestCase):
+    def test_slot_wrappers(self):
+        t = (1, 2.5, 3)
+        self.assertEqual(tuple.__getitem__(t, -1), 3)
+        self.assertEqual(tuple.__getitem__(t, 1), 2.5)
+        with self.assertRaises(IndexError):
+            tuple.__getitem__(t, 3)
+        self.assertIs(tuple.__contains__(t, 2.5), True)
+        self.assertIs(tuple.__contains__(t, 2.0), False)
+        self.assertIs(tuple.__contains__(t, 3.0), True)
+        self.assertEqual(str.__getitem__('abc', 1), 'b')
+        with self.assertRaisesRegex(IndexError,
+                                    'range object index out of range'):
+            range.__getitem__(range(10), 1000)
+        self.assertEqual(range.__getitem__(range(10), -1), 9)
+
+    def test_key_error_value(self):
+        for key in (1000, (1, 2), 'a', 2.5, None):
+            with self.subTest(key):
+                with self.assertRaises(KeyError) as cm:
+                    set_key_error_value(key)
+                self.assertEqual(cm.exception.args, (key,))
+                self.assertIs(cm.exception.args[0], key)
+
+
+def _box_kind_counters(func):
+    """The Py_STATS counters of one call func(), by line name."""
+    func()
+    # The dump directory of this process (Python/pystats.c); it may be shared,
+    # and holds markers beside the dumps, so take this process's dump.
+    stats_dir = os.environ.get('PYTHON_PYSTATS_DIR') or '/tmp/py_stats'
+    before = set(os.listdir(stats_dir)) if os.path.isdir(stats_dir) else set()
+    sys._stats_clear()
+    sys._stats_on()
+    func()
+    sys._stats_off()
+    sys._stats_dump()
+    mine = f'Stats process: pid={os.getpid()} '
+    new = []
+    for name in set(os.listdir(stats_dir)) - before:
+        if not name.endswith('.txt'):
+            continue
+        with open(os.path.join(stats_dir, name)) as stream:
+            if stream.readline().startswith(mine):
+                new.append(name)
+    assert len(new) == 1, new
+    path = os.path.join(stats_dir, new.pop())
+    counters = {}
+    with open(path) as stream:
+        for line in stream:
+            name, sep, value = line.strip().rpartition(':')
+            if sep and value.strip().isdigit():
+                counters[name.strip()] = int(value)
+    os.unlink(path)
+    return counters
+
+
+@unittest.skipUnless(hasattr(sys, '_stats_on'), 'needs a Py_STATS build')
+class IterationBoxTests(unittest.TestCase):
+    KINDS = ('Boxing by kind (slot adapter)', 'Boxing by kind (thunk)')
+
+    def extra_boxes(self, func):
+        counters = _box_kind_counters(func)
+        base = _box_kind_counters(lambda: None)
+        for kind in self.KINDS:
+            self.assertIn(kind, counters)
+        return {kind: counters[kind] - base[kind] for kind in self.KINDS}
+
+    def test_enumerate_and_zip_of_floats(self):
+        floats = [i + 0.5 for i in range(200)]
+
+        def enumerated():
+            total = 0
+            for i, x in enumerate(floats):
+                total += i
+            return total
+
+        def zipped():
+            total = 0.0
+            for a, b in zip(floats, floats):
+                total += a
+            return total
+
+        for func in (enumerated, zipped):
+            with self.subTest(func.__name__):
+                self.assertEqual(self.extra_boxes(func),
+                                 {kind: 0 for kind in self.KINDS})
 
 
 if __name__ == '__main__':

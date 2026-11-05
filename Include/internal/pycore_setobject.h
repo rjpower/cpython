@@ -52,7 +52,6 @@ extern void _PySet_ClearInternal(PySetObject *so);
 Py_VALUE_COMPAT(_PySet_AddValueTakeRef)
 PyAPI_FUNC(int) _PySet_AddTakeRef(PySetObject *so, PyObject *key);
 PyAPI_FUNC(int) _PySet_AddValueTakeRef(PySetObject *so, PyValue key);
-extern PyValue _PySetIter_NextValue(PyObject *iterator);
 
 PyObject *
 _PySet_Freeze(PyObject *set);

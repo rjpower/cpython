@@ -1196,8 +1196,8 @@ static PyMethodDef setiter_methods[] = {
     {NULL,              NULL}           /* sentinel */
 };
 
-PyValue
-_PySetIter_NextValue(PyObject *self)
+static _PyStatusValue
+setiter_iternext_value(PyObject *self)
 {
     setiterobject *si = (setiterobject*)self;
     PyValue key = PyValue_NULL;
@@ -1206,7 +1206,7 @@ _PySetIter_NextValue(PyObject *self)
     PySetObject *so = si->si_set;
 
     if (so == NULL)
-        return PyValue_NULL;
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
     assert (PyAnySet_Check(so));
 
     Py_ssize_t so_used = FT_ATOMIC_LOAD_SSIZE_RELAXED(so->used);
@@ -1215,7 +1215,7 @@ _PySetIter_NextValue(PyObject *self)
         PyErr_SetString(PyExc_RuntimeError,
                         "Set changed size during iteration");
         si->si_used = -1; /* Make this state sticky */
-        return PyValue_NULL;
+        return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
     }
 
     Py_BEGIN_CRITICAL_SECTION(so);
@@ -1234,24 +1234,14 @@ _PySetIter_NextValue(PyObject *self)
     if (PyValue_IsNull(key)) {
         si->si_set = NULL;
         Py_DECREF(so);
-        return PyValue_NULL;
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
     }
     si->len--;
-    return key;
+    return (_PyStatusValue){PYGEN_NEXT, key};
 }
 
-static PyObject *
-setiter_iternext(PyObject *self)
-{
-    /* A failed box consumes the element (see listiter_next()). */
-    PyValue key = _PySetIter_NextValue(self);
-    if (PyValue_IsNull(key)) {
-        return NULL;
-    }
-    PyObject *boxed = _PyValue_AsObjectAt(key, BOX_SITE_ITERATION);
-    PyValue_CLOSE(key);
-    return boxed;
-}
+/* A failed box consumes the element (see listiter_next()). */
+_Py_VALUE_THUNK_ITERNEXT(setiter_iternext, setiter_iternext_value)
 
 PyTypeObject PySetIter_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
@@ -1284,6 +1274,9 @@ PyTypeObject PySetIter_Type = {
     setiter_iternext,                           /* tp_iternext */
     setiter_methods,                            /* tp_methods */
     0,
+    .tp_value = {
+        .iternext = _Py_VALUE_SLOT_INIT(iternext, setiter_iternext_value),
+    },
 };
 
 static PyObject *

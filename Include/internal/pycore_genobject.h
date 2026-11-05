@@ -33,11 +33,19 @@ _PyGen_FinalizerIsNoop(PyObject *op)
 PyAPI_FUNC(PyObject *)_PyGen_yf(PyGenObject *);
 extern int _PyGen_ClearFrame(PyGenObject *self);
 
-// Export for '_asyncio' shared extension
-PyAPI_FUNC(int) _PyGen_SetStopIterationValue(PyObject *);
+/* Set StopIteration(value), or a bare StopIteration for PyValue_NULL.
+   Return 0, or -1 with another exception set. StopIteration's value field
+   is an object, so an inline value is boxed (value-api-m1b-m2.md, B6).
+   Export for '_asyncio' shared extension. */
+PyAPI_FUNC(int) _PyGen_SetStopIterationValue(PyValueBorrow value);
+#define _PyGen_SetStopIterationValue(V) \
+    (_PyGen_SetStopIterationValue)(PyValue_Borrow(V))
 
-// Export for '_asyncio' shared extension
-PyAPI_FUNC(int) _PyGen_FetchStopIterationValue(PyObject **);
+/* Fetch and clear a pending StopIteration and return its value, None if
+   it has none or if no exception is set. With another exception set,
+   return PyValue_NULL and leave it.
+   Export for '_asyncio' shared extension. */
+PyAPI_FUNC(PyValue) _PyGen_FetchStopIterationValue(void);
 // Set the exception passed to throw(typ[, val[, tb]]).
 // Return 0 on success, -1 on failure.
 extern int _PyGen_SetException(PyObject *typ, PyObject *val, PyObject *tb);

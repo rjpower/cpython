@@ -82,8 +82,6 @@ PyAPI_FUNC(PyObject *)_PyList_AsTupleAndClear(PyListObject *v);
 
 /* Owned value, NULL on exhaustion; these do not box at the object ABI. */
 PyAPI_FUNC(_PyValueIndexPair) _PyList_IterValue(PyObject *, Py_ssize_t);
-PyAPI_FUNC(PyValue) _PyListIter_NextValue(PyObject *iterator);
-PyAPI_FUNC(PyValue) _PyListRevIter_NextValue(PyObject *iterator);
 
 #ifdef __cplusplus
 }

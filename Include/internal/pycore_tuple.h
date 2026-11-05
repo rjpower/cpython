@@ -52,7 +52,6 @@ PyAPI_FUNC(PyObject *) _PyTuple_PackValues(Py_ssize_t n,
 PyAPI_FUNC(PyObject *) _PyTuple_FromPairTakeValue(PyValue, PyValue);
 
 extern _PyValueIndexPair _PyTuple_IterValue(PyObject *, Py_ssize_t);
-extern PyValue _PyTupleIter_NextValue(PyObject *);
 
 /* A borrow rooted by the tuple. Retain it (PyValue_DUP()) before a callback
    can remove its owner. Generic object-form reads use the owning

@@ -14,6 +14,7 @@
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_ceval.h"         // _Py_EnterRecursiveCallTstate()
 #include "pycore_crossinterp.h"   // _Py_CallInInterpreter()
+#include "pycore_dict.h"          // PyDict_GetValue()
 #include "pycore_genobject.h"     // _PyGen_FetchStopIterationValue()
 #include "pycore_list.h"          // _PyList_AppendTakeRef()
 #include "pycore_long.h"          // _PyLong_IsNegative()
@@ -54,6 +55,175 @@ null_error(void)
     return NULL;
 }
 
+/* The value dispatchers of the subscript, item, contains, iternext and send
+   families (pyjit/design/proposals/value-api-m1b-m2.md, sections 1.2 and
+   1.3). Their receivers are objects: no int or float defines these slots,
+   so a dispatcher whose receiver is a value raises upstream's TypeError
+   for an inline one before it reads a slot (R1). A type's value slot is
+   called if it is set, else its object slot through the adapter below,
+   which boxes only an inline key, item or value (SLOT_ADAPTER, under the
+   class SEQUENCE or ITERATION). */
+
+#define seq_adapter_box(v, SLOT) \
+    _PyValue_AdapterBox((v), BOX_SITE_SEQUENCE, (SLOT))
+#define iter_adapter_box(v, SLOT) \
+    _PyValue_AdapterBox((v), BOX_SITE_ITERATION, (SLOT))
+#define seq_adapter_release(v, obj) _PyValue_AdapterRelease((v), (obj))
+
+static void value_type_error(const char *msg, PyValueBorrow v);
+
+// _PyIndex_Check() of a value: an inline int has __index__, a float not.
+static inline int
+value_index_check(PyValueBorrow v)
+{
+    if (PyValue_IsInline(v)) {
+        return PyValue_IsInlineInt(v);
+    }
+    return _PyIndex_Check(PyValue_AsKnownObjectBorrow(v));
+}
+#define value_index_check(V) (value_index_check)(PyValue_Borrow(V))
+
+static PyValue
+call_subscript(PyObject *o, binaryfunc slot, PyValueBorrow key)
+{
+    PyTypeObject *t = Py_TYPE(o);
+    _Py_subscriptvaluefunc f = _PyType_VALUE_SLOT(t, subscript);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_subscript);
+        return f(o, key);
+    }
+    PyObject *k = seq_adapter_box(key, slot);
+    if (k == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *res = slot(o, k);
+    seq_adapter_release(key, k);
+    return _PyValue_FromObjectResult(res);
+}
+
+static PyValue
+call_item(PyObject *o, ssizeargfunc slot, Py_ssize_t i)
+{
+    PyTypeObject *t = Py_TYPE(o);
+    _Py_itemvaluefunc f = _PyType_VALUE_SLOT(t, item);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_item);
+        return f(o, i);
+    }
+    return _PyValue_FromObjectResult(slot(o, i));
+}
+
+// value is PyValue_NULL to delete.
+static int
+call_ass_subscript(PyObject *o, objobjargproc slot, PyValueBorrow key,
+                   PyValueBorrow value)
+{
+    PyTypeObject *t = Py_TYPE(o);
+    _Py_asssubscriptvaluefunc f = _PyType_VALUE_SLOT(t, ass_subscript);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_ass_subscript);
+        return f(o, key, value);
+    }
+    PyObject *k = seq_adapter_box(key, slot);
+    if (k == NULL) {
+        return -1;
+    }
+    PyObject *v = NULL;
+    if (!PyValue_IsNull(value)) {
+        v = seq_adapter_box(value, slot);
+        if (v == NULL) {
+            seq_adapter_release(key, k);
+            return -1;
+        }
+    }
+    int res = slot(o, k, v);
+    if (v != NULL) {
+        seq_adapter_release(value, v);
+    }
+    seq_adapter_release(key, k);
+    return res;
+}
+
+// value is PyValue_NULL to delete.
+static int
+call_ass_item(PyObject *o, ssizeobjargproc slot, Py_ssize_t i,
+              PyValueBorrow value)
+{
+    PyTypeObject *t = Py_TYPE(o);
+    _Py_assitemvaluefunc f = _PyType_VALUE_SLOT(t, ass_item);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_ass_item);
+        return f(o, i, value);
+    }
+    if (PyValue_IsNull(value)) {
+        return slot(o, i, NULL);
+    }
+    PyObject *v = seq_adapter_box(value, slot);
+    if (v == NULL) {
+        return -1;
+    }
+    int res = slot(o, i, v);
+    seq_adapter_release(value, v);
+    return res;
+}
+
+static int
+call_contains(PyObject *o, objobjproc slot, PyValueBorrow item)
+{
+    PyTypeObject *t = Py_TYPE(o);
+    _Py_containsvaluefunc f = _PyType_VALUE_SLOT(t, contains);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_contains);
+        return f(o, item);
+    }
+    PyObject *x = seq_adapter_box(item, slot);
+    if (x == NULL) {
+        return -1;
+    }
+    int res = slot(o, x);
+    seq_adapter_release(item, x);
+    return res;
+}
+
+/* The ITERNEXT adapter: an object tp_iternext's item is NEXT; NULL with
+   nothing pending is RETURN with no value; NULL with any exception, a
+   StopIteration included, is ERROR with the exception untouched (R11). */
+static _PyStatusValue
+adapt_iternext(iternextfunc slot, PyObject *it)
+{
+    PyObject *res = slot(it);
+    if (res != NULL) {
+        return (_PyStatusValue){PYGEN_NEXT, PyValue_FromObjectSteal(res)};
+    }
+    if (!PyErr_Occurred()) {
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
+    }
+    return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
+}
+
+static _PyStatusValue
+call_send(PyObject *it, sendfunc slot, PyValueBorrow arg)
+{
+    PyTypeObject *t = Py_TYPE(it);
+    _Py_sendvaluefunc f = _PyType_VALUE_SLOT(t, send);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_send);
+        return f(it, arg);
+    }
+    PyObject *a = iter_adapter_box(arg, slot);
+    if (a == NULL) {
+        return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
+    }
+    PyObject *res = NULL;
+    PySendResult status = slot(it, a, &res);
+    seq_adapter_release(arg, a);
+    if (status == PYGEN_ERROR) {
+        assert(res == NULL);
+        return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
+    }
+    return (_PyStatusValue){status, PyValue_FromObjectSteal(res)};
+}
+
 /* Operations on any object */
 
 PyObject *
@@ -70,12 +240,18 @@ PyObject_Type(PyObject *o)
 }
 
 Py_ssize_t
-PyObject_Size(PyObject *o)
+(_PyValue_Size)(PyValueBorrow v)
 {
-    if (o == NULL) {
+    if (PyValue_IsNull(v)) {
         null_error();
         return -1;
     }
+    if (PyValue_IsInline(v)) {
+        // As PyMapping_Size() reports for int and float.
+        value_type_error("object of type '%.200s' has no len()", v);
+        return -1;
+    }
+    PyObject *o = PyValue_AsKnownObjectBorrow(v);
 
     PySequenceMethods *m = Py_TYPE(o)->tp_as_sequence;
     if (m && m->sq_length) {
@@ -84,21 +260,38 @@ PyObject_Size(PyObject *o)
         return len;
     }
 
-    return PyMapping_Size(o);
+    return _PyValue_MappingSize(v);
+}
+
+Py_ssize_t
+PyObject_Size(PyObject *o)
+{
+    return _PyValue_Size(_Py_VALUE_ARG(o));
 }
 
 #undef PyObject_Length
 Py_ssize_t
 PyObject_Length(PyObject *o)
 {
-    return PyObject_Size(o);
+    return _PyValue_Size(_Py_VALUE_ARG(o));
 }
 #define PyObject_Length PyObject_Size
 
 int
-_PyObject_HasLen(PyObject *o) {
+(_PyValue_HasLen)(PyValueBorrow v)
+{
+    if (PyValue_IsInline(v)) {
+        // An int or float has no sq_length or mp_length.
+        return 0;
+    }
+    PyObject *o = PyValue_AsKnownObjectBorrow(v);
     return (Py_TYPE(o)->tp_as_sequence && Py_TYPE(o)->tp_as_sequence->sq_length) ||
         (Py_TYPE(o)->tp_as_mapping && Py_TYPE(o)->tp_as_mapping->mp_length);
+}
+
+int
+_PyObject_HasLen(PyObject *o) {
+    return _PyValue_HasLen(_Py_VALUE_ARG(o));
 }
 
 /* The length hint function returns a non-negative value from o.__len__()
@@ -108,12 +301,17 @@ _PyObject_HasLen(PyObject *o) {
 */
 
 Py_ssize_t
-PyObject_LengthHint(PyObject *o, Py_ssize_t defaultvalue)
+(_PyValue_LengthHint)(PyValueBorrow v, Py_ssize_t defaultvalue)
 {
+    if (PyValue_IsInline(v)) {
+        // An int or float has no __len__() or __length_hint__().
+        return defaultvalue;
+    }
+    PyObject *o = PyValue_AsKnownObjectBorrow(v);
     PyObject *hint, *result;
     Py_ssize_t res;
-    if (_PyObject_HasLen(o)) {
-        res = PyObject_Length(o);
+    if (_PyValue_HasLen(v)) {
+        res = _PyValue_Size(v);
         if (res < 0) {
             PyThreadState *tstate = _PyThreadState_GET();
             assert(_PyErr_Occurred(tstate));
@@ -167,171 +365,236 @@ PyObject_LengthHint(PyObject *o, Py_ssize_t defaultvalue)
     return res;
 }
 
-PyObject *
-PyObject_GetItem(PyObject *o, PyObject *key)
+Py_ssize_t
+PyObject_LengthHint(PyObject *o, Py_ssize_t defaultvalue)
 {
-    if (o == NULL || key == NULL) {
-        return null_error();
+    return _PyValue_LengthHint(_Py_VALUE_ARG(o), defaultvalue);
+}
+
+// type[key] and Class[key]: the type's __class_getitem__, whose argument
+// is an object.
+static PyValue
+value_class_getitem(PyObject *o, PyValueBorrow key)
+{
+    PyObject *k = _PyValue_AsObjectAt(key, BOX_SITE_SEQUENCE);
+    if (k == NULL) {
+        return PyValue_NULL;
     }
+    PyObject *result;
+    // Special case type[int], but disallow other types so str[int] fails
+    if ((PyTypeObject*)o == &PyType_Type) {
+        result = Py_GenericAlias(o, k);
+        Py_DECREF(k);
+        return _PyValue_FromObjectResult(result);
+    }
+
+    PyObject *meth;
+    if (PyObject_GetOptionalAttr(o, &_Py_ID(__class_getitem__), &meth) < 0) {
+        Py_DECREF(k);
+        return PyValue_NULL;
+    }
+    if (meth && meth != Py_None) {
+        result = PyObject_CallOneArg(meth, k);
+        Py_DECREF(meth);
+        Py_DECREF(k);
+        return _PyValue_FromObjectResult(result);
+    }
+    Py_XDECREF(meth);
+    Py_DECREF(k);
+    PyErr_Format(PyExc_TypeError, "type '%.200s' is not subscriptable",
+                 ((PyTypeObject *)o)->tp_name);
+    return PyValue_NULL;
+}
+
+PyValue
+(_PyValue_GetItem)(PyValueBorrow v, PyValueBorrow key)
+{
+    if (PyValue_IsNull(v) || PyValue_IsNull(key)) {
+        null_error();
+        return PyValue_NULL;
+    }
+    if (PyValue_IsInline(v)) {
+        value_type_error("'%.200s' object is not subscriptable", v);
+        return PyValue_NULL;
+    }
+    PyObject *o = PyValue_AsKnownObjectBorrow(v);
 
     PyMappingMethods *m = Py_TYPE(o)->tp_as_mapping;
     if (m && m->mp_subscript) {
-        PyObject *item = m->mp_subscript(o, key);
-        assert(_Py_CheckSlotResult(o, "__getitem__", item != NULL));
+        PyValue item = call_subscript(o, m->mp_subscript, key);
+        assert(_Py_CheckSlotResult(o, "__getitem__", !PyValue_IsNull(item)));
         return item;
     }
 
     PySequenceMethods *ms = Py_TYPE(o)->tp_as_sequence;
     if (ms && ms->sq_item) {
-        if (_PyIndex_Check(key)) {
+        if (value_index_check(key)) {
             Py_ssize_t key_value;
-            key_value = PyNumber_AsSsize_t(key, PyExc_IndexError);
+            key_value = _PyValue_AsSsize_t(key, PyExc_IndexError);
             if (key_value == -1 && PyErr_Occurred())
-                return NULL;
-            return PySequence_GetItem(o, key_value);
+                return PyValue_NULL;
+            return _PyValue_SequenceGetItem(v, key_value);
         }
         else {
-            return type_error("sequence index must "
-                              "be integer, not '%.200s'", key);
+            value_type_error("sequence index must "
+                             "be integer, not '%.200s'", key);
+            return PyValue_NULL;
         }
     }
 
     if (PyType_Check(o)) {
-        PyObject *meth, *result;
-
-        // Special case type[int], but disallow other types so str[int] fails
-        if ((PyTypeObject*)o == &PyType_Type) {
-            return Py_GenericAlias(o, key);
-        }
-
-        if (PyObject_GetOptionalAttr(o, &_Py_ID(__class_getitem__), &meth) < 0) {
-            return NULL;
-        }
-        if (meth && meth != Py_None) {
-            result = PyObject_CallOneArg(meth, key);
-            Py_DECREF(meth);
-            return result;
-        }
-        Py_XDECREF(meth);
-        PyErr_Format(PyExc_TypeError, "type '%.200s' is not subscriptable",
-                     ((PyTypeObject *)o)->tp_name);
-        return NULL;
+        return value_class_getitem(o, key);
     }
 
-    return type_error("'%.200s' object is not subscriptable", o);
+    value_type_error("'%.200s' object is not subscriptable", v);
+    return PyValue_NULL;
 }
 
-int
-PyMapping_GetOptionalItem(PyObject *obj, PyObject *key, PyObject **result)
+Py_VALUE_ENTRY PyObject *
+PyObject_GetItem(PyObject *o, PyObject *key)
 {
-    if (PyAnyDict_CheckExact(obj)) {
-        return PyDict_GetItemRef(obj, key, result);
+    return _PyValue_THUNK_EXIT(
+        _PyValue_GetItem(_Py_VALUE_ARG(o), _Py_VALUE_ARG(key)), BOX_SITE_SEQUENCE);
+}
+
+_PyStatusValue
+(_PyValue_GetOptionalItem)(PyValueBorrow v, PyValueBorrow key)
+{
+    if (PyValue_IsObject(v)
+        && PyAnyDict_CheckExact(PyValue_AsKnownObjectBorrow(v)))
+    {
+        // The entry's word, unboxed.
+        PyValue item;
+        int found = PyDict_GetValue(PyValue_AsKnownObjectBorrow(v), key,
+                                    &item);
+        return (_PyStatusValue){found, found > 0 ? item : PyValue_NULL};
     }
 
-    *result = PyObject_GetItem(obj, key);
-    if (*result) {
-        return 1;
+    PyValue item = _PyValue_GetItem(v, key);
+    if (!PyValue_IsNull(item)) {
+        return (_PyStatusValue){1, item};
     }
     assert(PyErr_Occurred());
     if (!PyErr_ExceptionMatches(PyExc_KeyError)) {
-        return -1;
+        return (_PyStatusValue){-1, PyValue_NULL};
     }
     PyErr_Clear();
-    return 0;
+    return (_PyStatusValue){0, PyValue_NULL};
 }
 
-PyObject*
+Py_VALUE_ENTRY int
+PyMapping_GetOptionalItem(PyObject *obj, PyObject *key, PyObject **result)
+{
+    return _PyValue_THUNK_EXIT_STATUS(
+        _PyValue_GetOptionalItem(_Py_VALUE_ARG(obj), _Py_VALUE_ARG(key)),
+        result, BOX_SITE_SEQUENCE);
+}
+
+Py_VALUE_ENTRY PyObject*
 _PyMapping_GetOptionalItem2(PyObject *obj, PyObject *key, int *err)
 {
     PyObject* result;
-    *err = PyMapping_GetOptionalItem(obj, key, &result);
+    *err = _PyValue_THUNK_EXIT_STATUS(
+        _PyValue_GetOptionalItem(_Py_VALUE_ARG(obj), _Py_VALUE_ARG(key)),
+        &result, BOX_SITE_SEQUENCE);
     return result;
+}
+
+// o[key] = value, or del o[key] for a PyValue_NULL value.
+static int
+value_ass_item(PyValueBorrow v, PyValueBorrow key, PyValueBorrow value)
+{
+    int deleting = PyValue_IsNull(value);
+    if (PyValue_IsNull(v) || PyValue_IsNull(key)) {
+        null_error();
+        return -1;
+    }
+    if (!PyValue_IsInline(v)) {
+        PyObject *o = PyValue_AsKnownObjectBorrow(v);
+        PyMappingMethods *m = Py_TYPE(o)->tp_as_mapping;
+        if (m && m->mp_ass_subscript) {
+            int res = call_ass_subscript(o, m->mp_ass_subscript, key, value);
+            assert(_Py_CheckSlotResult(o, deleting ? "__delitem__"
+                                                   : "__setitem__",
+                                       res >= 0));
+            return res;
+        }
+
+        if (Py_TYPE(o)->tp_as_sequence) {
+            if (value_index_check(key)) {
+                Py_ssize_t key_value;
+                key_value = _PyValue_AsSsize_t(key, PyExc_IndexError);
+                if (key_value == -1 && PyErr_Occurred())
+                    return -1;
+                if (deleting) {
+                    return _PyValue_SequenceDelItem(v, key_value);
+                }
+                return _PyValue_SequenceSetItem(v, key_value, value);
+            }
+            else if (Py_TYPE(o)->tp_as_sequence->sq_ass_item) {
+                value_type_error("sequence index must be "
+                                 "integer, not '%.200s'", key);
+                return -1;
+            }
+        }
+    }
+
+    value_type_error(deleting
+                     ? "'%.200s' object does not support item deletion"
+                     : "'%.200s' object does not support item assignment", v);
+    return -1;
+}
+
+int
+(_PyValue_SetItem)(PyValueBorrow v, PyValueBorrow key, PyValueBorrow value)
+{
+    if (PyValue_IsNull(value)) {
+        null_error();
+        return -1;
+    }
+    return value_ass_item(v, key, value);
+}
+
+int
+(_PyValue_DelItem)(PyValueBorrow v, PyValueBorrow key)
+{
+    return value_ass_item(v, key, PyValue_Borrow(PyValue_NULL));
 }
 
 int
 PyObject_SetItem(PyObject *o, PyObject *key, PyObject *value)
 {
-    if (o == NULL || key == NULL || value == NULL) {
-        null_error();
-        return -1;
-    }
-
-    PyMappingMethods *m = Py_TYPE(o)->tp_as_mapping;
-    if (m && m->mp_ass_subscript) {
-        int res = m->mp_ass_subscript(o, key, value);
-        assert(_Py_CheckSlotResult(o, "__setitem__", res >= 0));
-        return res;
-    }
-
-    if (Py_TYPE(o)->tp_as_sequence) {
-        if (_PyIndex_Check(key)) {
-            Py_ssize_t key_value;
-            key_value = PyNumber_AsSsize_t(key, PyExc_IndexError);
-            if (key_value == -1 && PyErr_Occurred())
-                return -1;
-            return PySequence_SetItem(o, key_value, value);
-        }
-        else if (Py_TYPE(o)->tp_as_sequence->sq_ass_item) {
-            type_error("sequence index must be "
-                       "integer, not '%.200s'", key);
-            return -1;
-        }
-    }
-
-    type_error("'%.200s' object does not support item assignment", o);
-    return -1;
+    return _PyValue_SetItem(_Py_VALUE_ARG(o), _Py_VALUE_ARG(key),
+                            _Py_VALUE_ARG(value));
 }
 
 int
 PyObject_DelItem(PyObject *o, PyObject *key)
 {
-    if (o == NULL || key == NULL) {
-        null_error();
+    return _PyValue_DelItem(_Py_VALUE_ARG(o), _Py_VALUE_ARG(key));
+}
+
+int
+(_PyValue_DelItemString)(PyValueBorrow o, const char *key)
+{
+    // _PyValue_DelItem() reports an int or float receiver.
+    PyObject *okey = PyUnicode_FromString(key);
+    if (okey == NULL) {
         return -1;
     }
-
-    PyMappingMethods *m = Py_TYPE(o)->tp_as_mapping;
-    if (m && m->mp_ass_subscript) {
-        int res = m->mp_ass_subscript(o, key, (PyObject*)NULL);
-        assert(_Py_CheckSlotResult(o, "__delitem__", res >= 0));
-        return res;
-    }
-
-    if (Py_TYPE(o)->tp_as_sequence) {
-        if (_PyIndex_Check(key)) {
-            Py_ssize_t key_value;
-            key_value = PyNumber_AsSsize_t(key, PyExc_IndexError);
-            if (key_value == -1 && PyErr_Occurred())
-                return -1;
-            return PySequence_DelItem(o, key_value);
-        }
-        else if (Py_TYPE(o)->tp_as_sequence->sq_ass_item) {
-            type_error("sequence index must be "
-                       "integer, not '%.200s'", key);
-            return -1;
-        }
-    }
-
-    type_error("'%.200s' object does not support item deletion", o);
-    return -1;
+    int ret = _PyValue_DelItem(o, _Py_VALUE_ARG(okey));
+    Py_DECREF(okey);
+    return ret;
 }
 
 int
 PyObject_DelItemString(PyObject *o, const char *key)
 {
-    PyObject *okey;
-    int ret;
-
     if (o == NULL || key == NULL) {
         null_error();
         return -1;
     }
-    okey = PyUnicode_FromString(key);
-    if (okey == NULL)
-        return -1;
-    ret = PyObject_DelItem(o, okey);
-    Py_DECREF(okey);
-    return ret;
+    return _PyValue_DelItemString(_Py_VALUE_ARG(o), key);
 }
 
 
@@ -2105,22 +2368,33 @@ PyNumber_ToBase(PyObject *n, int base)
 /* Operations on sequences */
 
 int
-PySequence_Check(PyObject *s)
+(_PyValue_SequenceCheck)(PyValueBorrow v)
 {
+    if (PyValue_IsInline(v)) {
+        // An int or float has no sq_item.
+        return 0;
+    }
+    PyObject *s = PyValue_AsKnownObjectBorrow(v);
     if (PyDict_Check(s))
         return 0;
     return Py_TYPE(s)->tp_as_sequence &&
         Py_TYPE(s)->tp_as_sequence->sq_item != NULL;
 }
 
-Py_ssize_t
-PySequence_Size(PyObject *s)
+int
+PySequence_Check(PyObject *s)
 {
-    if (s == NULL) {
-        null_error();
+    return _PyValue_SequenceCheck(_Py_VALUE_ARG(s));
+}
+
+Py_ssize_t
+(_PyValue_SequenceSize)(PyValueBorrow v)
+{
+    if (PyValue_IsInline(v)) {
+        value_type_error("object of type '%.200s' has no len()", v);
         return -1;
     }
-
+    PyObject *s = PyValue_AsKnownObjectBorrow(v);
     PySequenceMethods *m = Py_TYPE(s)->tp_as_sequence;
     if (m && m->sq_length) {
         Py_ssize_t len = m->sq_length(s);
@@ -2136,6 +2410,16 @@ PySequence_Size(PyObject *s)
     return -1;
 }
 
+Py_ssize_t
+PySequence_Size(PyObject *s)
+{
+    if (s == NULL) {
+        null_error();
+        return -1;
+    }
+    return _PyValue_SequenceSize(_Py_VALUE_ARG(s));
+}
+
 #undef PySequence_Length
 Py_ssize_t
 PySequence_Length(PyObject *s)
@@ -2144,30 +2428,77 @@ PySequence_Length(PyObject *s)
 }
 #define PySequence_Length PySequence_Size
 
-Py_VALUE_ENTRY PyObject *
-PySequence_Concat(PyObject *s, PyObject *o)
+PyValue
+(_PyValue_SequenceConcat)(PyValueBorrow v, PyValueBorrow w)
 {
-    if (s == NULL || o == NULL) {
-        return null_error();
+    if (PyValue_IsInline(v)) {
+        // An int or float has no sq_concat and is not a sequence.
+        value_type_error("'%.200s' object can't be concatenated", v);
+        return PyValue_NULL;
     }
-
-    PySequenceMethods *m = Py_TYPE(s)->tp_as_sequence;
+    PyTypeObject *tv = PyValue_TYPE(v);
+    PySequenceMethods *m = tv->tp_as_sequence;
     if (m && m->sq_concat) {
-        PyObject *res = m->sq_concat(s, o);
-        assert(_Py_CheckSlotResult(s, "+", res != NULL));
+        PyValue res = call_concat(tv, m->sq_concat,
+                                  _Py_VALUE_SLOT_INDEX_sq_concat, v, w);
+        assert(check_value_slot_result(tv, "+", !PyValue_IsNull(res)));
         return res;
     }
 
     /* Instances of user classes defining an __add__() method only
        have an nb_add slot, not an sq_concat slot.      So we fall back
        to nb_add if both arguments appear to be sequences. */
-    if (PySequence_Check(s) && PySequence_Check(o)) {
-        PyObject *result = OBJECT_BINARY_OP1(s, o, nb_add, "+");
-        if (result != Py_NotImplemented)
+    if (_PyValue_SequenceCheck(v) && _PyValue_SequenceCheck(w)) {
+        PyValue result = BINARY_OP1(v, w, nb_add, "+");
+        if (!value_is_notimplemented(result))
             return result;
-        Py_DECREF(result);
+        PyValue_CLOSE(result);
     }
-    return type_error("'%.200s' object can't be concatenated", s);
+    value_type_error("'%.200s' object can't be concatenated", v);
+    return PyValue_NULL;
+}
+
+Py_VALUE_ENTRY PyObject *
+PySequence_Concat(PyObject *s, PyObject *o)
+{
+    if (s == NULL || o == NULL) {
+        return null_error();
+    }
+    return _PyValue_THUNK_EXIT(
+        _PyValue_SequenceConcat(_Py_VALUE_ARG(s), _Py_VALUE_ARG(o)), BOX_SITE_SEQUENCE);
+}
+
+PyValue
+(_PyValue_SequenceRepeat)(PyValueBorrow v, Py_ssize_t count)
+{
+    if (PyValue_IsInline(v)) {
+        // An int or float has no sq_repeat and is not a sequence.
+        value_type_error("'%.200s' object can't be repeated", v);
+        return PyValue_NULL;
+    }
+    PyObject *o = PyValue_AsKnownObjectBorrow(v);
+    PySequenceMethods *m = Py_TYPE(o)->tp_as_sequence;
+    if (m && m->sq_repeat) {
+        PyObject *res = m->sq_repeat(o, count);
+        assert(_Py_CheckSlotResult(o, "*", res != NULL));
+        return _PyValue_FromObjectResult(res);
+    }
+
+    /* Instances of user classes defining a __mul__() method only
+       have an nb_multiply slot, not an sq_repeat slot. so we fall back
+       to nb_multiply if o appears to be a sequence. */
+    if (_PyValue_SequenceCheck(v)) {
+        PyObject *n = PyLong_FromSsize_t(count);
+        if (n == NULL)
+            return PyValue_NULL;
+        PyValue result = BINARY_OP1(v, _Py_VALUE_ARG(n), nb_multiply, "*");
+        Py_DECREF(n);
+        if (!value_is_notimplemented(result))
+            return result;
+        PyValue_CLOSE(result);
+    }
+    value_type_error("'%.200s' object can't be repeated", v);
+    return PyValue_NULL;
 }
 
 Py_VALUE_ENTRY PyObject *
@@ -2176,29 +2507,42 @@ PySequence_Repeat(PyObject *o, Py_ssize_t count)
     if (o == NULL) {
         return null_error();
     }
+    return _PyValue_THUNK_EXIT(
+        _PyValue_SequenceRepeat(_Py_VALUE_ARG(o), count), BOX_SITE_SEQUENCE);
+}
 
-    PySequenceMethods *m = Py_TYPE(o)->tp_as_sequence;
-    if (m && m->sq_repeat) {
-        PyObject *res = m->sq_repeat(o, count);
-        assert(_Py_CheckSlotResult(o, "*", res != NULL));
+PyValue
+(_PyValue_SequenceInPlaceConcat)(PyValueBorrow v, PyValueBorrow w)
+{
+    if (PyValue_IsInline(v)) {
+        // An int or float has no sq_concat and is not a sequence.
+        value_type_error("'%.200s' object can't be concatenated", v);
+        return PyValue_NULL;
+    }
+    PyTypeObject *tv = PyValue_TYPE(v);
+    PySequenceMethods *m = tv->tp_as_sequence;
+    if (m && m->sq_inplace_concat) {
+        PyValue res = call_concat(tv, m->sq_inplace_concat,
+                                  _Py_VALUE_SLOT_INDEX_sq_inplace_concat,
+                                  v, w);
+        assert(check_value_slot_result(tv, "+=", !PyValue_IsNull(res)));
+        return res;
+    }
+    if (m && m->sq_concat) {
+        PyValue res = call_concat(tv, m->sq_concat,
+                                  _Py_VALUE_SLOT_INDEX_sq_concat, v, w);
+        assert(check_value_slot_result(tv, "+", !PyValue_IsNull(res)));
         return res;
     }
 
-    /* Instances of user classes defining a __mul__() method only
-       have an nb_multiply slot, not an sq_repeat slot. so we fall back
-       to nb_multiply if o appears to be a sequence. */
-    if (PySequence_Check(o)) {
-        PyObject *n, *result;
-        n = PyLong_FromSsize_t(count);
-        if (n == NULL)
-            return NULL;
-        result = OBJECT_BINARY_OP1(o, n, nb_multiply, "*");
-        Py_DECREF(n);
-        if (result != Py_NotImplemented)
+    if (_PyValue_SequenceCheck(v) && _PyValue_SequenceCheck(w)) {
+        PyValue result = BINARY_IOP1(v, w, nb_inplace_add, nb_add, "+=");
+        if (!value_is_notimplemented(result))
             return result;
-        Py_DECREF(result);
+        PyValue_CLOSE(result);
     }
-    return type_error("'%.200s' object can't be repeated", o);
+    value_type_error("'%.200s' object can't be concatenated", v);
+    return PyValue_NULL;
 }
 
 Py_VALUE_ENTRY PyObject *
@@ -2207,27 +2551,44 @@ PySequence_InPlaceConcat(PyObject *s, PyObject *o)
     if (s == NULL || o == NULL) {
         return null_error();
     }
+    return _PyValue_THUNK_EXIT(
+        _PyValue_SequenceInPlaceConcat(_Py_VALUE_ARG(s), _Py_VALUE_ARG(o)), BOX_SITE_SEQUENCE);
+}
 
-    PySequenceMethods *m = Py_TYPE(s)->tp_as_sequence;
-    if (m && m->sq_inplace_concat) {
-        PyObject *res = m->sq_inplace_concat(s, o);
-        assert(_Py_CheckSlotResult(s, "+=", res != NULL));
-        return res;
+PyValue
+(_PyValue_SequenceInPlaceRepeat)(PyValueBorrow v, Py_ssize_t count)
+{
+    if (PyValue_IsInline(v)) {
+        // An int or float has no sq_repeat and is not a sequence.
+        value_type_error("'%.200s' object can't be repeated", v);
+        return PyValue_NULL;
     }
-    if (m && m->sq_concat) {
-        PyObject *res = m->sq_concat(s, o);
-        assert(_Py_CheckSlotResult(s, "+", res != NULL));
-        return res;
+    PyObject *o = PyValue_AsKnownObjectBorrow(v);
+    PySequenceMethods *m = Py_TYPE(o)->tp_as_sequence;
+    if (m && m->sq_inplace_repeat) {
+        PyObject *res = m->sq_inplace_repeat(o, count);
+        assert(_Py_CheckSlotResult(o, "*=", res != NULL));
+        return _PyValue_FromObjectResult(res);
+    }
+    if (m && m->sq_repeat) {
+        PyObject *res = m->sq_repeat(o, count);
+        assert(_Py_CheckSlotResult(o, "*", res != NULL));
+        return _PyValue_FromObjectResult(res);
     }
 
-    if (PySequence_Check(s) && PySequence_Check(o)) {
-        PyObject *result = OBJECT_BINARY_IOP1(s, o, nb_inplace_add, nb_add,
-                                              "+=");
-        if (result != Py_NotImplemented)
+    if (_PyValue_SequenceCheck(v)) {
+        PyObject *n = PyLong_FromSsize_t(count);
+        if (n == NULL)
+            return PyValue_NULL;
+        PyValue result = BINARY_IOP1(v, _Py_VALUE_ARG(n), nb_inplace_multiply,
+                                     nb_multiply, "*=");
+        Py_DECREF(n);
+        if (!value_is_notimplemented(result))
             return result;
-        Py_DECREF(result);
+        PyValue_CLOSE(result);
     }
-    return type_error("'%.200s' object can't be concatenated", s);
+    value_type_error("'%.200s' object can't be repeated", v);
+    return PyValue_NULL;
 }
 
 Py_VALUE_ENTRY PyObject *
@@ -2236,40 +2597,22 @@ PySequence_InPlaceRepeat(PyObject *o, Py_ssize_t count)
     if (o == NULL) {
         return null_error();
     }
-
-    PySequenceMethods *m = Py_TYPE(o)->tp_as_sequence;
-    if (m && m->sq_inplace_repeat) {
-        PyObject *res = m->sq_inplace_repeat(o, count);
-        assert(_Py_CheckSlotResult(o, "*=", res != NULL));
-        return res;
-    }
-    if (m && m->sq_repeat) {
-        PyObject *res = m->sq_repeat(o, count);
-        assert(_Py_CheckSlotResult(o, "*", res != NULL));
-        return res;
-    }
-
-    if (PySequence_Check(o)) {
-        PyObject *n, *result;
-        n = PyLong_FromSsize_t(count);
-        if (n == NULL)
-            return NULL;
-        result = OBJECT_BINARY_IOP1(o, n, nb_inplace_multiply, nb_multiply,
-                                    "*=");
-        Py_DECREF(n);
-        if (result != Py_NotImplemented)
-            return result;
-        Py_DECREF(result);
-    }
-    return type_error("'%.200s' object can't be repeated", o);
+    return _PyValue_THUNK_EXIT(
+        _PyValue_SequenceInPlaceRepeat(_Py_VALUE_ARG(o), count), BOX_SITE_SEQUENCE);
 }
 
-PyObject *
-PySequence_GetItem(PyObject *s, Py_ssize_t i)
+PyValue
+(_PyValue_SequenceGetItem)(PyValueBorrow v, Py_ssize_t i)
 {
-    if (s == NULL) {
-        return null_error();
+    if (PyValue_IsNull(v)) {
+        null_error();
+        return PyValue_NULL;
     }
+    if (PyValue_IsInline(v)) {
+        value_type_error("'%.200s' object does not support indexing", v);
+        return PyValue_NULL;
+    }
+    PyObject *s = PyValue_AsKnownObjectBorrow(v);
 
     PySequenceMethods *m = Py_TYPE(s)->tp_as_sequence;
     if (m && m->sq_item) {
@@ -2278,107 +2621,168 @@ PySequence_GetItem(PyObject *s, Py_ssize_t i)
                 Py_ssize_t l = (*m->sq_length)(s);
                 assert(_Py_CheckSlotResult(s, "__len__", l >= 0));
                 if (l < 0) {
-                    return NULL;
+                    return PyValue_NULL;
                 }
                 i += l;
             }
         }
-        PyObject *res = m->sq_item(s, i);
-        assert(_Py_CheckSlotResult(s, "__getitem__", res != NULL));
+        PyValue res = call_item(s, m->sq_item, i);
+        assert(_Py_CheckSlotResult(s, "__getitem__", !PyValue_IsNull(res)));
         return res;
     }
 
     if (Py_TYPE(s)->tp_as_mapping && Py_TYPE(s)->tp_as_mapping->mp_subscript) {
-        return type_error("%.200s is not a sequence", s);
+        type_error("%.200s is not a sequence", s);
+        return PyValue_NULL;
     }
-    return type_error("'%.200s' object does not support indexing", s);
+    type_error("'%.200s' object does not support indexing", s);
+    return PyValue_NULL;
 }
 
-PyObject *
+Py_VALUE_ENTRY PyObject *
+PySequence_GetItem(PyObject *s, Py_ssize_t i)
+{
+    return _PyValue_THUNK_EXIT(_PyValue_SequenceGetItem(_Py_VALUE_ARG(s), i), BOX_SITE_SEQUENCE);
+}
+
+PyValue
+(_PyValue_SequenceGetSlice)(PyValueBorrow v, Py_ssize_t i1, Py_ssize_t i2)
+{
+    if (PyValue_IsInline(v)) {
+        // An int or float has no mp_subscript.
+        value_type_error("'%.200s' object is unsliceable", v);
+        return PyValue_NULL;
+    }
+    PyObject *s = PyValue_AsKnownObjectBorrow(v);
+    PyMappingMethods *mp = Py_TYPE(s)->tp_as_mapping;
+    if (mp && mp->mp_subscript) {
+        PyObject *slice = _PySlice_FromIndices(i1, i2);
+        if (!slice) {
+            return PyValue_NULL;
+        }
+        PyObject *res = mp->mp_subscript(s, slice);
+        assert(_Py_CheckSlotResult(s, "__getitem__", res != NULL));
+        Py_DECREF(slice);
+        return _PyValue_FromObjectResult(res);
+    }
+
+    type_error("'%.200s' object is unsliceable", s);
+    return PyValue_NULL;
+}
+
+Py_VALUE_ENTRY PyObject *
 PySequence_GetSlice(PyObject *s, Py_ssize_t i1, Py_ssize_t i2)
 {
     if (!s) {
         return null_error();
     }
+    return _PyValue_THUNK_EXIT(
+        _PyValue_SequenceGetSlice(_Py_VALUE_ARG(s), i1, i2), BOX_SITE_SEQUENCE);
+}
 
-    PyMappingMethods *mp = Py_TYPE(s)->tp_as_mapping;
-    if (mp && mp->mp_subscript) {
-        PyObject *slice = _PySlice_FromIndices(i1, i2);
-        if (!slice) {
-            return NULL;
-        }
-        PyObject *res = mp->mp_subscript(s, slice);
-        assert(_Py_CheckSlotResult(s, "__getitem__", res != NULL));
-        Py_DECREF(slice);
-        return res;
+// s[i] = value, or del s[i] for a PyValue_NULL value.
+static int
+value_sequence_ass_item(PyValueBorrow v, Py_ssize_t i, PyValueBorrow value)
+{
+    int deleting = PyValue_IsNull(value);
+    if (PyValue_IsNull(v)) {
+        null_error();
+        return -1;
     }
+    if (!PyValue_IsInline(v)) {
+        PyObject *s = PyValue_AsKnownObjectBorrow(v);
+        PySequenceMethods *m = Py_TYPE(s)->tp_as_sequence;
+        if (m && m->sq_ass_item) {
+            if (i < 0) {
+                if (m->sq_length) {
+                    Py_ssize_t l = (*m->sq_length)(s);
+                    assert(_Py_CheckSlotResult(s, "__len__", l >= 0));
+                    if (l < 0) {
+                        return -1;
+                    }
+                    i += l;
+                }
+            }
+            int res = call_ass_item(s, m->sq_ass_item, i, value);
+            assert(_Py_CheckSlotResult(s, deleting ? "__delitem__"
+                                                   : "__setitem__",
+                                       res >= 0));
+            return res;
+        }
 
-    return type_error("'%.200s' object is unsliceable", s);
+        if (Py_TYPE(s)->tp_as_mapping
+            && Py_TYPE(s)->tp_as_mapping->mp_ass_subscript)
+        {
+            type_error("%.200s is not a sequence", s);
+            return -1;
+        }
+    }
+    value_type_error(deleting
+                     ? "'%.200s' object doesn't support item deletion"
+                     : "'%.200s' object does not support item assignment", v);
+    return -1;
+}
+
+int
+(_PyValue_SequenceSetItem)(PyValueBorrow v, Py_ssize_t i, PyValueBorrow value)
+{
+    /* Upstream passes a NULL item on to sq_ass_item, which deletes; the
+       value form keeps that. */
+    return value_sequence_ass_item(v, i, value);
+}
+
+int
+(_PyValue_SequenceDelItem)(PyValueBorrow v, Py_ssize_t i)
+{
+    return value_sequence_ass_item(v, i, PyValue_Borrow(PyValue_NULL));
 }
 
 int
 PySequence_SetItem(PyObject *s, Py_ssize_t i, PyObject *o)
 {
-    if (s == NULL) {
-        null_error();
-        return -1;
-    }
-
-    PySequenceMethods *m = Py_TYPE(s)->tp_as_sequence;
-    if (m && m->sq_ass_item) {
-        if (i < 0) {
-            if (m->sq_length) {
-                Py_ssize_t l = (*m->sq_length)(s);
-                assert(_Py_CheckSlotResult(s, "__len__", l >= 0));
-                if (l < 0) {
-                    return -1;
-                }
-                i += l;
-            }
-        }
-        int res = m->sq_ass_item(s, i, o);
-        assert(_Py_CheckSlotResult(s, "__setitem__", res >= 0));
-        return res;
-    }
-
-    if (Py_TYPE(s)->tp_as_mapping && Py_TYPE(s)->tp_as_mapping->mp_ass_subscript) {
-        type_error("%.200s is not a sequence", s);
-        return -1;
-    }
-    type_error("'%.200s' object does not support item assignment", s);
-    return -1;
+    return _PyValue_SequenceSetItem(_Py_VALUE_ARG(s), i, _Py_VALUE_ARG(o));
 }
 
 int
 PySequence_DelItem(PyObject *s, Py_ssize_t i)
 {
-    if (s == NULL) {
-        null_error();
+    return _PyValue_SequenceDelItem(_Py_VALUE_ARG(s), i);
+}
+
+int
+(_PyValue_SequenceSetSlice)(PyValueBorrow v, Py_ssize_t i1, Py_ssize_t i2,
+                            PyValueBorrow w)
+{
+    if (PyValue_IsInline(v)) {
+        // An int or float has no mp_ass_subscript.
+        value_type_error("'%.200s' object doesn't support slice assignment",
+                         v);
         return -1;
     }
-
-    PySequenceMethods *m = Py_TYPE(s)->tp_as_sequence;
-    if (m && m->sq_ass_item) {
-        if (i < 0) {
-            if (m->sq_length) {
-                Py_ssize_t l = (*m->sq_length)(s);
-                assert(_Py_CheckSlotResult(s, "__len__", l >= 0));
-                if (l < 0) {
-                    return -1;
-                }
-                i += l;
+    PyObject *s = PyValue_AsKnownObjectBorrow(v);
+    PyMappingMethods *mp = Py_TYPE(s)->tp_as_mapping;
+    if (mp && mp->mp_ass_subscript) {
+        // A NULL item deletes the slice, as upstream passes it through.
+        PyObject *o = NULL;
+        if (!PyValue_IsNull(w)) {
+            o = _PyValue_AsObjectAt(w, BOX_SITE_SEQUENCE);
+            if (o == NULL) {
+                return -1;
             }
         }
-        int res = m->sq_ass_item(s, i, (PyObject *)NULL);
-        assert(_Py_CheckSlotResult(s, "__delitem__", res >= 0));
+        PyObject *slice = _PySlice_FromIndices(i1, i2);
+        if (!slice) {
+            Py_XDECREF(o);
+            return -1;
+        }
+        int res = mp->mp_ass_subscript(s, slice, o);
+        assert(_Py_CheckSlotResult(s, "__setitem__", res >= 0));
+        Py_DECREF(slice);
+        Py_XDECREF(o);
         return res;
     }
 
-    if (Py_TYPE(s)->tp_as_mapping && Py_TYPE(s)->tp_as_mapping->mp_ass_subscript) {
-        type_error("%.200s is not a sequence", s);
-        return -1;
-    }
-    type_error("'%.200s' object doesn't support item deletion", s);
+    type_error("'%.200s' object doesn't support slice assignment", s);
     return -1;
 }
 
@@ -2389,30 +2793,19 @@ PySequence_SetSlice(PyObject *s, Py_ssize_t i1, Py_ssize_t i2, PyObject *o)
         null_error();
         return -1;
     }
-
-    PyMappingMethods *mp = Py_TYPE(s)->tp_as_mapping;
-    if (mp && mp->mp_ass_subscript) {
-        PyObject *slice = _PySlice_FromIndices(i1, i2);
-        if (!slice)
-            return -1;
-        int res = mp->mp_ass_subscript(s, slice, o);
-        assert(_Py_CheckSlotResult(s, "__setitem__", res >= 0));
-        Py_DECREF(slice);
-        return res;
-    }
-
-    type_error("'%.200s' object doesn't support slice assignment", s);
-    return -1;
+    return _PyValue_SequenceSetSlice(_Py_VALUE_ARG(s), i1, i2,
+                                     _Py_VALUE_ARG(o));
 }
 
 int
-PySequence_DelSlice(PyObject *s, Py_ssize_t i1, Py_ssize_t i2)
+(_PyValue_SequenceDelSlice)(PyValueBorrow v, Py_ssize_t i1, Py_ssize_t i2)
 {
-    if (s == NULL) {
-        null_error();
+    if (PyValue_IsInline(v)) {
+        // An int or float has no mp_ass_subscript.
+        value_type_error("'%.200s' object doesn't support slice deletion", v);
         return -1;
     }
-
+    PyObject *s = PyValue_AsKnownObjectBorrow(v);
     PyMappingMethods *mp = Py_TYPE(s)->tp_as_mapping;
     if (mp && mp->mp_ass_subscript) {
         PyObject *slice = _PySlice_FromIndices(i1, i2);
@@ -2428,35 +2821,62 @@ PySequence_DelSlice(PyObject *s, Py_ssize_t i1, Py_ssize_t i2)
     return -1;
 }
 
-PyObject *
-PySequence_Tuple(PyObject *v)
+int
+PySequence_DelSlice(PyObject *s, Py_ssize_t i1, Py_ssize_t i2)
 {
+    if (s == NULL) {
+        null_error();
+        return -1;
+    }
+    return _PyValue_SequenceDelSlice(_Py_VALUE_ARG(s), i1, i2);
+}
+
+/* The next item of the iterator it as an object, for the object results of
+   PySequence_Tuple(): NULL at the end (nothing set) or with an exception. */
+static PyObject *
+sequence_iter_next(PyObject *it)
+{
+    _PyStatusValue r = _PyValue_IterNext(it);
+    if (r.status != PYGEN_NEXT) {
+        return NULL;
+    }
+    if (PyValue_IsInline(r.value)) {
+        return _PyValue_AsObjectAt(r.value, BOX_SITE_ITERATION);
+    }
+    return PyValue_AsKnownObjectSteal(r.value);
+}
+
+PyObject *
+(_PyValue_SequenceTuple)(PyValueBorrow v)
+{
+    if (PyValue_IsInline(v)) {
+        // tuple(5) fails in PyObject_GetIter().
+        value_type_error("'%.200s' object is not iterable", v);
+        return NULL;
+    }
+    PyObject *o = PyValue_AsKnownObjectBorrow(v);
     PyObject *it;  /* iter(v) */
 
-    if (v == NULL) {
-        return null_error();
-    }
-
     /* Special-case the common tuple and list cases, for efficiency. */
-    if (PyTuple_CheckExact(v)) {
+    if (PyTuple_CheckExact(o)) {
         /* Note that we can't know whether it's safe to return
            a tuple *subclass* instance as-is, hence the restriction
            to exact tuples here.  In contrast, lists always make
            a copy, so there's no need for exactness below. */
-        return Py_NewRef(v);
+        return Py_NewRef(o);
     }
-    if (PyList_CheckExact(v))
-        return PyList_AsTuple(v);
+    if (PyList_CheckExact(o))
+        return PyList_AsTuple(o);
 
     /* Get iterator. */
-    it = PyObject_GetIter(v);
+    it = _PyValue_GetIter(v);
     if (it == NULL)
         return NULL;
 
     Py_ssize_t n;
     PyObject *buffer[8];
     for (n = 0; n < 8; n++) {
-        PyObject *item = PyIter_Next(it);
+        PyObject *item = sequence_iter_next(it);
         if (item == NULL) {
             if (PyErr_Occurred()) {
                 goto fail;
@@ -2476,7 +2896,7 @@ PySequence_Tuple(PyObject *v)
         PyList_SET_VALUE(list, j, PyValue_PrepareOwned(buffer[j]));
     }
     for (;;) {
-        PyObject *item = PyIter_Next(it);
+        PyObject *item = sequence_iter_next(it);
         if (item == NULL) {
             if (PyErr_Occurred()) {
                 Py_DECREF(list);
@@ -2505,20 +2925,31 @@ fail:
 }
 
 PyObject *
-PySequence_List(PyObject *v)
+PySequence_Tuple(PyObject *v)
 {
-    PyObject *result;  /* result list */
-    PyObject *rv;          /* return value from PyList_Extend */
-
     if (v == NULL) {
         return null_error();
     }
+    return _PyValue_SequenceTuple(_Py_VALUE_ARG(v));
+}
+
+PyObject *
+(_PyValue_SequenceList)(PyValueBorrow v)
+{
+    if (PyValue_IsInline(v)) {
+        // list(5) fails in PyObject_GetIter().
+        value_type_error("'%.200s' object is not iterable", v);
+        return NULL;
+    }
+    PyObject *o = PyValue_AsKnownObjectBorrow(v);
+    PyObject *result;  /* result list */
+    PyObject *rv;          /* return value from PyList_Extend */
 
     result = PyList_New(0);
     if (result == NULL)
         return NULL;
 
-    rv = _PyList_Extend((PyListObject *)result, v);
+    rv = _PyList_Extend((PyListObject *)result, o);
     if (rv == NULL) {
         Py_DECREF(result);
         return NULL;
@@ -2528,19 +2959,30 @@ PySequence_List(PyObject *v)
 }
 
 PyObject *
-PySequence_Fast(PyObject *v, const char *m)
+PySequence_List(PyObject *v)
 {
-    PyObject *it;
-
     if (v == NULL) {
         return null_error();
     }
+    return _PyValue_SequenceList(_Py_VALUE_ARG(v));
+}
 
-    if (PyList_CheckExact(v) || PyTuple_CheckExact(v)) {
-        return Py_NewRef(v);
+PyObject *
+(_PyValue_SequenceFast)(PyValueBorrow v, const char *m)
+{
+    if (PyValue_IsInline(v)) {
+        // PyObject_GetIter() fails with a TypeError, which becomes m.
+        PyErr_SetString(PyExc_TypeError, m);
+        return NULL;
+    }
+    PyObject *o = PyValue_AsKnownObjectBorrow(v);
+    PyObject *it;
+
+    if (PyList_CheckExact(o) || PyTuple_CheckExact(o)) {
+        return Py_NewRef(o);
     }
 
-    it = PyObject_GetIter(v);
+    it = _PyValue_GetIter(v);
     if (it == NULL) {
         PyThreadState *tstate = _PyThreadState_GET();
         if (_PyErr_ExceptionMatches(tstate, PyExc_TypeError)) {
@@ -2549,10 +2991,19 @@ PySequence_Fast(PyObject *v, const char *m)
         return NULL;
     }
 
-    v = PySequence_List(it);
+    o = _PyValue_SequenceList(_Py_VALUE_ARG(it));
     Py_DECREF(it);
 
-    return v;
+    return o;
+}
+
+PyObject *
+PySequence_Fast(PyObject *v, const char *m)
+{
+    if (v == NULL) {
+        return null_error();
+    }
+    return _PyValue_SequenceFast(_Py_VALUE_ARG(v), m);
 }
 
 /* Iterate over seq.  Result depends on the operation:
@@ -2562,28 +3013,29 @@ PySequence_Fast(PyObject *v, const char *m)
    PY_ITERSEARCH_CONTAINS:  return 1 if obj in seq, else 0; -1 on error.
 */
 Py_ssize_t
-_PySequence_IterSearch(PyObject *seq, PyObject *obj, int operation)
+(_PyValue_IterSearch)(PyValueBorrow seq, PyValueBorrow obj, int operation)
 {
     Py_ssize_t n;
     int wrapped;  /* for PY_ITERSEARCH_INDEX, true iff n wrapped around */
     PyObject *it;  /* iter(seq) */
 
-    if (seq == NULL || obj == NULL) {
+    if (PyValue_IsNull(seq) || PyValue_IsNull(obj)) {
         null_error();
         return -1;
     }
 
-    it = PyObject_GetIter(seq);
+    it = _PyValue_GetIter(seq);
     if (it == NULL) {
         if (PyErr_ExceptionMatches(PyExc_TypeError)) {
             if (operation == PY_ITERSEARCH_CONTAINS) {
-                type_error(
+                value_type_error(
                     "argument of type '%.200s' is not a container or iterable",
                     seq
                     );
             }
             else {
-                type_error("argument of type '%.200s' is not iterable", seq);
+                value_type_error("argument of type '%.200s' is not iterable",
+                                 seq);
             }
         }
         return -1;
@@ -2592,15 +3044,16 @@ _PySequence_IterSearch(PyObject *seq, PyObject *obj, int operation)
     n = wrapped = 0;
     for (;;) {
         int cmp;
-        PyObject *item = PyIter_Next(it);
-        if (item == NULL) {
-            if (PyErr_Occurred())
-                goto Fail;
+        _PyStatusValue step = _PyValue_IterNext(it);
+        if (step.status < 0) {
+            goto Fail;
+        }
+        if (step.status == 0) {
             break;
         }
 
-        cmp = PyObject_RichCompareBool(item, obj, Py_EQ);
-        Py_DECREF(item);
+        cmp = _PyValue_RichCompareBool(step.value, obj, Py_EQ);
+        PyValue_CLOSE(step.value);
         if (cmp < 0)
             goto Fail;
         if (cmp > 0) {
@@ -2653,33 +3106,60 @@ Done:
 
 }
 
+Py_ssize_t
+_PySequence_IterSearch(PyObject *seq, PyObject *obj, int operation)
+{
+    return _PyValue_IterSearch(_Py_VALUE_ARG(seq), _Py_VALUE_ARG(obj),
+                               operation);
+}
+
 /* Return # of times o appears in s. */
+Py_ssize_t
+(_PyValue_SequenceCount)(PyValueBorrow s, PyValueBorrow o)
+{
+    // An int or float receiver fails in PyObject_GetIter() inside the search.
+    return _PyValue_IterSearch(s, o, PY_ITERSEARCH_COUNT);
+}
+
 Py_ssize_t
 PySequence_Count(PyObject *s, PyObject *o)
 {
-    return _PySequence_IterSearch(s, o, PY_ITERSEARCH_COUNT);
+    if (s == NULL || o == NULL) {
+        null_error();
+        return -1;
+    }
+    return _PyValue_SequenceCount(_Py_VALUE_ARG(s), _Py_VALUE_ARG(o));
 }
 
 /* Return -1 if error; 1 if ob in seq; 0 if ob not in seq.
  * Use sq_contains if possible, else defer to _PySequence_IterSearch().
  */
 int
-PySequence_Contains(PyObject *seq, PyObject *ob)
+(_PyValue_Contains)(PyValueBorrow seq, PyValueBorrow ob)
 {
-    if (ob == NULL) {
+    if (PyValue_IsNull(ob)) {
         /* A NULL operand is a bad call even for an empty container, as
            PyObject_RichCompare() reports upstream. */
         PyErr_BadInternalCall();
         return -1;
     }
-    PySequenceMethods *sqm = Py_TYPE(seq)->tp_as_sequence;
-    if (sqm != NULL && sqm->sq_contains != NULL) {
-        int res = (*sqm->sq_contains)(seq, ob);
-        assert(_Py_CheckSlotResult(seq, "__contains__", res >= 0));
-        return res;
+    if (!PyValue_IsInline(seq)) {
+        PyObject *o = PyValue_AsKnownObjectBorrow(seq);
+        PySequenceMethods *sqm = Py_TYPE(o)->tp_as_sequence;
+        if (sqm != NULL && sqm->sq_contains != NULL) {
+            int res = call_contains(o, sqm->sq_contains, ob);
+            assert(_Py_CheckSlotResult(o, "__contains__", res >= 0));
+            return res;
+        }
     }
-    Py_ssize_t result = _PySequence_IterSearch(seq, ob, PY_ITERSEARCH_CONTAINS);
+    Py_ssize_t result = _PyValue_IterSearch(seq, ob, PY_ITERSEARCH_CONTAINS);
     return Py_SAFE_DOWNCAST(result, Py_ssize_t, int);
+}
+
+int
+PySequence_Contains(PyObject *seq, PyObject *ob)
+{
+    return _PyValue_Contains(_Py_VALUE_ARG(seq), _Py_VALUE_ARG(ob));
 }
 
 /* Backwards compatibility */
@@ -2687,32 +3167,57 @@ PySequence_Contains(PyObject *seq, PyObject *ob)
 int
 PySequence_In(PyObject *w, PyObject *v)
 {
-    return PySequence_Contains(w, v);
+    return _PyValue_Contains(_Py_VALUE_ARG(w), _Py_VALUE_ARG(v));
+}
+
+Py_ssize_t
+(_PyValue_SequenceIndex)(PyValueBorrow s, PyValueBorrow o)
+{
+    // An int or float receiver fails in PyObject_GetIter() inside the search.
+    return _PyValue_IterSearch(s, o, PY_ITERSEARCH_INDEX);
 }
 
 Py_ssize_t
 PySequence_Index(PyObject *s, PyObject *o)
 {
-    return _PySequence_IterSearch(s, o, PY_ITERSEARCH_INDEX);
+    if (s == NULL || o == NULL) {
+        null_error();
+        return -1;
+    }
+    return _PyValue_SequenceIndex(_Py_VALUE_ARG(s), _Py_VALUE_ARG(o));
 }
 
 /* Operations on mappings */
 
 int
-PyMapping_Check(PyObject *o)
+(_PyValue_MappingCheck)(PyValueBorrow v)
 {
-    return o && Py_TYPE(o)->tp_as_mapping &&
+    if (PyValue_IsInline(v)) {
+        // An int or float has no mp_subscript.
+        return 0;
+    }
+    PyObject *o = PyValue_AsKnownObjectBorrow(v);
+    return Py_TYPE(o)->tp_as_mapping &&
         Py_TYPE(o)->tp_as_mapping->mp_subscript;
 }
 
-Py_ssize_t
-PyMapping_Size(PyObject *o)
+int
+PyMapping_Check(PyObject *o)
 {
     if (o == NULL) {
-        null_error();
+        return 0;
+    }
+    return _PyValue_MappingCheck(_Py_VALUE_ARG(o));
+}
+
+Py_ssize_t
+(_PyValue_MappingSize)(PyValueBorrow v)
+{
+    if (PyValue_IsInline(v)) {
+        value_type_error("object of type '%.200s' has no len()", v);
         return -1;
     }
-
+    PyObject *o = PyValue_AsKnownObjectBorrow(v);
     PyMappingMethods *m = Py_TYPE(o)->tp_as_mapping;
     if (m && m->mp_length) {
         Py_ssize_t len = m->mp_length(o);
@@ -2729,6 +3234,16 @@ PyMapping_Size(PyObject *o)
     return -1;
 }
 
+Py_ssize_t
+PyMapping_Size(PyObject *o)
+{
+    if (o == NULL) {
+        null_error();
+        return -1;
+    }
+    return _PyValue_MappingSize(_Py_VALUE_ARG(o));
+}
+
 #undef PyMapping_Length
 Py_ssize_t
 PyMapping_Length(PyObject *o)
@@ -2737,91 +3252,130 @@ PyMapping_Length(PyObject *o)
 }
 #define PyMapping_Length PyMapping_Size
 
-PyObject *
-PyMapping_GetItemString(PyObject *o, const char *key)
+PyValue
+(_PyValue_MappingGetItemString)(PyValueBorrow o, const char *key)
 {
-    PyObject *okey, *r;
-
     if (key == NULL) {
-        return null_error();
+        null_error();
+        return PyValue_NULL;
     }
 
-    okey = PyUnicode_FromString(key);
+    // _PyValue_GetItem() reports an int or float receiver.
+    PyObject *okey = PyUnicode_FromString(key);
     if (okey == NULL)
-        return NULL;
-    r = PyObject_GetItem(o, okey);
+        return PyValue_NULL;
+    PyValue r = _PyValue_GetItem(o, _Py_VALUE_ARG(okey));
     Py_DECREF(okey);
     return r;
 }
 
-int
-PyMapping_GetOptionalItemString(PyObject *obj, const char *key, PyObject **result)
+Py_VALUE_ENTRY PyObject *
+PyMapping_GetItemString(PyObject *o, const char *key)
+{
+    if (o == NULL) {
+        return null_error();
+    }
+    return _PyValue_THUNK_EXIT(
+        _PyValue_MappingGetItemString(_Py_VALUE_ARG(o), key), BOX_SITE_SEQUENCE);
+}
+
+_PyStatusValue
+(_PyValue_MappingGetOptionalItemString)(PyValueBorrow obj, const char *key)
 {
     if (key == NULL) {
-        *result = NULL;
         null_error();
-        return -1;
+        return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
     }
     PyObject *okey = PyUnicode_FromString(key);
     if (okey == NULL) {
-        *result = NULL;
+        return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
+    }
+    _PyStatusValue r = _PyValue_GetOptionalItem(obj, _Py_VALUE_ARG(okey));
+    Py_DECREF(okey);
+    return r;
+}
+
+Py_VALUE_ENTRY int
+PyMapping_GetOptionalItemString(PyObject *obj, const char *key, PyObject **result)
+{
+    return _PyValue_THUNK_EXIT_STATUS(
+        _PyValue_MappingGetOptionalItemString(_Py_VALUE_ARG(obj), key),
+        result, BOX_SITE_SEQUENCE);
+}
+
+int
+(_PyValue_MappingSetItemString)(PyValueBorrow o, const char *key,
+                                PyValueBorrow value)
+{
+    if (key == NULL) {
+        null_error();
         return -1;
     }
-    int rc = PyMapping_GetOptionalItem(obj, okey, result);
+
+    // _PyValue_SetItem() reports an int or float receiver.
+    PyObject *okey = PyUnicode_FromString(key);
+    if (okey == NULL)
+        return -1;
+    int r = _PyValue_SetItem(o, _Py_VALUE_ARG(okey), value);
     Py_DECREF(okey);
-    return rc;
+    return r;
 }
 
 int
 PyMapping_SetItemString(PyObject *o, const char *key, PyObject *value)
 {
-    PyObject *okey;
-    int r;
-
-    if (key == NULL) {
+    if (o == NULL || value == NULL) {
         null_error();
         return -1;
     }
+    return _PyValue_MappingSetItemString(_Py_VALUE_ARG(o), key,
+                                         _Py_VALUE_ARG(value));
+}
 
-    okey = PyUnicode_FromString(key);
-    if (okey == NULL)
-        return -1;
-    r = PyObject_SetItem(o, okey, value);
-    Py_DECREF(okey);
-    return r;
+int
+(_PyValue_MappingHasKeyStringWithError)(PyValueBorrow obj, const char *key)
+{
+    _PyStatusValue r = _PyValue_MappingGetOptionalItemString(obj, key);
+    PyValue_XCLOSE(r.value);
+    return r.status;
 }
 
 int
 PyMapping_HasKeyStringWithError(PyObject *obj, const char *key)
 {
-    PyObject *res;
-    int rc = PyMapping_GetOptionalItemString(obj, key, &res);
-    Py_XDECREF(res);
-    return rc;
+    return _PyValue_MappingHasKeyStringWithError(_Py_VALUE_ARG(obj), key);
+}
+
+int
+(_PyValue_MappingHasKeyWithError)(PyValueBorrow obj, PyValueBorrow key)
+{
+    _PyStatusValue r = _PyValue_GetOptionalItem(obj, key);
+    PyValue_XCLOSE(r.value);
+    return r.status;
 }
 
 int
 PyMapping_HasKeyWithError(PyObject *obj, PyObject *key)
 {
-    PyObject *res;
-    int rc = PyMapping_GetOptionalItem(obj, key, &res);
-    Py_XDECREF(res);
-    return rc;
+    return _PyValue_MappingHasKeyWithError(_Py_VALUE_ARG(obj),
+                                           _Py_VALUE_ARG(key));
 }
 
 int
-PyMapping_HasKeyString(PyObject *obj, const char *key)
+(_PyValue_MappingHasKeyString)(PyValueBorrow obj, const char *key)
 {
-    PyObject *value;
+    PyValue value = PyValue_NULL;
     int rc;
-    if (obj == NULL) {
+    if (PyValue_IsNull(obj)) {
         // For backward compatibility.
         // PyMapping_GetOptionalItemString() crashes if obj is NULL.
         null_error();
         rc = -1;
     }
     else {
-        rc = PyMapping_GetOptionalItemString(obj, key, &value);
+        _PyStatusValue r = _PyValue_MappingGetOptionalItemString(obj, key);
+        rc = r.status;
+        value = r.value;
     }
     if (rc < 0) {
         PyErr_FormatUnraisable(
@@ -2830,23 +3384,31 @@ PyMapping_HasKeyString(PyObject *obj, const char *key)
             "PyMapping_GetOptionalItemString() or PyMapping_GetItemString()");
         return 0;
     }
-    Py_XDECREF(value);
+    PyValue_XCLOSE(value);
     return rc;
 }
 
 int
-PyMapping_HasKey(PyObject *obj, PyObject *key)
+PyMapping_HasKeyString(PyObject *obj, const char *key)
 {
-    PyObject *value;
+    return _PyValue_MappingHasKeyString(_Py_VALUE_ARG(obj), key);
+}
+
+int
+(_PyValue_MappingHasKey)(PyValueBorrow obj, PyValueBorrow key)
+{
+    PyValue value = PyValue_NULL;
     int rc;
-    if (obj == NULL || key == NULL) {
+    if (PyValue_IsNull(obj) || PyValue_IsNull(key)) {
         // For backward compatibility.
         // PyMapping_GetOptionalItem() crashes if any of them is NULL.
         null_error();
         rc = -1;
     }
     else {
-        rc = PyMapping_GetOptionalItem(obj, key, &value);
+        _PyStatusValue r = _PyValue_GetOptionalItem(obj, key);
+        rc = r.status;
+        value = r.value;
     }
     if (rc < 0) {
         PyErr_FormatUnraisable(
@@ -2855,8 +3417,14 @@ PyMapping_HasKey(PyObject *obj, PyObject *key)
             "PyMapping_GetOptionalItem() or PyObject_GetItem()");
         return 0;
     }
-    Py_XDECREF(value);
+    PyValue_XCLOSE(value);
     return rc;
+}
+
+int
+PyMapping_HasKey(PyObject *obj, PyObject *key)
+{
+    return _PyValue_MappingHasKey(_Py_VALUE_ARG(obj), _Py_VALUE_ARG(key));
 }
 
 /* This function is quite similar to PySequence_Fast(), but specialized to be
@@ -2872,7 +3440,7 @@ method_output_as_list(PyObject *o, PyObject *meth)
     if (meth_output == NULL || PyList_CheckExact(meth_output)) {
         return meth_output;
     }
-    it = PyObject_GetIter(meth_output);
+    it = _PyValue_GetIter(_Py_VALUE_ARG(meth_output));
     if (it == NULL) {
         PyThreadState *tstate = _PyThreadState_GET();
         if (_PyErr_ExceptionMatches(tstate, PyExc_TypeError)) {
@@ -2884,9 +3452,30 @@ method_output_as_list(PyObject *o, PyObject *meth)
         return NULL;
     }
     Py_DECREF(meth_output);
-    result = PySequence_List(it);
+    result = _PyValue_SequenceList(_Py_VALUE_ARG(it));
     Py_DECREF(it);
     return result;
+}
+
+PyObject *
+(_PyValue_MappingKeys)(PyValueBorrow v)
+{
+    if (PyValue_IsInline(v)) {
+        // The AttributeError of the failed lookup records the receiver, so
+        // the call is made on a box, as upstream makes it on the int.
+        PyObject *box = _PyValue_AsObjectAt(v, BOX_SITE_ATTRIBUTE);
+        if (box == NULL) {
+            return NULL;
+        }
+        PyObject *res = method_output_as_list(box, &_Py_ID(keys));
+        Py_DECREF(box);
+        return res;
+    }
+    PyObject *o = PyValue_AsKnownObjectBorrow(v);
+    if (PyAnyDict_CheckExact(o)) {
+        return PyDict_Keys(o);
+    }
+    return method_output_as_list(o, &_Py_ID(keys));
 }
 
 PyObject *
@@ -2895,10 +3484,28 @@ PyMapping_Keys(PyObject *o)
     if (o == NULL) {
         return null_error();
     }
-    if (PyAnyDict_CheckExact(o)) {
-        return PyDict_Keys(o);
+    return _PyValue_MappingKeys(_Py_VALUE_ARG(o));
+}
+
+PyObject *
+(_PyValue_MappingItems)(PyValueBorrow v)
+{
+    if (PyValue_IsInline(v)) {
+        // The AttributeError of the failed lookup records the receiver, so
+        // the call is made on a box, as upstream makes it on the int.
+        PyObject *box = _PyValue_AsObjectAt(v, BOX_SITE_ATTRIBUTE);
+        if (box == NULL) {
+            return NULL;
+        }
+        PyObject *res = method_output_as_list(box, &_Py_ID(items));
+        Py_DECREF(box);
+        return res;
     }
-    return method_output_as_list(o, &_Py_ID(keys));
+    PyObject *o = PyValue_AsKnownObjectBorrow(v);
+    if (PyAnyDict_CheckExact(o)) {
+        return PyDict_Items(o);
+    }
+    return method_output_as_list(o, &_Py_ID(items));
 }
 
 PyObject *
@@ -2907,10 +3514,28 @@ PyMapping_Items(PyObject *o)
     if (o == NULL) {
         return null_error();
     }
-    if (PyAnyDict_CheckExact(o)) {
-        return PyDict_Items(o);
+    return _PyValue_MappingItems(_Py_VALUE_ARG(o));
+}
+
+PyObject *
+(_PyValue_MappingValues)(PyValueBorrow v)
+{
+    if (PyValue_IsInline(v)) {
+        // The AttributeError of the failed lookup records the receiver, so
+        // the call is made on a box, as upstream makes it on the int.
+        PyObject *box = _PyValue_AsObjectAt(v, BOX_SITE_ATTRIBUTE);
+        if (box == NULL) {
+            return NULL;
+        }
+        PyObject *res = method_output_as_list(box, &_Py_ID(values));
+        Py_DECREF(box);
+        return res;
     }
-    return method_output_as_list(o, &_Py_ID(items));
+    PyObject *o = PyValue_AsKnownObjectBorrow(v);
+    if (PyAnyDict_CheckExact(o)) {
+        return PyDict_Values(o);
+    }
+    return method_output_as_list(o, &_Py_ID(values));
 }
 
 PyObject *
@@ -2919,10 +3544,7 @@ PyMapping_Values(PyObject *o)
     if (o == NULL) {
         return null_error();
     }
-    if (PyAnyDict_CheckExact(o)) {
-        return PyDict_Values(o);
-    }
-    return method_output_as_list(o, &_Py_ID(values));
+    return _PyValue_MappingValues(_Py_VALUE_ARG(o));
 }
 
 /* isinstance(), issubclass() */
@@ -3290,8 +3912,13 @@ _PyObject_RealIsSubclass(PyObject *derived, PyObject *cls)
 
 
 PyObject *
-PyObject_GetIter(PyObject *o)
+(_PyValue_GetIter)(PyValueBorrow v)
 {
+    if (PyValue_IsInline(v)) {
+        value_type_error("'%.200s' object is not iterable", v);
+        return NULL;
+    }
+    PyObject *o = PyValue_AsKnownObjectBorrow(v);
     PyTypeObject *t = Py_TYPE(o);
     getiterfunc f;
 
@@ -3314,6 +3941,12 @@ PyObject_GetIter(PyObject *o)
 }
 
 PyObject *
+PyObject_GetIter(PyObject *o)
+{
+    return _PyValue_GetIter(_Py_VALUE_ARG(o));
+}
+
+PyObject *
 PyObject_GetAIter(PyObject *o) {
     PyTypeObject *t = Py_TYPE(o);
     unaryfunc f;
@@ -3332,12 +3965,16 @@ PyObject_GetAIter(PyObject *o) {
     return it;
 }
 
+/* A presence test reads the object slot, which an extension iterator
+   fills while its value slot is 0 (the adapter); the identity test of the
+   pair table's _PyObject_NextNotImplemented reads its value side
+   (value-api-m1b-m2.md, section 2.6). */
 int
 PyIter_Check(PyObject *obj)
 {
     PyTypeObject *tp = Py_TYPE(obj);
     return (tp->tp_iternext != NULL &&
-            tp->tp_iternext != &_PyObject_NextNotImplemented);
+            _PyType_VALUE_SLOT(tp, iternext) != _PyValue_NextNotImplemented);
 }
 
 int
@@ -3349,34 +3986,70 @@ PyAIter_Check(PyObject *obj)
             tp->tp_as_async->am_anext != &_PyObject_NextNotImplemented);
 }
 
-static int
-iternext(PyObject *iter, PyObject **item)
+_PyStatusValue
+_PyValue_IterStep(PyObject *it)
 {
-    iternextfunc tp_iternext = Py_TYPE(iter)->tp_iternext;
-    if ((*item = tp_iternext(iter))) {
-        return 1;
+    PyTypeObject *t = Py_TYPE(it);
+    _Py_iternextvaluefunc f = _PyType_VALUE_SLOT(t, iternext);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(t, _Py_VALUE_SLOT_INDEX_iternext);
+        _PyStatusValue r = f(it);
+        assert(r.status != PYGEN_NEXT || !PyValue_IsNull(r.value));
+        assert(r.status != PYGEN_ERROR || PyValue_IsNull(r.value));
+        return r;
     }
+    return adapt_iternext(t->tp_iternext, it);
+}
 
-    PyThreadState *tstate = _PyThreadState_GET();
-    /* When the iterator is exhausted it must return NULL;
-     * a StopIteration exception may or may not be set. */
-    if (!_PyErr_Occurred(tstate)) {
-        return 0;
+/* When the iterator is exhausted it gives RETURN, whose value the
+   consumer drops, or raises StopIteration, which is cleared. */
+_PyStatusValue
+_PyValue_IterNext(PyObject *it)
+{
+    _PyStatusValue r = _PyValue_IterStep(it);
+    if (r.status == PYGEN_NEXT) {
+        return r;
     }
+    if (r.status == PYGEN_RETURN) {
+        PyValue_XCLOSE(r.value);
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
+    }
+    PyThreadState *tstate = _PyThreadState_GET();
     if (_PyErr_ExceptionMatches(tstate, PyExc_StopIteration)) {
         _PyErr_Clear(tstate);
-        return 0;
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
     }
-
     /* Error case: an exception (different than StopIteration) is set. */
-    return -1;
+    return r;
+}
+
+_PyStatusValue
+_PyValue_NextNotImplemented(PyObject *it)
+{
+    PyErr_Format(PyExc_TypeError,
+                 "'%.200s' object is not iterable",
+                 Py_TYPE(it)->tp_name);
+    return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
+}
+
+PyObject *
+(_PyValue_IterNextThunkExit)(_PyStatusValue r _PyBox_AT_PARAM)
+{
+    if (r.status == PYGEN_NEXT) {
+        return _PyValue_ThunkResult(r.value _PyBox_AT_ARG(at));
+    }
+    if (r.status == PYGEN_RETURN && !PyValue_IsNull(r.value)) {
+        (void)_PyGen_SetStopIterationValue(r.value);
+        PyValue_CLOSE(r.value);
+    }
+    return NULL;
 }
 
 /* Return 1 and set 'item' to the next item of 'iter' on success.
  * Return 0 and set 'item' to NULL when there are no remaining values.
  * Return -1, set 'item' to NULL and set an exception on error.
  */
-int
+Py_VALUE_ENTRY int
 PyIter_NextItem(PyObject *iter, PyObject **item)
 {
     assert(iter != NULL);
@@ -3388,7 +4061,7 @@ PyIter_NextItem(PyObject *iter, PyObject **item)
         return -1;
     }
 
-    return iternext(iter, item);
+    return _PyValue_THUNK_EXIT_STATUS(_PyValue_IterNext(iter), item, BOX_SITE_ITERATION);
 }
 
 /* Return next item.
@@ -3399,43 +4072,75 @@ PyIter_NextItem(PyObject *iter, PyObject **item)
  * will be false.
  * Else return the next object.  PyErr_Occurred() will be false.
  */
-PyObject *
+Py_VALUE_ENTRY PyObject *
 PyIter_Next(PyObject *iter)
 {
     PyObject *item;
-    (void)iternext(iter, &item);
+    (void)_PyValue_THUNK_EXIT_STATUS(_PyValue_IterNext(iter), &item, BOX_SITE_ITERATION);
     return item;
 }
 
-PySendResult
+// The value of a pending StopIteration, or of no exception (None), as RETURN.
+static _PyStatusValue
+send_fetch_return(void)
+{
+    PyValue value = _PyGen_FetchStopIterationValue();
+    if (PyValue_IsNull(value)) {
+        return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
+    }
+    return (_PyStatusValue){PYGEN_RETURN, value};
+}
+
+_PyStatusValue
+(_PyValue_Send)(PyObject *iter, PyValueBorrow arg)
+{
+    assert(!PyValue_IsNull(arg));
+    PyTypeObject *t = Py_TYPE(iter);
+    if (t->tp_as_async && t->tp_as_async->am_send) {
+        _PyStatusValue r = call_send(iter, t->tp_as_async->am_send, arg);
+        assert(_Py_CheckSlotResult(iter, "am_send", r.status != PYGEN_ERROR));
+        return r;
+    }
+    if (PyValue_IsNone(arg) && PyIter_Check(iter)) {
+        _PyStatusValue r = _PyValue_IterStep(iter);
+        if (r.status == PYGEN_NEXT) {
+            return r;
+        }
+        if (r.status == PYGEN_RETURN) {
+            if (PyValue_IsNull(r.value)) {
+                r.value = PyValue_None;
+            }
+            return r;
+        }
+        return send_fetch_return();
+    }
+    // .send(arg): the call takes an object until value calls (M3).
+    PyObject *a = _PyValue_AsObjectAt(arg, BOX_SITE_ITERATION);
+    if (a == NULL) {
+        return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
+    }
+    PyObject *res = PyObject_CallMethodOneArg(iter, &_Py_ID(send), a);
+    Py_DECREF(a);
+    if (res != NULL) {
+        return (_PyStatusValue){PYGEN_NEXT, PyValue_FromObjectSteal(res)};
+    }
+    return send_fetch_return();
+}
+
+Py_VALUE_ENTRY PySendResult
 PyIter_Send(PyObject *iter, PyObject *arg, PyObject **result)
 {
     assert(arg != NULL);
     assert(result != NULL);
-    if (Py_TYPE(iter)->tp_as_async && Py_TYPE(iter)->tp_as_async->am_send) {
-        PySendResult res = Py_TYPE(iter)->tp_as_async->am_send(iter, arg, result);
-        assert(_Py_CheckSlotResult(iter, "am_send", res != PYGEN_ERROR));
-        return res;
-    }
-    if (arg == Py_None && PyIter_Check(iter)) {
-        *result = Py_TYPE(iter)->tp_iternext(iter);
-    }
-    else {
-        *result = PyObject_CallMethodOneArg(iter, &_Py_ID(send), arg);
-    }
-    if (*result != NULL) {
-        return PYGEN_NEXT;
-    }
-    if (_PyGen_FetchStopIterationValue(result) == 0) {
-        return PYGEN_RETURN;
-    }
-    return PYGEN_ERROR;
+    return (PySendResult)_PyValue_THUNK_EXIT_STATUS(
+        _PyValue_Send(iter, _Py_VALUE_ARG(arg)), result, BOX_SITE_ITERATION);
 }
 
-PySendResultPair
+Py_VALUE_ENTRY PySendResultPair
 _PyIter_Send(PyObject *iter, PyObject *arg)
 {
     PySendResultPair pair;
-    pair.kind = PyIter_Send(iter, arg, &pair.object);
+    pair.kind = (PySendResult)_PyValue_THUNK_EXIT_STATUS(
+        _PyValue_Send(iter, _Py_VALUE_ARG(arg)), &pair.object, BOX_SITE_ITERATION);
     return pair;
 }

@@ -18,6 +18,10 @@ extern void _PyErr_GetExcInfo(PyThreadState *, PyObject **, PyObject **, PyObjec
 
 // Export for '_testinternalcapi' shared extension
 PyAPI_FUNC(void) _PyErr_SetKeyError(PyObject *);
+/* _PyErr_SetKeyError() for a value: KeyError's args tuple holds the word,
+   so an inline key is not boxed. */
+PyAPI_FUNC(void) _PyErr_SetKeyErrorValue(PyValueBorrow key);
+#define _PyErr_SetKeyErrorValue(K) (_PyErr_SetKeyErrorValue)(PyValue_Borrow(K))
 
 
 // Like PyErr_Format(), but saves current exception as __context__ and

@@ -187,6 +187,210 @@ extern int _PyValue_WriteRepr(PyUnicodeWriter *writer, PyValueBorrow value);
 PyAPI_FUNC(Py_hash_t) _PyValue_HashNotImplemented(PyValueBorrow value);
 PyAPI_FUNC(Py_hash_t) _PyValue_GenericHash(PyValueBorrow value);
 
+/* Subscript, item, contains, size, iteration and send
+   (pyjit/design/proposals/value-api-m1b-m2.md, section 1.2). A receiver
+   that is a value is tested for an inline value before any slot is read:
+   no int or float defines these slots, so an inline receiver gets
+   upstream's TypeError. An iterator is an object, the result of
+   _PyValue_GetIter(). A _PyStatusValue result has status -1 (error,
+   PyValue_NULL), 0 (absent, ended or returned; the value, if any, is
+   owned) or 1 (found or next; the value is owned). */
+
+// PyObject_GetItem(), PyObject_SetItem() and PyObject_DelItem().
+PyAPI_FUNC(PyValue) _PyValue_GetItem(PyValueBorrow o, PyValueBorrow key);
+PyAPI_FUNC(int) _PyValue_SetItem(PyValueBorrow o, PyValueBorrow key,
+                                 PyValueBorrow value);
+PyAPI_FUNC(int) _PyValue_DelItem(PyValueBorrow o, PyValueBorrow key);
+#define _PyValue_GetItem(O, K) \
+    (_PyValue_GetItem)(PyValue_Borrow(O), PyValue_Borrow(K))
+#define _PyValue_SetItem(O, K, V) \
+    (_PyValue_SetItem)(PyValue_Borrow(O), PyValue_Borrow(K), PyValue_Borrow(V))
+#define _PyValue_DelItem(O, K) \
+    (_PyValue_DelItem)(PyValue_Borrow(O), PyValue_Borrow(K))
+
+/* PySequence_GetItem(), PySequence_SetItem() and PySequence_DelItem(): a
+   negative index is adjusted by the object sq_length. */
+PyAPI_FUNC(PyValue) _PyValue_SequenceGetItem(PyValueBorrow s, Py_ssize_t i);
+PyAPI_FUNC(int) _PyValue_SequenceSetItem(PyValueBorrow s, Py_ssize_t i,
+                                         PyValueBorrow value);
+PyAPI_FUNC(int) _PyValue_SequenceDelItem(PyValueBorrow s, Py_ssize_t i);
+#define _PyValue_SequenceGetItem(S, I) \
+    (_PyValue_SequenceGetItem)(PyValue_Borrow(S), I)
+#define _PyValue_SequenceSetItem(S, I, V) \
+    (_PyValue_SequenceSetItem)(PyValue_Borrow(S), I, PyValue_Borrow(V))
+#define _PyValue_SequenceDelItem(S, I) \
+    (_PyValue_SequenceDelItem)(PyValue_Borrow(S), I)
+
+/* PyMapping_GetOptionalItem(): 1 with the item, 0 for a missing key (a
+   KeyError is cleared), -1 on another error. */
+PyAPI_FUNC(_PyStatusValue) _PyValue_GetOptionalItem(PyValueBorrow o,
+                                                    PyValueBorrow key);
+#define _PyValue_GetOptionalItem(O, K) \
+    (_PyValue_GetOptionalItem)(PyValue_Borrow(O), PyValue_Borrow(K))
+
+// PySequence_Contains() and _PySequence_IterSearch().
+PyAPI_FUNC(int) _PyValue_Contains(PyValueBorrow seq, PyValueBorrow item);
+PyAPI_FUNC(Py_ssize_t) _PyValue_IterSearch(PyValueBorrow seq,
+                                           PyValueBorrow obj, int operation);
+#define _PyValue_Contains(S, I) \
+    (_PyValue_Contains)(PyValue_Borrow(S), PyValue_Borrow(I))
+#define _PyValue_IterSearch(S, O, OP) \
+    (_PyValue_IterSearch)(PyValue_Borrow(S), PyValue_Borrow(O), OP)
+
+// PyObject_Size() and PyObject_GetIter().
+PyAPI_FUNC(Py_ssize_t) _PyValue_Size(PyValueBorrow o);
+PyAPI_FUNC(PyObject *) _PyValue_GetIter(PyValueBorrow o);
+#define _PyValue_Size(O) (_PyValue_Size)(PyValue_Borrow(O))
+#define _PyValue_GetIter(O) (_PyValue_GetIter)(PyValue_Borrow(O))
+
+/* The three iteration layers (section 1.2; R11, R16).
+   _PyValue_IterStep(): one call of the iterator's value iternext slot, or
+   of its object tp_iternext through the adapter, unnormalised: 1 with the
+   item; 0 with the return value, PyValue_NULL for none; -1 with any
+   exception, StopIteration included, untouched. For next(), the wrapping
+   iterators and FOR_ITER.
+   _PyValue_IterNext(): the consumer's step (PyIter_Next()): 1 with the
+   item, 0 at the end (a return value is closed, a pending StopIteration
+   cleared), -1 on another error.
+   _PyValue_Send(): PyIter_Send(): 1 with the yielded item, 0 with the
+   return value (None if there is none), -1 on error. */
+PyAPI_FUNC(_PyStatusValue) _PyValue_IterStep(PyObject *it);
+PyAPI_FUNC(_PyStatusValue) _PyValue_IterNext(PyObject *it);
+PyAPI_FUNC(_PyStatusValue) _PyValue_Send(PyObject *it, PyValueBorrow arg);
+#define _PyValue_Send(IT, A) (_PyValue_Send)(IT, PyValue_Borrow(A))
+
+/* The value side of _PyObject_NextNotImplemented() in the pair table: the
+   iternext of a type that is not an iterator. */
+PyAPI_FUNC(_PyStatusValue) _PyValue_NextNotImplemented(PyObject *it);
+
+/* The thin value forms of the rest of the sequence, mapping and iteration
+   families follow. */
+
+// PyObject_LengthHint() and _PyObject_HasLen().
+PyAPI_FUNC(Py_ssize_t) _PyValue_LengthHint(PyValueBorrow v,
+                                           Py_ssize_t defaultvalue);
+PyAPI_FUNC(int) _PyValue_HasLen(PyValueBorrow v);
+#define _PyValue_LengthHint(V, DEFAULTVALUE) \
+    (_PyValue_LengthHint)(PyValue_Borrow(V), DEFAULTVALUE)
+#define _PyValue_HasLen(V) \
+    (_PyValue_HasLen)(PyValue_Borrow(V))
+
+// PyObject_DelItemString().
+PyAPI_FUNC(int) _PyValue_DelItemString(PyValueBorrow o, const char *key);
+#define _PyValue_DelItemString(O, KEY) \
+    (_PyValue_DelItemString)(PyValue_Borrow(O), KEY)
+
+// PySequence_Check(), PySequence_Size() and PySequence_Length().
+PyAPI_FUNC(int) _PyValue_SequenceCheck(PyValueBorrow s);
+PyAPI_FUNC(Py_ssize_t) _PyValue_SequenceSize(PyValueBorrow s);
+#define _PyValue_SequenceCheck(S) \
+    (_PyValue_SequenceCheck)(PyValue_Borrow(S))
+#define _PyValue_SequenceSize(S) \
+    (_PyValue_SequenceSize)(PyValue_Borrow(S))
+
+// PySequence_Concat(), _Repeat(), _InPlaceConcat() and _InPlaceRepeat().
+PyAPI_FUNC(PyValue) _PyValue_SequenceConcat(PyValueBorrow s, PyValueBorrow o);
+PyAPI_FUNC(PyValue) _PyValue_SequenceRepeat(PyValueBorrow o, Py_ssize_t count);
+PyAPI_FUNC(PyValue) _PyValue_SequenceInPlaceConcat(PyValueBorrow s,
+                                                   PyValueBorrow o);
+PyAPI_FUNC(PyValue) _PyValue_SequenceInPlaceRepeat(PyValueBorrow o,
+                                                   Py_ssize_t count);
+#define _PyValue_SequenceConcat(S, O) \
+    (_PyValue_SequenceConcat)(PyValue_Borrow(S), PyValue_Borrow(O))
+#define _PyValue_SequenceRepeat(O, COUNT) \
+    (_PyValue_SequenceRepeat)(PyValue_Borrow(O), COUNT)
+#define _PyValue_SequenceInPlaceConcat(S, O) \
+    (_PyValue_SequenceInPlaceConcat)(PyValue_Borrow(S), PyValue_Borrow(O))
+#define _PyValue_SequenceInPlaceRepeat(O, COUNT) \
+    (_PyValue_SequenceInPlaceRepeat)(PyValue_Borrow(O), COUNT)
+
+// PySequence_GetSlice(), _SetSlice() (a null item deletes) and _DelSlice().
+PyAPI_FUNC(PyValue) _PyValue_SequenceGetSlice(PyValueBorrow s, Py_ssize_t i1,
+                                              Py_ssize_t i2);
+PyAPI_FUNC(int) _PyValue_SequenceSetSlice(PyValueBorrow s, Py_ssize_t i1,
+                                          Py_ssize_t i2, PyValueBorrow o);
+PyAPI_FUNC(int) _PyValue_SequenceDelSlice(PyValueBorrow s, Py_ssize_t i1,
+                                          Py_ssize_t i2);
+#define _PyValue_SequenceGetSlice(S, I1, I2) \
+    (_PyValue_SequenceGetSlice)(PyValue_Borrow(S), I1, I2)
+#define _PyValue_SequenceSetSlice(S, I1, I2, O) \
+    (_PyValue_SequenceSetSlice)(PyValue_Borrow(S), I1, I2, PyValue_Borrow(O))
+#define _PyValue_SequenceDelSlice(S, I1, I2) \
+    (_PyValue_SequenceDelSlice)(PyValue_Borrow(S), I1, I2)
+
+// PySequence_Tuple(), PySequence_List() and PySequence_Fast().
+PyAPI_FUNC(PyObject *) _PyValue_SequenceTuple(PyValueBorrow v);
+PyAPI_FUNC(PyObject *) _PyValue_SequenceList(PyValueBorrow v);
+PyAPI_FUNC(PyObject *) _PyValue_SequenceFast(PyValueBorrow v, const char *m);
+#define _PyValue_SequenceTuple(V) \
+    (_PyValue_SequenceTuple)(PyValue_Borrow(V))
+#define _PyValue_SequenceList(V) \
+    (_PyValue_SequenceList)(PyValue_Borrow(V))
+#define _PyValue_SequenceFast(V, M) \
+    (_PyValue_SequenceFast)(PyValue_Borrow(V), M)
+
+// PySequence_Count() and PySequence_Index().
+PyAPI_FUNC(Py_ssize_t) _PyValue_SequenceCount(PyValueBorrow s,
+                                              PyValueBorrow o);
+PyAPI_FUNC(Py_ssize_t) _PyValue_SequenceIndex(PyValueBorrow s,
+                                              PyValueBorrow o);
+#define _PyValue_SequenceCount(S, O) \
+    (_PyValue_SequenceCount)(PyValue_Borrow(S), PyValue_Borrow(O))
+#define _PyValue_SequenceIndex(S, O) \
+    (_PyValue_SequenceIndex)(PyValue_Borrow(S), PyValue_Borrow(O))
+
+// PyMapping_Check(), PyMapping_Size() and PyMapping_Length().
+PyAPI_FUNC(int) _PyValue_MappingCheck(PyValueBorrow o);
+PyAPI_FUNC(Py_ssize_t) _PyValue_MappingSize(PyValueBorrow o);
+#define _PyValue_MappingCheck(O) \
+    (_PyValue_MappingCheck)(PyValue_Borrow(O))
+#define _PyValue_MappingSize(O) \
+    (_PyValue_MappingSize)(PyValue_Borrow(O))
+
+// PyMapping_GetItemString(), _GetOptionalItemString() and _SetItemString().
+PyAPI_FUNC(PyValue) _PyValue_MappingGetItemString(PyValueBorrow o,
+                                                  const char *key);
+PyAPI_FUNC(_PyStatusValue)
+_PyValue_MappingGetOptionalItemString(PyValueBorrow obj, const char *key);
+PyAPI_FUNC(int) _PyValue_MappingSetItemString(PyValueBorrow o, const char *key,
+                                              PyValueBorrow value);
+#define _PyValue_MappingGetItemString(O, KEY) \
+    (_PyValue_MappingGetItemString)(PyValue_Borrow(O), KEY)
+#define _PyValue_MappingGetOptionalItemString(OBJ, KEY) \
+    (_PyValue_MappingGetOptionalItemString)(PyValue_Borrow(OBJ), KEY)
+#define _PyValue_MappingSetItemString(O, KEY, VALUE) \
+    (_PyValue_MappingSetItemString)(PyValue_Borrow(O), KEY, \
+                                    PyValue_Borrow(VALUE))
+
+// PyMapping_HasKey*(). The two that ignore errors (HasKey, HasKeyString)
+// also take PyValue_NULL, for the null argument of the object API.
+PyAPI_FUNC(int) _PyValue_MappingHasKeyWithError(PyValueBorrow obj,
+                                                PyValueBorrow key);
+PyAPI_FUNC(int) _PyValue_MappingHasKeyStringWithError(PyValueBorrow obj,
+                                                      const char *key);
+PyAPI_FUNC(int) _PyValue_MappingHasKey(PyValueBorrow obj, PyValueBorrow key);
+PyAPI_FUNC(int) _PyValue_MappingHasKeyString(PyValueBorrow obj,
+                                             const char *key);
+#define _PyValue_MappingHasKeyWithError(OBJ, KEY) \
+    (_PyValue_MappingHasKeyWithError)(PyValue_Borrow(OBJ), PyValue_Borrow(KEY))
+#define _PyValue_MappingHasKeyStringWithError(OBJ, KEY) \
+    (_PyValue_MappingHasKeyStringWithError)(PyValue_Borrow(OBJ), KEY)
+#define _PyValue_MappingHasKey(OBJ, KEY) \
+    (_PyValue_MappingHasKey)(PyValue_Borrow(OBJ), PyValue_Borrow(KEY))
+#define _PyValue_MappingHasKeyString(OBJ, KEY) \
+    (_PyValue_MappingHasKeyString)(PyValue_Borrow(OBJ), KEY)
+
+// PyMapping_Keys(), _Items() and _Values().
+PyAPI_FUNC(PyObject *) _PyValue_MappingKeys(PyValueBorrow o);
+PyAPI_FUNC(PyObject *) _PyValue_MappingItems(PyValueBorrow o);
+PyAPI_FUNC(PyObject *) _PyValue_MappingValues(PyValueBorrow o);
+#define _PyValue_MappingKeys(O) \
+    (_PyValue_MappingKeys)(PyValue_Borrow(O))
+#define _PyValue_MappingItems(O) \
+    (_PyValue_MappingItems)(PyValue_Borrow(O))
+#define _PyValue_MappingValues(O) \
+    (_PyValue_MappingValues)(PyValue_Borrow(O))
+
 #ifdef __cplusplus
 }
 #endif

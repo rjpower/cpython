@@ -9,6 +9,7 @@
 #include "pycore_dict.h"          // PyDict_SetValue()
 #include "pycore_fileutils.h"     // _PyFile_Flush
 #include "pycore_floatobject.h"   // _PyFloat_ExactDealloc()
+#include "pycore_genobject.h"     // _PyGen_SetStopIterationValue()
 #include "pycore_interp.h"        // _PyInterpreterState_GetConfig()
 #include "pycore_import.h"        // _PyImport_LazyImportModuleLevelObject  ()
 #include "pycore_iterobject.h"    // _PyCallIter_NewEx()
@@ -20,6 +21,9 @@
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_pythonrun.h"     // _Py_SourceAsString()
 #include "pycore_value.h"      // _PyObject_ValueIdentity()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_ops.h"     // _PyValue_IterStep()
+#include "pycore_value_slots.h"   // _Py_VALUE_THUNK_ITERNEXT()
 #include "pycore_tuple.h"         // _PyTuple_Recycle()
 #include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
 
@@ -427,21 +431,20 @@ static PyObject *
 builtin_all(PyObject *module, PyObject *iterable)
 /*[clinic end generated code: output=ca2a7127276f79b3 input=1a7c5d1bc3438a21]*/
 {
-    PyObject *it, *item;
-    PyObject *(*iternext)(PyObject *);
+    PyObject *it;
+    _PyStatusValue item;
     int cmp;
 
     it = PyObject_GetIter(iterable);
     if (it == NULL)
         return NULL;
-    iternext = *Py_TYPE(it)->tp_iternext;
 
     for (;;) {
-        item = iternext(it);
-        if (item == NULL)
+        item = _PyValue_IterNext(it);
+        if (item.status != PYGEN_NEXT)
             break;
-        cmp = PyObject_IsTrue(item);
-        Py_DECREF(item);
+        cmp = _PyValue_IsTrue(item.value);
+        PyValue_CLOSE(item.value);
         if (cmp < 0) {
             Py_DECREF(it);
             return NULL;
@@ -452,12 +455,9 @@ builtin_all(PyObject *module, PyObject *iterable)
         }
     }
     Py_DECREF(it);
-    if (PyErr_Occurred()) {
-        if (PyErr_ExceptionMatches(PyExc_StopIteration))
-            PyErr_Clear();
-        else
-            return NULL;
-    }
+    // _PyValue_IterNext() has cleared a StopIteration that ended it
+    if (item.status == PYGEN_ERROR)
+        return NULL;
     Py_RETURN_TRUE;
 }
 
@@ -476,21 +476,20 @@ static PyObject *
 builtin_any(PyObject *module, PyObject *iterable)
 /*[clinic end generated code: output=fa65684748caa60e input=41d7451c23384f24]*/
 {
-    PyObject *it, *item;
-    PyObject *(*iternext)(PyObject *);
+    PyObject *it;
+    _PyStatusValue item;
     int cmp;
 
     it = PyObject_GetIter(iterable);
     if (it == NULL)
         return NULL;
-    iternext = *Py_TYPE(it)->tp_iternext;
 
     for (;;) {
-        item = iternext(it);
-        if (item == NULL)
+        item = _PyValue_IterNext(it);
+        if (item.status != PYGEN_NEXT)
             break;
-        cmp = PyObject_IsTrue(item);
-        Py_DECREF(item);
+        cmp = _PyValue_IsTrue(item.value);
+        PyValue_CLOSE(item.value);
         if (cmp < 0) {
             Py_DECREF(it);
             return NULL;
@@ -501,12 +500,9 @@ builtin_any(PyObject *module, PyObject *iterable)
         }
     }
     Py_DECREF(it);
-    if (PyErr_Occurred()) {
-        if (PyErr_ExceptionMatches(PyExc_StopIteration))
-            PyErr_Clear();
-        else
-            return NULL;
-    }
+    // _PyValue_IterNext() has cleared a StopIteration that ended it
+    if (item.status == PYGEN_ERROR)
+        return NULL;
     Py_RETURN_FALSE;
 }
 
@@ -689,41 +685,51 @@ filter_traverse(PyObject *self, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
-filter_next(PyObject *self)
+/* The value iternext slot of filter (R16): the inner iterator's end, with
+   its return value, or its error is filter's. */
+static _PyStatusValue
+filter_next_value(PyObject *self)
 {
     filterobject *lz = _filterobject_CAST(self);
-    PyObject *item;
+    _PyStatusValue item;
     PyObject *it = lz->it;
     long ok;
-    PyObject *(*iternext)(PyObject *);
     int checktrue = lz->func == Py_None || lz->func == (PyObject *)&PyBool_Type;
 
-    iternext = *Py_TYPE(it)->tp_iternext;
     for (;;) {
-        item = iternext(it);
-        if (item == NULL)
-            return NULL;
+        item = _PyValue_IterStep(it);
+        if (item.status != PYGEN_NEXT)
+            return item;
 
         if (checktrue) {
-            ok = PyObject_IsTrue(item);
+            ok = _PyValue_IsTrue(item.value);
         } else {
+            // The function takes an object until value calls (M3).
+            PyObject *arg = _PyValue_AsObjectAt(item.value,
+                                                BOX_SITE_CALL_ADAPTER);
+            if (arg == NULL) {
+                PyValue_CLOSE(item.value);
+                return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
+            }
             PyObject *good;
-            good = PyObject_CallOneArg(lz->func, item);
+            good = PyObject_CallOneArg(lz->func, arg);
+            Py_DECREF(arg);
             if (good == NULL) {
-                Py_DECREF(item);
-                return NULL;
+                PyValue_CLOSE(item.value);
+                return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
             }
             ok = PyObject_IsTrue(good);
             Py_DECREF(good);
         }
         if (ok > 0)
             return item;
-        Py_DECREF(item);
+        PyValue_CLOSE(item.value);
         if (ok < 0)
-            return NULL;
+            return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
     }
 }
+
+_Py_VALUE_THUNK_ITERNEXT(filter_next, filter_next_value)
 
 static PyObject *
 filter_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
@@ -789,7 +795,10 @@ PyTypeObject PyFilter_Type = {
     PyType_GenericAlloc,                /* tp_alloc */
     filter_new,                         /* tp_new */
     PyObject_GC_Del,                    /* tp_free */
-    .tp_vectorcall = filter_vectorcall
+    .tp_vectorcall = filter_vectorcall,
+    .tp_value = {
+        .iternext = _Py_VALUE_SLOT_INIT(iternext, filter_next_value),
+    },
 };
 
 
@@ -1629,14 +1638,16 @@ map_traverse(PyObject *self, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
-map_next(PyObject *self)
+/* The value iternext slot of map (R16): without strict, the end of an
+   inner iterator, with its return value, or its error is map's. */
+static _PyStatusValue
+map_next_value(PyObject *self)
 {
     mapobject *lz = _mapobject_CAST(self);
     Py_ssize_t i;
     PyObject *small_stack[_PY_FASTCALL_SMALL_STACK];
     PyObject **stack;
-    PyObject *result = NULL;
+    _PyStatusValue result = {PYGEN_ERROR, PyValue_NULL};
     PyThreadState *tstate = _PyThreadState_GET();
 
     const Py_ssize_t niters = PyTuple_GET_SIZE(lz->iters);
@@ -1647,35 +1658,52 @@ map_next(PyObject *self)
         stack = PyMem_Malloc(niters * sizeof(stack[0]));
         if (stack == NULL) {
             _PyErr_NoMemory(tstate);
-            return NULL;
+            return result;
         }
     }
 
     Py_ssize_t nargs = 0;
+    _PyStatusValue val;
+    PyObject *call_result;
     for (i = 0; i < niters; i++) {
         // iters holds only iterators made by PyObject_GetIter(): never a scalar.
         PyObject *it = _PyTuple_GET_OBJECT(lz->iters, i);
-        PyObject *val = Py_TYPE(it)->tp_iternext(it);
-        if (val == NULL) {
+        val = _PyValue_IterStep(it);
+        if (val.status != PYGEN_NEXT) {
             if (lz->strict) {
                 goto check;
             }
+            result = val;
+            goto exit;
+        }
+        // The function takes objects until value calls (M3).
+        stack[i] = _PyValue_AsObjectAt(val.value, BOX_SITE_CALL_ADAPTER);
+        PyValue_CLOSE(val.value);
+        if (stack[i] == NULL) {
             goto exit_no_result;
         }
-        stack[i] = val;
         nargs++;
     }
 
-    result = _PyObject_VectorcallTstate(tstate, lz->func, stack, nargs, NULL);
+    call_result = _PyObject_VectorcallTstate(tstate, lz->func, stack, nargs,
+                                             NULL);
+    if (call_result != NULL) {
+        result = (_PyStatusValue){PYGEN_NEXT,
+                                  PyValue_FromObjectSteal(call_result)};
+    }
     goto exit;
 
 check:
-    if (PyErr_Occurred()) {
+    if (val.status == PYGEN_ERROR) {
         if (!PyErr_ExceptionMatches(PyExc_StopIteration)) {
             // next() on argument i raised an exception (not StopIteration)
             goto exit_no_result;
         }
         PyErr_Clear();
+    }
+    else {
+        // Strict mode drops the return value of argument i
+        PyValue_XCLOSE(val.value);
     }
     if (i) {
         // ValueError: map() argument 2 is shorter than argument 1
@@ -1689,28 +1717,33 @@ check:
     for (i = 1; i < niters; i++) {
         // iters holds only iterators made by PyObject_GetIter(): never a scalar.
         PyObject *it = _PyTuple_GET_OBJECT(lz->iters, i);
-        PyObject *val = (*Py_TYPE(it)->tp_iternext)(it);
-        if (val) {
-            Py_DECREF(val);
+        val = _PyValue_IterStep(it);
+        if (val.status == PYGEN_NEXT) {
+            PyValue_CLOSE(val.value);
             const char* plural = i == 1 ? " " : "s 1-";
             PyErr_Format(PyExc_ValueError,
                          "map() argument %zd is longer than argument%s%zd",
                          i + 1, plural, i);
             goto exit_no_result;
         }
-        if (PyErr_Occurred()) {
+        if (val.status == PYGEN_ERROR) {
             if (!PyErr_ExceptionMatches(PyExc_StopIteration)) {
                 // next() on argument i raised an exception (not StopIteration)
                 goto exit_no_result;
             }
             PyErr_Clear();
         }
+        else {
+            PyValue_XCLOSE(val.value);
+        }
         // Argument i is exhausted. So far so good...
     }
     // All arguments are exhausted. Success!
+    result = (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
+    goto exit;
 
 exit_no_result:
-    assert(result == NULL);
+    assert(result.status == PYGEN_ERROR && PyValue_IsNull(result.value));
 
 exit:
     for (i = 0; i < nargs; i++) {
@@ -1721,6 +1754,8 @@ exit:
     }
     return result;
 }
+
+_Py_VALUE_THUNK_ITERNEXT(map_next, map_next_value)
 
 static PyObject *
 map_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
@@ -1816,7 +1851,8 @@ PyTypeObject PyMap_Type = {
     PyType_GenericAlloc,                /* tp_alloc */
     map_new,                            /* tp_new */
     PyObject_GC_Del,                    /* tp_free */
-    .tp_vectorcall = map_vectorcall
+    .tp_vectorcall = map_vectorcall,
+    .tp_value = { .iternext = _Py_VALUE_SLOT_INIT(iternext, map_next_value) },
 };
 
 
@@ -1824,7 +1860,7 @@ PyTypeObject PyMap_Type = {
 static PyObject *
 builtin_next(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
 {
-    PyObject *it, *res;
+    PyObject *it;
 
     if (!_PyArg_CheckPositional("next", nargs, 1, 2))
         return NULL;
@@ -1837,21 +1873,34 @@ builtin_next(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
         return NULL;
     }
 
-    res = (*Py_TYPE(it)->tp_iternext)(it);
-    if (res != NULL) {
-        return res;
+    // The raw step (R11): an iterator's return value reaches the caller
+    // as StopIteration(value), as from the iterator's own __next__().
+    _PyStatusValue res = _PyValue_IterStep(it);
+    if (res.status == PYGEN_NEXT) {
+        // next() returns an object: an inline item is boxed here.
+        if (PyValue_IsInline(res.value)) {
+            return _PyValue_AsObjectAt(res.value, BOX_SITE_ITERATION);
+        }
+        return PyValue_AsKnownObjectSteal(res.value);
     } else if (nargs > 1) {
         PyObject *def = args[1];
-        if (PyErr_Occurred()) {
+        if (res.status == PYGEN_ERROR) {
             if(!PyErr_ExceptionMatches(PyExc_StopIteration))
                 return NULL;
             PyErr_Clear();
         }
+        else {
+            PyValue_XCLOSE(res.value);
+        }
         return Py_NewRef(def);
-    } else if (PyErr_Occurred()) {
+    } else if (res.status == PYGEN_ERROR) {
+        return NULL;
+    } else if (PyValue_IsNull(res.value)) {
+        PyErr_SetNone(PyExc_StopIteration);
         return NULL;
     } else {
-        PyErr_SetNone(PyExc_StopIteration);
+        (void)_PyGen_SetStopIterationValue(res.value);
+        PyValue_CLOSE(res.value);
         return NULL;
     }
 }
@@ -3281,8 +3330,11 @@ zip_traverse(PyObject *self, visitproc visit, void *arg)
     return 0;
 }
 
-static PyObject *
-zip_next(PyObject *self)
+/* The value iternext slot of zip (R16): without strict, the end of an
+   inner iterator, with its return value, or its error is zip's. The result
+   tuple holds the items' words. */
+static _PyStatusValue
+zip_next_value(PyObject *self)
 {
     zipobject *lz = _zipobject_CAST(self);
 
@@ -3290,24 +3342,24 @@ zip_next(PyObject *self)
     Py_ssize_t tuplesize = lz->tuplesize;
     PyObject *result = lz->result;
     PyObject *it;
-    PyObject *item;
+    _PyStatusValue item;
 
     if (tuplesize == 0)
-        return NULL;
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
 
     if (_PyObject_IsUniquelyReferenced(result)) {
         Py_INCREF(result);
         for (i=0 ; i < tuplesize ; i++) {
             it = _PyTuple_GET_OBJECT(lz->ittuple, i);  // iterators only
-            item = (*Py_TYPE(it)->tp_iternext)(it);
-            if (item == NULL) {
+            item = _PyValue_IterStep(it);
+            if (item.status != PYGEN_NEXT) {
                 Py_DECREF(result);
                 if (lz->strict) {
                     goto check;
                 }
-                return NULL;
+                return item;
             }
-            _PyTuple_ReplaceTakeValue(result, i, PyValue_PrepareOwned(item));
+            _PyTuple_ReplaceTakeValue(result, i, item.value);
         }
         // bpo-42536: The GC may have untracked this result tuple. Since we're
         // recycling it, make sure it's tracked again:
@@ -3315,59 +3367,70 @@ zip_next(PyObject *self)
     } else {
         result = PyTuple_New(tuplesize);
         if (result == NULL)
-            return NULL;
+            return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
         for (i=0 ; i < tuplesize ; i++) {
             it = _PyTuple_GET_OBJECT(lz->ittuple, i);  // iterators only
-            item = (*Py_TYPE(it)->tp_iternext)(it);
-            if (item == NULL) {
+            item = _PyValue_IterStep(it);
+            if (item.status != PYGEN_NEXT) {
                 Py_DECREF(result);
                 if (lz->strict) {
                     goto check;
                 }
-                return NULL;
+                return item;
             }
-            PyTuple_SET_VALUE(result, i, PyValue_PrepareOwned(_PyObject_CAST(item)));
+            PyTuple_SET_VALUE(result, i, item.value);
         }
     }
-    return result;
+    return (_PyStatusValue){PYGEN_NEXT, PyValue_FromObjectSteal(result)};
 check:
-    if (PyErr_Occurred()) {
+    if (item.status == PYGEN_ERROR) {
         if (!PyErr_ExceptionMatches(PyExc_StopIteration)) {
             // next() on argument i raised an exception (not StopIteration)
-            return NULL;
+            return item;
         }
         PyErr_Clear();
+    }
+    else {
+        // Strict mode drops the return value of argument i
+        PyValue_XCLOSE(item.value);
     }
     if (i) {
         // ValueError: zip() argument 2 is shorter than argument 1
         // ValueError: zip() argument 3 is shorter than arguments 1-2
         const char* plural = i == 1 ? " " : "s 1-";
-        return PyErr_Format(PyExc_ValueError,
-                            "zip() argument %zd is shorter than argument%s%zd",
-                            i + 1, plural, i);
+        PyErr_Format(PyExc_ValueError,
+                     "zip() argument %zd is shorter than argument%s%zd",
+                     i + 1, plural, i);
+        return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
     }
     for (i = 1; i < tuplesize; i++) {
         it = _PyTuple_GET_OBJECT(lz->ittuple, i);  // iterators only
-        item = (*Py_TYPE(it)->tp_iternext)(it);
-        if (item) {
-            Py_DECREF(item);
+        item = _PyValue_IterStep(it);
+        if (item.status == PYGEN_NEXT) {
+            PyValue_CLOSE(item.value);
             const char* plural = i == 1 ? " " : "s 1-";
-            return PyErr_Format(PyExc_ValueError,
-                                "zip() argument %zd is longer than argument%s%zd",
-                                i + 1, plural, i);
+            PyErr_Format(PyExc_ValueError,
+                         "zip() argument %zd is longer than argument%s%zd",
+                         i + 1, plural, i);
+            return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
         }
-        if (PyErr_Occurred()) {
+        if (item.status == PYGEN_ERROR) {
             if (!PyErr_ExceptionMatches(PyExc_StopIteration)) {
                 // next() on argument i raised an exception (not StopIteration)
-                return NULL;
+                return item;
             }
             PyErr_Clear();
+        }
+        else {
+            PyValue_XCLOSE(item.value);
         }
         // Argument i is exhausted. So far so good...
     }
     // All arguments are exhausted. Success!
-    return NULL;
+    return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
 }
+
+_Py_VALUE_THUNK_ITERNEXT(zip_next, zip_next_value)
 
 static PyObject *
 zip_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
@@ -3455,6 +3518,7 @@ PyTypeObject PyZip_Type = {
     PyType_GenericAlloc,                /* tp_alloc */
     zip_new,                            /* tp_new */
     PyObject_GC_Del,                    /* tp_free */
+    .tp_value = { .iternext = _Py_VALUE_SLOT_INIT(iternext, zip_next_value) },
 };
 
 

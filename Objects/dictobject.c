@@ -5570,8 +5570,10 @@ dictiter_pair(dictiterobject *di, PyValue key, PyValue value)
     return PyValue_FromObjectSteal(result);
 }
 
-PyValue
-_PyDictIter_NextValue(PyObject *self)
+/* The value slot of the six dict iterator types. The reversed iterators
+ * run under the dict's critical section, as their object slot did. */
+static _PyStatusValue
+dictiter_next_value_impl(PyObject *self)
 {
     int keys = Py_IS_TYPE(self, &PyDictIterKey_Type) ||
                Py_IS_TYPE(self, &PyDictRevIterKey_Type);
@@ -5584,12 +5586,12 @@ _PyDictIter_NextValue(PyObject *self)
                   Py_IS_TYPE(self, &PyDictRevIterItem_Type);
     if (!keys && !values && !items) {
         PyErr_BadInternalCall();
-        return PyValue_NULL;
+        return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
     }
     dictiterobject *di = (dictiterobject *)self;
     PyDictObject *d = di->di_dict;
     if (d == NULL) {
-        return PyValue_NULL;
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
     }
     PyValue key = PyValue_NULL, value = PyValue_NULL;
     int found;
@@ -5601,48 +5603,46 @@ _PyDictIter_NextValue(PyObject *self)
                                 keys || items ? &key : NULL,
                                 values || items ? &value : NULL);
     }
-    if (found <= 0) {
-        return PyValue_NULL;
+    if (found < 0) {
+        return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
+    }
+    if (found == 0) {
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
     }
     if (items) {
-        return dictiter_pair(di, key, value);
+        /* dictiter_pair() returns NULL only when the pair allocation fails,
+           with MemoryError set. */
+        PyValue pair = dictiter_pair(di, key, value);
+        if (PyValue_IsNull(pair)) {
+            return (_PyStatusValue){PYGEN_ERROR, PyValue_NULL};
+        }
+        return (_PyStatusValue){PYGEN_NEXT, pair};
     }
-    return keys ? key : value;
+    return (_PyStatusValue){PYGEN_NEXT, keys ? key : value};
 }
 
-static PyObject *
-dictiter_object_next(PyObject *self)
-{
-    PyValue value = _PyDictIter_NextValue(self);
-    if (PyValue_IsNull(value)) {
-        return NULL;
-    }
-    PyObject *result = _PyValue_AsObjectAt(value, BOX_SITE_ITERATION);
-    PyValue_XCLOSE(value);
-    return result;
-}
-
-static PyObject*
-dictiter_iternextkey_lock_held(PyDictObject *d, PyObject *self)
-{
-    return dictiter_object_next(self);
-}
-
-
-static PyObject*
-dictiter_iternextkey(PyObject *self)
+static _PyStatusValue
+dictiter_next_value(PyObject *self)
 {
     dictiterobject *di = (dictiterobject *)self;
     PyDictObject *d = di->di_dict;
-
-    if (d == NULL)
-        return NULL;
-
-    PyObject *value;
-    value = dictiter_iternextkey_lock_held(d, self);
-
-    return value;
+    if (d == NULL) {
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
+    }
+    if (!(Py_IS_TYPE(self, &PyDictRevIterKey_Type) ||
+          Py_IS_TYPE(self, &PyDictRevIterValue_Type) ||
+          Py_IS_TYPE(self, &PyDictRevIterItem_Type))) {
+        return dictiter_next_value_impl(self);
+    }
+    _PyStatusValue result;
+    Py_BEGIN_CRITICAL_SECTION(d);
+    result = dictiter_next_value_impl(self);
+    Py_END_CRITICAL_SECTION();
+    return result;
 }
+
+/* A failed box or pair allocation consumes the entry (see listiter_next()). */
+_Py_VALUE_THUNK_ITERNEXT(dictiter_object_next, dictiter_next_value)
 
 PyTypeObject PyDictIterKey_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
@@ -5672,33 +5672,14 @@ PyTypeObject PyDictIterKey_Type = {
     0,                                          /* tp_richcompare */
     0,                                          /* tp_weaklistoffset */
     PyObject_SelfIter,                          /* tp_iter */
-    dictiter_iternextkey,                       /* tp_iternext */
+    dictiter_object_next,                       /* tp_iternext */
     dictiter_methods,                           /* tp_methods */
     0,
+    .tp_value = {
+        .iternext = _Py_VALUE_SLOT_INIT(iternext, dictiter_next_value),
+    },
 };
 
-
-static PyObject *
-dictiter_iternextvalue_lock_held(PyDictObject *d, PyObject *self)
-{
-    return dictiter_object_next(self);
-}
-
-
-static PyObject *
-dictiter_iternextvalue(PyObject *self)
-{
-    dictiterobject *di = (dictiterobject *)self;
-    PyDictObject *d = di->di_dict;
-
-    if (d == NULL)
-        return NULL;
-
-    PyObject *value;
-    value = dictiter_iternextvalue_lock_held(d, self);
-
-    return value;
-}
 
 PyTypeObject PyDictIterValue_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
@@ -5728,9 +5709,12 @@ PyTypeObject PyDictIterValue_Type = {
     0,                                          /* tp_richcompare */
     0,                                          /* tp_weaklistoffset */
     PyObject_SelfIter,                          /* tp_iter */
-    dictiter_iternextvalue,                     /* tp_iternext */
+    dictiter_object_next,                       /* tp_iternext */
     dictiter_methods,                           /* tp_methods */
     0,
+    .tp_value = {
+        .iternext = _Py_VALUE_SLOT_INIT(iternext, dictiter_next_value),
+    },
 };
 
 static int
@@ -5749,12 +5733,6 @@ acquire_iter_result(PyObject *result)
         return true;
     }
     return false;
-}
-
-static PyObject *
-dictiter_iternextitem(PyObject *self)
-{
-    return dictiter_object_next(self);
 }
 
 PyTypeObject PyDictIterItem_Type = {
@@ -5785,36 +5763,16 @@ PyTypeObject PyDictIterItem_Type = {
     0,                                          /* tp_richcompare */
     0,                                          /* tp_weaklistoffset */
     PyObject_SelfIter,                          /* tp_iter */
-    dictiter_iternextitem,                      /* tp_iternext */
+    dictiter_object_next,                       /* tp_iternext */
     dictiter_methods,                           /* tp_methods */
     0,
+    .tp_value = {
+        .iternext = _Py_VALUE_SLOT_INIT(iternext, dictiter_next_value),
+    },
 };
 
 
 /* dictreviter */
-
-static PyObject *
-dictreviter_iter_lock_held(PyDictObject *d, PyObject *self)
-{
-    return dictiter_object_next(self);
-}
-
-static PyObject *
-dictreviter_iternext(PyObject *self)
-{
-    dictiterobject *di = (dictiterobject *)self;
-    PyDictObject *d = di->di_dict;
-
-    if (d == NULL)
-        return NULL;
-
-    PyObject *value;
-    Py_BEGIN_CRITICAL_SECTION(d);
-    value = dictreviter_iter_lock_held(d, self);
-    Py_END_CRITICAL_SECTION();
-
-    return value;
-}
 
 PyTypeObject PyDictRevIterKey_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
@@ -5824,7 +5782,10 @@ PyTypeObject PyDictRevIterKey_Type = {
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
     .tp_traverse = dictiter_traverse,
     .tp_iter = PyObject_SelfIter,
-    .tp_iternext = dictreviter_iternext,
+    .tp_iternext = dictiter_object_next,
+    .tp_value = {
+        .iternext = _Py_VALUE_SLOT_INIT(iternext, dictiter_next_value),
+    },
     .tp_methods = dictiter_methods
 };
 
@@ -5866,7 +5827,10 @@ PyTypeObject PyDictRevIterItem_Type = {
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
     .tp_traverse = dictiter_traverse,
     .tp_iter = PyObject_SelfIter,
-    .tp_iternext = dictreviter_iternext,
+    .tp_iternext = dictiter_object_next,
+    .tp_value = {
+        .iternext = _Py_VALUE_SLOT_INIT(iternext, dictiter_next_value),
+    },
     .tp_methods = dictiter_methods
 };
 
@@ -5878,7 +5842,10 @@ PyTypeObject PyDictRevIterValue_Type = {
     .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_HAVE_GC,
     .tp_traverse = dictiter_traverse,
     .tp_iter = PyObject_SelfIter,
-    .tp_iternext = dictreviter_iternext,
+    .tp_iternext = dictiter_object_next,
+    .tp_value = {
+        .iternext = _Py_VALUE_SLOT_INIT(iternext, dictiter_next_value),
+    },
     .tp_methods = dictiter_methods
 };
 

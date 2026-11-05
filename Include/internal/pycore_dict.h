@@ -205,12 +205,6 @@ extern int _PyDict_GetMethodValue(PyDictObject *dict, PyObject *name, PyValue *m
  * Caller roots both inputs and validates current keys/layout before using ix. */
 PyAPI_FUNC(Py_ssize_t) _PyDict_LookupIndexAndOwnedValue(PyDictObject *, PyObject *, PyValue *);
 PyAPI_FUNC(Py_ssize_t) _PyDict_LookupIndex(PyDictObject *, PyObject *);
-/* Owns the returned canonical key/value/item tuple; NULL1 means exhaustion
- * or error (PyErr distinguishes them). Supports the six builtin forward/
- * reverse dict iterator types. As in upstream's item iterator, a step whose
- * pair allocation (or, in tp_iternext, boxing) fails consumes the entry.
- * Object tp_iternext remains a separate fallible outward bridge. */
-PyAPI_FUNC(PyValue) _PyDictIter_NextValue(PyObject *iterator);
 PyAPI_FUNC(Py_ssize_t) _PyDictKeys_StringLookup(PyDictKeysObject* dictkeys, PyObject *key);
 
 /* Look up a string key in an all unicode dict keys, assign the keys object a version, and

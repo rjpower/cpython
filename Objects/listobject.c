@@ -1091,8 +1091,6 @@ list_extend_iter_lock_held(PyListObject *self, PyObject *iterable)
     if (it == NULL) {
         return -1;
     }
-    PyObject *(*iternext)(PyObject *) = *Py_TYPE(it)->tp_iternext;
-
     /* Guess a result list size. */
     Py_ssize_t n = PyObject_LengthHint(iterable, 8);
     if (n < 0) {
@@ -1123,18 +1121,17 @@ list_extend_iter_lock_held(PyListObject *self, PyObject *iterable)
 
     /* Run iterator to exhaustion. */
     for (;;) {
-        PyObject *item = iternext(it);
-        if (item == NULL) {
-            if (PyErr_Occurred()) {
-                if (PyErr_ExceptionMatches(PyExc_StopIteration))
-                    PyErr_Clear();
-                else
-                    goto error;
-            }
+        /* The dispatcher clears a pending StopIteration and closes any
+           return value, so only a real error is left. */
+        _PyStatusValue step = _PyValue_IterNext(it);
+        if (step.status == PYGEN_ERROR) {
+            goto error;
+        }
+        if (step.status == PYGEN_RETURN) {
             break;
         }
 
-        if (_PyList_AppendTakeValue(self, PyValue_PrepareOwned(item)) < 0) goto error;
+        if (_PyList_AppendTakeValue(self, step.value) < 0) goto error;
     }
 
     /* Cut back result list if initial guess was too large. */
@@ -3698,6 +3695,7 @@ PyTypeObject PyList_Type = {
 static void listiter_dealloc(PyObject *);
 static int listiter_traverse(PyObject *, visitproc, void *);
 static PyObject *listiter_next(PyObject *);
+static _PyStatusValue listiter_next_value(PyObject *);
 static PyObject *listiter_len(PyObject *, PyObject *);
 static PyObject *listiter_reduce_general(void *_it, int forward);
 static PyObject *listiter_reduce(PyObject *, PyObject *);
@@ -3745,6 +3743,9 @@ PyTypeObject PyListIter_Type = {
     listiter_next,                              /* tp_iternext */
     listiter_methods,                           /* tp_methods */
     0,                                          /* tp_members */
+    .tp_value = {
+        .iternext = _Py_VALUE_SLOT_INIT(iternext, listiter_next_value),
+    },
 };
 
 
@@ -3785,38 +3786,31 @@ listiter_traverse(PyObject *it, visitproc visit, void *arg)
     return 0;
 }
 
-PyValue
-_PyListIter_NextValue(PyObject *self)
+static _PyStatusValue
+listiter_next_value(PyObject *self)
 {
     _PyListIterObject *it = (_PyListIterObject *)self;
     Py_ssize_t index = it->it_index;
-    if (index < 0) return PyValue_NULL;
+    if (index < 0) {
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
+    }
     PyListObject *seq = it->it_seq;
     if (!valid_index(index, Py_SIZE(seq))) {
         it->it_index = -1;
         it->it_seq = NULL;
         Py_DECREF(seq);
-        return PyValue_NULL;
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
     }
     PyValue value = PyValue_DUP(seq->ob_item[index]);
     it->it_index = index + 1;
-    return value;
+    return (_PyStatusValue){PYGEN_NEXT, value};
 }
 
-static PyObject *
-listiter_next(PyObject *self)
-{
-    /* A step whose box fails still consumes its item, as upstream's dict
-       item iterator does when it cannot allocate its result tuple. The
-       iterators over lists, tuples, sets and dicts all follow this rule. */
-    PyValue value = _PyListIter_NextValue(self);
-    if (PyValue_IsNull(value)) {
-        return NULL;
-    }
-    PyObject *result = _PyValue_AsObjectAt(value, BOX_SITE_ITERATION);
-    PyValue_CLOSE(value);
-    return result;
-}
+/* A step whose box fails still consumes its item, as upstream's dict item
+   iterator does when it cannot allocate its result tuple. The iterators
+   over lists, tuples, sets and dicts all follow this rule: the thunk boxes
+   after the value slot has advanced. */
+_Py_VALUE_THUNK_ITERNEXT(listiter_next, listiter_next_value)
 
 static PyObject *
 listiter_len(PyObject *self, PyObject *Py_UNUSED(ignored))
@@ -3866,6 +3860,7 @@ typedef struct {
 static void listreviter_dealloc(PyObject *);
 static int listreviter_traverse(PyObject *, visitproc, void *);
 static PyObject *listreviter_next(PyObject *);
+static _PyStatusValue listreviter_next_value(PyObject *);
 static PyObject *listreviter_len(PyObject *, PyObject *);
 static PyObject *listreviter_reduce(PyObject *, PyObject *);
 static PyObject *listreviter_setstate(PyObject *, PyObject *);
@@ -3908,6 +3903,9 @@ PyTypeObject PyListRevIter_Type = {
     listreviter_next,                           /* tp_iternext */
     listreviter_methods,                /* tp_methods */
     0,
+    .tp_value = {
+        .iternext = _Py_VALUE_SLOT_INIT(iternext, listreviter_next_value),
+    },
 };
 
 /*[clinic input]
@@ -3948,36 +3946,28 @@ listreviter_traverse(PyObject *it, visitproc visit, void *arg)
     return 0;
 }
 
-PyValue
-_PyListRevIter_NextValue(PyObject *self)
+static _PyStatusValue
+listreviter_next_value(PyObject *self)
 {
     listreviterobject *it = (listreviterobject *)self;
     Py_ssize_t index = it->it_index;
-    if (index < 0) return PyValue_NULL;
+    if (index < 0) {
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
+    }
     PyListObject *seq = it->it_seq;
     if (!valid_index(index, Py_SIZE(seq))) {
         it->it_index = -1;
         it->it_seq = NULL;
         Py_DECREF(seq);
-        return PyValue_NULL;
+        return (_PyStatusValue){PYGEN_RETURN, PyValue_NULL};
     }
     PyValue value = PyValue_DUP(seq->ob_item[index]);
     it->it_index = index - 1;
-    return value;
+    return (_PyStatusValue){PYGEN_NEXT, value};
 }
 
-static PyObject *
-listreviter_next(PyObject *self)
-{
-    /* A failed box consumes the item (see listiter_next()). */
-    PyValue value = _PyListRevIter_NextValue(self);
-    if (PyValue_IsNull(value)) {
-        return NULL;
-    }
-    PyObject *result = _PyValue_AsObjectAt(value, BOX_SITE_ITERATION);
-    PyValue_CLOSE(value);
-    return result;
-}
+/* A failed box consumes the item (see listiter_next()). */
+_Py_VALUE_THUNK_ITERNEXT(listreviter_next, listreviter_next_value)
 
 static PyObject *
 listreviter_len(PyObject *self, PyObject *Py_UNUSED(ignored))

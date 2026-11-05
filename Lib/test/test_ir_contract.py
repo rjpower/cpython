@@ -33,11 +33,6 @@ SLOT_ROLES = (_opcode.IR_ROLE_LOCAL_IN, _opcode.IR_ROLE_LOCAL_OUT,
 FIELD_LOCS = (_opcode.IR_LOC_A, _opcode.IR_LOC_B, _opcode.IR_LOC_C,
               _opcode.IR_LOC_D)
 
-# The superinstructions that the register IR never emits keep their packed
-# opargs as plain immediates.
-DEAD = {"LOAD_FAST_LOAD_FAST", "LOAD_FAST_BORROW_LOAD_FAST_BORROW",
-        "STORE_FAST_LOAD_FAST", "STORE_FAST_STORE_FAST"}
-
 # The feedback entry of each family (Include/internal/pycore_feedback.h):
 # its kind and size in bytes
 FEEDBACK = {
@@ -195,16 +190,14 @@ class ContractTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertEqual(oparg_role(BY_NAME[name]), role)
         # Exactly the opcodes whose oparg names a local or a cell have slot
-        # roles, but for the superinstructions that the IR never emits
+        # roles
         named = {opcode.opname[op] for op in (*opcode.haslocal, *opcode.hasfree)
                  if op < opcode.MIN_INSTRUMENTED_OPCODE}
         slots = {name for name, row in BY_NAME.items()
                  if row.base < opcode.MIN_INSTRUMENTED_OPCODE
                  and oparg_role(row) in SLOT_ROLES}
         bases = {opcode.opname[BY_NAME[name].base] for name in slots}
-        self.assertEqual(bases, named - DEAD)
-        for name in DEAD:
-            self.assertNotIn(oparg_role(BY_NAME[name]), SLOT_ROLES)
+        self.assertEqual(bases, named)
 
     def test_targets(self):
         for name, op in opcode.opmap.items():
@@ -291,8 +284,8 @@ class ContractTests(unittest.TestCase):
             "INSTRUMENTED_YIELD_VALUE": {"PY_YIELD"},
             "INSTRUMENTED_JUMP_FORWARD": {"JUMP"},
             "INSTRUMENTED_JUMP_BACKWARD": {"JUMP"},
-            "INSTRUMENTED_POP_JUMP_IF_TRUE": {"BRANCH_RIGHT"},
-            "INSTRUMENTED_NOT_TAKEN": {"BRANCH_LEFT"},
+            "INSTRUMENTED_POP_JUMP_IF_TRUE": {"BRANCH_RIGHT", "BRANCH_LEFT"},
+            "INSTRUMENTED_END_SEND": {"STOP_ITERATION", "BRANCH_LEFT"},
             "INSTRUMENTED_END_FOR": {"STOP_ITERATION"},
             "INSTRUMENTED_RESUME": {"PY_START", "PY_RESUME"},
         }
@@ -308,8 +301,8 @@ class ContractTests(unittest.TestCase):
         # that fires in a code object is in the events of the twins of that
         # code object's handlers, or of the twins that instrumentation adds
         # to any code.  The run is coarse: an event names the offset of its
-        # source, not of the twin that fires it (BRANCH_LEFT from NOT_TAKEN
-        # names the branch), so this checks the code object, not the word.
+        # source, not of the twin that fires it (BRANCH_LEFT names the
+        # jump), so this checks the code object, not the word.
         events = sys.monitoring.events
         twin_events = 0
         for row in ROWS.values():

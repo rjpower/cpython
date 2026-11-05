@@ -528,7 +528,7 @@ _PyRegPass_PopTop(_PyRegCfg *cfg)
  * "a.x and b" tests a copy of its first value and pops the value where it
  * goes on:
  *
- *     COPY 1; POP_JUMP_IF_FALSE L; NOT_TAKEN; POP_TOP; <b>; L:
+ *     COPY 1; POP_JUMP_IF_FALSE L; POP_TOP; <b>; L:
  *
  * JUMP_IF_FALSE_OR_POP does all three: it keeps the value where it jumps
  * and releases it where it falls through.  The POP_TOP must be the next op
@@ -537,7 +537,7 @@ _PyRegPass_PopTop(_PyRegCfg *cfg)
  * local the flowgraph turns the COPY into a second load, which copy
  * propagation folds into the jump:
  *
- *     LOAD_FAST x; POP_JUMP_IF_FALSE L <- x; NOT_TAKEN; POP_TOP; <b>; L:
+ *     LOAD_FAST x; POP_JUMP_IF_FALSE L <- x; POP_TOP; <b>; L:
  *
  * and the jump becomes JUMP_IF_FALSE_OR_POP of the first load's value. */
 
@@ -547,9 +547,6 @@ fall_through_pop(_PyRegCfg *cfg, int start, int end, _PyRegOp *jump, int v)
 {
     int j = (int)(jump - cfg->ops);
     _PyRegOp *next = live_neighbour(cfg, start, end, j, 1);
-    if (next != NULL && next->opcode == NOT_TAKEN) {
-        next = live_neighbour(cfg, start, end, (int)(next - cfg->ops), 1);
-    }
     if (next == NULL || next->opcode != POP_TOP
         || next->loc.lineno != jump->loc.lineno
         || _PyReg_IN(cfg, next)[0] != v)
@@ -566,7 +563,7 @@ truth_jump(int opcode)
          : opcode == POP_JUMP_IF_TRUE ? JUMP_IF_TRUE_OR_POP : 0;
 }
 
-/* LOAD_FAST x (v); POP_JUMP_IF_* <- x; [NOT_TAKEN]; POP_TOP v */
+/* LOAD_FAST x (v); POP_JUMP_IF_* <- x; POP_TOP v */
 static int
 fold_local_truth(_PyRegCfg *cfg, int start, int end, _PyRegOp *load)
 {

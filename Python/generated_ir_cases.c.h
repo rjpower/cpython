@@ -9184,26 +9184,6 @@
             DISPATCH();
         }
 
-        TARGET(EXTENDED_ARG) {
-            int opcode = EXTENDED_ARG;
-            (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(EXTENDED_ARG);
-            int oparg = (int)IR_A(ir_word);
-            (void)oparg;
-            opcode = EXTENDED_ARG;
-            assert(oparg);
-            opcode = IR_HANDLER(*next_instr);
-            oparg = oparg << 8 | _PyIR_Oparg(frame, next_instr);
-            PRE_DISPATCH_GOTO();
-            DISPATCH_GOTO();
-        }
-
         TARGET(FORMAT_SIMPLE) {
             int opcode = FORMAT_SIMPLE;
             (void)(opcode);
@@ -10580,6 +10560,16 @@
                     JUMP_TO_LABEL(error);
                 }
             }
+            if (!tstate->tracing) {
+                _PyIRWord *dest = _Py_call_instrumentation_jump(
+                    this_instr, tstate, PY_MONITORING_EVENT_BRANCH_LEFT, frame,
+                    this_instr, next_instr);
+                if (dest == NULL) {
+                    PyValue_CLOSE(held);
+                    JUMP_TO_LABEL(error);
+                }
+                next_instr = dest;
+            }
             val = held;
             (void)index_or_null;
             ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), index_or_null);
@@ -10739,6 +10729,7 @@
             else {
                 PyValue_CLOSE(held);
                 res = PyValue_NULL;
+                INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
             }
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
             DISPATCH();
@@ -10775,6 +10766,7 @@
             else {
                 PyValue_CLOSE(held);
                 res = PyValue_NULL;
+                INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
             }
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
             DISPATCH();
@@ -11119,22 +11111,6 @@
             DISPATCH();
         }
 
-        TARGET(INSTRUMENTED_NOT_TAKEN) {
-            int opcode = INSTRUMENTED_NOT_TAKEN;
-            (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
-            _PyIRWord* const prev_instr = frame->instr_ptr;
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(INSTRUMENTED_NOT_TAKEN);
-            (void)this_instr;
-            INSTRUMENTED_JUMP(prev_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
-            DISPATCH();
-        }
-
         TARGET(INSTRUMENTED_POP_ITER) {
             int opcode = INSTRUMENTED_POP_ITER;
             (void)(opcode);
@@ -11209,6 +11185,9 @@
                 if (jump) {
                     INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
                 }
+                else {
+                    INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
+                }
             }
             DISPATCH();
         }
@@ -11239,6 +11218,7 @@
             else {
                 ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), value);
                 PyValue_XCLOSE(ir_own_A);
+                INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
             }
             DISPATCH();
         }
@@ -11269,6 +11249,7 @@
             }
             else {
                 ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), value);
+                INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
             }
             DISPATCH();
         }
@@ -11319,6 +11300,9 @@
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, jump);
                 if (jump) {
                     INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
+                }
+                else {
+                    INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
                 }
             }
             DISPATCH();
@@ -11736,7 +11720,6 @@
             else {
                 PyValue_CLOSE(held);
                 res = PyValue_NULL;
-                JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
             }
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
             DISPATCH();
@@ -11773,7 +11756,6 @@
             else {
                 PyValue_CLOSE(held);
                 res = PyValue_NULL;
-                JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
             }
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
             DISPATCH();
@@ -13426,37 +13408,6 @@
             DISPATCH();
         }
 
-        TARGET(LOAD_FAST_BORROW_LOAD_FAST_BORROW) {
-            int opcode = LOAD_FAST_BORROW_LOAD_FAST_BORROW;
-            (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(LOAD_FAST_BORROW_LOAD_FAST_BORROW);
-            PyValue ir_displaced = PyValue_NULL;
-            (void)ir_displaced;
-            int oparg = (int)IR_B(ir_word);
-            (void)oparg;
-            assert(!IR_IS_LOCAL(IR_A(ir_word)));
-            PyValue value1;
-            PyValue value2;
-            uint32_t oparg1 = oparg >> 4;
-            uint32_t oparg2 = oparg & 15;
-            value1 = PyValue_DUP(GETLOCAL(oparg1));
-            value2 = PyValue_DUP(GETLOCAL(oparg2));
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), value1);
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), value2);
-            if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                next_instr = frame->instr_ptr + 1;
-                JUMP_TO_LABEL(error);
-            }
-            DISPATCH();
-        }
-
         TARGET(LOAD_FAST_CHECK) {
             int opcode = LOAD_FAST_CHECK;
             (void)(opcode);
@@ -13482,37 +13433,6 @@
             }
             value = PyValue_DUP(value_s);
             IR_STORE_DST(IR_A(ir_word), value);
-            if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                next_instr = frame->instr_ptr + 1;
-                JUMP_TO_LABEL(error);
-            }
-            DISPATCH();
-        }
-
-        TARGET(LOAD_FAST_LOAD_FAST) {
-            int opcode = LOAD_FAST_LOAD_FAST;
-            (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(LOAD_FAST_LOAD_FAST);
-            PyValue ir_displaced = PyValue_NULL;
-            (void)ir_displaced;
-            int oparg = (int)IR_B(ir_word);
-            (void)oparg;
-            assert(!IR_IS_LOCAL(IR_A(ir_word)));
-            PyValue value1;
-            PyValue value2;
-            uint32_t oparg1 = oparg >> 4;
-            uint32_t oparg2 = oparg & 15;
-            value1 = PyValue_DUP(GETLOCAL(oparg1));
-            value2 = PyValue_DUP(GETLOCAL(oparg2));
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), value1);
-            IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), value2);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -14942,19 +14862,6 @@
             DISPATCH();
         }
 
-        TARGET(NOT_TAKEN) {
-            int opcode = NOT_TAKEN;
-            (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(NOT_TAKEN);
-            DISPATCH();
-        }
-
         TARGET(POP_EXCEPT) {
             int opcode = POP_EXCEPT;
             (void)(opcode);
@@ -15075,9 +14982,6 @@
                 if (flag) {
                     JUMPTO(oparg);
                 }
-                else {
-                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
-                }
             }
             DISPATCH();
         }
@@ -15142,9 +15046,6 @@
                 if (flag) {
                     JUMPTO(oparg);
                 }
-                else {
-                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
-                }
             }
             DISPATCH();
         }
@@ -15186,9 +15087,6 @@
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
-                }
-                else {
-                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
                 }
             }
             DISPATCH();
@@ -15251,9 +15149,6 @@
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
-                }
-                else {
-                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
                 }
             }
             DISPATCH();
@@ -15320,9 +15215,6 @@
                 if (flag) {
                     JUMPTO(oparg);
                 }
-                else {
-                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
-                }
             }
             DISPATCH();
         }
@@ -15365,9 +15257,6 @@
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
-                }
-                else {
-                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
                 }
             }
             DISPATCH();
@@ -15431,9 +15320,6 @@
                 if (flag) {
                     JUMPTO(oparg);
                 }
-                else {
-                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
-                }
             }
             DISPATCH();
         }
@@ -15478,9 +15364,6 @@
                 if (flag) {
                     JUMPTO(oparg);
                 }
-                else {
-                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
-                }
             }
             DISPATCH();
         }
@@ -15524,9 +15407,6 @@
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
-                }
-                else {
-                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
                 }
             }
             DISPATCH();
@@ -15592,9 +15472,6 @@
                 if (flag) {
                     JUMPTO(oparg);
                 }
-                else {
-                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
-                }
             }
             DISPATCH();
         }
@@ -15659,9 +15536,6 @@
                 if (flag) {
                     JUMPTO(oparg);
                 }
-                else {
-                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
-                }
             }
             DISPATCH();
         }
@@ -15703,9 +15577,6 @@
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
-                }
-                else {
-                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
                 }
             }
             DISPATCH();
@@ -15768,9 +15639,6 @@
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
-                }
-                else {
-                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
                 }
             }
             DISPATCH();
@@ -15837,9 +15705,6 @@
                 if (flag) {
                     JUMPTO(oparg);
                 }
-                else {
-                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
-                }
             }
             DISPATCH();
         }
@@ -15882,9 +15747,6 @@
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
-                }
-                else {
-                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
                 }
             }
             DISPATCH();
@@ -15947,9 +15809,6 @@
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
-                }
-                else {
-                    JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
                 }
             }
             DISPATCH();
@@ -17488,72 +17347,6 @@
                 value = trash;
                 PyValue_XCLOSE(value);
             }
-            DISPATCH();
-        }
-
-        TARGET(STORE_FAST_LOAD_FAST) {
-            int opcode = STORE_FAST_LOAD_FAST;
-            (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(STORE_FAST_LOAD_FAST);
-            PyValue ir_displaced = PyValue_NULL;
-            (void)ir_displaced;
-            int oparg = (int)IR_C(ir_word);
-            (void)oparg;
-            PyValue value1;
-            PyValue value2;
-            value1 = IR_SLOT(IR_B(ir_word));
-            uint32_t oparg1 = oparg >> 4;
-            uint32_t oparg2 = oparg & 15;
-            PyValue tmp = GETLOCAL(oparg1);
-            GETLOCAL(oparg1) = value1;
-            _PyValue_CheckHome(value1);
-            IR_SLOT(IR_B(ir_word)) = PyValue_NULL;
-            value2 = PyValue_DUP(GETLOCAL(oparg2));
-            IR_STORE_TEMP_DST(IR_A(ir_word), value2);
-            PyValue_XCLOSE(tmp);
-            IR_STORE_DST(IR_A(ir_word), value2);
-            if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
-                next_instr = frame->instr_ptr + 1;
-                JUMP_TO_LABEL(error);
-            }
-            DISPATCH();
-        }
-
-        TARGET(STORE_FAST_STORE_FAST) {
-            int opcode = STORE_FAST_STORE_FAST;
-            (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(STORE_FAST_STORE_FAST);
-            int oparg = (int)IR_C(ir_word);
-            (void)oparg;
-            PyValue value2;
-            PyValue value1;
-            value1 = IR_SLOT(IR_B(ir_word));
-            value2 = IR_SLOT(IR_A(ir_word));
-            uint32_t oparg1 = oparg >> 4;
-            uint32_t oparg2 = oparg & 15;
-            PyValue tmp = GETLOCAL(oparg1);
-            GETLOCAL(oparg1) = value1;
-            _PyValue_CheckHome(value1);
-            IR_SLOT(IR_B(ir_word)) = PyValue_NULL;
-            PyValue_XCLOSE(tmp);
-            tmp = GETLOCAL(oparg2);
-            GETLOCAL(oparg2) = value2;
-            _PyValue_CheckHome(value2);
-            IR_SLOT(IR_A(ir_word)) = PyValue_NULL;
-            PyValue_XCLOSE(tmp);
             DISPATCH();
         }
 

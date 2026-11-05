@@ -1983,10 +1983,10 @@ class TestBranchAndJumpEvents(CheckEvents):
 
         self.check_events(func, recorders = BRANCH_OFFSET_RECORDERS, expected = [
             ('branch left', 'func', 6, 7),
-            ('branch right', 'func', 7, 11),
+            ('branch right', 'func', 7, 10),
             ('branch left', 'func', 6, 7),
-            ('branch left', 'func', 7, 9),
-            ('branch right', 'func', 6, 15)])
+            ('branch left', 'func', 7, 8),
+            ('branch right', 'func', 6, 14)])
 
     def test_except_star(self):
 
@@ -2013,8 +2013,8 @@ class TestBranchAndJumpEvents(CheckEvents):
             ('branch', 'func', 4, 4),
             ('line', 'func', 5),
             ('line', 'meth', 1),
-            ('jump', 'func', 5, '[offset=34]'),
-            ('branch', 'func', '[offset=36]', '[offset=38]'),
+            ('jump', 'func', 5, '[offset=33]'),
+            ('branch', 'func', '[offset=35]', '[offset=36]'),
             ('line', 'get_events', 11)])
 
         self.check_events(func, recorders = FLOW_AND_LINE_RECORDERS, expected = [
@@ -2028,8 +2028,8 @@ class TestBranchAndJumpEvents(CheckEvents):
             ('line', 'func', 5),
             ('line', 'meth', 1),
             ('return', 'meth', None),
-            ('jump', 'func', 5, '[offset=34]'),
-            ('branch', 'func', '[offset=36]', '[offset=38]'),
+            ('jump', 'func', 5, '[offset=33]'),
+            ('branch', 'func', '[offset=35]', '[offset=36]'),
             ('return', 'func', None),
             ('line', 'get_events', 11)])
 
@@ -2041,8 +2041,8 @@ class TestBranchAndJumpEvents(CheckEvents):
                 n += 1
             return None
 
-        in_loop = ('branch left', 'foo', 3, 5)
-        exit_loop = ('branch right', 'foo', 3, 9)
+        in_loop = ('branch left', 'foo', 3, 4)
+        exit_loop = ('branch right', 'foo', 3, 8)
         self.check_events(foo, recorders = BRANCH_OFFSET_RECORDERS, expected = [
             in_loop,
             in_loop,
@@ -2122,6 +2122,112 @@ class TestBranchAndJumpEvents(CheckEvents):
         sys.monitoring.register_callback(TEST_TOOL, E.BRANCH_LEFT, callback)
 
         self.assertEqual(func("true"), 1)
+
+
+class TestBranchEventsOfOneJump(MonitoringTestBase, unittest.TestCase):
+    """A conditional jump fires BRANCH_LEFT and BRANCH_RIGHT itself, at its
+    own offset, and each event is disabled and monitored on its own."""
+
+    @staticmethod
+    def func(n):
+        total = 0
+        for i in range(n):
+            if i % 2:
+                total += i
+        return total
+
+    def record(self, tool, event, disable=False):
+        events = []
+        def callback(code, offset, dest):
+            events.append((offset, dest))
+            return sys.monitoring.DISABLE if disable else None
+        sys.monitoring.register_callback(tool, event, callback)
+        return events
+
+    def run_func(self, *tools_events):
+        code = self.func.__code__
+        try:
+            for tool, event in tools_events:
+                sys.monitoring.set_local_events(tool, code, event)
+            self.assertEqual(self.func(6), 9)
+            self.assertEqual(self.func(6), 9)
+        finally:
+            for tool, event in tools_events:
+                sys.monitoring.set_local_events(tool, code, 0)
+                for single in (E.BRANCH_LEFT, E.BRANCH_RIGHT):
+                    if event & single:
+                        sys.monitoring.register_callback(tool, single, None)
+            sys.monitoring.restart_events()
+
+    def test_events_are_at_the_jump(self):
+        left = self.record(TEST_TOOL, E.BRANCH_LEFT)
+        right = self.record(TEST_TOOL, E.BRANCH_RIGHT)
+        self.run_func((TEST_TOOL, E.BRANCH_LEFT | E.BRANCH_RIGHT))
+        branches = {src: (l, r) for src, l, r in self.func.__code__.co_branches()}
+        # FOR_ITER: 6 iterations, then the exit; the if: 3 true, 3 false
+        # per call; there are two calls
+        self.assertEqual(len(left), 2 * (6 + 3))
+        self.assertEqual(len(right), 2 * (1 + 3))
+        for src, dest in left:
+            self.assertEqual(dest, branches[src][0])
+        for src, dest in right:
+            self.assertEqual(dest, branches[src][1])
+        # No word separates a conditional jump from its fall-through
+        jump = [src for src, l, r in self.func.__code__.co_branches()
+                if l == src + 1]
+        self.assertTrue(jump)
+        self.assertTrue(all(src in jump for src, _ in left if _ == src + 1))
+
+    def test_disable_left_keeps_right(self):
+        left = self.record(TEST_TOOL, E.BRANCH_LEFT, disable=True)
+        right = self.record(TEST_TOOL, E.BRANCH_RIGHT)
+        self.run_func((TEST_TOOL, E.BRANCH_LEFT | E.BRANCH_RIGHT))
+        # Each location reports its left branch once
+        self.assertEqual(len(left), len({src for src, _ in left}))
+        self.assertEqual(len(right), 2 * (1 + 3))
+
+    def test_disable_right_keeps_left(self):
+        left = self.record(TEST_TOOL, E.BRANCH_LEFT)
+        right = self.record(TEST_TOOL, E.BRANCH_RIGHT, disable=True)
+        self.run_func((TEST_TOOL, E.BRANCH_LEFT | E.BRANCH_RIGHT))
+        self.assertEqual(len(left), 2 * (6 + 3))
+        self.assertEqual(len(right), len({src for src, _ in right}))
+
+    def test_tools_with_different_events(self):
+        left = self.record(TEST_TOOL, E.BRANCH_LEFT)
+        right = self.record(TEST_TOOL2, E.BRANCH_RIGHT)
+        self.run_func((TEST_TOOL, E.BRANCH_LEFT), (TEST_TOOL2, E.BRANCH_RIGHT))
+        self.assertEqual(len(left), 2 * (6 + 3))
+        self.assertEqual(len(right), 2 * (1 + 3))
+
+    def test_one_tool_disables_its_event_only(self):
+        left = self.record(TEST_TOOL, E.BRANCH_LEFT)
+        right = self.record(TEST_TOOL, E.BRANCH_RIGHT)
+        left2 = self.record(TEST_TOOL2, E.BRANCH_LEFT, disable=True)
+        self.run_func((TEST_TOOL, E.BRANCH_LEFT | E.BRANCH_RIGHT),
+                      (TEST_TOOL2, E.BRANCH_LEFT))
+        self.assertEqual(len(left), 2 * (6 + 3))
+        self.assertEqual(len(right), 2 * (1 + 3))
+        self.assertEqual(len(left2), len({src for src, _ in left2}))
+
+    def test_left_after_right(self):
+        # The location is instrumented for BRANCH_RIGHT before BRANCH_LEFT
+        # is monitored
+        code = self.func.__code__
+        right = self.record(TEST_TOOL, E.BRANCH_RIGHT)
+        left = self.record(TEST_TOOL2, E.BRANCH_LEFT)
+        sys.monitoring.set_local_events(TEST_TOOL, code, E.BRANCH_RIGHT)
+        try:
+            self.assertEqual(self.func(6), 9)
+            sys.monitoring.set_local_events(TEST_TOOL2, code, E.BRANCH_LEFT)
+            self.assertEqual(self.func(6), 9)
+        finally:
+            sys.monitoring.set_local_events(TEST_TOOL, code, 0)
+            sys.monitoring.set_local_events(TEST_TOOL2, code, 0)
+            sys.monitoring.register_callback(TEST_TOOL, E.BRANCH_RIGHT, None)
+            sys.monitoring.register_callback(TEST_TOOL2, E.BRANCH_LEFT, None)
+        self.assertEqual(len(right), 2 * (1 + 3))
+        self.assertEqual(len(left), 6 + 3)
 
 
 class TestBranchConsistency(MonitoringTestBase, unittest.TestCase):

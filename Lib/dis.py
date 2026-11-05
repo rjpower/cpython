@@ -55,10 +55,6 @@ CALL_INTRINSIC_1 = opmap['CALL_INTRINSIC_1']
 CALL_INTRINSIC_2 = opmap['CALL_INTRINSIC_2']
 LOAD_COMMON_CONSTANT = opmap['LOAD_COMMON_CONSTANT']
 LOAD_SPECIAL = opmap['LOAD_SPECIAL']
-LOAD_FAST_LOAD_FAST = opmap['LOAD_FAST_LOAD_FAST']
-LOAD_FAST_BORROW_LOAD_FAST_BORROW = opmap['LOAD_FAST_BORROW_LOAD_FAST_BORROW']
-STORE_FAST_LOAD_FAST = opmap['STORE_FAST_LOAD_FAST']
-STORE_FAST_STORE_FAST = opmap['STORE_FAST_STORE_FAST']
 IS_OP = opmap['IS_OP']
 CONTAINS_OP = opmap['CONTAINS_OP']
 END_ASYNC_FOR = opmap['END_ASYNC_FOR']
@@ -682,13 +678,6 @@ class ArgResolver:
                 lbl = self.get_label_for_offset(argval)
                 preposition = "from" if deop == END_ASYNC_FOR else "to"
                 argrepr = f"{preposition} L{lbl}" if lbl is not None else ""
-            elif deop in (LOAD_FAST_LOAD_FAST, LOAD_FAST_BORROW_LOAD_FAST_BORROW, STORE_FAST_LOAD_FAST, STORE_FAST_STORE_FAST):
-                arg1 = arg >> 4
-                arg2 = arg & 15
-                val1, argrepr1 = _get_name_info(arg1, self.varname_from_oparg)
-                val2, argrepr2 = _get_name_info(arg2, self.varname_from_oparg)
-                argrepr = argrepr1 + ", " + argrepr2
-                argval = val1, val2
             elif deop in haslocal or deop in hasfree:
                 argval, argrepr = _get_name_info(arg, self.varname_from_oparg)
             elif deop in hascompare:

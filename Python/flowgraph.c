@@ -560,8 +560,6 @@ normalize_jumps_in_block(cfg_builder *g, basicblock *b) {
 
     bool is_forward = last->i_target->b_visited == 0;
     if (is_forward) {
-        RETURN_IF_ERROR(
-            basicblock_addop(b, NOT_TAKEN, 0, last->i_loc, last->i_except));
         return SUCCESS;
     }
 
@@ -589,9 +587,6 @@ normalize_jumps_in_block(cfg_builder *g, basicblock *b) {
     if (backwards_jump == NULL) {
         return ERROR;
     }
-    RETURN_IF_ERROR(
-        basicblock_addop(backwards_jump, NOT_TAKEN, 0, last->i_loc,
-                         last->i_except));
     RETURN_IF_ERROR(
         basicblock_add_jump(backwards_jump, JUMP, target, last->i_loc,
                             last->i_except));
@@ -2983,7 +2978,6 @@ optimize_load_fast(cfg_builder *g)
             cfg_instr *instr = &block->b_instr[i];
             int opcode = instr->i_opcode;
             int oparg = instr->i_oparg;
-            assert(opcode != EXTENDED_ARG);
             switch (opcode) {
                 // Opcodes that load and store locals
                 case DELETE_FAST: {
@@ -3002,34 +2996,9 @@ optimize_load_fast(cfg_builder *g)
                     break;
                 }
 
-                case LOAD_FAST_LOAD_FAST: {
-                    PUSH_REF(i, oparg >> 4);
-                    PUSH_REF(i, oparg & 15);
-                    break;
-                }
-
                 case STORE_FAST: {
                     ref r = ref_stack_pop(&refs);
                     store_local(instr_flags, &refs, oparg, r);
-                    break;
-                }
-
-                case STORE_FAST_LOAD_FAST: {
-                    // STORE_FAST
-                    ref r = ref_stack_pop(&refs);
-                    store_local(instr_flags, &refs, oparg >> 4, r);
-                    // LOAD_FAST
-                    PUSH_REF(i, oparg & 15);
-                    break;
-                }
-
-                case STORE_FAST_STORE_FAST: {
-                    // STORE_FAST
-                    ref r = ref_stack_pop(&refs);
-                    store_local(instr_flags, &refs, oparg >> 4, r);
-                    // STORE_FAST
-                    r = ref_stack_pop(&refs);
-                    store_local(instr_flags, &refs, oparg & 15, r);
                     break;
                 }
 
@@ -3199,9 +3168,6 @@ optimize_load_fast(cfg_builder *g)
                     case LOAD_FAST:
                         instr->i_opcode = LOAD_FAST_BORROW;
                         break;
-                    case LOAD_FAST_LOAD_FAST:
-                        instr->i_opcode = LOAD_FAST_BORROW_LOAD_FAST_BORROW;
-                        break;
                     default:
                         break;
                 }
@@ -3246,7 +3212,6 @@ scan_block_for_locals(basicblock *b, basicblock ***sp)
     uint64_t unsafe_mask = b->b_unsafe_locals_mask;
     for (int i = 0; i < b->b_iused; i++) {
         cfg_instr *instr = &b->b_instr[i];
-        assert(instr->i_opcode != EXTENDED_ARG);
         if (instr->i_except != NULL) {
             maybe_push(instr->i_except, unsafe_mask, sp);
         }
@@ -3304,7 +3269,6 @@ fast_scan_many_locals(basicblock *entryblock, int nlocals)
         blocknum++;
         for (int i = 0; i < b->b_iused; i++) {
             cfg_instr *instr = &b->b_instr[i];
-            assert(instr->i_opcode != EXTENDED_ARG);
             int arg = instr->i_oparg;
             if (arg < 64) {
                 continue;
@@ -4127,7 +4091,6 @@ fix_cell_offsets(_PyCompile_CodeUnitMetadata *umd, basicblock *entryblock, int *
         for (int i = 0; i < b->b_iused; i++) {
             cfg_instr *inst = &b->b_instr[i];
             // This is called before extended args are generated.
-            assert(inst->i_opcode != EXTENDED_ARG);
             int oldoffset = inst->i_oparg;
             switch(inst->i_opcode) {
                 case MAKE_CELL:

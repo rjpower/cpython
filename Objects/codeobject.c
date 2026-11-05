@@ -2477,6 +2477,9 @@ free_monitoring_data(_PyCoMonitoringData *data)
     if (data->tools) {
         PyMem_Free(data->tools);
     }
+    if (data->left_tools) {
+        PyMem_Free(data->left_tools);
+    }
     if (data->lines) {
         PyMem_Free(data->lines);
     }

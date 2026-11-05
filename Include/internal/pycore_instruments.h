@@ -105,6 +105,11 @@ typedef struct _PyCoMonitoringData {
     _Py_LocalMonitors active_monitors;
     /* The tools that are to be notified for events for the matching code unit */
     uint8_t *tools;
+    /* The tools that are to be notified of BRANCH_LEFT by the conditional
+     * jumps and the END_SEND of an `async for`, whose BRANCH_RIGHT or
+     * STOP_ITERATION tools are in tools.  NULL until BRANCH_LEFT is first
+     * monitored, and then tools is not NULL */
+    uint8_t *left_tools;
     /* The version of tools when they instrument the code */
     uintptr_t tool_versions[PY_MONITORING_TOOL_IDS];
     /* Information to support line events */

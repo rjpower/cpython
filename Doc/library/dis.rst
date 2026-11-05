@@ -585,15 +585,6 @@ operations on it as if it was a Python list. The top of the stack corresponds to
    generate line tracing events.
 
 
-.. opcode:: NOT_TAKEN
-
-   Do nothing code.
-   Used by the interpreter to record :monitoring-event:`BRANCH_LEFT`
-   and :monitoring-event:`BRANCH_RIGHT` events for :mod:`sys.monitoring`.
-
-   .. versionadded:: 3.14
-
-
 .. opcode:: POP_ITER
 
    Removes the iterator from the top of the stack.
@@ -1443,21 +1434,6 @@ iterations of the loop.
 
    .. versionadded:: 3.14
 
-.. opcode:: LOAD_FAST_LOAD_FAST (var_nums)
-
-   Pushes references to ``co_varnames[var_nums >> 4]`` and
-   ``co_varnames[var_nums & 15]`` onto the stack.
-
-   .. versionadded:: 3.13
-
-
-.. opcode:: LOAD_FAST_BORROW_LOAD_FAST_BORROW (var_nums)
-
-   Pushes borrowed references to ``co_varnames[var_nums >> 4]`` and
-   ``co_varnames[var_nums & 15]`` onto the stack.
-
-   .. versionadded:: 3.14
-
 .. opcode:: LOAD_FAST_CHECK (var_num)
 
    Pushes a reference to the local ``co_varnames[var_num]`` onto the stack,
@@ -1477,21 +1453,6 @@ iterations of the loop.
 .. opcode:: STORE_FAST (var_num)
 
    Stores ``STACK.pop()`` into the local ``co_varnames[var_num]``.
-
-.. opcode:: STORE_FAST_STORE_FAST (var_nums)
-
-   Stores ``STACK[-1]`` into ``co_varnames[var_nums >> 4]``
-   and ``STACK[-2]`` into ``co_varnames[var_nums & 15]``.
-
-   .. versionadded:: 3.13
-
-.. opcode:: STORE_FAST_LOAD_FAST (var_nums)
-
-   Stores ``STACK.pop()`` into the local ``co_varnames[var_nums >> 4]``
-   and pushes a reference to the local ``co_varnames[var_nums & 15]``
-   onto the stack.
-
-   .. versionadded:: 3.13
 
 .. opcode:: DELETE_FAST (var_num)
 
@@ -1689,14 +1650,6 @@ iterations of the loop.
       STACK.append(slice(start, end, step))
 
    See the :func:`slice` built-in function for more information.
-
-
-.. opcode:: EXTENDED_ARG (ext)
-
-   Prefixes any opcode which has an argument too big to fit into the default one
-   byte. *ext* holds an additional byte which act as higher bits in the argument.
-   For each opcode, at most three prefixal ``EXTENDED_ARG`` are allowed, forming
-   an argument from two-byte to four-byte.
 
 
 .. opcode:: CONVERT_VALUE (oparg)

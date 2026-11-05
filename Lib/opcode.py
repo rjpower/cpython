@@ -6,7 +6,7 @@ operate on bytecodes (e.g. peephole optimizers).
 
 
 __all__ = ["cmp_op", "stack_effect", "hascompare", "opname", "opmap",
-           "HAVE_ARGUMENT", "EXTENDED_ARG", "hasarg", "hasconst", "hasname",
+           "HAVE_ARGUMENT", "hasarg", "hasconst", "hasname",
            "hasjump", "hasjrel", "hasjabs", "hasfree", "haslocal", "hasexc"]
 
 import builtins
@@ -15,7 +15,6 @@ from _opcode import stack_effect
 
 from _opcode_metadata import (_specializations, _specialized_opmap, opmap,  # noqa: F401
                               _ir_opmap, HAVE_ARGUMENT, MIN_INSTRUMENTED_OPCODE)  # noqa: F401
-EXTENDED_ARG = opmap['EXTENDED_ARG']
 
 # The code is register IR: a word per instruction, whose handler is an
 # opcode, a specialisation, or one of the handlers in _ir_opmap.  opname

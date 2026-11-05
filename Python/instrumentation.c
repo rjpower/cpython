@@ -177,8 +177,6 @@ static const int8_t EVENT_FOR_OPCODE[256] = {
     [INSTRUMENTED_END_FOR] = PY_MONITORING_EVENT_STOP_ITERATION,
     [END_SEND] = PY_MONITORING_EVENT_STOP_ITERATION,
     [INSTRUMENTED_END_SEND] = PY_MONITORING_EVENT_STOP_ITERATION,
-    [NOT_TAKEN] = PY_MONITORING_EVENT_BRANCH_LEFT,
-    [INSTRUMENTED_NOT_TAKEN] = PY_MONITORING_EVENT_BRANCH_LEFT,
     [END_ASYNC_FOR] = PY_MONITORING_EVENT_BRANCH_RIGHT,
 };
 
@@ -202,7 +200,6 @@ static const uint8_t DE_INSTRUMENT[256] = {
     [INSTRUMENTED_END_FOR] = END_FOR,
     [INSTRUMENTED_END_SEND] = END_SEND,
     [INSTRUMENTED_LOAD_SUPER_ATTR] = LOAD_SUPER_ATTR,
-    [INSTRUMENTED_NOT_TAKEN] = NOT_TAKEN,
     [INSTRUMENTED_END_ASYNC_FOR] = END_ASYNC_FOR,
 };
 
@@ -245,14 +242,56 @@ static const uint8_t INSTRUMENTED_OPCODES[256] = {
     [INSTRUMENTED_POP_ITER] = INSTRUMENTED_POP_ITER,
     [LOAD_SUPER_ATTR] = INSTRUMENTED_LOAD_SUPER_ATTR,
     [INSTRUMENTED_LOAD_SUPER_ATTR] = INSTRUMENTED_LOAD_SUPER_ATTR,
-    [NOT_TAKEN] = INSTRUMENTED_NOT_TAKEN,
-    [INSTRUMENTED_NOT_TAKEN] = INSTRUMENTED_NOT_TAKEN,
     [END_ASYNC_FOR] = INSTRUMENTED_END_ASYNC_FOR,
     [INSTRUMENTED_END_ASYNC_FOR] = INSTRUMENTED_END_ASYNC_FOR,
 
     [INSTRUMENTED_LINE] = INSTRUMENTED_LINE,
     [INSTRUMENTED_INSTRUCTION] = INSTRUMENTED_INSTRUCTION,
 };
+
+/* A conditional jump fires BRANCH_RIGHT where it jumps and BRANCH_LEFT where
+ * it falls through, both with its own location.  The END_SEND of an
+ * `async for` fires BRANCH_LEFT too, after its STOP_ITERATION.  The event
+ * of EVENT_FOR_OPCODE is the first of the two, and its tools are in
+ * monitoring->tools; the BRANCH_LEFT tools of these instructions are in
+ * monitoring->left_tools, so that a tool can disable one event of a location
+ * and keep the other.  (FOR_ITER's BRANCH_LEFT is its only event.) */
+static inline bool
+is_left_jump(int base)
+{
+    return base == POP_JUMP_IF_FALSE || base == POP_JUMP_IF_TRUE ||
+           base == POP_JUMP_IF_NONE || base == POP_JUMP_IF_NOT_NONE ||
+           base == JUMP_IF_FALSE_OR_POP || base == JUMP_IF_TRUE_OR_POP;
+}
+
+/* Does `event` at word index i of code live in monitoring->left_tools? */
+static inline bool
+in_left_tools(PyCodeObject *code, int i, int event)
+{
+    if (event != PY_MONITORING_EVENT_BRANCH_LEFT) {
+        return false;
+    }
+    int base = base_opcode(code, i);
+    return is_left_jump(base) || base == END_SEND;
+}
+
+/* The word index of the instruction that fires BRANCH_LEFT for the
+ * instruction at index i, which is a conditional jump itself, or the
+ * END_ASYNC_FOR of an `async for` whose loop ends in that END_SEND.  -1 if
+ * the instruction names no such site. */
+static int
+left_site(PyCodeObject *code, int i, int base)
+{
+    if (is_left_jump(base)) {
+        return i;
+    }
+    if (base == END_ASYNC_FOR) {
+        int send = _PyCode_InstrTarget(code, i);
+        assert(base_opcode(code, send) == END_SEND);
+        return send;
+    }
+    return -1;
+}
 
 static inline bool
 opcode_has_event(int opcode)
@@ -667,7 +706,12 @@ sanity_check_instrumentation(PyCodeObject *code)
                 /* RESUME fixup */
                 event = _PyCode_InstrOparg(code, i) ? 1: 0;
             }
-            CHECK(active_monitors.tools[event] != 0);
+            CHECK(active_monitors.tools[event] != 0 ||
+                  active_monitors.tools[PY_MONITORING_EVENT_BRANCH_LEFT] != 0);
+        }
+        if (data->left_tools) {
+            uint8_t left = data->left_tools[i];
+            CHECK((active_monitors.tools[PY_MONITORING_EVENT_BRANCH_LEFT] & left) == left);
         }
         if (data->lines && _PyCode_GetOriginalOpcode(data->lines, i)) {
             int line1 = compute_line(code, get_line_delta(data->lines, i));
@@ -885,8 +929,15 @@ remove_tools(PyCodeObject * code, int offset, int event, int tools)
     assert(monitoring);
     bool should_de_instrument;
     if (monitoring->tools) {
-        monitoring->tools[offset] &= ~tools;
-        should_de_instrument = (monitoring->tools[offset] == 0);
+        if (in_left_tools(code, offset, event)) {
+            assert(monitoring->left_tools);
+            monitoring->left_tools[offset] &= ~tools;
+        }
+        else {
+            monitoring->tools[offset] &= ~tools;
+        }
+        should_de_instrument = (monitoring->tools[offset] == 0 &&
+            (monitoring->left_tools == NULL || monitoring->left_tools[offset] == 0));
     }
     else {
         /* Single tool */
@@ -951,7 +1002,13 @@ add_tools(PyCodeObject * code, int offset, int event, int tools)
     if (code->_co_monitoring &&
         code->_co_monitoring->tools
     ) {
-        code->_co_monitoring->tools[offset] |= tools;
+        if (in_left_tools(code, offset, event)) {
+            assert(code->_co_monitoring->left_tools);
+            code->_co_monitoring->left_tools[offset] |= tools;
+        }
+        else {
+            code->_co_monitoring->tools[offset] |= tools;
+        }
     }
     else {
         /* Single tool */
@@ -1165,6 +1222,10 @@ get_tools_for_instruction(PyCodeObject *code, PyInterpreterState *interp, int i,
     if (PY_MONITORING_IS_INSTRUMENTED_EVENT(event)) {
         /* Instrumented events use per-instruction tool bitmaps. */
         if (code->_co_monitoring->tools) {
+            if (in_left_tools(code, i, event)) {
+                uint8_t *left_tools = code->_co_monitoring->left_tools;
+                return left_tools ? left_tools[i] : 0;
+            }
             tools = code->_co_monitoring->tools[i];
         }
         else {
@@ -1324,6 +1385,15 @@ _Py_call_instrumentation_jump(
     assert(event == PY_MONITORING_EVENT_JUMP ||
            event == PY_MONITORING_EVENT_BRANCH_RIGHT ||
            event == PY_MONITORING_EVENT_BRANCH_LEFT);
+    if (event != PY_MONITORING_EVENT_JUMP) {
+        /* A conditional jump calls this for both its branches, and the
+         * tools of one event of its location may be none. */
+        PyCodeObject *code = _PyFrame_GetCode(frame);
+        if (get_tools_for_instruction(code, tstate->interp,
+                                      instr_offset(frame, instr), event) == 0) {
+            return dest;
+        }
+    }
     int to = dest_offset(frame, dest);
     PyObject *to_obj = PyLong_FromLong(to);
     if (to_obj == NULL) {
@@ -1738,6 +1808,7 @@ allocate_instrumentation_data(PyCodeObject *code)
         monitoring->active_monitors = (_Py_LocalMonitors){ 0 };
         memset(monitoring->tool_versions, 0, sizeof(monitoring->tool_versions));
         monitoring->tools = NULL;
+        monitoring->left_tools = NULL;
         monitoring->lines = NULL;
         monitoring->line_tools = NULL;
         monitoring->per_instruction_opcodes = NULL;
@@ -1770,13 +1841,23 @@ update_instrumentation_data(PyCodeObject *code, PyInterpreterState *interp)
         interp->monitors,
         code->_co_monitoring->local_monitors);
     bool multitools = multiple_tools(&all_events);
-    if (code->_co_monitoring->tools == NULL && multitools) {
+    /* BRANCH_LEFT tools are per location, as are those of the other events
+     * of a location that has two, so a tool that is alone still needs them. */
+    bool left = all_events.tools[PY_MONITORING_EVENT_BRANCH_LEFT] != 0;
+    if (code->_co_monitoring->tools == NULL && (multitools || left)) {
         code->_co_monitoring->tools = PyMem_Malloc(code_len);
         if (code->_co_monitoring->tools == NULL) {
             PyErr_NoMemory();
             return -1;
         }
         initialize_tools(code);
+    }
+    if (code->_co_monitoring->left_tools == NULL && left) {
+        code->_co_monitoring->left_tools = PyMem_Calloc(code_len, 1);
+        if (code->_co_monitoring->left_tools == NULL) {
+            PyErr_NoMemory();
+            return -1;
+        }
     }
     if (all_events.tools[PY_MONITORING_EVENT_LINE]) {
         if (code->_co_monitoring->lines == NULL) {
@@ -1911,6 +1992,17 @@ force_instrument_lock_held(PyCodeObject *code, PyInterpreterState *interp)
             uint8_t new_tools = new_events.tools[event];
             if (new_tools) {
                 add_tools(code, i, event, new_tools);
+            }
+        }
+        int left = left_site(code, i, base);
+        if (left >= 0) {
+            uint8_t removed_left = removed_events.tools[PY_MONITORING_EVENT_BRANCH_LEFT];
+            if (removed_left) {
+                remove_tools(code, left, PY_MONITORING_EVENT_BRANCH_LEFT, removed_left);
+            }
+            uint8_t new_left = new_events.tools[PY_MONITORING_EVENT_BRANCH_LEFT];
+            if (new_left) {
+                add_tools(code, left, PY_MONITORING_EVENT_BRANCH_LEFT, new_left);
             }
         }
     }
@@ -3070,18 +3162,14 @@ branch_handler_vectorcall(
             }
         }
         else if (IS_CONDITIONAL_JUMP_OPCODE(opcode)) {
-            if (self->right) {
-                offset = src_offset + 1;
-                other_event = PY_MONITORING_EVENT_BRANCH_LEFT;
-                assert(base_opcode(code, offset) == NOT_TAKEN);
-            }
-            else {
-                offset = src_offset;
-                other_event = PY_MONITORING_EVENT_BRANCH_RIGHT;
-            }
+            // Both branches are events of the jump's own location
+            offset = src_offset;
+            other_event = self->right ? PY_MONITORING_EVENT_BRANCH_LEFT
+                                      : PY_MONITORING_EVENT_BRANCH_RIGHT;
         }
         else {
-            // Orphaned NOT_TAKEN -- Jump removed by the compiler
+            // The BRANCH_LEFT of an `async for`: its other branch is the
+            // END_ASYNC_FOR, which we cannot find from here
             return res;
         }
         PyInterpreterState *interp = _PyInterpreterState_GET();
@@ -3209,19 +3297,15 @@ branchesiter_next(PyObject *op)
             case POP_JUMP_IF_NOT_NONE:
             case JUMP_IF_FALSE_OR_POP:
             case JUMP_IF_TRUE_OR_POP: {
-                /* Skip NOT_TAKEN */
-                int not_taken = next_offset + 1;
-                bi->bi_offset = not_taken;
-                return int_triple(offset, not_taken, jump_dest(code, offset));
+                bi->bi_offset = next_offset;
+                return int_triple(offset, next_offset, jump_dest(code, offset));
             }
             case END_ASYNC_FOR: {
                 // The END_SEND of the SEND that END_ASYNC_FOR names
                 int src_offset = _PyCode_InstrTarget(code, offset);
                 bi->bi_offset = next_offset;
                 assert(base_opcode(code, src_offset) == END_SEND);
-                assert(base_opcode(code, src_offset + 1) == NOT_TAKEN);
-                int not_taken = src_offset + 2;
-                return int_triple(src_offset, not_taken, next_offset);
+                return int_triple(src_offset, src_offset + 1, next_offset);
             }
         }
         offset = next_offset;

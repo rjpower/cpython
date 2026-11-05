@@ -36,7 +36,6 @@ extern "C" {
 #define MATCH_MAPPING                           23
 #define MATCH_SEQUENCE                          24
 #define NOP                                     25
-#define NOT_TAKEN                               26
 #define POP_EXCEPT                              27
 #define POP_ITER                                28
 #define POP_TOP                                 29
@@ -74,7 +73,6 @@ extern "C" {
 #define DICT_MERGE                              61
 #define DICT_UPDATE                             62
 #define END_ASYNC_FOR                           63
-#define EXTENDED_ARG                            64
 #define FOR_ITER                                65
 #define GET_AWAITABLE                           66
 #define GET_ITER                                67
@@ -95,9 +93,7 @@ extern "C" {
 #define LOAD_FAST                               82
 #define LOAD_FAST_AND_CLEAR                     83
 #define LOAD_FAST_BORROW                        84
-#define LOAD_FAST_BORROW_LOAD_FAST_BORROW       85
 #define LOAD_FAST_CHECK                         86
-#define LOAD_FAST_LOAD_FAST                     87
 #define LOAD_FROM_DICT_OR_DEREF                 88
 #define LOAD_FROM_DICT_OR_GLOBALS               89
 #define LOAD_GLOBAL                             90
@@ -121,8 +117,6 @@ extern "C" {
 #define STORE_ATTR                             108
 #define STORE_DEREF                            109
 #define STORE_FAST                             110
-#define STORE_FAST_LOAD_FAST                   111
-#define STORE_FAST_STORE_FAST                  112
 #define STORE_GLOBAL                           113
 #define STORE_NAME                             114
 #define SWAP                                   115
@@ -248,7 +242,6 @@ extern "C" {
 #define INSTRUMENTED_FOR_ITER                  236
 #define INSTRUMENTED_INSTRUCTION               237
 #define INSTRUMENTED_JUMP_FORWARD              238
-#define INSTRUMENTED_NOT_TAKEN                 239
 #define INSTRUMENTED_POP_JUMP_IF_NONE          240
 #define INSTRUMENTED_JUMP_IF_FALSE_OR_POP      241
 #define INSTRUMENTED_JUMP_IF_TRUE_OR_POP       242

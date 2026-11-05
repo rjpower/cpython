@@ -328,8 +328,10 @@ Known values:
    64403: no local reaches an input field of a store (STORE_FAST,
    STORE_DEREF and their pairs), which keeps its input.
    64404: an int constant outside int32 and inside int51 is inline and
-   loads with LOAD_CONST_INLINE_INT. */
-#define PYC_MAGIC_NUMBER 64404
+   loads with LOAD_CONST_INLINE_INT.
+   64405: no NOT_TAKEN; conditional jumps fire BRANCH_LEFT themselves, and
+   five dead handlers are removed (register IR v2 B2). */
+#define PYC_MAGIC_NUMBER 64405
 /* This is equivalent to converting PYC_MAGIC_NUMBER to 2 bytes
    (little-endian) and then appending b'\r\n'. */
 #define PYC_MAGIC_NUMBER_TOKEN \

@@ -145,8 +145,6 @@ dummy_func(
         pure inst(NOP, (--)) {
         }
 
-        macro(NOT_TAKEN) = NOP;
-
         op(_CHECK_PERIODIC, (--)) {
             int err = check_periodics(tstate);
             ERROR_IF(err != 0);
@@ -247,21 +245,6 @@ dummy_func(
             GETLOCAL(oparg) = PyValue_NULL;
         }
 
-        inst(LOAD_FAST_LOAD_FAST, ( -- value1, value2)) {
-            uint32_t oparg1 = oparg >> 4;
-            uint32_t oparg2 = oparg & 15;
-            value1 = PyValue_DUP(GETLOCAL(oparg1));
-            value2 = PyValue_DUP(GETLOCAL(oparg2));
-        }
-
-        inst(LOAD_FAST_BORROW_LOAD_FAST_BORROW, ( -- value1, value2)) {
-            uint32_t oparg1 = oparg >> 4;
-            uint32_t oparg2 = oparg & 15;
-            // Temporaries own their values, as for LOAD_FAST_BORROW.
-            value1 = PyValue_DUP(GETLOCAL(oparg1));
-            value2 = PyValue_DUP(GETLOCAL(oparg2));
-        }
-
         // The assembler (Python/assemble.c) emits constant loads as the
         // inline forms.
         family(LOAD_CONST, 0) = {
@@ -314,32 +297,6 @@ dummy_func(
         pseudo(STORE_FAST_MAYBE_NULL, (unused --)) = {
             STORE_FAST,
         };
-
-        inst(STORE_FAST_LOAD_FAST, (value1 -- value2)) {
-            uint32_t oparg1 = oparg >> 4;
-            uint32_t oparg2 = oparg & 15;
-            PyValue tmp = GETLOCAL(oparg1);  // a move: replaced below
-            GETLOCAL(oparg1) = value1;
-            _PyValue_CheckHome(value1);
-            DEAD(value1);
-            value2 = PyValue_DUP(GETLOCAL(oparg2));
-            PyValue_XCLOSE(tmp);
-        }
-
-        inst(STORE_FAST_STORE_FAST, (value2, value1 --)) {
-            uint32_t oparg1 = oparg >> 4;
-            uint32_t oparg2 = oparg & 15;
-            PyValue tmp = GETLOCAL(oparg1);  // a move: replaced below
-            GETLOCAL(oparg1) = value1;
-            _PyValue_CheckHome(value1);
-            DEAD(value1);
-            PyValue_XCLOSE(tmp);
-            tmp = GETLOCAL(oparg2);
-            GETLOCAL(oparg2) = value2;
-            _PyValue_CheckHome(value2);
-            DEAD(value2);
-            PyValue_XCLOSE(tmp);
-        }
 
         pure inst(POP_TOP, (value --)) {
             PyValue_XCLOSE(value);
@@ -428,6 +385,18 @@ dummy_func(
                     PyValue_CLOSE(held);
                     ERROR_NO_POP();
                 }
+            }
+            // The end of an `async for`'s send loop is its left branch. The
+            // tools of other sends are none, and the call returns at once.
+            if (!tstate->tracing) {
+                _PyIRWord *dest = _Py_call_instrumentation_jump(
+                    this_instr, tstate, PY_MONITORING_EVENT_BRANCH_LEFT, frame,
+                    this_instr, next_instr);
+                if (dest == NULL) {
+                    PyValue_CLOSE(held);
+                    ERROR_NO_POP();
+                }
+                next_instr = dest;
             }
             val = held;
             (void)index_or_null;
@@ -3441,9 +3410,6 @@ dummy_func(
             if (flag) {
                 JUMPTO(oparg);
             }
-            else {
-                JUMPBY(INSTR_OPCODE(next_instr) == NOT_TAKEN);
-            }
         }
 
         replaced op(_POP_JUMP_IF_TRUE, (cond -- )) {
@@ -3453,9 +3419,6 @@ dummy_func(
             RECORD_BRANCH_TAKEN(FB_BRANCH(), flag);
             if (flag) {
                 JUMPTO(oparg);
-            }
-            else {
-                JUMPBY(INSTR_OPCODE(next_instr) == NOT_TAKEN);
             }
         }
 
@@ -3561,7 +3524,6 @@ dummy_func(
             else {
                 PyValue_CLOSE(held);
                 res = PyValue_NULL;
-                JUMPBY(INSTR_OPCODE(next_instr) == NOT_TAKEN);
             }
         }
 
@@ -3580,7 +3542,6 @@ dummy_func(
             else {
                 PyValue_CLOSE(held);
                 res = PyValue_NULL;
-                JUMPBY(INSTR_OPCODE(next_instr) == NOT_TAKEN);
             }
         }
 
@@ -5416,11 +5377,6 @@ dummy_func(
             INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_JUMP);
         }
 
-        inst(INSTRUMENTED_NOT_TAKEN, ( -- )) {
-            (void)this_instr; // INSTRUMENTED_JUMP requires this_instr
-            INSTRUMENTED_JUMP(prev_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
-        }
-
         macro(INSTRUMENTED_JUMP_BACKWARD) =
             unused/1 +
             _CHECK_PERIODIC +
@@ -5434,6 +5390,9 @@ dummy_func(
             if (jump) {
                 INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
             }
+            else {
+                INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
+            }
         }
 
         op(_INSTRUMENTED_POP_JUMP_IF_FALSE, (cond -- )) {
@@ -5443,6 +5402,9 @@ dummy_func(
             RECORD_BRANCH_TAKEN(FB_BRANCH(), jump);
             if (jump) {
                 INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
+            }
+            else {
+                INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
             }
         }
 
@@ -5461,6 +5423,7 @@ dummy_func(
             }
             else {
                 PyValue_CLOSE(value);
+                INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
             }
         }
 
@@ -5479,6 +5442,7 @@ dummy_func(
             else {
                 PyValue_CLOSE(held);
                 res = PyValue_NULL;
+                INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
             }
         }
 
@@ -5497,6 +5461,7 @@ dummy_func(
             else {
                 PyValue_CLOSE(held);
                 res = PyValue_NULL;
+                INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
             }
         }
 
@@ -5509,15 +5474,8 @@ dummy_func(
             }
             else {
                 DEAD(value);
+                INSTRUMENTED_JUMP(this_instr, next_instr, PY_MONITORING_EVENT_BRANCH_LEFT);
             }
-        }
-
-        tier1 inst(EXTENDED_ARG, ( -- )) {
-            assert(oparg);
-            opcode = INSTR_OPCODE(next_instr);
-            oparg = oparg << 8 | INSTR_OPARG(next_instr);
-            PRE_DISPATCH_GOTO();
-            DISPATCH_GOTO();
         }
 
         tier1 inst(CACHE, (--)) {

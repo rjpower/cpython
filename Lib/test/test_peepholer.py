@@ -886,7 +886,7 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
 
     def test_store_fast_load_fast_borrow(self):
         # gh-159493: a LOAD_FAST that can borrow must not be fused into
-        # STORE_FAST_LOAD_FAST, regardless of how the source is laid out.
+        # a fused store and load, regardless of how the source is laid out.
         def f(shared, n):
             for i in range(n): shared
 
@@ -896,7 +896,6 @@ class TestMarkingVariablesAsUnKnown(BytecodeTestCase):
 
         for func in (f, g):
             with self.subTest(func=func.__name__):
-                self.assertNotInBytecode(func, 'STORE_FAST_LOAD_FAST')
                 # The borrowed load and its POP_TOP go: the statement
                 # "shared" does nothing
                 self.assertNotInBytecode(func, 'LOAD_FAST_BORROW', 'shared')
@@ -3070,14 +3069,16 @@ class OptimizeLoadFastTestCase(DirectCfgOptimizerTests):
             ("LOAD_FAST", 0, 1),
             ("LOAD_CONST", 0, 2),
             ("LOAD_CONST", 0, 3),
-            ("STORE_FAST_STORE_FAST", ((0 << 4) | 1), 4),
+            ("STORE_FAST", 0, 4),
+            ("STORE_FAST", 1, 4),
             ("POP_TOP", None, 5),
         ]
         expected = [
             ("LOAD_FAST", 0, 1),
             ("LOAD_COMMON_CONSTANT", 7, 2),
             ("LOAD_COMMON_CONSTANT", 7, 3),
-            ("STORE_FAST_STORE_FAST", ((0 << 4) | 1), 4),
+            ("STORE_FAST", 0, 4),
+            ("STORE_FAST", 1, 4),
             ("POP_TOP", None, 5),
         ]
         self.check(insts, expected)
@@ -3099,12 +3100,14 @@ class OptimizeLoadFastTestCase(DirectCfgOptimizerTests):
         insts = [
             ("LOAD_FAST", 0, 1),
             ("LOAD_CONST", 0, 3),
-            ("STORE_FAST_STORE_FAST", ((0 << 4) | 1), 4),
+            ("STORE_FAST", 0, 4),
+            ("STORE_FAST", 1, 4),
         ]
         expected = [
             ("LOAD_FAST", 0, 1),
             ("LOAD_COMMON_CONSTANT", 7, 3),
-            ("STORE_FAST_STORE_FAST", ((0 << 4) | 1), 4),
+            ("STORE_FAST", 0, 4),
+            ("STORE_FAST", 1, 4),
         ]
         self.check(insts, expected)
 

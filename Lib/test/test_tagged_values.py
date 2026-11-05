@@ -502,7 +502,9 @@ class InlineIntTest(unittest.TestCase):
             return total
         self.assertEqual(warm(f, 10), sum(i * 3 - 70000 for i in range(10)))
         names = opnames(f)
-        for name in ("LOAD_SMALL_INT_INLINE", "LOAD_CONST_INLINE_INT",
+        # 70000 and 3 live in hidden constant slots, so no instruction
+        # loads them.
+        for name in ("LOAD_SMALL_INT_INLINE",
                      "BINARY_OP_ADD_INT", "BINARY_OP_SUBTRACT_INT",
                      "BINARY_OP_MULTIPLY_INT", "FOR_ITER_RANGE"):
             self.assertIn(name, names)

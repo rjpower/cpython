@@ -60,7 +60,8 @@ class PositionalReferenceControls(unittest.TestCase):
 
         args = code_arguments(sample.__code__)
         args[0] = Index()
-        for invalid in (args[:15], args + [(), (), b"", None]):
+        # Too few, and more than the constructor's optional arguments take.
+        for invalid in (args[:15], args + [None] * 8):
             with self.assertRaises(TypeError):
                 types.CodeType(*invalid)
         with self.assertRaisesRegex(TypeError, "keyword"):

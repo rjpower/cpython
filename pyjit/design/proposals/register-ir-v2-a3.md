@@ -582,6 +582,7 @@ Every result records the compiler version and `PY_TAIL_CALL_CC`.
 | R10 | The tail-call figures are old (`48bb4d6d1d3`) | the single measurement includes HEAD's computed goto, so the comparison is at one base |
 | R11 | R-c adds a C call; under GCC each one on a hot path costs 7–11 instructions (§2.2) | use R-c only where the handler already calls out (calls, native calls, runtime API); R-a and R-b add no call |
 | R12 | The box area keeps a frame and a canary in 96 functions (3.9% of entries) until R27 | the exemption list may only shrink; R27's waves empty it |
+| R13 | **Found in step 2.** GCC 15.2 miscompiles a non-tail call to a `no_callee_saved_registers` function when a value is live across it, at `-Og` to `-O3`: the caller reloads the value from a callee-saved register it never set (`build/pyjit-link-wave1/a3/gcc-ncsr-bug.c`, 20 lines). The loop's first call into the handlers had this shape | `enter_handlers()` in `ceval.c`: a normal-ABI, non-inlined trampoline with nothing live across its call, which saves the callee-saved registers itself. It is the only non-tail call into a handler, on both compilers (one form). `a3/step2/objcheck.sh` refuses any other. Report the bug upstream with the reproducer; drop the trampoline only when every qualified GCC is fixed |
 
 ### 9.2 Open questions
 

@@ -175,7 +175,7 @@ _PyFrame_SetReturnValue(_PyInterpreterFrame *f, PyValue v)
                || PyValue_IsNull(f->base[f->return_slot]));
     }
 #endif
-    PyValue old = f->base[f->return_slot];
+    PyValue old = f->base[f->return_slot];  // a move: replaced below
     f->base[f->return_slot] = v;
     _PyValue_CheckHome(v);
     PyValue_XCLOSE(old);
@@ -193,7 +193,7 @@ static inline void
 _PyFrame_ClearTemporaries(_PyInterpreterFrame *f, int first)
 {
     for (int i = _PyFrame_NumSlots(f); i-- > first;) {
-        PyValue ref = f->base[i];
+        PyValue ref = f->base[i];  // a move: cleared below
         if (!PyValue_IsNull(ref)) {
             f->base[i] = PyValue_NULL;
             PyValue_CLOSE(ref);
@@ -262,7 +262,7 @@ _PyFrame_Initialize(
     frame->previous = previous;
     frame->base = base;
     frame->f_funcobj = func;
-    frame->f_executable = PyValue_FromPyObjectNew(code);
+    frame->f_executable = PyValue_DUP(PyValue_FromObjectBorrow(code));
     PyFunctionObject *func_obj = (PyFunctionObject *)PyValue_AsKnownObjectBorrow(func);
     frame->f_builtins = func_obj->func_builtins;
     frame->f_globals = func_obj->func_globals;
@@ -531,7 +531,7 @@ _PyFrame_PushTrampolineUnchecked(PyThreadState *tstate, PyCodeObject *code, int 
     _PyInterpreterFrame *frame = _PyThreadState_PushFrameUnchecked(tstate, nslots);
     frame->previous = previous;
     frame->f_funcobj = PyValue_None;
-    frame->f_executable = PyValue_FromPyObjectNew(code);
+    frame->f_executable = PyValue_DUP(PyValue_FromObjectBorrow(code));
 #ifdef Py_DEBUG
     frame->f_builtins = NULL;
     frame->f_globals = NULL;

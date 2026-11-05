@@ -404,6 +404,7 @@ _PyCompile_SetQualname(compiler *c)
 static void
 replace_equivalent_constant(PyObject *tuple, Py_ssize_t index, PyValue replacement)
 {
+    // a move: replaced below
     PyValue old = ((PyTupleObject *)tuple)->ob_item[index];
     ((PyTupleObject *)tuple)->ob_item[index] = replacement;
     PyValue_CLOSE(old);
@@ -508,7 +509,7 @@ static PyValue
                 goto error;
             }
             replace_equivalent_constant(PyValue_AsKnownObjectBorrow(key), 1,
-                                        PyValue_FromPyObjectSteal(merged));
+                                        PyValue_FromObjectSteal(merged));
         }
     }
 
@@ -520,8 +521,10 @@ error:
     return PyValue_NULL;
 }
 
+/* The index of key in dict, adding it with the next index if absent. It
+   only reads key: the dict retains its own count. */
 static Py_ssize_t
-dict_add_value(PyObject *dict, PyValue key)
+dict_add_value(PyObject *dict, PyValueBorrow key)
 {
     Py_ssize_t index = PyDict_GET_SIZE(dict);
     PyValue proposed = PyValue_FromInt64(index);
@@ -540,14 +543,12 @@ dict_add_value(PyObject *dict, PyValue key)
     PyValue_CLOSE(selected);
     return result;
 }
+#define dict_add_value(D, K) (dict_add_value)((D), PyValue_Borrow(K))
 
 Py_ssize_t
 _PyCompile_DictAddObj(PyObject *dict, PyObject *o)
 {
-    PyValue key = PyValue_DUP(PyValue_FromObjectBorrow(o));
-    Py_ssize_t index = dict_add_value(dict, key);
-    PyValue_CLOSE(key);
-    return index;
+    return dict_add_value(dict, PyValue_FromObjectBorrow(o));
 }
 
 Py_ssize_t
@@ -1569,7 +1570,7 @@ intern_constant(PyObject *const_cache, PyValue constant)
         if (_PyCode_ShouldInternString(o)) {
             _PyUnicode_InternMortal(_PyInterpreterState_GET(), &o);
         }
-        return PyValue_FromPyObjectSteal(o);
+        return PyValue_FromObjectSteal(o);
     }
     if (PyTuple_CheckExact(o)) {
         Py_ssize_t len = PyTuple_GET_SIZE(o);
@@ -1678,7 +1679,7 @@ intern_constant(PyObject *const_cache, PyValue constant)
             PyValue_CLOSE(key);
             return PyValue_NULL;
         }
-        PyValue replacement = PyValue_FromPyObjectSteal(new);
+        PyValue replacement = PyValue_FromObjectSteal(new);
         replace_equivalent_constant(PyValue_AsKnownObjectBorrow(key), 1,
                                     PyValue_DUP(replacement));
         PyValue_CLOSE(selected);

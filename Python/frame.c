@@ -148,6 +148,7 @@ clear_slots(_PyInterpreterFrame *frame, int n)
     PyValue *sp = locals + n;
     while (sp > locals) {
         sp--;
+        // a move: cleared below
         PyValue ref = *sp;
         *sp = PyValue_NULL;
         PyValue_XCLOSE(ref);

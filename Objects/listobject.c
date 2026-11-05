@@ -245,7 +245,7 @@ static inline PyObject*
 list_get_item_ref(PyListObject *op, Py_ssize_t i)
 {
     if (!valid_index(i, Py_SIZE(op))) return NULL;
-    PyValue value = op->ob_item[i];
+    PyValueBorrow value = PyValue_Borrow(op->ob_item[i]);
     return PyValue_IsNull(value) ? NULL : _PyValue_AsObjectAt(value, BOX_SITE_LIST);
 }
 
@@ -259,8 +259,8 @@ PyValue
 _PyList_GetValue(PyListObject *self, Py_ssize_t index)
 {
     if (!valid_index(index, Py_SIZE(self))) return PyValue_NULL;
-    PyValue value = self->ob_item[index];
-    return PyValue_IsNull(value) ? value : PyValue_DUP(value);
+    PyValueBorrow value = PyValue_Borrow(self->ob_item[index]);
+    return PyValue_XDUP(value);
 }
 
 PyValue
@@ -327,7 +327,7 @@ _PyList_SetItemTakeValue(PyListObject *self, Py_ssize_t i, PyValue value)
         PyErr_SetString(PyExc_IndexError, "list assignment index out of range");
         return -1;
     }
-    PyValue old = self->ob_item[i];
+    PyValue old = self->ob_item[i];  // a move: replaced below
     self->ob_item[i] = value;
     _PyValue_CheckHome(value);
     PyValue_XCLOSE(old);
@@ -493,8 +493,8 @@ list_repr_impl(PyListObject *v)
     if (PyUnicodeWriter_WriteChar(writer, '[') < 0) goto error;
     for (Py_ssize_t i = 0; i < Py_SIZE(v); i++) {
         /* A slot of a list from PyList_New() can still be NULL. */
-        PyValue item = v->ob_item[i];
-        item = PyValue_IsNull(item) ? PyValue_NULL : PyValue_DUP(item);
+        PyValueBorrow slot = PyValue_Borrow(v->ob_item[i]);
+        PyValue item = PyValue_IsNull(slot) ? PyValue_NULL : PyValue_DUP(slot);
         int result = 0;
         if (i > 0) result = PyUnicodeWriter_WriteUTF8(writer, ", ", 2);
         if (result == 0) {
@@ -676,6 +676,7 @@ list_repeat_impl(PyListObject *a, Py_ssize_t n)
         size = Py_SIZE(a);
         if (size > capacity / n) { Py_DECREF(result); continue; }
         for (Py_ssize_t i = 0; i < size; i++) {
+            // The n copies' counts are added in bulk below.
             PyValue value = a->ob_item[i];
             if (PyValue_RefcountOnObject(value)) _Py_RefcntAdd(PyValue_AsKnownObjectBorrow(value), n);
             result->ob_item[i] = value;
@@ -822,7 +823,7 @@ list_ass_slice_lock_held(PyListObject *a, Py_ssize_t ilow, Py_ssize_t ihigh, PyO
         ptr_wise_atomic_memmove(a, &item[ihigh+d], &item[ihigh], k - ihigh);
     }
     for (k = 0; k < n; k++, ilow++) {
-        PyValue w = vitem[k];
+        PyValueBorrow w = PyValue_Borrow(vitem[k]);
         item[ilow] = PyValue_DUP(w);
         _PyValue_CheckHome(item[ilow]);
     }
@@ -888,7 +889,7 @@ list_inplace_repeat_lock_held(PyListObject *self, Py_ssize_t n)
     Py_ssize_t total = size * n;
     if (list_resize(self, total) < 0) return -1;
     for (Py_ssize_t i = 0; i < size; i++) {
-        PyValue value = self->ob_item[i];
+        PyValueBorrow value = PyValue_Borrow(self->ob_item[i]);
         if (PyValue_RefcountOnObject(value)) {
             _Py_RefcntAdd(PyValue_AsKnownObjectBorrow(value), n - 1);
         }
@@ -934,7 +935,7 @@ list_ass_item_impl(PyListObject *a, Py_ssize_t i, PyObject *v)
         PyErr_SetString(PyExc_IndexError, "list assignment index out of range");
         return -1;
     }
-    PyValue old = a->ob_item[i];
+    PyValue old = a->ob_item[i];  // a move: replaced or removed
     if (v == NULL) {
         Py_ssize_t size = Py_SIZE(a);
         if (i < size - 1) list_shift_items_left_lock_held(a, i, size - 1);
@@ -1051,7 +1052,7 @@ list_extend_fast_values(PyListObject *self, PyObject *iterable)
     PyValue *src = PyList_Check(iterable) ? _PyList_ITEMS(iterable) : _PyTuple_ITEMS(iterable);
     PyValue *dest = self->ob_item + m;
     for (Py_ssize_t i = 0; i < n; i++) {
-        PyValue value = src[i];
+        PyValueBorrow value = PyValue_Borrow(src[i]);
         dest[i] = PyValue_DUP(value);
         _PyValue_CheckHome(dest[i]);
     }
@@ -1297,7 +1298,7 @@ list_pop_impl(PyListObject *self, Py_ssize_t index)
             PyValue_CLOSE(value);
             continue;
         }
-        PyValue removed = items[index];
+        PyValue removed = items[index];  // a move: removed below
         if (index + 1 < size) ptr_wise_atomic_memmove(self, items + index, items + index + 1, size - index - 1);
         Py_SET_SIZE(self, size - 1);
         list_resize(self, size - 1);
@@ -1315,7 +1316,7 @@ reverse_slice(PyValue *lo, PyValue *hi)
 
     --hi;
     while (lo < hi) {
-        PyValue t = *lo;
+        PyValue t = *lo;  // a move: replaced below
         FT_ATOMIC_STORE_PTR_RELEASE(*lo, *hi);
         FT_ATOMIC_STORE_PTR_RELEASE(*hi, t);
         ++lo;
@@ -3104,14 +3105,14 @@ list_richcompare_impl(PyObject *v, PyObject *w, int op)
      * release the GIL and allow the list to be mutated in the meantime.
      */
     for (i = 0; i < Py_SIZE(vl) && i < Py_SIZE(wl); i++) {
-        PyValue vitem = vl->ob_item[i];
-        PyValue witem = wl->ob_item[i];
-        if (_PyValue_IsSameWord(vitem, witem)) {
+        PyValueBorrow vslot = PyValue_Borrow(vl->ob_item[i]);
+        PyValueBorrow wslot = PyValue_Borrow(wl->ob_item[i]);
+        if (_PyValue_IsSameWord(vslot, wslot)) {
             continue;
         }
 
-        vitem = PyValue_DUP(vitem);
-        witem = PyValue_DUP(witem);
+        PyValue vitem = PyValue_DUP(vslot);
+        PyValue witem = PyValue_DUP(wslot);
         int k = _PyValue_RichCompareBool(vitem, witem, Py_EQ);
         if (k < 0) {
             PyValue_CLOSE(vitem);

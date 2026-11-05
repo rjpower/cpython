@@ -7,8 +7,9 @@ object pointers. Heap objects still use reference counting and the cyclic
 collector. A value does not select a collector or a representation mode.
 
 Pointer payloads carry an ownership bit. `PyValue_Borrow` creates a view rooted
-by an existing owner; `PyValue_NewRef` creates an independent strong owner;
-`PyValue_Close` consumes one strong owner. Raw bit copies do not create owners.
+by an existing owner; `PyValue_DUP` (`PyValue_XDUP` if it may be NULL) creates
+an independent strong owner; `PyValue_CLOSE` (`PyValue_XCLOSE`) consumes one
+strong owner. Raw bit copies do not create owners.
 Scalars have no heap owner. `PyValue_NULL`, tagged iterator indices and
 wrapped internal pointers are internal states, not language values.
 They must not cross the owning object bridge. Construction holes may be NULL,

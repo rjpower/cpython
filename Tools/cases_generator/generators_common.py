@@ -742,8 +742,8 @@ class Emitter:
 
     def note_pointer_assignment(self, stmt: SimpleStmt, storage: Storage) -> None:
         """After `a = b;` with b known to hold a pointer, a is known to hold a
-        pointer too. No constructor qualifies: the PyValue_FromPyObject*()
-        constructors are canonical, so an exact int or float they are given
+        pointer too. No constructor qualifies: PyValue_FromObjectSteal() and
+        PyValue_FromObjectBorrow() are canonical, so an exact int or float they are given
         becomes an inline value."""
         tkns = stmt.contents
         if len(tkns) != 4 or tkns[1].kind != "EQUALS" or tkns[-1].kind != "SEMI":

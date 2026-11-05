@@ -9,6 +9,10 @@ extern "C" {
 #endif
 
 
+/* The unchecked value read: a borrow rooted by the struct sequence.
+   Internal, like every function that returns a PyValueBorrow. */
+PyAPI_FUNC(PyValueBorrow) PyStructSequence_GET_VALUE(PyObject *, Py_ssize_t);
+
 /* other API */
 
 // Export for '_curses' shared extension

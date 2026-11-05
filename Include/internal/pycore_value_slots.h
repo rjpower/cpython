@@ -232,7 +232,7 @@ extern void _PyType_CheckValueInvariant(PyTypeObject *type);
 static inline PyValue
 _PyValue_FromObjectResult(PyObject *obj)
 {
-    return obj == NULL ? PyValue_NULL : PyValue_FromPyObjectSteal(obj);
+    return obj == NULL ? PyValue_NULL : PyValue_FromObjectSteal(obj);
 }
 
 /* The object that a thunk returns for the owned value result: the object,

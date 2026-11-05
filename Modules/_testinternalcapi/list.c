@@ -4,6 +4,7 @@
 #include "parts.h"
 #include "../_testcapi/util.h"    // NULLABLE
 
+#include "pycore_list.h"          // PyList_GET_VALUE()
 #include "pycore_value.h"         // PyValue_AsObject()
 
 
@@ -28,7 +29,7 @@ list_get_value(PyObject *Py_UNUSED(module), PyObject *args)
     PyValue value = PyList_GetValue(obj, index);
     if (!PyValue_IsLanguageValue(value)) return NULL;
     PyObject *result = PyValue_AsObject(value);
-    PyValue_Close(value);
+    PyValue_XCLOSE(value);
     return result;
 }
 
@@ -41,11 +42,11 @@ list_get_value_and_clear(PyObject *Py_UNUSED(module), PyObject *args)
     PyValue value = PyList_GetValue(obj, index);
     if (!PyValue_IsLanguageValue(value)) return NULL;
     if (PyList_Clear(obj) < 0) {
-        PyValue_Close(value);
+        PyValue_XCLOSE(value);
         return NULL;
     }
     PyObject *result = PyValue_AsObject(value);
-    PyValue_Close(value);
+    PyValue_XCLOSE(value);
     return result;
 }
 
@@ -58,7 +59,7 @@ list_value_bits(PyObject *Py_UNUSED(module), PyObject *args)
     PyValue value = PyList_GetValue(obj, index);
     if (!PyValue_IsLanguageValue(value)) return NULL;
     uint64_t bits = value.bits;
-    PyValue_Close(value);
+    PyValue_XCLOSE(value);
     return PyLong_FromUnsignedLongLong(bits);
 }
 

@@ -575,7 +575,7 @@ _PyValue_Truth(PyValueBorrow ref)
             ir_displaced = (OLD); \
         } \
         else { \
-            PyValue_Close(OLD); \
+            PyValue_XCLOSE(OLD); \
         } \
     } while (0)
 

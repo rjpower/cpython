@@ -25,7 +25,7 @@ static inline PyValue
 _PyCell_SwapValue(PyCellObject *cell, PyValue value)
 {
     assert(PyValue_IsLanguageValue(value) || PyValue_IsNull(value));
-    PyValue previous = cell->ob_ref;
+    PyValue previous = cell->ob_ref;  // a move: replaced below
     cell->ob_ref = value;
     _PyValue_CheckHome(cell->ob_ref);
     return previous;

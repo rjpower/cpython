@@ -14,7 +14,7 @@ PyValue_PrepareOwned(PyObject *obj)
     if (obj == NULL) {
         return PyValue_NULL;
     }
-    return PyValue_FromPyObjectSteal(obj);
+    return PyValue_FromObjectSteal(obj);
 }
 
 PyValue
@@ -203,7 +203,7 @@ _PyValue_MultiplyInt64(int64_t a, int64_t b)
     if (res == NULL) {
         return PyValue_NULL;
     }
-    return PyValue_FromPyObjectSteal(res);
+    return PyValue_FromObjectSteal(res);
 }
 
 PyValue
@@ -219,7 +219,7 @@ _PyValue_LshiftInt64(int64_t value, int64_t shift)
     if (res == NULL) {
         return PyValue_NULL;
     }
-    return PyValue_FromPyObjectSteal(res);
+    return PyValue_FromObjectSteal(res);
 }
 
 PyValue
@@ -230,7 +230,7 @@ _PyValue_BoxDouble(double value)
     if (op == NULL) {
         return PyValue_NULL;
     }
-    return PyValue_FromPyObjectSteal(op);
+    return PyValue_FromObjectSteal(op);
 }
 
 int

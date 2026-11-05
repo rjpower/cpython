@@ -249,29 +249,10 @@ merge_refcount(PyObject *op, Py_ssize_t extra)
 static void
 frame_disable_deferred_refcounting(_PyInterpreterFrame *frame)
 {
-    // Convert locals, variables, and the executable object to strong
-    // references from (possibly) deferred references.
+    // Nothing to convert: every word in a frame (f_executable, f_funcobj and
+    // the slots) is an owner, never a deferred or borrowed reference.
     assert(frame->owner == FRAME_OWNED_BY_FRAME_OBJECT ||
            frame->owner == FRAME_OWNED_BY_GENERATOR);
-
-    frame->f_executable = frame->f_executable;
-
-    if (frame->owner == FRAME_OWNED_BY_GENERATOR) {
-        PyGenObject *gen = _PyGen_GetGeneratorFromFrame(frame);
-        if (gen->gi_frame_state == FRAME_CLEARED) {
-            // gh-124068: if the generator is cleared, then most fields other
-            // than f_executable are not valid.
-            return;
-        }
-    }
-
-    frame->f_funcobj = frame->f_funcobj;
-    PyValue *end = frame->base + _PyFrame_NumSlots(frame);
-    for (PyValue *ref = frame->base; ref < end; ref++) {
-        if (PyValue_IsObject(*ref) && !PyValue_RefcountOnObject(*ref)) {
-            *ref = *ref;
-        }
-    }
 }
 
 static void

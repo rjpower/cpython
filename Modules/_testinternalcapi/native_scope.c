@@ -779,7 +779,7 @@ native_scope_call_state(PyObject *Py_UNUSED(module), PyObject *code_object)
     if (values != NULL) {
         for (int i = 0; i < nslots; i++) {
             PyTuple_SET_VALUE(values, i, PyValue_IsNull(snapshots[i])
-                ? PyValue_FromPyObjectNew(Py_None) : PyValue_NewRef(snapshots[i]));
+                ? PyValue_DUP(PyValue_FromObjectBorrow(Py_None)) : PyValue_XDUP(snapshots[i]));
         }
         report = Py_BuildValue("(iniiiiOKK)", handler, word_index, nlocals,
             base, count, destination, values,

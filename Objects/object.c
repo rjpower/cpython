@@ -37,7 +37,7 @@
 #include "pycore_tuple.h"         // _PyTuple_DebugMallocStats()
 #include "pycore_typeobject.h"    // _PyBufferWrapper_Type
 #include "pycore_typevarobject.h" // _PyTypeAlias_Type
-#include "pycore_value.h"      // PyValue_FromPyObjectSteal
+#include "pycore_value.h"         // PyValue_FromObjectSteal
 #include "pycore_unionobject.h"   // _PyUnion_Type
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "pycore_value_ops.h"     // _PyValue_RichCompare()
@@ -1438,7 +1438,7 @@ _PyObject_GetAttrValue(PyObject *v, PyObject *name)
         _PyObject_SetAttributeErrorContext(v, name);
         return PyValue_NULL;
     }
-    return PyValue_FromPyObjectSteal(result);
+    return PyValue_FromObjectSteal(result);
 }
 
 int
@@ -1710,6 +1710,7 @@ _PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
     assert(PyValue_IsNull(*method));
     PyValue descriptor = PyValue_NULL;
     PyValue result = PyValue_NULL, result_self = PyValue_NULL;
+    // a move: cleared below
     PyValue original_self = *self;
     *self = PyValue_NULL;
     PyTypeObject *tp = Py_TYPE(obj);
@@ -1721,7 +1722,7 @@ _PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
     if (tp->tp_getattro != PyObject_GenericGetAttr || !PyUnicode_CheckExact(name)) {
         PyObject *value = PyObject_GetAttr(obj, name);
         if (value != NULL) {
-            result = PyValue_FromPyObjectSteal(value);
+            result = PyValue_FromObjectSteal(value);
             status = 0;
         }
         goto done;
@@ -1735,7 +1736,7 @@ _PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
     if (get != NULL && PyDescr_IsData(descr)) {
         PyObject *value = get(descr, obj, (PyObject *)tp);
         if (value != NULL) {
-            result = PyValue_FromPyObjectSteal(value);
+            result = PyValue_FromObjectSteal(value);
             status = 0;
         }
         goto done;
@@ -1784,18 +1785,18 @@ _PyObject_GetMethodValue(PyThreadState *ts, PyValue *self,
     }
     else if (get != NULL) {
         if (Py_IS_TYPE(descr, &PyClassMethod_Type)) {
-            result = PyValue_FromPyObjectNew(_PyClassMethod_GetFunc(descr));
-            result_self = PyValue_FromPyObjectNew((PyObject *)tp);
+            result = PyValue_DUP(PyValue_FromObjectBorrow(_PyClassMethod_GetFunc(descr)));
+            result_self = PyValue_DUP(PyValue_FromObjectBorrow((PyObject *)tp));
             status = 1;
         }
         else if (Py_IS_TYPE(descr, &PyStaticMethod_Type)) {
-            result = PyValue_FromPyObjectNew(_PyStaticMethod_GetFunc(descr));
+            result = PyValue_DUP(PyValue_FromObjectBorrow(_PyStaticMethod_GetFunc(descr)));
             status = 0;
         }
         else {
             PyObject *value = get(descr, obj, (PyObject *)tp);
             if (value != NULL) {
-                result = PyValue_FromPyObjectSteal(value);
+                result = PyValue_FromObjectSteal(value);
                 status = 0;
             }
         }
@@ -2868,7 +2869,7 @@ PyUnstable_Object_IsUniqueReferencedTemporary(PyObject *op)
     PyValue *stackpointer = frame->base + _PyFrame_NumSlots(frame);
     while (stackpointer > base) {
         stackpointer--;
-        PyValue ref = *stackpointer;
+        PyValueBorrow ref = PyValue_Borrow(*stackpointer);
         if (!PyValue_IsObject(ref)) {
             continue;
         }

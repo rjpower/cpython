@@ -218,7 +218,7 @@ dummy_func(
         };
 
         inst(LOAD_FAST_CHECK, (-- value)) {
-            PyValue value_s = GETLOCAL(oparg);
+            PyValueBorrow value_s = PyValue_Borrow(GETLOCAL(oparg));
             if (PyValue_IsNull(value_s)) {
                 _PyEval_FormatExcCheckArg(tstate, PyExc_UnboundLocalError,
                     UNBOUNDLOCAL_ERROR_MSG,
@@ -270,7 +270,7 @@ dummy_func(
         };
 
         pure inst(LOAD_CONST, (-- value)) {
-            value = PyValue_NewRef(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+            value = PyValue_XDUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
         }
 
         // The constant is an inline int.
@@ -304,7 +304,7 @@ dummy_func(
         macro(STORE_FAST) = _SWAP_FAST + POP_TOP;
 
         op(_SWAP_FAST, (value -- trash)) {
-            PyValue tmp = GETLOCAL(oparg);
+            PyValue tmp = GETLOCAL(oparg);  // a move: replaced below
             GETLOCAL(oparg) = value;
             _PyValue_CheckHome(value);
             DEAD(value);
@@ -318,7 +318,7 @@ dummy_func(
         inst(STORE_FAST_LOAD_FAST, (value1 -- value2)) {
             uint32_t oparg1 = oparg >> 4;
             uint32_t oparg2 = oparg & 15;
-            PyValue tmp = GETLOCAL(oparg1);
+            PyValue tmp = GETLOCAL(oparg1);  // a move: replaced below
             GETLOCAL(oparg1) = value1;
             _PyValue_CheckHome(value1);
             DEAD(value1);
@@ -329,7 +329,7 @@ dummy_func(
         inst(STORE_FAST_STORE_FAST, (value2, value1 --)) {
             uint32_t oparg1 = oparg >> 4;
             uint32_t oparg2 = oparg & 15;
-            PyValue tmp = GETLOCAL(oparg1);
+            PyValue tmp = GETLOCAL(oparg1);  // a move: replaced below
             GETLOCAL(oparg1) = value1;
             _PyValue_CheckHome(value1);
             DEAD(value1);
@@ -449,7 +449,7 @@ dummy_func(
             }
             else {
                 PyObject *res_o = PyNumber_Negative(PyValue_AsKnownObjectBorrow(value));
-                res = res_o == NULL ? PyValue_NULL : PyValue_FromPyObjectSteal(res_o);
+                res = res_o == NULL ? PyValue_NULL : PyValue_FromObjectSteal(res_o);
             }
             if (PyValue_IsNull(res)) {
                 ERROR_NO_POP();
@@ -615,7 +615,7 @@ dummy_func(
             if (res_o == NULL) {
                 ERROR_NO_POP();
             }
-            res = PyValue_FromPyObjectSteal(res_o);
+            res = PyValue_FromObjectSteal(res_o);
             v = value;
             DEAD(value);
         }
@@ -962,7 +962,7 @@ dummy_func(
             if (res_o == NULL) {
                 ERROR_NO_POP();
             }
-            res = PyValue_FromPyObjectSteal(res_o);
+            res = PyValue_FromObjectSteal(res_o);
             l = left;
             r = right;
             INPUTS_DEAD();
@@ -1013,7 +1013,7 @@ dummy_func(
             _Py_DECREF_SPECIALIZED(right_o, _PyUnicode_ExactDealloc);
             *target_local = PyValue_NULL;
             ERROR_IF(temp == NULL);
-            res = PyValue_FromPyObjectSteal(temp);
+            res = PyValue_FromObjectSteal(temp);
         }
 
        // These legacy descriptors guard objects. Decline canonical inline
@@ -1037,7 +1037,7 @@ dummy_func(
             assert(d->result_type == NULL || Py_TYPE(res_o) == d->result_type);
             assert(!d->result_unique || Py_REFCNT(res_o) == 1 || _Py_IsImmortal(res_o));
 
-            res = PyValue_FromPyObjectSteal(res_o);
+            res = PyValue_FromObjectSteal(res_o);
             l = left;
             r = right;
             DEAD(left);
@@ -1063,7 +1063,7 @@ dummy_func(
             PyObject *res_o = _PyEval_BinarySlice(container, start, stop);
             DECREF_INPUTS();
             ERROR_IF(res_o == NULL);
-            res = PyValue_FromPyObjectSteal(res_o);
+            res = PyValue_FromObjectSteal(res_o);
         }
 
         macro(BINARY_SLICE) = _SPECIALIZE_BINARY_SLICE + _BINARY_SLICE;
@@ -1097,7 +1097,7 @@ dummy_func(
                 index += PyList_GET_SIZE(list);
             }
             EXIT_IF(index < 0 || index >= PyList_GET_SIZE(list));
-            res = PyValue_NewRef(PyList_GET_VALUE(list, index));
+            res = PyValue_XDUP(PyList_GET_VALUE(list, index));
             assert(!PyValue_IsNull(res));
             STAT_INC(BINARY_OP, hit);
             ls = list_st;
@@ -1120,7 +1120,7 @@ dummy_func(
             if (res_o == NULL) {
                 ERROR_NO_POP();
             }
-            res = PyValue_FromPyObjectSteal(res_o);
+            res = PyValue_FromObjectSteal(res_o);
             ls = list_st;
             ss = sub_st;
             INPUTS_DEAD();
@@ -1204,7 +1204,7 @@ dummy_func(
             STAT_INC(BINARY_OP, hit);
             Py_ssize_t index = PyValue_InlineInt64(sub_st);
             assert(0 <= index && index < PyTuple_GET_SIZE(tuple));
-            res = PyValue_NewRef(PyTuple_GET_VALUE(tuple, index));
+            res = PyValue_XDUP(PyTuple_GET_VALUE(tuple, index));
             assert(!PyValue_IsNull(res));
             ts = tuple_st;
             ss = sub_st;
@@ -1260,7 +1260,7 @@ dummy_func(
             PyCodeObject *code = (PyCodeObject *)PyFunction_GET_CODE(getitem_o);
             assert(code->co_argcount == 2);
             EXIT_IF(!_PyThreadState_HasStackSpace(tstate, code->co_framesize));
-            getitem = PyValue_FromPyObjectNew(getitem_o);
+            getitem = PyValue_DUP(PyValue_FromObjectBorrow(getitem_o));
         }
 
         op(_BINARY_OP_SUBSCR_INIT_CALL, (container, sub, getitem -- new_frame)) {
@@ -1350,6 +1350,7 @@ dummy_func(
             }
             STAT_INC(STORE_SUBSCR, hit);
 
+            // a move: replaced below
             PyValue old_value = _PyList_ITEMS(list)[index];
             _PyList_ITEMS(list)[index] = TAKE(value);
             assert(!PyValue_IsNull(old_value));
@@ -1409,7 +1410,7 @@ dummy_func(
             }
             v = value;
             DEAD(value);
-            res = PyValue_FromPyObjectSteal(res_o);
+            res = PyValue_FromObjectSteal(res_o);
         }
 
         macro(CALL_INTRINSIC_1) = _CALL_INTRINSIC_1 + POP_TOP;
@@ -1425,7 +1426,7 @@ dummy_func(
                 ERROR_NO_POP();
             }
 
-            res = PyValue_FromPyObjectSteal(res_o);
+            res = PyValue_FromObjectSteal(res_o);
 
             vs1 = value1_st;
             vs2 = value2_st;
@@ -1562,7 +1563,7 @@ dummy_func(
                 Py_DECREF(iter_o);
                 ERROR_IF(true);
             }
-            iter = PyValue_FromPyObjectSteal(iter_o);
+            iter = PyValue_FromObjectSteal(iter_o);
         }
 
         inst(GET_ANEXT, (aiter -- aiter, awaitable)) {
@@ -1570,14 +1571,14 @@ dummy_func(
             if (awaitable_o == NULL) {
                 ERROR_NO_POP();
             }
-            awaitable = PyValue_FromPyObjectSteal(awaitable_o);
+            awaitable = PyValue_FromObjectSteal(awaitable_o);
         }
 
         inst(GET_AWAITABLE, (iterable -- iter)) {
             PyObject *iter_o = _PyEval_GetAwaitable(PyValue_AsKnownObjectBorrow(iterable), oparg);
             PyValue_CLOSE(iterable);
             ERROR_IF(iter_o == NULL);
-            iter = PyValue_FromPyObjectSteal(iter_o);
+            iter = PyValue_FromObjectSteal(iter_o);
         }
 
         family(SEND, INLINE_CACHE_ENTRIES_SEND) = {
@@ -1645,7 +1646,7 @@ dummy_func(
                     ERROR_NO_POP();
                 }
                 PyValue_CLOSE(v);
-                retval = PyValue_FromPyObjectSteal(res.object);
+                retval = PyValue_FromObjectSteal(res.object);
                 if (res.kind == PYGEN_RETURN) {
                     JUMPBY(oparg);
                 }
@@ -1730,7 +1731,7 @@ dummy_func(
             DEAD(iter);
             null_out = null_in;
             DEAD(null_in);
-            retval = PyValue_FromPyObjectSteal(retval_o);
+            retval = PyValue_FromObjectSteal(retval_o);
             if (what == PYGEN_RETURN) {
                 JUMPBY(oparg);
             }
@@ -1859,7 +1860,7 @@ dummy_func(
             assert(exc_value && PyExceptionInstance_Check(exc_value));
             int matches = PyErr_GivenExceptionMatches(exc_value, PyExc_StopIteration);
             if (matches) {
-                value = PyValue_FromPyObjectNew(((PyStopIterationObject *)exc_value)->value);
+                value = PyValue_DUP(PyValue_FromObjectBorrow(((PyStopIterationObject *)exc_value)->value));
                 DECREF_INPUTS();
                 null_out = null_in;
                 none = PyValue_None;
@@ -1886,7 +1887,7 @@ dummy_func(
                                  "__build_class__ not found");
                 ERROR_IF(true);
             }
-            bc = PyValue_FromPyObjectSteal(bc_o);
+            bc = PyValue_FromObjectSteal(bc_o);
         }
 
         inst(STORE_NAME, (v -- )) {
@@ -1935,8 +1936,8 @@ dummy_func(
             assert(PyTuple_CheckExact(seq_o));
             EXIT_IF(PyTuple_GET_SIZE(seq_o) != 2);
             STAT_INC(UNPACK_SEQUENCE, hit);
-            val0 = PyValue_NewRef(PyTuple_GET_VALUE(seq_o, 0));
-            val1 = PyValue_NewRef(PyTuple_GET_VALUE(seq_o, 1));
+            val0 = PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 0));
+            val1 = PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 1));
             PyValue_CLOSE(seq);
         }
 
@@ -1950,7 +1951,7 @@ dummy_func(
             STAT_INC(UNPACK_SEQUENCE, hit);
             PyValue *items = _PyTuple_ITEMS(seq_o);
             for (int i = oparg; --i >= 0; ) {
-                *values++ = PyValue_NewRef(items[i]);
+                *values++ = PyValue_XDUP(items[i]);
             }
             DECREF_INPUTS();
         }
@@ -1969,7 +1970,7 @@ dummy_func(
             STAT_INC(UNPACK_SEQUENCE, hit);
             PyValue *items = _PyList_ITEMS(seq_o);
             for (int i = oparg; --i >= 0; ) {
-                *values++ = PyValue_NewRef(items[i]);
+                *values++ = PyValue_XDUP(items[i]);
             }
             UNLOCK_OBJECT(seq_o);
             DECREF_INPUTS();
@@ -2049,7 +2050,7 @@ dummy_func(
                                  "no locals found");
                 ERROR_IF(true);
             }
-            locals = PyValue_FromPyObjectNew(l);
+            locals = PyValue_DUP(PyValue_FromObjectBorrow(l));
         }
 
         inst(LOAD_FROM_DICT_OR_GLOBALS, (mod_or_class_dict -- v)) {
@@ -2073,7 +2074,7 @@ dummy_func(
                 ERROR_IF(PyValue_IsNull(v));
             }
             else {
-                v = PyValue_FromPyObjectSteal(v_o);
+                v = PyValue_FromObjectSteal(v_o);
             }
         }
 
@@ -2081,7 +2082,7 @@ dummy_func(
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             PyObject *v_o = _PyEval_LoadName(tstate, frame, name);
             ERROR_IF(v_o == NULL);
-            v = PyValue_FromPyObjectSteal(v_o);
+            v = PyValue_FromObjectSteal(v_o);
         }
 
         family(LOAD_GLOBAL, INLINE_CACHE_ENTRIES_LOAD_GLOBAL) = {
@@ -2141,9 +2142,9 @@ dummy_func(
             assert(keys->dk_kind == DICT_KEYS_UNICODE);
             PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
             DEOPT_IF(index >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(keys->dk_nentries));
-            PyValue found = entries[index].me_value;
+            PyValueBorrow found = PyValue_Borrow(entries[index].me_value);
             DEOPT_IF(PyValue_IsNull(found));
-            res = PyValue_NewRef(found);
+            res = PyValue_XDUP(found);
             STAT_INC(LOAD_GLOBAL, hit);
         }
 
@@ -2156,9 +2157,9 @@ dummy_func(
             assert(keys->dk_kind == DICT_KEYS_UNICODE);
             PyDictUnicodeEntry *entries = DK_UNICODE_ENTRIES(keys);
             DEOPT_IF(index >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(keys->dk_nentries));
-            PyValue found = entries[index].me_value;
+            PyValueBorrow found = PyValue_Borrow(entries[index].me_value);
             DEOPT_IF(PyValue_IsNull(found));
-            res = PyValue_NewRef(found);
+            res = PyValue_XDUP(found);
             STAT_INC(LOAD_GLOBAL, hit);
         }
 
@@ -2174,7 +2175,7 @@ dummy_func(
             _PUSH_NULL_CONDITIONAL;
 
         inst(DELETE_FAST, (--)) {
-            PyValue v = GETLOCAL(oparg);
+            PyValueBorrow v = PyValue_Borrow(GETLOCAL(oparg));
             if (PyValue_IsNull(v)) {
                 _PyEval_FormatExcCheckArg(tstate, PyExc_UnboundLocalError,
                     UNBOUNDLOCAL_ERROR_MSG,
@@ -2182,7 +2183,7 @@ dummy_func(
                 );
                 ERROR_IF(true);
             }
-            PyValue tmp = GETLOCAL(oparg);
+            PyValue tmp = GETLOCAL(oparg);  // a move: replaced below
             GETLOCAL(oparg) = PyValue_NULL;
             PyValue_XCLOSE(tmp);
         }
@@ -2194,8 +2195,8 @@ dummy_func(
             if (cell == NULL) {
                 ERROR_NO_POP();
             }
-            PyValue tmp = GETLOCAL(oparg);
-            GETLOCAL(oparg) = PyValue_FromPyObjectSteal(cell);
+            PyValue tmp = GETLOCAL(oparg);  // a move: replaced below
+            GETLOCAL(oparg) = PyValue_FromObjectSteal(cell);
             PyValue_XCLOSE(tmp);
         }
 
@@ -2245,7 +2246,7 @@ dummy_func(
                         ERROR_NO_POP();
                     }
                 }
-                selected = PyValue_FromPyObjectSteal(value_o);
+                selected = PyValue_FromObjectSteal(value_o);
             }
             PyValue_CLOSE(held_class_dict);
             value = selected;
@@ -2276,7 +2277,7 @@ dummy_func(
             assert(oparg == co->co_nfreevars);
             int offset = co->co_nlocalsplus - oparg;
             for (int i = 0; i < oparg; ++i) {
-                frame->base[offset + i] = PyValue_NewRef(PyTuple_GET_VALUE(closure, i));
+                frame->base[offset + i] = PyValue_XDUP(PyTuple_GET_VALUE(closure, i));
             }
         }
 
@@ -2284,7 +2285,7 @@ dummy_func(
             PyObject *str_o = _Py_BuildString_ValueSteal(pieces, oparg);
             DEAD(pieces);
             ERROR_IF(str_o == NULL);
-            str = PyValue_FromPyObjectSteal(str_o);
+            str = PyValue_FromObjectSteal(str_o);
         }
 
         inst(BUILD_INTERPOLATION, (value, str, format[oparg & 1] -- interpolation)) {
@@ -2307,7 +2308,7 @@ dummy_func(
             PyValue_CLOSE(str);
             PyValue_CLOSE(value);
             ERROR_IF(interpolation_o == NULL);
-            interpolation = PyValue_FromPyObjectSteal(interpolation_o);
+            interpolation = PyValue_FromObjectSteal(interpolation_o);
         }
 
         inst(BUILD_TEMPLATE, (strings, interpolations -- template)) {
@@ -2317,7 +2318,7 @@ dummy_func(
             PyValue_CLOSE(interpolations);
             PyValue_CLOSE(strings);
             ERROR_IF(template_o == NULL);
-            template = PyValue_FromPyObjectSteal(template_o);
+            template = PyValue_FromObjectSteal(template_o);
         }
 
         inst(BUILD_TUPLE, (values[oparg] -- tup)) {
@@ -2326,7 +2327,7 @@ dummy_func(
                 ERROR_NO_POP();
             }
             INPUTS_DEAD();
-            tup = PyValue_FromPyObjectSteal(tup_o);
+            tup = PyValue_FromObjectSteal(tup_o);
         }
 
         inst(BUILD_LIST, (values[oparg] -- list)) {
@@ -2335,7 +2336,7 @@ dummy_func(
                 ERROR_NO_POP();
             }
             INPUTS_DEAD();
-            list = PyValue_FromPyObjectSteal(list_o);
+            list = PyValue_FromObjectSteal(list_o);
         }
 
         op(_LIST_EXTEND, (list_st, unused[oparg-1], iterable_st -- list_st, unused[oparg-1], i)) {
@@ -2383,7 +2384,7 @@ dummy_func(
 
             int err = 0;
             for (Py_ssize_t i = 0; i < oparg; i++) {
-                PyValue value = values[i];
+                PyValue value = values[i];  // a move: cleared below
                 values[i] = PyValue_NULL;
                 if (err == 0) {
                     err = _PySet_AddValueTakeRef((PySetObject *)set_o,
@@ -2400,14 +2401,14 @@ dummy_func(
             }
 
             INPUTS_DEAD();
-            set = PyValue_FromPyObjectSteal(set_o);
+            set = PyValue_FromObjectSteal(set_o);
         }
 
         inline_ok inst(BUILD_MAP, (values[oparg*2] -- map)) {
             PyObject *map_o = _Py_BuildMap_ValueSteal(values, oparg);
             DEAD(values);
             int failed = map_o == NULL;
-            map = failed ? PyValue_NULL : PyValue_FromPyObjectSteal(map_o);
+            map = failed ? PyValue_NULL : PyValue_FromObjectSteal(map_o);
             SYNC_SP();
             IR_FINISH_VALUE_OPERATION();
             ERROR_IF(failed);
@@ -2564,7 +2565,7 @@ dummy_func(
             PyObject *attr_o = PyObject_GetAttr(super, name);
             Py_DECREF(super);
             ERROR_IF(attr_o == NULL);
-            attr = PyValue_FromPyObjectSteal(attr_o);
+            attr = PyValue_FromObjectSteal(attr_o);
         }
 
         macro(LOAD_SUPER_ATTR) =
@@ -2589,7 +2590,7 @@ dummy_func(
             PyObject *attr = _PySuper_Lookup((PyTypeObject *)class, self, name, NULL);
             DECREF_INPUTS();
             ERROR_IF(attr == NULL);
-            attr_st = PyValue_FromPyObjectSteal(attr);
+            attr_st = PyValue_FromObjectSteal(attr);
         }
 
         macro(LOAD_SUPER_ATTR_METHOD) =
@@ -2626,7 +2627,7 @@ dummy_func(
             }
             DECREF_INPUTS();
 
-            attr = PyValue_FromPyObjectSteal(attr_o);
+            attr = PyValue_FromObjectSteal(attr_o);
         }
 
         family(LOAD_ATTR, INLINE_CACHE_ENTRIES_LOAD_ATTR) = {
@@ -2714,9 +2715,9 @@ dummy_func(
         op(_LOAD_ATTR_INSTANCE_VALUE, (offset/1, owner -- attr)) {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
             PyValue *value_ptr = (PyValue *)(((char *)owner_o) + offset);
-            PyValue found = *value_ptr;
+            PyValueBorrow found = PyValue_Borrow(*value_ptr);
             DEOPT_IF(PyValue_IsNull(found));
-            attr = PyValue_NewRef(found);
+            attr = PyValue_XDUP(found);
             STAT_INC(LOAD_ATTR, hit);
             PyValue receiver = OWNER(owner);
             SYNC_SP();
@@ -2743,10 +2744,11 @@ dummy_func(
 
         op(_LOAD_ATTR_SHAPE, (offset/1, owner -- attr)) {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-            PyValue found = *(PyValue *)((char *)owner_o + offset);
+            PyValueBorrow found =
+                PyValue_Borrow(*(PyValue *)((char *)owner_o + offset));
             // The shape proves the slot filled.
             assert(!PyValue_IsNull(found));
-            attr = PyValue_NewRef(found);
+            attr = PyValue_XDUP(found);
             STAT_INC(LOAD_ATTR, hit);
             PyValue receiver = OWNER(owner);
             SYNC_SP();
@@ -2772,9 +2774,9 @@ dummy_func(
             assert(keys->dk_kind == DICT_KEYS_UNICODE);
             EXIT_IF(index >= (size_t)FT_ATOMIC_LOAD_SSIZE_RELAXED(keys->dk_nentries));
             PyDictUnicodeEntry *ep = DK_UNICODE_ENTRIES(keys) + index;
-            PyValue found = ep->me_value;
+            PyValueBorrow found = PyValue_Borrow(ep->me_value);
             EXIT_IF(PyValue_IsNull(found));
-            attr = PyValue_NewRef(found);
+            attr = PyValue_XDUP(found);
             STAT_INC(LOAD_ATTR, hit);
             PyValue receiver = OWNER(owner);
             SYNC_SP();
@@ -2815,7 +2817,7 @@ dummy_func(
                 EXIT_IF(true);
             }
             STAT_INC(LOAD_ATTR, hit);
-            attr = PyValue_NewRef(found);
+            attr = PyValue_XDUP(found);
             PyValue receiver = OWNER(owner);
             SYNC_SP();
             IR_RETIRE_PUBLISHED(receiver);
@@ -2831,7 +2833,8 @@ dummy_func(
         op(_LOAD_ATTR_SLOT, (index/1, owner -- attr)) {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
 
-            PyValue value = *(PyValue *)((char *)owner_o + index);
+            PyValueBorrow value =
+                PyValue_Borrow(*(PyValue *)((char *)owner_o + index));
             EXIT_IF(PyValue_IsNull(value));
             _PyValue_RecheckHome(value);
             attr = PyValue_DUP(value);
@@ -2859,7 +2862,7 @@ dummy_func(
         op(_LOAD_ATTR_CLASS, (descr/4, owner -- attr)) {
             STAT_INC(LOAD_ATTR, hit);
             assert(descr != NULL);
-            attr = PyValue_FromPyObjectNew(descr);
+            attr = PyValue_DUP(PyValue_FromObjectBorrow(descr));
             DECREF_INPUTS();
         }
 
@@ -2885,7 +2888,7 @@ dummy_func(
             PyCodeObject *code = (PyCodeObject *)f->func_code;
             EXIT_IF(!_PyThreadState_HasStackSpace(tstate, code->co_framesize));
             STAT_INC(LOAD_ATTR, hit);
-            _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(tstate, PyValue_FromPyObjectNew(fget), 1, frame);
+            _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(tstate, PyValue_DUP(PyValue_FromObjectBorrow(fget)), 1, frame);
             pushed_frame->base[0] = TAKE(owner);
             new_frame = PyValue_Wrap(pushed_frame);
         }
@@ -2910,9 +2913,9 @@ dummy_func(
             STAT_INC(LOAD_ATTR, hit);
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
             _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(
-                tstate, PyValue_FromPyObjectNew(f), 2, frame);
+                tstate, PyValue_DUP(PyValue_FromObjectBorrow(f)), 2, frame);
             pushed_frame->base[0] = TAKE(owner);
-            pushed_frame->base[1] = PyValue_FromPyObjectNew(name);
+            pushed_frame->base[1] = PyValue_DUP(PyValue_FromObjectBorrow(name));
             new_frame = PyValue_Wrap(pushed_frame);
         }
 
@@ -2941,7 +2944,7 @@ dummy_func(
 
             assert(_PyObject_GetManagedDict(owner_o) == NULL);
             PyValue *value_ptr = (PyValue *)(((char *)owner_o) + offset);
-            PyValue old_value = *value_ptr;
+            PyValue old_value = *value_ptr;  // a move: replaced below
 #ifdef Py_SHAPES
             /* This store does not grow the type's shapes.  An addition whose
              * transition is missing goes to STORE_ATTR, which creates it, so
@@ -2986,7 +2989,7 @@ dummy_func(
         inline_ok op(_STORE_ATTR_SHAPE, (offset/1, value, owner --)) {
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
             PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
-            PyValue old_value = *value_ptr;
+            PyValue old_value = *value_ptr;  // a move: replaced below
             assert(!PyValue_IsNull(old_value));
             *value_ptr = TAKE(value);
             STAT_INC(STORE_ATTR, hit);
@@ -3046,7 +3049,7 @@ dummy_func(
             // values, apart from its keys.
             PyValue *value_ptr = dict->ma_values == NULL ?
                 &ep->me_value : &dict->ma_values->values[hint];
-            PyValue old_value = *value_ptr;
+            PyValue old_value = *value_ptr;  // a move: replaced below
             if (PyValue_IsNull(old_value)) {
                 UNLOCK_OBJECT(dict);
                 DEOPT_IF(true);
@@ -3054,7 +3057,7 @@ dummy_func(
             if (dict->_ma_watcher_tag & DICT_WATCHER_MASK) {
                 /* A watcher error's unraisable hook may reenter. Do not
                  * retain a raw slot pointer across the provider call. */
-                PyValue watched_dict = PyValue_FromPyObjectNew((PyObject *)dict);
+                PyValue watched_dict = PyValue_DUP(PyValue_FromObjectBorrow((PyObject *)dict));
                 PyValue release_value = TAKE(value);
                 PyValue receiver = TAKE(owner);
                 UNLOCK_OBJECT(dict);
@@ -3096,7 +3099,7 @@ dummy_func(
             DEOPT_IF(!LOCK_OBJECT(owner_o));
             char *addr = (char *)owner_o + index;
             STAT_INC(STORE_ATTR, hit);
-            PyValue old_value = *(PyValue *)addr;
+            PyValue old_value = *(PyValue *)addr;  // a move: replaced below
             *(PyValue *)addr = TAKE(value);
             PyValue receiver = OWNER(owner);
             UNLOCK_OBJECT(owner_o);
@@ -3157,7 +3160,7 @@ dummy_func(
                 res = res_bool ? PyValue_True : PyValue_False;
             }
             else {
-                res = PyValue_FromPyObjectSteal(res_o);
+                res = PyValue_FromObjectSteal(res_o);
             }
         }
 
@@ -3343,8 +3346,8 @@ dummy_func(
             if (!Py_IsNone(match_o)) {
                 PyErr_SetHandledException(match_o);
             }
-            rest = PyValue_FromPyObjectSteal(rest_o);
-            match = PyValue_FromPyObjectSteal(match_o);
+            rest = PyValue_FromObjectSteal(rest_o);
+            match = PyValue_FromObjectSteal(match_o);
         }
 
         inst(CHECK_EXC_MATCH, (left, right -- left, b)) {
@@ -3384,7 +3387,7 @@ dummy_func(
             }
             DECREF_INPUTS();
             ERROR_IF(res_o == NULL);
-            res = PyValue_FromPyObjectSteal(res_o);
+            res = PyValue_FromObjectSteal(res_o);
         }
 
         inst(IMPORT_FROM, (from -- from, res)) {
@@ -3400,7 +3403,7 @@ dummy_func(
             }
 
             ERROR_IF(res_o == NULL);
-            res = PyValue_FromPyObjectSteal(res_o);
+            res = PyValue_FromObjectSteal(res_o);
         }
 
         tier1 inst(JUMP_FORWARD, (--)) {
@@ -3597,7 +3600,7 @@ dummy_func(
             ERROR_IF(len_i < 0);
             PyObject *len_o = PyLong_FromSsize_t(len_i);
             ERROR_IF(len_o == NULL);
-            len = PyValue_FromPyObjectSteal(len_o);
+            len = PyValue_FromObjectSteal(len_o);
         }
 
         op(_MATCH_CLASS, (subject, type, names -- attrs, s, tp, n)) {
@@ -3610,7 +3613,7 @@ dummy_func(
                 PyValue_AsKnownObjectBorrow(names));
             if (attrs_o) {
                 assert(PyTuple_CheckExact(attrs_o));  // Success!
-                attrs = PyValue_FromPyObjectSteal(attrs_o);
+                attrs = PyValue_FromObjectSteal(attrs_o);
             }
             else {
                 if (_PyErr_Occurred(tstate)) { // Error!
@@ -3641,7 +3644,7 @@ dummy_func(
             PyObject *values_or_none_o = _PyEval_MatchKeys(tstate,
                 PyValue_AsKnownObjectBorrow(subject), PyValue_AsKnownObjectBorrow(keys));
             ERROR_IF(values_or_none_o == NULL);
-            values_or_none = PyValue_FromPyObjectSteal(values_or_none_o);
+            values_or_none = PyValue_FromObjectSteal(values_or_none_o);
         }
 
         family(GET_ITER, INLINE_CACHE_ENTRIES_GET_ITER) = {
@@ -3822,7 +3825,7 @@ dummy_func(
         replaced op(_ITER_NEXT_LIST, (iter, null_or_index -- iter, null_or_index, next)) {
             PyObject *list_o = PyValue_AsKnownObjectBorrow(iter);
             assert(PyList_CheckExact(list_o));
-            next = PyValue_NewRef(PyList_GET_VALUE(list_o, PyValue_UntagIndex(null_or_index)));
+            next = PyValue_XDUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(null_or_index)));
             null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
         }
 
@@ -3857,7 +3860,7 @@ dummy_func(
             assert(Py_TYPE(tuple_o) == &PyTuple_Type);
             uintptr_t i = PyValue_UntagIndex(null_or_index);
             assert((size_t)i < (size_t)PyTuple_GET_SIZE(tuple_o));
-            next = PyValue_NewRef(PyTuple_GET_VALUE(tuple_o, i));
+            next = PyValue_XDUP(PyTuple_GET_VALUE(tuple_o, i));
             null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
         }
 
@@ -3993,7 +3996,7 @@ dummy_func(
                 !PyValue_IsNull(exit_self), exc, val_o, tb);
             Py_XDECREF(original_tb);
             ERROR_IF(res_o == NULL);
-            res = PyValue_FromPyObjectSteal(res_o);
+            res = PyValue_FromObjectSteal(res_o);
         }
 
         pseudo(SETUP_FINALLY, (-- unused), (HAS_ARG)) = {
@@ -4024,7 +4027,7 @@ dummy_func(
 
             _PyErr_StackItem *exc_info = tstate->exc_info;
             if (exc_info->exc_value != NULL) {
-                prev_exc = PyValue_FromPyObjectSteal(exc_info->exc_value);
+                prev_exc = PyValue_FromObjectSteal(exc_info->exc_value);
             }
             else {
                 prev_exc = PyValue_None;
@@ -4041,7 +4044,7 @@ dummy_func(
             STAT_INC(LOAD_ATTR, hit);
             assert(descr != NULL);
             assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
-            attr = PyValue_FromPyObjectNew(descr);
+            attr = PyValue_DUP(PyValue_FromObjectBorrow(descr));
             self = TAKE(owner);
         }
 
@@ -4058,7 +4061,7 @@ dummy_func(
             STAT_INC(LOAD_ATTR, hit);
             assert(descr != NULL);
             assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
-            attr = PyValue_FromPyObjectNew(descr);
+            attr = PyValue_DUP(PyValue_FromObjectBorrow(descr));
             self = TAKE(owner);
         }
 
@@ -4073,7 +4076,7 @@ dummy_func(
             STAT_INC(LOAD_ATTR, hit);
             assert(descr != NULL);
             PyValue_CLOSE(owner);
-            attr = PyValue_FromPyObjectNew(descr);
+            attr = PyValue_DUP(PyValue_FromObjectBorrow(descr));
         }
 
         macro(LOAD_ATTR_NONDESCRIPTOR_WITH_VALUES) =
@@ -4089,7 +4092,7 @@ dummy_func(
             STAT_INC(LOAD_ATTR, hit);
             assert(descr != NULL);
             PyValue_CLOSE(owner);
-            attr = PyValue_FromPyObjectNew(descr);
+            attr = PyValue_DUP(PyValue_FromObjectBorrow(descr));
         }
 
         macro(LOAD_ATTR_NONDESCRIPTOR_NO_DICT) =
@@ -4110,7 +4113,7 @@ dummy_func(
             STAT_INC(LOAD_ATTR, hit);
             assert(descr != NULL);
             assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
-            attr = PyValue_FromPyObjectNew(descr);
+            attr = PyValue_DUP(PyValue_FromObjectBorrow(descr));
             self = TAKE(owner);
         }
 
@@ -4262,9 +4265,9 @@ dummy_func(
             assert(PyValue_IsNull(self_or_null));
             PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
             STAT_INC(CALL, hit);
-            self_or_null = PyValue_FromPyObjectNew(((PyMethodObject *)callable_o)->im_self);
+            self_or_null = PyValue_DUP(PyValue_FromObjectBorrow(((PyMethodObject *)callable_o)->im_self));
             PyValue temp = callable;
-            callable = PyValue_FromPyObjectNew(((PyMethodObject *)callable_o)->im_func);
+            callable = PyValue_DUP(PyValue_FromObjectBorrow(((PyMethodObject *)callable_o)->im_func));
             PyValue_CLOSE(temp);
         }
 
@@ -4380,7 +4383,7 @@ dummy_func(
         inline_ok op(_CALL_TYPE_1, (callable, null, arg -- res, a)) {
             assert(oparg == 1);
             STAT_INC(CALL, hit);
-            res = PyValue_FromPyObjectNew(PyValue_TYPE(arg));
+            res = PyValue_DUP(PyValue_FromObjectBorrow(PyValue_TYPE(arg)));
             a = arg;
             INPUTS_DEAD();
         }
@@ -4409,7 +4412,7 @@ dummy_func(
             }
             a = arg;
             INPUTS_DEAD();
-            res = PyValue_FromPyObjectSteal(res_o);
+            res = PyValue_FromObjectSteal(res_o);
         }
 
         macro(CALL_STR_1) =
@@ -4437,7 +4440,7 @@ dummy_func(
             }
             a = arg;
             INPUTS_DEAD();
-            res = PyValue_FromPyObjectSteal(res_o);
+            res = PyValue_FromObjectSteal(res_o);
         }
 
         macro(CALL_TUPLE_1) =
@@ -4475,9 +4478,9 @@ dummy_func(
             if (self_o == NULL) {
                 ERROR_NO_POP();
             }
-            self_or_null = PyValue_FromPyObjectSteal(self_o);
+            self_or_null = PyValue_FromObjectSteal(self_o);
             PyValue temp = callable;
-            callable = PyValue_FromPyObjectNew(init_func);
+            callable = PyValue_DUP(PyValue_FromObjectBorrow(init_func));
             PyValue_CLOSE(temp);
         }
 
@@ -4551,7 +4554,7 @@ dummy_func(
                 ERROR_NO_POP();
             }
             PyValue temp = callable;
-            callable = PyValue_FromPyObjectSteal(res_o);
+            callable = PyValue_FromObjectSteal(res_o);
             PyValue_CLOSE(temp);
         }
 
@@ -4629,7 +4632,7 @@ dummy_func(
                 ERROR_NO_POP();
             }
             PyValue temp = callable;
-            callable = PyValue_FromPyObjectSteal(res_o);
+            callable = PyValue_FromObjectSteal(res_o);
             PyValue_CLOSE(temp);
         }
 
@@ -4663,7 +4666,7 @@ dummy_func(
                 ERROR_NO_POP();
             }
             PyValue temp = callable;
-            callable = PyValue_FromPyObjectSteal(res_o);
+            callable = PyValue_FromObjectSteal(res_o);
             PyValue_CLOSE(temp);
         }
 
@@ -4828,7 +4831,7 @@ dummy_func(
             s = arguments[0];
             a = arguments[1];
             INPUTS_DEAD();
-            res = PyValue_FromPyObjectSteal(res_o);
+            res = PyValue_FromObjectSteal(res_o);
         }
 
         op(_CHECK_RECURSION_LIMIT, ( -- )) {
@@ -4890,7 +4893,7 @@ dummy_func(
                 ERROR_NO_POP();
             }
             PyValue temp = callable;
-            callable = PyValue_FromPyObjectSteal(res_o);
+            callable = PyValue_FromObjectSteal(res_o);
             PyValue_CLOSE(temp);
         }
 
@@ -4943,7 +4946,7 @@ dummy_func(
             c = callable;
             s = args[0];
             INPUTS_DEAD();
-            res = PyValue_FromPyObjectSteal(res_o);
+            res = PyValue_FromObjectSteal(res_o);
         }
 
         macro(CALL_METHOD_DESCRIPTOR_NOARGS) =
@@ -5000,7 +5003,7 @@ dummy_func(
                 ERROR_NO_POP();
             }
             PyValue temp = callable;
-            callable = PyValue_FromPyObjectSteal(res_o);
+            callable = PyValue_FromObjectSteal(res_o);
             PyValue_CLOSE(temp);
         }
 
@@ -5225,7 +5228,7 @@ dummy_func(
             // The function's own reference: PyFunction_New can run code
             _PyFunction_SetVersion(
                 func_obj, ((PyCodeObject *)func_obj->func_code)->co_version);
-            func = PyValue_FromPyObjectSteal((PyObject *)func_obj);
+            func = PyValue_FromObjectSteal((PyObject *)func_obj);
         }
 
         macro(MAKE_FUNCTION) = _MAKE_FUNCTION + POP_TOP;
@@ -5263,7 +5266,7 @@ dummy_func(
             frame = tstate->current_frame = prev;
             LOAD_IP(1);
             RELOAD_STACK();
-            res = PyValue_FromPyObjectSteal((PyObject *)gen);
+            res = PyValue_FromObjectSteal((PyObject *)gen);
             LLTRACE_RESUME_FRAME();
         }
 
@@ -5284,7 +5287,7 @@ dummy_func(
             PyObject *slice_o = PySlice_New(start_o, stop_o, step_o);
             DECREF_INPUTS();
             ERROR_IF(slice_o == NULL);
-            slice = PyValue_FromPyObjectSteal(slice_o);
+            slice = PyValue_FromObjectSteal(slice_o);
         }
 
         inst(CONVERT_VALUE, (value -- result)) {
@@ -5294,7 +5297,7 @@ dummy_func(
             PyObject *result_o = conv_fn(PyValue_AsKnownObjectBorrow(value));
             PyValue_CLOSE(value);
             ERROR_IF(result_o == NULL);
-            result = PyValue_FromPyObjectSteal(result_o);
+            result = PyValue_FromObjectSteal(result_o);
         }
 
         inst(FORMAT_SIMPLE, (value -- res)) {
@@ -5305,7 +5308,7 @@ dummy_func(
                 PyObject *res_o = PyObject_Format(value_o, NULL);
                 PyValue_CLOSE(value);
                 ERROR_IF(res_o == NULL);
-                res = PyValue_FromPyObjectSteal(res_o);
+                res = PyValue_FromObjectSteal(res_o);
             }
             else {
                 res = TAKE(value);
@@ -5316,7 +5319,7 @@ dummy_func(
             PyObject *res_o = PyObject_Format(PyValue_AsKnownObjectBorrow(value), PyValue_AsKnownObjectBorrow(fmt_spec));
             DECREF_INPUTS();
             ERROR_IF(res_o == NULL);
-            res = PyValue_FromPyObjectSteal(res_o);
+            res = PyValue_FromObjectSteal(res_o);
         }
 
         pure inst(COPY, (bottom, unused[oparg-1] -- bottom, unused[oparg-1], top)) {
@@ -5594,7 +5597,7 @@ dummy_func(
                 so a program can emulate the
                 Python main loop. */
             PyObject *exc = _PyErr_GetRaisedException(tstate);
-            slots[exc_slot] = PyValue_FromPyObjectSteal(exc);
+            slots[exc_slot] = PyValue_FromObjectSteal(exc);
             next_instr = INSTR_AT_OFFSET(handler);
 
             int err = monitor_handled(tstate, frame, next_instr, exc);

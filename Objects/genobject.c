@@ -263,10 +263,10 @@ gen_raise_already_executing_error(PyGenObject *gen)
 // is called.
 /* The receiver of the SEND whose YIELD_VALUE suspended frame: two slots
    below that of the yielded value, which the value sent in takes */
-static inline PyValue
+static inline PyValueBorrow
 _PyGen_YieldFromRef(_PyInterpreterFrame *frame)
 {
-    PyValue ref = frame->base[frame->return_slot - 2];
+    PyValueBorrow ref = PyValue_Borrow(frame->base[frame->return_slot - 2]);
     assert(!PyValue_IsNull(ref));
     return ref;
 }
@@ -282,7 +282,7 @@ gen_send_ex2(PyGenObject *gen, PyObject *arg, PyObject **presult, int exc)
     /* arg goes to the slot of the yield that suspended the frame, or of
        the value that RETURN_GENERATOR returned */
     PyObject *arg_obj = arg ? arg : Py_None;
-    _PyFrame_SetReturnValue(frame, PyValue_NewRef(PyValue_FromObjectBorrow(arg_obj)));
+    _PyFrame_SetReturnValue(frame, PyValue_XDUP(PyValue_FromObjectBorrow(arg_obj)));
 
     _PyErr_StackItem *prev_exc_info = tstate->exc_info;
     gen->gi_exc_state.previous_item = prev_exc_info;

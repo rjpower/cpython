@@ -95,39 +95,6 @@ PyValue_IsObject(PyValueBorrow value)
 }
 #define PyValue_IsObject(V0) (PyValue_IsObject)(PyValue_Borrow(V0))
 
-/* NewRef creates an independent owner for a pointer value. A raw bit copy
- * merely aliases the existing owner. Scalars require no runtime call.
- * Immortal objects keep the no-count tag, so each has one encoding and
- * exact-bit tests such as PyValue_IsNone() hold for every owner.  It reads
- * its argument, so it takes a borrow.  Since no word carries the no-count
- * tag on a mortal object (H1), it equals PyValue_XDUP(); the two are to be
- * merged (pyjit/design/proposals/register-ir-v2-a5b.md, section 7). */
-static inline PyValue
-PyValue_NewRef(PyValueBorrow value)
-{
-    PyValue result = {value.bits};
-    if (PyValue_IsObject(value)) {
-        PyObject *obj = (PyObject *)(value.bits & ~(uintptr_t)1);
-        if (_Py_IsImmortal(obj)) {
-            result.bits = (uintptr_t)obj | 1;
-        }
-        else {
-            Py_INCREF(obj);
-            result.bits = (uintptr_t)obj;
-        }
-    }
-    return result;
-}
-#define PyValue_NewRef(V0) (PyValue_NewRef)(PyValue_Borrow(V0))
-
-static inline void
-PyValue_Close(PyValue value)
-{
-    if (PyValue_IsObject(value) && !(value.bits & 1)) {
-        Py_DECREF((PyObject *)value.bits);
-    }
-}
-
 static inline int
 PyValue_IsLanguageValue(PyValueBorrow value)
 {

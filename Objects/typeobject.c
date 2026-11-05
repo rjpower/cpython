@@ -14,6 +14,7 @@
 #include "pycore_function.h"      // _PyFunction_GetVersionForCurrentState()
 #include "pycore_gc_trace.h"      // _PyGC_TraceRegisterStaticType()
 #include "pycore_interpframe.h"   // _PyInterpreterFrame
+#include "pycore_list.h"          // PyList_GET_VALUE()
 #include "pycore_long.h"          // _PyLong_IsNegative(), _PyLong_GetOne()
 #include "pycore_memoryobject.h"  // _PyMemoryView_FromBufferProc()
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
@@ -2893,7 +2894,7 @@ clear_slots(PyTypeObject *type, PyObject *self)
         }
         if (mp->type == _Py_T_VALUE || mp->type == _Py_T_VALUE_EX) {
             PyValue *addr = _PyMember_GetOffset(self, mp);
-            PyValue previous = *addr;
+            PyValue previous = *addr;  // a move: cleared below
             *addr = PyValue_NULL;
             PyValue_XCLOSE(previous);
         }
@@ -3230,12 +3231,12 @@ _PyObject_LookupSpecialMethod(PyObject *attr, PyValue *method,
     /* The outputs are the caller's frame slots, which hold canonical values;
        a consumer that needs objects (WITH_EXCEPT_START) boxes them. The
        method is tested and bound through its object view. */
-    *method = PyValue_FromPyObjectNew(method_view);
+    *method = PyValue_DUP(PyValue_FromObjectBorrow(method_view));
     PyValue_CLEAR(found);
     PyObject *method_object = method_view;
     if (_PyType_HasFeature(Py_TYPE(method_object), Py_TPFLAGS_METHOD_DESCRIPTOR)) {
-        PyValue retired = *self;
-        *self = PyValue_FromPyObjectSteal(self_view);
+        PyValue retired = *self;  // a move: replaced below
+        *self = PyValue_FromObjectSteal(self_view);
         self_view = NULL;
         PyValue_XCLOSE(retired);
         rc = 1;
@@ -3246,8 +3247,8 @@ _PyObject_LookupSpecialMethod(PyObject *attr, PyValue *method,
         binding_type = Py_NewRef((PyObject *)Py_TYPE(self_view));
         bound = f(method_object, self_view, binding_type);
         if (bound != NULL) {
-            PyValue retired = *method;
-            *method = PyValue_FromPyObjectSteal(bound);
+            PyValue retired = *method;  // a move: replaced below
+            *method = PyValue_FromObjectSteal(bound);
             bound = NULL;
             PyValue_XCLOSE(retired);
         }
@@ -3800,7 +3801,7 @@ mro_implementation_unlocked(PyTypeObject *type)
             return NULL;
         }
 
-        PyTuple_SET_VALUE(result, 0, PyValue_FromPyObjectNew((PyObject *)type));
+        PyTuple_SET_VALUE(result, 0, PyValue_DUP(PyValue_FromObjectBorrow((PyObject *)type)));
         for (Py_ssize_t i = 0; i < k; i++) {
             PyTuple_SET_VALUE(result, i + 1, PyValue_DUP(PyTuple_GET_VALUE(base_mro, i)));
         }
@@ -3840,7 +3841,7 @@ mro_implementation_unlocked(PyTypeObject *type)
         return NULL;
     }
 
-    PyList_SET_VALUE(result, 0, PyValue_FromPyObjectNew((PyObject *)type));
+    PyList_SET_VALUE(result, 0, PyValue_DUP(PyValue_FromObjectBorrow((PyObject *)type)));
     if (pmerge(result, to_merge, n + 1) < 0) {
         Py_CLEAR(result);
     }
@@ -4664,7 +4665,7 @@ type_new_copy_slots(type_new_ctx *ctx, PyObject *dict)
         if (!slot) {
             goto error;
         }
-        PyList_SET_VALUE(new_slots, j, PyValue_FromPyObjectSteal(slot));
+        PyList_SET_VALUE(new_slots, j, PyValue_FromObjectSteal(slot));
 
         int r = PyDict_Contains(dict, slot);
         if (r < 0) {
@@ -6677,7 +6678,7 @@ find_name_in_mro(PyTypeObject *type, PyObject *name, PyValue *out)
        during dict lookup, e.g. when comparing to non-string keys. */
     _PyCValue mro_ref;
     _PyThreadState_PushCValue(tstate, &mro_ref);
-    mro_ref.ref = PyValue_FromPyObjectNew(mro);
+    mro_ref.ref = PyValue_DUP(PyValue_FromObjectBorrow(mro));
     Py_ssize_t n = PyTuple_GET_SIZE(mro);
     for (Py_ssize_t i = 0; i < n; i++) {
         PyObject *base = _PyTuple_GET_OBJECT(mro, i);
@@ -7082,7 +7083,7 @@ _Py_type_getattro_value(PyTypeObject *type, PyObject *name,
         if (meta_get != NULL && PyDescr_IsData(meta_obj)) {
             PyObject *returned = meta_get(meta_obj, type_owner, metatype_owner);
             if (returned != NULL) {
-                result_ref.ref = PyValue_FromPyObjectSteal(returned);
+                result_ref.ref = PyValue_FromObjectSteal(returned);
             }
             goto done;
         }
@@ -7098,13 +7099,13 @@ _Py_type_getattro_value(PyTypeObject *type, PyObject *name,
             if (Py_TYPE(attr_obj) == &PyStaticMethod_Type) {
                 PyObject *callable = _PyStaticMethod_GetFunc(attr_obj);
                 if (callable != NULL) {
-                    result_ref.ref = PyValue_FromPyObjectNew(callable);
+                    result_ref.ref = PyValue_DUP(PyValue_FromObjectBorrow(callable));
                     goto done;
                 }
             }
             PyObject *returned = local_get(attr_obj, NULL, type_owner);
             if (returned != NULL) {
-                result_ref.ref = PyValue_FromPyObjectSteal(returned);
+                result_ref.ref = PyValue_FromObjectSteal(returned);
             }
             goto done;
         }
@@ -7116,7 +7117,7 @@ _Py_type_getattro_value(PyTypeObject *type, PyObject *name,
         PyObject *meta_obj = PyValue_AsKnownObjectBorrow(meta_attribute_ref.ref);
         PyObject *returned = meta_get(meta_obj, type_owner, metatype_owner);
         if (returned != NULL) {
-            result_ref.ref = PyValue_FromPyObjectSteal(returned);
+            result_ref.ref = PyValue_FromObjectSteal(returned);
         }
         goto done;
     }
@@ -14461,7 +14462,8 @@ super_init_without_args(_PyInterpreterFrame *cframe, PyTypeObject **type_p,
     }
 
     assert(_PyFrame_GetCode(cframe)->co_nlocalsplus > 0);
-    PyValue firstref = _PyFrame_GetLocalsArray(cframe)[0];
+    PyValueBorrow firstref =
+        PyValue_Borrow(_PyFrame_GetLocalsArray(cframe)[0]);
     if (PyValue_IsNull(firstref)) {
         PyErr_SetString(PyExc_RuntimeError, "super(): arg[0] deleted");
         return -1;
@@ -14506,7 +14508,8 @@ super_init_without_args(_PyInterpreterFrame *cframe, PyTypeObject **type_p,
         PyObject *name = PyValue_AsKnownObjectBorrow(name_value);
         assert(PyUnicode_CheckExact(name));
         if (_PyUnicode_Equal(name, &_Py_ID(__class__))) {
-            PyValue cell_value = _PyFrame_GetLocalsArray(cframe)[i];
+            PyValueBorrow cell_value =
+                PyValue_Borrow(_PyFrame_GetLocalsArray(cframe)[i]);
             if (!PyValue_IsObject(cell_value) || PyValue_IsNull(cell_value) ||
                     !PyCell_Check(PyValue_AsKnownObjectBorrow(cell_value))) {
                 PyErr_SetString(PyExc_RuntimeError,

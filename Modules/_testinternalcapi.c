@@ -319,7 +319,7 @@ classify_stack_addresses(PyObject *self, PyObject *args)
             return NULL;
         }
         PyObject *object = PyValue_AsObject(item);
-        PyValue_Close(item);
+        PyValue_XCLOSE(item);
         if (object == NULL) {
             Py_DECREF(labels);
             Py_DECREF(fast);
@@ -2208,7 +2208,7 @@ get_object_dict_values(PyObject *self, PyObject *obj)
         PyValue item = values->values[i];
         PyTuple_SET_VALUE(res, i, PyValue_IsNull(item)
             ? PyValue_DUP(PyValue_FromObjectBorrow(&_Py_STR(anon_null)))
-            : PyValue_NewRef(item));
+            : PyValue_XDUP(item));
     }
     return res;
 }
@@ -3206,12 +3206,12 @@ pyvalue_contract(PyObject *self, PyObject *arg)
     PyValue value = PyValue_PrepareOwned(Py_NewRef(arg));
     const char *kind = PyValue_IsInlineInt(value) ? "int51" :
                        PyValue_IsInlineFloat(value) ? "float64" : "object";
-    PyValue duplicate = PyValue_NewRef(PyValue_Borrow(value));
+    PyValue duplicate = PyValue_XDUP(PyValue_Borrow(value));
     assert(PyValue_Is(value, duplicate));
     assert(PyValue_IsLanguageValue(value));
     PyObject *object = PyValue_AsObject(duplicate);
-    PyValue_Close(duplicate);
-    PyValue_Close(value);
+    PyValue_XCLOSE(duplicate);
+    PyValue_XCLOSE(value);
     if (object == NULL) {
         return NULL;
     }
@@ -3949,7 +3949,7 @@ test_list_setitem_take_value(PyObject *module, PyObject *Py_UNUSED(args))
         return NULL;
     }
     int result = _PyList_SetItemTakeValue((PyListObject *)list, 1,
-                                         PyValue_FromPyObjectSteal(owner));
+                                         PyValue_FromObjectSteal(owner));
     if (result != -1 || !PyErr_ExceptionMatches(PyExc_IndexError) ||
         probe.closed != 1) {
         Py_DECREF(list);
@@ -3969,7 +3969,7 @@ test_list_setitem_take_value(PyObject *module, PyObject *Py_UNUSED(args))
         return NULL;
     }
     result = _PyList_SetItemTakeValue((PyListObject *)list, 0,
-                                      PyValue_FromPyObjectSteal(owner));
+                                      PyValue_FromObjectSteal(owner));
     assert(result == 0);
     PyValue alias = PyList_GetValue(list, 0);
     assert(!PyValue_IsNull(alias));

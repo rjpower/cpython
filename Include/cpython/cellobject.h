@@ -21,7 +21,8 @@ PyAPI_FUNC(PyObject *) PyCell_New(PyObject *);
 PyAPI_FUNC(PyObject *) PyCell_Get(PyObject *);
 PyAPI_FUNC(int) PyCell_Set(PyObject *, PyObject *);
 /* GetValue returns an owner. NewValue and SetValue, which take a borrowed
-   value, are internal (pycore_cell.h): only the core makes a PyValueBorrow. */
+   value, are internal (pycore_cell.h), like every function that takes or
+   returns a PyValueBorrow. */
 PyAPI_FUNC(PyValue) PyCell_GetValue(PyObject *);
 
 #ifdef __cplusplus

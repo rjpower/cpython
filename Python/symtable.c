@@ -1,6 +1,7 @@
 #include "Python.h"
 #include "pycore_ast.h"           // stmt_ty
 #include "pycore_dict.h"          // _PyDict_NextValue()
+#include "pycore_list.h"          // PyList_GET_VALUE()
 #include "pycore_parser.h"        // _PyParser_ASTFromString()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_runtime.h"       // _Py_ID()

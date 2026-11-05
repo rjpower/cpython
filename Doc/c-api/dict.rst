@@ -40,8 +40,8 @@ Canonical value reads
 ^^^^^^^^^^^^^^^^^^^^^
 
 These rebuild APIs accept :class:`dict` and :class:`frozendict` inputs and
-return owning canonical values without boxing inline scalars. Inputs borrow;
-the caller closes each returned value with ``PyValue_Close``. A returned owner
+return owning canonical values without boxing inline scalars. The caller
+closes each returned value with ``PyValue_XCLOSE``. A returned owner
 remains valid after the dictionary changes or is destroyed.
 
 Both functions preserve an exception already pending on entry and return
@@ -52,7 +52,8 @@ Cleanup errors also cause failure; no successful result has a pending exception.
 
 The forms that take a value as the key (``PyDict_GetValue``,
 ``PyDict_SetValue``, ``PyDict_DelValue`` and ``PyDict_ContainsValue``) are
-internal to CPython: they take a borrowed value, which only the core makes.
+internal to CPython, like every function that takes or returns a borrowed
+value: the operations that make, read or retain one are internal.
 
 .. c:function:: int PyDict_GetValueString(PyObject *p, const char *key, PyValue *result)
 

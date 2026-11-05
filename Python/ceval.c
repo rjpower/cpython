@@ -755,6 +755,7 @@ static void
 clear_value_arguments(PyValue *arguments, int count)
 {
     for (int i = count - 1; i >= 0; i--) {
+        // a move: cleared below
         PyValue value = arguments[i];
         arguments[i] = PyValue_NULL;
         PyValue_CLOSE(value);
@@ -1059,7 +1060,7 @@ value_binary_operation(int operation, PyValue left, PyValue right,
     }
     assert(_PyEval_BinaryOps[operation] != NULL);
     PyObject *result = _PyEval_BinaryOps[operation](left_obj, right_obj);
-    return result == NULL ? PyValue_NULL : PyValue_FromPyObjectSteal(result);
+    return result == NULL ? PyValue_NULL : PyValue_FromObjectSteal(result);
 }
 
 /* The wrappers below keep a runtime-API out-parameter in their own C frame,
@@ -1506,7 +1507,7 @@ _PyEval_GetIter(PyValue iterable, int yield_from)
     if (iter_o == NULL) {
         return result;
     }
-    result.first = PyValue_FromPyObjectSteal(iter_o);
+    result.first = PyValue_FromObjectSteal(iter_o);
     return result;
 }
 
@@ -1796,8 +1797,9 @@ call_transaction_expand_method(PyThreadState *tstate, _PyInterpreterFrame *frame
         return 0;
     }
     PyMethodObject *method = (PyMethodObject *)PyValue_AsKnownObjectBorrow(homes[0]);
-    PyValue self = PyValue_FromPyObjectNew(method->im_self);
-    PyValue function = PyValue_FromPyObjectNew(method->im_func);
+    PyValue self = PyValue_DUP(PyValue_FromObjectBorrow(method->im_self));
+    PyValue function = PyValue_DUP(PyValue_FromObjectBorrow(method->im_func));
+    // a move: replaced below
     PyValue obsolete = homes[0];
     /* Publish both final input homes before the obsolete wrapper can run
      * a destructor. No pointer into the old window crosses that release. */
@@ -1844,7 +1846,7 @@ call_transaction_prepare_tuple(PyThreadState *tstate, _PyInterpreterFrame *frame
     obsolete = homes[2];
     /* A tuple is a heap object, so this pure owner transfer cannot retire a
      * scalar box. Only the final tuple home is visible during local cleanup. */
-    homes[2] = PyValue_FromPyObjectSteal(tuple);
+    homes[2] = PyValue_FromObjectSteal(tuple);
     tuple = NULL;
     status = 0;
 done:
@@ -2147,6 +2149,7 @@ done:
             return -1;
         }
         PyValue *home = _PyFrame_Slots(call->frame) + call->destination;
+        // a move: replaced below
         PyValue displaced = *home;
         *home = local_result;
         _PyValue_CheckHome(*home);
@@ -2406,7 +2409,7 @@ native_call_builtin_o(PyThreadState *tstate, _PyInterpreterFrame *frame,
         return PyValue_NULL;
     }
     PyValue c = callable;
-    PyValue s = args[0];
+    PyValue s = args[0];  // a move: the consumed input, closed below
     _PyNativeResult_Publish(&scope.result, &pending,
                             native_call_publish_result, &publication);
     if (native_call_finish(&publication, &scope, &s, &c, next) < 0) {
@@ -2887,7 +2890,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *c
             i++;
         }
         assert(PyValue_IsNull(localsplus[i]));
-        localsplus[i] = PyValue_FromPyObjectSteal(kwdict);
+        localsplus[i] = PyValue_FromObjectSteal(kwdict);
     }
     else {
         kwdict = NULL;
@@ -2933,7 +2936,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *c
             goto fail_post_positional;
         }
         assert(PyValue_IsNull(localsplus[total_args]));
-        localsplus[total_args] = PyValue_FromPyObjectSteal(u);
+        localsplus[total_args] = PyValue_FromObjectSteal(u);
     }
     else if (argcount > n) {
         /* Too many positional args. Error is reported later */
@@ -2950,6 +2953,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *c
             PyValueBorrow keyword_value = PyTuple_GET_VALUE(kwnames, i);
             PyObject *keyword = PyValue_IsObject(keyword_value)
                 ? PyValue_AsKnownObjectBorrow(keyword_value) : NULL;
+            // a move: closed or stored below
             PyValue value_value = args[i+argcount];
             Py_ssize_t j;
 
@@ -3002,7 +3006,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *c
                     } else {
                         for (Py_ssize_t k = co->co_posonlyargcount; k < total_args; k++) {
                             PyList_SET_VALUE(possible_keywords, k - co->co_posonlyargcount,
-                                             PyValue_NewRef(co_varnames[k]));
+                                             PyValue_XDUP(co_varnames[k]));
                         }
 
                         suggestion_keyword = _Py_CalculateSuggestions(possible_keywords, keyword);
@@ -3088,7 +3092,7 @@ initialize_locals(PyThreadState *tstate, PyFunctionObject *func, PyCodeObject *c
             PyValue *defs = _PyTuple_ITEMS(func->func_defaults);
             for (; i < defcount; i++) {
                 if (PyValue_IsNull(localsplus[m+i])) {
-                    localsplus[m+i] = PyValue_NewRef(defs[i]);
+                    localsplus[m+i] = PyValue_XDUP(defs[i]);
                     _PyValue_CheckHome(localsplus[m+i]);
                 }
             }
@@ -3302,7 +3306,7 @@ eval_frame_push_and_init_ex_code(PyThreadState *tstate, PyValue func,
     for (Py_ssize_t i = 0; i < total; i++) {
         PyValueBorrow borrowed = has_dict ? PyValue_FromObjectBorrow(object_array[i])
                                     : PyTuple_GET_VALUE(callargs, i);
-        newargs[i] = PyValue_NewRef(borrowed);
+        newargs[i] = PyValue_XDUP(borrowed);
     }
     new_frame = eval_frame_push_and_init_code(
         tstate, func, locals,
@@ -3372,7 +3376,7 @@ call_transaction_push_python(_PyCallTransaction *call,
         ((PyFunctionObject *)callable)->vectorcall != _PyFunction_Vectorcall) {
         goto done;
     }
-    function = PyValue_NewRef(homes[0]);
+    function = PyValue_XDUP(homes[0]);
     code = (PyCodeObject *)Py_NewRef(PyFunction_GET_CODE(callable));
     locals = code->co_flags & CO_OPTIMIZED ? NULL
         : Py_NewRef(PyFunction_GET_GLOBALS(callable));
@@ -3397,7 +3401,7 @@ call_transaction_push_python(_PyCallTransaction *call,
             names = Py_NewRef(PyValue_AsKnownObjectBorrow(homes[call->count - 1]));
         }
         for (int i = 0; i < total; i++) {
-            storage[i] = PyValue_NewRef(homes[offset + i]);
+            storage[i] = PyValue_XDUP(homes[offset + i]);
             copied++;
         }
         int positional = total - (names == NULL ? 0 : (int)PyTuple_GET_SIZE(names));
@@ -3494,7 +3498,8 @@ call_transaction_invoke(_PyCallTransaction *call, _PyInterpreterFrame **child)
         call_record_monitor(call) < 0) {
         return -1;
     }
-    PyValue callable = _PyFrame_Slots(call->frame)[call->base];
+    PyValueBorrow callable = PyValue_Borrow(
+        _PyFrame_Slots(call->frame)[call->base]);
     if (PyValue_IsObject(callable)) {
         PyObject *object = PyValue_AsKnownObjectBorrow(callable);
         if (Py_TYPE(object) == &PyFunction_Type &&
@@ -3593,16 +3598,16 @@ _PyEval_Vector(PyThreadState *tstate, PyFunctionObject *func,
      * to func, locals and all its arguments */
     Py_XINCREF(locals);
     for (size_t i = 0; i < argcount; i++) {
-        arguments[i] = PyValue_NewRef(PyValue_FromObjectBorrow(args[i]));
+        arguments[i] = PyValue_XDUP(PyValue_FromObjectBorrow(args[i]));
     }
     if (kwnames) {
         Py_ssize_t kwcount = PyTuple_GET_SIZE(kwnames);
         for (Py_ssize_t i = 0; i < kwcount; i++) {
-            arguments[i+argcount] = PyValue_NewRef(PyValue_FromObjectBorrow(args[i+argcount]));
+            arguments[i+argcount] = PyValue_XDUP(PyValue_FromObjectBorrow(args[i+argcount]));
         }
     }
     _PyInterpreterFrame *frame = _PyEvalFramePushAndInit(
-        tstate, PyValue_FromPyObjectNew(func), locals,
+        tstate, PyValue_DUP(PyValue_FromObjectBorrow(func)), locals,
         arguments, argcount, kwnames, NULL);
     if (total_args > 8) {
         PyMem_Free(arguments);
@@ -3838,7 +3843,7 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
             }
             goto Error;
         }
-        *--sp = PyValue_FromPyObjectSteal(w);
+        *--sp = PyValue_FromObjectSteal(w);
         _PyValue_CheckTemp(*sp);
     }
 
@@ -3872,7 +3877,7 @@ _PyEval_UnpackIterableValue(PyThreadState *tstate, PyObject *v,
     l = PySequence_List(it);
     if (l == NULL)
         goto Error;
-    *--sp = PyValue_FromPyObjectSteal(l);
+    *--sp = PyValue_FromObjectSteal(l);
     i++;
 
     ll = PyList_GET_SIZE(l);
@@ -3897,6 +3902,7 @@ Error:
     /* The slots that the values went to are temporaries, which hold NULL
        unless live */
     for (; i > 0; i--, sp++) {
+        // a move: cleared below
         PyValue ref = *sp;
         *sp = PyValue_NULL;
         PyValue_CLOSE(ref);
@@ -5313,7 +5319,7 @@ _PyEval_LoadGlobalValue(PyObject *globals, PyObject *builtins, PyObject *name,
                 return;
             }
         }
-        *writeto = PyValue_FromPyObjectSteal(res);
+        *writeto = PyValue_FromObjectSteal(res);
     }
 
     PyObject *res_o = PyValue_IsObject(*writeto) ?
@@ -5321,8 +5327,9 @@ _PyEval_LoadGlobalValue(PyObject *globals, PyObject *builtins, PyObject *name,
     if (res_o != NULL && PyLazyImport_CheckExact(res_o)) {
         PyObject *l_v = _PyLazyImport_Reify(
             PyThreadState_GET(), res_o, name, namespace);
+        // a move: replaced below
         PyValue old = *writeto;
-        *writeto = l_v == NULL ? PyValue_NULL : PyValue_FromPyObjectSteal(l_v);
+        *writeto = l_v == NULL ? PyValue_NULL : PyValue_FromObjectSteal(l_v);
         *writeto = _PyValue_Publish(writeto);
         PyValue_CLOSE(old);
     }
@@ -5402,7 +5409,7 @@ _PyForIter_VirtualIteratorNext(PyThreadState *tstate, _PyInterpreterFrame *frame
 {
     _PyStatusValue result = {0, PyValue_NULL};
     PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
-    PyValue index = *index_ptr;
+    PyValueBorrow index = PyValue_Borrow(*index_ptr);
     if (PyValue_IsTaggedIndex(index)) {
         intptr_t i = PyValue_UntagIndex(index);
         assert(i >= 0);
@@ -5430,7 +5437,7 @@ _PyForIter_VirtualIteratorNext(PyThreadState *tstate, _PyInterpreterFrame *frame
         }
         return result;
     }
-    result.value = PyValue_FromPyObjectSteal(next_o);
+    result.value = PyValue_FromObjectSteal(next_o);
     result.status = 1;
     return result;
 }

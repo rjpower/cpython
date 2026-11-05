@@ -293,7 +293,7 @@
                 if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromPyObjectSteal(res_o);
+                res = PyValue_FromObjectSteal(res_o);
                 l = left;
                 r = right;
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), l);
@@ -521,7 +521,7 @@
                 }
                 assert(d->result_type == NULL || Py_TYPE(res_o) == d->result_type);
                 assert(!d->result_unique || Py_REFCNT(res_o) == 1 || _Py_IsImmortal(res_o));
-                res = PyValue_FromPyObjectSteal(res_o);
+                res = PyValue_FromObjectSteal(res_o);
                 l = left;
                 r = right;
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), l);
@@ -863,7 +863,7 @@
                 if (temp == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromPyObjectSteal(temp);
+                res = PyValue_FromObjectSteal(temp);
             }
             IR_STORE_DST(IR_A(ir_word), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -3007,7 +3007,7 @@
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
-                getitem = PyValue_FromPyObjectNew(getitem_o);
+                getitem = PyValue_DUP(PyValue_FromObjectBorrow(getitem_o));
             }
             // _BINARY_OP_SUBSCR_INIT_CALL
             {
@@ -3103,7 +3103,7 @@
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_D(ir_word));
                 }
-                res = PyValue_NewRef(PyList_GET_VALUE(list, index));
+                res = PyValue_XDUP(PyList_GET_VALUE(list, index));
                 assert(!PyValue_IsNull(res));
                 STAT_INC(BINARY_OP, hit);
                 ls = list_st;
@@ -3199,7 +3199,7 @@
                 if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromPyObjectSteal(res_o);
+                res = PyValue_FromObjectSteal(res_o);
                 ls = list_st;
                 ss = sub_st;
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), ls);
@@ -3395,7 +3395,7 @@
                 STAT_INC(BINARY_OP, hit);
                 Py_ssize_t index = PyValue_InlineInt64(sub_st);
                 assert(0 <= index && index < PyTuple_GET_SIZE(tuple));
-                res = PyValue_NewRef(PyTuple_GET_VALUE(tuple, index));
+                res = PyValue_XDUP(PyTuple_GET_VALUE(tuple, index));
                 assert(!PyValue_IsNull(res));
                 ts = tuple_st;
                 ss = sub_st;
@@ -4083,7 +4083,7 @@
                 if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromPyObjectSteal(res_o);
+                res = PyValue_FromObjectSteal(res_o);
             }
             IR_STORE_DST(IR_A(ir_word), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -4162,7 +4162,7 @@
             if (interpolation_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            interpolation = PyValue_FromPyObjectSteal(interpolation_o);
+            interpolation = PyValue_FromObjectSteal(interpolation_o);
             IR_PUBLISH_TEMP(window[0], interpolation);
             IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -4196,7 +4196,7 @@
             if (list_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            list = PyValue_FromPyObjectSteal(list_o);
+            list = PyValue_FromObjectSteal(list_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg);
             IR_PUBLISH_TEMP(window[0], list);
             IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
@@ -4229,7 +4229,7 @@
             values = &window[0];
             PyObject *map_o = _Py_BuildMap_ValueSteal(values, oparg);
             int failed = map_o == NULL;
-            map = failed ? PyValue_NULL : PyValue_FromPyObjectSteal(map_o);
+            map = failed ? PyValue_NULL : PyValue_FromObjectSteal(map_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg*2);
             IR_PUBLISH_TEMP(window[0], map);
             {
@@ -4301,7 +4301,7 @@
                 Py_DECREF(set_o);
                 JUMP_TO_LABEL(error);
             }
-            set = PyValue_FromPyObjectSteal(set_o);
+            set = PyValue_FromObjectSteal(set_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg);
             IR_PUBLISH_TEMP(window[0], set);
             IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
@@ -4358,7 +4358,7 @@
             if (slice_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            slice = PyValue_FromPyObjectSteal(slice_o);
+            slice = PyValue_FromObjectSteal(slice_o);
             IR_PUBLISH_TEMP(window[0], slice);
             IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -4393,7 +4393,7 @@
                 IR_CLEAR_SLOTS(&window[0], oparg);
                 JUMP_TO_LABEL(error);
             }
-            str = PyValue_FromPyObjectSteal(str_o);
+            str = PyValue_FromObjectSteal(str_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg);
             IR_PUBLISH_TEMP(window[0], str);
             IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
@@ -4460,7 +4460,7 @@
             if (template_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            template = PyValue_FromPyObjectSteal(template_o);
+            template = PyValue_FromObjectSteal(template_o);
             IR_STORE_DST(IR_A(ir_word), template);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
@@ -4493,7 +4493,7 @@
             if (tup_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            tup = PyValue_FromPyObjectSteal(tup_o);
+            tup = PyValue_FromObjectSteal(tup_o);
             IR_CLEAR_SLOTS(&window[1], -1 + oparg);
             IR_PUBLISH_TEMP(window[0], tup);
             IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
@@ -4708,9 +4708,9 @@
                 if (self_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                self_or_null = PyValue_FromPyObjectSteal(self_o);
+                self_or_null = PyValue_FromObjectSteal(self_o);
                 PyValue temp = callable;
-                callable = PyValue_FromPyObjectNew(init_func);
+                callable = PyValue_DUP(PyValue_FromObjectBorrow(init_func));
                 IR_PUBLISH_TEMP(window[0], callable);
                 IR_PUBLISH_TEMP(window[1], self_or_null);
                 PyValue_CLOSE(temp);
@@ -4817,9 +4817,9 @@
                 assert(PyValue_IsNull(self_or_null));
                 PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
                 STAT_INC(CALL, hit);
-                self_or_null = PyValue_FromPyObjectNew(((PyMethodObject *)callable_o)->im_self);
+                self_or_null = PyValue_DUP(PyValue_FromObjectBorrow(((PyMethodObject *)callable_o)->im_self));
                 PyValue temp = callable;
-                callable = PyValue_FromPyObjectNew(((PyMethodObject *)callable_o)->im_func);
+                callable = PyValue_DUP(PyValue_FromObjectBorrow(((PyMethodObject *)callable_o)->im_func));
                 IR_PUBLISH_TEMP(window[0], callable);
                 IR_PUBLISH_TEMP(window[1], self_or_null);
                 PyValue_CLOSE(temp);
@@ -5121,7 +5121,7 @@
                     JUMP_TO_LABEL(error);
                 }
                 PyValue temp = callable;
-                callable = PyValue_FromPyObjectSteal(res_o);
+                callable = PyValue_FromObjectSteal(res_o);
                 IR_PUBLISH_TEMP(window[0], callable);
                 PyValue_CLOSE(temp);
             }
@@ -5214,7 +5214,7 @@
                     JUMP_TO_LABEL(error);
                 }
                 PyValue temp = callable;
-                callable = PyValue_FromPyObjectSteal(res_o);
+                callable = PyValue_FromObjectSteal(res_o);
                 IR_PUBLISH_TEMP(window[0], callable);
                 PyValue_CLOSE(temp);
             }
@@ -5303,7 +5303,7 @@
                     JUMP_TO_LABEL(error);
                 }
                 PyValue temp = callable;
-                callable = PyValue_FromPyObjectSteal(res_o);
+                callable = PyValue_FromObjectSteal(res_o);
                 IR_PUBLISH_TEMP(window[0], callable);
                 PyValue_CLOSE(temp);
             }
@@ -5792,7 +5792,7 @@
                 }
                 v = value;
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), v);
-                res = PyValue_FromPyObjectSteal(res_o);
+                res = PyValue_FromObjectSteal(res_o);
             }
             // _POP_TOP
             {
@@ -5869,7 +5869,7 @@
                 if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromPyObjectSteal(res_o);
+                res = PyValue_FromObjectSteal(res_o);
                 vs1 = value1_st;
                 vs2 = value2_st;
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), vs2);
@@ -6672,7 +6672,7 @@
                     JUMP_TO_LABEL(error);
                 }
                 PyValue temp = callable;
-                callable = PyValue_FromPyObjectSteal(res_o);
+                callable = PyValue_FromObjectSteal(res_o);
                 IR_PUBLISH_TEMP(window[0], callable);
                 PyValue_CLOSE(temp);
             }
@@ -6793,7 +6793,7 @@
                     JUMP_TO_LABEL(error);
                 }
                 PyValue temp = callable;
-                callable = PyValue_FromPyObjectSteal(res_o);
+                callable = PyValue_FromObjectSteal(res_o);
                 IR_PUBLISH_TEMP(window[0], callable);
                 PyValue_CLOSE(temp);
             }
@@ -6920,7 +6920,7 @@
                 }
                 c = callable;
                 s = args[0];
-                res = PyValue_FromPyObjectSteal(res_o);
+                res = PyValue_FromObjectSteal(res_o);
             }
             // _POP_TOP
             {
@@ -7055,7 +7055,7 @@
                 c = callable;
                 s = arguments[0];
                 a = arguments[1];
-                res = PyValue_FromPyObjectSteal(res_o);
+                res = PyValue_FromObjectSteal(res_o);
             }
             // _POP_TOP
             {
@@ -7466,7 +7466,7 @@
                     JUMP_TO_LABEL(error);
                 }
                 a = arg;
-                res = PyValue_FromPyObjectSteal(res_o);
+                res = PyValue_FromObjectSteal(res_o);
             }
             // _POP_TOP
             {
@@ -7563,7 +7563,7 @@
                     JUMP_TO_LABEL(error);
                 }
                 a = arg;
-                res = PyValue_FromPyObjectSteal(res_o);
+                res = PyValue_FromObjectSteal(res_o);
             }
             // _POP_TOP
             {
@@ -7641,7 +7641,7 @@
                 arg = window[2];
                 assert(oparg == 1);
                 STAT_INC(CALL, hit);
-                res = PyValue_FromPyObjectNew(PyValue_TYPE(arg));
+                res = PyValue_DUP(PyValue_FromObjectBorrow(PyValue_TYPE(arg)));
                 a = arg;
             }
             // _POP_TOP
@@ -7731,8 +7731,8 @@
             if (!Py_IsNone(match_o)) {
                 PyErr_SetHandledException(match_o);
             }
-            rest = PyValue_FromPyObjectSteal(rest_o);
-            match = PyValue_FromPyObjectSteal(match_o);
+            rest = PyValue_FromObjectSteal(rest_o);
+            match = PyValue_FromObjectSteal(match_o);
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), rest);
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word) + 1), match);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -7851,7 +7851,7 @@
             assert(exc_value && PyExceptionInstance_Check(exc_value));
             int matches = PyErr_GivenExceptionMatches(exc_value, PyExc_StopIteration);
             if (matches) {
-                value = PyValue_FromPyObjectNew(((PyStopIterationObject *)exc_value)->value);
+                value = PyValue_DUP(PyValue_FromObjectBorrow(((PyStopIterationObject *)exc_value)->value));
                 PyValue tmp = sub_iter;
                 sub_iter = value;
                 IR_PUBLISH_TEMP(window[0], sub_iter);
@@ -7964,7 +7964,7 @@
                     res = res_bool ? PyValue_True : PyValue_False;
                 }
                 else {
-                    res = PyValue_FromPyObjectSteal(res_o);
+                    res = PyValue_FromObjectSteal(res_o);
                 }
             }
             IR_STORE_DST(IR_A(ir_word), res);
@@ -8209,7 +8209,7 @@
                     res = res_bool ? PyValue_True : PyValue_False;
                 }
                 else {
-                    res = PyValue_FromPyObjectSteal(res_o);
+                    res = PyValue_FromObjectSteal(res_o);
                 }
             }
             IR_STORE_DST(IR_A(ir_word), res);
@@ -8734,7 +8734,7 @@
             if (result_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            result = PyValue_FromPyObjectSteal(result_o);
+            result = PyValue_FromObjectSteal(result_o);
             IR_STORE_DST(IR_A(ir_word), result);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
@@ -8785,7 +8785,7 @@
             assert(oparg == co->co_nfreevars);
             int offset = co->co_nlocalsplus - oparg;
             for (int i = 0; i < oparg; ++i) {
-                frame->base[offset + i] = PyValue_NewRef(PyTuple_GET_VALUE(closure, i));
+                frame->base[offset + i] = PyValue_XDUP(PyTuple_GET_VALUE(closure, i));
             }
             DISPATCH();
         }
@@ -8824,7 +8824,7 @@
             INSTRUCTION_STATS(DELETE_FAST);
             int oparg = (int)IR_A(ir_word);
             (void)oparg;
-            PyValue v = GETLOCAL(oparg);
+            PyValueBorrow v = PyValue_Borrow(GETLOCAL(oparg));
             if (PyValue_IsNull(v)) {
                 _PyEval_FormatExcCheckArg(tstate, PyExc_UnboundLocalError,
                     UNBOUNDLOCAL_ERROR_MSG,
@@ -9240,7 +9240,7 @@
                 if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromPyObjectSteal(res_o);
+                res = PyValue_FromObjectSteal(res_o);
             }
             else {
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), value);
@@ -9303,7 +9303,7 @@
             if (res_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            res = PyValue_FromPyObjectSteal(res_o);
+            res = PyValue_FromObjectSteal(res_o);
             IR_STORE_DST(IR_A(ir_word), res);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
@@ -9522,7 +9522,7 @@
             {
                 PyObject *list_o = PyValue_AsKnownObjectBorrow(iter);
                 assert(PyList_CheckExact(list_o));
-                next = PyValue_NewRef(PyList_GET_VALUE(list_o, PyValue_UntagIndex(null_or_index)));
+                next = PyValue_XDUP(PyList_GET_VALUE(list_o, PyValue_UntagIndex(null_or_index)));
                 null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
             }
             IR_PUBLISH_TEMP(window[1], null_or_index);
@@ -9672,7 +9672,7 @@
                 assert(Py_TYPE(tuple_o) == &PyTuple_Type);
                 uintptr_t i = PyValue_UntagIndex(null_or_index);
                 assert((size_t)i < (size_t)PyTuple_GET_SIZE(tuple_o));
-                next = PyValue_NewRef(PyTuple_GET_VALUE(tuple_o, i));
+                next = PyValue_XDUP(PyTuple_GET_VALUE(tuple_o, i));
                 null_or_index = PyValue_IncrementTaggedIndexNoOverflow(null_or_index);
             }
             IR_PUBLISH_TEMP(window[1], null_or_index);
@@ -9809,7 +9809,7 @@
                 Py_DECREF(iter_o);
                 JUMP_TO_LABEL(error);
             }
-            iter = PyValue_FromPyObjectSteal(iter_o);
+            iter = PyValue_FromObjectSteal(iter_o);
             IR_STORE_DST(IR_A(ir_word), iter);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
@@ -9851,7 +9851,7 @@
             if (awaitable_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            awaitable = PyValue_FromPyObjectSteal(awaitable_o);
+            awaitable = PyValue_FromObjectSteal(awaitable_o);
             IR_STORE_DST(IR_A(ir_word), awaitable);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
@@ -9899,7 +9899,7 @@
             if (iter_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            iter = PyValue_FromPyObjectSteal(iter_o);
+            iter = PyValue_FromObjectSteal(iter_o);
             IR_STORE_DST(IR_A(ir_word), iter);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
@@ -10062,7 +10062,7 @@
             if (len_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            len = PyValue_FromPyObjectSteal(len_o);
+            len = PyValue_FromObjectSteal(len_o);
             IR_STORE_DST(IR_A(ir_word), len);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
@@ -10115,7 +10115,7 @@
             if (res_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            res = PyValue_FromPyObjectSteal(res_o);
+            res = PyValue_FromObjectSteal(res_o);
             IR_STORE_DST(IR_A(ir_word), res);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
@@ -10198,7 +10198,7 @@
             if (res_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            res = PyValue_FromPyObjectSteal(res_o);
+            res = PyValue_FromObjectSteal(res_o);
             IR_PUBLISH_TEMP(window[0], res);
             IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -10951,7 +10951,7 @@
                 if (attr_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                attr = PyValue_FromPyObjectSteal(attr_o);
+                attr = PyValue_FromObjectSteal(attr_o);
             }
             // _PUSH_NULL_CONDITIONAL
             {
@@ -11100,7 +11100,7 @@
                 if (attr_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                attr = PyValue_FromPyObjectSteal(attr_o);
+                attr = PyValue_FromObjectSteal(attr_o);
             }
             // _PUSH_NULL_CONDITIONAL
             {
@@ -12003,7 +12003,7 @@
                 PyObject *descr = (PyObject *)fb->descr;
                 STAT_INC(LOAD_ATTR, hit);
                 assert(descr != NULL);
-                attr = PyValue_FromPyObjectNew(descr);
+                attr = PyValue_DUP(PyValue_FromObjectBorrow(descr));
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 _PyValue_XCLOSE_POINTER(ir_own_B);
             }
@@ -12081,7 +12081,7 @@
                 PyObject *descr = (PyObject *)fb->descr;
                 STAT_INC(LOAD_ATTR, hit);
                 assert(descr != NULL);
-                attr = PyValue_FromPyObjectNew(descr);
+                attr = PyValue_DUP(PyValue_FromObjectBorrow(descr));
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 _PyValue_XCLOSE_POINTER(ir_own_B);
             }
@@ -12168,10 +12168,10 @@
                 STAT_INC(LOAD_ATTR, hit);
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
                 _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(
-                    tstate, PyValue_FromPyObjectNew(f), 2, frame);
+                    tstate, PyValue_DUP(PyValue_FromObjectBorrow(f)), 2, frame);
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 pushed_frame->base[0] = IR_TAKE(owner, ir_own_B);
-                pushed_frame->base[1] = PyValue_FromPyObjectNew(name);
+                pushed_frame->base[1] = PyValue_DUP(PyValue_FromObjectBorrow(name));
                 new_frame = PyValue_Wrap(pushed_frame);
             }
             // _SAVE_RETURN_SLOT
@@ -12253,13 +12253,13 @@
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
                 PyValue *value_ptr = (PyValue *)(((char *)owner_o) + offset);
-                PyValue found = *value_ptr;
+                PyValueBorrow found = PyValue_Borrow(*value_ptr);
                 if (PyValue_IsNull(found)) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                attr = PyValue_NewRef(found);
+                attr = PyValue_XDUP(found);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 PyValue receiver = ir_own_B;
@@ -12351,7 +12351,7 @@
                 STAT_INC(LOAD_ATTR, hit);
                 assert(descr != NULL);
                 assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
-                attr = PyValue_FromPyObjectNew(descr);
+                attr = PyValue_DUP(PyValue_FromObjectBorrow(descr));
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 self = IR_TAKE(owner, ir_own_B);
             }
@@ -12411,7 +12411,7 @@
                 STAT_INC(LOAD_ATTR, hit);
                 assert(descr != NULL);
                 assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
-                attr = PyValue_FromPyObjectNew(descr);
+                attr = PyValue_DUP(PyValue_FromObjectBorrow(descr));
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 self = IR_TAKE(owner, ir_own_B);
             }
@@ -12481,7 +12481,7 @@
                 STAT_INC(LOAD_ATTR, hit);
                 assert(descr != NULL);
                 assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
-                attr = PyValue_FromPyObjectNew(descr);
+                attr = PyValue_DUP(PyValue_FromObjectBorrow(descr));
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 self = IR_TAKE(owner, ir_own_B);
             }
@@ -12546,13 +12546,13 @@
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
                 PyDictUnicodeEntry *ep = DK_UNICODE_ENTRIES(keys) + index;
-                PyValue found = ep->me_value;
+                PyValueBorrow found = PyValue_Borrow(ep->me_value);
                 if (PyValue_IsNull(found)) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
-                attr = PyValue_NewRef(found);
+                attr = PyValue_XDUP(found);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 PyValue receiver = ir_own_B;
@@ -12710,7 +12710,7 @@
                 assert(descr != NULL);
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 _PyValue_XCLOSE_POINTER(ir_own_B);
-                attr = PyValue_FromPyObjectNew(descr);
+                attr = PyValue_DUP(PyValue_FromObjectBorrow(descr));
             }
             IR_STORE_DST(IR_A(ir_word), attr);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -12776,7 +12776,7 @@
                 assert(descr != NULL);
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 _PyValue_XCLOSE_POINTER(ir_own_B);
-                attr = PyValue_FromPyObjectNew(descr);
+                attr = PyValue_DUP(PyValue_FromObjectBorrow(descr));
             }
             IR_STORE_DST(IR_A(ir_word), attr);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -12850,7 +12850,7 @@
                     JUMP_TO_PREDICTED(LOAD_ATTR);
                 }
                 STAT_INC(LOAD_ATTR, hit);
-                _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(tstate, PyValue_FromPyObjectNew(fget), 1, frame);
+                _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(tstate, PyValue_DUP(PyValue_FromObjectBorrow(fget)), 1, frame);
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 pushed_frame->base[0] = IR_TAKE(owner, ir_own_B);
                 new_frame = PyValue_Wrap(pushed_frame);
@@ -12931,9 +12931,10 @@
             {
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-                PyValue found = *(PyValue *)((char *)owner_o + offset);
+                PyValueBorrow found =
+                PyValue_Borrow(*(PyValue *)((char *)owner_o + offset));
                 assert(!PyValue_IsNull(found));
-                attr = PyValue_NewRef(found);
+                attr = PyValue_XDUP(found);
                 STAT_INC(LOAD_ATTR, hit);
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 PyValue receiver = ir_own_B;
@@ -13010,7 +13011,8 @@
             {
                 uint32_t index = fb->index;
                 PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
-                PyValue value = *(PyValue *)((char *)owner_o + index);
+                PyValueBorrow value =
+                PyValue_Borrow(*(PyValue *)((char *)owner_o + index));
                 if (PyValue_IsNull(value)) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_ATTR));
@@ -13143,7 +13145,7 @@
                     }
                 }
                 STAT_INC(LOAD_ATTR, hit);
-                attr = PyValue_NewRef(found);
+                attr = PyValue_XDUP(found);
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), owner);
                 PyValue receiver = ir_own_B;
                 IR_STORE_TEMP_DST(IR_A(ir_word), attr);
@@ -13201,7 +13203,7 @@
                                  "__build_class__ not found");
                 JUMP_TO_LABEL(error);
             }
-            bc = PyValue_FromPyObjectSteal(bc_o);
+            bc = PyValue_FromObjectSteal(bc_o);
             IR_STORE_DST(IR_A(ir_word), bc);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
@@ -13252,7 +13254,7 @@
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValue value;
-            value = PyValue_NewRef(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
+            value = PyValue_XDUP(PyTuple_GET_VALUE(FRAME_CO_CONSTS, oparg));
             IR_STORE_DST(IR_A(ir_word), value);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
@@ -13470,7 +13472,7 @@
             int oparg = (int)IR_B(ir_word);
             (void)oparg;
             PyValue value;
-            PyValue value_s = GETLOCAL(oparg);
+            PyValueBorrow value_s = PyValue_Borrow(GETLOCAL(oparg));
             if (PyValue_IsNull(value_s)) {
                 _PyEval_FormatExcCheckArg(tstate, PyExc_UnboundLocalError,
                     UNBOUNDLOCAL_ERROR_MSG,
@@ -13583,7 +13585,7 @@
                         JUMP_TO_LABEL(error);
                     }
                 }
-                selected = PyValue_FromPyObjectSteal(value_o);
+                selected = PyValue_FromObjectSteal(value_o);
             }
             PyValue_CLOSE(held_class_dict);
             value = selected;
@@ -13652,7 +13654,7 @@
                 }
             }
             else {
-                v = PyValue_FromPyObjectSteal(v_o);
+                v = PyValue_FromObjectSteal(v_o);
             }
             IR_STORE_DST(IR_A(ir_word), v);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -13775,13 +13777,13 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
                     JUMP_TO_PREDICTED(LOAD_GLOBAL);
                 }
-                PyValue found = entries[index].me_value;
+                PyValueBorrow found = PyValue_Borrow(entries[index].me_value);
                 if (PyValue_IsNull(found)) {
                     UPDATE_MISS_STATS(LOAD_GLOBAL);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
                     JUMP_TO_PREDICTED(LOAD_GLOBAL);
                 }
-                res = PyValue_NewRef(found);
+                res = PyValue_XDUP(found);
                 STAT_INC(LOAD_GLOBAL, hit);
             }
             // _PUSH_NULL_CONDITIONAL
@@ -13833,13 +13835,13 @@
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
                     JUMP_TO_PREDICTED(LOAD_GLOBAL);
                 }
-                PyValue found = entries[index].me_value;
+                PyValueBorrow found = PyValue_Borrow(entries[index].me_value);
                 if (PyValue_IsNull(found)) {
                     UPDATE_MISS_STATS(LOAD_GLOBAL);
                     assert(_PyOpcode_Deopt[opcode] == (LOAD_GLOBAL));
                     JUMP_TO_PREDICTED(LOAD_GLOBAL);
                 }
-                res = PyValue_NewRef(found);
+                res = PyValue_XDUP(found);
                 STAT_INC(LOAD_GLOBAL, hit);
             }
             // _PUSH_NULL_CONDITIONAL
@@ -13929,7 +13931,7 @@
                                  "no locals found");
                 JUMP_TO_LABEL(error);
             }
-            locals = PyValue_FromPyObjectNew(l);
+            locals = PyValue_DUP(PyValue_FromObjectBorrow(l));
             IR_STORE_DST(IR_A(ir_word), locals);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
@@ -13959,7 +13961,7 @@
             if (v_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            v = PyValue_FromPyObjectSteal(v_o);
+            v = PyValue_FromObjectSteal(v_o);
             IR_STORE_DST(IR_A(ir_word), v);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
@@ -14219,7 +14221,7 @@
                 if (attr_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                attr = PyValue_FromPyObjectSteal(attr_o);
+                attr = PyValue_FromObjectSteal(attr_o);
             }
             // _PUSH_NULL_CONDITIONAL
             {
@@ -14307,7 +14309,7 @@
             if (attr == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            attr_st = PyValue_FromPyObjectSteal(attr);
+            attr_st = PyValue_FromObjectSteal(attr);
             IR_PUBLISH_TEMP(window[0], attr_st);
             IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -14413,7 +14415,7 @@
                 _PyValue_CLOSE_POINTER(tmp);
                 window[0] = PyValue_NULL;
                 window[1] = PyValue_NULL;
-                attr = PyValue_FromPyObjectSteal(attr_o);
+                attr = PyValue_FromObjectSteal(attr_o);
             }
             IR_PUBLISH_TEMP(window[0], attr);
             IR_PUBLISH_TEMP(window[1], self_or_null);
@@ -14570,7 +14572,7 @@
                 if (attr_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                attr = PyValue_FromPyObjectSteal(attr_o);
+                attr = PyValue_FromObjectSteal(attr_o);
             }
             // _PUSH_NULL_CONDITIONAL
             {
@@ -14606,7 +14608,7 @@
                 JUMP_TO_LABEL(error);
             }
             PyValue tmp = GETLOCAL(oparg);
-            GETLOCAL(oparg) = PyValue_FromPyObjectSteal(cell);
+            GETLOCAL(oparg) = PyValue_FromObjectSteal(cell);
             PyValue_XCLOSE(tmp);
             DISPATCH();
         }
@@ -14655,7 +14657,7 @@
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), co);
                 _PyFunction_SetVersion(
                                    func_obj, ((PyCodeObject *)func_obj->func_code)->co_version);
-                func = PyValue_FromPyObjectSteal((PyObject *)func_obj);
+                func = PyValue_FromObjectSteal((PyObject *)func_obj);
             }
             // _POP_TOP
             {
@@ -14778,7 +14780,7 @@
                     ir_obj_names);
                 if (attrs_o) {
                     assert(PyTuple_CheckExact(attrs_o));
-                    attrs = PyValue_FromPyObjectSteal(attrs_o);
+                    attrs = PyValue_FromObjectSteal(attrs_o);
                 }
                 else {
                     if (_PyErr_Occurred(tstate)) {
@@ -14865,7 +14867,7 @@
             if (values_or_none_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            values_or_none = PyValue_FromPyObjectSteal(values_or_none_o);
+            values_or_none = PyValue_FromObjectSteal(values_or_none_o);
             IR_STORE_DST(IR_A(ir_word), values_or_none);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
@@ -16006,7 +16008,7 @@
             }
             _PyErr_StackItem *exc_info = tstate->exc_info;
             if (exc_info->exc_value != NULL) {
-                prev_exc = PyValue_FromPyObjectSteal(exc_info->exc_value);
+                prev_exc = PyValue_FromObjectSteal(exc_info->exc_value);
             }
             else {
                 prev_exc = PyValue_None;
@@ -16229,7 +16231,7 @@
             frame = tstate->current_frame = prev;
             LOAD_IP(1);
             slots = _PyFrame_Slots(frame);
-            res = PyValue_FromPyObjectSteal((PyObject *)gen);
+            res = PyValue_FromObjectSteal((PyObject *)gen);
             LLTRACE_RESUME_FRAME();
             IR_STORE_RETURN(res);
             DISPATCH();
@@ -16377,7 +16379,7 @@
                     }
                     window[2] = PyValue_NULL;
                     PyValue_CLOSE(v);
-                    retval = PyValue_FromPyObjectSteal(res.object);
+                    retval = PyValue_FromObjectSteal(res.object);
                     if (res.kind == PYGEN_RETURN) {
                         JUMPBY(oparg);
                     }
@@ -16453,7 +16455,7 @@
                 PyValue_CLOSE(v);
                 asend = iter;
                 null_out = null_in;
-                retval = PyValue_FromPyObjectSteal(retval_o);
+                retval = PyValue_FromObjectSteal(retval_o);
                 if (what == PYGEN_RETURN) {
                     JUMPBY(oparg);
                 }
@@ -17376,7 +17378,7 @@
                     }
                 }
                 if (dict->_ma_watcher_tag & DICT_WATCHER_MASK) {
-                    PyValue watched_dict = PyValue_FromPyObjectNew((PyObject *)dict);
+                    PyValue watched_dict = PyValue_DUP(PyValue_FromObjectBorrow((PyObject *)dict));
                     ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), value);
                     PyValue release_value = IR_TAKE(value, ir_own_B);
                     ir_own_A = IR_CONSUME_INPUT(IR_A(ir_word), owner);
@@ -18255,7 +18257,7 @@
                 if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromPyObjectSteal(res_o);
+                res = PyValue_FromObjectSteal(res_o);
                 v = value;
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), v);
             }
@@ -18303,7 +18305,7 @@
                 }
                 else {
                     PyObject *res_o = PyNumber_Negative(PyValue_AsKnownObjectBorrow(value));
-                    res = res_o == NULL ? PyValue_NULL : PyValue_FromPyObjectSteal(res_o);
+                    res = res_o == NULL ? PyValue_NULL : PyValue_FromObjectSteal(res_o);
                 }
                 if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
@@ -18514,7 +18516,7 @@
                 STAT_INC(UNPACK_SEQUENCE, hit);
                 PyValue *items = _PyList_ITEMS(seq_o);
                 for (int i = oparg; --i >= 0; ) {
-                    *values++ = PyValue_NewRef(items[i]);
+                    *values++ = PyValue_XDUP(items[i]);
                 }
                 UNLOCK_OBJECT(seq_o);
                 IR_CLEAR_SLOTS(&window[oparg], 1 - oparg);
@@ -18569,7 +18571,7 @@
                 STAT_INC(UNPACK_SEQUENCE, hit);
                 PyValue *items = _PyTuple_ITEMS(seq_o);
                 for (int i = oparg; --i >= 0; ) {
-                    *values++ = PyValue_NewRef(items[i]);
+                    *values++ = PyValue_XDUP(items[i]);
                 }
                 IR_CLEAR_SLOTS(&window[oparg], 1 - oparg);
                 _PyValue_CLOSE_POINTER(seq);
@@ -18622,8 +18624,8 @@
                     JUMP_TO_PREDICTED(UNPACK_SEQUENCE);
                 }
                 STAT_INC(UNPACK_SEQUENCE, hit);
-                val0 = PyValue_NewRef(PyTuple_GET_VALUE(seq_o, 0));
-                val1 = PyValue_NewRef(PyTuple_GET_VALUE(seq_o, 1));
+                val0 = PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 0));
+                val1 = PyValue_XDUP(PyTuple_GET_VALUE(seq_o, 1));
                 IR_PUBLISH_TEMP(window[0], val1);
                 IR_PUBLISH_TEMP(window[1], val0);
                 _PyValue_CLOSE_POINTER(seq);
@@ -18707,7 +18709,7 @@
             if (res_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            res = PyValue_FromPyObjectSteal(res_o);
+            res = PyValue_FromObjectSteal(res_o);
             IR_PUBLISH_TEMP(window[5], res);
             IR_MOVE_TO_DST(IR_A(ir_word), window[5]);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -18829,7 +18831,7 @@
                     slots[first] = PyValue_TagIndex(frame_lasti);
                 }
                 PyObject *exc = _PyErr_GetRaisedException(tstate);
-                slots[exc_slot] = PyValue_FromPyObjectSteal(exc);
+                slots[exc_slot] = PyValue_FromObjectSteal(exc);
                 next_instr = _PyFrame_InstrAt(frame, handler);
                 int err = monitor_handled(tstate, frame, next_instr, exc);
                 if (err < 0) {

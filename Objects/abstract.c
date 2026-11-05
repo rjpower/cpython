@@ -982,7 +982,7 @@ value_type_error(const char *msg, PyValueBorrow v)
 
 /* The adapter (D9), one function per signature kind: an object slot called
    with value operands, boxed under site class NUMBER (_PyValue_AdapterBox()).
-   The result becomes a value through PyValue_FromPyObjectSteal(), which
+   The result becomes a value through PyValue_FromObjectSteal(), which
    makes an exact int or float inline. */
 
 #define adapter_box(v) _PyValue_AdapterBox((v), BOX_SITE_NUMBER)
@@ -3031,7 +3031,7 @@ call_special_method(PyThreadState *tstate, PyObject *cls, PyObject *name,
     *res = NULL;
     _PyCValue cref;
     _PyThreadState_PushCValue(tstate, &cref);
-    PyValue self = PyValue_FromPyObjectNew(cls);
+    PyValue self = PyValue_DUP(PyValue_FromObjectBorrow(cls));
     PyObject *method = NULL, *self_object = NULL;
     int found = _PyObject_LookupSpecialMethod(name, &cref.ref, &self);
     if (found <= 0) {

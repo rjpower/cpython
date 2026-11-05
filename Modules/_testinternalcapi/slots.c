@@ -284,7 +284,7 @@ value_fields_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
     PyValue *homes[3] = {&fields->i, &fields->f, &fields->o};
     for (int k = 0; k < 3; k++) {
         if (given[k] != NULL) {
-            *homes[k] = PyValue_FromPyObjectNew(given[k]);
+            *homes[k] = PyValue_DUP(PyValue_FromObjectBorrow(given[k]));
             _PyValue_CheckHome(*homes[k]);
         }
     }
@@ -432,7 +432,7 @@ slice_from_values(PyObject *module, PyObject *args)
     PyValue values[3];
     for (int k = 0; k < 3; k++) {
         values[k] = objects[k] == NULL ? PyValue_NULL
-                                       : PyValue_FromPyObjectNew(objects[k]);
+                                       : PyValue_DUP(PyValue_FromObjectBorrow(objects[k]));
     }
     PyObject *slice = _PySlice_FromValues(values[0], values[1], values[2]);
     for (int k = 0; k < 3; k++) {

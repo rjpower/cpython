@@ -42,7 +42,8 @@ _PyMember_GetValue(PyObject *obj, PyMemberDef *member)
         PyErr_SetString(PyExc_SystemError, "unresolved relative value member");
         return PyValue_NULL;
     }
-    PyValue value = *(PyValue *)_PyMember_GetOffset(obj, member);
+    PyValueBorrow value =
+        PyValue_Borrow(*(PyValue *)_PyMember_GetOffset(obj, member));
     _PyValue_RecheckHome(value);
     if (PyValue_IsNull(value)) {
         if (member->type == _Py_T_VALUE) {
@@ -70,7 +71,7 @@ int
         return -1;
     }
     PyValue *slot = _PyMember_GetOffset(obj, member);
-    PyValue previous = *slot;
+    PyValue previous = *slot;  // a move: replaced below
     if (PyValue_IsNull(value) && PyValue_IsNull(previous) &&
         member->type == _Py_T_VALUE_EX) {
         PyErr_SetString(PyExc_AttributeError, member->name);

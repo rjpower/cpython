@@ -151,7 +151,7 @@ slice_from_owned(PyValue start, PyValue stop, PyValue step)
 static inline PyValue
 object_bound(PyObject *obj)
 {
-    return obj == NULL ? PyValue_None : PyValue_FromPyObjectNew(obj);
+    return obj == NULL ? PyValue_None : PyValue_DUP(PyValue_FromObjectBorrow(obj));
 }
 
 PyObject *

@@ -554,7 +554,7 @@ INPLACE_READERS = {
     "PyDict_ContainsValue", "PySet_ContainsValue", "PyDict_DelValue",
     "_PyValue_RichCompareObject",
     # Not a reader: PyDict_SetValue keeps counted copies of its key and
-    # value (PyValue_NewRef of a borrow), so it neither keeps nor releases the
+    # value (PyValue_XDUP of a borrow), so it neither keeps nor releases the
     # caller's count and a borrowed local may be passed to it
     "PyDict_SetValue",
     # Boxes an inline input into value_temps, which owns the box; the result
@@ -1406,7 +1406,7 @@ OPERANDS = {"IDENTIFIER", "NUMBER", "RPAREN", "RBRACKET"}
 # their packed opargs keep role IMM.
 SLOT_VALUE_READS = {        # f(GETLOCAL(oparg), ...) reads the slot's value
     "PyValue_DUP", "PyValue_IsNull", "PyCell_NewValue",
-    "PyValue_AsKnownObjectBorrow",
+    "PyValue_AsKnownObjectBorrow", "PyValue_Borrow",
 }
 SLOT_ADDRESS_READS: set[str] = set()  # f(&GETLOCAL(oparg)) reads the slot in place
 SLOT_ADDRESS_WRITES = {     # f(&GETLOCAL(oparg), ...) may store to the slot

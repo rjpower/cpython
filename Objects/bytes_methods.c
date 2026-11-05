@@ -683,7 +683,7 @@ _Py_bytes_tailmatch(const char *str, Py_ssize_t len,
     if (PyTuple_Check(subobj)) {
         Py_ssize_t count = PyTuple_GET_SIZE(subobj);
         for (Py_ssize_t i = 0; i < count; i++) {
-            PyValue item = PyValue_NewRef(PyTuple_GET_VALUE(subobj, i));
+            PyValue item = PyValue_XDUP(PyTuple_GET_VALUE(subobj, i));
             int result;
             if (!PyValue_IsObject(item)) {
                 /* Reject inline numbers without allocating a box before a

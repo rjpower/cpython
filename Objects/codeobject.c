@@ -144,6 +144,7 @@ _PyCode_ShouldInternString(PyObject *o)
 static void
 replace_equivalent_constant(PyObject *tuple, Py_ssize_t index, PyValue value)
 {
+    // a move: replaced below
     PyValue old = ((PyTupleObject *)tuple)->ob_item[index];
     ((PyTupleObject *)tuple)->ob_item[index] = value;
     PyValue_CLOSE(old);
@@ -180,7 +181,7 @@ intern_strings(PyObject *tuple)
         }
         PyObject *v = PyValue_AsKnownObjectSteal(value);
         _PyUnicode_InternImmortal(interp, &v);
-        replace_equivalent_constant(tuple, i, PyValue_FromPyObjectSteal(v));
+        replace_equivalent_constant(tuple, i, PyValue_FromObjectSteal(v));
     }
     return 0;
 }
@@ -210,7 +211,7 @@ intern_constants(PyObject *tuple, int *modified)
                 _PyUnicode_InternMortal(interp, &v);
                 if (w != v) {
                     replace_equivalent_constant(tuple, i,
-                                                PyValue_FromPyObjectSteal(v));
+                                                PyValue_FromObjectSteal(v));
                     if (modified) {
                         *modified = 1;
                     }
@@ -270,7 +271,7 @@ intern_constants(PyObject *tuple, int *modified)
                 }
 
                 replace_equivalent_constant(tuple, i,
-                                            PyValue_FromPyObjectSteal(v));
+                                            PyValue_FromObjectSteal(v));
                 if (modified) {
                     *modified = 1;
                 }
@@ -3097,7 +3098,7 @@ static PyValue
     for (Py_ssize_t i = 0; i < count; i++) {
         PyValue_CLOSE(items[i]);
     }
-    return tuple == NULL ? PyValue_NULL : PyValue_FromPyObjectSteal(tuple);
+    return tuple == NULL ? PyValue_NULL : PyValue_FromObjectSteal(tuple);
 }
 
 static PyValue constant_value_key(PyValueBorrow constant);

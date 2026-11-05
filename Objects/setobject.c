@@ -164,7 +164,7 @@ set_compare_entry_lock_held(PySetObject *so, setentry *table, setentry *entry,
     if (entry->hash == 0 && PyValue_IsNull(entry->key))
         return SET_LOOKKEY_EMPTY;
     if (entry->hash == hash) {
-        PyValue startkey = entry->key;
+        PyValueBorrow startkey = PyValue_Borrow(entry->key);
         assert(!_PyValue_IsSameWord(startkey, dummy));
         if (PyValue_Is(startkey, key)) {
             return SET_LOOKKEY_FOUND;
@@ -173,12 +173,12 @@ set_compare_entry_lock_held(PySetObject *so, setentry *table, setentry *entry,
             return SET_LOOKKEY_FOUND;
         }
         table = so->table;
-        startkey = PyValue_DUP(startkey);
-        int cmp = _PyValue_RichCompareBool(startkey, key, Py_EQ);
+        PyValue owned_key = PyValue_DUP(startkey);
+        int cmp = _PyValue_RichCompareBool(owned_key, key, Py_EQ);
         /* Compare the location while our snapshot still owns its object.
            If it is unchanged, the table retains an owner through CLOSE. */
-        int changed = table != so->table || !_PyValue_IsSameWord(entry->key, startkey);
-        PyValue_XCLOSE(startkey);
+        int changed = table != so->table || !_PyValue_IsSameWord(entry->key, owned_key);
+        PyValue_XCLOSE(owned_key);
         if (cmp < 0)
             return SET_LOOKKEY_ERROR;
         if (changed)
@@ -198,7 +198,7 @@ set_compare_frozenset(PySetObject *so, setentry *table, setentry *ep,
                                  PyValueBorrow key, Py_hash_t hash)
 {
     assert(PyFrozenSet_Check(so));
-    PyValue startkey = ep->key;
+    PyValueBorrow startkey = PyValue_Borrow(ep->key);
     if (PyValue_IsNull(startkey)) {
         return SET_LOOKKEY_EMPTY;
     }
@@ -309,18 +309,18 @@ set_add_entry_takeref(PySetObject *so, PyValue key, Py_hash_t hash)
             if (entry->hash == 0 && PyValue_IsNull(entry->key))
                 goto found_unused_or_dummy;
             if (entry->hash == hash) {
-                PyValue startkey = entry->key;
+                PyValueBorrow startkey = PyValue_Borrow(entry->key);
                 assert(!_PyValue_IsSameWord(startkey, dummy));
                 if (PyValue_Is(startkey, key))
                     goto found_active;
                 if (set_unicode_eq(startkey, key))
                     goto found_active;
                 table = so->table;
-                startkey = PyValue_DUP(startkey);
-                cmp = _PyValue_RichCompareBool(startkey, key, Py_EQ);
+                PyValue owned_key = PyValue_DUP(startkey);
+                cmp = _PyValue_RichCompareBool(owned_key, key, Py_EQ);
                 int changed = table != so->table ||
-                              !_PyValue_IsSameWord(entry->key, startkey);
-                PyValue_XCLOSE(startkey);
+                              !_PyValue_IsSameWord(entry->key, owned_key);
+                PyValue_XCLOSE(owned_key);
                 if (cmp > 0)
                     goto found_active;
                 if (cmp < 0)
@@ -653,13 +653,13 @@ static int
 set_add_key(PySetObject *so, PyObject *key)
 {
     return _PySet_AddValueTakeRef(
-        so, PyValue_NewRef(PyValue_FromObjectBorrow(key)));
+        so, PyValue_XDUP(PyValue_FromObjectBorrow(key)));
 }
 
 static int
 (set_contains_value)(PySetObject *so, PyValueBorrow borrowed)
 {
-    PyValue key = PyValue_NewRef(borrowed);
+    PyValue key = PyValue_XDUP(borrowed);
     Py_hash_t hash = _PyValue_Hash(key);
     if (hash == -1) {
         set_unhashable_type(PyValue_AsKnownObjectBorrow(key));
@@ -675,7 +675,7 @@ static int
 static int
 (set_discard_value)(PySetObject *so, PyValueBorrow borrowed)
 {
-    PyValue key = PyValue_NewRef(borrowed);
+    PyValue key = PyValue_XDUP(borrowed);
     Py_hash_t hash = _PyValue_Hash(key);
     if (hash == -1) {
         set_unhashable_type(PyValue_AsKnownObjectBorrow(key));
@@ -1000,6 +1000,7 @@ set_pop_impl(PySetObject *so)
     if (key == NULL) {
         return NULL;
     }
+    // a move: replaced by dummy below
     PyValue stored = entry->key;
     FT_ATOMIC_STORE_SSIZE_RELAXED(entry->hash, -1);
     FT_ATOMIC_STORE_SSIZE_RELAXED(so->used, so->used - 1);
@@ -3248,7 +3249,7 @@ PySet_AddValue(PyObject *anyset, PyValue key)
         PyObject_GC_IsTracked(PyValue_AsKnownObjectBorrow(key))) {
         _PyObject_GC_TRACK(anyset);
     }
-    return _PySet_AddValueTakeRef((PySetObject *)anyset, PyValue_NewRef(key));
+    return _PySet_AddValueTakeRef((PySetObject *)anyset, PyValue_XDUP(key));
 }
 
 PyValue

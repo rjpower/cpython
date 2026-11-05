@@ -11,6 +11,7 @@
 #include "pycore_interp.h"        // struct _import_runtime_state
 #include "pycore_interpframe.h"
 #include "pycore_lazyimportobject.h"
+#include "pycore_list.h"          // PyList_GET_VALUE()
 #include "pycore_magic_number.h"  // PYC_MAGIC_NUMBER_TOKEN
 #include "pycore_moduleobject.h"  // _PyModule_GetDef()
 #include "pycore_namespace.h"     // _PyNamespace_Type

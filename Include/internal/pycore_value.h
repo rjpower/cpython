@@ -361,7 +361,7 @@ PyValue_Box(PyValue ref)
 
    An exact int that fits in int51, or an exact float other than NaN, is
    held inline in every home (frame slot, container element, field, cell,
-   dict key or value, set key): the PyValue_FromPyObject*() constructors
+   dict key or value, set key): the PyValue_FromObject*() constructors
    turn such an object into its inline value, and _PyValue_CheckHome()
    asserts it at each store. Only C code holds such a value boxed, in a
    PyObject * or a C local PyValue, and a value may be boxed more than once.
@@ -671,10 +671,10 @@ PyValue_AsKnownObjectSteal(PyValue ref)
     }
 }
 
-/* The canonical constructors (FromPyObjectSteal, FromPyObjectNew,
-   FromObjectBorrow) make an exact int that fits inline, or an exact float
-   other than NaN, an inline value: Steal frees the box at once (the release
-   contract under "Value identity"), New and Borrow leave it to its owner.
+/* The canonical constructors (FromObjectSteal, FromObjectBorrow) make an
+   exact int that fits inline, or an exact float other than NaN, an inline
+   value: Steal frees the box at once (the release contract under "Value
+   identity"), Borrow leaves it to its owner.
    Any other object becomes a pointer, with the no-count tag if it is
    immortal. Code that goes on to use the object keeps its PyObject * in a C
    local: the value may hold no object. */
@@ -722,10 +722,11 @@ _PyObject_IsSame(PyObject *a, PyObject *b)
 PyAPI_FUNC(int) _PyValue_BoxSiteOr(int fallback);
 #endif
 
-/* The borrowed canonical value of obj, which its owner keeps alive: the
-   exact bits that PyValue_FromPyObjectNew() would give it, with no count
-   taken (B1). NULL gives PyValue_NULL. PyValue_DUP() makes an owner of it.
-   Only an exact int or float calls out of line. */
+/* The borrowed canonical value of obj, which its owner keeps alive: an
+   inline int or float, the tagged word of an immortal, or the plain pointer,
+   with no count taken (B1). NULL gives PyValue_NULL. PyValue_DUP() makes an
+   owner of it. Only an exact int or float calls out of line. Like Py_NewRef(),
+   the macro accepts a pointer to any object struct. */
 static inline PyValueBorrow
 PyValue_FromObjectBorrow(PyObject *obj)
 {
@@ -750,9 +751,10 @@ PyValue_FromObjectBorrow(PyObject *obj)
     }
     return value;
 }
+#define PyValue_FromObjectBorrow(obj) (PyValue_FromObjectBorrow)(_PyObject_CAST(obj))
 
 static inline PyValue
-PyValue_FromPyObjectSteal(PyObject *obj)
+PyValue_FromObjectSteal(PyObject *obj)
 {
     assert(obj != NULL);
     if (_PyValue_IsNumberType(Py_TYPE(obj))) {
@@ -760,29 +762,6 @@ PyValue_FromPyObjectSteal(PyObject *obj)
     }
     return _PyValue_PointerSteal(obj);
 }
-
-static inline PyValue
-_PyValue_FromPyObjectNew(PyObject *obj)
-{
-    assert(obj != NULL);
-    assert((uintptr_t)obj < Py_PTR_LIMIT);
-    if (_PyValue_IsNumberType(Py_TYPE(obj))) {
-        PyValueBorrow value = PyValue_FromObjectBorrow(obj);
-        if (PyValue_IsInline(value)) {
-            // An inline value owns nothing: the borrow's word is an owner.
-            PyValue owned = {value.bits};
-            return owned;
-        }
-    }
-    if (_Py_IsImmortal(obj)) {
-        return (PyValue){ .bits = (uintptr_t)obj | Py_TAG_REFCNT };
-    }
-    _Py_INCREF_MORTAL(obj);
-    PyValue ref = (PyValue){ .bits = (uintptr_t)obj };
-    PyValue_CheckValid(ref);
-    return ref;
-}
-#define PyValue_FromPyObjectNew(obj) _PyValue_FromPyObjectNew(_PyObject_CAST(obj))
 
 static inline PyValue
 PyValue_DUP(PyValueBorrow ref)
@@ -890,8 +869,8 @@ _PyValue_Word(PyValueBorrow value)
 #define _PyValue_Word(V0) (_PyValue_Word)(PyValue_Borrow(V0))
 
 /* The value of OP, a static immortal object that C code uses as a sentinel
-   in a home, such as the set's dummy key: what PyValue_FromPyObjectNew()
-   gives it, as a constant expression. It owns no count and never reaches
+   in a home, such as the set's dummy key: its owner's word, as a constant
+   expression. It owns no count and never reaches
    Python. */
 #define _PyValue_SENTINEL(OP) \
     ((PyValue){ .bits = (uintptr_t)(OP) | Py_TAG_REFCNT })
@@ -1176,7 +1155,7 @@ static inline void
 _PyThreadState_PushCValueNew(PyThreadState *tstate, _PyCValue *ref, PyObject *obj)
 {
     _PyThreadState_PushCValue(tstate, ref);
-    ref->ref = PyValue_FromPyObjectNew(obj);
+    ref->ref = PyValue_DUP(PyValue_FromObjectBorrow(obj));
 }
 
 #  define _PyCValue_CLEAR(REF) ((void)0)
@@ -1191,7 +1170,7 @@ _PyThreadState_PopCValue(PyThreadState *tstate, _PyCValue *ref)
 static inline PyValue
 _PyThreadState_PopCValueSteal(PyThreadState *tstate, _PyCValue *ref)
 {
-    PyValue res = ref->ref;
+    PyValue res = ref->ref;  // a move: the record is popped
     _PyCValue_CLEAR(ref);
     return res;
 }
@@ -1219,7 +1198,7 @@ _PyValue_CloseStack(PyValue *arguments, int total_args)
     // arguments is a pointer into the GC visible stack,
     // so we must NULL out values as we clear them.
     for (int i = total_args-1; i >= 0; i--) {
-        PyValue tmp = arguments[i];
+        PyValue tmp = arguments[i];  // a move: cleared below
         arguments[i] = PyValue_NULL;
         PyValue_CLOSE(tmp);
     }

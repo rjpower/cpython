@@ -124,6 +124,7 @@ As a consequence of this, split keys have a maximum size of 16.
 #include "pycore_dict.h"          // export _PyDict_SizeOf()
 #include "pycore_freelist.h"      // _PyFreeListState_GET()
 #include "pycore_gc.h"            // _PyObject_GC_IS_TRACKED()
+#include "pycore_list.h"          // PyList_GET_VALUE()
 #include "pycore_object.h"        // _PyObject_GC_TRACK(), _PyDebugAllocatorStats()
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_LOAD_SSIZE_RELAXED
 #include "pycore_pyerrors.h"      // _PyErr_GetRaisedException()
@@ -440,6 +441,7 @@ dictkeys_decref(PyDictKeysObject *dk, bool use_qsbr)
             Py_ssize_t i, n;
             for (i = 0, n = dk->dk_nentries; i < n; i++) {
                 PyObject *key = entries[i].me_key;
+                // a move: cleared below
                 PyValue value = entries[i].me_value;
                 entries[i].me_key = NULL;
                 entries[i].me_value = PyValue_NULL;
@@ -451,7 +453,9 @@ dictkeys_decref(PyDictKeysObject *dk, bool use_qsbr)
             PyDictKeyEntry *entries = DK_ENTRIES(dk);
             Py_ssize_t i, n;
             for (i = 0, n = dk->dk_nentries; i < n; i++) {
+                // a move: cleared below
                 PyValue key = entries[i].me_key;
+                // a move: cleared below
                 PyValue value = entries[i].me_value;
                 entries[i].me_key = PyValue_NULL;
                 entries[i].me_value = PyValue_NULL;
@@ -686,7 +690,7 @@ _PyDict_CheckConsistency(PyObject *op, int check_content)
             PyDictKeyEntry *entries = DK_ENTRIES(keys);
             for (Py_ssize_t i=0; i < usable; i++) {
                 PyDictKeyEntry *entry = &entries[i];
-                PyValue key = entry->me_key;
+                PyValueBorrow key = PyValue_Borrow(entry->me_key);
 
                 if (!PyValue_IsNull(key)) {
                     CHECK(PyValue_IsLanguageValue(key) && _PyValue_IsHome(key));
@@ -1327,7 +1331,7 @@ int
 
     /* Equality can remove the query's last external owner. Capture the found
      * value before releasing our query pin, which can itself reenter. */
-    PyValue query = PyValue_NewRef(key);
+    PyValue query = PyValue_XDUP(key);
     PyValueBorrow value = PyValue_Borrow(PyValue_NULL);
     Py_ssize_t ix = _Py_dict_lookup((PyDictObject *)op, query, hash, &value);
     PyValue owned = PyValue_NULL;
@@ -1407,7 +1411,7 @@ _PyDict_HasOnlyStringKeys(PyObject *dict)
         if (PyValue_IsNull(entries[i].me_value)) {
             continue;
         }
-        PyValue key = entries[i].me_key;
+        PyValueBorrow key = PyValue_Borrow(entries[i].me_key);
         if (!PyValue_IsObject(key) || !PyUnicode_Check(PyValue_AsKnownObjectBorrow(key))) {
             return 0;
         }
@@ -2006,7 +2010,7 @@ int
         return _PyDict_GetValue_KnownHash(op, key, cached, result);
     }
     PyObject *dict_owner = Py_NewRef(op);
-    PyValue query = PyValue_NewRef(key);
+    PyValue query = PyValue_XDUP(key);
     PyValue value = PyValue_NULL;
     Py_hash_t hash = _PyValue_Hash(query);
     int status = -1;
@@ -2338,8 +2342,8 @@ int
         return -1;
     }
     return _PyDict_SetValue_Take2((PyDictObject *)op,
-        PyValue_NewRef(key),
-        PyValue_NewRef(value));
+        PyValue_XDUP(key),
+        PyValue_XDUP(value));
 }
 
 int
@@ -2526,7 +2530,17 @@ dict_selection_matches(PyDictObject *mp, PyDictKeysObject *saved_keys,
     if (PyValue_IsNull(current_value) || !_PyValue_IsSameWord(current_value, value)) {
         return 0;
     }
-    if (!_PyValue_IsSameWord(dict_entry_key(mp, ix), PyValue_Borrow(key))) {
+    if (DK_IS_UNICODE(keys)) {
+        /* A Unicode table holds its keys as objects, and a word rebuilt from
+           one tags it if it is immortal now. The key may have become
+           immortal (interned) since it was selected and retained, so compare
+           the objects, not the words. */
+        if (DK_UNICODE_ENTRIES(keys)[ix].me_key
+                != PyValue_AsKnownObjectBorrow(key)) {
+            return 0;
+        }
+    }
+    else if (!_PyValue_IsSameWord(DK_ENTRIES(keys)[ix].me_key, key)) {
         return 0;
     }
     Py_hash_t current_hash = DK_IS_UNICODE(keys) ?
@@ -2590,7 +2604,7 @@ int
         }
         return -1;
     }
-    PyValue query = PyValue_NewRef(key);
+    PyValue query = PyValue_XDUP(key);
     Py_hash_t hash = _PyValue_Hash(query);
     int status = -1;
     if (hash != -1) {
@@ -2821,6 +2835,7 @@ clear_lock_held(PyObject *op)
         set_keys(mp, Py_EMPTY_KEYS);
         n = oldkeys->dk_nentries;
         for (i = 0; i < n; i++) {
+            // a move: cleared below
             PyValue tmp = oldvalues->values[i];
             FT_ATOMIC_STORE_PTR_RELEASE(oldvalues->values[i], PyValue_NULL);
             PyValue_XCLOSE(tmp);
@@ -3450,6 +3465,7 @@ dict_dealloc(PyObject *self)
     if (values != NULL) {
         if (values->embedded == 0) {
             for (i = 0, n = values->capacity; i < n; i++) {
+                // a move: cleared below
                 PyValue value = values->values[i];
                 values->values[i] = PyValue_NULL;
                 PyValue_XCLOSE(value);
@@ -3630,7 +3646,7 @@ dict_snapshot_values(PyObject *dict, int kind)
                 if (pair == NULL) {
                     goto error;
                 }
-                PyList_SET_VALUE(result, i, PyValue_FromPyObjectSteal(pair));
+                PyList_SET_VALUE(result, i, PyValue_FromObjectSteal(pair));
             }
         }
         if (mp->ma_used != count) {
@@ -4146,7 +4162,7 @@ copy_values(PyDictValues *destination, const PyDictValues *source)
     memcpy(get_insertion_order_array(destination),
            get_insertion_order_array((PyDictValues *)source), source->size);
     for (size_t i = 0; i < source->capacity; i++) {
-        PyValue value = source->values[i];
+        PyValueBorrow value = PyValue_Borrow(source->values[i]);
         destination->values[i] = PyValue_IsNull(value) ? PyValue_NULL :
             PyValue_DUP(value);
         _PyValue_CheckHome(destination->values[i]);
@@ -5398,7 +5414,9 @@ dictiter_pair(dictiterobject *di, PyValue key, PyValue value)
     PyObject *result = di->di_result;
     if (acquire_iter_result(result)) {
         PyTupleObject *pair = (PyTupleObject *)result;
+        // a move: replaced below
         PyValue old_key = pair->ob_item[0];
+        // a move: replaced below
         PyValue old_value = pair->ob_item[1];
         pair->ob_item[0] = key;
         pair->ob_item[1] = value;
@@ -5421,7 +5439,7 @@ dictiter_pair(dictiterobject *di, PyValue key, PyValue value)
     if (result == NULL) {
         return PyValue_NULL;
     }
-    return PyValue_FromPyObjectSteal(result);
+    return PyValue_FromObjectSteal(result);
 }
 
 PyValue
@@ -6146,7 +6164,7 @@ dictitems_xor_lock_held(PyObject *d1, PyObject *d2)
             PyTuple_SET_VALUE(pair, 1, val2);
             key = val2 = PyValue_NULL;
             if (_PySet_AddValueTakeRef((PySetObject *)result_set,
-                                     PyValue_FromPyObjectSteal(pair)) < 0)
+                                     PyValue_FromObjectSteal(pair)) < 0)
             {
                 goto error;
             }
@@ -6946,6 +6964,7 @@ store_instance_attr_lock_held(PyObject *obj, PyObject *name, PyValue value)
             }
             continue;
         }
+        // a move: replaced below
         PyValue old_value = values->values[ix];
         if (PyValue_IsNull(old_value) && PyValue_IsNull(value)) {
             PyErr_Format(PyExc_AttributeError, "'%.100s' object has no attribute '%U'",
@@ -7004,7 +7023,7 @@ _PyObject_TryGetInstanceValue(PyObject *obj, PyObject *name, PyValue *out)
     PyDictKeysObject *keys = CACHED_KEYS(Py_TYPE(obj));
     Py_ssize_t ix = _PyDictKeys_StringLookupSplit(keys, name);
     if (ix >= 0 && ix < values->capacity) {
-        PyValue value = values->values[ix];
+        PyValueBorrow value = PyValue_Borrow(values->values[ix]);
         if (!PyValue_IsNull(value)) {
             *out = PyValue_DUP(value);
         }

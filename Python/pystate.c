@@ -701,6 +701,7 @@ static void
 common_constants_clear(PyInterpreterState *interp)
 {
     for (int i = 0; i < NUM_COMMON_CONSTANTS; i++) {
+        // a move: cleared below
         PyValue ref = interp->common_consts[i];
         if (PyValue_IsNull(ref)) {
             continue;

@@ -22,13 +22,21 @@ Py_BUILD_CORE_MODULE, or one that defines Py_VALUE_CORE (Include/pyport.h).
   ENCODING_FUNCTIONS). In a value-native unit: a .bits or ->bits access of a
   PyValue, PyValueBorrow or _PyValueGuarded; a brace initializer of one
   ({x.bits}, (PyValue){...}) other than {0}, which zero-initializes; a
-  cast to a PyValue * or PyValueBorrow * from anything but void *, a byte
-  pointer or the same type, or from a word pointer to anything but those;
-  a union with a word member. A match inside a macro that one of those
-  files defines is theirs. In the text of every C file of the tree: an encoding constant
-  (ENCODING_NAMES), a (PyValue){ or (PyValueBorrow){ literal and, in a
-  header or a unit that clang-query does not check, a .bits or ->bits
-  access; the text covers the macro bodies that no unit expands.
+  cast to a word pointer from anything but void *, a byte pointer or the
+  same type, or from a word pointer to anything but those; a union with a
+  word, an array of words or a struct holding one. Byte pointers are
+  allowed because a word's address is often computed as a byte offset (a
+  member offset, a PyMem_* block); so that a second cast cannot launder the
+  first, a cast to a word pointer from the address of a non-word object, or
+  from a cast of a pointer to a non-byte, non-word type, fails, and so does
+  a cast to a non-byte, non-word pointer from a cast of a word pointer. A
+  match belongs to the files where its first and last tokens are written:
+  a match in the body of a macro that one of those files defines is
+  theirs, one in a macro's argument is the caller's. In the text of every
+  C file of the tree: an encoding constant (ENCODING_NAMES), a (PyValue){
+  or (PyValueBorrow){ literal and, in a header or a unit that clang-query
+  does not check, a .bits or ->bits access; the text covers the macro
+  bodies that no unit expands.
 * public-value: the public headers (Include/ outside Include/internal/)
   carry the word opaquely (rule 2). A struct field may name PyValue or
   PyValueBorrow, directly or through a typedef, only if it is one of the
@@ -37,7 +45,8 @@ Py_BUILD_CORE_MODULE, or one that defines Py_VALUE_CORE (Include/pyport.h).
   _Py_valuefunc storage, which the rule accepts
   (pyjit/design/proposals/value-api-v2a0.md, D2). An inline function may
   return a word but not take one, and no function or macro body names a
-  value type: an inline accessor may only copy a word out of a field.
+  value type: an inline accessor may only copy a word out of a field. No
+  file-scope declaration other than a prototype or a typedef names one.
   Comments and string literals are skipped; macro bodies are read.
 * borrow-field: a field, global, static or array of type PyValueBorrow. A
   borrow lives only in C locals (pyjit/design/proposals/register-ir-v2-a5b.md,
@@ -169,7 +178,8 @@ ENCODING_FILES = (
     "Modules/_remote_debugging/",
     # The encoding's own tests.
     "Modules/_testinternalcapi.c",
-    "Modules/_testinternalcapi/",
+    "Modules/_testinternalcapi/list.c",
+    "Modules/_testinternalcapi/slots.c",
     # The type cache's guarded word (register-ir-v2-a5b.md, section 2.4).
     "Include/internal/pycore_typecache.h",
 )
@@ -187,6 +197,10 @@ ENCODING_NAMES = (
     "Py_INT_BASE", "Py_TAG_REFCNT", "Py_TAG_INVALID", "Py_TAG_BITS",
     "Py_TAGGED_SHIFT", "Py_OWNED_MASK", "PyValue_NULL_BITS", "_PyValue_BITS",
 )
+# Files whose text names .bits of something other than a word, which the
+# text half of raw-bits cannot tell apart: no compile database covers the
+# test modules, and these are the read-write lock's bits field.
+NOT_WORD_BITS = ("Modules/_testinternalcapi/test_lock.c",)
 ENCODING_HEADERS = ("Include/internal/pycore_pyvalue.h",
                     "Include/internal/pycore_value.h")
 # The C files of the tree that the text rules read.
@@ -203,11 +217,22 @@ def points_to(matcher):
     return f"pointsTo(qualType({matcher}))"
 
 
-WORD = ("hasCanonicalType(anyOf("
-        f"{type_names('PyValue', 'PyValueBorrow', '_PyValueGuarded')}))")
+WORD_TYPES = ("PyValue", "PyValueBorrow", "_PyValueGuarded")
+WORD = f"hasCanonicalType(anyOf({type_names(*WORD_TYPES)}))"
 OWNER = f"hasCanonicalType(anyOf({type_names('PyValue')}))"
 BORROW = f"hasCanonicalType(anyOf({type_names('PyValueBorrow')}))"
 BYTE_POINTER = "pointsTo(voidType()), pointsTo(qualType(isAnyCharacter()))"
+BYTE_OR_WORD_POINTER = f"qualType(anyOf({BYTE_POINTER}, {points_to(WORD)}))"
+# A word, an array of words, or a struct with one: what a union may not
+# hold beside other members.
+WORD_OR_ARRAY = (f"qualType(anyOf({WORD}, hasCanonicalType(arrayType("
+                 f"hasElementType(qualType({WORD}))))))")
+WORD_HOLDER = (f"qualType(anyOf({WORD_OR_ARRAY}, hasCanonicalType(recordType("
+               f"hasDeclaration(recordDecl(hasDescendant(fieldDecl(hasType("
+               f"{WORD_OR_ARRAY})))))))))")
+# A pointer to anything but a byte or a word, seen through every cast.
+OTHER_POINTER = (f"ignoringParenCasts(expr(hasType(hasCanonicalType("
+                 f"pointerType())), unless(hasType({BYTE_OR_WORD_POINTER}))))")
 NOT_ENCODING_FUNCTION = (
     "unless(hasAncestor(functionDecl(hasAnyName({}))))".format(
         ", ".join(f'"{name}"' for name in ENCODING_FUNCTIONS)))
@@ -225,12 +250,27 @@ RAW_BITS_MATCHERS = (
     *(f'explicitCastExpr(hasDestinationType({points_to(word)}), '
       f'unless(hasSourceExpression(hasType(qualType(anyOf({BYTE_POINTER}, '
       f'{points_to(word)}))))), {NOT_ENCODING_FUNCTION})'
-      '.bind("rawcast")' for word in (OWNER, BORROW)),
+      '.bind("rawcast")'
+      for word in (f"hasCanonicalType(anyOf({type_names(name)}))"
+                   for name in WORD_TYPES)),
     f'explicitCastExpr(hasSourceExpression(hasType({points_to(WORD)})), '
-    'hasDestinationType(pointerType()), unless(hasDestinationType(qualType('
-    f'anyOf({BYTE_POINTER}, {points_to(WORD)})))), '
+    'hasDestinationType(pointerType()), unless(hasDestinationType('
+    f'{BYTE_OR_WORD_POINTER})), {NOT_ENCODING_FUNCTION}).bind("rawcast")',
+    # The byte-pointer allowance does not launder: a word pointer made from
+    # the address of a non-word object, or from a cast of a pointer to
+    # another type, and a typed pointer made from a cast of a word pointer.
+    f'explicitCastExpr(hasDestinationType({points_to(WORD)}), '
+    'hasSourceExpression(ignoringParenImpCasts(anyOf('
+    'ignoringParenCasts(unaryOperator(hasOperatorName("&"), hasUnaryOperand('
+    f'expr(unless(hasType(qualType({WORD}))))))), '
+    f'explicitCastExpr(hasSourceExpression({OTHER_POINTER}))))), '
     f'{NOT_ENCODING_FUNCTION}).bind("rawcast")',
-    f'recordDecl(isUnion(), has(fieldDecl(hasType(qualType({WORD})))))'
+    'explicitCastExpr(hasDestinationType(pointerType()), unless('
+    f'hasDestinationType({BYTE_OR_WORD_POINTER})), hasSourceExpression('
+    'ignoringParenImpCasts(explicitCastExpr(hasSourceExpression('
+    f'ignoringParenCasts(expr(hasType(qualType({points_to(WORD)})))))))), '
+    f'{NOT_ENCODING_FUNCTION}).bind("rawcast")',
+    f'recordDecl(isUnion(), hasDescendant(fieldDecl(hasType({WORD_HOLDER}))))'
     '.bind("rawunion")',
 )
 BORROW_FIELD_MATCHERS = (
@@ -238,9 +278,13 @@ BORROW_FIELD_MATCHERS = (
     'varDecl(anyOf(hasGlobalStorage(), hasType(arrayType())), '
     f'hasType({BORROW_STORAGE})).bind("borrowvar")',
 )
+# A member of a C local struct (a status-and-value pair returned by value)
+# is not a home: the struct is a local owner.
 HOME_COPY_MATCHER = (
     f'varDecl(hasLocalStorage(), hasType(qualType({OWNER})), hasInitializer('
-    'ignoringParenImpCasts(anyOf(memberExpr(), arraySubscriptExpr(), '
+    'ignoringParenImpCasts(anyOf(memberExpr(unless(hasObjectExpression('
+    'ignoringParenImpCasts(declRefExpr(to(varDecl(hasLocalStorage(), '
+    'hasType(hasCanonicalType(recordType()))))))))), arraySubscriptExpr(), '
     'unaryOperator(hasOperatorName("*")))))).bind("homecopy")'
 )
 RAW_BITS_MESSAGES = {
@@ -499,7 +543,10 @@ def check_call(call):
 
 
 LOCATION = re.compile(r"^(.*?):(\d+):(\d+): note: \"(\w+)\" binds here")
-MACRO_NOTE = re.compile(r"^(.*?):\d+:\d+: note: expanded from macro '\w+'")
+# The range of a node dump's first line: <file:line:col, ...> or
+# <file:line:col>, where the end may name its own file.
+DUMP_RANGE = re.compile(r" <([^<>,]+?):(\d+):(\d+)(?:, (?:line:\d+:\d+|col:\d+|"
+                        r"([^<>,]+?):\d+:\d+))?>")
 SRCDIR = Path(__file__).resolve().parents[2]
 
 
@@ -510,6 +557,20 @@ def display_path(path, directory):
     if full.is_relative_to(SRCDIR):
         return str(full.relative_to(SRCDIR))
     return str(full)
+
+
+def spelled_range(dump, path, line, column):
+    """Where the first and last tokens of a match are written: ((file, line,
+    column), file). clang reports a match at its file location: a token of
+    a macro's body at the macro's expansion site, a token of a macro's
+    argument where the argument is written. The node dump that follows
+    gives the range's spelling locations; a location without a file is in
+    the previous one's file."""
+    m = DUMP_RANGE.search(dump[0]) if dump else None
+    if m is None or m[1] is None:
+        return (path, line, column), path
+    begin = (m[1], int(m[2]), int(m[3]))
+    return begin, m[4] or begin[0]
 
 
 def encoding_allowed(path):
@@ -531,13 +592,8 @@ def parse_output(text, kind, directory):
             continue
         path, line, column, binding = m[1], int(m[2]), int(m[3]), m[4]
         i += 1
-        # The files of the macros that the match is expanded from.
-        macro_paths = []
         while i < len(lines) and not lines[i].startswith(
                 f'Binding for "{binding}":'):
-            note = MACRO_NOTE.match(lines[i])
-            if note:
-                macro_paths.append(display_path(note[1], directory))
             i += 1
         i += 1
         dump = []
@@ -545,9 +601,15 @@ def parse_output(text, kind, directory):
                 lines[i]) and not lines[i].startswith("Match #"):
             dump.append(lines[i])
             i += 1
+        # A match is written where its tokens are spelled: in a macro's body
+        # it is the macro's file's, in a macro's argument the unit's.
+        begin, end = spelled_range(dump, path, line, column)
         path = display_path(path, directory)
+        begin_path = display_path(begin[0], directory)
+        in_macro_body = (begin_path, *begin[1:]) != (path, line, column)
+        spelled = {begin_path, display_path(end, directory)}
         if binding in RAW_BITS_MESSAGES:
-            if not any(map(encoding_allowed, [path, *macro_paths])):
+            if not all(map(encoding_allowed, spelled)):
                 findings.append(Finding(path, line, column, "raw-bits",
                                         RAW_BITS_MESSAGES[binding], True))
         elif binding in ("borrowfield", "borrowvar"):
@@ -555,7 +617,7 @@ def parse_output(text, kind, directory):
             findings.append(Finding(
                 path, line, column, "borrow-field",
                 f"a PyValueBorrow {what} outside a C local", True))
-        elif binding == "homecopy" and not macro_paths:
+        elif binding == "homecopy" and not in_macro_body:
             # A copy that a macro declares is the macro's: the IR
             # publication macros displace a slot's word and close it.
             findings.append(Finding(
@@ -713,8 +775,8 @@ def check_raw_bits_text(srcdir, checked_units=frozenset()):
     headers only."""
     findings = []
     for path in source_files(srcdir):
-        scan_bits = path.endswith(".h") or (
-            checked_units and path not in checked_units)
+        scan_bits = path not in NOT_WORD_BITS and (path.endswith(".h") or (
+            checked_units and path not in checked_units))
         findings.extend(raw_bits_text(
             path, Path(srcdir, path).read_text(errors="replace"), scan_bits))
     return findings
@@ -857,7 +919,9 @@ def check_public_header(path, text, aliases=frozenset()):
                             "signature in a public layout", True))
                 if frames and frames[-1][0] == "record":
                     frames[-1][2].clear()
-            if not [f for f in frames if f[0] != "extern"]:
+            # A record's declaration goes on after its brace.
+            if kind != "record" and not [f for f in frames
+                                         if f[0] != "extern"]:
                 statement_start = i + 1
         elif frames and frames[-1][0] == "record":
             members = frames[-1][2]
@@ -874,8 +938,36 @@ def check_public_header(path, text, aliases=frozenset()):
                 fail(offset, f"a public function body names {token}: an "
                      "inline accessor may only copy a word out of a field")
         elif token == ";":
+            # The declaration's tokens outside a record's braces, which the
+            # field rule checks.
+            statement, depth = [], 0
+            for _, t in tokens[statement_start:i]:
+                depth += {"{": 1, "}": -1}.get(t, 0)
+                if depth == 0 and t != "}":
+                    statement.append(t)
+            taken = next((t for t in statement if t in value_names), None)
+            if taken and declares_object(statement):
+                fail(offset, f"a public file-scope declaration of a {taken} "
+                     "object: only prototypes and typedefs may name one")
             statement_start = i + 1
     return findings
+
+
+def declares_object(statement):
+    """Whether the tokens of a file-scope declaration, without its ';',
+    declare an object rather than a function or a type."""
+    if not statement or statement[0] == "typedef":
+        return False
+    if statement[0] == "PyAPI_DATA" or statement[-1] != ")":
+        return True
+    # A function's declarator ends with its parameters, after its name;
+    # (*name)(...) declares a pointer.
+    depth = 0
+    for k in range(len(statement) - 1, -1, -1):
+        depth += {")": 1, "(": -1}.get(statement[k], 0)
+        if depth == 0:
+            break
+    return not (k > 0 and re.fullmatch(r"[A-Za-z_]\w*", statement[k - 1]))
 
 
 def public_headers(srcdir):
@@ -980,6 +1072,14 @@ SELF_TESTS = {
     "raw_bits_union": ("""
         union pun { PyValue v; uintptr_t w; };
         """, "raw-bits", 1),
+    "raw_bits_union_array": ("""
+        union pun { PyValue v[2]; uintptr_t w[2]; };
+        """, "raw-bits", 1),
+    "raw_bits_union_wrapped": ("""
+        struct wrapped { PyValueBorrow v; };
+        union pun { struct wrapped s; uintptr_t w; };
+        union inline_pun { struct { int n; PyValue v; } s; uintptr_t w; };
+        """, "raw-bits", 2),
     "raw_bits_accessors": ("""
         static PyObject dummy_struct;
         int f(PyValue v, PyValueBorrow b) {
@@ -987,6 +1087,65 @@ SELF_TESTS = {
                    + (_PyValue_Word(v) != 0)
                    + _PyValue_IsSameWord(b, _PyValue_SENTINEL(&dummy_struct));
         }""", "raw-bits", 0),
+    # A match written in a value header's macro argument is the file's;
+    # one written in the macro's body is the header's.
+    "macro_arg_cast": ("""
+        int f(uintptr_t u) {
+            return PyValue_IsNull(*(PyValue *)&u);
+        }""", "raw-bits", 1),
+    "macro_arg_bits": ("""
+        int f(PyValue v) {
+            return PyValue_IsNull(PyValue_Wrap((void *)v.bits));
+        }""", "raw-bits", 1),
+    "macro_body": ("""
+        int f(PyValue v) {
+            return PyValue_Is(v, PyValue_True) + PyValue_IsNull(PyValue_None);
+        }""", "raw-bits", 0),
+    "macro_body_nested": ("""
+        static PyObject dummy_struct;
+        #define DUMMY _PyValue_SENTINEL(&dummy_struct)
+        int f(PyValue v) {
+            return _PyValue_IsSameWord(v, DUMMY);
+        }""", "raw-bits", 0),
+    "macro_body_member": ("""
+        int f(void) {
+            return PyValue_True.bits != 0;
+        }""", "raw-bits", 1),
+    "local_macro_arg_cast": ("""
+        #define IS_NULL_BITS(x) PyValue_IsNull(*(PyValue *)&(x))
+        int f(uintptr_t u) {
+            return IS_NULL_BITS(u);
+        }""", "raw-bits", 1),
+    # A byte pointer between two casts does not launder a word.
+    "launder_word_from_bits": ("""
+        int f(uintptr_t b) {
+            return PyValue_IsNull(*(PyValue *)(void *)&b);
+        }""", "raw-bits", 1),
+    "launder_word_from_byte_object": ("""
+        int f(void) {
+            char c = 0;
+            return PyValue_IsNull(*(PyValue *)&c);
+        }""", "raw-bits", 1),
+    "launder_bits_through_void": ("""
+        uintptr_t f(PyValue v) {
+            return *(uintptr_t *)(void *)&v;
+        }""", "raw-bits", 1),
+    "launder_bits_through_char": ("""
+        uintptr_t f(PyValue v) {
+            return *(uintptr_t *)(char *)&v;
+        }""", "raw-bits", 1),
+    "byte_offsets": ("""
+        PyValue *f(PyObject *o, Py_ssize_t offset, void *block) {
+            PyValue *p = (PyValue *)((char *)o + offset);
+            PyValue *q = (PyValue *)block;
+            char *r = (char *)&p[1];
+            return r == NULL ? q : p;
+        }""", "raw-bits", 0),
+    "raw_bits_guarded_cast": ("""
+        #include "pycore_typecache.h"
+        int f(PyObject **objects) {
+            return (_PyValueGuarded *)objects != NULL;
+        }""", "raw-bits", 1),
     "borrow_field": ("""
         struct holder { PyValueBorrow one; PyValueBorrow many[2]; };
         static PyValueBorrow cached;
@@ -997,15 +1156,21 @@ SELF_TESTS = {
             return PyValue_IsNull(q) + PyValue_IsNull(cached);
         }""", "borrow-field", 4),
     "home_copy": ("""
-        int f(PyValue *p, PyListObject *l) {
+        typedef struct { int status; PyValue value; } pair;
+        pair g(void);
+        int f(PyValue *p, PyListObject *l, pair *q) {
             PyValue a = p[0];
             PyValue b = *p;
             PyValue c = l->ob_item[1];
             PyValue d = PyValue_DUP(p[0]);
-            int n = PyValue_IsNull(a) + PyValue_IsNull(b) + PyValue_IsNull(c);
+            pair r = g();
+            PyValue e = r.value;
+            PyValue h = q->value;
+            int n = PyValue_IsNull(a) + PyValue_IsNull(b) + PyValue_IsNull(c)
+                    + PyValue_IsNull(e) + PyValue_IsNull(h);
             PyValue_CLOSE(d);
             return n;
-        }""", "home-copy", 3),
+        }""", "home-copy", 4),
     "compat_body_box": ("""
         Py_VALUE_COMPAT(g) PyObject *f(PyValue v);
         PyObject *f(PyValue v) {
@@ -1033,6 +1198,12 @@ SELF_TEST_HEADER = '#include "Python.h"\n#include "pycore_value_api.h"\n'
 
 # The text of raw-bits: name -> (path, text, scan_bits, number of findings).
 RAW_BITS_TEXT_TESTS = {
+    "test_module_bits": ("Modules/_testinternalcapi/spam.c",
+                         "uintptr_t f(PyValue v) { return v.bits; }\n",
+                         True, 1),
+    "encoding_test_bits": ("Modules/_testinternalcapi/list.c",
+                           "uintptr_t f(PyValue v) { return v.bits; }\n",
+                           True, 0),
     "macro_bits": ("Include/internal/pycore_spam.h",
                    "#define SPAM_BITS(v) ((v).bits)\n", True, 1),
     "public_macro_bits": ("Include/cpython/spam.h",
@@ -1169,6 +1340,15 @@ PUBLIC_VALUE_TESTS = {
     "callback_parameter": ("""
         typedef int (*PySpam_Callback)(PyObject *, PyValueBorrow key);
         PyAPI_FUNC(int) PySpam_AddWatcher(PySpam_Callback callback);""", 0),
+    "file_scope_value": ("""
+        PyAPI_DATA(PyValue) _PySpam_Word;
+        extern PyValueBorrow _PySpam_View;
+        extern PyValue (*_PySpam_Hook)(PyValueBorrow);
+        PyAPI_FUNC(PyValue) PySpam_GetValue(PyObject *);
+        typedef PyValue PySpamWord;
+        typedef struct { uintptr_t bits; } PyValue;
+        struct spam { int n; };
+        static struct { int n; } spam_counts;""", 3),
 }
 
 

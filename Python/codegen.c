@@ -24,6 +24,7 @@
 #include "pycore_dict.h"          // _PyDict_NextValue()
 #include "pycore_instruction_sequence.h" // _PyInstructionSequence_NewLabel()
 #include "pycore_intrinsics.h"
+#include "pycore_list.h"          // PyList_GET_VALUE()
 #include "pycore_long.h"          // _PyLong_GetZero()
 #include "pycore_object.h"        // _Py_ANNOTATE_FORMAT_VALUE_WITH_FAKE_GLOBALS
 #include "pycore_pystate.h"       // _Py_GetConfig()

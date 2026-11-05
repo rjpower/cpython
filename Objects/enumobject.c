@@ -154,7 +154,9 @@ enum_next_long(enumobject *en, PyObject* next_item)
         next_index = NULL;
         PyValue replacement_item = PyValue_PrepareOwned(next_item);
         next_item = NULL;
+        // a move: replaced below
         PyValue old_index = _PyTuple_CAST(result)->ob_item[0];
+        // a move: replaced below
         PyValue old_item = _PyTuple_CAST(result)->ob_item[1];
         _PyTuple_CAST(result)->ob_item[0] = replacement_index;
         _PyTuple_CAST(result)->ob_item[1] = replacement_item;
@@ -214,7 +216,9 @@ enum_next(PyObject *op)
         next_index = NULL;
         PyValue replacement_item = PyValue_PrepareOwned(next_item);
         next_item = NULL;
+        // a move: replaced below
         PyValue old_index = _PyTuple_CAST(result)->ob_item[0];
+        // a move: replaced below
         PyValue old_item = _PyTuple_CAST(result)->ob_item[1];
         _PyTuple_CAST(result)->ob_item[0] = replacement_index;
         _PyTuple_CAST(result)->ob_item[1] = replacement_item;

@@ -84,8 +84,9 @@ PyAPI_FUNC(int) _PyDict_GetValue_KnownHash(PyObject *, PyValueBorrow, Py_hash_t,
     (_PyDict_GetValue_KnownHash)(D, PyValue_Borrow(K), H, R)
 
 /* The value forms that take a borrowed key: as PyDict_GetItemRef(),
- * PyDict_SetItem(), PyDict_DelItem() and PyDict_Contains(). They are internal
- * because only the core makes a PyValueBorrow. GetValue initializes its
+ * PyDict_SetItem(), PyDict_DelItem() and PyDict_Contains(). They are internal,
+ * like every function that takes or returns a PyValueBorrow: the operations
+ * that make, read or retain a borrow are internal. GetValue initializes its
  * output to PyValue_NULL and returns 1 with an owned value, 0 if absent, or
  * -1 with an exception; SetValue retains its borrowed inputs. Each has a
  * reader macro, so the core passes owners and borrows alike. */

@@ -10,6 +10,6 @@ PyAPI_FUNC(int) PyStructSequence_InitType2(PyTypeObject *type,
 typedef PyTupleObject PyStructSequence;
 #define PyStructSequence_SET_ITEM PyStructSequence_SetItem
 
-/* Unchecked value reads borrow from the struct sequence; object reads own. */
-PyAPI_FUNC(PyValueBorrow) PyStructSequence_GET_VALUE(PyObject *, Py_ssize_t);
+/* The unchecked value read, which returns a borrow, is internal
+   (pycore_structseq.h). */
 PyAPI_FUNC(void) PyStructSequence_SET_VALUE(PyObject *, Py_ssize_t, PyValue);

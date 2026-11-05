@@ -266,11 +266,11 @@ add_overwritten_fast_local(PyFrameObject *frame, PyObject *obj)
         return -1;
     }
     for (Py_ssize_t i = 0; i < new_size - 1; i++) {
-        PyTuple_SET_VALUE(new_tuple, i, PyValue_NewRef(
+        PyTuple_SET_VALUE(new_tuple, i, PyValue_XDUP(
             PyTuple_GET_VALUE(frame->f_overwritten_fast_locals, i)));
     }
     PyTuple_SET_VALUE(new_tuple, new_size - 1,
-                     PyValue_NewRef(PyValue_FromObjectBorrow(obj)));
+                     PyValue_XDUP(PyValue_FromObjectBorrow(obj)));
     Py_XSETREF(frame->f_overwritten_fast_locals, new_tuple);
     return 0;
 }
@@ -294,7 +294,7 @@ framelocalsproxy_setitem(PyObject *self, PyObject *key, PyObject *value)
         }
 
         _PyLocals_Kind kind = _PyLocals_GetKind(co->co_localspluskinds, i);
-        PyValue oldvalue = fast[i];
+        PyValueBorrow oldvalue = PyValue_Borrow(fast[i]);
         PyObject *cell = NULL;
         if (kind == CO_FAST_FREE) {
             // The cell was set when the frame was created from
@@ -309,11 +309,11 @@ framelocalsproxy_setitem(PyObject *self, PyObject *key, PyObject *value)
         }
         if (cell != NULL) {
             PyValue replacement = value == NULL ? PyValue_NULL :
-                PyValue_NewRef(PyValue_FromObjectBorrow(value));
+                PyValue_XDUP(PyValue_FromObjectBorrow(value));
             _PyCell_SetValue((PyCellObject *)cell, replacement);
         } else if (PyValue_IsInline(oldvalue)) {
             // An inline value holds no reference to keep alive.
-            fast[i] = PyValue_NewRef(PyValue_FromObjectBorrow(value));
+            fast[i] = PyValue_XDUP(PyValue_FromObjectBorrow(value));
         } else if (value != PyValue_AsKnownObjectBorrow(oldvalue)) {
             PyObject *old_obj = PyValue_AsKnownObjectBorrow(fast[i]);
             if (old_obj != NULL && !_Py_IsImmortal(old_obj)) {
@@ -326,7 +326,7 @@ framelocalsproxy_setitem(PyObject *self, PyObject *key, PyObject *value)
                 _Py_value_allow_borrows_outlive_close(fast[i]);
                 PyValue_CLOSE(fast[i]);
             }
-            fast[i] = PyValue_NewRef(PyValue_FromObjectBorrow(value));
+            fast[i] = PyValue_XDUP(PyValue_FromObjectBorrow(value));
         }
         return 0;
     }
@@ -1967,6 +1967,7 @@ frame_lineno_set_impl(PyFrameObject *self, PyObject *value)
     int depth = stack_depth(start_stack);
     while (start_stack > best_stack) {
         depth--;
+        // a move: cleared below
         PyValue popped = stack_base[depth];
         stack_base[depth] = PyValue_NULL;
         if (top_of_stack(start_stack) == Except) {
@@ -2255,7 +2256,7 @@ init_frame(PyThreadState *tstate, _PyInterpreterFrame *frame,
            PyFunctionObject *func, PyObject *locals)
 {
     PyCodeObject *code = (PyCodeObject *)func->func_code;
-    _PyFrame_Initialize(tstate, frame, PyValue_FromPyObjectNew(func),
+    _PyFrame_Initialize(tstate, frame, PyValue_DUP(PyValue_FromObjectBorrow(func)),
                         Py_XNewRef(locals), code, frame->owned_slots, 0, NULL);
 }
 
@@ -2345,7 +2346,7 @@ frame_init_get_vars(_PyInterpreterFrame *frame)
     PyObject *closure = func->func_closure;
     int offset = PyUnstable_Code_GetFirstFree(co);
     for (int i = 0; i < co->co_nfreevars; ++i) {
-        frame->base[offset + i] = PyValue_NewRef(PyTuple_GET_VALUE(closure, i));
+        frame->base[offset + i] = PyValue_XDUP(PyTuple_GET_VALUE(closure, i));
     }
     // COPY_FREE_VARS doesn't have inline CACHEs, either:
     frame->instr_ptr = _PyFrame_InstrAt(frame, 0);

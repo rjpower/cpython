@@ -282,7 +282,7 @@ class TestIRCases(unittest.TestCase):
             PyObject *o = spam_call(l, r);
             DECREF_INPUTS();
             ERROR_IF(o == NULL);
-            res = PyValue_FromPyObjectSteal(o);
+            res = PyValue_FromObjectSteal(o);
         }
     """
         output = """
@@ -341,7 +341,7 @@ class TestIRCases(unittest.TestCase):
             if (o == NULL) {
                 JUMP_TO_LABEL(error);
             }
-            res = PyValue_FromPyObjectSteal(o);
+            res = PyValue_FromObjectSteal(o);
             IR_STORE_DST(IR_A(ir_word), res);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
@@ -422,7 +422,7 @@ class TestIRCases(unittest.TestCase):
         }
         inst(OP_STEAL, (value -- res)) {
             PyObject *o = PyValue_AsKnownObjectSteal(value);
-            res = PyValue_FromPyObjectSteal(SPAM(o));
+            res = PyValue_FromObjectSteal(SPAM(o));
         }
         inst(OP_ALIAS, (value -- res)) {
             if (SPAM(PyValue_AsKnownObjectBorrow(value))) {
@@ -1036,7 +1036,7 @@ class TestIRCases(unittest.TestCase):
             PyValue a;
             a = value;
             DEAD(value);
-            res = PyValue_FromPyObjectSteal(SPAM(PyValue_AsKnownObjectBorrow(a)));
+            res = PyValue_FromObjectSteal(SPAM(PyValue_AsKnownObjectBorrow(a)));
             PyValue_CLOSE(a);
         }
         inst(OP_COPY_STORE, (value -- res)) {
@@ -1048,7 +1048,7 @@ class TestIRCases(unittest.TestCase):
         inst(OP_OBJECT_STEAL, (value -- res)) {
             PyObject *o = PyValue_AsKnownObjectBorrow(value);
             DEAD(value);
-            res = PyValue_FromPyObjectSteal(o);
+            res = PyValue_FromObjectSteal(o);
         }
         inst(OP_OBJECT_COPY_RELEASE, (value --)) {
             PyObject *o = PyValue_AsKnownObjectBorrow(value);
@@ -1058,7 +1058,7 @@ class TestIRCases(unittest.TestCase):
             Py_DECREF(p);
         }
         inst(OP_OBJECT_NESTED_STEAL, (value -- res)) {
-            res = PyValue_FromPyObjectSteal(PyValue_AsKnownObjectBorrow(value));
+            res = PyValue_FromObjectSteal(PyValue_AsKnownObjectBorrow(value));
             DEAD(value);
         }
         inst(OP_OBJECT_TARGET, (value, item --)) {
@@ -1106,7 +1106,7 @@ class TestIRCases(unittest.TestCase):
             Py_DECREF(p);
         }
         inst(OP_TEMPS_STEAL, (value -- res)) {
-            res = PyValue_FromPyObjectSteal(_PyValueTemps_Object(value_temps, value));
+            res = PyValue_FromObjectSteal(_PyValueTemps_Object(value_temps, value));
             DEAD(value);
         }
     """
@@ -1314,7 +1314,7 @@ class TestIRCases(unittest.TestCase):
             if (PyValue_IsNone(v)) {
                 SPAM(PyValue_AsKnownObjectBorrow(v));
             }
-            res = PyValue_FromPyObjectSteal(PyValue_AsKnownObjectSteal(v));
+            res = PyValue_FromObjectSteal(PyValue_AsKnownObjectSteal(v));
         }
     """
         output = self.ir_output(input)
@@ -1851,14 +1851,16 @@ class TestIRCases(unittest.TestCase):
         return ir_generator.oparg_slot_role([analysis.instructions["OP"]])
 
     def test_constructor_results_are_not_known_objects(self):
-        # The PyValue_FromPyObject*() constructors make an exact int or
+        # The PyValue_FromObject*() constructors make an exact int or
         # float inline, so their results get the generic DUP and an inline
         # test before an object read, not the _POINTER forms
-        for ctor in ("Steal", "New", "Borrow"):
+        for ctor in ("PyValue_FromObjectSteal(SPAM())",
+                     "PyValue_DUP(PyValue_FromObjectBorrow(SPAM()))",
+                     "PyValue_FromObjectBorrow(SPAM())"):
             with self.subTest(ctor=ctor):
                 output = self.ir_output(f"""
                 op(_MAKE, (-- res)) {{
-                    res = PyValue_FromPyObject{ctor}(SPAM());
+                    res = {ctor};
                 }}
                 op(_COPY, (value -- value, copy)) {{
                     copy = PyValue_DUP(value);
@@ -1882,7 +1884,7 @@ class TestIRCases(unittest.TestCase):
             ("-- value", "value = PyValue_DUP(GETLOCAL(oparg));",
              "_PyIR_ROLE_LOCAL_IN"),
             ("-- res", "PyObject *o = PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));"
-             " res = PyValue_FromPyObjectNew(o);", "_PyIR_ROLE_LOCAL_IN"),
+             " res = PyValue_DUP(PyValue_FromObjectBorrow(o));", "_PyIR_ROLE_LOCAL_IN"),
             ("value --", "PyValue tmp = GETLOCAL(oparg); "
              "GETLOCAL(oparg) = value; PyValue_XCLOSE(tmp);",
              "_PyIR_ROLE_LOCAL_OUT"),
@@ -1897,9 +1899,9 @@ class TestIRCases(unittest.TestCase):
             ("-- value", "value = GETLOCAL(oparg); "
              "GETLOCAL(oparg) = PyValue_NULL;", "_PyIR_ROLE_LOCAL_MOVE"),
             ("-- value", "PyObject *c = PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));"
-             " value = PyValue_FromPyObjectSteal(PyCell_GetRef((PyCellObject *)c));",
+             " value = PyValue_FromObjectSteal(PyCell_GetRef((PyCellObject *)c));",
              "_PyIR_ROLE_CELL"),
-            ("-- value", "value = PyValue_FromPyObjectNew(SPAM(oparg));", None),
+            ("-- value", "value = PyValue_DUP(PyValue_FromObjectBorrow(SPAM(oparg)));", None),
         ]:
             with self.subTest(body=body):
                 self.assertEqual(self.slot_role(effect, body), role)

@@ -10,6 +10,7 @@
 #include "pycore_compile.h"
 #include "pycore_intrinsics.h"
 #include "pycore_ir.h"              // _PyIR_Formats
+#include "pycore_list.h"            // PyList_GET_VALUE()
 #include "pycore_opcode_metadata.h" // IS_VALID_OPCODE, OPCODE_HAS_*, etc
 #include "pycore_opcode_utils.h"
 #include "pycore_value.h"           // PyValue_IsNull()

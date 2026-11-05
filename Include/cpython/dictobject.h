@@ -89,7 +89,11 @@ typedef enum {
 // new value for key, NULL if key is being deleted.
 /* key/new_value borrow strong snapshots for the callback duration.
  * PyValue_NULL marks an absent event field. CLONED passes the source dict
- * as key. The dict metadata argument retains its existing lifetime rules. */
+ * as key. The dict metadata argument retains its existing lifetime rules.
+ * This is the one public declaration that names PyValueBorrow, which R26
+ * allows as a callback's parameter type (pyjit/design/value-api.md,
+ * section 1.6). The operations that read a borrow are internal, so only a
+ * callback built with the core (Py_BUILD_CORE) can use these arguments. */
 typedef int(*PyDict_WatchCallback)(PyDict_WatchEvent event, PyObject* dict,
                                  PyValueBorrow key, PyValueBorrow new_value);
 
@@ -112,8 +116,9 @@ PyAPI_FUNC(PyObject*) PyFrozenDict_New(PyObject *iterable);
  * NextValue requires valid cursor storage and distinct optional key/value
  * outputs. Error/end leave the cursor unchanged; success advances it once.
  * The forms that take a PyValueBorrow key (GetValue, SetValue, DelValue,
- * ContainsValue) are internal (pycore_dict.h): nothing outside the core
- * makes a PyValueBorrow. */
+ * ContainsValue) are internal (pycore_dict.h): the operations that make,
+ * read or retain a borrow are internal, so no public function takes or
+ * returns one. */
 PyAPI_FUNC(int) PyDict_GetValueString(PyObject *, const char *, PyValue *);
 PyAPI_FUNC(int) PyDict_NextValue(PyObject *, Py_ssize_t *, PyValue *, PyValue *);
 PyAPI_FUNC(int) PyDict_PopValue(PyObject *, PyValue, PyValue *);

@@ -10,6 +10,7 @@
 #include "Python.h"
 #include "pycore_dict.h"          // PyDict_SetValue()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
+#include "pycore_list.h"          // PyList_GET_VALUE()
 #include "pycore_modsupport.h"    // _PyArg_NoPositional()
 #include "pycore_object.h"        // _PyObject_GC_TRACK()
 #include "pycore_structseq.h"     // PyStructSequence_InitType()
@@ -130,7 +131,8 @@ PyObject *
 PyStructSequence_GetItemRef(PyObject *op, Py_ssize_t index)
 {
     assert(index >= 0 && index < REAL_SIZE(op));
-    PyValue value = ((PyStructSequence *)op)->ob_item[index];
+    PyValueBorrow value =
+        PyValue_Borrow(((PyStructSequence *)op)->ob_item[index]);
     return PyValue_IsNull(value) ? NULL : _PyValue_AsObjectAt(value, BOX_SITE_CELL);
 }
 
@@ -163,6 +165,7 @@ structseq_dealloc(PyObject *op)
     // cleared by the garbage collector.
     size = REAL_SIZE(obj);
     for (i = 0; i < size; ++i) {
+        // a move: cleared below
         PyValue value = obj->ob_item[i];
         obj->ob_item[i] = PyValue_NULL;
         PyValue_XCLOSE(value);

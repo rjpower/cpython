@@ -113,8 +113,8 @@ PyTuple_GetValue(PyObject *op, Py_ssize_t i)
         PyErr_SetString(PyExc_IndexError, "tuple index out of range");
         return PyValue_NULL;
     }
-    PyValue value = _PyTuple_CAST(op)->ob_item[i];
-    return PyValue_IsNull(value) ? value : PyValue_DUP(value);
+    PyValueBorrow value = PyValue_Borrow(_PyTuple_CAST(op)->ob_item[i]);
+    return PyValue_XDUP(value);
 }
 
 PyObject *
@@ -160,6 +160,7 @@ PyTuple_SetValue(PyObject *op, Py_ssize_t i, PyValue value)
         PyErr_SetString(PyExc_IndexError, "tuple assignment index out of range");
         return -1;
     }
+    // a move: replaced below
     PyValue old = _PyTuple_CAST(op)->ob_item[i];
     _PyTuple_CAST(op)->ob_item[i] = value;
     _PyValue_CheckHome(_PyTuple_CAST(op)->ob_item[i]);
@@ -179,6 +180,7 @@ _PyTuple_ReplaceTakeRef(PyObject *op, Py_ssize_t i, PyObject *item)
     assert(PyTuple_CheckExact(op));
     assert(0 <= i && i < Py_SIZE(op));
     PyValue value = PyValue_PrepareOwned(item);
+    // a move: replaced below
     PyValue old = _PyTuple_CAST(op)->ob_item[i];
     _PyTuple_CAST(op)->ob_item[i] = value;
     _PyValue_CheckHome(_PyTuple_CAST(op)->ob_item[i]);
@@ -196,7 +198,7 @@ _PyTuple_MaybeUntrack(PyObject *op)
     t = (PyTupleObject *) op;
     n = Py_SIZE(t);
     for (i = 0; i < n; i++) {
-        PyValue elt = t->ob_item[i];
+        PyValueBorrow elt = PyValue_Borrow(t->ob_item[i]);
         /* Tuple with NULL elements aren't
            fully constructed, don't untrack
            them yet. */
@@ -382,7 +384,7 @@ tuple_repr(PyObject *self)
         }
 
         /* A slot of a tuple from PyTuple_New() can still be NULL. */
-        PyValue item = v->ob_item[i];
+        PyValueBorrow item = PyValue_Borrow(v->ob_item[i]);
         int result = PyValue_IsNull(item) ? PyUnicodeWriter_WriteRepr(writer, NULL)
                                           : _PyValue_WriteRepr(writer, item);
         if (result < 0) {
@@ -654,14 +656,14 @@ _PyTuple_Concat(PyObject *aa, PyObject *bb)
     PyValue *src = a->ob_item;
     PyValue *dest = np->ob_item;
     for (Py_ssize_t i = 0; i < Py_SIZE(a); i++) {
-        PyValue value = src[i];
+        PyValueBorrow value = PyValue_Borrow(src[i]);
         dest[i] = PyValue_DUP(value);
     }
 
     src = b->ob_item;
     dest = np->ob_item + Py_SIZE(a);
     for (Py_ssize_t i = 0; i < Py_SIZE(b); i++) {
-        PyValue value = src[i];
+        PyValueBorrow value = PyValue_Borrow(src[i]);
         dest[i] = PyValue_DUP(value);
     }
 
@@ -696,6 +698,7 @@ _PyTuple_Repeat(PyObject *self, Py_ssize_t n)
 
     PyValue *dest = np->ob_item;
     if (input_size == 1) {
+        // The n copies' counts are added in bulk below.
         PyValue value = a->ob_item[0];
         if (PyValue_RefcountOnObject(value)) {
             _Py_RefcntAdd(PyValue_AsKnownObjectBorrow(value), n);
@@ -707,6 +710,7 @@ _PyTuple_Repeat(PyObject *self, Py_ssize_t n)
     }
     else {
         for (Py_ssize_t i = 0; i < input_size; i++) {
+            // The n copies' counts are added in bulk below.
             PyValue value = a->ob_item[i];
             if (PyValue_RefcountOnObject(value)) {
                 _Py_RefcntAdd(PyValue_AsKnownObjectBorrow(value), n);

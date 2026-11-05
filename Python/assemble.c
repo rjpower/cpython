@@ -4,6 +4,7 @@
 #include "pycore_dict.h"          // _PyDict_NextValue()
 #include "pycore_flowgraph.h"
 #include "pycore_ir.h"                // IR_WORD()
+#include "pycore_list.h"              // PyList_GET_VALUE()
 #include "pycore_long.h"              // _PyLong_CheckExactAndCompact()
 #include "pycore_opcode_utils.h"    // IS_BACKWARDS_JUMP_OPCODE
 #include "pycore_opcode_metadata.h" // _PyOpcode_num_popped

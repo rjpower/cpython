@@ -1,6 +1,7 @@
 #include "parts.h"
 
 #include "pycore_dict.h"
+#include "pycore_list.h" // PyList_GET_VALUE()
 #include "pycore_tuple.h"
 #include "pycore_value.h"
 

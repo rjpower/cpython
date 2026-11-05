@@ -34,8 +34,8 @@ PyAPI_DATA(PyObject *) _PySet_Dummy;
 
 PyAPI_FUNC(int) _PySet_Contains(PySetObject *so, PyObject *key);
 
-// Internal because only the core makes a PyValueBorrow; its reader macro
-// lets the core pass owners and borrows alike.
+// Internal, like every function that takes or returns a PyValueBorrow; its
+// reader macro lets the core pass owners and borrows alike.
 PyAPI_FUNC(int) PySet_ContainsValue(PyObject *anyset, PyValueBorrow key);
 #define PySet_ContainsValue(S, K) (PySet_ContainsValue)(S, PyValue_Borrow(K))
 

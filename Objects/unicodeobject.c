@@ -14614,7 +14614,7 @@ unicode_iteritem(PyObject *obj, Py_ssize_t index)
     PyObject *result = unicode_char(ch);
     index = (result == NULL) ? -1 : index + 1;
     PyValue value = result == NULL ? PyValue_NULL :
-                    PyValue_FromPyObjectSteal(result);
+                    PyValue_FromObjectSteal(result);
     return (_PyValueIndexPair) { .value = value, .index = index };
 }
 

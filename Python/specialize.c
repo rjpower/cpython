@@ -1819,7 +1819,7 @@ function_get_version(PyObject *o, int opcode)
 
 #ifdef Py_STATS
 static int
-store_subscr_fail_kind(PyObject *container, PyValue sub)
+store_subscr_fail_kind(PyObject *container, PyValueBorrow sub)
 {
     PyTypeObject *container_type = Py_TYPE(container);
     bool sub_is_int = PyValue_LongCheckExact(sub);
@@ -2283,7 +2283,7 @@ _Py_Specialize_CallKw(PyValue callable_st, _PyInstr *instr, int nargs)
 
 #ifdef Py_STATS
 static int
-binary_op_fail_kind(int oparg, PyValue lhs_st, PyValue rhs_st)
+binary_op_fail_kind(int oparg, PyValueBorrow lhs_st, PyValueBorrow rhs_st)
 {
     PyTypeObject *lhs_type = PyValue_TYPE(lhs_st);
     PyTypeObject *rhs_type = PyValue_TYPE(rhs_st);

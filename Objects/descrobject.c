@@ -13,6 +13,7 @@
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_value.h"         // _PyObject_IsSame()
+#include "pycore_value_slots.h"   // _PyType_ValueWrapper()
 
 
 /*[clinic input]
@@ -559,8 +560,18 @@ wrapperdescr_raw_call(PyWrapperDescrObject *descr, PyObject *self,
                      descr->d_base->name);
         return NULL;
     }
+    void *wrapped = descr->d_wrapped;
+    if (descr->d_wrapped_value != NULL) {
+        /* A slot wrapper with a value side calls it through the value
+           wrapper of its slotdef (value-api-v2a0.md, section 4.5). */
+        wrapperfunc value_wrapper = _PyType_ValueWrapper(descr->d_base);
+        if (value_wrapper != NULL) {
+            wrapper = value_wrapper;
+            wrapped = descr->d_wrapped_value;
+        }
+    }
     _PyBorrowMark mark = _PyBorrowScope_Enter(tstate);
-    result = (*wrapper)(self, args, descr->d_wrapped);
+    result = (*wrapper)(self, args, wrapped);
     _PyBorrowScope_Exit(tstate, mark);
     return result;
 }
@@ -1060,7 +1071,8 @@ PyDescr_NewGetSet(PyTypeObject *type, PyGetSetDef *getset)
 }
 
 PyObject *
-PyDescr_NewWrapper(PyTypeObject *type, struct wrapperbase *base, void *wrapped)
+_PyDescr_NewWrapperPair(PyTypeObject *type, struct wrapperbase *base,
+                        void *wrapped, void *wrapped_value)
 {
     PyWrapperDescrObject *descr;
 
@@ -1069,8 +1081,15 @@ PyDescr_NewWrapper(PyTypeObject *type, struct wrapperbase *base, void *wrapped)
     if (descr != NULL) {
         descr->d_base = base;
         descr->d_wrapped = wrapped;
+        descr->d_wrapped_value = wrapped_value;
     }
     return (PyObject *)descr;
+}
+
+PyObject *
+PyDescr_NewWrapper(PyTypeObject *type, struct wrapperbase *base, void *wrapped)
+{
+    return _PyDescr_NewWrapperPair(type, base, wrapped, NULL);
 }
 
 int

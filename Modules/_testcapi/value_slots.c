@@ -74,6 +74,78 @@ static PyTypeObject ObjAdd_Type = {
 };
 
 
+/* ObjIndex: only an object nb_index */
+
+static PyObject *
+objindex_index(PyObject *Py_UNUSED(self))
+{
+    if (log_call("ObjIndex.index") < 0) {
+        return NULL;
+    }
+    return PyLong_FromLong(7);
+}
+
+static PyNumberMethods objindex_as_number = {
+    .nb_index = objindex_index,
+};
+
+static PyTypeObject ObjIndex_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testcapi.ObjIndex",
+    .tp_basicsize = sizeof(PyObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+    .tp_new = PyType_GenericNew,
+    .tp_as_number = &objindex_as_number,
+};
+
+
+/* ObjNotImpl: object slots that return NotImplemented */
+
+static PyObject *
+objnotimpl_add(PyObject *Py_UNUSED(a), PyObject *Py_UNUSED(b))
+{
+    if (log_call("ObjNotImpl.add") < 0) {
+        return NULL;
+    }
+    Py_RETURN_NOTIMPLEMENTED;
+}
+
+static PyObject *
+objnotimpl_power(PyObject *Py_UNUSED(a), PyObject *Py_UNUSED(b),
+                 PyObject *Py_UNUSED(c))
+{
+    if (log_call("ObjNotImpl.power") < 0) {
+        return NULL;
+    }
+    Py_RETURN_NOTIMPLEMENTED;
+}
+
+static PyObject *
+objnotimpl_richcompare(PyObject *Py_UNUSED(a), PyObject *Py_UNUSED(b),
+                       int Py_UNUSED(op))
+{
+    if (log_call("ObjNotImpl.richcompare") < 0) {
+        return NULL;
+    }
+    Py_RETURN_NOTIMPLEMENTED;
+}
+
+static PyNumberMethods objnotimpl_as_number = {
+    .nb_add = objnotimpl_add,
+    .nb_power = objnotimpl_power,
+};
+
+static PyTypeObject ObjNotImpl_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testcapi.ObjNotImpl",
+    .tp_basicsize = sizeof(PyObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+    .tp_new = PyType_GenericNew,
+    .tp_as_number = &objnotimpl_as_number,
+    .tp_richcompare = objnotimpl_richcompare,
+};
+
+
 /* Static subtypes of int */
 
 static PyTypeObject IntSubNothing_Type = {
@@ -135,6 +207,8 @@ _PyTestCapi_Init_ValueSlots(PyObject *mod)
     }
     PyTypeObject *types[] = {
         &ObjAdd_Type,
+        &ObjIndex_Type,
+        &ObjNotImpl_Type,
         &IntSubNothing_Type,
         &IntSubRepr_Type,
         &IntSubAdd_Type,

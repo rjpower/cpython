@@ -20,6 +20,8 @@
 #include "pycore_tuple.h"         // _PyTuple_FromArraySteal()
 #include "pycore_unionobject.h"   // _PyUnion_Check()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_ops.h"     // _PyValue_Add()
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
 #include <stddef.h>               // offsetof()
 
@@ -931,6 +933,193 @@ PyNumber_Check(PyObject *o)
         (*(binaryfunc*)(& ((char*)nb_methods)[slot]))
 #define NB_TERNOP(nb_methods, slot) \
         (*(ternaryfunc*)(& ((char*)nb_methods)[slot]))
+// The value row of a number slot.
+#define NB_ROW(x) _Py_VALUE_SLOT_INDEX_##x
+
+/* The number protocol on values (pyjit/design/proposals/value-api-v2a0.md,
+   section 4.6). Each dispatcher _PyValue_<Op> is the port of the object
+   function of the operation, which is now its thunk. Where upstream calls
+   a type's object slot, the dispatcher calls the type's value slot of the
+   same row if it is set, else the object slot through the adapter: the
+   same slot function either way, with the same arguments in the same
+   order. Deduplication compares object slots, as upstream does (D8): under
+   the pairing invariant the object slot identifies the pair. */
+
+#ifndef NDEBUG
+// _Py_CheckSlotResult() for a slot of type, whose operand may be inline.
+static int
+check_value_slot_result(PyTypeObject *type, const char *slot_name,
+                        int success)
+{
+    PyThreadState *tstate = _PyThreadState_GET();
+    if (!success && !_PyErr_Occurred(tstate)) {
+        _Py_FatalErrorFormat(__func__,
+                             "Slot %s of type %s failed "
+                             "without setting an exception",
+                             slot_name, type->tp_name);
+    }
+    if (success && _PyErr_Occurred(tstate)) {
+        _Py_FatalErrorFormat(__func__,
+                             "Slot %s of type %s succeeded "
+                             "with an exception set",
+                             slot_name, type->tp_name);
+    }
+    return 1;
+}
+#endif
+
+static inline int
+value_is_notimplemented(PyValue res)
+{
+    return PyValue_Is(res, PyValue_NotImplemented);
+}
+
+static void
+value_type_error(const char *msg, PyValueBorrow v)
+{
+    PyErr_Format(PyExc_TypeError, msg, PyValue_TYPE(v)->tp_name);
+}
+
+/* The adapter (D9), one function per signature kind: an object slot called
+   with value operands, boxed under site class NUMBER (_PyValue_AdapterBox()).
+   The result becomes a value through PyValue_FromPyObjectSteal(), which
+   makes an exact int or float inline. */
+
+#define adapter_box(v) _PyValue_AdapterBox((v), BOX_SITE_NUMBER)
+#define adapter_release(v, obj) _PyValue_AdapterRelease((v), (obj))
+
+static PyValue
+adapt_unary(unaryfunc f, PyValueBorrow v)
+{
+    PyObject *a = adapter_box(v);
+    if (a == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *res = f(a);
+    adapter_release(v, a);
+    return _PyValue_FromObjectResult(res);
+}
+
+static PyValue
+adapt_binary(binaryfunc f, PyValueBorrow v, PyValueBorrow w)
+{
+    PyObject *a = adapter_box(v);
+    if (a == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *b = adapter_box(w);
+    if (b == NULL) {
+        adapter_release(v, a);
+        return PyValue_NULL;
+    }
+    PyObject *res = f(a, b);
+    adapter_release(w, b);
+    adapter_release(v, a);
+    return _PyValue_FromObjectResult(res);
+}
+
+static PyValue
+adapt_ternary(ternaryfunc f, PyValueBorrow v, PyValueBorrow w,
+              PyValueBorrow z)
+{
+    PyObject *a = adapter_box(v);
+    if (a == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *b = adapter_box(w);
+    if (b == NULL) {
+        adapter_release(v, a);
+        return PyValue_NULL;
+    }
+    PyObject *c = adapter_box(z);
+    if (c == NULL) {
+        adapter_release(w, b);
+        adapter_release(v, a);
+        return PyValue_NULL;
+    }
+    PyObject *res = f(a, b, c);
+    adapter_release(z, c);
+    adapter_release(w, b);
+    adapter_release(v, a);
+    return _PyValue_FromObjectResult(res);
+}
+
+// The sequence stays an object; an inline other operand is boxed.
+static PyValue
+adapt_concat(binaryfunc f, PyObject *seq, PyValueBorrow w)
+{
+    PyObject *b = adapter_box(w);
+    if (b == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *res = f(seq, b);
+    adapter_release(w, b);
+    return _PyValue_FromObjectResult(res);
+}
+
+/* Call the slot of row of type t, whose object side is slot: the value
+   slot if it is set, else slot through the adapter. */
+
+static inline PyValue
+call_unary(PyTypeObject *t, unaryfunc slot, int row, PyValueBorrow v)
+{
+    _Py_unaryvaluefunc f = (_Py_unaryvaluefunc)_PyType_VALUE_FIELD_AT(t, row);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(t, row);
+        return f(v);
+    }
+    return adapt_unary(slot, v);
+}
+
+/* The value field of row of type t. The binary and ternary dispatchers
+   read it where they read the object slot beside it, as a pair: a slot
+   that they call first can run Python code that changes the type, and
+   upstream then still calls the object slot that it read before. */
+static inline _Py_valuefunc
+read_value_field(PyTypeObject *t, int row)
+{
+    _Py_valuefunc f = _PyType_VALUE_FIELD_AT(t, row);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(t, row);
+    }
+    return f;
+}
+
+// Call the pair (slot, value) read by read_value_field().
+static inline PyValue
+call_binary(binaryfunc slot, _Py_valuefunc value,
+            PyValueBorrow v, PyValueBorrow w)
+{
+    if (value != NULL) {
+        return ((_Py_binaryvaluefunc)value)(v, w);
+    }
+    return adapt_binary(slot, v, w);
+}
+
+static inline PyValue
+call_ternary(ternaryfunc slot, _Py_valuefunc value,
+             PyValueBorrow v, PyValueBorrow w, PyValueBorrow z)
+{
+    if (value != NULL) {
+        return ((_Py_ternaryvaluefunc)value)(v, w, z);
+    }
+    return adapt_ternary(slot, v, w, z);
+}
+
+// sq_concat and sq_inplace_concat; v holds the sequence, an object.
+static inline PyValue
+call_concat(PyTypeObject *t, binaryfunc slot, int row,
+            PyValueBorrow v, PyValueBorrow w)
+{
+    PyObject *seq = PyValue_AsKnownObjectBorrow(v);
+    _Py_concatvaluefunc f =
+        (_Py_concatvaluefunc)_PyType_VALUE_FIELD_AT(t, row);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(t, row);
+        return f(seq, w);
+    }
+    return adapt_concat(slot, seq, w);
+}
 
 /*
   Calling scheme used for binary operations:
@@ -942,24 +1131,23 @@ PyNumber_Check(PyObject *o)
       Py_TYPE(v)
  */
 
-static PyObject *
-binary_op1(PyObject *v, PyObject *w, const int op_slot
-#ifndef NDEBUG
-           , const char *op_name
-#endif
-           )
+static PyValue
+binary_op1(PyValueBorrow v, PyValueBorrow w, const int op_slot,
+           const int row, const char *op_name)
 {
+    PyTypeObject *tv = PyValue_TYPE(v);
+    PyTypeObject *tw = PyValue_TYPE(w);
     binaryfunc slotv;
-    if (Py_TYPE(v)->tp_as_number != NULL) {
-        slotv = NB_BINOP(Py_TYPE(v)->tp_as_number, op_slot);
+    if (tv->tp_as_number != NULL) {
+        slotv = NB_BINOP(tv->tp_as_number, op_slot);
     }
     else {
         slotv = NULL;
     }
 
     binaryfunc slotw;
-    if (!Py_IS_TYPE(w, Py_TYPE(v)) && Py_TYPE(w)->tp_as_number != NULL) {
-        slotw = NB_BINOP(Py_TYPE(w)->tp_as_number, op_slot);
+    if (tw != tv && tw->tp_as_number != NULL) {
+        slotw = NB_BINOP(tw->tp_as_number, op_slot);
         if (slotw == slotv) {
             slotw = NULL;
         }
@@ -967,58 +1155,63 @@ binary_op1(PyObject *v, PyObject *w, const int op_slot
     else {
         slotw = NULL;
     }
+    _Py_valuefunc valuev = slotv ? read_value_field(tv, row) : NULL;
+    _Py_valuefunc valuew = slotw ? read_value_field(tw, row) : NULL;
 
     if (slotv) {
-        PyObject *x;
-        if (slotw && PyType_IsSubtype(Py_TYPE(w), Py_TYPE(v))) {
-            x = slotw(v, w);
-            if (x != Py_NotImplemented)
+        PyValue x;
+        if (slotw && PyType_IsSubtype(tw, tv)) {
+            x = call_binary(slotw, valuew, v, w);
+            if (!value_is_notimplemented(x))
                 return x;
-            Py_DECREF(x); /* can't do it */
+            PyValue_CLOSE(x); /* can't do it */
             slotw = NULL;
         }
-        x = slotv(v, w);
-        assert(_Py_CheckSlotResult(v, op_name, x != NULL));
-        if (x != Py_NotImplemented) {
+        x = call_binary(slotv, valuev, v, w);
+        assert(check_value_slot_result(tv, op_name, !PyValue_IsNull(x)));
+        if (!value_is_notimplemented(x)) {
             return x;
         }
-        Py_DECREF(x); /* can't do it */
+        PyValue_CLOSE(x); /* can't do it */
     }
     if (slotw) {
-        PyObject *x = slotw(v, w);
-        assert(_Py_CheckSlotResult(w, op_name, x != NULL));
-        if (x != Py_NotImplemented) {
+        PyValue x = call_binary(slotw, valuew, v, w);
+        assert(check_value_slot_result(tw, op_name, !PyValue_IsNull(x)));
+        if (!value_is_notimplemented(x)) {
             return x;
         }
-        Py_DECREF(x); /* can't do it */
+        PyValue_CLOSE(x); /* can't do it */
     }
-    Py_RETURN_NOTIMPLEMENTED;
+    return PyValue_NotImplemented;
 }
 
-#ifdef NDEBUG
-#  define BINARY_OP1(v, w, op_slot, op_name) binary_op1(v, w, op_slot)
-#else
-#  define BINARY_OP1(v, w, op_slot, op_name) binary_op1(v, w, op_slot, op_name)
-#endif
+#define BINARY_OP1(v, w, op, op_name) \
+    binary_op1(v, w, NB_SLOT(op), NB_ROW(op), op_name)
 
-static PyObject *
-binop_type_error(PyObject *v, PyObject *w, const char *op_name)
+// BINARY_OP1() for object operands, with an object result.
+#define OBJECT_BINARY_OP1(v, w, op, op_name) \
+    _PyValue_THUNK_EXIT(BINARY_OP1(_Py_VALUE_ARG(v), _Py_VALUE_ARG(w), \
+                                   op, op_name))
+
+static PyValue
+binop_type_error(PyValueBorrow v, PyValueBorrow w, const char *op_name)
 {
     PyErr_Format(PyExc_TypeError,
                  "unsupported operand type(s) for %.100s: "
                  "'%.100s' and '%.100s'",
                  op_name,
-                 Py_TYPE(v)->tp_name,
-                 Py_TYPE(w)->tp_name);
-    return NULL;
+                 PyValue_TYPE(v)->tp_name,
+                 PyValue_TYPE(w)->tp_name);
+    return PyValue_NULL;
 }
 
-static PyObject *
-binary_op(PyObject *v, PyObject *w, const int op_slot, const char *op_name)
+static PyValue
+binary_op(PyValueBorrow v, PyValueBorrow w, const int op_slot,
+          const int row, const char *op_name)
 {
-    PyObject *result = BINARY_OP1(v, w, op_slot, op_name);
-    if (result == Py_NotImplemented) {
-        Py_DECREF(result);
+    PyValue result = binary_op1(v, w, op_slot, row, op_name);
+    if (value_is_notimplemented(result)) {
+        PyValue_CLOSE(result);
         return binop_type_error(v, w, op_name);
     }
     return result;
@@ -1032,16 +1225,19 @@ binary_op(PyObject *v, PyObject *w, const int op_slot, const char *op_name)
     v.op(v,w,z), w.op(v,w,z), z.op(v,w,z)
  */
 
-static PyObject *
-ternary_op(PyObject *v,
-           PyObject *w,
-           PyObject *z,
+static PyValue
+ternary_op(PyValueBorrow v,
+           PyValueBorrow w,
+           PyValueBorrow z,
            const int op_slot,
+           const int row,
            const char *op_name
            )
 {
-    PyNumberMethods *mv = Py_TYPE(v)->tp_as_number;
-    PyNumberMethods *mw = Py_TYPE(w)->tp_as_number;
+    PyTypeObject *tv = PyValue_TYPE(v);
+    PyTypeObject *tw = PyValue_TYPE(w);
+    PyNumberMethods *mv = tv->tp_as_number;
+    PyNumberMethods *mw = tw->tp_as_number;
 
     ternaryfunc slotv;
     if (mv != NULL) {
@@ -1052,7 +1248,7 @@ ternary_op(PyObject *v,
     }
 
     ternaryfunc slotw;
-    if (!Py_IS_TYPE(w, Py_TYPE(v)) && mw != NULL) {
+    if (tw != tv && mw != NULL) {
         slotw = NB_TERNOP(mw, op_slot);
         if (slotw == slotv) {
             slotw = NULL;
@@ -1061,57 +1257,61 @@ ternary_op(PyObject *v,
     else {
         slotw = NULL;
     }
+    _Py_valuefunc valuev = slotv ? read_value_field(tv, row) : NULL;
+    _Py_valuefunc valuew = slotw ? read_value_field(tw, row) : NULL;
 
     if (slotv) {
-        PyObject *x;
-        if (slotw && PyType_IsSubtype(Py_TYPE(w), Py_TYPE(v))) {
-            x = slotw(v, w, z);
-            if (x != Py_NotImplemented) {
+        PyValue x;
+        if (slotw && PyType_IsSubtype(tw, tv)) {
+            x = call_ternary(slotw, valuew, v, w, z);
+            if (!value_is_notimplemented(x)) {
                 return x;
             }
-            Py_DECREF(x); /* can't do it */
+            PyValue_CLOSE(x); /* can't do it */
             slotw = NULL;
         }
-        x = slotv(v, w, z);
-        assert(_Py_CheckSlotResult(v, op_name, x != NULL));
-        if (x != Py_NotImplemented) {
+        x = call_ternary(slotv, valuev, v, w, z);
+        assert(check_value_slot_result(tv, op_name, !PyValue_IsNull(x)));
+        if (!value_is_notimplemented(x)) {
             return x;
         }
-        Py_DECREF(x); /* can't do it */
+        PyValue_CLOSE(x); /* can't do it */
     }
     if (slotw) {
-        PyObject *x = slotw(v, w, z);
-        assert(_Py_CheckSlotResult(w, op_name, x != NULL));
-        if (x != Py_NotImplemented) {
+        PyValue x = call_ternary(slotw, valuew, v, w, z);
+        assert(check_value_slot_result(tw, op_name, !PyValue_IsNull(x)));
+        if (!value_is_notimplemented(x)) {
             return x;
         }
-        Py_DECREF(x); /* can't do it */
+        PyValue_CLOSE(x); /* can't do it */
     }
 
-    PyNumberMethods *mz = Py_TYPE(z)->tp_as_number;
+    PyTypeObject *tz = PyValue_TYPE(z);
+    PyNumberMethods *mz = tz->tp_as_number;
     if (mz != NULL) {
         ternaryfunc slotz = NB_TERNOP(mz, op_slot);
         if (slotz == slotv || slotz == slotw) {
             slotz = NULL;
         }
         if (slotz) {
-            PyObject *x = slotz(v, w, z);
-            assert(_Py_CheckSlotResult(z, op_name, x != NULL));
-            if (x != Py_NotImplemented) {
+            PyValue x = call_ternary(slotz, read_value_field(tz, row),
+                                     v, w, z);
+            assert(check_value_slot_result(tz, op_name, !PyValue_IsNull(x)));
+            if (!value_is_notimplemented(x)) {
                 return x;
             }
-            Py_DECREF(x); /* can't do it */
+            PyValue_CLOSE(x); /* can't do it */
         }
     }
 
-    if (z == Py_None) {
+    if (PyValue_Is(z, PyValue_None)) {
         PyErr_Format(
             PyExc_TypeError,
             "unsupported operand type(s) for %.100s: "
             "'%.100s' and '%.100s'",
             op_name,
-            Py_TYPE(v)->tp_name,
-            Py_TYPE(w)->tp_name);
+            tv->tp_name,
+            tw->tp_name);
     }
     else {
         PyErr_Format(
@@ -1119,73 +1319,96 @@ ternary_op(PyObject *v,
             "unsupported operand type(s) for %.100s: "
             "'%.100s', '%.100s', '%.100s'",
             op_name,
-            Py_TYPE(v)->tp_name,
-            Py_TYPE(w)->tp_name,
-            Py_TYPE(z)->tp_name);
+            tv->tp_name,
+            tw->tp_name,
+            tz->tp_name);
     }
-    return NULL;
+    return PyValue_NULL;
 }
 
-#define BINARY_FUNC(func, op, op_name) \
+/* A dispatcher and its thunk, the object function. */
+#define BINARY_FUNC(func, name, op, op_name) \
+    PyValue \
+    (_PyValue_##name)(PyValueBorrow v, PyValueBorrow w) \
+    { \
+        return binary_op(v, w, NB_SLOT(op), NB_ROW(op), op_name); \
+    } \
+    \
     PyObject * \
     func(PyObject *v, PyObject *w) { \
-        return binary_op(v, w, NB_SLOT(op), op_name); \
+        return _PyValue_THUNK_EXIT( \
+            (_PyValue_##name)(_Py_VALUE_ARG(v), _Py_VALUE_ARG(w))); \
     }
 
-BINARY_FUNC(PyNumber_Or, nb_or, "|")
-BINARY_FUNC(PyNumber_Xor, nb_xor, "^")
-BINARY_FUNC(PyNumber_And, nb_and, "&")
-BINARY_FUNC(PyNumber_Lshift, nb_lshift, "<<")
-BINARY_FUNC(PyNumber_Rshift, nb_rshift, ">>")
-BINARY_FUNC(PyNumber_Subtract, nb_subtract, "-")
-BINARY_FUNC(PyNumber_Divmod, nb_divmod, "divmod()")
+BINARY_FUNC(PyNumber_Or, Or, nb_or, "|")
+BINARY_FUNC(PyNumber_Xor, Xor, nb_xor, "^")
+BINARY_FUNC(PyNumber_And, And, nb_and, "&")
+BINARY_FUNC(PyNumber_Lshift, Lshift, nb_lshift, "<<")
+BINARY_FUNC(PyNumber_Rshift, Rshift, nb_rshift, ">>")
+BINARY_FUNC(PyNumber_Subtract, Subtract, nb_subtract, "-")
+BINARY_FUNC(PyNumber_Divmod, Divmod, nb_divmod, "divmod()")
 
-PyObject *
-PyNumber_Add(PyObject *v, PyObject *w)
+/* Sequence concatenation after the number slots: sq_concat's value side
+   takes the other operand as a borrow (section 4.6). */
+PyValue
+(_PyValue_Add)(PyValueBorrow v, PyValueBorrow w)
 {
-    PyObject *result = BINARY_OP1(v, w, NB_SLOT(nb_add), "+");
-    if (result != Py_NotImplemented) {
+    PyValue result = BINARY_OP1(v, w, nb_add, "+");
+    if (!value_is_notimplemented(result)) {
         return result;
     }
-    Py_DECREF(result);
+    PyValue_CLOSE(result);
 
-    PySequenceMethods *m = Py_TYPE(v)->tp_as_sequence;
+    PyTypeObject *tv = PyValue_TYPE(v);
+    PySequenceMethods *m = tv->tp_as_sequence;
     if (m && m->sq_concat) {
-        result = (*m->sq_concat)(v, w);
-        assert(_Py_CheckSlotResult(v, "+", result != NULL));
+        result = call_concat(tv, m->sq_concat, _Py_VALUE_SLOT_INDEX_sq_concat,
+                             v, w);
+        assert(check_value_slot_result(tv, "+", !PyValue_IsNull(result)));
         return result;
     }
 
     return binop_type_error(v, w, "+");
 }
 
-static PyObject *
-sequence_repeat(ssizeargfunc repeatfunc, PyObject *seq, PyObject *n)
+PyObject *
+PyNumber_Add(PyObject *v, PyObject *w)
+{
+    return _PyValue_THUNK_EXIT(
+        (_PyValue_Add)(_Py_VALUE_ARG(v), _Py_VALUE_ARG(w)));
+}
+
+/* seq * n; seq holds a sequence, an object. sq_repeat has no value side. */
+static PyValue
+sequence_repeat(ssizeargfunc repeatfunc, PyValueBorrow seq, PyValueBorrow n)
 {
     Py_ssize_t count;
-    if (_PyIndex_Check(n)) {
-        count = PyNumber_AsSsize_t(n, PyExc_OverflowError);
+    PyNumberMethods *mn = PyValue_TYPE(n)->tp_as_number;
+    if (mn != NULL && mn->nb_index != NULL) {
+        count = (_PyValue_AsSsize_t)(n, PyExc_OverflowError);
         if (count == -1 && PyErr_Occurred()) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
     else {
-        return type_error("can't multiply sequence by "
-                          "non-int of type '%.200s'", n);
+        value_type_error("can't multiply sequence by "
+                         "non-int of type '%.200s'", n);
+        return PyValue_NULL;
     }
-    PyObject *res = (*repeatfunc)(seq, count);
-    assert(_Py_CheckSlotResult(seq, "*", res != NULL));
-    return res;
+    PyObject *obj = PyValue_AsKnownObjectBorrow(seq);
+    PyObject *res = (*repeatfunc)(obj, count);
+    assert(_Py_CheckSlotResult(obj, "*", res != NULL));
+    return _PyValue_FromObjectResult(res);
 }
 
-PyObject *
-PyNumber_Multiply(PyObject *v, PyObject *w)
+PyValue
+(_PyValue_Multiply)(PyValueBorrow v, PyValueBorrow w)
 {
-    PyObject *result = BINARY_OP1(v, w, NB_SLOT(nb_multiply), "*");
-    if (result == Py_NotImplemented) {
-        PySequenceMethods *mv = Py_TYPE(v)->tp_as_sequence;
-        PySequenceMethods *mw = Py_TYPE(w)->tp_as_sequence;
-        Py_DECREF(result);
+    PyValue result = BINARY_OP1(v, w, nb_multiply, "*");
+    if (value_is_notimplemented(result)) {
+        PySequenceMethods *mv = PyValue_TYPE(v)->tp_as_sequence;
+        PySequenceMethods *mw = PyValue_TYPE(w)->tp_as_sequence;
+        PyValue_CLOSE(result);
         if  (mv && mv->sq_repeat) {
             return sequence_repeat(mv->sq_repeat, v, w);
         }
@@ -1197,15 +1420,30 @@ PyNumber_Multiply(PyObject *v, PyObject *w)
     return result;
 }
 
-BINARY_FUNC(PyNumber_MatrixMultiply, nb_matrix_multiply, "@")
-BINARY_FUNC(PyNumber_FloorDivide, nb_floor_divide, "//")
-BINARY_FUNC(PyNumber_TrueDivide, nb_true_divide, "/")
-BINARY_FUNC(PyNumber_Remainder, nb_remainder, "%")
+PyObject *
+PyNumber_Multiply(PyObject *v, PyObject *w)
+{
+    return _PyValue_THUNK_EXIT(
+        (_PyValue_Multiply)(_Py_VALUE_ARG(v), _Py_VALUE_ARG(w)));
+}
+
+BINARY_FUNC(PyNumber_MatrixMultiply, MatrixMultiply, nb_matrix_multiply, "@")
+BINARY_FUNC(PyNumber_FloorDivide, FloorDivide, nb_floor_divide, "//")
+BINARY_FUNC(PyNumber_TrueDivide, TrueDivide, nb_true_divide, "/")
+BINARY_FUNC(PyNumber_Remainder, Remainder, nb_remainder, "%")
+
+PyValue
+(_PyValue_Power)(PyValueBorrow v, PyValueBorrow w, PyValueBorrow z)
+{
+    return ternary_op(v, w, z, NB_SLOT(nb_power), NB_ROW(nb_power),
+                      "** or pow()");
+}
 
 PyObject *
 PyNumber_Power(PyObject *v, PyObject *w, PyObject *z)
 {
-    return ternary_op(v, w, z, NB_SLOT(nb_power), "** or pow()");
+    return _PyValue_THUNK_EXIT((_PyValue_Power)(
+        _Py_VALUE_ARG(v), _Py_VALUE_ARG(w), _Py_VALUE_ARG(z)));
 }
 
 PyObject *
@@ -1230,100 +1468,116 @@ _PyNumber_PowerNoMod(PyObject *lhs, PyObject *rhs)
 
    */
 
-static PyObject *
-binary_iop1(PyObject *v, PyObject *w, const int iop_slot, const int op_slot
-#ifndef NDEBUG
-            , const char *op_name
-#endif
-            )
+static PyValue
+binary_iop1(PyValueBorrow v, PyValueBorrow w, const int iop_slot,
+            const int iop_row, const int op_slot, const int op_row,
+            const char *op_name)
 {
-    PyNumberMethods *mv = Py_TYPE(v)->tp_as_number;
+    PyTypeObject *tv = PyValue_TYPE(v);
+    PyNumberMethods *mv = tv->tp_as_number;
     if (mv != NULL) {
         binaryfunc slot = NB_BINOP(mv, iop_slot);
         if (slot) {
-            PyObject *x = (slot)(v, w);
-            assert(_Py_CheckSlotResult(v, op_name, x != NULL));
-            if (x != Py_NotImplemented) {
+            PyValue x = call_binary(slot, read_value_field(tv, iop_row),
+                                    v, w);
+            assert(check_value_slot_result(tv, op_name, !PyValue_IsNull(x)));
+            if (!value_is_notimplemented(x)) {
                 return x;
             }
-            Py_DECREF(x);
+            PyValue_CLOSE(x);
         }
     }
-#ifdef NDEBUG
-    return binary_op1(v, w, op_slot);
-#else
-    return binary_op1(v, w, op_slot, op_name);
-#endif
+    return binary_op1(v, w, op_slot, op_row, op_name);
 }
 
-#ifdef NDEBUG
-#  define BINARY_IOP1(v, w, iop_slot, op_slot, op_name) binary_iop1(v, w, iop_slot, op_slot)
-#else
-#  define BINARY_IOP1(v, w, iop_slot, op_slot, op_name) binary_iop1(v, w, iop_slot, op_slot, op_name)
-#endif
+#define BINARY_IOP1(v, w, iop, op, op_name) \
+    binary_iop1(v, w, NB_SLOT(iop), NB_ROW(iop), NB_SLOT(op), NB_ROW(op), \
+                op_name)
 
-static PyObject *
-binary_iop(PyObject *v, PyObject *w, const int iop_slot, const int op_slot,
-                const char *op_name)
+// BINARY_IOP1() for object operands, with an object result.
+#define OBJECT_BINARY_IOP1(v, w, iop, op, op_name) \
+    _PyValue_THUNK_EXIT(BINARY_IOP1(_Py_VALUE_ARG(v), _Py_VALUE_ARG(w), \
+                                    iop, op, op_name))
+
+static PyValue
+binary_iop(PyValueBorrow v, PyValueBorrow w, const int iop_slot,
+           const int iop_row, const int op_slot, const int op_row,
+           const char *op_name)
 {
-    PyObject *result = BINARY_IOP1(v, w, iop_slot, op_slot, op_name);
-    if (result == Py_NotImplemented) {
-        Py_DECREF(result);
+    PyValue result = binary_iop1(v, w, iop_slot, iop_row, op_slot, op_row,
+                                 op_name);
+    if (value_is_notimplemented(result)) {
+        PyValue_CLOSE(result);
         return binop_type_error(v, w, op_name);
     }
     return result;
 }
 
-static PyObject *
-ternary_iop(PyObject *v, PyObject *w, PyObject *z, const int iop_slot, const int op_slot,
-                const char *op_name)
+static PyValue
+ternary_iop(PyValueBorrow v, PyValueBorrow w, PyValueBorrow z,
+            const int iop_slot, const int iop_row, const int op_slot,
+            const int op_row, const char *op_name)
 {
-    PyNumberMethods *mv = Py_TYPE(v)->tp_as_number;
+    PyTypeObject *tv = PyValue_TYPE(v);
+    PyNumberMethods *mv = tv->tp_as_number;
     if (mv != NULL) {
         ternaryfunc slot = NB_TERNOP(mv, iop_slot);
         if (slot) {
-            PyObject *x = (slot)(v, w, z);
-            if (x != Py_NotImplemented) {
+            PyValue x = call_ternary(slot, read_value_field(tv, iop_row),
+                                     v, w, z);
+            if (!value_is_notimplemented(x)) {
                 return x;
             }
-            Py_DECREF(x);
+            PyValue_CLOSE(x);
         }
     }
-    return ternary_op(v, w, z, op_slot, op_name);
+    return ternary_op(v, w, z, op_slot, op_row, op_name);
 }
 
-#define INPLACE_BINOP(func, iop, op, op_name) \
+#define INPLACE_BINOP(func, name, iop, op, op_name) \
+    PyValue \
+    (_PyValue_InPlace##name)(PyValueBorrow v, PyValueBorrow w) \
+    { \
+        return binary_iop(v, w, NB_SLOT(iop), NB_ROW(iop), \
+                          NB_SLOT(op), NB_ROW(op), op_name); \
+    } \
+    \
     PyObject * \
     func(PyObject *v, PyObject *w) { \
-        return binary_iop(v, w, NB_SLOT(iop), NB_SLOT(op), op_name); \
+        return _PyValue_THUNK_EXIT( \
+            (_PyValue_InPlace##name)(_Py_VALUE_ARG(v), _Py_VALUE_ARG(w))); \
     }
 
-INPLACE_BINOP(PyNumber_InPlaceOr, nb_inplace_or, nb_or, "|=")
-INPLACE_BINOP(PyNumber_InPlaceXor, nb_inplace_xor, nb_xor, "^=")
-INPLACE_BINOP(PyNumber_InPlaceAnd, nb_inplace_and, nb_and, "&=")
-INPLACE_BINOP(PyNumber_InPlaceLshift, nb_inplace_lshift, nb_lshift, "<<=")
-INPLACE_BINOP(PyNumber_InPlaceRshift, nb_inplace_rshift, nb_rshift, ">>=")
-INPLACE_BINOP(PyNumber_InPlaceSubtract, nb_inplace_subtract, nb_subtract, "-=")
-INPLACE_BINOP(PyNumber_InPlaceMatrixMultiply, nb_inplace_matrix_multiply, nb_matrix_multiply, "@=")
-INPLACE_BINOP(PyNumber_InPlaceFloorDivide, nb_inplace_floor_divide, nb_floor_divide, "//=")
-INPLACE_BINOP(PyNumber_InPlaceTrueDivide, nb_inplace_true_divide, nb_true_divide,  "/=")
-INPLACE_BINOP(PyNumber_InPlaceRemainder, nb_inplace_remainder, nb_remainder, "%=")
+INPLACE_BINOP(PyNumber_InPlaceOr, Or, nb_inplace_or, nb_or, "|=")
+INPLACE_BINOP(PyNumber_InPlaceXor, Xor, nb_inplace_xor, nb_xor, "^=")
+INPLACE_BINOP(PyNumber_InPlaceAnd, And, nb_inplace_and, nb_and, "&=")
+INPLACE_BINOP(PyNumber_InPlaceLshift, Lshift, nb_inplace_lshift, nb_lshift, "<<=")
+INPLACE_BINOP(PyNumber_InPlaceRshift, Rshift, nb_inplace_rshift, nb_rshift, ">>=")
+INPLACE_BINOP(PyNumber_InPlaceSubtract, Subtract, nb_inplace_subtract, nb_subtract, "-=")
+INPLACE_BINOP(PyNumber_InPlaceMatrixMultiply, MatrixMultiply, nb_inplace_matrix_multiply, nb_matrix_multiply, "@=")
+INPLACE_BINOP(PyNumber_InPlaceFloorDivide, FloorDivide, nb_inplace_floor_divide, nb_floor_divide, "//=")
+INPLACE_BINOP(PyNumber_InPlaceTrueDivide, TrueDivide, nb_inplace_true_divide, nb_true_divide,  "/=")
+INPLACE_BINOP(PyNumber_InPlaceRemainder, Remainder, nb_inplace_remainder, nb_remainder, "%=")
 
-PyObject *
-PyNumber_InPlaceAdd(PyObject *v, PyObject *w)
+PyValue
+(_PyValue_InPlaceAdd)(PyValueBorrow v, PyValueBorrow w)
 {
-    PyObject *result = BINARY_IOP1(v, w, NB_SLOT(nb_inplace_add),
-                                   NB_SLOT(nb_add), "+=");
-    if (result == Py_NotImplemented) {
-        PySequenceMethods *m = Py_TYPE(v)->tp_as_sequence;
-        Py_DECREF(result);
+    PyValue result = BINARY_IOP1(v, w, nb_inplace_add, nb_add, "+=");
+    if (value_is_notimplemented(result)) {
+        PyTypeObject *tv = PyValue_TYPE(v);
+        PySequenceMethods *m = tv->tp_as_sequence;
+        PyValue_CLOSE(result);
         if (m != NULL) {
             binaryfunc func = m->sq_inplace_concat;
-            if (func == NULL)
+            int row = _Py_VALUE_SLOT_INDEX_sq_inplace_concat;
+            if (func == NULL) {
                 func = m->sq_concat;
+                row = _Py_VALUE_SLOT_INDEX_sq_concat;
+            }
             if (func != NULL) {
-                result = func(v, w);
-                assert(_Py_CheckSlotResult(v, "+=", result != NULL));
+                result = call_concat(tv, func, row, v, w);
+                assert(check_value_slot_result(tv, "+=",
+                                               !PyValue_IsNull(result)));
                 return result;
             }
         }
@@ -1333,15 +1587,22 @@ PyNumber_InPlaceAdd(PyObject *v, PyObject *w)
 }
 
 PyObject *
-PyNumber_InPlaceMultiply(PyObject *v, PyObject *w)
+PyNumber_InPlaceAdd(PyObject *v, PyObject *w)
 {
-    PyObject *result = BINARY_IOP1(v, w, NB_SLOT(nb_inplace_multiply),
-                                   NB_SLOT(nb_multiply), "*=");
-    if (result == Py_NotImplemented) {
+    return _PyValue_THUNK_EXIT(
+        (_PyValue_InPlaceAdd)(_Py_VALUE_ARG(v), _Py_VALUE_ARG(w)));
+}
+
+PyValue
+(_PyValue_InPlaceMultiply)(PyValueBorrow v, PyValueBorrow w)
+{
+    PyValue result = BINARY_IOP1(v, w, nb_inplace_multiply, nb_multiply,
+                                 "*=");
+    if (value_is_notimplemented(result)) {
         ssizeargfunc f = NULL;
-        PySequenceMethods *mv = Py_TYPE(v)->tp_as_sequence;
-        PySequenceMethods *mw = Py_TYPE(w)->tp_as_sequence;
-        Py_DECREF(result);
+        PySequenceMethods *mv = PyValue_TYPE(v)->tp_as_sequence;
+        PySequenceMethods *mw = PyValue_TYPE(w)->tp_as_sequence;
+        PyValue_CLOSE(result);
         if (mv != NULL) {
             f = mv->sq_inplace_repeat;
             if (f == NULL)
@@ -1362,10 +1623,25 @@ PyNumber_InPlaceMultiply(PyObject *v, PyObject *w)
 }
 
 PyObject *
-PyNumber_InPlacePower(PyObject *v, PyObject *w, PyObject *z)
+PyNumber_InPlaceMultiply(PyObject *v, PyObject *w)
+{
+    return _PyValue_THUNK_EXIT(
+        (_PyValue_InPlaceMultiply)(_Py_VALUE_ARG(v), _Py_VALUE_ARG(w)));
+}
+
+PyValue
+(_PyValue_InPlacePower)(PyValueBorrow v, PyValueBorrow w, PyValueBorrow z)
 {
     return ternary_iop(v, w, z, NB_SLOT(nb_inplace_power),
-                                NB_SLOT(nb_power), "**=");
+                       NB_ROW(nb_inplace_power), NB_SLOT(nb_power),
+                       NB_ROW(nb_power), "**=");
+}
+
+PyObject *
+PyNumber_InPlacePower(PyObject *v, PyObject *w, PyObject *z)
+{
+    return _PyValue_THUNK_EXIT((_PyValue_InPlacePower)(
+        _Py_VALUE_ARG(v), _Py_VALUE_ARG(w), _Py_VALUE_ARG(z)));
 }
 
 PyObject *
@@ -1377,27 +1653,37 @@ _PyNumber_InPlacePowerNoMod(PyObject *lhs, PyObject *rhs)
 
 /* Unary operators and functions */
 
-#define UNARY_FUNC(func, op, meth_name, descr)                           \
-    PyObject *                                                           \
-    func(PyObject *o) {                                                  \
-        if (o == NULL) {                                                 \
-            return null_error();                                         \
+#define UNARY_FUNC(func, name, op, meth_name, descr)                     \
+    PyValue                                                              \
+    (_PyValue_##name)(PyValueBorrow o)                                   \
+    {                                                                    \
+        if (PyValue_IsNull(o)) {                                         \
+            null_error();                                                \
+            return PyValue_NULL;                                         \
         }                                                                \
                                                                          \
-        PyNumberMethods *m = Py_TYPE(o)->tp_as_number;                   \
+        PyTypeObject *t = PyValue_TYPE(o);                               \
+        PyNumberMethods *m = t->tp_as_number;                            \
         if (m && m->op) {                                                \
-            PyObject *res = (*m->op)(o);                                 \
-            assert(_Py_CheckSlotResult(o, #meth_name, res != NULL));     \
+            PyValue res = call_unary(t, m->op, NB_ROW(op), o);           \
+            assert(check_value_slot_result(t, #meth_name,                \
+                                           !PyValue_IsNull(res)));       \
             return res;                                                  \
         }                                                                \
                                                                          \
-        return type_error("bad operand type for "descr": '%.200s'", o);  \
+        value_type_error("bad operand type for "descr": '%.200s'", o);   \
+        return PyValue_NULL;                                             \
+    }                                                                    \
+                                                                         \
+    PyObject *                                                           \
+    func(PyObject *o) {                                                  \
+        return _PyValue_THUNK_EXIT((_PyValue_##name)(_Py_VALUE_ARG(o))); \
     }
 
-UNARY_FUNC(PyNumber_Negative, nb_negative, __neg__, "unary -")
-UNARY_FUNC(PyNumber_Positive, nb_positive, __pos__, "unary +")
-UNARY_FUNC(PyNumber_Invert, nb_invert, __invert__, "unary ~")
-UNARY_FUNC(PyNumber_Absolute, nb_absolute, __abs__, "abs()")
+UNARY_FUNC(PyNumber_Negative, Negative, nb_negative, __neg__, "unary -")
+UNARY_FUNC(PyNumber_Positive, Positive, nb_positive, __pos__, "unary +")
+UNARY_FUNC(PyNumber_Invert, Invert, nb_invert, __invert__, "unary ~")
+UNARY_FUNC(PyNumber_Absolute, Absolute, nb_absolute, __abs__, "abs()")
 
 
 int
@@ -1406,52 +1692,76 @@ PyIndex_Check(PyObject *obj)
     return _PyIndex_Check(obj);
 }
 
+static inline int
+value_long_check(PyValueBorrow v)
+{
+    return PyType_FastSubclass(PyValue_TYPE(v), Py_TPFLAGS_LONG_SUBCLASS);
+}
+
+#define value_long_check(V) (value_long_check)(PyValue_Borrow(V))
+
+static inline int
+value_long_check_exact(PyValueBorrow v)
+{
+    return PyValue_TYPE(v) == &PyLong_Type;
+}
+#define value_long_check_exact(V) (value_long_check_exact)(PyValue_Borrow(V))
+
 
 /* Return a Python int from the object item.
    Can return an instance of int subclass.
    Raise TypeError if the result is not an int
    or if the object cannot be interpreted as an index.
 */
-PyObject *
-_PyNumber_Index(PyObject *item)
+PyValue
+(_PyValue_Index)(PyValueBorrow item)
 {
-    if (item == NULL) {
-        return null_error();
+    if (PyValue_IsNull(item)) {
+        null_error();
+        return PyValue_NULL;
     }
 
-    if (PyLong_Check(item)) {
-        return Py_NewRef(item);
+    if (value_long_check(item)) {
+        return PyValue_DUP(item);
     }
-    if (!_PyIndex_Check(item)) {
+    PyTypeObject *t = PyValue_TYPE(item);
+    if (t->tp_as_number == NULL || t->tp_as_number->nb_index == NULL) {
         PyErr_Format(PyExc_TypeError,
                      "'%.200s' object cannot be interpreted "
-                     "as an integer", Py_TYPE(item)->tp_name);
-        return NULL;
+                     "as an integer", t->tp_name);
+        return PyValue_NULL;
     }
 
-    PyObject *result = Py_TYPE(item)->tp_as_number->nb_index(item);
-    assert(_Py_CheckSlotResult(item, "__index__", result != NULL));
-    if (!result || PyLong_CheckExact(result)) {
+    PyValue result = call_unary(t, t->tp_as_number->nb_index,
+                                NB_ROW(nb_index), item);
+    assert(check_value_slot_result(t, "__index__", !PyValue_IsNull(result)));
+    if (PyValue_IsNull(result) || value_long_check_exact(result)) {
         return result;
     }
 
-    if (!PyLong_Check(result)) {
+    if (!value_long_check(result)) {
         PyErr_Format(PyExc_TypeError,
-                     "%T.__index__() must return an int, not %T",
-                     item, result);
-        Py_DECREF(result);
-        return NULL;
+                     "%N.__index__() must return an int, not %N",
+                     t, PyValue_TYPE(result));
+        PyValue_CLOSE(result);
+        return PyValue_NULL;
     }
     /* Issue #17576: warn if 'result' not of exact type int. */
     if (PyErr_WarnFormat(PyExc_DeprecationWarning, 1,
-            "%T.__index__() must return an int, not %T.  "
+            "%N.__index__() must return an int, not %N.  "
             "The ability to return an instance of a strict subclass of int "
             "is deprecated, and may be removed in a future version of Python.",
-            item, result)) {
-        Py_DECREF(result);
-        return NULL;
+            t, PyValue_TYPE(result))) {
+        PyValue_CLOSE(result);
+        return PyValue_NULL;
     }
     return result;
+}
+
+PyObject *
+_PyNumber_Index(PyObject *item)
+{
+    return _PyValue_THUNK_EXIT((_PyValue_Index)(_Py_VALUE_ARG(item)));
 }
 
 /* Return an exact Python int from the object item.
@@ -1471,16 +1781,22 @@ PyNumber_Index(PyObject *item)
 /* Return an error on Overflow only if err is not NULL*/
 
 Py_ssize_t
-PyNumber_AsSsize_t(PyObject *item, PyObject *err)
+(_PyValue_AsSsize_t)(PyValueBorrow item, PyObject *err)
 {
     Py_ssize_t result;
     PyObject *runerr;
-    PyObject *value = _PyNumber_Index(item);
-    if (value == NULL)
+    PyValue value = (_PyValue_Index)(item);
+    if (PyValue_IsNull(value))
         return -1;
 
+    // An inline int fits: it has at most 51 bits.
+    if (PyValue_IsInlineInt(value)) {
+        return (Py_ssize_t)PyValue_InlineInt64(value);
+    }
+    PyObject *obj = PyValue_AsKnownObjectBorrow(value);
+
     /* We're done if PyLong_AsSsize_t() returns without error. */
-    result = PyLong_AsSsize_t(value);
+    result = PyLong_AsSsize_t(obj);
     if (result != -1)
         goto finish;
 
@@ -1499,11 +1815,11 @@ PyNumber_AsSsize_t(PyObject *item, PyObject *err)
     /* If no error-handling desired then the default clipping
        is sufficient. */
     if (!err) {
-        assert(PyLong_Check(value));
+        assert(PyLong_Check(obj));
         /* Whether or not it is less than or equal to
            zero is determined by the sign of ob_size
         */
-        if (_PyLong_IsNegative((PyLongObject *)value))
+        if (_PyLong_IsNegative((PyLongObject *)obj))
             result = PY_SSIZE_T_MIN;
         else
             result = PY_SSIZE_T_MAX;
@@ -1512,155 +1828,202 @@ PyNumber_AsSsize_t(PyObject *item, PyObject *err)
         /* Otherwise replace the error with caller's error object. */
         _PyErr_Format(tstate, err,
                       "cannot fit '%.200s' into an index-sized integer",
-                      Py_TYPE(item)->tp_name);
+                      PyValue_TYPE(item)->tp_name);
     }
 
  finish:
-    Py_DECREF(value);
+    PyValue_CLOSE(value);
     return result;
 }
 
-
-PyObject *
-PyNumber_Long(PyObject *o)
+Py_ssize_t
+PyNumber_AsSsize_t(PyObject *item, PyObject *err)
 {
-    PyObject *result;
+    return (_PyValue_AsSsize_t)(_Py_VALUE_ARG(item), err);
+}
+
+
+PyValue
+(_PyValue_Long)(PyValueBorrow o)
+{
+    PyValue result;
     PyNumberMethods *m;
     Py_buffer view;
 
-    if (o == NULL) {
-        return null_error();
+    if (PyValue_IsNull(o)) {
+        null_error();
+        return PyValue_NULL;
     }
 
-    if (PyLong_CheckExact(o)) {
-        return Py_NewRef(o);
+    if (value_long_check_exact(o)) {
+        return PyValue_DUP(o);
     }
-    m = Py_TYPE(o)->tp_as_number;
+    PyTypeObject *t = PyValue_TYPE(o);
+    m = t->tp_as_number;
     if (m && m->nb_int) { /* This should include subclasses of int */
         /* Convert using the nb_int slot, which should return something
            of exact type int. */
-        result = m->nb_int(o);
-        assert(_Py_CheckSlotResult(o, "__int__", result != NULL));
-        if (!result || PyLong_CheckExact(result)) {
+        result = call_unary(t, m->nb_int, NB_ROW(nb_int), o);
+        assert(check_value_slot_result(t, "__int__", !PyValue_IsNull(result)));
+        if (PyValue_IsNull(result) || value_long_check_exact(result)) {
             return result;
         }
 
-        if (!PyLong_Check(result)) {
+        if (!value_long_check(result)) {
             PyErr_Format(PyExc_TypeError,
-                         "%T.__int__() must return an int, not %T",
-                         o, result);
-            Py_DECREF(result);
-            return NULL;
+                         "%N.__int__() must return an int, not %N",
+                         t, PyValue_TYPE(result));
+            PyValue_CLOSE(result);
+            return PyValue_NULL;
         }
         /* Issue #17576: warn if 'result' not of exact type int. */
         if (PyErr_WarnFormat(PyExc_DeprecationWarning, 1,
-                "%T.__int__() must return an int, not %T.  "
+                "%N.__int__() must return an int, not %N.  "
                 "The ability to return an instance of a strict subclass of int "
                 "is deprecated, and may be removed in a future version of Python.",
-                o, result)) {
-            Py_DECREF(result);
-            return NULL;
+                t, PyValue_TYPE(result))) {
+            PyValue_CLOSE(result);
+            return PyValue_NULL;
         }
-        Py_SETREF(result, _PyLong_Copy((PyLongObject *)result));
-        return result;
+        // A strict subclass of int is an object.
+        PyObject *copy = _PyLong_Copy(
+            (PyLongObject *)PyValue_AsKnownObjectBorrow(result));
+        PyValue_CLOSE(result);
+        return _PyValue_FromObjectResult(copy);
     }
     if (m && m->nb_index) {
-        return PyNumber_Index(o);
+        // As PyNumber_Index(): an exact int.
+        PyValue index = (_PyValue_Index)(o);
+        if (PyValue_IsNull(index) || value_long_check_exact(index)) {
+            return index;
+        }
+        PyObject *copy = _PyLong_Copy(
+            (PyLongObject *)PyValue_AsKnownObjectBorrow(index));
+        PyValue_CLOSE(index);
+        return _PyValue_FromObjectResult(copy);
     }
 
-    if (PyUnicode_Check(o))
+    // Every inline value is an int or a float, which have nb_int.
+    PyObject *obj = PyValue_AsKnownObjectBorrow(o);
+    if (PyUnicode_Check(obj))
         /* The below check is done in PyLong_FromUnicodeObject(). */
-        return PyLong_FromUnicodeObject(o, 10);
+        return _PyValue_FromObjectResult(PyLong_FromUnicodeObject(obj, 10));
 
-    if (PyBytes_Check(o))
+    if (PyBytes_Check(obj))
         /* need to do extra error checking that PyLong_FromString()
          * doesn't do.  In particular int('9\x005') must raise an
          * exception, not truncate at the null.
          */
-        return _PyLong_FromBytes(PyBytes_AS_STRING(o),
-                                 PyBytes_GET_SIZE(o), 10);
+        return _PyValue_FromObjectResult(_PyLong_FromBytes(
+            PyBytes_AS_STRING(obj), PyBytes_GET_SIZE(obj), 10));
 
-    if (PyByteArray_Check(o))
-        return _PyLong_FromBytes(PyByteArray_AS_STRING(o),
-                                 PyByteArray_GET_SIZE(o), 10);
+    if (PyByteArray_Check(obj))
+        return _PyValue_FromObjectResult(_PyLong_FromBytes(
+            PyByteArray_AS_STRING(obj), PyByteArray_GET_SIZE(obj), 10));
 
-    if (PyObject_GetBuffer(o, &view, PyBUF_SIMPLE) == 0) {
+    if (PyObject_GetBuffer(obj, &view, PyBUF_SIMPLE) == 0) {
         PyObject *bytes;
 
         /* Copy to NUL-terminated buffer. */
         bytes = PyBytes_FromStringAndSize((const char *)view.buf, view.len);
         if (bytes == NULL) {
             PyBuffer_Release(&view);
-            return NULL;
+            return PyValue_NULL;
         }
-        result = _PyLong_FromBytes(PyBytes_AS_STRING(bytes),
-                                   PyBytes_GET_SIZE(bytes), 10);
+        PyObject *res = _PyLong_FromBytes(PyBytes_AS_STRING(bytes),
+                                          PyBytes_GET_SIZE(bytes), 10);
         Py_DECREF(bytes);
         PyBuffer_Release(&view);
-        return result;
+        return _PyValue_FromObjectResult(res);
     }
 
-    return type_error("int() argument must be a string, a bytes-like object "
-                      "or a real number, not '%.200s'", o);
+    type_error("int() argument must be a string, a bytes-like object "
+               "or a real number, not '%.200s'", obj);
+    return PyValue_NULL;
+}
+
+PyObject *
+PyNumber_Long(PyObject *o)
+{
+    return _PyValue_THUNK_EXIT((_PyValue_Long)(_Py_VALUE_ARG(o)));
+}
+
+PyValue
+(_PyValue_Float)(PyValueBorrow o)
+{
+    if (PyValue_IsNull(o)) {
+        null_error();
+        return PyValue_NULL;
+    }
+
+    PyTypeObject *t = PyValue_TYPE(o);
+    if (t == &PyFloat_Type) {
+        return PyValue_DUP(o);
+    }
+
+    PyNumberMethods *m = t->tp_as_number;
+    if (m && m->nb_float) { /* This should include subclasses of float */
+        PyValue res = call_unary(t, m->nb_float, NB_ROW(nb_float), o);
+        assert(check_value_slot_result(t, "__float__", !PyValue_IsNull(res)));
+        if (PyValue_IsNull(res) || PyValue_TYPE(res) == &PyFloat_Type) {
+            return res;
+        }
+
+        if (!PyType_IsSubtype(PyValue_TYPE(res), &PyFloat_Type)) {
+            PyErr_Format(PyExc_TypeError,
+                         "%N.__float__() must return a float, not %N",
+                         t, PyValue_TYPE(res));
+            PyValue_CLOSE(res);
+            return PyValue_NULL;
+        }
+        /* Issue #26983: warn if 'res' not of exact type float. */
+        if (PyErr_WarnFormat(PyExc_DeprecationWarning, 1,
+                "%N.__float__() must return a float, not %N.  "
+                "The ability to return an instance of a strict subclass of float "
+                "is deprecated, and may be removed in a future version of Python.",
+                t, PyValue_TYPE(res))) {
+            PyValue_CLOSE(res);
+            return PyValue_NULL;
+        }
+        // A strict subclass of float is an object.
+        double val = PyFloat_AS_DOUBLE(PyValue_AsKnownObjectBorrow(res));
+        PyValue_CLOSE(res);
+        return _PyValue_FromObjectResult(PyFloat_FromDouble(val));
+    }
+
+    if (m && m->nb_index) {
+        PyValue res = (_PyValue_Index)(o);
+        if (PyValue_IsNull(res)) {
+            return PyValue_NULL;
+        }
+        double val;
+        if (PyValue_IsInlineInt(res)) {
+            val = (double)PyValue_InlineInt64(res);
+        }
+        else {
+            val = PyLong_AsDouble(PyValue_AsKnownObjectBorrow(res));
+        }
+        PyValue_CLOSE(res);
+        if (val == -1.0 && PyErr_Occurred()) {
+            return PyValue_NULL;
+        }
+        return _PyValue_FromObjectResult(PyFloat_FromDouble(val));
+    }
+
+    // Every inline value is an int or a float, which have nb_float.
+    PyObject *obj = PyValue_AsKnownObjectBorrow(o);
+    /* A float subclass with nb_float == NULL */
+    if (PyFloat_Check(obj)) {
+        return _PyValue_FromObjectResult(
+            PyFloat_FromDouble(PyFloat_AS_DOUBLE(obj)));
+    }
+    return _PyValue_FromObjectResult(PyFloat_FromString(obj));
 }
 
 PyObject *
 PyNumber_Float(PyObject *o)
 {
-    if (o == NULL) {
-        return null_error();
-    }
-
-    if (PyFloat_CheckExact(o)) {
-        return Py_NewRef(o);
-    }
-
-    PyNumberMethods *m = Py_TYPE(o)->tp_as_number;
-    if (m && m->nb_float) { /* This should include subclasses of float */
-        PyObject *res = m->nb_float(o);
-        assert(_Py_CheckSlotResult(o, "__float__", res != NULL));
-        if (!res || PyFloat_CheckExact(res)) {
-            return res;
-        }
-
-        if (!PyFloat_Check(res)) {
-            PyErr_Format(PyExc_TypeError,
-                         "%T.__float__() must return a float, not %T", o, res);
-            Py_DECREF(res);
-            return NULL;
-        }
-        /* Issue #26983: warn if 'res' not of exact type float. */
-        if (PyErr_WarnFormat(PyExc_DeprecationWarning, 1,
-                "%T.__float__() must return a float, not %T.  "
-                "The ability to return an instance of a strict subclass of float "
-                "is deprecated, and may be removed in a future version of Python.",
-                o, res)) {
-            Py_DECREF(res);
-            return NULL;
-        }
-        double val = PyFloat_AS_DOUBLE(res);
-        Py_DECREF(res);
-        return PyFloat_FromDouble(val);
-    }
-
-    if (m && m->nb_index) {
-        PyObject *res = _PyNumber_Index(o);
-        if (!res) {
-            return NULL;
-        }
-        double val = PyLong_AsDouble(res);
-        Py_DECREF(res);
-        if (val == -1.0 && PyErr_Occurred()) {
-            return NULL;
-        }
-        return PyFloat_FromDouble(val);
-    }
-
-    /* A float subclass with nb_float == NULL */
-    if (PyFloat_Check(o)) {
-        return PyFloat_FromDouble(PyFloat_AS_DOUBLE(o));
-    }
-    return PyFloat_FromString(o);
+    return _PyValue_THUNK_EXIT((_PyValue_Float)(_Py_VALUE_ARG(o)));
 }
 
 
@@ -1741,7 +2104,7 @@ PySequence_Concat(PyObject *s, PyObject *o)
        have an nb_add slot, not an sq_concat slot.      So we fall back
        to nb_add if both arguments appear to be sequences. */
     if (PySequence_Check(s) && PySequence_Check(o)) {
-        PyObject *result = BINARY_OP1(s, o, NB_SLOT(nb_add), "+");
+        PyObject *result = OBJECT_BINARY_OP1(s, o, nb_add, "+");
         if (result != Py_NotImplemented)
             return result;
         Py_DECREF(result);
@@ -1771,7 +2134,7 @@ PySequence_Repeat(PyObject *o, Py_ssize_t count)
         n = PyLong_FromSsize_t(count);
         if (n == NULL)
             return NULL;
-        result = BINARY_OP1(o, n, NB_SLOT(nb_multiply), "*");
+        result = OBJECT_BINARY_OP1(o, n, nb_multiply, "*");
         Py_DECREF(n);
         if (result != Py_NotImplemented)
             return result;
@@ -1800,8 +2163,8 @@ PySequence_InPlaceConcat(PyObject *s, PyObject *o)
     }
 
     if (PySequence_Check(s) && PySequence_Check(o)) {
-        PyObject *result = BINARY_IOP1(s, o, NB_SLOT(nb_inplace_add),
-                                       NB_SLOT(nb_add), "+=");
+        PyObject *result = OBJECT_BINARY_IOP1(s, o, nb_inplace_add, nb_add,
+                                              "+=");
         if (result != Py_NotImplemented)
             return result;
         Py_DECREF(result);
@@ -1833,8 +2196,8 @@ PySequence_InPlaceRepeat(PyObject *o, Py_ssize_t count)
         n = PyLong_FromSsize_t(count);
         if (n == NULL)
             return NULL;
-        result = BINARY_IOP1(o, n, NB_SLOT(nb_inplace_multiply),
-                             NB_SLOT(nb_multiply), "*=");
+        result = OBJECT_BINARY_IOP1(o, n, nb_inplace_multiply, nb_multiply,
+                                    "*=");
         Py_DECREF(n);
         if (result != Py_NotImplemented)
             return result;

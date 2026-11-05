@@ -9,6 +9,7 @@ extern "C" {
 #endif
 
 #include "pycore_value.h"         // PyValue_NotImplemented
+#include "pycore_value_api.h"     // _PyValue_AsObjectKind()
 
 /* Value slots (pyjit/design/value-api.md, section 2;
  * pyjit/design/proposals/value-api-v2a0.md, section 4).
@@ -189,10 +190,32 @@ _Py_VALUE_SLOT_TABLE(_Py_VALUE_SLOT_TYPEDEF)
 #define _PyType_SET_VALUE_SLOT(t, field, fn) \
     ((t)->tp_value.field = _Py_VALUE_SLOT_INIT(field, fn))
 
+/* The value field of row (_Py_VALUE_SLOT_INDEX_<field>) of type t, as an
+ * lvalue; the fields are laid out in table order (the static asserts
+ * above). */
+#define _PyType_VALUE_FIELD_AT(t, row) \
+    (((_Py_valuefunc *)&(t)->tp_value)[row])
+
+#ifdef Py_DEBUG
+/* Check that the value field of row pairs with the object slot beside it
+ * (section 4.4); the value dispatchers call it, through
+ * _PyType_CHECK_VALUE_ROW(), before each value-slot call. A failure is
+ * fatal. */
+extern void _PyType_CheckValueRow(PyTypeObject *type, int row);
+#  define _PyType_CHECK_VALUE_ROW(type, row) _PyType_CheckValueRow(type, row)
+#else
+#  define _PyType_CHECK_VALUE_ROW(type, row) ((void)0)
+#endif
+
 /* The offset in PyTypeObject of the value field beside the object slot at
  * offset, an offset of slotdefs (from PyHeapTypeObject), or -1 if that
  * object slot has none. */
 extern Py_ssize_t _PyType_ValueSlotFromObjectOffset(Py_ssize_t offset);
+
+/* The value wrapper that a slot descriptor of base calls with its
+ * d_wrapped_value, or NULL if base is not a slotdef or its row has none
+ * (section 4.5). */
+extern wrapperfunc _PyType_ValueWrapper(const struct wrapperbase *base);
 
 #ifdef Py_DEBUG
 /* Check that every value slot of type pairs with its object slot
@@ -213,7 +236,8 @@ _PyValue_FromObjectResult(PyObject *obj)
 }
 
 /* The object that a thunk returns for the owned value result: the object,
- * a new box of an inline value, or NULL with an exception set. */
+ * a new box of an inline value (kind THUNK), or NULL with an exception
+ * set. */
 static inline PyObject *
 _PyValue_THUNK_EXIT(PyValue result)
 {
@@ -222,19 +246,53 @@ _PyValue_THUNK_EXIT(PyValue result)
     }
     if (PyValue_IsInline(result)) {
         // An inline value owns nothing, so there is nothing to release.
-        return PyValue_AsObject(result);
+        return _PyValue_AsObjectKind(result, BOX_KIND_THUNK);
     }
     return PyValue_AsKnownObjectSteal(result);
 }
 
 /* The borrowed value of an object argument of a thunk. */
-#define _Py_VALUE_ARG(OBJ) PyValue_Borrow(PyValue_FromObjectBorrow(OBJ))
+#define _Py_VALUE_ARG(OBJ) PyValue_FromObjectBorrow(OBJ)
+
+/* The adapter (D9): the object argument of an object slot that a value
+ * dispatcher calls because the value slot of the row is 0. An argument that
+ * holds an object lends it; an inline one is boxed, of kind SLOT_ADAPTER
+ * under site class site, and _PyValue_AdapterRelease() releases the box
+ * after the call. A failed box gives NULL with the exception set. */
+static inline PyObject *
+_PyValue_AdapterBox(PyValueBorrow v, int site)
+{
+    if (!PyValue_IsInline(v)) {
+        return PyValue_AsKnownObjectBorrow(v);
+    }
+    return _PyValue_AsObjectAtKind(v, site, BOX_KIND_SLOT_ADAPTER);
+}
+
+static inline void
+_PyValue_AdapterRelease(PyValueBorrow v, PyObject *obj)
+{
+    if (PyValue_IsInline(v)) {
+        Py_DECREF(obj);
+    }
+}
+#ifdef Py_STATS
+#  define _PyValue_AdapterBox(V, SITE) \
+        (_PyValue_AdapterBox)(PyValue_Borrow(V), SITE)
+#else
+   // Without stats there are no site classes (BOX_SITE_*).
+#  define _PyValue_AdapterBox(V, SITE) \
+        (_PyValue_AdapterBox)(PyValue_Borrow(V), 0)
+#endif
+#define _PyValue_AdapterRelease(V, OBJ) \
+    (_PyValue_AdapterRelease)(PyValue_Borrow(V), OBJ)
 
 
 /* Thunks (D12): _Py_VALUE_THUNK_<kind>(name, valuefn) defines name, the
  * object slot of a core type whose value slot is valuefn. It converts its
- * object arguments at entry with PyValue_FromObjectBorrow(), calls valuefn
- * and converts the result with _PyValue_THUNK_EXIT(). A type that defines
+ * object arguments at entry with _Py_VALUE_ARG(), which makes an exact int
+ * or float inline (so the result of an exact int operation is boxed again at
+ * exit: Q8), calls valuefn and converts the result with
+ * _PyValue_THUNK_EXIT(). A type that defines
  * both names valuefn in tp_value and name in the object slot, so that the
  * two form a pair. */
 
@@ -340,7 +398,8 @@ _PyValue_THUNK_EXIT(PyValue result)
         if (PyValue_IsInline(base) || PyValue_IsInline(exponent)) { \
             return PyValue_NotImplemented; \
         } \
-        PyObject *modulus_object = PyValue_AsObject(modulus); \
+        PyObject *modulus_object = \
+            _PyValue_AsObjectKind(modulus, BOX_KIND_SLOT_ADAPTER); \
         if (modulus_object == NULL) { \
             return PyValue_NULL; \
         } \

@@ -259,11 +259,23 @@ static const char *const box_site_names[BOX_SITE_KINDS] = {
     [BOX_SITE_COMPILER] = "compiler",
 };
 
+static const char *const box_kind_names[BOX_KINDS] = {
+    [BOX_KIND_CORE] = "core",
+    [BOX_KIND_THUNK] = "thunk",
+    [BOX_KIND_SLOT_ADAPTER] = "slot adapter",
+    [BOX_KIND_CALL_ADAPTER] = "call adapter",
+};
+
 /* The box table (pyjit/design/value-api.md, section 6.1): one line per site
-   class, so that every dump has the same rows. */
+   class and per kind, so that every dump has the same rows. */
 static void
 print_box_stats(FILE *out, ObjectStats *stats)
 {
+    for (int i = 0; i < BOX_KINDS; i++) {
+        assert(box_kind_names[i] != NULL);
+        fprintf(out, "Boxing by kind (%s): %" PRIu64 "\n",
+                box_kind_names[i], stats->box_kind[i]);
+    }
     for (int i = 0; i < BOX_SITE_KINDS; i++) {
         assert(box_site_names[i] != NULL);
         fprintf(out, "Boxing by site (%s): %" PRIu64 "\n",
@@ -402,6 +414,9 @@ merge_object_stats(ObjectStats *dest, const ObjectStats *src)
     for (int i = 0; i < BOX_SITE_KINDS; i++) {
         dest->box[i] += src->box[i];
         dest->entry_unbox[i] += src->entry_unbox[i];
+    }
+    for (int i = 0; i < BOX_KINDS; i++) {
+        dest->box_kind[i] += src->box_kind[i];
     }
     dest->object_visits += src->object_visits;
 }

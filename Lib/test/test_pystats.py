@@ -244,6 +244,30 @@ class TestPyStats(unittest.TestCase):
                          int(stats['Object inline int boxes'])
                          + int(stats['Object inline float boxes']))
 
+    def test_box_kinds(self):
+        """Check the box count by kind (pyjit/design/proposals/
+        value-api-v2a0.md, section 4.7).
+        """
+        code = """
+        import operator
+        def func_start():
+            # int has no value slots yet: PyNumber_Add() makes its operands
+            # inline, the adapter boxes them for int's nb_add, and the thunk
+            # boxes the inline result.
+            operator.add(1000, 2000)
+        """
+        stats = run_test_code_stats(code, args=['-X', 'pystats'])
+        kinds = {kind: int(stats[f'Boxing by kind ({kind})'])
+                 for kind in ('core', 'thunk', 'slot adapter',
+                              'call adapter')}
+        self.assertGreaterEqual(kinds['slot adapter'], 2)
+        self.assertGreaterEqual(kinds['thunk'], 1)
+        self.assertEqual(kinds['call adapter'],
+                         int(stats['Boxing by site (call adapter)']))
+        self.assertEqual(sum(kinds.values()),
+                         int(stats['Object inline int boxes'])
+                         + int(stats['Object inline float boxes']))
+
 
 if __name__ == "__main__":
     unittest.main()

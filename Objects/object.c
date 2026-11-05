@@ -1,6 +1,11 @@
 
 /* Generic object operations; and implementation of None */
 
+/* This file holds the rich comparison, truth and string dispatchers, so it
+   is an adapter unit: Tools/build/check_value_api.py does not list its
+   slot-field reads. */
+#define Py_VALUE_ADAPTER 1
+
 #include "Python.h"
 #include "pycore_brc.h"           // _Py_brc_queue_object()
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
@@ -35,6 +40,8 @@
 #include "pycore_value.h"      // PyValue_FromPyObjectSteal
 #include "pycore_unionobject.h"   // _PyUnion_Type
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_ops.h"     // _PyValue_RichCompare()
+#include "pycore_value_slots.h"   // _PyValue_AdapterBox()
 
 
 #ifdef Py_LIMITED_API
@@ -756,17 +763,43 @@ PyObject_Dump(PyObject* op)
     fflush(stderr);
 }
 
+/* The string protocol on values (pyjit/design/proposals/value-api-v2a0.md,
+   section 4.6). As in Objects/abstract.c, a dispatcher calls the value slot
+   of a row if it is set, else the object slot through the adapter, and the
+   object function is its thunk. */
+
+static PyObject *
+call_repr(PyTypeObject *t, reprfunc slot, int row, PyValueBorrow v)
+{
+    _Py_reprvaluefunc f = (_Py_reprvaluefunc)_PyType_VALUE_FIELD_AT(t, row);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(t, row);
+        return f(v);
+    }
+    PyObject *a = _PyValue_AdapterBox(v, BOX_SITE_REPR);
+    if (a == NULL) {
+        return NULL;
+    }
+    PyObject *res = slot(a);
+    _PyValue_AdapterRelease(v, a);
+    return res;
+}
+
 PyObject *
-PyObject_Repr(PyObject *v)
+(_PyValue_Repr)(PyValueBorrow v)
 {
     PyObject *res;
     if (PyErr_CheckSignals())
         return NULL;
-    if (v == NULL)
+    if (PyValue_IsNull(v))
         return PyUnicode_FromString("<NULL>");
-    if (Py_TYPE(v)->tp_repr == NULL)
+    PyTypeObject *tp = PyValue_TYPE(v);
+    if (tp->tp_repr == NULL) {
+        // An inline value's type has a repr, so v holds an object.
         return PyUnicode_FromFormat("<%s object at %p>",
-                                    Py_TYPE(v)->tp_name, v);
+                                    tp->tp_name,
+                                    PyValue_AsKnownObjectBorrow(v));
+    }
 
     PyThreadState *tstate = _PyThreadState_GET();
 #ifdef Py_DEBUG
@@ -782,7 +815,7 @@ PyObject_Repr(PyObject *v)
                                      " while getting the repr of an object")) {
         return NULL;
     }
-    res = (*Py_TYPE(v)->tp_repr)(v);
+    res = call_repr(tp, tp->tp_repr, _Py_VALUE_SLOT_INDEX_repr, v);
     _Py_LeaveRecursiveCallTstate(tstate);
 
     if (res == NULL) {
@@ -790,7 +823,7 @@ PyObject_Repr(PyObject *v)
     }
     if (!PyUnicode_Check(res)) {
         _PyErr_Format(tstate, PyExc_TypeError,
-                      "%T.__repr__() must return a str, not %T", v, res);
+                      "%N.__repr__() must return a str, not %T", tp, res);
         Py_DECREF(res);
         return NULL;
     }
@@ -798,18 +831,25 @@ PyObject_Repr(PyObject *v)
 }
 
 PyObject *
-PyObject_Str(PyObject *v)
+PyObject_Repr(PyObject *v)
+{
+    return (_PyValue_Repr)(_Py_VALUE_ARG(v));
+}
+
+PyObject *
+(_PyValue_Str)(PyValueBorrow v)
 {
     PyObject *res;
     if (PyErr_CheckSignals())
         return NULL;
-    if (v == NULL)
+    if (PyValue_IsNull(v))
         return PyUnicode_FromString("<NULL>");
-    if (PyUnicode_CheckExact(v)) {
-        return Py_NewRef(v);
+    PyTypeObject *tp = PyValue_TYPE(v);
+    if (tp == &PyUnicode_Type) {
+        return Py_NewRef(PyValue_AsKnownObjectBorrow(v));
     }
-    if (Py_TYPE(v)->tp_str == NULL)
-        return PyObject_Repr(v);
+    if (tp->tp_str == NULL)
+        return (_PyValue_Repr)(v);
 
     PyThreadState *tstate = _PyThreadState_GET();
 #ifdef Py_DEBUG
@@ -824,7 +864,7 @@ PyObject_Str(PyObject *v)
     if (_Py_EnterRecursiveCallTstate(tstate, " while getting the str of an object")) {
         return NULL;
     }
-    res = (*Py_TYPE(v)->tp_str)(v);
+    res = call_repr(tp, tp->tp_str, _Py_VALUE_SLOT_INDEX_str, v);
     _Py_LeaveRecursiveCallTstate(tstate);
 
     if (res == NULL) {
@@ -832,7 +872,7 @@ PyObject_Str(PyObject *v)
     }
     if (!PyUnicode_Check(res)) {
         _PyErr_Format(tstate, PyExc_TypeError,
-                      "%T.__str__() must return a str, not %T", v, res);
+                      "%N.__str__() must return a str, not %T", tp, res);
         Py_DECREF(res);
         return NULL;
     }
@@ -841,18 +881,24 @@ PyObject_Str(PyObject *v)
 }
 
 PyObject *
-PyObject_ASCII(PyObject *v)
+PyObject_Str(PyObject *v)
+{
+    return (_PyValue_Str)(_Py_VALUE_ARG(v));
+}
+
+PyObject *
+(_PyValue_ASCII)(PyValueBorrow v)
 {
     PyObject *repr, *ascii, *res;
 
-    repr = PyObject_Repr(v);
+    repr = (_PyValue_Repr)(v);
     if (repr == NULL)
         return NULL;
 
     if (PyUnicode_IS_ASCII(repr))
         return repr;
 
-    /* repr is guaranteed to be a PyUnicode object by PyObject_Repr */
+    /* repr is guaranteed to be a PyUnicode object by _PyValue_Repr */
     ascii = _PyUnicode_AsASCIIString(repr, "backslashreplace");
     Py_DECREF(repr);
     if (ascii == NULL)
@@ -865,6 +911,12 @@ PyObject_ASCII(PyObject *v)
 
     Py_DECREF(ascii);
     return res;
+}
+
+PyObject *
+PyObject_ASCII(PyObject *v)
+{
+    return (_PyValue_ASCII)(_Py_VALUE_ARG(v));
 }
 
 PyObject *
@@ -1043,108 +1095,123 @@ int _Py_SwappedOp[] = {Py_GT, Py_GE, Py_EQ, Py_NE, Py_LT, Py_LE};
 
 static const char * const opstrings[] = {"<", "<=", "==", "!=", ">", ">="};
 
+/* The rich comparison on values, with the order and defaults of
+   do_richcompare(); value_ops.c's _PyValue_RichCompareBool() returns its
+   truth. */
+
+static PyValue
+call_richcompare(PyTypeObject *t, richcmpfunc slot,
+                 PyValueBorrow v, PyValueBorrow w, int op)
+{
+    int row = _Py_VALUE_SLOT_INDEX_richcompare;
+    _Py_richcmpvaluefunc f =
+        (_Py_richcmpvaluefunc)_PyType_VALUE_FIELD_AT(t, row);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(t, row);
+        return f(v, w, op);
+    }
+    PyObject *a = _PyValue_AdapterBox(v, BOX_SITE_COMPARE);
+    if (a == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *b = _PyValue_AdapterBox(w, BOX_SITE_COMPARE);
+    if (b == NULL) {
+        _PyValue_AdapterRelease(v, a);
+        return PyValue_NULL;
+    }
+    PyObject *res = slot(a, b, op);
+    _PyValue_AdapterRelease(w, b);
+    _PyValue_AdapterRelease(v, a);
+    return _PyValue_FromObjectResult(res);
+}
+
 /* Perform a rich comparison, raising TypeError when the requested comparison
    operator is not supported. */
-static PyObject *
-do_richcompare(PyThreadState *tstate, PyObject *v, PyObject *w, int op)
+static PyValue
+do_richcompare(PyThreadState *tstate, PyValueBorrow v, PyValueBorrow w,
+               int op)
 {
+    PyTypeObject *tv = PyValue_TYPE(v);
+    PyTypeObject *tw = PyValue_TYPE(w);
     richcmpfunc f;
-    PyObject *res;
+    PyValue res;
     int checked_reverse_op = 0;
 
-    if (!Py_IS_TYPE(v, Py_TYPE(w)) &&
-        PyType_IsSubtype(Py_TYPE(w), Py_TYPE(v)) &&
-        (f = Py_TYPE(w)->tp_richcompare) != NULL) {
+    if (tv != tw &&
+        PyType_IsSubtype(tw, tv) &&
+        (f = tw->tp_richcompare) != NULL) {
         checked_reverse_op = 1;
-        res = (*f)(w, v, _Py_SwappedOp[op]);
-        if (res != Py_NotImplemented)
+        res = call_richcompare(tw, f, w, v, _Py_SwappedOp[op]);
+        if (!PyValue_Is(res, PyValue_NotImplemented))
             return res;
-        Py_DECREF(res);
+        PyValue_CLOSE(res);
     }
-    if ((f = Py_TYPE(v)->tp_richcompare) != NULL) {
-        res = (*f)(v, w, op);
-        if (res != Py_NotImplemented)
+    if ((f = tv->tp_richcompare) != NULL) {
+        res = call_richcompare(tv, f, v, w, op);
+        if (!PyValue_Is(res, PyValue_NotImplemented))
             return res;
-        Py_DECREF(res);
+        PyValue_CLOSE(res);
     }
-    if (!checked_reverse_op && (f = Py_TYPE(w)->tp_richcompare) != NULL) {
-        res = (*f)(w, v, _Py_SwappedOp[op]);
-        if (res != Py_NotImplemented)
+    if (!checked_reverse_op && (f = tw->tp_richcompare) != NULL) {
+        res = call_richcompare(tw, f, w, v, _Py_SwappedOp[op]);
+        if (!PyValue_Is(res, PyValue_NotImplemented))
             return res;
-        Py_DECREF(res);
+        PyValue_CLOSE(res);
     }
     /* If neither object implements it, provide a sensible default
        for == and !=, but raise an exception for ordering. */
     switch (op) {
     case Py_EQ:
-        res = (v == w) ? Py_True : Py_False;
-        break;
+        return PyValue_Is(v, w) ? PyValue_True : PyValue_False;
     case Py_NE:
-        res = (v != w) ? Py_True : Py_False;
-        break;
+        return PyValue_Is(v, w) ? PyValue_False : PyValue_True;
     default:
         _PyErr_Format(tstate, PyExc_TypeError,
                       "'%s' not supported between instances of '%.100s' and '%.100s'",
                       opstrings[op],
-                      Py_TYPE(v)->tp_name,
-                      Py_TYPE(w)->tp_name);
-        return NULL;
+                      tv->tp_name,
+                      tw->tp_name);
+        return PyValue_NULL;
     }
-    return Py_NewRef(res);
 }
 
-/* Perform a rich comparison with object result.  This wraps do_richcompare()
+/* Perform a rich comparison with value result.  This wraps do_richcompare()
    with a check for NULL arguments and a recursion check. */
 
-PyObject *
-PyObject_RichCompare(PyObject *v, PyObject *w, int op)
+PyValue
+(_PyValue_RichCompare)(PyValueBorrow v, PyValueBorrow w, int op)
 {
     PyThreadState *tstate = _PyThreadState_GET();
 
     assert(Py_LT <= op && op <= Py_GE);
-    if (v == NULL || w == NULL) {
+    if (PyValue_IsNull(v) || PyValue_IsNull(w)) {
         if (!_PyErr_Occurred(tstate)) {
             PyErr_BadInternalCall();
         }
-        return NULL;
+        return PyValue_NULL;
     }
     if (_Py_EnterRecursiveCallTstate(tstate, " in comparison")) {
-        return NULL;
+        return PyValue_NULL;
     }
-    PyObject *res = do_richcompare(tstate, v, w, op);
+    PyValue res = do_richcompare(tstate, v, w, op);
     _Py_LeaveRecursiveCallTstate(tstate);
     return res;
 }
 
-/* Perform a rich comparison with integer result.  This wraps
-   PyObject_RichCompare(), returning -1 for error, 0 for false, 1 for true. */
+PyObject *
+PyObject_RichCompare(PyObject *v, PyObject *w, int op)
+{
+    return _PyValue_THUNK_EXIT(
+        (_PyValue_RichCompare)(_Py_VALUE_ARG(v), _Py_VALUE_ARG(w), op));
+}
+
+/* Perform a rich comparison with integer result, returning -1 for error,
+   0 for false, 1 for true: value_ops.c's _PyValue_RichCompareBool(), which
+   also guarantees that identity implies equality. */
 int
 PyObject_RichCompareBool(PyObject *v, PyObject *w, int op)
 {
-    PyObject *res;
-    int ok;
-
-    /* Quick result when objects are the same.
-       Guarantees that identity implies equality. */
-    if (v == w) {
-        if (op == Py_EQ)
-            return 1;
-        else if (op == Py_NE)
-            return 0;
-    }
-
-    res = PyObject_RichCompare(v, w, op);
-    if (res == NULL)
-        return -1;
-    if (PyBool_Check(res)) {
-        ok = (res == Py_True);
-        assert(_Py_IsImmortal(res));
-    }
-    else {
-        ok = PyObject_IsTrue(res);
-        Py_DECREF(res);
-    }
-    return ok;
+    return (_PyValue_RichCompareBool)(_Py_VALUE_ARG(v), _Py_VALUE_ARG(w), op);
 }
 
 Py_hash_t
@@ -1158,22 +1225,7 @@ PyObject_HashNotImplemented(PyObject *v)
 Py_hash_t
 PyObject_Hash(PyObject *v)
 {
-    PyTypeObject *tp = Py_TYPE(v);
-    if (tp->tp_hash != NULL)
-        return (*tp->tp_hash)(v);
-    /* To keep to the general practice that inheriting
-     * solely from object in C code should work without
-     * an explicit call to PyType_Ready, we implicitly call
-     * PyType_Ready here and then check the tp_hash slot again
-     */
-    if (!_PyType_IsReady(tp)) {
-        if (PyType_Ready(tp) < 0)
-            return -1;
-        if (tp->tp_hash != NULL)
-            return (*tp->tp_hash)(v);
-    }
-    /* Otherwise, the object can't be hashed */
-    return PyObject_HashNotImplemented(v);
+    return (_PyValue_Hash)(_Py_VALUE_ARG(v));
 }
 
 PyObject *
@@ -2053,42 +2105,75 @@ PyObject_GenericSetDict(PyObject *obj, PyObject *value, void *context)
 /* Test a value used as condition, e.g., in a while or if statement.
    Return -1 if an error occurred */
 
+static Py_ssize_t
+call_bool(PyTypeObject *t, inquiry slot, PyValueBorrow v)
+{
+    int row = _Py_VALUE_SLOT_INDEX_nb_bool;
+    _Py_inquiryvaluefunc f =
+        (_Py_inquiryvaluefunc)_PyType_VALUE_FIELD_AT(t, row);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(t, row);
+        return f(v);
+    }
+    PyObject *a = _PyValue_AdapterBox(v, BOX_SITE_NUMBER);
+    if (a == NULL) {
+        return -1;
+    }
+    int res = slot(a);
+    _PyValue_AdapterRelease(v, a);
+    return res;
+}
+
 int
-PyObject_IsTrue(PyObject *v)
+(_PyValue_IsTrue)(PyValueBorrow v)
 {
     Py_ssize_t res;
-    if (v == Py_True)
+    PyTypeObject *tp = PyValue_TYPE(v);
+    if (PyValue_Is(v, PyValue_True))
         return 1;
-    if (v == Py_False)
+    if (PyValue_Is(v, PyValue_False))
         return 0;
-    if (v == Py_None)
+    if (PyValue_Is(v, PyValue_None))
         return 0;
-    else if (Py_TYPE(v)->tp_as_number != NULL &&
-             Py_TYPE(v)->tp_as_number->nb_bool != NULL)
-        res = (*Py_TYPE(v)->tp_as_number->nb_bool)(v);
-    else if (Py_TYPE(v)->tp_as_mapping != NULL &&
-             Py_TYPE(v)->tp_as_mapping->mp_length != NULL)
-        res = (*Py_TYPE(v)->tp_as_mapping->mp_length)(v);
-    else if (Py_TYPE(v)->tp_as_sequence != NULL &&
-             Py_TYPE(v)->tp_as_sequence->sq_length != NULL)
-        res = (*Py_TYPE(v)->tp_as_sequence->sq_length)(v);
+    else if (tp->tp_as_number != NULL &&
+             tp->tp_as_number->nb_bool != NULL)
+        res = call_bool(tp, tp->tp_as_number->nb_bool, v);
+    /* An inline value's type has nb_bool, so v holds an object below. */
+    else if (tp->tp_as_mapping != NULL &&
+             tp->tp_as_mapping->mp_length != NULL)
+        res = (*tp->tp_as_mapping->mp_length)(PyValue_AsKnownObjectBorrow(v));
+    else if (tp->tp_as_sequence != NULL &&
+             tp->tp_as_sequence->sq_length != NULL)
+        res = (*tp->tp_as_sequence->sq_length)(PyValue_AsKnownObjectBorrow(v));
     else
         return 1;
     /* if it is negative, it should be either -1 or -2 */
     return (res > 0) ? 1 : Py_SAFE_DOWNCAST(res, Py_ssize_t, int);
 }
 
+int
+PyObject_IsTrue(PyObject *v)
+{
+    return (_PyValue_IsTrue)(_Py_VALUE_ARG(v));
+}
+
 /* equivalent of 'not v'
    Return -1 if an error occurred */
 
 int
-PyObject_Not(PyObject *v)
+(_PyValue_Not)(PyValueBorrow v)
 {
     int res;
-    res = PyObject_IsTrue(v);
+    res = (_PyValue_IsTrue)(v);
     if (res < 0)
         return res;
     return res == 0;
+}
+
+int
+PyObject_Not(PyObject *v)
+{
+    return (_PyValue_Not)(_Py_VALUE_ARG(v));
 }
 
 /* Test whether an object can be called */

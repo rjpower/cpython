@@ -25,6 +25,13 @@ extern PyTypeObject _PyMethodWrapper_Type;
 // Export for '_testinternalcapi' shared extension
 PyAPI_FUNC(void *) _PyMember_GetOffset(PyObject *, PyMemberDef *);
 
+/* A slot wrapper descriptor that carries the pair (wrapped, wrapped_value):
+   the object function and its value-slot function, which may be NULL
+   (value-api-v2a0.md, section 4.5). PyDescr_NewWrapper() passes NULL. */
+extern PyObject *_PyDescr_NewWrapperPair(PyTypeObject *type,
+                                         struct wrapperbase *base,
+                                         void *wrapped, void *wrapped_value);
+
 /* Value-field descriptors only. Get returns an independent owner; Set borrows
    its input and publishes a strong field before releasing the prior owner. */
 extern PyValue _PyMember_GetValue(PyObject *, PyMemberDef *);

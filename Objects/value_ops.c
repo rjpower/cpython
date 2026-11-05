@@ -1,13 +1,67 @@
+/* This file holds the hash dispatcher, so it is an adapter unit:
+   Tools/build/check_value_api.py does not list its slot-field reads. */
+#define Py_VALUE_ADAPTER 1
+
 #include "Python.h"
+#include "pycore_typeobject.h"    // _PyType_IsReady()
 #include "pycore_value_ops.h"
+#include "pycore_value_slots.h"   // _PyType_VALUE_FIELD_AT()
 
 /* As upstream's PyObject_RichCompare() and PyObject_Repr(), these entry
    points take their status from the operation and leave any other pending
    exception alone. Releases need no save (the release contract in
-   pycore_value.h). */
+   pycore_value.h).
+
+   The mixed paths call the dispatchers (pyjit/design/proposals/
+   value-api-v2a0.md, section 4.6) after their inline arms, which V2a-1a
+   moves into the value slots of int and float. Their callers read the
+   operands from containers, so each keeps an owner of an object operand
+   across the dispatch, which can run Python code that removes it, as
+   upstream's callers do with Py_INCREF(). An inline operand owns nothing. */
+
+static inline PyObject *
+hold(PyValueBorrow value)
+{
+    if (PyValue_IsNull(value) || PyValue_IsInline(value)) {
+        return NULL;
+    }
+    return Py_NewRef(PyValue_AsKnownObjectBorrow(value));
+}
+
+/* The port of PyObject_Hash(), whose value is an object: an inline value is
+   an exact int or float, which _PyValue_Hash()'s arms hash. */
+static Py_hash_t
+hash_object_value(PyValueBorrow value)
+{
+    PyTypeObject *tp = PyValue_TYPE(value);
+    int row = _Py_VALUE_SLOT_INDEX_hash;
+    if (tp->tp_hash == NULL) {
+        /* To keep to the general practice that inheriting
+         * solely from object in C code should work without
+         * an explicit call to PyType_Ready, we implicitly call
+         * PyType_Ready here and then check the tp_hash slot again
+         */
+        if (_PyType_IsReady(tp)) {
+            /* Otherwise, the object can't be hashed */
+            return _PyValue_HashNotImplemented(value);
+        }
+        if (PyType_Ready(tp) < 0) {
+            return -1;
+        }
+        if (tp->tp_hash == NULL) {
+            return _PyValue_HashNotImplemented(value);
+        }
+    }
+    _Py_hashvaluefunc f = (_Py_hashvaluefunc)_PyType_VALUE_FIELD_AT(tp, row);
+    if (f != NULL) {
+        _PyType_CHECK_VALUE_ROW(tp, row);
+        return f(value);
+    }
+    return tp->tp_hash(PyValue_AsKnownObjectBorrow(value));
+}
 
 Py_hash_t
-_PyValue_Hash(PyValue value)
+(_PyValue_Hash)(PyValueBorrow value)
 {
     if (PyValue_IsInlineInt(value)) {
         /* As long_hash(): |value| < 2**50 < _PyHASH_MODULUS, so the hash is
@@ -19,11 +73,9 @@ _PyValue_Hash(PyValue value)
         /* Inline floats exclude NaN, the only case using the object identity. */
         return _Py_HashDouble(Py_None, PyValue_InlineFloat(value));
     }
-    /* As PyObject_Hash() itself, with an owner in case __hash__ removes the
-       value from the container that it was read from. */
-    PyValue owner = PyValue_DUP(value);
-    Py_hash_t hash = PyObject_Hash(PyValue_AsKnownObjectBorrow(owner));
-    PyValue_CLOSE(owner);
+    PyObject *owner = hold(value);
+    Py_hash_t hash = hash_object_value(value);
+    Py_XDECREF(owner);
     return hash;
 }
 
@@ -48,23 +100,6 @@ compare_inline(PyValueBorrow left, PyValueBorrow right, int op)
     }
 }
 
-/* A box that succeeds runs no Python (the release contract), so neither
-   argument can leave its container in between. A caller may have an
-   exception pending, as upstream's comparisons allow (a dict lookup in a
-   deallocator); a failed box replaces it, and releasing the old exception can
-   run Python, but then neither box is used. */
-static int
-box_operands(PyValueBorrow left, PyValueBorrow right, PyObject **a, PyObject **b)
-{
-    *a = PyValue_AsObject(left);
-    *b = *a == NULL ? NULL : PyValue_AsObject(right);
-    if (*b == NULL) {
-        Py_CLEAR(*a);
-        return -1;
-    }
-    return 0;
-}
-
 int
 (_PyValue_RichCompareBool)(PyValueBorrow left, PyValueBorrow right, int op)
 {
@@ -75,14 +110,14 @@ int
     if (PyValue_IsInline(left) && PyValue_IsInline(right)) {
         return compare_inline(left, right, op);
     }
-    PyObject *a, *b;
-    if (box_operands(left, right, &a, &b) < 0) {
-        return -1;
-    }
-    int result = PyObject_RichCompareBool(a, b, op);
-    Py_DECREF(b);
-    Py_DECREF(a);
-    return result;
+    PyObject *owner_left = hold(left);
+    PyObject *owner_right = hold(right);
+    PyValue res = (_PyValue_RichCompare)(left, right, op);
+    int ok = PyValue_IsNull(res) ? -1 : (_PyValue_IsTrue)(PyValue_Borrow(res));
+    PyValue_XCLOSE(res);
+    Py_XDECREF(owner_right);
+    Py_XDECREF(owner_left);
+    return ok;
 }
 
 PyObject *
@@ -91,25 +126,33 @@ PyObject *
     if (PyValue_IsInline(left) && PyValue_IsInline(right)) {
         return PyBool_FromLong(compare_inline(left, right, op));
     }
-    PyObject *a, *b;
-    if (box_operands(left, right, &a, &b) < 0) {
+    PyObject *owner_left = hold(left);
+    PyObject *owner_right = hold(right);
+    PyValue res = (_PyValue_RichCompare)(left, right, op);
+    Py_XDECREF(owner_right);
+    Py_XDECREF(owner_left);
+    if (PyValue_IsNull(res)) {
         return NULL;
     }
-    PyObject *result = PyObject_RichCompare(a, b, op);
-    Py_DECREF(b);
-    Py_DECREF(a);
-    return result;
+    if (PyValue_IsInline(res)) {
+        /* A comparison that returned an exact int or float: an object
+           result of a value dispatcher, so a box of kind THUNK. */
+        return _PyValue_AsObjectAtKind(res, BOX_SITE_COMPARE, BOX_KIND_THUNK);
+    }
+    return PyValue_AsKnownObjectSteal(res);
 }
 
 int
 (_PyValue_WriteRepr)(PyUnicodeWriter *writer, PyValueBorrow value)
 {
-    PyObject *obj = PyValue_AsObject(value);
-    if (obj == NULL) {
+    PyObject *owner = hold(value);
+    PyObject *repr = (_PyValue_Repr)(value);
+    Py_XDECREF(owner);
+    if (repr == NULL) {
         return -1;
     }
-    int result = PyUnicodeWriter_WriteRepr(writer, obj);
-    Py_DECREF(obj);
+    int result = PyUnicodeWriter_WriteStr(writer, repr);
+    Py_DECREF(repr);
     return result;
 }
 
@@ -124,7 +167,17 @@ _PyValue_HashNotImplemented(PyValueBorrow value)
 Py_hash_t
 _PyValue_GenericHash(PyValueBorrow value)
 {
-    /* Only an object reaches it: an inline value is an exact int or float,
-       whose types hash by value. */
-    return PyObject_GenericHash(PyValue_AsKnownObjectBorrow(value));
+    if (!PyValue_IsInline(value)) {
+        return PyObject_GenericHash(PyValue_AsKnownObjectBorrow(value));
+    }
+    /* object.__hash__() of an exact int or float, whose own types hash by
+       value: as the object form, the identity hash of the object that it
+       is given, here a box for the object function (kind SLOT_ADAPTER). */
+    PyObject *box = _PyValue_AsObjectKind(value, BOX_KIND_SLOT_ADAPTER);
+    if (box == NULL) {
+        return -1;
+    }
+    Py_hash_t hash = PyObject_GenericHash(box);
+    Py_DECREF(box);
+    return hash;
 }

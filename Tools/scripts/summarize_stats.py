@@ -446,6 +446,15 @@ class Stats:
                 sites.setdefault(key[len(unboxes) : -1], [0, 0])[1] = value
         return [(site, box, unbox) for site, (box, unbox) in sites.items()]
 
+    def get_box_kind_stats(self) -> list[tuple[str, int]]:
+        """(kind, boxes) in the order of the dump."""
+        prefix = "Boxing by kind ("
+        return [
+            (key[len(prefix) : -1], value)
+            for key, value in self._data.items()
+            if key.startswith(prefix)
+        ]
+
     def get_gc_stats(self) -> list[dict[str, int]]:
         gc_stats: list[dict[str, int]] = []
         for key, value in self._data.items():
@@ -1040,6 +1049,33 @@ def box_stats_section() -> Section:
     )
 
 
+def box_kind_section() -> Section:
+    def calc_box_kind_table(stats: Stats) -> Rows:
+        kinds = stats.get_box_kind_stats()
+        total = sum(box for _, box in kinds)
+        return [(kind, Count(box), Ratio(box, total)) for kind, box in kinds]
+
+    return Section(
+        "Boxing by kind",
+        "Boxes of inline values by kind",
+        [
+            Table(
+                ("Kind", "Boxes:", "Ratio:"),
+                calc_box_kind_table,
+                JoinMode.CHANGE,
+            )
+        ],
+        doc="""
+        The boxes of the site table by the kind of code that made them
+        (pyjit/design/proposals/value-api-v2a0.md, section 4.7): "core" for
+        value-native code, "thunk" for an object function that returns the
+        inline result of its value dispatcher, "slot adapter" for an object
+        slot called with an inline operand, and "call adapter" for the call
+        adapter's class. They add up to the boxes of the site table.
+        """,
+    )
+
+
 def gc_stats_section() -> Section:
     def calc_gc_stats(stats: Stats) -> Rows:
         gc_stats = stats.get_gc_stats()
@@ -1115,6 +1151,7 @@ LAYOUT = [
     call_stats_section(),
     object_stats_section(),
     box_stats_section(),
+    box_kind_section(),
     gc_stats_section(),
     rare_event_section(),
     meta_stats_section(),

@@ -55,6 +55,9 @@ typedef struct {
     PyDescr_COMMON;
     struct wrapperbase *d_base;
     void *d_wrapped; /* This can be any function pointer */
+    /* The value-slot function paired with d_wrapped, or NULL. Internal to
+       the VM; set only for the slot wrappers that PyType_Ready adds. */
+    void *d_wrapped_value;
 } PyWrapperDescrObject;
 
 PyAPI_FUNC(PyObject *) PyDescr_NewWrapper(PyTypeObject *,

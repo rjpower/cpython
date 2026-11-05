@@ -72,6 +72,18 @@
 
 #define BOX_SITE_KINDS 19
 
+/* Kinds of boxes (pyjit/design/proposals/value-api-v2a0.md, section 4.7):
+   a box of the core, of a thunk's exit (an object API returning a value
+   slot's result), of the slot adapter (an object slot called with inline
+   operands), or of the call adapter (the BOX_SITE_CALL_ADAPTER class). A
+   box primitive's caller passes the kind, as it passes the site class. */
+#define BOX_KIND_CORE 0
+#define BOX_KIND_THUNK 1
+#define BOX_KIND_SLOT_ADAPTER 2
+#define BOX_KIND_CALL_ADAPTER 3
+
+#define BOX_KINDS 4
+
 typedef struct _specialization_stats {
     uint64_t success;
     uint64_t failure;
@@ -140,6 +152,8 @@ typedef struct _object_stats {
        entry made inline, by the same classes. */
     uint64_t box[BOX_SITE_KINDS];
     uint64_t entry_unbox[BOX_SITE_KINDS];
+    // The same boxes by kind (BOX_KIND_*).
+    uint64_t box_kind[BOX_KINDS];
     /* Temporary value used during GC */
     uint64_t object_visits;
 } ObjectStats;

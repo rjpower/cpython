@@ -49,6 +49,8 @@ _PyValue_FromObjectKnown(PyObject *obj)
 // Set the current thread's site class and return the previous one.
 PyAPI_FUNC(int) _PyValue_SwapBoxSite(int site);
 // _PyValue_BoxSiteOr(), the current class, is in pycore_value.h.
+// Set the current thread's box kind (BOX_KIND_*) and return the previous.
+PyAPI_FUNC(int) _PyValue_SwapBoxKind(int kind);
 
 static inline PyObject *
 _PyValue_AsObjectAt(PyValueBorrow value, int site)
@@ -59,6 +61,29 @@ _PyValue_AsObjectAt(PyValueBorrow value, int site)
     return object;
 }
 #define _PyValue_AsObjectAt(V0, V1) (_PyValue_AsObjectAt)(PyValue_Borrow(V0), V1)
+
+/* PyValue_AsObject() under a box kind (BOX_KIND_*) and, with the At form, a
+   site class: the kind argument of the box primitive. */
+static inline PyObject *
+_PyValue_AsObjectKind(PyValueBorrow value, int kind)
+{
+    int previous = _PyValue_SwapBoxKind(kind);
+    PyObject *object = PyValue_AsObject(value);
+    _PyValue_SwapBoxKind(previous);
+    return object;
+}
+#define _PyValue_AsObjectKind(V0, V1) (_PyValue_AsObjectKind)(PyValue_Borrow(V0), V1)
+
+static inline PyObject *
+_PyValue_AsObjectAtKind(PyValueBorrow value, int site, int kind)
+{
+    int previous = _PyValue_SwapBoxKind(kind);
+    PyObject *object = _PyValue_AsObjectAt(value, site);
+    _PyValue_SwapBoxKind(previous);
+    return object;
+}
+#define _PyValue_AsObjectAtKind(V0, V1, V2) \
+    (_PyValue_AsObjectAtKind)(PyValue_Borrow(V0), V1, V2)
 
 static inline PyObject *
 _PyValueTemps_ObjectAt(_PyValueTemps *temps, PyValueBorrow value, int site)
@@ -80,6 +105,8 @@ _PyBorrow_TupleItemsAt(PyObject *tuple, Py_ssize_t n, int site)
 }
 #else
 #  define _PyValue_AsObjectAt(VALUE, SITE) PyValue_AsObject(VALUE)
+#  define _PyValue_AsObjectKind(VALUE, KIND) PyValue_AsObject(VALUE)
+#  define _PyValue_AsObjectAtKind(VALUE, SITE, KIND) PyValue_AsObject(VALUE)
 #  define _PyValueTemps_ObjectAt(TEMPS, VALUE, SITE) \
         _PyValueTemps_Object((TEMPS), (VALUE))
 #  define _PyBorrow_TupleItemsAt(TUPLE, N, SITE) \

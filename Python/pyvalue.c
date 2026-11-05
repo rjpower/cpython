@@ -100,6 +100,19 @@ _PyValue_BoxSiteOr(int fallback)
 {
     return box_site != BOX_SITE_UNATTRIBUTED ? box_site : fallback;
 }
+
+/* The kind of the current thread's boxes (BOX_KIND_*), set as the site
+   class is, by the Kind forms of pycore_value_api.h for one boxing call. */
+static _Py_thread_local int box_kind = BOX_KIND_CORE;
+
+int
+_PyValue_SwapBoxKind(int kind)
+{
+    assert(0 <= kind && kind < BOX_KINDS);
+    int previous = box_kind;
+    box_kind = kind;
+    return previous;
+}
 #endif
 
 // Out of line, so that the test before each call is all that hot paths carry.
@@ -108,6 +121,9 @@ Py_NO_INLINE PyValue
 {
     assert(PyValue_IsInline(ref));
     OBJECT_STAT_INC(box[box_site]);
+    // The call adapter's class is its kind.
+    OBJECT_STAT_INC(box_kind[box_site == BOX_SITE_CALL_ADAPTER
+                             ? BOX_KIND_CALL_ADAPTER : box_kind]);
     PyObject *box;
     if (PyValue_IsInlineInt(ref)) {
         OBJECT_STAT_INC(inline_int_boxes);

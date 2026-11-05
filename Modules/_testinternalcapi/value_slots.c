@@ -372,6 +372,24 @@ static PyTypeObject VIntSubAdd_Type = {
 };
 
 
+/* VIntCopyAdd: not a VInt, no value slots, and the same object nb_add as
+ * VInt (the thunk). binary_op1() sees one slot for both operand types and
+ * calls it once (D8). */
+
+static PyNumberMethods vintcopyadd_as_number = {
+    .nb_add = vint_add,
+};
+
+static PyTypeObject VIntCopyAdd_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testinternalcapi.VIntCopyAdd",
+    .tp_basicsize = sizeof(PyObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT,
+    .tp_new = PyType_GenericNew,
+    .tp_as_number = &vintcopyadd_as_number,
+};
+
+
 /* VIntSpec: both sides through internal spec slot ids */
 
 static PyValue
@@ -516,6 +534,556 @@ static PyTypeObject NotImpl_Type = {
         .nb_power = _Py_VALUE_SLOT_INIT(nb_power, notimpl_power_value),
         .richcompare = _Py_VALUE_SLOT_INIT(richcompare,
                                            notimpl_richcompare_value),
+    },
+};
+
+
+/* Split: every slot has a hand-written object function and value function
+ * that compute the same result and log which one ran. */
+
+typedef struct {
+    PyObject_HEAD
+    long long value;
+} SplitObject;
+
+static PyTypeObject Split_Type;
+
+static PyObject *
+split_make(long long value)
+{
+    SplitObject *self = PyObject_New(SplitObject, &Split_Type);
+    if (self == NULL) {
+        return NULL;
+    }
+    self->value = value;
+    return (PyObject *)self;
+}
+
+static PyObject *
+split_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+{
+    long long value;
+    if (kwds != NULL && PyDict_GET_SIZE(kwds) != 0) {
+        PyErr_SetString(PyExc_TypeError, "Split takes no keyword arguments");
+        return NULL;
+    }
+    if (!PyArg_ParseTuple(args, "L:Split", &value)) {
+        return NULL;
+    }
+    SplitObject *self = (SplitObject *)type->tp_alloc(type, 0);
+    if (self == NULL) {
+        return NULL;
+    }
+    self->value = value;
+    return (PyObject *)self;
+}
+
+/* As vint_operand(), for Split. */
+static int
+split_operand(PyValueBorrow v, long long *out, int *is_split)
+{
+    *is_split = 0;
+    if (PyValue_IsInlineInt(v)) {
+        *out = PyValue_InlineInt64(v);
+        return 1;
+    }
+    if (!PyValue_IsObject(v)) {
+        return 0;
+    }
+    PyObject *obj = PyValue_AsKnownObjectBorrow(v);
+    if (PyObject_TypeCheck(obj, &Split_Type)) {
+        *out = ((SplitObject *)obj)->value;
+        *is_split = 1;
+        return 1;
+    }
+    if (PyLong_Check(obj)) {
+        int overflow;
+        long long n = PyLong_AsLongLongAndOverflow(obj, &overflow);
+        if (n == -1 && PyErr_Occurred()) {
+            return -1;
+        }
+        if (overflow) {
+            return 0;
+        }
+        *out = n;
+        return 1;
+    }
+    return 0;
+}
+
+/* Both operands of a binary operation: 1 if handled and at least one is a
+ * Split, 0 for NotImplemented, -1 with an exception set. */
+static int
+split_operands(PyValueBorrow a, PyValueBorrow b, long long *x, long long *y)
+{
+    int a_split, b_split;
+    int res = split_operand(a, x, &a_split);
+    if (res <= 0) {
+        return res;
+    }
+    res = split_operand(b, y, &b_split);
+    if (res <= 0) {
+        return res;
+    }
+    return a_split || b_split;
+}
+
+/* A new reference: Split(x - y) or NotImplemented. */
+static PyObject *
+split_sub_impl(PyValueBorrow a, PyValueBorrow b)
+{
+    long long x, y;
+    int res = split_operands(a, b, &x, &y);
+    if (res < 0) {
+        return NULL;
+    }
+    if (res == 0) {
+        Py_RETURN_NOTIMPLEMENTED;
+    }
+    return split_make(x - y);
+}
+
+static PyObject *
+split_pow_impl(PyValueBorrow a, PyValueBorrow b, PyValueBorrow c)
+{
+    long long x, y, m = 0;
+    int res = split_operands(a, b, &x, &y);
+    if (res < 0) {
+        return NULL;
+    }
+    if (res == 0 || y < 0) {
+        Py_RETURN_NOTIMPLEMENTED;
+    }
+    int has_modulus = !(PyValue_IsObject(c)
+                        && PyValue_AsKnownObjectBorrow(c) == Py_None);
+    if (has_modulus) {
+        int c_split;
+        res = split_operand(c, &m, &c_split);
+        if (res < 0) {
+            return NULL;
+        }
+        if (res == 0 || m <= 0 || x < 0) {
+            Py_RETURN_NOTIMPLEMENTED;
+        }
+    }
+    long long result = has_modulus ? 1 % m : 1;
+    for (long long i = 0; i < y; i++) {
+        result = has_modulus ? (result * (x % m)) % m : result * x;
+    }
+    return split_make(result);
+}
+
+/* 1 or 0 for the comparison, 2 for NotImplemented, -1 on error. */
+static int
+split_compare_impl(PyValueBorrow a, PyValueBorrow b, int op)
+{
+    long long x, y;
+    int res = split_operands(a, b, &x, &y);
+    if (res <= 0) {
+        return res < 0 ? -1 : 2;
+    }
+    switch (op) {
+    case Py_LT: return x < y;
+    case Py_LE: return x <= y;
+    case Py_EQ: return x == y;
+    case Py_NE: return x != y;
+    case Py_GT: return x > y;
+    case Py_GE: return x >= y;
+    }
+    PyErr_BadInternalCall();
+    return -1;
+}
+
+#define SPLIT_VALUE(OBJ) (((SplitObject *)(OBJ))->value)
+#define SPLIT_SELF(BORROW) SPLIT_VALUE(PyValue_AsKnownObjectBorrow(BORROW))
+
+static Py_hash_t
+split_hash_of(long long value)
+{
+    Py_hash_t h = (Py_hash_t)value;
+    return h == -1 ? -2 : h;
+}
+
+/* sub */
+
+static PyObject *
+split_sub_object(PyObject *a, PyObject *b)
+{
+    if (log_call("Split.sub.object") < 0) {
+        return NULL;
+    }
+    return split_sub_impl(_Py_VALUE_ARG(a), _Py_VALUE_ARG(b));
+}
+
+static PyValue
+split_sub_value(PyValueBorrow a, PyValueBorrow b)
+{
+    if (log_call("Split.sub.value") < 0) {
+        return PyValue_NULL;
+    }
+    return _PyValue_FromObjectResult(split_sub_impl(a, b));
+}
+
+/* isub */
+
+static PyObject *
+split_isub_object(PyObject *a, PyObject *b)
+{
+    if (log_call("Split.isub.object") < 0) {
+        return NULL;
+    }
+    return split_sub_impl(_Py_VALUE_ARG(a), _Py_VALUE_ARG(b));
+}
+
+static PyValue
+split_isub_value(PyValueBorrow a, PyValueBorrow b)
+{
+    if (log_call("Split.isub.value") < 0) {
+        return PyValue_NULL;
+    }
+    return _PyValue_FromObjectResult(split_sub_impl(a, b));
+}
+
+/* pow */
+
+static PyObject *
+split_pow_object(PyObject *a, PyObject *b, PyObject *c)
+{
+    if (log_call("Split.pow.object") < 0) {
+        return NULL;
+    }
+    return split_pow_impl(_Py_VALUE_ARG(a), _Py_VALUE_ARG(b),
+                          _Py_VALUE_ARG(c));
+}
+
+static PyValue
+split_pow_value(PyValueBorrow a, PyValueBorrow b, PyValueBorrow c)
+{
+    if (log_call("Split.pow.value") < 0) {
+        return PyValue_NULL;
+    }
+    return _PyValue_FromObjectResult(split_pow_impl(a, b, c));
+}
+
+/* neg */
+
+static PyObject *
+split_neg_object(PyObject *self)
+{
+    if (log_call("Split.neg.object") < 0) {
+        return NULL;
+    }
+    return split_make(-SPLIT_VALUE(self));
+}
+
+static PyValue
+split_neg_value(PyValueBorrow self)
+{
+    if (log_call("Split.neg.value") < 0) {
+        return PyValue_NULL;
+    }
+    return _PyValue_FromObjectResult(split_make(-SPLIT_SELF(self)));
+}
+
+/* index */
+
+static PyObject *
+split_index_object(PyObject *self)
+{
+    if (log_call("Split.index.object") < 0) {
+        return NULL;
+    }
+    return PyLong_FromLongLong(SPLIT_VALUE(self));
+}
+
+static PyValue
+split_index_value(PyValueBorrow self)
+{
+    if (log_call("Split.index.value") < 0) {
+        return PyValue_NULL;
+    }
+    return _PyValue_FromObjectResult(PyLong_FromLongLong(SPLIT_SELF(self)));
+}
+
+/* bool */
+
+static int
+split_bool_object(PyObject *self)
+{
+    if (log_call("Split.bool.object") < 0) {
+        return -1;
+    }
+    return SPLIT_VALUE(self) != 0;
+}
+
+static int
+split_bool_value(PyValueBorrow self)
+{
+    if (log_call("Split.bool.value") < 0) {
+        return -1;
+    }
+    return SPLIT_SELF(self) != 0;
+}
+
+/* hash */
+
+static Py_hash_t
+split_hash_object(PyObject *self)
+{
+    if (log_call("Split.hash.object") < 0) {
+        return -1;
+    }
+    return split_hash_of(SPLIT_VALUE(self));
+}
+
+static Py_hash_t
+split_hash_value(PyValueBorrow self)
+{
+    if (log_call("Split.hash.value") < 0) {
+        return -1;
+    }
+    return split_hash_of(SPLIT_SELF(self));
+}
+
+/* richcompare */
+
+static PyObject *
+split_richcompare_object(PyObject *a, PyObject *b, int op)
+{
+    if (log_call("Split.richcompare.object") < 0) {
+        return NULL;
+    }
+    int res = split_compare_impl(_Py_VALUE_ARG(a), _Py_VALUE_ARG(b), op);
+    if (res < 0) {
+        return NULL;
+    }
+    if (res == 2) {
+        Py_RETURN_NOTIMPLEMENTED;
+    }
+    return PyBool_FromLong(res);
+}
+
+static PyValue
+split_richcompare_value(PyValueBorrow a, PyValueBorrow b, int op)
+{
+    if (log_call("Split.richcompare.value") < 0) {
+        return PyValue_NULL;
+    }
+    int res = split_compare_impl(a, b, op);
+    if (res < 0) {
+        return PyValue_NULL;
+    }
+    if (res == 2) {
+        return PyValue_NotImplemented;
+    }
+    return res ? PyValue_True : PyValue_False;
+}
+
+/* repr and str */
+
+static PyObject *
+split_repr_object(PyObject *self)
+{
+    if (log_call("Split.repr.object") < 0) {
+        return NULL;
+    }
+    return PyUnicode_FromFormat("Split(%lld)", SPLIT_VALUE(self));
+}
+
+static PyObject *
+split_repr_value(PyValueBorrow self)
+{
+    if (log_call("Split.repr.value") < 0) {
+        return NULL;
+    }
+    return PyUnicode_FromFormat("Split(%lld)", SPLIT_SELF(self));
+}
+
+static PyObject *
+split_str_object(PyObject *self)
+{
+    if (log_call("Split.str.object") < 0) {
+        return NULL;
+    }
+    return PyUnicode_FromFormat("split %lld", SPLIT_VALUE(self));
+}
+
+static PyObject *
+split_str_value(PyValueBorrow self)
+{
+    if (log_call("Split.str.value") < 0) {
+        return NULL;
+    }
+    return PyUnicode_FromFormat("split %lld", SPLIT_SELF(self));
+}
+
+static PyNumberMethods split_as_number = {
+    .nb_subtract = split_sub_object,
+    .nb_inplace_subtract = split_isub_object,
+    .nb_power = split_pow_object,
+    .nb_negative = split_neg_object,
+    .nb_index = split_index_object,
+    .nb_bool = split_bool_object,
+};
+
+static PyMemberDef split_members[] = {
+    {"value", Py_T_LONGLONG, offsetof(SplitObject, value), Py_READONLY},
+    {NULL},
+};
+
+static PyTypeObject Split_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testinternalcapi.Split",
+    .tp_basicsize = sizeof(SplitObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+    .tp_new = split_new,
+    .tp_members = split_members,
+    .tp_as_number = &split_as_number,
+    .tp_hash = split_hash_object,
+    .tp_richcompare = split_richcompare_object,
+    .tp_repr = split_repr_object,
+    .tp_str = split_str_object,
+    .tp_value = {
+        .nb_subtract = _Py_VALUE_SLOT_INIT(nb_subtract, split_sub_value),
+        .nb_inplace_subtract = _Py_VALUE_SLOT_INIT(nb_inplace_subtract,
+                                                   split_isub_value),
+        .nb_power = _Py_VALUE_SLOT_INIT(nb_power, split_pow_value),
+        .nb_negative = _Py_VALUE_SLOT_INIT(nb_negative, split_neg_value),
+        .nb_index = _Py_VALUE_SLOT_INIT(nb_index, split_index_value),
+        .nb_bool = _Py_VALUE_SLOT_INIT(nb_bool, split_bool_value),
+        .hash = _Py_VALUE_SLOT_INIT(hash, split_hash_value),
+        .richcompare = _Py_VALUE_SLOT_INIT(richcompare,
+                                           split_richcompare_value),
+        .repr = _Py_VALUE_SLOT_INIT(repr, split_repr_value),
+        .str = _Py_VALUE_SLOT_INIT(str, split_str_value),
+    },
+};
+
+
+/* SplitSeq: sq_concat and sq_inplace_concat, both sides. */
+
+typedef struct {
+    PyObject_HEAD
+    long long value;
+} SplitSeqObject;
+
+static PyTypeObject SplitSeq_Type;
+
+static PyObject *
+splitseq_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
+{
+    long long value;
+    if (kwds != NULL && PyDict_GET_SIZE(kwds) != 0) {
+        PyErr_SetString(PyExc_TypeError,
+                        "SplitSeq takes no keyword arguments");
+        return NULL;
+    }
+    if (!PyArg_ParseTuple(args, "L:SplitSeq", &value)) {
+        return NULL;
+    }
+    SplitSeqObject *self = (SplitSeqObject *)type->tp_alloc(type, 0);
+    if (self == NULL) {
+        return NULL;
+    }
+    self->value = value;
+    return (PyObject *)self;
+}
+
+/* SplitSeq(self.value * 1000 + other), or TypeError. */
+static PyObject *
+splitseq_concat_impl(PyObject *self, PyValueBorrow other)
+{
+    long long y = 0;
+    int ok = 0;
+    if (PyValue_IsInlineInt(other)) {
+        y = PyValue_InlineInt64(other);
+        ok = 1;
+    }
+    else if (PyValue_IsObject(other)) {
+        PyObject *obj = PyValue_AsKnownObjectBorrow(other);
+        if (PyObject_TypeCheck(obj, &SplitSeq_Type)) {
+            y = ((SplitSeqObject *)obj)->value;
+            ok = 1;
+        }
+        else if (PyLong_Check(obj)) {
+            int overflow;
+            y = PyLong_AsLongLongAndOverflow(obj, &overflow);
+            if (y == -1 && PyErr_Occurred()) {
+                return NULL;
+            }
+            ok = !overflow;
+        }
+    }
+    if (!ok) {
+        PyErr_SetString(PyExc_TypeError, "can only concatenate SplitSeq");
+        return NULL;
+    }
+    SplitSeqObject *res = PyObject_New(SplitSeqObject, &SplitSeq_Type);
+    if (res == NULL) {
+        return NULL;
+    }
+    res->value = ((SplitSeqObject *)self)->value * 1000 + y;
+    return (PyObject *)res;
+}
+
+static PyObject *
+splitseq_concat_object(PyObject *self, PyObject *other)
+{
+    if (log_call("SplitSeq.concat.object") < 0) {
+        return NULL;
+    }
+    return splitseq_concat_impl(self, _Py_VALUE_ARG(other));
+}
+
+static PyValue
+splitseq_concat_value(PyObject *self, PyValueBorrow other)
+{
+    if (log_call("SplitSeq.concat.value") < 0) {
+        return PyValue_NULL;
+    }
+    return _PyValue_FromObjectResult(splitseq_concat_impl(self, other));
+}
+
+static PyObject *
+splitseq_iconcat_object(PyObject *self, PyObject *other)
+{
+    if (log_call("SplitSeq.iconcat.object") < 0) {
+        return NULL;
+    }
+    return splitseq_concat_impl(self, _Py_VALUE_ARG(other));
+}
+
+static PyValue
+splitseq_iconcat_value(PyObject *self, PyValueBorrow other)
+{
+    if (log_call("SplitSeq.iconcat.value") < 0) {
+        return PyValue_NULL;
+    }
+    return _PyValue_FromObjectResult(splitseq_concat_impl(self, other));
+}
+
+static PySequenceMethods splitseq_as_sequence = {
+    .sq_concat = splitseq_concat_object,
+    .sq_inplace_concat = splitseq_iconcat_object,
+};
+
+static PyMemberDef splitseq_members[] = {
+    {"value", Py_T_LONGLONG, offsetof(SplitSeqObject, value), Py_READONLY},
+    {NULL},
+};
+
+static PyTypeObject SplitSeq_Type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name = "_testinternalcapi.SplitSeq",
+    .tp_basicsize = sizeof(SplitSeqObject),
+    .tp_flags = Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE,
+    .tp_new = splitseq_new,
+    .tp_members = splitseq_members,
+    .tp_as_sequence = &splitseq_as_sequence,
+    .tp_value = {
+        .sq_concat = _Py_VALUE_SLOT_INIT(sq_concat, splitseq_concat_value),
+        .sq_inplace_concat = _Py_VALUE_SLOT_INIT(sq_inplace_concat,
+                                                 splitseq_iconcat_value),
     },
 };
 
@@ -882,6 +1450,186 @@ call_value_slot(PyObject *Py_UNUSED(module), PyObject *const *args,
 #undef EXPECT
 }
 
+/* value_dispatch(name, *args): call the dispatcher _PyValue_<name> with the
+ * arguments as borrowed values (an exact int or float that fits is inline).
+ * A PyValue result is returned as (object, was_inline). */
+
+typedef PyValue (*dispatch_unary)(PyValueBorrow);
+typedef PyValue (*dispatch_binary)(PyValueBorrow, PyValueBorrow);
+typedef PyValue (*dispatch_ternary)(PyValueBorrow, PyValueBorrow,
+                                    PyValueBorrow);
+
+static const struct {
+    const char *name;
+    dispatch_binary fn;
+} binary_dispatchers[] = {
+#define BINARY_ROW(NAME) {#NAME, (_PyValue_##NAME)},
+#define INPLACE_ROW(NAME) {"InPlace" #NAME, (_PyValue_InPlace##NAME)},
+    _PyValue_BINARY_DISPATCHERS(BINARY_ROW)
+    _PyValue_INPLACE_DISPATCHERS(INPLACE_ROW)
+#undef BINARY_ROW
+#undef INPLACE_ROW
+};
+
+static const struct {
+    const char *name;
+    dispatch_ternary fn;
+} ternary_dispatchers[] = {
+    {"Power", (_PyValue_Power)},
+    {"InPlacePower", (_PyValue_InPlacePower)},
+};
+
+static const struct {
+    const char *name;
+    dispatch_unary fn;
+} unary_dispatchers[] = {
+    {"Negative", (_PyValue_Negative)},
+    {"Positive", (_PyValue_Positive)},
+    {"Absolute", (_PyValue_Absolute)},
+    {"Invert", (_PyValue_Invert)},
+    {"Index", (_PyValue_Index)},
+    {"Long", (_PyValue_Long)},
+    {"Float", (_PyValue_Float)},
+};
+
+/* (object, was_inline) for the owner of a dispatcher; NULL with an exception
+ * set for PyValue_NULL. */
+static PyObject *
+dispatch_value_result(PyValue result)
+{
+    if (PyValue_IsNull(result)) {
+        return NULL;
+    }
+    int was_inline = PyValue_IsInline(result);
+    PyObject *obj = value_result(result);
+    if (obj == NULL) {
+        return NULL;
+    }
+    return Py_BuildValue("NN", obj, PyBool_FromLong(was_inline));
+}
+
+static PyObject *
+int_result(long long res)
+{
+    return res == -1 && PyErr_Occurred() ? NULL : PyLong_FromLongLong(res);
+}
+
+static PyObject *
+bool_result(int res)
+{
+    return res < 0 ? NULL : PyBool_FromLong(res);
+}
+
+static PyObject *
+value_dispatch(PyObject *Py_UNUSED(module), PyObject *const *args,
+               Py_ssize_t nargs)
+{
+    if (nargs < 1 || !PyUnicode_Check(args[0])) {
+        PyErr_SetString(PyExc_TypeError, "value_dispatch(name, *args)");
+        return NULL;
+    }
+    const char *name = PyUnicode_AsUTF8(args[0]);
+    if (name == NULL) {
+        return NULL;
+    }
+    Py_ssize_t operands = nargs - 1;
+    PyValueBorrow v[3];
+    for (Py_ssize_t i = 0; i < operands && i < 3; i++) {
+        v[i] = _Py_VALUE_ARG(args[i + 1]);
+    }
+#define EXPECT(N) \
+    if (operands != (N)) { \
+        PyErr_Format(PyExc_TypeError, "%s takes %d arguments, got %zd", \
+                     name, (N), operands); \
+        return NULL; \
+    }
+    for (size_t i = 0; i < Py_ARRAY_LENGTH(binary_dispatchers); i++) {
+        if (strcmp(binary_dispatchers[i].name, name) == 0) {
+            EXPECT(2);
+            return dispatch_value_result(binary_dispatchers[i].fn(v[0], v[1]));
+        }
+    }
+    for (size_t i = 0; i < Py_ARRAY_LENGTH(ternary_dispatchers); i++) {
+        if (strcmp(ternary_dispatchers[i].name, name) == 0) {
+            EXPECT(3);
+            return dispatch_value_result(
+                ternary_dispatchers[i].fn(v[0], v[1], v[2]));
+        }
+    }
+    for (size_t i = 0; i < Py_ARRAY_LENGTH(unary_dispatchers); i++) {
+        if (strcmp(unary_dispatchers[i].name, name) == 0) {
+            EXPECT(1);
+            return dispatch_value_result(unary_dispatchers[i].fn(v[0]));
+        }
+    }
+    if (strcmp(name, "AsSsize_t") == 0) {
+        EXPECT(2);
+        PyObject *exc = args[2] == Py_None ? NULL : args[2];
+        return int_result((_PyValue_AsSsize_t)(v[0], exc));
+    }
+    if (strcmp(name, "RichCompare") == 0 || strcmp(name, "RichCompareBool") == 0)
+    {
+        EXPECT(3);
+        int op = PyLong_AsInt(args[3]);
+        if (op == -1 && PyErr_Occurred()) {
+            return NULL;
+        }
+        if (op < Py_LT || op > Py_GE) {
+            PyErr_SetString(PyExc_ValueError, "invalid comparison operator");
+            return NULL;
+        }
+        if (strcmp(name, "RichCompare") == 0) {
+            return dispatch_value_result((_PyValue_RichCompare)(v[0], v[1], op));
+        }
+        return bool_result((_PyValue_RichCompareBool)(v[0], v[1], op));
+    }
+    if (strcmp(name, "IsTrue") == 0) {
+        EXPECT(1);
+        return bool_result((_PyValue_IsTrue)(v[0]));
+    }
+    if (strcmp(name, "Not") == 0) {
+        EXPECT(1);
+        return bool_result((_PyValue_Not)(v[0]));
+    }
+    if (strcmp(name, "Hash") == 0) {
+        EXPECT(1);
+        return int_result((_PyValue_Hash)(v[0]));
+    }
+    if (strcmp(name, "Repr") == 0) {
+        EXPECT(1);
+        return (_PyValue_Repr)(v[0]);
+    }
+    if (strcmp(name, "Str") == 0) {
+        EXPECT(1);
+        return (_PyValue_Str)(v[0]);
+    }
+    if (strcmp(name, "ASCII") == 0) {
+        EXPECT(1);
+        return (_PyValue_ASCII)(v[0]);
+    }
+#undef EXPECT
+    PyErr_Format(PyExc_ValueError, "unknown dispatcher %s", name);
+    return NULL;
+}
+
+static PyObject *
+wrapper_pair(PyObject *Py_UNUSED(module), PyObject *descr)
+{
+    if (!Py_IS_TYPE(descr, &PyWrapperDescr_Type)) {
+        PyErr_SetString(PyExc_TypeError, "expected a wrapper_descriptor");
+        return NULL;
+    }
+    PyWrapperDescrObject *d = (PyWrapperDescrObject *)descr;
+    PyObject *object = address_to_int(d->d_wrapped);
+    PyObject *value = object == NULL ? NULL
+                                     : address_to_int(d->d_wrapped_value);
+    if (value == NULL) {
+        Py_XDECREF(object);
+        return NULL;
+    }
+    return Py_BuildValue("NN", object, value);
+}
+
 static PyObject *
 value_functions(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(args))
 {
@@ -909,6 +1657,32 @@ value_functions(PyObject *Py_UNUSED(module), PyObject *Py_UNUSED(args))
         {"NotImpl.add", (const void *)notimpl_add_value},
         {"NotImpl.power", (const void *)notimpl_power_value},
         {"NotImpl.richcompare", (const void *)notimpl_richcompare_value},
+        {"Split.sub.object", (const void *)split_sub_object},
+        {"Split.sub.value", (const void *)split_sub_value},
+        {"Split.isub.object", (const void *)split_isub_object},
+        {"Split.isub.value", (const void *)split_isub_value},
+        {"Split.pow.object", (const void *)split_pow_object},
+        {"Split.pow.value", (const void *)split_pow_value},
+        {"Split.neg.object", (const void *)split_neg_object},
+        {"Split.neg.value", (const void *)split_neg_value},
+        {"Split.index.object", (const void *)split_index_object},
+        {"Split.index.value", (const void *)split_index_value},
+        {"Split.bool.object", (const void *)split_bool_object},
+        {"Split.bool.value", (const void *)split_bool_value},
+        {"Split.hash.object", (const void *)split_hash_object},
+        {"Split.hash.value", (const void *)split_hash_value},
+        {"Split.richcompare.object", (const void *)split_richcompare_object},
+        {"Split.richcompare.value", (const void *)split_richcompare_value},
+        {"Split.repr.object", (const void *)split_repr_object},
+        {"Split.repr.value", (const void *)split_repr_value},
+        {"Split.str.object", (const void *)split_str_object},
+        {"Split.str.value", (const void *)split_str_value},
+        {"SplitSeq.concat.object", (const void *)splitseq_concat_object},
+        {"SplitSeq.concat.value", (const void *)splitseq_concat_value},
+        {"SplitSeq.iconcat.object", (const void *)splitseq_iconcat_object},
+        {"SplitSeq.iconcat.value", (const void *)splitseq_iconcat_value},
+        {"PyObject_HashNotImplemented", (const void *)PyObject_HashNotImplemented},
+        {"PyObject_GenericHash", (const void *)PyObject_GenericHash},
     };
     for (size_t i = 0; i < Py_ARRAY_LENGTH(entries); i++) {
         PyObject *address = address_to_int(entries[i].address);
@@ -930,7 +1704,9 @@ static PyMethodDef methods[] = {
     {"value_slot", value_slot, METH_VARARGS},
     {"object_slot", object_slot, METH_VARARGS},
     {"value_functions", value_functions, METH_NOARGS},
+    {"wrapper_pair", wrapper_pair, METH_O},
     {"call_value_slot", _PyCFunction_CAST(call_value_slot), METH_FASTCALL},
+    {"value_dispatch", _PyCFunction_CAST(value_dispatch), METH_FASTCALL},
     {"make_invalid_value_type", make_invalid_value_type, METH_O},
     {NULL},
 };
@@ -946,7 +1722,10 @@ _PyTestInternalCapi_Init_ValueSlots(PyObject *module)
         &VIntSubNothing_Type,
         &VIntSubRepr_Type,
         &VIntSubAdd_Type,
+        &VIntCopyAdd_Type,
         &NotImpl_Type,
+        &Split_Type,
+        &SplitSeq_Type,
         &VSeq_Type,
     };
     for (size_t i = 0; i < Py_ARRAY_LENGTH(static_types); i++) {

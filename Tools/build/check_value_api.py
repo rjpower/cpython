@@ -47,8 +47,17 @@ Py_BUILD_CORE_MODULE, or one that defines Py_VALUE_CORE (Include/pyport.h).
   should be a PyValueBorrow (register-ir-v2-a5b.md, section 5.3). Reported,
   not failing.
 
-The functions that Py_VALUE_COMPAT marks need no rule here: calling one from
-a value-native unit is a compile error.
+* compat-body: a box primitive or box helper (BOX_PRIMITIVES) called
+  directly in the body of a function that Py_VALUE_COMPAT marks. Such a
+  function is a thunk of a value dispatcher
+  (pyjit/design/proposals/value-api-v2a0.md, D10), and its boxes are of
+  kind THUNK: it boxes through _PyValue_THUNK_EXIT()
+  (Include/internal/pycore_value_slots.h). The rule checks a thunk once its
+  declaration is marked, which the waves do (W1b, W2); until then it has
+  nothing to check.
+
+The functions that Py_VALUE_COMPAT marks need no other rule here: calling
+one from a value-native unit is a compile error.
 
 The script reads compile_commands.json, which intercept-build records while
 the units compile, and runs clang-query over every value-native unit, then
@@ -240,6 +249,20 @@ RAW_BITS_MESSAGES = {
     "rawcast": "casts between a word pointer and another pointer type",
     "rawunion": "puns a word through a union",
 }
+# The functions that box an inline value, which a thunk body must not call
+# directly: the primitives and the helpers built on them.
+BOX_PRIMITIVES = ("PyValue_AsObject", "_PyValue_AsObjectAt",
+                  "_PyValue_AsObjectKind", "_PyValue_AsObjectAtKind",
+                  "_PyValue_BoxInlineValue", "PyValue_Box",
+                  "_PyValue_BoxInto", "_PyValueTemps_Object",
+                  "_PyValueTemps_ObjectAt", "_PyBorrow_TupleItems",
+                  "_PyBorrow_TupleItemsAt", "_PyValue_AdapterBox")
+COMPAT_BODY_MATCHER = (
+    "callExpr(callee(functionDecl(hasAnyName({names}))), hasAncestor("
+    'functionDecl(isDefinition(), hasAttr("attr::Unavailable"))))'
+    '.bind("compat_box")'.format(
+        names=", ".join(f'"{name}"' for name in BOX_PRIMITIVES))
+)
 QUERY = "\n".join([
     "set output diag",
     "enable output dump",
@@ -249,6 +272,7 @@ QUERY = "\n".join([
                              HOME_COPY_MATCHER)),
     "set traversal AsIs",
     f"match {SLOT_READ_MATCHER}",
+    f"match {COMPAT_BODY_MATCHER}",
     "",
 ])
 
@@ -551,6 +575,11 @@ def parse_output(text, kind, directory):
                 path, line, column, "slot-read",
                 f"read of {field} ({family} family)",
                 family in MARKED_SLOT_FAMILIES))
+        elif binding == "compat_box":
+            findings.append(Finding(
+                path, line, column, "compat-body",
+                "box primitive in a Py_VALUE_COMPAT body; box through "
+                "_PyValue_THUNK_EXIT()", True))
     return findings
 
 
@@ -977,6 +1006,26 @@ SELF_TESTS = {
             PyValue_CLOSE(d);
             return n;
         }""", "home-copy", 3),
+    "compat_body_box": ("""
+        Py_VALUE_COMPAT(g) PyObject *f(PyValue v);
+        PyObject *f(PyValue v) {
+            return PyValue_AsObject(v);
+        }""", "compat-body", 1),
+    "compat_body_helper_box": ("""
+        Py_VALUE_COMPAT(g) PyObject *f(PyValue v);
+        PyObject *f(PyValue v) {
+            return PyValue_AsKnownObjectSteal(PyValue_Box(v));
+        }""", "compat-body", 1),
+    "compat_body_thunk_exit": ("""
+        #include "pycore_value_slots.h"
+        Py_VALUE_COMPAT(g) PyObject *f(PyValue v);
+        PyObject *f(PyValue v) {
+            return _PyValue_THUNK_EXIT(v);
+        }""", "compat-body", 0),
+    "compat_body_unmarked": ("""
+        PyObject *f(PyValue v) {
+            return PyValue_AsObject(v);
+        }""", "compat-body", 0),
 }
 # The rules whose findings report and do not fail.
 REPORT_RULES = frozenset({"slot-read", "home-copy"})

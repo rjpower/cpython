@@ -4147,6 +4147,9 @@ typedef struct {
     PyTypeObject *type;
     void **slot_ptr;
     void *slot_value;
+    // The value field of the slot, or NULL, and its new value.
+    _Py_valuefunc *value_ptr;
+    _Py_valuefunc value;
 } slot_update_item_t;
 
 // The number of slot updates performed is based on the number of changed
@@ -4195,9 +4198,10 @@ slot_update_free_chunks(slot_update_t *updates)
 
 static int
 queue_slot_update(slot_update_t *updates, PyTypeObject *type,
-                  void **slot_ptr, void *slot_value)
+                  void **slot_ptr, void *slot_value,
+                  _Py_valuefunc *value_ptr, _Py_valuefunc value)
 {
-    if (*slot_ptr == slot_value) {
+    if (*slot_ptr == slot_value && (value_ptr == NULL || *value_ptr == value)) {
         return 0; // slot pointer not actually changed, don't queue update
     }
     if (updates->head == NULL || updates->head->n == SLOT_UPDATE_CHUNK_SIZE) {
@@ -4212,6 +4216,8 @@ queue_slot_update(slot_update_t *updates, PyTypeObject *type,
     item->type = type;
     item->slot_ptr = slot_ptr;
     item->slot_value = slot_value;
+    item->value_ptr = value_ptr;
+    item->value = value;
     updates->head->n++;
     assert(updates->head->n <= SLOT_UPDATE_CHUNK_SIZE);
     return 0;
@@ -4226,6 +4232,9 @@ apply_slot_updates(slot_update_t *updates)
         for (Py_ssize_t i = 0; i < chunk->n; i++) {
             slot_update_item_t *item = &chunk->updates[i];
             *(item->slot_ptr) = item->slot_value;
+            if (item->value_ptr != NULL) {
+                *(item->value_ptr) = item->value;
+            }
             if (item->slot_value == slot_tp_call) {
                 /* A generic __call__ is incompatible with vectorcall */
                 type_clear_flags(item->type, Py_TPFLAGS_HAVE_VECTORCALL);
@@ -9901,16 +9910,31 @@ type_ready_inherit_as_structs(PyTypeObject *type, PyTypeObject *base)
  * either. A value field of 0 means "call the object slot through the
  * adapter", which is always correct. */
 
+// The wrapper column of the table: the family of the value wrapper that
+// slot descriptors of the row call (section 4.5).
+enum {
+    VALUE_WRAPPER_NONE,
+    VALUE_WRAPPER_UNARY,
+    VALUE_WRAPPER_BINARY,
+    VALUE_WRAPPER_TERNARY,
+    VALUE_WRAPPER_INQUIRY,
+    VALUE_WRAPPER_HASH,
+    VALUE_WRAPPER_RICHCMP,
+    VALUE_WRAPPER_REPR,
+    VALUE_WRAPPER_CONCAT,
+};
+
 typedef struct {
     const char *name;
     int object_offset;          // of the object slot, as in slotdefs
     int value_offset;           // of the value field in PyTypeObject
+    int wrapper;                // VALUE_WRAPPER_*
 } value_slot_row;
 
 static const value_slot_row value_slot_rows[] = {
 #define VALUE_SLOT_ROW(FIELD, PATH, KIND, WRAPPER) \
     {#FIELD, offsetof(PyHeapTypeObject, PATH), \
-     offsetof(PyTypeObject, tp_value.FIELD)},
+     offsetof(PyTypeObject, tp_value.FIELD), VALUE_WRAPPER_##WRAPPER},
     _Py_VALUE_SLOT_TABLE(VALUE_SLOT_ROW)
 #undef VALUE_SLOT_ROW
 };
@@ -10130,16 +10154,6 @@ check_value_invariant(PyTypeObject *type, uint64_t own)
     for (int row = 0; row < _Py_VALUE_SLOT_COUNT; row++) {
         check_value_row(type, row, (own & ((uint64_t)1 << row)) != 0);
     }
-}
-
-/* The invariant for a type that PyType_Ready has finished: after
-   fixup_slot_dispatchers() and for the target of a __class__ assignment.
-   Own definitions are no longer known then, so every row must form a
-   known pair. */
-void
-_PyType_CheckValueInvariant(PyTypeObject *type)
-{
-    check_value_invariant(type, 0);
 }
 #endif
 
@@ -11401,6 +11415,218 @@ RICHCMP_WRAPPER(eq, Py_EQ)
 RICHCMP_WRAPPER(ne, Py_NE)
 RICHCMP_WRAPPER(gt, Py_GT)
 RICHCMP_WRAPPER(ge, Py_GE)
+
+/* Value wrappers (value-api-v2a0.md, section 4.5). A slot descriptor whose
+   d_wrapped_value is set calls the value function through one of these in
+   place of the object wrapper of its slotdef. Each checks the arguments as
+   that object wrapper does, passes borrows of self and the arguments, and
+   returns the result as an object. */
+
+static PyObject *
+wrap_binaryvalue(PyObject *self, PyObject *args, void *wrapped, int reflected)
+{
+    _Py_binaryvaluefunc func = (_Py_binaryvaluefunc)wrapped;
+    PyObject *receiver = Py_NewRef(self);
+    PyObject *tuple = Py_NewRef(args);
+    PyObject *other = NULL;
+    PyObject *result = NULL;
+
+    if (!check_num_args(tuple, 1)) {
+        goto done;
+    }
+    other = PyTuple_GetItemRef(tuple, 0);
+    if (other == NULL) {
+        goto done;
+    }
+    PyValueBorrow a = _Py_VALUE_ARG(receiver);
+    PyValueBorrow b = _Py_VALUE_ARG(other);
+    result = _PyValue_THUNK_EXIT(reflected ? func(b, a) : func(a, b));
+
+done:
+    Py_CLEAR(other);
+    Py_CLEAR(tuple);
+    Py_CLEAR(receiver);
+    return result;
+}
+
+static PyObject *
+wrap_binaryvalue_l(PyObject *self, PyObject *args, void *wrapped)
+{
+    return wrap_binaryvalue(self, args, wrapped, 0);
+}
+
+static PyObject *
+wrap_binaryvalue_r(PyObject *self, PyObject *args, void *wrapped)
+{
+    return wrap_binaryvalue(self, args, wrapped, 1);
+}
+
+static PyObject *
+wrap_ternaryvalue_impl(PyObject *self, PyObject *args, void *wrapped,
+                       int reflected)
+{
+    _Py_ternaryvaluefunc func = (_Py_ternaryvaluefunc)wrapped;
+    PyObject *receiver = Py_NewRef(self);
+    PyObject *tuple = Py_NewRef(args);
+    PyObject *other = NULL;
+    PyObject *third = NULL;
+    PyObject *result = NULL;
+
+    Py_ssize_t size = check_pow_args(tuple);
+    if (size == -1) {
+        goto done;
+    }
+    other = PyTuple_GetItemRef(tuple, 0);
+    if (other == NULL) {
+        goto done;
+    }
+    third = size == 2 ? PyTuple_GetItemRef(tuple, 1) : Py_NewRef(Py_None);
+    if (third == NULL) {
+        goto done;
+    }
+    PyValueBorrow a = _Py_VALUE_ARG(receiver);
+    PyValueBorrow b = _Py_VALUE_ARG(other);
+    PyValueBorrow c = _Py_VALUE_ARG(third);
+    result = _PyValue_THUNK_EXIT(reflected ? func(b, a, c) : func(a, b, c));
+
+done:
+    Py_CLEAR(third);
+    Py_CLEAR(other);
+    Py_CLEAR(tuple);
+    Py_CLEAR(receiver);
+    return result;
+}
+
+static PyObject *
+wrap_ternaryvalue(PyObject *self, PyObject *args, void *wrapped)
+{
+    return wrap_ternaryvalue_impl(self, args, wrapped, 0);
+}
+
+static PyObject *
+wrap_ternaryvalue_r(PyObject *self, PyObject *args, void *wrapped)
+{
+    return wrap_ternaryvalue_impl(self, args, wrapped, 1);
+}
+
+static PyObject *
+wrap_unaryvalue(PyObject *self, PyObject *args, void *wrapped)
+{
+    _Py_unaryvaluefunc func = (_Py_unaryvaluefunc)wrapped;
+
+    if (!check_num_args(args, 0)) {
+        return NULL;
+    }
+    return _PyValue_THUNK_EXIT(func(_Py_VALUE_ARG(self)));
+}
+
+static PyObject *
+wrap_inquiryvalue(PyObject *self, PyObject *args, void *wrapped)
+{
+    _Py_inquiryvaluefunc func = (_Py_inquiryvaluefunc)wrapped;
+
+    if (!check_num_args(args, 0)) {
+        return NULL;
+    }
+    int res = func(_Py_VALUE_ARG(self));
+    if (res == -1 && PyErr_Occurred()) {
+        return NULL;
+    }
+    return PyBool_FromLong((long)res);
+}
+
+static PyObject *
+wrap_hashvalue(PyObject *self, PyObject *args, void *wrapped)
+{
+    _Py_hashvaluefunc func = (_Py_hashvaluefunc)wrapped;
+
+    if (!check_num_args(args, 0)) {
+        return NULL;
+    }
+    Py_hash_t res = func(_Py_VALUE_ARG(self));
+    if (res == -1 && PyErr_Occurred()) {
+        return NULL;
+    }
+    return PyLong_FromSsize_t(res);
+}
+
+static PyObject *
+wrap_richcmpvalue(PyObject *self, PyObject *args, void *wrapped, int op)
+{
+    _Py_richcmpvaluefunc func = (_Py_richcmpvaluefunc)wrapped;
+    PyObject *receiver = Py_NewRef(self);
+    PyObject *tuple = Py_NewRef(args);
+    PyObject *other = NULL;
+    PyObject *result = NULL;
+
+    if (!check_num_args(tuple, 1)) {
+        goto done;
+    }
+    other = PyTuple_GetItemRef(tuple, 0);
+    if (other == NULL) {
+        goto done;
+    }
+    result = _PyValue_THUNK_EXIT(
+        func(_Py_VALUE_ARG(receiver), _Py_VALUE_ARG(other), op));
+
+done:
+    Py_CLEAR(other);
+    Py_CLEAR(tuple);
+    Py_CLEAR(receiver);
+    return result;
+}
+
+#undef RICHCMP_VALUE_WRAPPER
+#define RICHCMP_VALUE_WRAPPER(NAME, OP) \
+static PyObject * \
+wrap_richcmpvalue_##NAME(PyObject *self, PyObject *args, void *wrapped) \
+{ \
+    return wrap_richcmpvalue(self, args, wrapped, OP); \
+}
+
+RICHCMP_VALUE_WRAPPER(lt, Py_LT)
+RICHCMP_VALUE_WRAPPER(le, Py_LE)
+RICHCMP_VALUE_WRAPPER(eq, Py_EQ)
+RICHCMP_VALUE_WRAPPER(ne, Py_NE)
+RICHCMP_VALUE_WRAPPER(gt, Py_GT)
+RICHCMP_VALUE_WRAPPER(ge, Py_GE)
+
+static PyObject *
+wrap_reprvalue(PyObject *self, PyObject *args, void *wrapped)
+{
+    _Py_reprvaluefunc func = (_Py_reprvaluefunc)wrapped;
+
+    if (!check_num_args(args, 0)) {
+        return NULL;
+    }
+    return func(_Py_VALUE_ARG(self));
+}
+
+// sq_concat and sq_inplace_concat: the sequence stays an object.
+static PyObject *
+wrap_concatvalue(PyObject *self, PyObject *args, void *wrapped)
+{
+    _Py_concatvaluefunc func = (_Py_concatvaluefunc)wrapped;
+    PyObject *receiver = Py_NewRef(self);
+    PyObject *tuple = Py_NewRef(args);
+    PyObject *other = NULL;
+    PyObject *result = NULL;
+
+    if (!check_num_args(tuple, 1)) {
+        goto done;
+    }
+    other = PyTuple_GetItemRef(tuple, 0);
+    if (other == NULL) {
+        goto done;
+    }
+    result = _PyValue_THUNK_EXIT(func(receiver, _Py_VALUE_ARG(other)));
+
+done:
+    Py_CLEAR(other);
+    Py_CLEAR(tuple);
+    Py_CLEAR(receiver);
+    return result;
+}
 
 static PyObject *
 wrap_next(PyObject *self, PyObject *args, void *wrapped)
@@ -12933,6 +13159,112 @@ static pytype_slotdef slotdefs[] = {
    interpreter starts. */
 static uint8_t slotdefs_dups[Py_ARRAY_LENGTH(slotdefs)][1 + MAX_EQUIV];
 
+/* The value data of each slotdef (value-api-v2a0.md, section 4.5), parallel
+   to slotdefs: the row of its value field (-1 if its slot has none), the
+   value side of its slot_* function (0 until V2a-1a and M1b write them), and
+   the value wrapper of its slot descriptors (NULL if the row has none).
+
+   add_operators() reads it while the first static types are readied, before
+   _PyType_InitSlotDefs() runs, so it is filled at its first use, in the
+   main interpreter's single-threaded start. */
+typedef struct {
+    int row;
+    _Py_valuefunc function;
+    wrapperfunc wrapper;
+} slotdef_value;
+
+static slotdef_value slotdef_values[Py_ARRAY_LENGTH(slotdefs)];
+static int slotdef_values_ready = 0;
+
+// The value wrapper for slotdef p, whose row has wrapper family family.
+static wrapperfunc
+slotdef_value_wrapper(const pytype_slotdef *p, int family)
+{
+    wrapperfunc w = p->wrapper;
+    if (w == NULL) {
+        return NULL;
+    }
+    switch (family) {
+    case VALUE_WRAPPER_UNARY:
+        assert(w == wrap_unaryfunc);
+        return wrap_unaryvalue;
+    case VALUE_WRAPPER_BINARY:
+        if (w == wrap_binaryfunc_r) {
+            return wrap_binaryvalue_r;
+        }
+        // The in-place slots use wrap_binaryfunc, which is the left form.
+        assert(w == wrap_binaryfunc_l || w == wrap_binaryfunc);
+        return wrap_binaryvalue_l;
+    case VALUE_WRAPPER_TERNARY:
+        if (w == wrap_ternaryfunc_r) {
+            return wrap_ternaryvalue_r;
+        }
+        assert(w == wrap_ternaryfunc);
+        return wrap_ternaryvalue;
+    case VALUE_WRAPPER_INQUIRY:
+        assert(w == wrap_inquirypred);
+        return wrap_inquiryvalue;
+    case VALUE_WRAPPER_HASH:
+        assert(w == wrap_hashfunc);
+        return wrap_hashvalue;
+    case VALUE_WRAPPER_RICHCMP:
+        if (w == richcmp_lt) {
+            return wrap_richcmpvalue_lt;
+        }
+        if (w == richcmp_le) {
+            return wrap_richcmpvalue_le;
+        }
+        if (w == richcmp_eq) {
+            return wrap_richcmpvalue_eq;
+        }
+        if (w == richcmp_ne) {
+            return wrap_richcmpvalue_ne;
+        }
+        if (w == richcmp_gt) {
+            return wrap_richcmpvalue_gt;
+        }
+        assert(w == richcmp_ge);
+        return wrap_richcmpvalue_ge;
+    case VALUE_WRAPPER_REPR:
+        assert(w == wrap_unaryfunc);
+        return wrap_reprvalue;
+    case VALUE_WRAPPER_CONCAT:
+        assert(w == wrap_binaryfunc);
+        return wrap_concatvalue;
+    default:
+        assert(family == VALUE_WRAPPER_NONE);
+        return NULL;
+    }
+}
+
+static void
+init_slotdef_values(void)
+{
+    if (slotdef_values_ready) {
+        return;
+    }
+    for (pytype_slotdef *p = slotdefs; p->name; p++) {
+        slotdef_value *v = &slotdef_values[p - slotdefs];
+        v->row = value_slot_row_from_object_offset(p->offset);
+        v->function = NULL;
+        v->wrapper = v->row < 0 ? NULL : slotdef_value_wrapper(
+            p, value_slot_rows[v->row].wrapper);
+    }
+    slotdef_values_ready = 1;
+}
+
+wrapperfunc
+_PyType_ValueWrapper(const struct wrapperbase *base)
+{
+    uintptr_t start = (uintptr_t)slotdefs;
+    uintptr_t end = (uintptr_t)(slotdefs + Py_ARRAY_LENGTH(slotdefs));
+    if ((uintptr_t)base < start || (uintptr_t)base >= end) {
+        return NULL;
+    }
+    assert(slotdef_values_ready);
+    return slotdef_values[base - slotdefs].wrapper;
+}
+
 /* Given a type pointer and an offset gotten from a slotdef entry, return a
    pointer to the actual slot.  This is not quite the same as simply adding
    the offset to the type pointer, since it takes care to indirect through the
@@ -12987,6 +13319,88 @@ has_slotdef(PyObject *name)
     }
     return false;
 }
+
+#ifdef Py_DEBUG
+/* Whether the slot descriptor that update_one_slot() finds in the MRO for a
+   slotdef of row carries the pair (object, value). */
+static int
+value_pair_in_slot_descriptor(PyTypeObject *type, int row, void *object,
+                              _Py_valuefunc value)
+{
+    for (pytype_slotdef *p = slotdefs; p->name; p++) {
+        if (slotdef_values[p - slotdefs].row != row) {
+            continue;
+        }
+        PyValue descr_ref;
+        if (find_name_in_mro(type, p->name_strobj, &descr_ref) <= 0) {
+            continue;
+        }
+        int found = 0;
+        if (PyValue_IsObject(descr_ref)) {
+            PyObject *descr = PyValue_AsKnownObjectBorrow(descr_ref);
+            if (Py_IS_TYPE(descr, &PyWrapperDescr_Type)) {
+                PyWrapperDescrObject *d = (PyWrapperDescrObject *)descr;
+                found = (d->d_wrapped == object
+                         && (_Py_valuefunc)d->d_wrapped_value == value);
+            }
+        }
+        PyValue_CLOSE(descr_ref);
+        if (found) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* One row of the invariant (section 4.4) for a type that PyType_Ready has
+   finished: a row that update_one_slot() writes, and every row after
+   fixup_slot_dispatchers() and for the target of a __class__ assignment.
+   A non-zero value field must sit beside a non-NULL object slot and form
+   with it a pair of the pair table, of a slot_* function, of a base in the
+   MRO, or of the slot descriptor that update_one_slot() finds, which is how
+   a type's own pairs stay visible after PyType_Ready. */
+static void
+check_ready_value_row(PyTypeObject *type, int row)
+{
+    _Py_valuefunc value = *value_slot_field(type, row);
+    if (value == NULL) {
+        return;
+    }
+    void *object = value_slot_object(type, row);
+    if (object == NULL) {
+        value_slot_invariant_failed(type, row,
+                                    "is set beside a NULL object slot");
+    }
+    if (value_slot_pair_is_known(type, row, object, value)) {
+        return;
+    }
+    for (pytype_slotdef *p = slotdefs; p->name; p++) {
+        slotdef_value *v = &slotdef_values[p - slotdefs];
+        if (v->row == row && p->function == object && v->function == value) {
+            return;
+        }
+    }
+    if (!value_pair_in_slot_descriptor(type, row, object, value)) {
+        value_slot_invariant_failed(type, row,
+                                    "does not pair with its object slot");
+    }
+}
+
+void
+_PyType_CheckValueRow(PyTypeObject *type, int row)
+{
+    check_ready_value_row(type, row);
+}
+
+void
+_PyType_CheckValueInvariant(PyTypeObject *type)
+{
+    assert(slotdef_values_ready);
+    for (int row = 0; row < _Py_VALUE_SLOT_COUNT; row++) {
+        check_ready_value_row(type, row);
+    }
+}
+#endif
 
 /* Common code for update_slots_callback() and fixup_slot_dispatchers().
  *
@@ -13066,11 +13480,18 @@ update_one_slot(PyTypeObject *type, pytype_slotdef *p, pytype_slotdef **next_p,
     // A generic wrapper that uses method lookup (safe but slow)
     void *generic = NULL;
 
+    // The value sides of specific and generic: update_one_slot() writes the
+    // pair (value-api-v2a0.md, section 4.5, D6).
+    _Py_valuefunc specific_value = NULL;
+    _Py_valuefunc generic_value = NULL;
+
     // Set to 1 if the generic wrapper is necessary
     int use_generic = 0;
 
     int offset = p->offset;
     void **ptr = slotptr(type, offset);
+    assert(slotdef_values_ready);
+    int row = slotdef_values[p - slotdefs].row;
 
     if (ptr == NULL) {
         do {
@@ -13090,6 +13511,7 @@ update_one_slot(PyTypeObject *type, pytype_slotdef *p, pytype_slotdef **next_p,
         if (res <= 0) {
             if (ptr == (void**)&type->tp_iternext) {
                 specific = (void *)_PyObject_NextNotImplemented;
+                specific_value = value_slot_pair_side(row, specific);
             }
             continue;
         }
@@ -13117,14 +13539,24 @@ update_one_slot(PyTypeObject *type, pytype_slotdef *p, pytype_slotdef **next_p,
                 tptr = slotptr(type, offset);
             }
 
-            if (tptr == NULL || tptr == ptr)
+            if (tptr == NULL || tptr == ptr) {
                 generic = p->function;
+                generic_value = slotdef_values[p - slotdefs].function;
+            }
             d = (PyWrapperDescrObject *)descr;
             if ((specific == NULL || specific == d->d_wrapped) &&
                 d->d_base->wrapper == p->wrapper &&
                 is_subtype_with_mro(lookup_tp_mro(type), type, PyDescr_TYPE(d)))
             {
+                /* The descriptor carries the pair. Descriptors that agree
+                   on the object function but not on the value side leave
+                   the value side 0. */
+                _Py_valuefunc value = (_Py_valuefunc)d->d_wrapped_value;
+                if (specific != NULL && specific_value != value) {
+                    value = NULL;
+                }
                 specific = d->d_wrapped;
+                specific_value = value;
             }
             else {
                 /* We cannot use the specific slot function because either
@@ -13154,6 +13586,7 @@ update_one_slot(PyTypeObject *type, pytype_slotdef *p, pytype_slotdef **next_p,
                list.  Cut all that nonsense short -- this speeds
                up instance creation tremendously. */
             specific = (void *)type->tp_new;
+            assert(row < 0);
             /* XXX I'm not 100% sure that there isn't a hole
                in this reasoning that requires additional
                sanity checks.  I'll buy the first person to
@@ -13165,6 +13598,7 @@ update_one_slot(PyTypeObject *type, pytype_slotdef *p, pytype_slotdef **next_p,
                to prevent inheritance of the default
                implementation from object.__hash__ */
             specific = (void *)PyObject_HashNotImplemented;
+            specific_value = value_slot_pair_side(row, specific);
         }
         else {
             use_generic = 1;
@@ -13172,10 +13606,13 @@ update_one_slot(PyTypeObject *type, pytype_slotdef *p, pytype_slotdef **next_p,
                 Py_IS_TYPE(descr, &PyMethodDescr_Type) &&
                 *ptr == ((PyMethodDescrObject *)descr)->d_method->ml_meth)
             {
+                // The object slot stays, so its value side stays.
                 generic = *ptr;
+                generic_value = row < 0 ? NULL : *value_slot_field(type, row);
             }
             else {
                 generic = p->function;
+                generic_value = slotdef_values[p - slotdefs].function;
             }
             if (p->function == slot_tp_call) {
                 /* A generic __call__ is incompatible with vectorcall */
@@ -13188,40 +13625,47 @@ update_one_slot(PyTypeObject *type, pytype_slotdef *p, pytype_slotdef **next_p,
     } while ((++p)->offset == offset);
 
     void *slot_value;
+    _Py_valuefunc value_side;
     if (specific && !use_generic) {
         slot_value = specific;
+        value_side = specific_value;
     } else {
         slot_value = generic;
+        value_side = generic_value;
     }
+    _Py_valuefunc *value_ptr = row < 0 ? NULL : value_slot_field(type, row);
+    assert(value_ptr != NULL || value_side == NULL);
 
 #ifdef Py_GIL_DISABLED
     if (queued_updates != NULL) {
         // queue the update to perform later, while world is stopped
-        if (queue_slot_update(queued_updates, type, ptr, slot_value) < 0) {
+        if (queue_slot_update(queued_updates, type, ptr, slot_value,
+                              value_ptr, value_side) < 0) {
             return -1;
         }
     } else {
         // do the update to the type structure now
         *ptr = slot_value;
+        if (value_ptr != NULL) {
+            *value_ptr = value_side;
+        }
     }
 #else
     // always do the update immediately
     assert(queued_updates == NULL);
-    /* A value slot never stays beside an object function that it does not
-       pair with (value-api-v2a0.md, D6). Interim until 0c writes the
-       slotdef pairs: a new object function gets the pair table's value
-       side, or 0, the adapter. */
-    int row = value_slot_row_from_object_offset(offset);
-    if (row >= 0 && *ptr != slot_value) {
-        *value_slot_field(type, row) = value_slot_pair_side(row, slot_value);
-        *ptr = slot_value;
 #ifdef Py_DEBUG
-        check_value_row(type, row, 0);
+    int changed = (*ptr != slot_value
+                   || (value_ptr != NULL && *value_ptr != value_side));
 #endif
+    *ptr = slot_value;
+    if (value_ptr != NULL) {
+        *value_ptr = value_side;
     }
-    else {
-        *ptr = slot_value;
+#ifdef Py_DEBUG
+    if (changed && row >= 0) {
+        check_ready_value_row(type, row);
     }
+#endif
 #endif
 
     if (next_p != NULL) {
@@ -13638,6 +14082,24 @@ slot_inherited(PyTypeObject *type, pytype_slotdef *slotdef, void **slot)
    slot that calls the method from the dictionary, and we want to avoid
    infinite recursion here.) */
 
+/* The value side of the pair that a slot descriptor of p carries with the
+   object function object, the type's slot (section 4.5): the type's value
+   field, or, when that is 0, the pair table's side, which the value pass of
+   PyType_Ready gives the field after add_operators() runs. */
+static void *
+slotdef_value_side(PyTypeObject *type, const pytype_slotdef *p, void *object)
+{
+    int row = slotdef_values[p - slotdefs].row;
+    if (row < 0) {
+        return NULL;
+    }
+    _Py_valuefunc value = *value_slot_field(type, row);
+    if (value == NULL) {
+        value = value_slot_pair_side(row, object);
+    }
+    return (void *)value;
+}
+
 static int
 add_operators(PyTypeObject *type)
 {
@@ -13646,6 +14108,7 @@ add_operators(PyTypeObject *type)
     PyObject *descr;
     void **ptr;
 
+    init_slotdef_values();
     for (p = slotdefs; p->name; p++) {
         if (p->wrapper == NULL)
             continue;
@@ -13673,7 +14136,8 @@ add_operators(PyTypeObject *type)
                 return -1;
         }
         else {
-            descr = PyDescr_NewWrapper(type, p, *ptr);
+            descr = _PyDescr_NewWrapperPair(type, p, *ptr,
+                                            slotdef_value_side(type, p, *ptr));
             if (descr == NULL)
                 return -1;
             if (PyDict_SetItem(dict, p->name_strobj, descr) < 0) {

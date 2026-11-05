@@ -12,10 +12,15 @@ extern "C" {
 
 /* Borrowed inputs are retained across callback-capable object bridges. */
 extern Py_hash_t _PyValue_Hash(PyValue value);
-extern int _PyValue_RichCompareBool(PyValue left, PyValue right, int op);
+extern int _PyValue_RichCompareBool(PyValueBorrow left, PyValueBorrow right, int op);
+#define _PyValue_RichCompareBool(V0, V1, V2) \
+    (_PyValue_RichCompareBool)(PyValue_Borrow(V0), PyValue_Borrow(V1), V2)
 /* An owning object result, including arbitrary Python comparison results. */
-extern PyObject *_PyValue_RichCompareObject(PyValue left, PyValue right, int op);
-extern int _PyValue_WriteRepr(PyUnicodeWriter *writer, PyValue value);
+extern PyObject *_PyValue_RichCompareObject(PyValueBorrow left, PyValueBorrow right, int op);
+#define _PyValue_RichCompareObject(V0, V1, V2) \
+    (_PyValue_RichCompareObject)(PyValue_Borrow(V0), PyValue_Borrow(V1), V2)
+extern int _PyValue_WriteRepr(PyUnicodeWriter *writer, PyValueBorrow value);
+#define _PyValue_WriteRepr(V0, V1) (_PyValue_WriteRepr)(V0, PyValue_Borrow(V1))
 
 #ifdef __cplusplus
 }

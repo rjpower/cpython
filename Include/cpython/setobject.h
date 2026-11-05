@@ -72,6 +72,6 @@ static inline Py_ssize_t PySet_GET_SIZE(PyObject *so) {
 
 /* Borrowed input values; PopValue transfers the removed table owner. */
 PyAPI_FUNC(int) PySet_AddValue(PyObject *set, PyValue key);
-PyAPI_FUNC(int) PySet_ContainsValue(PyObject *anyset, PyValue key);
+PyAPI_FUNC(int) PySet_ContainsValue(PyObject *anyset, PyValueBorrow key);
 PyAPI_FUNC(int) PySet_DiscardValue(PyObject *set, PyValue key);
 PyAPI_FUNC(PyValue) PySet_PopValue(PyObject *set);

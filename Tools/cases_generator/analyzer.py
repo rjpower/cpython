@@ -568,6 +568,7 @@ NON_ESCAPING_FUNCTIONS = (
     "PyException_GetContext",
     "PyException_GetTraceback",
     "PyFloat_AS_DOUBLE",
+    "Py_ARITHMETIC_RIGHT_SHIFT",
     "PyFloat_FromDouble",
     "PyFunction_GET_CODE",
     "PyFunction_GET_GLOBALS",
@@ -585,7 +586,9 @@ NON_ESCAPING_FUNCTIONS = (
     "_PyValue_BorrowTagged",
     "PyValue_BorrowAt",
     "PyValue_CLOSE_SPECIALIZED",
+    "PyValue_Borrow",
     "PyValue_DUP",
+    "PyValue_XDUP",
     "PyValue_NewRef",
     "PyValue_FromObjectBorrow",
     "PyValue_DupImmortal",
@@ -735,6 +738,10 @@ NON_ESCAPING_FUNCTIONS = (
     # Boxing allocates an int or float, which runs no Python code and
     # cannot start a collection.
     "PyValue_Box",
+    # Box an inline value the same way, into a temporary that the handler's
+    # value_temps owns.
+    "_PyValueTemps_Box",
+    "_PyValueTemps_Object",
     "PyValue_IsValid",
     "PyValue_Wrap",
     "PyValue_Unwrap",
@@ -941,16 +948,28 @@ def stmt_escapes(stmt: Stmt) -> bool:
         assert False, "Unexpected statement type"
 
 def find_aliased_outputs(op: parser.InstDef) -> tuple[str, ...]:
-    """The outputs that a statement `out = in;` makes alias an input."""
+    """The outputs that a statement `out = in;` or `out = TAKE(in);` makes
+    alias an input: TAKE gives the input's value a count of its own, so the
+    output is the same value, as it is through `PyValue held = TAKE(in);`
+    and `out = held;`."""
     innames = {i.name for i in op.inputs if isinstance(i, parser.StackEffect)}
     outnames = {o.name for o in op.outputs} - innames
     tokens = [t for t in op.block.tokens() if t.kind != "COMMENT"]
+    texts = [t.text for t in tokens]
+    for i in range(len(texts) - 7):
+        if (texts[i] == "PyValue" and texts[i + 2:i + 5] == ["=", "TAKE", "("]
+                and texts[i + 5] in innames and texts[i + 6:i + 8] == [")", ";"]):
+            innames = innames | {texts[i + 1]}
     found: list[str] = []
     for i in range(len(tokens) - 3):
-        if (tokens[i].text in outnames and tokens[i + 1].kind == "EQUALS"
-                and tokens[i + 2].text in innames and tokens[i + 3].kind == "SEMI"
-                and (i == 0 or tokens[i - 1].kind in ("SEMI", "LBRACE", "RBRACE"))
-                and tokens[i].text not in found):
+        if (tokens[i].text not in outnames or tokens[i + 1].kind != "EQUALS"
+                or (i > 0 and tokens[i - 1].kind not in ("SEMI", "LBRACE", "RBRACE"))
+                or tokens[i].text in found):
+            continue
+        rhs = [t.text for t in tokens[i + 2:i + 7]]
+        if (tokens[i + 2].text in innames and tokens[i + 3].kind == "SEMI"
+                or rhs[:2] == ["TAKE", "("] and len(rhs) == 5
+                and rhs[2] in innames and rhs[3:] == [")", ";"]):
             found.append(tokens[i].text)
     return tuple(found)
 

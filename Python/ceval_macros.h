@@ -599,53 +599,48 @@ gen_try_set_executing(PyGenObject *gen)
     ((int)(((const _PyCodeExec *)frame->ir_words) - 1)->nlocalsplus)
 #define IR_IS_LOCAL(F) ((int)(F) < IR_NLOCALSPLUS())
 
-/* REF is a box that the handler made of an inline input for an object
- * API: value_temps owns it until the handler finishes and REF borrows it,
- * so the C code can keep reading it as an object, while the input's home
- * keeps the canonical value.  An immortal box needs no owner. */
-#define IR_KEEP_BOX(REF) \
-    do { \
-        assert(value_temps != NULL); \
-        if (PyValue_RefcountOnObject(REF)) { \
-            assert(value_temps->count < value_temps->capacity); \
-            value_temps->objects[value_temps->count++] = \
-                PyValue_AsKnownObjectBorrow(REF); \
-            (REF) = _PyValue_BorrowTagged(REF); \
-        } \
-    } while (0)
+/* The view of an input that the handler reads through field F, which may
+ * name a local (the instruction's borrow_mask): the slot's bits, as a
+ * PyValueBorrow, which only C locals hold and nothing releases.  The one
+ * load of the slot (pyjit/design/proposals/register-ir-v2-a5b.md, 4.2). */
+#define IR_VIEW(F) PyValue_Borrow(IR_SLOT(F))
 
-/* An input that the handler consumes as it is, through field F: the slot's
- * bits.  A temporary's value is the handler's.  A local's is borrowed in
- * place, in the handler's C variable only: it owns no count, and its bits
- * do not say so, since a frame slot never holds a borrow (pyjit/design/
- * pyvalue.md D4).  The generator knows such a value from the instruction's
- * borrow_mask and releases it only if F names a temporary
- * (Tools/cases_generator/ir_generator.py, inplace_input_use()). */
-#define IR_LOAD_BORROWED(F) IR_SLOT(F)
+/* The owner of V, the view of a temporary whose slot the same expression
+ * clears: the count moves from the slot to the C local.  The one
+ * count-free conversion from a borrow to an owner; only IR_CONSUME_INPUT
+ * uses it. */
+static inline PyValue
+_PyIR_AdoptTemp(PyValueBorrow view)
+{
+    PyValue owner = {view.bits};
+    return owner;
+}
 
-/* REF, read through field F, or a copy of it, goes to another slot: a
- * local's value borrowed in place takes a count of its own. */
-#define IR_INPLACE_OWN(REF, F) \
-    do { \
-        if (IR_IS_LOCAL(F)) { \
-            (REF) = PyValue_DUP(REF); \
-        } \
-    } while (0)
+/* The handler takes the input V that it read through field F: the owner
+ * of a temporary's value, whose slot becomes NULL, or PyValue_NULL for a
+ * local, which keeps its value and owns it.  The generator assigns it to
+ * ir_own_<F> (Tools/cases_generator/ir_generator.py, IRStack.consume). */
+#define IR_CONSUME_INPUT(F, V) \
+    (IR_IS_LOCAL(F) ? PyValue_NULL \
+                    : (IR_SLOT(F) = PyValue_NULL, _PyIR_AdoptTemp(V)))
 
-/* REF, read through field F, made heap safe: a local's value borrowed in
- * place takes a count of its own; a temporary's was the handler's. */
-#define IR_INPLACE_HEAP_SAFE(REF, F) \
-    (IR_IS_LOCAL(F) ? PyValue_NewRef(REF) : PyValue_MakeHeapSafe(REF))
-
-/* The object that REF, read through field F, holds, owned: a new count for
- * a local's value borrowed in place, the handler's for a temporary's. */
-#define IR_INPLACE_OBJECT_STEAL(REF, F) \
-    (IR_IS_LOCAL(F) ? Py_NewRef(PyValue_AsKnownObjectBorrow(REF)) \
-                    : PyValue_AsKnownObjectSteal(REF))
+/* The DSL's TAKE(V) of view V, whose field's owner is OWN: a value with a
+ * count of its own, for a home.  A local's (OWN is NULL) takes a new
+ * count; a temporary's is the handler's.  A frame slot holds no borrow
+ * (pyjit/design/pyvalue.md D4), so the result is heap safe; debug builds
+ * check it until step A5b-3 merges the check into the home check. */
+static inline PyValue
+_PyIR_Take(PyValueBorrow view, PyValue owner)
+{
+    PyValue taken = PyValue_IsNull(owner) ? PyValue_XDUP(view) : owner;
+    assert(PyValue_IsHeapSafe(taken));
+    return taken;
+}
+#define IR_TAKE(V, OWN) _PyIR_Take(PyValue_Borrow(V), (OWN))
 
 /* The truth of a value, as TO_BOOL tests it, or -1 with an exception set */
 static inline int
-_PyValue_Truth(PyValue ref)
+_PyValue_Truth(PyValueBorrow ref)
 {
     if (PyValue_IsTrue(ref)) {
         return 1;
@@ -661,25 +656,7 @@ _PyValue_Truth(PyValue ref)
     }
     return PyObject_IsTrue(PyValue_AsKnownObjectBorrow(ref));
 }
-
-/* The handler takes the input that it read through field F: a temporary's
- * slot becomes NULL, and a local keeps its value. */
-#define IR_CONSUME_INPUT(F) \
-    do { \
-        if (!IR_IS_LOCAL(F)) { \
-            IR_SLOT(F) = PyValue_NULL; \
-        } \
-    } while (0)
-
-/* V, the input read through field F or what replaced it, goes back to a
- * temporary's slot. */
-#define IR_STORE_INPUT(F, V) \
-    do { \
-        if (!IR_IS_LOCAL(F)) { \
-            IR_SLOT(F) = _PyValue_Publish(&(V)); \
-            _PyValue_CheckTemp(IR_SLOT(F)); \
-        } \
-    } while (0)
+#define _PyValue_Truth(V0) (_PyValue_Truth)(PyValue_Borrow(V0))
 
 /* A handler writes a temporary into a slot that holds NULL. */
 #define IR_STORE_TEMP(SLOT, V) \

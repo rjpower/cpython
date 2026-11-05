@@ -412,25 +412,27 @@ dummy_func(
         }
 
         pure inst(END_SEND, (receiver, index_or_null, value -- val)) {
-            val = value;
+            val = TAKE(value);
             (void)index_or_null;
-            DEAD(value);
             DEAD(index_or_null);
             PyValue_CLOSE(receiver);
         }
 
         tier1 inst(INSTRUMENTED_END_SEND, (receiver, index_or_null, value -- val)) {
             PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
+            PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
+            // Taken before the monitoring call, which can run code
+            PyValue held = TAKE(value);
             if (PyGen_Check(receiver_o) || PyCoro_CheckExact(receiver_o)) {
-                int err = monitor_stop_iteration(tstate, frame, this_instr, PyValue_AsKnownObjectBorrow(value));
+                int err = monitor_stop_iteration(tstate, frame, this_instr, value_o);
                 if (err) {
+                    PyValue_CLOSE(held);
                     ERROR_NO_POP();
                 }
             }
-            val = value;
+            val = held;
             (void)index_or_null;
             DEAD(index_or_null);
-            DEAD(value);
             PyValue_CLOSE(receiver);
         }
 
@@ -1025,10 +1027,7 @@ dummy_func(
             assert(INLINE_CACHE_ENTRIES_BINARY_OP == 5);
             _PyBinaryOpSpecializationDescr *d = (_PyBinaryOpSpecializationDescr*)descr;
             assert(d != NULL);
-            int match = (d->guard != NULL)
-                ? d->guard(left_o, right_o)
-                : (Py_TYPE(left_o) == d->lhs_type && Py_TYPE(right_o) == d->rhs_type);
-            EXIT_IF(!match);
+            EXIT_IF(Py_TYPE(left_o) != d->lhs_type || Py_TYPE(right_o) != d->rhs_type);
 
             STAT_INC(BINARY_OP, hit);
 
@@ -1234,8 +1233,8 @@ dummy_func(
             _GUARD_NOS_DICT_SUBSCRIPT + unused/5 + _BINARY_OP_SUBSCR_DICT;
 
         inline_ok op(_BINARY_OP_SUBSCR_DICT, (dict_st, sub_st -- res)) {
-            PyValue held_dict = PyValue_MakeHeapSafe(dict_st);
-            PyValue held_sub = PyValue_MakeHeapSafe(sub_st);
+            PyValue held_dict = TAKE(dict_st);
+            PyValue held_sub = TAKE(sub_st);
             _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
             IR_CAPTURE_VALUE_INPUTS(operation);
             IR_CAPTURE_VALUE_RESULT(operation);
@@ -1271,8 +1270,8 @@ dummy_func(
         op(_BINARY_OP_SUBSCR_INIT_CALL, (container, sub, getitem -- new_frame)) {
             STAT_INC(BINARY_OP, hit);
             _PyInterpreterFrame* pushed_frame = _PyFrame_PushUnchecked(tstate, getitem, 2, frame);
-            pushed_frame->base[0] = PyValue_MakeHeapSafe(container);
-            pushed_frame->base[1] = PyValue_MakeHeapSafe(sub);
+            pushed_frame->base[0] = TAKE(container);
+            pushed_frame->base[1] = TAKE(sub);
             INPUTS_DEAD();
             frame->return_slot = (uint16_t)IR_DST_SLOT;
             new_frame = PyValue_Wrap(pushed_frame);
@@ -1286,8 +1285,7 @@ dummy_func(
             _PUSH_FRAME;
 
         inline_ok inst(LIST_APPEND, (list, unused[oparg-1], v -- list, unused[oparg-1])) {
-            PyValue item = PyValue_MakeHeapSafe(v);
-            DEAD(v);
+            PyValue item = TAKE(v);
             int err = _PyList_AppendTakeValue((PyListObject *)PyValue_AsKnownObjectBorrow(list), item);
             ERROR_IF(err < 0);
         }
@@ -1319,9 +1317,9 @@ dummy_func(
 
         inline_ok op(_STORE_SUBSCR, (v, container, sub -- )) {
             /* container[sub] = v */
-            PyValue held_value = PyValue_MakeHeapSafe(v);
-            PyValue held_container = PyValue_MakeHeapSafe(container);
-            PyValue held_sub = PyValue_MakeHeapSafe(sub);
+            PyValue held_value = TAKE(v);
+            PyValue held_container = TAKE(container);
+            PyValue held_sub = TAKE(sub);
             _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
             INPUTS_DEAD();
             SYNC_SP();
@@ -1334,8 +1332,10 @@ dummy_func(
 
         macro(STORE_SUBSCR) = unused/1 + _SPECIALIZE_STORE_SUBSCR + _STORE_SUBSCR;
 
+        // The index is released by POP_TOP, which does not read it: the
+        // release of the replaced item before it can run code (S7)
         macro(STORE_SUBSCR_LIST_INT) =
-            _GUARD_TOS_INT + _GUARD_NOS_LIST + unused/1 + _STORE_SUBSCR_LIST_INT + _POP_TOP_INT + POP_TOP;
+            _GUARD_TOS_INT + _GUARD_NOS_LIST + unused/1 + _STORE_SUBSCR_LIST_INT + POP_TOP + POP_TOP;
 
         // The index and stored value stay in canonical representation.
         inline_ok op(_STORE_SUBSCR_LIST_INT, (value, list_st, sub_st -- ls, ss)) {
@@ -1356,7 +1356,7 @@ dummy_func(
             STAT_INC(STORE_SUBSCR, hit);
 
             PyValue old_value = _PyList_ITEMS(list)[index];
-            _PyList_ITEMS(list)[index] = PyValue_MakeHeapSafe(value);
+            _PyList_ITEMS(list)[index] = TAKE(value);
             assert(!PyValue_IsNull(old_value));
             UNLOCK_OBJECT(list);  // unlock before decrefs!
             INPUTS_DEAD();
@@ -1372,9 +1372,9 @@ dummy_func(
             PyObject *dict = PyValue_AsKnownObjectBorrow(dict_st);
             assert(Py_TYPE(dict)->tp_as_mapping->mp_ass_subscript == _PyDict_StoreSubscript);
             STAT_INC(STORE_SUBSCR, hit);
-            PyValue key = PyValue_MakeHeapSafe(sub);
-            PyValue stored = PyValue_MakeHeapSafe(value);
-            PyValue retained_dict = PyValue_MakeHeapSafe(dict_st);
+            PyValue key = TAKE(sub);
+            PyValue stored = TAKE(value);
+            PyValue retained_dict = TAKE(dict_st);
             _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
             INPUTS_DEAD();
             SYNC_SP();
@@ -1485,8 +1485,9 @@ dummy_func(
             return result;
         }
 
-        op(_MAKE_HEAP_SAFE, (value -- value)) {
-            value = PyValue_MakeHeapSafe(value);
+        // The returned or yielded value goes to another frame, a home
+        op(_MAKE_HEAP_SAFE, (value -- taken)) {
+            taken = TAKE(value);
         }
 
         // The stack effect here is a bit misleading.
@@ -1524,16 +1525,22 @@ dummy_func(
             _MAKE_HEAP_SAFE +
             _RETURN_VALUE;
 
-        tier1 op(_RETURN_VALUE_EVENT, (val -- val)) {
+        // The value is taken before the event, which can run code
+        tier1 op(_RETURN_VALUE_EVENT, (val -- taken)) {
+            PyObject *val_o = PyValue_AsKnownObjectBorrow(val);
+            PyValue held = TAKE(val);
             int err = _Py_call_instrumentation_arg(
                     tstate, PY_MONITORING_EVENT_PY_RETURN,
-                    frame, this_instr, PyValue_AsKnownObjectBorrow(val));
-            ERROR_IF(err);
+                    frame, this_instr, val_o);
+            if (err) {
+                PyValue_CLOSE(held);
+                ERROR_IF(true);
+            }
+            taken = held;
         }
 
         macro(INSTRUMENTED_RETURN_VALUE) =
             _RETURN_VALUE_EVENT +
-            _MAKE_HEAP_SAFE +
             _RETURN_VALUE;
 
         inst(GET_AITER, (obj -- iter)) {
@@ -1615,8 +1622,7 @@ dummy_func(
             {
                 PyGenObject *gen = (PyGenObject *)receiver_o;
                 _PyInterpreterFrame *gen_frame = &gen->gi_iframe;
-                _PyFrame_SetReturnValue(gen_frame, PyValue_MakeHeapSafe(v));
-                DEAD(v);
+                _PyFrame_SetReturnValue(gen_frame, TAKE(v));
                 SYNC_SP();
                 gen->gi_exc_state.previous_item = tstate->exc_info;
                 tstate->exc_info = &gen->gi_exc_state;
@@ -1667,8 +1673,7 @@ dummy_func(
             EXIT_IF(!gen_try_set_executing((PyGenObject *)gen));
             STAT_INC(SEND, hit);
             _PyInterpreterFrame *pushed_frame = &gen->gi_iframe;
-            _PyFrame_SetReturnValue(pushed_frame, PyValue_MakeHeapSafe(v));
-            DEAD(v);
+            _PyFrame_SetReturnValue(pushed_frame, TAKE(v));
             gen->gi_exc_state.previous_item = tstate->exc_info;
             tstate->exc_info = &gen->gi_exc_state;
             frame->return_slot = (uint16_t)IR_DST_SLOT;
@@ -1903,12 +1908,7 @@ dummy_func(
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             PyObject *ns = LOCALS();
             int error = _PyEval_StoreName(tstate, v, name, ns);
-            if (PyValue_IsNull(v)) {
-                DEAD(v);
-            }
-            else {
-                PyValue_CLOSE(v);
-            }
+            PyValue_XCLOSE(v);
             ERROR_IF(error);
         }
 
@@ -2023,8 +2023,8 @@ dummy_func(
 
         inline_ok op(_STORE_ATTR, (v, owner --)) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            PyValue held_value = PyValue_MakeHeapSafe(v);
-            PyValue receiver = PyValue_MakeHeapSafe(owner);
+            PyValue held_value = TAKE(v);
+            PyValue receiver = TAKE(owner);
             _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
             IR_CAPTURE_VALUE_INPUTS(operation);
             INPUTS_DEAD();
@@ -2073,6 +2073,8 @@ dummy_func(
         inst(LOAD_FROM_DICT_OR_GLOBALS, (mod_or_class_dict -- v)) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             PyObject *namespace = PyValue_AsKnownObjectBorrow(mod_or_class_dict);
+            // Taken before the lookup, which can run code
+            PyValue held_namespace = TAKE(mod_or_class_dict);
             int err;
             PyObject *v_o = _PyMapping_GetOptionalItem2(namespace, name, &err);
             if (v_o != NULL && PyLazyImport_CheckExact(v_o)) {
@@ -2081,7 +2083,7 @@ dummy_func(
                     err = -1;
                 }
             }
-            PyValue_CLOSE(mod_or_class_dict);
+            PyValue_CLOSE(held_namespace);
             ERROR_IF(err < 0);
             if (v_o == NULL) {
                 _PyEval_LoadGlobalValue(GLOBALS(), BUILTINS(), name, &v);
@@ -2230,6 +2232,8 @@ dummy_func(
         inst(LOAD_FROM_DICT_OR_DEREF, (class_dict_st -- value)) {
             PyObject *name;
             PyObject *class_dict = PyValue_AsKnownObjectBorrow(class_dict_st);
+            // Taken before the lookup, which can run code
+            PyValue held_class_dict = TAKE(class_dict_st);
 
             assert(class_dict);
             assert(oparg >= 0 && oparg < _PyFrame_GetCode(frame)->co_nlocalsplus);
@@ -2237,6 +2241,7 @@ dummy_func(
             int err;
             PyObject* value_o = _PyMapping_GetOptionalItem2(class_dict, name, &err);
             if (err < 0) {
+                PyValue_CLOSE(held_class_dict);
                 ERROR_NO_POP();
             }
             PyValue selected;
@@ -2245,6 +2250,7 @@ dummy_func(
                 selected = _PyCell_GetValue(cell);
                 if (PyValue_IsNull(selected)) {
                     _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
+                    PyValue_CLOSE(held_class_dict);
                     ERROR_NO_POP();
                 }
             }
@@ -2253,12 +2259,13 @@ dummy_func(
                     Py_SETREF(value_o, _PyLazyImport_Reify(
                         tstate, value_o, name, class_dict));
                     if (value_o == NULL) {
+                        PyValue_CLOSE(held_class_dict);
                         ERROR_NO_POP();
                     }
                 }
                 selected = PyValue_FromPyObjectSteal(value_o);
             }
-            PyValue_CLOSE(class_dict_st);
+            PyValue_CLOSE(held_class_dict);
             value = selected;
         }
 
@@ -2687,7 +2694,7 @@ dummy_func(
         inline_ok op(_LOAD_ATTR, (owner -- attr, unused[oparg&1])) {
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
             int method = oparg & 1;
-            PyValue receiver = PyValue_MakeHeapSafe(owner);
+            PyValue receiver = TAKE(owner);
             _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
             IR_CAPTURE_VALUE_INPUTS(operation);
             IR_CAPTURE_VALUE_RESULT(operation);
@@ -2745,8 +2752,7 @@ dummy_func(
             DEOPT_IF(PyValue_IsNull(found));
             attr = PyValue_NewRef(found);
             STAT_INC(LOAD_ATTR, hit);
-            PyValue receiver = PyValue_MakeHeapSafe(owner);
-            DEAD(owner);
+            PyValue receiver = OWNER(owner);
             SYNC_SP();
             IR_RETIRE_PUBLISHED(receiver);
         }
@@ -2776,8 +2782,7 @@ dummy_func(
             assert(!PyValue_IsNull(found));
             attr = PyValue_NewRef(found);
             STAT_INC(LOAD_ATTR, hit);
-            PyValue receiver = PyValue_MakeHeapSafe(owner);
-            DEAD(owner);
+            PyValue receiver = OWNER(owner);
             SYNC_SP();
             IR_RETIRE_PUBLISHED(receiver);
         }
@@ -2805,8 +2810,7 @@ dummy_func(
             EXIT_IF(PyValue_IsNull(found));
             attr = PyValue_NewRef(found);
             STAT_INC(LOAD_ATTR, hit);
-            PyValue receiver = PyValue_MakeHeapSafe(owner);
-            DEAD(owner);
+            PyValue receiver = OWNER(owner);
             SYNC_SP();
             IR_RETIRE_PUBLISHED(receiver);
         }
@@ -2846,8 +2850,7 @@ dummy_func(
             }
             STAT_INC(LOAD_ATTR, hit);
             attr = PyValue_NewRef(found);
-            PyValue receiver = PyValue_MakeHeapSafe(owner);
-            DEAD(owner);
+            PyValue receiver = OWNER(owner);
             SYNC_SP();
             IR_RETIRE_PUBLISHED(receiver);
         }
@@ -2866,9 +2869,8 @@ dummy_func(
             EXIT_IF(PyValue_IsNull(value));
             assert(PyValue_IsHeapSafe(value));
             attr = PyValue_DUP(value);
-            PyValue receiver = PyValue_MakeHeapSafe(owner);
+            PyValue receiver = OWNER(owner);
             STAT_INC(LOAD_ATTR, hit);
-            DEAD(owner);
             SYNC_SP();
             IR_RETIRE_PUBLISHED(receiver);
         }
@@ -2918,8 +2920,7 @@ dummy_func(
             EXIT_IF(!_PyThreadState_HasStackSpace(tstate, code->co_framesize));
             STAT_INC(LOAD_ATTR, hit);
             _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(tstate, PyValue_FromPyObjectNew(fget), 1, frame);
-            pushed_frame->base[0] = PyValue_MakeHeapSafe(owner);
-            DEAD(owner);
+            pushed_frame->base[0] = TAKE(owner);
             new_frame = PyValue_Wrap(pushed_frame);
         }
 
@@ -2944,8 +2945,7 @@ dummy_func(
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
             _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(
                 tstate, PyValue_FromPyObjectNew(f), 2, frame);
-            pushed_frame->base[0] = PyValue_MakeHeapSafe(owner);
-            DEAD(owner);
+            pushed_frame->base[0] = TAKE(owner);
             pushed_frame->base[1] = PyValue_FromPyObjectNew(name);
             new_frame = PyValue_Wrap(pushed_frame);
         }
@@ -2990,8 +2990,7 @@ dummy_func(
             }
 #endif
             STAT_INC(STORE_ATTR, hit);
-            *value_ptr = PyValue_MakeHeapSafe(value);
-            DEAD(value);
+            *value_ptr = TAKE(value);
             if (PyValue_IsNull(old_value)) {
                 PyDictValues *values = _PyObject_InlineValues(owner_o);
                 Py_ssize_t index = value_ptr - values->values;
@@ -3002,8 +3001,7 @@ dummy_func(
 #endif
             }
             UNLOCK_OBJECT(owner_o);
-            PyValue receiver = PyValue_MakeHeapSafe(owner);
-            DEAD(owner);
+            PyValue receiver = OWNER(owner);
             SYNC_SP();
             IR_RETIRE_PUBLISHED_PAIR(old_value, receiver);
         }
@@ -3024,11 +3022,9 @@ dummy_func(
             PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
             PyValue old_value = *value_ptr;
             assert(!PyValue_IsNull(old_value));
-            *value_ptr = PyValue_MakeHeapSafe(value);
-            DEAD(value);
+            *value_ptr = TAKE(value);
             STAT_INC(STORE_ATTR, hit);
-            PyValue receiver = PyValue_MakeHeapSafe(owner);
-            DEAD(owner);
+            PyValue receiver = OWNER(owner);
             SYNC_SP();
             IR_RETIRE_PUBLISHED_PAIR(old_value, receiver);
         }
@@ -3043,14 +3039,12 @@ dummy_func(
             PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
             PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
             assert(PyValue_IsNull(*value_ptr));
-            *value_ptr = PyValue_MakeHeapSafe(value);
-            DEAD(value);
+            *value_ptr = TAKE(value);
             PyDictValues *values = _PyObject_InlineValues(owner_o);
             _PyDictValues_AddToInsertionOrder(values, value_ptr - values->values);
             _PyDictValues_SetShape(values, (uint8_t)shape_to);
             STAT_INC(STORE_ATTR, hit);
-            PyValue receiver = PyValue_MakeHeapSafe(owner);
-            DEAD(owner);
+            PyValue receiver = OWNER(owner);
             SYNC_SP();
             IR_RETIRE_PUBLISHED(receiver);
         }
@@ -3095,8 +3089,8 @@ dummy_func(
                 /* A watcher error's unraisable hook may reenter. Do not
                  * retain a raw slot pointer across the provider call. */
                 PyValue watched_dict = PyValue_FromPyObjectNew((PyObject *)dict);
-                PyValue release_value = PyValue_MakeHeapSafe(value);
-                PyValue receiver = PyValue_MakeHeapSafe(owner);
+                PyValue release_value = TAKE(value);
+                PyValue receiver = TAKE(owner);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 IR_CAPTURE_VALUE_INPUTS(operation);
                 UNLOCK_OBJECT(dict);
@@ -3117,8 +3111,8 @@ dummy_func(
                 ERROR_IF(err < 0);
             }
             else {
-                *value_ptr = PyValue_MakeHeapSafe(value);
-                PyValue receiver = PyValue_MakeHeapSafe(owner);
+                *value_ptr = TAKE(value);
+                PyValue receiver = OWNER(owner);
                 UNLOCK_OBJECT(dict);
                 INPUTS_DEAD();
                 SYNC_SP();
@@ -3139,8 +3133,8 @@ dummy_func(
             char *addr = (char *)owner_o + index;
             STAT_INC(STORE_ATTR, hit);
             PyValue old_value = *(PyValue *)addr;
-            *(PyValue *)addr = PyValue_MakeHeapSafe(value);
-            PyValue receiver = PyValue_MakeHeapSafe(owner);
+            *(PyValue *)addr = TAKE(value);
+            PyValue receiver = OWNER(owner);
             UNLOCK_OBJECT(owner_o);
             INPUTS_DEAD();
             SYNC_SP();
@@ -3364,9 +3358,13 @@ dummy_func(
         inst(CHECK_EG_MATCH, (exc_value_st, match_type_st -- rest, match)) {
             PyObject *exc_value = PyValue_AsKnownObjectBorrow(exc_value_st);
             PyObject *match_type = PyValue_AsKnownObjectBorrow(match_type_st);
+            // Taken before the check, which can run code
+            PyValue held_exc = TAKE(exc_value_st);
+            PyValue held_type = TAKE(match_type_st);
             int err = _PyEval_CheckExceptStarTypeValid(tstate, match_type);
             if (err < 0) {
-                DECREF_INPUTS();
+                PyValue_CLOSE(held_type);
+                PyValue_CLOSE(held_exc);
                 ERROR_IF(true);
             }
 
@@ -3374,7 +3372,8 @@ dummy_func(
             PyObject *rest_o = NULL;
             int res = _PyEval_ExceptionGroupMatch(frame, exc_value, match_type,
                                                   &match_o, &rest_o);
-            DECREF_INPUTS();
+            PyValue_CLOSE(held_type);
+            PyValue_CLOSE(held_exc);
             ERROR_IF(res < 0);
 
             assert((match_o == NULL) == (rest_o == NULL));
@@ -3390,15 +3389,18 @@ dummy_func(
         inst(CHECK_EXC_MATCH, (left, right -- left, b)) {
             PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
             PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
+            // Taken before the check, which can run code
+            PyValue held_right = TAKE(right);
 
             assert(PyExceptionInstance_Check(left_o));
             int err = _PyEval_CheckExceptTypeValid(tstate, right_o);
             if (err < 0) {
+                PyValue_CLOSE(held_right);
                 ERROR_NO_POP();
             }
 
             int res = PyErr_GivenExceptionMatches(left_o, right_o);
-            PyValue_CLOSE(right);
+            PyValue_CLOSE(held_right);
             b = res ? PyValue_True : PyValue_False;
         }
 
@@ -3581,34 +3583,38 @@ dummy_func(
         // the result slot is NULL where it falls through.  It has no
         // feedback entry, since its fields fill the word.
         inst(JUMP_IF_FALSE_OR_POP, (cond -- res)) {
-            int truth = _PyValue_Truth(cond);
+            // Taken before the truth test, which can run code
+            PyValue held = TAKE(cond);
+            int truth = _PyValue_Truth(held);
             if (truth < 0) {
+                PyValue_CLOSE(held);
                 ERROR_NO_POP();
             }
             if (!truth) {
-                res = cond;
-                DEAD(cond);
+                res = held;
                 JUMPTO(oparg);
             }
             else {
-                PyValue_CLOSE(cond);
+                PyValue_CLOSE(held);
                 res = PyValue_NULL;
                 JUMPBY(INSTR_OPCODE(next_instr) == NOT_TAKEN);
             }
         }
 
         inst(JUMP_IF_TRUE_OR_POP, (cond -- res)) {
-            int truth = _PyValue_Truth(cond);
+            // Taken before the truth test, which can run code
+            PyValue held = TAKE(cond);
+            int truth = _PyValue_Truth(held);
             if (truth < 0) {
+                PyValue_CLOSE(held);
                 ERROR_NO_POP();
             }
             if (truth) {
-                res = cond;
-                DEAD(cond);
+                res = held;
                 JUMPTO(oparg);
             }
             else {
-                PyValue_CLOSE(cond);
+                PyValue_CLOSE(held);
                 res = PyValue_NULL;
                 JUMPBY(INSTR_OPCODE(next_instr) == NOT_TAKEN);
             }
@@ -4076,8 +4082,7 @@ dummy_func(
             assert(descr != NULL);
             assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
             attr = PyValue_FromPyObjectNew(descr);
-            self = owner;
-            DEAD(owner);
+            self = TAKE(owner);
         }
 
         macro(LOAD_ATTR_METHOD_WITH_VALUES) =
@@ -4094,8 +4099,7 @@ dummy_func(
             assert(descr != NULL);
             assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
             attr = PyValue_FromPyObjectNew(descr);
-            self = owner;
-            DEAD(owner);
+            self = TAKE(owner);
         }
 
         macro(LOAD_ATTR_METHOD_NO_DICT) =
@@ -4147,8 +4151,7 @@ dummy_func(
             assert(descr != NULL);
             assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
             attr = PyValue_FromPyObjectNew(descr);
-            self = owner;
-            DEAD(owner);
+            self = TAKE(owner);
         }
 
         macro(LOAD_ATTR_METHOD_LAZY_DICT) =
@@ -4823,8 +4826,7 @@ dummy_func(
 
             DEOPT_IF(!LOCK_OBJECT(self_o));
             STAT_INC(CALL, hit);
-            PyValue item = PyValue_MakeHeapSafe(arg);
-            DEAD(arg);
+            PyValue item = TAKE(arg);
             int err = _PyList_AppendTakeValue((PyListObject *)self_o, item);
             UNLOCK_OBJECT(self_o);
             if (err) {
@@ -5279,8 +5281,9 @@ dummy_func(
             co = codeobj_st;
             DEAD(codeobj_st);
 
+            // The function's own reference: PyFunction_New can run code
             _PyFunction_SetVersion(
-                func_obj, ((PyCodeObject *)codeobj)->co_version);
+                func_obj, ((PyCodeObject *)func_obj->func_code)->co_version);
             func = PyValue_FromPyObjectSteal((PyObject *)func_obj);
         }
 
@@ -5289,8 +5292,7 @@ dummy_func(
         inst(SET_FUNCTION_ATTRIBUTE, (attr_st, func_in -- func_out)) {
             PyObject *func = PyValue_AsKnownObjectBorrow(func_in);
             PyObject *attr = PyValue_AsKnownObjectSteal(attr_st);
-            func_out = func_in;
-            DEAD(func_in);
+            func_out = TAKE(func_in);
             assert(PyFunction_Check(func));
             size_t offset = _Py_FunctionAttributeOffsets[oparg];
             assert(offset != 0);
@@ -5366,8 +5368,7 @@ dummy_func(
                 res = PyValue_FromPyObjectSteal(res_o);
             }
             else {
-                res = value;
-                DEAD(value);
+                res = TAKE(value);
             }
         }
 
@@ -5398,8 +5399,8 @@ dummy_func(
         }
 
         inline_ok op(_BINARY_OP, (lhs, rhs -- res)) {
-            PyValue held_left = PyValue_MakeHeapSafe(lhs);
-            PyValue held_right = PyValue_MakeHeapSafe(rhs);
+            PyValue held_left = TAKE(lhs);
+            PyValue held_right = TAKE(rhs);
             _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
             IR_CAPTURE_VALUE_INPUTS(operation);
             IR_CAPTURE_VALUE_RESULT(operation);
@@ -5524,33 +5525,37 @@ dummy_func(
         }
 
         inst(INSTRUMENTED_JUMP_IF_FALSE_OR_POP, (cond -- res)) {
-            int truth = _PyValue_Truth(cond);
+            // Taken before the truth test, which can run code
+            PyValue held = TAKE(cond);
+            int truth = _PyValue_Truth(held);
             if (truth < 0) {
+                PyValue_CLOSE(held);
                 ERROR_NO_POP();
             }
             if (!truth) {
-                res = cond;
-                DEAD(cond);
+                res = held;
                 INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
             }
             else {
-                PyValue_CLOSE(cond);
+                PyValue_CLOSE(held);
                 res = PyValue_NULL;
             }
         }
 
         inst(INSTRUMENTED_JUMP_IF_TRUE_OR_POP, (cond -- res)) {
-            int truth = _PyValue_Truth(cond);
+            // Taken before the truth test, which can run code
+            PyValue held = TAKE(cond);
+            int truth = _PyValue_Truth(held);
             if (truth < 0) {
+                PyValue_CLOSE(held);
                 ERROR_NO_POP();
             }
             if (truth) {
-                res = cond;
-                DEAD(cond);
+                res = held;
                 INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
             }
             else {
-                PyValue_CLOSE(cond);
+                PyValue_CLOSE(held);
                 res = PyValue_NULL;
             }
         }

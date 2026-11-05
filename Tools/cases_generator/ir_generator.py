@@ -83,12 +83,15 @@ from analyzer import (
     Skip,
     Flush,
     StackItem,
+    VALUE_TO_OBJECT,
     analysis_error,
     analyze_files,
 )
 from parser import SimpleStmt
 from generators_common import (
     DEFAULT_INPUT,
+    NON_ESCAPING_DEALLOCS,
+    POINTER_VARIANTS,
     ROOT,
     Emitter,
     TokenIterator,
@@ -135,6 +138,28 @@ def first_ir_only_handler(analysis: Analysis) -> int:
 # (Python/ceval_macros.h), from this_instr, which every handler defines.
 FIELDS = ("A", "B", "C", "D")
 FIELD_VARS = {f: f"IR_FIELD_{f}(this_instr)" for f in FIELDS}
+
+
+def owner_name(field: str) -> str:
+    """The owner of the borrowable input read through field: the value that
+    IR_CONSUME_INPUT gives the handler, PyValue_NULL for a local"""
+    return f"ir_own_{field}"
+
+
+# The release of a view's owner, which is PyValue_NULL for a local, for each
+# release of a view and its form for a value known to be in pointer space
+VIEW_RELEASES = {
+    "PyValue_CLOSE": ("PyValue_XCLOSE", "_PyValue_XCLOSE_POINTER"),
+    "PyValue_XCLOSE": ("PyValue_XCLOSE", "_PyValue_XCLOSE_POINTER"),
+    "PyValue_CLOSE_SPECIALIZED": ("PyValue_XCLOSE_SPECIALIZED",
+                                  "_PyValue_XCLOSE_SPECIALIZED_POINTER"),
+}
+# The DSL calls that take a view: they give its owner, or a count of its
+# own for a local, to the caller (IREmitter.take_view())
+VIEW_TAKES = {"TAKE", "OWNER", "PyValue_AsKnownObjectSteal"}
+# The DSL calls that read a view's owner, so that the handler must have
+# taken the input (IR_CONSUME_INPUT) before the statement that holds them
+OWNER_READS = set(VIEW_RELEASES) | VIEW_TAKES
 
 # The IR forms of the instruction macros (see STACK_INSTRUCTION_MACROS).
 IR_INSTRUCTION_MACROS = {
@@ -244,13 +269,19 @@ class IRFormat:
 # An instruction named PREFIX + X, for an instruction X, shares the format of
 # X: the instrumented twins.
 SHARED_FORMAT_PREFIXES = ("INSTRUMENTED_",)
-def declare_variable(var: StackItem, out: CWriter) -> None:
+def declare_variable(var: StackItem, out: CWriter,
+                     roles: dict[str, set[str]]) -> None:
     type, null = type_and_null(var)
+    if not var.is_array() and roles.get(var.name) == {"view"}:
+        type = "PyValueBorrow"
     space = " " if type[-1].isalnum() else ""
     out.emit(f"{type}{space}{var.name};\n")
 
 
-def declare_variables(inst: Instruction, out: CWriter) -> None:
+def declare_variables(inst: Instruction, out: CWriter,
+                      roles: dict[str, set[str]] | None = None) -> None:
+    """The handler's variables, one per name of its uops' stack items: a
+    view is a PyValueBorrow, any other value a PyValue (S8)"""
     try:
         stack = get_stack_effect(inst)
     except StackError as ex:
@@ -262,11 +293,11 @@ def declare_variables(inst: Instruction, out: CWriter) -> None:
         for var in part.stack.inputs:
             if var.used and var.name not in seen:
                 seen.add(var.name)
-                declare_variable(var, out)
+                declare_variable(var, out, roles or {})
         for var in part.stack.outputs:
             if var.used and var.name not in seen:
                 seen.add(var.name)
-                declare_variable(var, out)
+                declare_variable(var, out, roles or {})
         if any(token.text == "IR_INVOKE_CALL" for token in part.body.tokens()):
             break
 
@@ -342,19 +373,6 @@ def runs_code(inst: Instruction) -> bool:
         return True
     return releases_object(inst) or any(
         uop_runs_code(part) for part in inst.parts if isinstance(part, Uop))
-
-
-def stack_read_later(inst: Instruction, uop: Uop) -> bool:
-    """Whether the stack slots of uop's inputs may be read after its body
-    starts: a deopt or exit re-executes the instruction from the stack, an
-    error without pop leaves the stack to exception_unwind, and an escaping
-    call exposes the frame."""
-    parts = inst.parts[inst.parts.index(uop):]
-    return any(
-        p.properties.deopts or p.properties.side_exit
-        or p.properties.escapes or p.properties.error_without_pop
-        for p in parts if isinstance(p, Uop)
-    )
 
 
 def is_transparent(inst: Instruction) -> bool:
@@ -504,38 +522,31 @@ def classify_inputs(inst: Instruction, n_inputs: int) -> list[str]:
     return result
 
 
-# A value read through a field that names a local holds the slot's bits:
-# it borrows the local in place, owns no count, and nothing in the value
-# says so (pyjit/design/pyvalue.md D4; register-ir.md IR-D3).  So the
-# generator knows each such value (Local.ir_inplace) and what a handler does
-# with it.  It may:
-# - release it: the release happens only if the field names a temporary,
-#   whose value the handler took (IREmitter.inplace_release());
-# - take a count of it: PyValue_DUP, PyValue_NewRef, or PyValue_MakeHeapSafe
-#   and PyValue_AsKnownObjectSteal, which take one for a local
-#   (IREmitter.inplace_owner());
+# A value read through a field that may name a local is a view: a
+# PyValueBorrow of the slot's bits, which owns no count and which only C
+# locals hold (pyjit/design/proposals/register-ir-v2-a5b.md, section 4).
+# Its owner is ir_own_<F>, the value that IR_CONSUME_INPUT gives the handler
+# for a temporary and PyValue_NULL for a local.  So the generator knows
+# each view (Local.ir_inplace) and what a handler does with it.  It may:
+# - release it: the release is of the owner (IREmitter.release_view());
+# - take it, with TAKE(x) for a home (a count of its own for a local) or
+#   OWNER(x) for a receiver that IR_RETIRE_PUBLISHED releases, or steal its
+#   object with PyValue_AsKnownObjectSteal (IREmitter.take_view());
 # - read it, as an argument of a function that only reads its value
 #   arguments (INPLACE_READERS, the PyValue_Is* tests), through `.bits`,
 #   or in `(void)name`;
-# - copy it to a stack input or output of the uop, which then borrows the
-#   same local (IREmitter.note_pointer_assignment() follows only those);
+# - copy it to a stack input or output of the uop, which then views the
+#   same slot (IREmitter.note_pointer_assignment() follows only those);
 # - read its object with PyValue_AsKnownObjectBorrow(), which has no count
-#   either: that object, or a variable that it is assigned to, must not be
-#   an argument that a function takes over or releases (consumed_argument()).
-# Any other use, a store or a function that may keep it, keeps the input:
-# the format does not let a local reach its field (compute_format(),
-# kept_inputs()), and the generator refuses such a use of a value that
-# still may borrow a local (IREmitter.check_inplace_input()).  So a handler
-# cannot keep or release a local's reference without a count, through the
-# value or through those copies.  An object pointer that reaches another
-# variable through an expression (a field, an array, a conditional) is not
-# followed: A5b's typed borrow covers that.
-INPLACE_RELEASES = {"PyValue_CLOSE", "PyValue_XCLOSE",
-                    "PyValue_CLOSE_SPECIALIZED"}
-INPLACE_OWNERS = {"PyValue_MakeHeapSafe", "PyValue_AsKnownObjectSteal"}
+#   either: that object, or a variable that it is assigned or cast to, may
+#   be read only as OBJECT_READERS allows (object_use_refused()).
+# Any other use keeps the input: the format does not let a local reach its
+# field (compute_format(), kept_inputs()), and the generator refuses such a
+# use of a view (IREmitter.check_inplace_input()).  The C compiler rejects
+# a view that reaches an owner, a home or a function that takes PyValue.
 INPLACE_READERS = {
-    "PyValue_DUP", "PyValue_NewRef", "PyValue_AsObject",
-    "PyValue_AsKnownObjectBorrow", "PyValue_AsPyObjectNew", "PyValue_TYPE",
+    "PyValue_DUP", "PyValue_XDUP", "PyValue_AsObject",
+    "PyValue_AsKnownObjectBorrow", "PyValue_TYPE",
     "PyValue_BoolCheck", "PyValue_FloatOperandValues", "PyValue_InlineFloat",
     "PyValue_InlineInt64", "_PyValue_IntScaled", "PyValue_LongCheckExact",
     "_PyValue_Truth",
@@ -543,7 +554,7 @@ INPLACE_READERS = {
     "PyDict_ContainsValue", "PySet_ContainsValue", "PyDict_DelValue",
     "_PyValue_RichCompareObject",
     # Not a reader: PyDict_SetValue keeps counted copies of its key and
-    # value (MakeHeapSafe of a borrow), so it neither keeps nor releases the
+    # value (PyValue_NewRef of a borrow), so it neither keeps nor releases the
     # caller's count and a borrowed local may be passed to it
     "PyDict_SetValue",
     # Boxes an inline input into value_temps, which owns the box; the result
@@ -566,6 +577,54 @@ INPLACE_OBJECT_READERS = {"PyValue_AsKnownObjectBorrow"}
 # every argument but the first, their target
 OBJECT_RELEASES = {"Py_DECREF", "Py_XDECREF", "Py_CLEAR", "Py_SETREF",
                    "Py_XSETREF", "Py_DecRef", "Py_XDecRef"}
+# The functions, macros and statements that may receive the object of a
+# view (S3, register-ir-v2-a5b.md 4.7): each reads the object while the
+# handler runs and takes a count of its own if it keeps it.  Any other
+# callee of such a pointer, a store of it into a field, an array element or
+# the result of `?:`, or a return of it keeps the input out of borrow_mask:
+# a view's object has no count to keep it alive.  test_generated_cases
+# checks that each name receives the object of a view in bytecodes.c
+# (OBJECT_READERS_SEEN); that a name only reads is checked by review.
+# Uses inside assert() vanish from release builds and are not checked.
+OBJECT_READERS = {
+    # Statements
+    "LOCK_OBJECT", "UNLOCK_OBJECT",
+    # Type tests and accessors
+    "Py_TYPE", "PyAnyDict_CheckExact", "PyAnySet_CheckExact",
+    "PyCoro_CheckExact", "PyGen_Check",
+    "PyList_CheckExact", "PyModule_CheckExact", "PySlice_Check",
+    "PyTuple_CheckExact", "PyType_Check", "PyUnicode_CheckExact",
+    "PyDict_CheckExact",
+    "PyList_GET_SIZE", "PyList_GET_VALUE", "PyTuple_GET_SIZE",
+    "PyTuple_GET_VALUE", "PyUnicode_1BYTE_DATA", "PyUnicode_GET_LENGTH",
+    "PyUnicode_IS_COMPACT_ASCII", "PyUnicode_READ_CHAR", "_PyList_ITEMS",
+    "_PyLong_IsZero", "_PyObject_GetManagedDict", "_PyObject_InlineValues",
+    "_PyObject_Shape",
+    # They take the index of a value slot, an address inside the object
+    # less the start of its values
+    "_PyShape_TransitionMissing", "_PyDictValues_AddToInsertionOrder",
+    # Operations that read their operands and count what they keep
+    "PyErr_GivenExceptionMatches",
+    # The value-form container calls (they read the container object and
+    # the key as a value)
+    "PyDict_ContainsValue", "PyDict_DelValue", "PySet_ContainsValue",
+    "PyFunction_New", "PyNumber_Invert", "PyNumber_Negative",
+    "PyObject_DelItem", "PyObject_Format", "PyObject_IsTrue",
+    "PyObject_RichCompare", "PySequence_Contains", "PyUnicode_Concat",
+    "_PyDict_SetValue_Take2", "_PyEval_CheckExceptStarTypeValid",
+    "_PyEval_CheckExceptTypeValid", "_PyEval_ExceptionGroupMatch",
+    "_PyEval_GetAwaitable", "_PyLazyImport_Reify", "_PyList_SliceSubscript",
+    "_PyMapping_GetOptionalItem2", "_PySet_Contains", "_PyTemplate_Build",
+    "_PyUnicode_Equal", "_Py_call_instrumentation_arg",
+    "monitor_stop_iteration",
+    # The indirect calls of BINARY_OP_EXTEND, CONVERT_VALUE and
+    # CALL_INTRINSIC_*, through tables of functions that read their
+    # operands, and of GET_AITER, through the type's am_aiter slot
+    "action", "conv_fn", "func", "getter",
+}
+# The names of OBJECT_READERS that S3 let receive the object of a view,
+# collected while this is a set
+OBJECT_READERS_SEEN: set[str] | None = None
 
 
 def call_argument(tokens: list[Token], i: int) -> tuple[str | None, int]:
@@ -581,6 +640,10 @@ def call_argument(tokens: list[Token], i: int) -> tuple[str | None, int]:
             if depth == 0:
                 if j > 0 and tokens[j - 1].kind == "IDENTIFIER":
                     return tokens[j - 1].text, position
+                if j >= 4 and [t.text for t in tokens[j - 4:j]] == \
+                        ["(", "*", tokens[j - 2].text, ")"] \
+                        and tokens[j - 2].kind == "IDENTIFIER":
+                    return tokens[j - 2].text, position  # (*fn)(...)
                 return None, 0
             depth -= 1
         elif text == "," and depth == 0:
@@ -602,9 +665,43 @@ def consumed_argument(tokens: list[Token], i: int) -> bool:
     return False
 
 
+STATEMENT_START = (";", "{", "}")
+C_TYPE_WORDS = {"char", "const", "struct", "union", "enum", "unsigned",
+                "signed", "int", "long", "short", "void", "double", "float",
+                "volatile"}
+
+
+def is_word(tkn: Token) -> bool:
+    "An identifier or a C type keyword, which the lexer gives its own kind"
+    return tkn.kind == "IDENTIFIER" or tkn.text in C_TYPE_WORDS
+
+
+def declared_or_assigned(tokens: list[Token], j: int) -> str | None:
+    """The plain local that tokens[..j] names as the target of the `=` at
+    tokens[j]: `name =` as a statement, or `T *name =` / `T name =` as a
+    declaration; None for anything else (S3 fails closed): a field, an
+    array element, `*p`, or the inner target of a chained assignment"""
+    if j < 1 or tokens[j].text != "=" or tokens[j - 1].kind != "IDENTIFIER":
+        return None
+    k = j - 2
+    if k < 0 or tokens[k].text in STATEMENT_START:
+        return tokens[j - 1].text  # A statement: `name = ...;`
+    # A declaration: type words, then pointer stars, from a statement start
+    while k >= 0 and tokens[k].text == "*":
+        k -= 1
+    words = 0
+    while k >= 0 and is_word(tokens[k]):
+        words += 1
+        k -= 1
+    if words == 0 or not (k < 0 or tokens[k].text in STATEMENT_START):
+        return None
+    return tokens[j - 1].text
+
+
 def assigned_name(tokens: list[Token], start: int, end: int) -> str | None:
-    """The variable that `name = (cast) tokens[start..end];` assigns, as a
-    statement or a declaration (the cast is optional), or None"""
+    """The plain local that `name = (cast) tokens[start..end];` assigns, as a
+    statement or a declaration (the cast is optional), or None
+    (declared_or_assigned())"""
     if end + 1 >= len(tokens) or tokens[end + 1].text != ";":
         return None
     j = start - 1
@@ -612,16 +709,162 @@ def assigned_name(tokens: list[Token], start: int, end: int) -> str | None:
         while j >= 0 and tokens[j].text != "(":
             j -= 1
         j -= 1
-    if j < 1 or tokens[j].text != "=" or tokens[j - 1].kind != "IDENTIFIER":
+    return declared_or_assigned(tokens, j)
+
+
+def assignment_bounds(tokens: list[Token], start: int,
+                      end: int) -> tuple[int, int] | None:
+    """(the `=`, the `;`) of a statement `target = <expression>;` in whose
+    expression tokens[start..end] stands outside any call, or None"""
+    depth = 0
+    groups = 0  # Parentheses that enclose tokens[start..end]
+    j = start - 1
+    while j >= 0:
+        text = tokens[j].text
+        if text == ")":
+            depth += 1
+        elif text == "(":
+            if depth == 0:
+                if j > 0 and tokens[j - 1].kind == "IDENTIFIER" or j >= 4 and \
+                        [x.text for x in tokens[j - 4:j]] == \
+                        ["(", "*", tokens[j - 2].text, ")"]:
+                    return None  # An argument of a call, or of (*fn)(...)
+                groups += 1
+            else:
+                depth -= 1
+        elif depth == 0 and (text == "=" or text in STATEMENT_START
+                             or text in (",", "?", ":", "return")):
+            break
+        j -= 1
+    if j < 0 or tokens[j].text != "=":
         return None
-    return tokens[j - 1].text
+    k = end + 1
+    depth = 0
+    while k < len(tokens):
+        text = tokens[k].text
+        if text == "(":
+            depth += 1
+        elif text == ")":
+            if depth == 0:
+                if groups == 0:
+                    return None
+                groups -= 1
+            else:
+                depth -= 1
+        elif depth == 0 and text in (";", ",", "?", ":", "="):
+            break
+        k += 1
+    if k >= len(tokens) or tokens[k].text != ";":
+        return None
+    return j, k
+
+
+def derived_name(tokens: list[Token], start: int, end: int) -> str | None:
+    """The plain local that a statement `name = <expression>;` assigns, where
+    tokens[start..end], the object of a view, is in the expression outside
+    any call and the expression is address arithmetic: an address derived
+    from the object, which is followed as the object is.  None if the
+    statement is not of that form."""
+    bounds = assignment_bounds(tokens, start, end)
+    if bounds is None:
+        return None
+    j, k = bounds
+    if tokens[j + 1].text == "*":
+        return None  # A load through the address: a field read
+    if any(tokens[m].text not in ("+", "-", "*", "(", ")")
+           and not is_word(tokens[m]) and tokens[m].kind != "NUMBER"
+           for m in range(j + 1, k)):
+        return None  # Not address arithmetic: a comparison, for example
+    return declared_or_assigned(tokens, j)
+
+
+# Integer types: a declaration of one from an address inside an object
+# (a pointer difference) holds no pointer
+INTEGER_TYPES = {"Py_ssize_t", "size_t", "ptrdiff_t", "intptr_t", "uintptr_t",
+                 "int", "long"}
+
+
+def integer_declaration(tokens: list[Token], start: int, end: int) -> bool:
+    "Whether tokens[start..end] is in the initializer of an integer local"
+    bounds = assignment_bounds(tokens, start, end)
+    if bounds is None:
+        return False
+    j, _ = bounds
+    return (j >= 3 and tokens[j - 1].kind == "IDENTIFIER"
+            and tokens[j - 2].text in INTEGER_TYPES
+            and tokens[j - 3].text in STATEMENT_START)
+
+
+def dereferenced(tokens: list[Token], start: int, end: int) -> bool:
+    """Whether tokens[start..end], an address inside an object, is
+    dereferenced, `*(T *)(address [+ offset])` or `*address`: a load or
+    store of a field, as `->` is"""
+    k = start - 1
+    while k >= 0:
+        if tokens[k].text == "(":
+            k -= 1  # A grouping parenthesis
+            continue
+        if tokens[k].text == ")":
+            # A cast: `(T *)`
+            m = k - 1
+            while m >= 0 and tokens[m].text != "(":
+                if tokens[m].text != "*" and not is_word(tokens[m]):
+                    return False
+                m -= 1
+            k = m - 1
+            continue
+        break
+    if k < 0 or tokens[k].text != "*":
+        return False
+    before = tokens[k - 1].text if k > 0 else ";"
+    return before in STATEMENT_START or before in ("=", "(", ",", "return", "!")
+
+
+def object_use_allowed(tokens: list[Token], start: int, end: int) -> bool:
+    """Whether tokens[start..end], an expression that gives the object of a
+    view, uncounted (a variable that holds it, or the call that reads it),
+    is used as OBJECT_READERS allows (S3): a field access, a comparison,
+    `(void)`, or an argument, or address arithmetic inside an argument, of
+    a reader.  A copy (assigned_name()) or a derived address
+    (derived_name()) is followed by the caller; anything else is refused."""
+    prev = tokens[start - 1].text if start > 0 else ""
+    nxt = tokens[end + 1].text if end + 1 < len(tokens) else ""
+    if nxt == "->" or prev in ("==", "!=") or nxt in ("==", "!="):
+        return True
+    if prev == "!" or prev == "(" and nxt == ")" and start >= 2 \
+            and tokens[start - 2].text == "if":
+        return True
+    j = end + 1
+    while j < len(tokens) and tokens[j].text == ")":
+        j += 1
+    if j < len(tokens) and tokens[j].text == "->" and j > end + 1:
+        # A field of it through a cast
+        return True
+    if dereferenced(tokens, start, end) or integer_declaration(tokens, start, end):
+        return True
+    if prev == ")" and nxt == ";" and start >= 3 \
+            and tokens[start - 2].text == "void" \
+            and tokens[start - 3].text == "(":
+        return True
+    callee, _ = call_argument(tokens, start)
+    if callee in OBJECT_READERS and OBJECT_READERS_SEEN is not None:
+        OBJECT_READERS_SEEN.add(callee)
+    return callee in OBJECT_READERS
+
+
+def object_holder(tokens: list[Token], start: int, end: int) -> str | None:
+    "The local that a copy of, or an address derived from, the object gets"
+    holder = assigned_name(tokens, start, end)
+    if holder is None:
+        holder = derived_name(tokens, start, end)
+    return holder
 
 
 def inplace_input_use(uop: CodeSection, name: str) -> Token | None:
-    """The first use of name, which may borrow a local in place, in the
-    body of uop that is not one of those above, or None.  Uses inside
-    assert() vanish from release builds and are not checked."""
-    tokens = list(uop.body.tokens())
+    """The first use of name, a view, in the body of uop that is not one of
+    those above, or None.  Uses inside assert() vanish from release builds
+    and are not checked."""
+    tokens = [t for t in uop.body.tokens() if t.kind != "COMMENT"]
     stack_names = ({item.name for item in uop.stack.inputs + uop.stack.outputs}
                    if isinstance(uop, Uop) else set())
     names = {name}
@@ -644,9 +887,13 @@ def inplace_input_use(uop: CodeSection, name: str) -> Token | None:
                 and not (i > 0 and tokens[i - 1].text in (".", "->"))):
             if consumed_argument(tokens, i):
                 return tkn
-            copy = assigned_name(tokens, i, i)
+            copy = object_holder(tokens, i, i)
             if copy is not None:
                 objects.add(copy)
+            elif not (i + 1 < len(tokens) and tokens[i + 1].text == "="
+                      and (i == 0 or tokens[i - 1].text in (";", "{", "}"))) \
+                    and not object_use_allowed(tokens, i, i):
+                return tkn
             i += 1
             continue
         if (tkn.kind != "IDENTIFIER" or tkn.text not in names
@@ -661,7 +908,7 @@ def inplace_input_use(uop: CodeSection, name: str) -> Token | None:
             if tokens[i - 2].text not in stack_names:
                 # The emitter follows copies to stack variables only
                 return tkn
-            names.add(tokens[i - 2].text)  # A copy, which borrows too
+            names.add(tokens[i - 2].text)  # A copy, which views the slot too
         elif prev == ")" and nxt == ";" and i >= 3 \
                 and tokens[i - 2].text == "void" and tokens[i - 3].text == "(":
             pass
@@ -669,9 +916,9 @@ def inplace_input_use(uop: CodeSection, name: str) -> Token | None:
             callee = enclosing_callee(tokens, i) or ""
             whole = prev == "(" and nxt == ")"
             first = prev == "(" and nxt == ","
-            if not ((callee in INPLACE_RELEASES and (whole or first))
+            if not ((callee in VIEW_RELEASES and (whole or first))
                     or (callee == "DEAD" and whole)
-                    or (callee in INPLACE_OWNERS and whole)
+                    or (callee in VIEW_TAKES and whole)
                     or callee in INPLACE_READERS
                     or callee.startswith("PyValue_Is")):
                 return tkn
@@ -679,9 +926,11 @@ def inplace_input_use(uop: CodeSection, name: str) -> Token | None:
                 # Its object, which has no count either
                 if consumed_argument(tokens, i - 2):
                     return tkn
-                holder = assigned_name(tokens, i - 2, i + 1)
+                holder = object_holder(tokens, i - 2, i + 1)
                 if holder is not None:
                     objects.add(holder)
+                elif not object_use_allowed(tokens, i - 2, i + 1):
+                    return tkn
             elif callee == "_PyValueTemps_Object" and prev == "," and nxt == ")":
                 # `_PyValueTemps_Object(temps, name)`: the object of name,
                 # uncounted (or a box that temps owns). Follow it like
@@ -689,9 +938,11 @@ def inplace_input_use(uop: CodeSection, name: str) -> Token | None:
                 # the borrow.
                 if consumed_argument(tokens, i - 4):
                     return tkn
-                holder = assigned_name(tokens, i - 4, i + 1)
+                holder = object_holder(tokens, i - 4, i + 1)
                 if holder is not None:
                     objects.add(holder)
+                elif not object_use_allowed(tokens, i - 4, i + 1):
+                    return tkn
         elif nxt == "." and i + 3 < len(tokens) and tokens[i + 2].text == "bits" \
                 and tokens[i + 3].text not in ASSIGNMENT_OPS:
             pass
@@ -731,30 +982,8 @@ def kept_inputs(inst: Instruction, n_inputs: int) -> set[int]:
         popped.reverse()
         for j, item in enumerate(part.stack.outputs):
             i = passed_through(part, j)
-            if i is not None and takes_count(part, item.name):
-                i = None  # A new value, which owns its count
             stack.append(popped[i] if i is not None else -1)
     return kept
-
-
-def takes_count(uop: Uop, name: str) -> bool:
-    """Whether the body of uop replaces name by the value with a count that
-    an owner call gives (`name = PyValue_MakeHeapSafe(name);`) on every
-    path: as a statement of the body itself, not of a branch."""
-    tokens = list(uop.body.tokens())
-    depth = 0
-    for i, tkn in enumerate(tokens):
-        if tkn.text == "{":
-            depth += 1
-        elif tkn.text == "}":
-            depth -= 1
-        elif (depth == 1 and tkn.text == name
-              and i > 0 and tokens[i - 1].text in (";", "{", "}")
-              and [t.text for t in tokens[i + 1:i + 6]]
-                  in ([ "=", owner, "(", name, ")"] for owner in INPLACE_OWNERS)
-              and i + 6 < len(tokens) and tokens[i + 6].text == ";"):
-            return True
-    return False
 
 
 class iter_with_first(TokenIterator):
@@ -1511,6 +1740,66 @@ def may_be_positive(diff: PointerOffset) -> bool:
     return bool(diff.positive) or diff.numeric > 0
 
 
+# The types of a declaration that holds no pointer derived from an object:
+# numbers, and values (an owner counts its object, and S3 follows views)
+VALUE_TYPES = INTEGER_TYPES | {
+    "bool", "char", "double", "float", "short", "unsigned", "signed",
+    "Py_hash_t", "Py_UCS4", "PyValue", "PyValueBorrow"}
+
+
+def is_value_type(text: str) -> bool:
+    "Whether a declaration of type text holds no pointer"
+    return text in VALUE_TYPES or re.fullmatch(r"u?int\d+_t", text) is not None
+
+
+def designator_start(tokens: list[Token], i: int) -> int:
+    """The first token of the postfix expression that ends at tokens[i], the
+    designator of a call: `f`, `(*f)`, `Py_TYPE(o)->tp_iternext`"""
+    j = i
+    while True:
+        close = tokens[j].text
+        if close in (")", "]"):
+            opening = "(" if close == ")" else "["
+            depth = 0
+            while j > 0:
+                if tokens[j].text == close:
+                    depth += 1
+                elif tokens[j].text == opening:
+                    depth -= 1
+                    if depth == 0:
+                        break
+                j -= 1
+            if j > 0 and (tokens[j - 1].kind == "IDENTIFIER"
+                          or tokens[j - 1].text in (")", "]")):
+                j -= 1  # A call or an index of the expression before
+                continue
+        if j > 1 and tokens[j - 1].text in ("->", "."):
+            j -= 2
+            continue
+        return j
+
+
+def object_source(tokens: list[Token], views: dict[str, int],
+                  view_objects: dict[str, int]) -> int | None:
+    """The position of the input whose object the expression reads, uncounted:
+    a variable that holds such an object, or the object of a view"""
+    texts = [t.text for t in tokens]
+    for i, tkn in enumerate(tokens):
+        if tkn.kind != "IDENTIFIER" or i > 0 and texts[i - 1] in (".", "->"):
+            continue
+        if tkn.text in view_objects:
+            return view_objects[tkn.text]
+        if (tkn.text == "PyValue_AsKnownObjectBorrow" and i + 3 < len(texts)
+                and texts[i + 1] == "(" and texts[i + 2] in views
+                and texts[i + 3] == ")"):
+            return views[texts[i + 2]]
+        if (tkn.text == "_PyValueTemps_Object" and i + 5 < len(texts)
+                and texts[i + 1] == "(" and texts[i + 3] == ","
+                and texts[i + 4] in views and texts[i + 5] == ")"):
+            return views[texts[i + 4]]
+    return None
+
+
 class IRStack(Stack):
     """The frame's slots in place of the stack, the SlotStack of the design
     note.  Every slot holds a value that the frame owns or NULL: a handler
@@ -1525,13 +1814,31 @@ class IRStack(Stack):
     there, which goes to the slot counted from dst."""
 
     def __init__(self, layout: SlotLayout | None = None,
-                 raw_inputs: set[int] | None = None) -> None:
+                 roles: dict[str, set[str]] | None = None) -> None:
         super().__init__()
         self.layout = layout if layout is not None else SlotLayout.empty()
-        # The positions of the borrowable inputs that the handler consumes
-        # as they are: those read through a local come borrowed, as
-        # LOAD_FAST_BORROW would have pushed them.
-        self.raw_inputs = set(raw_inputs or ())
+        # The C variables that hold the view of each borrowable input, by
+        # position, the latest last: IR_CONSUME_INPUT adopts the bits that
+        # the handler loaded rather than reloading the slot.
+        self.views: dict[int, list[str]] = {}
+        # Views that may dangle: they were loaded before a call that can run
+        # code, which can rebind a local (S7, IREmitter.check_stale_views).
+        self.stale: set[str] = set()
+        # The body's variables that hold the object of a view, uncounted,
+        # by the view's input, which dangle with it until the body takes
+        # the view (IREmitter.note_view_object)
+        self.view_objects: dict[str, int] = {}
+        # The fields whose input's owner the body has taken or released
+        # (TAKE, OWNER, a steal, a release or DECREF_INPUTS), with the
+        # token that did: at most once on any path, whichever view of the
+        # input names it (IREmitter.spend_owner)
+        self.spent: dict[str, Token] = {}
+        # The views of those inputs, which the spend killed: no later
+        # statement reads them (IREmitter.check_spent_views)
+        self.spent_views: set[str] = set()
+        # The role of each C variable of the handler, "view" or "owner",
+        # which gives its type (S8, generate_handler); shared by copies.
+        self.roles: dict[str, set[str]] = roles if roles is not None else {}
         # Register style: where the frame holds the value at a constant
         # position, "in" the slot of its input or "out" the slot from dst.
         # Positions that are not constant are outputs.
@@ -1560,9 +1867,46 @@ class IRStack(Stack):
         other = super().copy()
         assert isinstance(other, IRStack)
         other.owner = dict(self.owner)
-        other.raw_inputs = set(self.raw_inputs)
+        other.views = {p: list(names) for p, names in self.views.items()}
+        other.stale = set(self.stale)
+        other.view_objects = dict(self.view_objects)
+        other.spent = dict(self.spent)
+        other.spent_views = set(self.spent_views)
+        other.roles = self.roles
         other.window_taken = self.window_taken
         return other
+
+    def code_ran(self) -> None:
+        "Code that can rebind a local may have run: each view may dangle"
+        for names in self.views.values():
+            self.stale.update(names)
+        self.stale.update(self.view_objects)
+
+    def taken(self, p: int) -> None:
+        "The body took a count of the input at p, which keeps its object"
+        for name in [n for n, q in self.view_objects.items() if q == p]:
+            del self.view_objects[name]
+            self.stale.discard(name)
+
+    def field_position(self, field: str) -> int:
+        "The position of the input read through field"
+        for p, f in self.layout.in_fields.items():
+            if f == field:
+                return p
+        raise StackError(f"no input is read through field {field}")
+
+    def bind(self, name: str, view_of: int | None) -> None:
+        """C variable name is assigned: the view of the input at view_of, or
+        an owner if view_of is None"""
+        for names in self.views.values():
+            if name in names:
+                names.remove(name)
+        self.stale.discard(name)
+        self.spent_views.discard(name)
+        if view_of is not None:
+            self.views.setdefault(view_of, []).append(name)
+        self.roles.setdefault(name, set()).add(
+            "view" if view_of is not None else "owner")
 
     def input_field(self, p: int) -> str:
         "The C expression of the field of the input at position p"
@@ -1606,11 +1950,14 @@ class IRStack(Stack):
         if not lay.window and not var.is_array():
             p = memory_offset.as_int()
             if (p is not None and self.owner.get(p) == "in"
-                    and p in lay.borrowable and p in self.raw_inputs):
-                return f"IR_LOAD_BORROWED({self.input_field(p)})"
+                    and p in lay.borrowable):
+                return f"IR_VIEW({self.input_field(p)})"
         return super().load(var, memory_offset)
 
     def pop(self, var: StackItem, out: CWriter) -> Local:
+        before = self.variables[-1] if self.variables else None
+        old_name = before.name if before is not None else None
+        fresh = before is None or not before.in_local
         local = super().pop(var, out)
         lay = self.layout
         if (not lay.window and local.memory_offset is not None and var.used
@@ -1619,18 +1966,35 @@ class IRStack(Stack):
             if p is not None and self.owner.get(p) == "in":
                 local.ir_input = p
                 if p in lay.borrowable:
-                    local.ir_field = lay.in_fields[p]
-                    local.ir_borrowed = p in self.raw_inputs
                     local.ir_inplace = lay.in_fields[p]
+        if var.used and not var.is_array() and (fresh or old_name != var.name):
+            # The pop assigned var: a load, or a copy of another variable
+            view_of = None
+            if local.ir_inplace is not None:
+                view_of = self.field_position(local.ir_inplace)
+            stale = old_name in self.stale
+            self.bind(var.name, view_of)
+            if stale and not fresh:
+                self.stale.add(var.name)
+            if view_of is not None and not fresh:
+                # A copy that a uop may only release, which reads the owner
+                out.emit(f"(void){var.name};\n")
         return local
 
     def consume(self, out: CWriter, p: int) -> None:
-        "The frame gives up the input at position p, which may be borrowed"
+        """The frame gives up the input at position p.  A borrowable one's
+        owner, ir_own_<F>, adopts the bits of a variable that holds its
+        view."""
         f = self.input_field(p)
-        if p in self.layout.borrowable:
-            out.emit(f"IR_CONSUME_INPUT({f});\n")
-        else:
+        if p not in self.layout.borrowable:
             out.emit(f"IR_SLOT({f}) = PyValue_NULL;\n")
+            return
+        names = self.views.get(p)
+        if not names:
+            raise StackError(f"no variable holds the view of the input "
+                             f"in {f} when the handler takes it")
+        out.emit(f"{owner_name(self.layout.in_fields[p])} = "
+                 f"IR_CONSUME_INPUT({f}, {names[-1]});\n")
 
     def store(self, out: CWriter, var: Local, memory_offset: PointerOffset) -> bool:
         """Write var, which the stack holds at memory_offset; whether the
@@ -1651,13 +2015,14 @@ class IRStack(Stack):
             out.emit(f"IR_PUBLISH_TEMP({self.window_slot(memory_offset)}, {var.name});\n")
             return True
         if p is not None and var.ir_input == p and self.owner.get(p) == "in":
-            # The input itself, back in its slot: a box, or a NULL before
-            # the handler closes it
+            # The input itself, back in its slot, changed: a NULL before the
+            # handler closes it.  A borrowable input's slot keeps the view's
+            # value: a new value there is an output of its own name.
             f = self.input_field(p)
             if p in lay.borrowable:
-                out.emit(f"IR_STORE_INPUT({f}, {var.name});\n")
-            else:
-                out.emit(f"IR_PUBLISH_TEMP(IR_SLOT({f}), {var.name});\n")
+                raise StackError(f"'{var.name}' would be stored back to its "
+                                 f"input's slot, which may name a local")
+            out.emit(f"IR_PUBLISH_TEMP(IR_SLOT({f}), {var.name});\n")
             return True
         if p is not None and (lay.dst_offset is None or p < lay.dst_offset):
             if p in lay.in_fields and p not in lay.borrowable:
@@ -1698,20 +2063,20 @@ class IRStack(Stack):
         return True
 
     def own_inplace(self, out: CWriter, var: Local) -> None:
-        """Before var goes to a slot other than its input's: if it borrows a
-        local in place, it takes a count, as LOAD_FAST_BORROW does (no frame
-        slot holds a borrow)"""
+        """Before var goes to a slot other than its input's: a view cannot
+        (no frame slot holds a borrow); the DSL writes TAKE() for a value
+        that goes to a home"""
         if var.ir_inplace is not None:
-            out.emit(f"IR_INPLACE_OWN({var.name}, {FIELD_VARS[var.ir_inplace]});\n")
-            out.start_line()
-            var.ir_inplace = None
+            raise StackError(f"'{var.name}', a view of the input in "
+                             f"{FIELD_VARS[var.ir_inplace]}, would be stored "
+                             f"to a slot; assign the output TAKE() of it")
 
     def refuse_inplace(self, var: Local, memory_offset: PointerOffset) -> None:
         "A slot must not get a local's reference without a count"
         if var.ir_inplace is not None:
-            raise StackError(f"'{var.name}', which may borrow a local in "
-                             f"place, would be stored at position "
-                             f"{memory_offset}")
+            raise StackError(f"'{var.name}', a view of the input in "
+                             f"{FIELD_VARS[var.ir_inplace]}, would be stored "
+                             f"at position {memory_offset}")
 
     def keep(self, var: Local, p: int | None) -> bool:
         """A value at a position without a slot of its own, such as the
@@ -1794,6 +2159,23 @@ class IRStack(Stack):
     def merge(self, other: Stack, out: CWriter) -> None:
         assert isinstance(other, IRStack)
         super().merge(other, out)
+        # A variable views an input after the join if it does on both
+        # paths, and may dangle if it may on either
+        for p in set(self.views) | set(other.views):
+            mine = self.views.get(p, [])
+            theirs = other.views.get(p, [])
+            both = [name for name in mine if name in theirs]
+            self.views[p] = both
+            other.views[p] = list(both)
+        self.stale |= other.stale
+        other.stale = set(self.stale)
+        self.view_objects |= other.view_objects
+        other.view_objects = dict(self.view_objects)
+        # An owner is spent after the join if it is on either path
+        self.spent = other.spent | self.spent
+        other.spent = dict(self.spent)
+        self.spent_views |= other.spent_views
+        other.spent_views = set(self.spent_views)
         # A side that has not written a position yet writes it later,
         # without the check that the slot is NULL.
         for p in set(self.owner) | set(other.owner):
@@ -1865,12 +2247,29 @@ class IREmitter(Emitter):
         self._replacers["IR_INVOKE_CALL"] = self.invoke_call
         self._replacers["IR_BEGIN_CALL_EFFECTS"] = self.call_effects
         self._replacers["IR_REFRESH_CALL"] = self.refresh_call
-        self._replacers["PyValue_MakeHeapSafe"] = self.inplace_owner
-        # Set while a statement is emitted, for inplace_release()
+        self._replacers["TAKE"] = self.take_view
+        self._replacers["OWNER"] = self.take_view
+        self._replacers["PyValue_AsKnownObjectBorrow"] = self.object_of
+        self._replacers["PyValue_AsPyObjectNew"] = self.object_of
+        # Set while a statement is emitted
         self.statement: SimpleStmt | None = None
         # The input, and its field, that the statement's escaping release
-        # killed, if it may borrow a local in place
+        # killed, if it is a view
         self.killed_inplace: tuple[str, str] | None = None
+        # The variable that `PyValue NAME = OWNER(x);` assigned, which only
+        # IR_RETIRE_PUBLISHED may read, with no call that runs code before
+        self.pending_owner: Token | None = None
+        # The outputs that a statement `out = TAKE(in);` assigned in the
+        # handler (check_error_outputs())
+        self.taken_outputs: set[str] = set()
+        # The object locals of the handler (emit_object_inputs), which the
+        # first pass of generate_handler finds and the second declares
+        self.boxes: set[str] = set()
+        # The variables assigned from one that has an object local, in the
+        # uop, with the source; their object is read through the source
+        self.box_copies: dict[str, str] = {}
+        # The C type of each variable of the handler, from the first pass
+        self.declared_roles: dict[str, set[str]] = {}
         self.stores_outputs = False  # the statement's uop is the last
         self.call_finished = False
         self.call_fallback_used = False
@@ -1922,11 +2321,11 @@ class IREmitter(Emitter):
         assert next(tkn_iter).kind == "SEMI"
         storage.flush(self.out)
         for retired in (first, second):
-            field = self.inplace_field(retired, storage)
-            if field is not None:
-                # A local's value is not the handler's to retire
-                self.emit(f"if (IR_IS_LOCAL({field})) {{ "
-                          f"{retired.text} = PyValue_NULL; }}\n")
+            if self.view_field(retired, storage) is not None:
+                raise analysis_error(
+                    f"{tkn.text}({retired.text}) of a view: retire its "
+                    f"OWNER()", retired)
+        self.pending_owner = None
         failure_result = "NULL"
         if inst.name in ("LOAD_ATTR_SLOT", "LOAD_ATTR_INSTANCE_VALUE", "LOAD_ATTR_SHAPE",
                          "LOAD_ATTR_MODULE", "LOAD_ATTR_WITH_HINT"):
@@ -1958,6 +2357,9 @@ class IREmitter(Emitter):
             self.emit(f"PyValue_XCLOSE({second.text}); {second.text} = PyValue_NULL;\n")
             self.emit("}\n")
         self.emit("}\n")
+        stack = storage.stack
+        assert isinstance(stack, IRStack)
+        stack.code_ran()
         return True
 
     def capture_value_inputs(self, tkn, tkn_iter, uop, storage, inst):
@@ -2043,14 +2445,6 @@ class IREmitter(Emitter):
             self.emit("return _PyJIT_RAISE;\n")
         else:
             self.emit("JUMP_TO_LABEL(error);\n")
-
-    def emit_store_input(self, var: Local, storage: Storage) -> None:
-        """An input that emit_object_inputs boxed, which the slot must hold
-        for a later reader.  value_temps owns the box and var borrows it, so
-        the C code can still read var as an object.  The slot keeps the
-        inline value, the canonical form of the box, so nothing goes back."""
-        self.out.start_line()
-        self.emit(f"IR_KEEP_BOX({var.name});\n")
 
     def release_displaced(self):
         """Release the local value that IR_STORE_DST or IR_MOVE_TO_DST
@@ -2218,115 +2612,257 @@ class IREmitter(Emitter):
         if use is not None:
             where = inst.name if inst is not None else uop.name
             raise analysis_error(
-                f"{where}: {uop.name} uses '{name}', which may borrow a "
-                f"local in place, as more than a value it reads, releases "
-                f"or takes a count of (inplace_input_use())", use)
+                f"{where}: {uop.name} uses '{name}', which may be a view of "
+                f"a local, as more than a value it reads, releases or takes "
+                f"a count of (inplace_input_use())", use)
 
-    def inplace_field(self, arg: Token | None, storage: Storage) -> str | None:
-        "The field whose local arg may borrow in place, if arg is a variable"
+    def view_field(self, arg: Token | None, storage: Storage) -> str | None:
+        "The field whose input arg views, if arg is a variable that is a view"
         if arg is None or arg.kind != "IDENTIFIER":
             return None
         if self.killed_inplace is not None and self.killed_inplace[0] == arg.text:
-            return FIELD_VARS[self.killed_inplace[1]]
+            return self.killed_inplace[1]
         var = find_local(arg.text, storage)
-        if var is None or var.ir_inplace is None:
+        if var is None:
             return None
-        return FIELD_VARS[var.ir_inplace]
+        return var.ir_inplace
 
-    def inplace_release(self, tkn: Token, storage: Storage,
-                        arg: Token | None) -> None:
-        """A release of arg, which may borrow a local in place, is a
-        statement of its own: it releases arg only if the field names a
-        temporary, whose value the handler took."""
-        field = self.inplace_field(arg, storage)
-        if field is None:
-            return
-        stmt = self.statement
-        if (stmt is None or stmt.contents[0] is not tkn
-                or stmt.contents[-1].kind != "SEMI"):
+    def spend_owner(self, field: str, tkn: Token, storage: Storage) -> None:
+        """The body takes or releases the owner of the input read through
+        field, which it may do once on a path: another view of the same
+        input, a copy, does not own a second count"""
+        stack = storage.stack
+        assert isinstance(stack, IRStack)
+        before = stack.spent.get(field)
+        if before is not None:
             raise analysis_error(
-                f"{tkn.text}({arg.text}) of a value that may borrow a local "
-                "in place must be a statement of its own", tkn)
-        self.out.start_line()
-        self.emit(f"if (!IR_IS_LOCAL({field})) ")
+                f"{tkn.text}: the owner of the input in field {field} was "
+                f"taken or released already, by {before.text} at line "
+                f"{before.line}; a view or copy of an input owns no count "
+                "of its own", tkn)
+        stack.spent[field] = tkn
+        # The spend kills every view and copy of the input
+        p = stack.field_position(field)
+        stack.spent_views.update(stack.views.get(p, []))
+        for var in storage.inputs:
+            if var.ir_inplace == field and not var.is_dead():
+                var.kill()
+
+    def check_spent_views(self, tokens: list[Token], storage: Storage) -> None:
+        """No statement reads a view, or a copy of one, after the body took
+        or released its input's owner: a view has no count of its own"""
+        stack = storage.stack
+        if not isinstance(stack, IRStack) or not stack.spent_views:
+            return
+        for i, tkn in enumerate(tokens):
+            if (tkn.kind != "IDENTIFIER" or tkn.text not in stack.spent_views
+                    or i > 0 and tokens[i - 1].text in (".", "->")):
+                continue
+            if i >= 2 and tokens[i - 2].text == "DEAD" \
+                    and tokens[i - 1].text == "(":
+                continue
+            raise analysis_error(
+                f"view '{tkn.text}' is read after the body took or released "
+                "its input's owner, which killed it and every copy of it",
+                tkn)
+
+    def ensure_consumed(self, field: str, storage: Storage) -> None:
+        """Before code that reads the owner of the input read through field:
+        the handler takes the input, so ir_own_<field> holds its owner"""
+        stack = storage.stack
+        assert isinstance(stack, IRStack)
+        p = stack.field_position(field)
+        if stack.owner.get(p) == "in":
+            self.out.start_line()
+            stack.consume(self.out, p)
+            del stack.owner[p]
+
+    def is_pointer(self, name: Token, storage: Storage) -> bool:
+        var = find_local(name.text, storage)
+        return (var is not None and var.known_object) or name.text == self.killed_pointer
 
     def value_pointer_variant(self, tkn, tkn_iter, uop, storage, inst):
         lparen = next(tkn_iter)
         assert lparen.kind == "LPAREN"
         arg = tkn_iter.peek()
         assert arg is not None
-        if tkn.text != "PyValue_DUP":
-            self.inplace_release(tkn, storage, arg)
-        self.emit_function_name(tkn, arg, storage)
+        field = None if tkn.text == "PyValue_DUP" else self.view_field(arg, storage)
+        if field is None:
+            self.emit_function_name(tkn, arg, storage)
+            self.out.emit(lparen)
+            return True
+        # The release of a view is its owner's
+        name = next(tkn_iter)
+        self.spend_owner(field, tkn, storage)
+        self.ensure_consumed(field, storage)
+        release = VIEW_RELEASES[tkn.text][self.is_pointer(name, storage)]
+        self.out.emit_at(release, tkn)
         self.out.emit(lparen)
+        self.out.emit(owner_name(field))
         return True
 
     def value_close_specialized(self, tkn, tkn_iter, uop, storage, inst):
         lparen = next(tkn_iter)
         assert lparen.kind == "LPAREN"
-        self.inplace_release(tkn, storage, tkn_iter.peek())
-        return super().value_close_specialized(
-            tkn, iter_with_first(lparen, tkn_iter), uop, storage, inst)
+        field = self.view_field(tkn_iter.peek(), storage)
+        if field is None:
+            return super().value_close_specialized(
+                tkn, iter_with_first(lparen, tkn_iter), uop, storage, inst)
+        name = next(tkn_iter)
+        comma = next(tkn_iter)
+        dealloc = next(tkn_iter)
+        if comma.kind != "COMMA" or dealloc.kind != "IDENTIFIER":
+            raise analysis_error("Expected comma and identifier", comma)
+        self.spend_owner(field, tkn, storage)
+        self.ensure_consumed(field, storage)
+        release = VIEW_RELEASES[tkn.text][self.is_pointer(name, storage)]
+        self.out.emit_at(release, tkn)
+        self.out.emit(lparen)
+        self.out.emit(owner_name(field))
+        self.out.emit(comma)
+        self.out.emit(dealloc)
+        return self.value_kill(name, storage,
+                               dealloc.text not in NON_ESCAPING_DEALLOCS)
 
     def value_steal(self, tkn, tkn_iter, uop, storage, inst):
         lparen = next(tkn_iter)
         assert lparen.kind == "LPAREN"
-        field = self.inplace_field(tkn_iter.peek(), storage)
-        if field is None:
+        arg = tkn_iter.peek()
+        var = find_local(arg.text, storage) if arg is not None and arg.kind == "IDENTIFIER" else None
+        field = self.view_field(arg, storage)
+        box = var.ir_box if var is not None else None
+        if var is not None and box is None and var.name in self.box_copies:
+            raise analysis_error(
+                f"{tkn.text}({var.name}): '{var.name}' is a copy of "
+                f"'{self.box_copies[var.name]}', which has an object local",
+                tkn)
+        if field is None and box is None:
             return super().value_steal(
                 tkn, iter_with_first(lparen, tkn_iter), uop, storage, inst)
-        # The object, with a count of its own for a local
         name = next(tkn_iter)
-        self.out.emit_at("IR_INPLACE_OBJECT_STEAL", tkn)
-        self.out.emit(lparen)
-        self.out.emit(name)
-        self.out.emit(f", {field}")
+        owned = name.text
+        if field is not None:
+            # The object, with a count of its own for a local
+            self.spend_owner(field, tkn, storage)
+            self.ensure_consumed(field, storage)
+            owned = f"IR_TAKE({name.text}, {owner_name(field)})"
+            storage.stack.taken(storage.stack.field_position(field))
+        steal = (POINTER_VARIANTS[tkn.text] if self.is_pointer(name, storage)
+                 else tkn.text)
+        if box is None:
+            self.out.emit_at(steal, tkn)
+            self.out.emit(lparen)
+            self.out.emit(owned)
+            return self.value_kill(name, storage, False)
+        # An inline value owns nothing: the box, which value_temps owns,
+        # gives the count
+        rparen = next(tkn_iter)
+        if rparen.kind != "RPAREN":
+            raise analysis_error("Expected ')'", rparen)
+        self.out.emit_at(f"(PyValue_IsInline({name.text}) ? Py_NewRef({box}) "
+                         f": {steal}({owned}))", tkn)
+        self.out.last_token = rparen
         return self.value_kill(name, storage, False)
 
-    def inplace_owner(self, tkn, tkn_iter, uop, storage, inst):
-        "PyValue_MakeHeapSafe(), which takes a count for a local"
+    def take_view(self, tkn, tkn_iter, uop, storage, inst):
+        """TAKE(x): x's value with a count of its own, for a home.  OWNER(x):
+        the owner of x's input, PyValue_NULL for a local, which only
+        IR_RETIRE_PUBLISHED may read.  Both kill x; for a value that is not
+        a view, both are x itself."""
         lparen = next(tkn_iter)
-        field = self.inplace_field(tkn_iter.peek(), storage)
+        name = next(tkn_iter)
+        rparen = next(tkn_iter)
+        if (lparen.kind != "LPAREN" or name.kind != "IDENTIFIER"
+                or rparen.kind != "RPAREN"):
+            raise analysis_error(f"{tkn.text}() takes a variable", tkn)
+        if find_local(name.text, storage) is None:
+            raise analysis_error(
+                f"{tkn.text}({name.text}): not a stack variable", name)
+        field = self.view_field(name, storage)
+        if field is not None:
+            self.spend_owner(field, tkn, storage)
+            texts = [x.text for x in self.statement.contents] \
+                if self.statement is not None else []
+            if tkn.text == "TAKE" and len(texts) == 7 and texts[1] == "=" \
+                    and texts[2] == "TAKE" and any(
+                        var.name == texts[0] for var in storage.outputs):
+                self.taken_outputs.add(texts[0])
         if field is None:
+            text = name.text
+        elif tkn.text == "TAKE":
+            self.ensure_consumed(field, storage)
+            text = f"IR_TAKE({name.text}, {owner_name(field)})"
+            storage.stack.taken(storage.stack.field_position(field))
+        else:
+            self.ensure_consumed(field, storage)
+            text = owner_name(field)
+        self.out.emit_at(text, tkn)
+        self.out.last_token = rparen
+        return self.value_kill(name, storage, False)
+
+    def object_of(self, tkn, tkn_iter, uop, storage, inst):
+        """The object of a value that has an object local reads it: the
+        input's object, or a box that value_temps owns"""
+        lparen = next(tkn_iter)
+        assert lparen.kind == "LPAREN"
+        arg = tkn_iter.peek()
+        var = find_local(arg.text, storage) if arg is not None and arg.kind == "IDENTIFIER" else None
+        if var is not None and var.ir_box is None and var.name in self.box_copies:
+            raise analysis_error(
+                f"{tkn.text}({var.name}): '{var.name}' is a copy of "
+                f"'{self.box_copies[var.name]}', whose object local holds "
+                "its object; read that", tkn)
+        if var is None or var.ir_box is None or tkn_iter.peek() is None:
             self.out.emit(tkn)
             self.out.emit(lparen)
             return True
         name = next(tkn_iter)
-        self.out.emit_at("IR_INPLACE_HEAP_SAFE", tkn)
-        self.out.emit(lparen)
-        self.out.emit(name)
-        self.out.emit(f", {field}")
+        rparen = next(tkn_iter)
+        if rparen.kind != "RPAREN":
+            raise analysis_error(f"{tkn.text}() of '{name.text}' must be its "
+                                 "whole argument", rparen)
+        text = (var.ir_box if tkn.text == "PyValue_AsKnownObjectBorrow"
+                else f"Py_NewRef({var.ir_box})")
+        self.out.emit_at(text, tkn)
+        self.out.last_token = rparen
         return True
 
     def note_pointer_assignment(self, stmt: SimpleStmt, storage: Storage) -> None:
-        """After `a = b;` with b borrowing a local in place, a borrows it
-        too."""
+        """After `a = b;` with b a view, a is a view of the same input"""
         super().note_pointer_assignment(stmt, storage)
         tkns = stmt.contents
         if len(tkns) != 4 or tkns[1].kind != "EQUALS" or tkns[-1].kind != "SEMI":
             return
         source = find_local(tkns[2].text, storage)
-        if source is None or source.ir_inplace is None:
+        if source is None:
+            return
+        if source.ir_box is not None:
+            # The copy holds the value, which may be inline; its object
+            # is the source's object local, which object_of() reads
+            self.box_copies[tkns[0].text] = tkns[2].text
+        if source.ir_inplace is None:
             return
         if self.stores_outputs and any(
                 var.name == tkns[0].text for var in storage.outputs) and not any(
                 var.name == tkns[0].text for var in storage.inputs):
-            # An output that the handler stores owns its value: take the
-            # count here, on this path, rather than at the store, after
-            # paths join.  (An earlier uop's output flows to the next uop,
-            # which may release it only if it names a temporary.)
-            self.out.start_line()
-            self.out.emit(f"IR_INPLACE_OWN({tkns[0].text}, "
-                          f"{FIELD_VARS[source.ir_inplace]});\n")
-            return
+            # An output that the handler stores owns its value
+            raise analysis_error(
+                f"output '{tkns[0].text}' would be a view of "
+                f"'{tkns[2].text}'; assign it TAKE({tkns[2].text})", tkns[0])
+        stack = storage.stack
+        assert isinstance(stack, IRStack)
         for var in storage.inputs + storage.outputs:
             if var.name == tkns[0].text:
                 var.ir_inplace = source.ir_inplace
+                stale = tkns[2].text in stack.stale
+                stack.bind(var.name, stack.field_position(source.ir_inplace))
+                if stale:
+                    stack.stale.add(var.name)
                 return
         # inplace_input_use() keeps such an input out of borrow_mask
         raise analysis_error(
-            f"'{tkns[0].text}', not a stack variable, would borrow a local "
-            f"in place through '{tkns[2].text}'", tkns[0])
+            f"'{tkns[0].text}', not a stack variable, would be a view of "
+            f"'{tkns[2].text}'", tkns[0])
 
     def consume_killed(self, storage: Storage) -> None:
         """Clear the slots of the inputs that the handler has taken: a dead
@@ -2341,6 +2877,210 @@ class IREmitter(Emitter):
                 self.out.start_line()
                 stack.consume(self.out, p)
                 del stack.owner[p]
+
+    def note_view_object(self, stmt: SimpleStmt, storage: Storage,
+                         escapes: bool) -> None:
+        """After `[T *]h = [(T *)]PyValue_AsKnownObjectBorrow(x);` or
+        `[T *]h = [(T *)]_PyValueTemps_Object(temps, x);` with x a view, or
+        `[T *]h = [(T *)]g;` with g such a variable, h holds the object of a
+        view, uncounted, and dangles with it (S7).  So does a pointer that
+        `T *h = <expression>;` or `h = <expression>;`, with h not a stack
+        variable, derives from the object in a statement that runs no code
+        (Py_TYPE(), a field, an address inside it): S7 follows it as the
+        object (fail closed)"""
+        stack = storage.stack
+        assert isinstance(stack, IRStack)
+        tokens = [t for t in stmt.contents if t.kind != "COMMENT"]
+        texts = [t.text for t in tokens]
+        if "=" not in texts or texts[-1] != ";":
+            return
+        eq = texts.index("=")
+        if eq < 1 or tokens[eq - 1].kind != "IDENTIFIER":
+            return
+        name = texts[eq - 1]
+        rhs = texts[eq + 1:-1]
+        while len(rhs) >= 3 and rhs[0] == "(" and ")" in rhs \
+                and rhs.index(")") + 1 < len(rhs):
+            rhs = rhs[rhs.index(")") + 1:]  # A cast, or casts
+        views = {n: p for p, names in stack.views.items() for n in names}
+        source = None
+        if (len(rhs) == 4 and rhs[0] == "PyValue_AsKnownObjectBorrow"
+                and rhs[1] == "(" and rhs[2] in views and rhs[3] == ")"):
+            source = views[rhs[2]]
+        elif (len(rhs) == 6 and rhs[0] == "_PyValueTemps_Object"
+                and rhs[1] == "(" and rhs[3] == "," and rhs[4] in views
+                and rhs[5] == ")"):
+            source = views[rhs[4]]
+        elif len(rhs) == 1 and rhs[0] in stack.view_objects:
+            source = stack.view_objects[rhs[0]]
+        elif not escapes and (
+                eq >= 2 and (texts[eq - 2] == "*" or is_word(tokens[eq - 2])
+                             and not is_value_type(texts[eq - 2]))
+                or eq == 1 and find_local(name, storage) is None):
+            # A declaration of a pointer, or of a type that may be one, or
+            # an assignment to a variable of the body: derived if the
+            # expression reads the object of a view
+            source = object_source(tokens[eq + 1:-1], views,
+                                   stack.view_objects)
+        stale = len(rhs) == 1 and rhs[0] in stack.stale
+        stack.view_objects.pop(name, None)
+        stack.stale.discard(name)
+        if source is not None:
+            stack.view_objects[name] = source
+            if stale:
+                stack.stale.add(name)
+
+    def check_stale_views(self, tokens: list[Token], storage: Storage,
+                          inst: Instruction | None) -> None:
+        """S7 (register-ir-v2-a5b.md 4.8): a view of a local dangles if a
+        call that runs code rebinds the local, so no view loaded before such
+        a call is read after it: the body takes it (TAKE()) before the call.
+        A release, DEAD() or OWNER() reads the field's owner, which a local
+        does not have, and a copy is a stale view itself."""
+        stack = storage.stack
+        if not isinstance(stack, IRStack) or not stack.stale:
+            return
+        texts = [t.text for t in tokens]
+        for i, tkn in enumerate(tokens):
+            if (tkn.kind != "IDENTIFIER" or tkn.text not in stack.stale
+                    or i > 0 and tokens[i - 1].text in (".", "->")):
+                continue
+            if (i + 1 < len(tokens) and tokens[i + 1].kind == "EQUALS"
+                    and (i == 0 or tokens[i - 1].text in (";", "{", "}"))):
+                continue  # A new value
+            prev = tokens[i - 1].text if i > 0 else ""
+            nxt = tokens[i + 1].text if i + 1 < len(tokens) else ""
+            if prev in ("(", ",") and nxt in (")", ","):
+                callee = enclosing_callee(tokens, i) or ""
+                if callee in VIEW_RELEASES or callee in ("DEAD", "OWNER"):
+                    # They read the field's owner, which a local does not
+                    # have, not the view
+                    continue
+            if prev == ")" and nxt == ";" and i >= 3 \
+                    and tokens[i - 2].text == "void":
+                continue
+            if nxt == ";" and (prev == "=" or prev == ")" and "=" in texts[:i]
+                                and texts[texts.index("=") + 1] == "("):
+                # A copy, which is stale too (note_pointer_assignment,
+                # note_view_object)
+                continue
+            what = (f"'{tkn.text}', the object of a view,"
+                    if tkn.text in stack.view_objects else f"view '{tkn.text}'")
+            raise analysis_error(
+                f"{what} is read after a call that can run code and rebind "
+                "its local (S7); TAKE() the view before the call", tkn)
+
+    def check_unsequenced_views(self, stmt: SimpleStmt, call: Token,
+                                storage: Storage) -> None:
+        """S7 within a statement: C does not order the operands of an
+        expression, so a view, or the object of one, read in the statement
+        of a call that can run code, outside the call's designator and
+        arguments (which C evaluates before the call), may be read after
+        the call"""
+        stack = storage.stack
+        if not isinstance(stack, IRStack):
+            return
+        names = {n for ns in stack.views.values() for n in ns}
+        names |= set(stack.view_objects)
+        if not names:
+            return
+        tokens = [t for t in stmt.contents if t.kind != "COMMENT"]
+        call_at = next((i for i, t in enumerate(tokens) if t is call), None)
+        if call_at is None or call_at + 1 >= len(tokens) \
+                or tokens[call_at + 1].text != "(":
+            return
+        start = designator_start(tokens, call_at) - 1
+        depth = 0
+        end = call_at + 1
+        for end in range(call_at + 1, len(tokens)):
+            if tokens[end].text == "(":
+                depth += 1
+            elif tokens[end].text == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+        for i, tkn in enumerate(tokens):
+            if (start < i < end or tkn.kind != "IDENTIFIER"
+                    or tkn.text not in names
+                    or i > 0 and tokens[i - 1].text in (".", "->")):
+                continue
+            if i + 1 < len(tokens) and tokens[i + 1].kind == "EQUALS" \
+                    and (i == 0 or tokens[i - 1].text in ("*", "PyObject",
+                                                          "PyValue")):
+                continue  # The target of the statement
+            raise analysis_error(
+                f"'{tkn.text}' is read in the statement of {call.text}(), "
+                "which can run code, outside its arguments: C may read it "
+                "after the call (S7); read it in a statement before", tkn)
+
+    def object_condition(self, condition: list[Token],
+                         storage: Storage) -> list[Token]:
+        """A condition, which the emitter writes as it is, with the object
+        of each value that has an object local read through it, as
+        object_of() reads it in a statement"""
+        tokens = list(condition)
+        out: list[Token] = []
+        i = 0
+        while i < len(tokens):
+            tkn = tokens[i]
+            var = None
+            if (tkn.text in VALUE_TO_OBJECT and i + 3 < len(tokens)
+                    and tokens[i + 1].text == "(" and tokens[i + 3].text == ")"):
+                var = find_local(tokens[i + 2].text, storage)
+            if var is not None and (var.ir_box is not None
+                                    or var.name in self.box_copies):
+                if (tkn.text != "PyValue_AsKnownObjectBorrow"
+                        or var.ir_box is None):
+                    raise analysis_error(
+                        f"{tkn.text}({var.name}) in a condition: read the "
+                        "object in a statement", tkn)
+                out.append(replace(tkn, kind="IDENTIFIER", text=var.ir_box,
+                                   end=tokens[i + 3].end))
+                i += 4
+                continue
+            out.append(tkn)
+            i += 1
+        return out
+
+    def emit_IfStmt(self, stmt, uop, storage, inst):
+        self.check_stale_views(list(stmt.condition), storage, inst)
+        self.check_spent_views(list(stmt.condition), storage)
+        stmt = replace(stmt, condition=self.object_condition(stmt.condition, storage))
+        return super().emit_IfStmt(stmt, uop, storage, inst)
+
+    def emit_WhileStmt(self, stmt, uop, storage, inst):
+        self.check_stale_views(list(stmt.condition), storage, inst)
+        self.check_spent_views(list(stmt.condition), storage)
+        stmt = replace(stmt, condition=self.object_condition(stmt.condition, storage))
+        return super().emit_WhileStmt(stmt, uop, storage, inst)
+
+    def before_statement(self, stmt: SimpleStmt, storage: Storage,
+                         inst: Instruction | None) -> None:
+        """Take each input whose owner the statement reads, so that the
+        statement can read it; check OWNER's and S7's rules"""
+        tokens = [t for t in stmt.contents if t.kind != "COMMENT"]
+        self.check_stale_views(tokens, storage, inst)
+        self.check_spent_views(tokens, storage)
+        texts = [t.text for t in tokens]
+        if self.pending_owner is not None and self.pending_owner.text in texts \
+                and texts[0] not in ("IR_RETIRE_PUBLISHED", "IR_RETIRE_PUBLISHED_PAIR"):
+            raise analysis_error(
+                f"'{self.pending_owner.text}', the owner that OWNER() gave, is "
+                "NULL for a local: only IR_RETIRE_PUBLISHED may read it; "
+                "use TAKE()", tokens[texts.index(self.pending_owner.text)])
+        for i, tkn in enumerate(tokens):
+            if (tkn.text in OWNER_READS and i + 2 < len(tokens)
+                    and texts[i + 1] == "(" and tokens[i + 2].kind == "IDENTIFIER"):
+                field = self.view_field(tokens[i + 2], storage)
+                if field is not None:
+                    self.ensure_consumed(field, storage)
+            if tkn.text == "OWNER":
+                if not (len(texts) == 8 and texts[0] == "PyValue" and i == 3
+                        and texts[2] == "=" and texts[-1] == ";"):
+                    raise analysis_error(
+                        "OWNER() is the initializer of a PyValue variable, "
+                        "`PyValue receiver = OWNER(owner);`", tkn)
+                self.pending_owner = tokens[1]
 
     def emit_SimpleStmt(self, stmt: SimpleStmt, uop: CodeSection,
                         storage: Storage, inst: Instruction | None
@@ -2357,15 +3097,23 @@ class IREmitter(Emitter):
         self.statement = stmt
         uops = [part for part in inst.parts if isinstance(part, Uop)] if inst else []
         self.stores_outputs = bool(uops) and uops[-1] is uop
+        escape = uop.properties.escaping_calls.get(stmt)
+        if escape is not None and self.pending_owner is not None:
+            raise analysis_error(
+                f"code can run between OWNER() and IR_RETIRE_PUBLISHED, so "
+                f"'{self.pending_owner.text}' must own a count; use TAKE()",
+                escape.call)
+        self.before_statement(stmt, storage, inst)
+        if escape is not None:
+            self.check_unsequenced_views(stmt, escape.call, storage)
         if transaction_marker:
             # Their handlers explicitly publish/refresh captured homes and
             # terminal state. Automatic post-call spill/reload would instead
             # republish stale C inputs after actual destination publication.
             self.cannot_escape = True
         # An escaping release kills its input before the statement is
-        # emitted (Emitter.emit_SimpleStmt); remember whether it borrows
+        # emitted (Emitter.emit_SimpleStmt); remember whether it is a view
         self.killed_inplace = None
-        escape = uop.properties.escaping_calls.get(stmt)
         if escape is not None and escape.kills is not None and not self.cannot_escape:
             killed = find_local(escape.kills.text, storage)
             if killed is not None and killed.ir_inplace is not None:
@@ -2376,6 +3124,16 @@ class IREmitter(Emitter):
             self.cannot_escape = previous
             self.statement = None
             self.killed_inplace = None
+        stack = storage.stack
+        assert isinstance(stack, IRStack)
+        for target in uop.local_stores:
+            if target in stmt.contents:
+                var = find_local(target.text, storage)
+                if var is not None and var.ir_inplace is None and not var.is_array():
+                    stack.bind(var.name, None)
+        self.note_view_object(stmt, storage, escape is not None)
+        if escape is not None or transaction_marker:
+            stack.code_ran()
         if reachable:
             self.consume_killed(storage)
         return reachable, tkn, storage
@@ -2389,13 +3147,14 @@ class IREmitter(Emitter):
         inst: Instruction | None,
     ) -> bool:
         """In register style, close each input from the top after clearing
-        its slot; an output defined before stays in its variable."""
+        its slot; an output defined before stays in its variable.  A view's
+        release is its owner's."""
         stack = storage.stack
         assert isinstance(stack, IRStack)
         if stack.layout.window or self.cannot_escape:
             if any(var.ir_inplace is not None for var in storage.inputs):
                 raise analysis_error(
-                    "DECREF_INPUTS here would release a local's reference", tkn)
+                    "DECREF_INPUTS here would release a view", tkn)
             return super().decref_inputs(tkn, tkn_iter, uop, storage, inst)
         next(tkn_iter)
         next(tkn_iter)
@@ -2407,6 +3166,12 @@ class IREmitter(Emitter):
             if var.is_array():
                 raise analysis_error("register-style array input", tkn)
             close = "PyValue_XCLOSE" if "null" in var.name else "PyValue_CLOSE"
+            name = var.name
+            if var.ir_inplace is not None:
+                close = "PyValue_XCLOSE"
+                self.spend_owner(var.ir_inplace, tkn, storage)
+                self.ensure_consumed(var.ir_inplace, storage)
+                name = owner_name(var.ir_inplace)
             if var.known_object:
                 close = f"_{close}_POINTER"
             self.out.start_line()
@@ -2414,12 +3179,10 @@ class IREmitter(Emitter):
             if p is not None and stack.owner.get(p) == "in":
                 stack.consume(self.out, p)
                 del stack.owner[p]
-            if var.ir_inplace is not None:
-                # Only a temporary's value is the handler's to release
-                self.emit(f"if (!IR_IS_LOCAL({FIELD_VARS[var.ir_inplace]})) ")
-            self.emit(f"{close}({var.name});\n")
+            self.emit(f"{close}({name});\n")
             var.kill()
         storage.clear_inputs("after DECREF_INPUTS")
+        stack.code_ran()
         return True
 
     def goto_error(self, offset: int, storage: Storage) -> str:
@@ -2432,6 +3195,62 @@ class IREmitter(Emitter):
         stack.flush(self.out)
         return f"{self.jump_prefix}JUMP_TO_LABEL(error);"
 
+    def check_exit_inputs(self, tkn: Token, storage: Storage,
+                          what: str | None = None) -> None:
+        """A DEOPT_IF or EXIT_IF goes to the generic instruction, and
+        DISPATCH_SAME_OPARG runs the handler again: either reads the inputs
+        from their slots, so none may have been taken or consumed"""
+        stack = storage.stack
+        if not isinstance(stack, IRStack) or stack.layout.window:
+            return
+        consumed = [p for p in sorted(stack.layout.borrowable)
+                    if stack.owner.get(p) != "in"]
+        if consumed or stack.spent:
+            field = (stack.layout.in_fields[consumed[0]] if consumed
+                     else next(iter(stack.spent)))
+            raise analysis_error(
+                f"{what or tkn.text} after the handler took the input in field "
+                f"{field}: the instruction it goes to would read a cleared "
+                "slot, and the taken value would leak; test before the "
+                "TAKE() or release", tkn)
+
+    def check_owner_exit(self, tkn: Token) -> None:
+        """No error exit between OWNER() and IR_RETIRE_PUBLISHED: the owner
+        that OWNER() gave holds a temporary's count, which the exit would
+        leak"""
+        if self.pending_owner is not None:
+            raise analysis_error(
+                f"{tkn.text} between OWNER() and IR_RETIRE_PUBLISHED would "
+                f"leak '{self.pending_owner.text}'; exit before the OWNER() "
+                "or after the retire", tkn)
+
+    def deopt_if(self, tkn, tkn_iter, uop, storage, inst):
+        self.check_exit_inputs(tkn, storage)
+        return super().deopt_if(tkn, tkn_iter, uop, storage, inst)
+
+    def exit_if(self, tkn, tkn_iter, uop, storage, inst):
+        self.check_exit_inputs(tkn, storage)
+        return super().exit_if(tkn, tkn_iter, uop, storage, inst)
+
+    def check_error_outputs(self, tkn: Token, storage: Storage) -> None:
+        """An error exit stores no output, so no output may hold a TAKE()
+        result then: the exit would leak its count"""
+        for var in storage.outputs:
+            if var.name in self.taken_outputs and var.in_local:
+                raise analysis_error(
+                    f"{tkn.text} while output '{var.name}' holds a TAKE() "
+                    "result, whose count the error exit would leak; exit "
+                    "before the TAKE()", tkn)
+
+    def error_if(self, tkn, tkn_iter, uop, storage, inst):
+        self.check_owner_exit(tkn)
+        self.check_error_outputs(tkn, storage)
+        return super().error_if(tkn, tkn_iter, uop, storage, inst)
+
+    def goto_label(self, goto: Token, label: Token, storage: Storage) -> None:
+        self.check_owner_exit(goto)
+        super().goto_label(goto, label, storage)
+
     def error_no_pop(
         self,
         tkn: Token,
@@ -2441,6 +3260,8 @@ class IREmitter(Emitter):
         inst: Instruction | None,
     ) -> bool:
         "The inputs stay in their slots"
+        self.check_owner_exit(tkn)
+        self.check_error_outputs(tkn, storage)
         self.out.start_line()
         return super().error_no_pop(tkn, tkn_iter, uop, storage, inst)
 
@@ -2529,13 +3350,15 @@ class IREmitter(Emitter):
         storage: Storage,
         inst: Instruction | None,
     ) -> bool:
-        "The handler runs again on the same word, and reads its inputs again"
+        """The handler runs again on the same word, and reads its inputs
+        again; the path ends here"""
         assert inst is not None
+        self.check_exit_inputs(tkn, storage)
         if uses_call_transaction(inst):
             self.emit(f"if (call.effects) {{ goto {self.call_fallback}; }}\n")
             self.call_fallback_used = True
         self.emit(tkn)
-        return True
+        return False
 
     def emit_jump_to_predicted(self, inst: Instruction | None) -> None:
         assert inst is not None
@@ -2588,50 +3411,59 @@ class IREmitter(Emitter):
         return True
 
     def emit_object_inputs(
-        self, uop: Uop, storage: Storage, inst: Instruction | None, stack_read_later: bool
+        self, uop: Uop, storage: Storage, inst: Instruction | None
     ) -> None:
-        """Inputs read through a field: check, and box an inline value.  A
-        box belongs to the handler, as the box of the temporary that
-        LOAD_FAST_BORROW pushed would: a temporary's goes back to its slot,
-        and a local keeps its inline value.  An object read through a field
-        that names a local is the slot's, borrowed in place (see
-        inplace_input_use())."""
+        """The inputs that uop reads as objects (PyObject *).  A guard exits
+        if one holds an inline value; it is then known to be an object for
+        the rest of the instruction.  Any other uop reads it through an
+        object local, ir_obj_<name>: the input's object, or a box of an
+        inline value that value_temps owns, made out of line.  The input
+        keeps its canonical value (register-ir-v2-a5b.md, 4.5)."""
         for var in storage.inputs:
+            if var.name in uop.asserted_objects:
+                var.known_object = True
             if var.ir_inplace is not None:
                 self.check_inplace_input(uop, var.name, inst)
-        kept = {item.name for item in uop.stack.outputs}
+        if uop.properties.inline_ok:
+            return
+        guard = uop.is_guard()
         for var in storage.inputs:
-            if var.ir_field is None or var.known_object or var.ir_borrowed:
+            if (var.name not in uop.object_inputs or var.known_object
+                    or var.ir_box is not None):
                 continue
-            converts = not uop.properties.inline_ok and (
-                var.name in uop.object_inputs or var.name in uop.asserted_objects)
-            if not converts:
-                if var.name in kept and not assigns_to(uop, var.name):
-                    continue  # An inspection, see classify_inputs()
-                assert inst is not None
-                raise analysis_error(
-                    f"{inst.name}: input '{var.name}' may name a borrowed "
-                    f"local but {uop.name} consumes it as is", inst.where)
-            if var.name not in uop.asserted_objects:
-                self.out.start_line()
-                if uop.is_guard():
-                    self.emit(f"if (Py_UNLIKELY(!PyValue_IsPointerSpace({var.name}))) {{\n")
-                    self.emit_jump_to_predicted(inst)
-                else:
-                    self.check_boxed_input(uop, var.name, inst)
-                    self.emit(f"if (Py_UNLIKELY(PyValue_IsInline({var.name}))) {{\n")
-                    self.emit(f"{var.name} = PyValue_Box({var.name});\n")
-                    self.emit(f"if (PyValue_IsInline({var.name})) {{\n")
-                    storage.stack.copy().flush(self.out)
-                    self.emit(f"{self.jump_prefix}JUMP_TO_LABEL(error);\n")
-                    self.emit("}\n")
-                    if inst is not None:
-                        self.emit(f"BOX_STAT_INC({inst.name});\n")
-                    self.emit(f"IR_KEEP_BOX({var.name});\n")
+            self.out.start_line()
+            # Test the slot rather than the local where the slot holds the
+            # value, which is cheaper (see _PyValue_TopBitsAt())
+            ref = var.name
+            at = ""
+            if var.memory_offset is not None and var.ir_inplace is None:
+                ref = f"&{storage.stack.address(var.memory_offset)}"
+                at = "At"
+            if guard:
+                if inst is not None:
+                    self.check_exit_inputs(inst.where, storage,
+                                           f"The guard of {uop.name}")
+                self.emit(f"if (Py_UNLIKELY(!PyValue_IsPointerSpace{at}({ref}))) {{\n")
+                self.emit_jump_to_predicted(inst)
                 self.emit("}\n")
-            var.known_object = True
-            var.ir_borrowed = True
-        super().emit_object_inputs(uop, storage, inst, stack_read_later)
+                var.known_object = True
+                continue
+            box = f"ir_obj_{var.name}"
+            self.boxes.add(box)
+            self.emit(f"if (Py_UNLIKELY(PyValue_IsInline{at}({ref}))) {{\n")
+            self.emit(f"{box} = _PyValueTemps_Box(value_temps, {var.name});\n")
+            self.emit(f"if ({box} == NULL) {{\n")
+            # Every input is still in its slot: exception_unwind has them
+            storage.stack.copy().flush(self.out)
+            self.emit(f"{self.jump_prefix}JUMP_TO_LABEL(error);\n")
+            self.emit("}\n")
+            if inst is not None:
+                self.emit(f"BOX_STAT_INC({inst.name});\n")
+            self.emit("}\n")
+            self.emit("else {\n")
+            self.emit(f"{box} = PyValue_AsKnownObjectBorrow({var.name});\n")
+            self.emit("}\n")
+            var.ir_box = box
 
 
 def write_uop(
@@ -2647,6 +3479,7 @@ def write_uop(
         emitter.emit(f"// flush\n")
         stack.flush(emitter.out)
         return True, stack
+    emitter.box_copies = {}
     emitter.out.start_line()
     if braces:
         emitter.out.emit(f"// {uop.name}\n")
@@ -2661,8 +3494,12 @@ def write_uop(
             emitter.emit(value + "\n")
             if inst.family is None:
                 emitter.emit(f"(void){cache.name};\n")
-    emitter.emit_object_inputs(uop, storage, inst, stack_read_later(inst, uop))
+    emitter.emit_object_inputs(uop, storage, inst)
     reachable, storage = emitter.emit_tokens(uop, storage, inst, False)
+    if emitter.pending_owner is not None:
+        raise analysis_error(
+            f"OWNER() gave '{emitter.pending_owner.text}', which no "
+            f"IR_RETIRE_PUBLISHED of {uop.name} retires", emitter.pending_owner)
     if (emitter.helper and uop.name.startswith("_SPECIALIZE_") and
             any(t.text == "DISPATCH_SAME_OPARG" for t in uop.body.tokens())):
         emitter.out.start_line()
@@ -2745,7 +3582,38 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
     With record, the handler sets up a value record, value_temps, for the
     boxes it makes of inline inputs.  Without it, value_temps is NULL, so
     the dispatch macros finish no bridges: only a handler that boxes
-    (boxing_handlers, the contract's BOXES) needs one."""
+    (boxing_handlers, the contract's BOXES) needs one.
+
+    The handler is generated twice.  The first pass, to no output, finds
+    the role of each C variable, a view or an owner, and the object
+    locals; the second declares them, a view as a PyValueBorrow (S8).  A
+    name with both roles is refused: the DSL gives the owner another name,
+    as `taken = TAKE(value)` does."""
+    saved = emitter.out
+    roles: dict[str, set[str]] = {}
+    emitter.boxes = set()
+    emitter.declared_roles = {}
+    emitter.out = CWriter.null()
+    try:
+        emit_handler(name, inst, fmt, emitter, emitter.out, record, roles)
+    finally:
+        emitter.out = saved
+    for var, kinds in sorted(roles.items()):
+        if len(kinds) > 1:
+            raise analysis_error(
+                f"{name}: '{var}' is a view (PyValueBorrow) and an owner "
+                f"(PyValue) in one handler; give one of them another name",
+                inst.where)
+    emitter.declared_roles = roles
+    emit_handler(name, inst, fmt, emitter, out, record, {})
+
+
+def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
+                 emitter: IREmitter, out: CWriter, record: bool,
+                 roles: dict[str, set[str]]) -> None:
+    "One pass of generate_handler, which records the roles it finds"
+    emitter.pending_owner = None
+    emitter.taken_outputs = set()
     operation = None
     emitter.has_record = record
     nofb = name == inst.name + NOFB_SUFFIX
@@ -2901,13 +3769,15 @@ def generate_handler(name: str, inst: Instruction, fmt: IRFormat,
         out.emit("}\n")
     elif mode == STORE_NEVER:
         out.emit(f"assert(!IR_IS_LOCAL({FIELD_VARS[fmt.field_of(ROLE_DST)]}));\n")
-    declare_variables(inst, out)
-    raw_inputs: set[int] = set()
-    if fmt.borrow_mask:
-        uses = classify_inputs(inst, fmt.n_inputs)
-        raw_inputs = {k - fmt.n_inputs for k in range(fmt.n_inputs)
-                      if fmt.borrow_mask & (1 << k) and uses[k] == "raw"}
-    stack: Stack = IRStack(slot_layout(inst, fmt, mode), raw_inputs)
+    declare_variables(inst, out, emitter.declared_roles)
+    for k in range(fmt.n_inputs):
+        if fmt.borrow_mask & (1 << k):
+            own = owner_name(fmt.input_field(k))
+            out.emit(f"PyValue {own} = PyValue_NULL;\n")
+            out.emit(f"(void){own};\n")
+    for box in sorted(emitter.boxes):
+        out.emit(f"PyObject *{box} = NULL;\n")
+    stack: Stack = IRStack(slot_layout(inst, fmt, mode), roles)
     insert_braces = len([p for p in inst.parts if isinstance(p, Uop)]) > 1
     reachable = True
     for part in inst.parts:
@@ -3171,7 +4041,6 @@ CONSTRUCTOR = re.compile(r"New(?!Ref)|Alloc|^PyValue_From|_PyFrame_Push|_Py_Make
 NON_BOXING_CALLS = {"finish_displaced_local", "retire_published_values",
                     "value_attribute_complete", "value_operation_finish",
                     "value_reader_complete"}
-BOXING_MACROS = {"IR_KEEP_BOX"}
 
 
 def enclosing_call_name(code: str, end: int) -> str | None:
@@ -3193,8 +4062,6 @@ def enclosing_call_name(code: str, end: int) -> str | None:
 
 def boxes_into_record(code: str) -> bool:
     "Whether the generated code of a handler may box into value_temps"
-    if re.search(r"\b(?:%s)\b" % "|".join(sorted(BOXING_MACROS)), code):
-        return True
     for m in re.finditer(r"\bvalue_temps\b", code):
         before, after = code[:m.start()], code[m.end():]
         if (re.match(r"\s*=\s*&value_owners\s*;", after)

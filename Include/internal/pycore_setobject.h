@@ -34,6 +34,10 @@ PyAPI_DATA(PyObject *) _PySet_Dummy;
 
 PyAPI_FUNC(int) _PySet_Contains(PySetObject *so, PyObject *key);
 
+// The reader macro of PySet_ContainsValue() (Include/cpython/setobject.h):
+// the core passes owners and borrows alike.
+#define PySet_ContainsValue(S, K) (PySet_ContainsValue)(S, PyValue_Borrow(K))
+
 // Clears the set without acquiring locks. Used by _PyCode_Fini.
 extern void _PySet_ClearInternal(PySetObject *so);
 

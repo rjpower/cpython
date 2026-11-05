@@ -529,6 +529,18 @@ BORROW_TESTS = {
               r"type 'PyValueBorrow \*'|incompatible pointer types "
               r"initializing 'PyValue \*' with an expression of type "
               r"'PyValueBorrow \*'"),
+    # Unit 7: a handler's store of a view to dst, against the real macros
+    "borrow_stored_to_dst": (f"""
+        #include "{SRCDIR}/Python/ceval.h"
+        #include "{SRCDIR}/Python/ceval_macros.h"
+        void f(PyThreadState *tstate, _PyInterpreterFrame *frame,
+               PyValue *slots, PyValueBorrow b) {{
+            PyValue ir_displaced = PyValue_NULL;
+            IR_STORE_DST(0, b);  /* rejected */
+            (void)ir_displaced;
+        }}""", r"passing argument 1 of '_PyValue_Publish' from incompatible "
+              r"pointer type|incompatible pointer types passing "
+              r"'PyValueBorrow \*' to parameter of type 'PyValue \*'"),
     "borrow_returned_as_owner": ("""
         PyValue f(PyValueBorrow b) {
             return b;  /* rejected */

@@ -853,6 +853,14 @@ PyValue_XCLOSE(PyValue ref)
     }
 }
 
+static inline void
+PyValue_XCLOSE_SPECIALIZED(PyValue ref, destructor destruct)
+{
+    if (PyValue_RefcountOnObject(ref)) {
+        Py_DECREF_MORTAL_SPECIALIZED(BITS_TO_PTR(ref), destruct);
+    }
+}
+
 #define PyValue_CLEAR(REF) \
     do { \
         PyValue *_tmp_op_ptr = &(REF); \
@@ -911,6 +919,14 @@ static inline void
 _PyValue_CLOSE_SPECIALIZED_POINTER(PyValue ref, destructor destruct)
 {
     if (_PyValue_PointerOwnsCount(ref)) {
+        Py_DECREF_MORTAL_SPECIALIZED(BITS_TO_PTR(ref), destruct);
+    }
+}
+
+static inline void
+_PyValue_XCLOSE_SPECIALIZED_POINTER(PyValue ref, destructor destruct)
+{
+    if (!PyValue_IsNull(ref) && _PyValue_PointerOwnsCount(ref)) {
         Py_DECREF_MORTAL_SPECIALIZED(BITS_TO_PTR(ref), destruct);
     }
 }

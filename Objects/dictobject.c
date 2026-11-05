@@ -1314,8 +1314,8 @@ start:
 }
 
 int
-_PyDict_GetValue_KnownHash(PyObject *op, PyValue key, Py_hash_t hash,
-                         PyValue *result)
+(_PyDict_GetValue_KnownHash)(PyObject *op, PyValueBorrow key, Py_hash_t hash,
+                           PyValue *result)
 {
     *result = PyValue_NULL;
     if (!PyAnyDict_Check(op)) {
@@ -1327,7 +1327,7 @@ _PyDict_GetValue_KnownHash(PyObject *op, PyValue key, Py_hash_t hash,
 
     /* Equality can remove the query's last external owner. Capture the found
      * value before releasing our query pin, which can itself reenter. */
-    PyValue query = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(key));
+    PyValue query = PyValue_NewRef(key);
     PyValue value = PyValue_NULL;
     Py_ssize_t ix = _Py_dict_lookup((PyDictObject *)op, query, hash, &value);
     PyValue owned = PyValue_NULL;
@@ -1977,7 +1977,7 @@ dict_unhashable_type(PyObject *op, PyObject *key)
 /* The cached hash of an exact str key, or -1 if key is not one or has none
    (the dictionary fast path of _PyObject_HashDictKey()). */
 static inline Py_hash_t
-cached_str_hash(PyValue key)
+cached_str_hash(PyValueBorrow key)
 {
     if (!PyValue_IsObject(key)) {
         return -1;
@@ -1990,7 +1990,7 @@ cached_str_hash(PyValue key)
 }
 
 int
-PyDict_GetValue(PyObject *op, PyValue key, PyValue *result)
+(PyDict_GetValue)(PyObject *op, PyValueBorrow key, PyValue *result)
 {
     *result = PyValue_NULL;
     if (!PyAnyDict_Check(op) || !PyValue_IsLanguageValue(key)) {
@@ -2004,7 +2004,7 @@ PyDict_GetValue(PyObject *op, PyValue key, PyValue *result)
         return _PyDict_GetValue_KnownHash(op, key, cached, result);
     }
     PyObject *dict_owner = Py_NewRef(op);
-    PyValue query = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(key));
+    PyValue query = PyValue_NewRef(key);
     PyValue value = PyValue_NULL;
     Py_hash_t hash = _PyValue_Hash(query);
     int status = -1;
@@ -2044,7 +2044,7 @@ PyDict_GetValueString(PyObject *op, const char *key, PyValue *result)
 }
 
 int
-PyDict_ContainsValue(PyObject *op, PyValue key)
+(PyDict_ContainsValue)(PyObject *op, PyValueBorrow key)
 {
     Py_hash_t cached = cached_str_hash(key);
     if (cached != -1) {
@@ -2325,7 +2325,7 @@ _PyDict_SetValue_Take2_KnownHash(PyDictObject *mp, PyValue key, PyValue value,
 }
 
 int
-PyDict_SetValue(PyObject *op, PyValue key, PyValue value)
+(PyDict_SetValue)(PyObject *op, PyValueBorrow key, PyValueBorrow value)
 {
     assert(PyValue_IsLanguageValue(key) && PyValue_IsLanguageValue(value));
     if (!PyDict_Check(op)) {
@@ -2338,8 +2338,8 @@ PyDict_SetValue(PyObject *op, PyValue key, PyValue value)
         return -1;
     }
     return _PyDict_SetValue_Take2((PyDictObject *)op,
-        PyValue_MakeHeapSafe(_PyValue_BorrowTagged(key)),
-        PyValue_MakeHeapSafe(_PyValue_BorrowTagged(value)));
+        PyValue_NewRef(key),
+        PyValue_NewRef(value));
 }
 
 int
@@ -2569,7 +2569,7 @@ done:
 }
 
 int
-PyDict_DelValue(PyObject *op, PyValue key)
+(PyDict_DelValue)(PyObject *op, PyValueBorrow key)
 {
     assert(PyValue_IsLanguageValue(key));
     if (!PyDict_Check(op)) {
@@ -2581,7 +2581,7 @@ PyDict_DelValue(PyObject *op, PyValue key)
         }
         return -1;
     }
-    PyValue query = PyValue_MakeHeapSafe(_PyValue_BorrowTagged(key));
+    PyValue query = PyValue_NewRef(key);
     Py_hash_t hash = _PyValue_Hash(query);
     int status = -1;
     if (hash != -1) {

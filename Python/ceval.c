@@ -1399,7 +1399,7 @@ _PyEval_GetIter(PyValue iterable, PyValue *index_or_null, int yield_from)
     return PyValue_FromPyObjectSteal(iter_o);
 }
 
-int _PyEval_StoreName(PyThreadState *tstate, PyValue v, PyObject *name, PyObject* ns)
+int (_PyEval_StoreName)(PyThreadState *tstate, PyValueBorrow v, PyObject *name, PyObject* ns)
 {
     int deletion = PyValue_IsNull(v);
 
@@ -4374,7 +4374,7 @@ _PyEval_UnpackIndices(PyObject *start, PyObject *stop,
 /* The bounds of a slice with no step, as PySlice_Unpack() gives them, if
    start and stop are each an inline int or None, and one is an inline int. */
 static bool
-inline_slice_bounds(PyValue start, PyValue stop,
+inline_slice_bounds(PyValueBorrow start, PyValueBorrow stop,
                     Py_ssize_t *istart, Py_ssize_t *istop)
 {
     if (!PyValue_IsInlineInt(start) && !PyValue_IsInlineInt(stop)) {
@@ -4405,7 +4405,7 @@ inline_slice_bounds(PyValue start, PyValue stop,
    borrowed reference to the object ref holds or to the box, or NULL with an
    exception set if boxing fails. */
 static PyObject *
-borrow_or_box(PyValue ref, PyObject **box)
+borrow_or_box(PyValueBorrow ref, PyObject **box)
 {
     if (PyValue_IsInline(ref)) {
         *box = PyValue_AsObject(ref);
@@ -4414,6 +4414,7 @@ borrow_or_box(PyValue ref, PyObject **box)
     *box = NULL;
     return PyValue_AsKnownObjectBorrow(ref);
 }
+#define borrow_or_box(V0, V1) (borrow_or_box)(PyValue_Borrow(V0), V1)
 
 static PyObject *
 binary_slice(PyObject *container, PyObject *start, PyObject *stop)
@@ -4438,7 +4439,7 @@ binary_slice(PyObject *container, PyObject *start, PyObject *stop)
 
 // container[start:stop], for BINARY_SLICE.
 PyObject *
-_PyEval_BinarySlice(PyValue container_st, PyValue start_st, PyValue stop_st)
+(_PyEval_BinarySlice)(PyValueBorrow container_st, PyValueBorrow start_st, PyValueBorrow stop_st)
 {
     Py_ssize_t start, stop;
     if (PyValue_IsPointerSpace(container_st) &&
@@ -4482,8 +4483,8 @@ done:
 // container[start:stop] = v, for STORE_SLICE. Return 0, or -1 with an
 // exception set.
 int
-_PyEval_StoreSlice(PyValue v_st, PyValue container_st,
-                   PyValue start_st, PyValue stop_st)
+(_PyEval_StoreSlice)(PyValueBorrow v_st, PyValueBorrow container_st,
+                   PyValueBorrow start_st, PyValueBorrow stop_st)
 {
     Py_ssize_t start, stop;
     if (PyValue_IsPointerSpace(v_st) && PyValue_IsPointerSpace(container_st) &&

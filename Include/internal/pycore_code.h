@@ -192,30 +192,44 @@ extern int _PyCode_SafeAddr2Line(PyCodeObject *co, int addr);
 
 PyAPI_FUNC(void) _Py_Specialize_LoadSuperAttr(PyValue global_super, PyValue cls,
                                          _PyInstr *instr, int load_method);
-PyAPI_FUNC(void) _Py_Specialize_LoadAttr(PyValue owner, _PyInstr *instr,
+PyAPI_FUNC(void) _Py_Specialize_LoadAttr(PyValueBorrow owner, _PyInstr *instr,
                                     PyObject *name);
-PyAPI_FUNC(void) _Py_Specialize_StoreAttr(PyValue owner, _PyInstr *instr,
+#define _Py_Specialize_LoadAttr(V0, V1, V2) \
+    (_Py_Specialize_LoadAttr)(PyValue_Borrow(V0), V1, V2)
+PyAPI_FUNC(void) _Py_Specialize_StoreAttr(PyValueBorrow owner, _PyInstr *instr,
                                      PyObject *name);
+#define _Py_Specialize_StoreAttr(V0, V1, V2) \
+    (_Py_Specialize_StoreAttr)(PyValue_Borrow(V0), V1, V2)
 PyAPI_FUNC(void) _Py_Specialize_LoadGlobal(PyObject *globals, PyObject *builtins,
                                       _PyInstr *instr, PyObject *name);
-PyAPI_FUNC(void) _Py_Specialize_StoreSubscr(PyValue container, PyValue sub,
+PyAPI_FUNC(void) _Py_Specialize_StoreSubscr(PyValueBorrow container, PyValueBorrow sub,
                                        _PyInstr *instr);
+#define _Py_Specialize_StoreSubscr(V0, V1, V2) \
+    (_Py_Specialize_StoreSubscr)(PyValue_Borrow(V0), PyValue_Borrow(V1), V2)
 PyAPI_FUNC(void) _Py_Specialize_Call(PyValue callable, PyValue self_or_null,
                                 _PyInstr *instr, int nargs);
 PyAPI_FUNC(void) _Py_Specialize_CallKw(PyValue callable, _PyInstr *instr,
                                   int nargs);
-PyAPI_FUNC(void) _Py_Specialize_BinaryOp(PyValue lhs, PyValue rhs, _PyInstr *instr,
+PyAPI_FUNC(void) _Py_Specialize_BinaryOp(PyValueBorrow lhs, PyValueBorrow rhs, _PyInstr *instr,
                                     int oparg, PyValue *locals);
-PyAPI_FUNC(void) _Py_Specialize_CompareOp(PyValue lhs, PyValue rhs,
+#define _Py_Specialize_BinaryOp(V0, V1, V2, V3, V4) \
+    (_Py_Specialize_BinaryOp)(PyValue_Borrow(V0), PyValue_Borrow(V1), V2, V3, V4)
+PyAPI_FUNC(void) _Py_Specialize_CompareOp(PyValueBorrow lhs, PyValueBorrow rhs,
                                      _PyInstr *instr, int oparg);
+#define _Py_Specialize_CompareOp(V0, V1, V2, V3) \
+    (_Py_Specialize_CompareOp)(PyValue_Borrow(V0), PyValue_Borrow(V1), V2, V3)
 PyAPI_FUNC(void) _Py_Specialize_UnpackSequence(PyValue seq, _PyInstr *instr,
                                           int oparg);
 PyAPI_FUNC(void) _Py_Specialize_ForIter(PyValue iter, PyValue null_or_index, _PyInstr *instr, int oparg);
 PyAPI_FUNC(void) _Py_Specialize_Send(PyValue receiver, _PyInstr *instr);
 PyAPI_FUNC(void) _Py_Specialize_ToBool(PyValue value, _PyInstr *instr);
-PyAPI_FUNC(void) _Py_Specialize_PopJumpIf(PyValue value, _PyInstr *instr);
-PyAPI_FUNC(void) _Py_Specialize_ContainsOp(PyValue item, PyValue value,
+PyAPI_FUNC(void) _Py_Specialize_PopJumpIf(PyValueBorrow value, _PyInstr *instr);
+#define _Py_Specialize_PopJumpIf(V0, V1) \
+    (_Py_Specialize_PopJumpIf)(PyValue_Borrow(V0), V1)
+PyAPI_FUNC(void) _Py_Specialize_ContainsOp(PyValueBorrow item, PyValueBorrow value,
                                            _PyInstr *instr);
+#define _Py_Specialize_ContainsOp(V0, V1, V2) \
+    (_Py_Specialize_ContainsOp)(PyValue_Borrow(V0), PyValue_Borrow(V1), V2)
 PyAPI_FUNC(void) _Py_GatherStats_GetIter(PyValue iterable);
 PyAPI_FUNC(void) _Py_Specialize_CallFunctionEx(PyValue func_st, _PyInstr *instr);
 PyAPI_FUNC(void) _Py_Specialize_GetIter(PyValue iterable, _PyInstr *instr);
@@ -319,20 +333,18 @@ adaptive_counter_backoff(_Py_BackoffCounter counter) {
 /* Specialization Extensions */
 
 /* callbacks for an external specialization */
-typedef int (*binaryopguardfunc)(PyObject *lhs, PyObject *rhs);
 typedef PyObject *(*binaryopactionfunc)(PyObject *lhs, PyObject *rhs);
 
 typedef struct {
     int oparg;
-    binaryopguardfunc guard;
     binaryopactionfunc action;
     /* Static type of the result, or NULL if unknown. */
     PyTypeObject *result_type;
     /* Nonzero iff `action` always returns a freshly allocated object (not
        aliased to either operand). */
     int result_unique;
-    /* Expected types of the left and right operands, checked instead of
-       calling `guard` when `guard` is NULL. NULL means unknown. */
+    /* Expected types of the left and right operands, which the handler
+       checks. NULL means unknown. */
     PyTypeObject *lhs_type;
     PyTypeObject *rhs_type;
 } _PyBinaryOpSpecializationDescr;

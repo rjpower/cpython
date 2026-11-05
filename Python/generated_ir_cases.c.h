@@ -39,13 +39,17 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_ADD;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -61,14 +65,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -108,16 +112,20 @@
             INSTRUCTION_STATS(BINARY_OP_ADD_FLOAT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValueBorrow value;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _BINARY_OP_ADD_FLOAT
             {
-                right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                right = IR_VIEW(IR_FIELD_C(this_instr));
+                left = IR_VIEW(IR_FIELD_B(this_instr));
                 double a, b;
                 if (!PyValue_FloatOperandValues(left, right, &a, &b)) {
                     UPDATE_MISS_STATS(BINARY_OP);
@@ -130,20 +138,22 @@
                 }
                 l = left;
                 r = right;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), l);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), r);
             }
             // _POP_TOP_NUMBER
             {
                 value = r;
+                (void)value;
                 assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyFloat_OrLongExactDealloc);
             }
             // _POP_TOP_NUMBER
             {
                 value = l;
+                (void)value;
                 assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyFloat_OrLongExactDealloc);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -169,15 +179,19 @@
             INSTRUCTION_STATS(BINARY_OP_ADD_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue value;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow value;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue res;
-            PyValue l;
-            PyValue r;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                value = IR_VIEW(IR_FIELD_C(this_instr));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -185,7 +199,7 @@
             }
             // _GUARD_NOS_INT
             {
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                left = IR_VIEW(IR_FIELD_B(this_instr));
                 if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -194,6 +208,7 @@
             // _BINARY_OP_ADD_INT
             {
                 right = value;
+                (void)right;
                 int64_t a = _PyValue_IntScaled(left);
                 int64_t b = _PyValue_IntScaled(right);
                 int64_t sum;
@@ -209,20 +224,22 @@
                 }
                 l = left;
                 r = right;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), l);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), r);
             }
             // _POP_TOP_INT
             {
                 value = r;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
             }
             // _POP_TOP_INT
             {
                 value = l;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -248,16 +265,20 @@
             INSTRUCTION_STATS(BINARY_OP_ADD_UNICODE);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue value;
-            PyValue nos;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow value;
+            PyValueBorrow nos;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue res;
-            PyValue l;
-            PyValue r;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _GUARD_TOS_UNICODE
             {
-                value = IR_SLOT(IR_FIELD_C(this_instr));
+                value = IR_VIEW(IR_FIELD_C(this_instr));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(value))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -270,7 +291,7 @@
             }
             // _GUARD_NOS_UNICODE
             {
-                nos = IR_SLOT(IR_FIELD_B(this_instr));
+                nos = IR_VIEW(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(nos))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -284,7 +305,9 @@
             // _BINARY_OP_ADD_UNICODE
             {
                 right = value;
+                (void)right;
                 left = nos;
+                (void)left;
                 PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
                 PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
                 assert(PyUnicode_CheckExact(left_o));
@@ -297,20 +320,22 @@
                 res = PyValue_FromPyObjectSteal(res_o);
                 l = left;
                 r = right;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), l);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), r);
             }
             // _POP_TOP_UNICODE
             {
                 value = r;
+                (void)value;
                 assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value)));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) _PyValue_CLOSE_SPECIALIZED_POINTER(value, _PyUnicode_ExactDealloc);
+                _PyValue_XCLOSE_SPECIALIZED_POINTER(ir_own_C, _PyUnicode_ExactDealloc);
             }
             // _POP_TOP_UNICODE
             {
                 value = l;
+                (void)value;
                 assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value)));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_SPECIALIZED_POINTER(value, _PyUnicode_ExactDealloc);
+                _PyValue_XCLOSE_SPECIALIZED_POINTER(ir_own_B, _PyUnicode_ExactDealloc);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -343,13 +368,17 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_AND;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -365,14 +394,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -412,15 +441,19 @@
             INSTRUCTION_STATS(BINARY_OP_AND_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue value;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow value;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue res;
-            PyValue l;
-            PyValue r;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                value = IR_VIEW(IR_FIELD_C(this_instr));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -428,7 +461,7 @@
             }
             // _GUARD_NOS_INT
             {
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                left = IR_VIEW(IR_FIELD_B(this_instr));
                 if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -437,6 +470,7 @@
             // _BINARY_OP_AND_INT
             {
                 right = value;
+                (void)right;
                 STAT_INC(BINARY_OP, hit);
                 res = PyValue_FromInlineInt(PyValue_InlineInt64(left) & PyValue_InlineInt64(right));
                 if (PyValue_IsNull(res)) {
@@ -444,20 +478,22 @@
                 }
                 l = left;
                 r = right;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), l);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), r);
             }
             // _POP_TOP_INT
             {
                 value = r;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
             }
             // _POP_TOP_INT
             {
                 value = l;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -484,16 +520,20 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
-            PyValue left;
-            PyValue right;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValueBorrow value;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _BINARY_OP_EXTEND
             {
-                right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                right = IR_VIEW(IR_FIELD_C(this_instr));
+                left = IR_VIEW(IR_FIELD_B(this_instr));
                 PyObject *descr = (PyObject *)fb->descr;
                 if (!PyValue_IsObject(left) || !PyValue_IsObject(right)) {
                     UPDATE_MISS_STATS(BINARY_OP);
@@ -504,10 +544,7 @@
                 assert(INLINE_CACHE_ENTRIES_BINARY_OP == 5);
                 _PyBinaryOpSpecializationDescr *d = (_PyBinaryOpSpecializationDescr*)descr;
                 assert(d != NULL);
-                int match = (d->guard != NULL)
-                ? d->guard(left_o, right_o)
-            : (Py_TYPE(left_o) == d->lhs_type && Py_TYPE(right_o) == d->rhs_type);
-                if (!match) {
+                if (Py_TYPE(left_o) != d->lhs_type || Py_TYPE(right_o) != d->rhs_type) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
@@ -521,20 +558,22 @@
                 res = PyValue_FromPyObjectSteal(res_o);
                 l = left;
                 r = right;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), l);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), r);
             }
             // _POP_TOP
             {
                 value = r;
+                (void)value;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_XCLOSE(value);
+                PyValue_XCLOSE(ir_own_C);
             }
             // _POP_TOP
             {
                 value = l;
+                (void)value;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_XCLOSE(value);
+                PyValue_XCLOSE(ir_own_B);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -567,13 +606,17 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_FLOOR_DIVIDE;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -589,14 +632,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -636,15 +679,19 @@
             INSTRUCTION_STATS(BINARY_OP_FLOOR_DIVIDE_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue value;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow value;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue res;
-            PyValue l;
-            PyValue r;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                value = IR_VIEW(IR_FIELD_C(this_instr));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -652,7 +699,7 @@
             }
             // _GUARD_NOS_INT
             {
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                left = IR_VIEW(IR_FIELD_B(this_instr));
                 if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -661,6 +708,7 @@
             // _BINARY_OP_FLOOR_DIVIDE_INT
             {
                 right = value;
+                (void)right;
                 int64_t b = PyValue_InlineInt64(right);
                 if (b == 0) {
                     UPDATE_MISS_STATS(BINARY_OP);
@@ -678,20 +726,22 @@
                 }
                 l = left;
                 r = right;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), l);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), r);
             }
             // _POP_TOP_INT
             {
                 value = r;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
             }
             // _POP_TOP_INT
             {
                 value = l;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -724,13 +774,17 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_ADD;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -746,14 +800,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -793,14 +847,18 @@
             INSTRUCTION_STATS(BINARY_OP_INPLACE_ADD_UNICODE);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue value;
-            PyValue nos;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow value;
+            PyValueBorrow nos;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _GUARD_TOS_UNICODE
             {
-                value = IR_SLOT(IR_FIELD_C(this_instr));
+                value = IR_VIEW(IR_FIELD_C(this_instr));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(value))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -813,7 +871,7 @@
             }
             // _GUARD_NOS_UNICODE
             {
-                nos = IR_SLOT(IR_FIELD_B(this_instr));
+                nos = IR_VIEW(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(nos))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -827,7 +885,9 @@
             // _BINARY_OP_INPLACE_ADD_UNICODE
             {
                 right = value;
+                (void)right;
                 left = nos;
+                (void)left;
                 PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
                 assert(PyUnicode_CheckExact(left_o));
                 assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(right)));
@@ -839,12 +899,12 @@
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
                 }
                 STAT_INC(BINARY_OP, hit);
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_SPECIALIZED_POINTER(left, _PyUnicode_ExactDealloc);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), left);
+                _PyValue_XCLOSE_SPECIALIZED_POINTER(ir_own_B, _PyUnicode_ExactDealloc);
                 assert(Py_REFCNT(left_o) >= 1);
                 PyObject *temp = PyValue_AsKnownObjectSteal(*target_local);
-                PyObject *right_o = IR_INPLACE_OBJECT_STEAL(right, IR_FIELD_C(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), right);
+                PyObject *right_o = _PyValue_AsPyObjectStealPointer(IR_TAKE(right, ir_own_C));
                 PyUnicode_Append(&temp, right_o);
                 _Py_DECREF_SPECIALIZED(right_o, _PyUnicode_ExactDealloc);
                 *target_local = PyValue_NULL;
@@ -884,13 +944,17 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_AND;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -906,14 +970,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -960,13 +1024,17 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_FLOOR_DIVIDE;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -982,14 +1050,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -1036,13 +1104,17 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_LSHIFT;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -1058,14 +1130,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -1112,13 +1184,17 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_MATRIX_MULTIPLY;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -1134,14 +1210,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -1188,13 +1264,17 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_MULTIPLY;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -1210,14 +1290,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -1264,13 +1344,17 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_OR;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -1286,14 +1370,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -1340,13 +1424,17 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_POWER;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -1362,14 +1450,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -1416,13 +1504,17 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_REMAINDER;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -1438,14 +1530,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -1492,13 +1584,17 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_RSHIFT;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -1514,14 +1610,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -1568,13 +1664,17 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_SUBTRACT;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -1590,14 +1690,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -1644,13 +1744,17 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_TRUE_DIVIDE;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -1666,14 +1770,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -1720,13 +1824,17 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_XOR;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -1742,14 +1850,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -1796,13 +1904,17 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_LSHIFT;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -1818,14 +1930,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -1865,15 +1977,19 @@
             INSTRUCTION_STATS(BINARY_OP_LSHIFT_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue value;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow value;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue res;
-            PyValue l;
-            PyValue r;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                value = IR_VIEW(IR_FIELD_C(this_instr));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -1881,7 +1997,7 @@
             }
             // _GUARD_NOS_INT
             {
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                left = IR_VIEW(IR_FIELD_B(this_instr));
                 if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -1890,6 +2006,7 @@
             // _BINARY_OP_LSHIFT_INT
             {
                 right = value;
+                (void)right;
                 int64_t b = PyValue_InlineInt64(right);
                 if (b < 0) {
                     UPDATE_MISS_STATS(BINARY_OP);
@@ -1912,20 +2029,22 @@
                 }
                 l = left;
                 r = right;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), l);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), r);
             }
             // _POP_TOP_INT
             {
                 value = r;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
             }
             // _POP_TOP_INT
             {
                 value = l;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -1958,13 +2077,17 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_MATRIX_MULTIPLY;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -1980,14 +2103,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -2034,13 +2157,17 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_MULTIPLY;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -2056,14 +2183,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -2103,16 +2230,20 @@
             INSTRUCTION_STATS(BINARY_OP_MULTIPLY_FLOAT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValueBorrow value;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _BINARY_OP_MULTIPLY_FLOAT
             {
-                right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                right = IR_VIEW(IR_FIELD_C(this_instr));
+                left = IR_VIEW(IR_FIELD_B(this_instr));
                 double a, b;
                 if (!PyValue_FloatOperandValues(left, right, &a, &b)) {
                     UPDATE_MISS_STATS(BINARY_OP);
@@ -2125,20 +2256,22 @@
                 }
                 l = left;
                 r = right;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), l);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), r);
             }
             // _POP_TOP_NUMBER
             {
                 value = r;
+                (void)value;
                 assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyFloat_OrLongExactDealloc);
             }
             // _POP_TOP_NUMBER
             {
                 value = l;
+                (void)value;
                 assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyFloat_OrLongExactDealloc);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -2164,15 +2297,19 @@
             INSTRUCTION_STATS(BINARY_OP_MULTIPLY_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue value;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow value;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue res;
-            PyValue l;
-            PyValue r;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                value = IR_VIEW(IR_FIELD_C(this_instr));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -2180,7 +2317,7 @@
             }
             // _GUARD_NOS_INT
             {
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                left = IR_VIEW(IR_FIELD_B(this_instr));
                 if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -2189,6 +2326,7 @@
             // _BINARY_OP_MULTIPLY_INT
             {
                 right = value;
+                (void)right;
                 int64_t a = _PyValue_IntScaled(left);
                 int64_t b = PyValue_InlineInt64(right);
                 int64_t product;
@@ -2204,20 +2342,22 @@
                 }
                 l = left;
                 r = right;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), l);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), r);
             }
             // _POP_TOP_INT
             {
                 value = r;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
             }
             // _POP_TOP_INT
             {
                 value = l;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -2250,13 +2390,17 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_OR;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -2272,14 +2416,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -2319,15 +2463,19 @@
             INSTRUCTION_STATS(BINARY_OP_OR_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue value;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow value;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue res;
-            PyValue l;
-            PyValue r;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                value = IR_VIEW(IR_FIELD_C(this_instr));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -2335,7 +2483,7 @@
             }
             // _GUARD_NOS_INT
             {
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                left = IR_VIEW(IR_FIELD_B(this_instr));
                 if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -2344,6 +2492,7 @@
             // _BINARY_OP_OR_INT
             {
                 right = value;
+                (void)right;
                 STAT_INC(BINARY_OP, hit);
                 res = PyValue_FromInlineInt(PyValue_InlineInt64(left) | PyValue_InlineInt64(right));
                 if (PyValue_IsNull(res)) {
@@ -2351,20 +2500,22 @@
                 }
                 l = left;
                 r = right;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), l);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), r);
             }
             // _POP_TOP_INT
             {
                 value = r;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
             }
             // _POP_TOP_INT
             {
                 value = l;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -2397,13 +2548,17 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_POWER;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -2419,14 +2574,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -2473,13 +2628,17 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_REMAINDER;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -2495,14 +2654,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -2542,15 +2701,19 @@
             INSTRUCTION_STATS(BINARY_OP_REMAINDER_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue value;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow value;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue res;
-            PyValue l;
-            PyValue r;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                value = IR_VIEW(IR_FIELD_C(this_instr));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -2558,7 +2721,7 @@
             }
             // _GUARD_NOS_INT
             {
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                left = IR_VIEW(IR_FIELD_B(this_instr));
                 if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -2567,6 +2730,7 @@
             // _BINARY_OP_REMAINDER_INT
             {
                 right = value;
+                (void)right;
                 int64_t b = PyValue_InlineInt64(right);
                 if (b == 0) {
                     UPDATE_MISS_STATS(BINARY_OP);
@@ -2584,20 +2748,22 @@
                 }
                 l = left;
                 r = right;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), l);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), r);
             }
             // _POP_TOP_INT
             {
                 value = r;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
             }
             // _POP_TOP_INT
             {
                 value = l;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -2630,13 +2796,17 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_RSHIFT;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -2652,14 +2822,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -2699,15 +2869,19 @@
             INSTRUCTION_STATS(BINARY_OP_RSHIFT_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue value;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow value;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue res;
-            PyValue l;
-            PyValue r;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                value = IR_VIEW(IR_FIELD_C(this_instr));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -2715,7 +2889,7 @@
             }
             // _GUARD_NOS_INT
             {
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                left = IR_VIEW(IR_FIELD_B(this_instr));
                 if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -2724,6 +2898,7 @@
             // _BINARY_OP_RSHIFT_INT
             {
                 right = value;
+                (void)right;
                 int64_t b = PyValue_InlineInt64(right);
                 if (b < 0) {
                     UPDATE_MISS_STATS(BINARY_OP);
@@ -2737,20 +2912,22 @@
                 }
                 l = left;
                 r = right;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), l);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), r);
             }
             // _POP_TOP_INT
             {
                 value = r;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
             }
             // _POP_TOP_INT
             {
                 value = l;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -2783,13 +2960,17 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_SUBSCR;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -2805,14 +2986,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -2856,13 +3037,17 @@
             _PyValueTemps *value_temps = &value_owners;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue nos;
-            PyValue dict_st;
-            PyValue sub_st;
+            PyValueBorrow nos;
+            PyValueBorrow dict_st;
+            PyValueBorrow sub_st;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _GUARD_NOS_DICT_SUBSCRIPT
             {
-                nos = IR_SLOT(IR_FIELD_B(this_instr));
+                nos = IR_VIEW(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(nos))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -2879,16 +3064,17 @@
             }
             // _BINARY_OP_SUBSCR_DICT
             {
-                sub_st = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                sub_st = IR_VIEW(IR_FIELD_C(this_instr));
                 dict_st = nos;
-                PyValue held_dict = IR_INPLACE_HEAP_SAFE(dict_st, IR_FIELD_B(this_instr));
-                PyValue held_sub = IR_INPLACE_HEAP_SAFE(sub_st, IR_FIELD_C(this_instr));
+                (void)dict_st;
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), dict_st);
+                PyValue held_dict = IR_TAKE(dict_st, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), sub_st);
+                PyValue held_sub = IR_TAKE(sub_st, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 STAT_INC(BINARY_OP, hit);
                 PyValue pending = value_binary_operation(NB_SUBSCR, held_dict, held_sub, value_temps);
                 if (PyValue_IsNull(pending)) {
@@ -2929,10 +3115,14 @@
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_GETITEM);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue container;
+            PyValueBorrow container;
             PyValue getitem;
-            PyValue sub;
+            PyValueBorrow sub;
             PyValue new_frame;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _CHECK_PEP_523
             {
                 if (IS_PEP523_HOOKED(tstate)) {
@@ -2942,7 +3132,7 @@
             }
             // _BINARY_OP_SUBSCR_CHECK_FUNC
             {
-                container = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                container = IR_VIEW(IR_FIELD_B(this_instr));
                 if (!PyValue_IsObject(container)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -2974,13 +3164,13 @@
             }
             // _BINARY_OP_SUBSCR_INIT_CALL
             {
-                sub = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                sub = IR_VIEW(IR_FIELD_C(this_instr));
                 STAT_INC(BINARY_OP, hit);
                 _PyInterpreterFrame* pushed_frame = _PyFrame_PushUnchecked(tstate, getitem, 2, frame);
-                pushed_frame->base[0] = IR_INPLACE_HEAP_SAFE(container, IR_FIELD_B(this_instr));
-                pushed_frame->base[1] = IR_INPLACE_HEAP_SAFE(sub, IR_FIELD_C(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), container);
+                pushed_frame->base[0] = IR_TAKE(container, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), sub);
+                pushed_frame->base[1] = IR_TAKE(sub, ir_own_C);
                 frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
                 new_frame = PyValue_Wrap(pushed_frame);
             }
@@ -3021,16 +3211,20 @@
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_LIST_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue value;
-            PyValue nos;
-            PyValue list_st;
-            PyValue sub_st;
+            PyValueBorrow value;
+            PyValueBorrow nos;
+            PyValueBorrow list_st;
+            PyValueBorrow sub_st;
             PyValue res;
-            PyValue ls;
-            PyValue ss;
+            PyValueBorrow ls;
+            PyValueBorrow ss;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                value = IR_VIEW(IR_FIELD_C(this_instr));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -3038,7 +3232,7 @@
             }
             // _GUARD_NOS_LIST
             {
-                nos = IR_SLOT(IR_FIELD_B(this_instr));
+                nos = IR_VIEW(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(nos))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -3052,7 +3246,9 @@
             // _BINARY_OP_SUBSCR_LIST_INT
             {
                 sub_st = value;
+                (void)sub_st;
                 list_st = nos;
+                (void)list_st;
                 PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
                 assert(PyList_CheckExact(list));
                 Py_ssize_t index = PyValue_InlineInt64(sub_st);
@@ -3068,20 +3264,22 @@
                 STAT_INC(BINARY_OP, hit);
                 ls = list_st;
                 ss = sub_st;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), ls);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), ss);
             }
             // _POP_TOP_INT
             {
                 value = ss;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
             }
             // _POP_TOP
             {
                 value = ls;
+                (void)value;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(ir_own_B);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -3107,17 +3305,21 @@
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_LIST_SLICE);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue tos;
-            PyValue nos;
-            PyValue list_st;
-            PyValue sub_st;
+            PyValueBorrow tos;
+            PyValueBorrow nos;
+            PyValueBorrow list_st;
+            PyValueBorrow sub_st;
             PyValue res;
-            PyValue ls;
-            PyValue ss;
-            PyValue value;
+            PyValueBorrow ls;
+            PyValueBorrow ss;
+            PyValueBorrow value;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _GUARD_TOS_SLICE
             {
-                tos = IR_SLOT(IR_FIELD_C(this_instr));
+                tos = IR_VIEW(IR_FIELD_C(this_instr));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(tos))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -3130,7 +3332,7 @@
             }
             // _GUARD_NOS_LIST
             {
-                nos = IR_SLOT(IR_FIELD_B(this_instr));
+                nos = IR_VIEW(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(nos))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -3144,7 +3346,9 @@
             // _BINARY_OP_SUBSCR_LIST_SLICE
             {
                 sub_st = tos;
+                (void)sub_st;
                 list_st = nos;
+                (void)list_st;
                 PyObject *sub = PyValue_AsKnownObjectBorrow(sub_st);
                 PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
                 assert(PySlice_Check(sub));
@@ -3157,20 +3361,22 @@
                 res = PyValue_FromPyObjectSteal(res_o);
                 ls = list_st;
                 ss = sub_st;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), ls);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), ss);
             }
             // _POP_TOP
             {
                 value = ss;
+                (void)value;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) _PyValue_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(ir_own_C);
             }
             // _POP_TOP
             {
                 value = ls;
+                (void)value;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(ir_own_B);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -3196,16 +3402,20 @@
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_STR_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue value;
-            PyValue nos;
-            PyValue str_st;
-            PyValue sub_st;
+            PyValueBorrow value;
+            PyValueBorrow nos;
+            PyValueBorrow str_st;
+            PyValueBorrow sub_st;
             PyValue res;
-            PyValue s;
-            PyValue i;
+            PyValueBorrow s;
+            PyValueBorrow i;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                value = IR_VIEW(IR_FIELD_C(this_instr));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -3213,7 +3423,7 @@
             }
             // _GUARD_NOS_COMPACT_ASCII
             {
-                nos = IR_SLOT(IR_FIELD_B(this_instr));
+                nos = IR_VIEW(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(nos))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -3231,7 +3441,9 @@
             // _BINARY_OP_SUBSCR_STR_INT
             {
                 sub_st = value;
+                (void)sub_st;
                 str_st = nos;
+                (void)str_st;
                 PyObject *str = PyValue_AsKnownObjectBorrow(str_st);
                 assert(PyUnicode_CheckExact(str));
                 Py_ssize_t index = PyValue_InlineInt64(sub_st);
@@ -3249,21 +3461,23 @@
                 PyObject *res_o = (PyObject*)&_Py_SINGLETON(strings).ascii[c];
                 s = str_st;
                 i = sub_st;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), s);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), i);
                 res = PyValue_FromPyObjectBorrow(res_o);
             }
             // _POP_TOP_INT
             {
                 value = i;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
             }
             // _POP_TOP_UNICODE
             {
                 value = s;
+                (void)value;
                 assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value)));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_SPECIALIZED_POINTER(value, _PyUnicode_ExactDealloc);
+                _PyValue_XCLOSE_SPECIALIZED_POINTER(ir_own_B, _PyUnicode_ExactDealloc);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -3289,16 +3503,20 @@
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_TUPLE_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue value;
-            PyValue nos;
-            PyValue tuple_st;
-            PyValue sub_st;
+            PyValueBorrow value;
+            PyValueBorrow nos;
+            PyValueBorrow tuple_st;
+            PyValueBorrow sub_st;
             PyValue res;
-            PyValue ts;
-            PyValue ss;
+            PyValueBorrow ts;
+            PyValueBorrow ss;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                value = IR_VIEW(IR_FIELD_C(this_instr));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -3306,7 +3524,7 @@
             }
             // _GUARD_NOS_TUPLE
             {
-                nos = IR_SLOT(IR_FIELD_B(this_instr));
+                nos = IR_VIEW(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(nos))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -3320,7 +3538,9 @@
             // _GUARD_BINARY_OP_SUBSCR_TUPLE_INT_BOUNDS
             {
                 sub_st = value;
+                (void)sub_st;
                 tuple_st = nos;
+                (void)tuple_st;
                 PyObject *tuple = PyValue_AsKnownObjectBorrow(tuple_st);
                 assert(PyTuple_CheckExact(tuple));
                 Py_ssize_t index = PyValue_InlineInt64(sub_st);
@@ -3344,20 +3564,22 @@
                 assert(!PyValue_IsNull(res));
                 ts = tuple_st;
                 ss = sub_st;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), ts);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), ss);
             }
             // _POP_TOP_INT
             {
                 value = ss;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
             }
             // _POP_TOP
             {
                 value = ts;
+                (void)value;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(ir_own_B);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -3383,16 +3605,20 @@
             INSTRUCTION_STATS(BINARY_OP_SUBSCR_USTR_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue value;
-            PyValue nos;
-            PyValue str_st;
-            PyValue sub_st;
+            PyValueBorrow value;
+            PyValueBorrow nos;
+            PyValueBorrow str_st;
+            PyValueBorrow sub_st;
             PyValue res;
-            PyValue s;
-            PyValue i;
+            PyValueBorrow s;
+            PyValueBorrow i;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                value = IR_VIEW(IR_FIELD_C(this_instr));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -3400,7 +3626,7 @@
             }
             // _GUARD_NOS_UNICODE
             {
-                nos = IR_SLOT(IR_FIELD_B(this_instr));
+                nos = IR_VIEW(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(nos))) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -3414,7 +3640,9 @@
             // _BINARY_OP_SUBSCR_USTR_INT
             {
                 sub_st = value;
+                (void)sub_st;
                 str_st = nos;
+                (void)str_st;
                 PyObject *str = PyValue_AsKnownObjectBorrow(str_st);
                 assert(PyUnicode_CheckExact(str));
                 Py_ssize_t index = PyValue_InlineInt64(sub_st);
@@ -3435,21 +3663,23 @@
                 PyObject *res_o = (PyObject*)&_Py_SINGLETON(strings).ascii[c];
                 s = str_st;
                 i = sub_st;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), s);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), i);
                 res = PyValue_FromPyObjectBorrow(res_o);
             }
             // _POP_TOP_INT
             {
                 value = i;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
             }
             // _POP_TOP_UNICODE
             {
                 value = s;
+                (void)value;
                 assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value)));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_SPECIALIZED_POINTER(value, _PyUnicode_ExactDealloc);
+                _PyValue_XCLOSE_SPECIALIZED_POINTER(ir_own_B, _PyUnicode_ExactDealloc);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -3482,13 +3712,17 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_SUBTRACT;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -3504,14 +3738,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -3551,16 +3785,20 @@
             INSTRUCTION_STATS(BINARY_OP_SUBTRACT_FLOAT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValueBorrow value;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _BINARY_OP_SUBTRACT_FLOAT
             {
-                right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                right = IR_VIEW(IR_FIELD_C(this_instr));
+                left = IR_VIEW(IR_FIELD_B(this_instr));
                 double a, b;
                 if (!PyValue_FloatOperandValues(left, right, &a, &b)) {
                     UPDATE_MISS_STATS(BINARY_OP);
@@ -3573,20 +3811,22 @@
                 }
                 l = left;
                 r = right;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), l);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), r);
             }
             // _POP_TOP_NUMBER
             {
                 value = r;
+                (void)value;
                 assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyFloat_OrLongExactDealloc);
             }
             // _POP_TOP_NUMBER
             {
                 value = l;
+                (void)value;
                 assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyFloat_OrLongExactDealloc);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -3612,15 +3852,19 @@
             INSTRUCTION_STATS(BINARY_OP_SUBTRACT_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue value;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow value;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue res;
-            PyValue l;
-            PyValue r;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                value = IR_VIEW(IR_FIELD_C(this_instr));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -3628,7 +3872,7 @@
             }
             // _GUARD_NOS_INT
             {
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                left = IR_VIEW(IR_FIELD_B(this_instr));
                 if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -3637,6 +3881,7 @@
             // _BINARY_OP_SUBTRACT_INT
             {
                 right = value;
+                (void)right;
                 int64_t a = _PyValue_IntScaled(left);
                 int64_t b = _PyValue_IntScaled(right);
                 int64_t difference;
@@ -3652,20 +3897,22 @@
                 }
                 l = left;
                 r = right;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), l);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), r);
             }
             // _POP_TOP_INT
             {
                 value = r;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
             }
             // _POP_TOP_INT
             {
                 value = l;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -3691,16 +3938,20 @@
             INSTRUCTION_STATS(BINARY_OP_TRUEDIV_FLOAT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue res;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValueBorrow value;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _BINARY_OP_TRUEDIV_FLOAT
             {
-                right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                right = IR_VIEW(IR_FIELD_C(this_instr));
+                left = IR_VIEW(IR_FIELD_B(this_instr));
                 double a, b;
                 if (!PyValue_FloatOperandValues(left, right, &a, &b)) {
                     UPDATE_MISS_STATS(BINARY_OP);
@@ -3717,20 +3968,22 @@
                 }
                 l = left;
                 r = right;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), l);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), r);
             }
             // _POP_TOP_NUMBER
             {
                 value = r;
+                (void)value;
                 assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyFloat_OrLongExactDealloc);
             }
             // _POP_TOP_NUMBER
             {
                 value = l;
+                (void)value;
                 assert(PyValue_IsInlineFloat(value) || PyValue_IsInlineInt(value));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyFloat_OrLongExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyFloat_OrLongExactDealloc);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -3763,13 +4016,17 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_TRUE_DIVIDE;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -3785,14 +4042,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -3839,13 +4096,17 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_XOR;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -3861,14 +4122,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -3908,15 +4169,19 @@
             INSTRUCTION_STATS(BINARY_OP_XOR_INT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue value;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow value;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue res;
-            PyValue l;
-            PyValue r;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                value = IR_VIEW(IR_FIELD_C(this_instr));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -3924,7 +4189,7 @@
             }
             // _GUARD_NOS_INT
             {
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                left = IR_VIEW(IR_FIELD_B(this_instr));
                 if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(BINARY_OP);
                     IR_DEOPT_BINARY_OP(IR_FIELD_D(this_instr));
@@ -3933,6 +4198,7 @@
             // _BINARY_OP_XOR_INT
             {
                 right = value;
+                (void)right;
                 STAT_INC(BINARY_OP, hit);
                 res = PyValue_FromInlineInt(PyValue_InlineInt64(left) ^ PyValue_InlineInt64(right));
                 if (PyValue_IsNull(res)) {
@@ -3940,20 +4206,22 @@
                 }
                 l = left;
                 r = right;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), l);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), r);
             }
             // _POP_TOP_INT
             {
                 value = r;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
             }
             // _POP_TOP_INT
             {
                 value = l;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -3979,10 +4247,16 @@
             INSTRUCTION_STATS(BINARY_SLICE);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue container;
-            PyValue start;
-            PyValue stop;
+            PyValueBorrow container;
+            PyValueBorrow start;
+            PyValueBorrow stop;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            PyValue ir_own_D = PyValue_NULL;
+            (void)ir_own_D;
             // _SPECIALIZE_BINARY_SLICE
             {
                 #if ENABLE_SPECIALIZATION
@@ -3991,16 +4265,16 @@
             }
             // _BINARY_SLICE
             {
-                stop = IR_LOAD_BORROWED(IR_FIELD_D(this_instr));
-                start = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                container = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                stop = IR_VIEW(IR_FIELD_D(this_instr));
+                start = IR_VIEW(IR_FIELD_C(this_instr));
+                container = IR_VIEW(IR_FIELD_B(this_instr));
                 PyObject *res_o = _PyEval_BinarySlice(container, start, stop);
-                IR_CONSUME_INPUT(IR_FIELD_D(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_D(this_instr))) PyValue_CLOSE(stop);
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE(start);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE(container);
+                ir_own_D = IR_CONSUME_INPUT(IR_FIELD_D(this_instr), stop);
+                PyValue_XCLOSE(ir_own_D);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), start);
+                PyValue_XCLOSE(ir_own_C);
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), container);
+                PyValue_XCLOSE(ir_own_B);
                 if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
@@ -4042,27 +4316,33 @@
             PyValue str;
             PyValue *format;
             PyValue interpolation;
+            PyObject *ir_obj_str = NULL;
+            PyObject *ir_obj_value = NULL;
             format = &window[2];
             str = window[1];
             value = window[0];
             if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                value = PyValue_Box(value);
-                if (PyValue_IsInline(value)) {
+                ir_obj_value = _PyValueTemps_Box(value_temps, value);
+                if (ir_obj_value == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(BUILD_INTERPOLATION);
-                IR_KEEP_BOX(value);
+            }
+            else {
+                ir_obj_value = PyValue_AsKnownObjectBorrow(value);
             }
             if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1]))) {
-                str = PyValue_Box(str);
-                if (PyValue_IsInline(str)) {
+                ir_obj_str = _PyValueTemps_Box(value_temps, str);
+                if (ir_obj_str == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(BUILD_INTERPOLATION);
-                IR_KEEP_BOX(str);
             }
-            PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
-            PyObject *str_o = PyValue_AsKnownObjectBorrow(str);
+            else {
+                ir_obj_str = PyValue_AsKnownObjectBorrow(str);
+            }
+            PyObject *value_o = ir_obj_value;
+            PyObject *str_o = ir_obj_str;
             int conversion = oparg >> 2;
             PyObject *format_o;
             if (oparg & 1) {
@@ -4076,9 +4356,9 @@
             IR_CLEAR_SLOTS(&window[2], (oparg & 1));
             PyValue_XCLOSE(format_ref);
             window[1] = PyValue_NULL;
-            _PyValue_CLOSE_POINTER(str);
+            PyValue_CLOSE(str);
             window[0] = PyValue_NULL;
-            _PyValue_CLOSE_POINTER(value);
+            PyValue_CLOSE(value);
             if (interpolation_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
@@ -4362,34 +4642,44 @@
             _PyValueTemps *value_temps = &value_owners;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue strings;
-            PyValue interpolations;
+            PyValueBorrow strings;
+            PyValueBorrow interpolations;
             PyValue template;
-            interpolations = IR_SLOT(IR_FIELD_C(this_instr));
-            strings = IR_SLOT(IR_FIELD_B(this_instr));
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            PyObject *ir_obj_interpolations = NULL;
+            PyObject *ir_obj_strings = NULL;
+            interpolations = IR_VIEW(IR_FIELD_C(this_instr));
+            strings = IR_VIEW(IR_FIELD_B(this_instr));
             if (Py_UNLIKELY(PyValue_IsInline(strings))) {
-                strings = PyValue_Box(strings);
-                if (PyValue_IsInline(strings)) {
+                ir_obj_strings = _PyValueTemps_Box(value_temps, strings);
+                if (ir_obj_strings == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(BUILD_TEMPLATE);
-                IR_KEEP_BOX(strings);
+            }
+            else {
+                ir_obj_strings = PyValue_AsKnownObjectBorrow(strings);
             }
             if (Py_UNLIKELY(PyValue_IsInline(interpolations))) {
-                interpolations = PyValue_Box(interpolations);
-                if (PyValue_IsInline(interpolations)) {
+                ir_obj_interpolations = _PyValueTemps_Box(value_temps, interpolations);
+                if (ir_obj_interpolations == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(BUILD_TEMPLATE);
-                IR_KEEP_BOX(interpolations);
             }
-            PyObject *strings_o = PyValue_AsKnownObjectBorrow(strings);
-            PyObject *interpolations_o = PyValue_AsKnownObjectBorrow(interpolations);
+            else {
+                ir_obj_interpolations = PyValue_AsKnownObjectBorrow(interpolations);
+            }
+            PyObject *strings_o = ir_obj_strings;
+            PyObject *interpolations_o = ir_obj_interpolations;
             PyObject *template_o = _PyTemplate_Build(strings_o, interpolations_o);
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) _PyValue_CLOSE_POINTER(interpolations);
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_POINTER(strings);
+            ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), interpolations);
+            PyValue_XCLOSE(ir_own_C);
+            ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), strings);
+            PyValue_XCLOSE(ir_own_B);
             if (template_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
@@ -5719,34 +6009,40 @@
             (void)ir_displaced;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue value;
+            PyValueBorrow value;
             PyValue res;
-            PyValue v;
+            PyValueBorrow v;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyObject *ir_obj_value = NULL;
             // _CALL_INTRINSIC_1
             {
-                value = IR_SLOT(IR_FIELD_B(this_instr));
+                value = IR_VIEW(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                    value = PyValue_Box(value);
-                    if (PyValue_IsInline(value)) {
+                    ir_obj_value = _PyValueTemps_Box(value_temps, value);
+                    if (ir_obj_value == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CALL_INTRINSIC_1);
-                    IR_KEEP_BOX(value);
+                }
+                else {
+                    ir_obj_value = PyValue_AsKnownObjectBorrow(value);
                 }
                 assert(oparg <= MAX_INTRINSIC_1);
-                PyObject *res_o = _PyIntrinsics_UnaryFunctions[oparg].func(tstate, PyValue_AsKnownObjectBorrow(value));
+                PyObject *res_o = _PyIntrinsics_UnaryFunctions[oparg].func(tstate, ir_obj_value);
                 if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 v = value;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), v);
                 res = PyValue_FromPyObjectSteal(res_o);
             }
             // _POP_TOP
             {
                 value = v;
+                (void)value;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_XCLOSE_POINTER(value);
+                PyValue_XCLOSE(ir_own_B);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -5778,35 +6074,45 @@
             (void)ir_displaced;
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            PyValue value2_st;
-            PyValue value1_st;
+            PyValueBorrow value2_st;
+            PyValueBorrow value1_st;
             PyValue res;
-            PyValue vs1;
-            PyValue vs2;
-            PyValue value;
+            PyValueBorrow vs1;
+            PyValueBorrow vs2;
+            PyValueBorrow value;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            PyObject *ir_obj_value1_st = NULL;
+            PyObject *ir_obj_value2_st = NULL;
             // _CALL_INTRINSIC_2
             {
-                value1_st = IR_SLOT(IR_FIELD_C(this_instr));
-                value2_st = IR_SLOT(IR_FIELD_B(this_instr));
+                value1_st = IR_VIEW(IR_FIELD_C(this_instr));
+                value2_st = IR_VIEW(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(PyValue_IsInline(value2_st))) {
-                    value2_st = PyValue_Box(value2_st);
-                    if (PyValue_IsInline(value2_st)) {
+                    ir_obj_value2_st = _PyValueTemps_Box(value_temps, value2_st);
+                    if (ir_obj_value2_st == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CALL_INTRINSIC_2);
-                    IR_KEEP_BOX(value2_st);
+                }
+                else {
+                    ir_obj_value2_st = PyValue_AsKnownObjectBorrow(value2_st);
                 }
                 if (Py_UNLIKELY(PyValue_IsInline(value1_st))) {
-                    value1_st = PyValue_Box(value1_st);
-                    if (PyValue_IsInline(value1_st)) {
+                    ir_obj_value1_st = _PyValueTemps_Box(value_temps, value1_st);
+                    if (ir_obj_value1_st == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CALL_INTRINSIC_2);
-                    IR_KEEP_BOX(value1_st);
+                }
+                else {
+                    ir_obj_value1_st = PyValue_AsKnownObjectBorrow(value1_st);
                 }
                 assert(oparg <= MAX_INTRINSIC_2);
-                PyObject *value1 = PyValue_AsKnownObjectBorrow(value1_st);
-                PyObject *value2 = PyValue_AsKnownObjectBorrow(value2_st);
+                PyObject *value1 = ir_obj_value1_st;
+                PyObject *value2 = ir_obj_value2_st;
                 PyObject *res_o = _PyIntrinsics_BinaryFunctions[oparg].func(tstate, value2, value1);
                 if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
@@ -5814,20 +6120,22 @@
                 res = PyValue_FromPyObjectSteal(res_o);
                 vs1 = value1_st;
                 vs2 = value2_st;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), vs2);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), vs1);
             }
             // _POP_TOP
             {
                 value = vs2;
+                (void)value;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_XCLOSE_POINTER(value);
+                PyValue_XCLOSE(ir_own_B);
             }
             // _POP_TOP
             {
                 value = vs1;
+                (void)value;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) _PyValue_XCLOSE_POINTER(value);
+                PyValue_XCLOSE(ir_own_C);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -6378,6 +6686,7 @@
             PyValue a;
             PyValue c;
             PyValue value;
+            PyObject *ir_obj_arg = NULL;
             // _GUARD_NOS_NULL
             {
                 null = window[1];
@@ -6407,15 +6716,17 @@
             {
                 arg = window[2];
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[2]))) {
-                    arg = PyValue_Box(arg);
-                    if (PyValue_IsInline(arg)) {
+                    ir_obj_arg = _PyValueTemps_Box(value_temps, arg);
+                    if (ir_obj_arg == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CALL_LEN);
-                    IR_KEEP_BOX(arg);
+                }
+                else {
+                    ir_obj_arg = PyValue_AsKnownObjectBorrow(arg);
                 }
                 STAT_INC(CALL, hit);
-                PyObject *arg_o = PyValue_AsKnownObjectBorrow(arg);
+                PyObject *arg_o = ir_obj_arg;
                 Py_ssize_t len_i = PyObject_Length(arg_o);
                 if (len_i < 0) {
                     JUMP_TO_LABEL(error);
@@ -6439,7 +6750,7 @@
             {
                 value = a;
                 window[1] = PyValue_NULL;
-                _PyValue_XCLOSE_POINTER(value);
+                PyValue_XCLOSE(value);
             }
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -6529,7 +6840,7 @@
                     JUMP_TO_PREDICTED(CALL);
                 }
                 STAT_INC(CALL, hit);
-                PyValue item = PyValue_MakeHeapSafe(arg);
+                PyValue item = arg;
                 window[2] = PyValue_NULL;
                 int err = _PyList_AppendTakeValue((PyListObject *)self_o, item);
                 UNLOCK_OBJECT(self_o);
@@ -7426,6 +7737,7 @@
             PyValue res;
             PyValue a;
             PyValue value;
+            PyObject *ir_obj_arg = NULL;
             // _GUARD_NOS_NULL
             {
                 null = window[1];
@@ -7454,14 +7766,16 @@
             {
                 arg = window[2];
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[2]))) {
-                    arg = PyValue_Box(arg);
-                    if (PyValue_IsInline(arg)) {
+                    ir_obj_arg = _PyValueTemps_Box(value_temps, arg);
+                    if (ir_obj_arg == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CALL_STR_1);
-                    IR_KEEP_BOX(arg);
                 }
-                PyObject *arg_o = PyValue_AsKnownObjectBorrow(arg);
+                else {
+                    ir_obj_arg = PyValue_AsKnownObjectBorrow(arg);
+                }
+                PyObject *arg_o = ir_obj_arg;
                 assert(oparg == 1);
                 STAT_INC(CALL, hit);
                 PyObject *res_o = PyObject_Str(arg_o);
@@ -7477,7 +7791,7 @@
                 window[1] = PyValue_NULL;
                 window[2] = PyValue_NULL;
                 IR_PUBLISH_TEMP(window[0], res);
-                _PyValue_XCLOSE_POINTER(value);
+                PyValue_XCLOSE(value);
             }
             // _CHECK_PERIODIC_AT_END
             {
@@ -7525,6 +7839,7 @@
             PyValue res;
             PyValue a;
             PyValue value;
+            PyObject *ir_obj_arg = NULL;
             // _GUARD_NOS_NULL
             {
                 null = window[1];
@@ -7553,14 +7868,16 @@
             {
                 arg = window[2];
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[2]))) {
-                    arg = PyValue_Box(arg);
-                    if (PyValue_IsInline(arg)) {
+                    ir_obj_arg = _PyValueTemps_Box(value_temps, arg);
+                    if (ir_obj_arg == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CALL_TUPLE_1);
-                    IR_KEEP_BOX(arg);
                 }
-                PyObject *arg_o = PyValue_AsKnownObjectBorrow(arg);
+                else {
+                    ir_obj_arg = PyValue_AsKnownObjectBorrow(arg);
+                }
+                PyObject *arg_o = ir_obj_arg;
                 assert(oparg == 1);
                 STAT_INC(CALL, hit);
                 PyObject *res_o = PySequence_Tuple(arg_o);
@@ -7576,7 +7893,7 @@
                 window[1] = PyValue_NULL;
                 window[2] = PyValue_NULL;
                 IR_PUBLISH_TEMP(window[0], res);
-                _PyValue_XCLOSE_POINTER(value);
+                PyValue_XCLOSE(value);
             }
             // _CHECK_PERIODIC_AT_END
             {
@@ -7689,46 +8006,56 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
-            PyValue exc_value_st;
-            PyValue match_type_st;
+            PyValueBorrow exc_value_st;
+            PyValueBorrow match_type_st;
             PyValue rest;
             PyValue match;
-            match_type_st = IR_SLOT(IR_FIELD_C(this_instr));
-            exc_value_st = IR_SLOT(IR_FIELD_B(this_instr));
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            PyObject *ir_obj_exc_value_st = NULL;
+            PyObject *ir_obj_match_type_st = NULL;
+            match_type_st = IR_VIEW(IR_FIELD_C(this_instr));
+            exc_value_st = IR_VIEW(IR_FIELD_B(this_instr));
             if (Py_UNLIKELY(PyValue_IsInline(exc_value_st))) {
-                exc_value_st = PyValue_Box(exc_value_st);
-                if (PyValue_IsInline(exc_value_st)) {
+                ir_obj_exc_value_st = _PyValueTemps_Box(value_temps, exc_value_st);
+                if (ir_obj_exc_value_st == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(CHECK_EG_MATCH);
-                IR_KEEP_BOX(exc_value_st);
+            }
+            else {
+                ir_obj_exc_value_st = PyValue_AsKnownObjectBorrow(exc_value_st);
             }
             if (Py_UNLIKELY(PyValue_IsInline(match_type_st))) {
-                match_type_st = PyValue_Box(match_type_st);
-                if (PyValue_IsInline(match_type_st)) {
+                ir_obj_match_type_st = _PyValueTemps_Box(value_temps, match_type_st);
+                if (ir_obj_match_type_st == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(CHECK_EG_MATCH);
-                IR_KEEP_BOX(match_type_st);
             }
-            PyObject *exc_value = PyValue_AsKnownObjectBorrow(exc_value_st);
-            PyObject *match_type = PyValue_AsKnownObjectBorrow(match_type_st);
+            else {
+                ir_obj_match_type_st = PyValue_AsKnownObjectBorrow(match_type_st);
+            }
+            PyObject *exc_value = ir_obj_exc_value_st;
+            PyObject *match_type = ir_obj_match_type_st;
+            ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), exc_value_st);
+            PyValue held_exc = IR_TAKE(exc_value_st, ir_own_B);
+            ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), match_type_st);
+            PyValue held_type = IR_TAKE(match_type_st, ir_own_C);
             int err = _PyEval_CheckExceptStarTypeValid(tstate, match_type);
             if (err < 0) {
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) _PyValue_CLOSE_POINTER(match_type_st);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_POINTER(exc_value_st);
+                PyValue_CLOSE(held_type);
+                PyValue_CLOSE(held_exc);
                 JUMP_TO_LABEL(error);
             }
             PyObject *match_o = NULL;
             PyObject *rest_o = NULL;
             int res = _PyEval_ExceptionGroupMatch(frame, exc_value, match_type,
                 &match_o, &rest_o);
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) _PyValue_CLOSE_POINTER(match_type_st);
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_POINTER(exc_value_st);
+            PyValue_CLOSE(held_type);
+            PyValue_CLOSE(held_exc);
             if (res < 0) {
                 JUMP_TO_LABEL(error);
             }
@@ -7771,36 +8098,46 @@
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyValue left;
-            PyValue right;
+            PyValueBorrow right;
             PyValue b;
-            right = IR_SLOT(IR_FIELD_C(this_instr));
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            PyObject *ir_obj_left = NULL;
+            PyObject *ir_obj_right = NULL;
+            right = IR_VIEW(IR_FIELD_C(this_instr));
             left = IR_SLOT(IR_FIELD_B(this_instr));
-            if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                right = PyValue_Box(right);
-                if (PyValue_IsInline(right)) {
-                    JUMP_TO_LABEL(error);
-                }
-                BOX_STAT_INC(CHECK_EXC_MATCH);
-                IR_KEEP_BOX(right);
-            }
             if (Py_UNLIKELY(PyValue_IsInlineAt(&IR_SLOT(IR_FIELD_B(this_instr))))) {
-                left = PyValue_Box(left);
-                if (PyValue_IsInline(left)) {
+                ir_obj_left = _PyValueTemps_Box(value_temps, left);
+                if (ir_obj_left == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(CHECK_EXC_MATCH);
-                IR_KEEP_BOX(left);
             }
-            PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
-            PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
+            else {
+                ir_obj_left = PyValue_AsKnownObjectBorrow(left);
+            }
+            if (Py_UNLIKELY(PyValue_IsInline(right))) {
+                ir_obj_right = _PyValueTemps_Box(value_temps, right);
+                if (ir_obj_right == NULL) {
+                    JUMP_TO_LABEL(error);
+                }
+                BOX_STAT_INC(CHECK_EXC_MATCH);
+            }
+            else {
+                ir_obj_right = PyValue_AsKnownObjectBorrow(right);
+            }
+            PyObject *left_o = ir_obj_left;
+            PyObject *right_o = ir_obj_right;
+            ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), right);
+            PyValue held_right = IR_TAKE(right, ir_own_C);
             assert(PyExceptionInstance_Check(left_o));
             int err = _PyEval_CheckExceptTypeValid(tstate, right_o);
             if (err < 0) {
+                PyValue_CLOSE(held_right);
                 JUMP_TO_LABEL(error);
             }
             int res = PyErr_GivenExceptionMatches(left_o, right_o);
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) _PyValue_CLOSE_POINTER(right);
+            PyValue_CLOSE(held_right);
             b = res ? PyValue_True : PyValue_False;
             IR_STORE_DST(IR_FIELD_A(this_instr), b);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -7840,19 +8177,22 @@
             PyValue none;
             PyValue null_out;
             PyValue value;
+            PyObject *ir_obj_exc_value_st = NULL;
             exc_value_st = window[3];
             last_sent_val = window[2];
             null_in = window[1];
             sub_iter = window[0];
             if (Py_UNLIKELY(PyValue_IsInlineAt(&window[3]))) {
-                exc_value_st = PyValue_Box(exc_value_st);
-                if (PyValue_IsInline(exc_value_st)) {
+                ir_obj_exc_value_st = _PyValueTemps_Box(value_temps, exc_value_st);
+                if (ir_obj_exc_value_st == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(CLEANUP_THROW);
-                IR_KEEP_BOX(exc_value_st);
             }
-            PyObject *exc_value = PyValue_AsKnownObjectBorrow(exc_value_st);
+            else {
+                ir_obj_exc_value_st = PyValue_AsKnownObjectBorrow(exc_value_st);
+            }
+            PyObject *exc_value = ir_obj_exc_value_st;
             #if !_Py_TAIL_CALL_INTERP
             assert(throwflag);
             #endif
@@ -7867,7 +8207,7 @@
                 tmp = exc_value_st;
                 exc_value_st = PyValue_NULL;
                 IR_PUBLISH_TEMP(window[3], exc_value_st);
-                _PyValue_CLOSE_POINTER(tmp);
+                PyValue_CLOSE(tmp);
                 tmp = last_sent_val;
                 last_sent_val = PyValue_NULL;
                 IR_PUBLISH_TEMP(window[2], last_sent_val);
@@ -7922,13 +8262,17 @@
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_D(this_instr));
             (void)oparg;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_COMPARE_OP
             {
-                right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                right = IR_VIEW(IR_FIELD_C(this_instr));
+                left = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -7958,10 +8302,10 @@
                     }
                     res_o = PyObject_RichCompare(left_o, right_o, oparg >> 5);
                 }
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE(right);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE(left);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), right);
+                PyValue_XCLOSE(ir_own_C);
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), left);
+                PyValue_XCLOSE(ir_own_B);
                 if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
@@ -8004,15 +8348,19 @@
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue value;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow value;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue res;
-            PyValue l;
-            PyValue r;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _GUARD_TOS_FLOAT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                value = IR_VIEW(IR_FIELD_C(this_instr));
                 if (!PyValue_IsInlineFloat(value)) {
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
@@ -8021,7 +8369,7 @@
             }
             // _GUARD_NOS_FLOAT
             {
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                left = IR_VIEW(IR_FIELD_B(this_instr));
                 if (!PyValue_IsInlineFloat(left)) {
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
@@ -8031,27 +8379,30 @@
             // _COMPARE_OP_FLOAT
             {
                 right = value;
+                (void)right;
                 STAT_INC(COMPARE_OP, hit);
                 double dleft = PyValue_InlineFloat(left);
                 double dright = PyValue_InlineFloat(right);
                 int sign_ish = COMPARISON_BIT(dleft, dright);
                 l = left;
                 r = right;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), l);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), r);
                 res = (sign_ish & oparg) ? PyValue_True : PyValue_False;
             }
             // _POP_TOP_FLOAT
             {
                 value = r;
+                (void)value;
                 assert(PyValue_IsInlineFloat(value));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyFloat_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyFloat_ExactDealloc);
             }
             // _POP_TOP_FLOAT
             {
                 value = l;
+                (void)value;
                 assert(PyValue_IsInlineFloat(value));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyFloat_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyFloat_ExactDealloc);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -8080,15 +8431,19 @@
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue value;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow value;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue res;
-            PyValue l;
-            PyValue r;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                value = IR_VIEW(IR_FIELD_C(this_instr));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
@@ -8097,7 +8452,7 @@
             }
             // _GUARD_NOS_INT
             {
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                left = IR_VIEW(IR_FIELD_B(this_instr));
                 if (!PyValue_IsInlineInt(left)) {
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
@@ -8107,27 +8462,30 @@
             // _COMPARE_OP_INT
             {
                 right = value;
+                (void)right;
                 STAT_INC(COMPARE_OP, hit);
                 int64_t ileft = _PyValue_IntScaled(left);
                 int64_t iright = _PyValue_IntScaled(right);
                 int sign_ish = COMPARISON_BIT(ileft, iright);
                 l = left;
                 r = right;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), l);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), r);
                 res =  (sign_ish & oparg) ? PyValue_True : PyValue_False;
             }
             // _POP_TOP_INT
             {
                 value = r;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_C, _PyLong_ExactDealloc);
             }
             // _POP_TOP_INT
             {
                 value = l;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_B, _PyLong_ExactDealloc);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -8160,13 +8518,17 @@
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(0);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_COMPARE_OP
             {
-                right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                right = IR_VIEW(IR_FIELD_C(this_instr));
+                left = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -8196,10 +8558,10 @@
                     }
                     res_o = PyObject_RichCompare(left_o, right_o, oparg >> 5);
                 }
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE(right);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE(left);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), right);
+                PyValue_XCLOSE(ir_own_C);
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), left);
+                PyValue_XCLOSE(ir_own_B);
                 if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
@@ -8242,16 +8604,20 @@
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue value;
-            PyValue nos;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow value;
+            PyValueBorrow nos;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue res;
-            PyValue l;
-            PyValue r;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _GUARD_TOS_UNICODE
             {
-                value = IR_SLOT(IR_FIELD_C(this_instr));
+                value = IR_VIEW(IR_FIELD_C(this_instr));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(value))) {
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
@@ -8266,7 +8632,7 @@
             }
             // _GUARD_NOS_UNICODE
             {
-                nos = IR_SLOT(IR_FIELD_B(this_instr));
+                nos = IR_VIEW(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(nos))) {
                     UPDATE_MISS_STATS(COMPARE_OP);
                     assert(_PyOpcode_Deopt[opcode] == (COMPARE_OP));
@@ -8282,7 +8648,9 @@
             // _COMPARE_OP_STR
             {
                 right = value;
+                (void)right;
                 left = nos;
+                (void)left;
                 PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
                 PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
                 STAT_INC(COMPARE_OP, hit);
@@ -8290,8 +8658,8 @@
                 assert((oparg >> 5) == Py_EQ || (oparg >> 5) == Py_NE);
                 l = left;
                 r = right;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), l);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), r);
                 assert(eq == 0 || eq == 1);
                 assert((oparg & 0xf) == COMPARISON_NOT_EQUALS || (oparg & 0xf) == COMPARISON_EQUALS);
                 assert(COMPARISON_NOT_EQUALS + 1 == COMPARISON_EQUALS);
@@ -8300,14 +8668,16 @@
             // _POP_TOP_UNICODE
             {
                 value = r;
+                (void)value;
                 assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value)));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) _PyValue_CLOSE_SPECIALIZED_POINTER(value, _PyUnicode_ExactDealloc);
+                _PyValue_XCLOSE_SPECIALIZED_POINTER(ir_own_C, _PyUnicode_ExactDealloc);
             }
             // _POP_TOP_UNICODE
             {
                 value = l;
+                (void)value;
                 assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value)));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_SPECIALIZED_POINTER(value, _PyUnicode_ExactDealloc);
+                _PyValue_XCLOSE_SPECIALIZED_POINTER(ir_own_B, _PyUnicode_ExactDealloc);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -8341,16 +8711,22 @@
             _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_D(this_instr));
             (void)oparg;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue b;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValueBorrow value;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            PyObject *ir_obj_left = NULL;
+            PyObject *ir_obj_right = NULL;
             // _SPECIALIZE_CONTAINS_OP
             {
-                right = IR_SLOT(IR_FIELD_C(this_instr));
-                left = IR_SLOT(IR_FIELD_B(this_instr));
+                right = IR_VIEW(IR_FIELD_C(this_instr));
+                left = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -8365,23 +8741,27 @@
             // _CONTAINS_OP
             {
                 if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    left = PyValue_Box(left);
-                    if (PyValue_IsInline(left)) {
+                    ir_obj_left = _PyValueTemps_Box(value_temps, left);
+                    if (ir_obj_left == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CONTAINS_OP);
-                    IR_KEEP_BOX(left);
+                }
+                else {
+                    ir_obj_left = PyValue_AsKnownObjectBorrow(left);
                 }
                 if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                    right = PyValue_Box(right);
-                    if (PyValue_IsInline(right)) {
+                    ir_obj_right = _PyValueTemps_Box(value_temps, right);
+                    if (ir_obj_right == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CONTAINS_OP);
-                    IR_KEEP_BOX(right);
                 }
-                PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
-                PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
+                else {
+                    ir_obj_right = PyValue_AsKnownObjectBorrow(right);
+                }
+                PyObject *left_o = ir_obj_left;
+                PyObject *right_o = ir_obj_right;
                 int res = PySequence_Contains(right_o, left_o);
                 if (res < 0) {
                     JUMP_TO_LABEL(error);
@@ -8389,20 +8769,22 @@
                 b = (res ^ oparg) ? PyValue_True : PyValue_False;
                 l = left;
                 r = right;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), l);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), r);
             }
             // _POP_TOP
             {
                 value = r;
+                (void)value;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) _PyValue_XCLOSE_POINTER(value);
+                PyValue_XCLOSE(ir_own_C);
             }
             // _POP_TOP
             {
                 value = l;
+                (void)value;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_XCLOSE_POINTER(value);
+                PyValue_XCLOSE(ir_own_B);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), b);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -8431,16 +8813,20 @@
             _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue tos;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow tos;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue b;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValueBorrow value;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _GUARD_TOS_ANY_DICT
             {
-                tos = IR_SLOT(IR_FIELD_C(this_instr));
+                tos = IR_VIEW(IR_FIELD_C(this_instr));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(tos))) {
                     UPDATE_MISS_STATS(CONTAINS_OP);
                     assert(_PyOpcode_Deopt[opcode] == (CONTAINS_OP));
@@ -8456,7 +8842,8 @@
             // _CONTAINS_OP_DICT
             {
                 right = tos;
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                (void)right;
+                left = IR_VIEW(IR_FIELD_B(this_instr));
                 PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
                 assert(PyAnyDict_CheckExact(right_o));
                 STAT_INC(CONTAINS_OP, hit);
@@ -8467,20 +8854,22 @@
                 b = (res ^ oparg) ? PyValue_True : PyValue_False;
                 l = left;
                 r = right;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), l);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), r);
             }
             // _POP_TOP
             {
                 value = r;
+                (void)value;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) _PyValue_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(ir_own_C);
             }
             // _POP_TOP
             {
                 value = l;
+                (void)value;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_XCLOSE(value);
+                PyValue_XCLOSE(ir_own_B);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), b);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -8513,16 +8902,22 @@
             _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(0);
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue b;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValueBorrow value;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            PyObject *ir_obj_left = NULL;
+            PyObject *ir_obj_right = NULL;
             // _SPECIALIZE_CONTAINS_OP
             {
-                right = IR_SLOT(IR_FIELD_C(this_instr));
-                left = IR_SLOT(IR_FIELD_B(this_instr));
+                right = IR_VIEW(IR_FIELD_C(this_instr));
+                left = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -8537,23 +8932,27 @@
             // _CONTAINS_OP
             {
                 if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    left = PyValue_Box(left);
-                    if (PyValue_IsInline(left)) {
+                    ir_obj_left = _PyValueTemps_Box(value_temps, left);
+                    if (ir_obj_left == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CONTAINS_OP);
-                    IR_KEEP_BOX(left);
+                }
+                else {
+                    ir_obj_left = PyValue_AsKnownObjectBorrow(left);
                 }
                 if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                    right = PyValue_Box(right);
-                    if (PyValue_IsInline(right)) {
+                    ir_obj_right = _PyValueTemps_Box(value_temps, right);
+                    if (ir_obj_right == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CONTAINS_OP);
-                    IR_KEEP_BOX(right);
                 }
-                PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
-                PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
+                else {
+                    ir_obj_right = PyValue_AsKnownObjectBorrow(right);
+                }
+                PyObject *left_o = ir_obj_left;
+                PyObject *right_o = ir_obj_right;
                 int res = PySequence_Contains(right_o, left_o);
                 if (res < 0) {
                     JUMP_TO_LABEL(error);
@@ -8561,20 +8960,22 @@
                 b = (res ^ oparg) ? PyValue_True : PyValue_False;
                 l = left;
                 r = right;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), l);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), r);
             }
             // _POP_TOP
             {
                 value = r;
+                (void)value;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) _PyValue_XCLOSE_POINTER(value);
+                PyValue_XCLOSE(ir_own_C);
             }
             // _POP_TOP
             {
                 value = l;
+                (void)value;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_XCLOSE_POINTER(value);
+                PyValue_XCLOSE(ir_own_B);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), b);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -8603,16 +9004,20 @@
             _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue tos;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow tos;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue b;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValueBorrow value;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _GUARD_TOS_ANY_SET
             {
-                tos = IR_SLOT(IR_FIELD_C(this_instr));
+                tos = IR_VIEW(IR_FIELD_C(this_instr));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(tos))) {
                     UPDATE_MISS_STATS(CONTAINS_OP);
                     assert(_PyOpcode_Deopt[opcode] == (CONTAINS_OP));
@@ -8628,7 +9033,8 @@
             // _CONTAINS_OP_SET
             {
                 right = tos;
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                (void)right;
+                left = IR_VIEW(IR_FIELD_B(this_instr));
                 PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
                 assert(PyAnySet_CheckExact(right_o));
                 STAT_INC(CONTAINS_OP, hit);
@@ -8646,20 +9052,22 @@
                 b = (res ^ oparg) ? PyValue_True : PyValue_False;
                 l = left;
                 r = right;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), l);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), r);
             }
             // _POP_TOP
             {
                 value = r;
+                (void)value;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) _PyValue_XCLOSE_POINTER(value);
+                _PyValue_XCLOSE_POINTER(ir_own_C);
             }
             // _POP_TOP
             {
                 value = l;
+                (void)value;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_XCLOSE(value);
+                PyValue_XCLOSE(ir_own_B);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), b);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -8691,23 +9099,28 @@
             (void)ir_displaced;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue value;
+            PyValueBorrow value;
             PyValue result;
-            value = IR_SLOT(IR_FIELD_B(this_instr));
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyObject *ir_obj_value = NULL;
+            value = IR_VIEW(IR_FIELD_B(this_instr));
             if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                value = PyValue_Box(value);
-                if (PyValue_IsInline(value)) {
+                ir_obj_value = _PyValueTemps_Box(value_temps, value);
+                if (ir_obj_value == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(CONVERT_VALUE);
-                IR_KEEP_BOX(value);
+            }
+            else {
+                ir_obj_value = PyValue_AsKnownObjectBorrow(value);
             }
             conversion_func conv_fn;
             assert(oparg >= FVC_STR && oparg <= FVC_ASCII);
             conv_fn = _PyEval_ConversionFuncs[oparg];
-            PyObject *result_o = conv_fn(PyValue_AsKnownObjectBorrow(value));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_POINTER(value);
+            PyObject *result_o = conv_fn(ir_obj_value);
+            ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), value);
+            PyValue_XCLOSE(ir_own_B);
             if (result_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
@@ -8844,10 +9257,14 @@
             #endif
             value_owners = (_PyValueTemps){value_boxes, 0, 4};
             _PyValueTemps *value_temps = &value_owners;
-            PyValue container;
-            PyValue sub;
-            sub = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-            container = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+            PyValueBorrow container;
+            PyValueBorrow sub;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            sub = IR_VIEW(IR_FIELD_B(this_instr));
+            container = IR_VIEW(IR_FIELD_A(this_instr));
             PyObject *container_o = _PyValueTemps_Object(value_temps, container);
             if (container_o == NULL) {
                 JUMP_TO_LABEL(error);
@@ -8863,10 +9280,10 @@
                 }
                 err = PyObject_DelItem(container_o, sub_o);
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE(sub);
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-            if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE(container);
+            ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), sub);
+            PyValue_XCLOSE(ir_own_B);
+            ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), container);
+            PyValue_XCLOSE(ir_own_A);
             if (err) {
                 JUMP_TO_LABEL(error);
             }
@@ -8899,38 +9316,47 @@
             PyValue update;
             PyValue u;
             PyValue value;
+            PyObject *ir_obj_callable = NULL;
+            PyObject *ir_obj_dict = NULL;
+            PyObject *ir_obj_update = NULL;
             // _DICT_MERGE
             {
                 update = window[4 + (oparg - 1)];
                 dict = window[3];
                 callable = window[0];
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                    callable = PyValue_Box(callable);
-                    if (PyValue_IsInline(callable)) {
+                    ir_obj_callable = _PyValueTemps_Box(value_temps, callable);
+                    if (ir_obj_callable == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(DICT_MERGE);
-                    IR_KEEP_BOX(callable);
+                }
+                else {
+                    ir_obj_callable = PyValue_AsKnownObjectBorrow(callable);
                 }
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[3]))) {
-                    dict = PyValue_Box(dict);
-                    if (PyValue_IsInline(dict)) {
+                    ir_obj_dict = _PyValueTemps_Box(value_temps, dict);
+                    if (ir_obj_dict == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(DICT_MERGE);
-                    IR_KEEP_BOX(dict);
+                }
+                else {
+                    ir_obj_dict = PyValue_AsKnownObjectBorrow(dict);
                 }
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[4 + (oparg - 1)]))) {
-                    update = PyValue_Box(update);
-                    if (PyValue_IsInline(update)) {
+                    ir_obj_update = _PyValueTemps_Box(value_temps, update);
+                    if (ir_obj_update == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(DICT_MERGE);
-                    IR_KEEP_BOX(update);
                 }
-                PyObject *callable_o = PyValue_AsKnownObjectBorrow(callable);
-                PyObject *dict_o = PyValue_AsKnownObjectBorrow(dict);
-                PyObject *update_o = PyValue_AsKnownObjectBorrow(update);
+                else {
+                    ir_obj_update = PyValue_AsKnownObjectBorrow(update);
+                }
+                PyObject *callable_o = ir_obj_callable;
+                PyObject *dict_o = ir_obj_dict;
+                PyObject *update_o = ir_obj_update;
                 PyObject *dupkey = NULL;
                 int err = _PyDict_MergeUniq(dict_o, update_o, &dupkey);
                 if (err < 0) {
@@ -8944,7 +9370,7 @@
             {
                 value = u;
                 window[4 + (oparg - 1)] = PyValue_NULL;
-                _PyValue_XCLOSE_POINTER(value);
+                PyValue_XCLOSE(value);
             }
             DISPATCH();
         }
@@ -8974,28 +9400,34 @@
             PyValue update;
             PyValue upd;
             PyValue value;
+            PyObject *ir_obj_dict = NULL;
+            PyObject *ir_obj_update = NULL;
             // _DICT_UPDATE
             {
                 update = window[1 + (oparg - 1)];
                 dict = window[0];
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                    dict = PyValue_Box(dict);
-                    if (PyValue_IsInline(dict)) {
+                    ir_obj_dict = _PyValueTemps_Box(value_temps, dict);
+                    if (ir_obj_dict == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(DICT_UPDATE);
-                    IR_KEEP_BOX(dict);
+                }
+                else {
+                    ir_obj_dict = PyValue_AsKnownObjectBorrow(dict);
                 }
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1 + (oparg - 1)]))) {
-                    update = PyValue_Box(update);
-                    if (PyValue_IsInline(update)) {
+                    ir_obj_update = _PyValueTemps_Box(value_temps, update);
+                    if (ir_obj_update == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(DICT_UPDATE);
-                    IR_KEEP_BOX(update);
                 }
-                PyObject *dict_o = PyValue_AsKnownObjectBorrow(dict);
-                PyObject *update_o = PyValue_AsKnownObjectBorrow(update);
+                else {
+                    ir_obj_update = PyValue_AsKnownObjectBorrow(update);
+                }
+                PyObject *dict_o = ir_obj_dict;
+                PyObject *update_o = ir_obj_update;
                 int err = PyDict_Update(dict_o, update_o);
                 if (err < 0) {
                     int matches = _PyErr_ExceptionMatches(tstate, PyExc_AttributeError);
@@ -9020,7 +9452,7 @@
             {
                 value = upd;
                 window[1 + (oparg - 1)] = PyValue_NULL;
-                _PyValue_XCLOSE_POINTER(value);
+                PyValue_XCLOSE(value);
             }
             DISPATCH();
         }
@@ -9048,26 +9480,29 @@
             (void)window;
             PyValue awaitable_st;
             PyValue exc_st;
+            PyObject *ir_obj_exc_st = NULL;
             exc_st = window[1];
             awaitable_st = window[0];
             if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1]))) {
-                exc_st = PyValue_Box(exc_st);
-                if (PyValue_IsInline(exc_st)) {
+                ir_obj_exc_st = _PyValueTemps_Box(value_temps, exc_st);
+                if (ir_obj_exc_st == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(END_ASYNC_FOR);
-                IR_KEEP_BOX(exc_st);
+            }
+            else {
+                ir_obj_exc_st = PyValue_AsKnownObjectBorrow(exc_st);
             }
             JUMPBY(0);
             (void)oparg;
-            PyObject *exc = PyValue_AsKnownObjectBorrow(exc_st);
+            PyObject *exc = ir_obj_exc_st;
             assert(exc && PyExceptionInstance_Check(exc));
             int matches = PyErr_GivenExceptionMatches(exc, PyExc_StopAsyncIteration);
             if (matches) {
                 PyValue tmp = exc_st;
                 exc_st = PyValue_NULL;
                 IR_PUBLISH_TEMP(window[1], exc_st);
-                _PyValue_CLOSE_POINTER(tmp);
+                PyValue_CLOSE(tmp);
                 tmp = awaitable_st;
                 awaitable_st = PyValue_NULL;
                 IR_PUBLISH_TEMP(window[0], awaitable_st);
@@ -9096,10 +9531,12 @@
             (void)this_instr;
             next_instr += 1;
             INSTRUCTION_STATS(END_FOR);
-            PyValue value;
-            value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE(value);
+            PyValueBorrow value;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            value = IR_VIEW(IR_FIELD_C(this_instr));
+            ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), value);
+            PyValue_XCLOSE(ir_own_C);
             DISPATCH();
         }
 
@@ -9116,21 +9553,26 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(END_SEND);
-            PyValue receiver;
-            PyValue index_or_null;
-            PyValue value;
+            PyValueBorrow receiver;
+            PyValueBorrow index_or_null;
+            PyValueBorrow value;
             PyValue val;
-            value = IR_LOAD_BORROWED(IR_FIELD_D(this_instr));
-            index_or_null = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-            receiver = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-            val = value;
-            IR_INPLACE_OWN(val, IR_FIELD_D(this_instr));
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            PyValue ir_own_D = PyValue_NULL;
+            (void)ir_own_D;
+            value = IR_VIEW(IR_FIELD_D(this_instr));
+            index_or_null = IR_VIEW(IR_FIELD_C(this_instr));
+            receiver = IR_VIEW(IR_FIELD_B(this_instr));
+            ir_own_D = IR_CONSUME_INPUT(IR_FIELD_D(this_instr), value);
+            val = IR_TAKE(value, ir_own_D);
             (void)index_or_null;
-            IR_CONSUME_INPUT(IR_FIELD_D(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), index_or_null);
+            ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), receiver);
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), val);
-            if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE(receiver);
+            PyValue_XCLOSE(ir_own_B);
             DISPATCH();
         }
 
@@ -9151,23 +9593,28 @@
             #endif
             value_owners = (_PyValueTemps){value_boxes, 0, 3};
             _PyValueTemps *value_temps = &value_owners;
-            PyValue should_be_none;
-            should_be_none = IR_SLOT(IR_FIELD_A(this_instr));
+            PyValueBorrow should_be_none;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            PyObject *ir_obj_should_be_none = NULL;
+            should_be_none = IR_VIEW(IR_FIELD_A(this_instr));
             if (Py_UNLIKELY(PyValue_IsInline(should_be_none))) {
-                should_be_none = PyValue_Box(should_be_none);
-                if (PyValue_IsInline(should_be_none)) {
+                ir_obj_should_be_none = _PyValueTemps_Box(value_temps, should_be_none);
+                if (ir_obj_should_be_none == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(EXIT_INIT_CHECK);
-                IR_KEEP_BOX(should_be_none);
+            }
+            else {
+                ir_obj_should_be_none = PyValue_AsKnownObjectBorrow(should_be_none);
             }
             if (!PyValue_IsNone(should_be_none)) {
                 PyErr_Format(PyExc_TypeError,
                              "__init__() should return None, not '%.200s'",
-                             Py_TYPE(PyValue_AsKnownObjectBorrow(should_be_none))->tp_name);
+                             Py_TYPE(ir_obj_should_be_none)->tp_name);
                 JUMP_TO_LABEL(error);
             }
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+            ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), should_be_none);
             DISPATCH();
         }
 
@@ -9211,31 +9658,35 @@
             #endif
             value_owners = (_PyValueTemps){value_boxes, 0, 4};
             _PyValueTemps *value_temps = &value_owners;
-            PyValue value;
+            PyValueBorrow value;
             PyValue res;
-            value = IR_SLOT(IR_FIELD_B(this_instr));
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyObject *ir_obj_value = NULL;
+            value = IR_VIEW(IR_FIELD_B(this_instr));
             if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                value = PyValue_Box(value);
-                if (PyValue_IsInline(value)) {
+                ir_obj_value = _PyValueTemps_Box(value_temps, value);
+                if (ir_obj_value == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(FORMAT_SIMPLE);
-                IR_KEEP_BOX(value);
             }
-            PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
+            else {
+                ir_obj_value = PyValue_AsKnownObjectBorrow(value);
+            }
+            PyObject *value_o = ir_obj_value;
             if (!PyUnicode_CheckExact(value_o)) {
                 PyObject *res_o = PyObject_Format(value_o, NULL);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_POINTER(value);
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), value);
+                PyValue_XCLOSE(ir_own_B);
                 if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 res = PyValue_FromPyObjectSteal(res_o);
             }
             else {
-                res = value;
-                IR_INPLACE_OWN(res, IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), value);
+                res = IR_TAKE(value, ir_own_B);
             }
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
             DISPATCH();
@@ -9260,32 +9711,42 @@
             _PyValueTemps *value_temps = &value_owners;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue value;
-            PyValue fmt_spec;
+            PyValueBorrow value;
+            PyValueBorrow fmt_spec;
             PyValue res;
-            fmt_spec = IR_SLOT(IR_FIELD_C(this_instr));
-            value = IR_SLOT(IR_FIELD_B(this_instr));
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            PyObject *ir_obj_fmt_spec = NULL;
+            PyObject *ir_obj_value = NULL;
+            fmt_spec = IR_VIEW(IR_FIELD_C(this_instr));
+            value = IR_VIEW(IR_FIELD_B(this_instr));
             if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                value = PyValue_Box(value);
-                if (PyValue_IsInline(value)) {
+                ir_obj_value = _PyValueTemps_Box(value_temps, value);
+                if (ir_obj_value == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(FORMAT_WITH_SPEC);
-                IR_KEEP_BOX(value);
+            }
+            else {
+                ir_obj_value = PyValue_AsKnownObjectBorrow(value);
             }
             if (Py_UNLIKELY(PyValue_IsInline(fmt_spec))) {
-                fmt_spec = PyValue_Box(fmt_spec);
-                if (PyValue_IsInline(fmt_spec)) {
+                ir_obj_fmt_spec = _PyValueTemps_Box(value_temps, fmt_spec);
+                if (ir_obj_fmt_spec == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(FORMAT_WITH_SPEC);
-                IR_KEEP_BOX(fmt_spec);
             }
-            PyObject *res_o = PyObject_Format(PyValue_AsKnownObjectBorrow(value), PyValue_AsKnownObjectBorrow(fmt_spec));
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) _PyValue_CLOSE_POINTER(fmt_spec);
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_POINTER(value);
+            else {
+                ir_obj_fmt_spec = PyValue_AsKnownObjectBorrow(fmt_spec);
+            }
+            PyObject *res_o = PyObject_Format(ir_obj_value, ir_obj_fmt_spec);
+            ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), fmt_spec);
+            PyValue_XCLOSE(ir_own_C);
+            ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), value);
+            PyValue_XCLOSE(ir_own_B);
             if (res_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
@@ -9770,19 +10231,24 @@
             _PyValueTemps *value_temps = &value_owners;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue obj;
+            PyValueBorrow obj;
             PyValue iter;
-            obj = IR_SLOT(IR_FIELD_B(this_instr));
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyObject *ir_obj_obj = NULL;
+            obj = IR_VIEW(IR_FIELD_B(this_instr));
             if (Py_UNLIKELY(PyValue_IsInline(obj))) {
-                obj = PyValue_Box(obj);
-                if (PyValue_IsInline(obj)) {
+                ir_obj_obj = _PyValueTemps_Box(value_temps, obj);
+                if (ir_obj_obj == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(GET_AITER);
-                IR_KEEP_BOX(obj);
+            }
+            else {
+                ir_obj_obj = PyValue_AsKnownObjectBorrow(obj);
             }
             unaryfunc getter = NULL;
-            PyObject *obj_o = PyValue_AsKnownObjectBorrow(obj);
+            PyObject *obj_o = ir_obj_obj;
             PyObject *iter_o;
             PyTypeObject *type = Py_TYPE(obj_o);
             if (type->tp_as_async != NULL) {
@@ -9793,13 +10259,13 @@
                               "'async for' requires an object with "
                               "__aiter__ method, got %.100s",
                               type->tp_name);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_POINTER(obj);
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), obj);
+                PyValue_XCLOSE(ir_own_B);
                 JUMP_TO_LABEL(error);
             }
             iter_o = (*getter)(obj_o);
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_POINTER(obj);
+            ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), obj);
+            PyValue_XCLOSE(ir_own_B);
             if (iter_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
@@ -9843,16 +10309,19 @@
             (void)ir_displaced;
             PyValue aiter;
             PyValue awaitable;
+            PyObject *ir_obj_aiter = NULL;
             aiter = IR_SLOT(IR_FIELD_B(this_instr));
             if (Py_UNLIKELY(PyValue_IsInlineAt(&IR_SLOT(IR_FIELD_B(this_instr))))) {
-                aiter = PyValue_Box(aiter);
-                if (PyValue_IsInline(aiter)) {
+                ir_obj_aiter = _PyValueTemps_Box(value_temps, aiter);
+                if (ir_obj_aiter == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(GET_ANEXT);
-                IR_KEEP_BOX(aiter);
             }
-            PyObject *awaitable_o = _PyEval_GetANext(PyValue_AsKnownObjectBorrow(aiter));
+            else {
+                ir_obj_aiter = PyValue_AsKnownObjectBorrow(aiter);
+            }
+            PyObject *awaitable_o = _PyEval_GetANext(ir_obj_aiter);
             if (awaitable_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
@@ -9887,20 +10356,25 @@
             (void)ir_displaced;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue iterable;
+            PyValueBorrow iterable;
             PyValue iter;
-            iterable = IR_SLOT(IR_FIELD_B(this_instr));
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyObject *ir_obj_iterable = NULL;
+            iterable = IR_VIEW(IR_FIELD_B(this_instr));
             if (Py_UNLIKELY(PyValue_IsInline(iterable))) {
-                iterable = PyValue_Box(iterable);
-                if (PyValue_IsInline(iterable)) {
+                ir_obj_iterable = _PyValueTemps_Box(value_temps, iterable);
+                if (ir_obj_iterable == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(GET_AWAITABLE);
-                IR_KEEP_BOX(iterable);
             }
-            PyObject *iter_o = _PyEval_GetAwaitable(PyValue_AsKnownObjectBorrow(iterable), oparg);
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_POINTER(iterable);
+            else {
+                ir_obj_iterable = PyValue_AsKnownObjectBorrow(iterable);
+            }
+            PyObject *iter_o = _PyEval_GetAwaitable(ir_obj_iterable, oparg);
+            ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), iterable);
+            PyValue_XCLOSE(ir_own_B);
             if (iter_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
@@ -10061,16 +10535,19 @@
             (void)ir_displaced;
             PyValue obj;
             PyValue len;
+            PyObject *ir_obj_obj = NULL;
             obj = IR_SLOT(IR_FIELD_B(this_instr));
             if (Py_UNLIKELY(PyValue_IsInlineAt(&IR_SLOT(IR_FIELD_B(this_instr))))) {
-                obj = PyValue_Box(obj);
-                if (PyValue_IsInline(obj)) {
+                ir_obj_obj = _PyValueTemps_Box(value_temps, obj);
+                if (ir_obj_obj == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(GET_LEN);
-                IR_KEEP_BOX(obj);
             }
-            Py_ssize_t len_i = PyObject_Length(PyValue_AsKnownObjectBorrow(obj));
+            else {
+                ir_obj_obj = PyValue_AsKnownObjectBorrow(obj);
+            }
+            Py_ssize_t len_i = PyObject_Length(ir_obj_obj);
             if (len_i < 0) {
                 JUMP_TO_LABEL(error);
             }
@@ -10111,24 +10588,27 @@
             (void)oparg;
             PyValue from;
             PyValue res;
+            PyObject *ir_obj_from = NULL;
             from = IR_SLOT(IR_FIELD_B(this_instr));
             if (Py_UNLIKELY(PyValue_IsInlineAt(&IR_SLOT(IR_FIELD_B(this_instr))))) {
-                from = PyValue_Box(from);
-                if (PyValue_IsInline(from)) {
+                ir_obj_from = _PyValueTemps_Box(value_temps, from);
+                if (ir_obj_from == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(IMPORT_FROM);
-                IR_KEEP_BOX(from);
+            }
+            else {
+                ir_obj_from = PyValue_AsKnownObjectBorrow(from);
             }
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             PyObject *res_o;
-            if (PyLazyImport_CheckExact(PyValue_AsKnownObjectBorrow(from))) {
+            if (PyLazyImport_CheckExact(ir_obj_from)) {
                 res_o = _PyEval_LazyImportFrom(
-                    tstate, frame, PyValue_AsKnownObjectBorrow(from), name);
+                    tstate, frame, ir_obj_from, name);
             }
             else {
                 res_o = _PyEval_ImportFrom(
-                    tstate, PyValue_AsKnownObjectBorrow(from), name);
+                    tstate, ir_obj_from, name);
             }
             if (res_o == NULL) {
                 JUMP_TO_LABEL(error);
@@ -10169,47 +10649,53 @@
             PyValue level;
             PyValue fromlist;
             PyValue res;
+            PyObject *ir_obj_fromlist = NULL;
+            PyObject *ir_obj_level = NULL;
             fromlist = window[1];
             level = window[0];
             if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                level = PyValue_Box(level);
-                if (PyValue_IsInline(level)) {
+                ir_obj_level = _PyValueTemps_Box(value_temps, level);
+                if (ir_obj_level == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(IMPORT_NAME);
-                IR_KEEP_BOX(level);
+            }
+            else {
+                ir_obj_level = PyValue_AsKnownObjectBorrow(level);
             }
             if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1]))) {
-                fromlist = PyValue_Box(fromlist);
-                if (PyValue_IsInline(fromlist)) {
+                ir_obj_fromlist = _PyValueTemps_Box(value_temps, fromlist);
+                if (ir_obj_fromlist == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(IMPORT_NAME);
-                IR_KEEP_BOX(fromlist);
+            }
+            else {
+                ir_obj_fromlist = PyValue_AsKnownObjectBorrow(fromlist);
             }
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
             PyObject *res_o;
             if (!(oparg & 0x02)) {
                 res_o = _PyEval_LazyImportName(tstate, BUILTINS(), GLOBALS(),
                     LOCALS(), name,
-                    PyValue_AsKnownObjectBorrow(fromlist),
-                    PyValue_AsKnownObjectBorrow(level),
+                    ir_obj_fromlist,
+                    ir_obj_level,
                     oparg & 0x01);
             }
             else {
                 res_o = _PyEval_ImportName(tstate, BUILTINS(), GLOBALS(),
                     LOCALS(), name,
-                    PyValue_AsKnownObjectBorrow(fromlist),
-                    PyValue_AsKnownObjectBorrow(level));
+                    ir_obj_fromlist,
+                    ir_obj_level);
             }
             PyValue tmp = fromlist;
             fromlist = PyValue_NULL;
             IR_PUBLISH_TEMP(window[1], fromlist);
-            _PyValue_CLOSE_POINTER(tmp);
+            PyValue_CLOSE(tmp);
             tmp = level;
             level = PyValue_NULL;
             IR_PUBLISH_TEMP(window[0], level);
-            _PyValue_CLOSE_POINTER(tmp);
+            PyValue_CLOSE(tmp);
             window[0] = PyValue_NULL;
             window[1] = PyValue_NULL;
             if (res_o == NULL) {
@@ -10438,6 +10924,7 @@
             (void)window;
             PyValue awaitable_st;
             PyValue exc_st;
+            PyObject *ir_obj_exc_st = NULL;
             // _MONITOR_END_ASYNC_FOR
             {
                 assert(IR_HANDLER(*(JUMP_TARGET(oparg))) == END_SEND || IR_HANDLER(*(JUMP_TARGET(oparg))) >= MIN_INSTRUMENTED_OPCODE);
@@ -10448,23 +10935,25 @@
                 exc_st = window[1];
                 awaitable_st = window[0];
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1]))) {
-                    exc_st = PyValue_Box(exc_st);
-                    if (PyValue_IsInline(exc_st)) {
+                    ir_obj_exc_st = _PyValueTemps_Box(value_temps, exc_st);
+                    if (ir_obj_exc_st == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(INSTRUMENTED_END_ASYNC_FOR);
-                    IR_KEEP_BOX(exc_st);
+                }
+                else {
+                    ir_obj_exc_st = PyValue_AsKnownObjectBorrow(exc_st);
                 }
                 JUMPBY(0);
                 (void)oparg;
-                PyObject *exc = PyValue_AsKnownObjectBorrow(exc_st);
+                PyObject *exc = ir_obj_exc_st;
                 assert(exc && PyExceptionInstance_Check(exc));
                 int matches = PyErr_GivenExceptionMatches(exc, PyExc_StopAsyncIteration);
                 if (matches) {
                     PyValue tmp = exc_st;
                     exc_st = PyValue_NULL;
                     IR_PUBLISH_TEMP(window[1], exc_st);
-                    _PyValue_CLOSE_POINTER(tmp);
+                    PyValue_CLOSE(tmp);
                     tmp = awaitable_st;
                     awaitable_st = PyValue_NULL;
                     IR_PUBLISH_TEMP(window[0], awaitable_st);
@@ -10499,25 +10988,30 @@
             value_owners = (_PyValueTemps){value_boxes, 0, 7};
             _PyValueTemps *value_temps = &value_owners;
             PyValue receiver;
-            PyValue value;
-            value = IR_SLOT(IR_FIELD_C(this_instr));
+            PyValueBorrow value;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            PyObject *ir_obj_value = NULL;
+            value = IR_VIEW(IR_FIELD_C(this_instr));
             receiver = IR_SLOT(IR_FIELD_A(this_instr));
             if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                value = PyValue_Box(value);
-                if (PyValue_IsInline(value)) {
+                ir_obj_value = _PyValueTemps_Box(value_temps, value);
+                if (ir_obj_value == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(INSTRUMENTED_END_FOR);
-                IR_KEEP_BOX(value);
+            }
+            else {
+                ir_obj_value = PyValue_AsKnownObjectBorrow(value);
             }
             if (PyValue_GenCheck(receiver)) {
-                int err = monitor_stop_iteration(tstate, frame, this_instr, PyValue_AsKnownObjectBorrow(value));
+                int err = monitor_stop_iteration(tstate, frame, this_instr, ir_obj_value);
                 if (err) {
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) _PyValue_CLOSE_POINTER(value);
+            ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), value);
+            PyValue_XCLOSE(ir_own_C);
             DISPATCH();
         }
 
@@ -10538,44 +11032,58 @@
             #endif
             value_owners = (_PyValueTemps){value_boxes, 0, 6};
             _PyValueTemps *value_temps = &value_owners;
-            PyValue receiver;
-            PyValue index_or_null;
-            PyValue value;
+            PyValueBorrow receiver;
+            PyValueBorrow index_or_null;
+            PyValueBorrow value;
             PyValue val;
-            value = IR_SLOT(IR_FIELD_D(this_instr));
-            index_or_null = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-            receiver = IR_SLOT(IR_FIELD_B(this_instr));
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            PyValue ir_own_D = PyValue_NULL;
+            (void)ir_own_D;
+            PyObject *ir_obj_receiver = NULL;
+            PyObject *ir_obj_value = NULL;
+            value = IR_VIEW(IR_FIELD_D(this_instr));
+            index_or_null = IR_VIEW(IR_FIELD_C(this_instr));
+            receiver = IR_VIEW(IR_FIELD_B(this_instr));
             if (Py_UNLIKELY(PyValue_IsInline(receiver))) {
-                receiver = PyValue_Box(receiver);
-                if (PyValue_IsInline(receiver)) {
+                ir_obj_receiver = _PyValueTemps_Box(value_temps, receiver);
+                if (ir_obj_receiver == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(INSTRUMENTED_END_SEND);
-                IR_KEEP_BOX(receiver);
+            }
+            else {
+                ir_obj_receiver = PyValue_AsKnownObjectBorrow(receiver);
             }
             if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                value = PyValue_Box(value);
-                if (PyValue_IsInline(value)) {
+                ir_obj_value = _PyValueTemps_Box(value_temps, value);
+                if (ir_obj_value == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(INSTRUMENTED_END_SEND);
-                IR_KEEP_BOX(value);
             }
-            PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
+            else {
+                ir_obj_value = PyValue_AsKnownObjectBorrow(value);
+            }
+            PyObject *receiver_o = ir_obj_receiver;
+            PyObject *value_o = ir_obj_value;
+            ir_own_D = IR_CONSUME_INPUT(IR_FIELD_D(this_instr), value);
+            PyValue held = IR_TAKE(value, ir_own_D);
             if (PyGen_Check(receiver_o) || PyCoro_CheckExact(receiver_o)) {
-                int err = monitor_stop_iteration(tstate, frame, this_instr, PyValue_AsKnownObjectBorrow(value));
+                int err = monitor_stop_iteration(tstate, frame, this_instr, value_o);
                 if (err) {
+                    PyValue_CLOSE(held);
                     JUMP_TO_LABEL(error);
                 }
             }
-            val = value;
-            IR_INPLACE_OWN(val, IR_FIELD_D(this_instr));
+            val = held;
             (void)index_or_null;
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_D(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), index_or_null);
+            ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), receiver);
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), val);
-            if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_POINTER(receiver);
+            PyValue_XCLOSE(ir_own_B);
             DISPATCH();
         }
 
@@ -10723,22 +11231,24 @@
             INSTRUCTION_STATS(INSTRUMENTED_JUMP_IF_FALSE_OR_POP);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue cond;
+            PyValueBorrow cond;
             PyValue res;
-            cond = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-            int truth = _PyValue_Truth(cond);
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            cond = IR_VIEW(IR_FIELD_B(this_instr));
+            ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), cond);
+            PyValue held = IR_TAKE(cond, ir_own_B);
+            int truth = _PyValue_Truth(held);
             if (truth < 0) {
+                PyValue_CLOSE(held);
                 JUMP_TO_LABEL(error);
             }
             if (!truth) {
-                res = cond;
-                IR_INPLACE_OWN(res, IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                res = held;
                 INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
             }
             else {
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE(cond);
+                PyValue_CLOSE(held);
                 res = PyValue_NULL;
             }
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
@@ -10760,22 +11270,24 @@
             INSTRUCTION_STATS(INSTRUMENTED_JUMP_IF_TRUE_OR_POP);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue cond;
+            PyValueBorrow cond;
             PyValue res;
-            cond = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-            int truth = _PyValue_Truth(cond);
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            cond = IR_VIEW(IR_FIELD_B(this_instr));
+            ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), cond);
+            PyValue held = IR_TAKE(cond, ir_own_B);
+            int truth = _PyValue_Truth(held);
             if (truth < 0) {
+                PyValue_CLOSE(held);
                 JUMP_TO_LABEL(error);
             }
             if (truth) {
-                res = cond;
-                IR_INPLACE_OWN(res, IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                res = held;
                 INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
             }
             else {
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE(cond);
+                PyValue_CLOSE(held);
                 res = PyValue_NULL;
             }
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), res);
@@ -10855,38 +11367,47 @@
             PyValue self_st;
             PyValue attr;
             PyValue *null;
+            PyObject *ir_obj_class_st = NULL;
+            PyObject *ir_obj_global_super_st = NULL;
+            PyObject *ir_obj_self_st = NULL;
             // _LOAD_SUPER_ATTR
             {
                 self_st = window[2];
                 class_st = window[1];
                 global_super_st = window[0];
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                    global_super_st = PyValue_Box(global_super_st);
-                    if (PyValue_IsInline(global_super_st)) {
+                    ir_obj_global_super_st = _PyValueTemps_Box(value_temps, global_super_st);
+                    if (ir_obj_global_super_st == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(INSTRUMENTED_LOAD_SUPER_ATTR);
-                    IR_KEEP_BOX(global_super_st);
+                }
+                else {
+                    ir_obj_global_super_st = PyValue_AsKnownObjectBorrow(global_super_st);
                 }
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1]))) {
-                    class_st = PyValue_Box(class_st);
-                    if (PyValue_IsInline(class_st)) {
+                    ir_obj_class_st = _PyValueTemps_Box(value_temps, class_st);
+                    if (ir_obj_class_st == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(INSTRUMENTED_LOAD_SUPER_ATTR);
-                    IR_KEEP_BOX(class_st);
+                }
+                else {
+                    ir_obj_class_st = PyValue_AsKnownObjectBorrow(class_st);
                 }
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[2]))) {
-                    self_st = PyValue_Box(self_st);
-                    if (PyValue_IsInline(self_st)) {
+                    ir_obj_self_st = _PyValueTemps_Box(value_temps, self_st);
+                    if (ir_obj_self_st == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(INSTRUMENTED_LOAD_SUPER_ATTR);
-                    IR_KEEP_BOX(self_st);
                 }
-                PyObject *global_super = PyValue_AsKnownObjectBorrow(global_super_st);
-                PyObject *class = PyValue_AsKnownObjectBorrow(class_st);
-                PyObject *self = PyValue_AsKnownObjectBorrow(self_st);
+                else {
+                    ir_obj_self_st = PyValue_AsKnownObjectBorrow(self_st);
+                }
+                PyObject *global_super = ir_obj_global_super_st;
+                PyObject *class = ir_obj_class_st;
+                PyObject *self = ir_obj_self_st;
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                     PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
                     int err = _Py_call_instrumentation_2args(
@@ -10896,15 +11417,15 @@
                         PyValue tmp = self_st;
                         self_st = PyValue_NULL;
                         IR_PUBLISH_TEMP(window[2], self_st);
-                        _PyValue_CLOSE_POINTER(tmp);
+                        PyValue_CLOSE(tmp);
                         tmp = class_st;
                         class_st = PyValue_NULL;
                         IR_PUBLISH_TEMP(window[1], class_st);
-                        _PyValue_CLOSE_POINTER(tmp);
+                        PyValue_CLOSE(tmp);
                         tmp = global_super_st;
                         global_super_st = PyValue_NULL;
                         IR_PUBLISH_TEMP(window[0], global_super_st);
-                        _PyValue_CLOSE_POINTER(tmp);
+                        PyValue_CLOSE(tmp);
                         window[0] = PyValue_NULL;
                         window[1] = PyValue_NULL;
                         window[2] = PyValue_NULL;
@@ -10936,15 +11457,15 @@
                 PyValue tmp = self_st;
                 self_st = PyValue_NULL;
                 IR_PUBLISH_TEMP(window[2], self_st);
-                _PyValue_CLOSE_POINTER(tmp);
+                PyValue_CLOSE(tmp);
                 tmp = class_st;
                 class_st = PyValue_NULL;
                 IR_PUBLISH_TEMP(window[1], class_st);
-                _PyValue_CLOSE_POINTER(tmp);
+                PyValue_CLOSE(tmp);
                 tmp = global_super_st;
                 global_super_st = PyValue_NULL;
                 IR_PUBLISH_TEMP(window[0], global_super_st);
-                _PyValue_CLOSE_POINTER(tmp);
+                PyValue_CLOSE(tmp);
                 window[0] = PyValue_NULL;
                 window[1] = PyValue_NULL;
                 window[2] = PyValue_NULL;
@@ -11005,38 +11526,47 @@
             PyValue self_st;
             PyValue attr;
             PyValue *null;
+            PyObject *ir_obj_class_st = NULL;
+            PyObject *ir_obj_global_super_st = NULL;
+            PyObject *ir_obj_self_st = NULL;
             // _LOAD_SUPER_ATTR
             {
                 self_st = window[2];
                 class_st = window[1];
                 global_super_st = window[0];
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                    global_super_st = PyValue_Box(global_super_st);
-                    if (PyValue_IsInline(global_super_st)) {
+                    ir_obj_global_super_st = _PyValueTemps_Box(value_temps, global_super_st);
+                    if (ir_obj_global_super_st == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(INSTRUMENTED_LOAD_SUPER_ATTR);
-                    IR_KEEP_BOX(global_super_st);
+                }
+                else {
+                    ir_obj_global_super_st = PyValue_AsKnownObjectBorrow(global_super_st);
                 }
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1]))) {
-                    class_st = PyValue_Box(class_st);
-                    if (PyValue_IsInline(class_st)) {
+                    ir_obj_class_st = _PyValueTemps_Box(value_temps, class_st);
+                    if (ir_obj_class_st == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(INSTRUMENTED_LOAD_SUPER_ATTR);
-                    IR_KEEP_BOX(class_st);
+                }
+                else {
+                    ir_obj_class_st = PyValue_AsKnownObjectBorrow(class_st);
                 }
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[2]))) {
-                    self_st = PyValue_Box(self_st);
-                    if (PyValue_IsInline(self_st)) {
+                    ir_obj_self_st = _PyValueTemps_Box(value_temps, self_st);
+                    if (ir_obj_self_st == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(INSTRUMENTED_LOAD_SUPER_ATTR);
-                    IR_KEEP_BOX(self_st);
                 }
-                PyObject *global_super = PyValue_AsKnownObjectBorrow(global_super_st);
-                PyObject *class = PyValue_AsKnownObjectBorrow(class_st);
-                PyObject *self = PyValue_AsKnownObjectBorrow(self_st);
+                else {
+                    ir_obj_self_st = PyValue_AsKnownObjectBorrow(self_st);
+                }
+                PyObject *global_super = ir_obj_global_super_st;
+                PyObject *class = ir_obj_class_st;
+                PyObject *self = ir_obj_self_st;
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                     PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
                     int err = _Py_call_instrumentation_2args(
@@ -11046,15 +11576,15 @@
                         PyValue tmp = self_st;
                         self_st = PyValue_NULL;
                         IR_PUBLISH_TEMP(window[2], self_st);
-                        _PyValue_CLOSE_POINTER(tmp);
+                        PyValue_CLOSE(tmp);
                         tmp = class_st;
                         class_st = PyValue_NULL;
                         IR_PUBLISH_TEMP(window[1], class_st);
-                        _PyValue_CLOSE_POINTER(tmp);
+                        PyValue_CLOSE(tmp);
                         tmp = global_super_st;
                         global_super_st = PyValue_NULL;
                         IR_PUBLISH_TEMP(window[0], global_super_st);
-                        _PyValue_CLOSE_POINTER(tmp);
+                        PyValue_CLOSE(tmp);
                         window[0] = PyValue_NULL;
                         window[1] = PyValue_NULL;
                         window[2] = PyValue_NULL;
@@ -11086,15 +11616,15 @@
                 PyValue tmp = self_st;
                 self_st = PyValue_NULL;
                 IR_PUBLISH_TEMP(window[2], self_st);
-                _PyValue_CLOSE_POINTER(tmp);
+                PyValue_CLOSE(tmp);
                 tmp = class_st;
                 class_st = PyValue_NULL;
                 IR_PUBLISH_TEMP(window[1], class_st);
-                _PyValue_CLOSE_POINTER(tmp);
+                PyValue_CLOSE(tmp);
                 tmp = global_super_st;
                 global_super_st = PyValue_NULL;
                 IR_PUBLISH_TEMP(window[0], global_super_st);
-                _PyValue_CLOSE_POINTER(tmp);
+                PyValue_CLOSE(tmp);
                 window[0] = PyValue_NULL;
                 window[1] = PyValue_NULL;
                 window[2] = PyValue_NULL;
@@ -11159,15 +11689,19 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_POP_ITER);
-            PyValue iter;
-            PyValue index_or_null;
-            index_or_null = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-            iter = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+            PyValueBorrow iter;
+            PyValueBorrow index_or_null;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            index_or_null = IR_VIEW(IR_FIELD_B(this_instr));
+            iter = IR_VIEW(IR_FIELD_A(this_instr));
             (void)index_or_null;
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+            ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), index_or_null);
             INSTRUMENTED_JUMP(prev_instr, this_instr+1, PY_MONITORING_EVENT_BRANCH_RIGHT);
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-            if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE(iter);
+            ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), iter);
+            PyValue_XCLOSE(ir_own_A);
             DISPATCH();
         }
 
@@ -11187,12 +11721,14 @@
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
+            PyValueBorrow value;
             PyValue res;
             PyValue cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _TO_BOOL
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                value = IR_VIEW(IR_FIELD_A(this_instr));
                 int err;
                 if (PyValue_IsInlineInt(value)) {
                     err = PyValue_InlineInt64(value) != 0;
@@ -11203,8 +11739,8 @@
                 else {
                     err = PyObject_IsTrue(PyValue_AsKnownObjectBorrow(value));
                 }
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE(value);
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), value);
+                PyValue_XCLOSE(ir_own_A);
                 if (err < 0) {
                     JUMP_TO_LABEL(error);
                 }
@@ -11239,17 +11775,19 @@
             _PyFb_POP_JUMP_IF_NONE *fb = (_PyFb_POP_JUMP_IF_NONE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
-            value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+            PyValueBorrow value;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            value = IR_VIEW(IR_FIELD_A(this_instr));
             int jump = PyValue_IsNone(value);
             RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, jump);
             if (jump) {
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), value);
                 INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
             }
             else {
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE(value);
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), value);
+                PyValue_XCLOSE(ir_own_A);
             }
             DISPATCH();
         }
@@ -11270,17 +11808,19 @@
             _PyFb_POP_JUMP_IF_NOT_NONE *fb = (_PyFb_POP_JUMP_IF_NOT_NONE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
-            value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+            PyValueBorrow value;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            value = IR_VIEW(IR_FIELD_A(this_instr));
             int jump = !PyValue_IsNone(value);
             RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, jump);
             if (jump) {
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE(value);
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), value);
+                PyValue_XCLOSE(ir_own_A);
                 INSTRUMENTED_JUMP(this_instr, JUMP_TARGET(oparg), PY_MONITORING_EVENT_BRANCH_RIGHT);
             }
             else {
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), value);
             }
             DISPATCH();
         }
@@ -11301,12 +11841,14 @@
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
+            PyValueBorrow value;
             PyValue res;
             PyValue cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _TO_BOOL
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                value = IR_VIEW(IR_FIELD_A(this_instr));
                 int err;
                 if (PyValue_IsInlineInt(value)) {
                     err = PyValue_InlineInt64(value) != 0;
@@ -11317,8 +11859,8 @@
                 else {
                     err = PyObject_IsTrue(PyValue_AsKnownObjectBorrow(value));
                 }
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE(value);
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), value);
+                PyValue_XCLOSE(ir_own_A);
                 if (err < 0) {
                     JUMP_TO_LABEL(error);
                 }
@@ -11410,44 +11952,48 @@
             next_instr += 1;
             INSTRUCTION_STATS(INSTRUMENTED_RETURN_VALUE);
             #if _Py_TAIL_CALL_INTERP
-            PyObject *value_boxes[8];
+            PyObject *value_boxes[6];
             _PyValueTemps value_owners;
             #endif
-            value_owners = (_PyValueTemps){value_boxes, 0, 8};
+            value_owners = (_PyValueTemps){value_boxes, 0, 6};
             _PyValueTemps *value_temps = &value_owners;
-            PyValue val;
-            PyValue value;
+            PyValueBorrow val;
+            PyValue taken;
             PyValue retval;
             PyValue res;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            PyObject *ir_obj_val = NULL;
             // _RETURN_VALUE_EVENT
             {
-                val = IR_SLOT(IR_FIELD_A(this_instr));
+                val = IR_VIEW(IR_FIELD_A(this_instr));
                 if (Py_UNLIKELY(PyValue_IsInline(val))) {
-                    val = PyValue_Box(val);
-                    if (PyValue_IsInline(val)) {
+                    ir_obj_val = _PyValueTemps_Box(value_temps, val);
+                    if (ir_obj_val == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(INSTRUMENTED_RETURN_VALUE);
-                    IR_KEEP_BOX(val);
                 }
+                else {
+                    ir_obj_val = PyValue_AsKnownObjectBorrow(val);
+                }
+                PyObject *val_o = ir_obj_val;
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), val);
+                PyValue held = IR_TAKE(val, ir_own_A);
                 int err = _Py_call_instrumentation_arg(
                     tstate, PY_MONITORING_EVENT_PY_RETURN,
-                    frame, this_instr, PyValue_AsKnownObjectBorrow(val));
+                    frame, this_instr, val_o);
                 if (err) {
+                    PyValue_CLOSE(held);
                     JUMP_TO_LABEL(error);
                 }
-            }
-            // _MAKE_HEAP_SAFE
-            {
-                value = val;
-                value = IR_INPLACE_HEAP_SAFE(value, IR_FIELD_A(this_instr));
+                taken = held;
             }
             // _RETURN_VALUE
             {
-                retval = value;
+                retval = taken;
                 assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
                 PyValue temp = retval;
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 _PyFrame_AssertTemporariesClear(frame);
                 DTRACE_FUNCTION_RETURN();
                 _Py_LeaveRecursiveCallPy(tstate);
@@ -11494,21 +12040,25 @@
             opcode = INSTRUMENTED_YIELD_VALUE;
             PyValue val;
             PyValue value;
+            PyValue taken;
             PyValue retval;
+            PyObject *ir_obj_val = NULL;
             // _YIELD_VALUE_EVENT
             {
                 val = window[0];
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                    val = PyValue_Box(val);
-                    if (PyValue_IsInline(val)) {
+                    ir_obj_val = _PyValueTemps_Box(value_temps, val);
+                    if (ir_obj_val == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(INSTRUMENTED_YIELD_VALUE);
-                    IR_KEEP_BOX(val);
+                }
+                else {
+                    ir_obj_val = PyValue_AsKnownObjectBorrow(val);
                 }
                 int err = _Py_call_instrumentation_arg(
                     tstate, PY_MONITORING_EVENT_PY_YIELD,
-                    frame, this_instr, PyValue_AsKnownObjectBorrow(val));
+                    frame, this_instr, ir_obj_val);
                 if (err) {
                     // Explicit stack reload
                     slots = _PyFrame_Slots(frame);
@@ -11524,11 +12074,11 @@
             // _MAKE_HEAP_SAFE
             {
                 value = val;
-                value = PyValue_MakeHeapSafe(value);
+                taken = value;
             }
             // _YIELD_VALUE
             {
-                retval = value;
+                retval = taken;
                 assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
                 frame->instr_ptr++;
                 PyGenObject *gen = _PyGen_GetGeneratorFromFrame(frame);
@@ -11578,15 +12128,17 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(INTERPRETER_EXIT);
-            PyValue retval;
-            retval = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+            PyValueBorrow retval;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            retval = IR_VIEW(IR_FIELD_A(this_instr));
             assert(frame->owner == FRAME_OWNED_BY_INTERPRETER);
             assert(_PyFrame_IsIncomplete(frame));
             tstate->current_frame = frame->previous;
             assert(!_PyErr_Occurred(tstate));
             PyObject *result = PyValue_AsObject(retval);
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-            if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE(retval);
+            ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), retval);
+            PyValue_XCLOSE(ir_own_A);
             #if !_Py_TAIL_CALL_INTERP
             assert(frame == &entry.frame);
             #endif
@@ -11634,34 +12186,40 @@
             (void)ir_displaced;
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue b;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValueBorrow value;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _IS_OP
             {
-                right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                right = IR_VIEW(IR_FIELD_C(this_instr));
+                left = IR_VIEW(IR_FIELD_B(this_instr));
                 int res = PyValue_Is(left, right) ^ oparg;
                 b = res ? PyValue_True : PyValue_False;
                 l = left;
                 r = right;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), l);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), r);
             }
             // _POP_TOP
             {
                 value = r;
+                (void)value;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_XCLOSE(value);
+                PyValue_XCLOSE(ir_own_C);
             }
             // _POP_TOP
             {
                 value = l;
+                (void)value;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_XCLOSE(value);
+                PyValue_XCLOSE(ir_own_B);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), b);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -11787,22 +12345,24 @@
             INSTRUCTION_STATS(JUMP_IF_FALSE_OR_POP);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue cond;
+            PyValueBorrow cond;
             PyValue res;
-            cond = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-            int truth = _PyValue_Truth(cond);
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            cond = IR_VIEW(IR_FIELD_B(this_instr));
+            ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), cond);
+            PyValue held = IR_TAKE(cond, ir_own_B);
+            int truth = _PyValue_Truth(held);
             if (truth < 0) {
+                PyValue_CLOSE(held);
                 JUMP_TO_LABEL(error);
             }
             if (!truth) {
-                res = cond;
-                IR_INPLACE_OWN(res, IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                res = held;
                 JUMPTO(oparg);
             }
             else {
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE(cond);
+                PyValue_CLOSE(held);
                 res = PyValue_NULL;
                 JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
             }
@@ -11825,22 +12385,24 @@
             INSTRUCTION_STATS(JUMP_IF_TRUE_OR_POP);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue cond;
+            PyValueBorrow cond;
             PyValue res;
-            cond = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-            int truth = _PyValue_Truth(cond);
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            cond = IR_VIEW(IR_FIELD_B(this_instr));
+            ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), cond);
+            PyValue held = IR_TAKE(cond, ir_own_B);
+            int truth = _PyValue_Truth(held);
             if (truth < 0) {
+                PyValue_CLOSE(held);
                 JUMP_TO_LABEL(error);
             }
             if (truth) {
-                res = cond;
-                IR_INPLACE_OWN(res, IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                res = held;
                 JUMPTO(oparg);
             }
             else {
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE(cond);
+                PyValue_CLOSE(held);
                 res = PyValue_NULL;
                 JUMPBY(IR_HANDLER(*next_instr) == NOT_TAKEN);
             }
@@ -11869,7 +12431,7 @@
             PyValue v;
             v = window[1 + (oparg-1)];
             list = window[0];
-            PyValue item = PyValue_MakeHeapSafe(v);
+            PyValue item = v;
             window[1 + (oparg-1)] = PyValue_NULL;
             int err = _PyList_AppendTakeValue((PyListObject *)PyValue_AsKnownObjectBorrow(list), item);
             if (err < 0) {
@@ -11903,28 +12465,34 @@
             PyValue iterable_st;
             PyValue i;
             PyValue value;
+            PyObject *ir_obj_iterable_st = NULL;
+            PyObject *ir_obj_list_st = NULL;
             // _LIST_EXTEND
             {
                 iterable_st = window[1 + (oparg-1)];
                 list_st = window[0];
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                    list_st = PyValue_Box(list_st);
-                    if (PyValue_IsInline(list_st)) {
+                    ir_obj_list_st = _PyValueTemps_Box(value_temps, list_st);
+                    if (ir_obj_list_st == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(LIST_EXTEND);
-                    IR_KEEP_BOX(list_st);
+                }
+                else {
+                    ir_obj_list_st = PyValue_AsKnownObjectBorrow(list_st);
                 }
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1 + (oparg-1)]))) {
-                    iterable_st = PyValue_Box(iterable_st);
-                    if (PyValue_IsInline(iterable_st)) {
+                    ir_obj_iterable_st = _PyValueTemps_Box(value_temps, iterable_st);
+                    if (ir_obj_iterable_st == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(LIST_EXTEND);
-                    IR_KEEP_BOX(iterable_st);
                 }
-                PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
-                PyObject *iterable = PyValue_AsKnownObjectBorrow(iterable_st);
+                else {
+                    ir_obj_iterable_st = PyValue_AsKnownObjectBorrow(iterable_st);
+                }
+                PyObject *list = ir_obj_list_st;
+                PyObject *iterable = ir_obj_iterable_st;
                 PyObject *none_val = _PyList_Extend((PyListObject *)list, iterable);
                 if (none_val == NULL) {
                     int matches = _PyErr_ExceptionMatches(tstate, PyExc_TypeError);
@@ -11945,7 +12513,7 @@
             {
                 value = i;
                 window[1 + (oparg-1)] = PyValue_NULL;
-                _PyValue_XCLOSE_POINTER(value);
+                PyValue_XCLOSE(value);
             }
             DISPATCH();
         }
@@ -11973,11 +12541,13 @@
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
             (void)oparg;
-            PyValue owner;
+            PyValueBorrow owner;
             PyValue attr;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
             // _SPECIALIZE_LOAD_ATTR
             {
-                owner = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                owner = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -11994,11 +12564,11 @@
             {
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
                 int method = oparg & 1;
-                PyValue receiver = IR_INPLACE_HEAP_SAFE(owner, IR_FIELD_B(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), owner);
+                PyValue receiver = IR_TAKE(owner, ir_own_B);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 PyValue pending, pending_self;
                 int invoked;
                 int failed = value_load_attribute(tstate, receiver, name, method,
@@ -12050,12 +12620,14 @@
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue owner;
+            PyValueBorrow owner;
             PyValue attr;
             PyValue *null;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
             // _CHECK_ATTR_CLASS
             {
-                owner = IR_SLOT(IR_FIELD_B(this_instr));
+                owner = IR_VIEW(IR_FIELD_B(this_instr));
                 uint32_t class_version = fb->class_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -12081,8 +12653,8 @@
                 STAT_INC(LOAD_ATTR, hit);
                 assert(descr != NULL);
                 attr = PyValue_FromPyObjectNew(descr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_POINTER(owner);
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), owner);
+                _PyValue_XCLOSE_POINTER(ir_own_B);
             }
             // _PUSH_NULL_CONDITIONAL
             {
@@ -12118,12 +12690,14 @@
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue owner;
+            PyValueBorrow owner;
             PyValue attr;
             PyValue *null;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_FIELD_B(this_instr));
+                owner = IR_VIEW(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -12160,8 +12734,8 @@
                 STAT_INC(LOAD_ATTR, hit);
                 assert(descr != NULL);
                 attr = PyValue_FromPyObjectNew(descr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_POINTER(owner);
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), owner);
+                _PyValue_XCLOSE_POINTER(ir_own_B);
             }
             // _PUSH_NULL_CONDITIONAL
             {
@@ -12197,11 +12771,13 @@
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue owner;
+            PyValueBorrow owner;
             PyValue new_frame;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_FIELD_B(this_instr));
+                owner = IR_VIEW(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -12248,8 +12824,8 @@
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
                 _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(
                     tstate, PyValue_FromPyObjectNew(f), 2, frame);
-                pushed_frame->base[0] = IR_INPLACE_HEAP_SAFE(owner, IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), owner);
+                pushed_frame->base[0] = IR_TAKE(owner, ir_own_B);
                 pushed_frame->base[1] = PyValue_FromPyObjectNew(name);
                 new_frame = PyValue_Wrap(pushed_frame);
             }
@@ -12297,12 +12873,14 @@
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue owner;
+            PyValueBorrow owner;
             PyValue attr;
             PyValue *null;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_FIELD_B(this_instr));
+                owner = IR_VIEW(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -12341,8 +12919,8 @@
                 }
                 attr = PyValue_NewRef(found);
                 STAT_INC(LOAD_ATTR, hit);
-                PyValue receiver = IR_INPLACE_HEAP_SAFE(owner, IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), owner);
+                PyValue receiver = ir_own_B;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), attr);
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), attr);
                 {
@@ -12394,12 +12972,14 @@
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
             assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
-            PyValue owner;
+            PyValueBorrow owner;
             PyValue attr;
             PyValue self;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_FIELD_B(this_instr));
+                owner = IR_VIEW(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -12433,9 +13013,8 @@
                 assert(descr != NULL);
                 assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
                 attr = PyValue_FromPyObjectNew(descr);
-                self = owner;
-                IR_INPLACE_OWN(self, IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), owner);
+                self = IR_TAKE(owner, ir_own_B);
             }
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), attr);
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr) + 1), self);
@@ -12466,12 +13045,14 @@
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
             assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
-            PyValue owner;
+            PyValueBorrow owner;
             PyValue attr;
             PyValue self;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_FIELD_B(this_instr));
+                owner = IR_VIEW(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -12495,9 +13076,8 @@
                 assert(descr != NULL);
                 assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
                 attr = PyValue_FromPyObjectNew(descr);
-                self = owner;
-                IR_INPLACE_OWN(self, IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), owner);
+                self = IR_TAKE(owner, ir_own_B);
             }
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), attr);
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr) + 1), self);
@@ -12528,12 +13108,14 @@
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
             assert(!IR_IS_LOCAL(IR_FIELD_A(this_instr)));
-            PyValue owner;
+            PyValueBorrow owner;
             PyValue attr;
             PyValue self;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_FIELD_B(this_instr));
+                owner = IR_VIEW(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -12567,9 +13149,8 @@
                 assert(descr != NULL);
                 assert(_PyType_HasFeature(Py_TYPE(descr), Py_TPFLAGS_METHOD_DESCRIPTOR));
                 attr = PyValue_FromPyObjectNew(descr);
-                self = owner;
-                IR_INPLACE_OWN(self, IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), owner);
+                self = IR_TAKE(owner, ir_own_B);
             }
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr)), attr);
             IR_STORE_TEMP(IR_SLOT(IR_FIELD_A(this_instr) + 1), self);
@@ -12599,12 +13180,14 @@
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue owner;
+            PyValueBorrow owner;
             PyValue attr;
             PyValue *null;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
             // _LOAD_ATTR_MODULE
             {
-                owner = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                owner = IR_VIEW(IR_FIELD_B(this_instr));
                 uint32_t dict_version = fb->dict_version;
                 uint32_t index = fb->index;
                 if (!PyValue_IsObject(owner)) {
@@ -12641,8 +13224,8 @@
                 }
                 attr = PyValue_NewRef(found);
                 STAT_INC(LOAD_ATTR, hit);
-                PyValue receiver = IR_INPLACE_HEAP_SAFE(owner, IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), owner);
+                PyValue receiver = ir_own_B;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), attr);
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), attr);
                 {
@@ -12697,11 +13280,13 @@
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue owner;
+            PyValueBorrow owner;
             PyValue attr;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
             // _SPECIALIZE_LOAD_ATTR
             {
-                owner = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                owner = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -12718,11 +13303,11 @@
             {
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
                 int method = oparg & 1;
-                PyValue receiver = IR_INPLACE_HEAP_SAFE(owner, IR_FIELD_B(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), owner);
+                PyValue receiver = IR_TAKE(owner, ir_own_B);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 PyValue pending, pending_self;
                 int invoked;
                 int failed = value_load_attribute(tstate, receiver, name, method,
@@ -12774,11 +13359,13 @@
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue owner;
+            PyValueBorrow owner;
             PyValue attr;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_FIELD_B(this_instr));
+                owner = IR_VIEW(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -12800,8 +13387,8 @@
                 assert(Py_TYPE(PyValue_AsKnownObjectBorrow(owner))->tp_dictoffset == 0);
                 STAT_INC(LOAD_ATTR, hit);
                 assert(descr != NULL);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_POINTER(owner);
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), owner);
+                _PyValue_XCLOSE_POINTER(ir_own_B);
                 attr = PyValue_FromPyObjectNew(descr);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), attr);
@@ -12831,11 +13418,13 @@
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue owner;
+            PyValueBorrow owner;
             PyValue attr;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_FIELD_B(this_instr));
+                owner = IR_VIEW(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -12867,8 +13456,8 @@
                 assert((oparg & 1) == 0);
                 STAT_INC(LOAD_ATTR, hit);
                 assert(descr != NULL);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_POINTER(owner);
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), owner);
+                _PyValue_XCLOSE_POINTER(ir_own_B);
                 attr = PyValue_FromPyObjectNew(descr);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), attr);
@@ -12898,11 +13487,13 @@
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue owner;
+            PyValueBorrow owner;
             PyValue new_frame;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_FIELD_B(this_instr));
+                owner = IR_VIEW(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -12945,8 +13536,8 @@
                 }
                 STAT_INC(LOAD_ATTR, hit);
                 _PyInterpreterFrame *pushed_frame = _PyFrame_PushUnchecked(tstate, PyValue_FromPyObjectNew(fget), 1, frame);
-                pushed_frame->base[0] = IR_INPLACE_HEAP_SAFE(owner, IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), owner);
+                pushed_frame->base[0] = IR_TAKE(owner, ir_own_B);
                 new_frame = PyValue_Wrap(pushed_frame);
             }
             // _SAVE_RETURN_SLOT
@@ -12993,12 +13584,14 @@
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue owner;
+            PyValueBorrow owner;
             PyValue attr;
             PyValue *null;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_FIELD_B(this_instr));
+                owner = IR_VIEW(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -13030,8 +13623,8 @@
                 assert(!PyValue_IsNull(found));
                 attr = PyValue_NewRef(found);
                 STAT_INC(LOAD_ATTR, hit);
-                PyValue receiver = IR_INPLACE_HEAP_SAFE(owner, IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), owner);
+                PyValue receiver = ir_own_B;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), attr);
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), attr);
                 {
@@ -13082,12 +13675,14 @@
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue owner;
+            PyValueBorrow owner;
             PyValue attr;
             PyValue *null;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_FIELD_B(this_instr));
+                owner = IR_VIEW(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -13114,9 +13709,9 @@
                 }
                 assert(PyValue_IsHeapSafe(value));
                 attr = PyValue_DUP(value);
-                PyValue receiver = IR_INPLACE_HEAP_SAFE(owner, IR_FIELD_B(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), owner);
+                PyValue receiver = ir_own_B;
                 STAT_INC(LOAD_ATTR, hit);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), attr);
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), attr);
                 {
@@ -13167,12 +13762,14 @@
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue owner;
+            PyValueBorrow owner;
             PyValue attr;
             PyValue *null;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_FIELD_B(this_instr));
+                owner = IR_VIEW(IR_FIELD_B(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(LOAD_ATTR);
@@ -13241,8 +13838,8 @@
                 }
                 STAT_INC(LOAD_ATTR, hit);
                 attr = PyValue_NewRef(found);
-                PyValue receiver = IR_INPLACE_HEAP_SAFE(owner, IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), owner);
+                PyValue receiver = ir_own_B;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), attr);
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), attr);
                 {
@@ -13674,25 +14271,33 @@
             (void)ir_displaced;
             int oparg = (int)IR_FIELD_C(this_instr);
             (void)oparg;
-            PyValue class_dict_st;
+            PyValueBorrow class_dict_st;
             PyValue value;
-            class_dict_st = IR_SLOT(IR_FIELD_B(this_instr));
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyObject *ir_obj_class_dict_st = NULL;
+            class_dict_st = IR_VIEW(IR_FIELD_B(this_instr));
             if (Py_UNLIKELY(PyValue_IsInline(class_dict_st))) {
-                class_dict_st = PyValue_Box(class_dict_st);
-                if (PyValue_IsInline(class_dict_st)) {
+                ir_obj_class_dict_st = _PyValueTemps_Box(value_temps, class_dict_st);
+                if (ir_obj_class_dict_st == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(LOAD_FROM_DICT_OR_DEREF);
-                IR_KEEP_BOX(class_dict_st);
+            }
+            else {
+                ir_obj_class_dict_st = PyValue_AsKnownObjectBorrow(class_dict_st);
             }
             PyObject *name;
-            PyObject *class_dict = PyValue_AsKnownObjectBorrow(class_dict_st);
+            PyObject *class_dict = ir_obj_class_dict_st;
+            ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), class_dict_st);
+            PyValue held_class_dict = IR_TAKE(class_dict_st, ir_own_B);
             assert(class_dict);
             assert(oparg >= 0 && oparg < _PyFrame_GetCode(frame)->co_nlocalsplus);
             name = _PyTuple_GET_OBJECT(_PyFrame_GetCode(frame)->co_localsplusnames, oparg);
             int err;
             PyObject* value_o = _PyMapping_GetOptionalItem2(class_dict, name, &err);
             if (err < 0) {
+                PyValue_CLOSE(held_class_dict);
                 JUMP_TO_LABEL(error);
             }
             PyValue selected;
@@ -13701,6 +14306,7 @@
                 selected = _PyCell_GetValue(cell);
                 if (PyValue_IsNull(selected)) {
                     _PyEval_FormatExcUnbound(tstate, _PyFrame_GetCode(frame), oparg);
+                    PyValue_CLOSE(held_class_dict);
                     JUMP_TO_LABEL(error);
                 }
             }
@@ -13709,13 +14315,13 @@
                     Py_SETREF(value_o, _PyLazyImport_Reify(
                                   tstate, value_o, name, class_dict));
                     if (value_o == NULL) {
+                        PyValue_CLOSE(held_class_dict);
                         JUMP_TO_LABEL(error);
                     }
                 }
                 selected = PyValue_FromPyObjectSteal(value_o);
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_POINTER(class_dict_st);
+            PyValue_CLOSE(held_class_dict);
             value = selected;
             IR_STORE_DST(IR_FIELD_A(this_instr), value);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -13747,19 +14353,26 @@
             (void)ir_displaced;
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue mod_or_class_dict;
+            PyValueBorrow mod_or_class_dict;
             PyValue v;
-            mod_or_class_dict = IR_SLOT(IR_FIELD_B(this_instr));
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyObject *ir_obj_mod_or_class_dict = NULL;
+            mod_or_class_dict = IR_VIEW(IR_FIELD_B(this_instr));
             if (Py_UNLIKELY(PyValue_IsInline(mod_or_class_dict))) {
-                mod_or_class_dict = PyValue_Box(mod_or_class_dict);
-                if (PyValue_IsInline(mod_or_class_dict)) {
+                ir_obj_mod_or_class_dict = _PyValueTemps_Box(value_temps, mod_or_class_dict);
+                if (ir_obj_mod_or_class_dict == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(LOAD_FROM_DICT_OR_GLOBALS);
-                IR_KEEP_BOX(mod_or_class_dict);
+            }
+            else {
+                ir_obj_mod_or_class_dict = PyValue_AsKnownObjectBorrow(mod_or_class_dict);
             }
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-            PyObject *namespace = PyValue_AsKnownObjectBorrow(mod_or_class_dict);
+            PyObject *namespace = ir_obj_mod_or_class_dict;
+            ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), mod_or_class_dict);
+            PyValue held_namespace = IR_TAKE(mod_or_class_dict, ir_own_B);
             int err;
             PyObject *v_o = _PyMapping_GetOptionalItem2(namespace, name, &err);
             if (v_o != NULL && PyLazyImport_CheckExact(v_o)) {
@@ -13768,8 +14381,7 @@
                     err = -1;
                 }
             }
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_CLOSE_POINTER(mod_or_class_dict);
+            PyValue_CLOSE(held_namespace);
             if (err < 0) {
                 JUMP_TO_LABEL(error);
             }
@@ -14266,6 +14878,9 @@
             PyValue self_st;
             PyValue attr;
             PyValue *null;
+            PyObject *ir_obj_class_st = NULL;
+            PyObject *ir_obj_global_super_st = NULL;
+            PyObject *ir_obj_self_st = NULL;
             // _SPECIALIZE_LOAD_SUPER_ATTR
             {
                 class_st = window[1];
@@ -14286,32 +14901,38 @@
             {
                 self_st = window[2];
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                    global_super_st = PyValue_Box(global_super_st);
-                    if (PyValue_IsInline(global_super_st)) {
+                    ir_obj_global_super_st = _PyValueTemps_Box(value_temps, global_super_st);
+                    if (ir_obj_global_super_st == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(LOAD_SUPER_ATTR);
-                    IR_KEEP_BOX(global_super_st);
+                }
+                else {
+                    ir_obj_global_super_st = PyValue_AsKnownObjectBorrow(global_super_st);
                 }
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1]))) {
-                    class_st = PyValue_Box(class_st);
-                    if (PyValue_IsInline(class_st)) {
+                    ir_obj_class_st = _PyValueTemps_Box(value_temps, class_st);
+                    if (ir_obj_class_st == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(LOAD_SUPER_ATTR);
-                    IR_KEEP_BOX(class_st);
+                }
+                else {
+                    ir_obj_class_st = PyValue_AsKnownObjectBorrow(class_st);
                 }
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[2]))) {
-                    self_st = PyValue_Box(self_st);
-                    if (PyValue_IsInline(self_st)) {
+                    ir_obj_self_st = _PyValueTemps_Box(value_temps, self_st);
+                    if (ir_obj_self_st == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(LOAD_SUPER_ATTR);
-                    IR_KEEP_BOX(self_st);
                 }
-                PyObject *global_super = PyValue_AsKnownObjectBorrow(global_super_st);
-                PyObject *class = PyValue_AsKnownObjectBorrow(class_st);
-                PyObject *self = PyValue_AsKnownObjectBorrow(self_st);
+                else {
+                    ir_obj_self_st = PyValue_AsKnownObjectBorrow(self_st);
+                }
+                PyObject *global_super = ir_obj_global_super_st;
+                PyObject *class = ir_obj_class_st;
+                PyObject *self = ir_obj_self_st;
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                     PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
                     int err = _Py_call_instrumentation_2args(
@@ -14321,15 +14942,15 @@
                         PyValue tmp = self_st;
                         self_st = PyValue_NULL;
                         IR_PUBLISH_TEMP(window[2], self_st);
-                        _PyValue_CLOSE_POINTER(tmp);
+                        PyValue_CLOSE(tmp);
                         tmp = class_st;
                         class_st = PyValue_NULL;
                         IR_PUBLISH_TEMP(window[1], class_st);
-                        _PyValue_CLOSE_POINTER(tmp);
+                        PyValue_CLOSE(tmp);
                         tmp = global_super_st;
                         global_super_st = PyValue_NULL;
                         IR_PUBLISH_TEMP(window[0], global_super_st);
-                        _PyValue_CLOSE_POINTER(tmp);
+                        PyValue_CLOSE(tmp);
                         window[0] = PyValue_NULL;
                         window[1] = PyValue_NULL;
                         window[2] = PyValue_NULL;
@@ -14361,15 +14982,15 @@
                 PyValue tmp = self_st;
                 self_st = PyValue_NULL;
                 IR_PUBLISH_TEMP(window[2], self_st);
-                _PyValue_CLOSE_POINTER(tmp);
+                PyValue_CLOSE(tmp);
                 tmp = class_st;
                 class_st = PyValue_NULL;
                 IR_PUBLISH_TEMP(window[1], class_st);
-                _PyValue_CLOSE_POINTER(tmp);
+                PyValue_CLOSE(tmp);
                 tmp = global_super_st;
                 global_super_st = PyValue_NULL;
                 IR_PUBLISH_TEMP(window[0], global_super_st);
-                _PyValue_CLOSE_POINTER(tmp);
+                PyValue_CLOSE(tmp);
                 window[0] = PyValue_NULL;
                 window[1] = PyValue_NULL;
                 window[2] = PyValue_NULL;
@@ -14516,6 +15137,7 @@
             PyValue self_st;
             PyValue attr;
             PyValue self_or_null;
+            PyObject *ir_obj_self_st = NULL;
             // _GUARD_LOAD_SUPER_ATTR_METHOD
             {
                 class_st = window[1];
@@ -14548,15 +15170,17 @@
             {
                 self_st = window[2];
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[2]))) {
-                    self_st = PyValue_Box(self_st);
-                    if (PyValue_IsInline(self_st)) {
+                    ir_obj_self_st = _PyValueTemps_Box(value_temps, self_st);
+                    if (ir_obj_self_st == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(LOAD_SUPER_ATTR_METHOD);
-                    IR_KEEP_BOX(self_st);
+                }
+                else {
+                    ir_obj_self_st = PyValue_AsKnownObjectBorrow(self_st);
                 }
                 PyObject *class = PyValue_AsKnownObjectBorrow(class_st);
-                PyObject *self = PyValue_AsKnownObjectBorrow(self_st);
+                PyObject *self = ir_obj_self_st;
                 STAT_INC(LOAD_SUPER_ATTR, hit);
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 2);
                 PyTypeObject *cls = (PyTypeObject *)class;
@@ -14574,7 +15198,7 @@
                     self_or_null = self_st;
                 } else {
                     window[2] = PyValue_NULL;
-                    _PyValue_CLOSE_POINTER(self_st);
+                    PyValue_CLOSE(self_st);
                     self_or_null = PyValue_NULL;
                 }
                 window[2] = PyValue_NULL;
@@ -14630,6 +15254,9 @@
             PyValue self_st;
             PyValue attr;
             PyValue *null;
+            PyObject *ir_obj_class_st = NULL;
+            PyObject *ir_obj_global_super_st = NULL;
+            PyObject *ir_obj_self_st = NULL;
             // _SPECIALIZE_LOAD_SUPER_ATTR
             {
                 class_st = window[1];
@@ -14650,32 +15277,38 @@
             {
                 self_st = window[2];
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                    global_super_st = PyValue_Box(global_super_st);
-                    if (PyValue_IsInline(global_super_st)) {
+                    ir_obj_global_super_st = _PyValueTemps_Box(value_temps, global_super_st);
+                    if (ir_obj_global_super_st == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(LOAD_SUPER_ATTR);
-                    IR_KEEP_BOX(global_super_st);
+                }
+                else {
+                    ir_obj_global_super_st = PyValue_AsKnownObjectBorrow(global_super_st);
                 }
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1]))) {
-                    class_st = PyValue_Box(class_st);
-                    if (PyValue_IsInline(class_st)) {
+                    ir_obj_class_st = _PyValueTemps_Box(value_temps, class_st);
+                    if (ir_obj_class_st == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(LOAD_SUPER_ATTR);
-                    IR_KEEP_BOX(class_st);
+                }
+                else {
+                    ir_obj_class_st = PyValue_AsKnownObjectBorrow(class_st);
                 }
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[2]))) {
-                    self_st = PyValue_Box(self_st);
-                    if (PyValue_IsInline(self_st)) {
+                    ir_obj_self_st = _PyValueTemps_Box(value_temps, self_st);
+                    if (ir_obj_self_st == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(LOAD_SUPER_ATTR);
-                    IR_KEEP_BOX(self_st);
                 }
-                PyObject *global_super = PyValue_AsKnownObjectBorrow(global_super_st);
-                PyObject *class = PyValue_AsKnownObjectBorrow(class_st);
-                PyObject *self = PyValue_AsKnownObjectBorrow(self_st);
+                else {
+                    ir_obj_self_st = PyValue_AsKnownObjectBorrow(self_st);
+                }
+                PyObject *global_super = ir_obj_global_super_st;
+                PyObject *class = ir_obj_class_st;
+                PyObject *self = ir_obj_self_st;
                 if (opcode == INSTRUMENTED_LOAD_SUPER_ATTR) {
                     PyObject *arg = oparg & 2 ? class : &_PyInstrumentation_MISSING;
                     int err = _Py_call_instrumentation_2args(
@@ -14685,15 +15318,15 @@
                         PyValue tmp = self_st;
                         self_st = PyValue_NULL;
                         IR_PUBLISH_TEMP(window[2], self_st);
-                        _PyValue_CLOSE_POINTER(tmp);
+                        PyValue_CLOSE(tmp);
                         tmp = class_st;
                         class_st = PyValue_NULL;
                         IR_PUBLISH_TEMP(window[1], class_st);
-                        _PyValue_CLOSE_POINTER(tmp);
+                        PyValue_CLOSE(tmp);
                         tmp = global_super_st;
                         global_super_st = PyValue_NULL;
                         IR_PUBLISH_TEMP(window[0], global_super_st);
-                        _PyValue_CLOSE_POINTER(tmp);
+                        PyValue_CLOSE(tmp);
                         window[0] = PyValue_NULL;
                         window[1] = PyValue_NULL;
                         window[2] = PyValue_NULL;
@@ -14725,15 +15358,15 @@
                 PyValue tmp = self_st;
                 self_st = PyValue_NULL;
                 IR_PUBLISH_TEMP(window[2], self_st);
-                _PyValue_CLOSE_POINTER(tmp);
+                PyValue_CLOSE(tmp);
                 tmp = class_st;
                 class_st = PyValue_NULL;
                 IR_PUBLISH_TEMP(window[1], class_st);
-                _PyValue_CLOSE_POINTER(tmp);
+                PyValue_CLOSE(tmp);
                 tmp = global_super_st;
                 global_super_st = PyValue_NULL;
                 IR_PUBLISH_TEMP(window[0], global_super_st);
-                _PyValue_CLOSE_POINTER(tmp);
+                PyValue_CLOSE(tmp);
                 window[0] = PyValue_NULL;
                 window[1] = PyValue_NULL;
                 window[2] = PyValue_NULL;
@@ -14809,38 +15442,44 @@
             _PyValueTemps *value_temps = &value_owners;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue codeobj_st;
+            PyValueBorrow codeobj_st;
             PyValue func;
-            PyValue co;
-            PyValue value;
+            PyValueBorrow co;
+            PyValueBorrow value;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyObject *ir_obj_codeobj_st = NULL;
             // _MAKE_FUNCTION
             {
-                codeobj_st = IR_SLOT(IR_FIELD_B(this_instr));
+                codeobj_st = IR_VIEW(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(PyValue_IsInline(codeobj_st))) {
-                    codeobj_st = PyValue_Box(codeobj_st);
-                    if (PyValue_IsInline(codeobj_st)) {
+                    ir_obj_codeobj_st = _PyValueTemps_Box(value_temps, codeobj_st);
+                    if (ir_obj_codeobj_st == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(MAKE_FUNCTION);
-                    IR_KEEP_BOX(codeobj_st);
                 }
-                PyObject *codeobj = PyValue_AsKnownObjectBorrow(codeobj_st);
+                else {
+                    ir_obj_codeobj_st = PyValue_AsKnownObjectBorrow(codeobj_st);
+                }
+                PyObject *codeobj = ir_obj_codeobj_st;
                 PyFunctionObject *func_obj = (PyFunctionObject *)
                 PyFunction_New(codeobj, GLOBALS());
                 if (func_obj == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 co = codeobj_st;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), co);
                 _PyFunction_SetVersion(
-                                   func_obj, ((PyCodeObject *)codeobj)->co_version);
+                                   func_obj, ((PyCodeObject *)func_obj->func_code)->co_version);
                 func = PyValue_FromPyObjectSteal((PyObject *)func_obj);
             }
             // _POP_TOP
             {
                 value = co;
+                (void)value;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), func);
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_XCLOSE_POINTER(value);
+                PyValue_XCLOSE(ir_own_B);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), func);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -14919,40 +15558,49 @@
             PyValue tp;
             PyValue n;
             PyValue value;
+            PyObject *ir_obj_names = NULL;
+            PyObject *ir_obj_subject = NULL;
+            PyObject *ir_obj_type = NULL;
             // _MATCH_CLASS
             {
                 names = window[2];
                 type = window[1];
                 subject = window[0];
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                    subject = PyValue_Box(subject);
-                    if (PyValue_IsInline(subject)) {
+                    ir_obj_subject = _PyValueTemps_Box(value_temps, subject);
+                    if (ir_obj_subject == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(MATCH_CLASS);
-                    IR_KEEP_BOX(subject);
+                }
+                else {
+                    ir_obj_subject = PyValue_AsKnownObjectBorrow(subject);
                 }
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1]))) {
-                    type = PyValue_Box(type);
-                    if (PyValue_IsInline(type)) {
+                    ir_obj_type = _PyValueTemps_Box(value_temps, type);
+                    if (ir_obj_type == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(MATCH_CLASS);
-                    IR_KEEP_BOX(type);
+                }
+                else {
+                    ir_obj_type = PyValue_AsKnownObjectBorrow(type);
                 }
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[2]))) {
-                    names = PyValue_Box(names);
-                    if (PyValue_IsInline(names)) {
+                    ir_obj_names = _PyValueTemps_Box(value_temps, names);
+                    if (ir_obj_names == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(MATCH_CLASS);
-                    IR_KEEP_BOX(names);
                 }
-                assert(PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(names)));
+                else {
+                    ir_obj_names = PyValue_AsKnownObjectBorrow(names);
+                }
+                assert(PyTuple_CheckExact(ir_obj_names));
                 PyObject *attrs_o = _PyEval_MatchClass(tstate,
-                    PyValue_AsKnownObjectBorrow(subject),
-                    PyValue_AsKnownObjectBorrow(type), oparg,
-                    PyValue_AsKnownObjectBorrow(names));
+                    ir_obj_subject,
+                    ir_obj_type, oparg,
+                    ir_obj_names);
                 if (attrs_o) {
                     assert(PyTuple_CheckExact(attrs_o));
                     attrs = PyValue_FromPyObjectSteal(attrs_o);
@@ -14973,19 +15621,19 @@
                 IR_PUBLISH_TEMP(window[0], attrs);
                 IR_PUBLISH_TEMP(window[1], s);
                 IR_PUBLISH_TEMP(window[2], tp);
-                _PyValue_XCLOSE_POINTER(value);
+                PyValue_XCLOSE(value);
             }
             // _POP_TOP
             {
                 value = tp;
                 window[2] = PyValue_NULL;
-                _PyValue_XCLOSE_POINTER(value);
+                PyValue_XCLOSE(value);
             }
             // _POP_TOP
             {
                 value = s;
                 window[1] = PyValue_NULL;
-                _PyValue_XCLOSE_POINTER(value);
+                PyValue_XCLOSE(value);
             }
             IR_MOVE_TO_DST(IR_FIELD_A(this_instr), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -15018,26 +15666,32 @@
             PyValue subject;
             PyValue keys;
             PyValue values_or_none;
+            PyObject *ir_obj_keys = NULL;
+            PyObject *ir_obj_subject = NULL;
             keys = IR_SLOT(IR_FIELD_C(this_instr));
             subject = IR_SLOT(IR_FIELD_B(this_instr));
             if (Py_UNLIKELY(PyValue_IsInlineAt(&IR_SLOT(IR_FIELD_B(this_instr))))) {
-                subject = PyValue_Box(subject);
-                if (PyValue_IsInline(subject)) {
+                ir_obj_subject = _PyValueTemps_Box(value_temps, subject);
+                if (ir_obj_subject == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(MATCH_KEYS);
-                IR_KEEP_BOX(subject);
+            }
+            else {
+                ir_obj_subject = PyValue_AsKnownObjectBorrow(subject);
             }
             if (Py_UNLIKELY(PyValue_IsInlineAt(&IR_SLOT(IR_FIELD_C(this_instr))))) {
-                keys = PyValue_Box(keys);
-                if (PyValue_IsInline(keys)) {
+                ir_obj_keys = _PyValueTemps_Box(value_temps, keys);
+                if (ir_obj_keys == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(MATCH_KEYS);
-                IR_KEEP_BOX(keys);
+            }
+            else {
+                ir_obj_keys = PyValue_AsKnownObjectBorrow(keys);
             }
             PyObject *values_or_none_o = _PyEval_MatchKeys(tstate,
-                PyValue_AsKnownObjectBorrow(subject), PyValue_AsKnownObjectBorrow(keys));
+                ir_obj_subject, ir_obj_keys);
             if (values_or_none_o == NULL) {
                 JUMP_TO_LABEL(error);
             }
@@ -15158,21 +15812,26 @@
             #endif
             value_owners = (_PyValueTemps){value_boxes, 0, 3};
             _PyValueTemps *value_temps = &value_owners;
-            PyValue exc_value;
-            exc_value = IR_SLOT(IR_FIELD_A(this_instr));
+            PyValueBorrow exc_value;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            PyObject *ir_obj_exc_value = NULL;
+            exc_value = IR_VIEW(IR_FIELD_A(this_instr));
             if (Py_UNLIKELY(PyValue_IsInline(exc_value))) {
-                exc_value = PyValue_Box(exc_value);
-                if (PyValue_IsInline(exc_value)) {
+                ir_obj_exc_value = _PyValueTemps_Box(value_temps, exc_value);
+                if (ir_obj_exc_value == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(POP_EXCEPT);
-                IR_KEEP_BOX(exc_value);
+            }
+            else {
+                ir_obj_exc_value = PyValue_AsKnownObjectBorrow(exc_value);
             }
             _PyErr_StackItem *exc_info = tstate->exc_info;
+            ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), exc_value);
             Py_XSETREF(exc_info->exc_value,
                        PyValue_IsNone(exc_value)
-                       ? NULL : IR_INPLACE_OBJECT_STEAL(exc_value, IR_FIELD_A(this_instr)));
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                       ? NULL : (PyValue_IsInline(exc_value) ? Py_NewRef(ir_obj_exc_value) : PyValue_AsKnownObjectSteal(IR_TAKE(exc_value, ir_own_A))));
             DISPATCH();
         }
 
@@ -15189,14 +15848,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_ITER);
-            PyValue iter;
-            PyValue index_or_null;
-            index_or_null = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-            iter = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+            PyValueBorrow iter;
+            PyValueBorrow index_or_null;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            index_or_null = IR_VIEW(IR_FIELD_B(this_instr));
+            iter = IR_VIEW(IR_FIELD_A(this_instr));
             (void)index_or_null;
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-            if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE(iter);
+            ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), index_or_null);
+            ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), iter);
+            PyValue_XCLOSE(ir_own_A);
             DISPATCH();
         }
 
@@ -15217,12 +15880,14 @@
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
+            PyValueBorrow value;
             PyValue res;
             PyValue cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _SPECIALIZE_POP_JUMP_IF
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                value = IR_VIEW(IR_FIELD_A(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -15246,8 +15911,8 @@
                 else {
                     err = PyObject_IsTrue(PyValue_AsKnownObjectBorrow(value));
                 }
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE(value);
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), value);
+                PyValue_XCLOSE(ir_own_A);
                 if (err < 0) {
                     JUMP_TO_LABEL(error);
                 }
@@ -15285,14 +15950,16 @@
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue owner;
-            PyValue value;
+            PyValueBorrow owner;
+            PyValueBorrow value;
             PyValue res;
-            PyValue v;
+            PyValueBorrow v;
             PyValue cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_FIELD_A(this_instr));
+                owner = IR_VIEW(IR_FIELD_A(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
@@ -15310,14 +15977,16 @@
             // _REPLACE_WITH_TRUE
             {
                 value = owner;
+                (void)value;
                 res = PyValue_True;
                 v = value;
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), v);
             }
             // _POP_TOP
             {
                 value = v;
-                if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) _PyValue_XCLOSE_POINTER(value);
+                (void)value;
+                _PyValue_XCLOSE_POINTER(ir_own_A);
             }
             // _POP_JUMP_IF_FALSE
             {
@@ -15351,11 +16020,13 @@
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
-            PyValue cond;
+            PyValueBorrow value;
+            PyValueBorrow cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _GUARD_TOS_BOOL
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                value = IR_VIEW(IR_FIELD_A(this_instr));
                 if (!PyValue_BoolCheck(value)) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
@@ -15366,9 +16037,10 @@
             // _POP_JUMP_IF_FALSE
             {
                 cond = value;
+                (void)cond;
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsFalse(cond);
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), cond);
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -15396,13 +16068,15 @@
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
+            PyValueBorrow value;
             PyValue res;
-            PyValue v;
+            PyValueBorrow v;
             PyValue cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _GUARD_TOS_EXACT_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                value = IR_VIEW(IR_FIELD_A(this_instr));
                 if (!PyValue_LongCheckExact(value)) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
@@ -15421,13 +16095,14 @@
                 }
                 res = zero ? PyValue_False : PyValue_True;
                 v = value;
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), v);
             }
             // _POP_TOP_INT
             {
                 value = v;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_A, _PyLong_ExactDealloc);
             }
             // _POP_JUMP_IF_FALSE
             {
@@ -15461,14 +16136,16 @@
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue tos;
-            PyValue value;
+            PyValueBorrow tos;
+            PyValueBorrow value;
             PyValue res;
-            PyValue v;
+            PyValueBorrow v;
             PyValue cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _GUARD_TOS_LIST
             {
-                tos = IR_SLOT(IR_FIELD_A(this_instr));
+                tos = IR_VIEW(IR_FIELD_A(this_instr));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(tos))) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
@@ -15484,17 +16161,19 @@
             // _TO_BOOL_LIST
             {
                 value = tos;
+                (void)value;
                 PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
                 assert(PyList_CheckExact(value_o));
                 STAT_INC(TO_BOOL, hit);
                 res = PyList_GET_SIZE(value_o) ? PyValue_True : PyValue_False;
                 v = value;
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), v);
             }
             // _POP_TOP
             {
                 value = v;
-                if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) _PyValue_XCLOSE_POINTER(value);
+                (void)value;
+                _PyValue_XCLOSE_POINTER(ir_own_A);
             }
             // _POP_JUMP_IF_FALSE
             {
@@ -15528,18 +16207,20 @@
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
+            PyValueBorrow value;
             PyValue res;
             PyValue cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _TO_BOOL_NONE
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                value = IR_VIEW(IR_FIELD_A(this_instr));
                 if (!PyValue_IsNone(value)) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_FALSE);
                 }
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), value);
                 STAT_INC(TO_BOOL, hit);
                 res = PyValue_False;
             }
@@ -15575,13 +16256,15 @@
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
+            PyValueBorrow value;
             PyValue res;
-            PyValue v;
+            PyValueBorrow v;
             PyValue cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _GUARD_TOS_UNICODE
             {
-                value = IR_SLOT(IR_FIELD_A(this_instr));
+                value = IR_VIEW(IR_FIELD_A(this_instr));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(value))) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_FALSE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_FALSE));
@@ -15600,13 +16283,14 @@
                 PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
                 res = value_o == &_Py_STR(empty) ? PyValue_False : PyValue_True;
                 v = value;
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), v);
             }
             // _POP_TOP_UNICODE
             {
                 value = v;
+                (void)value;
                 assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value)));
-                if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) _PyValue_CLOSE_SPECIALIZED_POINTER(value, _PyUnicode_ExactDealloc);
+                _PyValue_XCLOSE_SPECIALIZED_POINTER(ir_own_A, _PyUnicode_ExactDealloc);
             }
             // _POP_JUMP_IF_FALSE
             {
@@ -15640,20 +16324,22 @@
             _PyFb_POP_JUMP_IF_NONE *fb = (_PyFb_POP_JUMP_IF_NONE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
+            PyValueBorrow value;
             PyValue b;
             PyValue cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _IS_NONE
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                value = IR_VIEW(IR_FIELD_A(this_instr));
                 if (PyValue_IsNone(value)) {
                     b = PyValue_True;
-                    IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                    ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), value);
                 }
                 else {
                     b = PyValue_False;
-                    IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                    if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE(value);
+                    ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), value);
+                    PyValue_XCLOSE(ir_own_A);
                 }
             }
             // _POP_JUMP_IF_TRUE
@@ -15688,20 +16374,22 @@
             _PyFb_POP_JUMP_IF_NOT_NONE *fb = (_PyFb_POP_JUMP_IF_NOT_NONE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
+            PyValueBorrow value;
             PyValue b;
             PyValue cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _IS_NONE
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                value = IR_VIEW(IR_FIELD_A(this_instr));
                 if (PyValue_IsNone(value)) {
                     b = PyValue_True;
-                    IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                    ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), value);
                 }
                 else {
                     b = PyValue_False;
-                    IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                    if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE(value);
+                    ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), value);
+                    PyValue_XCLOSE(ir_own_A);
                 }
             }
             // _POP_JUMP_IF_FALSE
@@ -15737,12 +16425,14 @@
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
+            PyValueBorrow value;
             PyValue res;
             PyValue cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _SPECIALIZE_POP_JUMP_IF
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                value = IR_VIEW(IR_FIELD_A(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -15766,8 +16456,8 @@
                 else {
                     err = PyObject_IsTrue(PyValue_AsKnownObjectBorrow(value));
                 }
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE(value);
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), value);
+                PyValue_XCLOSE(ir_own_A);
                 if (err < 0) {
                     JUMP_TO_LABEL(error);
                 }
@@ -15805,14 +16495,16 @@
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue owner;
-            PyValue value;
+            PyValueBorrow owner;
+            PyValueBorrow value;
             PyValue res;
-            PyValue v;
+            PyValueBorrow v;
             PyValue cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_FIELD_A(this_instr));
+                owner = IR_VIEW(IR_FIELD_A(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
@@ -15830,14 +16522,16 @@
             // _REPLACE_WITH_TRUE
             {
                 value = owner;
+                (void)value;
                 res = PyValue_True;
                 v = value;
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), v);
             }
             // _POP_TOP
             {
                 value = v;
-                if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) _PyValue_XCLOSE_POINTER(value);
+                (void)value;
+                _PyValue_XCLOSE_POINTER(ir_own_A);
             }
             // _POP_JUMP_IF_TRUE
             {
@@ -15871,11 +16565,13 @@
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
-            PyValue cond;
+            PyValueBorrow value;
+            PyValueBorrow cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _GUARD_TOS_BOOL
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                value = IR_VIEW(IR_FIELD_A(this_instr));
                 if (!PyValue_BoolCheck(value)) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
@@ -15886,9 +16582,10 @@
             // _POP_JUMP_IF_TRUE
             {
                 cond = value;
+                (void)cond;
                 assert(PyValue_BoolCheck(cond));
                 int flag = PyValue_IsTrue(cond);
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), cond);
                 RECORD_BRANCH_TAKEN(((_PyFbHeader *)fb)->history, flag);
                 if (flag) {
                     JUMPTO(oparg);
@@ -15916,13 +16613,15 @@
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
+            PyValueBorrow value;
             PyValue res;
-            PyValue v;
+            PyValueBorrow v;
             PyValue cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _GUARD_TOS_EXACT_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                value = IR_VIEW(IR_FIELD_A(this_instr));
                 if (!PyValue_LongCheckExact(value)) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
@@ -15941,13 +16640,14 @@
                 }
                 res = zero ? PyValue_False : PyValue_True;
                 v = value;
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), v);
             }
             // _POP_TOP_INT
             {
                 value = v;
+                (void)value;
                 assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                PyValue_XCLOSE_SPECIALIZED(ir_own_A, _PyLong_ExactDealloc);
             }
             // _POP_JUMP_IF_TRUE
             {
@@ -15981,14 +16681,16 @@
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue tos;
-            PyValue value;
+            PyValueBorrow tos;
+            PyValueBorrow value;
             PyValue res;
-            PyValue v;
+            PyValueBorrow v;
             PyValue cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _GUARD_TOS_LIST
             {
-                tos = IR_SLOT(IR_FIELD_A(this_instr));
+                tos = IR_VIEW(IR_FIELD_A(this_instr));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(tos))) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
@@ -16004,17 +16706,19 @@
             // _TO_BOOL_LIST
             {
                 value = tos;
+                (void)value;
                 PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
                 assert(PyList_CheckExact(value_o));
                 STAT_INC(TO_BOOL, hit);
                 res = PyList_GET_SIZE(value_o) ? PyValue_True : PyValue_False;
                 v = value;
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), v);
             }
             // _POP_TOP
             {
                 value = v;
-                if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) _PyValue_XCLOSE_POINTER(value);
+                (void)value;
+                _PyValue_XCLOSE_POINTER(ir_own_A);
             }
             // _POP_JUMP_IF_TRUE
             {
@@ -16048,18 +16752,20 @@
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
+            PyValueBorrow value;
             PyValue res;
             PyValue cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _TO_BOOL_NONE
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                value = IR_VIEW(IR_FIELD_A(this_instr));
                 if (!PyValue_IsNone(value)) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
                     JUMP_TO_PREDICTED(POP_JUMP_IF_TRUE);
                 }
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), value);
                 STAT_INC(TO_BOOL, hit);
                 res = PyValue_False;
             }
@@ -16095,13 +16801,15 @@
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
+            PyValueBorrow value;
             PyValue res;
-            PyValue v;
+            PyValueBorrow v;
             PyValue cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _GUARD_TOS_UNICODE
             {
-                value = IR_SLOT(IR_FIELD_A(this_instr));
+                value = IR_VIEW(IR_FIELD_A(this_instr));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(value))) {
                     UPDATE_MISS_STATS(POP_JUMP_IF_TRUE);
                     assert(_PyOpcode_Deopt[opcode] == (POP_JUMP_IF_TRUE));
@@ -16120,13 +16828,14 @@
                 PyObject *value_o = PyValue_AsKnownObjectBorrow(value);
                 res = value_o == &_Py_STR(empty) ? PyValue_False : PyValue_True;
                 v = value;
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), v);
             }
             // _POP_TOP_UNICODE
             {
                 value = v;
+                (void)value;
                 assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(value)));
-                if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) _PyValue_CLOSE_SPECIALIZED_POINTER(value, _PyUnicode_ExactDealloc);
+                _PyValue_XCLOSE_SPECIALIZED_POINTER(ir_own_A, _PyUnicode_ExactDealloc);
             }
             // _POP_JUMP_IF_TRUE
             {
@@ -16157,10 +16866,12 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(POP_TOP);
-            PyValue value;
-            value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-            if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_XCLOSE(value);
+            PyValueBorrow value;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            value = IR_VIEW(IR_FIELD_A(this_instr));
+            ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), value);
+            PyValue_XCLOSE(ir_own_A);
             DISPATCH();
         }
 
@@ -16169,14 +16880,18 @@
             int opcode = PUSH_EXC_INFO;
             (void)(opcode);
             _PyInterpreterFrame *frame = tstate->current_frame;
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
             #endif
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(PUSH_EXC_INFO);
+            #if _Py_TAIL_CALL_INTERP
+            PyObject *value_boxes[5];
+            _PyValueTemps value_owners;
+            #endif
+            value_owners = (_PyValueTemps){value_boxes, 0, 5};
+            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             PyValue *window = &IR_SLOT(IR_FIELD_B(this_instr));
@@ -16185,13 +16900,17 @@
             PyValue exc;
             PyValue prev_exc;
             PyValue new_exc;
+            PyObject *ir_obj_exc = NULL;
             exc = window[0];
             if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                exc = PyValue_Box(exc);
-                if (PyValue_IsInline(exc)) {
+                ir_obj_exc = _PyValueTemps_Box(value_temps, exc);
+                if (ir_obj_exc == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(PUSH_EXC_INFO);
+            }
+            else {
+                ir_obj_exc = PyValue_AsKnownObjectBorrow(exc);
             }
             _PyErr_StackItem *exc_info = tstate->exc_info;
             if (exc_info->exc_value != NULL) {
@@ -16201,12 +16920,12 @@
                 prev_exc = PyValue_None;
             }
             assert(PyValue_ExceptionInstanceCheck(exc));
-            exc_info->exc_value = PyValue_AsPyObjectNew(exc);
+            exc_info->exc_value = Py_NewRef(ir_obj_exc);
             new_exc = exc;
             IR_PUBLISH_TEMP(window[0], prev_exc);
             IR_PUBLISH_TEMP(window[1], new_exc);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }
@@ -16313,17 +17032,20 @@
             (void)window;
             PyValue *values;
             PyValue exc_st;
+            PyObject *ir_obj_exc_st = NULL;
             exc_st = window[oparg];
             values = &window[0];
             if (Py_UNLIKELY(PyValue_IsInlineAt(&window[oparg]))) {
-                exc_st = PyValue_Box(exc_st);
-                if (PyValue_IsInline(exc_st)) {
+                ir_obj_exc_st = _PyValueTemps_Box(value_temps, exc_st);
+                if (ir_obj_exc_st == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(RERAISE);
-                IR_KEEP_BOX(exc_st);
             }
-            PyObject *exc = _PyValue_AsPyObjectStealPointer(exc_st);
+            else {
+                ir_obj_exc_st = PyValue_AsKnownObjectBorrow(exc_st);
+            }
+            PyObject *exc = (PyValue_IsInline(exc_st) ? Py_NewRef(ir_obj_exc_st) : PyValue_AsKnownObjectSteal(exc_st));
             assert(oparg >= 0 && oparg <= 2);
             if (oparg) {
                 frame->instr_ptr = _PyFrame_InstrAt(frame, PyValue_UntagIndex(values[0]));
@@ -16507,20 +17229,23 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(RETURN_VALUE);
-            PyValue value;
+            PyValueBorrow value;
+            PyValue taken;
             PyValue retval;
             PyValue res;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _MAKE_HEAP_SAFE
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
-                value = IR_INPLACE_HEAP_SAFE(value, IR_FIELD_A(this_instr));
+                value = IR_VIEW(IR_FIELD_A(this_instr));
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), value);
+                taken = IR_TAKE(value, ir_own_A);
             }
             // _RETURN_VALUE
             {
-                retval = value;
+                retval = taken;
                 assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
                 PyValue temp = retval;
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 _PyFrame_AssertTemporariesClear(frame);
                 DTRACE_FUNCTION_RETURN();
                 _Py_LeaveRecursiveCallPy(tstate);
@@ -16571,6 +17296,7 @@
             PyValue null_or_index;
             PyValue v;
             PyValue retval;
+            PyObject *ir_obj_receiver = NULL;
             // _SPECIALIZE_SEND
             {
                 receiver = window[0];
@@ -16590,14 +17316,16 @@
                 v = window[2];
                 null_or_index = window[1];
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                    receiver = PyValue_Box(receiver);
-                    if (PyValue_IsInline(receiver)) {
+                    ir_obj_receiver = _PyValueTemps_Box(value_temps, receiver);
+                    if (ir_obj_receiver == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(SEND);
-                    IR_KEEP_BOX(receiver);
                 }
-                PyObject *receiver_o = PyValue_AsKnownObjectBorrow(receiver);
+                else {
+                    ir_obj_receiver = PyValue_AsKnownObjectBorrow(receiver);
+                }
+                PyObject *receiver_o = ir_obj_receiver;
                 assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
                 if (!IS_PEP523_HOOKED(tstate) &&
                     (Py_TYPE(receiver_o) == &PyGen_Type || Py_TYPE(receiver_o) == &PyCoro_Type) &&
@@ -16605,7 +17333,7 @@
                 {
                     PyGenObject *gen = (PyGenObject *)receiver_o;
                     _PyInterpreterFrame *gen_frame = &gen->gi_iframe;
-                    _PyFrame_SetReturnValue(gen_frame, PyValue_MakeHeapSafe(v));
+                    _PyFrame_SetReturnValue(gen_frame, v);
                     window[2] = PyValue_NULL;
                     gen->gi_exc_state.previous_item = tstate->exc_info;
                     tstate->exc_info = &gen->gi_exc_state;
@@ -16677,6 +17405,7 @@
             PyValue asend;
             PyValue null_out;
             PyValue retval;
+            PyObject *ir_obj_v = NULL;
             // _GUARD_3OS_ASYNC_GEN_ASEND
             {
                 iter = window[0];
@@ -16697,23 +17426,25 @@
                 v = window[2];
                 null_in = window[1];
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[2]))) {
-                    v = PyValue_Box(v);
-                    if (PyValue_IsInline(v)) {
+                    ir_obj_v = _PyValueTemps_Box(value_temps, v);
+                    if (ir_obj_v == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(SEND_ASYNC_GEN);
-                    IR_KEEP_BOX(v);
+                }
+                else {
+                    ir_obj_v = PyValue_AsKnownObjectBorrow(v);
                 }
                 PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
                 assert(PyAsyncGenASend_CheckExact(iter_o));
-                PyObject *val = PyValue_AsKnownObjectBorrow(v);
+                PyObject *val = ir_obj_v;
                 PyObject *retval_o;
                 PySendResult what = _PyAsyncGenASend_Send(iter_o, val, &retval_o);
                 if (what == PYGEN_ERROR) {
                     JUMP_TO_LABEL(error);
                 }
                 window[2] = PyValue_NULL;
-                _PyValue_CLOSE_POINTER(v);
+                PyValue_CLOSE(v);
                 asend = iter;
                 null_out = null_in;
                 retval = PyValue_FromPyObjectSteal(retval_o);
@@ -16776,7 +17507,7 @@
                 }
                 STAT_INC(SEND, hit);
                 _PyInterpreterFrame *pushed_frame = &gen->gi_iframe;
-                _PyFrame_SetReturnValue(pushed_frame, PyValue_MakeHeapSafe(v));
+                _PyFrame_SetReturnValue(pushed_frame, v);
                 gen->gi_exc_state.previous_item = tstate->exc_info;
                 tstate->exc_info = &gen->gi_exc_state;
                 frame->return_slot = (uint16_t)IR_FIELD_A(this_instr);
@@ -16829,6 +17560,7 @@
             PyValue null_or_index;
             PyValue none;
             PyValue next;
+            PyObject *ir_obj_iter = NULL;
             // _GUARD_TOS_IS_NONE
             {
                 val = window[2];
@@ -16853,14 +17585,16 @@
                 null_or_index = nos;
                 iter = window[0];
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                    iter = PyValue_Box(iter);
-                    if (PyValue_IsInline(iter)) {
+                    ir_obj_iter = _PyValueTemps_Box(value_temps, iter);
+                    if (ir_obj_iter == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(SEND_VIRTUAL);
-                    IR_KEEP_BOX(iter);
                 }
-                PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
+                else {
+                    ir_obj_iter = PyValue_AsKnownObjectBorrow(iter);
+                }
+                PyObject *iter_o = ir_obj_iter;
                 Py_ssize_t index = PyValue_UntagIndex(null_or_index);
                 _PyValueIndexPair next_index = Py_TYPE(iter_o)->_tp_iteritem(iter_o, index);
                 index = next_index.index;
@@ -16970,33 +17704,42 @@
             _PyValueTemps *value_temps = &value_owners;
             int oparg = (int)IR_FIELD_D(this_instr);
             (void)oparg;
-            PyValue attr_st;
-            PyValue func_in;
+            PyValueBorrow attr_st;
+            PyValueBorrow func_in;
             PyValue func_out;
-            func_in = IR_SLOT(IR_FIELD_C(this_instr));
-            attr_st = IR_SLOT(IR_FIELD_B(this_instr));
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            PyObject *ir_obj_attr_st = NULL;
+            PyObject *ir_obj_func_in = NULL;
+            func_in = IR_VIEW(IR_FIELD_C(this_instr));
+            attr_st = IR_VIEW(IR_FIELD_B(this_instr));
             if (Py_UNLIKELY(PyValue_IsInline(attr_st))) {
-                attr_st = PyValue_Box(attr_st);
-                if (PyValue_IsInline(attr_st)) {
+                ir_obj_attr_st = _PyValueTemps_Box(value_temps, attr_st);
+                if (ir_obj_attr_st == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(SET_FUNCTION_ATTRIBUTE);
-                IR_KEEP_BOX(attr_st);
+            }
+            else {
+                ir_obj_attr_st = PyValue_AsKnownObjectBorrow(attr_st);
             }
             if (Py_UNLIKELY(PyValue_IsInline(func_in))) {
-                func_in = PyValue_Box(func_in);
-                if (PyValue_IsInline(func_in)) {
+                ir_obj_func_in = _PyValueTemps_Box(value_temps, func_in);
+                if (ir_obj_func_in == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(SET_FUNCTION_ATTRIBUTE);
-                IR_KEEP_BOX(func_in);
             }
-            PyObject *func = PyValue_AsKnownObjectBorrow(func_in);
-            PyObject *attr = IR_INPLACE_OBJECT_STEAL(attr_st, IR_FIELD_B(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            func_out = func_in;
-            IR_INPLACE_OWN(func_out, IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+            else {
+                ir_obj_func_in = PyValue_AsKnownObjectBorrow(func_in);
+            }
+            PyObject *func = ir_obj_func_in;
+            ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), attr_st);
+            PyObject *attr = (PyValue_IsInline(attr_st) ? Py_NewRef(ir_obj_attr_st) : PyValue_AsKnownObjectSteal(IR_TAKE(attr_st, ir_own_B)));
+            ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), func_in);
+            func_out = IR_TAKE(func_in, ir_own_C);
             assert(PyFunction_Check(func));
             size_t offset = _Py_FunctionAttributeOffsets[oparg];
             assert(offset != 0);
@@ -17032,28 +17775,34 @@
             PyValue iterable;
             PyValue i;
             PyValue value;
+            PyObject *ir_obj_iterable = NULL;
+            PyObject *ir_obj_set = NULL;
             // _SET_UPDATE
             {
                 iterable = window[1 + (oparg-1)];
                 set = window[0];
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                    set = PyValue_Box(set);
-                    if (PyValue_IsInline(set)) {
+                    ir_obj_set = _PyValueTemps_Box(value_temps, set);
+                    if (ir_obj_set == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(SET_UPDATE);
-                    IR_KEEP_BOX(set);
+                }
+                else {
+                    ir_obj_set = PyValue_AsKnownObjectBorrow(set);
                 }
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1 + (oparg-1)]))) {
-                    iterable = PyValue_Box(iterable);
-                    if (PyValue_IsInline(iterable)) {
+                    ir_obj_iterable = _PyValueTemps_Box(value_temps, iterable);
+                    if (ir_obj_iterable == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(SET_UPDATE);
-                    IR_KEEP_BOX(iterable);
                 }
-                int err = _PySet_Update(PyValue_AsKnownObjectBorrow(set),
-                                    PyValue_AsKnownObjectBorrow(iterable));
+                else {
+                    ir_obj_iterable = PyValue_AsKnownObjectBorrow(iterable);
+                }
+                int err = _PySet_Update(ir_obj_set,
+                                    ir_obj_iterable);
                 if (err < 0) {
                     JUMP_TO_LABEL(error);
                 }
@@ -17063,7 +17812,7 @@
             {
                 value = i;
                 window[1 + (oparg-1)] = PyValue_NULL;
-                _PyValue_XCLOSE_POINTER(value);
+                PyValue_XCLOSE(value);
             }
             DISPATCH();
         }
@@ -17089,12 +17838,16 @@
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
             (void)oparg;
-            PyValue v;
-            PyValue owner;
+            PyValueBorrow v;
+            PyValueBorrow owner;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _SPECIALIZE_STORE_ATTR
             {
-                owner = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
-                v = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                owner = IR_VIEW(IR_FIELD_A(this_instr));
+                v = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -17112,13 +17865,13 @@
             // _STORE_ATTR
             {
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-                PyValue held_value = IR_INPLACE_HEAP_SAFE(v, IR_FIELD_B(this_instr));
-                PyValue receiver = IR_INPLACE_HEAP_SAFE(owner, IR_FIELD_A(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), v);
+                PyValue held_value = IR_TAKE(v, ir_own_B);
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), owner);
+                PyValue receiver = IR_TAKE(owner, ir_own_A);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 int invoked;
                 int err = value_store_attribute(receiver, held_value, name, value_temps, &invoked);
                 if (!invoked) {
@@ -17155,11 +17908,15 @@
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_INSTANCE_VALUE);
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
-            PyValue value;
-            PyValue owner;
+            PyValueBorrow value;
+            PyValueBorrow owner;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _LOCK_OBJECT
             {
-                value = IR_SLOT(IR_FIELD_A(this_instr));
+                value = IR_VIEW(IR_FIELD_A(this_instr));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(value))) {
                     UPDATE_MISS_STATS(STORE_ATTR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_ATTR));
@@ -17174,6 +17931,7 @@
             // _GUARD_TYPE_VERSION_LOCKED
             {
                 owner = value;
+                (void)owner;
                 uint32_t type_version = fb->type_version;
                 PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
                 assert(type_version != 0);
@@ -17204,7 +17962,7 @@
             }
             // _STORE_ATTR_INSTANCE_VALUE
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                value = IR_VIEW(IR_FIELD_B(this_instr));
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
                 assert(_PyObject_GetManagedDict(owner_o) == NULL);
@@ -17226,8 +17984,8 @@
                 }
                 #endif
                 STAT_INC(STORE_ATTR, hit);
-                *value_ptr = IR_INPLACE_HEAP_SAFE(value, IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), value);
+                *value_ptr = IR_TAKE(value, ir_own_B);
                 if (PyValue_IsNull(old_value)) {
                     PyDictValues *values = _PyObject_InlineValues(owner_o);
                     Py_ssize_t index = value_ptr - values->values;
@@ -17238,8 +17996,8 @@
                     #endif
                 }
                 UNLOCK_OBJECT(owner_o);
-                PyValue receiver = IR_INPLACE_HEAP_SAFE(owner, IR_FIELD_A(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), owner);
+                PyValue receiver = ir_own_A;
                 {
                     int retire_needed = _PyValue_MayDealloc(old_value);
                     if (!retire_needed) {
@@ -17281,12 +18039,16 @@
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue v;
-            PyValue owner;
+            PyValueBorrow v;
+            PyValueBorrow owner;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _SPECIALIZE_STORE_ATTR
             {
-                owner = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
-                v = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                owner = IR_VIEW(IR_FIELD_A(this_instr));
+                v = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -17304,13 +18066,13 @@
             // _STORE_ATTR
             {
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-                PyValue held_value = IR_INPLACE_HEAP_SAFE(v, IR_FIELD_B(this_instr));
-                PyValue receiver = IR_INPLACE_HEAP_SAFE(owner, IR_FIELD_A(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), v);
+                PyValue held_value = IR_TAKE(v, ir_own_B);
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), owner);
+                PyValue receiver = IR_TAKE(owner, ir_own_A);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 int invoked;
                 int err = value_store_attribute(receiver, held_value, name, value_temps, &invoked);
                 if (!invoked) {
@@ -17347,11 +18109,15 @@
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_SHAPE);
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
-            PyValue owner;
-            PyValue value;
+            PyValueBorrow owner;
+            PyValueBorrow value;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_FIELD_A(this_instr));
+                owner = IR_VIEW(IR_FIELD_A(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(STORE_ATTR);
@@ -17377,17 +18143,17 @@
             }
             // _STORE_ATTR_SHAPE
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                value = IR_VIEW(IR_FIELD_B(this_instr));
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
                 PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
                 PyValue old_value = *value_ptr;
                 assert(!PyValue_IsNull(old_value));
-                *value_ptr = IR_INPLACE_HEAP_SAFE(value, IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), value);
+                *value_ptr = IR_TAKE(value, ir_own_B);
                 STAT_INC(STORE_ATTR, hit);
-                PyValue receiver = IR_INPLACE_HEAP_SAFE(owner, IR_FIELD_A(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), owner);
+                PyValue receiver = ir_own_A;
                 {
                     int retire_needed = _PyValue_MayDealloc(old_value);
                     if (!retire_needed) {
@@ -17423,11 +18189,15 @@
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_SHAPE_ADD);
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
-            PyValue owner;
-            PyValue value;
+            PyValueBorrow owner;
+            PyValueBorrow value;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_FIELD_A(this_instr));
+                owner = IR_VIEW(IR_FIELD_A(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(STORE_ATTR);
@@ -17453,20 +18223,20 @@
             }
             // _STORE_ATTR_SHAPE_ADD
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                value = IR_VIEW(IR_FIELD_B(this_instr));
                 uint32_t shape_to = fb->shape_to;
                 uint32_t offset = fb->offset;
                 PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
                 PyValue *value_ptr = (PyValue *)((char *)owner_o + offset);
                 assert(PyValue_IsNull(*value_ptr));
-                *value_ptr = IR_INPLACE_HEAP_SAFE(value, IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), value);
+                *value_ptr = IR_TAKE(value, ir_own_B);
                 PyDictValues *values = _PyObject_InlineValues(owner_o);
                 _PyDictValues_AddToInsertionOrder(values, value_ptr - values->values);
                 _PyDictValues_SetShape(values, (uint8_t)shape_to);
                 STAT_INC(STORE_ATTR, hit);
-                PyValue receiver = IR_INPLACE_HEAP_SAFE(owner, IR_FIELD_A(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), owner);
+                PyValue receiver = ir_own_A;
                 {
                     int retire_needed = _PyValue_MayDealloc(receiver);
                     if (!retire_needed) {
@@ -17498,11 +18268,15 @@
             next_instr += 1;
             INSTRUCTION_STATS(STORE_ATTR_SLOT);
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
-            PyValue owner;
-            PyValue value;
+            PyValueBorrow owner;
+            PyValueBorrow value;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_FIELD_A(this_instr));
+                owner = IR_VIEW(IR_FIELD_A(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(STORE_ATTR);
@@ -17519,7 +18293,7 @@
             }
             // _STORE_ATTR_SLOT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                value = IR_VIEW(IR_FIELD_B(this_instr));
                 uint32_t index = fb->index;
                 PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
                 if (!LOCK_OBJECT(owner_o)) {
@@ -17530,11 +18304,11 @@
                 char *addr = (char *)owner_o + index;
                 STAT_INC(STORE_ATTR, hit);
                 PyValue old_value = *(PyValue *)addr;
-                *(PyValue *)addr = IR_INPLACE_HEAP_SAFE(value, IR_FIELD_B(this_instr));
-                PyValue receiver = IR_INPLACE_HEAP_SAFE(owner, IR_FIELD_A(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), value);
+                *(PyValue *)addr = IR_TAKE(value, ir_own_B);
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), owner);
+                PyValue receiver = ir_own_A;
                 UNLOCK_OBJECT(owner_o);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 {
                     int retire_needed = _PyValue_MayDealloc(old_value);
                     if (!retire_needed) {
@@ -17572,11 +18346,15 @@
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = (int)((_PyFbHeader *)fb)->arg;
             (void)oparg;
-            PyValue owner;
-            PyValue value;
+            PyValueBorrow owner;
+            PyValueBorrow value;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _GUARD_TYPE_VERSION
             {
-                owner = IR_SLOT(IR_FIELD_A(this_instr));
+                owner = IR_VIEW(IR_FIELD_A(this_instr));
                 uint32_t type_version = fb->type_version;
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(owner))) {
                     UPDATE_MISS_STATS(STORE_ATTR);
@@ -17593,7 +18371,7 @@
             }
             // _STORE_ATTR_WITH_HINT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                value = IR_VIEW(IR_FIELD_B(this_instr));
                 uint32_t hint = fb->hint;
                 PyObject *owner_o = PyValue_AsKnownObjectBorrow(owner);
                 assert(Py_TYPE(owner_o)->tp_flags & Py_TPFLAGS_MANAGED_DICT);
@@ -17642,14 +18420,14 @@
                 }
                 if (dict->_ma_watcher_tag & DICT_WATCHER_MASK) {
                     PyValue watched_dict = PyValue_FromPyObjectNew((PyObject *)dict);
-                    PyValue release_value = IR_INPLACE_HEAP_SAFE(value, IR_FIELD_B(this_instr));
-                    PyValue receiver = IR_INPLACE_HEAP_SAFE(owner, IR_FIELD_A(this_instr));
+                    ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), value);
+                    PyValue release_value = IR_TAKE(value, ir_own_B);
+                    ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), owner);
+                    PyValue receiver = IR_TAKE(owner, ir_own_A);
                     _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                     operation.input_slots[0] = IR_FIELD_B(this_instr);
                     operation.input_slots[1] = IR_FIELD_A(this_instr);
                     UNLOCK_OBJECT(dict);
-                    IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                    IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                     int err = PyDict_SetValue((PyObject *)dict,
                         PyValue_FromObjectBorrow(name), release_value);
                     if (err < 0) {
@@ -17673,11 +18451,11 @@
                     }
                 }
                 else {
-                    *value_ptr = IR_INPLACE_HEAP_SAFE(value, IR_FIELD_B(this_instr));
-                    PyValue receiver = IR_INPLACE_HEAP_SAFE(owner, IR_FIELD_A(this_instr));
+                    ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), value);
+                    *value_ptr = IR_TAKE(value, ir_own_B);
+                    ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), owner);
+                    PyValue receiver = ir_own_A;
                     UNLOCK_OBJECT(dict);
-                    IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                    IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                     {
                         int retire_needed = _PyValue_MayDealloc(old_value);
                         if (!retire_needed) {
@@ -17846,12 +18624,14 @@
             INSTRUCTION_STATS(STORE_GLOBAL);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue v;
-            v = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+            PyValueBorrow v;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            v = IR_VIEW(IR_FIELD_A(this_instr));
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             int err;
             if (PyValue_IsNull(v)) {
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), v);
                 err = PyDict_Pop(GLOBALS(), name, NULL);
                 if (err == 0) {
                     err = -1;
@@ -17861,8 +18641,8 @@
             }
             else {
                 err = PyDict_SetValue(GLOBALS(), PyValue_FromObjectBorrow(name), v);
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE(v);
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), v);
+                PyValue_XCLOSE(ir_own_A);
             }
             if (err < 0) {
                 JUMP_TO_LABEL(error);
@@ -17885,18 +18665,15 @@
             INSTRUCTION_STATS(STORE_NAME);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue v;
-            v = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+            PyValueBorrow v;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            v = IR_VIEW(IR_FIELD_A(this_instr));
             PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
             PyObject *ns = LOCALS();
             int error = _PyEval_StoreName(tstate, v, name, ns);
-            if (PyValue_IsNull(v)) {
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-            }
-            else {
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE(v);
-            }
+            ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), v);
+            PyValue_XCLOSE(ir_own_A);
             if (error) {
                 JUMP_TO_LABEL(error);
             }
@@ -17916,10 +18693,18 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_SLICE);
-            PyValue v;
-            PyValue container;
-            PyValue start;
-            PyValue stop;
+            PyValueBorrow v;
+            PyValueBorrow container;
+            PyValueBorrow start;
+            PyValueBorrow stop;
+            PyValue ir_own_D = PyValue_NULL;
+            (void)ir_own_D;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_STORE_SLICE
             {
                 #if ENABLE_SPECIALIZATION
@@ -17928,19 +18713,19 @@
             }
             // _STORE_SLICE
             {
-                stop = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                start = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-                container = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
-                v = IR_LOAD_BORROWED(IR_FIELD_D(this_instr));
+                stop = IR_VIEW(IR_FIELD_C(this_instr));
+                start = IR_VIEW(IR_FIELD_B(this_instr));
+                container = IR_VIEW(IR_FIELD_A(this_instr));
+                v = IR_VIEW(IR_FIELD_D(this_instr));
                 int err = _PyEval_StoreSlice(v, container, start, stop);
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE(stop);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE(start);
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE(container);
-                IR_CONSUME_INPUT(IR_FIELD_D(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_D(this_instr))) PyValue_CLOSE(v);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), stop);
+                PyValue_XCLOSE(ir_own_C);
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), start);
+                PyValue_XCLOSE(ir_own_B);
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), container);
+                PyValue_XCLOSE(ir_own_A);
+                ir_own_D = IR_CONSUME_INPUT(IR_FIELD_D(this_instr), v);
+                PyValue_XCLOSE(ir_own_D);
                 if (err) {
                     JUMP_TO_LABEL(error);
                 }
@@ -17967,13 +18752,19 @@
             value_owners = (_PyValueTemps){value_boxes, 0, 9};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_STORE_SUBSCR *fb = (_PyFb_STORE_SUBSCR *)IR_FB(IR_FIELD_D(this_instr));
-            PyValue container;
-            PyValue sub;
-            PyValue v;
+            PyValueBorrow container;
+            PyValueBorrow sub;
+            PyValueBorrow v;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
             // _SPECIALIZE_STORE_SUBSCR
             {
-                sub = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-                container = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                sub = IR_VIEW(IR_FIELD_B(this_instr));
+                container = IR_VIEW(IR_FIELD_A(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -17987,14 +18778,14 @@
             }
             // _STORE_SUBSCR
             {
-                v = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                PyValue held_value = IR_INPLACE_HEAP_SAFE(v, IR_FIELD_C(this_instr));
-                PyValue held_container = IR_INPLACE_HEAP_SAFE(container, IR_FIELD_A(this_instr));
-                PyValue held_sub = IR_INPLACE_HEAP_SAFE(sub, IR_FIELD_B(this_instr));
+                v = IR_VIEW(IR_FIELD_C(this_instr));
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), v);
+                PyValue held_value = IR_TAKE(v, ir_own_C);
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), container);
+                PyValue held_container = IR_TAKE(container, ir_own_A);
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), sub);
+                PyValue held_sub = IR_TAKE(sub, ir_own_B);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 int err = value_store_subscript(held_container, held_sub, held_value,
                     value_temps);
                 value_operation_close3(&held_sub, &held_container, &held_value);
@@ -18027,13 +18818,19 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_SUBSCR_DICT);
-            PyValue nos;
-            PyValue value;
-            PyValue dict_st;
-            PyValue sub;
+            PyValueBorrow nos;
+            PyValueBorrow value;
+            PyValueBorrow dict_st;
+            PyValueBorrow sub;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
             // _GUARD_NOS_DICT_STORE_SUBSCRIPT
             {
-                nos = IR_SLOT(IR_FIELD_A(this_instr));
+                nos = IR_VIEW(IR_FIELD_A(this_instr));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(nos))) {
                     UPDATE_MISS_STATS(STORE_SUBSCR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_SUBSCR));
@@ -18053,19 +18850,20 @@
             }
             // _STORE_SUBSCR_DICT
             {
-                sub = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                sub = IR_VIEW(IR_FIELD_B(this_instr));
                 dict_st = nos;
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                (void)dict_st;
+                value = IR_VIEW(IR_FIELD_C(this_instr));
                 PyObject *dict = PyValue_AsKnownObjectBorrow(dict_st);
                 assert(Py_TYPE(dict)->tp_as_mapping->mp_ass_subscript == _PyDict_StoreSubscript);
                 STAT_INC(STORE_SUBSCR, hit);
-                PyValue key = IR_INPLACE_HEAP_SAFE(sub, IR_FIELD_B(this_instr));
-                PyValue stored = IR_INPLACE_HEAP_SAFE(value, IR_FIELD_C(this_instr));
-                PyValue retained_dict = IR_INPLACE_HEAP_SAFE(dict_st, IR_FIELD_A(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), sub);
+                PyValue key = IR_TAKE(sub, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), value);
+                PyValue stored = IR_TAKE(value, ir_own_C);
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), dict_st);
+                PyValue retained_dict = IR_TAKE(dict_st, ir_own_A);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 int err = _PyDict_SetValue_Take2((PyDictObject *)dict, key, stored);
                 value_operation_close3(&retained_dict, NULL, NULL);
                 {
@@ -18097,15 +18895,21 @@
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(STORE_SUBSCR_LIST_INT);
-            PyValue value;
-            PyValue nos;
-            PyValue list_st;
-            PyValue sub_st;
-            PyValue ls;
-            PyValue ss;
+            PyValueBorrow value;
+            PyValueBorrow nos;
+            PyValueBorrow list_st;
+            PyValueBorrow sub_st;
+            PyValueBorrow ls;
+            PyValueBorrow ss;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
             // _GUARD_TOS_INT
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                value = IR_VIEW(IR_FIELD_B(this_instr));
                 if (!PyValue_IsInlineInt(value)) {
                     UPDATE_MISS_STATS(STORE_SUBSCR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_SUBSCR));
@@ -18114,7 +18918,7 @@
             }
             // _GUARD_NOS_LIST
             {
-                nos = IR_SLOT(IR_FIELD_A(this_instr));
+                nos = IR_VIEW(IR_FIELD_A(this_instr));
                 if (Py_UNLIKELY(!PyValue_IsPointerSpace(nos))) {
                     UPDATE_MISS_STATS(STORE_SUBSCR);
                     assert(_PyOpcode_Deopt[opcode] == (STORE_SUBSCR));
@@ -18130,8 +18934,10 @@
             // _STORE_SUBSCR_LIST_INT
             {
                 sub_st = value;
+                (void)sub_st;
                 list_st = nos;
-                value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
+                (void)list_st;
+                value = IR_VIEW(IR_FIELD_C(this_instr));
                 PyObject *list = PyValue_AsKnownObjectBorrow(list_st);
                 assert(PyList_CheckExact(list));
                 Py_ssize_t index = PyValue_InlineInt64(sub_st);
@@ -18154,26 +18960,27 @@
                 }
                 STAT_INC(STORE_SUBSCR, hit);
                 PyValue old_value = _PyList_ITEMS(list)[index];
-                _PyList_ITEMS(list)[index] = IR_INPLACE_HEAP_SAFE(value, IR_FIELD_C(this_instr));
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), value);
+                _PyList_ITEMS(list)[index] = IR_TAKE(value, ir_own_C);
                 assert(!PyValue_IsNull(old_value));
                 UNLOCK_OBJECT(list);
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), list_st);
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), sub_st);
                 ls = list_st;
                 ss = sub_st;
                 PyValue_CLOSE(old_value);
             }
-            // _POP_TOP_INT
+            // _POP_TOP
             {
                 value = ss;
-                assert(PyValue_LongCheckExact(value));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE_SPECIALIZED(value, _PyLong_ExactDealloc);
+                (void)value;
+                PyValue_XCLOSE(ir_own_B);
             }
             // _POP_TOP
             {
                 value = ls;
-                if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) _PyValue_XCLOSE_POINTER(value);
+                (void)value;
+                _PyValue_XCLOSE_POINTER(ir_own_A);
             }
             DISPATCH();
         }
@@ -18532,33 +19339,39 @@
             _PyValueTemps *value_temps = &value_owners;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue value;
+            PyValueBorrow value;
             PyValue res;
-            PyValue v;
+            PyValueBorrow v;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyObject *ir_obj_value = NULL;
             // _UNARY_INVERT
             {
-                value = IR_SLOT(IR_FIELD_B(this_instr));
+                value = IR_VIEW(IR_FIELD_B(this_instr));
                 if (Py_UNLIKELY(PyValue_IsInline(value))) {
-                    value = PyValue_Box(value);
-                    if (PyValue_IsInline(value)) {
+                    ir_obj_value = _PyValueTemps_Box(value_temps, value);
+                    if (ir_obj_value == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(UNARY_INVERT);
-                    IR_KEEP_BOX(value);
                 }
-                PyObject *res_o = PyNumber_Invert(PyValue_AsKnownObjectBorrow(value));
+                else {
+                    ir_obj_value = PyValue_AsKnownObjectBorrow(value);
+                }
+                PyObject *res_o = PyNumber_Invert(ir_obj_value);
                 if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 res = PyValue_FromPyObjectSteal(res_o);
                 v = value;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), v);
             }
             // _POP_TOP
             {
                 value = v;
+                (void)value;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_XCLOSE_POINTER(value);
+                PyValue_XCLOSE(ir_own_B);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -18584,12 +19397,14 @@
             INSTRUCTION_STATS(UNARY_NEGATIVE);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue value;
+            PyValueBorrow value;
             PyValue res;
-            PyValue v;
+            PyValueBorrow v;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
             // _UNARY_NEGATIVE
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                value = IR_VIEW(IR_FIELD_B(this_instr));
                 if (PyValue_IsInlineInt(value)) {
                     res = PyValue_FromInt64(-PyValue_InlineInt64(value));
                 }
@@ -18604,13 +19419,14 @@
                     JUMP_TO_LABEL(error);
                 }
                 v = value;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), v);
             }
             // _POP_TOP
             {
                 value = v;
+                (void)value;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_XCLOSE(value);
+                PyValue_XCLOSE(ir_own_B);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -18636,12 +19452,14 @@
             INSTRUCTION_STATS(UNARY_NOT);
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue value;
+            PyValueBorrow value;
             PyValue res;
-            value = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            value = IR_VIEW(IR_FIELD_B(this_instr));
             int truth = _PyValue_Truth(value);
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE(value);
+            ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), value);
+            PyValue_XCLOSE(ir_own_B);
             if (truth < 0) {
                 JUMP_TO_LABEL(error);
             }
@@ -18678,17 +19496,20 @@
             (void)window;
             PyValue seq;
             PyValue *top;
+            PyObject *ir_obj_seq = NULL;
             seq = window[0];
             top = &window[1 + (oparg & 0xFF) + (oparg >> 8)];
             if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                seq = PyValue_Box(seq);
-                if (PyValue_IsInline(seq)) {
+                ir_obj_seq = _PyValueTemps_Box(value_temps, seq);
+                if (ir_obj_seq == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(UNPACK_EX);
-                IR_KEEP_BOX(seq);
             }
-            PyObject *seq_o = _PyValue_AsPyObjectStealPointer(seq);
+            else {
+                ir_obj_seq = PyValue_AsKnownObjectBorrow(seq);
+            }
+            PyObject *seq_o = (PyValue_IsInline(seq) ? Py_NewRef(ir_obj_seq) : PyValue_AsKnownObjectSteal(seq));
             window[0] = PyValue_NULL;
             int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg & 0xFF, oparg >> 8, top);
             Py_DECREF(seq_o);
@@ -18723,6 +19544,7 @@
             (void)window;
             PyValue seq;
             PyValue *top;
+            PyObject *ir_obj_seq = NULL;
             // _SPECIALIZE_UNPACK_SEQUENCE
             {
                 seq = window[0];
@@ -18742,14 +19564,16 @@
             {
                 top = &window[oparg];
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                    seq = PyValue_Box(seq);
-                    if (PyValue_IsInline(seq)) {
+                    ir_obj_seq = _PyValueTemps_Box(value_temps, seq);
+                    if (ir_obj_seq == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(UNPACK_SEQUENCE);
-                    IR_KEEP_BOX(seq);
                 }
-                PyObject *seq_o = _PyValue_AsPyObjectStealPointer(seq);
+                else {
+                    ir_obj_seq = PyValue_AsKnownObjectBorrow(seq);
+                }
+                PyObject *seq_o = (PyValue_IsInline(seq) ? Py_NewRef(ir_obj_seq) : PyValue_AsKnownObjectSteal(seq));
                 window[0] = PyValue_NULL;
                 int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg, -1, top);
                 Py_DECREF(seq_o);
@@ -18966,37 +19790,46 @@
             PyValue lasti;
             PyValue val;
             PyValue res;
+            PyObject *ir_obj_exit_func = NULL;
+            PyObject *ir_obj_exit_self = NULL;
+            PyObject *ir_obj_val = NULL;
             val = window[4];
             lasti = window[2];
             exit_self = window[1];
             exit_func = window[0];
             if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                exit_func = PyValue_Box(exit_func);
-                if (PyValue_IsInline(exit_func)) {
+                ir_obj_exit_func = _PyValueTemps_Box(value_temps, exit_func);
+                if (ir_obj_exit_func == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(WITH_EXCEPT_START);
-                IR_KEEP_BOX(exit_func);
+            }
+            else {
+                ir_obj_exit_func = PyValue_AsKnownObjectBorrow(exit_func);
             }
             if (Py_UNLIKELY(PyValue_IsInlineAt(&window[1]))) {
-                exit_self = PyValue_Box(exit_self);
-                if (PyValue_IsInline(exit_self)) {
+                ir_obj_exit_self = _PyValueTemps_Box(value_temps, exit_self);
+                if (ir_obj_exit_self == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(WITH_EXCEPT_START);
-                IR_KEEP_BOX(exit_self);
+            }
+            else {
+                ir_obj_exit_self = PyValue_AsKnownObjectBorrow(exit_self);
             }
             if (Py_UNLIKELY(PyValue_IsInlineAt(&window[4]))) {
-                val = PyValue_Box(val);
-                if (PyValue_IsInline(val)) {
+                ir_obj_val = _PyValueTemps_Box(value_temps, val);
+                if (ir_obj_val == NULL) {
                     JUMP_TO_LABEL(error);
                 }
                 BOX_STAT_INC(WITH_EXCEPT_START);
-                IR_KEEP_BOX(val);
+            }
+            else {
+                ir_obj_val = PyValue_AsKnownObjectBorrow(val);
             }
             PyObject *exc, *tb;
-            PyObject *val_o = PyValue_AsKnownObjectBorrow(val);
-            PyObject *exit_func_o = PyValue_AsKnownObjectBorrow(exit_func);
+            PyObject *val_o = ir_obj_val;
+            PyObject *exit_func_o = ir_obj_exit_func;
             assert(val_o && PyExceptionInstance_Check(val_o));
             exc = PyExceptionInstance_Class(val_o);
             PyObject *original_tb = tb = PyException_GetTraceback(val_o);
@@ -19007,7 +19840,7 @@
             (void)lasti;
             PyObject* res_o;
             {
-                PyObject *stack[5] = {NULL, PyValue_AsKnownObjectBorrow(exit_self), exc, val_o, tb};
+                PyObject *stack[5] = {NULL, ir_obj_exit_self, exc, val_o, tb};
                 int has_self = !PyValue_IsNull(exit_self);
                 res_o = PyObject_Vectorcall(exit_func_o, stack + 2 - has_self,
                     (3 + has_self) | PY_VECTORCALL_ARGUMENTS_OFFSET, NULL);
@@ -19047,15 +19880,16 @@
             (void)window;
             opcode = YIELD_VALUE;
             PyValue value;
+            PyValue taken;
             PyValue retval;
             // _MAKE_HEAP_SAFE
             {
                 value = window[0];
-                value = PyValue_MakeHeapSafe(value);
+                taken = value;
             }
             // _YIELD_VALUE
             {
-                retval = value;
+                retval = taken;
                 assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
                 frame->instr_ptr++;
                 PyGenObject *gen = _PyGen_GetGeneratorFromFrame(frame);

@@ -111,11 +111,11 @@ PyAPI_FUNC(PyObject*) PyFrozenDict_New(PyObject *iterable);
  * value, or a NUL-terminated UTF-8 string, respectively. Close owned results.
  * NextValue requires valid cursor storage and distinct optional key/value
  * outputs. Error/end leave the cursor unchanged; success advances it once. */
-PyAPI_FUNC(int) PyDict_GetValue(PyObject *, PyValue, PyValue *);
+PyAPI_FUNC(int) PyDict_GetValue(PyObject *, PyValueBorrow, PyValue *);
 PyAPI_FUNC(int) PyDict_GetValueString(PyObject *, const char *, PyValue *);
 PyAPI_FUNC(int) PyDict_NextValue(PyObject *, Py_ssize_t *, PyValue *, PyValue *);
 /* Inputs borrow; setters promote before retaining. */
-PyAPI_FUNC(int) PyDict_SetValue(PyObject *, PyValue, PyValue);
-PyAPI_FUNC(int) PyDict_DelValue(PyObject *, PyValue);
-PyAPI_FUNC(int) PyDict_ContainsValue(PyObject *, PyValue);
+PyAPI_FUNC(int) PyDict_SetValue(PyObject *, PyValueBorrow, PyValueBorrow);
+PyAPI_FUNC(int) PyDict_DelValue(PyObject *, PyValueBorrow);
+PyAPI_FUNC(int) PyDict_ContainsValue(PyObject *, PyValueBorrow);
 PyAPI_FUNC(int) PyDict_PopValue(PyObject *, PyValue, PyValue *);

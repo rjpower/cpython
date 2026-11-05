@@ -8,7 +8,7 @@ operations until their Action adapters are implemented.
 
 import argparse
 
-from analyzer import analyze_files
+from analyzer import analysis_error, analyze_files
 from cwriter import CWriter
 from generators_common import DEFAULT_INPUT, ROOT, write_header
 from ir_generator import (
@@ -67,7 +67,20 @@ class HelperEmitter(IREmitter):
             return super().dispatch_same_oparg(tkn, tkn_iter, uop, storage, inst)
         next(tkn_iter)
         next(tkn_iter)
-        self.emit(f"do {{ next_instr = this_instr + 1; goto jit_after{uop.name}; }} while (0)")
+        # The interpreter runs the handler again, which loads its views
+        # again; the helper reloads them, since the specialization could
+        # run code that rebinds a local (S7)
+        stack = storage.stack
+        reloads = []
+        for p, names in stack.views.items():
+            if stack.owner.get(p) != "in":
+                raise analysis_error(
+                    f"{uop.name} consumes an input before it specializes", tkn)
+            for name in names:
+                reloads.append(f"{name} = IR_VIEW({stack.input_field(p)}); ")
+                stack.stale.discard(name)
+        self.emit(f"do {{ next_instr = this_instr + 1; {''.join(reloads)}"
+                  f"goto jit_after{uop.name}; }} while (0)")
         return True
 
 

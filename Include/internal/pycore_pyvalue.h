@@ -105,22 +105,27 @@ _PyValue_BorrowTagged(PyValue value)
 /* NewRef creates an independent owner for a pointer value. A raw bit copy
  * merely aliases the existing owner. Scalars require no runtime call.
  * Immortal objects keep the no-count tag, so each has one encoding and
- * exact-bit tests such as PyValue_IsNone() hold for every owner. */
+ * exact-bit tests such as PyValue_IsNone() hold for every owner.  It reads
+ * its argument, so it takes a borrow; unlike PyValue_XDUP(), it also counts
+ * a borrow that carries the no-count tag on a mortal object, which the
+ * tagging producers make until step A5b-3. */
 static inline PyValue
-PyValue_NewRef(PyValue value)
+PyValue_NewRef(PyValueBorrow value)
 {
+    PyValue result = {value.bits};
     if (PyValue_IsObject(value)) {
         PyObject *obj = (PyObject *)(value.bits & ~(uintptr_t)1);
         if (_Py_IsImmortal(obj)) {
-            value.bits = (uintptr_t)obj | 1;
+            result.bits = (uintptr_t)obj | 1;
         }
         else {
             Py_INCREF(obj);
-            value.bits = (uintptr_t)obj;
+            result.bits = (uintptr_t)obj;
         }
     }
-    return value;
+    return result;
 }
+#define PyValue_NewRef(V0) (PyValue_NewRef)(PyValue_Borrow(V0))
 
 static inline void
 PyValue_Close(PyValue value)

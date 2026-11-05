@@ -1264,7 +1264,7 @@ specialize_instance_load_attr(PyObject* owner, _PyInstr *instr, PyObject* name)
 }
 
 Py_NO_INLINE void
-_Py_Specialize_LoadAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
+(_Py_Specialize_LoadAttr)(PyValueBorrow owner_st, _PyInstr *instr, PyObject *name)
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[LOAD_ATTR] == INLINE_CACHE_ENTRIES_LOAD_ATTR);
@@ -1316,7 +1316,7 @@ _Py_Specialize_LoadAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
 }
 
 Py_NO_INLINE void
-_Py_Specialize_StoreAttr(PyValue owner_st, _PyInstr *instr, PyObject *name)
+(_Py_Specialize_StoreAttr)(PyValueBorrow owner_st, _PyInstr *instr, PyObject *name)
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[STORE_ATTR] == INLINE_CACHE_ENTRIES_STORE_ATTR);
@@ -1889,7 +1889,7 @@ store_subscr_fail_kind(PyObject *container, PyValue sub)
 #endif
 
 Py_NO_INLINE void
-_Py_Specialize_StoreSubscr(PyValue container_st, PyValue sub_st, _PyInstr *instr)
+(_Py_Specialize_StoreSubscr)(PyValueBorrow container_st, PyValueBorrow sub_st, _PyInstr *instr)
 {
     assert(ENABLE_SPECIALIZATION);
     fb_begin_binary(instr, PyValue_TYPE(container_st), PyValue_TYPE(sub_st));
@@ -2468,41 +2468,41 @@ SEQ_INT_MULTIPLY_ACTION(int_tuple_multiply, _PyTuple_Repeat,   rhs, lhs)
 
 static _PyBinaryOpSpecializationDescr binaryop_extend_descrs[] = {
     /* list-list concatenation: _PyList_Concat always allocates a new list */
-    {NB_ADD, NULL, _PyList_Concat, &PyList_Type, 1, &PyList_Type, &PyList_Type},
+    {NB_ADD, _PyList_Concat, &PyList_Type, 1, &PyList_Type, &PyList_Type},
     /* tuple-tuple concatenation: _PyTuple_Concat has a zero-length shortcut
        that can return one of the operands, so the result is not guaranteed
        to be a freshly allocated object. */
-    {NB_ADD, NULL, _PyTuple_Concat, &PyTuple_Type, 0, &PyTuple_Type, &PyTuple_Type},
+    {NB_ADD, _PyTuple_Concat, &PyTuple_Type, 0, &PyTuple_Type, &PyTuple_Type},
 
     /* str * int / int * str: call _PyUnicode_Repeat directly.
        _PyUnicode_Repeat returns the original when n == 1. */
-    {NB_MULTIPLY, NULL, str_int_multiply, &PyUnicode_Type, 0, &PyUnicode_Type, &PyLong_Type},
-    {NB_MULTIPLY, NULL, int_str_multiply, &PyUnicode_Type, 0, &PyLong_Type, &PyUnicode_Type},
-    {NB_INPLACE_MULTIPLY, NULL, str_int_multiply, &PyUnicode_Type, 0, &PyUnicode_Type, &PyLong_Type},
-    {NB_INPLACE_MULTIPLY, NULL, int_str_multiply, &PyUnicode_Type, 0, &PyLong_Type, &PyUnicode_Type},
+    {NB_MULTIPLY, str_int_multiply, &PyUnicode_Type, 0, &PyUnicode_Type, &PyLong_Type},
+    {NB_MULTIPLY, int_str_multiply, &PyUnicode_Type, 0, &PyLong_Type, &PyUnicode_Type},
+    {NB_INPLACE_MULTIPLY, str_int_multiply, &PyUnicode_Type, 0, &PyUnicode_Type, &PyLong_Type},
+    {NB_INPLACE_MULTIPLY, int_str_multiply, &PyUnicode_Type, 0, &PyLong_Type, &PyUnicode_Type},
 
     /* bytes + bytes: bytes_concat may return an operand when one side
        is empty, so result is not always unique. */
-    {NB_ADD, NULL, _PyBytes_Concat, &PyBytes_Type, 0, &PyBytes_Type, &PyBytes_Type},
-    {NB_INPLACE_ADD, NULL, _PyBytes_Concat, &PyBytes_Type, 0, &PyBytes_Type, &PyBytes_Type},
+    {NB_ADD, _PyBytes_Concat, &PyBytes_Type, 0, &PyBytes_Type, &PyBytes_Type},
+    {NB_INPLACE_ADD, _PyBytes_Concat, &PyBytes_Type, 0, &PyBytes_Type, &PyBytes_Type},
 
     /* bytes * int / int * bytes: call _PyBytes_Repeat directly.
        _PyBytes_Repeat returns the original when n == 1. */
-    {NB_MULTIPLY, NULL, bytes_int_multiply, &PyBytes_Type, 0, &PyBytes_Type, &PyLong_Type},
-    {NB_MULTIPLY, NULL, int_bytes_multiply, &PyBytes_Type, 0, &PyLong_Type, &PyBytes_Type},
-    {NB_INPLACE_MULTIPLY, NULL, bytes_int_multiply, &PyBytes_Type, 0, &PyBytes_Type, &PyLong_Type},
-    {NB_INPLACE_MULTIPLY, NULL, int_bytes_multiply, &PyBytes_Type, 0, &PyLong_Type, &PyBytes_Type},
+    {NB_MULTIPLY, bytes_int_multiply, &PyBytes_Type, 0, &PyBytes_Type, &PyLong_Type},
+    {NB_MULTIPLY, int_bytes_multiply, &PyBytes_Type, 0, &PyLong_Type, &PyBytes_Type},
+    {NB_INPLACE_MULTIPLY, bytes_int_multiply, &PyBytes_Type, 0, &PyBytes_Type, &PyLong_Type},
+    {NB_INPLACE_MULTIPLY, int_bytes_multiply, &PyBytes_Type, 0, &PyLong_Type, &PyBytes_Type},
 
     /* tuple * int / int * tuple: call _PyTuple_Repeat directly.
        _PyTuple_Repeat returns the original when n == 1. */
-    {NB_MULTIPLY, NULL, tuple_int_multiply, &PyTuple_Type, 0, &PyTuple_Type, &PyLong_Type},
-    {NB_MULTIPLY, NULL, int_tuple_multiply, &PyTuple_Type, 0, &PyLong_Type, &PyTuple_Type},
-    {NB_INPLACE_MULTIPLY, NULL, tuple_int_multiply, &PyTuple_Type, 0, &PyTuple_Type, &PyLong_Type},
-    {NB_INPLACE_MULTIPLY, NULL, int_tuple_multiply, &PyTuple_Type, 0, &PyLong_Type, &PyTuple_Type},
+    {NB_MULTIPLY, tuple_int_multiply, &PyTuple_Type, 0, &PyTuple_Type, &PyLong_Type},
+    {NB_MULTIPLY, int_tuple_multiply, &PyTuple_Type, 0, &PyLong_Type, &PyTuple_Type},
+    {NB_INPLACE_MULTIPLY, tuple_int_multiply, &PyTuple_Type, 0, &PyTuple_Type, &PyLong_Type},
+    {NB_INPLACE_MULTIPLY, int_tuple_multiply, &PyTuple_Type, 0, &PyLong_Type, &PyTuple_Type},
 
     /* dict | dict */
-    {NB_OR, NULL, _PyDict_Or, &PyDict_Type, 1, &PyDict_Type, &PyDict_Type},
-    {NB_INPLACE_OR, NULL, _PyDict_IOr, &PyDict_Type, 0, &PyDict_Type, &PyDict_Type},
+    {NB_OR, _PyDict_Or, &PyDict_Type, 1, &PyDict_Type, &PyDict_Type},
+    {NB_INPLACE_OR, _PyDict_IOr, &PyDict_Type, 0, &PyDict_Type, &PyDict_Type},
 };
 
 static int
@@ -2515,7 +2515,6 @@ binary_op_extended_specialization(PyObject *lhs, PyObject *rhs, int oparg,
         if (d->oparg != oparg) {
             continue;
         }
-        assert(d->guard == NULL);
         int match = Py_TYPE(lhs) == d->lhs_type && Py_TYPE(rhs) == d->rhs_type;
         if (match) {
             *descr = d;
@@ -2565,7 +2564,7 @@ specialize_subscr_getitem(PyTypeObject *container_type, _PyInstr *instr)
  * Scalar types and existing compact predicates need no temporary boxes. */
 static void
 specialize_binary_op(PyObject *lhs, PyObject *rhs,
-                     PyValue lhs_st, PyValue rhs_st,
+                     PyValueBorrow lhs_st, PyValueBorrow rhs_st,
                      _PyInstr *instr, int oparg, PyValue *locals)
 {
     PyTypeObject *lhs_type = PyValue_TYPE(lhs_st);
@@ -2735,7 +2734,7 @@ specialize_binary_op(PyObject *lhs, PyObject *rhs,
 }
 
 Py_NO_INLINE void
-_Py_Specialize_BinaryOp(PyValue lhs_st, PyValue rhs_st, _PyInstr *instr,
+(_Py_Specialize_BinaryOp)(PyValueBorrow lhs_st, PyValueBorrow rhs_st, _PyInstr *instr,
                         int oparg, PyValue *locals)
 {
     assert(ENABLE_SPECIALIZATION);
@@ -2782,7 +2781,7 @@ compare_op_fail_kind(PyTypeObject *lhs, PyTypeObject *rhs)
 #endif   // Py_STATS
 
 Py_NO_INLINE void
-_Py_Specialize_CompareOp(PyValue lhs_st, PyValue rhs_st, _PyInstr *instr,
+(_Py_Specialize_CompareOp)(PyValueBorrow lhs_st, PyValueBorrow rhs_st, _PyInstr *instr,
                          int oparg)
 {
     PyTypeObject *lhs_type = PyValue_TYPE(lhs_st);
@@ -3139,7 +3138,7 @@ enum { TRUTH_BOOL, TRUTH_INT, TRUTH_LIST, TRUTH_NONE, TRUTH_STR,
 /* TO_BOOL and the conditional jumps, which test the truth of a value the
  * same way, choose a specialisation from their own row of ops. */
 static void
-specialize_truth(PyValue value_o, _PyInstr *instr, const uint8_t *ops)
+specialize_truth(PyValueBorrow value_o, _PyInstr *instr, const uint8_t *ops)
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[TO_BOOL] == INLINE_CACHE_ENTRIES_TO_BOOL);
@@ -3201,6 +3200,7 @@ failure:
 success:
     specialize(instr, specialized_op);
 }
+#define specialize_truth(V0, V1, V2) (specialize_truth)(PyValue_Borrow(V0), V1, V2)
 
 Py_NO_INLINE void
 _Py_Specialize_ToBool(PyValue value_o, _PyInstr *instr)
@@ -3213,7 +3213,7 @@ _Py_Specialize_ToBool(PyValue value_o, _PyInstr *instr)
 }
 
 Py_NO_INLINE void
-_Py_Specialize_PopJumpIf(PyValue value_o, _PyInstr *instr)
+(_Py_Specialize_PopJumpIf)(PyValueBorrow value_o, _PyInstr *instr)
 {
     static const uint8_t if_false[TRUTH_COUNT] = {
         POP_JUMP_IF_FALSE_BOOL, POP_JUMP_IF_FALSE_INT, POP_JUMP_IF_FALSE_LIST,
@@ -3251,7 +3251,7 @@ containsop_fail_kind(PyObject *value) {
 #endif
 
 Py_NO_INLINE void
-_Py_Specialize_ContainsOp(PyValue item_st, PyValue value_st, _PyInstr *instr)
+(_Py_Specialize_ContainsOp)(PyValueBorrow item_st, PyValueBorrow value_st, _PyInstr *instr)
 {
     assert(ENABLE_SPECIALIZATION);
     assert(_PyOpcode_Caches[CONTAINS_OP] == INLINE_CACHE_ENTRIES_COMPARE_OP);

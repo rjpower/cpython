@@ -98,19 +98,23 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_ADD;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
+                    do { next_instr = this_instr + 1; rhs = IR_VIEW(IR_FIELD_C(this_instr)); lhs = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -123,14 +127,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -190,19 +194,23 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_AND;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
+                    do { next_instr = this_instr + 1; rhs = IR_VIEW(IR_FIELD_C(this_instr)); lhs = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -215,14 +223,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -282,19 +290,23 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_FLOOR_DIVIDE;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
+                    do { next_instr = this_instr + 1; rhs = IR_VIEW(IR_FIELD_C(this_instr)); lhs = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -307,14 +319,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -374,19 +386,23 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_ADD;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
+                    do { next_instr = this_instr + 1; rhs = IR_VIEW(IR_FIELD_C(this_instr)); lhs = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -399,14 +415,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -466,19 +482,23 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_AND;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
+                    do { next_instr = this_instr + 1; rhs = IR_VIEW(IR_FIELD_C(this_instr)); lhs = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -491,14 +511,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -558,19 +578,23 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_FLOOR_DIVIDE;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
+                    do { next_instr = this_instr + 1; rhs = IR_VIEW(IR_FIELD_C(this_instr)); lhs = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -583,14 +607,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -650,19 +674,23 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_LSHIFT;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
+                    do { next_instr = this_instr + 1; rhs = IR_VIEW(IR_FIELD_C(this_instr)); lhs = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -675,14 +703,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -742,19 +770,23 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_MATRIX_MULTIPLY;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
+                    do { next_instr = this_instr + 1; rhs = IR_VIEW(IR_FIELD_C(this_instr)); lhs = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -767,14 +799,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -834,19 +866,23 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_MULTIPLY;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
+                    do { next_instr = this_instr + 1; rhs = IR_VIEW(IR_FIELD_C(this_instr)); lhs = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -859,14 +895,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -926,19 +962,23 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_OR;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
+                    do { next_instr = this_instr + 1; rhs = IR_VIEW(IR_FIELD_C(this_instr)); lhs = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -951,14 +991,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -1018,19 +1058,23 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_POWER;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
+                    do { next_instr = this_instr + 1; rhs = IR_VIEW(IR_FIELD_C(this_instr)); lhs = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -1043,14 +1087,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -1110,19 +1154,23 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_REMAINDER;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
+                    do { next_instr = this_instr + 1; rhs = IR_VIEW(IR_FIELD_C(this_instr)); lhs = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -1135,14 +1183,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -1202,19 +1250,23 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_RSHIFT;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
+                    do { next_instr = this_instr + 1; rhs = IR_VIEW(IR_FIELD_C(this_instr)); lhs = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -1227,14 +1279,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -1294,19 +1346,23 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_SUBTRACT;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
+                    do { next_instr = this_instr + 1; rhs = IR_VIEW(IR_FIELD_C(this_instr)); lhs = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -1319,14 +1375,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -1386,19 +1442,23 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_TRUE_DIVIDE;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
+                    do { next_instr = this_instr + 1; rhs = IR_VIEW(IR_FIELD_C(this_instr)); lhs = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -1411,14 +1471,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -1478,19 +1538,23 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_INPLACE_XOR;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
+                    do { next_instr = this_instr + 1; rhs = IR_VIEW(IR_FIELD_C(this_instr)); lhs = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -1503,14 +1567,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -1570,19 +1634,23 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_LSHIFT;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
+                    do { next_instr = this_instr + 1; rhs = IR_VIEW(IR_FIELD_C(this_instr)); lhs = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -1595,14 +1663,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -1662,19 +1730,23 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_MATRIX_MULTIPLY;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
+                    do { next_instr = this_instr + 1; rhs = IR_VIEW(IR_FIELD_C(this_instr)); lhs = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -1687,14 +1759,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -1754,19 +1826,23 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_MULTIPLY;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
+                    do { next_instr = this_instr + 1; rhs = IR_VIEW(IR_FIELD_C(this_instr)); lhs = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -1779,14 +1855,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -1846,19 +1922,23 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_OR;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
+                    do { next_instr = this_instr + 1; rhs = IR_VIEW(IR_FIELD_C(this_instr)); lhs = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -1871,14 +1951,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -1938,19 +2018,23 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_POWER;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
+                    do { next_instr = this_instr + 1; rhs = IR_VIEW(IR_FIELD_C(this_instr)); lhs = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -1963,14 +2047,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -2030,19 +2114,23 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_REMAINDER;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
+                    do { next_instr = this_instr + 1; rhs = IR_VIEW(IR_FIELD_C(this_instr)); lhs = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -2055,14 +2143,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -2122,19 +2210,23 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_RSHIFT;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
+                    do { next_instr = this_instr + 1; rhs = IR_VIEW(IR_FIELD_C(this_instr)); lhs = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -2147,14 +2239,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -2214,19 +2306,23 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_SUBSCR;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
+                    do { next_instr = this_instr + 1; rhs = IR_VIEW(IR_FIELD_C(this_instr)); lhs = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -2239,14 +2335,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -2306,19 +2402,23 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_SUBTRACT;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
+                    do { next_instr = this_instr + 1; rhs = IR_VIEW(IR_FIELD_C(this_instr)); lhs = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -2331,14 +2431,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -2398,19 +2498,23 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_TRUE_DIVIDE;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
+                    do { next_instr = this_instr + 1; rhs = IR_VIEW(IR_FIELD_C(this_instr)); lhs = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -2423,14 +2527,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -2490,19 +2594,23 @@
             _PyFb_BINARY_OP *fb = (_PyFb_BINARY_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = NB_XOR;
             (void)oparg;
-            PyValue lhs;
-            PyValue rhs;
+            PyValueBorrow lhs;
+            PyValueBorrow rhs;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_BINARY_OP
             {
-                rhs = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                lhs = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                rhs = IR_VIEW(IR_FIELD_C(this_instr));
+                lhs = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_BinaryOp(lhs, rhs, next_instr, oparg, LOCALS_ARRAY);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
+                    do { next_instr = this_instr + 1; rhs = IR_VIEW(IR_FIELD_C(this_instr)); lhs = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_BINARY_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(BINARY_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -2515,14 +2623,14 @@
             }
             // _BINARY_OP
             {
-                PyValue held_left = IR_INPLACE_HEAP_SAFE(lhs, IR_FIELD_B(this_instr));
-                PyValue held_right = IR_INPLACE_HEAP_SAFE(rhs, IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), lhs);
+                PyValue held_left = IR_TAKE(lhs, ir_own_B);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), rhs);
+                PyValue held_right = IR_TAKE(rhs, ir_own_C);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_C(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
                 PyValue pending = value_binary_operation(oparg, held_left, held_right, value_temps);
                 if (PyValue_IsNull(pending)) {
                     (void)value_operation_restore2(&operation, &held_left, &held_right);
@@ -2963,19 +3071,23 @@
             _PyFb_COMPARE_OP *fb = (_PyFb_COMPARE_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_D(this_instr));
             (void)oparg;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue res;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
             // _SPECIALIZE_COMPARE_OP
             {
-                right = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                left = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                right = IR_VIEW(IR_FIELD_C(this_instr));
+                left = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_CompareOp(left, right, next_instr, oparg);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_COMPARE_OP; } while (0);
+                    do { next_instr = this_instr + 1; right = IR_VIEW(IR_FIELD_C(this_instr)); left = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_COMPARE_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(COMPARE_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -3002,10 +3114,10 @@
                     }
                     res_o = PyObject_RichCompare(left_o, right_o, oparg >> 5);
                 }
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE(right);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE(left);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), right);
+                PyValue_XCLOSE(ir_own_C);
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), left);
+                PyValue_XCLOSE(ir_own_B);
                 if (res_o == NULL) {
                     JUMP_TO_LABEL(error);
                 }
@@ -3060,22 +3172,28 @@
             _PyFb_CONTAINS_OP *fb = (_PyFb_CONTAINS_OP *)IR_FB(IR_FIELD_D(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_D(this_instr));
             (void)oparg;
-            PyValue left;
-            PyValue right;
+            PyValueBorrow left;
+            PyValueBorrow right;
             PyValue b;
-            PyValue l;
-            PyValue r;
-            PyValue value;
+            PyValueBorrow l;
+            PyValueBorrow r;
+            PyValueBorrow value;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            PyObject *ir_obj_left = NULL;
+            PyObject *ir_obj_right = NULL;
             // _SPECIALIZE_CONTAINS_OP
             {
-                right = IR_SLOT(IR_FIELD_C(this_instr));
-                left = IR_SLOT(IR_FIELD_B(this_instr));
+                right = IR_VIEW(IR_FIELD_C(this_instr));
+                left = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_ContainsOp(left, right, next_instr);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_CONTAINS_OP; } while (0);
+                    do { next_instr = this_instr + 1; right = IR_VIEW(IR_FIELD_C(this_instr)); left = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_CONTAINS_OP; } while (0);
                 }
                 OPCODE_DEFERRED_INC(CONTAINS_OP);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -3087,23 +3205,27 @@
             // _CONTAINS_OP
             {
                 if (Py_UNLIKELY(PyValue_IsInline(left))) {
-                    left = PyValue_Box(left);
-                    if (PyValue_IsInline(left)) {
+                    ir_obj_left = _PyValueTemps_Box(value_temps, left);
+                    if (ir_obj_left == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CONTAINS_OP);
-                    IR_KEEP_BOX(left);
+                }
+                else {
+                    ir_obj_left = PyValue_AsKnownObjectBorrow(left);
                 }
                 if (Py_UNLIKELY(PyValue_IsInline(right))) {
-                    right = PyValue_Box(right);
-                    if (PyValue_IsInline(right)) {
+                    ir_obj_right = _PyValueTemps_Box(value_temps, right);
+                    if (ir_obj_right == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(CONTAINS_OP);
-                    IR_KEEP_BOX(right);
                 }
-                PyObject *left_o = PyValue_AsKnownObjectBorrow(left);
-                PyObject *right_o = PyValue_AsKnownObjectBorrow(right);
+                else {
+                    ir_obj_right = PyValue_AsKnownObjectBorrow(right);
+                }
+                PyObject *left_o = ir_obj_left;
+                PyObject *right_o = ir_obj_right;
                 int res = PySequence_Contains(right_o, left_o);
                 if (res < 0) {
                     JUMP_TO_LABEL(error);
@@ -3111,20 +3233,22 @@
                 b = (res ^ oparg) ? PyValue_True : PyValue_False;
                 l = left;
                 r = right;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), l);
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), r);
             }
             // _POP_TOP
             {
                 value = r;
+                (void)value;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
-                if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) _PyValue_XCLOSE_POINTER(value);
+                PyValue_XCLOSE(ir_own_C);
             }
             // _POP_TOP
             {
                 value = l;
+                (void)value;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), b);
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) _PyValue_XCLOSE_POINTER(value);
+                PyValue_XCLOSE(ir_own_B);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), b);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -3228,10 +3352,12 @@
             INSTRUCTION_STATS(END_FOR);
             _PyValueTemps *const value_temps = NULL;
             (void)value_temps;
-            PyValue value;
-            value = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-            if (!IR_IS_LOCAL(IR_FIELD_C(this_instr))) PyValue_CLOSE(value);
+            PyValueBorrow value;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            value = IR_VIEW(IR_FIELD_C(this_instr));
+            ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), value);
+            PyValue_XCLOSE(ir_own_C);
             DISPATCH();
         }
 
@@ -3530,18 +3656,20 @@
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
             (void)oparg;
-            PyValue owner;
+            PyValueBorrow owner;
             PyValue attr;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
             // _SPECIALIZE_LOAD_ATTR
             {
-                owner = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                owner = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
                     next_instr = this_instr;
                     _Py_Specialize_LoadAttr(owner, next_instr, name);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_LOAD_ATTR; } while (0);
+                    do { next_instr = this_instr + 1; owner = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_LOAD_ATTR; } while (0);
                 }
                 OPCODE_DEFERRED_INC(LOAD_ATTR);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -3554,11 +3682,11 @@
             {
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
                 int method = oparg & 1;
-                PyValue receiver = IR_INPLACE_HEAP_SAFE(owner, IR_FIELD_B(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), owner);
+                PyValue receiver = IR_TAKE(owner, ir_own_B);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 PyValue pending, pending_self;
                 int invoked;
                 int failed = value_load_attribute(tstate, receiver, name, method,
@@ -3627,18 +3755,20 @@
             _PyFb_LOAD_ATTR *fb = (_PyFb_LOAD_ATTR *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue owner;
+            PyValueBorrow owner;
             PyValue attr;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
             // _SPECIALIZE_LOAD_ATTR
             {
-                owner = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                owner = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     PyObject *name = GETITEM(FRAME_CO_NAMES, oparg>>1);
                     next_instr = this_instr;
                     _Py_Specialize_LoadAttr(owner, next_instr, name);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_LOAD_ATTR; } while (0);
+                    do { next_instr = this_instr + 1; owner = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_LOAD_ATTR; } while (0);
                 }
                 OPCODE_DEFERRED_INC(LOAD_ATTR);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -3651,11 +3781,11 @@
             {
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg >> 1);
                 int method = oparg & 1;
-                PyValue receiver = IR_INPLACE_HEAP_SAFE(owner, IR_FIELD_B(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), owner);
+                PyValue receiver = IR_TAKE(owner, ir_own_B);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.result_slot = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 PyValue pending, pending_self;
                 int invoked;
                 int failed = value_load_attribute(tstate, receiver, name, method,
@@ -4457,14 +4587,18 @@
             INSTRUCTION_STATS(POP_ITER);
             _PyValueTemps *const value_temps = NULL;
             (void)value_temps;
-            PyValue iter;
-            PyValue index_or_null;
-            index_or_null = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-            iter = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+            PyValueBorrow iter;
+            PyValueBorrow index_or_null;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            index_or_null = IR_VIEW(IR_FIELD_B(this_instr));
+            iter = IR_VIEW(IR_FIELD_A(this_instr));
             (void)index_or_null;
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-            if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE(iter);
+            ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), index_or_null);
+            ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), iter);
+            PyValue_XCLOSE(ir_own_A);
             DISPATCH();
         }
 
@@ -4493,18 +4627,20 @@
             _PyFb_POP_JUMP_IF_FALSE *fb = (_PyFb_POP_JUMP_IF_FALSE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
+            PyValueBorrow value;
             PyValue res;
             PyValue cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _SPECIALIZE_POP_JUMP_IF
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                value = IR_VIEW(IR_FIELD_A(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_PopJumpIf(value, next_instr);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_POP_JUMP_IF; } while (0);
+                    do { next_instr = this_instr + 1; value = IR_VIEW(IR_FIELD_A(this_instr)); goto jit_after_SPECIALIZE_POP_JUMP_IF; } while (0);
                 }
                 OPCODE_DEFERRED_INC(TO_BOOL);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -4525,8 +4661,8 @@
                 else {
                     err = PyObject_IsTrue(PyValue_AsKnownObjectBorrow(value));
                 }
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE(value);
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), value);
+                PyValue_XCLOSE(ir_own_A);
                 if (err < 0) {
                     JUMP_TO_LABEL(error);
                 }
@@ -4573,20 +4709,22 @@
             _PyFb_POP_JUMP_IF_NONE *fb = (_PyFb_POP_JUMP_IF_NONE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
+            PyValueBorrow value;
             PyValue b;
             PyValue cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _IS_NONE
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                value = IR_VIEW(IR_FIELD_A(this_instr));
                 if (PyValue_IsNone(value)) {
                     b = PyValue_True;
-                    IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                    ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), value);
                 }
                 else {
                     b = PyValue_False;
-                    IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                    if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE(value);
+                    ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), value);
+                    PyValue_XCLOSE(ir_own_A);
                 }
             }
             // _POP_JUMP_IF_TRUE
@@ -4630,20 +4768,22 @@
             _PyFb_POP_JUMP_IF_NOT_NONE *fb = (_PyFb_POP_JUMP_IF_NOT_NONE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
+            PyValueBorrow value;
             PyValue b;
             PyValue cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _IS_NONE
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                value = IR_VIEW(IR_FIELD_A(this_instr));
                 if (PyValue_IsNone(value)) {
                     b = PyValue_True;
-                    IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
+                    ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), value);
                 }
                 else {
                     b = PyValue_False;
-                    IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                    if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE(value);
+                    ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), value);
+                    PyValue_XCLOSE(ir_own_A);
                 }
             }
             // _POP_JUMP_IF_FALSE
@@ -4687,18 +4827,20 @@
             _PyFb_POP_JUMP_IF_TRUE *fb = (_PyFb_POP_JUMP_IF_TRUE *)IR_FB(IR_FIELD_B(this_instr));
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue value;
+            PyValueBorrow value;
             PyValue res;
             PyValue cond;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _SPECIALIZE_POP_JUMP_IF
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                value = IR_VIEW(IR_FIELD_A(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_PopJumpIf(value, next_instr);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_POP_JUMP_IF; } while (0);
+                    do { next_instr = this_instr + 1; value = IR_VIEW(IR_FIELD_A(this_instr)); goto jit_after_SPECIALIZE_POP_JUMP_IF; } while (0);
                 }
                 OPCODE_DEFERRED_INC(TO_BOOL);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -4719,8 +4861,8 @@
                 else {
                     err = PyObject_IsTrue(PyValue_AsKnownObjectBorrow(value));
                 }
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_CLOSE(value);
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), value);
+                PyValue_XCLOSE(ir_own_A);
                 if (err < 0) {
                     JUMP_TO_LABEL(error);
                 }
@@ -4764,10 +4906,12 @@
             INSTRUCTION_STATS(POP_TOP);
             _PyValueTemps *const value_temps = NULL;
             (void)value_temps;
-            PyValue value;
-            value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
-            IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-            if (!IR_IS_LOCAL(IR_FIELD_A(this_instr))) PyValue_XCLOSE(value);
+            PyValueBorrow value;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            value = IR_VIEW(IR_FIELD_A(this_instr));
+            ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), value);
+            PyValue_XCLOSE(ir_own_A);
             DISPATCH();
         }
 
@@ -4945,20 +5089,23 @@
             INSTRUCTION_STATS(RETURN_VALUE);
             _PyValueTemps *const value_temps = NULL;
             (void)value_temps;
-            PyValue value;
+            PyValueBorrow value;
+            PyValue taken;
             PyValue retval;
             PyValue res;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _MAKE_HEAP_SAFE
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
-                value = IR_INPLACE_HEAP_SAFE(value, IR_FIELD_A(this_instr));
+                value = IR_VIEW(IR_FIELD_A(this_instr));
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), value);
+                taken = IR_TAKE(value, ir_own_A);
             }
             // _RETURN_VALUE
             {
-                retval = value;
+                retval = taken;
                 assert(frame->owner != FRAME_OWNED_BY_INTERPRETER);
                 PyValue temp = retval;
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 _PyFrame_AssertTemporariesClear(frame);
                 DTRACE_FUNCTION_RETURN();
                 _Py_LeaveRecursiveCallPy(tstate);
@@ -5007,12 +5154,16 @@
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(IR_FIELD_C(this_instr));
             int oparg = IR_FB_ARG(fb, IR_FIELD_C(this_instr));
             (void)oparg;
-            PyValue v;
-            PyValue owner;
+            PyValueBorrow v;
+            PyValueBorrow owner;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _SPECIALIZE_STORE_ATTR
             {
-                owner = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
-                v = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                owner = IR_VIEW(IR_FIELD_A(this_instr));
+                v = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -5020,7 +5171,7 @@
                         PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
                         next_instr = this_instr;
                         _Py_Specialize_StoreAttr(owner, next_instr, name);
-                        do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_STORE_ATTR; } while (0);
+                        do { next_instr = this_instr + 1; owner = IR_VIEW(IR_FIELD_A(this_instr)); v = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_STORE_ATTR; } while (0);
                     }
                 }
                 OPCODE_DEFERRED_INC(STORE_ATTR);
@@ -5033,13 +5184,13 @@
             // _STORE_ATTR
             {
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-                PyValue held_value = IR_INPLACE_HEAP_SAFE(v, IR_FIELD_B(this_instr));
-                PyValue receiver = IR_INPLACE_HEAP_SAFE(owner, IR_FIELD_A(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), v);
+                PyValue held_value = IR_TAKE(v, ir_own_B);
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), owner);
+                PyValue receiver = IR_TAKE(owner, ir_own_A);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 int invoked;
                 int err = value_store_attribute(receiver, held_value, name, value_temps, &invoked);
                 if (!invoked) {
@@ -5090,12 +5241,16 @@
             _PyFb_STORE_ATTR *fb = (_PyFb_STORE_ATTR *)IR_FB(0);
             int oparg = (int)IR_FIELD_CD(this_instr);
             (void)oparg;
-            PyValue v;
-            PyValue owner;
+            PyValueBorrow v;
+            PyValueBorrow owner;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
             // _SPECIALIZE_STORE_ATTR
             {
-                owner = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
-                v = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                owner = IR_VIEW(IR_FIELD_A(this_instr));
+                v = IR_VIEW(IR_FIELD_B(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
@@ -5103,7 +5258,7 @@
                         PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
                         next_instr = this_instr;
                         _Py_Specialize_StoreAttr(owner, next_instr, name);
-                        do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_STORE_ATTR; } while (0);
+                        do { next_instr = this_instr + 1; owner = IR_VIEW(IR_FIELD_A(this_instr)); v = IR_VIEW(IR_FIELD_B(this_instr)); goto jit_after_SPECIALIZE_STORE_ATTR; } while (0);
                     }
                 }
                 OPCODE_DEFERRED_INC(STORE_ATTR);
@@ -5116,13 +5271,13 @@
             // _STORE_ATTR
             {
                 PyObject *name = GETITEM(FRAME_CO_NAMES, oparg);
-                PyValue held_value = IR_INPLACE_HEAP_SAFE(v, IR_FIELD_B(this_instr));
-                PyValue receiver = IR_INPLACE_HEAP_SAFE(owner, IR_FIELD_A(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), v);
+                PyValue held_value = IR_TAKE(v, ir_own_B);
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), owner);
+                PyValue receiver = IR_TAKE(owner, ir_own_A);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
                 operation.input_slots[0] = IR_FIELD_B(this_instr);
                 operation.input_slots[1] = IR_FIELD_A(this_instr);
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
                 int invoked;
                 int err = value_store_attribute(receiver, held_value, name, value_temps, &invoked);
                 if (!invoked) {
@@ -5339,19 +5494,25 @@
             _PyValueTemps value_owners = {value_boxes, 0, Py_ARRAY_LENGTH(value_boxes)};
             _PyValueTemps *value_temps = &value_owners;
             _PyFb_STORE_SUBSCR *fb = (_PyFb_STORE_SUBSCR *)IR_FB(IR_FIELD_D(this_instr));
-            PyValue container;
-            PyValue sub;
-            PyValue v;
+            PyValueBorrow container;
+            PyValueBorrow sub;
+            PyValueBorrow v;
+            PyValue ir_own_C = PyValue_NULL;
+            (void)ir_own_C;
+            PyValue ir_own_A = PyValue_NULL;
+            (void)ir_own_A;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
             // _SPECIALIZE_STORE_SUBSCR
             {
-                sub = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
-                container = IR_LOAD_BORROWED(IR_FIELD_A(this_instr));
+                sub = IR_VIEW(IR_FIELD_B(this_instr));
+                container = IR_VIEW(IR_FIELD_A(this_instr));
                 #if ENABLE_SPECIALIZATION
                 _PyFbHeader *feedback = ((_PyFbHeader *)fb);
                 if (ADAPTIVE_COUNTER_TRIGGERS(feedback)) {
                     next_instr = this_instr;
                     _Py_Specialize_StoreSubscr(container, sub, next_instr);
-                    do { next_instr = this_instr + 1; goto jit_after_SPECIALIZE_STORE_SUBSCR; } while (0);
+                    do { next_instr = this_instr + 1; sub = IR_VIEW(IR_FIELD_B(this_instr)); container = IR_VIEW(IR_FIELD_A(this_instr)); goto jit_after_SPECIALIZE_STORE_SUBSCR; } while (0);
                 }
                 OPCODE_DEFERRED_INC(STORE_SUBSCR);
                 ADVANCE_ADAPTIVE_COUNTER(feedback);
@@ -5362,14 +5523,14 @@
             }
             // _STORE_SUBSCR
             {
-                v = IR_LOAD_BORROWED(IR_FIELD_C(this_instr));
-                PyValue held_value = IR_INPLACE_HEAP_SAFE(v, IR_FIELD_C(this_instr));
-                PyValue held_container = IR_INPLACE_HEAP_SAFE(container, IR_FIELD_A(this_instr));
-                PyValue held_sub = IR_INPLACE_HEAP_SAFE(sub, IR_FIELD_B(this_instr));
+                v = IR_VIEW(IR_FIELD_C(this_instr));
+                ir_own_C = IR_CONSUME_INPUT(IR_FIELD_C(this_instr), v);
+                PyValue held_value = IR_TAKE(v, ir_own_C);
+                ir_own_A = IR_CONSUME_INPUT(IR_FIELD_A(this_instr), container);
+                PyValue held_container = IR_TAKE(container, ir_own_A);
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), sub);
+                PyValue held_sub = IR_TAKE(sub, ir_own_B);
                 _PyValueOperation operation = value_operation_begin(tstate, frame, next_instr);
-                IR_CONSUME_INPUT(IR_FIELD_C(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_A(this_instr));
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
                 int err = value_store_subscript(held_container, held_sub, held_value,
                     value_temps);
                 value_operation_close3(&held_sub, &held_container, &held_value);
@@ -5518,12 +5679,14 @@
             (void)value_temps;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue value;
+            PyValueBorrow value;
             PyValue res;
-            PyValue v;
+            PyValueBorrow v;
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
             // _UNARY_NEGATIVE
             {
-                value = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+                value = IR_VIEW(IR_FIELD_B(this_instr));
                 if (PyValue_IsInlineInt(value)) {
                     res = PyValue_FromInt64(-PyValue_InlineInt64(value));
                 }
@@ -5538,13 +5701,14 @@
                     JUMP_TO_LABEL(error);
                 }
                 v = value;
-                IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
+                ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), v);
             }
             // _POP_TOP
             {
                 value = v;
+                (void)value;
                 IR_STORE_TEMP_DST(IR_FIELD_A(this_instr), res);
-                if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_XCLOSE(value);
+                PyValue_XCLOSE(ir_own_B);
             }
             IR_STORE_DST(IR_FIELD_A(this_instr), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -5581,12 +5745,14 @@
             (void)value_temps;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
-            PyValue value;
+            PyValueBorrow value;
             PyValue res;
-            value = IR_LOAD_BORROWED(IR_FIELD_B(this_instr));
+            PyValue ir_own_B = PyValue_NULL;
+            (void)ir_own_B;
+            value = IR_VIEW(IR_FIELD_B(this_instr));
             int truth = _PyValue_Truth(value);
-            IR_CONSUME_INPUT(IR_FIELD_B(this_instr));
-            if (!IR_IS_LOCAL(IR_FIELD_B(this_instr))) PyValue_CLOSE(value);
+            ir_own_B = IR_CONSUME_INPUT(IR_FIELD_B(this_instr), value);
+            PyValue_XCLOSE(ir_own_B);
             if (truth < 0) {
                 JUMP_TO_LABEL(error);
             }
@@ -5632,6 +5798,7 @@
             (void)window;
             PyValue seq;
             PyValue *top;
+            PyObject *ir_obj_seq = NULL;
             // _SPECIALIZE_UNPACK_SEQUENCE
             {
                 seq = window[0];
@@ -5654,14 +5821,16 @@
             {
                 top = &window[oparg];
                 if (Py_UNLIKELY(PyValue_IsInlineAt(&window[0]))) {
-                    seq = PyValue_Box(seq);
-                    if (PyValue_IsInline(seq)) {
+                    ir_obj_seq = _PyValueTemps_Box(value_temps, seq);
+                    if (ir_obj_seq == NULL) {
                         JUMP_TO_LABEL(error);
                     }
                     BOX_STAT_INC(UNPACK_SEQUENCE);
-                    IR_KEEP_BOX(seq);
                 }
-                PyObject *seq_o = _PyValue_AsPyObjectStealPointer(seq);
+                else {
+                    ir_obj_seq = PyValue_AsKnownObjectBorrow(seq);
+                }
+                PyObject *seq_o = (PyValue_IsInline(seq) ? Py_NewRef(ir_obj_seq) : PyValue_AsKnownObjectSteal(seq));
                 window[0] = PyValue_NULL;
                 int res = _PyEval_UnpackIterableValue(tstate, seq_o, oparg, -1, top);
                 Py_DECREF(seq_o);

@@ -28,7 +28,7 @@ _PyValue_Hash(PyValue value)
 }
 
 static int
-compare_inline(PyValue left, PyValue right, int op)
+compare_inline(PyValueBorrow left, PyValueBorrow right, int op)
 {
     /* Every int51 is represented exactly by a double, whose significand has
        53 bits. No boxed subclass or NaN enters this path, so ordinary C
@@ -54,7 +54,7 @@ compare_inline(PyValue left, PyValue right, int op)
    deallocator); a failed box replaces it, and releasing the old exception can
    run Python, but then neither box is used. */
 static int
-box_operands(PyValue left, PyValue right, PyObject **a, PyObject **b)
+box_operands(PyValueBorrow left, PyValueBorrow right, PyObject **a, PyObject **b)
 {
     *a = PyValue_AsObject(left);
     *b = *a == NULL ? NULL : PyValue_AsObject(right);
@@ -66,7 +66,7 @@ box_operands(PyValue left, PyValue right, PyObject **a, PyObject **b)
 }
 
 int
-_PyValue_RichCompareBool(PyValue left, PyValue right, int op)
+(_PyValue_RichCompareBool)(PyValueBorrow left, PyValueBorrow right, int op)
 {
     /* Python's containers consider an object equal to itself, including NaN. */
     if ((op == Py_EQ || op == Py_NE) && PyValue_Is(left, right)) {
@@ -86,7 +86,7 @@ _PyValue_RichCompareBool(PyValue left, PyValue right, int op)
 }
 
 PyObject *
-_PyValue_RichCompareObject(PyValue left, PyValue right, int op)
+(_PyValue_RichCompareObject)(PyValueBorrow left, PyValueBorrow right, int op)
 {
     if (PyValue_IsInline(left) && PyValue_IsInline(right)) {
         return PyBool_FromLong(compare_inline(left, right, op));
@@ -102,7 +102,7 @@ _PyValue_RichCompareObject(PyValue left, PyValue right, int op)
 }
 
 int
-_PyValue_WriteRepr(PyUnicodeWriter *writer, PyValue value)
+(_PyValue_WriteRepr)(PyUnicodeWriter *writer, PyValueBorrow value)
 {
     PyObject *obj = PyValue_AsObject(value);
     if (obj == NULL) {

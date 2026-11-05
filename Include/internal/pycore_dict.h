@@ -79,7 +79,17 @@ extern PyObject* _PyDictView_Intersect(PyObject* self, PyObject *other);
  * The output is NULL1 on absence/error; caller owns any prior output contents.
  * Like PyDict_GetItemRef(), a lookup whose keys run no Python succeeds with
  * an unrelated exception pending and leaves it pending. */
-PyAPI_FUNC(int) _PyDict_GetValue_KnownHash(PyObject *, PyValue, Py_hash_t, PyValue *);
+PyAPI_FUNC(int) _PyDict_GetValue_KnownHash(PyObject *, PyValueBorrow, Py_hash_t, PyValue *);
+#define _PyDict_GetValue_KnownHash(D, K, H, R) \
+    (_PyDict_GetValue_KnownHash)(D, PyValue_Borrow(K), H, R)
+
+/* The reader macros of the value-form calls of Include/cpython/dictobject.h:
+   the core passes owners and borrows alike. */
+#define PyDict_GetValue(D, K, R) (PyDict_GetValue)(D, PyValue_Borrow(K), R)
+#define PyDict_SetValue(D, K, V) \
+    (PyDict_SetValue)(D, PyValue_Borrow(K), PyValue_Borrow(V))
+#define PyDict_DelValue(D, K) (PyDict_DelValue)(D, PyValue_Borrow(K))
+#define PyDict_ContainsValue(D, K) (PyDict_ContainsValue)(D, PyValue_Borrow(K))
 /* Return 1 with independent owners for requested key/value outputs, 0 at end,
  * or -1 on error. Optional output slots must be distinct; non-success sets
  * them to NULL1. Capture is allocation-free; only success advances the cursor.

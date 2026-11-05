@@ -149,18 +149,17 @@ class Local:
     # guard, was asserted to be an object, or was assigned from a pointer.
     # Cleared when the code assigns anything else to it.
     known_object: bool = False
-    # The IR field the value was read through (see ir_generator.IRStack).
-    ir_field: str | None = None
-    # Read as it is (IR_LOAD_BORROWED) or converted to an object already,
-    # so that ir_generator's emit_object_inputs() leaves it.
-    ir_borrowed: bool = False
     # The stack position of the register-style input that the value was
     # read from, whose slot is its home (see ir_generator.IRStack).
     ir_input: int | None = None
-    # The IR field whose slot the value may borrow in place, without a
-    # count, when the field names a local: an input read through it, or a
-    # copy of one (see ir_generator.inplace_input_use()).
+    # The IR field whose slot the value views: a PyValueBorrow, which owns
+    # no count, of an input read through a field that may name a local, or
+    # a copy of one (see ir_generator.inplace_input_use()).
     ir_inplace: str | None = None
+    # The object local, ir_obj_<name>, that holds the object of the value
+    # for a uop that reads it as one: the value's object, or a box of an
+    # inline value that value_temps owns (ir_generator, emit_object_inputs).
+    ir_box: str | None = None
 
     def __repr__(self) -> str:
         return f"Local('{self.item.name}', mem={self.memory_offset}, local={self.in_local}, array={self.is_array()})"
@@ -204,10 +203,9 @@ class Local:
             self.memory_offset,
             self.in_local,
             self.known_object,
-            self.ir_field,
-            self.ir_borrowed,
             self.ir_input,
             self.ir_inplace,
+            self.ir_box,
         )
 
     @property
@@ -238,11 +236,14 @@ def array_or_scalar(var: StackItem | Local) -> str:
     return "array" if var.is_array() else "scalar"
 
 def check_inplace_merge(var: Local, other: Local) -> None:
-    """The generator releases or keeps a value that borrows a local in place
-    (ir_generator.py) as if it did on every path, so it must on all or none"""
+    """A variable is a view (ir_generator.py) or holds an object local on
+    every path or on none: it has one C type, and one way to read it"""
     if var.ir_inplace != other.ir_inplace:
         raise StackError(
-            f"'{var.name}' may borrow a local in place on some paths, but not all")
+            f"'{var.name}' is a view on some paths, but not all")
+    if var.ir_box != other.ir_box:
+        raise StackError(
+            f"'{var.name}' has an object local on some paths, but not all")
 
 
 class Stack:

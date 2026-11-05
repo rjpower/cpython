@@ -6,7 +6,6 @@ from analyzer import (
     Properties,
     StackItem,
     Uop,
-    VALUE_TO_OBJECT,
     analysis_error,
     Label,
     CodeSection,
@@ -177,15 +176,6 @@ def forget_stored_pointers(uop: CodeSection, storage: Storage) -> None:
             var.known_object = False
 
 
-# What a uop body may do with an input that emit_object_inputs boxed,
-# besides converting it to an object: the box replaces the input's C local,
-# and is not the canonical value, so it must not reach a home.  Only the
-# uop's outputs are published (_PyValue_Publish) on their way to one.
-BOXED_INPUT_RELEASES = {"DEAD", "PyValue_CLOSE", "PyValue_XCLOSE"}
-# Functions that take a value and only read it as an object
-BOXED_INPUT_READERS = {"_PyForIter_VirtualIteratorNext"}
-
-
 def enclosing_callee(tokens: list[Token], i: int) -> str | None:
     "The function whose argument list holds tokens[i], or None"
     depth = 0
@@ -201,55 +191,6 @@ def enclosing_callee(tokens: list[Token], i: int) -> str | None:
             depth -= 1
         elif text in (";", "{", "}") and depth == 0:
             return None
-    return None
-
-
-def safe_boxed_use(tokens: list[Token], i: int, outputs: set[str]) -> bool:
-    "Whether the use tokens[i] of a boxed input cannot keep the box"
-    prev = tokens[i - 1].text if i > 0 else ""
-    nxt = tokens[i + 1].text if i + 1 < len(tokens) else ""
-    if prev in ("(", ",") and nxt in (")", ","):
-        callee = enclosing_callee(tokens, i) or ""
-        if callee in BOXED_INPUT_READERS:
-            return True
-        return prev == "(" and nxt == ")" and (
-            callee in VALUE_TO_OBJECT or callee in BOXED_INPUT_RELEASES
-            or callee.startswith("PyValue_Is"))
-    # The whole right-hand side of an assignment to an output
-    return (prev == "=" and nxt == ";" and i >= 2
-            and tokens[i - 2].text in outputs
-            and (i < 3 or tokens[i - 3].text in (";", "{", "}")))
-
-
-def boxed_input_store(uop: Uop, name: str) -> Token | None:
-    """The first use of input name in the body of uop, outside assert(),
-    that could keep the box the generator made of it, or None.
-
-    A use is safe when name is the whole argument of an object conversion
-    (VALUE_TO_OBJECT), of a PyValue_Is* test or of a release
-    (BOXED_INPUT_RELEASES), an argument of a function that only reads it
-    (BOXED_INPUT_READERS), or the whole right-hand side of an assignment to
-    an output.  Anything else may store it, as the generic SEND once did with
-    _PyFrame_SetReturnValue(gen_frame, PyValue_MakeHeapSafe(v))."""
-    outputs = {item.name for item in uop.stack.outputs}
-    tokens = list(uop.body.tokens())
-    i = 0
-    while i < len(tokens):
-        tkn = tokens[i]
-        if tkn.text == "assert":
-            depth = 0
-            for i in range(i + 1, len(tokens)):
-                if tokens[i].text == "(":
-                    depth += 1
-                elif tokens[i].text == ")":
-                    depth -= 1
-                    if depth == 0:
-                        break
-        elif (tkn.kind == "IDENTIFIER" and tkn.text == name
-                and (i == 0 or tokens[i - 1].text not in (".", "->"))
-                and not safe_boxed_use(tokens, i, outputs)):
-            return tkn
-        i += 1
     return None
 
 
@@ -347,82 +288,6 @@ class Emitter:
         self.emit(f"UPDATE_MISS_STATS({family_name});\n")
         self.emit(f"assert(_PyOpcode_Deopt[opcode] == ({family_name}));\n")
         self.emit(f"JUMP_TO_PREDICTED({self.jump_prefix}{family_name});\n")
-
-    def emit_object_inputs(
-        self, uop: Uop, storage: Storage, inst: Instruction | None, stack_read_later: bool
-    ) -> None:
-        """Make each input that uop converts to PyObject * hold a pointer.
-
-        A guard exits if the input holds an inline value; any other uop boxes
-        the value, by value so that the input can stay in a register. Either
-        way the input is known to be an object for the rest of the
-        instruction. The test is marked unlikely, so the boxing code goes out
-        of line. See "Inline values" in interpreter_definition.md.
-
-        The box is written back to the input's stack slot only if something
-        can still read that slot: the input outlives the uop, or
-        stack_read_later says that a deopt, exit, escaping call or error
-        without pop may follow.
-        """
-        for var in storage.inputs:
-            if var.name in uop.asserted_objects:
-                var.known_object = True
-        if uop.properties.inline_ok:
-            return
-        guard = uop.is_guard()
-        peeks = {item.name for item in uop.stack.inputs if item.peek}
-        # Boxed inputs whose stack slot still holds the inline value.
-        unsynced: list[Local] = []
-        for var in storage.inputs:
-            if var.name not in uop.object_inputs or var.known_object:
-                continue
-            self.out.start_line()
-            # Test the stack slot rather than the local where the slot holds
-            # the value, which is cheaper (see _PyValue_TopBitsAt()).
-            ref = var.name
-            at = ""
-            if var.memory_offset is not None:
-                ref = f"&{storage.stack.address(var.memory_offset)}"
-                at = "At"
-            if guard:
-                self.emit(f"if (Py_UNLIKELY(!PyValue_IsPointerSpace{at}({ref}))) {{\n")
-                self.emit_jump_to_predicted(inst)
-            else:
-                self.check_boxed_input(uop, var.name, inst)
-                self.emit(f"if (Py_UNLIKELY(PyValue_IsInline{at}({ref}))) {{\n")
-                self.emit(f"{var.name} = PyValue_Box({var.name});\n")
-                # A failed box leaves the value inline. Every input is still
-                # live, so leave them all to exception_unwind, boxes included.
-                self.emit(f"if (PyValue_IsInline({var.name})) {{\n")
-                for other in unsynced:
-                    self.emit_store_input(other, storage)
-                storage.stack.copy().flush(self.out)
-                self.emit(f"{self.jump_prefix}JUMP_TO_LABEL(error);\n")
-                self.emit("}\n")
-                if inst is not None:
-                    self.emit(f"BOX_STAT_INC({inst.name});\n")
-                if var.memory_offset is not None:
-                    if var.name in peeks or stack_read_later:
-                        self.emit_store_input(var, storage)
-                    else:
-                        unsynced.append(var)
-            self.emit("}\n")
-            var.known_object = True
-
-    def check_boxed_input(self, uop: Uop, name: str, inst: Instruction | None) -> None:
-        "Refuse a uop that boxes input name and could then keep the box"
-        store = boxed_input_store(uop, name)
-        if store is not None:
-            raise analysis_error(
-                f"{uop.name} boxes input '{name}' for an object API and then "
-                f"uses it as a value, which can keep the box; box it "
-                f"explicitly (_PyValueTemps_Object) where it needs the object",
-                store)
-
-    def emit_store_input(self, var: Local, storage: Storage) -> None:
-        assert var.memory_offset is not None
-        self.out.start_line()
-        storage.stack.store(self.out, var, var.memory_offset)
 
     def goto_error(self, offset: int, storage: Storage) -> str:
         if offset > 0:
@@ -849,8 +714,7 @@ class Emitter:
                                     var.in_local = True
                                     var.memory_offset = None
                                     var.known_object = False
-                                    var.ir_borrowed = False
-                                    var.ir_field = None
+                                    var.ir_box = None
                                     stored.append(var)
                                     break
                             for var in storage.outputs:
@@ -858,8 +722,7 @@ class Emitter:
                                     var.in_local = True
                                     var.memory_offset = None
                                     var.known_object = False
-                                    var.ir_borrowed = False
-                                    var.ir_field = None
+                                    var.ir_box = None
                                     stored.append(var)
                                     break
                         if tkn.text.startswith("DISPATCH"):

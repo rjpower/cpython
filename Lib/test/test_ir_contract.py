@@ -473,22 +473,23 @@ class AnalyzerTests(unittest.TestCase):
                                      union)
 
     def test_boxing(self):
-        # A macro that boxes into value_temps without the generated code
-        # naming it must be listed, so that boxes_into_record() sees it
+        # No macro boxes into value_temps without the generated code naming
+        # it: the handlers box through _PyValueTemps_Box(value_temps, x),
+        # which boxes_into_record() sees
         path = os.path.join(test_tools.basepath, "Python", "ceval_macros.h")
         with open(path) as f:
             text = f.read().replace("\\\n", " ")
         writers = {m.group(1) for m in re.finditer(
             r"#\s*define\s+(\w+)[^\n]*\bvalue_temps->"
             r"(?:count\s*(?:\+\+|[-+]?=(?!=))|objects\s*\[)", text)}
-        self.assertEqual(writers, self.ir_generator.BOXING_MACROS)
+        self.assertEqual(writers, set())
         boxes = self.ir_generator.boxes_into_record
         decl = "_PyValueTemps *value_temps = &value_owners;\n"
         for code, expected in [
             ("", False),
             ("assert(value_temps->count == 0);", False),
             ("finish_displaced_local(tstate, value_temps, ir_displaced);", False),
-            ("IR_KEEP_BOX(left);", True),
+            ("ir_obj_left = _PyValueTemps_Box(value_temps, left);", True),
             ("value_reader_complete(&s, next_instr, value_temps, &r);", False),
             ("value_binary_operation(op, l, r, value_temps);", True),
             ("spam(value_temps);", True),

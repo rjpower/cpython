@@ -643,9 +643,9 @@ set_add_key(PySetObject *so, PyObject *key)
 }
 
 static int
-set_contains_value(PySetObject *so, PyValue key)
+(set_contains_value)(PySetObject *so, PyValueBorrow borrowed)
 {
-    key = PyValue_NewRef(key);
+    PyValue key = PyValue_NewRef(borrowed);
     Py_hash_t hash = _PyValue_Hash(key);
     if (hash == -1) {
         set_unhashable_type(PyValue_AsKnownObjectBorrow(key));
@@ -656,6 +656,7 @@ set_contains_value(PySetObject *so, PyValue key)
     PyValue_XCLOSE(key);
     return result;
 }
+#define set_contains_value(S, K) (set_contains_value)(S, PyValue_Borrow(K))
 
 static int
 set_discard_value(PySetObject *so, PyValue key)
@@ -3200,7 +3201,7 @@ PySet_Contains(PyObject *anyset, PyObject *key)
 }
 
 int
-PySet_ContainsValue(PyObject *anyset, PyValue key)
+(PySet_ContainsValue)(PyObject *anyset, PyValueBorrow key)
 {
     if (!PyAnySet_Check(anyset)) {
         PyErr_BadInternalCall();

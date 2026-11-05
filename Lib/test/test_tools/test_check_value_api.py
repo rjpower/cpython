@@ -9,6 +9,7 @@ same units and rules, with the rest of the value-API lint, which needs
 clang-query.
 """
 
+import os
 import shlex
 import shutil
 import sysconfig
@@ -128,6 +129,23 @@ class TextRuleTests(unittest.TestCase):
         self.assertEqual([(f.line, f.rule, f.fails) for f in findings],
                          [(2, "deferred", False)])
         self.assertTrue(findings[0].path.endswith("deferred.c"))
+
+    def test_unchecked_value_units(self):
+        # A value-native source outside the compile database (a shared
+        # module that the database was not recorded for) is reported, not
+        # failing; one in the database is not.
+        with tempfile.TemporaryDirectory() as tmp:
+            os.mkdir(f"{tmp}/Modules")
+            with open(f"{tmp}/Modules/shared.c", "w") as f:
+                f.write("/* unit */\n#  define Py_VALUE_CORE 1\n")
+            with open(f"{tmp}/Modules/plain.c", "w") as f:
+                f.write("#define Py_VALUE_CORE_NOT 1\n")
+            findings = check_value_api.unchecked_value_units(tmp, set())
+            self.assertEqual([(f.path, f.line, f.rule, f.fails)
+                              for f in findings],
+                             [("Modules/shared.c", 2, "unchecked", False)])
+            self.assertEqual(check_value_api.unchecked_value_units(
+                tmp, {"Modules/shared.c"}), [])
 
 
 if __name__ == "__main__":

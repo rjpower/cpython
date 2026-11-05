@@ -1077,7 +1077,7 @@ _io_BytesIO___setstate___impl(bytesio *self, PyValueBorrow state)
         PyValue_CLOSE(position_obj);
         return PyValue_NULL;
     }
-    pos = _PyValue_AsSsize_t(position_obj, PyExc_OverflowError);
+    pos = _PyValue_IntAsSsize_t(position_obj);
     PyValue_CLOSE(position_obj);
     if (pos == -1 && PyErr_Occurred())
         return PyValue_NULL;

@@ -2768,7 +2768,7 @@ math_issubnormal_impl(PyObject *module, double x)
 /*[clinic end generated code: output=bddeb916a8d77de2 input=9a20aba7107d0d95]*/
 {
 #if !defined(_MSC_VER) && defined(_Py_STDC_VERSION) && _Py_STDC_VERSION >= 202311L
-    return PyBool_FromLong(issubnormal(x));
+    return PyValue_FromBool(issubnormal(x));
 #else
     return PyValue_FromBool(isfinite(x) && x && !isnormal(x));
 #endif

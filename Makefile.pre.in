@@ -1008,12 +1008,20 @@ check-r27: all
 		--suite r27-suite.json
 
 # intercept-build records the compile commands as the units compile, so the
-# core objects are compiled once more under it. A build started with
+# core objects and the shared modules are compiled once more under it. A build started with
 # "intercept-build make" records the database on the way.
 compile_commands.json:
 	rm -f $(LIBRARY_OBJS_OMIT_FROZEN) Programs/python.o
+	@# The shared extension modules are units too: a module that defines
+	@# Py_VALUE_CORE is checked, so its object is recompiled as well.
+	@for o in `find Modules -name '*.o'`; do \
+		case " $(LIBRARY_OBJS_OMIT_FROZEN) " in \
+		*" $$o "*) ;; \
+		*) rm -f $$o ;; \
+		esac; \
+	done
 	$(PYTHON_FOR_REGEN) $(srcdir)/Tools/build/check_value_api.py --cdb $@ \
-		--intercept $(MAKE) $(LIBRARY_OBJS_OMIT_FROZEN) Programs/python.o
+		--intercept $(MAKE) $(LIBRARY_OBJS_OMIT_FROZEN) Programs/python.o sharedmods
 
 # Objects linked into the interpreter only, not into libpython.
 PLATFORM_MAIN_OBJS=	@PLATFORM_MAIN_OBJS@

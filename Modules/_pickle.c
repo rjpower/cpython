@@ -563,24 +563,6 @@ Pdata_pop_value(PickleState *state, Pdata *self)
     return self->data[Py_SIZE(self)];
 }
 
-/* Pop the topmost element as an object (boxing an inline value), or return
- * NULL with an exception set.
- */
-static PyObject *
-Pdata_pop(PickleState *state, Pdata *self)
-{
-    PyValue item = Pdata_pop_value(state, self);
-    if (PyValue_IsNull(item)) {
-        return NULL;
-    }
-    return _PyValue_AsObjectStealAt(item, BOX_SITE_FIELD);
-}
-/* D is a Pdata*.  Pop the topmost element and store it into V, which
- * must be an lvalue holding PyObject*.  On stack underflow, UnpicklingError
- * is raised and V is set to NULL.
- */
-#define PDATA_POP(S, D, V) do { (V) = Pdata_pop(S, (D)); } while (0)
-
 /* The borrowed topmost element.  The caller has checked the stack depth. */
 static inline PyValueBorrow
 Pdata_peek(Pdata *self, Py_ssize_t from_top)
@@ -6756,7 +6738,11 @@ load_obj(PickleState *state, UnpicklerObject *self)
     if (args == NULL)
         return -1;
 
-    PDATA_POP(state, self->stack, cls);
+    do {
+        PyValue cls_popped = Pdata_pop_value(state, self->stack);
+        cls = PyValue_IsNull(cls_popped) ? NULL
+            : _PyValue_AsObjectStealAt(cls_popped, BOX_SITE_FIELD);
+    } while (0);
     if (cls) {
         obj = instantiate(cls, args);
         Py_DECREF(cls);
@@ -6843,17 +6829,29 @@ load_newobj(PickleState *state, UnpicklerObject *self, int use_kwargs)
      * cls.__new__(cls, *args, **kwargs).
      */
     if (use_kwargs) {
-        PDATA_POP(state, self->stack, kwargs);
+        do {
+            PyValue kwargs_popped = Pdata_pop_value(state, self->stack);
+            kwargs = PyValue_IsNull(kwargs_popped) ? NULL
+                : _PyValue_AsObjectStealAt(kwargs_popped, BOX_SITE_FIELD);
+        } while (0);
         if (kwargs == NULL) {
             return -1;
         }
     }
-    PDATA_POP(state, self->stack, args);
+    do {
+        PyValue args_popped = Pdata_pop_value(state, self->stack);
+        args = PyValue_IsNull(args_popped) ? NULL
+            : _PyValue_AsObjectStealAt(args_popped, BOX_SITE_FIELD);
+    } while (0);
     if (args == NULL) {
         Py_XDECREF(kwargs);
         return -1;
     }
-    PDATA_POP(state, self->stack, cls);
+    do {
+        PyValue cls_popped = Pdata_pop_value(state, self->stack);
+        cls = PyValue_IsNull(cls_popped) ? NULL
+            : _PyValue_AsObjectStealAt(cls_popped, BOX_SITE_FIELD);
+    } while (0);
     if (cls == NULL) {
         Py_XDECREF(kwargs);
         Py_DECREF(args);
@@ -6951,11 +6949,19 @@ load_stack_global(PickleState *st, UnpicklerObject *self)
     PyObject *module_name;
     PyObject *global_name;
 
-    PDATA_POP(st, self->stack, global_name);
+    do {
+        PyValue global_name_popped = Pdata_pop_value(st, self->stack);
+        global_name = PyValue_IsNull(global_name_popped) ? NULL
+            : _PyValue_AsObjectStealAt(global_name_popped, BOX_SITE_FIELD);
+    } while (0);
     if (global_name == NULL) {
         return -1;
     }
-    PDATA_POP(st, self->stack, module_name);
+    do {
+        PyValue module_name_popped = Pdata_pop_value(st, self->stack);
+        module_name = PyValue_IsNull(module_name_popped) ? NULL
+            : _PyValue_AsObjectStealAt(module_name_popped, BOX_SITE_FIELD);
+    } while (0);
     if (module_name == NULL) {
         Py_DECREF(global_name);
         return -1;
@@ -7013,7 +7019,11 @@ load_binpersid(PickleState *st, UnpicklerObject *self)
 {
     PyObject *pid, *obj;
 
-    PDATA_POP(st, self->stack, pid);
+    do {
+        PyValue pid_popped = Pdata_pop_value(st, self->stack);
+        pid = PyValue_IsNull(pid_popped) ? NULL
+            : _PyValue_AsObjectStealAt(pid_popped, BOX_SITE_FIELD);
+    } while (0);
     if (pid == NULL)
         return -1;
 
@@ -7583,7 +7593,11 @@ load_build(PickleState *st, UnpicklerObject *self)
         return Pdata_stack_underflow(st, self->stack);
 
     PyObject *state;
-    PDATA_POP(st, self->stack, state);
+    do {
+        PyValue state_popped = Pdata_pop_value(st, self->stack);
+        state = PyValue_IsNull(state_popped) ? NULL
+            : _PyValue_AsObjectStealAt(state_popped, BOX_SITE_FIELD);
+    } while (0);
     if (state == NULL)
         return -1;
 
@@ -7755,10 +7769,18 @@ load_reduce(PickleState *state, UnpicklerObject *self)
     PyObject *argtup = NULL;
     PyObject *obj = NULL;
 
-    PDATA_POP(state, self->stack, argtup);
+    do {
+        PyValue argtup_popped = Pdata_pop_value(state, self->stack);
+        argtup = PyValue_IsNull(argtup_popped) ? NULL
+            : _PyValue_AsObjectStealAt(argtup_popped, BOX_SITE_FIELD);
+    } while (0);
     if (argtup == NULL)
         return -1;
-    PDATA_POP(state, self->stack, callable);
+    do {
+        PyValue callable_popped = Pdata_pop_value(state, self->stack);
+        callable = PyValue_IsNull(callable_popped) ? NULL
+            : _PyValue_AsObjectStealAt(callable_popped, BOX_SITE_FIELD);
+    } while (0);
     if (callable) {
         obj = PyObject_CallObject(callable, argtup);
         Py_DECREF(callable);
@@ -7971,7 +7993,11 @@ load(PickleState *st, UnpicklerObject *self)
         goto error;
 
     Py_CLEAR(self->persistent_load);
-    PDATA_POP(st, self->stack, value);
+    do {
+        PyValue value_popped = Pdata_pop_value(st, self->stack);
+        value = PyValue_IsNull(value_popped) ? NULL
+            : _PyValue_AsObjectStealAt(value_popped, BOX_SITE_FIELD);
+    } while (0);
     return value;
 
 error:

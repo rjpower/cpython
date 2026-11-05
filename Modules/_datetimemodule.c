@@ -2442,6 +2442,7 @@ multiply_truedivide_timedelta_float(PyDateTime_Delta *delta,
         goto error;
     temp = _PyValue_Multiply(pyus_in, factor);
     PyValue_CLOSE(factor);
+    factor = PyValue_NULL;
     PyValue_CLOSE(pyus_in);
     pyus_in = PyValue_NULL;
     if (PyValue_IsNull(temp))

@@ -1278,9 +1278,14 @@ _elementtree_Element___setstate___impl(ElementObject *self,
 /*[clinic end generated code: output=e4a0b9806f2c3f5b input=13830488d35d51f7]*/
 {
     if (!(PyValue_IsObject(state) && PyDict_CheckExact(PyValue_AsKnownObjectBorrow(state)))) {
+        PyObject *state_obj = _PyValue_AsObjectAt(state, BOX_SITE_PARSER);
+        if (state_obj == NULL) {
+            return PyValue_NULL;
+        }
         PyErr_Format(PyExc_TypeError,
                      "Don't know how to unpickle \"%.200R\" as an Element",
-                     state);
+                     state_obj);
+        Py_DECREF(state_obj);
         return PyValue_NULL;
     }
     else {

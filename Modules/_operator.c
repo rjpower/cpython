@@ -822,23 +822,6 @@ value_has_buffer(PyValueBorrow v)
            && PyObject_CheckBuffer(PyValue_AsKnownObjectBorrow(v));
 }
 
-/* PyObject_GetBuffer() on a value; an inline value is boxed so that the
-   call raises the same TypeError as before. */
-static int
-value_get_buffer(PyValueBorrow v, Py_buffer *view, int flags)
-{
-    if (PyValue_IsObject(v)) {
-        return PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(v), view, flags);
-    }
-    PyObject *o = _PyValue_AsObjectAt(v, BOX_SITE_PARSER);
-    if (o == NULL) {
-        return -1;
-    }
-    int rc = PyObject_GetBuffer(o, view, flags);
-    Py_DECREF(o);
-    return rc;
-}
-
 /*[clinic input]
 _operator.length_hint -> Py_ssize_t
 
@@ -917,7 +900,13 @@ _operator__compare_digest_impl(PyObject *module, PyValueBorrow a,
             return PyValue_NULL;
         }
 
-        if (value_get_buffer(a, &view_a, PyBUF_SIMPLE) == -1) {
+        PyObject *a_obj = _PyValue_AsObjectAt(a, BOX_SITE_PARSER);
+        if (a_obj == NULL) {
+            return PyValue_NULL;
+        }
+        int a_rc = PyObject_GetBuffer(a_obj, &view_a, PyBUF_SIMPLE);
+        Py_DECREF(a_obj);
+        if (a_rc == -1) {
             return PyValue_NULL;
         }
         if (view_a.ndim > 1) {
@@ -927,7 +916,14 @@ _operator__compare_digest_impl(PyObject *module, PyValueBorrow a,
             return PyValue_NULL;
         }
 
-        if (value_get_buffer(b, &view_b, PyBUF_SIMPLE) == -1) {
+        PyObject *b_obj = _PyValue_AsObjectAt(b, BOX_SITE_PARSER);
+        if (b_obj == NULL) {
+            PyBuffer_Release(&view_a);
+            return PyValue_NULL;
+        }
+        int b_rc = PyObject_GetBuffer(b_obj, &view_b, PyBUF_SIMPLE);
+        Py_DECREF(b_obj);
+        if (b_rc == -1) {
             PyBuffer_Release(&view_a);
             return PyValue_NULL;
         }

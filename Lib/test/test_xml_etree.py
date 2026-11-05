@@ -3130,6 +3130,11 @@ class BasicElementTest(ElementTestCase, unittest.TestCase):
                 'text': 'text',
             }
             self.assertRaises(TypeError, e.__setstate__, state)
+            # An int or a float is not a dict: the message formats it.
+            for bad in (0, 1.5, 2**70, None):
+                with self.assertRaisesRegex(
+                        TypeError, 'Don.t know how to unpickle'):
+                    e.__setstate__(bad)
 
         if hasattr(e, '__deepcopy__'):
             class E(ET.Element):

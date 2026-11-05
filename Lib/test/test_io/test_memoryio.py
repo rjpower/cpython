@@ -1012,6 +1012,10 @@ class CBytesIOTest(PyBytesIOTest):
         self.assertRaises(TypeError, memio.__setstate__, (b"", 0.0, None))
         self.assertRaises(TypeError, memio.__setstate__, (b"", 0, 0))
         self.assertRaises(TypeError, memio.__setstate__, (b"len-test", 0))
+        if self.ioclass.__module__ == '_io':
+            with self.assertRaisesRegex(OverflowError,
+                                        "too large to convert to C ssize_t"):
+                memio.__setstate__((b"", 2**70, None))
         self.assertRaises(TypeError, memio.__setstate__)
         self.assertRaises(TypeError, memio.__setstate__, 0)
         memio.close()
@@ -1181,6 +1185,10 @@ class CStringIOTest(PyStringIOTest):
         self.assertRaises(TypeError, memio.__setstate__, ("", "", 0.0, None))
         self.assertRaises(TypeError, memio.__setstate__, ("", "", 0, 0))
         self.assertRaises(TypeError, memio.__setstate__, ("len-test", 0))
+        if self.ioclass.__module__ == '_io':
+            with self.assertRaisesRegex(OverflowError,
+                                        "too large to convert to C ssize_t"):
+                memio.__setstate__(("", "", 2**70, None))
         self.assertRaises(TypeError, memio.__setstate__)
         self.assertRaises(TypeError, memio.__setstate__, 0)
         memio.close()

@@ -362,8 +362,6 @@ _enter_buffered_busy(buffered *self)
         return FAILURE; \
     }
 
-/* The same check in a function that returns a PyValue. */
-
 #define CHECK_INITIALIZED_INT(self) \
     if (self->ok <= 0) { \
         if (self->detached) { \
@@ -395,8 +393,6 @@ _enter_buffered_busy(buffered *self)
             return FAILURE; \
         } \
     } while (0);
-
-/* The same check in a function that returns a PyValue. */
 
 #define VALID_READ_BUFFER(self) \
     (self->readable && self->read_end != -1)
@@ -2422,23 +2418,6 @@ _forward_call(buffered *self, PyObject *name, PyObject *arg)
     return PyObject_CallMethodOneArg((PyObject *)self, name, arg);
 }
 
-/* _forward_call() for an argument that is a value and a result that is one. */
-static PyValue
-_forward_call_value(buffered *self, PyObject *name, PyValueBorrow arg)
-{
-    if (PyValue_IsNull(arg)) {
-        // The optional argument was not given.
-        return _PyValue_FromObjectResult(_forward_call(self, name, NULL));
-    }
-    PyObject *arg_obj = _PyValue_AsObjectAt(arg, BOX_SITE_PARSER);
-    if (arg_obj == NULL) {
-        return PyValue_NULL;
-    }
-    PyObject *res = _forward_call(self, name, arg_obj);
-    Py_DECREF(arg_obj);
-    return _PyValue_FromObjectResult(res);
-}
-
 /*[clinic input]
 _io.BufferedRWPair.read
     size: object(c_default="NULL") = -1
@@ -2449,7 +2428,16 @@ static PyValue
 _io_BufferedRWPair_read_impl(rwpair *self, PyValueBorrow size)
 /*[clinic end generated code: output=79096de0a5d030ff input=eddb5e52aba9ebe5]*/
 {
-    return _forward_call_value(self->reader, &_Py_ID(read), size);
+    PyObject *arg_obj = NULL;
+    if (!PyValue_IsNull(size)) {
+        arg_obj = _PyValue_AsObjectAt(size, BOX_SITE_PARSER);
+        if (arg_obj == NULL) {
+            return PyValue_NULL;
+        }
+    }
+    PyObject *res = _forward_call(self->reader, &_Py_ID(read), arg_obj);
+    Py_XDECREF(arg_obj);
+    return _PyValue_FromObjectResult(res);
 }
 
 /*[clinic input]
@@ -2462,7 +2450,16 @@ static PyValue
 _io_BufferedRWPair_peek_impl(rwpair *self, PyValueBorrow size)
 /*[clinic end generated code: output=c884599ea5b9e200 input=36af95964bebe355]*/
 {
-    return _forward_call_value(self->reader, &_Py_ID(peek), size);
+    PyObject *arg_obj = NULL;
+    if (!PyValue_IsNull(size)) {
+        arg_obj = _PyValue_AsObjectAt(size, BOX_SITE_PARSER);
+        if (arg_obj == NULL) {
+            return PyValue_NULL;
+        }
+    }
+    PyObject *res = _forward_call(self->reader, &_Py_ID(peek), arg_obj);
+    Py_XDECREF(arg_obj);
+    return _PyValue_FromObjectResult(res);
 }
 
 /*[clinic input]
@@ -2475,7 +2472,16 @@ static PyValue
 _io_BufferedRWPair_read1_impl(rwpair *self, PyValueBorrow size)
 /*[clinic end generated code: output=24194a9d01b8871e input=9e94db423e490b58]*/
 {
-    return _forward_call_value(self->reader, &_Py_ID(read1), size);
+    PyObject *arg_obj = NULL;
+    if (!PyValue_IsNull(size)) {
+        arg_obj = _PyValue_AsObjectAt(size, BOX_SITE_PARSER);
+        if (arg_obj == NULL) {
+            return PyValue_NULL;
+        }
+    }
+    PyObject *res = _forward_call(self->reader, &_Py_ID(read1), arg_obj);
+    Py_XDECREF(arg_obj);
+    return _PyValue_FromObjectResult(res);
 }
 
 /*[clinic input]
@@ -2488,7 +2494,13 @@ static PyValue
 _io_BufferedRWPair_readinto_impl(rwpair *self, PyValueBorrow buffer)
 /*[clinic end generated code: output=62d6a791a6247c38 input=ccd86ce2666261f7]*/
 {
-    return _forward_call_value(self->reader, &_Py_ID(readinto), buffer);
+    PyObject *arg_obj = _PyValue_AsObjectAt(buffer, BOX_SITE_PARSER);
+    if (arg_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *res = _forward_call(self->reader, &_Py_ID(readinto), arg_obj);
+    Py_DECREF(arg_obj);
+    return _PyValue_FromObjectResult(res);
 }
 
 /*[clinic input]
@@ -2501,7 +2513,13 @@ static PyValue
 _io_BufferedRWPair_readinto1_impl(rwpair *self, PyValueBorrow buffer)
 /*[clinic end generated code: output=a39b11bb10e1a69a input=613d9bf127f88a4a]*/
 {
-    return _forward_call_value(self->reader, &_Py_ID(readinto1), buffer);
+    PyObject *arg_obj = _PyValue_AsObjectAt(buffer, BOX_SITE_PARSER);
+    if (arg_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *res = _forward_call(self->reader, &_Py_ID(readinto1), arg_obj);
+    Py_DECREF(arg_obj);
+    return _PyValue_FromObjectResult(res);
 }
 
 /*[clinic input]
@@ -2514,7 +2532,13 @@ static PyValue
 _io_BufferedRWPair_write_impl(rwpair *self, PyValueBorrow buffer)
 /*[clinic end generated code: output=fae204425df4bab2 input=66c602422e3ec36f]*/
 {
-    return _forward_call_value(self->writer, &_Py_ID(write), buffer);
+    PyObject *arg_obj = _PyValue_AsObjectAt(buffer, BOX_SITE_PARSER);
+    if (arg_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *res = _forward_call(self->writer, &_Py_ID(write), arg_obj);
+    Py_DECREF(arg_obj);
+    return _PyValue_FromObjectResult(res);
 }
 
 /*[clinic input]

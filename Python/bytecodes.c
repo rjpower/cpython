@@ -2088,13 +2088,18 @@ dummy_func(
             }
         }
 
-        // The oparg (name << 1 | NULL bit) is in CD; B5 removes the NULL bit
+        // The NULL of a call's window needs no write: the slot is NULL by the
+        // NULL invariant, and the assembler clears the bit in the word
+        // (register-ir.md G4).  The stack model keeps the output.
+        op(_NULL_SLOT_CONDITIONAL, ( -- unused[oparg & 1])) {
+        }
+
         macro(LOAD_GLOBAL) =
             unused/1 +
             _SPECIALIZE_LOAD_GLOBAL +
             unused/3 +
             _LOAD_GLOBAL +
-            _PUSH_NULL_CONDITIONAL;
+            _NULL_SLOT_CONDITIONAL;
 
         op(_GUARD_GLOBALS_VERSION, (globals_version/1 --)) {
             PyDictObject *dict = (PyDictObject *)GLOBALS();
@@ -2137,13 +2142,13 @@ dummy_func(
         macro(LOAD_GLOBAL_MODULE) =
             unused/1 + // Skip over the entry distance
             _LOAD_GLOBAL_MODULE +
-            _PUSH_NULL_CONDITIONAL;
+            _NULL_SLOT_CONDITIONAL;
 
         macro(LOAD_GLOBAL_BUILTIN) =
             unused/1 + // Skip over the entry distance
             _GUARD_GLOBALS_VERSION +
             _LOAD_GLOBAL_BUILTINS +
-            _PUSH_NULL_CONDITIONAL;
+            _NULL_SLOT_CONDITIONAL;
 
         inst(DELETE_FAST, (--)) {
             PyValueBorrow v = PyValue_Borrow(GETLOCAL(oparg));

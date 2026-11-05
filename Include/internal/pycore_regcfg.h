@@ -56,6 +56,12 @@ extern "C" {
 #define _PyReg_JUMP_OUTPUT      4   // outputs only where it jumps
 #define _PyReg_FUSED            8   // set by the assembler: a compare that
                                     // runs as one word with its fuse jump
+#define _PyReg_DISCARD          64  // a call whose result nothing reads: its
+                                    // dst field is IR_NO_DST
+#define _PyReg_ELIDED           16  // a PUSH_NULL that has no word: the NULL
+                                    // invariant makes its slot NULL already
+#define _PyReg_ELIDED_NOP       32  // ... but a NOP stands for it, because it
+                                    // alone holds its line
 
 typedef struct _PyRegOp {
     int opcode;             // the stack instruction, or _PyReg_DEAD
@@ -201,6 +207,8 @@ int _PyRegPass_SwapRename(_PyRegCfg *cfg);
 int _PyRegPass_CopyProp(_PyRegCfg *cfg);
 int _PyRegPass_StoreElim(_PyRegCfg *cfg);
 int _PyRegPass_PopTop(_PyRegCfg *cfg);
+int _PyRegPass_Discard(_PyRegCfg *cfg);
+int _PyRegPass_ElideNull(_PyRegCfg *cfg);
 int _PyRegPass_TruthFold(_PyRegCfg *cfg);
 /* Returns the number of constant slots, or -1 */
 int _PyRegPass_ConstSlots(_PyRegCfg *cfg, PyObject *consts, int nfree);

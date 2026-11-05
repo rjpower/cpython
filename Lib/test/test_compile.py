@@ -3112,9 +3112,6 @@ class TestSourcePositions(unittest.TestCase):
         source = "del (\n lhs  \n   .    \n     rhs      \n       )"
         code = compile(source, "<test>", "exec")
         self.assertOpcodeSourcePositionIs(
-            code, "PUSH_NULL", line=4, end_line=4, column=5, end_column=8
-        )
-        self.assertOpcodeSourcePositionIs(
             code, "STORE_ATTR", line=4, end_line=4, column=5, end_column=8
         )
 

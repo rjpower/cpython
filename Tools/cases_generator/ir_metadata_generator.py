@@ -37,6 +37,7 @@ from ir_generator import (
     handler_ids,
     handler_instructions,
     monitoring_events,
+    STACK_ONLY,
     num_handlers,
 )
 from typing import TextIO
@@ -68,7 +69,8 @@ def extent_initializer(e: Extent) -> str:
 
 def format_initializer(fmt: IRFormat, shadow: str,
                        contract: HandlerContract, events: list[str]) -> str:
-    flags = ["_PyIR_VALID"]
+    # A STACK_ONLY opcode has a format for the CFG but no handler to run
+    flags = [] if fmt.group in STACK_ONLY else ["_PyIR_VALID"]
     for present, flag in (
             (fmt.window, "_PyIR_WINDOW"),
             (fmt.jumps, "_PyIR_JUMPS"),
@@ -79,7 +81,8 @@ def format_initializer(fmt: IRFormat, shadow: str,
             (fmt.runs_code, "_PyIR_RUNS_CODE"),
             (fmt.jump_always, "_PyIR_JUMP_ALWAYS"),
             (fmt.names_target, "_PyIR_NAMES_TARGET"),
-            (fmt.fused, "_PyIR_FUSED")):
+            (fmt.fused, "_PyIR_FUSED"),
+            (fmt.discards, "_PyIR_DISCARDS")):
         if present:
             flags.append(flag)
     dst = "_PyIR_NO_DST" if fmt.dst_offset is None else str(fmt.dst_offset)
@@ -161,6 +164,10 @@ def generate_ir_metadata(
         if BINARY_OP_FAMILY in analysis.instructions:
             indices[BINARY_OP_FAMILY] = analysis.instructions[BINARY_OP_FAMILY].opcode
             rows[BINARY_OP_FAMILY] = contracts[binary_op_handlers(analysis)[0]]
+        # So have the STACK_ONLY opcodes, which the CFG reads
+        for name in STACK_ONLY:
+            if name in analysis.instructions:
+                indices[name] = analysis.instructions[name].opcode
         for name in sorted(indices, key=lambda name: indices[name]):
             twin = rows[name].twin
             events = monitoring_events(twin, insts[twin]) if twin else []

@@ -2958,6 +2958,41 @@ output.append(4)
         )
         output.append(15)
 
+    # The NULL slot of a call has no instruction (PUSH_NULL is elided): the
+    # slots that the next word names show it.
+    @jump_test(3, 5, [6, 15])
+    def test_jump_out_of_multiline_method_call(output):
+        a = 1
+        output.append(
+            4
+        )
+        output.append(6)
+        (
+            ( # 8
+                a
+                +
+                10
+            )
+            +
+            13
+        )
+        output.append(15)
+
+    @jump_test(4, 6, [8])
+    def test_jump_out_of_multiline_nested_call(output):
+        a = 1
+        max(
+            a,
+            max(a, 2)
+        )
+        output.append(8)
+
+    @jump_test(1, 3, [4])
+    def test_jump_over_discarded_call(output):
+        len(
+            output)
+        output.append(4)
+
     @jump_test(2, 3, [1, 3], warning=(RuntimeWarning, unbound_locals))
     def test_jump_extended_args_unpack_ex_simple(output):
         output.append(1)
@@ -2993,6 +3028,113 @@ output.append(4)
         output.append(1)
         _ = output.append(2) and "Spam"
         output.append(3)
+
+
+class JumpStackModelTestCase(unittest.TestCase):
+    """Setting f_lineno models the stack of the whole code object, with the
+    NULL slots of calls that have no instruction.  Setting it to the line
+    that is running must not break the function, whatever the shape of the
+    expressions on it."""
+
+    SOURCES = {
+        "attribute_of_call": "def f(a):\n    return a().b\n",
+        "augmented_attribute": "def f(a):\n    a.c += 1\n    return 1\n",
+        "augmented_subscript": "def f(a):\n    a[0] += 1\n    return 1\n",
+        "nested_calls": "def f(a):\n    return a(a(a))\n",
+        "conditional_argument":
+            "def f(a, b, c):\n    try:\n        return a(b if c else b, c)\n"
+            "    except ValueError:\n        pass\n",
+        "comprehension_argument":
+            "def f(a, b):\n    return a(b, [x for x in b], b)\n",
+        "local_before_call":
+            "def f(a, b):\n    return b + a(b)\n",
+        "with_after_call":
+            "def f(a, b):\n    a(b if b else a, b)\n    with b:\n        pass\n",
+    }
+
+    class Value:
+        c = 0
+        b = 1
+        def __call__(self, *args):
+            return self
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def __iadd__(self, other):
+            return self
+        def __getitem__(self, i):
+            return 0
+        def __setitem__(self, i, v):
+            pass
+        def __iter__(self):
+            return iter(())
+        def __radd__(self, other):
+            return other
+        def __add__(self, other):
+            return self
+
+    def run_with_line_jumps(self, source):
+        namespace = {}
+        exec(source, namespace)
+        function = namespace["f"]
+        code = function.__code__
+        value = self.Value()
+
+        def tracer(frame, event, arg):
+            if frame.f_code is not code:
+                return None
+            if event == "line":
+                try:
+                    frame.f_lineno = frame.f_lineno
+                except ValueError:
+                    pass
+            return tracer
+
+        args = (value,) * code.co_argcount
+        expected = function(*args)
+        # A jump may bind None to locals the new line expects to be bound
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            sys.settrace(tracer)
+            try:
+                actual = function(*args)
+            finally:
+                sys.settrace(None)
+        self.assertIs(actual, expected)
+
+    def test_jump_to_running_line(self):
+        for name, source in self.SOURCES.items():
+            with self.subTest(name):
+                self.run_with_line_jumps(source)
+
+    def test_stack_too_deep_is_refused(self):
+        # More temporaries than the stack model can hold: the jump is
+        # refused, not guessed
+        args = ", ".join("a" for _ in range(40))
+        source = f"def f(a):\n    return a({args},\n        a)\n"
+        namespace = {}
+        exec(source, namespace)
+        function = namespace["f"]
+        code = function.__code__
+        refused = []
+
+        def tracer(frame, event, arg):
+            if frame.f_code is not code:
+                return None
+            if event == "line" and frame.f_lineno == 3:
+                try:
+                    frame.f_lineno = 2
+                except ValueError as e:
+                    refused.append(str(e))
+            return tracer
+
+        sys.settrace(tracer)
+        try:
+            function(lambda *args: None)
+        finally:
+            sys.settrace(None)
+        self.assertEqual(len(refused), 1)
 
 
 class TestExtendedArgs(unittest.TestCase):

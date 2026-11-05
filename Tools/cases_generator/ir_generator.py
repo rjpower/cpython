@@ -203,6 +203,11 @@ FUSED_JUMPS = ("COMPARE_OP_JUMP", "CONTAINS_OP_JUMP", "IS_OP_JUMP")
 FUSED_SHADOWS = {"COMPARE_OP_JUMP": "COMPARE_OP",
                  "CONTAINS_OP_JUMP": "CONTAINS_OP", "IS_OP_JUMP": "IS_OP"}
 
+# The families whose dst field may be IR_NO_DST, so that the word of a call
+# whose result is popped at once (CALL; POP_TOP) needs no POP_TOP.  The
+# intrinsics are not calls in this sense and keep their POP_TOP.
+DISCARDING = ("CALL", "CALL_KW", "CALL_FUNCTION_EX")
+
 # Instructions whose oparg can need more than 12 bits although their bodies
 # name no constant or name table, see wide_oparg().
 WIDE_OPARGS = ("UNPACK_EX",)
@@ -254,6 +259,7 @@ class IRFormat:
                                     # the local's old value
     runs_code: bool = False         # a member may run Python code, see
                                     # runs_code()
+    discards: bool = False          # dst may be IR_NO_DST, see DISCARDING
     # The rest of the instruction contract (pycore_ir.h, _PyIRFormat)
     jump_always: bool = False       # see jumps_always()
     names_target: bool = False      # see names_target_only()
@@ -1032,11 +1038,19 @@ def all_instructions(analysis: Analysis) -> dict[str, Instruction]:
     return {**analysis.instructions, **analysis.ir_only}
 
 
+# Opcodes of the compiler's stack model that no word ever has: the register
+# CFG omits them (PUSH_NULL writes NULL into a temporary that the NULL
+# invariant already guarantees is NULL, register-ir.md G4).  They keep their
+# opcode number and their format, which the CFG reads, but have no handler.
+STACK_ONLY = ("PUSH_NULL",)
+
+
 def handler_ids(analysis: Analysis) -> dict[str, int]:
     """Handler index of each handler, by name, from the pinned table.
-    BINARY_OP itself has none: its operations do."""
+    BINARY_OP itself has none: its operations do, and a STACK_ONLY opcode
+    has none."""
     ids = {name: inst.opcode for name, inst in analysis.instructions.items()
-           if name != BINARY_OP_FAMILY}
+           if name != BINARY_OP_FAMILY and name not in STACK_ONLY}
     names = sorted(analysis.ir_only) + binary_op_handlers(analysis)
     table = analysis.numbers
     for name in names:
@@ -1299,6 +1313,7 @@ def compute_format(group: str, members: list[Instruction]) -> IRFormat:
         fused=fused,
         no_fold=no_fold,
         store_dst=store_dst, runs_code=any(runs_code(m) for m in members),
+        discards=store_dst and window and group in DISCARDING,
         jump_always=jumps and jumps_always(head),
         names_target=jumps and names_target_only(head),
         fb_layout=fb_layout, fb_kind=fb_kind,
@@ -3710,7 +3725,8 @@ def emit_handler(name: str, inst: Instruction, fmt: IRFormat,
         if mode == STORE_RESULT and fmt.window:
             # The result is in its slot of the window; a local takes it
             dst = FIELD_VARS[fmt.field_of(ROLE_DST)]
-            stack.dst_stores.append(f"IR_MOVE_TO_DST({dst}, window[{fmt.dst_offset}])")
+            macro = "IR_MOVE_TO_DST_OR_DISCARD" if fmt.discards else "IR_MOVE_TO_DST"
+            stack.dst_stores.append(f"{macro}({dst}, window[{fmt.dst_offset}])")
             out.emit(f"{stack.dst_stores[-1]};\n")
         if fmt.store_dst:
             emitter.release_displaced()
@@ -4040,7 +4056,10 @@ def handler_contracts(analysis: Analysis,
     ids = handler_ids(analysis)
     boxing = boxing_handlers(analysis, formats)
     result = {}
-    for name, inst in handler_instructions(analysis).items():
+    insts = {**handler_instructions(analysis),
+             **{name: analysis.instructions[name] for name in STACK_ONLY
+                if name in analysis.instructions}}
+    for name, inst in insts.items():
         fmt = formats[name]
         inputs, outputs = external_io(inst)
         result[name] = HandlerContract(

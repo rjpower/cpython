@@ -5154,7 +5154,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -5247,7 +5247,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -5336,7 +5336,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -5432,7 +5432,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -5983,7 +5983,7 @@
                 assert((!PyValue_IsNull(res)) ^ (_PyErr_Occurred(tstate) != NULL));
             }
             IR_PUBLISH_TEMP(window[0], res);
-            IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -6466,7 +6466,7 @@
                 window[1] = PyValue_NULL;
                 PyValue_XCLOSE(value);
             }
-            IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -6585,7 +6585,7 @@
                 window[1] = PyValue_NULL;
                 _PyValue_XCLOSE_POINTER(value);
             }
-            IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -6705,7 +6705,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -6826,7 +6826,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -6955,7 +6955,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -7097,7 +7097,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -7481,7 +7481,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -7578,7 +7578,7 @@
                     JUMP_TO_LABEL(error);
                 }
             }
-            IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -7650,7 +7650,7 @@
                 IR_PUBLISH_TEMP(window[0], res);
                 PyValue_XCLOSE(value);
             }
-            IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
+            IR_MOVE_TO_DST_OR_DISCARD(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
@@ -13941,7 +13941,6 @@
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValue *res;
-            PyValue *null;
             // _SPECIALIZE_LOAD_GLOBAL
             {
                 #if ENABLE_SPECIALIZATION
@@ -13974,12 +13973,8 @@
                     JUMP_TO_LABEL(error);
                 }
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = &IR_SLOT(IR_A(ir_word) + 1);
-                if (oparg & 1) {
-                    null[0] = PyValue_NULL;
-                }
             }
             DISPATCH();
         }
@@ -13998,7 +13993,6 @@
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValue res;
-            PyValue *null;
             // _GUARD_GLOBALS_VERSION
             {
                 uint32_t globals_version = fb->globals_version;
@@ -14048,12 +14042,8 @@
                 res = PyValue_XDUP(found);
                 STAT_INC(LOAD_GLOBAL, hit);
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = &IR_SLOT(IR_A(ir_word) + 1);
-                if (oparg & 1) {
-                    null[0] = PyValue_NULL;
-                }
             }
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
             DISPATCH();
@@ -14073,7 +14063,6 @@
             int oparg = (int)IR_CD(ir_word);
             (void)oparg;
             PyValue res;
-            PyValue *null;
             // _LOAD_GLOBAL_MODULE
             {
                 uint32_t globals_version = fb->globals_version;
@@ -14106,12 +14095,8 @@
                 res = PyValue_XDUP(found);
                 STAT_INC(LOAD_GLOBAL, hit);
             }
-            // _PUSH_NULL_CONDITIONAL
+            // _NULL_SLOT_CONDITIONAL
             {
-                null = &IR_SLOT(IR_A(ir_word) + 1);
-                if (oparg & 1) {
-                    null[0] = PyValue_NULL;
-                }
             }
             IR_STORE_TEMP(IR_SLOT(IR_A(ir_word)), res);
             DISPATCH();
@@ -15980,29 +15965,6 @@
             IR_PUBLISH_TEMP(window[1], new_exc);
             if (!PyValue_IsNull(ir_displaced) &&
                 finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
-                next_instr = frame->instr_ptr + 1;
-                JUMP_TO_LABEL(error);
-            }
-            DISPATCH();
-        }
-
-        TARGET(PUSH_NULL) {
-            int opcode = PUSH_NULL;
-            (void)(opcode);
-            _PyValueTemps *const value_temps = NULL;
-            (void)value_temps;
-            _PyIRWord* const this_instr = next_instr;
-            (void)this_instr;
-            frame->instr_ptr = next_instr;
-            next_instr += 1;
-            INSTRUCTION_STATS(PUSH_NULL);
-            PyValue ir_displaced = PyValue_NULL;
-            (void)ir_displaced;
-            PyValue res;
-            res = PyValue_NULL;
-            IR_STORE_DST(IR_A(ir_word), res);
-            if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }

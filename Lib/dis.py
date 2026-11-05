@@ -412,7 +412,8 @@ def _decode_word(handler, fields, fbinit=None):
     fb = None
     for k, role in enumerate(roles):
         if role == _ROLE_DST:
-            dst = fields[k]
+            # 4095, outside the slot range, is a call whose result is released
+            dst = fields[k] if fields[k] != 0xFFF else None
         elif role == _ROLE_BASE or role >= _ROLE_IN0:
             srcs.append(fields[k])
         elif role == _ROLE_FB:

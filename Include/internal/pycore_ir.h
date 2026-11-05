@@ -69,6 +69,10 @@ extern "C" {
 #define IR_CD_MAX       0xFFFFFF    // and of CD
 /* A frame has at most this many slots, so a slot field is 0 to 4094. */
 #define IR_MAX_SLOTS    IR_FIELD_MAX
+/* The dst field of a call whose result nothing reads: outside the slot range,
+ * it tells the handler to release the result (_PyIR_DISCARDS), where a
+ * CALL; POP_TOP pair took two words. */
+#define IR_NO_DST       IR_FIELD_MAX
 /* A target in a 12-bit field is a signed distance in words from the next
  * word, -2048 to 2047.  FOR_ITER and SEND reach at most IR_MAX_FORWARD, the
  * non-negative half (2^11 - 1), and the assembler relaxes a loop whose exit
@@ -171,6 +175,8 @@ enum {
  * jump.  The first call seeds the taken history of its entry. */
 #define IR_FUSED_OP_MASK    0xFF
 #define _PyIR_FUSED_IF_FALSE 0x100  // jump where the condition is false
+#define _PyIR_DISCARDS      0x800   // dst may be IR_NO_DST: the handler
+                                    // releases the result (the calls)
 
 /* _PyIRFormat.effects: what the handler itself may do, from the cases
  * generator's analysis of its instruction.  For a stack opcode they agree
@@ -413,6 +419,27 @@ PyAPI_FUNC(int) _PyCode_InstrFoldedInputs(PyCodeObject *co, int i);
 /* The local that the dst field of word i names, into which a STORE_FAST of
  * its result is folded, or -1. */
 PyAPI_FUNC(int) _PyCode_InstrStoredLocal(PyCodeObject *co, int i);
+
+/* The number of temporaries that the frame holds before the word at index i
+ * runs, as its fields prove it, -1 if they name no temporary, or
+ * _PyCode_DEPTH_UNKNOWN if they name some but do not fix the depth.  The
+ * temporaries are a prefix of the slots, so a word that names slot
+ * co_nlocalsplus + d as its highest input, or the end of its window, or
+ * the slot it pushes to, has d entries beneath.  A PUSH_NULL has no word:
+ * its entry is a NULL slot that only the first word naming a higher slot
+ * shows (Objects/frameobject.c:mark_stacks).  *floor is the depth once the
+ * word has consumed its inputs. */
+#define _PyCode_DEPTH_UNKNOWN (-2)
+PyAPI_FUNC(int) _PyCode_InstrDepthBefore(PyCodeObject *co, int i, int *floor);
+
+/* The depths of the entries that the loads folded into the word at index i
+ * would have pushed, or none if the word names no temporary.  Returns their
+ * number. */
+PyAPI_FUNC(int) _PyCode_InstrHoles(PyCodeObject *co, int i, int holes[4]);
+
+/* Whether the call at index i releases its result (its dst is IR_NO_DST):
+ * the POP_TOP of the stack form is folded into it. */
+PyAPI_FUNC(int) _PyCode_InstrDiscards(PyCodeObject *co, int i);
 
 /* The word index that the instruction at index i jumps to, or -1 if it
  * does not jump.  END_ASYNC_FOR, which names its SEND, counts as a jump. */

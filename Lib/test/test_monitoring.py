@@ -2013,8 +2013,8 @@ class TestBranchAndJumpEvents(CheckEvents):
             ('branch', 'func', 4, 4),
             ('line', 'func', 5),
             ('line', 'meth', 1),
-            ('jump', 'func', 5, '[offset=33]'),
-            ('branch', 'func', '[offset=35]', '[offset=36]'),
+            ('jump', 'func', 5, '[offset=31]'),
+            ('branch', 'func', '[offset=33]', '[offset=34]'),
             ('line', 'get_events', 11)])
 
         self.check_events(func, recorders = FLOW_AND_LINE_RECORDERS, expected = [
@@ -2028,8 +2028,8 @@ class TestBranchAndJumpEvents(CheckEvents):
             ('line', 'func', 5),
             ('line', 'meth', 1),
             ('return', 'meth', None),
-            ('jump', 'func', 5, '[offset=33]'),
-            ('branch', 'func', '[offset=35]', '[offset=36]'),
+            ('jump', 'func', 5, '[offset=31]'),
+            ('branch', 'func', '[offset=33]', '[offset=34]'),
             ('return', 'func', None),
             ('line', 'get_events', 11)])
 

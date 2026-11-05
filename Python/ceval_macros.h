@@ -621,6 +621,24 @@ _PyIR_AdoptTemp(PyValueBorrow view)
         } \
     } while (0)
 
+/* IR_MOVE_TO_DST for a call, whose dst may be IR_NO_DST (_PyIR_DISCARDS):
+ * nothing reads the result, which the handler releases from SLOT. */
+#define IR_MOVE_TO_DST_OR_DISCARD(F, SLOT) \
+    do { \
+        if (IR_IS_LOCAL(F)) { \
+            PyValue ir_old = IR_SLOT(F); \
+            IR_SLOT(F) = _PyValue_Publish(&(SLOT)); \
+            _PyValue_CheckHome(IR_SLOT(F)); \
+            (SLOT) = PyValue_NULL; \
+            IR_RETIRE_LOCAL(ir_old); \
+        } \
+        else if ((F) == IR_NO_DST) { \
+            PyValue ir_result = (SLOT); \
+            (SLOT) = PyValue_NULL; \
+            PyValue_XCLOSE(ir_result); \
+        } \
+    } while (0)
+
 /* Clear N slots from PTR on; N may be zero or less. */
 #define IR_CLEAR_SLOTS(PTR, N) \
     do { \

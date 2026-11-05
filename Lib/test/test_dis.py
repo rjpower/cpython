@@ -106,7 +106,7 @@ def _f(a):
 dis_f = """\
 %3d           RESUME                   0
 
-%3d           LOAD_GLOBAL              1 (print + NULL)  r1 <-
+%3d           LOAD_GLOBAL              0 (print)  r1 <-
               LOAD_FAST_BORROW         0 (a)  r3 <-
               CALL                     1  r1 <- r1
               POP_TOP               <- r1
@@ -120,7 +120,7 @@ dis_f = """\
 dis_f_with_offsets = """\
 %3d          0       RESUME                   0
 
-%3d          1       LOAD_GLOBAL              1 (print + NULL)  r1 <-
+%3d          1       LOAD_GLOBAL              0 (print)  r1 <-
              2       LOAD_FAST_BORROW         0 (a)  r3 <-
              3       CALL                     1  r1 <- r1
              4       POP_TOP               <- r1
@@ -134,7 +134,7 @@ dis_f_with_offsets = """\
 dis_f_with_positions_format = f"""\
 %-14s           RESUME                   0
 
-%-14s           LOAD_GLOBAL              1 (print + NULL)  r1 <-
+%-14s           LOAD_GLOBAL              0 (print)  r1 <-
 %-14s           LOAD_FAST_BORROW         0 (a)  r3 <-
 %-14s           CALL                     1  r1 <- r1
 %-14s           POP_TOP               <- r1
@@ -145,7 +145,7 @@ dis_f_with_positions_format = f"""\
 
 dis_f_co_code = """\
           RESUME                   0
-          LOAD_GLOBAL              1  r1 <-
+          LOAD_GLOBAL              0  r1 <-
           LOAD_FAST_BORROW         0  r3 <-
           CALL                     1  r1 <- r1
           POP_TOP               <- r1
@@ -161,7 +161,7 @@ def bug708901():
 dis_bug708901 = """\
 %3d           RESUME                   0
 
-%3d           LOAD_GLOBAL              1 (range + NULL)  r1 <-
+%3d           LOAD_GLOBAL              0 (range)  r1 <-
               LOAD_SMALL_INT           1  r3 <-
 
 %3d           LOAD_SMALL_INT          10  r4 <-
@@ -261,13 +261,12 @@ def wrap_func_w_kwargs():
 dis_kw_names = """\
 %3d           RESUME                   0
 
-%3d           LOAD_GLOBAL              1 (func_w_kwargs + NULL)  r0 <-
+%3d           LOAD_GLOBAL              0 (func_w_kwargs)  r0 <-
               LOAD_SMALL_INT           1  r2 <-
               LOAD_SMALL_INT           2  r3 <-
               LOAD_SMALL_INT           5  r4 <-
               LOAD_CONST               1 (('c',))  r5 <-
-              CALL_KW                  3  r0 <- r0
-              POP_TOP               <- r0
+              CALL_KW                  3  <- r0
               LOAD_COMMON_CONSTANT     7 (None)  r0 <-
               RETURN_VALUE          <- r0
 """ % (wrap_func_w_kwargs.__code__.co_firstlineno,
@@ -391,7 +390,6 @@ dis_annot_stmt_str = """\
    4           LOAD_SMALL_INT           1  r1 <-
                LOAD_NAME                2 (lst)  r2 <-
                LOAD_NAME                3 (fun)  r3 <-
-               PUSH_NULL             r4 <-
                LOAD_SMALL_INT           0  r5 <-
                CALL                     1  r3 <- r3
                STORE_SUBSCR          <- r2, r3, r1
@@ -586,12 +584,11 @@ dis_asyncwith = """\
                 LOAD_SPECIAL             2 (__aenter__)  <- r5
                 CALL                     0  r5 <- r5
                 GET_AWAITABLE            1  r5 <- r5
-                PUSH_NULL             r6 <-
                 LOAD_COMMON_CONSTANT     7 (None)  r7 <-
         L2:     SEND                     3 (to L5)  r7 <- r5
         L3:     YIELD_VALUE              1  r7 <- r7
         L4:     RESUME                   3
-                JUMP_BACKWARD_NO_INTERRUPT 13 (to L2)
+                JUMP_BACKWARD_NO_INTERRUPT 12 (to L2)
         L5:     END_SEND              r5 <- r5, r6, r7
         L6:     POP_TOP               <- r5
 
@@ -602,12 +599,11 @@ dis_asyncwith = """\
                 LOAD_COMMON_CONSTANT     7 (None)  r7 <-
                 CALL                     3  r3 <- r3
                 GET_AWAITABLE            2  r3 <- r3
-                PUSH_NULL             r4 <-
                 LOAD_COMMON_CONSTANT     7 (None)  r5 <-
         L8:     SEND                     3 (to L11)  r5 <- r3
         L9:     YIELD_VALUE              1  r5 <- r5
        L10:     RESUME                   3
-                JUMP_BACKWARD_NO_INTERRUPT 27 (to L8)
+                JUMP_BACKWARD_NO_INTERRUPT 25 (to L8)
        L11:     END_SEND              r3 <- r3, r4, r5
                 POP_TOP               <- r3
 
@@ -616,21 +612,20 @@ dis_asyncwith = """\
                 RETURN_VALUE          <- r3
 
 %4d   L12:     CLEANUP_THROW         r5 <- r5
-       L13:     JUMP_BACKWARD_NO_INTERRUPT 17 (to L5)
+       L13:     JUMP_BACKWARD_NO_INTERRUPT 16 (to L5)
        L14:     CLEANUP_THROW         r3 <- r3
-       L15:     JUMP_BACKWARD_NO_INTERRUPT 31 (to L11)
+       L15:     JUMP_BACKWARD_NO_INTERRUPT 29 (to L11)
        L16:     PUSH_EXC_INFO         r6 <- r6
                 WITH_EXCEPT_START     r8 <- r3
                 GET_AWAITABLE            2  r8 <- r8
-                PUSH_NULL             r9 <-
                 LOAD_COMMON_CONSTANT     7 (None)  r10 <-
        L17:     SEND                     4 (to L21)  r10 <- r8
        L18:     YIELD_VALUE              1  r10 <- r10
        L19:     RESUME                   3
-                JUMP_BACKWARD_NO_INTERRUPT 45 (to L17)
+                JUMP_BACKWARD_NO_INTERRUPT 42 (to L17)
        L20:     CLEANUP_THROW         r8 <- r8
        L21:     END_SEND              r8 <- r8, r9, r10
-                POP_JUMP_IF_TRUE        53 (to L22)  <- r8
+                POP_JUMP_IF_TRUE        50 (to L22)  <- r8
                 RERAISE                  2  <- r5
        L22:     POP_TOP               <- r7
        L23:     POP_EXCEPT            <- r6
@@ -690,17 +685,13 @@ dis_tryfinally = """\
 %4d   L1:     LOAD_FAST_BORROW         0 (a)  r2 <-
 
 %4d   L2:     LOAD_FAST_BORROW         1 (b)  r3 <-
-               PUSH_NULL             r4 <-
-               CALL                     0  r3 <- r3
-               POP_TOP               <- r3
+               CALL                     0  <- r3
                RETURN_VALUE          <- r2
 
   --   L3:     PUSH_EXC_INFO         r2 <- r2
 
 %4d           LOAD_FAST                1 (b)  r4 <-
-               PUSH_NULL             r5 <-
-               CALL                     0  r4 <- r4
-               POP_TOP               <- r4
+               CALL                     0  <- r4
                RERAISE                  0  <- r3
 
   --   L4:     COPY                     3  <- r2
@@ -724,16 +715,13 @@ dis_tryfinallyconst = """\
 %4d           NOP
 
 %4d           LOAD_FAST_BORROW         0 (b)  r1 <-
-               PUSH_NULL             r2 <-
-               CALL                     0  r1 <- r1
-               POP_TOP               <- r1
+               CALL                     0  <- r1
                LOAD_SMALL_INT           1  r1 <-
                RETURN_VALUE          <- r1
 
   --   L1:     PUSH_EXC_INFO         r1 <- r1
 
 %4d           LOAD_FAST                0 (b)  r3 <-
-               PUSH_NULL             r4 <-
                CALL                     0  r3 <- r3
                POP_TOP               <- r3
                RERAISE                  0  <- r2
@@ -797,7 +785,7 @@ Disassembly of <code object foo at 0x..., file "%s", line %d>:
 %4d           LOAD_GLOBAL              0 (list)  r2 <-
                COPY                     1  <- r2
                LOAD_COMMON_CONSTANT     5 (list)  r4 <-
-               IS_OP_JUMP              16 (is to L3 if false)  <- r3, r4
+               IS_OP_JUMP              15 (is to L3 if false)  <- r3, r4
                POP_TOP               <- r2
                BUILD_LIST               0  r2 <- r2
                LOAD_FAST_BORROW         0 (x)  r3 <-
@@ -807,15 +795,13 @@ Disassembly of <code object foo at 0x..., file "%s", line %d>:
                SET_FUNCTION_ATTRIBUTE   8 (closure)  r3 <- r3, r4
                LOAD_DEREF               1 (y)  r4 <-
                CALL                     0  r3 <- r3
-               PUSH_NULL             r4 <-
        L1:     FOR_ITER                 2 (to L2)  r5 <- r3
                LIST_APPEND              3  <- r2
-               JUMP_BACKWARD           17 (to L1)
+               JUMP_BACKWARD           16 (to L1)
        L2:     END_FOR               <- r3, r4, r5
                POP_ITER              <- r3, r4
                RETURN_VALUE          <- r2
-       L3:     PUSH_NULL             r3 <-
-               LOAD_FAST_BORROW         0 (x)  r4 <-
+       L3:     LOAD_FAST_BORROW         0 (x)  r4 <-
                BUILD_TUPLE              1  r4 <- r4
                LOAD_CONST               1 (<code object <genexpr> at 0x..., file "%s", line %d>)  r5 <-
                MAKE_FUNCTION         r5 <- r5
@@ -910,12 +896,11 @@ dis_loop_test_quickened_code = """\
               LOAD_SMALL_INT           3  r2 <-
               BINARY_OP                5 (*)  r1 <- r1, r2
               GET_ITER_VIRTUAL         0  r1 <- r1
-      L1:     FOR_ITER_LIST            5 (to L2)  r0 <- r1
+      L1:     FOR_ITER_LIST            4 (to L2)  r0 <- r1
 
-%3d           LOAD_GLOBAL_MODULE       1 (load_test + NULL)  r3 <-
+%3d           LOAD_GLOBAL_MODULE       0 (load_test)  r3 <-
               LOAD_FAST_BORROW         0 (i)  r5 <-
-              CALL_PY_GENERAL          1  r3 <- r3
-              POP_TOP               <- r3
+              CALL_PY_GENERAL          1  <- r3
               JUMP_BACKWARD            7 (to L1)
 
 %3d   L2:     END_FOR               <- r1, r2, r3
@@ -1323,7 +1308,6 @@ class DisTests(DisTestBase):
   0           RESUME                   0
 
   1           LOAD_NAME                0 (str)  r0 <-
-              PUSH_NULL             r1 <-
               LOAD_SMALL_INT           1  r2 <-
               CALL_STR_1               1  r0 <- r0
               RETURN_VALUE          <- r0
@@ -1770,7 +1754,7 @@ expected_opinfo_outer = [
   make_inst(opname='SET_FUNCTION_ATTRIBUTE', arg=8, argval=8, argrepr='closure', offset=9, start_offset=9, starts_line=False, line_number=2, dst=4, srcs=(4, 5)),
   make_inst(opname='SET_FUNCTION_ATTRIBUTE', arg=1, argval=1, argrepr='defaults', offset=10, start_offset=10, starts_line=False, line_number=2, dst=3, srcs=(3, 4)),
   make_inst(opname='STORE_FAST', arg=2, argval='f', argrepr='f', offset=11, start_offset=11, starts_line=False, line_number=2, srcs=(3,)),
-  make_inst(opname='LOAD_GLOBAL', arg=1, argval='print', argrepr='print + NULL', offset=12, start_offset=12, starts_line=True, line_number=7, dst=3, fb=2, cache_info=[('kind', 1, b'\x05'), ('arg', 2, b'\x00\x00')]),
+  make_inst(opname='LOAD_GLOBAL', arg=0, argval='print', argrepr='print', offset=12, start_offset=12, starts_line=True, line_number=7, dst=3, fb=2, cache_info=[('kind', 1, b'\x05'), ('arg', 2, b'\x00\x00')]),
   make_inst(opname='LOAD_DEREF', arg=0, argval='a', argrepr='a', offset=13, start_offset=13, starts_line=False, line_number=7, dst=5),
   make_inst(opname='LOAD_DEREF', arg=1, argval='b', argrepr='b', offset=14, start_offset=14, starts_line=False, line_number=7, dst=6),
   make_inst(opname='LOAD_COMMON_CONSTANT', arg=8, argval='', argrepr="''", offset=15, start_offset=15, starts_line=False, line_number=7, dst=7),
@@ -1799,7 +1783,7 @@ expected_opinfo_f = [
   make_inst(opname='SET_FUNCTION_ATTRIBUTE', arg=8, argval=8, argrepr='closure', offset=12, start_offset=12, starts_line=False, line_number=3, dst=6, srcs=(6, 7)),
   make_inst(opname='SET_FUNCTION_ATTRIBUTE', arg=1, argval=1, argrepr='defaults', offset=13, start_offset=13, starts_line=False, line_number=3, dst=5, srcs=(5, 6)),
   make_inst(opname='STORE_FAST', arg=2, argval='inner', argrepr='inner', offset=14, start_offset=14, starts_line=False, line_number=3, srcs=(5,)),
-  make_inst(opname='LOAD_GLOBAL', arg=1, argval='print', argrepr='print + NULL', offset=15, start_offset=15, starts_line=True, line_number=5, dst=5, fb=2, cache_info=[('kind', 1, b'\x05'), ('arg', 2, b'\x00\x00')]),
+  make_inst(opname='LOAD_GLOBAL', arg=0, argval='print', argrepr='print', offset=15, start_offset=15, starts_line=True, line_number=5, dst=5, fb=2, cache_info=[('kind', 1, b'\x05'), ('arg', 2, b'\x00\x00')]),
   make_inst(opname='LOAD_DEREF', arg=3, argval='a', argrepr='a', offset=16, start_offset=16, starts_line=False, line_number=5, dst=7),
   make_inst(opname='LOAD_DEREF', arg=4, argval='b', argrepr='b', offset=17, start_offset=17, starts_line=False, line_number=5, dst=8),
   make_inst(opname='LOAD_DEREF', arg=0, argval='c', argrepr='c', offset=18, start_offset=18, starts_line=False, line_number=5, dst=9),
@@ -1812,27 +1796,26 @@ expected_opinfo_f = [
 expected_opinfo_inner = [
   make_inst(opname='COPY_FREE_VARS', arg=4, argval=4, argrepr='', offset=0, start_offset=0, starts_line=True, line_number=None),
   make_inst(opname='RESUME', arg=0, argval=0, argrepr='', offset=1, start_offset=1, starts_line=True, line_number=3),
-  make_inst(opname='LOAD_GLOBAL', arg=1, argval='print', argrepr='print + NULL', offset=2, start_offset=2, starts_line=True, line_number=4, dst=6, fb=2, cache_info=[('kind', 1, b'\x05'), ('arg', 2, b'\x00\x00')]),
+  make_inst(opname='LOAD_GLOBAL', arg=0, argval='print', argrepr='print', offset=2, start_offset=2, starts_line=True, line_number=4, dst=6, fb=2, cache_info=[('kind', 1, b'\x05'), ('arg', 2, b'\x00\x00')]),
   make_inst(opname='LOAD_DEREF', arg=2, argval='a', argrepr='a', offset=3, start_offset=3, starts_line=False, line_number=4, dst=8),
   make_inst(opname='LOAD_DEREF', arg=3, argval='b', argrepr='b', offset=4, start_offset=4, starts_line=False, line_number=4, dst=9),
   make_inst(opname='LOAD_DEREF', arg=4, argval='c', argrepr='c', offset=5, start_offset=5, starts_line=False, line_number=4, dst=10),
   make_inst(opname='LOAD_DEREF', arg=5, argval='d', argrepr='d', offset=6, start_offset=6, starts_line=False, line_number=4, dst=11),
   make_inst(opname='LOAD_FAST_BORROW', arg=0, argval='e', argrepr='e', offset=7, start_offset=7, starts_line=False, line_number=4, dst=12),
   make_inst(opname='LOAD_FAST_BORROW', arg=1, argval='f', argrepr='f', offset=8, start_offset=8, starts_line=False, line_number=4, dst=13),
-  make_inst(opname='CALL', arg=6, argval=6, argrepr='', offset=9, start_offset=9, starts_line=False, line_number=4, dst=6, srcs=(6,), fb=6, cache_info=[('kind', 1, b'\x06'), ('arg', 2, b'\x00\x00')]),
-  make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=10, start_offset=10, starts_line=False, line_number=4, srcs=(6,)),
-  make_inst(opname='LOAD_COMMON_CONSTANT', arg=7, argval=None, argrepr='None', offset=11, start_offset=11, starts_line=False, line_number=4, dst=6),
-  make_inst(opname='RETURN_VALUE', arg=None, argval=None, argrepr='', offset=12, start_offset=12, starts_line=False, line_number=4, srcs=(6,)),
+  make_inst(opname='CALL', arg=6, argval=6, argrepr='', offset=9, start_offset=9, starts_line=False, line_number=4, srcs=(6,), fb=6, cache_info=[('kind', 1, b'\x06'), ('arg', 2, b'\x00\x00')]),
+  make_inst(opname='LOAD_COMMON_CONSTANT', arg=7, argval=None, argrepr='None', offset=10, start_offset=10, starts_line=False, line_number=4, dst=6),
+  make_inst(opname='RETURN_VALUE', arg=None, argval=None, argrepr='', offset=11, start_offset=11, starts_line=False, line_number=4, srcs=(6,)),
 ]
 
 expected_opinfo_jumpy = [
   make_inst(opname='RESUME', arg=0, argval=0, argrepr='', offset=0, start_offset=0, starts_line=True, line_number=1),
-  make_inst(opname='LOAD_GLOBAL', arg=1, argval='range', argrepr='range + NULL', offset=1, start_offset=1, starts_line=True, line_number=3, dst=5, fb=66, cache_info=[('kind', 1, b'\x05'), ('arg', 2, b'\x00\x00')]),
+  make_inst(opname='LOAD_GLOBAL', arg=0, argval='range', argrepr='range', offset=1, start_offset=1, starts_line=True, line_number=3, dst=5, fb=66, cache_info=[('kind', 1, b'\x05'), ('arg', 2, b'\x00\x00')]),
   make_inst(opname='LOAD_SMALL_INT', arg=10, argval=10, argrepr='', offset=2, start_offset=2, starts_line=False, line_number=3, handler='LOAD_SMALL_INT_INLINE', dst=7),
   make_inst(opname='CALL', arg=1, argval=1, argrepr='', offset=3, start_offset=3, starts_line=False, line_number=3, dst=5, srcs=(5,), fb=70, cache_info=[('kind', 1, b'\x06'), ('arg', 2, b'\x00\x00')]),
   make_inst(opname='GET_ITER', arg=0, argval=0, argrepr='', offset=4, start_offset=4, starts_line=False, line_number=3, dst=5, srcs=(5,), fb=73, cache_info=[('kind', 1, b'\x02'), ('arg', 2, b'\x00\x00')]),
   make_inst(opname='FOR_ITER', arg=11, argval=17, argrepr='to L4', offset=5, start_offset=5, starts_line=False, line_number=3, label=1, dst=0, srcs=(5,), fb=18, cache_info=[('kind', 1, b'\x02'), ('arg', 2, b'\x00\x00')]),
-  make_inst(opname='LOAD_GLOBAL', arg=3, argval='print', argrepr='print + NULL', offset=6, start_offset=6, starts_line=True, line_number=4, dst=7, fb=21, cache_info=[('kind', 1, b'\x05'), ('arg', 2, b'\x00\x00')]),
+  make_inst(opname='LOAD_GLOBAL', arg=2, argval='print', argrepr='print', offset=6, start_offset=6, starts_line=True, line_number=4, dst=7, fb=21, cache_info=[('kind', 1, b'\x05'), ('arg', 2, b'\x00\x00')]),
   make_inst(opname='LOAD_FAST_BORROW', arg=0, argval='i', argrepr='i', offset=7, start_offset=7, starts_line=False, line_number=4, dst=9),
   make_inst(opname='CALL', arg=1, argval=1, argrepr='', offset=8, start_offset=8, starts_line=False, line_number=4, dst=7, srcs=(7,), fb=25, cache_info=[('kind', 1, b'\x06'), ('arg', 2, b'\x00\x00')]),
   make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=9, start_offset=9, starts_line=False, line_number=4, srcs=(7,)),
@@ -1845,13 +1828,13 @@ expected_opinfo_jumpy = [
   make_inst(opname='JUMP_FORWARD', arg=23, argval=23, argrepr='to L5', offset=16, start_offset=16, starts_line=False, line_number=8),
   make_inst(opname='END_FOR', arg=None, argval=None, argrepr='', offset=17, start_offset=17, starts_line=True, line_number=3, label=4, srcs=(5, 6, 7)),
   make_inst(opname='POP_ITER', arg=None, argval=None, argrepr='', offset=18, start_offset=18, starts_line=False, line_number=3, srcs=(5, 6)),
-  make_inst(opname='LOAD_GLOBAL', arg=3, argval='print', argrepr='print + NULL', offset=19, start_offset=19, starts_line=True, line_number=10, dst=5, fb=76, cache_info=[('kind', 1, b'\x05'), ('arg', 2, b'\x00\x00')]),
+  make_inst(opname='LOAD_GLOBAL', arg=2, argval='print', argrepr='print', offset=19, start_offset=19, starts_line=True, line_number=10, dst=5, fb=76, cache_info=[('kind', 1, b'\x05'), ('arg', 2, b'\x00\x00')]),
   make_inst(opname='LOAD_CONST', arg=1, argval='I can haz else clause?', argrepr="'I can haz else clause?'", offset=20, start_offset=20, starts_line=False, line_number=10, dst=7),
   make_inst(opname='CALL', arg=1, argval=1, argrepr='', offset=21, start_offset=21, starts_line=False, line_number=10, dst=5, srcs=(5,), fb=80, cache_info=[('kind', 1, b'\x06'), ('arg', 2, b'\x00\x00')]),
   make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=22, start_offset=22, starts_line=False, line_number=10, srcs=(5,)),
   make_inst(opname='LOAD_FAST_CHECK', arg=0, argval='i', argrepr='i', offset=23, start_offset=23, starts_line=True, line_number=11, label=5, dst=5),
   make_inst(opname='POP_JUMP_IF_FALSE', arg=35, argval=35, argrepr='to L8', offset=24, start_offset=24, starts_line=False, line_number=11, srcs=(5,), fb=28, cache_info=[('kind', 1, b'\x01'), ('arg', 2, b'\x00\x00')]),
-  make_inst(opname='LOAD_GLOBAL', arg=3, argval='print', argrepr='print + NULL', offset=25, start_offset=25, starts_line=True, line_number=12, dst=5, fb=31, cache_info=[('kind', 1, b'\x05'), ('arg', 2, b'\x00\x00')]),
+  make_inst(opname='LOAD_GLOBAL', arg=2, argval='print', argrepr='print', offset=25, start_offset=25, starts_line=True, line_number=12, dst=5, fb=31, cache_info=[('kind', 1, b'\x05'), ('arg', 2, b'\x00\x00')]),
   make_inst(opname='LOAD_FAST_BORROW', arg=0, argval='i', argrepr='i', offset=26, start_offset=26, starts_line=False, line_number=12, dst=7),
   make_inst(opname='CALL', arg=1, argval=1, argrepr='', offset=27, start_offset=27, starts_line=False, line_number=12, dst=5, srcs=(5,), fb=35, cache_info=[('kind', 1, b'\x06'), ('arg', 2, b'\x00\x00')]),
   make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=28, start_offset=28, starts_line=False, line_number=12, srcs=(5,)),
@@ -1861,7 +1844,7 @@ expected_opinfo_jumpy = [
   make_inst(opname='COMPARE_OP_JUMP', arg=1, argval=34, argrepr='bool(<) to L7 if true', offset=32, start_offset=32, starts_line=True, line_number=16, label=6, srcs=(0, 2), fb=14, cache_info=[('kind', 1, b'\x03'), ('arg', 2, b'\x12\x00')]),
   make_inst(opname='JUMP_BACKWARD', arg=23, argval=23, argrepr='to L5', offset=33, start_offset=33, starts_line=False, line_number=16),
   make_inst(opname='JUMP_FORWARD', arg=39, argval=39, argrepr='to L9', offset=34, start_offset=34, starts_line=True, line_number=17, label=7),
-  make_inst(opname='LOAD_GLOBAL', arg=3, argval='print', argrepr='print + NULL', offset=35, start_offset=35, starts_line=True, line_number=19, label=8, dst=5, fb=83, cache_info=[('kind', 1, b'\x05'), ('arg', 2, b'\x00\x00')]),
+  make_inst(opname='LOAD_GLOBAL', arg=2, argval='print', argrepr='print', offset=35, start_offset=35, starts_line=True, line_number=19, label=8, dst=5, fb=83, cache_info=[('kind', 1, b'\x05'), ('arg', 2, b'\x00\x00')]),
   make_inst(opname='LOAD_CONST', arg=2, argval='Who let lolcatz into this test suite?', argrepr="'Who let lolcatz into this test suite?'", offset=36, start_offset=36, starts_line=False, line_number=19, dst=7),
   make_inst(opname='CALL', arg=1, argval=1, argrepr='', offset=37, start_offset=37, starts_line=False, line_number=19, dst=5, srcs=(5,), fb=87, cache_info=[('kind', 1, b'\x06'), ('arg', 2, b'\x00\x00')]),
   make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=38, start_offset=38, starts_line=False, line_number=19, srcs=(5,)),
@@ -1877,7 +1860,7 @@ expected_opinfo_jumpy = [
   make_inst(opname='SWAP', arg=3, argval=3, argrepr='', offset=48, start_offset=48, starts_line=False, line_number=25, srcs=(5,)),
   make_inst(opname='LOAD_SPECIAL', arg=0, argval=0, argrepr='__enter__', offset=49, start_offset=49, starts_line=False, line_number=25, srcs=(7,)),
   make_inst(opname='CALL', arg=0, argval=0, argrepr='', offset=50, start_offset=50, starts_line=False, line_number=25, dst=1, srcs=(7,), fb=94, cache_info=[('kind', 1, b'\x06'), ('arg', 2, b'\x00\x00')]),
-  make_inst(opname='LOAD_GLOBAL', arg=3, argval='print', argrepr='print + NULL', offset=51, start_offset=51, starts_line=True, line_number=26, dst=7, fb=97, cache_info=[('kind', 1, b'\x05'), ('arg', 2, b'\x00\x00')]),
+  make_inst(opname='LOAD_GLOBAL', arg=2, argval='print', argrepr='print', offset=51, start_offset=51, starts_line=True, line_number=26, dst=7, fb=97, cache_info=[('kind', 1, b'\x05'), ('arg', 2, b'\x00\x00')]),
   make_inst(opname='LOAD_CONST', arg=3, argval='Never reach this', argrepr="'Never reach this'", offset=52, start_offset=52, starts_line=False, line_number=26, dst=9),
   make_inst(opname='CALL', arg=1, argval=1, argrepr='', offset=53, start_offset=53, starts_line=False, line_number=26, dst=7, srcs=(7,), fb=101, cache_info=[('kind', 1, b'\x06'), ('arg', 2, b'\x00\x00')]),
   make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=54, start_offset=54, starts_line=False, line_number=26, srcs=(7,)),
@@ -1886,53 +1869,51 @@ expected_opinfo_jumpy = [
   make_inst(opname='LOAD_COMMON_CONSTANT', arg=7, argval=None, argrepr='None', offset=57, start_offset=57, starts_line=False, line_number=25, dst=9),
   make_inst(opname='CALL', arg=3, argval=3, argrepr='', offset=58, start_offset=58, starts_line=False, line_number=25, dst=5, srcs=(5,), fb=104, cache_info=[('kind', 1, b'\x06'), ('arg', 2, b'\x00\x00')]),
   make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=59, start_offset=59, starts_line=False, line_number=25, srcs=(5,)),
-  make_inst(opname='LOAD_GLOBAL', arg=3, argval='print', argrepr='print + NULL', offset=60, start_offset=60, starts_line=True, line_number=28, label=10, dst=5, fb=42, cache_info=[('kind', 1, b'\x05'), ('arg', 2, b'\x00\x00')]),
+  make_inst(opname='LOAD_GLOBAL', arg=2, argval='print', argrepr='print', offset=60, start_offset=60, starts_line=True, line_number=28, label=10, dst=5, fb=42, cache_info=[('kind', 1, b'\x05'), ('arg', 2, b'\x00\x00')]),
   make_inst(opname='LOAD_CONST', arg=5, argval="OK, now we're done", argrepr='"OK, now we\'re done"', offset=61, start_offset=61, starts_line=False, line_number=28, dst=7),
-  make_inst(opname='CALL', arg=1, argval=1, argrepr='', offset=62, start_offset=62, starts_line=False, line_number=28, dst=5, srcs=(5,), fb=46, cache_info=[('kind', 1, b'\x06'), ('arg', 2, b'\x00\x00')]),
-  make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=63, start_offset=63, starts_line=False, line_number=28, srcs=(5,)),
-  make_inst(opname='LOAD_COMMON_CONSTANT', arg=7, argval=None, argrepr='None', offset=64, start_offset=64, starts_line=False, line_number=28, dst=5),
-  make_inst(opname='RETURN_VALUE', arg=None, argval=None, argrepr='', offset=65, start_offset=65, starts_line=False, line_number=28, srcs=(5,)),
-  make_inst(opname='PUSH_EXC_INFO', arg=None, argval=None, argrepr='', offset=66, start_offset=66, starts_line=True, line_number=25, dst=8, srcs=(8,)),
-  make_inst(opname='WITH_EXCEPT_START', arg=None, argval=None, argrepr='', offset=67, start_offset=67, starts_line=False, line_number=25, dst=10, srcs=(5,)),
-  make_inst(opname='POP_JUMP_IF_TRUE', arg=70, argval=70, argrepr='to L11', offset=68, start_offset=68, starts_line=False, line_number=25, srcs=(10,), fb=49, cache_info=[('kind', 1, b'\x01'), ('arg', 2, b'\x00\x00')]),
-  make_inst(opname='RERAISE', arg=2, argval=2, argrepr='', offset=69, start_offset=69, starts_line=False, line_number=25, srcs=(7,)),
-  make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=70, start_offset=70, starts_line=False, line_number=25, label=11, srcs=(9,)),
-  make_inst(opname='POP_EXCEPT', arg=None, argval=None, argrepr='', offset=71, start_offset=71, starts_line=False, line_number=25, srcs=(8,)),
-  make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=72, start_offset=72, starts_line=False, line_number=25, srcs=(7,)),
-  make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=73, start_offset=73, starts_line=False, line_number=25, srcs=(6,)),
-  make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=74, start_offset=74, starts_line=False, line_number=25, srcs=(5,)),
-  make_inst(opname='JUMP_BACKWARD_NO_INTERRUPT', arg=60, argval=60, argrepr='to L10', offset=75, start_offset=75, starts_line=False, line_number=25),
-  make_inst(opname='COPY', arg=3, argval=3, argrepr='', offset=76, start_offset=76, starts_line=True, line_number=None, srcs=(8,)),
-  make_inst(opname='POP_EXCEPT', arg=None, argval=None, argrepr='', offset=77, start_offset=77, starts_line=False, line_number=None, srcs=(11,)),
-  make_inst(opname='RERAISE', arg=1, argval=1, argrepr='', offset=78, start_offset=78, starts_line=False, line_number=None, srcs=(9,)),
-  make_inst(opname='PUSH_EXC_INFO', arg=None, argval=None, argrepr='', offset=79, start_offset=79, starts_line=False, line_number=None, dst=5, srcs=(5,)),
-  make_inst(opname='LOAD_GLOBAL', arg=4, argval='ZeroDivisionError', argrepr='ZeroDivisionError', offset=80, start_offset=80, starts_line=True, line_number=22, dst=7, fb=52, cache_info=[('kind', 1, b'\x05'), ('arg', 2, b'\x00\x00')]),
-  make_inst(opname='CHECK_EXC_MATCH', arg=None, argval=None, argrepr='', offset=81, start_offset=81, starts_line=False, line_number=22, dst=7, srcs=(6, 7)),
-  make_inst(opname='POP_JUMP_IF_FALSE', arg=90, argval=90, argrepr='to L12', offset=82, start_offset=82, starts_line=False, line_number=22, srcs=(7,), fb=56, cache_info=[('kind', 1, b'\x01'), ('arg', 2, b'\x00\x00')]),
-  make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=83, start_offset=83, starts_line=False, line_number=22, srcs=(6,)),
-  make_inst(opname='LOAD_GLOBAL', arg=3, argval='print', argrepr='print + NULL', offset=84, start_offset=84, starts_line=True, line_number=23, dst=6, fb=59, cache_info=[('kind', 1, b'\x05'), ('arg', 2, b'\x00\x00')]),
-  make_inst(opname='LOAD_CONST', arg=4, argval='Here we go, here we go, here we go...', argrepr="'Here we go, here we go, here we go...'", offset=85, start_offset=85, starts_line=False, line_number=23, dst=8),
-  make_inst(opname='CALL', arg=1, argval=1, argrepr='', offset=86, start_offset=86, starts_line=False, line_number=23, dst=6, srcs=(6,), fb=63, cache_info=[('kind', 1, b'\x06'), ('arg', 2, b'\x00\x00')]),
-  make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=87, start_offset=87, starts_line=False, line_number=23, srcs=(6,)),
-  make_inst(opname='POP_EXCEPT', arg=None, argval=None, argrepr='', offset=88, start_offset=88, starts_line=False, line_number=23, srcs=(5,)),
-  make_inst(opname='JUMP_BACKWARD_NO_INTERRUPT', arg=60, argval=60, argrepr='to L10', offset=89, start_offset=89, starts_line=False, line_number=23),
-  make_inst(opname='RERAISE', arg=0, argval=0, argrepr='', offset=90, start_offset=90, starts_line=True, line_number=22, label=12, srcs=(6,)),
-  make_inst(opname='COPY', arg=3, argval=3, argrepr='', offset=91, start_offset=91, starts_line=True, line_number=None, srcs=(5,)),
-  make_inst(opname='POP_EXCEPT', arg=None, argval=None, argrepr='', offset=92, start_offset=92, starts_line=False, line_number=None, srcs=(8,)),
-  make_inst(opname='RERAISE', arg=1, argval=1, argrepr='', offset=93, start_offset=93, starts_line=False, line_number=None, srcs=(6,)),
-  make_inst(opname='PUSH_EXC_INFO', arg=None, argval=None, argrepr='', offset=94, start_offset=94, starts_line=False, line_number=None, dst=5, srcs=(5,)),
-  make_inst(opname='LOAD_GLOBAL', arg=3, argval='print', argrepr='print + NULL', offset=95, start_offset=95, starts_line=True, line_number=28, dst=7, fb=107, cache_info=[('kind', 1, b'\x05'), ('arg', 2, b'\x00\x00')]),
-  make_inst(opname='LOAD_CONST', arg=5, argval="OK, now we're done", argrepr='"OK, now we\'re done"', offset=96, start_offset=96, starts_line=False, line_number=28, dst=9),
-  make_inst(opname='CALL', arg=1, argval=1, argrepr='', offset=97, start_offset=97, starts_line=False, line_number=28, dst=7, srcs=(7,), fb=111, cache_info=[('kind', 1, b'\x06'), ('arg', 2, b'\x00\x00')]),
-  make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=98, start_offset=98, starts_line=False, line_number=28, srcs=(7,)),
-  make_inst(opname='RERAISE', arg=0, argval=0, argrepr='', offset=99, start_offset=99, starts_line=False, line_number=28, srcs=(6,)),
-  make_inst(opname='COPY', arg=3, argval=3, argrepr='', offset=100, start_offset=100, starts_line=True, line_number=None, srcs=(5,)),
-  make_inst(opname='POP_EXCEPT', arg=None, argval=None, argrepr='', offset=101, start_offset=101, starts_line=False, line_number=None, srcs=(8,)),
-  make_inst(opname='RERAISE', arg=1, argval=1, argrepr='', offset=102, start_offset=102, starts_line=False, line_number=None, srcs=(6,)),
+  make_inst(opname='CALL', arg=1, argval=1, argrepr='', offset=62, start_offset=62, starts_line=False, line_number=28, srcs=(5,), fb=46, cache_info=[('kind', 1, b'\x06'), ('arg', 2, b'\x00\x00')]),
+  make_inst(opname='LOAD_COMMON_CONSTANT', arg=7, argval=None, argrepr='None', offset=63, start_offset=63, starts_line=False, line_number=28, dst=5),
+  make_inst(opname='RETURN_VALUE', arg=None, argval=None, argrepr='', offset=64, start_offset=64, starts_line=False, line_number=28, srcs=(5,)),
+  make_inst(opname='PUSH_EXC_INFO', arg=None, argval=None, argrepr='', offset=65, start_offset=65, starts_line=True, line_number=25, dst=8, srcs=(8,)),
+  make_inst(opname='WITH_EXCEPT_START', arg=None, argval=None, argrepr='', offset=66, start_offset=66, starts_line=False, line_number=25, dst=10, srcs=(5,)),
+  make_inst(opname='POP_JUMP_IF_TRUE', arg=69, argval=69, argrepr='to L11', offset=67, start_offset=67, starts_line=False, line_number=25, srcs=(10,), fb=49, cache_info=[('kind', 1, b'\x01'), ('arg', 2, b'\x00\x00')]),
+  make_inst(opname='RERAISE', arg=2, argval=2, argrepr='', offset=68, start_offset=68, starts_line=False, line_number=25, srcs=(7,)),
+  make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=69, start_offset=69, starts_line=False, line_number=25, label=11, srcs=(9,)),
+  make_inst(opname='POP_EXCEPT', arg=None, argval=None, argrepr='', offset=70, start_offset=70, starts_line=False, line_number=25, srcs=(8,)),
+  make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=71, start_offset=71, starts_line=False, line_number=25, srcs=(7,)),
+  make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=72, start_offset=72, starts_line=False, line_number=25, srcs=(6,)),
+  make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=73, start_offset=73, starts_line=False, line_number=25, srcs=(5,)),
+  make_inst(opname='JUMP_BACKWARD_NO_INTERRUPT', arg=60, argval=60, argrepr='to L10', offset=74, start_offset=74, starts_line=False, line_number=25),
+  make_inst(opname='COPY', arg=3, argval=3, argrepr='', offset=75, start_offset=75, starts_line=True, line_number=None, srcs=(8,)),
+  make_inst(opname='POP_EXCEPT', arg=None, argval=None, argrepr='', offset=76, start_offset=76, starts_line=False, line_number=None, srcs=(11,)),
+  make_inst(opname='RERAISE', arg=1, argval=1, argrepr='', offset=77, start_offset=77, starts_line=False, line_number=None, srcs=(9,)),
+  make_inst(opname='PUSH_EXC_INFO', arg=None, argval=None, argrepr='', offset=78, start_offset=78, starts_line=False, line_number=None, dst=5, srcs=(5,)),
+  make_inst(opname='LOAD_GLOBAL', arg=4, argval='ZeroDivisionError', argrepr='ZeroDivisionError', offset=79, start_offset=79, starts_line=True, line_number=22, dst=7, fb=52, cache_info=[('kind', 1, b'\x05'), ('arg', 2, b'\x00\x00')]),
+  make_inst(opname='CHECK_EXC_MATCH', arg=None, argval=None, argrepr='', offset=80, start_offset=80, starts_line=False, line_number=22, dst=7, srcs=(6, 7)),
+  make_inst(opname='POP_JUMP_IF_FALSE', arg=88, argval=88, argrepr='to L12', offset=81, start_offset=81, starts_line=False, line_number=22, srcs=(7,), fb=56, cache_info=[('kind', 1, b'\x01'), ('arg', 2, b'\x00\x00')]),
+  make_inst(opname='POP_TOP', arg=None, argval=None, argrepr='', offset=82, start_offset=82, starts_line=False, line_number=22, srcs=(6,)),
+  make_inst(opname='LOAD_GLOBAL', arg=2, argval='print', argrepr='print', offset=83, start_offset=83, starts_line=True, line_number=23, dst=6, fb=59, cache_info=[('kind', 1, b'\x05'), ('arg', 2, b'\x00\x00')]),
+  make_inst(opname='LOAD_CONST', arg=4, argval='Here we go, here we go, here we go...', argrepr="'Here we go, here we go, here we go...'", offset=84, start_offset=84, starts_line=False, line_number=23, dst=8),
+  make_inst(opname='CALL', arg=1, argval=1, argrepr='', offset=85, start_offset=85, starts_line=False, line_number=23, srcs=(6,), fb=63, cache_info=[('kind', 1, b'\x06'), ('arg', 2, b'\x00\x00')]),
+  make_inst(opname='POP_EXCEPT', arg=None, argval=None, argrepr='', offset=86, start_offset=86, starts_line=False, line_number=23, srcs=(5,)),
+  make_inst(opname='JUMP_BACKWARD_NO_INTERRUPT', arg=60, argval=60, argrepr='to L10', offset=87, start_offset=87, starts_line=False, line_number=23),
+  make_inst(opname='RERAISE', arg=0, argval=0, argrepr='', offset=88, start_offset=88, starts_line=True, line_number=22, label=12, srcs=(6,)),
+  make_inst(opname='COPY', arg=3, argval=3, argrepr='', offset=89, start_offset=89, starts_line=True, line_number=None, srcs=(5,)),
+  make_inst(opname='POP_EXCEPT', arg=None, argval=None, argrepr='', offset=90, start_offset=90, starts_line=False, line_number=None, srcs=(8,)),
+  make_inst(opname='RERAISE', arg=1, argval=1, argrepr='', offset=91, start_offset=91, starts_line=False, line_number=None, srcs=(6,)),
+  make_inst(opname='PUSH_EXC_INFO', arg=None, argval=None, argrepr='', offset=92, start_offset=92, starts_line=False, line_number=None, dst=5, srcs=(5,)),
+  make_inst(opname='LOAD_GLOBAL', arg=2, argval='print', argrepr='print', offset=93, start_offset=93, starts_line=True, line_number=28, dst=7, fb=107, cache_info=[('kind', 1, b'\x05'), ('arg', 2, b'\x00\x00')]),
+  make_inst(opname='LOAD_CONST', arg=5, argval="OK, now we're done", argrepr='"OK, now we\'re done"', offset=94, start_offset=94, starts_line=False, line_number=28, dst=9),
+  make_inst(opname='CALL', arg=1, argval=1, argrepr='', offset=95, start_offset=95, starts_line=False, line_number=28, srcs=(7,), fb=111, cache_info=[('kind', 1, b'\x06'), ('arg', 2, b'\x00\x00')]),
+  make_inst(opname='RERAISE', arg=0, argval=0, argrepr='', offset=96, start_offset=96, starts_line=False, line_number=28, srcs=(6,)),
+  make_inst(opname='COPY', arg=3, argval=3, argrepr='', offset=97, start_offset=97, starts_line=True, line_number=None, srcs=(5,)),
+  make_inst(opname='POP_EXCEPT', arg=None, argval=None, argrepr='', offset=98, start_offset=98, starts_line=False, line_number=None, srcs=(8,)),
+  make_inst(opname='RERAISE', arg=1, argval=1, argrepr='', offset=99, start_offset=99, starts_line=False, line_number=None, srcs=(6,)),
 ]
 
 # One last piece of inspect fodder to check the default line number handling
 def simple(): pass
+
 expected_opinfo_simple = [
   make_inst(opname='RESUME', arg=0, argval=0, argrepr='', offset=0, start_offset=0, starts_line=True, line_number=simple.__code__.co_firstlineno),
   make_inst(opname='LOAD_COMMON_CONSTANT', arg=7, argval=None, argrepr='None', offset=1, start_offset=1, starts_line=False, line_number=simple.__code__.co_firstlineno, dst=0),
@@ -1997,11 +1978,9 @@ class InstructionTests(InstructionTestCase):
         expected = [
             (0, 1, 0, 0),
             (1, 1, 0, 1),
-            (1, 1, 0, 1),
             (2, 2, 2, 3),
             (2, 2, 5, 6),
             (2, 2, 8, 9),
-            (1, 3, 0, 1),
             (1, 3, 0, 1),
             (1, 3, 0, 1),
             (1, 3, 0, 1)
@@ -2443,10 +2422,8 @@ class TestDisCLI(unittest.TestCase):
             0           RESUME                   0
 
             1           LOAD_NAME                0 (print)  r0 <-
-                        PUSH_NULL             r1 <-
-                        CALL                     0  r0 <- r0
+                        CALL                     0  <- r0
                         FEEDBACK                 2 (kind: CALL, arg: 0)
-                        POP_TOP               <- r0
                         LOAD_COMMON_CONSTANT     7 (None)  r0 <-
                         RETURN_VALUE          <- r0
         '''

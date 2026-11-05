@@ -791,6 +791,10 @@ handler_oparg(_PyRegCfg *cfg, _PyRegOp *op)
         _PyRegOp *jump = (fmt->flags & _PyIR_FUSED) ? &cfg->ops[op->fuse] : op;
         return jump_target(cfg, jump) - (op->word + 1);
     }
+    if (op->opcode == LOAD_GLOBAL) {
+        // The NULL bit is only the stack model's: the slot is NULL already
+        return op->oparg & ~1;
+    }
     return op->oparg;
 }
 
@@ -988,6 +992,13 @@ choose_handlers(_PyRegCfg *cfg, PyObject *consts)
         }
         assert(!IS_PSEUDO_INSTR(op->opcode));
         assert(IS_VALID_OPCODE(op->opcode));
+        if (op->flags & _PyReg_ELIDED) {
+            // No handler runs for it (PUSH_NULL has none); a NOP holds a
+            // line that nothing else on it does
+            op->handler = NOP;
+            op->nwords = (op->flags & _PyReg_ELIDED_NOP) ? 1 : 0;
+            continue;
+        }
         op->handler = choose_handler(op, consts);
         if (op->handler < 0) {
             return ERROR;

@@ -176,6 +176,106 @@ _PyCode_FbUnits(PyCodeObject *co)
 }
 
 int
+_PyCode_InstrDepthBefore(PyCodeObject *co, int i, int *floor)
+{
+    assert(i >= 0 && i < Py_SIZE(co));
+    _PyIRWord word = _PyCode_WORDS(co)[i];
+    int nl = co->co_nlocalsplus;
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    int depth = -1;
+    int dst = -1;
+    int agree = 1;
+    int nstack = 0;
+    int lowest = INT_MAX;
+    int highest = -1;
+    *floor = 0;
+    for (int r = 0; r < 4; r++) {
+        int role = fmt->roles[r];
+        int slot = (int)((word >> (16 + 12 * r)) & IR_FIELD_MAX);
+        if (role == _PyIR_ROLE_BASE && (fmt->flags & _PyIR_WINDOW)) {
+            if (slot >= nl) {
+                int extent = _PyIR_Extent(fmt->reads,
+                                          _PyCode_InstrOparg(co, i));
+                depth = slot - nl + extent;
+                *floor = slot - nl;
+            }
+        }
+        else if (role >= _PyIR_ROLE_IN0 && slot >= nl && slot != IR_NO_DST) {
+            // The k-th of n inputs lies n-k-1 slots below the top
+            int d = slot - nl + fmt->ninputs - (role - _PyIR_ROLE_IN0);
+            if (depth >= 0 && d != depth) {
+                agree = 0;
+            }
+            depth = Py_MAX(depth, d);
+            nstack++;
+            lowest = Py_MIN(lowest, slot - nl);
+            highest = Py_MAX(highest, slot - nl);
+        }
+        else if (role == _PyIR_ROLE_DST && slot >= nl && slot != IR_NO_DST) {
+            dst = slot - nl;
+        }
+    }
+    if (!agree) {
+        // The inputs are not in stack order: a renamed SWAP leaves the
+        // operands of a store the other way round.  With every input in a
+        // slot they still fill the top slots, in some order.  Otherwise the
+        // depth is not known.
+        if (nstack != fmt->ninputs || highest - lowest + 1 != nstack) {
+            return _PyCode_DEPTH_UNKNOWN;
+        }
+        depth = highest + 1;
+    }
+    if (depth < 0 && dst >= 0 && !(fmt->flags & _PyIR_WINDOW)) {
+        // Only folded loads feed the word: its result takes the slot of the
+        // first input
+        depth = dst + fmt->ninputs;
+    }
+    if (depth >= 0 && !(fmt->flags & _PyIR_WINDOW)) {
+        *floor = depth - fmt->ninputs;
+    }
+    return depth;
+}
+
+int
+_PyCode_InstrHoles(PyCodeObject *co, int i, int holes[4])
+{
+    int floor;
+    int named = _PyCode_InstrDepthBefore(co, i, &floor);
+    if (named < 0) {
+        return 0;
+    }
+    _PyIRWord word = _PyCode_WORDS(co)[i];
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    int n = 0;
+    for (int r = 0; r < 4; r++) {
+        int k = fmt->roles[r] - _PyIR_ROLE_IN0;
+        if (k >= 0 && (fmt->borrow_mask & (1 << k))
+            && (int)((word >> (16 + 12 * r)) & IR_FIELD_MAX) < co->co_nlocalsplus)
+        {
+            holes[n++] = named - fmt->ninputs + k;
+        }
+    }
+    return n;
+}
+
+int
+_PyCode_InstrDiscards(PyCodeObject *co, int i)
+{
+    assert(i >= 0 && i < Py_SIZE(co));
+    _PyIRWord word = _PyCode_WORDS(co)[i];
+    const _PyIRFormat *fmt = _PyIR_FormatOf(IR_HANDLER(word));
+    if (!(fmt->flags & _PyIR_DISCARDS)) {
+        return 0;
+    }
+    for (int r = 0; r < 4; r++) {
+        if (fmt->roles[r] == _PyIR_ROLE_DST) {
+            return (int)((word >> (16 + 12 * r)) & IR_FIELD_MAX) == IR_NO_DST;
+        }
+    }
+    return 0;
+}
+
+int
 _PyCode_InstrFbIndex(PyCodeObject *co, int i)
 {
     assert(i >= 0 && i < Py_SIZE(co));

@@ -169,6 +169,11 @@ _PyFrame_NumSlots(_PyInterpreterFrame *f)
 static inline void
 _PyFrame_SetReturnValue(_PyInterpreterFrame *f, PyValue v)
 {
+    if (f->return_slot == IR_NO_DST) {
+        // A call whose result nothing reads (_PyIR_DISCARDS)
+        PyValue_XCLOSE(v);
+        return;
+    }
 #ifdef Py_DEBUG
     if (f->owner != FRAME_OWNED_BY_INTERPRETER) {
         assert(f->return_slot < _PyFrame_NumSlots(f));

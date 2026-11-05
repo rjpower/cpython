@@ -752,7 +752,8 @@ _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
     }
     if (fmt->flags & _PyIR_WINDOW) {
         slots->base = op->nread > 0 ? _PyRegCfg_Slot(cfg, in[0]) : op->base;
-        slots->dst = op->dst >= 0 ? op->dst : slots->base + fmt->dst;
+        slots->dst = (op->flags & _PyReg_DISCARD) ? IR_NO_DST
+                   : op->dst >= 0 ? op->dst : slots->base + fmt->dst;
         return;
     }
     slots->base = top - op->npop;
@@ -795,6 +796,18 @@ _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
 /* The slot limit that the allocator enforces, IR_MAX_SLOTS.  Tests lower it
  * to reach the error, which no stdlib source does. */
 int _PyIR_MaxSlots = IR_MAX_SLOTS;
+
+/* How many times o reads register v */
+static int
+reads_of(const _PyRegCfg *cfg, const _PyRegOp *o, int v)
+{
+    const int *in = _PyReg_IN(cfg, o);
+    int n = 0;
+    for (int k = 0; k < o->nread + o->nimplicit; k++) {
+        n += in[k] == v;
+    }
+    return n;
+}
 
 static int
 slot_error(const _PyRegOp *op, const char *what)
@@ -981,7 +994,8 @@ compact_op(_PyRegCfg *cfg, occupancy *o, _PyRegOp *op)
         cfg->ntemps = Py_MAX(cfg->ntemps, s - nl + 1);
         // A jump whose result a store elimination sent to a local leaves
         // the result's slot NULL where it falls through
-        if ((op->dst >= 0 && j == stored) || (op->flags & _PyReg_JUMP_OUTPUT)) {
+        if ((op->dst >= 0 && j == stored) || (op->flags & _PyReg_JUMP_OUTPUT)
+            || ((op->flags & _PyReg_DISCARD) && j == stored)) {
             continue;
         }
         RETURN_IF_ERROR(occ_take(o, s - nl, v, op));
@@ -1107,7 +1121,8 @@ _PyRegCfg_Compact(_PyRegCfg *cfg)
         int high = -1;
         for (int r = 0; r < 4; r++) {
             int role = fmt->roles[r];
-            if (role == _PyIR_ROLE_DST && fmt->dst != _PyIR_NO_DST) {
+            if (role == _PyIR_ROLE_DST && fmt->dst != _PyIR_NO_DST
+                && !(op->flags & _PyReg_DISCARD)) {
                 high = Py_MAX(high, slots.dst);
             }
             else if (role == _PyIR_ROLE_BASE) {
@@ -1297,6 +1312,30 @@ _PyRegCfg_Verify(_PyRegCfg *cfg, const char *after, int physical)
                     && written < cfg->const_first + cfg->nconst)
                 {
                     err = verify_error(after, op, "a write to a constant slot");
+                }
+            }
+            if ((op->flags & _PyReg_ELIDED)
+                && (op->opcode != PUSH_NULL || op->dst >= 0 || op->nout != 1
+                    || out[0] < nl)) {
+                err = verify_error(after, op, "an elided op that is not a "
+                                   "PUSH_NULL of a temporary");
+            }
+            if (op->flags & _PyReg_DISCARD) {
+                // A fresh register lives within its region
+                int reads = 0, last = b;
+                while (last + 1 < cfg->nblocks && cfg->blocks[last + 1].continued) {
+                    last++;
+                }
+                for (int q = i + 1; q < cfg->blocks[last].end; q++) {
+                    if (cfg->ops[q].opcode != _PyReg_DEAD) {
+                        reads += reads_of(cfg, &cfg->ops[q], out[0]);
+                    }
+                }
+                if (!(fmt->flags & _PyIR_DISCARDS) || op->dst >= 0
+                    || op->nout != 1 || reads != 0)
+                {
+                    err = verify_error(after, op, "a discarded result that "
+                                       "is read or cannot be discarded");
                 }
             }
         }
@@ -1521,8 +1560,10 @@ static const struct {
     {"copy propagation", _PyRegPass_CopyProp},
     {"store elimination", _PyRegPass_StoreElim},
     {"pop top", _PyRegPass_PopTop},
+    {"discard", _PyRegPass_Discard},
     {"truth folding", _PyRegPass_TruthFold},
     {"jump fusion", _PyRegPass_FuseJump},
+    {"null elision", _PyRegPass_ElideNull},
 };
 
 static int

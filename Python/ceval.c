@@ -1713,7 +1713,8 @@ call_transaction_begin(_PyInterpreterFrame *frame, int base, int count,
 {
     assert(base >= _PyFrame_GetCode(frame)->co_nlocalsplus);
     assert(count >= 0 && base <= _PyFrame_NumSlots(frame) - count);
-    assert(destination >= 0 && destination < _PyFrame_NumSlots(frame));
+    assert((destination >= 0 && destination < _PyFrame_NumSlots(frame))
+           || destination == IR_NO_DST);
     (void)destination;
     /* Every call input is an evaluated temporary, including snapshots of
      * locals, and owns its value. Callback-current LOCAL homes are never
@@ -2053,7 +2054,9 @@ call_transaction_native(_PyCallTransaction *call)
     }
     call_transaction_detach(call, retired);
     retired_count = call->count;
-    to_local = call->destination < _PyFrame_GetCode(call->frame)->co_nlocalsplus;
+    // IR_NO_DST: the result waits in local_result until it is released
+    to_local = call->destination < _PyFrame_GetCode(call->frame)->co_nlocalsplus
+               || call->destination == IR_NO_DST;
     _PyNativeResult_Publish(&scope.result,
         to_local ? &local_result
                  : _PyFrame_Slots(call->frame) + call->destination,
@@ -2095,6 +2098,10 @@ done:
             assert(PyValue_IsNull(window[0]));
             window[0] = local_result;
             return -1;
+        }
+        if (call->destination == IR_NO_DST) {
+            PyValue_XCLOSE(local_result);   // may run __del__
+            return call_record_refresh(call);
         }
         PyValue *home = _PyFrame_Slots(call->frame) + call->destination;
         // a move: replaced below

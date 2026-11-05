@@ -387,7 +387,8 @@ _PyRegPass_StoreElim(_PyRegCfg *cfg)
                 continue;
             }
             _PyRegOp *p = store_producer(cfg, region_start, i);
-            if (p == NULL || p->opcode == LOAD_FAST_BORROW || p->dst >= 0
+            if (p == NULL || p->opcode == LOAD_FAST_BORROW
+                || p->opcode == PUSH_NULL || p->dst >= 0
                 || p->loc.lineno != op->loc.lineno)
             {
                 continue;
@@ -522,6 +523,53 @@ int
 _PyRegPass_PopTop(_PyRegCfg *cfg)
 {
     return for_each_region_backward(cfg, pop_top_region);
+}
+
+
+/* Discarded call results (pass e).
+ *
+ * A call (a format with _PyIR_DISCARDS) whose result the next live op, a
+ * POP_TOP on the same line, releases: the call's dst field becomes
+ * IR_NO_DST and its handler releases the result, so the POP_TOP goes.  The
+ * result's register stays as the output but is never written (compaction
+ * takes no slot for it), and nothing reads it.  The POP_TOP stays where it
+ * ends its line (see discard_region). */
+
+static int
+discard_region(_PyRegCfg *cfg, int start, int end)
+{
+    for (int i = start; i < end; i++) {
+        _PyRegOp *pop = &cfg->ops[i];
+        if (pop->opcode != POP_TOP) {
+            continue;
+        }
+        int v = _PyReg_IN(cfg, pop)[0];
+        _PyRegOp *prod = live_neighbour(cfg, start, end, i, -1);
+        if (prod == NULL || prod->dst >= 0 || prod->nout != 1
+            || _PyReg_OUT(cfg, prod)[0] != v || !is_fresh(cfg, v)
+            || prod->loc.lineno != pop->loc.lineno
+            || !(_PyRegCfg_FormatOf(prod->opcode)->flags & _PyIR_DISCARDS))
+        {
+            continue;
+        }
+        // A debugger that starts tracing inside the call (pdb.set_trace())
+        // sees its first line event at the word after the call: the POP_TOP
+        // keeps it on the call's line.  Only where another word of the
+        // line follows is the POP_TOP not that word.
+        _PyRegOp *after = live_neighbour(cfg, start, end, i, 1);
+        if (after == NULL || after->loc.lineno != pop->loc.lineno) {
+            continue;
+        }
+        prod->flags |= _PyReg_DISCARD;
+        pop->opcode = _PyReg_DEAD;
+    }
+    return SUCCESS;
+}
+
+int
+_PyRegPass_Discard(_PyRegCfg *cfg)
+{
+    return for_each_region_backward(cfg, discard_region);
 }
 
 
@@ -1041,4 +1089,46 @@ _PyRegPass_FuseJump(_PyRegCfg *cfg)
         _PyRegCfg_FreeLiveness(&lv);
     }
     return 0;
+}
+
+
+/* PUSH_NULL goes (pass f).
+ *
+ * PUSH_NULL writes NULL into a temporary, and the NULL invariant
+ * (register-ir.md section 1) says that a temporary nothing has written, or
+ * that a handler has consumed, is NULL.  The op keeps its register and so
+ * its slot, which compaction takes and the verifier checks like any other
+ * (two live temporaries never share a slot), but the assembler gives it no
+ * word.  If it alone holds its line, a NOP keeps the line's event. */
+
+static int
+elide_null_region(_PyRegCfg *cfg, int start, int end)
+{
+    for (int i = start; i < end; i++) {
+        _PyRegOp *op = &cfg->ops[i];
+        if (op->opcode != PUSH_NULL) {
+            continue;
+        }
+        assert(op->dst < 0 && op->nout == 1);
+        _PyRegOp *before = live_neighbour(cfg, start, end, i, -1);
+        _PyRegOp *after = live_neighbour(cfg, start, end, i, 1);
+        int line = op->loc.lineno;
+        int keeps_line = (before != NULL && before->loc.lineno == line)
+                         || (after != NULL && after->loc.lineno == line);
+        op->flags |= _PyReg_ELIDED | (keeps_line ? 0 : _PyReg_ELIDED_NOP);
+    }
+    return SUCCESS;
+}
+
+int
+_PyRegPass_ElideNull(_PyRegCfg *cfg)
+{
+    RETURN_IF_ERROR(for_each_region_backward(cfg, elide_null_region));
+    // Unreachable code never runs, but must not name a handler that is gone
+    for (int i = 0; i < cfg->nops; i++) {
+        if (cfg->ops[i].opcode == PUSH_NULL) {
+            cfg->ops[i].flags |= _PyReg_ELIDED;
+        }
+    }
+    return SUCCESS;
 }

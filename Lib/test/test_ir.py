@@ -1737,10 +1737,22 @@ class RegCfgTest(unittest.TestCase):
         self.assertEqual([e[2] - first for e in events if e[0] == "line"],
                          [1, 2, 3])
 
-    def test_pop_top_of_a_call_stays(self):
+    def test_pop_top_of_a_call_is_folded(self):
+        # The call releases its result: no dst, no POP_TOP, as the return
+        # that follows is on its line
         def f(g):
             g()
+        self.assertNotIn("POP_TOP", self.names(f))
+        self.assertNotIn("PUSH_NULL", self.names(f))
+
+    def test_pop_top_that_ends_a_line_stays(self):
+        # A debugger that starts tracing inside the call (pdb.set_trace())
+        # stops at the word after it, and that must still be on the line
+        def f(g):
+            g()
+            return 1
         self.assertIn("POP_TOP", self.names(f))
+        self.assertNotIn("PUSH_NULL", self.names(f))
 
     # d. Truth folding in value context
 

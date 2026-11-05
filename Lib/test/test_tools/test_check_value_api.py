@@ -1,5 +1,5 @@
 """The typed-borrow units of Tools/build/check_value_api.py, compiled with the
-compilers and flags that built this interpreter.
+compilers and flags that built this interpreter, and its public-value rule.
 
 Each misuse of a PyValueBorrow must fail to compile, and the readers must
 accept owners and borrows alike (pyjit/design/proposals/register-ir-v2-a5b.md,
@@ -53,6 +53,21 @@ class BorrowUnitTests(unittest.TestCase):
     def test_cxx(self):
         self.check(check_value_api.BORROW_CXX_TESTS, compiler("CXX"),
                    check_value_api.cxx_flags(self.flags), ".cpp")
+
+
+class PublicValueTests(unittest.TestCase):
+    """The public-value rule: public headers carry the word opaquely, and
+    the value slots are opaque storage."""
+
+    def test_self_tests(self):
+        for name, (text, count) in check_value_api.PUBLIC_VALUE_TESTS.items():
+            with self.subTest(unit=name):
+                findings = check_value_api.check_public_header(name, text)
+                self.assertEqual(len(findings), count, findings)
+
+    def test_public_headers(self):
+        srcdir = sysconfig.get_config_var("srcdir")
+        self.assertEqual(check_value_api.check_public_headers(srcdir), [])
 
 
 if __name__ == "__main__":

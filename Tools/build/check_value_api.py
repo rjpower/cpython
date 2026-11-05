@@ -18,6 +18,18 @@ Py_BUILD_CORE_MODULE, or one that defines Py_VALUE_CORE (Include/pyport.h).
   A read of a slot whose family is in MARKED_SLOT_FAMILIES fails; other reads
   are listed. Units that define Py_VALUE_ADAPTER are skipped.
 
+* public-value: the public headers (Include/ outside Include/internal/)
+  carry the word opaquely (value-api.md, section 1.6, rule 2). A header
+  fails if it decodes or builds a word inline (.bits, ->bits, a (PyValue){
+  or (PyValueBorrow){ literal), or if a struct field other than the five
+  frozen word fields names PyValue or PyValueBorrow: a word field or a typed
+  value signature. Value slots are opaque _Py_valuefunc storage, which the
+  rule accepts (pyjit/design/proposals/value-api-v2a0.md, D2). INTERIM:
+  a minimal text form for step V2a-0. A5b-3 (register-ir-v2-a5b.md, section
+  5.6) owns the rule: its public-value replaces check_public_header and
+  keeps the self-tests in PUBLIC_VALUE_TESTS; the known holes (macro
+  bodies, typedef aliases, pointer casts of a word) are left to it.
+
 The functions that Py_VALUE_COMPAT marks need no rule here: calling one from
 a value-native unit is a compile error.
 
@@ -99,6 +111,16 @@ SLOT_FAMILIES = {
 MARKED_SLOT_FAMILIES = frozenset()
 
 VALUE_TYPES = ("PyValue", "PyValueBorrow")
+
+# The public layouts that may hold a word (value-api.md, section 1.6, rule
+# 2), as (struct, field).
+PUBLIC_WORD_FIELDS = frozenset({
+    ("PyListObject", "ob_item"),
+    ("PyTupleObject", "ob_item"),
+    ("PyCellObject", "ob_ref"),
+    ("setentry", "key"),
+    ("_PyValueIndexPair", "value"),
+})
 PYVALUE_TYPES = tuple(f'asString("{const}{name}")' for name in VALUE_TYPES
                       for const in ("", "const "))
 VARIADIC_MATCHER = (
@@ -586,6 +608,163 @@ BORROW_CXX_TESTS = {
 }
 
 
+PUBLIC_TOKEN = re.compile(
+    r"/\*.*?\*/|//[^\n]*|\"(?:\\.|[^\"\\\n])*\"|'(?:\\.|[^'\\\n])*'"
+    r"|^[ \t]*#(?:\\\n|[^\n])*"
+    r"|(?P<token>->|[A-Za-z_]\w*|[{}();\[\].,*])", re.S | re.M)
+WORD_LITERAL = re.compile(r"\(\s*(?:PyValue|PyValueBorrow)\s*\)\s*\{")
+
+
+def field_name(tokens):
+    """The name that a member declaration declares: the identifier after
+    the first '(*' of a function pointer, else the last identifier before a
+    '[' or the end."""
+    for i in range(len(tokens) - 2):
+        if tokens[i][1] == "(" and tokens[i + 1][1] == "*":
+            return tokens[i + 2][1]
+    names = [t for _, t in tokens if t == "[" or re.match(r"[A-Za-z_]", t)]
+    if "[" in names:
+        names = names[:names.index("[")]
+    return names[-1] if names else "?"
+
+
+def check_public_header(path, text):
+    """The public-value findings of one public header's text. Interim until
+    A5b-3's public-value rule; see the module docstring."""
+    def line_of(offset):
+        return text.count("\n", 0, offset) + 1
+
+    findings = []
+    for m in WORD_LITERAL.finditer(text):
+        findings.append(Finding(path, line_of(m.start()), 1, "public-value",
+                                "a public header builds a word inline",
+                                True))
+    tokens = [(m.start(), m["token"]) for m in PUBLIC_TOKEN.finditer(text)
+              if m["token"]]
+    # Each frame: [is a struct or union body, tag, member tokens, fields]
+    frames = []
+    for i, (offset, token) in enumerate(tokens):
+        if token in (".", "->") and i + 1 < len(tokens) \
+                and tokens[i + 1][1] == "bits":
+            findings.append(Finding(path, line_of(offset), 1, "public-value",
+                                    "a public header decodes a word inline",
+                                    True))
+        if token == "{":
+            words = [t for _, t in tokens[max(0, i - 3):i]]
+            is_record = any(w in ("struct", "union") for w in words)
+            tag = words[-1] if is_record and words[-1] not in (
+                "struct", "union") else None
+            frames.append([is_record, tag, [], []])
+        elif token == "}":
+            if not frames:
+                continue
+            is_record, tag, _, fields = frames.pop()
+            if is_record:
+                # The typedef name, if any, follows the brace.
+                after = [t for _, t in tokens[i + 1:i + 3]]
+                name = after[0] if after and re.match(r"[A-Za-z_]",
+                                                     after[0]) else tag
+                for field, line in fields:
+                    if (name, field) not in PUBLIC_WORD_FIELDS:
+                        findings.append(Finding(
+                            path, line, 1, "public-value",
+                            f"{name}.{field} holds a word or a value "
+                            "signature in a public layout", True))
+                if frames and frames[-1][0]:
+                    frames[-1][2].clear()
+        elif frames and frames[-1][0]:
+            members = frames[-1][2]
+            if token == ";":
+                where = [o for o, t in members if t in VALUE_TYPES]
+                if where:
+                    frames[-1][3].append((field_name(members),
+                                          line_of(where[0])))
+                members.clear()
+            else:
+                members.append((offset, token))
+    return findings
+
+
+def public_headers(srcdir):
+    include = Path(srcdir, "Include")
+    return sorted([*include.glob("*.h"), *include.glob("cpython/*.h")])
+
+
+def check_public_headers(srcdir):
+    findings = []
+    for path in public_headers(srcdir):
+        findings.extend(check_public_header(
+            str(path.relative_to(srcdir)), path.read_text(errors="replace")))
+    return findings
+
+
+# Public header texts -> number of public-value findings.
+PUBLIC_VALUE_TESTS = {
+    "opaque_value_slots": ("""
+        typedef void (*_Py_valuefunc)(void);
+        typedef struct _PyValueSlots {
+            _Py_valuefunc nb_add;
+            _Py_valuefunc hash;
+        } _PyValueSlots;
+        struct _typeobject {
+            void *_tp_cache;
+            _PyValueSlots tp_value;
+            Py_ssize_t tp_value_vectorcall_offset;
+            _Py_valuefunc tp_value_vectorcall;
+        };""", 0),
+    "frozen_word_fields": ("""
+        typedef struct {
+            PyObject_VAR_HEAD
+            PyValue *ob_item;
+            Py_ssize_t allocated;
+        } PyListObject;
+        typedef struct {
+            PyObject_HEAD
+            PyValue ob_ref;
+        } PyCellObject;""", 0),
+    "exported_value_functions": ("""
+        PyAPI_FUNC(PyValue) PyList_GetValue(PyObject *op, Py_ssize_t i);
+        PyAPI_FUNC(int) PyList_SetValue(PyObject *op, Py_ssize_t i,
+                                        PyValue value);
+        static inline PyValue
+        PyList_GET_VALUE(PyObject *op, Py_ssize_t i) {
+            return _PyList_CAST(op)->ob_item[i];
+        }""", 0),
+    "typed_value_slot": ("""
+        typedef struct _PyValueSlots {
+            PyValue (*nb_add)(PyValueBorrow, PyValueBorrow);
+        } _PyValueSlots;""", 1),
+    "word_field": ("""
+        struct _typeobject {
+            void *_tp_cache;
+            PyValue tp_cached_value;
+        };""", 1),
+    "inline_decoding": ("""
+        static inline int
+        PyValue_IsTagged(PyValue value) {
+            return (value.bits & 3) != 0;
+        }""", 1),
+    "inline_building": ("""
+        #define PyValue_FROM_BITS(B) ((PyValue){ .bits = (B) })
+        """, 1),
+}
+
+
+def public_value_self_test():
+    """Run the public-value self-tests. Return a list of failures."""
+    failures = []
+    for name, (text, count) in PUBLIC_VALUE_TESTS.items():
+        got = check_public_header(name, text)
+        if len(got) != count:
+            failures.append(f"self-test {name}: expected {count} "
+                            f"public-value findings, got {len(got)}: "
+                            + "; ".join(str(f) for f in got))
+        else:
+            print(f"self-test {name}: {len(got)} public-value finding(s), "
+                  "as expected")
+    return failures
+
+
 def self_test(clang_query, template, compiler, cxx, jobs):
     """Run the self-tests with the flags of template, a core unit's entry.
     Return a list of failures."""
@@ -726,8 +905,9 @@ def main():
                     if entry["file"].endswith("Objects/object.c"))
     compiler = args.cc or entry_arguments(template)[0]
 
-    failures = self_test(clang_query, template, compiler, args.cxx,
-                         args.jobs)
+    failures = public_value_self_test()
+    failures += self_test(clang_query, template, compiler, args.cxx,
+                          args.jobs)
     if failures or args.self_test_only:
         for failure in failures:
             print(failure)
@@ -737,6 +917,9 @@ def main():
         wanted = {os.path.normpath(os.path.abspath(f)) for f in args.files}
         entries = {p: e for p, e in entries.items() if p in wanted}
     findings, errors = check_units(clang_query, entries.values(), args.jobs)
+    if not args.files:
+        findings = sorted(findings + check_public_headers(
+            Path(__file__).resolve().parents[2]))
     for finding in findings:
         print(finding)
     for error in errors:

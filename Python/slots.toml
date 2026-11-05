@@ -23,6 +23,8 @@
 #   The default for NULLs is 'reject' for pointer slots; 'allow' for
 #       non-pointer ones
 # must_be_static: true if slot needs the PySlot_STATIC flag (in PySlot struct)
+# value_field: for an internal id (from 256; see the end of the file), the
+#   field of PyTypeObject.tp_value that it sets
 
 
 [0]
@@ -834,3 +836,276 @@ duplicates = 'allow'
 name = 'Py_mod_token'
 kind = 'mod'
 dtype = 'ptr'
+
+
+# Internal value slot ids (pyjit/design/proposals/value-api-v2a0.md, D13).
+# They set the value field 'value_field' of PyTypeObject.tp_value, in the
+# order of _Py_VALUE_SLOT_TABLE (Include/internal/pycore_value_slots.h).
+# They live in a reserved range from 256, above upstream's ids, so that
+# upstream additions cannot collide; they have no public name and are for
+# core and in-tree spec types only.
+
+[256]
+name = '_Py_value_nb_add'
+kind = 'type'
+value_field = 'nb_add'
+
+[257]
+name = '_Py_value_nb_subtract'
+kind = 'type'
+value_field = 'nb_subtract'
+
+[258]
+name = '_Py_value_nb_multiply'
+kind = 'type'
+value_field = 'nb_multiply'
+
+[259]
+name = '_Py_value_nb_true_divide'
+kind = 'type'
+value_field = 'nb_true_divide'
+
+[260]
+name = '_Py_value_nb_floor_divide'
+kind = 'type'
+value_field = 'nb_floor_divide'
+
+[261]
+name = '_Py_value_nb_remainder'
+kind = 'type'
+value_field = 'nb_remainder'
+
+[262]
+name = '_Py_value_richcompare'
+kind = 'type'
+value_field = 'richcompare'
+
+[263]
+name = '_Py_value_hash'
+kind = 'type'
+value_field = 'hash'
+
+[264]
+name = '_Py_value_nb_bool'
+kind = 'type'
+value_field = 'nb_bool'
+
+[265]
+name = '_Py_value_nb_index'
+kind = 'type'
+value_field = 'nb_index'
+
+[266]
+name = '_Py_value_getattro'
+kind = 'type'
+value_field = 'getattro'
+
+[267]
+name = '_Py_value_subscript'
+kind = 'type'
+value_field = 'subscript'
+
+[268]
+name = '_Py_value_ass_subscript'
+kind = 'type'
+value_field = 'ass_subscript'
+
+[269]
+name = '_Py_value_contains'
+kind = 'type'
+value_field = 'contains'
+
+[270]
+name = '_Py_value_iternext'
+kind = 'type'
+value_field = 'iternext'
+
+[271]
+name = '_Py_value_call'
+kind = 'type'
+value_field = 'call'
+
+[272]
+name = '_Py_value_nb_power'
+kind = 'type'
+value_field = 'nb_power'
+
+[273]
+name = '_Py_value_nb_negative'
+kind = 'type'
+value_field = 'nb_negative'
+
+[274]
+name = '_Py_value_nb_positive'
+kind = 'type'
+value_field = 'nb_positive'
+
+[275]
+name = '_Py_value_nb_absolute'
+kind = 'type'
+value_field = 'nb_absolute'
+
+[276]
+name = '_Py_value_nb_invert'
+kind = 'type'
+value_field = 'nb_invert'
+
+[277]
+name = '_Py_value_nb_int'
+kind = 'type'
+value_field = 'nb_int'
+
+[278]
+name = '_Py_value_nb_float'
+kind = 'type'
+value_field = 'nb_float'
+
+[279]
+name = '_Py_value_nb_divmod'
+kind = 'type'
+value_field = 'nb_divmod'
+
+[280]
+name = '_Py_value_nb_lshift'
+kind = 'type'
+value_field = 'nb_lshift'
+
+[281]
+name = '_Py_value_nb_rshift'
+kind = 'type'
+value_field = 'nb_rshift'
+
+[282]
+name = '_Py_value_nb_and'
+kind = 'type'
+value_field = 'nb_and'
+
+[283]
+name = '_Py_value_nb_xor'
+kind = 'type'
+value_field = 'nb_xor'
+
+[284]
+name = '_Py_value_nb_or'
+kind = 'type'
+value_field = 'nb_or'
+
+[285]
+name = '_Py_value_nb_matrix_multiply'
+kind = 'type'
+value_field = 'nb_matrix_multiply'
+
+[286]
+name = '_Py_value_nb_inplace_add'
+kind = 'type'
+value_field = 'nb_inplace_add'
+
+[287]
+name = '_Py_value_nb_inplace_subtract'
+kind = 'type'
+value_field = 'nb_inplace_subtract'
+
+[288]
+name = '_Py_value_nb_inplace_multiply'
+kind = 'type'
+value_field = 'nb_inplace_multiply'
+
+[289]
+name = '_Py_value_nb_inplace_remainder'
+kind = 'type'
+value_field = 'nb_inplace_remainder'
+
+[290]
+name = '_Py_value_nb_inplace_power'
+kind = 'type'
+value_field = 'nb_inplace_power'
+
+[291]
+name = '_Py_value_nb_inplace_lshift'
+kind = 'type'
+value_field = 'nb_inplace_lshift'
+
+[292]
+name = '_Py_value_nb_inplace_rshift'
+kind = 'type'
+value_field = 'nb_inplace_rshift'
+
+[293]
+name = '_Py_value_nb_inplace_and'
+kind = 'type'
+value_field = 'nb_inplace_and'
+
+[294]
+name = '_Py_value_nb_inplace_xor'
+kind = 'type'
+value_field = 'nb_inplace_xor'
+
+[295]
+name = '_Py_value_nb_inplace_or'
+kind = 'type'
+value_field = 'nb_inplace_or'
+
+[296]
+name = '_Py_value_nb_inplace_floor_divide'
+kind = 'type'
+value_field = 'nb_inplace_floor_divide'
+
+[297]
+name = '_Py_value_nb_inplace_true_divide'
+kind = 'type'
+value_field = 'nb_inplace_true_divide'
+
+[298]
+name = '_Py_value_nb_inplace_matrix_multiply'
+kind = 'type'
+value_field = 'nb_inplace_matrix_multiply'
+
+[299]
+name = '_Py_value_repr'
+kind = 'type'
+value_field = 'repr'
+
+[300]
+name = '_Py_value_str'
+kind = 'type'
+value_field = 'str'
+
+[301]
+name = '_Py_value_setattro'
+kind = 'type'
+value_field = 'setattro'
+
+[302]
+name = '_Py_value_descr_get'
+kind = 'type'
+value_field = 'descr_get'
+
+[303]
+name = '_Py_value_descr_set'
+kind = 'type'
+value_field = 'descr_set'
+
+[304]
+name = '_Py_value_item'
+kind = 'type'
+value_field = 'item'
+
+[305]
+name = '_Py_value_ass_item'
+kind = 'type'
+value_field = 'ass_item'
+
+[306]
+name = '_Py_value_send'
+kind = 'type'
+value_field = 'send'
+
+[307]
+name = '_Py_value_sq_concat'
+kind = 'type'
+value_field = 'sq_concat'
+
+[308]
+name = '_Py_value_sq_inplace_concat'
+kind = 'type'
+value_field = 'sq_inplace_concat'

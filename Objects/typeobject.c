@@ -35,6 +35,8 @@
 #include "pycore_cell.h"          // PyCell_GetRef()
 #include "pycore_stats.h"
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_ops.h"     // _PyValue_GenericHash()
+#include "pycore_value_slots.h"   // _Py_VALUE_SLOT_TABLE
 #include "opcode.h"               // MAKE_CELL
 
 #include <stddef.h>               // ptrdiff_t
@@ -224,6 +226,9 @@ slot_tp_setattro(PyObject *self, PyObject *name, PyObject *value);
 
 static PyObject *
 slot_tp_call(PyObject *self, PyObject *args, PyObject *kwds);
+
+static void **
+slotptr(PyTypeObject *type, int ioffset);
 
 static inline PyTypeObject *
 type_from_ref(PyObject *ref)
@@ -8344,6 +8349,10 @@ object_set_class(PyObject *self, PyObject *value, void *closure)
         types_start_world();
     }
     if (res == 0) {
+#ifdef Py_DEBUG
+        // The value dispatchers now read newto's pairs (section 4.4).
+        _PyType_CheckValueInvariant(newto);
+#endif
         if (oldto->tp_flags & Py_TPFLAGS_HEAPTYPE) {
             Py_DECREF(oldto);
         }
@@ -9889,6 +9898,256 @@ type_ready_inherit_as_structs(PyTypeObject *type, PyTypeObject *base)
     }
 }
 
+
+/* Value slots (pyjit/design/proposals/value-api-v2a0.md, section 4).
+ *
+ * Each value field pairs with the object slot beside it: when both are set,
+ * they implement the same operation, so the value dispatchers may call
+ * either. A value field of 0 means "call the object slot through the
+ * adapter", which is always correct. */
+
+typedef struct {
+    const char *name;
+    int object_offset;          // of the object slot, as in slotdefs
+    int value_offset;           // of the value field in PyTypeObject
+} value_slot_row;
+
+static const value_slot_row value_slot_rows[] = {
+#define VALUE_SLOT_ROW(FIELD, PATH, KIND, WRAPPER) \
+    {#FIELD, offsetof(PyHeapTypeObject, PATH), \
+     offsetof(PyTypeObject, tp_value.FIELD)},
+    _Py_VALUE_SLOT_TABLE(VALUE_SLOT_ROW)
+#undef VALUE_SLOT_ROW
+};
+static_assert(Py_ARRAY_LENGTH(value_slot_rows) == _Py_VALUE_SLOT_COUNT,
+              "one row per value field");
+// The internal spec ids of Python/slots.toml follow the table.
+static_assert(_Py_slot_INTERNAL_COUNT == _Py_VALUE_SLOT_COUNT,
+              "one spec id per value field");
+#define VALUE_SLOT_CHECK_ID(FIELD, PATH, KIND, WRAPPER) \
+    static_assert(_Py_value_##FIELD \
+                  == _Py_slot_INTERNAL_BASE + _Py_VALUE_SLOT_INDEX_##FIELD, \
+                  "_Py_value_" #FIELD " is out of table order");
+_Py_VALUE_SLOT_TABLE(VALUE_SLOT_CHECK_ID)
+#undef VALUE_SLOT_CHECK_ID
+
+/* The pair table (section 4.3): object functions that many types share,
+   with their value sides. A row whose value side is NULL waits for the
+   step that writes it: M2 (attributes), M1b (iteration), M3 (calls). */
+typedef struct {
+    int row;
+    void *object;
+    _Py_valuefunc value;
+} value_slot_pair;
+
+static const value_slot_pair value_slot_pairs[] = {
+    {_Py_VALUE_SLOT_INDEX_hash, (void *)PyObject_HashNotImplemented,
+     _Py_VALUE_SLOT_INIT(hash, _PyValue_HashNotImplemented)},
+    {_Py_VALUE_SLOT_INDEX_hash, (void *)PyObject_GenericHash,
+     _Py_VALUE_SLOT_INIT(hash, _PyValue_GenericHash)},
+    {_Py_VALUE_SLOT_INDEX_getattro, (void *)PyObject_GenericGetAttr, NULL},
+    {_Py_VALUE_SLOT_INDEX_setattro, (void *)PyObject_GenericSetAttr, NULL},
+    {_Py_VALUE_SLOT_INDEX_iternext, (void *)_PyObject_NextNotImplemented,
+     NULL},
+    {_Py_VALUE_SLOT_INDEX_call, (void *)PyVectorcall_Call, NULL},
+};
+
+// The row whose object slot is at offset (as in slotdefs), or -1.
+static int
+value_slot_row_from_object_offset(Py_ssize_t offset)
+{
+    for (int i = 0; i < _Py_VALUE_SLOT_COUNT; i++) {
+        if (value_slot_rows[i].object_offset == offset) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+Py_ssize_t
+_PyType_ValueSlotFromObjectOffset(Py_ssize_t offset)
+{
+    int row = value_slot_row_from_object_offset(offset);
+    return row < 0 ? -1 : value_slot_rows[row].value_offset;
+}
+
+static inline _Py_valuefunc *
+value_slot_field(PyTypeObject *type, int row)
+{
+    return (_Py_valuefunc *)((char *)type + value_slot_rows[row].value_offset);
+}
+
+// The object slot beside a value field, or NULL.
+static inline void *
+value_slot_object(PyTypeObject *type, int row)
+{
+    void **ptr = slotptr(type, value_slot_rows[row].object_offset);
+    return ptr == NULL ? NULL : *ptr;
+}
+
+// The value side that the pair table gives object, or NULL.
+static _Py_valuefunc
+value_slot_pair_side(int row, void *object)
+{
+    for (size_t i = 0; i < Py_ARRAY_LENGTH(value_slot_pairs); i++) {
+        if (value_slot_pairs[i].row == row
+            && value_slot_pairs[i].object == object)
+        {
+            return value_slot_pairs[i].value;
+        }
+    }
+    return NULL;
+}
+
+static inline PyTypeObject *
+mro_type_at(PyObject *mro, Py_ssize_t i)
+{
+    PyValueBorrow item = PyValue_Borrow(PyTuple_GET_VALUE(mro, i));
+    if (!PyValue_IsObject(item)) {
+        return NULL;
+    }
+    PyObject *base = PyValue_AsKnownObjectBorrow(item);
+    return PyType_Check(base) ? (PyTypeObject *)base : NULL;
+}
+
+/* Inherit the value slots, once the object slots are final (section 4.4).
+   A value field that is set already is the type's own definition. A field
+   that is 0 takes the pair table's value side for its object slot, if the
+   table has one; otherwise it takes the value field of the first base in
+   the MRO whose object slot is the same function, which may be 0. Return
+   the mask of the type's own rows. */
+static uint64_t
+type_ready_inherit_value(PyTypeObject *type)
+{
+    static_assert(_Py_VALUE_SLOT_COUNT <= 64, "the own mask has 64 bits");
+    PyObject *mro = lookup_tp_mro(type);
+    Py_ssize_t n = PyTuple_GET_SIZE(mro);
+    uint64_t own = 0;
+    for (int row = 0; row < _Py_VALUE_SLOT_COUNT; row++) {
+        _Py_valuefunc *field = value_slot_field(type, row);
+        if (*field != NULL) {
+            own |= (uint64_t)1 << row;
+            continue;
+        }
+        void *object = value_slot_object(type, row);
+        if (object == NULL) {
+            continue;
+        }
+        _Py_valuefunc value = value_slot_pair_side(row, object);
+        if (value != NULL) {
+            *field = value;
+            continue;
+        }
+        for (Py_ssize_t i = 1; i < n; i++) {
+            PyTypeObject *base = mro_type_at(mro, i);
+            if (base != NULL && value_slot_object(base, row) == object) {
+                *field = *value_slot_field(base, row);
+                break;
+            }
+        }
+    }
+    return own;
+}
+
+#ifdef Py_DEBUG
+static void _Py_NO_RETURN
+value_slot_invariant_failed(PyTypeObject *type, int row, const char *problem)
+{
+    char message[200];
+    PyOS_snprintf(message, sizeof(message),
+                  "type %.80s: value slot %s %s", type->tp_name,
+                  value_slot_rows[row].name, problem);
+    _PyObject_ASSERT_FAILED_MSG((PyObject *)type, message);
+}
+
+// Whether (object, value) is a pair that the type may hold in row.
+static int
+value_slot_pair_is_known(PyTypeObject *type, int row, void *object,
+                         _Py_valuefunc value)
+{
+    for (size_t i = 0; i < Py_ARRAY_LENGTH(value_slot_pairs); i++) {
+        if (value_slot_pairs[i].row == row
+            && value_slot_pairs[i].object == object
+            && value_slot_pairs[i].value == value)
+        {
+            return 1;
+        }
+    }
+    PyObject *mro = lookup_tp_mro(type);
+    if (mro == NULL) {
+        return 0;
+    }
+    for (Py_ssize_t i = 1; i < PyTuple_GET_SIZE(mro); i++) {
+        PyTypeObject *base = mro_type_at(mro, i);
+        if (base != NULL && value_slot_object(base, row) == object
+            && *value_slot_field(base, row) == value)
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+// Check one row of the invariant; own is whether it is the type's own.
+static void
+check_value_row(PyTypeObject *type, int row, int own)
+{
+    _Py_valuefunc value = *value_slot_field(type, row);
+    if (value == NULL) {
+        return;
+    }
+    void *object = value_slot_object(type, row);
+    if (object == NULL) {
+        value_slot_invariant_failed(type, row,
+                                    "is set beside a NULL object slot");
+    }
+    if (own) {
+        /* An own value field needs an object function of the type's own:
+           beside an inherited one, it must be the value side that the
+           first base with that function has. */
+        PyObject *mro = lookup_tp_mro(type);
+        for (Py_ssize_t i = 1; mro != NULL && i < PyTuple_GET_SIZE(mro); i++) {
+            PyTypeObject *base = mro_type_at(mro, i);
+            if (base != NULL && value_slot_object(base, row) == object) {
+                if (*value_slot_field(base, row) != value) {
+                    value_slot_invariant_failed(
+                        type, row, "is set beside an inherited object slot");
+                }
+                break;
+            }
+        }
+        return;
+    }
+    if (!value_slot_pair_is_known(type, row, object, value)) {
+        value_slot_invariant_failed(type, row,
+                                    "does not pair with its object slot");
+    }
+}
+
+/* The invariant (section 4.4). The rows in own are the type's own
+   definitions, which need a non-NULL object slot beside them that is not
+   a base's function with another value side. Every other non-zero value
+   field must form, with the type's object slot, a pair of a base in the
+   MRO or of the pair table. */
+static void
+check_value_invariant(PyTypeObject *type, uint64_t own)
+{
+    for (int row = 0; row < _Py_VALUE_SLOT_COUNT; row++) {
+        check_value_row(type, row, (own & ((uint64_t)1 << row)) != 0);
+    }
+}
+
+/* The invariant for a type that PyType_Ready has finished: after
+   fixup_slot_dispatchers() and for the target of a __class__ assignment.
+   Own definitions are no longer known then, so every row must form a
+   known pair. */
+void
+_PyType_CheckValueInvariant(PyTypeObject *type)
+{
+    check_value_invariant(type, 0);
+}
+#endif
+
 static void
 inherit_patma_flags(PyTypeObject *type, PyTypeObject *base) {
     if ((type->tp_flags & COLLECTION_FLAGS) == 0) {
@@ -9970,6 +10229,7 @@ type_ready_set_hash(PyTypeObject *type)
         return -1;
     }
     type->tp_hash = PyObject_HashNotImplemented;
+    _PyType_SET_VALUE_SLOT(type, hash, _PyValue_HashNotImplemented);
     return 0;
 }
 
@@ -10124,6 +10384,9 @@ type_ready(PyTypeObject *type, int initial, int add_subclasses)
 
     _PyObject_ASSERT((PyObject *)type, !is_readying(type));
     start_readying(type);
+    // The value slots that the type defines itself.
+    uint64_t own_value_slots = 0;
+    (void)own_value_slots;
 
     if (type_ready_pre_checks(type) < 0) {
         goto error;
@@ -10172,6 +10435,7 @@ type_ready(PyTypeObject *type, int initial, int add_subclasses)
         if (type_ready_inherit(type) < 0) {
             goto error;
         }
+        own_value_slots = type_ready_inherit_value(type);
         if (type_ready_preheader(type) < 0) {
             goto error;
         }
@@ -10191,6 +10455,9 @@ type_ready(PyTypeObject *type, int initial, int add_subclasses)
         if (type_ready_post_checks(type) < 0) {
             goto error;
         }
+#ifdef Py_DEBUG
+        check_value_invariant(type, own_value_slots);
+#endif
     }
 
     if (add_subclasses) {
@@ -12945,7 +13212,21 @@ update_one_slot(PyTypeObject *type, pytype_slotdef *p, pytype_slotdef **next_p,
 #else
     // always do the update immediately
     assert(queued_updates == NULL);
-    *ptr = slot_value;
+    /* A value slot never stays beside an object function that it does not
+       pair with (value-api-v2a0.md, D6). Interim until 0c writes the
+       slotdef pairs: a new object function gets the pair table's value
+       side, or 0, the adapter. */
+    int row = value_slot_row_from_object_offset(offset);
+    if (row >= 0 && *ptr != slot_value) {
+        *value_slot_field(type, row) = value_slot_pair_side(row, slot_value);
+        *ptr = slot_value;
+#ifdef Py_DEBUG
+        check_value_row(type, row, 0);
+#endif
+    }
+    else {
+        *ptr = slot_value;
+    }
 #endif
 
     if (next_p != NULL) {
@@ -13028,6 +13309,9 @@ fixup_slot_dispatchers(PyTypeObject *type)
         assert (rv == 0);
         (void)rv;
     }
+#ifdef Py_DEBUG
+    _PyType_CheckValueInvariant(type);
+#endif
 }
 
 #ifdef Py_GIL_DISABLED

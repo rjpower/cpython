@@ -22,6 +22,12 @@ extern PyObject *_PyValue_RichCompareObject(PyValueBorrow left, PyValueBorrow ri
 extern int _PyValue_WriteRepr(PyUnicodeWriter *writer, PyValueBorrow value);
 #define _PyValue_WriteRepr(V0, V1) (_PyValue_WriteRepr)(V0, PyValue_Borrow(V1))
 
+/* The value sides of the pair table's hash functions
+   (pyjit/design/proposals/value-api-v2a0.md, section 4.3):
+   PyObject_HashNotImplemented() and PyObject_GenericHash(). */
+PyAPI_FUNC(Py_hash_t) _PyValue_HashNotImplemented(PyValueBorrow value);
+PyAPI_FUNC(Py_hash_t) _PyValue_GenericHash(PyValueBorrow value);
+
 #ifdef __cplusplus
 }
 #endif

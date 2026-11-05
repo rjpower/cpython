@@ -70,5 +70,6 @@ int _PyTestCapi_Init_Module(PyObject *mod);
 int _PyTestCapi_Init_Weakref(PyObject *mod);
 int _PyTestCapi_Init_Marshal(PyObject *mod);
 int _PyTestCapi_Init_Fpcast(PyObject *mod);
+int _PyTestCapi_Init_ValueSlots(PyObject *mod);
 
 #endif // Py_TESTCAPI_PARTS_H

@@ -143,6 +143,74 @@ typedef struct {
  * backwards-compatibility */
 typedef Py_ssize_t printfunc;
 
+/* The value slots of a type (pyjit/design/value-api.md, section 2.1): one
+ * value-form function beside each object slot that has one. Each field is
+ * opaque function-pointer storage; the typed signatures, which take and
+ * return values, live in Include/internal/pycore_value_slots.h, whose
+ * _Py_VALUE_SLOT_TABLE gives the field order. A zero field means that the
+ * value dispatchers call the object slot through an adapter. The 16 hot
+ * fields come first. */
+typedef void (*_Py_valuefunc)(void);
+
+typedef struct _PyValueSlots {
+    /* Hot: 16 fields. */
+    _Py_valuefunc nb_add;
+    _Py_valuefunc nb_subtract;
+    _Py_valuefunc nb_multiply;
+    _Py_valuefunc nb_true_divide;
+    _Py_valuefunc nb_floor_divide;
+    _Py_valuefunc nb_remainder;
+    _Py_valuefunc richcompare;
+    _Py_valuefunc hash;
+    _Py_valuefunc nb_bool;
+    _Py_valuefunc nb_index;
+    _Py_valuefunc getattro;
+    _Py_valuefunc subscript;
+    _Py_valuefunc ass_subscript;
+    _Py_valuefunc contains;
+    _Py_valuefunc iternext;
+    _Py_valuefunc call;
+
+    /* Cold: 37 fields. */
+    _Py_valuefunc nb_power;
+    _Py_valuefunc nb_negative;
+    _Py_valuefunc nb_positive;
+    _Py_valuefunc nb_absolute;
+    _Py_valuefunc nb_invert;
+    _Py_valuefunc nb_int;
+    _Py_valuefunc nb_float;
+    _Py_valuefunc nb_divmod;
+    _Py_valuefunc nb_lshift;
+    _Py_valuefunc nb_rshift;
+    _Py_valuefunc nb_and;
+    _Py_valuefunc nb_xor;
+    _Py_valuefunc nb_or;
+    _Py_valuefunc nb_matrix_multiply;
+    _Py_valuefunc nb_inplace_add;
+    _Py_valuefunc nb_inplace_subtract;
+    _Py_valuefunc nb_inplace_multiply;
+    _Py_valuefunc nb_inplace_remainder;
+    _Py_valuefunc nb_inplace_power;
+    _Py_valuefunc nb_inplace_lshift;
+    _Py_valuefunc nb_inplace_rshift;
+    _Py_valuefunc nb_inplace_and;
+    _Py_valuefunc nb_inplace_xor;
+    _Py_valuefunc nb_inplace_or;
+    _Py_valuefunc nb_inplace_floor_divide;
+    _Py_valuefunc nb_inplace_true_divide;
+    _Py_valuefunc nb_inplace_matrix_multiply;
+    _Py_valuefunc repr;
+    _Py_valuefunc str;
+    _Py_valuefunc setattro;
+    _Py_valuefunc descr_get;
+    _Py_valuefunc descr_set;
+    _Py_valuefunc item;
+    _Py_valuefunc ass_item;
+    _Py_valuefunc send;
+    _Py_valuefunc sq_concat;
+    _Py_valuefunc sq_inplace_concat;
+} _PyValueSlots;
+
 // If this structure is modified, Doc/includes/typestruct.h should be updated
 // as well.
 struct _typeobject {
@@ -248,6 +316,12 @@ struct _typeobject {
     _Py_iteritemfunc _tp_iteritem;
 
     void *_tp_cache;
+
+    /* Value slots. PyType_Ready() inherits them beside the object slots.
+     * A positional static initialiser leaves them 0. */
+    _PyValueSlots tp_value;
+    Py_ssize_t tp_value_vectorcall_offset;
+    _Py_valuefunc tp_value_vectorcall;
 };
 
 #define _Py_ATTR_CACHE_UNUSED (30000)  // (see tp_versions_used)

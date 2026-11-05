@@ -36,6 +36,23 @@ typedef enum _PySlot_PROBLEM_HANDLING {
 
 PyAPI_DATA(const char *const) _PySlot_names[];
 
+/* Internal slot ids (Python/slots.toml) take a reserved range of at most
+ * _Py_slot_INTERNAL_LIMIT ids from _Py_slot_INTERNAL_BASE, above upstream's
+ * ids, so that upstream additions cannot collide. They have no public name:
+ * core and in-tree spec types use them (the value slots of
+ * pycore_value_slots.h). _PySlot_internal_names[id - _Py_slot_INTERNAL_BASE]
+ * is NULL past the last one. */
+#define _Py_slot_INTERNAL_BASE 256
+#define _Py_slot_INTERNAL_LIMIT 64
+PyAPI_DATA(const char *const) _PySlot_internal_names[_Py_slot_INTERNAL_LIMIT];
+
+static inline bool
+_PySlot_IsInternal(unsigned int id)
+{
+    return id - _Py_slot_INTERNAL_BASE < _Py_slot_INTERNAL_LIMIT
+           && _PySlot_internal_names[id - _Py_slot_INTERNAL_BASE] != NULL;
+}
+
 #define _PySlot_MAX_NESTING 5
 
 /* State for one nesting level of a slots iterator */
@@ -56,7 +73,8 @@ typedef struct _PySlotIterator_state {
 typedef struct {
     _PySlotIterator_state *state;
     _PySlotIterator_state states[_PySlot_MAX_NESTING];
-    unsigned int seen[_Py_slot_COUNT / _PySlot_SEEN_ENTRY_BITS + 1];
+    unsigned int seen[(_Py_slot_COUNT + _Py_slot_INTERNAL_LIMIT)
+                      / _PySlot_SEEN_ENTRY_BITS + 1];
     _PySlot_KIND kind;
     uint8_t recursion_level;
     bool is_at_end :1;
@@ -107,6 +125,9 @@ PyAPI_FUNC(bool) _PySlotIterator_SawSlot(_PySlotIterator *, int);
 static inline const char *
 _PySlot_GetName(uint16_t id)
 {
+    if (_PySlot_IsInternal(id)) {
+        return _PySlot_internal_names[id - _Py_slot_INTERNAL_BASE];
+    }
     if (id >= _Py_slot_COUNT) {
         return "<unknown_slot>";
     }
@@ -119,9 +140,9 @@ _PySlot_GetName(uint16_t id)
 static inline void
 _PySlot_err_bad_slot(char *kind, uint16_t id)
 {
-    if (id < _Py_slot_COUNT) {
+    if (id < _Py_slot_COUNT || _PySlot_IsInternal(id)) {
         PyErr_Format(PyExc_SystemError, "invalid %s slot %d (%s)",
-                    kind, (unsigned int)id, _PySlot_names[id]);
+                    kind, (unsigned int)id, _PySlot_GetName(id));
     }
     else if (id == Py_slot_invalid) {
         PyErr_Format(PyExc_SystemError, "invalid slot (Py_slot_invalid, %u)",

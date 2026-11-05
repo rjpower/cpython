@@ -75,23 +75,33 @@ _PySlotIterator_Rewind(_PySlotIterator *it, const void *slots)
     it->is_first_run = false;
 }
 
+// The bit of id in the seen set: internal ids follow the public ones.
+static unsigned int
+seen_bit(uint16_t id)
+{
+    if (id >= _Py_slot_INTERNAL_BASE) {
+        return _Py_slot_COUNT + (id - _Py_slot_INTERNAL_BASE);
+    }
+    return id;
+}
+
 static Py_ssize_t
 seen_index(uint16_t id)
 {
-    return id / _PySlot_SEEN_ENTRY_BITS;
+    return seen_bit(id) / _PySlot_SEEN_ENTRY_BITS;
 }
 
 static unsigned int
 seen_mask(uint16_t id)
 {
-    return ((unsigned int)1) << (id % _PySlot_SEEN_ENTRY_BITS);
+    return ((unsigned int)1) << (seen_bit(id) % _PySlot_SEEN_ENTRY_BITS);
 }
 
 bool
 _PySlotIterator_SawSlot(_PySlotIterator *it, int id)
 {
     assert (id > 0);
-    assert (id < _Py_slot_COUNT);
+    assert (id < _Py_slot_COUNT || _PySlot_IsInternal(id));
     return it->seen[seen_index(id)] & seen_mask(id);
 }
 
@@ -293,7 +303,8 @@ _PySlotIterator_Next(_PySlotIterator *it)
                 break;
         }
         assert (result->sl_id > 0);
-        assert (result->sl_id <= _Py_slot_COUNT);
+        assert (result->sl_id <= _Py_slot_COUNT
+                || _PySlot_IsInternal(result->sl_id));
         if (it->is_first_run && (handle_first_run(it) < 0)) {
             goto error;
         }

@@ -112,3 +112,19 @@ int
     Py_DECREF(obj);
     return result;
 }
+
+Py_hash_t
+_PyValue_HashNotImplemented(PyValueBorrow value)
+{
+    PyErr_Format(PyExc_TypeError, "unhashable type: '%.200s'",
+                 PyValue_TYPE(value)->tp_name);
+    return -1;
+}
+
+Py_hash_t
+_PyValue_GenericHash(PyValueBorrow value)
+{
+    /* Only an object reaches it: an inline value is an exact int or float,
+       whose types hash by value. */
+    return PyObject_GenericHash(PyValue_AsKnownObjectBorrow(value));
+}

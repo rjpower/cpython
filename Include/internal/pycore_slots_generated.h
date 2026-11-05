@@ -3,6 +3,63 @@
 #ifndef _PY_HAVE_INTERNAL_SLOTS_GENERATED_H
 #define _PY_HAVE_INTERNAL_SLOTS_GENERATED_H
 
+static_assert(_Py_slot_INTERNAL_BASE == 256, "Python/slots.toml and pycore_slots.h agree");
+#define _Py_slot_INTERNAL_COUNT 53
+static_assert(_Py_slot_INTERNAL_COUNT <= _Py_slot_INTERNAL_LIMIT, "the internal range has room");
+#define _Py_value_nb_add 256
+#define _Py_value_nb_subtract 257
+#define _Py_value_nb_multiply 258
+#define _Py_value_nb_true_divide 259
+#define _Py_value_nb_floor_divide 260
+#define _Py_value_nb_remainder 261
+#define _Py_value_richcompare 262
+#define _Py_value_hash 263
+#define _Py_value_nb_bool 264
+#define _Py_value_nb_index 265
+#define _Py_value_getattro 266
+#define _Py_value_subscript 267
+#define _Py_value_ass_subscript 268
+#define _Py_value_contains 269
+#define _Py_value_iternext 270
+#define _Py_value_call 271
+#define _Py_value_nb_power 272
+#define _Py_value_nb_negative 273
+#define _Py_value_nb_positive 274
+#define _Py_value_nb_absolute 275
+#define _Py_value_nb_invert 276
+#define _Py_value_nb_int 277
+#define _Py_value_nb_float 278
+#define _Py_value_nb_divmod 279
+#define _Py_value_nb_lshift 280
+#define _Py_value_nb_rshift 281
+#define _Py_value_nb_and 282
+#define _Py_value_nb_xor 283
+#define _Py_value_nb_or 284
+#define _Py_value_nb_matrix_multiply 285
+#define _Py_value_nb_inplace_add 286
+#define _Py_value_nb_inplace_subtract 287
+#define _Py_value_nb_inplace_multiply 288
+#define _Py_value_nb_inplace_remainder 289
+#define _Py_value_nb_inplace_power 290
+#define _Py_value_nb_inplace_lshift 291
+#define _Py_value_nb_inplace_rshift 292
+#define _Py_value_nb_inplace_and 293
+#define _Py_value_nb_inplace_xor 294
+#define _Py_value_nb_inplace_or 295
+#define _Py_value_nb_inplace_floor_divide 296
+#define _Py_value_nb_inplace_true_divide 297
+#define _Py_value_nb_inplace_matrix_multiply 298
+#define _Py_value_repr 299
+#define _Py_value_str 300
+#define _Py_value_setattro 301
+#define _Py_value_descr_get 302
+#define _Py_value_descr_set 303
+#define _Py_value_item 304
+#define _Py_value_ass_item 305
+#define _Py_value_send 306
+#define _Py_value_sq_concat 307
+#define _Py_value_sq_inplace_concat 308
+
 static inline uint16_t
 _PySlot_resolve_type_slot(uint16_t slot_id)
 {
@@ -108,6 +165,59 @@ _PySlot_resolve_type_slot(uint16_t slot_id)
         case Py_tp_flags:
         case Py_tp_metaclass:
         case Py_tp_module:
+        case _Py_value_nb_add:
+        case _Py_value_nb_subtract:
+        case _Py_value_nb_multiply:
+        case _Py_value_nb_true_divide:
+        case _Py_value_nb_floor_divide:
+        case _Py_value_nb_remainder:
+        case _Py_value_richcompare:
+        case _Py_value_hash:
+        case _Py_value_nb_bool:
+        case _Py_value_nb_index:
+        case _Py_value_getattro:
+        case _Py_value_subscript:
+        case _Py_value_ass_subscript:
+        case _Py_value_contains:
+        case _Py_value_iternext:
+        case _Py_value_call:
+        case _Py_value_nb_power:
+        case _Py_value_nb_negative:
+        case _Py_value_nb_positive:
+        case _Py_value_nb_absolute:
+        case _Py_value_nb_invert:
+        case _Py_value_nb_int:
+        case _Py_value_nb_float:
+        case _Py_value_nb_divmod:
+        case _Py_value_nb_lshift:
+        case _Py_value_nb_rshift:
+        case _Py_value_nb_and:
+        case _Py_value_nb_xor:
+        case _Py_value_nb_or:
+        case _Py_value_nb_matrix_multiply:
+        case _Py_value_nb_inplace_add:
+        case _Py_value_nb_inplace_subtract:
+        case _Py_value_nb_inplace_multiply:
+        case _Py_value_nb_inplace_remainder:
+        case _Py_value_nb_inplace_power:
+        case _Py_value_nb_inplace_lshift:
+        case _Py_value_nb_inplace_rshift:
+        case _Py_value_nb_inplace_and:
+        case _Py_value_nb_inplace_xor:
+        case _Py_value_nb_inplace_or:
+        case _Py_value_nb_inplace_floor_divide:
+        case _Py_value_nb_inplace_true_divide:
+        case _Py_value_nb_inplace_matrix_multiply:
+        case _Py_value_repr:
+        case _Py_value_str:
+        case _Py_value_setattro:
+        case _Py_value_descr_get:
+        case _Py_value_descr_set:
+        case _Py_value_item:
+        case _Py_value_ass_item:
+        case _Py_value_send:
+        case _Py_value_sq_concat:
+        case _Py_value_sq_inplace_concat:
             return slot_id;
         default:
             return Py_slot_invalid;
@@ -371,6 +481,112 @@ _PySlot_type_getslot(PyTypeObject *tp, uint16_t slot_id)
         case Py_mp_length:
             if (!(tp->tp_as_mapping)) return NULL;
             return (void*)tp->tp_as_mapping->mp_length;
+        case _Py_value_nb_add:
+            return (void*)tp->tp_value.nb_add;
+        case _Py_value_nb_subtract:
+            return (void*)tp->tp_value.nb_subtract;
+        case _Py_value_nb_multiply:
+            return (void*)tp->tp_value.nb_multiply;
+        case _Py_value_nb_true_divide:
+            return (void*)tp->tp_value.nb_true_divide;
+        case _Py_value_nb_floor_divide:
+            return (void*)tp->tp_value.nb_floor_divide;
+        case _Py_value_nb_remainder:
+            return (void*)tp->tp_value.nb_remainder;
+        case _Py_value_richcompare:
+            return (void*)tp->tp_value.richcompare;
+        case _Py_value_hash:
+            return (void*)tp->tp_value.hash;
+        case _Py_value_nb_bool:
+            return (void*)tp->tp_value.nb_bool;
+        case _Py_value_nb_index:
+            return (void*)tp->tp_value.nb_index;
+        case _Py_value_getattro:
+            return (void*)tp->tp_value.getattro;
+        case _Py_value_subscript:
+            return (void*)tp->tp_value.subscript;
+        case _Py_value_ass_subscript:
+            return (void*)tp->tp_value.ass_subscript;
+        case _Py_value_contains:
+            return (void*)tp->tp_value.contains;
+        case _Py_value_iternext:
+            return (void*)tp->tp_value.iternext;
+        case _Py_value_call:
+            return (void*)tp->tp_value.call;
+        case _Py_value_nb_power:
+            return (void*)tp->tp_value.nb_power;
+        case _Py_value_nb_negative:
+            return (void*)tp->tp_value.nb_negative;
+        case _Py_value_nb_positive:
+            return (void*)tp->tp_value.nb_positive;
+        case _Py_value_nb_absolute:
+            return (void*)tp->tp_value.nb_absolute;
+        case _Py_value_nb_invert:
+            return (void*)tp->tp_value.nb_invert;
+        case _Py_value_nb_int:
+            return (void*)tp->tp_value.nb_int;
+        case _Py_value_nb_float:
+            return (void*)tp->tp_value.nb_float;
+        case _Py_value_nb_divmod:
+            return (void*)tp->tp_value.nb_divmod;
+        case _Py_value_nb_lshift:
+            return (void*)tp->tp_value.nb_lshift;
+        case _Py_value_nb_rshift:
+            return (void*)tp->tp_value.nb_rshift;
+        case _Py_value_nb_and:
+            return (void*)tp->tp_value.nb_and;
+        case _Py_value_nb_xor:
+            return (void*)tp->tp_value.nb_xor;
+        case _Py_value_nb_or:
+            return (void*)tp->tp_value.nb_or;
+        case _Py_value_nb_matrix_multiply:
+            return (void*)tp->tp_value.nb_matrix_multiply;
+        case _Py_value_nb_inplace_add:
+            return (void*)tp->tp_value.nb_inplace_add;
+        case _Py_value_nb_inplace_subtract:
+            return (void*)tp->tp_value.nb_inplace_subtract;
+        case _Py_value_nb_inplace_multiply:
+            return (void*)tp->tp_value.nb_inplace_multiply;
+        case _Py_value_nb_inplace_remainder:
+            return (void*)tp->tp_value.nb_inplace_remainder;
+        case _Py_value_nb_inplace_power:
+            return (void*)tp->tp_value.nb_inplace_power;
+        case _Py_value_nb_inplace_lshift:
+            return (void*)tp->tp_value.nb_inplace_lshift;
+        case _Py_value_nb_inplace_rshift:
+            return (void*)tp->tp_value.nb_inplace_rshift;
+        case _Py_value_nb_inplace_and:
+            return (void*)tp->tp_value.nb_inplace_and;
+        case _Py_value_nb_inplace_xor:
+            return (void*)tp->tp_value.nb_inplace_xor;
+        case _Py_value_nb_inplace_or:
+            return (void*)tp->tp_value.nb_inplace_or;
+        case _Py_value_nb_inplace_floor_divide:
+            return (void*)tp->tp_value.nb_inplace_floor_divide;
+        case _Py_value_nb_inplace_true_divide:
+            return (void*)tp->tp_value.nb_inplace_true_divide;
+        case _Py_value_nb_inplace_matrix_multiply:
+            return (void*)tp->tp_value.nb_inplace_matrix_multiply;
+        case _Py_value_repr:
+            return (void*)tp->tp_value.repr;
+        case _Py_value_str:
+            return (void*)tp->tp_value.str;
+        case _Py_value_setattro:
+            return (void*)tp->tp_value.setattro;
+        case _Py_value_descr_get:
+            return (void*)tp->tp_value.descr_get;
+        case _Py_value_descr_set:
+            return (void*)tp->tp_value.descr_set;
+        case _Py_value_item:
+            return (void*)tp->tp_value.item;
+        case _Py_value_ass_item:
+            return (void*)tp->tp_value.ass_item;
+        case _Py_value_send:
+            return (void*)tp->tp_value.send;
+        case _Py_value_sq_concat:
+            return (void*)tp->tp_value.sq_concat;
+        case _Py_value_sq_inplace_concat:
+            return (void*)tp->tp_value.sq_inplace_concat;
     }
     _PySlot_err_bad_slot("PyType_GetSlot", slot_id);
     return NULL;
@@ -626,6 +842,165 @@ _PySlot_heaptype_apply_field_slot(PyHeapTypeObject *ht, PySlot slot)
         case Py_mp_length:
             ht->as_mapping.mp_length = (lenfunc)slot.sl_func;
             break;
+        case _Py_value_nb_add:
+            ht->ht_type.tp_value.nb_add = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_subtract:
+            ht->ht_type.tp_value.nb_subtract = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_multiply:
+            ht->ht_type.tp_value.nb_multiply = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_true_divide:
+            ht->ht_type.tp_value.nb_true_divide = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_floor_divide:
+            ht->ht_type.tp_value.nb_floor_divide = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_remainder:
+            ht->ht_type.tp_value.nb_remainder = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_richcompare:
+            ht->ht_type.tp_value.richcompare = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_hash:
+            ht->ht_type.tp_value.hash = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_bool:
+            ht->ht_type.tp_value.nb_bool = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_index:
+            ht->ht_type.tp_value.nb_index = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_getattro:
+            ht->ht_type.tp_value.getattro = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_subscript:
+            ht->ht_type.tp_value.subscript = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_ass_subscript:
+            ht->ht_type.tp_value.ass_subscript = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_contains:
+            ht->ht_type.tp_value.contains = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_iternext:
+            ht->ht_type.tp_value.iternext = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_call:
+            ht->ht_type.tp_value.call = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_power:
+            ht->ht_type.tp_value.nb_power = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_negative:
+            ht->ht_type.tp_value.nb_negative = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_positive:
+            ht->ht_type.tp_value.nb_positive = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_absolute:
+            ht->ht_type.tp_value.nb_absolute = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_invert:
+            ht->ht_type.tp_value.nb_invert = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_int:
+            ht->ht_type.tp_value.nb_int = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_float:
+            ht->ht_type.tp_value.nb_float = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_divmod:
+            ht->ht_type.tp_value.nb_divmod = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_lshift:
+            ht->ht_type.tp_value.nb_lshift = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_rshift:
+            ht->ht_type.tp_value.nb_rshift = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_and:
+            ht->ht_type.tp_value.nb_and = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_xor:
+            ht->ht_type.tp_value.nb_xor = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_or:
+            ht->ht_type.tp_value.nb_or = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_matrix_multiply:
+            ht->ht_type.tp_value.nb_matrix_multiply = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_inplace_add:
+            ht->ht_type.tp_value.nb_inplace_add = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_inplace_subtract:
+            ht->ht_type.tp_value.nb_inplace_subtract = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_inplace_multiply:
+            ht->ht_type.tp_value.nb_inplace_multiply = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_inplace_remainder:
+            ht->ht_type.tp_value.nb_inplace_remainder = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_inplace_power:
+            ht->ht_type.tp_value.nb_inplace_power = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_inplace_lshift:
+            ht->ht_type.tp_value.nb_inplace_lshift = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_inplace_rshift:
+            ht->ht_type.tp_value.nb_inplace_rshift = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_inplace_and:
+            ht->ht_type.tp_value.nb_inplace_and = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_inplace_xor:
+            ht->ht_type.tp_value.nb_inplace_xor = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_inplace_or:
+            ht->ht_type.tp_value.nb_inplace_or = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_inplace_floor_divide:
+            ht->ht_type.tp_value.nb_inplace_floor_divide = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_inplace_true_divide:
+            ht->ht_type.tp_value.nb_inplace_true_divide = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_nb_inplace_matrix_multiply:
+            ht->ht_type.tp_value.nb_inplace_matrix_multiply = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_repr:
+            ht->ht_type.tp_value.repr = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_str:
+            ht->ht_type.tp_value.str = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_setattro:
+            ht->ht_type.tp_value.setattro = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_descr_get:
+            ht->ht_type.tp_value.descr_get = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_descr_set:
+            ht->ht_type.tp_value.descr_set = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_item:
+            ht->ht_type.tp_value.item = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_ass_item:
+            ht->ht_type.tp_value.ass_item = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_send:
+            ht->ht_type.tp_value.send = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_sq_concat:
+            ht->ht_type.tp_value.sq_concat = (_Py_valuefunc)slot.sl_func;
+            break;
+        case _Py_value_sq_inplace_concat:
+            ht->ht_type.tp_value.sq_inplace_concat = (_Py_valuefunc)slot.sl_func;
+            break;
     }
 }
 
@@ -740,6 +1115,59 @@ _PySlot_get_dtype(uint16_t slot_id)
         case Py_tp_module: return _PySlot_DTYPE_PTR;
         case Py_mod_abi: return _PySlot_DTYPE_PTR;
         case Py_mod_token: return _PySlot_DTYPE_PTR;
+        case _Py_value_nb_add: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_subtract: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_multiply: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_true_divide: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_floor_divide: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_remainder: return _PySlot_DTYPE_FUNC;
+        case _Py_value_richcompare: return _PySlot_DTYPE_FUNC;
+        case _Py_value_hash: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_bool: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_index: return _PySlot_DTYPE_FUNC;
+        case _Py_value_getattro: return _PySlot_DTYPE_FUNC;
+        case _Py_value_subscript: return _PySlot_DTYPE_FUNC;
+        case _Py_value_ass_subscript: return _PySlot_DTYPE_FUNC;
+        case _Py_value_contains: return _PySlot_DTYPE_FUNC;
+        case _Py_value_iternext: return _PySlot_DTYPE_FUNC;
+        case _Py_value_call: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_power: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_negative: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_positive: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_absolute: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_invert: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_int: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_float: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_divmod: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_lshift: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_rshift: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_and: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_xor: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_or: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_matrix_multiply: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_inplace_add: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_inplace_subtract: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_inplace_multiply: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_inplace_remainder: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_inplace_power: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_inplace_lshift: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_inplace_rshift: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_inplace_and: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_inplace_xor: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_inplace_or: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_inplace_floor_divide: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_inplace_true_divide: return _PySlot_DTYPE_FUNC;
+        case _Py_value_nb_inplace_matrix_multiply: return _PySlot_DTYPE_FUNC;
+        case _Py_value_repr: return _PySlot_DTYPE_FUNC;
+        case _Py_value_str: return _PySlot_DTYPE_FUNC;
+        case _Py_value_setattro: return _PySlot_DTYPE_FUNC;
+        case _Py_value_descr_get: return _PySlot_DTYPE_FUNC;
+        case _Py_value_descr_set: return _PySlot_DTYPE_FUNC;
+        case _Py_value_item: return _PySlot_DTYPE_FUNC;
+        case _Py_value_ass_item: return _PySlot_DTYPE_FUNC;
+        case _Py_value_send: return _PySlot_DTYPE_FUNC;
+        case _Py_value_sq_concat: return _PySlot_DTYPE_FUNC;
+        case _Py_value_sq_inplace_concat: return _PySlot_DTYPE_FUNC;
         default: return _PySlot_DTYPE_VOID;
     }
 }

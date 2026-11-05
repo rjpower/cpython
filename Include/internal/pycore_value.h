@@ -443,6 +443,7 @@ PyValue_IsValid(PyValueBorrow ref)
 #define PyValue_True ((PyValue){.bits = ((uintptr_t)&_Py_TrueStruct) | Py_TAG_REFCNT })
 #define PyValue_False ((PyValue){.bits = ((uintptr_t)&_Py_FalseStruct) | Py_TAG_REFCNT })
 #define PyValue_None ((PyValue){.bits = ((uintptr_t)&_Py_NoneStruct) | Py_TAG_REFCNT })
+#define PyValue_NotImplemented ((PyValue){.bits = ((uintptr_t)&_Py_NotImplementedStruct) | Py_TAG_REFCNT })
 
 /* Initializer for the canonical value of a statically allocated immortal
    object, e.g. a keyword in a static tuple.  C accepts an address plus a

@@ -23,6 +23,10 @@ DEFAULT_PUBLIC_HEADER_PATH = INCLUDE_PATH / 'slots_generated.h'
 DEFAULT_PRIVATE_HEADER_PATH = INCLUDE_PATH / 'internal/pycore_slots_generated.h'
 DEFAULT_C_PATH = REPO_ROOT / 'Python/slots_generated.c'
 
+# Internal ids (those with a value_field) take a reserved range from here,
+# above upstream's ids; _Py_slot_INTERNAL_BASE in pycore_slots.h.
+INTERNAL_BASE = 256
+
 TABLES = {
     'tp': 'ht_type',
     'am': 'as_async',
@@ -54,9 +58,14 @@ class SlotInfo:
         try:
             return self._data['dtype']
         except KeyError:
-            if self.is_type_field:
+            if self.is_type_field or self.value_field:
                 return 'func'
             raise
+
+    @functools.cached_property
+    def value_field(self):
+        """The field of PyTypeObject.tp_value that an internal id sets."""
+        return self._data.get('value_field')
 
     @functools.cached_property
     def functype(self):
@@ -97,18 +106,30 @@ class SlotInfo:
 
 
 def parse_slots(file):
+    """The public slots, indexed by ID, and the internal ones, indexed by
+    ID - INTERNAL_BASE. Each range must be dense."""
     toml_contents = tomllib.load(file)
-    result = [None] * len(toml_contents)
+    public = {}
+    internal = {}
     for key, data in toml_contents.items():
         slot_id = int(key)
         try:
-            if result[slot_id]:
+            slot = SlotInfo(slot_id, data)
+            if (slot_id >= INTERNAL_BASE) != bool(slot.value_field):
+                raise ValueError('internal IDs, and only they, start at '
+                                 f'{INTERNAL_BASE} and set a value_field')
+            table = internal if slot_id >= INTERNAL_BASE else public
+            if slot_id in table:
                 raise ValueError(f'slot ID {slot_id} repeated')
-            result[slot_id] = SlotInfo(slot_id, data)
+            table[slot_id] = slot
         except Exception as e:
             e.add_note(f'handling slot {slot_id}')
             raise
-    return result
+    result = [public[i] for i in range(len(public))]
+    internal_result = [internal[i]
+                       for i in range(INTERNAL_BASE,
+                                      INTERNAL_BASE + len(internal))]
+    return result, internal_result
 
 
 class CWriter:
@@ -169,7 +190,7 @@ def write_public_header(f, slots):
     out(f'#endif /* _PY_HAVE_SLOTS_GENERATED_H */')
 
 
-def write_private_header(f, slots):
+def write_private_header(f, slots, internal):
     out = CWriter(f)
 
     def add_case(slot):
@@ -179,6 +200,14 @@ def write_private_header(f, slots):
 
     out(f'#ifndef _PY_HAVE_INTERNAL_SLOTS_GENERATED_H')
     out(f'#define _PY_HAVE_INTERNAL_SLOTS_GENERATED_H')
+    out()
+    out(f'static_assert(_Py_slot_INTERNAL_BASE == {INTERNAL_BASE}, '
+        f'"Python/slots.toml and pycore_slots.h agree");')
+    out(f'#define _Py_slot_INTERNAL_COUNT {len(internal)}')
+    out(f'static_assert(_Py_slot_INTERNAL_COUNT <= _Py_slot_INTERNAL_LIMIT, '
+        f'"the internal range has room");')
+    for slot in internal:
+        out(f'#define {slot.name} {slot.id}')
     for kind in 'type', 'mod':
         out()
         out(f'static inline uint16_t')
@@ -192,6 +221,9 @@ def write_private_header(f, slots):
                         out(f'case {slot.id}:')
                         out(f'    return {new_slot.name};')
                     elif slot.kind in {kind, 'slot'}:
+                        good_slots.append(f'case {slot.name}:')
+                for slot in internal:
+                    if slot.kind == kind:
                         good_slots.append(f'case {slot.name}:')
                 for case in good_slots:
                     out(case)
@@ -221,6 +253,9 @@ def write_private_header(f, slots):
                         out(f'case {slot.name}:')
                         out(f'    if (!({cond})) return NULL;')
                         out(f'    return (void*){val};')
+            for slot in internal:
+                out(f'case {slot.name}:')
+                out(f'    return (void*)tp->tp_value.{slot.value_field};')
         out(f'_PySlot_err_bad_slot("PyType_GetSlot", slot_id);')
         out(f'return NULL;')
     out()
@@ -243,6 +278,11 @@ def write_private_header(f, slots):
                     out(f'case {slot.name}:')
                     out(f'    ht->{table}.{field} = {functype}slot.sl_{slot.dtype};')
                     out(f'    break;')
+            for slot in internal:
+                out(f'case {slot.name}:')
+                out(f'    ht->ht_type.tp_value.{slot.value_field} = '
+                    f'(_Py_valuefunc)slot.sl_func;')
+                out(f'    break;')
     out()
     out(f'static inline _PySlot_DTYPE')
     out(f'_PySlot_get_dtype(uint16_t slot_id)')
@@ -254,6 +294,9 @@ def write_private_header(f, slots):
                 dtype = slot.dtype
                 name = slot.name
                 out(f'case {name}: return _PySlot_DTYPE_{dtype.upper()};')
+            for slot in internal:
+                out(f'case {slot.name}: '
+                    f'return _PySlot_DTYPE_{slot.dtype.upper()};')
             out(f'default: return _PySlot_DTYPE_VOID;')
     out()
     out(f'static inline _PySlot_PROBLEM_HANDLING')
@@ -310,7 +353,7 @@ def write_private_header(f, slots):
     out(f'#endif /* _PY_HAVE_INTERNAL_SLOTS_GENERATED_H */')
 
 
-def write_c(f, slots):
+def write_c(f, slots, internal):
     out = CWriter(f)
     out('#include "Python.h"')
     out('#include "pycore_slots.h"   // _PySlot_names')
@@ -319,6 +362,12 @@ def write_c(f, slots):
         for slot in slots:
             out(f'"{slot.name}",')
         out('NULL')
+    out()
+    with out.block(f'const char *const '
+                   f'_PySlot_internal_names[_Py_slot_INTERNAL_LIMIT] =',
+                   end=';'):
+        for slot in internal:
+            out(f'"{slot.name}",')
 
 
 @contextlib.contextmanager
@@ -377,10 +426,10 @@ def main(argv):
             args.cfile = DEFAULT_C_PATH
 
     with open(args.input, 'rb') as f:
-        slots = parse_slots(f)
+        slots, internal = parse_slots(f)
 
     if args.jsonl:
-        for slot in slots:
+        for slot in slots + internal:
             print(json.dumps(slot.to_dict()))
 
     if args.public_header:
@@ -389,11 +438,11 @@ def main(argv):
 
     if args.private_header:
         with replace_file(args.private_header) as f:
-            write_private_header(f, slots)
+            write_private_header(f, slots, internal)
 
     if args.cfile:
         with replace_file(args.cfile) as f:
-            write_c(f, slots)
+            write_c(f, slots, internal)
 
 if __name__ == "__main__":
     main(sys.argv)

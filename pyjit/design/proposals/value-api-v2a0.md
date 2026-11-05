@@ -192,7 +192,7 @@ flowchart LR
   for each row it covers; a function without a value form is not marked.
 - **Builder.** One agent owns the build: `make -k -j`, clang 21 with
   `-ferror-limit=0`, so one round lists every site, parsed from `error: 'X'
-  is unavailable`. Rounds take 10–15 minutes; a wave needs 2–3.
+  is unavailable`. Rounds take 10–15 minutes; with worker checks (below) a wave needs 2.
 - **Script** (`Tools/build/value_sweep.py`, from R23). It edits two classes
   by byte offset, using a per-function AST dump (`-ast-dump=json
   -ast-dump-filter=<function>` with the unit's flags):
@@ -238,6 +238,27 @@ flowchart LR
 - **Throughput.** The script does 55–70% of call sites. A worker fixes about
   40 call sites, or 5–15 slot functions, an hour. Each wave's first batch is
   a pilot that recalibrates the rest.
+- **Worker checks** (coordinator, 2026-11-04, after the user's review).
+  Workers check their own files and need no builder round for compile
+  errors.
+  - `check_unit.sh <build> <file>` compiles one unit with the build's exact
+    flags under `-fsyntax-only`. It shares no build state, so every worker
+    runs it at once. Errors that come from headers another batch still has
+    to fix are noted, not chased.
+  - A `Modules/` worker whose module builds as a shared extension builds its
+    `.so` into a private directory against the wave's base build, then runs
+    that module's tests with the directory first on `PYTHONPATH`.
+  - Built-in modules and core files are tested by the builder only, since
+    their tests need a relinked interpreter with every batch's edits.
+  - So the builder runs one round to collect errors, then one round to
+    merge, followed by the targeted tests and the suites.
+- **Model tiers.** Batches are tagged by class. Single-class mechanical
+  batches (explicit exits, renames, constructor returns the script could not
+  place) go to Haiku. Batches with ownership or value semantics (retyped
+  locals, the four traps, slot functions) go to Sonnet. A Sonnet checker
+  reads each Haiku batch's diff against its class rule. The first wave's
+  pilot runs one mechanical batch on both models and keeps Haiku only if its
+  diff compiles and the checker finds nothing that Sonnet's run did not.
 
 **What of R23's VS tool to keep.** Keep the ownership table, which is now
 also the source of the marks; the per-function AST dumps; the byte-offset

@@ -1029,10 +1029,9 @@ dummy_func(
         // Inline bounds slice a list, tuple or str without boxes or a slice
         // object; see _PyEval_BinarySlice().
         inline_ok op(_BINARY_SLICE, (container, start, stop -- res)) {
-            PyObject *res_o = _PyEval_BinarySlice(container, start, stop);
+            res = _PyEval_BinarySlice(container, start, stop);
             DECREF_INPUTS();
-            ERROR_IF(res_o == NULL);
-            res = PyValue_FromObjectSteal(res_o);
+            ERROR_IF(PyValue_IsNull(res));
         }
 
         macro(BINARY_SLICE) = _SPECIALIZE_BINARY_SLICE + _BINARY_SLICE;
@@ -5233,19 +5232,10 @@ dummy_func(
 
         inst(BUILD_SLICE, (args[oparg] -- slice)) {
             _PyValue_RecheckWindow(args, oparg);
-            PyObject *start_o = _PyValueTemps_Object(value_temps, args[0]);
-            if (start_o == NULL) {
-                ERROR_NO_POP();
-            }
-            PyObject *stop_o = _PyValueTemps_Object(value_temps, args[1]);
-            if (stop_o == NULL) {
-                ERROR_NO_POP();
-            }
-            PyObject *step_o = oparg == 3 ? _PyValueTemps_Object(value_temps, args[2]) : NULL;
-            if (oparg == 3 && step_o == NULL) {
-                ERROR_NO_POP();
-            }
-            PyObject *slice_o = PySlice_New(start_o, stop_o, step_o);
+            // The bounds are stored as the values they are: no box of an
+            // inline one.
+            PyObject *slice_o = _PySlice_FromValues(
+                args[0], args[1], oparg == 3 ? args[2] : PyValue_NULL);
             DECREF_INPUTS();
             ERROR_IF(slice_o == NULL);
             slice = PyValue_FromObjectSteal(slice_o);

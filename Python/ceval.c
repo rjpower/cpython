@@ -4534,67 +4534,71 @@ borrow_or_box(PyValueBorrow ref, PyObject **box)
 }
 #define borrow_or_box(V0, V1) (borrow_or_box)(PyValue_Borrow(V0), V1)
 
+/* The slice start:stop as a new object, with the bounds as they are (value
+   fields, M4b): no box of an inline bound. NULL with an exception set. */
 static PyObject *
-binary_slice(PyObject *container, PyObject *start, PyObject *stop)
+slice_of_bounds(PyValueBorrow start, PyValueBorrow stop)
 {
-    if (PyList_CheckExact(container)) {
-        return _PyList_BinarySlice(container, start, stop);
-    }
-    if (PyTuple_CheckExact(container)) {
-        return _PyTuple_BinarySlice(container, start, stop);
-    }
-    if (PyUnicode_CheckExact(container)) {
-        return _PyUnicode_BinarySlice(container, start, stop);
-    }
-    PyObject *slice = PySlice_New(start, stop, NULL);
-    if (slice == NULL) {
-        return NULL;
-    }
-    PyObject *res = PyObject_GetItem(container, slice);
-    Py_DECREF(slice);
-    return res;
+    return _PySlice_FromValues(start, stop, PyValue_NULL);
 }
 
-// container[start:stop], for BINARY_SLICE.
-PyObject *
+// container[start:stop], for BINARY_SLICE: an owner of the item, or
+// PyValue_NULL with an exception set.
+PyValue
 (_PyEval_BinarySlice)(PyValueBorrow container_st, PyValueBorrow start_st, PyValueBorrow stop_st)
 {
-    Py_ssize_t start, stop;
-    if (PyValue_IsPointerSpace(container_st) &&
-        inline_slice_bounds(start_st, stop_st, &start, &stop))
-    {
+    if (PyValue_IsPointerSpace(container_st)) {
         PyObject *container = PyValue_AsKnownObjectBorrow(container_st);
-        if (PyList_CheckExact(container)) {
-            PySlice_AdjustIndices(PyList_GET_SIZE(container), &start, &stop, 1);
-            return PyList_GetSlice(container, start, stop);
+        PyObject *res = NULL;
+        Py_ssize_t start, stop;
+        if (inline_slice_bounds(start_st, stop_st, &start, &stop)) {
+            if (PyList_CheckExact(container)) {
+                PySlice_AdjustIndices(PyList_GET_SIZE(container), &start, &stop, 1);
+                res = PyList_GetSlice(container, start, stop);
+                goto done;
+            }
+            if (PyTuple_CheckExact(container)) {
+                PySlice_AdjustIndices(PyTuple_GET_SIZE(container), &start, &stop, 1);
+                res = PyTuple_GetSlice(container, start, stop);
+                goto done;
+            }
+            if (PyUnicode_CheckExact(container)) {
+                PySlice_AdjustIndices(PyUnicode_GET_LENGTH(container), &start, &stop, 1);
+                res = PyUnicode_Substring(container, start, stop);
+                goto done;
+            }
         }
-        if (PyTuple_CheckExact(container)) {
-            PySlice_AdjustIndices(PyTuple_GET_SIZE(container), &start, &stop, 1);
-            return PyTuple_GetSlice(container, start, stop);
+        else if (PyValue_IsPointerSpace(start_st) &&
+                 PyValue_IsPointerSpace(stop_st))
+        {
+            /* Object bounds (None, or an object with __index__): the type's
+               own slicing reads them without a slice object. */
+            PyObject *start_o = PyValue_AsKnownObjectBorrow(start_st);
+            PyObject *stop_o = PyValue_AsKnownObjectBorrow(stop_st);
+            if (PyList_CheckExact(container)) {
+                res = _PyList_BinarySlice(container, start_o, stop_o);
+                goto done;
+            }
+            if (PyTuple_CheckExact(container)) {
+                res = _PyTuple_BinarySlice(container, start_o, stop_o);
+                goto done;
+            }
+            if (PyUnicode_CheckExact(container)) {
+                res = _PyUnicode_BinarySlice(container, start_o, stop_o);
+                goto done;
+            }
         }
-        if (PyUnicode_CheckExact(container)) {
-            PySlice_AdjustIndices(PyUnicode_GET_LENGTH(container), &start, &stop, 1);
-            return PyUnicode_Substring(container, start, stop);
-        }
-    }
-    PyObject *container_box, *start_box = NULL, *stop_box = NULL, *res = NULL;
-    PyObject *container = borrow_or_box(container_st, &container_box);
-    if (container == NULL) {
-        goto done;
-    }
-    PyObject *start_o = borrow_or_box(start_st, &start_box);
-    if (start_o == NULL) {
-        goto done;
-    }
-    PyObject *stop_o = borrow_or_box(stop_st, &stop_box);
-    if (stop_o == NULL) {
-        goto done;
-    }
-    res = binary_slice(container, start_o, stop_o);
+        goto generic;
 done:
-    Py_XDECREF(container_box);
-    Py_XDECREF(start_box);
-    Py_XDECREF(stop_box);
+        return res == NULL ? PyValue_NULL : PyValue_FromObjectSteal(res);
+    }
+generic:;
+    PyObject *slice = slice_of_bounds(start_st, stop_st);
+    if (slice == NULL) {
+        return PyValue_NULL;
+    }
+    PyValue res = _PyValue_GetItem(container_st, PyValue_FromObjectBorrow(slice));
+    Py_DECREF(slice);
     return res;
 }
 
@@ -4612,35 +4616,12 @@ int
         return _PyList_StoreSlice(PyValue_AsKnownObjectBorrow(container_st), start, stop,
                                   PyValue_AsKnownObjectBorrow(v_st));
     }
-    PyObject *v_box, *container_box = NULL, *start_box = NULL, *stop_box = NULL;
-    int err = -1;
-    PyObject *v = borrow_or_box(v_st, &v_box);
-    if (v == NULL) {
-        goto done;
-    }
-    PyObject *container = borrow_or_box(container_st, &container_box);
-    if (container == NULL) {
-        goto done;
-    }
-    PyObject *start_o = borrow_or_box(start_st, &start_box);
-    if (start_o == NULL) {
-        goto done;
-    }
-    PyObject *stop_o = borrow_or_box(stop_st, &stop_box);
-    if (stop_o == NULL) {
-        goto done;
-    }
-    PyObject *slice = PySlice_New(start_o, stop_o, NULL);
+    PyObject *slice = slice_of_bounds(start_st, stop_st);
     if (slice == NULL) {
-        goto done;
+        return -1;
     }
-    err = PyObject_SetItem(container, slice, v);
+    int err = _PyValue_SetItem(container_st, PyValue_FromObjectBorrow(slice), v_st);
     Py_DECREF(slice);
-done:
-    Py_XDECREF(v_box);
-    Py_XDECREF(container_box);
-    Py_XDECREF(start_box);
-    Py_XDECREF(stop_box);
     return err;
 }
 

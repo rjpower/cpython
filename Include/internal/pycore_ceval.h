@@ -322,7 +322,7 @@ _Py_Check_ArgsIterable(PyThreadState *tstate, PyObject *func, PyObject *args);
 PyAPI_FUNC(int) _PyEval_StoreName(PyThreadState *tstate, PyValueBorrow v, PyObject *name, PyObject* ns);
 #define _PyEval_StoreName(V0, V1, V2, V3) \
     (_PyEval_StoreName)(V0, PyValue_Borrow(V1), V2, V3)
-PyAPI_FUNC(PyObject *) _PyEval_BinarySlice(PyValueBorrow container, PyValueBorrow start, PyValueBorrow stop);
+PyAPI_FUNC(PyValue) _PyEval_BinarySlice(PyValueBorrow container, PyValueBorrow start, PyValueBorrow stop);
 #define _PyEval_BinarySlice(V0, V1, V2) \
     (_PyEval_BinarySlice)(PyValue_Borrow(V0), PyValue_Borrow(V1), PyValue_Borrow(V2))
 PyAPI_FUNC(int) _PyEval_StoreSlice(PyValueBorrow v, PyValueBorrow container, PyValueBorrow start, PyValueBorrow stop);

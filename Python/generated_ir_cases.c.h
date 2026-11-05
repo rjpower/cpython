@@ -4073,17 +4073,16 @@
                 stop = IR_VIEW(IR_D(ir_word));
                 start = IR_VIEW(IR_C(ir_word));
                 container = IR_VIEW(IR_B(ir_word));
-                PyObject *res_o = _PyEval_BinarySlice(container, start, stop);
+                res = _PyEval_BinarySlice(container, start, stop);
                 ir_own_D = IR_CONSUME_INPUT(IR_D(ir_word), stop);
                 PyValue_XCLOSE(ir_own_D);
                 ir_own_C = IR_CONSUME_INPUT(IR_C(ir_word), start);
                 PyValue_XCLOSE(ir_own_C);
                 ir_own_B = IR_CONSUME_INPUT(IR_B(ir_word), container);
                 PyValue_XCLOSE(ir_own_B);
-                if (res_o == NULL) {
+                if (PyValue_IsNull(res)) {
                     JUMP_TO_LABEL(error);
                 }
-                res = PyValue_FromObjectSteal(res_o);
             }
             IR_STORE_DST(IR_A(ir_word), res);
             if (!PyValue_IsNull(ir_displaced) &&
@@ -4316,15 +4315,13 @@
         TARGET(BUILD_SLICE) {
             int opcode = BUILD_SLICE;
             (void)(opcode);
+            _PyValueTemps *const value_temps = NULL;
+            (void)value_temps;
             _PyIRWord* const this_instr = next_instr;
             (void)this_instr;
             frame->instr_ptr = next_instr;
             next_instr += 1;
             INSTRUCTION_STATS(BUILD_SLICE);
-            PyObject *value_boxes[4];
-            _PyValueTemps value_owners;
-            value_owners = (_PyValueTemps){value_boxes, 0, 4};
-            _PyValueTemps *value_temps = &value_owners;
             PyValue ir_displaced = PyValue_NULL;
             (void)ir_displaced;
             int oparg = (int)IR_C(ir_word);
@@ -4335,19 +4332,8 @@
             PyValue slice;
             args = &window[0];
             _PyValue_RecheckWindow(args, oparg);
-            PyObject *start_o = _PyValueTemps_Object(value_temps, args[0]);
-            if (start_o == NULL) {
-                JUMP_TO_LABEL(error);
-            }
-            PyObject *stop_o = _PyValueTemps_Object(value_temps, args[1]);
-            if (stop_o == NULL) {
-                JUMP_TO_LABEL(error);
-            }
-            PyObject *step_o = oparg == 3 ? _PyValueTemps_Object(value_temps, args[2]) : NULL;
-            if (oparg == 3 && step_o == NULL) {
-                JUMP_TO_LABEL(error);
-            }
-            PyObject *slice_o = PySlice_New(start_o, stop_o, step_o);
+            PyObject *slice_o = _PySlice_FromValues(
+                args[0], args[1], oparg == 3 ? args[2] : PyValue_NULL);
             PyValue tmp;
             for (int _i = oparg; --_i >= 0;) {
                 tmp = args[_i];
@@ -4362,7 +4348,7 @@
             IR_PUBLISH_TEMP(window[0], slice);
             IR_MOVE_TO_DST(IR_A(ir_word), window[0]);
             if (!PyValue_IsNull(ir_displaced) &&
-                finish_displaced_local(tstate, frame, next_instr, value_temps, ir_displaced) < 0) {
+                finish_displaced_local(tstate, frame, next_instr, NULL, ir_displaced) < 0) {
                 next_instr = frame->instr_ptr + 1;
                 JUMP_TO_LABEL(error);
             }

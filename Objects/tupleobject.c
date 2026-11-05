@@ -12,6 +12,7 @@
 #include "pycore_value_ops.h"
 #include "pycore_tuple.h"         // _PyTupleIterObject
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
 
 /*[clinic input]
@@ -120,13 +121,7 @@ PyTuple_GetValue(PyObject *op, Py_ssize_t i)
 PyObject *
 PyTuple_GetItemRef(PyObject *op, Py_ssize_t i)
 {
-    PyValue value = PyTuple_GetValue(op, i);
-    if (PyValue_IsNull(value)) {
-        return NULL;
-    }
-    PyObject *result = _PyValue_AsObjectAt(value, BOX_SITE_TUPLE);
-    PyValue_CLOSE(value);
-    return result;
+    return _PyValue_THUNK_EXIT(PyTuple_GetValue(op, i));
 }
 
 void
@@ -177,10 +172,14 @@ PyTuple_SetItem(PyObject *op, Py_ssize_t i, PyObject *item)
 void
 _PyTuple_ReplaceTakeRef(PyObject *op, Py_ssize_t i, PyObject *item)
 {
+    _PyTuple_ReplaceTakeValue(op, i, PyValue_PrepareOwned(item));
+}
+
+void
+_PyTuple_ReplaceTakeValue(PyObject *op, Py_ssize_t i, PyValue value)
+{
     assert(PyTuple_CheckExact(op));
     assert(0 <= i && i < Py_SIZE(op));
-    PyValue value = PyValue_PrepareOwned(item);
-    // a move: replaced below
     PyValue old = _PyTuple_CAST(op)->ob_item[i];
     _PyTuple_CAST(op)->ob_item[i] = value;
     _PyValue_CheckHome(_PyTuple_CAST(op)->ob_item[i]);
@@ -257,13 +256,76 @@ PyTuple_Pack(Py_ssize_t n, ...)
     return (PyObject *)result;
 }
 
+/* A new tuple of the n owners, which it consumes on every exit. */
+static PyObject *
+tuple_from_owners(PyValue *owners, Py_ssize_t n)
+{
+    assert(n > 0);
+    PyTupleObject *tuple = tuple_alloc(n);
+    if (tuple == NULL) {
+        for (Py_ssize_t i = 0; i < n; i++) {
+            PyValue_CLOSE(owners[i]);
+        }
+        return NULL;
+    }
+    bool track = false;
+    for (Py_ssize_t i = 0; i < n; i++) {
+        assert(PyValue_IsLanguageValue(owners[i]));
+        tuple->ob_item[i] = owners[i];
+        _PyValue_CheckHome(tuple->ob_item[i]);
+        track |= maybe_tracked(tuple->ob_item[i]);
+    }
+    if (track) {
+        _PyObject_GC_TRACK(tuple);
+    }
+    return (PyObject *)tuple;
+}
+
+/* The value form of PyTuple_Pack(n, ...). It retains every input before it
+   allocates the tuple, since that allocation can run code that releases a
+   borrow's owner. */
+PyObject *
+_PyTuple_PackValues(Py_ssize_t n, const PyValueBorrow *items)
+{
+    if (n == 0) {
+        return tuple_get_empty();
+    }
+    if (n < 0) {
+        PyErr_BadInternalCall();
+        return NULL;
+    }
+    PyValue small[8];
+    PyValue *owners = small;
+    if (n > (Py_ssize_t)Py_ARRAY_LENGTH(small)) {
+        owners = PyMem_New(PyValue, n);
+        if (owners == NULL) {
+            return PyErr_NoMemory();
+        }
+    }
+    for (Py_ssize_t i = 0; i < n; i++) {
+        owners[i] = PyValue_DUP(items[i]);
+    }
+    PyObject *tuple = tuple_from_owners(owners, n);
+    if (owners != small) {
+        PyMem_Free(owners);
+    }
+    return tuple;
+}
+
+PyObject *
+_PyTuple_FromPairTakeValue(PyValue first, PyValue second)
+{
+    PyValue owners[2] = {first, second};
+    return tuple_from_owners(owners, 2);
+}
+
 PyObject *
 _PyTuple_FromPair(PyObject *first, PyObject *second)
 {
     assert(first != NULL);
     assert(second != NULL);
-
-    return _PyTuple_FromPairSteal(Py_NewRef(first), Py_NewRef(second));
+    return _PyTuple_PackValues(2, (PyValueBorrow[]){
+        PyValue_FromObjectBorrow(first), PyValue_FromObjectBorrow(second)});
 }
 
 PyObject *
@@ -271,19 +333,8 @@ _PyTuple_FromPairSteal(PyObject *first, PyObject *second)
 {
     assert(first != NULL);
     assert(second != NULL);
-
-    PyTupleObject *op = tuple_alloc(2);
-    if (op == NULL) {
-        Py_DECREF(first);
-        Py_DECREF(second);
-        return NULL;
-    }
-    op->ob_item[0] = PyValue_PrepareOwned(first);
-    op->ob_item[1] = PyValue_PrepareOwned(second);
-    if (maybe_tracked(op->ob_item[0]) || maybe_tracked(op->ob_item[1])) {
-        _PyObject_GC_TRACK(op);
-    }
-    return (PyObject *)op;
+    return _PyTuple_FromPairTakeValue(PyValue_FromObjectSteal(first),
+                                      PyValue_FromObjectSteal(second));
 }
 
 /* Methods */

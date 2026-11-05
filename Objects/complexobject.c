@@ -12,6 +12,7 @@
 #include "pycore_long.h"          // _PyLong_GetZero()
 #include "pycore_object.h"        // _PyObject_Init()
 #include "pycore_pymath.h"        // _Py_ADJUST_ERANGE2()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 
 #define _PyComplexObject_CAST(op)   ((PyComplexObject *)(op))
@@ -1141,7 +1142,9 @@ actual_complex_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         return complex_subtype_from_doubles(type, 0, 0);
     }
 
-    PyObject *arg = PyTuple_GetItemRef(args, 0);
+    PyValue v = PyTuple_GetValue(args, 0);
+    PyObject *arg = PyValue_IsNull(v) ? NULL : _PyValue_AsObjectAt(v, BOX_SITE_TUPLE);
+    PyValue_XCLOSE(v);
     if (arg == NULL) {
         return NULL;
     }

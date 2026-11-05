@@ -27,10 +27,14 @@ PyAPI_DATA(PyTypeObject) PyListRevIter_Type;
 PyAPI_FUNC(PyObject *) PyList_New(Py_ssize_t size);
 PyAPI_FUNC(Py_ssize_t) PyList_Size(PyObject *);
 #if !defined(Py_LIMITED_API) || Py_LIMITED_API+0 >= 0x030d0000
+Py_VALUE_COMPAT(PyList_GetValue)
 PyAPI_FUNC(PyObject *) PyList_GetItemRef(PyObject *, Py_ssize_t);
 #endif
+Py_VALUE_COMPAT(PyList_SetValue)
 PyAPI_FUNC(int) PyList_SetItem(PyObject *, Py_ssize_t, PyObject *);
+Py_VALUE_COMPAT(PyList_InsertValue)
 PyAPI_FUNC(int) PyList_Insert(PyObject *, Py_ssize_t, PyObject *);
+Py_VALUE_COMPAT(PyList_AppendValue)
 PyAPI_FUNC(int) PyList_Append(PyObject *, PyObject *);
 
 PyAPI_FUNC(PyObject *) PyList_GetSlice(PyObject *, Py_ssize_t, Py_ssize_t);

@@ -10,6 +10,8 @@
 #include "pycore_pyatomic_ft_wrappers.h"  // FT_ATOMIC_LOAD_SSIZE_RELAXED()
 #include "pycore_pyerrors.h"      // _PyErr_FormatFromCause()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
+#include "pycore_tuple.h"         // PyTuple_GET_VALUE()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 
 typedef struct {
@@ -341,11 +343,11 @@ calliter_setstate(PyObject *op, PyObject *state)
     if (!PyTuple_Check(state) || PyTuple_GET_SIZE(state) != 2) {
         goto error;
     }
-    sentinel = PyTuple_GetItemRef(state, 0);
+    sentinel = _PyValue_AsObjectAt(PyTuple_GET_VALUE(state, 0), BOX_SITE_TUPLE);
     if (sentinel == NULL) {
         return NULL;
     }
-    stop_exc = PyTuple_GetItemRef(state, 1);
+    stop_exc = _PyValue_AsObjectAt(PyTuple_GET_VALUE(state, 1), BOX_SITE_TUPLE);
     if (stop_exc == NULL) {
         goto fail;
     }
@@ -357,7 +359,7 @@ calliter_setstate(PyObject *op, PyObject *state)
     }
     if (it->it_callable != NULL) {
         if (PyTuple_GET_SIZE(sentinel)) {
-            item = PyTuple_GetItemRef(sentinel, 0);
+            item = _PyValue_AsObjectAt(PyTuple_GET_VALUE(sentinel, 0), BOX_SITE_TUPLE);
             if (item == NULL) {
                 goto fail;
             }

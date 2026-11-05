@@ -11,8 +11,11 @@
 #include "pycore_moduleobject.h"
 #include "pycore_pyatomic_ft_wrappers.h"
 #include "pycore_pyerrors.h"
+#include "pycore_setobject.h"     // PySet_AddValue()
 #include "pycore_traceback.h"
 #include "pycore_tstate.h"
+#include "pycore_tuple.h"         // _PyTuple_PackValues()
+#include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
 
 typedef struct {
     PyObject_HEAD
@@ -111,7 +114,17 @@ lazy_import_get_loaded_attr(PyThreadState *tstate, PyObject *name,
         current != mod) {
         goto done;
     }
-    if (PyDict_GetItemRef(dict, attr_name, &attr) < 0) {
+    PyValue attr_value;
+    int attr_rc = PyDict_GetValue(dict, PyValue_FromObjectBorrow(attr_name),
+                                  &attr_value);
+    if (attr_rc > 0) {
+        attr = _PyValue_AsObjectAt(attr_value, BOX_SITE_DICT);
+        PyValue_CLOSE(attr_value);
+        if (attr == NULL) {
+            attr_rc = -1;
+        }
+    }
+    if (attr_rc < 0) {
         goto done;
     }
     if (attr != NULL && PyLazyImport_CheckExact(attr)) {
@@ -359,7 +372,7 @@ _PyLazyImport_IsResolving(PyThreadState *tstate, PyObject *op)
 {
     _PyThreadStateImpl *ts = (_PyThreadStateImpl *)tstate;
     assert(PyLazyImport_CheckExact(op));
-    int active = ts->lazy_imports == NULL ? 0 : PySet_Contains(ts->lazy_imports, op);
+    int active = ts->lazy_imports == NULL ? 0 : PySet_ContainsValue(ts->lazy_imports, PyValue_FromObjectBorrow(op));
     assert(active >= 0);  // Exact placeholders use identity hashing and equality.
     return active;
 }
@@ -411,7 +424,7 @@ lazy_import_resolve_impl(PyThreadState *tstate, PyObject *lazy_import,
         }
     }
     resolving = ts->lazy_imports;
-    if (PySet_Add(resolving, lazy_import) < 0) {
+    if (PySet_AddValue(resolving, PyValue_FromObjectBorrow(lazy_import)) < 0) {
         goto done;
     }
 
@@ -419,7 +432,7 @@ lazy_import_resolve_impl(PyThreadState *tstate, PyObject *lazy_import,
     // Keep an empty tuple intact for custom __import__ hooks.
     if (first != NULL && root->lz_attr != NULL &&
         PyTuple_Check(root->lz_attr) && PyTuple_GET_SIZE(root->lz_attr) > 0) {
-        fromlist = PyTuple_Pack(1, first->lz_attr);
+        fromlist = _PyTuple_PackValues(1, (PyValueBorrow[]){PyValue_FromObjectBorrow(first->lz_attr)});
     }
     else {
         fromlist = Py_NewRef(root->lz_attr != NULL ? root->lz_attr : Py_None);
@@ -499,7 +512,7 @@ lazy_import_resolve_impl(PyThreadState *tstate, PyObject *lazy_import,
         FT_ATOMIC_STORE_INT_RELAXED(root->lz_active, 1);
         FT_ATOMIC_STORE_INT_RELAXED(tstate->interp->imports.has_lazy_submodules, 1);
         int package = PyModule_CheckExact(obj) ?
-            PyDict_Contains(_PyModule_GetDict(obj), &_Py_ID(__path__)) : 0;
+            PyDict_ContainsValue(_PyModule_GetDict(obj), _PyValue_FromObjectKnown(&_Py_ID(__path__))) : 0;
         if (package < 0) {
             Py_CLEAR(obj);
         }
@@ -546,7 +559,7 @@ done:
     if (resolving != NULL) {
         // A failed set resize can leave the placeholder inserted. Removing by
         // identity also permits greenlets to finish in a different order.
-        if (PySet_Discard(resolving, lazy_import) < 0) {
+        if (PySet_DiscardValue(resolving, PyValue_FromObjectBorrow(lazy_import)) < 0) {
             Py_CLEAR(obj);
         }
         if (PySet_GET_SIZE(resolving) == 0) {
@@ -603,7 +616,7 @@ _PyLazyImport_LoadChild(PyThreadState *tstate, PyObject *declaration,
     Py_DECREF(lz);
     if (result != NULL && PyModule_Check(result) &&
         PyUnicode_Compare(source->lz_from, name) != 0 &&
-        !PyDict_Contains(_PyModule_GetDict(result), &_Py_ID(__path__))) {
+        !PyDict_ContainsValue(_PyModule_GetDict(result), _PyValue_FromObjectKnown(&_Py_ID(__path__)))) {
         // Reaching a non-package must still reject an invalid dotted import.
         Py_DECREF(result);
         return _PyLazyImport_LoadChild(tstate, declaration, source->lz_from);

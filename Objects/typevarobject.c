@@ -7,6 +7,7 @@
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString()
 #include "pycore_unionobject.h"   // _Py_union_type_or, _Py_union_from_tuple
 #include "pycore_value.h"         // PyValue_TYPE()
+#include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
 #include "structmember.h"
 
 /*[clinic input]
@@ -197,7 +198,9 @@ constevaluator_call(PyObject *self, PyObject *args, PyObject *kwargs)
                 return NULL;
             }
             for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(value); i++) {
-                PyObject *item = PyTuple_GetItemRef(value, i);
+                PyValue item_v = PyTuple_GetValue(value, i);
+                PyObject *item = PyValue_IsNull(item_v) ? NULL : _PyValue_AsObjectAt(item_v, BOX_SITE_TUPLE);
+                PyValue_XCLOSE(item_v);
                 if (item == NULL) {
                     PyUnicodeWriter_Discard(writer);
                     return NULL;
@@ -386,7 +389,7 @@ type_check(PyObject *arg, const char *msg)
 static PyObject *
 make_union(PyObject *self, PyObject *other)
 {
-    PyObject *args = _PyTuple_FromPair(self, other);
+    PyObject *args = _PyTuple_PackValues(2, (PyValueBorrow[]){PyValue_FromObjectBorrow(self), PyValue_FromObjectBorrow(other)});
     if (args == NULL) {
         return NULL;
     }
@@ -458,7 +461,9 @@ unpack_typevartuples(PyObject *params)
         }
         PyTypeObject *tp = _PyInterpreterState_GET()->cached_objects.typevartuple_type;
         for (Py_ssize_t i = 0; i < n; i++) {
-            PyObject *param = PyTuple_GetItemRef(params, i);
+            PyValue param_v = PyTuple_GetValue(params, i);
+            PyObject *param = PyValue_IsNull(param_v) ? NULL : _PyValue_AsObjectAt(param_v, BOX_SITE_TUPLE);
+            PyValue_XCLOSE(param_v);
             if (param == NULL) {
                 Py_DECREF(new_params);
                 return NULL;
@@ -470,10 +475,10 @@ unpack_typevartuples(PyObject *params)
                     Py_DECREF(new_params);
                     return NULL;
                 }
-                PyTuple_SET_ITEM(new_params, i, unpacked);
+                PyTuple_SET_VALUE(new_params, i, PyValue_PrepareOwned(unpacked));
             }
             else {
-                PyTuple_SET_ITEM(new_params, i, param);
+                PyTuple_SET_VALUE(new_params, i, PyValue_PrepareOwned(param));
             }
         }
         return new_params;
@@ -820,7 +825,7 @@ typevar_typing_prepare_subst_impl(typevarobject *self, PyObject *alias,
             return NULL;
         }
         if (dflt != &_Py_NoDefaultStruct) {
-            PyObject *new_args = PyTuple_Pack(1, dflt);
+            PyObject *new_args = _PyTuple_PackValues(1, (PyValueBorrow[]){PyValue_FromObjectBorrow(dflt)});
             Py_DECREF(dflt);
             if (new_args == NULL) {
                 Py_DECREF(params);
@@ -1551,7 +1556,7 @@ unpack_iter(PyObject *self)
     if (unpacked == NULL) {
         return NULL;
     }
-    PyObject *tuple = PyTuple_Pack(1, unpacked);
+    PyObject *tuple = _PyTuple_PackValues(1, (PyValueBorrow[]){PyValue_FromObjectBorrow(unpacked)});
     if (tuple == NULL) {
         Py_DECREF(unpacked);
         return NULL;
@@ -2048,7 +2053,9 @@ typealias_check_type_params(PyObject *type_params, int *err) {
     PyThreadState *ts = _PyThreadState_GET();
     int default_seen = 0;
     for (Py_ssize_t index = 0; index < length; index++) {
-        PyObject *type_param = PyTuple_GetItemRef(type_params, index);
+        PyValue type_param_v = PyTuple_GetValue(type_params, index);
+        PyObject *type_param = PyValue_IsNull(type_param_v) ? NULL : _PyValue_AsObjectAt(type_param_v, BOX_SITE_TUPLE);
+        PyValue_XCLOSE(type_param_v);
         if (type_param == NULL) {
             *err = 1;
             return NULL;
@@ -2350,13 +2357,15 @@ call_typing_args_kwargs(const char *name, PyTypeObject *cls, PyObject *args, PyO
     if (new_args == NULL) {
         goto error;
     }
-    PyTuple_SET_ITEM(new_args, 0, Py_NewRef((PyObject *)cls));
+    PyTuple_SET_VALUE(new_args, 0, PyValue_DUP(_PyValue_FromObjectKnown((PyObject *)cls)));
     for (Py_ssize_t i = 0; i < nargs; i++) {
-        PyObject *arg = PyTuple_GetItemRef(args, i);
+        PyValue arg_v = PyTuple_GetValue(args, i);
+        PyObject *arg = PyValue_IsNull(arg_v) ? NULL : _PyValue_AsObjectAt(arg_v, BOX_SITE_TUPLE);
+        PyValue_XCLOSE(arg_v);
         if (arg == NULL) {
             goto error;
         }
-        PyTuple_SET_ITEM(new_args, i + 1, arg);
+        PyTuple_SET_VALUE(new_args, i + 1, PyValue_PrepareOwned(arg));
     }
     PyObject *result = PyObject_Call(func, new_args, kwargs);
     Py_DECREF(typing);

@@ -10,12 +10,14 @@
 #include "pycore_context.h"
 #include "pycore_interp.h"        // PyInterpreterState.gc
 #include "pycore_interpframe.h"   // _PyFrame_GetLocalsArray()
+#include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_object.h"
 #include "pycore_gc_trace.h"       // _PyGC_TraceAfterCollect()
 #include "pycore_object_alloc.h"  // _PyObject_MallocWithType()
 #include "pycore_pyerrors.h"
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_tuple.h"         // _PyTuple_MaybeUntrack()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "pycore_weakref.h"       // _PyWeakref_ClearRef()
 #include "pydtrace.h"
 
@@ -330,7 +332,7 @@ append_objects(PyObject *py_list, PyGC_Head *gc_list)
     for (gc = GC_NEXT(gc_list); gc != gc_list; gc = GC_NEXT(gc)) {
         PyObject *op = FROM_GC(gc);
         if (op != py_list) {
-            if (PyList_Append(py_list, op)) {
+            if (PyList_AppendValue(py_list, PyValue_FromObjectBorrow(op))) {
                 return -1; /* exception */
             }
         }
@@ -1032,7 +1034,7 @@ handle_legacy_finalizers(PyThreadState *tstate,
         PyObject *op = FROM_GC(gc);
 
         if ((gcstate->debug & _PyGC_DEBUG_SAVEALL) || has_legacy_finalizer(op)) {
-            if (PyList_Append(gcstate->garbage, op) < 0) {
+            if (PyList_AppendValue(gcstate->garbage, PyValue_FromObjectBorrow(op)) < 0) {
                 _PyErr_Clear(tstate);
                 break;
             }
@@ -1102,7 +1104,7 @@ delete_garbage(PyThreadState *tstate, GCState *gcstate,
 
         if (gcstate->debug & _PyGC_DEBUG_SAVEALL) {
             assert(gcstate->garbage != NULL);
-            if (PyList_Append(gcstate->garbage, op) < 0) {
+            if (PyList_AppendValue(gcstate->garbage, PyValue_FromObjectBorrow(op)) < 0) {
                 _PyErr_Clear(tstate);
             }
         }
@@ -1302,7 +1304,9 @@ invoke_gc_callback(PyThreadState *tstate, const char *phase,
 
     PyObject *stack[] = {phase_obj, info};
     for (Py_ssize_t i=0; i<PyList_GET_SIZE(gcstate->callbacks); i++) {
-        PyObject *r, *cb = PyList_GetItemRef(gcstate->callbacks, i);
+        PyValue cb_v = PyList_GetValue(gcstate->callbacks, i);
+        PyObject *r, *cb = PyValue_IsNull(cb_v) ? NULL : _PyValue_AsObjectAt(cb_v, BOX_SITE_LIST);
+        PyValue_XCLOSE(cb_v);
         if (cb == NULL) {
             PyErr_FormatUnraisable("Exception ignored on invoking gc callbacks");
             break;
@@ -1714,7 +1718,7 @@ gc_referrers_for(PyObject *objs, PyGC_Head *list, PyObject *resultlist)
             continue;
         }
         if (traverse(obj, referrersvisit, objs)) {
-            if (PyList_Append(resultlist, obj) < 0) {
+            if (PyList_AppendValue(resultlist, PyValue_FromObjectBorrow(obj)) < 0) {
                 return 0; /* error */
             }
         }

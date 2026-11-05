@@ -6,6 +6,7 @@
 #include "pycore_template.h"
 #include "pycore_tuple.h"         // _PyTuple_GET_OBJECT()
 #include "pycore_value.h"         // PyValue_TYPE()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 typedef struct {
     PyObject_HEAD
@@ -157,25 +158,25 @@ template_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
                     return NULL;
                 }
                 /* Replace laststring with concat */
-                _PyTuple_ReplaceTakeRef(strings, stringsidx - 1, concat);
+                _PyTuple_ReplaceTakeValue(strings, stringsidx - 1, PyValue_PrepareOwned(concat));
             }
             else {
-                PyTuple_SET_ITEM(strings, stringsidx++, Py_NewRef(item));
+                PyTuple_SET_VALUE(strings, stringsidx++, PyValue_DUP(PyValue_FromObjectBorrow(item)));
             }
             last_was_str = 1;
         }
         else if (_PyInterpolation_CheckExact(item)) {
             if (!last_was_str) {
                 _Py_DECLARE_STR(empty, "");
-                PyTuple_SET_ITEM(strings, stringsidx++, &_Py_STR(empty));
+                PyTuple_SET_VALUE(strings, stringsidx++, PyValue_PrepareOwned(&_Py_STR(empty)));
             }
-            PyTuple_SET_ITEM(interpolations, interpolationsidx++, Py_NewRef(item));
+            PyTuple_SET_VALUE(interpolations, interpolationsidx++, PyValue_DUP(PyValue_FromObjectBorrow(item)));
             last_was_str = 0;
         }
     }
     if (!last_was_str) {
         _Py_DECLARE_STR(empty, "");
-        PyTuple_SET_ITEM(strings, stringsidx++, &_Py_STR(empty));
+        PyTuple_SET_VALUE(strings, stringsidx++, PyValue_PrepareOwned(&_Py_STR(empty)));
     }
 
     PyObject *template = _PyTemplate_Build(strings, interpolations);
@@ -258,11 +259,15 @@ template_strings_concat(PyObject *left, PyObject *right)
     Py_ssize_t right_stringslen = PyTuple_GET_SIZE(right);
     /* A template compiled from an AST can hold a non-string here, an inline
        int among them, so read both ends owned (boxing if needed). */
-    PyObject *left_laststring = PyTuple_GetItemRef(left, left_stringslen - 1);
+    PyValue left_lastv = PyTuple_GetValue(left, left_stringslen - 1);
+    PyObject *left_laststring = PyValue_IsNull(left_lastv) ? NULL : _PyValue_AsObjectAt(left_lastv, BOX_SITE_TUPLE);
+    PyValue_XCLOSE(left_lastv);
     if (left_laststring == NULL) {
         return NULL;
     }
-    PyObject *right_firststring = PyTuple_GetItemRef(right, 0);
+    PyValue right_firstv = PyTuple_GetValue(right, 0);
+    PyObject *right_firststring = PyValue_IsNull(right_firstv) ? NULL : _PyValue_AsObjectAt(right_firstv, BOX_SITE_TUPLE);
+    PyValue_XCLOSE(right_firstv);
     if (right_firststring == NULL) {
         Py_DECREF(left_laststring);
         return NULL;
@@ -285,7 +290,7 @@ template_strings_concat(PyObject *left, PyObject *right)
     for (Py_ssize_t i = 0; i < left_stringslen - 1; i++) {
         PyTuple_SET_VALUE(newstrings, index++, PyValue_DUP(PyTuple_GET_VALUE(left, i)));
     }
-    PyTuple_SET_ITEM(newstrings, index++, concat);
+    PyTuple_SET_VALUE(newstrings, index++, PyValue_PrepareOwned(concat));
     for (Py_ssize_t i = 1; i < right_stringslen; i++) {
         PyTuple_SET_VALUE(newstrings, index++, PyValue_DUP(PyTuple_GET_VALUE(right, i)));
     }
@@ -339,7 +344,7 @@ template_values_get(PyObject *op, void *Py_UNUSED(data))
 
     for (Py_ssize_t i = 0; i < len; i++) {
         PyObject *item = _PyTuple_GET_OBJECT(self->interpolations, i);
-        PyTuple_SET_ITEM(values, i, _PyInterpolation_GetValueRef(item));
+        PyTuple_SET_VALUE(values, i, PyValue_PrepareOwned(_PyInterpolation_GetValueRef(item)));
     }
 
     return values;

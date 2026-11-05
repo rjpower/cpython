@@ -19,6 +19,7 @@
 #include "pycore_typeobject.h"    // _PyStaticType_FiniBuiltin()
 #include "pycore_unicodeobject.h" // _PyUnicode_InternImmortal()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
 static const char visible_length_key[] = "n_sequence_fields";
 static const char real_length_key[] = "n_fields";
@@ -32,8 +33,8 @@ const char * const PyStructSequence_UnnamedField = "unnamed field";
 static Py_ssize_t
 get_type_attr_as_size(PyTypeObject *tp, PyObject *name)
 {
-    PyObject *v;
-    int rc = PyDict_GetItemRef(_PyType_GetDict(tp), name, &v);
+    PyValue value;
+    int rc = PyDict_GetValue(_PyType_GetDict(tp), PyValue_FromObjectBorrow(name), &value);
 
     if (rc < 0) {
         return -1;
@@ -42,6 +43,11 @@ get_type_attr_as_size(PyTypeObject *tp, PyObject *name)
         PyErr_Format(PyExc_TypeError,
                      "Missed attribute '%U' of type %s",
                      name, tp->tp_name);
+        return -1;
+    }
+    PyObject *v = _PyValue_AsObjectAt(value, BOX_SITE_DICT);
+    PyValue_CLOSE(value);
+    if (v == NULL) {
         return -1;
     }
     Py_ssize_t size = PyLong_AsSsize_t(v);
@@ -130,10 +136,7 @@ PyStructSequence_SET_VALUE(PyObject *op, Py_ssize_t index, PyValue value)
 PyObject *
 PyStructSequence_GetItemRef(PyObject *op, Py_ssize_t index)
 {
-    assert(index >= 0 && index < REAL_SIZE(op));
-    PyValueBorrow value =
-        PyValue_Borrow(((PyStructSequence *)op)->ob_item[index]);
-    return PyValue_IsNull(value) ? NULL : _PyValue_AsObjectAt(value, BOX_SITE_CELL);
+    return _PyValue_THUNK_EXIT(PyValue_XDUP(PyStructSequence_GET_VALUE(op, index)));
 }
 
 
@@ -265,19 +268,19 @@ structseq_new_impl(PyTypeObject *type, PyObject *arg, PyObject *dict)
     if (dict != NULL && PyDict_GET_SIZE(dict) > 0) {
         Py_ssize_t n_found_keys = 0;
         for (i = len; i < max_len; ++i) {
-            PyObject *ob = NULL;
+            PyValue ob;
             const char *name = type->tp_members[i - n_unnamed_fields].name;
-            if (PyDict_GetItemStringRef(dict, name, &ob) < 0) {
+            if (PyDict_GetValueString(dict, name, &ob) < 0) {
                 Py_DECREF(res);
                 return NULL;
             }
-            if (ob == NULL) {
-                ob = Py_NewRef(Py_None);
+            if (PyValue_IsNull(ob)) {
+                ob = PyValue_DUP(_PyValue_FromObjectKnown(Py_None));
             }
             else {
                 ++n_found_keys;
             }
-            PyStructSequence_SetItem((PyObject *)res, i, ob);
+            PyStructSequence_SET_VALUE((PyObject *)res, i, ob);
         }
         if (PyDict_GET_SIZE(dict) > n_found_keys) {
             PyErr_Format(PyExc_TypeError,
@@ -459,16 +462,16 @@ structseq___replace___impl(PyStructSequence *self, PyObject *changes)
     // We do not support types with unnamed fields, so we can iterate over
     // i >= n_visible_fields case without slicing with (i - n_unnamed_fields).
     for (i = 0; i < n_fields; ++i) {
-        PyObject *ob;
-        if (PyDict_PopString(changes, Py_TYPE(self)->tp_members[i].name,
-                             &ob) < 0) {
+        PyValue ob;
+        if (PyDict_PopValueString(changes, Py_TYPE(self)->tp_members[i].name,
+                                  &ob) < 0) {
             goto error;
         }
-        if (ob == NULL) {
+        if (PyValue_IsNull(ob)) {
             result->ob_item[i] = PyValue_DUP(self->ob_item[i]);
         }
         else {
-            PyStructSequence_SetItem((PyObject *)result, i, ob);
+            PyStructSequence_SET_VALUE((PyObject *)result, i, ob);
         }
     }
     // Check if there are any unexpected fields.
@@ -519,7 +522,7 @@ initialize_structseq_dict(PyStructSequence_Desc *desc, PyObject* dict,
         if (v == NULL) {                                                       \
             return -1;                                                         \
         }                                                                      \
-        if (PyDict_SetItemString(dict, key, v) < 0) {                          \
+        if (PyDict_SetValueString(dict, key, PyValue_FromObjectBorrow(v)) < 0) {                          \
             Py_DECREF(v);                                                      \
             return -1;                                                         \
         }                                                                      \
@@ -545,7 +548,7 @@ initialize_structseq_dict(PyStructSequence_Desc *desc, PyObject* dict,
         if (new_member == NULL) {
             goto error;
         }
-        PyTuple_SET_ITEM(keys, k, new_member);
+        PyTuple_SET_VALUE(keys, k, PyValue_PrepareOwned(_PyObject_CAST(new_member)));
         k++;
     }
 
@@ -554,7 +557,7 @@ initialize_structseq_dict(PyStructSequence_Desc *desc, PyObject* dict,
         return -1;
     }
 
-    if (PyDict_SetItemString(dict, match_args_key, keys) < 0) {
+    if (PyDict_SetValueString(dict, match_args_key, PyValue_FromObjectBorrow(keys)) < 0) {
         goto error;
     }
 

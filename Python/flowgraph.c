@@ -1340,7 +1340,10 @@ get_const_value(int opcode, int oparg, PyObject *co_consts)
                          oparg, n);
             return NULL;
         }
-        return PyList_GetItemRef(co_consts, oparg);
+        PyValue v = PyList_GetValue(co_consts, oparg);
+        PyObject *obj = PyValue_IsNull(v) ? NULL : _PyValue_AsObjectAt(v, BOX_SITE_LIST);
+        PyValue_XCLOSE(v);
+        return obj;
     }
     if (opcode == LOAD_SMALL_INT) {
         return PyLong_FromLong(oparg);
@@ -1408,7 +1411,7 @@ add_const(PyObject *newconst, PyObject *consts, PyObject *const_cache,
         Py_DECREF(newconst);
         return -1;
     }
-    if (PyList_Append(consts, newconst)) {
+    if (PyList_AppendValue(consts, PyValue_FromObjectBorrow(newconst))) {
         Py_DECREF(newconst);
         return -1;
     }
@@ -1605,7 +1608,7 @@ fold_tuple_of_constants(basicblock *bb, int i, PyObject *consts,
             Py_DECREF(const_tuple);
             return ERROR;
         }
-        PyTuple_SET_ITEM(const_tuple, i, element);
+        PyTuple_SET_VALUE(const_tuple, i, PyValue_PrepareOwned(element));
     }
 
     nop_out(const_instrs, seq_size);
@@ -1690,7 +1693,7 @@ fold_constant_seq_into_load_const(basicblock *bb, int i,
                         return ERROR;
                     }
                     assert(consts_found > 0);
-                    PyTuple_SET_ITEM(newconst, --consts_found, constant);
+                    PyTuple_SET_VALUE(newconst, --consts_found, PyValue_PrepareOwned(constant));
                 }
                 nop_out(&instr, 1);
             }
@@ -1779,7 +1782,7 @@ optimize_lists_and_sets(basicblock *bb, int i, int nextop,
             Py_DECREF(const_result);
             return ERROR;
         }
-        PyTuple_SET_ITEM(const_result, i, element);
+        PyTuple_SET_VALUE(const_result, i, PyValue_PrepareOwned(element));
     }
 
     if (instr->i_opcode == BUILD_SET) {

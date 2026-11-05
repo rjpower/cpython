@@ -11,7 +11,7 @@
 #include "pycore_interp.h"        // struct _import_runtime_state
 #include "pycore_interpframe.h"
 #include "pycore_lazyimportobject.h"
-#include "pycore_list.h"          // PyList_GET_VALUE()
+#include "pycore_list.h"          // PyList_GET_VALUE(), PyList_AppendValue()
 #include "pycore_magic_number.h"  // PYC_MAGIC_NUMBER_TOKEN
 #include "pycore_moduleobject.h"  // _PyModule_GetDef()
 #include "pycore_namespace.h"     // _PyNamespace_Type
@@ -28,6 +28,7 @@
 #include "pycore_tuple.h"         // _PyTuple_GET_OBJECT()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
 #include "pycore_value.h"         // PyValue_AsKnownObjectBorrow()
+#include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
 #include "pycore_weakref.h"       // _PyWeakref_GET_REF()
 
 #include "marshal.h"              // PyMarshal_ReadObjectFromString()
@@ -293,7 +294,7 @@ _PyImport_DiscardLazyModule(PyInterpreterState *interp, PyObject *name)
     if (LAZY_MODULES(interp) == NULL) {
         return 0;
     }
-    return PySet_Discard(LAZY_MODULES(interp), name);
+    return PySet_DiscardValue(LAZY_MODULES(interp), PyValue_FromObjectBorrow(name));
 }
 
 static PyObject *
@@ -515,7 +516,7 @@ remove_module(PyThreadState *tstate, PyObject *name)
     PyObject *modules = get_modules_dict(tstate, true);
     if (PyDict_CheckExact(modules)) {
         // Error is reported to the caller
-        (void)PyDict_Pop(modules, name, NULL);
+        (void)PyDict_PopValue(modules, PyValue_FromObjectBorrow(name), NULL);
     }
     else if (PyMapping_DelItem(modules, name) < 0) {
         if (_PyErr_ExceptionMatches(tstate, PyExc_KeyError)) {
@@ -616,12 +617,12 @@ _modules_by_index_set(PyInterpreterState *interp,
     }
 
     while (PyList_GET_SIZE(MODULES_BY_INDEX(interp)) <= index) {
-        if (PyList_Append(MODULES_BY_INDEX(interp), Py_None) < 0) {
+        if (PyList_AppendValue(MODULES_BY_INDEX(interp), _PyValue_FromObjectKnown(Py_None)) < 0) {
             return -1;
         }
     }
 
-    return PyList_SetItem(MODULES_BY_INDEX(interp), index, Py_NewRef(module));
+    return PyList_SetValue(MODULES_BY_INDEX(interp), index, PyValue_DUP(PyValue_FromObjectBorrow(module)));
 }
 
 static int
@@ -632,7 +633,7 @@ _modules_by_index_clear_one(PyInterpreterState *interp, Py_ssize_t index)
         Py_FatalError(err);
         return -1;
     }
-    return PyList_SetItem(MODULES_BY_INDEX(interp), index, Py_NewRef(Py_None));
+    return PyList_SetValue(MODULES_BY_INDEX(interp), index, PyValue_DUP(_PyValue_FromObjectKnown(Py_None)));
 }
 
 
@@ -2726,7 +2727,7 @@ _PyImport_GetBuiltinModuleNames(void)
             Py_DECREF(list);
             return NULL;
         }
-        if (PyList_Append(list, name) < 0) {
+        if (PyList_AppendValue(list, PyValue_FromObjectBorrow(name)) < 0) {
             Py_DECREF(name);
             Py_DECREF(list);
             return NULL;
@@ -2850,9 +2851,9 @@ module_dict_for_exec(PyThreadState *tstate, PyObject *name)
     /* If the module is being reloaded, we get the old module back
        and re-use its dict to exec the new code. */
     d = PyModule_GetDict(m);
-    int r = PyDict_Contains(d, &_Py_ID(__builtins__));
+    int r = PyDict_ContainsValue(d, _PyValue_FromObjectKnown(&_Py_ID(__builtins__)));
     if (r == 0) {
-        r = PyDict_SetItem(d, &_Py_ID(__builtins__), PyEval_GetBuiltins());
+        r = PyDict_SetValue(d, _PyValue_FromObjectKnown(&_Py_ID(__builtins__)), PyValue_FromObjectBorrow(PyEval_GetBuiltins()));
     }
     if (r < 0) {
         remove_module(tstate, name);
@@ -3017,7 +3018,7 @@ list_frozen_module_names(void)
         if (nameobj == NULL) { \
             goto error; \
         } \
-        int res = PyList_Append(names, nameobj); \
+        int res = PyList_AppendValue(names, PyValue_FromObjectBorrow(nameobj)); \
         Py_DECREF(nameobj); \
         if (res != 0) { \
             goto error; \
@@ -3067,7 +3068,7 @@ list_frozen_module_names(void)
                 Py_DECREF(nameobj);
             }
             else {
-                int res = PyList_Append(names, nameobj);
+                int res = PyList_AppendValue(names, PyValue_FromObjectBorrow(nameobj));
                 Py_DECREF(nameobj);
                 if (res != 0) {
                     goto error;
@@ -3295,7 +3296,7 @@ PyImport_ImportFrozenModuleObject(PyObject *name)
             Py_DECREF(m);
             goto err_return;
         }
-        err = PyDict_SetItemString(d, "__path__", l);
+        err = PyDict_SetValueString(d, "__path__", PyValue_FromObjectBorrow(l));
         Py_DECREF(l);
         Py_DECREF(m);
         if (err != 0)
@@ -3321,7 +3322,7 @@ PyImport_ImportFrozenModuleObject(PyObject *name)
     else {
         origname = Py_NewRef(Py_None);
     }
-    err = PyDict_SetItemString(d, "__origname__", origname);
+    err = PyDict_SetValueString(d, "__origname__", PyValue_FromObjectBorrow(origname));
     Py_DECREF(origname);
     if (err != 0) {
         goto err_return;
@@ -3528,6 +3529,38 @@ _PyImport_ImportlibModuleRepr(PyInterpreterState *interp, PyObject *m)
    a finder for this path item. Cache the result in
    path_importer_cache. */
 
+/* Like the old PyDict_GetItemRef(): return 1 with a new reference in *out,
+   0 with *out set to NULL if the key is missing, or -1 with an exception
+   and *out set to NULL. */
+static int
+import_dict_get_object(PyObject *dict, PyValueBorrow key, PyObject **out)
+{
+    PyValue value;
+    int rc = PyDict_GetValue(dict, key, &value);
+    *out = NULL;
+    if (rc <= 0) {
+        return rc;
+    }
+    *out = _PyValue_AsObjectAt(value, BOX_SITE_DICT);
+    PyValue_CLOSE(value);
+    return *out == NULL ? -1 : 1;
+}
+
+/* Same, with a C string key. */
+static int
+import_dict_get_object_string(PyObject *dict, const char *key, PyObject **out)
+{
+    PyValue value;
+    int rc = PyDict_GetValueString(dict, key, &value);
+    *out = NULL;
+    if (rc <= 0) {
+        return rc;
+    }
+    *out = _PyValue_AsObjectAt(value, BOX_SITE_DICT);
+    PyValue_CLOSE(value);
+    return *out == NULL ? -1 : 1;
+}
+
 static PyObject *
 get_path_importer(PyThreadState *tstate, PyObject *path_importer_cache,
                   PyObject *path_hooks, PyObject *p)
@@ -3548,17 +3581,20 @@ get_path_importer(PyThreadState *tstate, PyObject *path_importer_cache,
     if (nhooks < 0)
         return NULL; /* Shouldn't happen */
 
-    if (PyDict_GetItemRef(path_importer_cache, p, &importer) != 0) {
+    if (import_dict_get_object(path_importer_cache, PyValue_FromObjectBorrow(p), &importer) != 0) {
         // found or error
         return importer;
     }
     // not found
     /* set path_importer_cache[p] to None to avoid recursion */
-    if (PyDict_SetItem(path_importer_cache, p, Py_None) != 0)
+    if (PyDict_SetValue(path_importer_cache, PyValue_FromObjectBorrow(p), _PyValue_FromObjectKnown(Py_None)) != 0)
         return NULL;
 
     for (j = 0; j < nhooks; j++) {
-        PyObject *hook = PyList_GetItemRef(path_hooks, j);
+        PyValue hook_value = PyList_GetValue(path_hooks, j);
+        PyObject *hook = PyValue_IsNull(hook_value) ? NULL
+            : _PyValue_AsObjectAt(hook_value, BOX_SITE_LIST);
+        PyValue_XCLOSE(hook_value);
         if (hook == NULL)
             return NULL;
         importer = PyObject_CallOneArg(hook, p);
@@ -3574,7 +3610,7 @@ get_path_importer(PyThreadState *tstate, PyObject *path_importer_cache,
     if (importer == NULL) {
         Py_RETURN_NONE;
     }
-    if (PyDict_SetItem(path_importer_cache, p, importer) < 0) {
+    if (PyDict_SetValue(path_importer_cache, PyValue_FromObjectBorrow(p), PyValue_FromObjectBorrow(importer)) < 0) {
         Py_DECREF(importer);
         return NULL;
     }
@@ -3610,14 +3646,14 @@ _PyImport_InitDefaultImportFunc(PyInterpreterState *interp)
 {
     // Get the __import__ function
     PyObject *import_func;
-    if (PyDict_GetItemStringRef(interp->builtins, "__import__", &import_func) <= 0) {
+    if (import_dict_get_object_string(interp->builtins, "__import__", &import_func) <= 0) {
         return -1;
     }
     IMPORT_FUNC(interp) = import_func;
 
     // Get the __lazy_import__ function
-    if (PyDict_GetItemStringRef(interp->builtins, "__lazy_import__",
-                                &import_func) <= 0) {
+    if (import_dict_get_object_string(interp->builtins, "__lazy_import__",
+                                         &import_func) <= 0) {
         return -1;
     }
     LAZY_IMPORT_FUNC(interp) = import_func;
@@ -3766,14 +3802,14 @@ resolve_name(PyThreadState *tstate, PyObject *name, PyObject *globals, int level
                          "globals must be a dict or a frozendict");
         goto error;
     }
-    if (PyDict_GetItemRef(globals, &_Py_ID(__package__), &package) < 0) {
+    if (import_dict_get_object(globals, _PyValue_FromObjectKnown(&_Py_ID(__package__)), &package) < 0) {
         goto error;
     }
     if (package == Py_None) {
         Py_DECREF(package);
         package = NULL;
     }
-    if (PyDict_GetItemRef(globals, &_Py_ID(__spec__), &spec) < 0) {
+    if (import_dict_get_object(globals, _PyValue_FromObjectKnown(&_Py_ID(__spec__)), &spec) < 0) {
         goto error;
     }
 
@@ -3821,7 +3857,7 @@ resolve_name(PyThreadState *tstate, PyObject *name, PyObject *globals, int level
             goto error;
         }
 
-        if (PyDict_GetItemRef(globals, &_Py_ID(__name__), &package) < 0) {
+        if (import_dict_get_object(globals, _PyValue_FromObjectKnown(&_Py_ID(__name__)), &package) < 0) {
             goto error;
         }
         if (package == NULL) {
@@ -3836,7 +3872,7 @@ resolve_name(PyThreadState *tstate, PyObject *name, PyObject *globals, int level
             goto error;
         }
 
-        int haspath = PyDict_Contains(globals, &_Py_ID(__path__));
+        int haspath = PyDict_ContainsValue(globals, _PyValue_FromObjectKnown(&_Py_ID(__path__)));
         if (haspath < 0) {
             goto error;
         }
@@ -4159,7 +4195,7 @@ lazy_modules_add(PyThreadState *tstate, PyObject *name,
     int loaded = mod != NULL && mod != Py_None;
     if (loaded && PyModule_Check(mod)) {
         PyObject *spec;
-        if (PyDict_GetItemRef(_PyModule_GetDict(mod), &_Py_ID(__spec__), &spec) < 0) {
+        if (import_dict_get_object(_PyModule_GetDict(mod), _PyValue_FromObjectKnown(&_Py_ID(__spec__)), &spec) < 0) {
             Py_DECREF(mod);
             return -1;
         }
@@ -4190,7 +4226,7 @@ lazy_modules_add(PyThreadState *tstate, PyObject *name,
     if (loaded || LAZY_MODULES(tstate->interp) == NULL) {
         return 0;
     }
-    return PySet_Add(LAZY_MODULES(tstate->interp), name);
+    return PySet_AddValue(LAZY_MODULES(tstate->interp), PyValue_FromObjectBorrow(name));
 }
 
 // Ensure a dict of pending submodule names exists for the parent.
@@ -4254,8 +4290,8 @@ register_lazy_on_parent(PyThreadState *tstate, PyObject *name, PyObject *source)
         int err = -1;
         if (submodules != NULL && !PyErr_Occurred()) {
             err = source == Py_None ?
-                PyDict_SetDefaultRef(submodules, child, value, NULL) :
-                PyDict_SetItem(submodules, child, value);
+                _PyDict_SetDefaultValue(submodules, PyValue_FromObjectBorrow(child), PyValue_FromObjectBorrow(value), NULL) :
+                PyDict_SetValue(submodules, PyValue_FromObjectBorrow(child), PyValue_FromObjectBorrow(value));
         }
         Py_XDECREF(cached);
         Py_DECREF(child);
@@ -4275,7 +4311,7 @@ register_from_lazy_on_parent(PyThreadState *tstate, PyObject *existing_module,
     // already resolved or tracked by their own placeholders, so skip the alias.
     int rc = 0;
     if (existing_module != NULL && PyModule_Check(existing_module)) {
-        rc = PyDict_Contains(_PyModule_GetDict(existing_module), from);
+        rc = PyDict_ContainsValue(_PyModule_GetDict(existing_module), PyValue_FromObjectBorrow(from));
         if (rc != 0) {
             return rc < 0 ? -1 : 0;
         }
@@ -4313,10 +4349,10 @@ _PyImport_ClearLazySubmodule(PyThreadState *tstate, PyObject *name, int bind)
     PyObject *pending = NULL;
     int rc = -1;
     if (parent != NULL && child != NULL) {
-        rc = PyDict_GetItemRef(LAZY_PENDING_SUBMODULES(tstate->interp),
-                              parent, &pending);
+        rc = import_dict_get_object(LAZY_PENDING_SUBMODULES(tstate->interp),
+                                    _PyValue_FromObjectKnown(parent), &pending);
         if (rc > 0) {
-            rc = PyDict_Contains(pending, child);
+            rc = PyDict_ContainsValue(pending, PyValue_FromObjectBorrow(child));
         }
         if (rc > 0) {
             PyObject *loaded = import_get_module(tstate, name), *loaded_spec = NULL;
@@ -4344,18 +4380,17 @@ _PyImport_ClearLazySubmodule(PyThreadState *tstate, PyObject *name, int bind)
             }
             Py_XDECREF(spec);
             if (bind && initializing == 0 && module != NULL &&
-                PyModule_CheckExact(module) && PyDict_Contains(pending, child) > 0) {
+                PyModule_CheckExact(module) && PyDict_ContainsValue(pending, PyValue_FromObjectBorrow(child)) > 0) {
                 PyObject *value = import_get_module(tstate, name);
                 if (value != NULL && value != Py_None) {
-                    initializing = PyDict_SetDefaultRef(
-                        _PyModule_GetDict(module), child, value, NULL) < 0 ? -1 : 0;
+                    initializing = _PyDict_SetDefaultValue(_PyModule_GetDict(module), PyValue_FromObjectBorrow(child), PyValue_FromObjectBorrow(value), NULL) < 0 ? -1 : 0;
                 }
                 Py_XDECREF(value);
             }
             Py_XDECREF(module);
             rc = initializing < 0 ? -1 :
-                (initializing ? PyDict_SetItem(pending, child, Py_None) :
-                                PyDict_Pop(pending, child, NULL));
+                (initializing ? PyDict_SetValue(pending, PyValue_FromObjectBorrow(child), _PyValue_FromObjectKnown(Py_None)) :
+                                PyDict_PopValue(pending, PyValue_FromObjectBorrow(child), NULL));
         }
     }
 done:
@@ -4378,7 +4413,7 @@ _PyImport_TryLoadLazySubmodule(PyObject *module, PyObject *attr_name,
     *recheck_dict = 0;
     PyObject *mod_dict = _PyModule_GetDict(module);
     PyObject *mod_name;
-    if (PyDict_GetItemRef(mod_dict, &_Py_ID(__name__), &mod_name) <= 0) {
+    if (import_dict_get_object(mod_dict, _PyValue_FromObjectKnown(&_Py_ID(__name__)), &mod_name) <= 0) {
         return NULL;
     }
     PyObject *mod = NULL, *pending_set = NULL, *source = NULL;
@@ -4388,12 +4423,12 @@ _PyImport_TryLoadLazySubmodule(PyObject *module, PyObject *attr_name,
     PyThreadState *tstate = _PyThreadState_GET();
     PyObject *lazy_pending = LAZY_PENDING_SUBMODULES(tstate->interp);
     if (lazy_pending == NULL ||
-        PyDict_GetItemRef(lazy_pending, mod_name, &pending_set) <= 0) {
+        import_dict_get_object(lazy_pending, PyValue_FromObjectBorrow(mod_name), &pending_set) <= 0) {
         goto done;
     }
 
     *recheck_dict = 1;
-    if (PyDict_GetItemRef(pending_set, attr_name, &source) <= 0) {
+    if (import_dict_get_object(pending_set, PyValue_FromObjectBorrow(attr_name), &source) <= 0) {
         goto done;
     }
     PyObject *full_name = PyUnicode_FromFormat("%U.%U", mod_name, attr_name);
@@ -4403,7 +4438,7 @@ _PyImport_TryLoadLazySubmodule(PyObject *module, PyObject *attr_name,
     // Match eager from-imports: accept a partial module in an import cycle.
     if (source != Py_None && !suppress &&
         (_PyLazyImport_IsActive(source) ||
-         !PyDict_Contains(mod_dict, &_Py_ID(__getattr__)))) {
+         !PyDict_ContainsValue(mod_dict, _PyValue_FromObjectKnown(&_Py_ID(__getattr__))))) {
         mod = _PyLazyImport_LoadChild(tstate, source, full_name);
     }
     else {
@@ -4420,7 +4455,7 @@ _PyImport_TryLoadLazySubmodule(PyObject *module, PyObject *attr_name,
         if (loaded != NULL && loaded != Py_None) {
             (void)_PyDict_DelItemIf(mod_dict, attr_name,
                                   lazy_submodule_matches, loaded);
-            (void)PyDict_SetDefaultRef(pending_set, attr_name, source, NULL);
+            (void)_PyDict_SetDefaultValue(pending_set, PyValue_FromObjectBorrow(attr_name), PyValue_FromObjectBorrow(source), NULL);
         }
         Py_XDECREF(loaded);
         PyErr_SetRaisedException(exc);
@@ -4439,8 +4474,8 @@ _PyImport_TryLoadLazySubmodule(PyObject *module, PyObject *attr_name,
         }
         if (mod == Py_None || initializing < 0 ||
             (initializing == 0 &&
-             (PyDict_SetItem(mod_dict, attr_name, mod) < 0 ||
-              PyDict_Pop(pending_set, attr_name, NULL) < 0))) {
+             (PyDict_SetValue(mod_dict, PyValue_FromObjectBorrow(attr_name), PyValue_FromObjectBorrow(mod)) < 0 ||
+              PyDict_PopValue(pending_set, PyValue_FromObjectBorrow(attr_name), NULL) < 0))) {
             Py_CLEAR(mod);
         }
     }
@@ -4487,7 +4522,7 @@ _PyImport_LazyImportModuleLevelObject(PyThreadState *tstate,
     PyObject *existing_module = NULL;
 
     if (fromlist != NULL && PyUnicode_Check(fromlist)) {
-        fromlist = PyTuple_Pack(1, fromlist);
+        fromlist = _PyTuple_PackValues(1, (PyValueBorrow[]){PyValue_FromObjectBorrow(fromlist)});
         if (fromlist == NULL) {
             goto done;
         }
@@ -4501,7 +4536,7 @@ _PyImport_LazyImportModuleLevelObject(PyThreadState *tstate,
 
     if (filter != NULL) {
         PyObject *modname;
-        if (PyDict_GetItemRef(globals, &_Py_ID(__name__), &modname) < 0) {
+        if (import_dict_get_object(globals, _PyValue_FromObjectKnown(&_Py_ID(__name__)), &modname) < 0) {
             Py_DECREF(filter);
             goto done;
         }
@@ -4536,7 +4571,8 @@ _PyImport_LazyImportModuleLevelObject(PyThreadState *tstate,
     // Validate the entire fromlist before registering any pending imports.
     if (PyTuple_Check(fromlist)) {
         for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(fromlist); i++) {
-            PyObject *item = PyTuple_GetItemRef(fromlist, i);
+            PyObject *item = _PyValue_AsObjectAt(PyTuple_GET_VALUE(fromlist, i),
+                                                 BOX_SITE_TUPLE);
             if (item == NULL) {
                 goto done;
             }
@@ -4841,7 +4877,7 @@ init_zipimport(PyThreadState *tstate, int verbose)
     }
     else {
         /* sys.path_hooks.insert(0, zipimporter) */
-        int err = PyList_Insert(path_hooks, 0, zipimporter);
+        int err = PyList_InsertValue(path_hooks, 0, PyValue_FromObjectBorrow(zipimporter));
         Py_DECREF(zipimporter);
         if (err < 0) {
             Py_DECREF(path_hooks);
@@ -5113,7 +5149,7 @@ _imp_extension_suffixes_impl(PyObject *module)
             Py_DECREF(list);
             return NULL;
         }
-        if (PyList_Append(list, item) < 0) {
+        if (PyList_AppendValue(list, PyValue_FromObjectBorrow(item)) < 0) {
             Py_DECREF(list);
             Py_DECREF(item);
             return NULL;
@@ -5204,9 +5240,7 @@ _imp_find_frozen_impl(PyObject *module, PyObject *name, int withdata)
         }
     }
 
-    PyObject *result = PyTuple_Pack(3, data ? data : Py_None,
-                                    info.is_package ? Py_True : Py_False,
-                                    origname ? origname : Py_None);
+    PyObject *result = _PyTuple_PackValues(3, (PyValueBorrow[]){PyValue_FromObjectBorrow(data ? data : Py_None), PyValue_FromObjectBorrow(info.is_package ? Py_True : Py_False), PyValue_FromObjectBorrow(origname ? origname : Py_None)});
     Py_XDECREF(origname);
     Py_XDECREF(data);
     return result;

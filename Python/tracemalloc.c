@@ -4,6 +4,7 @@
 #include "pycore_hashtable.h"     // _Py_hashtable_t
 #include "pycore_initconfig.h"    // _PyStatus_NO_MEMORY()
 #include "pycore_interpframe.h"   // _PyInterpreterFrame
+#include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_lock.h"          // PyMutex_LockFlags()
 #include "pycore_object.h"        // _PyType_PreHeaderSize()
 #include "pycore_pymem.h"         // _Py_tracemalloc_config
@@ -995,14 +996,14 @@ frame_to_pyobject(frame_t *frame, _Py_hashtable_t *intern_filenames)
         return NULL;
     }
 
-    PyTuple_SET_ITEM(frame_obj, 0, filename_obj);
+    PyTuple_SET_VALUE(frame_obj, 0, PyValue_PrepareOwned(filename_obj));
 
     PyObject *lineno_obj = PyLong_FromUnsignedLong(frame->lineno);
     if (lineno_obj == NULL) {
         Py_DECREF(frame_obj);
         return NULL;
     }
-    PyTuple_SET_ITEM(frame_obj, 1, lineno_obj);
+    PyTuple_SET_VALUE(frame_obj, 1, PyValue_PrepareOwned(lineno_obj));
 
     return frame_obj;
 }
@@ -1032,7 +1033,7 @@ traceback_to_pyobject(traceback_t *traceback, _Py_hashtable_t *intern_table,
             Py_DECREF(frames);
             return NULL;
         }
-        PyTuple_SET_ITEM(frames, i, frame);
+        PyTuple_SET_VALUE(frames, i, PyValue_PrepareOwned(frame));
     }
 
     if (intern_table != NULL) {
@@ -1065,14 +1066,14 @@ trace_to_pyobject(unsigned int domain, const trace_t *trace,
         Py_DECREF(trace_obj);
         return NULL;
     }
-    PyTuple_SET_ITEM(trace_obj, 0, obj);
+    PyTuple_SET_VALUE(trace_obj, 0, PyValue_PrepareOwned(obj));
 
     obj = PyLong_FromSize_t(trace->size);
     if (obj == NULL) {
         Py_DECREF(trace_obj);
         return NULL;
     }
-    PyTuple_SET_ITEM(trace_obj, 1, obj);
+    PyTuple_SET_VALUE(trace_obj, 1, PyValue_PrepareOwned(obj));
 
     obj = traceback_to_pyobject(trace->traceback, intern_tracebacks,
                                 intern_filenames);
@@ -1080,14 +1081,14 @@ trace_to_pyobject(unsigned int domain, const trace_t *trace,
         Py_DECREF(trace_obj);
         return NULL;
     }
-    PyTuple_SET_ITEM(trace_obj, 2, obj);
+    PyTuple_SET_VALUE(trace_obj, 2, PyValue_PrepareOwned(obj));
 
     obj = PyLong_FromUnsignedLong(trace->traceback->total_nframe);
     if (obj == NULL) {
         Py_DECREF(trace_obj);
         return NULL;
     }
-    PyTuple_SET_ITEM(trace_obj, 3, obj);
+    PyTuple_SET_VALUE(trace_obj, 3, PyValue_PrepareOwned(obj));
 
     return trace_obj;
 }
@@ -1198,7 +1199,7 @@ tracemalloc_get_traces_fill(_Py_hashtable_t *traces,
         return 1;
     }
 
-    int res = PyList_Append(get_traces->list, tuple);
+    int res = PyList_AppendValue(get_traces->list, PyValue_FromObjectBorrow(tuple));
     Py_DECREF(tuple);
     if (res < 0) {
         return 1;

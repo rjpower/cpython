@@ -1,5 +1,6 @@
 #include "Python.h"
 
+#include "pycore_dict.h"          // PyDict_SetValue()
 #include "pycore_long.h"          // _PyLong_IsCompact()
 #include "pycore_object.h"
 #include "pycore_initconfig.h"    // _Py_GetEnv()
@@ -355,7 +356,7 @@ add_home_sites(PyObject *sites, int recheck, int kind)
         PyObject *count = PyLong_FromSsize_t(
             _Py_atomic_load_ssize(&home_sites[recheck][kind][i].count));
         if (key == NULL || count == NULL
-            || PyDict_SetItem(sites, key, count) < 0)
+            || PyDict_SetValue(sites, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(count)) < 0)
         {
             Py_XDECREF(key);
             Py_XDECREF(count);
@@ -386,7 +387,7 @@ _PyValue_HomeViolationSites(void)
     if (dropped != 0) {
         PyObject *count = PyLong_FromSsize_t(dropped);
         if (count == NULL
-            || PyDict_SetItemString(sites, "<dropped: table full>", count) < 0)
+            || PyDict_SetValueString(sites, "<dropped: table full>", PyValue_FromObjectBorrow(count)) < 0)
         {
             Py_XDECREF(count);
             Py_DECREF(sites);

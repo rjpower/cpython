@@ -3,8 +3,11 @@
 
 #include "Python.h"
 #include "pycore_abstract.h"   // _PyIndex_Check()
+#include "pycore_dict.h"          // PyDict_SetValue()
 #include "pycore_object.h"     // _PyType_IsReady()
+#include "pycore_pyvalue.h"       // PyValue_PrepareOwned()
 #include "pycore_unicodeobject.h"     // _PyUnicodeWriter_FormatV()
+#include "pycore_value.h"         // PyValue_FromObjectBorrow()
 
 typedef double va_double;
 
@@ -132,7 +135,7 @@ do_ignore(const char **p_format, va_list *p_va, char endchar, Py_ssize_t n)
         PyErr_SetRaisedException(exc);
         if (w != NULL) {
             if (v != NULL) {
-                PyTuple_SET_ITEM(v, i, w);
+                PyTuple_SET_VALUE(v, i, PyValue_PrepareOwned(w));
             }
             else {
                 Py_DECREF(w);
@@ -174,7 +177,7 @@ do_mkdict(const char **p_format, va_list *p_va, char endchar, Py_ssize_t n)
             return NULL;
         }
         v = do_mkvalue(p_format, p_va);
-        if (v == NULL || PyDict_SetItem(d, k, v) < 0) {
+        if (v == NULL || PyDict_SetValue(d, PyValue_FromObjectBorrow(k), PyValue_FromObjectBorrow(v)) < 0) {
             do_ignore(p_format, p_va, endchar, n - i - 2);
             Py_DECREF(k);
             Py_XDECREF(v);
@@ -212,7 +215,7 @@ do_mklist(const char **p_format, va_list *p_va, char endchar, Py_ssize_t n)
             Py_DECREF(v);
             return NULL;
         }
-        PyList_SET_ITEM(v, i, w);
+        PyList_SET_VALUE(v, i, PyValue_PrepareOwned(w));
     }
     if (!check_end(p_format, endchar)) {
         Py_DECREF(v);
@@ -273,7 +276,7 @@ do_mktuple(const char **p_format, va_list *p_va, char endchar, Py_ssize_t n)
             Py_DECREF(v);
             return NULL;
         }
-        PyTuple_SET_ITEM(v, i, w);
+        PyTuple_SET_VALUE(v, i, PyValue_PrepareOwned(w));
     }
     if (!check_end(p_format, endchar)) {
         Py_DECREF(v);
@@ -623,7 +626,7 @@ PyModule_AddObjectRef(PyObject *mod, const char *name, PyObject *value)
                      PyModule_GetName(mod));
         return -1;
     }
-    return PyDict_SetItemString(dict, name, value);
+    return PyDict_SetValueString(dict, name, PyValue_FromObjectBorrow(value));
 }
 
 int

@@ -8,16 +8,20 @@
 #include <stdbool.h>
 #include "pycore_abstract.h"      // _PyObject_RealIsSubclass()
 #include "pycore_ceval.h"         // _Py_EnterRecursiveCall
+#include "pycore_dict.h"          // PyDict_SetValue()
 #include "pycore_exceptions.h"    // struct _Py_exc_state
 #include "pycore_initconfig.h"
-#include "pycore_list.h"          // PyList_GET_VALUE()
+#include "pycore_list.h"          // PyList_GET_VALUE(), PyList_AppendValue()
 #include "pycore_modsupport.h"    // _PyArg_NoKeywords()
 #include "pycore_moduleobject.h"  // _PyModule_CAST()
 #include "pycore_object.h"
 #include "pycore_pyerrors.h"      // struct _PyErr_SetRaisedException
+#include "pycore_setobject.h"     // PySet_AddValue()
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_value.h"         // PyValue_IsNone()
+#include "pycore_value_ops.h"     // _PyValue_Str()
 #include "pycore_unicodeobject.h" // _PyUnicode_Equal()
+#include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
 
 #include "osdefs.h"               // SEP
 #include "clinic/exceptions.c.h"
@@ -176,12 +180,12 @@ BaseException_str_impl(PyBaseExceptionObject *self)
     case 0:
         return Py_GetConstant(Py_CONSTANT_EMPTY_STR);
     case 1: {
-        PyObject *arg = PyTuple_GetItemRef((PyObject *)self->args, 0);
-        if (arg == NULL) {
+        PyValue arg = PyTuple_GetValue((PyObject *)self->args, 0);
+        if (PyValue_IsNull(arg)) {
             return NULL;
         }
-        PyObject *result = PyObject_Str(arg);
-        Py_DECREF(arg);
+        PyObject *result = _PyValue_Str(arg);
+        PyValue_CLOSE(arg);
         return result;
     }
     default:
@@ -200,7 +204,8 @@ BaseException_repr_impl(PyBaseExceptionObject *self)
 {
     const char *name = _PyType_Name(Py_TYPE(self));
     if (PyTuple_GET_SIZE(self->args) == 1) {
-        PyObject *arg = PyTuple_GetItemRef((PyObject *)self->args, 0);
+        PyObject *arg = _PyValue_AsObjectAt(PyTuple_GET_VALUE((PyObject *)self->args, 0),
+                                            BOX_SITE_TUPLE);
         if (arg == NULL) {
             return NULL;
         }
@@ -223,9 +228,9 @@ BaseException___reduce___impl(PyBaseExceptionObject *self)
 /*[clinic end generated code: output=af87c1247ef98748 input=283be5a10d9c964f]*/
 {
     if (self->args && self->dict)
-        return PyTuple_Pack(3, Py_TYPE(self), self->args, self->dict);
+        return _PyTuple_PackValues(3, (PyValueBorrow[]){_PyValue_FromObjectKnown(_PyObject_CAST(Py_TYPE(self))), PyValue_FromObjectBorrow(self->args), PyValue_FromObjectBorrow(self->dict)});
     else
-        return _PyTuple_FromPair((PyObject *)Py_TYPE(self), self->args);
+        return _PyTuple_PackValues(2, (PyValueBorrow[]){_PyValue_FromObjectKnown((PyObject *)Py_TYPE(self)), PyValue_FromObjectBorrow(self->args)});
 }
 
 /*
@@ -245,7 +250,6 @@ static PyObject *
 BaseException___setstate___impl(PyBaseExceptionObject *self, PyObject *state)
 /*[clinic end generated code: output=f3834889950453ab input=f9b1aea70382cdb6]*/
 {
-    PyObject *d_key, *d_value;
     Py_ssize_t i = 0;
 
     if (state != Py_None) {
@@ -254,7 +258,17 @@ BaseException___setstate___impl(PyBaseExceptionObject *self, PyObject *state)
             return NULL;
         }
         int rc;
-        while ((rc = PyDict_NextEntryRef(state, &i, &d_key, &d_value)) > 0) {
+        PyValue d_key_v, d_value_v;
+        while ((rc = PyDict_NextValue(state, &i, &d_key_v, &d_value_v)) > 0) {
+            PyObject *d_key = _PyValue_AsObjectAt(d_key_v, BOX_SITE_DICT);
+            PyObject *d_value = _PyValue_AsObjectAt(d_value_v, BOX_SITE_DICT);
+            PyValue_CLOSE(d_key_v);
+            PyValue_CLOSE(d_value_v);
+            if (d_key == NULL || d_value == NULL) {
+                Py_XDECREF(d_key);
+                Py_XDECREF(d_value);
+                return NULL;
+            }
             int res = PyObject_SetAttr((PyObject *)self, d_key, d_value);
             Py_DECREF(d_value);
             Py_DECREF(d_key);
@@ -321,7 +335,7 @@ BaseException_add_note_impl(PyBaseExceptionObject *self, PyObject *note)
         PyErr_SetString(PyExc_TypeError, "Cannot add note: __notes__ is not a list");
         return NULL;
     }
-    if (PyList_Append(notes, note) < 0) {
+    if (PyList_AppendValue(notes, PyValue_FromObjectBorrow(note)) < 0) {
         Py_DECREF(notes);
         return NULL;
     }
@@ -751,7 +765,7 @@ StopIteration_init(PyObject *op, PyObject *args, PyObject *kwds)
     PyStopIterationObject *self = PyStopIterationObject_CAST(op);
     Py_CLEAR(self->value);
     if (size > 0) {
-        value = PyTuple_GetItemRef(args, 0);
+        value = _PyValue_AsObjectAt(PyTuple_GET_VALUE(args, 0), BOX_SITE_TUPLE);
         if (value == NULL) {
             return -1;
         }
@@ -822,7 +836,7 @@ SystemExit_init(PyObject *op, PyObject *args, PyObject *kwds)
     if (size == 0)
         return 0;
     if (size == 1) {
-        PyObject *code = PyTuple_GetItemRef(args, 0);
+        PyObject *code = _PyValue_AsObjectAt(PyTuple_GET_VALUE(args, 0), BOX_SITE_TUPLE);
         if (code == NULL) {
             return -1;
         }
@@ -935,8 +949,13 @@ BaseExceptionGroup_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 
     bool nested_base_exceptions = false;
     for (Py_ssize_t i = 0; i < numexcs; i++) {
-        PyObject *exc = PyTuple_GetItemRef(exceptions, i);
-        if (!exc) {
+        PyValue exc_v = PyTuple_GetValue(exceptions, i);
+        if (PyValue_IsNull(exc_v)) {
+            goto error;
+        }
+        PyObject *exc = _PyValue_AsObjectAt(exc_v, BOX_SITE_TUPLE);
+        PyValue_CLOSE(exc_v);
+        if (exc == NULL) {
             goto error;
         }
         if (!PyExceptionInstance_Check(exc)) {
@@ -1018,7 +1037,7 @@ _PyExc_CreateExceptionGroup(const char *msg_str, PyObject *excs)
     if (!msg) {
         return NULL;
     }
-    PyObject *args = _PyTuple_FromPairSteal(msg, Py_NewRef(excs));
+    PyObject *args = _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(msg), PyValue_DUP(PyValue_FromObjectBorrow(excs)));
     if (!args) {
         return NULL;
     }
@@ -1103,7 +1122,8 @@ BaseExceptionGroup_repr(PyObject *op)
         assert(PyTuple_Check(self->args));
         PyObject *args_exceptions = NULL;
         if (PyTuple_GET_SIZE(self->args) == 2) {
-            args_exceptions = PyTuple_GetItemRef(self->args, 1);
+            args_exceptions = _PyValue_AsObjectAt(PyTuple_GET_VALUE(self->args, 1),
+                                                  BOX_SITE_TUPLE);
             if (args_exceptions == NULL) {
                 return NULL;
             }
@@ -1151,7 +1171,7 @@ BaseExceptionGroup_derive_impl(PyBaseExceptionGroupObject *self,
                                PyObject *excs)
 /*[clinic end generated code: output=4307564218dfbf06 input=f72009d38e98cec1]*/
 {
-    PyObject *init_args = _PyTuple_FromPair(self->msg, excs);
+    PyObject *init_args = _PyTuple_PackValues(2, (PyValueBorrow[]){PyValue_FromObjectBorrow(self->msg), PyValue_FromObjectBorrow(excs)});
     if (!init_args) {
         return NULL;
     }
@@ -1274,7 +1294,8 @@ get_matcher_type(PyObject *value,
     if (PyTuple_CheckExact(value)) {
         Py_ssize_t n = PyTuple_GET_SIZE(value);
         for (Py_ssize_t i=0; i<n; i++) {
-            PyObject *item = PyTuple_GetItemRef(value, i);
+            PyObject *item = _PyValue_AsObjectAt(PyTuple_GET_VALUE(value, i),
+                                                 BOX_SITE_TUPLE);
             if (item == NULL) {
                 return -1;
             }
@@ -1323,7 +1344,7 @@ exceptiongroup_split_check_match(PyObject *exc,
             if (exc_id == NULL) {
                 return -1;
             }
-            int res = PySet_Contains(matcher_value, exc_id);
+            int res = PySet_ContainsValue(matcher_value, PyValue_FromObjectBorrow(exc_id));
             Py_DECREF(exc_id);
             return res;
         }
@@ -1392,7 +1413,8 @@ exceptiongroup_split_recursive(PyObject *exc,
     }
     /* recursive calls */
     for (Py_ssize_t i = 0; i < num_excs; i++) {
-        PyObject *e = PyTuple_GetItemRef(eg->excs, i);
+        PyObject *e = _PyValue_AsObjectAt(PyTuple_GET_VALUE(eg->excs, i),
+                                          BOX_SITE_TUPLE);
         if (e == NULL) {
             goto done;
         }
@@ -1414,7 +1436,7 @@ exceptiongroup_split_recursive(PyObject *exc,
         Py_DECREF(e);
         if (rec_result.match) {
             assert(PyList_CheckExact(match_list));
-            if (PyList_Append(match_list, rec_result.match) < 0) {
+            if (PyList_AppendValue(match_list, PyValue_FromObjectBorrow(rec_result.match)) < 0) {
                 Py_DECREF(rec_result.match);
                 Py_XDECREF(rec_result.rest);
                 goto done;
@@ -1424,7 +1446,7 @@ exceptiongroup_split_recursive(PyObject *exc,
         if (rec_result.rest) {
             assert(construct_rest);
             assert(PyList_CheckExact(rest_list));
-            if (PyList_Append(rest_list, rec_result.rest) < 0) {
+            if (PyList_AppendValue(rest_list, PyValue_FromObjectBorrow(rec_result.rest)) < 0) {
                 Py_DECREF(rec_result.rest);
                 goto done;
             }
@@ -1481,9 +1503,7 @@ BaseExceptionGroup_split_impl(PyBaseExceptionGroupObject *self,
     }
 
     assert(_Py_IsStaticImmortal(Py_None));
-    PyObject *result = _PyTuple_FromPairSteal(
-            split_result.match ? split_result.match : Py_None,
-            split_result.rest ? split_result.rest : Py_None);
+    PyObject *result = _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(split_result.match ? split_result.match : Py_None), PyValue_PrepareOwned(split_result.rest ? split_result.rest : Py_None));
 
     return result;
 }
@@ -1538,7 +1558,7 @@ collect_exception_group_leaf_ids(PyObject *exc, PyObject *leaf_ids)
         if (exc_id == NULL) {
             return -1;
         }
-        int res = PySet_Add(leaf_ids, exc_id);
+        int res = PySet_AddValue(leaf_ids, PyValue_FromObjectBorrow(exc_id));
         Py_DECREF(exc_id);
         return res;
     }
@@ -1546,7 +1566,8 @@ collect_exception_group_leaf_ids(PyObject *exc, PyObject *leaf_ids)
     Py_ssize_t num_excs = PyTuple_GET_SIZE(eg->excs);
     /* recursive calls */
     for (Py_ssize_t i = 0; i < num_excs; i++) {
-        PyObject *e = PyTuple_GetItemRef(eg->excs, i);
+        PyObject *e = _PyValue_AsObjectAt(PyTuple_GET_VALUE(eg->excs, i),
+                                          BOX_SITE_TUPLE);
         if (e == NULL) {
             return -1;
         }
@@ -1583,7 +1604,9 @@ exception_group_projection(PyObject *eg, PyObject *keep)
 
     Py_ssize_t n = PyList_GET_SIZE(keep);
     for (Py_ssize_t i = 0; i < n; i++) {
-        PyObject *e = PyList_GetItemRef(keep, i);
+        PyValue e_v = PyList_GetValue(keep, i);
+        PyObject *e = PyValue_IsNull(e_v) ? NULL : _PyValue_AsObjectAt(e_v, BOX_SITE_LIST);
+        PyValue_XCLOSE(e_v);
         if (e == NULL) {
             Py_DECREF(leaf_ids);
             return NULL;
@@ -1667,7 +1690,13 @@ _PyExc_PrepReraiseStar(PyObject *orig, PyObject *excs)
         assert(numexcs == 1
                || (numexcs == 2 && PyValue_IsNone(PyList_GET_VALUE(excs, 1))));
 
-        return PyList_GetItemRef(excs, 0);
+        PyValue first = PyList_GetValue(excs, 0);
+        if (PyValue_IsNull(first)) {
+            return NULL;
+        }
+        PyObject *first_obj = _PyValue_AsObjectAt(first, BOX_SITE_LIST);
+        PyValue_CLOSE(first);
+        return first_obj;
     }
 
     PyObject *raised_list = PyList_New(0);
@@ -1686,7 +1715,9 @@ _PyExc_PrepReraiseStar(PyObject *orig, PyObject *excs)
 
     /* Split excs into raised and reraised by comparing metadata with orig */
     for (Py_ssize_t i = 0; i < numexcs; i++) {
-        PyObject *e = PyList_GetItemRef(excs, i);
+        PyValue e_v = PyList_GetValue(excs, i);
+        PyObject *e = PyValue_IsNull(e_v) ? NULL : _PyValue_AsObjectAt(e_v, BOX_SITE_LIST);
+        PyValue_XCLOSE(e_v);
         if (e == NULL) {
             goto done;
         }
@@ -1696,7 +1727,7 @@ _PyExc_PrepReraiseStar(PyObject *orig, PyObject *excs)
         }
         bool is_reraise = is_same_exception_metadata(e, orig);
         PyObject *append_list = is_reraise ? reraised_list : raised_list;
-        int err = PyList_Append(append_list, e);
+        int err = PyList_AppendValue(append_list, PyValue_FromObjectBorrow(e));
         Py_DECREF(e);
         if (err < 0) {
             goto done;
@@ -1718,7 +1749,7 @@ _PyExc_PrepReraiseStar(PyObject *orig, PyObject *excs)
     else if (num_raised > 0) {
         int res = 0;
         if (!Py_IsNone(reraised_eg)) {
-            res = PyList_Append(raised_list, reraised_eg);
+            res = PyList_AppendValue(raised_list, PyValue_FromObjectBorrow(reraised_eg));
         }
         Py_DECREF(reraised_eg);
         if (res < 0) {
@@ -1728,7 +1759,9 @@ _PyExc_PrepReraiseStar(PyObject *orig, PyObject *excs)
             result = _PyExc_CreateExceptionGroup("", raised_list);
         }
         else {
-            result = PyList_GetItemRef(raised_list, 0);
+            PyValue first = PyList_GetValue(raised_list, 0);
+            result = PyValue_IsNull(first) ? NULL : _PyValue_AsObjectAt(first, BOX_SITE_LIST);
+            PyValue_XCLOSE(first);
         }
         if (result == NULL) {
             goto done;
@@ -1811,8 +1844,7 @@ static PyObject*
 create_exception_group_class(void) {
     struct _Py_exc_state *state = get_exc_state();
 
-    PyObject *bases = _PyTuple_FromPair(
-        PyExc_BaseExceptionGroup, PyExc_Exception);
+    PyObject *bases = _PyTuple_PackValues(2, (PyValueBorrow[]){PyValue_FromObjectBorrow(PyExc_BaseExceptionGroup), PyValue_FromObjectBorrow(PyExc_Exception)});
     if (bases == NULL) {
         return NULL;
     }
@@ -1872,7 +1904,7 @@ ImportError_init(PyObject *op, PyObject *args, PyObject *kwds)
     Py_XSETREF(self->name_from, Py_XNewRef(name_from));
 
     if (PyTuple_GET_SIZE(args) == 1) {
-        msg = PyTuple_GetItemRef(args, 0);
+        msg = _PyValue_AsObjectAt(PyTuple_GET_VALUE(args, 0), BOX_SITE_TUPLE);
         if (msg == NULL) {
             return -1;
         }
@@ -1931,15 +1963,15 @@ ImportError_getstate(PyObject *op)
         dict = dict ? PyDict_Copy(dict) : PyDict_New();
         if (dict == NULL)
             return NULL;
-        if (self->name && PyDict_SetItem(dict, &_Py_ID(name), self->name) < 0) {
+        if (self->name && PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(name)), PyValue_FromObjectBorrow(self->name)) < 0) {
             Py_DECREF(dict);
             return NULL;
         }
-        if (self->path && PyDict_SetItem(dict, &_Py_ID(path), self->path) < 0) {
+        if (self->path && PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(path)), PyValue_FromObjectBorrow(self->path)) < 0) {
             Py_DECREF(dict);
             return NULL;
         }
-        if (self->name_from && PyDict_SetItem(dict, &_Py_ID(name_from), self->name_from) < 0) {
+        if (self->name_from && PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(name_from)), PyValue_FromObjectBorrow(self->name_from)) < 0) {
             Py_DECREF(dict);
             return NULL;
         }
@@ -1963,9 +1995,9 @@ ImportError_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
         return NULL;
     PyBaseExceptionObject *exc = PyBaseExceptionObject_CAST(self);
     if (state == Py_None)
-        res = _PyTuple_FromPair((PyObject *)Py_TYPE(self), exc->args);
+        res = _PyTuple_PackValues(2, (PyValueBorrow[]){_PyValue_FromObjectKnown((PyObject *)Py_TYPE(self)), PyValue_FromObjectBorrow(exc->args)});
     else
-        res = PyTuple_Pack(3, Py_TYPE(self), exc->args, state);
+        res = _PyTuple_PackValues(3, (PyValueBorrow[]){_PyValue_FromObjectKnown(_PyObject_CAST(Py_TYPE(self))), PyValue_FromObjectBorrow(exc->args), PyValue_FromObjectBorrow(state)});
     Py_DECREF(state);
     return res;
 }
@@ -2154,7 +2186,9 @@ oserror_parse_args(PyObject **p_args,
                 return -1;
             PyTuple_SET_ITEM(newargs, 0, *myerrno);
             for (i = 1; i < nargs; i++) {
-                PyObject *val = PyTuple_GetItemRef(args, i);
+                PyValue val_v = PyTuple_GetValue(args, i);
+                PyObject *val = PyValue_IsNull(val_v) ? NULL : _PyValue_AsObjectAt(val_v, BOX_SITE_TUPLE);
+                PyValue_XCLOSE(val_v);
                 if (val == NULL) {
                     Py_DECREF(newargs);
                     return -1;
@@ -2277,8 +2311,17 @@ OSError_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         struct _Py_exc_state *state = get_exc_state();
         if (myerrno && PyLong_Check(myerrno) &&
             state->errnomap && (PyObject *) type == PyExc_OSError) {
-            PyObject *newtype;
-            int rc = PyDict_GetItemRef(state->errnomap, myerrno, &newtype);
+            PyValue newtype_v;
+            int rc = PyDict_GetValue(state->errnomap,
+                                     PyValue_FromObjectBorrow(myerrno), &newtype_v);
+            PyObject *newtype = NULL;
+            if (rc > 0) {
+                newtype = _PyValue_AsObjectAt(newtype_v, BOX_SITE_DICT);
+                PyValue_CLOSE(newtype_v);
+                if (newtype == NULL) {
+                    rc = -1;
+                }
+            }
             if (rc < 0) {
                 goto error;
             }
@@ -2457,20 +2500,24 @@ OSError_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
         if (!args)
             return NULL;
 
-        PyObject *errno_obj = PyTuple_GetItemRef(self->args, 0);
+        PyValue errno_v = PyTuple_GetValue(self->args, 0);
+        PyObject *errno_obj = PyValue_IsNull(errno_v) ? NULL : _PyValue_AsObjectAt(errno_v, BOX_SITE_TUPLE);
+        PyValue_XCLOSE(errno_v);
         if (errno_obj == NULL) {
             Py_DECREF(args);
             return NULL;
         }
-        PyObject *strerror_obj = PyTuple_GetItemRef(self->args, 1);
+        PyValue strerror_v = PyTuple_GetValue(self->args, 1);
+        PyObject *strerror_obj = PyValue_IsNull(strerror_v) ? NULL : _PyValue_AsObjectAt(strerror_v, BOX_SITE_TUPLE);
+        PyValue_XCLOSE(strerror_v);
         if (strerror_obj == NULL) {
             Py_DECREF(errno_obj);
             Py_DECREF(args);
             return NULL;
         }
-        PyTuple_SET_ITEM(args, 0, errno_obj);
-        PyTuple_SET_ITEM(args, 1, strerror_obj);
-        PyTuple_SET_ITEM(args, 2, Py_NewRef(self->filename));
+        PyTuple_SET_VALUE(args, 0, PyValue_PrepareOwned(errno_obj));
+        PyTuple_SET_VALUE(args, 1, PyValue_PrepareOwned(strerror_obj));
+        PyTuple_SET_VALUE(args, 2, PyValue_DUP(PyValue_FromObjectBorrow(self->filename)));
 
         if (self->filename2) {
             /*
@@ -2478,18 +2525,18 @@ OSError_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
              * So, to recreate filename2, we need to pass in
              * winerror as well.
              */
-            PyTuple_SET_ITEM(args, 3, Py_NewRef(Py_None));
+            PyTuple_SET_VALUE(args, 3, PyValue_DUP(_PyValue_FromObjectKnown(Py_None)));
 
             /* filename2 */
-            PyTuple_SET_ITEM(args, 4, Py_NewRef(self->filename2));
+            PyTuple_SET_VALUE(args, 4, PyValue_DUP(PyValue_FromObjectBorrow(self->filename2)));
         }
     } else
         Py_INCREF(args);
 
     if (self->dict)
-        res = PyTuple_Pack(3, Py_TYPE(self), args, self->dict);
+        res = _PyTuple_PackValues(3, (PyValueBorrow[]){_PyValue_FromObjectKnown(_PyObject_CAST(Py_TYPE(self))), PyValue_FromObjectBorrow(args), PyValue_FromObjectBorrow(self->dict)});
     else
-        res = _PyTuple_FromPair((PyObject *)Py_TYPE(self), args);
+        res = _PyTuple_PackValues(2, (PyValueBorrow[]){_PyValue_FromObjectKnown((PyObject *)Py_TYPE(self)), PyValue_FromObjectBorrow(args)});
     Py_DECREF(args);
     return res;
 }
@@ -2788,7 +2835,8 @@ AttributeError_str(PyObject *op)
         Py_ssize_t nargs = PyTuple_GET_SIZE(self->args);
         int synthesize = (nargs == 0);
         if (nargs == 1) {
-            PyObject *arg = PyTuple_GetItemRef(self->args, 0);
+            PyObject *arg = _PyValue_AsObjectAt(PyTuple_GET_VALUE(self->args, 0),
+                                                BOX_SITE_TUPLE);
             if (arg == NULL) {
                 error = 1;
             }
@@ -2817,8 +2865,18 @@ AttributeError_str(PyObject *op)
     PyObject *result = NULL;
     if (PyModule_Check(obj)) {
         PyModuleObject *mod = _PyModule_CAST(obj);
-        PyObject *modname;
-        if (PyDict_GetItemRef(mod->md_dict, &_Py_ID(__name__), &modname) < 0) {
+        PyValue modname_v;
+        int mrc = PyDict_GetValue(mod->md_dict,
+                                  _PyValue_FromObjectKnown(&_Py_ID(__name__)), &modname_v);
+        PyObject *modname = NULL;
+        if (mrc > 0) {
+            modname = _PyValue_AsObjectAt(modname_v, BOX_SITE_DICT);
+            PyValue_CLOSE(modname_v);
+            if (modname == NULL) {
+                mrc = -1;
+            }
+        }
+        if (mrc < 0) {
             goto done;
         }
         if (modname && PyUnicode_Check(modname)) {
@@ -2862,14 +2920,14 @@ AttributeError_getstate(PyObject *op, PyObject *Py_UNUSED(ignored))
         if (dict == NULL) {
             return NULL;
         }
-        if (self->name && PyDict_SetItemString(dict, "name", self->name) < 0) {
+        if (self->name && PyDict_SetValueString(dict, "name", PyValue_FromObjectBorrow(self->name)) < 0) {
             Py_DECREF(dict);
             return NULL;
         }
         /* We specifically are not pickling the obj attribute since there are many
         cases where it is unlikely to be picklable. See GH-103352.
         */
-        if (self->args && PyDict_SetItemString(dict, "args", self->args) < 0) {
+        if (self->args && PyDict_SetValueString(dict, "args", PyValue_FromObjectBorrow(self->args)) < 0) {
             Py_DECREF(dict);
             return NULL;
         }
@@ -2890,7 +2948,7 @@ AttributeError_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
     }
 
     PyAttributeErrorObject *self = PyAttributeErrorObject_CAST(op);
-    PyObject *return_value = PyTuple_Pack(3, Py_TYPE(self), self->args, state);
+    PyObject *return_value = _PyTuple_PackValues(3, (PyValueBorrow[]){_PyValue_FromObjectKnown(_PyObject_CAST(Py_TYPE(self))), PyValue_FromObjectBorrow(self->args), PyValue_FromObjectBorrow(state)});
     Py_DECREF(state);
     return return_value;
 }
@@ -2934,14 +2992,14 @@ SyntaxError_init(PyObject *op, PyObject *args, PyObject *kwds)
 
     PySyntaxErrorObject *self = PySyntaxErrorObject_CAST(op);
     if (lenargs >= 1) {
-        PyObject *msg = PyTuple_GetItemRef(args, 0);
+        PyObject *msg = _PyValue_AsObjectAt(PyTuple_GET_VALUE(args, 0), BOX_SITE_TUPLE);
         if (msg == NULL) {
             return -1;
         }
         Py_XSETREF(self->msg, msg);
     }
     if (lenargs == 2) {
-        info = PyTuple_GetItemRef(args, 1);
+        info = _PyValue_AsObjectAt(PyTuple_GET_VALUE(args, 1), BOX_SITE_TUPLE);
         if (info == NULL) {
             return -1;
         }
@@ -3172,12 +3230,12 @@ KeyError_str(PyObject *op)
     */
     PyBaseExceptionObject *self = PyBaseExceptionObject_CAST(op);
     if (PyTuple_GET_SIZE(self->args) == 1) {
-        PyObject *arg = PyTuple_GetItemRef((PyObject *)self->args, 0);
-        if (arg == NULL) {
+        PyValue arg = PyTuple_GetValue((PyObject *)self->args, 0);
+        if (PyValue_IsNull(arg)) {
             return NULL;
         }
-        PyObject *result = PyObject_Repr(arg);
-        Py_DECREF(arg);
+        PyObject *result = _PyValue_Repr(arg);
+        PyValue_CLOSE(arg);
         return result;
     }
     return BaseException_str(op);
@@ -4686,7 +4744,7 @@ _PyExc_InitState(PyInterpreterState *interp)
     do { \
         PyObject *_code = PyLong_FromLong(CODE); \
         assert(_PyObject_RealIsSubclass(PyExc_ ## TYPE, PyExc_OSError)); \
-        if (!_code || PyDict_SetItem(state->errnomap, _code, PyExc_ ## TYPE)) { \
+        if (!_code || PyDict_SetValue(state->errnomap, PyValue_FromObjectBorrow(_code), PyValue_FromObjectBorrow(PyExc_ ## TYPE))) { \
             Py_XDECREF(_code); \
             return _PyStatus_ERR("errmap insertion problem."); \
         } \
@@ -4748,7 +4806,7 @@ _PyBuiltins_AddExceptions(PyObject *bltinmod)
     for (size_t i=0; i < Py_ARRAY_LENGTH(static_exceptions); i++) {
         struct static_exception item = static_exceptions[i];
 
-        if (PyDict_SetItemString(mod_dict, item.name, (PyObject*)item.exc)) {
+        if (PyDict_SetValueString(mod_dict, item.name, _PyValue_FromObjectKnown((PyObject*)item.exc))) {
             return -1;
         }
     }
@@ -4757,13 +4815,13 @@ _PyBuiltins_AddExceptions(PyObject *bltinmod)
     if (!PyExc_ExceptionGroup) {
         return -1;
     }
-    if (PyDict_SetItemString(mod_dict, "ExceptionGroup", PyExc_ExceptionGroup)) {
+    if (PyDict_SetValueString(mod_dict, "ExceptionGroup", PyValue_FromObjectBorrow(PyExc_ExceptionGroup))) {
         return -1;
     }
-    if (PyDict_SetItemString(mod_dict, "EnvironmentError", PyExc_OSError)) {
+    if (PyDict_SetValueString(mod_dict, "EnvironmentError", PyValue_FromObjectBorrow(PyExc_OSError))) {
         return -1;
     }
-    if (PyDict_SetItemString(mod_dict, "IOError", PyExc_OSError)) {
+    if (PyDict_SetValueString(mod_dict, "IOError", PyValue_FromObjectBorrow(PyExc_OSError))) {
         return -1;
     }
 #ifdef MS_WINDOWS

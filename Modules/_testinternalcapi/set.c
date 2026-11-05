@@ -3,6 +3,7 @@
 
 #include "pycore_critical_section.h"
 #include "pycore_setobject.h"
+#include "pycore_tuple.h"
 #include "pycore_value.h"
 
 
@@ -237,6 +238,19 @@ set_next_entry(PyObject *self, PyObject *args)
     Py_RETURN_NONE;
 }
 
+/* PySet_DiscardValue() of the argument as a borrowed value, so an int or
+   float key arrives inline. */
+static PyObject *
+set_discard_value(PyObject *self, PyObject *args)
+{
+    PyObject *set, *key;
+    if (!PyArg_ParseTuple(args, "OO", &set, &key)) {
+        return NULL;
+    }
+    NULLABLE(set);
+    RETURN_INT(PySet_DiscardValue(set, PyTuple_GET_VALUE(args, 1)));
+}
+
 
 static PyMethodDef TestMethods[] = {
     {"set_value_storage", set_value_storage, METH_O},
@@ -245,6 +259,7 @@ static PyMethodDef TestMethods[] = {
     {"set_clear_pending", set_clear_pending, METH_O},
     {"set_update", set_update, METH_VARARGS},
     {"set_next_entry", set_next_entry, METH_VARARGS},
+    {"set_discard_value", set_discard_value, METH_VARARGS},
 
     {NULL},
 };

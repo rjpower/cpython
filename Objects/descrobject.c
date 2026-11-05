@@ -1,10 +1,16 @@
 /* Descriptors -- a new, flexible way to describe attributes */
 
+/* The defer line of the value-API waves (value-api-v2a0.md, section 1.5):
+   the W1 container marks do not apply here until the steps that are
+   rewriting this file (V2a-1a, M1b, M2, M3a) land. */
+#define Py_VALUE_DEFER_MARKS 1
+
 #include "Python.h"
 #include "pycore_abstract.h"      // _PyObject_RealIsSubclass()
 #include "pycore_borrow.h"        // _PyBorrowScope_Enter()
 #include "pycore_call.h"          // _PyStack_AsDict()
 #include "pycore_ceval.h"         // _Py_EnterRecursiveCallTstate()
+#include "pycore_dict.h"          // PyDict_ContainsValue()
 #include "pycore_wasm_trampoline.h" // descr_set_trampoline_call(), descr_get_trampoline_call()
 #include "pycore_descrobject.h"   // _PyMethodWrapper_Type
 #include "pycore_modsupport.h"    // _PyArg_UnpackStack()
@@ -1157,7 +1163,7 @@ mappingproxy_contains(PyObject *self, PyObject *key)
 {
     mappingproxyobject *pp = (mappingproxyobject *)self;
     if (PyDict_CheckExact(pp->mapping))
-        return PyDict_Contains(pp->mapping, key);
+        return PyDict_ContainsValue(pp->mapping, PyValue_FromObjectBorrow(key));
     else
         return PySequence_Contains(pp->mapping, key);
 }

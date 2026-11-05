@@ -46,6 +46,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "pycore_long.h"          // _PyLong_FormatWriter()
 #include "pycore_object.h"        // _PyObject_IsUniquelyReferenced()
 #include "pycore_unicodeobject.h" // _Py_MAX_UNICODE
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 
 #define MAX_UNICODE _Py_MAX_UNICODE
@@ -104,7 +105,9 @@ unicode_format_getnextarg(struct unicode_formatter_t *ctx, int allowone)
     if (argidx < ctx->arglen && (allowone || ctx->arglen >= 0)) {
         ctx->argidx++;
         if (ctx->arglen >= 0) {
-            Py_XSETREF(ctx->curarg, PyTuple_GetItemRef(ctx->args, argidx));
+            PyValue argv = PyTuple_GetValue(ctx->args, argidx);
+            Py_XSETREF(ctx->curarg, PyValue_IsNull(argv) ? NULL : _PyValue_AsObjectAt(argv, BOX_SITE_TUPLE));
+            PyValue_XCLOSE(argv);
             return ctx->curarg;
         }
         else if (allowone) {

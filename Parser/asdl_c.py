@@ -707,7 +707,11 @@ class Obj2ModVisitor(PickleVisitor):
             self.emit("if (%s == NULL) goto failed;" % field.name, depth+1)
             self.emit("for (i = 0; i < len; i++) {", depth+1)
             self.emit("%s val;" % ctype, depth+2)
-            self.emit("PyObject *tmp2 = PyList_GetItemRef(tmp, i);", depth+2)
+            self.emit("PyValue item = PyList_GetValue(tmp, i);", depth+2)
+            self.emit("PyObject *tmp2 = PyValue_IsNull(item) ? NULL : "
+                      "_PyValue_AsObjectAt(item, BOX_SITE_LIST);", depth+2,
+                      reflow=False)
+            self.emit("PyValue_XCLOSE(item);", depth+2)
             self.emit("if (tmp2 == NULL) goto failed;", depth+2)
             with self.recursive_call(name, depth+2, failed_item="tmp2"):
                 self.emit("res = obj2ast_%s(state, tmp2, &val, \"%s\", arena);" %
@@ -877,7 +881,8 @@ class AnnotationsVisitor(PickleVisitor):
                         if (type == NULL) {
                             goto error;
                         }
-                        int res = PyDict_SetItem(annotations, name, type);
+                        int res = PyDict_SetValue(annotations, PyValue_FromObjectBorrow(name),
+                                                  PyValue_FromObjectBorrow(type));
                         Py_DECREF(type);
                         if (res < 0) {
                             goto error;
@@ -981,7 +986,7 @@ format_missing(PyObject *missing, PyObject *fields)
         if (name == NULL) {
             goto error;
         }
-        int contains = PySet_Contains(missing, name);
+        int contains = PySet_ContainsValue(missing, PyValue_FromObjectBorrow(name));
         if (contains == -1) {
             Py_DECREF(name);
             goto error;
@@ -1022,7 +1027,8 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
         return -1;
     }
 
-    int contains = PySet_Contains(state->abstract_types, (PyObject *)Py_TYPE(self));
+    int contains = PySet_ContainsValue(state->abstract_types,
+                                       _PyValue_FromObjectKnown((PyObject *)Py_TYPE(self)));
     if (contains == -1) {
         return -1;
     }
@@ -1084,7 +1090,7 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
             res = -1;
             goto cleanup;
         }
-        int p = PySet_Discard(remaining_fields, name);
+        int p = PySet_DiscardValue(remaining_fields, PyValue_FromObjectBorrow(name));
         if (p < 0) {
             res = -1;
             goto cleanup;
@@ -1103,12 +1109,21 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
             goto cleanup;
         }
         for (i = 0; i < num_keywords; i++) {
-            key = PyList_GetItemRef(positional_keys, i);
+            PyValue item = PyList_GetValue(positional_keys, i);
+            key = PyValue_IsNull(item) ? NULL : _PyValue_AsObjectAt(item, BOX_SITE_LIST);
+            PyValue_XCLOSE(item);
             if (key == NULL) {
                 res = -1;
                 goto cleanup;
             }
-            int found = PyDict_GetItemRef(keywords, key, &value);
+            int found = PyDict_GetValue(keywords, PyValue_FromObjectBorrow(key), &item);
+            if (found > 0) {
+                value = _PyValue_AsObjectAt(item, BOX_SITE_DICT);
+                PyValue_CLOSE(item);
+                if (value == NULL) {
+                    found = -1;
+                }
+            }
             if (found < 0) {
                 res = -1;
                 goto cleanup;
@@ -1123,7 +1138,7 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
                 goto cleanup;
             }
             else if (contains == 1) {
-                int p = PySet_Discard(remaining_fields, key);
+                int p = PySet_DiscardValue(remaining_fields, PyValue_FromObjectBorrow(key));
                 if (p < 0) {
                     res = -1;
                     goto cleanup;
@@ -1195,12 +1210,21 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
             goto cleanup;
         }
         for (i = 0; i < size; i++) {
-            name = PyList_GetItemRef(remaining_list, i);
+            PyValue item = PyList_GetValue(remaining_list, i);
+            name = PyValue_IsNull(item) ? NULL : _PyValue_AsObjectAt(item, BOX_SITE_LIST);
+            PyValue_XCLOSE(item);
             if (name == NULL) {
                 res = -1;
                 goto cleanup;
             }
-            int found = PyDict_GetItemRef(field_types, name, &type);
+            int found = PyDict_GetValue(field_types, PyValue_FromObjectBorrow(name), &item);
+            if (found > 0) {
+                type = _PyValue_AsObjectAt(item, BOX_SITE_DICT);
+                PyValue_CLOSE(item);
+                if (type == NULL) {
+                    found = -1;
+                }
+            }
             if (found < 0) {
                 res = -1;
                 goto cleanup;
@@ -1240,7 +1264,7 @@ ast_type_init(PyObject *self, PyObject *args, PyObject *kw)
             }
             else {
                 // simple field (e.g., identifier)
-                res = PySet_Add(missing_names, name);
+                res = PySet_AddValue(missing_names, PyValue_FromObjectBorrow(name));
                 if (res < 0) {
                     res = -1;
                     goto cleanup;
@@ -1324,17 +1348,17 @@ ast_type_reduce(PyObject *self, PyObject *unused)
                 if (!name) {
                     goto cleanup;
                 }
-                PyObject *value;
-                int rc = PyDict_GetItemRef(dict, name, &value);
+                PyValue value;
+                int rc = PyDict_GetValue(dict, PyValue_FromObjectBorrow(name), &value);
                 Py_DECREF(name);
                 if (rc < 0) {
                     goto cleanup;
                 }
-                if (!value) {
+                if (PyValue_IsNull(value)) {
                     break;
                 }
-                rc = PyList_Append(positional_args, Py_None);
-                Py_DECREF(value);
+                rc = PyList_AppendValue(positional_args, _PyValue_FromObjectKnown(Py_None));
+                PyValue_CLOSE(value);
                 if (rc < 0) {
                     goto cleanup;
                 }
@@ -1394,21 +1418,21 @@ ast_type_replace_update_payload(PyObject *payload,
         if (key == NULL) {
             return -1;
         }
-        PyObject *value;
-        if (PyDict_GetItemRef(dict, key, &value) < 0) {
+        PyValue value;
+        if (PyDict_GetValue(dict, PyValue_FromObjectBorrow(key), &value) < 0) {
             Py_DECREF(key);
             return -1;
         }
-        if (value == NULL) {
+        if (PyValue_IsNull(value)) {
             Py_DECREF(key);
             // If a field or attribute is not present at runtime, it should
             // be explicitly given in 'kwargs'. If not, the constructor will
             // issue a warning (which becomes an error in 3.15).
             continue;
         }
-        int rc = PyDict_SetItem(payload, key, value);
+        int rc = PyDict_SetValue(payload, PyValue_FromObjectBorrow(key), value);
         Py_DECREF(key);
-        Py_DECREF(value);
+        PyValue_CLOSE(value);
         if (rc < 0) {
             return -1;
         }
@@ -1759,7 +1783,7 @@ make_type(struct ast_state *state, const char *type, PyObject* base,
             Py_DECREF(fnames);
             return NULL;
         }
-        PyTuple_SET_ITEM(fnames, i, field);
+        PyTuple_SET_VALUE(fnames, i, PyValue_PrepareOwned(field));
     }
     result = PyObject_CallFunction((PyObject*)&PyType_Type, "s(O){OOOOOOOs}",
                     type, base,
@@ -1785,7 +1809,7 @@ add_attributes(struct ast_state *state, PyObject *type, const char * const *attr
             Py_DECREF(l);
             return -1;
         }
-        PyTuple_SET_ITEM(l, i, s);
+        PyTuple_SET_VALUE(l, i, PyValue_PrepareOwned(s));
     }
     result = PyObject_SetAttr(type, state->_attributes, l);
     Py_DECREF(l);
@@ -1808,7 +1832,7 @@ static PyObject* ast2obj_list(struct ast_state *state, asdl_seq *seq,
             Py_DECREF(result);
             return NULL;
         }
-        PyList_SET_ITEM(result, i, value);
+        PyList_SET_VALUE(result, i, PyValue_PrepareOwned(value));
     }
     return result;
 }
@@ -1929,7 +1953,8 @@ static int add_ast_fields(struct ast_state *state)
                 if (!state->abstract_types) {
                     return -1;
                 }
-                if (PySet_Add(state->abstract_types, state->AST_type) < 0) {
+                if (PySet_AddValue(state->abstract_types,
+                                   _PyValue_FromObjectKnown(state->AST_type)) < 0) {
                     return -1;
                 }
                 if (add_ast_fields(state) < 0) {
@@ -1973,7 +1998,8 @@ static int add_ast_fields(struct ast_state *state)
                             (name, name, len(sum.attributes)), 1)
         else:
             self.emit("if (add_attributes(state, state->%s_type, NULL, 0) < 0) return -1;" % name, 1)
-        self.emit("if (PySet_Add(state->abstract_types, state->%s_type) < 0) return -1;" % name, 1)
+        self.emit("if (PySet_AddValue(state->abstract_types, "
+                  "_PyValue_FromObjectKnown(state->%s_type)) < 0) return -1;" % name, 1)
         self.emit_defaults(name, sum.attributes, 1)
         simple = is_simple(sum)
         for t in sum.types:
@@ -2014,7 +2040,7 @@ ast_is_abstract(PyObject *Py_UNUSED(module), PyObject *cls) {
     if (state == NULL) {
         return NULL;
     }
-    int contains = PySet_Contains(state->abstract_types, cls);
+    int contains = PySet_ContainsValue(state->abstract_types, PyValue_FromObjectBorrow(cls));
     if (contains == -1) {
         return NULL;
     }
@@ -2213,7 +2239,7 @@ class ObjVisitor(PickleVisitor):
                 self.emit("for(i = 0; i < n; i++)", depth+1)
                 # This cannot fail, so no need for error handling
                 self.emit(
-                    "PyList_SET_ITEM(value, i, ast2obj_{0}(state, ({0}_ty)asdl_seq_GET({1}, i)));".format(
+                    "PyList_SET_VALUE(value, i, PyValue_PrepareOwned(ast2obj_{0}(state, ({0}_ty)asdl_seq_GET({1}, i))));".format(
                         field.type,
                         value
                     ),
@@ -2383,12 +2409,16 @@ def generate_module_def(mod, metadata, f, internal_h):
         #include "pycore_ast_state.h"     // struct ast_state
         #include "pycore_borrow.h"        // _PyBorrow_TupleItems()
         #include "pycore_ceval.h"         // _Py_EnterRecursiveCall()
+        #include "pycore_dict.h"          // PyDict_GetValue()
+        #include "pycore_list.h"          // PyList_AppendValue()
         #include "pycore_lock.h"          // _PyOnceFlag
         #include "pycore_modsupport.h"    // _PyArg_NoPositional()
         #include "pycore_pystate.h"       // _PyInterpreterState_GET()
         #include "pycore_runtime.h"       // _Py_ID()
         #include "pycore_setobject.h"     // _PySet_NextEntry()
+        #include "pycore_tuple.h"         // PyTuple_SET_VALUE()
         #include "pycore_unionobject.h"   // _Py_union_type_or
+        #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
         #include <stddef.h>               // offsetof()
 

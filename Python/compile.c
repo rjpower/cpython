@@ -280,7 +280,7 @@ _PyCompile_MaybeAddStaticAttributeToClass(compiler *c, expr_ty e)
         assert(u);
         if (u->u_scope_type == COMPILE_SCOPE_CLASS) {
             assert(u->u_static_attributes);
-            RETURN_IF_ERROR(PySet_Add(u->u_static_attributes, e->v.Attribute.attr));
+            RETURN_IF_ERROR(PySet_AddValue(u->u_static_attributes, PyValue_FromObjectBorrow(e->v.Attribute.attr)));
             break;
         }
     }
@@ -581,7 +581,7 @@ list2dict(PyObject *list)
             return NULL;
         }
         k = compiler_metadata_item(list, i);
-        if (PyDict_SetItem(dict, k, v) < 0) {
+        if (PyDict_SetValue(dict, PyValue_FromObjectBorrow(k), PyValue_FromObjectBorrow(v)) < 0) {
             Py_DECREF(v);
             Py_DECREF(dict);
             return NULL;
@@ -650,7 +650,7 @@ dictbytype(PyObject *src, int scope_type, int flag, Py_ssize_t offset)
                 goto error;
             }
             i++;
-            if (PyDict_SetItem(dest, k, item) < 0) {
+            if (PyDict_SetValue(dest, PyValue_FromObjectBorrow(k), PyValue_FromObjectBorrow(item)) < 0) {
                 Py_DECREF(item);
                 goto error;
             }
@@ -685,7 +685,7 @@ add_cell_names_from_symbols(PyObject *symbols, PyObject *names)
             goto error;
         }
         if (SYMBOL_TO_SCOPE(flags) == CELL) {
-            if (PySet_Add(names, PyValue_AsKnownObjectBorrow(key)) < 0) {
+            if (PySet_AddValue(names, key) < 0) {
                 goto error;
             }
         }
@@ -875,7 +875,7 @@ _PyCompile_EnterScope(compiler *c, identifier name, int scope_type,
         if (!capsule
             || _PyCapsule_SetTraverse(capsule, compiler_unit_capsule_traverse,
                                       compiler_unit_capsule_clear) < 0
-            || PyList_Append(c->c_stack, capsule) < 0)
+            || PyList_AppendValue(c->c_stack, PyValue_FromObjectBorrow(capsule)) < 0)
         {
             Py_XDECREF(capsule);
             compiler_unit_free(u);
@@ -1315,7 +1315,7 @@ _PyCompile_AddDeferredAnnotation(compiler *c, stmt_ty s,
     if (ptr == NULL) {
         return ERROR;
     }
-    if (PyList_Append(c->u->u_deferred_annotations, ptr) < 0) {
+    if (PyList_AppendValue(c->u->u_deferred_annotations, PyValue_FromObjectBorrow(ptr)) < 0) {
         Py_DECREF(ptr);
         return ERROR;
     }
@@ -1335,7 +1335,7 @@ _PyCompile_AddDeferredAnnotation(compiler *c, stmt_ty s,
             return ERROR;
         }
     }
-    int rc = PyList_Append(c->u->u_conditional_annotation_indices, index);
+    int rc = PyList_AppendValue(c->u->u_conditional_annotation_indices, PyValue_FromObjectBorrow(index));
     Py_DECREF(index);
     RETURN_IF_ERROR(rc);
     return SUCCESS;
@@ -1997,7 +1997,7 @@ _PyCompile_CodeGen(PyObject *ast, PyObject *filename, PyCompilerFlags *pflags,
 #define SET_METADATA_INT(key, value) do { \
         PyObject *v = PyLong_FromLong((long)value); \
         if (v == NULL) goto finally; \
-        int res = PyDict_SetItemString(metadata, key, v); \
+        int res = PyDict_SetValueString(metadata, key, PyValue_FromObjectBorrow(v)); \
         Py_XDECREF(v); \
         if (res < 0) goto finally; \
     } while (0);
@@ -2021,12 +2021,12 @@ _PyCompile_CodeGen(PyObject *ast, PyObject *filename, PyCompilerFlags *pflags,
     if (consts_list == NULL) {
         goto finally;
     }
-    if (PyDict_SetItemString(metadata, "consts", consts_list) < 0) {
+    if (PyDict_SetValueString(metadata, "consts", PyValue_FromObjectBorrow(consts_list)) < 0) {
         goto finally;
     }
 
     /* Allocate a copy of the instruction sequence on the heap */
-    res = _PyTuple_FromPair((PyObject *)_PyCompile_InstrSequence(c), metadata);
+    res = _PyTuple_PackValues(2, (PyValueBorrow[]){PyValue_FromObjectBorrow((PyObject *)_PyCompile_InstrSequence(c)), PyValue_FromObjectBorrow(metadata)});
 
 finally:
     Py_XDECREF(consts_list);

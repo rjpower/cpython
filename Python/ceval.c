@@ -1,5 +1,11 @@
 /* Execute compiled code */
 
+/* The defer line of the value-API waves (value-api-v2a0.md, section 1.5):
+   the interpreter unit (this file, bytecodes.c, the generated cases and
+   ceval_macros.h) is converted by the interpreter steps I1-I5, not by the
+   waves, so the compatibility marks do not apply here yet. */
+#define Py_VALUE_DEFER_MARKS 1
+
 #include "ceval.h"
 #include "pycore_long.h"
 #include "pycore_native_scope.h"

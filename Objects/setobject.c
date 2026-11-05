@@ -40,7 +40,9 @@
 #include "pycore_pyatomic_ft_wrappers.h"  // FT_ATOMIC_LOAD_SSIZE_RELAXED()
 #include "pycore_pyerrors.h"            // _PyErr_SetKeyError()
 #include "pycore_setobject.h"           // _PySet_NextEntry() definition
+#include "pycore_tuple.h"         // _PyTuple_PackValues()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 #include "pycore_weakref.h"             // FT_CLEAR_WEAKREFS()
 #include "pycore_value_ops.h"
 
@@ -2855,13 +2857,13 @@ set___reduce___impl(PySetObject *so)
     keys = PySequence_List((PyObject *)so);
     if (keys == NULL)
         goto done;
-    args = PyTuple_Pack(1, keys);
+    args = _PyTuple_PackValues(1, (PyValueBorrow[]){PyValue_FromObjectBorrow(keys)});
     if (args == NULL)
         goto done;
     state = _PyObject_GetState((PyObject *)so);
     if (state == NULL)
         goto done;
-    result = PyTuple_Pack(3, Py_TYPE(so), args, state);
+    result = _PyTuple_PackValues(3, (PyValueBorrow[]){_PyValue_FromObjectKnown(_PyObject_CAST(Py_TYPE(so))), PyValue_FromObjectBorrow(args), PyValue_FromObjectBorrow(state)});
 done:
     status = result == NULL ? -1 : 0;
     Py_XDECREF(args);
@@ -3227,7 +3229,7 @@ int
 }
 
 int
-PySet_DiscardValue(PyObject *set, PyValue key)
+(PySet_DiscardValue)(PyObject *set, PyValueBorrow key)
 {
     if (!PySet_Check(set)) {
         PyErr_BadInternalCall();
@@ -3237,7 +3239,7 @@ PySet_DiscardValue(PyObject *set, PyValue key)
 }
 
 int
-PySet_AddValue(PyObject *anyset, PyValue key)
+(PySet_AddValue)(PyObject *anyset, PyValueBorrow key)
 {
     if (!PySet_Check(anyset) &&
         !(PyFrozenSet_Check(anyset) && _PyObject_IsUniquelyReferenced(anyset))) {
@@ -3249,7 +3251,7 @@ PySet_AddValue(PyObject *anyset, PyValue key)
         PyObject_GC_IsTracked(PyValue_AsKnownObjectBorrow(key))) {
         _PyObject_GC_TRACK(anyset);
     }
-    return _PySet_AddValueTakeRef((PySetObject *)anyset, PyValue_XDUP(key));
+    return _PySet_AddValueTakeRef((PySetObject *)anyset, PyValue_DUP(key));
 }
 
 PyValue
@@ -3347,8 +3349,7 @@ _PySet_NextEntryRef(PyObject *set, Py_ssize_t *pos, PyObject **key, Py_hash_t *h
         return status;
     }
     /* A failed box consumes the entry, as in the set iterator. */
-    PyObject *boxed = _PyValue_AsObjectAt(value, BOX_SITE_SET);
-    PyValue_CLOSE(value);
+    PyObject *boxed = _PyValue_THUNK_EXIT(value);
     if (boxed == NULL) {
         return -1;
     }

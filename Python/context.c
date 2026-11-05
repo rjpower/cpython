@@ -2,6 +2,7 @@
 #include "pycore_call.h"          // _PyObject_VectorcallTstate()
 #include "pycore_context.h"
 #include "pycore_critical_section.h" // Py_BEGIN_CRITICAL_SECTION()
+#include "pycore_dict.h"          // PyDict_SetValueString()
 #include "pycore_freelist.h"      // _Py_FREELIST_FREE(), _Py_FREELIST_POP()
 #include "pycore_gc.h"            // _PyObject_GC_MAY_BE_TRACKED()
 #include "pycore_hamt.h"
@@ -10,6 +11,7 @@
 #include "pycore_pyatomic_ft_wrappers.h" // FT_ATOMIC_LOAD_INT_RELAXED()
 #include "pycore_pyerrors.h"
 #include "pycore_pystate.h"       // _PyThreadState_GET()
+#include "pycore_value.h"         // PyValue_FromObjectBorrow()
 
 
 
@@ -1433,8 +1435,7 @@ _PyContext_Init(PyInterpreterState *interp)
 {
     PyObject *missing = get_token_missing();
     assert(PyUnstable_IsImmortal(missing));
-    if (PyDict_SetItemString(
-        _PyType_GetDict(&PyContextToken_Type), "MISSING", missing))
+    if (PyDict_SetValueString(_PyType_GetDict(&PyContextToken_Type), "MISSING", PyValue_FromObjectBorrow(missing)))
     {
         Py_DECREF(missing);
         return _PyStatus_ERR("can't init context types");

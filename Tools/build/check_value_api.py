@@ -65,6 +65,11 @@ Py_BUILD_CORE_MODULE, or one that defines Py_VALUE_CORE (Include/pyport.h).
   declaration is marked, which the waves do (W1b, W2); until then it has
   nothing to check.
 
+* deferred: a value-native unit that defines Py_VALUE_DEFER_MARKS, so that
+  Py_VALUE_COMPAT marks nothing there (Include/pyport.h): the defer line of
+  a bulk wave (pyjit/design/proposals/value-api-v2a0.md, section 1.5).
+  Reported, not failing; the R27 gate needs none.
+
 The functions that Py_VALUE_COMPAT marks need no other rule here: calling
 one from a value-native unit is a compile error.
 
@@ -374,6 +379,28 @@ def defines(arguments):
 SOURCE_DEFINE = re.compile(
     r"^\s*#\s*define\s+(Py_VALUE_CORE|Py_VALUE_ADAPTER|Py_BUILD_CORE"
     r"|Py_BUILD_CORE_BUILTIN|Py_BUILD_CORE_MODULE)\b", re.M)
+
+
+DEFER_LINE = re.compile(r"^[ \t]*#[ \t]*define[ \t]+Py_VALUE_DEFER_MARKS\b", re.M)
+
+
+def deferred_units(entries):
+    """A note for each unit (entry, kind) that carries the defer line."""
+    findings = []
+    for entry, kind in entries:
+        path = Path(entry["directory"], entry["file"])
+        try:
+            text = path.read_text(errors="replace")
+        except OSError:
+            continue
+        m = DEFER_LINE.search(text)
+        if m is not None:
+            line = text.count("\n", 0, m.start()) + 1
+            findings.append(Finding(
+                display_path(entry["file"], entry["directory"]), line, 1,
+                "deferred", "Py_VALUE_DEFER_MARKS: the compatibility marks "
+                "do not apply in this unit", False))
+    return findings
 
 
 def unit_kind(entry):
@@ -1649,7 +1676,8 @@ def main():
         text_findings = [f for f in text_findings
                          if str(SRCDIR / f.path) in wanted]
     findings, errors = check_units(clang_query, entries.values(), args.jobs)
-    findings = sorted({*findings, *text_findings})
+    findings = sorted({*findings, *text_findings,
+                       *deferred_units(entries.values())})
     for finding in findings:
         print(finding)
     for error in errors:

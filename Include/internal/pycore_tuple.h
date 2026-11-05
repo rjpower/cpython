@@ -34,8 +34,22 @@ PyAPI_FUNC(PyObject *) _PyTuple_BinarySlice(PyObject *, PyObject *, PyObject *);
 PyAPI_FUNC(PyObject *) _PyTuple_Concat(PyObject *, PyObject *);
 PyAPI_FUNC(PyObject *) _PyTuple_Repeat(PyObject *self, Py_ssize_t n);
 
+Py_VALUE_COMPAT(_PyTuple_PackValues)
 PyAPI_FUNC(PyObject *) _PyTuple_FromPair(PyObject *, PyObject *);
+Py_VALUE_COMPAT(_PyTuple_FromPairTakeValue)
 PyAPI_FUNC(PyObject *) _PyTuple_FromPairSteal(PyObject *, PyObject *);
+
+/* The value forms of PyTuple_Pack(n, ...), _PyTuple_FromPair() and
+   _PyTuple_FromPairSteal(). PyTuple_Pack is variadic, and a PyValue must not
+   reach a variadic call, so PackValues takes the n borrowed inputs as an
+   array, written as a compound literal at the call:
+       _PyTuple_PackValues(2, (PyValueBorrow[]){PyValue_Borrow(a), b});
+   It retains them before it allocates. FromPairTakeValue consumes both
+   owners on every exit. Each returns a new tuple, or NULL with an
+   exception. */
+PyAPI_FUNC(PyObject *) _PyTuple_PackValues(Py_ssize_t n,
+                                           const PyValueBorrow *items);
+PyAPI_FUNC(PyObject *) _PyTuple_FromPairTakeValue(PyValue, PyValue);
 
 extern _PyValueIndexPair _PyTuple_IterValue(PyObject *, Py_ssize_t);
 extern PyValue _PyTupleIter_NextValue(PyObject *);
@@ -68,7 +82,9 @@ _PyTuple_GET_OBJECT(PyObject *tuple, Py_ssize_t index)
    reference to the tuple first, so a destructor that re-enters the iterator
    sees a shared tuple and builds a new one; call _PyTuple_Recycle() after
    the last replacement. PyTuple_SetItem() refuses a shared tuple. */
+Py_VALUE_COMPAT(_PyTuple_ReplaceTakeValue)
 PyAPI_FUNC(void) _PyTuple_ReplaceTakeRef(PyObject *tuple, Py_ssize_t i, PyObject *item);
+PyAPI_FUNC(void) _PyTuple_ReplaceTakeValue(PyObject *tuple, Py_ssize_t i, PyValue item);
 
 typedef struct {
     PyObject_HEAD

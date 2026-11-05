@@ -41,6 +41,7 @@ static inline Py_ssize_t PyList_GET_SIZE(PyObject *op) {
 PyAPI_FUNC(void) PyList_SET_VALUE(PyObject *op, Py_ssize_t index, PyValue value);
 #define PyList_SET_VALUE(op, index, value) \
     PyList_SET_VALUE(_PyObject_CAST(op), (index), (value))
+Py_VALUE_COMPAT(PyList_SET_VALUE)
 PyAPI_FUNC(void) PyList_SET_ITEM(PyObject *op, Py_ssize_t index, PyObject *value);
 #define PyList_SET_ITEM(op, index, value) \
     PyList_SET_ITEM(_PyObject_CAST(op), (index), _PyObject_CAST(value))
@@ -50,3 +51,5 @@ PyAPI_FUNC(int) PyList_Clear(PyObject *self);
 
 /* Owned value, or PyValue_NULL with an exception on invalid input. */
 PyAPI_FUNC(PyValue) PyList_GetValue(PyObject *, Py_ssize_t);
+/* The value form of PyList_SetItem(): consumes value on every exit. */
+PyAPI_FUNC(int) PyList_SetValue(PyObject *, Py_ssize_t, PyValue);

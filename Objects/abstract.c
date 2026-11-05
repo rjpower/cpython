@@ -4,6 +4,11 @@
    Tools/build/check_value_api.py does not list its slot-field reads. */
 #define Py_VALUE_ADAPTER 1
 
+/* The defer line of the value-API waves (value-api-v2a0.md, section 1.5):
+   the W1 container marks do not apply here until the steps that are
+   rewriting this file (V2a-1a, M1b, M2, M3a) land. */
+#define Py_VALUE_DEFER_MARKS 1
+
 #include "Python.h"
 #include "pycore_abstract.h"      // _PyIndex_Check()
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
@@ -2415,7 +2420,7 @@ PySequence_Tuple(PyObject *v)
     assert(n == 8);
     Py_SET_SIZE(list, n);
     for (Py_ssize_t j = 0; j < n; j++) {
-        PyList_SET_ITEM(list, j, buffer[j]);
+        PyList_SET_VALUE(list, j, PyValue_PrepareOwned(buffer[j]));
     }
     for (;;) {
         PyObject *item = PyIter_Next(it);
@@ -2427,7 +2432,7 @@ PySequence_Tuple(PyObject *v)
             }
             break;
         }
-        if (_PyList_AppendTakeRef(list, item) < 0) {
+        if (_PyList_AppendTakeValue(list, PyValue_PrepareOwned(item)) < 0) {
             Py_DECREF(list);
             Py_DECREF(it);
             return NULL;

@@ -330,7 +330,7 @@ PyThread_GetInfo(void)
         Py_DECREF(threadinfo);
         return NULL;
     }
-    PyStructSequence_SET_ITEM(threadinfo, pos++, value);
+    PyStructSequence_SET_VALUE(threadinfo, pos++, PyValue_PrepareOwned(value));
 
 #ifdef HAVE_PTHREAD_STUBS
     value = Py_NewRef(Py_None);
@@ -341,7 +341,7 @@ PyThread_GetInfo(void)
         return NULL;
     }
 #endif
-    PyStructSequence_SET_ITEM(threadinfo, pos++, value);
+    PyStructSequence_SET_VALUE(threadinfo, pos++, PyValue_PrepareOwned(value));
 
 #if (defined(_POSIX_THREADS) && defined(HAVE_CONFSTR) \
      && defined(_CS_GNU_LIBPTHREAD_VERSION))
@@ -357,7 +357,7 @@ PyThread_GetInfo(void)
     {
         value = Py_NewRef(Py_None);
     }
-    PyStructSequence_SET_ITEM(threadinfo, pos++, value);
+    PyStructSequence_SET_VALUE(threadinfo, pos++, PyValue_PrepareOwned(value));
     return threadinfo;
 }
 

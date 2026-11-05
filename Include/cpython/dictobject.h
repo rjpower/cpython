@@ -59,7 +59,9 @@ PyAPI_FUNC(int) PyDict_ContainsString(PyObject *mp, const char *key);
 
 PyAPI_FUNC(PyObject *) _PyDict_NewPresized(Py_ssize_t minused);
 
+Py_VALUE_COMPAT(PyDict_PopValue)
 PyAPI_FUNC(int) PyDict_Pop(PyObject *dict, PyObject *key, PyObject **result);
+Py_VALUE_COMPAT(PyDict_PopValueString)
 PyAPI_FUNC(int) PyDict_PopString(PyObject *dict, const char *key, PyObject **result);
 
 // Use PyDict_Pop() instead
@@ -116,9 +118,11 @@ PyAPI_FUNC(PyObject*) PyFrozenDict_New(PyObject *iterable);
  * NextValue requires valid cursor storage and distinct optional key/value
  * outputs. Error/end leave the cursor unchanged; success advances it once.
  * The forms that take a PyValueBorrow key (GetValue, SetValue, DelValue,
- * ContainsValue) are internal (pycore_dict.h): the operations that make,
+ * ContainsValue, PopValue, SetValueString) are internal (pycore_dict.h): the operations that make,
  * read or retain a borrow are internal, so no public function takes or
  * returns one. */
 PyAPI_FUNC(int) PyDict_GetValueString(PyObject *, const char *, PyValue *);
 PyAPI_FUNC(int) PyDict_NextValue(PyObject *, Py_ssize_t *, PyValue *, PyValue *);
-PyAPI_FUNC(int) PyDict_PopValue(PyObject *, PyValue, PyValue *);
+/* As PyDict_PopString(): 1 with the removed value as an owner in *result
+ * (which may be NULL), 0 if absent, -1 with an exception. */
+PyAPI_FUNC(int) PyDict_PopValueString(PyObject *, const char *, PyValue *);

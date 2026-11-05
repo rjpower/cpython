@@ -956,6 +956,81 @@ dict_public_value_string_oom(PyObject *module, PyObject *const *args, Py_ssize_t
     Py_RETURN_NONE;
 }
 
+/* The W1 removal and string forms, with values read from the argument
+   tuple, so an int or float argument arrives inline. The pop helpers return
+   (status, value, inline) with value None on a miss; inline tells whether
+   the removed value came out without a box. */
+
+static PyObject *
+dict_pop_result(int status, PyValue value)
+{
+    if (status < 0) {
+        return NULL;
+    }
+    if (status == 0) {
+        return Py_BuildValue("iOO", status, Py_None, Py_False);
+    }
+    int inline_value = PyValue_IsInline(value);
+    PyObject *object = PyValue_AsObject(value);
+    PyValue_CLOSE(value);
+    if (object == NULL) {
+        return NULL;
+    }
+    return Py_BuildValue("iNO", status, object,
+                         inline_value ? Py_True : Py_False);
+}
+
+static PyObject *
+dict_pop_value(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *dict, *key;
+    if (!PyArg_ParseTuple(args, "OO", &dict, &key)) {
+        return NULL;
+    }
+    PyValue value;
+    int status = PyDict_PopValue(dict, PyTuple_GET_VALUE(args, 1), &value);
+    return dict_pop_result(status, value);
+}
+
+static PyObject *
+dict_pop_value_string(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *dict;
+    const char *key;
+    if (!PyArg_ParseTuple(args, "Os", &dict, &key)) {
+        return NULL;
+    }
+    PyValue value;
+    int status = PyDict_PopValueString(dict, key, &value);
+    return dict_pop_result(status, value);
+}
+
+/* Store VALUE under the string KEY; return whether the entry holds it
+   inline. */
+static PyObject *
+dict_set_value_string(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *dict, *value;
+    const char *key;
+    if (!PyArg_ParseTuple(args, "OsO", &dict, &key, &value)) {
+        return NULL;
+    }
+    if (PyDict_SetValueString(dict, key, PyTuple_GET_VALUE(args, 2)) < 0) {
+        return NULL;
+    }
+    PyValue stored;
+    int status = PyDict_GetValueString(dict, key, &stored);
+    if (status <= 0) {
+        if (status == 0) {
+            PyErr_SetString(PyExc_AssertionError, "the stored key is missing");
+        }
+        return NULL;
+    }
+    int inline_value = PyValue_IsInline(stored);
+    PyValue_CLOSE(stored);
+    return PyBool_FromLong(inline_value);
+}
+
 static PyMethodDef methods[] = {
     {"dict_public_value_read", _PyCFunction_CAST(dict_public_value_read), METH_FASTCALL},
     {"dict_public_value_next", _PyCFunction_CAST(dict_public_value_next), METH_FASTCALL},
@@ -976,6 +1051,9 @@ static PyMethodDef methods[] = {
     {"dict_value_seed", dict_value_seed, METH_O},
     {"dict_value_pop_boxing_oom", dict_value_pop_boxing_oom, METH_O},
     {"dict_value_delete_if", dict_value_delete_if, METH_O},
+    {"dict_pop_value", dict_pop_value, METH_VARARGS},
+    {"dict_pop_value_string", dict_pop_value_string, METH_VARARGS},
+    {"dict_set_value_string", dict_set_value_string, METH_VARARGS},
     {NULL},
 };
 

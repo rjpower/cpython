@@ -6,6 +6,7 @@
 #include "osdefs.h"               // MAXPATHLEN
 #include "pycore_ceval.h"         // _Py_simple_func
 #include "pycore_crossinterp.h"   // _PyXIData_t
+#include "pycore_dict.h"          // PyDict_SetValue()
 #include "pycore_function.h"      // _PyFunction_VerifyStateless()
 #include "pycore_global_strings.h"  // _Py_ID()
 #include "pycore_import.h"        // _PyImport_SetModule()
@@ -14,7 +15,9 @@
 #include "pycore_pythonrun.h"     // _Py_SourceAsString()
 #include "pycore_runtime.h"       // _PyRuntime
 #include "pycore_setobject.h"     // _PySet_NextEntry()
+#include "pycore_tuple.h"         // _PyTuple_PackValues()
 #include "pycore_typeobject.h"    // _PyStaticType_InitBuiltin()
+#include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
 
 
 static Py_ssize_t
@@ -146,7 +149,17 @@ ensure_isolated_main(PyThreadState *tstate, struct sync_module *main)
         Py_DECREF(mod);
         return -1;
     }
-    else if (PyDict_GetItemRef(interpns, key, &loaded) < 0) {
+    PyValue loaded_value;
+    int loaded_rc = PyDict_GetValue(interpns, PyValue_FromObjectBorrow(key),
+                                    &loaded_value);
+    if (loaded_rc > 0) {
+        loaded = _PyValue_AsObjectAt(loaded_value, BOX_SITE_DICT);
+        PyValue_CLOSE(loaded_value);
+        if (loaded == NULL) {
+            loaded_rc = -1;
+        }
+    }
+    if (loaded_rc < 0) {
         // It's probably unrecoverable, so don't bother caching the error.
         Py_DECREF(mod);
         Py_DECREF(key);
@@ -174,7 +187,7 @@ ensure_isolated_main(PyThreadState *tstate, struct sync_module *main)
         }
 
         // Set the per-interpreter cache entry.
-        if (PyDict_SetItem(interpns, key, loaded) < 0) {
+        if (PyDict_SetValue(interpns, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(loaded)) < 0) {
             goto error;
         }
     }
@@ -1132,7 +1145,7 @@ _convert_exc_to_TracebackException(PyObject *exc, PyObject **p_tbexc)
         return -1;
     }
 
-    args = PyTuple_Pack(1, exc);
+    args = _PyTuple_PackValues(1, (PyValueBorrow[]){PyValue_FromObjectBorrow(exc)});
     if (args == NULL) {
         goto error;
     }
@@ -1141,10 +1154,10 @@ _convert_exc_to_TracebackException(PyObject *exc, PyObject **p_tbexc)
     if (kwargs == NULL) {
         goto error;
     }
-    if (PyDict_SetItemString(kwargs, "save_exc_type", Py_False) < 0) {
+    if (PyDict_SetValueString(kwargs, "save_exc_type", _PyValue_FromObjectKnown(Py_False)) < 0) {
         goto error;
     }
-    if (PyDict_SetItemString(kwargs, "lookup_lines", Py_False) < 0) {
+    if (PyDict_SetValueString(kwargs, "lookup_lines", _PyValue_FromObjectKnown(Py_False)) < 0) {
         goto error;
     }
 
@@ -2173,14 +2186,19 @@ _sharednsitem_copy_from_ns(struct _sharednsitem *item, PyObject *ns,
 {
     assert(item->name != NULL);
     assert(item->xidata == NULL);
-    PyObject *value;
-    int found = PyDict_GetItemStringRef(ns, item->name, &value);
+    PyValue item_value;
+    int found = PyDict_GetValueString(ns, item->name, &item_value);
     if (found < 0) {
         return -1;
     }
     if (found == 0) {
         // When applied, this item will be set to the default (or fail).
         return 0;
+    }
+    PyObject *value = _PyValue_AsObjectAt(item_value, BOX_SITE_DICT);
+    PyValue_CLOSE(item_value);
+    if (value == NULL) {
+        return -1;
     }
     int res = _sharednsitem_set_value(item, value, fallback);
     Py_DECREF(value);
@@ -2208,7 +2226,7 @@ _sharednsitem_apply(_PyXI_namespace_item *item, PyObject *ns, PyObject *dflt)
     else {
         value = Py_NewRef(dflt);
     }
-    int res = PyDict_SetItem(ns, name, value);
+    int res = PyDict_SetValue(ns, PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(value));
     Py_DECREF(name);
     Py_DECREF(value);
     return res;
@@ -2399,9 +2417,14 @@ _create_sharedns(PyObject *names)
     if (PyDict_CheckExact(names)) {
         Py_ssize_t i = 0;
         Py_ssize_t pos = 0;
-        PyObject *name;
+        PyValue name_value;
         int rc;
-        while ((rc = PyDict_NextEntryRef(names, &pos, &name, NULL)) > 0) {
+        while ((rc = PyDict_NextValue(names, &pos, &name_value, NULL)) > 0) {
+            PyObject *name = _PyValue_AsObjectAt(name_value, BOX_SITE_DICT);
+            PyValue_CLOSE(name_value);
+            if (name == NULL) {
+                goto error;
+            }
             int res = _sharednsitem_init(&items[i], name);
             Py_DECREF(name);
             if (res < 0) {
@@ -3094,7 +3117,7 @@ _PyXI_Preserve(_PyXI_session *session, const char *name, PyObject *value,
             goto error;
         }
     }
-    if (PyDict_SetItemString(session->_preserved, name, value) < 0) {
+    if (PyDict_SetValueString(session->_preserved, name, PyValue_FromObjectBorrow(value)) < 0) {
         set_exc_with_cause(PyExc_RuntimeError, "failed to preserve object");
         failure.code = _PyXI_ERR_PRESERVE_FAILURE;
         goto error;
@@ -3113,7 +3136,11 @@ _PyXI_GetPreserved(_PyXI_session_result *result, const char *name)
 {
     PyObject *value = NULL;
     if (result->preserved != NULL) {
-        (void)PyDict_GetItemStringRef(result->preserved, name, &value);
+        PyValue v;
+        if (PyDict_GetValueString(result->preserved, name, &v) > 0) {
+            value = _PyValue_AsObjectAt(v, BOX_SITE_DICT);
+            PyValue_CLOSE(v);
+        }
     }
     return value;
 }

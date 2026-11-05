@@ -9,8 +9,10 @@
 
 #include "pycore_c_array.h" // _Py_CArray_EnsureCapacity
 #include "pycore_compile.h" // _PyInstruction
+#include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_opcode_utils.h"
 #include "pycore_opcode_metadata.h" // OPCODE_HAS_ARG, etc
+#include "pycore_value.h"         // PyValue_FromObjectBorrow()
 
 typedef _PyInstruction instruction;
 typedef _PyInstructionSequence instr_sequence;
@@ -179,7 +181,7 @@ _PyInstructionSequence_AddNested(instr_sequence *seq, instr_sequence *nested)
             return ERROR;
         }
     }
-    if (PyList_Append(seq->s_nested, (PyObject*)nested) < 0) {
+    if (PyList_AppendValue(seq->s_nested, PyValue_FromObjectBorrow((PyObject*)nested)) < 0) {
         return ERROR;
     }
     return SUCCESS;
@@ -391,7 +393,7 @@ InstructionSequenceType_get_instructions_impl(_PyInstructionSequence *self)
             goto error;
         }
 
-        int res = PyList_Append(instructions, inst_tuple);
+        int res = PyList_AppendValue(instructions, PyValue_FromObjectBorrow(inst_tuple));
         Py_DECREF(inst_tuple);
         if (res != 0) {
             goto error;

@@ -286,17 +286,24 @@ extern "C" {
  *    Py_VALUE_COMPAT(_PyValue_Add) PyAPI_FUNC(PyObject *) PyNumber_Add(...);
  *
  * There is no weaker fallback: a compiler without the unavailable attribute
- * cannot build value-native units. */
+ * cannot build value-native units.
+ *
+ * A unit that defines Py_VALUE_DEFER_MARKS before including Python.h sees no
+ * mark: the defer line of a bulk wave (value-api-v2a0.md, section 1.5), for a
+ * unit that another step is rewriting. Tools/build/check_value_api.py lists
+ * the deferred units; the R27 gate needs none. */
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_BUILTIN) \
     && !defined(Py_BUILD_CORE_MODULE) && !defined(Py_VALUE_CORE)
 #  define Py_VALUE_CORE 1
 #endif
 #if defined(Py_VALUE_CORE)
-#  if defined(__clang__) || (defined(__GNUC__) && __GNUC__ >= 12)
+#  if !defined(__clang__) && !(defined(__GNUC__) && __GNUC__ >= 12)
+#    error "value-native units need __attribute__((unavailable)): Clang or GCC 12+"
+#  elif defined(Py_VALUE_DEFER_MARKS)
+#    define Py_VALUE_COMPAT(REPLACEMENT)
+#  else
 #    define Py_VALUE_COMPAT(REPLACEMENT) \
          __attribute__((unavailable("compatibility API; use " #REPLACEMENT)))
-#  else
-#    error "value-native units need __attribute__((unavailable)): Clang or GCC 12+"
 #  endif
 #else
 #  define Py_VALUE_COMPAT(REPLACEMENT)

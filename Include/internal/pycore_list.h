@@ -20,6 +20,7 @@ PyAPI_FUNC(PyObject *) _PyList_Concat(PyObject *, PyObject *);
 extern void _PyList_DebugMallocStats(FILE *out);
 // _PyList_GetItemRef should be used only when the object is known as a list
 // because it doesn't raise TypeError when the object is not a list, whereas PyList_GetItemRef does.
+Py_VALUE_COMPAT(_PyList_GetValue)
 PyAPI_FUNC(PyObject *) _PyList_GetItemRef(PyListObject *, Py_ssize_t i);
 
 
@@ -32,10 +33,23 @@ PyAPI_FUNC(PyValueBorrow) PyList_GET_VALUE(PyObject *op, Py_ssize_t index);
 #define PyList_GET_VALUE(op, index) \
     PyList_GET_VALUE(_PyObject_CAST(op), (index))
 
+Py_VALUE_COMPAT(_PyList_AppendTakeValue)
 PyAPI_FUNC(int)
 _PyList_AppendTakeRefListResize(PyListObject *self, PyObject *newitem);
 
+/* The value forms of PyList_Append() and PyList_Insert(): they borrow their
+   input and take a count of their own. Internal, because only the core makes
+   a PyValueBorrow; each has a reader macro, so the core passes owners and
+   borrows alike. */
+PyAPI_FUNC(int) PyList_AppendValue(PyObject *list, PyValueBorrow item);
+#define PyList_AppendValue(L, V) (PyList_AppendValue)(L, PyValue_Borrow(V))
+PyAPI_FUNC(int) PyList_InsertValue(PyObject *list, Py_ssize_t where,
+                                   PyValueBorrow item);
+#define PyList_InsertValue(L, I, V) \
+    (PyList_InsertValue)(L, I, PyValue_Borrow(V))
+
 /* These consume their input on success and failure. */
+Py_VALUE_COMPAT(_PyList_AppendTakeValue)
 PyAPI_FUNC(int) _PyList_AppendTakeRef(PyListObject *self, PyObject *newitem);
 PyAPI_FUNC(int) _PyList_AppendTakeValue(PyListObject *self, PyValue value);
 PyAPI_FUNC(PyValue) _PyList_GetValue(PyListObject *self, Py_ssize_t index);

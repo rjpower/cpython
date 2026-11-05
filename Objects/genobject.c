@@ -1575,7 +1575,7 @@ _PyCoro_ComputeOrigin(int origin_depth, _PyInterpreterFrame *current_frame)
             Py_DECREF(cr_origin);
             return NULL;
         }
-        PyTuple_SET_ITEM(cr_origin, i, frameinfo);
+        PyTuple_SET_VALUE(cr_origin, i, PyValue_PrepareOwned(frameinfo));
         frame = _PyFrame_GetFirstComplete(frame->previous);
     }
 

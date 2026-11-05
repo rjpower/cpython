@@ -1050,7 +1050,7 @@ _PyStack_AsDict(PyObject *const *values, PyObject *kwnames)
     for (Py_ssize_t i = 0; i < nkwargs; i++) {
         /* Vectorcall kwnames hold only str, which is never inline. */
         PyObject *key = _PyTuple_GET_OBJECT(kwnames, i);
-        if (PyDict_SetItem(dict, key, values[i]) < 0) {
+        if (PyDict_SetValue(dict, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(values[i])) < 0) {
             Py_DECREF(dict);
             return NULL;
         }
@@ -1121,7 +1121,7 @@ _PyStack_UnpackDict(PyThreadState *tstate,
     for (Py_ssize_t i = 0; i < nkwargs; i++) {
         PyObject *pair = PyValue_AsKnownObjectBorrow(PyList_GET_VALUE(items, i));
         PyObject *key = PyValue_AsKnownObjectBorrow(PyTuple_GET_VALUE(pair, 0));
-        PyTuple_SET_ITEM(kwnames, i, Py_NewRef(key));
+        PyTuple_SET_VALUE(kwnames, i, PyValue_DUP(PyValue_FromObjectBorrow(key)));
         stack[nargs + i] = _PyValue_AsObjectAt(PyTuple_GET_VALUE(pair, 1), BOX_SITE_CALL_ADAPTER);
         if (stack[nargs + i] == NULL) {
             goto error;

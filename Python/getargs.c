@@ -1585,7 +1585,10 @@ error_unexpected_keyword_arg(PyObject *kwargs, PyObject *kwnames,
     }
     PyObject *keyword = NULL;
     for (Py_ssize_t j = 0; j < PyList_GET_SIZE(names); j++) {
-        keyword = PyList_GetItemRef(names, j);
+        PyValue keyword_v = PyList_GetValue(names, j);
+        keyword = PyValue_IsNull(keyword_v)
+            ? NULL : _PyValue_AsObjectAt(keyword_v, BOX_SITE_LIST);
+        PyValue_XCLOSE(keyword_v);
         if (keyword == NULL) {
             goto done;
         }
@@ -1859,11 +1862,17 @@ vgetargskeywords_impl(PyObject *const *args, PyObject *tuple, Py_ssize_t nargs,
                 if (kwargs != NULL) {
                     /* A dict value may be a fresh box of an inline value:
                        the borrow stack keeps it for the borrowed outputs. */
-                    PyObject *owned;
-                    if (PyDict_GetItemStringRef(kwargs, kwlist[i], &owned) < 0) {
+                    PyValue owned_v;
+                    int found = PyDict_GetValueString(kwargs, kwlist[i], &owned_v);
+                    if (found < 0) {
                         return cleanreturn(0, &freelist);
                     }
-                    if (owned != NULL) {
+                    if (found > 0) {
+                        PyObject *owned = _PyValue_AsObjectAt(owned_v, BOX_SITE_DICT);
+                        PyValue_CLOSE(owned_v);
+                        if (owned == NULL) {
+                            return cleanreturn(0, &freelist);
+                        }
                         current_arg = _PyBorrow_Keep(owned);
                         if (current_arg == NULL) {
                             return cleanreturn(0, &freelist);
@@ -1953,17 +1962,23 @@ vgetargskeywords_impl(PyObject *const *args, PyObject *tuple, Py_ssize_t nargs,
         Py_ssize_t j;
         /* make sure there are no arguments given by name and position */
         for (i = pos; i < nargs; i++) {
-            PyObject *current_arg;
+            int present;
             if (kwargs != NULL) {
-                if (PyDict_GetItemStringRef(kwargs, kwlist[i], &current_arg) < 0) {
+                PyValue current_v;
+                present = PyDict_GetValueString(kwargs, kwlist[i], &current_v);
+                if (present < 0) {
                     return cleanreturn(0, &freelist);
+                }
+                if (present > 0) {
+                    PyValue_CLOSE(current_v);
                 }
             }
             else {
-                current_arg = find_keyword_str(kwnames, kwstack, kwlist[i]);
+                PyObject *current_arg = find_keyword_str(kwnames, kwstack, kwlist[i]);
+                present = current_arg != NULL;
+                Py_XDECREF(current_arg);
             }
-            if (current_arg) {
-                Py_DECREF(current_arg);
+            if (present) {
                 /* arg present in tuple and in dict */
                 PyErr_Format(PyExc_TypeError,
                              "argument for %.200s%s given by name ('%s') "
@@ -1979,13 +1994,18 @@ vgetargskeywords_impl(PyObject *const *args, PyObject *tuple, Py_ssize_t nargs,
         while (1) {
             if (kwargs != NULL) {
                 /* Error path only: keeping the keys costs nothing. */
-                PyObject *owned;
-                int r = PyDict_NextEntryRef(kwargs, &j, &owned, NULL);
+                PyValue owned_v;
+                int r = PyDict_NextValue(kwargs, &j, &owned_v, NULL);
                 if (r < 0) {
                     return cleanreturn(0, &freelist);
                 }
                 if (r == 0) {
                     break;
+                }
+                PyObject *owned = _PyValue_AsObjectAt(owned_v, BOX_SITE_DICT);
+                PyValue_CLOSE(owned_v);
+                if (owned == NULL) {
+                    return cleanreturn(0, &freelist);
                 }
                 key = _PyBorrow_Keep(owned);
                 if (key == NULL) {
@@ -2186,7 +2206,7 @@ new_kwtuple(const char * const *keywords, int total, int pos)
         }
         PyInterpreterState *interp = _PyInterpreterState_GET();
         _PyUnicode_InternImmortal(interp, &str);
-        PyTuple_SET_ITEM(kwtuple, i, str);
+        PyTuple_SET_VALUE(kwtuple, i, PyValue_PrepareOwned(str));
     }
     return kwtuple;
 }
@@ -2463,11 +2483,18 @@ vgetargskeywordsfast_impl(PyObject *const *args, PyObject *tuple,
             if (kwargs != NULL) {
                 /* A dict value may be a fresh box of an inline value: the
                    borrow stack keeps it for the borrowed outputs. */
-                PyObject *owned;
-                if (PyDict_GetItemRef(kwargs, keyword, &owned) < 0) {
+                PyValue owned_v;
+                int found = PyDict_GetValue(kwargs, PyValue_FromObjectBorrow(keyword),
+                                            &owned_v);
+                if (found < 0) {
                     return cleanreturn(0, &freelist);
                 }
-                if (owned != NULL) {
+                if (found > 0) {
+                    PyObject *owned = _PyValue_AsObjectAt(owned_v, BOX_SITE_DICT);
+                    PyValue_CLOSE(owned_v);
+                    if (owned == NULL) {
+                        return cleanreturn(0, &freelist);
+                    }
                     current_arg = _PyBorrow_Keep(owned);
                     if (current_arg == NULL) {
                         return cleanreturn(0, &freelist);
@@ -2540,21 +2567,28 @@ vgetargskeywordsfast_impl(PyObject *const *args, PyObject *tuple,
     if (nkwargs > 0) {
         /* make sure there are no arguments given by name and position */
         for (i = pos; i < nargs; i++) {
-            PyObject *current_arg;
+            int present;
             keyword = _PyTuple_GET_OBJECT(kwtuple, i - pos);
             if (kwargs != NULL) {
-                if (PyDict_GetItemRef(kwargs, keyword, &current_arg) < 0) {
+                PyValue current_v;
+                present = PyDict_GetValue(kwargs, PyValue_FromObjectBorrow(keyword),
+                                          &current_v);
+                if (present < 0) {
                     return cleanreturn(0, &freelist);
+                }
+                if (present > 0) {
+                    PyValue_CLOSE(current_v);
                 }
             }
             else {
-                current_arg = find_keyword(kwnames, kwstack, keyword);
+                PyObject *current_arg = find_keyword(kwnames, kwstack, keyword);
                 if (current_arg == NULL && PyErr_Occurred()) {
                     return cleanreturn(0, &freelist);
                 }
+                present = current_arg != NULL;
+                Py_XDECREF(current_arg);
             }
-            if (current_arg) {
-                Py_DECREF(current_arg);
+            if (present) {
                 /* arg present in tuple and in dict */
                 PyErr_Format(PyExc_TypeError,
                              "argument for %.200s%s given by name ('%U') "
@@ -2705,12 +2739,21 @@ _PyArg_UnpackKeywords(PyObject *const *args, Py_ssize_t nargs,
         if (nkwargs) {
             keyword = _PyTuple_GET_OBJECT(kwtuple, i - posonly);
             if (kwargs != NULL) {
-                if (PyDict_GetItemRef(kwargs, keyword, &current_arg) < 0) {
+                PyValue current_v;
+                int found = PyDict_GetValue(kwargs, PyValue_FromObjectBorrow(keyword),
+                                            &current_v);
+                if (found < 0) {
                     return NULL;
                 }
+                current_arg = NULL;
                 /* A dict value may be a fresh box of an inline value: the
                    borrow stack keeps it for the caller's borrowed buffer. */
-                if (current_arg != NULL) {
+                if (found > 0) {
+                    current_arg = _PyValue_AsObjectAt(current_v, BOX_SITE_DICT);
+                    PyValue_CLOSE(current_v);
+                    if (current_arg == NULL) {
+                        return NULL;
+                    }
                     current_arg = _PyBorrow_Keep(current_arg);
                     if (current_arg == NULL) {
                         return NULL;
@@ -2753,21 +2796,28 @@ _PyArg_UnpackKeywords(PyObject *const *args, Py_ssize_t nargs,
     if (nkwargs > 0) {
         /* make sure there are no arguments given by name and position */
         for (i = posonly; i < nargs; i++) {
-            PyObject *current_arg;
+            int present;
             keyword = _PyTuple_GET_OBJECT(kwtuple, i - posonly);
             if (kwargs != NULL) {
-                if (PyDict_GetItemRef(kwargs, keyword, &current_arg) < 0) {
+                PyValue current_v;
+                present = PyDict_GetValue(kwargs, PyValue_FromObjectBorrow(keyword),
+                                          &current_v);
+                if (present < 0) {
                     return NULL;
+                }
+                if (present > 0) {
+                    PyValue_CLOSE(current_v);
                 }
             }
             else {
-                current_arg = find_keyword(kwnames, kwstack, keyword);
+                PyObject *current_arg = find_keyword(kwnames, kwstack, keyword);
                 if (current_arg == NULL && PyErr_Occurred()) {
                     return NULL;
                 }
+                present = current_arg != NULL;
+                Py_XDECREF(current_arg);
             }
-            if (current_arg) {
-                Py_DECREF(current_arg);
+            if (present) {
                 /* arg present in tuple and in dict */
                 PyErr_Format(PyExc_TypeError,
                              "argument for %.200s%s given by name ('%U') "

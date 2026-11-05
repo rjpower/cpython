@@ -370,7 +370,7 @@ _PyPegen_raise_error_known_location(Parser *p, PyObject *errtype,
     if (!tmp) {
         goto error;
     }
-    value = _PyTuple_FromPair(errstr, tmp);
+    value = _PyTuple_PackValues(2, (PyValueBorrow[]){PyValue_FromObjectBorrow(errstr), PyValue_FromObjectBorrow(tmp)});
     Py_DECREF(tmp);
     if (!value) {
         goto error;

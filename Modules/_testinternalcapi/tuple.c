@@ -28,6 +28,71 @@ tuple_from_pair_steal(PyObject *Py_UNUSED(module), PyObject *args)
     return _PyTuple_FromPairSteal(Py_NewRef(first), Py_NewRef(second));
 }
 
+/* _PyTuple_PackValues(n, items) over the first n items of the tuple ITEMS,
+   read as borrows, so an int or float item arrives inline. A negative n is
+   passed through. */
+static PyObject *
+tuple_pack_values(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *items;
+    Py_ssize_t n;
+    if (!PyArg_ParseTuple(args, "O!n", &PyTuple_Type, &items, &n)) {
+        return NULL;
+    }
+    if (n > PyTuple_GET_SIZE(items)) {
+        PyErr_SetString(PyExc_ValueError, "n is larger than the tuple");
+        return NULL;
+    }
+    Py_ssize_t count = n < 0 ? 0 : n;
+    PyValueBorrow *borrows = PyMem_New(PyValueBorrow, count + 1);
+    if (borrows == NULL) {
+        return PyErr_NoMemory();
+    }
+    for (Py_ssize_t i = 0; i < count; i++) {
+        borrows[i] = PyTuple_GET_VALUE(items, i);
+    }
+    PyObject *result = _PyTuple_PackValues(n, borrows);
+    PyMem_Free(borrows);
+    return result;
+}
+
+static PyObject *
+tuple_from_pair_take_value(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *first, *second;
+    if (!PyArg_ParseTuple(args, "OO", &first, &second)) {
+        return NULL;
+    }
+    return _PyTuple_FromPairTakeValue(PyValue_DUP(PyTuple_GET_VALUE(args, 0)),
+                                      PyValue_DUP(PyTuple_GET_VALUE(args, 1)));
+}
+
+/* A new tuple equal to TUPLE with item I replaced by VALUE through
+   _PyTuple_ReplaceTakeValue(), which needs a tuple that nothing else sees. */
+static PyObject *
+tuple_replace_take_value(PyObject *Py_UNUSED(module), PyObject *args)
+{
+    PyObject *tuple, *value;
+    Py_ssize_t index;
+    if (!PyArg_ParseTuple(args, "O!nO", &PyTuple_Type, &tuple, &index, &value)) {
+        return NULL;
+    }
+    Py_ssize_t size = PyTuple_GET_SIZE(tuple);
+    if (index < 0 || index >= size) {
+        PyErr_SetString(PyExc_IndexError, "index out of range");
+        return NULL;
+    }
+    PyObject *copy = PyTuple_New(size);
+    if (copy == NULL) {
+        return NULL;
+    }
+    for (Py_ssize_t i = 0; i < size; i++) {
+        PyTuple_SET_VALUE(copy, i, PyValue_DUP(PyTuple_GET_VALUE(tuple, i)));
+    }
+    _PyTuple_ReplaceTakeValue(copy, index, PyValue_DUP(PyTuple_GET_VALUE(args, 2)));
+    return copy;
+}
+
 static PyObject *
 tuple_value_layout(PyObject *Py_UNUSED(module), PyObject *obj)
 {
@@ -308,6 +373,9 @@ _check_tuple_item_is_NULL(PyObject *Py_UNUSED(module), PyObject *args)
 static PyMethodDef test_methods[] = {
     {"tuple_from_pair", tuple_from_pair, METH_VARARGS},
     {"tuple_from_pair_steal", tuple_from_pair_steal, METH_VARARGS},
+    {"tuple_pack_values", tuple_pack_values, METH_VARARGS},
+    {"tuple_from_pair_take_value", tuple_from_pair_take_value, METH_VARARGS},
+    {"tuple_replace_take_value", tuple_replace_take_value, METH_VARARGS},
     {"tuple_value_layout", tuple_value_layout, METH_O},
     {"tuple_value_object", tuple_value_object, METH_VARARGS},
     {"cell_value_kind", cell_value_kind, METH_O},

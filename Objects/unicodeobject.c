@@ -44,6 +44,7 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 #include "pycore_borrow.h"        // _PyBorrowScope_Enter()
 #include "pycore_bytesobject.h"   // _PyBytes_RepeatBuffer()
 #include "pycore_ceval.h"         // _PyEval_GetBuiltin()
+#include "pycore_tuple.h"         // _PyTuple_PackValues()
 #include "pycore_value.h"
 #include "pycore_codecs.h"        // _PyCodec_Lookup()
 #include "pycore_critical_section.h" // Py_*_CRITICAL_SECTION_SEQUENCE_FAST
@@ -1688,8 +1689,9 @@ unicode_dealloc(PyObject *unicode)
             PyInterpreterState *interp = _PyInterpreterState_GET();
             PyObject *interned = get_interned_dict(interp);
             assert(interned != NULL);
-            PyObject *popped;
-            int r = PyDict_Pop(interned, unicode, &popped);
+            PyValue popped;
+            int r = PyDict_PopValue(interned, _PyValue_FromObjectKnown(unicode),
+                                    &popped);
             if (r == -1) {
                 PyErr_FormatUnraisable("Exception ignored while "
                                        "removing an interned string %R",
@@ -1712,7 +1714,7 @@ unicode_dealloc(PyObject *unicode)
                 return;
             }
             // Successfully popped.
-            assert(popped == unicode);
+            assert(PyValue_Is(popped, _PyValue_FromObjectKnown(unicode)));
             // Only our `popped` reference should be left; remove it too.
             assert(Py_REFCNT(unicode) == 1);
             Py_SET_REFCNT(unicode, 0);
@@ -9125,7 +9127,7 @@ PyUnicode_BuildEncodingMap(PyObject* string)
                 Py_DECREF(result);
                 return NULL;
             }
-            int rc = PyDict_SetItem(result, key, value);
+            int rc = PyDict_SetValue(result, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(value));
             Py_DECREF(key);
             Py_DECREF(value);
             if (rc < 0) {
@@ -10553,8 +10555,20 @@ PyUnicode_Join(PyObject *separator, PyObject *seq)
     else {
         Py_ssize_t n = 0;
         while (n < seqlen) {
-            items[n] = PyList_Check(fseq) ? PyList_GetItemRef(fseq, n)
-                                          : PyTuple_GetItemRef(fseq, n);
+            if (PyList_Check(fseq)) {
+                PyValue iv = PyList_GetValue(fseq, n);
+                items[n] = PyValue_IsNull(iv)
+                               ? NULL
+                               : _PyValue_AsObjectAt(iv, BOX_SITE_LIST);
+                PyValue_XCLOSE(iv);
+            }
+            else {
+                PyValue iv = PyTuple_GetValue(fseq, n);
+                items[n] = PyValue_IsNull(iv)
+                               ? NULL
+                               : _PyValue_AsObjectAt(iv, BOX_SITE_TUPLE);
+                PyValue_XCLOSE(iv);
+            }
             if (items[n] == NULL) {
                 break;
             }
@@ -10920,7 +10934,7 @@ split(PyObject *self,
         out = PyList_New(1);
         if (out == NULL)
             return NULL;
-        PyList_SET_ITEM(out, 0, Py_NewRef(self));
+        PyList_SET_VALUE(out, 0, PyValue_DUP(PyValue_FromObjectBorrow(self)));
         return out;
     }
     buf1 = PyUnicode_DATA(self);
@@ -11012,7 +11026,7 @@ rsplit(PyObject *self,
         out = PyList_New(1);
         if (out == NULL)
             return NULL;
-        PyList_SET_ITEM(out, 0, Py_NewRef(self));
+        PyList_SET_VALUE(out, 0, PyValue_DUP(PyValue_FromObjectBorrow(self)));
         return out;
     }
     buf1 = PyUnicode_DATA(self);
@@ -13463,7 +13477,7 @@ PyUnicode_Partition(PyObject *str_obj, PyObject *sep_obj)
     len2 = PyUnicode_GET_LENGTH(sep_obj);
     if (kind1 < kind2 || len1 < len2) {
         PyObject *empty = _PyUnicode_GetEmpty();  // Borrowed reference
-        return PyTuple_Pack(3, str_obj, empty, empty);
+        return _PyTuple_PackValues(3, (PyValueBorrow[]){PyValue_FromObjectBorrow(str_obj), PyValue_FromObjectBorrow(empty), PyValue_FromObjectBorrow(empty)});
     }
     buf1 = PyUnicode_DATA(str_obj);
     buf2 = PyUnicode_DATA(sep_obj);
@@ -13515,7 +13529,7 @@ PyUnicode_RPartition(PyObject *str_obj, PyObject *sep_obj)
     len2 = PyUnicode_GET_LENGTH(sep_obj);
     if (kind1 < kind2 || len1 < len2) {
         PyObject *empty = _PyUnicode_GetEmpty();  // Borrowed reference
-        return PyTuple_Pack(3, empty, empty, str_obj);
+        return _PyTuple_PackValues(3, (PyValueBorrow[]){PyValue_FromObjectBorrow(empty), PyValue_FromObjectBorrow(empty), PyValue_FromObjectBorrow(str_obj)});
     }
     buf1 = PyUnicode_DATA(str_obj);
     buf2 = PyUnicode_DATA(sep_obj);
@@ -13669,9 +13683,19 @@ static int
 unicode_maketrans_from_dict(PyObject *x, PyObject *newdict)
 {
     PyObject *key, *value;
+    PyValue key_v, value_v;
     Py_ssize_t i = 0;
     int res, rc;
-    while ((rc = PyDict_NextEntryRef(x, &i, &key, &value)) > 0) {
+    while ((rc = PyDict_NextValue(x, &i, &key_v, &value_v)) > 0) {
+        key = _PyValue_AsObjectAt(key_v, BOX_SITE_DICT);
+        value = _PyValue_AsObjectAt(value_v, BOX_SITE_DICT);
+        PyValue_CLOSE(key_v);
+        PyValue_CLOSE(value_v);
+        if (key == NULL || value == NULL) {
+            Py_XDECREF(key);
+            Py_XDECREF(value);
+            return -1;
+        }
         if (PyUnicode_Check(key)) {
             PyObject *newkey;
             int kind;
@@ -13686,13 +13710,13 @@ unicode_maketrans_from_dict(PyObject *x, PyObject *newdict)
             newkey = PyLong_FromLong(PyUnicode_READ(kind, data, 0));
             if (!newkey)
                 goto fail;
-            res = PyDict_SetItem(newdict, newkey, value);
+            res = PyDict_SetValue(newdict, PyValue_FromObjectBorrow(newkey), PyValue_FromObjectBorrow(value));
             Py_DECREF(newkey);
             if (res < 0)
                 goto fail;
         }
         else if (PyLong_Check(key)) {
-            if (PyDict_SetItem(newdict, key, value) < 0)
+            if (PyDict_SetValue(newdict, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(value)) < 0)
                 goto fail;
         }
         else {
@@ -13779,7 +13803,7 @@ unicode_maketrans_impl(PyObject *x, PyObject *y, PyObject *z)
                 Py_DECREF(key);
                 goto err;
             }
-            res = PyDict_SetItem(new, key, value);
+            res = PyDict_SetValue(new, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(value));
             Py_DECREF(key);
             Py_DECREF(value);
             if (res < 0)
@@ -13793,7 +13817,7 @@ unicode_maketrans_impl(PyObject *x, PyObject *y, PyObject *z)
                 key = PyLong_FromLong(PyUnicode_READ(z_kind, z_data, i));
                 if (!key)
                     goto err;
-                res = PyDict_SetItem(new, key, Py_None);
+                res = PyDict_SetValue(new, PyValue_FromObjectBorrow(key), _PyValue_FromObjectKnown(Py_None));
                 Py_DECREF(key);
                 if (res < 0)
                     goto err;
@@ -13929,7 +13953,9 @@ unicode_startswith_impl(PyObject *self, PyObject *subobj, Py_ssize_t start,
     if (PyTuple_Check(subobj)) {
         Py_ssize_t i;
         for (i = 0; i < PyTuple_GET_SIZE(subobj); i++) {
-            PyObject *substring = PyTuple_GetItemRef(subobj, i);
+            // The loop bound proves that subobj is a tuple and i in range.
+            PyObject *substring = _PyValue_AsObjectAt(
+                PyTuple_GET_VALUE(subobj, i), BOX_SITE_TUPLE);
             if (substring == NULL) {
                 return NULL;
             }
@@ -13991,7 +14017,9 @@ unicode_endswith_impl(PyObject *self, PyObject *subobj, Py_ssize_t start,
     if (PyTuple_Check(subobj)) {
         Py_ssize_t i;
         for (i = 0; i < PyTuple_GET_SIZE(subobj); i++) {
-            PyObject *substring = PyTuple_GetItemRef(subobj, i);
+            // The loop bound proves that subobj is a tuple and i in range.
+            PyObject *substring = _PyValue_AsObjectAt(
+                PyTuple_GET_VALUE(subobj, i), BOX_SITE_TUPLE);
             if (substring == NULL) {
                 return NULL;
             }
@@ -14974,13 +15002,17 @@ intern_common(PyInterpreterState *interp, PyObject *s /* stolen */,
     FT_MUTEX_LOCK_FLAGS(INTERN_MUTEX, _Py_LOCK_DONT_DETACH);
     PyObject *t;
     {
-        int res = PyDict_SetDefaultRef(interned, s, s, &t);
+        PyValue tv;
+        PyValueBorrow sv = _PyValue_FromObjectKnown(s);
+        int res = _PyDict_SetDefaultValue(interned, sv, sv, &tv);
         if (res < 0) {
             PyErr_Clear();
             FT_MUTEX_UNLOCK(INTERN_MUTEX);
             return s;
         }
-        else if (res == 1) {
+        // The interned dict holds only str objects.
+        t = PyValue_AsKnownObjectSteal(tv);
+        if (res == 1) {
             // value was already present (not inserted)
             Py_DECREF(s);
             if (immortalize &&

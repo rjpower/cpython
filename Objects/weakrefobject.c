@@ -5,6 +5,8 @@
 #include "pycore_object.h"        // _PyObject_GET_WEAKREFS_LISTPTR()
 #include "pycore_pyerrors.h"      // _PyErr_ChainExceptions1()
 #include "pycore_pystate.h"
+#include "pycore_pyvalue.h"       // PyValue_PrepareOwned()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "pycore_weakref.h"       // _PyWeakref_GET_REF()
 
 /*[clinic input]
@@ -1100,8 +1102,8 @@ PyObject_ClearWeakRefs(PyObject *object)
             clear_weakref_lock_held(cur, &callback);
             if (_Py_TryIncref((PyObject *) cur)) {
                 assert(num_items / 2 < num_weakrefs);
-                PyTuple_SET_ITEM(tuple, num_items, (PyObject *) cur);
-                PyTuple_SET_ITEM(tuple, num_items + 1, callback);
+                PyTuple_SET_VALUE(tuple, num_items, PyValue_PrepareOwned((PyObject *) cur));
+                PyTuple_SET_VALUE(tuple, num_items + 1, PyValue_PrepareOwned(callback));
                 num_items += 2;
                 callback = NULL;
             }
@@ -1115,9 +1117,15 @@ PyObject_ClearWeakRefs(PyObject *object)
     for (Py_ssize_t i = 0; i < num_items; i += 2) {
         /* NULL means an empty slot (no callback): callbacks are callable, so
            never stored inline, and no exception is set. */
-        PyObject *callback = PyTuple_GetItemRef(tuple, i + 1);
+        PyValue callback_ref = PyTuple_GetValue(tuple, i + 1);
+        PyObject *callback = PyValue_IsNull(callback_ref) ? NULL
+            : _PyValue_AsObjectAt(callback_ref, BOX_SITE_TUPLE);
+        PyValue_XCLOSE(callback_ref);
         if (callback != NULL) {
-            PyObject *weakref = PyTuple_GetItemRef(tuple, i);
+            PyValue weakref_ref = PyTuple_GetValue(tuple, i);
+            PyObject *weakref = PyValue_IsNull(weakref_ref) ? NULL
+                : _PyValue_AsObjectAt(weakref_ref, BOX_SITE_TUPLE);
+            PyValue_XCLOSE(weakref_ref);
             handle_callback((PyWeakReference *)weakref, callback);
             Py_DECREF(weakref);
             Py_DECREF(callback);

@@ -1,8 +1,10 @@
 #include "Python.h"
+#include "pycore_dict.h"          // PyDict_SetValue()
 #include "pycore_fileutils.h"     // _Py_HasFileSystemDefaultEncodeErrors
 #include "pycore_getopt.h"        // _PyOS_GetOpt()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_interp.h"        // _PyInterpreterState.runtime
+#include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_long.h"          // _PY_LONG_MAX_STR_DIGITS_THRESHOLD
 #include "pycore_pathconfig.h"    // _Py_path_config
 #include "pycore_pyerrors.h"      // _PyErr_GetRaisedException()
@@ -11,7 +13,10 @@
 #include "pycore_pyhash.h"        // _Py_HashSecret
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_pystats.h"       // _Py_StatsOn()
+#include "pycore_pyvalue.h"       // PyValue_PrepareOwned()
 #include "pycore_sysmodule.h"     // _PySys_SetIntMaxStrDigits()
+#include "pycore_value.h"         // PyValue_FromObjectBorrow()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 #include "osdefs.h"               // DELIM
 
@@ -621,7 +626,7 @@ _Py_GetGlobalVariablesAsDict(void)
             if (obj == NULL) { \
                 goto fail; \
             } \
-            int res = PyDict_SetItemString(dict, (KEY), obj); \
+            int res = PyDict_SetValueString(dict, (KEY), PyValue_FromObjectBorrow(obj)); \
             Py_DECREF(obj); \
             if (res < 0) { \
                 goto fail; \
@@ -919,7 +924,7 @@ _PyWideStringList_AsList(const PyWideStringList *list)
             Py_DECREF(pylist);
             return NULL;
         }
-        PyList_SET_ITEM(pylist, i, item);
+        PyList_SET_VALUE(pylist, i, PyValue_PrepareOwned(item));
     }
     return pylist;
 }
@@ -941,7 +946,7 @@ _PyWideStringList_AsTuple(const PyWideStringList *list)
             Py_DECREF(tuple);
             return NULL;
         }
-        PyTuple_SET_ITEM(tuple, i, item);
+        PyTuple_SET_VALUE(tuple, i, PyValue_PrepareOwned(item));
     }
     return tuple;
 }
@@ -1401,7 +1406,7 @@ _PyConfig_AsDict(const PyConfig *config)
             return NULL;
         }
 
-        int res = PyDict_SetItemString(dict, spec->name, obj);
+        int res = PyDict_SetValueString(dict, spec->name, PyValue_FromObjectBorrow(obj));
         Py_DECREF(obj);
         if (res < 0) {
             Py_DECREF(dict);
@@ -1522,7 +1527,10 @@ config_dict_get_wstrlist(PyObject *dict, const char *name, PyConfig *config,
     PyWideStringList wstrlist = _PyWideStringList_INIT;
     Py_ssize_t len = is_list ? PyList_GET_SIZE(list) : PyTuple_GET_SIZE(list);
     for (Py_ssize_t i=0; i < len; i++) {
-        PyObject *item = is_list ? PyList_GetItemRef(list, i) : PyTuple_GetItemRef(list, i);
+        PyValue item_value = is_list ? PyList_GetValue(list, i) : PyTuple_GetValue(list, i);
+        PyObject *item = PyValue_IsNull(item_value) ? NULL
+            : _PyValue_AsObjectAt(item_value, is_list ? BOX_SITE_LIST : BOX_SITE_TUPLE);
+        PyValue_XCLOSE(item_value);
         if (item == NULL) {
             goto error;
         }
@@ -1581,10 +1589,22 @@ config_dict_get_xoptions(PyObject *dict, const char *name, PyConfig *config,
     }
 
     Py_ssize_t pos = 0;
-    PyObject *key, *value;
+    PyValue key_value, value_value;
     PyWideStringList wstrlist = _PyWideStringList_INIT;
     int rc;
-    while ((rc = PyDict_NextEntryRef(xoptions, &pos, &key, &value)) > 0) {
+    while ((rc = PyDict_NextValue(xoptions, &pos, &key_value, &value_value)) > 0) {
+        PyObject *key = _PyValue_AsObjectAt(key_value, BOX_SITE_DICT);
+        PyValue_CLOSE(key_value);
+        if (key == NULL) {
+            PyValue_CLOSE(value_value);
+            goto error;
+        }
+        PyObject *value = _PyValue_AsObjectAt(value_value, BOX_SITE_DICT);
+        PyValue_CLOSE(value_value);
+        if (value == NULL) {
+            Py_DECREF(key);
+            goto error;
+        }
         PyObject *item;
 
         if (value != Py_True) {
@@ -3859,7 +3879,7 @@ _Py_GetConfigsAsDict(void)
     if (dict == NULL) {
         goto error;
     }
-    if (PyDict_SetItemString(result, "global_config", dict) < 0) {
+    if (PyDict_SetValueString(result, "global_config", PyValue_FromObjectBorrow(dict)) < 0) {
         goto error;
     }
     Py_CLEAR(dict);
@@ -3871,7 +3891,7 @@ _Py_GetConfigsAsDict(void)
     if (dict == NULL) {
         goto error;
     }
-    if (PyDict_SetItemString(result, "pre_config", dict) < 0) {
+    if (PyDict_SetValueString(result, "pre_config", PyValue_FromObjectBorrow(dict)) < 0) {
         goto error;
     }
     Py_CLEAR(dict);
@@ -3882,7 +3902,7 @@ _Py_GetConfigsAsDict(void)
     if (dict == NULL) {
         goto error;
     }
-    if (PyDict_SetItemString(result, "config", dict) < 0) {
+    if (PyDict_SetValueString(result, "config", PyValue_FromObjectBorrow(dict)) < 0) {
         goto error;
     }
     Py_CLEAR(dict);
@@ -3989,7 +4009,10 @@ _Py_DumpPathConfig(PyThreadState *tstate)
         PySys_WriteStderr("  sys.path = [\n");
         Py_ssize_t len = PyList_GET_SIZE(sys_path);
         for (Py_ssize_t i=0; i < len; i++) {
-            PyObject *path = PyList_GetItemRef(sys_path, i);
+            PyValue path_value = PyList_GetValue(sys_path, i);
+            PyObject *path = PyValue_IsNull(path_value) ? NULL
+                : _PyValue_AsObjectAt(path_value, BOX_SITE_LIST);
+            PyValue_XCLOSE(path_value);
             if (path == NULL) {
                 PyErr_Clear();
                 break;
@@ -4601,7 +4624,7 @@ config_add_xoption(PyObject *dict, const wchar_t *str)
             goto error;
         }
     }
-    if (PyDict_SetItem(dict, name, value) < 0) {
+    if (PyDict_SetValue(dict, PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(value)) < 0) {
         goto error;
     }
     Py_DECREF(name);
@@ -4814,7 +4837,7 @@ config_names_add(PyObject *names, const PyConfigSpec *spec)
         if (name == NULL) {
             return -1;
         }
-        int res = PyList_Append(names, name);
+        int res = PyList_AppendValue(names, PyValue_FromObjectBorrow(name));
         Py_DECREF(name);
         if (res < 0) {
             return -1;
@@ -4987,7 +5010,10 @@ PyConfig_Set(const char *name, PyObject *value)
                 return -1;
             }
             for (Py_ssize_t i=0; i < PyList_GET_SIZE(value); i++) {
-                PyObject *item = PyList_GetItemRef(value, i);
+                PyValue item_value = PyList_GetValue(value, i);
+                PyObject *item = PyValue_IsNull(item_value) ? NULL
+                    : _PyValue_AsObjectAt(item_value, BOX_SITE_LIST);
+                PyValue_XCLOSE(item_value);
                 if (item == NULL) {
                     return -1;
                 }
@@ -5011,9 +5037,21 @@ PyConfig_Set(const char *name, PyObject *value)
             }
 
             Py_ssize_t pos = 0;
-            PyObject *key, *item;
+            PyValue key_value, item_value;
             int rc;
-            while ((rc = PyDict_NextEntryRef(value, &pos, &key, &item)) > 0) {
+            while ((rc = PyDict_NextValue(value, &pos, &key_value, &item_value)) > 0) {
+                PyObject *key = _PyValue_AsObjectAt(key_value, BOX_SITE_DICT);
+                PyValue_CLOSE(key_value);
+                if (key == NULL) {
+                    PyValue_CLOSE(item_value);
+                    return -1;
+                }
+                PyObject *item = _PyValue_AsObjectAt(item_value, BOX_SITE_DICT);
+                PyValue_CLOSE(item_value);
+                if (item == NULL) {
+                    Py_DECREF(key);
+                    return -1;
+                }
                 if (!PyUnicode_Check(key)) {
                     PyErr_Format(PyExc_TypeError,
                                  "expected str, "

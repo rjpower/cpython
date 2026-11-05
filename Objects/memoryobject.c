@@ -14,7 +14,10 @@
 #include "pycore_abstract.h"      // _PyIndex_Check()
 #include "pycore_memoryobject.h"  // _PyManagedBuffer_Type
 #include "pycore_object.h"        // _PyObject_GC_UNTRACK()
+#include "pycore_pyvalue.h"       // PyValue_PrepareOwned()
 #include "pycore_strhex.h"        // _Py_strhex_with_sep()
+#include "pycore_tuple.h"         // PyTuple_GET_VALUE()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include <stddef.h>               // offsetof()
 
 /*[clinic input]
@@ -1386,8 +1389,12 @@ copy_shape(Py_ssize_t *shape, PyObject *seq, Py_ssize_t ndim,
     Py_ssize_t len = itemsize;
 
     for (i = 0; i < ndim; i++) {
-        PyObject *tmp = PyList_Check(seq) ? PyList_GetItemRef(seq, i)
-                                          : PyTuple_GetItemRef(seq, i);
+        PyValue ref = PyList_Check(seq) ? PyList_GetValue(seq, i)
+                                        : PyTuple_GetValue(seq, i);
+        PyObject *tmp = PyValue_IsNull(ref) ? NULL
+            : _PyValue_AsObjectAt(ref, PyList_Check(seq)
+                                  ? BOX_SITE_LIST : BOX_SITE_TUPLE);
+        PyValue_XCLOSE(ref);
         if (tmp == NULL) {
             return -1;
         }
@@ -2256,7 +2263,7 @@ struct_unpack_single(const char *ptr, struct unpacker *x)
         return NULL;
 
     if (PyTuple_GET_SIZE(v) == 1) {
-        PyObject *res = PyTuple_GetItemRef(v, 0);
+        PyObject *res = _PyValue_AsObjectAt(PyTuple_GET_VALUE(v, 0), BOX_SITE_TUPLE);
         Py_DECREF(v);
         return res;
     }
@@ -2306,7 +2313,7 @@ tolist_base(PyMemoryViewObject *self, const char *ptr, const Py_ssize_t *shape,
             Py_DECREF(lst);
             return NULL;
         }
-        PyList_SET_ITEM(lst, i, item);
+        PyList_SET_VALUE(lst, i, PyValue_PrepareOwned(item));
     }
 
     return lst;
@@ -2342,7 +2349,7 @@ tolist_rec(PyMemoryViewObject *self, const char *ptr, Py_ssize_t ndim, const Py_
             Py_DECREF(lst);
             return NULL;
         }
-        PyList_SET_ITEM(lst, i, item);
+        PyList_SET_VALUE(lst, i, PyValue_PrepareOwned(item));
     }
 
     return lst;
@@ -2558,7 +2565,7 @@ ptr_from_tuple(const Py_buffer *view, PyObject *tup)
 
     for (dim = 0; dim < nindices; dim++) {
         Py_ssize_t index;
-        PyObject *item = PyTuple_GetItemRef(tup, dim);
+        PyObject *item = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tup, dim), BOX_SITE_TUPLE);
         if (item == NULL) {
             return NULL;
         }
@@ -2672,7 +2679,7 @@ is_multislice(PyObject *key)
         return 0;
 
     for (i = 0; i < size; i++) {
-        PyObject *x = PyTuple_GetItemRef(key, i);
+        PyObject *x = _PyValue_AsObjectAt(PyTuple_GET_VALUE(key, i), BOX_SITE_TUPLE);
         if (x == NULL) {
             return -1;
         }
@@ -2693,7 +2700,7 @@ is_multiindex(PyObject *key)
         return 0;
     size = PyTuple_GET_SIZE(key);
     for (i = 0; i < size; i++) {
-        PyObject *x = PyTuple_GetItemRef(key, i);
+        PyObject *x = _PyValue_AsObjectAt(PyTuple_GET_VALUE(key, i), BOX_SITE_TUPLE);
         if (x == NULL) {
             return -1;
         }
@@ -3483,7 +3490,7 @@ _IntTupleFromSsizet(int len, Py_ssize_t *vals)
             Py_DECREF(intTuple);
             return NULL;
         }
-        PyTuple_SET_ITEM(intTuple, i, o);
+        PyTuple_SET_VALUE(intTuple, i, PyValue_PrepareOwned(o));
     }
     return intTuple;
 }

@@ -13,6 +13,7 @@
 #include "pycore_structseq.h"     // _PyStructSequence_FiniBuiltin()
 #include "pycore_tuple.h"         // _PyTuple_FromPairSteal
 #include "pycore_unicodeobject.h" // _PyUnicode_Equal()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 #include <float.h>                // DBL_MANT_DIG
 #include <stddef.h>               // offsetof
@@ -4381,8 +4382,12 @@ pylong_int_divmod(PyLongObject *v, PyLongObject *w,
                         "tuple of length 2 is required from int_divmod()");
         return -1;
     }
-    PyObject *q = PyTuple_GetItemRef(result, 0);
-    PyObject *r = PyTuple_GetItemRef(result, 1);
+    PyValue qv = PyTuple_GetValue(result, 0);
+    PyObject *q = PyValue_IsNull(qv) ? NULL : _PyValue_AsObjectAt(qv, BOX_SITE_TUPLE);
+    PyValue_XCLOSE(qv);
+    PyValue rv = PyTuple_GetValue(result, 1);
+    PyObject *r = PyValue_IsNull(rv) ? NULL : _PyValue_AsObjectAt(rv, BOX_SITE_TUPLE);
+    PyValue_XCLOSE(rv);
     Py_DECREF(result);
     if (q == NULL || r == NULL) {
         Py_XDECREF(q);
@@ -4836,7 +4841,7 @@ long_divmod(PyObject *a, PyObject *b)
     if (l_divmod((PyLongObject*)a, (PyLongObject*)b, &div, &mod) < 0) {
         return NULL;
     }
-    return _PyTuple_FromPairSteal((PyObject *)div, (PyObject *)mod);
+    return _PyTuple_FromPairTakeValue(PyValue_PrepareOwned((PyObject *)div), PyValue_PrepareOwned((PyObject *)mod));
 }
 
 
@@ -6139,7 +6144,7 @@ _PyLong_DivmodNear(PyObject *a, PyObject *b)
             goto error;
     }
 
-    return _PyTuple_FromPairSteal((PyObject *)quo, (PyObject *)rem);
+    return _PyTuple_FromPairTakeValue(PyValue_PrepareOwned((PyObject *)quo), PyValue_PrepareOwned((PyObject *)rem));
 
   error:
     Py_XDECREF(quo);
@@ -6212,7 +6217,9 @@ int___round___impl(PyObject *self, PyObject *o_ndigits)
     if (result == NULL)
         return NULL;
 
-    PyObject *rem = PyTuple_GetItemRef(result, 1);
+    PyValue remv = PyTuple_GetValue(result, 1);
+    PyObject *rem = PyValue_IsNull(remv) ? NULL : _PyValue_AsObjectAt(remv, BOX_SITE_TUPLE);
+    PyValue_XCLOSE(remv);
     Py_DECREF(result);
     if (rem == NULL) {
         return NULL;
@@ -6325,7 +6332,7 @@ int_as_integer_ratio_impl(PyObject *self)
     if (numerator == NULL) {
         return NULL;
     }
-    return _PyTuple_FromPairSteal(numerator, _PyLong_GetOne());
+    return _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(numerator), PyValue_PrepareOwned(_PyLong_GetOne()));
 }
 
 /*[clinic input]
@@ -6685,10 +6692,8 @@ PyLong_GetInfo(void)
     int_info = PyStructSequence_New(&Int_InfoType);
     if (int_info == NULL)
         return NULL;
-    PyStructSequence_SET_ITEM(int_info, field++,
-                              PyLong_FromLong(PyLong_SHIFT));
-    PyStructSequence_SET_ITEM(int_info, field++,
-                              PyLong_FromLong(sizeof(digit)));
+    PyStructSequence_SET_VALUE(int_info, field++, PyValue_PrepareOwned(PyLong_FromLong(PyLong_SHIFT)));
+    PyStructSequence_SET_VALUE(int_info, field++, PyValue_PrepareOwned(PyLong_FromLong(sizeof(digit))));
     /*
      * The following two fields were added after investigating uses of
      * sys.int_info in the wild: Exceedingly rarely used. The ONLY use found was
@@ -6696,10 +6701,8 @@ PyLong_GetInfo(void)
      * sequence unpacking. Cython and sympy also refer to sys.int_info but only
      * as info for debugging. No concern about adding these in a backport.
      */
-    PyStructSequence_SET_ITEM(int_info, field++,
-                              PyLong_FromLong(_PY_LONG_DEFAULT_MAX_STR_DIGITS));
-    PyStructSequence_SET_ITEM(int_info, field++,
-                              PyLong_FromLong(_PY_LONG_MAX_STR_DIGITS_THRESHOLD));
+    PyStructSequence_SET_VALUE(int_info, field++, PyValue_PrepareOwned(PyLong_FromLong(_PY_LONG_DEFAULT_MAX_STR_DIGITS)));
+    PyStructSequence_SET_VALUE(int_info, field++, PyValue_PrepareOwned(PyLong_FromLong(_PY_LONG_MAX_STR_DIGITS_THRESHOLD)));
     if (PyErr_Occurred()) {
         Py_CLEAR(int_info);
         return NULL;

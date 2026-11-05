@@ -1048,8 +1048,7 @@ formatteriter_next(PyObject *op)
         if (conversion_str == NULL)
             goto done;
 
-        tuple = PyTuple_Pack(4, literal_str, field_name_str, format_spec_str,
-                             conversion_str);
+        tuple = _PyTuple_PackValues(4, (PyValueBorrow[]){PyValue_FromObjectBorrow(literal_str), PyValue_FromObjectBorrow(field_name_str), PyValue_FromObjectBorrow(format_spec_str), PyValue_FromObjectBorrow(conversion_str)});
     done:
         Py_XDECREF(literal_str);
         Py_XDECREF(field_name_str);
@@ -1184,7 +1183,7 @@ fieldnameiter_next(PyObject *op)
             goto error;
 
         /* return a tuple of values */
-        return _PyTuple_FromPairSteal(is_attr_obj, obj);
+        return _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(is_attr_obj), PyValue_PrepareOwned(obj));
 
     error:
         Py_XDECREF(is_attr_obj);
@@ -1275,7 +1274,7 @@ formatter_field_name_split(PyObject *Py_UNUSED(module), PyObject *self)
         goto error;
 
     /* return a tuple of values */
-    return _PyTuple_FromPairSteal(first_obj, (PyObject *)it);
+    return _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(first_obj), PyValue_PrepareOwned((PyObject *)it));
 
 error:
     Py_XDECREF(it);

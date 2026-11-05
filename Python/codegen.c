@@ -16,6 +16,7 @@
 #include "opcode.h"
 #include "pycore_ast.h"           // _PyAST_GetDocString()
 #define NEED_OPCODE_TABLES
+#include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_opcode_utils.h"
 #undef NEED_OPCODE_TABLES
 #include "pycore_c_array.h"       // _Py_c_array_t
@@ -28,6 +29,7 @@
 #include "pycore_long.h"          // _PyLong_GetZero()
 #include "pycore_object.h"        // _Py_ANNOTATE_FORMAT_VALUE_WITH_FAKE_GLOBALS
 #include "pycore_pystate.h"       // _Py_GetConfig()
+#include "pycore_setobject.h"     // PySet_AddValue()
 #include "pycore_symtable.h"      // PySTEntryObject
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString
 #include "pycore_ceval.h"         // SPECIAL___ENTER__
@@ -786,7 +788,7 @@ codegen_rename_annotations_format_param(PyCodeObject *co)
     if (new_names == NULL) {
         return ERROR;
     }
-    PyTuple_SET_ITEM(new_names, 0, Py_NewRef(&_Py_ID(format)));
+    PyTuple_SET_VALUE(new_names, 0, PyValue_DUP(_PyValue_FromObjectKnown(&_Py_ID(format))));
     for (int i = 1; i < size; i++) {
         PyValueBorrow item = PyTuple_GET_VALUE(co->co_localsplusnames, i);
         PyTuple_SET_VALUE(new_names, i, PyValue_DUP(item));
@@ -829,7 +831,9 @@ codegen_deferred_annotations_body(compiler *c, location loc,
 
     for (Py_ssize_t i = 0; i < annotations_len; i++) {
         /* PyLong_AsVoidPtr is the native boundary for recorded AST pointers. */
-        PyObject *ptr = PyList_GetItemRef(deferred_anno, i);
+        PyValue ptr_v = PyList_GetValue(deferred_anno, i);
+        PyObject *ptr = PyValue_IsNull(ptr_v) ? NULL : _PyValue_AsObjectAt(ptr_v, BOX_SITE_LIST);
+        PyValue_XCLOSE(ptr_v);
         if (ptr == NULL) {
             return ERROR;
         }
@@ -1326,7 +1330,7 @@ codegen_type_param_bound_or_default(compiler *c, expr_ty e,
                                     identifier name, void *key,
                                     bool allow_starred)
 {
-    PyObject *defaults = PyTuple_Pack(1, _PyLong_GetOne());
+    PyObject *defaults = _PyTuple_PackValues(1, (PyValueBorrow[]){PyValue_FromObjectBorrow(_PyLong_GetOne())});
     ADDOP_LOAD_CONST_NEW(c, LOC(e), defaults);
     RETURN_IF_ERROR(codegen_setup_annotations_scope(c, LOC(e), key, name));
     if (allow_starred && e->kind == Starred_kind) {
@@ -1835,7 +1839,7 @@ codegen_typealias_body(compiler *c, stmt_ty s)
 {
     location loc = LOC(s);
     PyObject *name = s->v.TypeAlias.name->v.Name.id;
-    PyObject *defaults = PyTuple_Pack(1, _PyLong_GetOne());
+    PyObject *defaults = _PyTuple_PackValues(1, (PyValueBorrow[]){PyValue_FromObjectBorrow(_PyLong_GetOne())});
     ADDOP_LOAD_CONST_NEW(c, loc, defaults);
     RETURN_IF_ERROR(
         codegen_setup_annotations_scope(c, LOC(s), s, name));
@@ -3053,7 +3057,7 @@ codegen_from_import(compiler *c, stmt_ty s)
     /* build up the names */
     for (Py_ssize_t i = 0; i < n; i++) {
         alias_ty alias = (alias_ty)asdl_seq_GET(s->v.ImportFrom.names, i);
-        PyTuple_SET_ITEM(names, i, Py_NewRef(alias->name));
+        PyTuple_SET_VALUE(names, i, PyValue_DUP(PyValue_FromObjectBorrow(_PyObject_CAST(alias->name))));
     }
 
     ADDOP_LOAD_CONST_NEW(c, LOC(s), names);
@@ -4497,7 +4501,7 @@ codegen_call_simple_kw_helper(compiler *c, location loc,
     }
     for (Py_ssize_t i = 0; i < nkwelts; i++) {
         keyword_ty kw = asdl_seq_GET(keywords, i);
-        PyTuple_SET_ITEM(names, i, Py_NewRef(kw->arg));
+        PyTuple_SET_VALUE(names, i, PyValue_DUP(PyValue_FromObjectBorrow(_PyObject_CAST(kw->arg))));
     }
     ADDOP_LOAD_CONST_NEW(c, loc, names);
     return SUCCESS;
@@ -4962,10 +4966,10 @@ codegen_push_inlined_comprehension_name(compiler *c, location loc,
     if (scope == CELL) {
         ADDOP_NAME(c, loc, MAKE_CELL, name, cellvars);
     }
-    RETURN_IF_ERROR(PyList_Append(state->pushed_locals, name));
+    RETURN_IF_ERROR(PyList_AppendValue(state->pushed_locals, PyValue_FromObjectBorrow(name)));
     if (METADATA(c)->u_fasthidden != NULL) {
         /* Module/class comprehension bindings must remain hidden in assembly. */
-        RETURN_IF_ERROR(PySet_Add(METADATA(c)->u_fasthidden, name));
+        RETURN_IF_ERROR(PySet_AddValue(METADATA(c)->u_fasthidden, PyValue_FromObjectBorrow(name)));
     }
     return SUCCESS;
 }
@@ -6130,7 +6134,7 @@ codegen_pattern_helper_store_name(compiler *c, location loc,
     // Rotate this object underneath any items we need to preserve:
     Py_ssize_t rotations = pc->on_top + PyList_GET_SIZE(pc->stores) + 1;
     RETURN_IF_ERROR(codegen_pattern_helper_rotate(c, loc, rotations));
-    RETURN_IF_ERROR(PyList_Append(pc->stores, n));
+    RETURN_IF_ERROR(PyList_AppendValue(pc->stores, PyValue_FromObjectBorrow(n)));
     return SUCCESS;
 }
 
@@ -6328,7 +6332,7 @@ codegen_pattern_class(compiler *c, pattern_ty p, pattern_context *pc)
     Py_ssize_t i;
     for (i = 0; i < nattrs; i++) {
         PyObject *name = asdl_seq_GET(kwd_attrs, i);
-        PyTuple_SET_ITEM(attr_names, i, Py_NewRef(name));
+        PyTuple_SET_VALUE(attr_names, i, PyValue_DUP(PyValue_FromObjectBorrow(name)));
     }
     ADDOP_LOAD_CONST_NEW(c, LOC(p), attr_names);
     ADDOP_I(c, LOC(p), MATCH_CLASS, nargs);
@@ -6375,13 +6379,13 @@ codegen_pattern_mapping_key(compiler *c, PyObject *seen, pattern_ty p, Py_ssize_
     }
 
     if (key->kind == Constant_kind) {
-        int in_seen = PySet_Contains(seen, key->v.Constant.value);
+        int in_seen = PySet_ContainsValue(seen, PyValue_FromObjectBorrow(key->v.Constant.value));
         RETURN_IF_ERROR(in_seen);
         if (in_seen) {
             const char *e = "mapping pattern checks duplicate key (%R)";
             return _PyCompile_Error(c, LOC(p), e, key->v.Constant.value);
         }
-        RETURN_IF_ERROR(PySet_Add(seen, key->v.Constant.value));
+        RETURN_IF_ERROR(PySet_AddValue(seen, PyValue_FromObjectBorrow(key->v.Constant.value)));
     }
     else if (key->kind != Attribute_kind) {
         const char *e = "mapping pattern keys may only match literals and attribute lookups";
@@ -6630,7 +6634,7 @@ codegen_pattern_or(compiler *c, pattern_ty p, pattern_context *pc)
             codegen_error_duplicate_store(c, LOC(p), name);
             goto error;
         }
-        if (PyList_Append(pc->stores, name)) {
+        if (PyList_AppendValue(pc->stores, PyValue_FromObjectBorrow(name))) {
             goto error;
         }
     }

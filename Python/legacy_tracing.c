@@ -7,6 +7,7 @@
 #include "pycore_ceval.h"         // export _PyEval_SetProfile()
 #include "pycore_frame.h"         // PyFrameObject members
 #include "pycore_interpframe.h"   // _PyFrame_GetCode()
+#include "pycore_tuple.h"         // _PyTuple_PackValues()
 
 #include "opcode.h"
 #include <stddef.h>
@@ -218,7 +219,7 @@ sys_trace_exception_func(
     if (tb == NULL) {
         tb = Py_NewRef(Py_None);
     }
-    PyObject *tuple = PyTuple_Pack(3, type, exc, tb);
+    PyObject *tuple = _PyTuple_PackValues(3, (PyValueBorrow[]){PyValue_FromObjectBorrow(type), PyValue_FromObjectBorrow(exc), PyValue_FromObjectBorrow(tb)});
     Py_DECREF(tb);
     if (tuple == NULL) {
         return NULL;
@@ -580,7 +581,7 @@ _PyEval_SetProfileAllThreads(PyInterpreterState *interp, Py_tracefunc func, PyOb
     }
     _Py_FOR_EACH_TSTATE_UNLOCKED(interp, tstate) {
         PyObject *old = swap_profile_func_arg(tstate, func, arg);
-        PyTuple_SET_ITEM(old_profileobjs, --num_thread_states, old);
+        PyTuple_SET_VALUE(old_profileobjs, --num_thread_states, PyValue_PrepareOwned(old));
     }
     HEAD_UNLOCK(&_PyRuntime);
     int ret = set_monitoring_profile_events(interp);
@@ -753,7 +754,7 @@ _PyEval_SetTraceAllThreads(PyInterpreterState *interp, Py_tracefunc func, PyObje
     }
     _Py_FOR_EACH_TSTATE_UNLOCKED(interp, tstate) {
         PyObject *old = swap_trace_func_arg(tstate, func, arg);
-        PyTuple_SET_ITEM(old_trace_objs, --num_thread_states, old);
+        PyTuple_SET_VALUE(old_trace_objs, --num_thread_states, PyValue_PrepareOwned(old));
     }
     if (interp->sys_tracing_threads) {
         _Py_FOR_EACH_TSTATE_UNLOCKED(interp, tstate) {

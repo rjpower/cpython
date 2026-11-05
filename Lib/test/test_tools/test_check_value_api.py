@@ -91,6 +91,20 @@ class TextRuleTests(unittest.TestCase):
     def test_public_headers(self):
         self.assertEqual(check_value_api.check_public_headers(self.srcdir), [])
 
+    def test_deferred_units(self):
+        # The wave's defer line is reported, not failing, at its line.
+        with tempfile.TemporaryDirectory() as tmp:
+            with open(f"{tmp}/deferred.c", "w") as f:
+                f.write("/* unit */\n#define Py_VALUE_DEFER_MARKS 1\n")
+            with open(f"{tmp}/plain.c", "w") as f:
+                f.write("#define Py_VALUE_DEFER_MARKS_NOT 1\n")
+            entries = [({"directory": tmp, "file": name}, "core")
+                       for name in ("deferred.c", "plain.c")]
+            findings = check_value_api.deferred_units(entries)
+        self.assertEqual([(f.line, f.rule, f.fails) for f in findings],
+                         [(2, "deferred", False)])
+        self.assertTrue(findings[0].path.endswith("deferred.c"))
+
 
 if __name__ == "__main__":
     unittest.main()

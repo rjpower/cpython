@@ -9,6 +9,7 @@
 #include "pycore_ceval.h"         // _PyEval_AcquireLock()
 #include "pycore_codecs.h"        // _PyCodec_Fini()
 #include "pycore_critical_section.h" // _PyCriticalSection_Resume()
+#include "pycore_dict.h"          // PyDict_SetValue()
 #include "pycore_dtoa.h"          // _dtoa_state_INIT()
 #include "pycore_freelist.h"      // _PyObject_ClearFreeLists()
 #include "pycore_gc_trace.h"      // _PyGC_TRACE_CAPTURE_THREAD()
@@ -2734,7 +2735,7 @@ _PyThread_CurrentFrames(void)
             Py_DECREF(id);
             goto fail;
         }
-        int stat = PyDict_SetItem(result, id, frameobj);
+        int stat = PyDict_SetValue(result, PyValue_FromObjectBorrow(id), PyValue_FromObjectBorrow(frameobj));
         Py_DECREF(id);
         if (stat < 0) {
             goto fail;
@@ -2795,7 +2796,7 @@ _PyThread_CurrentExceptions(void)
                exc == Py_None ||
                PyExceptionInstance_Check(exc));
 
-        int stat = PyDict_SetItem(result, id, exc == NULL ? Py_None : exc);
+        int stat = PyDict_SetValue(result, PyValue_FromObjectBorrow(id), PyValue_FromObjectBorrow(exc == NULL ? Py_None : exc));
         Py_DECREF(id);
         if (stat < 0) {
             goto fail;

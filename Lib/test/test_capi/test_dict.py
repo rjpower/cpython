@@ -531,6 +531,51 @@ class CAPITest(unittest.TestCase):
         # CRASHES dict_pop(NULL, "key")
         # CRASHES dict_pop({"a": 1}, NULL)
 
+    def test_dict_pop_value(self):
+        # PyDict_PopValue() and PyDict_PopValueString() return an int value
+        # inline, with no box.
+        _testinternalcapi = import_helper.import_module("_testinternalcapi")
+        for pop in (_testinternalcapi.dict_pop_value,
+                    _testinternalcapi.dict_pop_value_string):
+            for dict_type in DICT_TYPES:
+                with self.subTest(pop=pop, dict_type=dict_type):
+                    mydict = dict_type({"key": 5, "key2": "value"})
+                    self.assertEqual(pop(mydict, "key"), (1, 5, True))
+                    self.assertEqual(pop(mydict, "key2"), (1, "value", False))
+                    self.assertEqual(mydict, {})
+                    self.assertEqual(pop(mydict, "key"), (0, None, False))
+                    mydict = dict_type({"a": 1})
+                    self.assertEqual(pop(mydict, "key"), (0, None, False))
+            for test_type in FROZENDICT_TYPES:
+                with self.frozendict_does_not_support('deletion'):
+                    pop(test_type(), "key")
+            for test_type in MAPPING_TYPES + OTHER_TYPES:
+                self.assertRaises(SystemError, pop, test_type(), "key")
+
+        pop = _testinternalcapi.dict_pop_value
+        # An int key finds the entry of an equal int; an unhashable key is
+        # not hashed when the dict is empty.
+        self.assertEqual(pop({1: "one", 2.0: "two"}, 2), (1, "two", False))
+        self.assertEqual(pop({}, ["list"]), (0, None, False))
+        self.assertRaises(TypeError, pop, {"key": 1}, ["list"])
+
+    def test_dict_set_value_string(self):
+        _testinternalcapi = import_helper.import_module("_testinternalcapi")
+        set_value_string = _testinternalcapi.dict_set_value_string
+        for dict_type in DICT_TYPES:
+            with self.subTest(dict_type=dict_type):
+                mydict = dict_type()
+                self.assertIs(set_value_string(mydict, "a", 5), True)
+                self.assertIs(set_value_string(mydict, "b", 2.5), True)
+                self.assertIs(set_value_string(mydict, "c", "x"), False)
+                self.assertEqual(mydict, {"a": 5, "b": 2.5, "c": "x"})
+        for test_type in FROZENDICT_TYPES:
+            with self.frozendict_does_not_support('assignment'):
+                set_value_string(test_type(), "a", 1)
+        for test_type in MAPPING_TYPES + OTHER_TYPES:
+            self.assertRaises(SystemError, set_value_string, test_type(),
+                              "a", 1)
+
     def test_dict_popstring(self):
         # Test PyDict_PopString()
         dict_popstring = _testcapi.dict_popstring

@@ -18,6 +18,7 @@
 #include "pycore_strhex.h"        // _Py_strhex_with_sep()
 #include "pycore_unicodeobject.h" // _PyUnicode_FormatLong()
 #include "pycore_value.h"
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 #include <stddef.h>
 
@@ -474,7 +475,11 @@ getnextarg(PyObject *args, Py_ssize_t arglen, Py_ssize_t *p_argidx, int allowone
     if (argidx < arglen) {
         (*p_argidx)++;
         if (arglen >= 0) {
-            return PyTuple_GetItemRef(args, argidx);
+            PyValue arg = PyTuple_GetValue(args, argidx);
+            PyObject *item = PyValue_IsNull(arg)
+                ? NULL : _PyValue_AsObjectAt(arg, BOX_SITE_TUPLE);
+            PyValue_XCLOSE(arg);
+            return item;
         }
         else if (allowone) {
             return Py_NewRef(args);
@@ -3065,8 +3070,12 @@ _PyBytes_FromSequence_lock_held(PyObject *x, PyObject **result)
     char *str = PyBytesWriter_GetData(writer);
 
     for (Py_ssize_t i = 0; i < size; i++) {
-        PyObject *item = PyList_CheckExact(x)
-            ? PyList_GetItemRef(x, i) : PyTuple_GetItemRef(x, i);
+        PyValue ref = PyList_CheckExact(x) ? PyList_GetValue(x, i)
+                                           : PyTuple_GetValue(x, i);
+        PyObject *item = PyValue_IsNull(ref) ? NULL
+            : _PyValue_AsObjectAt(ref, PyList_CheckExact(x)
+                                  ? BOX_SITE_LIST : BOX_SITE_TUPLE);
+        PyValue_XCLOSE(ref);
         if (item == NULL) {
             PyBytesWriter_Discard(writer);
             return -1;

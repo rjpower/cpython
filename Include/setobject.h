@@ -13,10 +13,14 @@ PyAPI_DATA(PyTypeObject) PySetIter_Type;
 PyAPI_FUNC(PyObject *) PySet_New(PyObject *);
 PyAPI_FUNC(PyObject *) PyFrozenSet_New(PyObject *);
 
+Py_VALUE_COMPAT(PySet_AddValue)
 PyAPI_FUNC(int) PySet_Add(PyObject *set, PyObject *key);
 PyAPI_FUNC(int) PySet_Clear(PyObject *set);
+Py_VALUE_COMPAT(PySet_ContainsValue)
 PyAPI_FUNC(int) PySet_Contains(PyObject *anyset, PyObject *key);
+Py_VALUE_COMPAT(PySet_DiscardValue)
 PyAPI_FUNC(int) PySet_Discard(PyObject *set, PyObject *key);
+Py_VALUE_COMPAT(PySet_PopValue)
 PyAPI_FUNC(PyObject *) PySet_Pop(PyObject *set);
 PyAPI_FUNC(Py_ssize_t) PySet_Size(PyObject *anyset);
 

@@ -1,13 +1,16 @@
 /* Return the initial module search path. */
 
 #include "Python.h"
+#include "pycore_dict.h"          // PyDict_SetValueString()
 #include "pycore_fileutils.h"     // _Py_abspath()
 #include "pycore_initconfig.h"    // _PyStatus_EXCEPTION()
+#include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_pathconfig.h"    // _PyPathConfig_ReadGlobal()
 #include "pycore_pymem.h"         // _PyMem_RawWcsdup()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_tuple.h"         // PyTuple_GET_VALUE()
 #include "pycore_value.h"         // PyValue_AsKnownObjectBorrow()
+#include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
 
 #include "marshal.h"              // PyMarshal_ReadObjectFromString
 #include "osdefs.h"               // DELIM
@@ -442,7 +445,7 @@ getpath_readlines_impl(PyObject *module, PyObject *pathobj)
             --cb;
         }
         PyObject *u = PyUnicode_FromWideChar(p1, cb >= 0 ? cb + 1 : 0);
-        if (!u || PyList_Append(r, u) < 0) {
+        if (!u || PyList_AppendValue(r, PyValue_FromObjectBorrow(u)) < 0) {
             Py_XDECREF(u);
             Py_CLEAR(r);
             break;
@@ -452,7 +455,7 @@ getpath_readlines_impl(PyObject *module, PyObject *pathobj)
     }
     if (r && p1 && *p1) {
         PyObject *u = PyUnicode_FromWideChar(p1, -1);
-        if (!u || PyList_Append(r, u) < 0) {
+        if (!u || PyList_AppendValue(r, PyValue_FromObjectBorrow(u)) < 0) {
             Py_CLEAR(r);
         }
         Py_XDECREF(u);
@@ -664,7 +667,7 @@ funcs_to_dict(PyObject *dict, int warnings)
         if (!f) {
             return 0;
         }
-        if (PyDict_SetItemString(dict, m->ml_name, f) < 0) {
+        if (PyDict_SetValueString(dict, m->ml_name, PyValue_FromObjectBorrow(f)) < 0) {
             Py_DECREF(f);
             return 0;
         }
@@ -675,7 +678,7 @@ funcs_to_dict(PyObject *dict, int warnings)
     if (!f) {
         return 0;
     }
-    if (PyDict_SetItemString(dict, m2->ml_name, f) < 0) {
+    if (PyDict_SetValueString(dict, m2->ml_name, PyValue_FromObjectBorrow(f)) < 0) {
         Py_DECREF(f);
         return 0;
     }
@@ -698,7 +701,7 @@ wchar_to_dict(PyObject *dict, const char *key, const wchar_t *s)
     } else {
         u = Py_NewRef(Py_None);
     }
-    r = PyDict_SetItemString(dict, key, u) == 0;
+    r = PyDict_SetValueString(dict, key, PyValue_FromObjectBorrow(u)) == 0;
     Py_DECREF(u);
     return r;
 }
@@ -723,7 +726,7 @@ decode_to_dict(PyObject *dict, const char *key, const char *s)
     } else {
         u = Py_NewRef(Py_None);
     }
-    r = PyDict_SetItemString(dict, key, u) == 0;
+    r = PyDict_SetValueString(dict, key, PyValue_FromObjectBorrow(u)) == 0;
     Py_DECREF(u);
     return r;
 }
@@ -767,10 +770,10 @@ env_to_dict(PyObject *dict, const char *key, int and_clear)
     }
 #endif
     if (u) {
-        r = PyDict_SetItemString(dict, key, u) == 0;
+        r = PyDict_SetValueString(dict, key, PyValue_FromObjectBorrow(u)) == 0;
         Py_DECREF(u);
     } else {
-        r = PyDict_SetItemString(dict, key, Py_None) == 0;
+        r = PyDict_SetValueString(dict, key, _PyValue_FromObjectKnown(Py_None)) == 0;
     }
     if (r && and_clear) {
 #ifdef MS_WINDOWS
@@ -793,7 +796,7 @@ int_to_dict(PyObject *dict, const char *key, int v)
     if (!o) {
         return 0;
     }
-    r = PyDict_SetItemString(dict, key, o) == 0;
+    r = PyDict_SetValueString(dict, key, PyValue_FromObjectBorrow(o)) == 0;
     Py_DECREF(o);
     return r;
 }
@@ -849,7 +852,7 @@ progname_to_dict(PyObject *dict, const char *key)
         break;
     }
 #endif
-    return PyDict_SetItemString(dict, key, Py_None) == 0;
+    return PyDict_SetValueString(dict, key, _PyValue_FromObjectKnown(Py_None)) == 0;
 }
 
 
@@ -876,7 +879,7 @@ library_to_dict(PyObject *dict, const char *key)
 #endif
 #endif
 
-    return PyDict_SetItemString(dict, key, Py_None) == 0;
+    return PyDict_SetValueString(dict, key, _PyValue_FromObjectKnown(Py_None)) == 0;
 }
 
 
@@ -929,7 +932,7 @@ _PyConfig_InitPathConfig(PyConfig *config, int compute_path_config)
         return PyStatus_NoMemory();
     }
 
-    if (PyDict_SetItemString(dict, "config", configDict) < 0) {
+    if (PyDict_SetValueString(dict, "config", PyValue_FromObjectBorrow(configDict)) < 0) {
         PyErr_Clear();
         Py_DECREF(configDict);
         Py_DECREF(dict);
@@ -1000,9 +1003,9 @@ _PyConfig_InitPathConfig(PyConfig *config, int compute_path_config)
         !decode_to_dict(dict, "ABI_THREAD", "") ||
 #endif
 #ifndef MS_WINDOWS
-        PyDict_SetItemString(dict, "winreg", Py_None) < 0 ||
+        PyDict_SetValueString(dict, "winreg", _PyValue_FromObjectKnown(Py_None)) < 0 ||
 #endif
-        PyDict_SetItemString(dict, "__builtins__", PyEval_GetBuiltins()) < 0
+        PyDict_SetValueString(dict, "__builtins__", PyValue_FromObjectBorrow(PyEval_GetBuiltins())) < 0
     ) {
         Py_DECREF(co);
         Py_DECREF(dict);

@@ -66,6 +66,38 @@ class CAPITest(unittest.TestCase):
         self.assertRaises(IndexError, _testinternalcapi.list_get_value, [], 0)
         self.assertRaises(SystemError, _testinternalcapi.list_get_value, (), 0)
 
+    def test_value_setters(self):
+        # PyList_SetValue(), PyList_AppendValue() and PyList_InsertValue()
+        # store an int argument inline, with no box.
+        set_value = _testinternalcapi.list_set_value
+        append = _testinternalcapi.list_append_value
+        insert = _testinternalcapi.list_insert_value
+        bits = _testinternalcapi.list_value_bits
+
+        items = [None, None]
+        set_value(items, 1, 7)
+        append(items, 8)
+        insert(items, 0, 6)
+        self.assertEqual(items, [6, None, 7, 8])
+        self.assertEqual([bits(items, i) >= 1 << 48 for i in range(4)],
+                         [True, False, True, True])
+        # An index out of range is clamped, as by list.insert().
+        insert(items, 100, 'end')
+        insert(items, -100, 'start')
+        self.assertEqual(items, ['start', 6, None, 7, 8, 'end'])
+        self.assertRaises(IndexError, set_value, items, 6, 1)
+        self.assertRaises(IndexError, set_value, items, -1, 1)
+        for not_list in ((), ListSubclass, 1):
+            with self.subTest(not_list=not_list):
+                self.assertRaises(SystemError, set_value, not_list, 0, 1)
+                self.assertRaises(SystemError, append, not_list, 1)
+                self.assertRaises(SystemError, insert, not_list, 0, 1)
+        items = ListSubclass([1])
+        append(items, 2)
+        insert(items, 0, 0)
+        set_value(items, 2, 3)
+        self.assertEqual(items, [0, 1, 3])
+
     def test_value_boxing_failure_keeps_list_and_consumes_item(self):
         # This int32 needs two PyLong digits, so boxing cannot use the
         # single-digit freelist or immortal small-int cache.

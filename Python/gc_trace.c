@@ -57,7 +57,9 @@
 #include "pycore_borrow.h"        // _PyBorrowStack_Visit()
 #include "pycore_gc_trace.h"
 #include "pycore_initconfig.h"    // _PyStatus_ERR()
+#include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
+#include "pycore_value_api.h"      // _PyValue_AsObjectAt()
 
 #if defined(WITH_MIMALLOC) && !defined(Py_GIL_DISABLED)
 
@@ -1692,16 +1694,26 @@ report(trace_t *t, PyThreadState *tstate, Py_ssize_t nholes)
         }
     }
     // A test worker's command line names its test.
-    PyObject *argv;
-    if (PyDict_GetItemRef(tstate->interp->sysdict, &_Py_ID(argv), &argv) < 0) {
+    PyObject *argv = NULL;
+    PyValue argv_v;
+    int argv_rc = PyDict_GetValue(tstate->interp->sysdict,
+                                  _PyValue_FromObjectKnown(&_Py_ID(argv)),
+                                  &argv_v);
+    if (argv_rc < 0) {
         PyErr_Clear();
-        argv = NULL;
+    }
+    else if (argv_rc > 0) {
+        argv = _PyValue_AsObjectAt(argv_v, BOX_SITE_DICT);
+        PyValue_CLOSE(argv_v);
     }
     if (argv != NULL && PyList_Check(argv)) {
         fputs("; argv", log);
         for (Py_ssize_t i = 0; i < PyList_GET_SIZE(argv); i++) {
             fputs(" ", log);
-            PyObject *arg = PyList_GetItemRef(argv, i);
+            PyValue arg_v = PyList_GetValue(argv, i);
+            PyObject *arg = PyValue_IsNull(arg_v)
+                ? NULL : _PyValue_AsObjectAt(arg_v, BOX_SITE_LIST);
+            PyValue_XCLOSE(arg_v);
             if (arg == NULL) {
                 PyErr_Clear();
             }
@@ -1888,7 +1900,7 @@ _PyGC_TraceGetHoles(PyInterpreterState *interp)
         PyObject *item = Py_BuildValue("(sKns)", h->type_name,
                                        (unsigned long long)h->addr,
                                        h->refcnt, h->referrer);
-        if (item == NULL || PyList_Append(list, item) < 0) {
+        if (item == NULL || PyList_AppendValue(list, PyValue_FromObjectBorrow(item)) < 0) {
             Py_XDECREF(item);
             Py_DECREF(list);
             return NULL;

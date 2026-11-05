@@ -5,6 +5,7 @@
 #include "pycore_audit.h"         // _PySys_Audit()
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_ceval.h"         // _Py_ReachedRecursionLimitWithMargin()
+#include "pycore_dict.h"          // PyDict_ContainsValue()
 #include "pycore_fileutils.h"     // _PyFile_Flush
 #include "pycore_initconfig.h"    // _PyStatus_ERR()
 #include "pycore_pyerrors.h"      // _PyErr_Format()
@@ -15,6 +16,7 @@
 #include "pycore_tuple.h"         // PyTuple_GET_VALUE()
 #include "pycore_unicodeobject.h" // _PyUnicode_Equal()
 #include "pycore_value.h"         // PyValue_Is()
+#include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
 
 #include "../Parser/tokenizer/tokenizer.h"
 
@@ -672,9 +674,9 @@ _PyErr_StackItemToExcInfoTuple(_PyErr_StackItem *err_info)
     PyObject *exc_type = get_exc_type(exc_value);
     PyObject *exc_traceback = get_exc_traceback(exc_value);
 
-    PyTuple_SET_ITEM(ret, 0, exc_type ? exc_type : Py_None);
-    PyTuple_SET_ITEM(ret, 1, exc_value ? Py_NewRef(exc_value) : Py_None);
-    PyTuple_SET_ITEM(ret, 2, exc_traceback ? exc_traceback : Py_None);
+    PyTuple_SET_VALUE(ret, 0, PyValue_PrepareOwned(exc_type ? exc_type : Py_None));
+    PyTuple_SET_VALUE(ret, 1, PyValue_PrepareOwned(exc_value ? Py_NewRef(exc_value) : Py_None));
+    PyTuple_SET_VALUE(ret, 2, PyValue_PrepareOwned(exc_traceback ? exc_traceback : Py_None));
 
     return ret;
 }
@@ -1127,13 +1129,13 @@ new_importerror(
     if (kwargs == NULL) {
         return NULL;
     }
-    if (PyDict_SetItemString(kwargs, "name", name) < 0) {
+    if (PyDict_SetValueString(kwargs, "name", PyValue_FromObjectBorrow(name)) < 0) {
         goto finally;
     }
-    if (PyDict_SetItemString(kwargs, "path", path) < 0) {
+    if (PyDict_SetValueString(kwargs, "path", PyValue_FromObjectBorrow(path)) < 0) {
         goto finally;
     }
-    if (PyDict_SetItemString(kwargs, "name_from", from_name) < 0) {
+    if (PyDict_SetValueString(kwargs, "name_from", PyValue_FromObjectBorrow(from_name)) < 0) {
         goto finally;
     }
     exc = PyObject_VectorcallDict(exctype, &msg, 1, kwargs);
@@ -1326,7 +1328,7 @@ PyErr_NewException(const char *name, PyObject *base, PyObject *dict)
             goto failure;
     }
 
-    int r = PyDict_Contains(dict, &_Py_ID(__module__));
+    int r = PyDict_ContainsValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__module__)));
     if (r < 0) {
         goto failure;
     }
@@ -1335,13 +1337,13 @@ PyErr_NewException(const char *name, PyObject *base, PyObject *dict)
                                              (Py_ssize_t)(dot-name));
         if (modulename == NULL)
             goto failure;
-        if (PyDict_SetItem(dict, &_Py_ID(__module__), modulename) != 0)
+        if (PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__module__)), PyValue_FromObjectBorrow(modulename)) != 0)
             goto failure;
     }
     if (PyTuple_Check(base)) {
         bases = Py_NewRef(base);
     } else {
-        bases = PyTuple_Pack(1, base);
+        bases = _PyTuple_PackValues(1, (PyValueBorrow[]){PyValue_FromObjectBorrow(base)});
         if (bases == NULL)
             goto failure;
     }
@@ -1377,7 +1379,7 @@ PyErr_NewExceptionWithDoc(const char *name, const char *doc,
         docobj = PyUnicode_FromString(doc);
         if (docobj == NULL)
             goto failure;
-        result = PyDict_SetItemString(dict, "__doc__", docobj);
+        result = PyDict_SetValueString(dict, "__doc__", PyValue_FromObjectBorrow(docobj));
         Py_DECREF(docobj);
         if (result < 0)
             goto failure;
@@ -1449,7 +1451,7 @@ make_unraisable_hook_args(PyThreadState *tstate, PyObject *exc_type,
             if (exc_type == NULL) { \
                 exc_type = Py_None; \
             } \
-            PyStructSequence_SET_ITEM(args, pos++, Py_NewRef(exc_type)); \
+            PyStructSequence_SET_VALUE(args, pos++, PyValue_DUP(PyValue_FromObjectBorrow(_PyObject_CAST(exc_type)))); \
         } while (0)
 
 
@@ -1656,7 +1658,8 @@ _PyErr_WriteUnraisableDefaultHook(PyObject *args)
     PyObject *fields[5] = {NULL};
     int res = -1;
     for (Py_ssize_t i = 0; i < (Py_ssize_t)Py_ARRAY_LENGTH(fields); i++) {
-        fields[i] = PyStructSequence_GetItemRef(args, i);
+        PyValueBorrow fv = PyStructSequence_GET_VALUE(args, i);
+        fields[i] = PyValue_IsNull(fv) ? NULL : _PyValue_AsObjectAt(fv, BOX_SITE_CELL);
         if (fields[i] == NULL) {
             if (!PyErr_Occurred()) {
                 PyErr_SetString(PyExc_SystemError, "empty unraisable hook field");

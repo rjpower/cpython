@@ -2,6 +2,7 @@
 #include "opcode.h"
 
 #include "pycore_code.h"          // _PyCodeConstructor
+#include "pycore_dict.h"          // PyDict_ContainsValue()
 #include "pycore_function.h"      // _PyFunction_ClearCodeByVersion()
 #include "pycore_hashtable.h"     // _Py_hashtable_t
 #include "pycore_index_pool.h"    // _PyIndexPool_Fini()
@@ -322,7 +323,7 @@ validate_and_copy_tuple(PyObject *tup)
                 return NULL;
             }
         }
-        PyTuple_SET_ITEM(newtuple, i, item);
+        PyTuple_SET_VALUE(newtuple, i, PyValue_PrepareOwned(item));
     }
 
     return newtuple;
@@ -364,7 +365,7 @@ void
 _Py_set_localsplus_info(int offset, PyObject *name, _PyLocals_Kind kind,
                         PyObject *names, PyObject *kinds)
 {
-    PyTuple_SET_ITEM(names, offset, Py_NewRef(name));
+    PyTuple_SET_VALUE(names, offset, PyValue_DUP(PyValue_FromObjectBorrow(name)));
     _PyLocals_SetKind(kinds, offset, kind);
 }
 
@@ -418,7 +419,7 @@ get_localsplus_names(PyCodeObject *co, _PyLocals_Kind kind, int num)
         }
         assert(index < num);
         PyObject *name = _PyTuple_GET_OBJECT(co->co_localsplusnames, offset);
-        PyTuple_SET_ITEM(names, index, Py_NewRef(name));
+        PyTuple_SET_VALUE(names, index, PyValue_DUP(PyValue_FromObjectBorrow(name)));
         index += 1;
     }
     assert(index == num);
@@ -1915,7 +1916,7 @@ identify_unbound_names(PyThreadState *tstate, PyCodeObject *co,
             int oparg = _PyCode_InstrOparg(co, i);
             int index = LOAD_ATTR_NAME_INDEX(oparg);
             PyObject *name = GETITEM(co->co_names, index);
-            if (PySet_Contains(attrnames, name)) {
+            if (PySet_ContainsValue(attrnames, PyValue_FromObjectBorrow(name))) {
                 if (_PyErr_Occurred(tstate)) {
                     return -1;
                 }
@@ -1923,10 +1924,10 @@ identify_unbound_names(PyThreadState *tstate, PyCodeObject *co,
             }
             unbound.total += 1;
             unbound.numattrs += 1;
-            if (PySet_Add(attrnames, name) < 0) {
+            if (PySet_AddValue(attrnames, PyValue_FromObjectBorrow(name)) < 0) {
                 return -1;
             }
-            if (PySet_Contains(globalnames, name)) {
+            if (PySet_ContainsValue(globalnames, PyValue_FromObjectBorrow(name))) {
                 if (_PyErr_Occurred(tstate)) {
                     return -1;
                 }
@@ -1937,7 +1938,7 @@ identify_unbound_names(PyThreadState *tstate, PyCodeObject *co,
             int oparg = _PyCode_InstrOparg(co, i);
             int index = LOAD_ATTR_NAME_INDEX(oparg);
             PyObject *name = GETITEM(co->co_names, index);
-            if (PySet_Contains(globalnames, name)) {
+            if (PySet_ContainsValue(globalnames, PyValue_FromObjectBorrow(name))) {
                 if (_PyErr_Occurred(tstate)) {
                     return -1;
                 }
@@ -1945,13 +1946,13 @@ identify_unbound_names(PyThreadState *tstate, PyCodeObject *co,
             }
             unbound.total += 1;
             unbound.globals.total += 1;
-            if (globalsns != NULL && PyDict_Contains(globalsns, name)) {
+            if (globalsns != NULL && PyDict_ContainsValue(globalsns, PyValue_FromObjectBorrow(name))) {
                 if (_PyErr_Occurred(tstate)) {
                     return -1;
                 }
                 unbound.globals.numglobal += 1;
             }
-            else if (builtinsns != NULL && PyDict_Contains(builtinsns, name)) {
+            else if (builtinsns != NULL && PyDict_ContainsValue(builtinsns, PyValue_FromObjectBorrow(name))) {
                 if (_PyErr_Occurred(tstate)) {
                     return -1;
                 }
@@ -1960,10 +1961,10 @@ identify_unbound_names(PyThreadState *tstate, PyCodeObject *co,
             else {
                 unbound.globals.numunknown += 1;
             }
-            if (PySet_Add(globalnames, name) < 0) {
+            if (PySet_AddValue(globalnames, PyValue_FromObjectBorrow(name)) < 0) {
                 return -1;
             }
-            if (PySet_Contains(attrnames, name)) {
+            if (PySet_ContainsValue(attrnames, PyValue_FromObjectBorrow(name))) {
                 if (_PyErr_Occurred(tstate)) {
                     return -1;
                 }
@@ -3012,7 +3013,10 @@ static PyObject *
 code__varname_from_oparg_impl(PyCodeObject *self, int oparg)
 /*[clinic end generated code: output=1fd1130413184206 input=6ba7d6df0d566463]*/
 {
-    return PyTuple_GetItemRef(self->co_localsplusnames, oparg);
+    PyValue name = PyTuple_GetValue(self->co_localsplusnames, oparg);
+    PyObject *result = PyValue_IsNull(name) ? NULL : _PyValue_AsObjectAt(name, BOX_SITE_TUPLE);
+    PyValue_XCLOSE(name);
+    return result;
 }
 
 /* XXX code objects need to participate in GC? */

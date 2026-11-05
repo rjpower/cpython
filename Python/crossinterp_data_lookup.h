@@ -615,7 +615,7 @@ _new_tuple_object(_PyXIData_t *xidata)
             Py_DECREF(tuple);
             return NULL;
         }
-        PyTuple_SET_ITEM(tuple, i, item);
+        PyTuple_SET_VALUE(tuple, i, PyValue_PrepareOwned(_PyObject_CAST(item)));
     }
     return tuple;
 }
@@ -666,7 +666,10 @@ _tuple_shared(PyThreadState *tstate, PyObject *obj, xidata_fallback_t fallback,
         if (xidata_i == NULL) {
             goto error;  // PyErr_NoMemory already set
         }
-        PyObject *item = PyTuple_GetItemRef(obj, i);
+        PyValue item_value = PyTuple_GetValue(obj, i);
+        PyObject *item = PyValue_IsNull(item_value)
+            ? NULL : _PyValue_AsObjectAt(item_value, BOX_SITE_TUPLE);
+        PyValue_XCLOSE(item_value);
         if (item == NULL) {
             PyMem_RawFree(xidata_i);
             goto error;

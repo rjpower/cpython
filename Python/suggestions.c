@@ -4,6 +4,7 @@
 #include "pycore_pyerrors.h"      // export _Py_UTF8_Edit_Cost()
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_unicodeobject.h" // _PyUnicode_Equal()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 #define MAX_CANDIDATE_ITEMS 750
 #define MAX_STRING_SIZE 40
@@ -148,7 +149,9 @@ _Py_CalculateSuggestions(PyObject *dir,
         return PyErr_NoMemory();
     }
     for (Py_ssize_t i = 0; i < dir_size; ++i) {
-        PyObject *item = PyList_GetItemRef(dir, i);
+        PyValue item_v = PyList_GetValue(dir, i);
+        PyObject *item = PyValue_IsNull(item_v) ? NULL : _PyValue_AsObjectAt(item_v, BOX_SITE_LIST);
+        PyValue_XCLOSE(item_v);
         if (item == NULL) {
             PyMem_Free(buffer);
             Py_XDECREF(suggestion);

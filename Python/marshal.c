@@ -9,7 +9,9 @@
 #include "Python.h"
 #include "pycore_call.h"             // _PyObject_CallNoArgs()
 #include "pycore_code.h"             // _PyCode_New()
+#include "pycore_dict.h"          // PyDict_SetValue()
 #include "pycore_hashtable.h"        // _Py_hashtable_t
+#include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_long.h"             // _PyLong_IsZero()
 #include "pycore_object.h"           // _PyObject_IsUniquelyReferenced
 #include "pycore_pystate.h"          // _PyInterpreterState_GET()
@@ -792,7 +794,8 @@ w_complex_object(PyObject *v, WFILE *p)
             W_SIZE(n, p);
         }
         for (i = 0; i < n; i++) {
-            PyObject *item = PyTuple_GetItemRef(v, i);
+            PyObject *item = _PyValue_AsObjectAt(PyTuple_GET_VALUE(v, i),
+                                                 BOX_SITE_TUPLE);
             if (item == NULL) {
                 p->error = true;
                 break;
@@ -810,7 +813,10 @@ w_complex_object(PyObject *v, WFILE *p)
         n = PyList_GET_SIZE(v);
         W_SIZE(n, p);
         for (i = 0; i < n; i++) {
-            PyObject *item = PyList_GetItemRef(v, i);
+            PyValue item_val = PyList_GetValue(v, i);
+            PyObject *item = PyValue_IsNull(item_val)
+                ? NULL : _PyValue_AsObjectAt(item_val, BOX_SITE_LIST);
+            PyValue_XCLOSE(item_val);
             if (item == NULL) {
                 p->error = true;
                 break;
@@ -825,6 +831,7 @@ w_complex_object(PyObject *v, WFILE *p)
     else if (PyAnyDict_CheckExact(v)) {
         Py_ssize_t pos;
         PyObject *key, *value;
+        PyValue key_val, value_val;
         if (PyFrozenDict_CheckExact(v)) {
             if (p->version < 6) {
                 w_byte(TYPE_UNKNOWN, p);
@@ -843,7 +850,17 @@ w_complex_object(PyObject *v, WFILE *p)
         /* This one is NULL object terminated! */
         pos = 0;
         int status;
-        while ((status = PyDict_NextEntryRef(v, &pos, &key, &value)) > 0) {
+        while ((status = PyDict_NextValue(v, &pos, &key_val, &value_val)) > 0) {
+            key = _PyValue_AsObjectAt(key_val, BOX_SITE_DICT);
+            value = _PyValue_AsObjectAt(value_val, BOX_SITE_DICT);
+            PyValue_CLOSE(key_val);
+            PyValue_CLOSE(value_val);
+            if (key == NULL || value == NULL) {
+                Py_XDECREF(key);
+                Py_XDECREF(value);
+                status = -1;
+                break;
+            }
             w_object(key, p);
             w_object(value, p);
             Py_DECREF(value);
@@ -862,6 +879,7 @@ w_complex_object(PyObject *v, WFILE *p)
     }
     else if (PyAnySet_CheckExact(v)) {
         PyObject *value;
+        PyValue value_val;
         Py_ssize_t pos = 0;
         Py_hash_t hash;
 
@@ -892,7 +910,13 @@ w_complex_object(PyObject *v, WFILE *p)
         bool changed = false;
         int rc;
         Py_BEGIN_CRITICAL_SECTION(v);
-        while ((rc = _PySet_NextEntryRef(v, &pos, &value, &hash)) > 0) {
+        while ((rc = _PySet_NextValue(v, &pos, &value_val, &hash)) > 0) {
+            value = _PyValue_AsObjectAt(value_val, BOX_SITE_SET);
+            PyValue_CLOSE(value_val);
+            if (value == NULL) {
+                rc = -1;
+                break;
+            }
             if (i == n) {
                 changed = true;
                 Py_DECREF(value);
@@ -908,7 +932,7 @@ w_complex_object(PyObject *v, WFILE *p)
             PyObject *index = PyLong_FromSsize_t(i);
             PyObject *item = NULL;
             if (index != NULL) {
-                item = PyTuple_Pack(3, dump, index, value);
+                item = _PyTuple_PackValues(3, (PyValueBorrow[]){PyValue_FromObjectBorrow(dump), PyValue_FromObjectBorrow(index), PyValue_FromObjectBorrow(value)});
                 Py_DECREF(index);
             }
             Py_DECREF(dump);
@@ -917,7 +941,7 @@ w_complex_object(PyObject *v, WFILE *p)
                 p->error = true;
                 break;
             }
-            PyList_SET_ITEM(items, i++, item);
+            PyList_SET_VALUE(items, i++, PyValue_PrepareOwned(item));
         }
         Py_END_CRITICAL_SECTION();
         if (rc < 0) {
@@ -938,12 +962,17 @@ w_complex_object(PyObject *v, WFILE *p)
             return;
         }
         for (Py_ssize_t i = 0; i < n; i++) {
-            PyObject *item = PyList_GetItemRef(items, i);
+            PyValue item_val = PyList_GetValue(items, i);
+            PyObject *item = PyValue_IsNull(item_val)
+                ? NULL : _PyValue_AsObjectAt(item_val, BOX_SITE_LIST);
+            PyValue_XCLOSE(item_val);
             if (item == NULL) {
                 p->error = true;
                 break;
             }
-            value = PyTuple_GetItemRef(item, 2);
+            /* item is a (dump, index, element) 3-tuple built above. */
+            value = _PyValue_AsObjectAt(PyTuple_GET_VALUE(item, 2),
+                                        BOX_SITE_TUPLE);
             Py_DECREF(item);
             if (value == NULL) {
                 p->error = true;
@@ -1440,7 +1469,7 @@ r_ref_reserve(int flag, RFILE *p)
             PyErr_SetString(PyExc_ValueError, "bad marshal data (index list too large)");
             return -1;
         }
-        if (PyList_Append(p->refs, Py_None) < 0)
+        if (PyList_AppendValue(p->refs, _PyValue_FromObjectKnown(Py_None)) < 0)
             return -1;
         return idx;
     } else
@@ -1462,7 +1491,7 @@ r_ref_insert(PyObject *o, Py_ssize_t idx, int flag, RFILE *p)
         return NULL;
     }
     if (flag) { /* currently only FLAG_REF is defined */
-        int status = PyList_SetItem(p->refs, idx, Py_NewRef(o));
+        int status = PyList_SetValue(p->refs, idx, PyValue_DUP(PyValue_FromObjectBorrow(o)));
         if (status < 0) {
             Py_XDECREF(o);
             return NULL;
@@ -1481,7 +1510,7 @@ r_ref(PyObject *o, int flag, RFILE *p)
     assert(flag & FLAG_REF);
     if (o == NULL)
         return NULL;
-    if (PyList_Append(p->refs, o) < 0) {
+    if (PyList_AppendValue(p->refs, PyValue_FromObjectBorrow(o)) < 0) {
         Py_DECREF(o); /* release the new object */
         return NULL;
     }
@@ -1748,7 +1777,7 @@ r_object(RFILE *p)
                 Py_SETREF(v, NULL);
                 break;
             }
-            PyTuple_SET_ITEM(v, i, v2);
+            PyTuple_SET_VALUE(v, i, PyValue_PrepareOwned(_PyObject_CAST(v2)));
         }
         retval = r_ref_insert(v, idx, flag, p);
         break;
@@ -1775,7 +1804,7 @@ r_object(RFILE *p)
                 Py_SETREF(v, NULL);
                 break;
             }
-            PyList_SET_ITEM(v, i, v2);
+            PyList_SET_VALUE(v, i, PyValue_PrepareOwned(_PyObject_CAST(v2)));
         }
         retval = v;
         break;
@@ -1809,7 +1838,7 @@ r_object(RFILE *p)
                 Py_DECREF(key);
                 break;
             }
-            if (PyDict_SetItem(v, key, val) < 0) {
+            if (PyDict_SetValue(v, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(val)) < 0) {
                 Py_DECREF(key);
                 Py_DECREF(val);
                 break;
@@ -1870,7 +1899,7 @@ r_object(RFILE *p)
                     Py_SETREF(v, NULL);
                     break;
                 }
-                if (PySet_Add(v, v2) == -1) {
+                if (PySet_AddValue(v, PyValue_FromObjectBorrow(v2)) == -1) {
                     Py_DECREF(v);
                     Py_DECREF(v2);
                     v = NULL;
@@ -2035,7 +2064,10 @@ r_object(RFILE *p)
             }
             break;
         }
-        v = PyList_GetItemRef(p->refs, n);
+        PyValue ref_val = PyList_GetValue(p->refs, n);
+        v = PyValue_IsNull(ref_val)
+            ? NULL : _PyValue_AsObjectAt(ref_val, BOX_SITE_LIST);
+        PyValue_XCLOSE(ref_val);
         if (v == NULL) {
             Py_XDECREF(v);
             break;

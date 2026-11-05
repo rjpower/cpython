@@ -28,8 +28,12 @@ STRINGLIB(bytes_join_lock_held)(PyObject *sep, PyObject *seq)
     }
 #if !STRINGLIB_MUTABLE
     if (seqlen == 1) {
-        item = PyList_CheckExact(seq) ? PyList_GetItemRef(seq, 0) :
-                                       PyTuple_GetItemRef(seq, 0);
+        PyValue ref = PyList_CheckExact(seq) ? PyList_GetValue(seq, 0)
+                                             : PyTuple_GetValue(seq, 0);
+        item = PyValue_IsNull(ref) ? NULL
+            : _PyValue_AsObjectAt(ref, PyList_CheckExact(seq)
+                                  ? BOX_SITE_LIST : BOX_SITE_TUPLE);
+        PyValue_XCLOSE(ref);
         if (item == NULL) {
             return NULL;
         }
@@ -56,8 +60,12 @@ STRINGLIB(bytes_join_lock_held)(PyObject *sep, PyObject *seq)
      */
     for (i = 0, nbufs = 0; i < seqlen; i++) {
         Py_ssize_t itemlen;
-        item = PyList_CheckExact(seq) ? PyList_GetItemRef(seq, i) :
-                                       PyTuple_GetItemRef(seq, i);
+        PyValue ref = PyList_CheckExact(seq) ? PyList_GetValue(seq, i)
+                                             : PyTuple_GetValue(seq, i);
+        item = PyValue_IsNull(ref) ? NULL
+            : _PyValue_AsObjectAt(ref, PyList_CheckExact(seq)
+                                  ? BOX_SITE_LIST : BOX_SITE_TUPLE);
+        PyValue_XCLOSE(ref);
         if (item == NULL) {
             goto error;
         }

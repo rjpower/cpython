@@ -10,6 +10,7 @@
 #include "pycore_pyerrors.h"      // _PyErr_GetRaisedException()
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_traceback.h"     // EXCEPTION_TB_HEADER
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 #include "frameobject.h"          // PyFrame_New()
 #include "../Parser/tokenizer/tokenizer.h"
@@ -411,7 +412,9 @@ _Py_FindSourceFile(PyObject *filename, char* namebuf, size_t namelen, PyObject *
         goto error;
     }
     for (i = 0; i < npath; i++) {
-        v = PyList_GetItemRef(syspath, i);
+        PyValue sv = PyList_GetValue(syspath, i);
+        v = PyValue_IsNull(sv) ? NULL : _PyValue_AsObjectAt(sv, BOX_SITE_LIST);
+        PyValue_XCLOSE(sv);
         if (v == NULL) {
             PyErr_Clear();
             break;

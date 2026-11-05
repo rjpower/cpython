@@ -16,6 +16,7 @@
 #include "pycore_tuple.h"         // _PyTuple_FromArraySteal()
 #include "pycore_typeobject.h"    // _Py_TYPE_VERSION_LIST
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 #include <stddef.h>
 
 /*[clinic input]
@@ -241,14 +242,6 @@ valid_index(Py_ssize_t i, Py_ssize_t limit)
     return (size_t) i < (size_t) limit;
 }
 
-static inline PyObject*
-list_get_item_ref(PyListObject *op, Py_ssize_t i)
-{
-    if (!valid_index(i, Py_SIZE(op))) return NULL;
-    PyValueBorrow value = PyValue_Borrow(op->ob_item[i]);
-    return PyValue_IsNull(value) ? NULL : _PyValue_AsObjectAt(value, BOX_SITE_LIST);
-}
-
 PyValueBorrow
 (PyList_GET_VALUE)(PyObject *op, Py_ssize_t index)
 {
@@ -300,21 +293,20 @@ PyList_GetItemRef(PyObject *op, Py_ssize_t i)
         PyErr_SetString(PyExc_TypeError, "expected a list");
         return NULL;
     }
-    PyObject *item = list_get_item_ref((PyListObject *)op, i);
-    /* With a valid index, NULL is an unpublished slot (no exception) or a
-       failed box of an inline item (exception set). */
-    if (item == NULL && !valid_index(i, Py_SIZE(op))) {
+    if (!valid_index(i, Py_SIZE(op))) {
         _Py_DECLARE_STR(list_err, "list index out of range");
         PyErr_SetObject(PyExc_IndexError, &_Py_STR(list_err));
         return NULL;
     }
-    return item;
+    /* NULL is an unpublished slot (no exception) or a failed box of an
+       inline item (exception set). */
+    return _PyValue_THUNK_EXIT(_PyList_GetValue((PyListObject *)op, i));
 }
 
 PyObject *
 _PyList_GetItemRef(PyListObject *list, Py_ssize_t i)
 {
-    return list_get_item_ref(list, i);
+    return _PyValue_THUNK_EXIT(_PyList_GetValue(list, i));
 }
 
 
@@ -335,15 +327,20 @@ _PyList_SetItemTakeValue(PyListObject *self, Py_ssize_t i, PyValue value)
 }
 
 int
-PyList_SetItem(PyObject *op, Py_ssize_t i, PyObject *newitem)
+PyList_SetValue(PyObject *op, Py_ssize_t i, PyValue value)
 {
     if (!PyList_Check(op)) {
-        Py_XDECREF(newitem);
+        PyValue_XCLOSE(value);
         PyErr_BadInternalCall();
         return -1;
     }
-    return _PyList_SetItemTakeValue((PyListObject *)op, i,
-                                    PyValue_PrepareOwned(newitem));
+    return _PyList_SetItemTakeValue((PyListObject *)op, i, value);
+}
+
+int
+PyList_SetItem(PyObject *op, Py_ssize_t i, PyObject *newitem)
+{
+    return PyList_SetValue(op, i, PyValue_PrepareOwned(newitem));
 }
 
 static void ptr_wise_atomic_memmove(PyListObject *a, PyValue *dest,
@@ -370,10 +367,10 @@ list_shift_items_left_lock_held(PyListObject *self, Py_ssize_t first,
 }
 
 static int
-ins1(PyListObject *self, Py_ssize_t where, PyObject *v)
+ins1(PyListObject *self, Py_ssize_t where, PyValueBorrow item)
 {
-    if (v == NULL) { PyErr_BadInternalCall(); return -1; }
-    PyValue value = PyValue_PrepareOwned(Py_NewRef(v));
+    if (PyValue_IsNull(item)) { PyErr_BadInternalCall(); return -1; }
+    PyValue value = PyValue_DUP(item);
     Py_ssize_t n = Py_SIZE(self);
     assert((size_t)n + 1 < PY_SSIZE_T_MAX);
     if (list_resize(self, n + 1) < 0) {
@@ -389,7 +386,7 @@ ins1(PyListObject *self, Py_ssize_t where, PyObject *v)
 }
 
 int
-PyList_Insert(PyObject *op, Py_ssize_t where, PyObject *newitem)
+(PyList_InsertValue)(PyObject *op, Py_ssize_t where, PyValueBorrow item)
 {
     if (!PyList_Check(op)) {
         PyErr_BadInternalCall();
@@ -398,9 +395,15 @@ PyList_Insert(PyObject *op, Py_ssize_t where, PyObject *newitem)
     PyListObject *self = (PyListObject *)op;
     int err;
     Py_BEGIN_CRITICAL_SECTION(self);
-    err = ins1(self, where, newitem);
+    err = ins1(self, where, item);
     Py_END_CRITICAL_SECTION();
     return err;
+}
+
+int
+PyList_Insert(PyObject *op, Py_ssize_t where, PyObject *newitem)
+{
+    return PyList_InsertValue(op, where, PyValue_FromObjectBorrow(newitem));
 }
 
 /* The input owner is consumed on both outcomes. */
@@ -429,21 +432,27 @@ _PyList_AppendTakeRef(PyListObject *self, PyObject *object)
 int
 _PyList_AppendTakeRefListResize(PyListObject *self, PyObject *newitem)
 {
-    return _PyList_AppendTakeRef(self, newitem);
+    return _PyList_AppendTakeValue(self, PyValue_PrepareOwned(newitem));
 }
 
 int
-PyList_Append(PyObject *op, PyObject *newitem)
+(PyList_AppendValue)(PyObject *op, PyValueBorrow item)
 {
-    if (PyList_Check(op) && (newitem != NULL)) {
+    if (PyList_Check(op) && !PyValue_IsNull(item)) {
         int ret;
         Py_BEGIN_CRITICAL_SECTION(op);
-        ret = _PyList_AppendTakeRef((PyListObject *)op, Py_NewRef(newitem));
+        ret = _PyList_AppendTakeValue((PyListObject *)op, PyValue_DUP(item));
         Py_END_CRITICAL_SECTION();
         return ret;
     }
     PyErr_BadInternalCall();
     return -1;
+}
+
+int
+PyList_Append(PyObject *op, PyObject *newitem)
+{
+    return PyList_AppendValue(op, PyValue_FromObjectBorrow(newitem));
 }
 
 /* Methods */
@@ -965,7 +974,7 @@ static PyObject *
 list_insert_impl(PyListObject *self, Py_ssize_t index, PyObject *object)
 /*[clinic end generated code: output=7f35e32f60c8cb78 input=b1987ca998a4ae2d]*/
 {
-    if (ins1(self, index, object) == 0) {
+    if (ins1(self, index, PyValue_FromObjectBorrow(object)) == 0) {
         Py_RETURN_NONE;
     }
     return NULL;
@@ -1014,7 +1023,7 @@ static PyObject *
 list_append_impl(PyListObject *self, PyObject *object)
 /*[clinic end generated code: output=78423561d92ed405 input=122b0853de54004f]*/
 {
-    if (_PyList_AppendTakeRef(self, Py_NewRef(object)) < 0) {
+    if (_PyList_AppendTakeValue(self, PyValue_DUP(PyValue_FromObjectBorrow(object))) < 0) {
         return NULL;
     }
     Py_RETURN_NONE;
@@ -1124,7 +1133,7 @@ list_extend_iter_lock_held(PyListObject *self, PyObject *iterable)
             break;
         }
 
-        if (_PyList_AppendTakeRef(self, item) < 0) goto error;
+        if (_PyList_AppendTakeValue(self, PyValue_PrepareOwned(item)) < 0) goto error;
     }
 
     /* Cut back result list if initial guess was too large. */

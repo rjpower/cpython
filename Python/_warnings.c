@@ -1,4 +1,5 @@
 #include "Python.h"
+#include "pycore_dict.h"          // PyDict_SetValue()
 #include "pycore_frame.h"         // PyFrameObject
 #include "pycore_genobject.h"     // PyAsyncGenObject
 #include "pycore_import.h"        // _PyImport_GetModules()
@@ -10,6 +11,7 @@
 #include "pycore_traceback.h"     // _Py_DisplaySourceLine()
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString()
+#include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
 #include "pycore_warnings.h"      // _PyWarnings_AfterFork()
 
 #include <stdbool.h>
@@ -75,7 +77,8 @@ warnings_clear_state(WarningsState *st)
 }
 
 #ifndef Py_DEBUG
-static PyObject *
+/* A new filter tuple as an owned value, or PyValue_NULL with an exception. */
+static PyValue
 create_filter(PyObject *category, PyObject *action_str, const char *modname)
 {
     PyObject *modname_obj = NULL;
@@ -84,17 +87,19 @@ create_filter(PyObject *category, PyObject *action_str, const char *modname)
     if (modname != NULL) {
         modname_obj = PyUnicode_InternFromString(modname);
         if (modname_obj == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
     } else {
         modname_obj = Py_NewRef(Py_None);
     }
 
     /* This assumes the line number is zero for now. */
-    PyObject *filter = PyTuple_Pack(5, action_str, Py_None,
-                                    category, modname_obj, _PyLong_GetZero());
+    PyObject *filter = _PyTuple_PackValues(5, (PyValueBorrow[]){
+        PyValue_FromObjectBorrow(action_str), PyValue_FromObjectBorrow(Py_None),
+        PyValue_FromObjectBorrow(category), PyValue_FromObjectBorrow(modname_obj),
+        PyValue_FromObjectBorrow(_PyLong_GetZero())});
     Py_DECREF(modname_obj);
-    return filter;
+    return filter == NULL ? PyValue_NULL : PyValue_FromObjectSteal(filter);
 }
 #endif
 
@@ -113,8 +118,8 @@ init_filters(PyInterpreterState *interp)
 
     size_t pos = 0;  /* Post-incremented in each use. */
 #define ADD(TYPE, ACTION, MODNAME) \
-    PyList_SET_ITEM(filters, pos++, \
-                    create_filter(TYPE, &_Py_ID(ACTION), MODNAME));
+    PyList_SET_VALUE(filters, pos++, \
+                     create_filter(TYPE, &_Py_ID(ACTION), MODNAME));
     ADD(PyExc_DeprecationWarning, default, "__main__");
     ADD(PyExc_DeprecationWarning, ignore, NULL);
     ADD(PyExc_PendingDeprecationWarning, ignore, NULL);
@@ -467,7 +472,10 @@ filter_search(PyInterpreterState *interp, PyObject *category,
         Py_ssize_t ln;
         int is_subclass, good_msg, good_mod;
 
-        tmp_item = PyList_GetItemRef(filters, i);
+        PyValue tmp_value = PyList_GetValue(filters, i);
+        tmp_item = PyValue_IsNull(tmp_value)
+            ? NULL : _PyValue_AsObjectAt(tmp_value, BOX_SITE_LIST);
+        PyValue_XCLOSE(tmp_value);
         if (tmp_item == NULL) {
             result = false;
             break;
@@ -481,11 +489,11 @@ filter_search(PyInterpreterState *interp, PyObject *category,
         }
 
         /* Python code: action, msg, cat, mod, ln = item */
-        action = PyTuple_GetItemRef(tmp_item, 0);
-        msg = PyTuple_GetItemRef(tmp_item, 1);
-        cat = PyTuple_GetItemRef(tmp_item, 2);
-        mod = PyTuple_GetItemRef(tmp_item, 3);
-        ln_obj = PyTuple_GetItemRef(tmp_item, 4);
+        action = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tmp_item, 0), BOX_SITE_TUPLE);
+        msg = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tmp_item, 1), BOX_SITE_TUPLE);
+        cat = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tmp_item, 2), BOX_SITE_TUPLE);
+        mod = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tmp_item, 3), BOX_SITE_TUPLE);
+        ln_obj = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tmp_item, 4), BOX_SITE_TUPLE);
         if (action == NULL || msg == NULL || cat == NULL || mod == NULL
             || ln_obj == NULL)
         {
@@ -618,7 +626,6 @@ static int
 already_warned(PyInterpreterState *interp, PyObject *registry, PyObject *key,
                int should_set)
 {
-    PyObject *already_warned;
 
     if (key == NULL)
         return -1;
@@ -627,9 +634,18 @@ already_warned(PyInterpreterState *interp, PyObject *registry, PyObject *key,
     assert(st != NULL);
     assert(warnings_lock_held(st));
 
-    PyObject *version_obj;
-    if (PyDict_GetItemRef(registry, &_Py_ID(version), &version_obj) < 0) {
+    PyValue version_val;
+    if (PyDict_GetValue(registry, _PyValue_FromObjectKnown(&_Py_ID(version)),
+                        &version_val) < 0) {
         return -1;
+    }
+    PyObject *version_obj = NULL;
+    if (!PyValue_IsNull(version_val)) {
+        version_obj = _PyValue_AsObjectAt(version_val, BOX_SITE_DICT);
+        PyValue_CLOSE(version_val);
+        if (version_obj == NULL) {
+            return -1;
+        }
     }
     bool should_update_version = (
         version_obj == NULL
@@ -642,19 +658,21 @@ already_warned(PyInterpreterState *interp, PyObject *registry, PyObject *key,
         version_obj = PyLong_FromLong(st->filters_version);
         if (version_obj == NULL)
             return -1;
-        if (PyDict_SetItem(registry, &_Py_ID(version), version_obj) < 0) {
+        if (PyDict_SetValue(registry, _PyValue_FromObjectKnown(&_Py_ID(version)), PyValue_FromObjectBorrow(version_obj)) < 0) {
             Py_DECREF(version_obj);
             return -1;
         }
         Py_DECREF(version_obj);
     }
     else {
-        if (PyDict_GetItemRef(registry, key, &already_warned) < 0) {
+        PyValue already_warned_val;
+        if (PyDict_GetValue(registry, PyValue_FromObjectBorrow(key),
+                            &already_warned_val) < 0) {
             return -1;
         }
-        if (already_warned != NULL) {
-            int rc = PyObject_IsTrue(already_warned);
-            Py_DECREF(already_warned);
+        if (!PyValue_IsNull(already_warned_val)) {
+            int rc = _PyValue_IsTrue(already_warned_val);
+            PyValue_CLOSE(already_warned_val);
             if (rc != 0)
                 return rc;
         }
@@ -662,7 +680,7 @@ already_warned(PyInterpreterState *interp, PyObject *registry, PyObject *key,
 
     /* This warning wasn't found in the registry, set it. */
     if (should_set)
-        return PyDict_SetItem(registry, key, Py_True);
+        return PyDict_SetValue(registry, PyValue_FromObjectBorrow(key), _PyValue_FromObjectKnown(Py_True));
     return 0;
 }
 
@@ -674,9 +692,9 @@ update_registry(PyInterpreterState *interp, PyObject *registry, PyObject *text,
     int rc;
 
     if (add_zero)
-        altkey = PyTuple_Pack(3, text, category, _PyLong_GetZero());
+        altkey = _PyTuple_PackValues(3, (PyValueBorrow[]){PyValue_FromObjectBorrow(text), PyValue_FromObjectBorrow(category), PyValue_FromObjectBorrow(_PyLong_GetZero())});
     else
-        altkey = _PyTuple_FromPair(text, category);
+        altkey = _PyTuple_PackValues(2, (PyValueBorrow[]){PyValue_FromObjectBorrow(text), PyValue_FromObjectBorrow(category)});
 
     rc = already_warned(interp, registry, altkey, 1);
     Py_XDECREF(altkey);
@@ -859,7 +877,7 @@ warn_explicit(PyThreadState *tstate, PyObject *category, PyObject *message,
     }
 
     /* Create key. */
-    key = PyTuple_Pack(3, text, category, lineno_obj);
+    key = _PyTuple_PackValues(3, (PyValueBorrow[]){PyValue_FromObjectBorrow(text), PyValue_FromObjectBorrow(category), PyValue_FromObjectBorrow(lineno_obj)});
     if (key == NULL)
         goto cleanup;
 
@@ -890,7 +908,7 @@ warn_explicit(PyThreadState *tstate, PyObject *category, PyObject *message,
     rc = 0;
     if (!_PyUnicode_EqualToASCIIString(action, "always") && !_PyUnicode_EqualToASCIIString(action, "all")) {
         if (registry != NULL && registry != Py_None &&
-            PyDict_SetItem(registry, key, Py_True) < 0)
+            PyDict_SetValue(registry, PyValue_FromObjectBorrow(key), _PyValue_FromObjectKnown(Py_True)) < 0)
         {
             goto cleanup;
         }
@@ -983,8 +1001,9 @@ is_filename_to_skip(PyObject *filename, PyTupleObject *skip_file_prefixes)
         Py_ssize_t prefixes = PyTuple_GET_SIZE(skip_file_prefixes);
         for (Py_ssize_t idx = 0; idx < prefixes; ++idx)
         {
-            PyObject *prefix = PyTuple_GetItemRef((PyObject *)skip_file_prefixes,
-                                                  idx);
+            PyObject *prefix = _PyValue_AsObjectAt(
+                PyTuple_GET_VALUE((PyObject *)skip_file_prefixes, idx),
+                BOX_SITE_TUPLE);
             if (prefix == NULL) {
                 return false;
             }
@@ -1053,8 +1072,9 @@ setup_context(Py_ssize_t stack_level,
         Py_ssize_t prefixes = PyTuple_GET_SIZE(skip_file_prefixes);
         for (Py_ssize_t idx = 0; idx < prefixes; ++idx)
         {
-            PyObject *prefix = PyTuple_GetItemRef((PyObject *)skip_file_prefixes,
-                                                  idx);
+            PyObject *prefix = _PyValue_AsObjectAt(
+                PyTuple_GET_VALUE((PyObject *)skip_file_prefixes, idx),
+                BOX_SITE_TUPLE);
             if (prefix == NULL) {
                 return 0;
             }
@@ -1104,8 +1124,20 @@ setup_context(Py_ssize_t stack_level,
     /* Setup registry. */
     assert(globals != NULL);
     assert(PyAnyDict_Check(globals));
-    int rc = PyDict_GetItemRef(globals, &_Py_ID(__warningregistry__),
-                               registry);
+    PyValue registry_val;
+    int rc = PyDict_GetValue(globals,
+                             _PyValue_FromObjectKnown(&_Py_ID(__warningregistry__)),
+                             &registry_val);
+    if (rc > 0) {
+        *registry = _PyValue_AsObjectAt(registry_val, BOX_SITE_DICT);
+        PyValue_CLOSE(registry_val);
+        if (*registry == NULL) {
+            rc = -1;
+        }
+    }
+    else {
+        *registry = NULL;
+    }
     if (rc < 0) {
         goto handle_error;
     }
@@ -1114,13 +1146,25 @@ setup_context(Py_ssize_t stack_level,
         if (*registry == NULL)
             goto handle_error;
 
-         rc = PyDict_SetItem(globals, &_Py_ID(__warningregistry__), *registry);
+         rc = PyDict_SetValue(globals, _PyValue_FromObjectKnown(&_Py_ID(__warningregistry__)), PyValue_FromObjectBorrow(*registry));
          if (rc < 0)
             goto handle_error;
     }
 
     /* Setup module. */
-    rc = PyDict_GetItemRef(globals, &_Py_ID(__name__), module);
+    PyValue module_val;
+    rc = PyDict_GetValue(globals, _PyValue_FromObjectKnown(&_Py_ID(__name__)),
+                         &module_val);
+    if (rc > 0) {
+        *module = _PyValue_AsObjectAt(module_val, BOX_SITE_DICT);
+        PyValue_CLOSE(module_val);
+        if (*module == NULL) {
+            rc = -1;
+        }
+    }
+    else if (rc == 0) {
+        *module = NULL;
+    }
     if (rc < 0) {
         goto handle_error;
     }
@@ -1257,10 +1301,21 @@ get_source_line(PyInterpreterState *interp, PyObject *module_globals, int lineno
 
     /* Prefer __spec__.name: __name__ is "__main__" for the module executed
        as a script, but the loader can only handle its own module name. */
-    PyObject *spec;
-    if (PyDict_GetItemRef(module_globals, &_Py_ID(__spec__), &spec) < 0) {
+    PyValue spec_val;
+    if (PyDict_GetValue(module_globals,
+                        _PyValue_FromObjectKnown(&_Py_ID(__spec__)),
+                        &spec_val) < 0) {
         Py_DECREF(loader);
         return NULL;
+    }
+    PyObject *spec = NULL;
+    if (!PyValue_IsNull(spec_val)) {
+        spec = _PyValue_AsObjectAt(spec_val, BOX_SITE_DICT);
+        PyValue_CLOSE(spec_val);
+        if (spec == NULL) {
+            Py_DECREF(loader);
+            return NULL;
+        }
     }
     module_name = NULL;
     if (spec != NULL) {
@@ -1275,8 +1330,17 @@ get_source_line(PyInterpreterState *interp, PyObject *module_globals, int lineno
         }
     }
     if (module_name == NULL) {
-        int rc = PyDict_GetItemRef(module_globals, &_Py_ID(__name__),
-                                   &module_name);
+        PyValue name_val;
+        int rc = PyDict_GetValue(module_globals,
+                                 _PyValue_FromObjectKnown(&_Py_ID(__name__)),
+                                 &name_val);
+        if (rc > 0) {
+            module_name = _PyValue_AsObjectAt(name_val, BOX_SITE_DICT);
+            PyValue_CLOSE(name_val);
+            if (module_name == NULL) {
+                rc = -1;
+            }
+        }
         if (rc <= 0) {  // not found or error
             Py_DECREF(loader);
             return NULL;
@@ -1319,7 +1383,10 @@ get_source_line(PyInterpreterState *interp, PyObject *module_globals, int lineno
         Py_DECREF(source_list);
         return NULL;
     }
-    source_line = PyList_GetItemRef(source_list, lineno-1);
+    PyValue line_val = PyList_GetValue(source_list, lineno-1);
+    source_line = PyValue_IsNull(line_val)
+        ? NULL : _PyValue_AsObjectAt(line_val, BOX_SITE_LIST);
+    PyValue_XCLOSE(line_val);
     Py_DECREF(source_list);
     return source_line;
 }

@@ -1,10 +1,12 @@
 #include "Python.h"
+#include "pycore_dict.h"          // PyDict_SetValueString()
 #include "pycore_fileutils.h"     // DECODE_LOCALE_ERR
 #include "pycore_getopt.h"        // _PyOS_GetOpt()
 #include "pycore_initconfig.h"    // _PyArgv
 #include "pycore_pylifecycle.h"   // _Py_LegacyLocaleDetected()
 #include "pycore_pymem.h"         // _PyMem_GetAllocatorName()
 #include "pycore_runtime.h"       // _PyRuntime_Initialize()
+#include "pycore_value.h"         // PyValue_FromObjectBorrow()
 
 #include <locale.h>               // setlocale()
 #include <stdlib.h>               // getenv()
@@ -416,7 +418,7 @@ _PyPreConfig_AsDict(const PyPreConfig *config)
             if (obj == NULL) { \
                 goto fail; \
             } \
-            int res = PyDict_SetItemString(dict, #ATTR, obj); \
+            int res = PyDict_SetValueString(dict, #ATTR, PyValue_FromObjectBorrow(obj)); \
             Py_DECREF(obj); \
             if (res < 0) { \
                 goto fail; \

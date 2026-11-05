@@ -6,11 +6,13 @@
 #include "pycore_cell.h"          // PyCell_GetRef()
 #include "pycore_ceval.h"         // _PyEval_Vector()
 #include "pycore_compile.h"       // _PyAST_Compile()
+#include "pycore_dict.h"          // PyDict_SetValue()
 #include "pycore_fileutils.h"     // _PyFile_Flush
 #include "pycore_floatobject.h"   // _PyFloat_ExactDealloc()
 #include "pycore_interp.h"        // _PyInterpreterState_GetConfig()
 #include "pycore_import.h"        // _PyImport_LazyImportModuleLevelObject  ()
 #include "pycore_iterobject.h"    // _PyCallIter_NewEx()
+#include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_long.h"          // _PyLong_CompactValue
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_object.h"        // _Py_AddToAllObjects()
@@ -19,6 +21,7 @@
 #include "pycore_pythonrun.h"     // _Py_SourceAsString()
 #include "pycore_value.h"      // _PyObject_ValueIdentity()
 #include "pycore_tuple.h"         // _PyTuple_Recycle()
+#include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
 
 #include "clinic/bltinmodule.c.h"
 
@@ -40,7 +43,7 @@ update_bases(PyObject *bases, PyObject *const *args, Py_ssize_t nargs)
             if (new_bases) {
                 /* If we already have made a replacement, then we append every normal base,
                    otherwise just skip it. */
-                if (PyList_Append(new_bases, base) < 0) {
+                if (PyList_AppendValue(new_bases, PyValue_FromObjectBorrow(base)) < 0) {
                     goto error;
                 }
             }
@@ -51,7 +54,7 @@ update_bases(PyObject *bases, PyObject *const *args, Py_ssize_t nargs)
         }
         if (!meth) {
             if (new_bases) {
-                if (PyList_Append(new_bases, base) < 0) {
+                if (PyList_AppendValue(new_bases, PyValue_FromObjectBorrow(base)) < 0) {
                     goto error;
                 }
             }
@@ -77,7 +80,7 @@ update_bases(PyObject *bases, PyObject *const *args, Py_ssize_t nargs)
             }
             for (j = 0; j < i; j++) {
                 base = args[j];
-                PyList_SET_ITEM(new_bases, j, Py_NewRef(base));
+                PyList_SET_VALUE(new_bases, j, PyValue_DUP(PyValue_FromObjectBorrow(base)));
             }
         }
         j = PyList_GET_SIZE(new_bases);
@@ -146,8 +149,19 @@ builtin___build_class__(PyObject *self, PyObject *const *args, Py_ssize_t nargs,
             goto error;
         }
 
-        if (PyDict_Pop(mkw, &_Py_ID(metaclass), &meta) < 0) {
+        PyValue meta_v;
+        int pop_rc = PyDict_PopValue(mkw, _PyValue_FromObjectKnown(&_Py_ID(metaclass)),
+                                     &meta_v);
+        if (pop_rc < 0) {
             goto error;
+        }
+        meta = NULL;
+        if (pop_rc > 0) {
+            meta = _PyValue_AsObjectAt(meta_v, BOX_SITE_DICT);
+            PyValue_CLOSE(meta_v);
+            if (meta == NULL) {
+                goto error;
+            }
         }
         if (meta != NULL) {
             /* metaclass is explicitly given, check if it's indeed a class */
@@ -161,7 +175,10 @@ builtin___build_class__(PyObject *self, PyObject *const *args, Py_ssize_t nargs,
         }
         /* else get the type of the first base */
         else {
-            PyObject *base0 = PyTuple_GetItemRef(bases, 0);
+            PyValue base0_v = PyTuple_GetValue(bases, 0);
+            PyObject *base0 = PyValue_IsNull(base0_v) ? NULL
+                : _PyValue_AsObjectAt(base0_v, BOX_SITE_TUPLE);
+            PyValue_XCLOSE(base0_v);
             if (base0 == NULL) {
                 goto error;
             }
@@ -218,7 +235,10 @@ builtin___build_class__(PyObject *self, PyObject *const *args, Py_ssize_t nargs,
         PyObject *margs[3] = {name, bases, ns};
         cls = PyObject_VectorcallDict(meta, margs, 3, mkw);
         if (cls != NULL && PyType_Check(cls) && PyCell_Check(cell)) {
-            PyObject *cell_cls = PyCell_Get(cell);
+            PyValue cell_cls_v = PyCell_GetValue(cell);
+            PyObject *cell_cls = PyValue_IsNull(cell_cls_v) ? NULL
+                : _PyValue_AsObjectAt(cell_cls_v, BOX_SITE_CELL);
+            PyValue_XCLOSE(cell_cls_v);
             if (cell_cls == NULL && PyErr_Occurred()) {
                 Py_CLEAR(cls);
                 goto error;
@@ -339,8 +359,20 @@ builtin___lazy_import___impl(PyObject *module, PyObject *name,
         return NULL;
     }
 
-    if (PyDict_GetItemRef(globals, &_Py_ID(__builtins__), &builtins) < 0) {
+    PyValue builtins_v;
+    int builtins_rc = PyDict_GetValue(globals,
+                                      _PyValue_FromObjectKnown(&_Py_ID(__builtins__)),
+                                      &builtins_v);
+    if (builtins_rc < 0) {
         return NULL;
+    }
+    builtins = NULL;
+    if (builtins_rc > 0) {
+        builtins = _PyValue_AsObjectAt(builtins_v, BOX_SITE_DICT);
+        PyValue_CLOSE(builtins_v);
+        if (builtins == NULL) {
+            return NULL;
+        }
     }
     if (builtins == NULL) {
         PyErr_SetString(PyExc_ValueError,
@@ -1494,7 +1526,10 @@ map_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
 
     for (i=1 ; i<numargs ; i++) {
         /* Get iterator. */
-        PyObject *arg = PyTuple_GetItemRef(args, i);
+        PyValue arg_v = PyTuple_GetValue(args, i);
+        PyObject *arg = PyValue_IsNull(arg_v) ? NULL
+            : _PyValue_AsObjectAt(arg_v, BOX_SITE_TUPLE);
+        PyValue_XCLOSE(arg_v);
         if (arg == NULL) {
             Py_DECREF(iters);
             return NULL;
@@ -1505,7 +1540,7 @@ map_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
             Py_DECREF(iters);
             return NULL;
         }
-        PyTuple_SET_ITEM(iters, i-1, it);
+        PyTuple_SET_VALUE(iters, i-1, PyValue_PrepareOwned(it));
     }
 
     /* create mapobject structure */
@@ -1514,7 +1549,10 @@ map_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         Py_DECREF(iters);
         return NULL;
     }
-    func = PyTuple_GetItemRef(args, 0);
+    PyValue func_v = PyTuple_GetValue(args, 0);
+    func = PyValue_IsNull(func_v) ? NULL
+        : _PyValue_AsObjectAt(func_v, BOX_SITE_TUPLE);
+    PyValue_XCLOSE(func_v);
     if (func == NULL) {
         Py_DECREF(lz);
         Py_DECREF(iters);
@@ -1557,7 +1595,7 @@ map_vectorcall(PyObject *type, PyObject * const*args,
             Py_DECREF(iters);
             return NULL;
         }
-        PyTuple_SET_ITEM(iters, i-1, it);
+        PyTuple_SET_VALUE(iters, i-1, PyValue_PrepareOwned(it));
     }
 
     mapobject *lz = (mapobject *)tp->tp_alloc(tp, 0);
@@ -1693,7 +1731,7 @@ map_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
     Py_ssize_t i;
     if (args == NULL)
         return NULL;
-    PyTuple_SET_ITEM(args, 0, Py_NewRef(lz->func));
+    PyTuple_SET_VALUE(args, 0, PyValue_DUP(PyValue_FromObjectBorrow(lz->func)));
     for (i = 0; i<numargs; i++){
         PyValueBorrow it = PyTuple_GET_VALUE(lz->iters, i);
         PyTuple_SET_VALUE(args, i+1, PyValue_DUP(it));
@@ -3182,7 +3220,10 @@ zip_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     if (ittuple == NULL)
         return NULL;
     for (i=0; i < tuplesize; ++i) {
-        PyObject *item = PyTuple_GetItemRef(args, i);
+        PyValue item_v = PyTuple_GetValue(args, i);
+        PyObject *item = PyValue_IsNull(item_v) ? NULL
+            : _PyValue_AsObjectAt(item_v, BOX_SITE_TUPLE);
+        PyValue_XCLOSE(item_v);
         if (item == NULL) {
             Py_DECREF(ittuple);
             return NULL;
@@ -3193,7 +3234,7 @@ zip_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
             Py_DECREF(ittuple);
             return NULL;
         }
-        PyTuple_SET_ITEM(ittuple, i, it);
+        PyTuple_SET_VALUE(ittuple, i, PyValue_PrepareOwned(_PyObject_CAST(it)));
     }
 
     /* create a result holder */
@@ -3203,7 +3244,7 @@ zip_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
         return NULL;
     }
     for (i=0 ; i < tuplesize ; i++) {
-        PyTuple_SET_ITEM(result, i, Py_NewRef(Py_None));
+        PyTuple_SET_VALUE(result, i, PyValue_DUP(_PyValue_FromObjectKnown(Py_None)));
     }
 
     /* create zipobject structure */
@@ -3266,7 +3307,7 @@ zip_next(PyObject *self)
                 }
                 return NULL;
             }
-            _PyTuple_ReplaceTakeRef(result, i, item);
+            _PyTuple_ReplaceTakeValue(result, i, PyValue_PrepareOwned(item));
         }
         // bpo-42536: The GC may have untracked this result tuple. Since we're
         // recycling it, make sure it's tracked again:
@@ -3285,7 +3326,7 @@ zip_next(PyObject *self)
                 }
                 return NULL;
             }
-            PyTuple_SET_ITEM(result, i, item);
+            PyTuple_SET_VALUE(result, i, PyValue_PrepareOwned(_PyObject_CAST(item)));
         }
     }
     return result;
@@ -3334,9 +3375,9 @@ zip_reduce(PyObject *self, PyObject *Py_UNUSED(ignored))
     zipobject *lz = _zipobject_CAST(self);
     /* Just recreate the zip with the internal iterator tuple */
     if (lz->strict) {
-        return PyTuple_Pack(3, Py_TYPE(lz), lz->ittuple, Py_True);
+        return _PyTuple_PackValues(3, (PyValueBorrow[]){_PyValue_FromObjectKnown(_PyObject_CAST(Py_TYPE(lz))), PyValue_FromObjectBorrow(lz->ittuple), _PyValue_FromObjectKnown(Py_True)});
     }
-    return _PyTuple_FromPair((PyObject *)Py_TYPE(lz), lz->ittuple);
+    return _PyTuple_PackValues(2, (PyValueBorrow[]){PyValue_FromObjectBorrow((PyObject *)Py_TYPE(lz)), PyValue_FromObjectBorrow(lz->ittuple)});
 }
 
 static PyObject *
@@ -3524,7 +3565,10 @@ _PyBuiltin_InitPythonFunctions(PyObject *dict)
         goto done;
     }
     for (Py_ssize_t i = 0; i < n; i++) {
-        PyObject *name = PyList_GetItemRef(all, i);
+        PyValue name_v = PyList_GetValue(all, i);
+        PyObject *name = PyValue_IsNull(name_v) ? NULL
+            : _PyValue_AsObjectAt(name_v, BOX_SITE_LIST);
+        PyValue_XCLOSE(name_v);
         if (name == NULL) {
             goto done;
         }
@@ -3533,7 +3577,7 @@ _PyBuiltin_InitPythonFunctions(PyObject *dict)
             Py_DECREF(name);
             goto done;
         }
-        int r = PyDict_SetItem(dict, name, func);
+        int r = PyDict_SetValue(dict, PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(func));
         Py_DECREF(func);
         Py_DECREF(name);
         if (r < 0) {
@@ -3576,7 +3620,7 @@ _PyBuiltin_Init(PyInterpreterState *interp)
 #endif
 
 #define SETBUILTIN(NAME, OBJECT) \
-    if (PyDict_SetItemString(dict, NAME, (PyObject *)OBJECT) < 0)       \
+    if (PyDict_SetValueString(dict, NAME, PyValue_FromObjectBorrow((PyObject *)OBJECT)) < 0)       \
         return NULL;                                                    \
     ADD_TO_ALL(OBJECT)
 
@@ -3614,7 +3658,7 @@ _PyBuiltin_Init(PyInterpreterState *interp)
     SETBUILTIN("type",                  &PyType_Type);
     SETBUILTIN("zip",                   &PyZip_Type);
     debug = PyBool_FromLong(config->optimization_level == 0);
-    if (PyDict_SetItemString(dict, "__debug__", debug) < 0) {
+    if (PyDict_SetValueString(dict, "__debug__", PyValue_FromObjectBorrow(debug)) < 0) {
         Py_DECREF(debug);
         return NULL;
     }

@@ -4,6 +4,11 @@
    Tools/build/check_value_api.py does not list its slot-field reads. */
 #define Py_VALUE_ADAPTER 1
 
+/* The defer line of the value-API waves (value-api-v2a0.md, section 1.5):
+   the W1 container marks do not apply here until the steps that are
+   rewriting this file (V2a-1a, M1b, M2, M3a) land. */
+#define Py_VALUE_DEFER_MARKS 1
+
 #include "Python.h"
 #include "pycore_abstract.h"      // _PySequence_IterSearch()
 #include "pycore_borrow.h"        // _PyBorrowScope_Enter()
@@ -14,7 +19,7 @@
 #include "pycore_function.h"      // _PyFunction_GetVersionForCurrentState()
 #include "pycore_gc_trace.h"      // _PyGC_TraceRegisterStaticType()
 #include "pycore_interpframe.h"   // _PyInterpreterFrame
-#include "pycore_list.h"          // PyList_GET_VALUE()
+#include "pycore_list.h"          // PyList_GET_VALUE(), PyList_AppendValue()
 #include "pycore_long.h"          // _PyLong_IsNegative(), _PyLong_GetOne()
 #include "pycore_memoryobject.h"  // _PyMemoryView_FromBufferProc()
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
@@ -458,7 +463,7 @@ _PyStaticType_GetBuiltins(void)
         PyTypeObject *cls = interp->types.builtins.initialized[i].type;
         assert(cls != NULL);
         assert(interp->types.builtins.initialized[i].isbuiltin);
-        PyList_SET_ITEM(results, i, Py_NewRef((PyObject *)cls));
+        PyList_SET_VALUE(results, i, PyValue_DUP(_PyValue_FromObjectKnown((PyObject *)cls)));
     }
 
     return results;
@@ -875,7 +880,7 @@ get_subclasses_unlocked(PyTypeObject *self, PyObject *list)
             continue;
         }
 
-        int res = PyList_Append(list, _PyObject_CAST(subclass));
+        int res = PyList_AppendValue(list, PyValue_FromObjectBorrow(_PyObject_CAST(subclass)));
         Py_DECREF(subclass);
         if (res < 0) {
             return -1;
@@ -989,7 +994,7 @@ _PyType_CheckConsistency(PyTypeObject *type)
 
     if (type->tp_flags & Py_TPFLAGS_DISALLOW_INSTANTIATION) {
         CHECK(type->tp_new == NULL);
-        CHECK(PyDict_Contains(lookup_tp_dict(type), &_Py_ID(__new__)) == 0);
+        CHECK(PyDict_ContainsValue(lookup_tp_dict(type), _PyValue_FromObjectKnown(&_Py_ID(__new__))) == 0);
     }
 
     return 1;
@@ -1754,10 +1759,10 @@ type_set_module(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
     if (dict == NULL) {
         goto done;
     }
-    if (PyDict_Pop(dict, &_Py_ID(__firstlineno__), NULL) < 0) {
+    if (PyDict_PopValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__firstlineno__)), NULL) < 0) {
         goto done;
     }
-    result = PyDict_SetItem(dict, &_Py_ID(__module__), value);
+    result = PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__module__)), PyValue_FromObjectBorrow(value));
 done:
     Py_CLEAR(dict);
     Py_CLEAR(value);
@@ -1854,10 +1859,10 @@ type_set_abstractmethods(PyObject *tp, PyObject *value, void *Py_UNUSED(closure)
         goto done;
     }
     if (value != NULL) {
-        result = PyDict_SetItem(dict, &_Py_ID(__abstractmethods__), value);
+        result = PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__abstractmethods__)), PyValue_FromObjectBorrow(value));
     }
     else {
-        result = PyDict_Pop(dict, &_Py_ID(__abstractmethods__), NULL);
+        result = PyDict_PopValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__abstractmethods__)), NULL);
         if (result == 0) {
             PyErr_SetObject(PyExc_AttributeError, &_Py_ID(__abstractmethods__));
             result = -1;
@@ -1943,14 +1948,14 @@ mro_hierarchy_for_complete_type(PyTypeObject *type, PyObject *temp)
 
     PyObject *tuple;
     if (old_mro != NULL) {
-        tuple = PyTuple_Pack(3, type, new_mro, old_mro);
+        tuple = _PyTuple_PackValues(3, (PyValueBorrow[]){_PyValue_FromObjectKnown(_PyObject_CAST(type)), PyValue_FromObjectBorrow(new_mro), PyValue_FromObjectBorrow(old_mro)});
     }
     else {
-        tuple = _PyTuple_FromPair((PyObject *)type, new_mro);
+        tuple = _PyTuple_PackValues(2, (PyValueBorrow[]){_PyValue_FromObjectKnown((PyObject *)type), PyValue_FromObjectBorrow(new_mro)});
     }
 
     if (tuple != NULL) {
-        res = PyList_Append(temp, tuple);
+        res = PyList_AppendValue(temp, PyValue_FromObjectBorrow(tuple));
     }
     else {
         res = -1;
@@ -2281,7 +2286,7 @@ type_set_doc(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
     if (dict == NULL) {
         goto done;
     }
-    result = PyDict_SetItem(dict, &_Py_ID(__doc__), value);
+    result = PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__doc__)), PyValue_FromObjectBorrow(value));
 done:
     Py_CLEAR(dict);
     Py_CLEAR(value);
@@ -2323,7 +2328,7 @@ type_get_annotate(PyObject *tp, void *Py_UNUSED(closure))
     else {
         annotate = Py_NewRef(Py_None);
         PyType_Modified(type);
-        if (PyDict_SetItem(dict, &_Py_ID(__annotate_func__), annotate) < 0) {
+        if (PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__annotate_func__)), PyValue_FromObjectBorrow(annotate)) < 0) {
             Py_CLEAR(annotate);
             goto done;
         }
@@ -2362,11 +2367,11 @@ type_set_annotate(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
     PyType_Modified(type);
     dict = type_mutation_get_dict(type);
     if (dict == NULL ||
-        PyDict_SetItem(dict, &_Py_ID(__annotate_func__), value) < 0) {
+        PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__annotate_func__)), PyValue_FromObjectBorrow(value)) < 0) {
         goto done;
     }
     if (!Py_IsNone(value) &&
-        PyDict_Pop(dict, &_Py_ID(__annotations_cache__), NULL) < 0) {
+        PyDict_PopValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__annotations_cache__)), NULL) < 0) {
         goto done;
     }
     result = 0;
@@ -2431,7 +2436,7 @@ type_get_annotations(PyObject *tp, void *Py_UNUSED(closure))
             }
         }
         PyType_Modified(type);
-        if (PyDict_SetItem(dict, &_Py_ID(__annotations_cache__), annotations) < 0) {
+        if (PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__annotations_cache__)), PyValue_FromObjectBorrow(annotations)) < 0) {
             Py_CLEAR(annotations);
             goto done;
         }
@@ -2465,16 +2470,16 @@ type_set_annotations(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
     if (dict == NULL) {
         goto done;
     }
-    int explicit = PyDict_Contains(dict, &_Py_ID(__annotations__));
+    int explicit = PyDict_ContainsValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__annotations__)));
     if (explicit < 0) {
         goto done;
     }
     PyObject *key = explicit ? &_Py_ID(__annotations__) : &_Py_ID(__annotations_cache__);
     if (value != NULL) {
-        result = PyDict_SetItem(dict, key, value);
+        result = PyDict_SetValue(dict, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(value));
     }
     else {
-        result = PyDict_Pop(dict, key, NULL);
+        result = PyDict_PopValue(dict, PyValue_FromObjectBorrow(key), NULL);
         if (result == 0) {
             PyErr_SetString(PyExc_AttributeError, "__annotations__");
             result = -1;
@@ -2485,11 +2490,11 @@ type_set_annotations(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
     }
     result = -1;
     if (explicit &&
-        PyDict_Pop(dict, &_Py_ID(__annotations_cache__), NULL) < 0) {
+        PyDict_PopValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__annotations_cache__)), NULL) < 0) {
         goto done;
     }
-    if (PyDict_Pop(dict, &_Py_ID(__annotate_func__), NULL) < 0 ||
-        PyDict_Pop(dict, &_Py_ID(__annotate__), NULL) < 0) {
+    if (PyDict_PopValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__annotate_func__)), NULL) < 0 ||
+        PyDict_PopValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__annotate__)), NULL) < 0) {
         goto done;
     }
     result = 0;
@@ -2534,7 +2539,7 @@ type_set_type_params(PyObject *tp, PyObject *value, void *Py_UNUSED(closure))
     if (dict == NULL) {
         goto done;
     }
-    result = PyDict_SetItem(dict, &_Py_ID(__type_params__), value);
+    result = PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__type_params__)), PyValue_FromObjectBorrow(value));
 done:
     Py_CLEAR(dict);
     Py_CLEAR(value);
@@ -3735,7 +3740,7 @@ again:
                 goto skip;
             }
         }
-        if (PyList_Append(acc, candidate) < 0) {
+        if (PyList_AppendValue(acc, PyValue_FromObjectBorrow(candidate)) < 0) {
             goto done;
         }
         for (Py_ssize_t j = 0; j < to_merge_size; j++) {
@@ -4667,7 +4672,7 @@ type_new_copy_slots(type_new_ctx *ctx, PyObject *dict)
         }
         PyList_SET_VALUE(new_slots, j, PyValue_FromObjectSteal(slot));
 
-        int r = PyDict_Contains(dict, slot);
+        int r = PyDict_ContainsValue(dict, PyValue_FromObjectBorrow(slot));
         if (r < 0) {
             goto error;
         }
@@ -4863,7 +4868,7 @@ type_new_set_name(const type_new_ctx *ctx, PyTypeObject *type)
 static int
 type_new_set_module(PyObject *dict)
 {
-    int r = PyDict_Contains(dict, &_Py_ID(__module__));
+    int r = PyDict_ContainsValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__module__)));
     if (r < 0) {
         return -1;
     }
@@ -4879,7 +4884,7 @@ type_new_set_module(PyObject *dict)
     PyObject *module;
     r = PyDict_GetItemRef(globals, &_Py_ID(__name__), &module);
     if (module) {
-        r = PyDict_SetItem(dict, &_Py_ID(__module__), module);
+        r = PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__module__)), PyValue_FromObjectBorrow(module));
         Py_DECREF(module);
     }
     return r;
@@ -4905,7 +4910,7 @@ type_new_set_ht_name(PyTypeObject *type, PyObject *dict)
             return -1;
         }
         et->ht_qualname = qualname;
-        if (PyDict_DelItem(dict, &_Py_ID(__qualname__)) < 0) {
+        if (PyDict_DelValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__qualname__))) < 0) {
             return -1;
         }
     }
@@ -4974,7 +4979,7 @@ type_new_staticmethod(PyObject *dict, PyObject *attr)
     }
     wrapper = PyStaticMethod_New(PyValue_AsKnownObjectBorrow(selected));
     if (wrapper == NULL) goto done;
-    result = PyDict_SetItem(dict_owner, key_owner, wrapper);
+    result = PyDict_SetValue(dict_owner, PyValue_FromObjectBorrow(key_owner), PyValue_FromObjectBorrow(wrapper));
 done:
     Py_CLEAR(wrapper);
     PyValue_CLEAR(selected);
@@ -5003,7 +5008,7 @@ type_new_classmethod(PyObject *dict, PyObject *attr)
     }
     wrapper = PyClassMethod_New(PyValue_AsKnownObjectBorrow(selected));
     if (wrapper == NULL) goto done;
-    result = PyDict_SetItem(dict_owner, key_owner, wrapper);
+    result = PyDict_SetValue(dict_owner, PyValue_FromObjectBorrow(key_owner), PyValue_FromObjectBorrow(wrapper));
 done:
     Py_CLEAR(wrapper);
     PyValue_CLEAR(selected);
@@ -5033,7 +5038,7 @@ type_add_common_descriptor(PyInterpreterState *interp,
     if (!descr) {
         return -1;
     }
-    if (PyDict_SetDefaultRef(dict, PyDescr_NAME(descr), descr, NULL) < 0) {
+    if (_PyDict_SetDefaultValue(dict, PyValue_FromObjectBorrow(PyDescr_NAME(descr)), PyValue_FromObjectBorrow(descr), NULL) < 0) {
         return -1;
     }
     return 0;
@@ -5160,9 +5165,9 @@ type_new_set_classcell(PyTypeObject *type, PyObject *dict)
                      selected_type_owner);
         goto done;
     }
-    int cell_status = PyCell_Set(PyValue_AsKnownObjectBorrow(cell), type_owner);
+    int cell_status = PyCell_SetValue(PyValue_AsKnownObjectBorrow(cell), PyValue_FromObjectBorrow(type_owner));
     if (cell_status < 0) goto done;
-    int del_status = PyDict_DelItem(dict_owner, &_Py_ID(__classcell__));
+    int del_status = PyDict_DelValue(dict_owner, _PyValue_FromObjectKnown(&_Py_ID(__classcell__)));
     if (del_status < 0) goto done;
     result = 0;
 done:
@@ -5192,9 +5197,9 @@ type_new_set_classdictcell(PyObject *dict)
                      selected_type_owner);
         goto done;
     }
-    int cell_status = PyCell_Set(PyValue_AsKnownObjectBorrow(cell), dict_owner);
+    int cell_status = PyCell_SetValue(PyValue_AsKnownObjectBorrow(cell), PyValue_FromObjectBorrow(dict_owner));
     if (cell_status < 0) goto done;
-    int del_status = PyDict_DelItem(dict_owner, &_Py_ID(__classdictcell__));
+    int del_status = PyDict_DelValue(dict_owner, _PyValue_FromObjectKnown(&_Py_ID(__classdictcell__)));
     if (del_status < 0) goto done;
     result = 0;
 done:
@@ -5292,7 +5297,7 @@ type_new_get_slots(type_new_ctx *ctx, PyObject *dict)
     // Make it into a tuple
     PyObject *new_slots;
     if (PyUnicode_Check(slots)) {
-        new_slots = PyTuple_Pack(1, slots);
+        new_slots = _PyTuple_PackValues(1, (PyValueBorrow[]){PyValue_FromObjectBorrow(slots)});
     }
     else {
         new_slots = PySequence_Tuple(slots);
@@ -5425,7 +5430,7 @@ type_new_get_bases(type_new_ctx *ctx, PyObject **type,
     Py_ssize_t nbases = PyTuple_GET_SIZE(bases_owner);
     if (nbases == 0) {
         chosen_base_owner = (PyObject *)Py_NewRef(&PyBaseObject_Type);
-        chosen_bases_owner = PyTuple_Pack(1, chosen_base_owner);
+        chosen_bases_owner = _PyTuple_PackValues(1, (PyValueBorrow[]){PyValue_FromObjectBorrow(chosen_base_owner)});
         if (chosen_bases_owner == NULL) goto done;
         chosen_metatype_owner = Py_NewRef(initial_metatype_owner);
         result = 0;
@@ -6018,11 +6023,11 @@ type_from_slots_or_spec(
             bases = Py_NewRef(bases_in);
         }
         else {
-            bases = PyTuple_Pack(1, bases_in);
+            bases = _PyTuple_PackValues(1, (PyValueBorrow[]){PyValue_FromObjectBorrow(bases_in)});
         }
     }
     else {
-        bases = PyTuple_Pack(1, &PyBaseObject_Type);
+        bases = _PyTuple_PackValues(1, (PyValueBorrow[]){_PyValue_FromObjectKnown(_PyObject_CAST(&PyBaseObject_Type))});
     }
     if (!bases) {
         goto finally;
@@ -6239,7 +6244,7 @@ type_from_slots_or_spec(
         if (!__doc__) {
             goto finally;
         }
-        r = PyDict_SetItem(dict, &_Py_ID(__doc__), __doc__);
+        r = PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__doc__)), PyValue_FromObjectBorrow(__doc__));
         Py_DECREF(__doc__);
         if (r < 0) {
             goto finally;
@@ -6247,18 +6252,18 @@ type_from_slots_or_spec(
     }
 
     if (weaklistoffset) {
-        if (PyDict_DelItem(dict, &_Py_ID(__weaklistoffset__)) < 0) {
+        if (PyDict_DelValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__weaklistoffset__))) < 0) {
             goto finally;
         }
     }
     if (dictoffset) {
-        if (PyDict_DelItem(dict, &_Py_ID(__dictoffset__)) < 0) {
+        if (PyDict_DelValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__dictoffset__))) < 0) {
             goto finally;
         }
     }
 
     /* Set type.__module__ */
-    r = PyDict_Contains(dict, &_Py_ID(__module__));
+    r = PyDict_ContainsValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__module__)));
     if (r < 0) {
         goto finally;
     }
@@ -6270,7 +6275,7 @@ type_from_slots_or_spec(
             if (modname == NULL) {
                 goto finally;
             }
-            r = PyDict_SetItem(dict, &_Py_ID(__module__), modname);
+            r = PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__module__)), PyValue_FromObjectBorrow(modname));
             Py_DECREF(modname);
             if (r != 0) {
                 goto finally;
@@ -8575,7 +8580,7 @@ object_getstate_default(PyObject *obj, int required)
             Py_CLEAR(name);
         }
         else {
-            int err = PyDict_SetItem(slots, name, value);
+            int err = PyDict_SetValue(slots, PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(value));
             Py_CLEAR(name);
             Py_CLEAR(value);
             if (err < 0) {
@@ -8590,7 +8595,7 @@ object_getstate_default(PyObject *obj, int required)
     }
 
     if (PyDict_GET_SIZE(slots) > 0) {
-        state2 = _PyTuple_FromPair(state, slots);
+        state2 = _PyTuple_PackValues(2, (PyValueBorrow[]){PyValue_FromObjectBorrow(state), PyValue_FromObjectBorrow(slots)});
         Py_CLEAR(state);
         if (state2 == NULL) {
             goto done;
@@ -8845,7 +8850,7 @@ reduce_newobj(PyObject *obj)
             return NULL;
         }
         cls = (PyObject *) Py_TYPE(obj);
-        PyTuple_SET_ITEM(newargs, 0, Py_NewRef(cls));
+        PyTuple_SET_VALUE(newargs, 0, PyValue_DUP(PyValue_FromObjectBorrow(cls)));
         for (i = 0; i < n; i++) {
             PyTuple_SET_VALUE(newargs, i+1, PyValue_DUP(PyTuple_GET_VALUE(args, i)));
         }
@@ -8859,7 +8864,7 @@ reduce_newobj(PyObject *obj)
             Py_DECREF(kwargs);
             return NULL;
         }
-        newargs = PyTuple_Pack(3, Py_TYPE(obj), args, kwargs);
+        newargs = _PyTuple_PackValues(3, (PyValueBorrow[]){_PyValue_FromObjectKnown(_PyObject_CAST(Py_TYPE(obj))), PyValue_FromObjectBorrow(args), PyValue_FromObjectBorrow(kwargs)});
         Py_DECREF(args);
         Py_DECREF(kwargs);
         if (newargs == NULL) {
@@ -8888,7 +8893,7 @@ reduce_newobj(PyObject *obj)
         return NULL;
     }
 
-    result = PyTuple_Pack(5, newobj, newargs, state, listitems, dictitems);
+    result = _PyTuple_PackValues(5, (PyValueBorrow[]){PyValue_FromObjectBorrow(newobj), PyValue_FromObjectBorrow(newargs), PyValue_FromObjectBorrow(state), PyValue_FromObjectBorrow(listitems), PyValue_FromObjectBorrow(dictitems)});
     Py_DECREF(newobj);
     Py_DECREF(newargs);
     Py_DECREF(state);
@@ -9231,10 +9236,10 @@ type_add_method(PyTypeObject *type, PyMethodDef *meth)
     int err;
     PyObject *dict = lookup_tp_dict(type);
     if (!(meth->ml_flags & METH_COEXIST)) {
-        err = PyDict_SetDefaultRef(dict, name, descr, NULL) < 0;
+        err = _PyDict_SetDefaultValue(dict, PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(descr), NULL) < 0;
     }
     else {
-        err = PyDict_SetItem(dict, name, descr) < 0;
+        err = PyDict_SetValue(dict, PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(descr)) < 0;
     }
     if (!isdescr) {
         Py_DECREF(name);
@@ -9285,7 +9290,7 @@ type_add_members(PyTypeObject *type)
         if (descr == NULL)
             return -1;
 
-        if (PyDict_SetDefaultRef(dict, PyDescr_NAME(descr), descr, NULL) < 0) {
+        if (_PyDict_SetDefaultValue(dict, PyValue_FromObjectBorrow(PyDescr_NAME(descr)), PyValue_FromObjectBorrow(descr), NULL) < 0) {
             Py_DECREF(descr);
             return -1;
         }
@@ -9310,7 +9315,7 @@ type_add_getset(PyTypeObject *type)
             return -1;
         }
 
-        if (PyDict_SetDefaultRef(dict, PyDescr_NAME(descr), descr, NULL) < 0) {
+        if (_PyDict_SetDefaultValue(dict, PyValue_FromObjectBorrow(PyDescr_NAME(descr)), PyValue_FromObjectBorrow(descr), NULL) < 0) {
             Py_DECREF(descr);
             return -1;
         }
@@ -9394,9 +9399,9 @@ overrides_hash(PyTypeObject *type)
     PyObject *dict = lookup_tp_dict(type);
 
     assert(dict != NULL);
-    int r = PyDict_Contains(dict, &_Py_ID(__eq__));
+    int r = PyDict_ContainsValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__eq__)));
     if (r == 0) {
-        r = PyDict_Contains(dict, &_Py_ID(__hash__));
+        r = PyDict_ContainsValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__hash__)));
     }
     return r;
 }
@@ -9700,7 +9705,7 @@ type_ready_set_bases(PyTypeObject *type, int initial)
             bases = PyTuple_New(0);
         }
         else {
-            bases = PyTuple_Pack(1, base);
+            bases = _PyTuple_PackValues(1, (PyValueBorrow[]){_PyValue_FromObjectKnown(_PyObject_CAST(base))});
         }
         if (bases == NULL) {
             return -1;
@@ -9733,7 +9738,7 @@ static int
 type_dict_set_doc(PyTypeObject *type)
 {
     PyObject *dict = lookup_tp_dict(type);
-    int r = PyDict_Contains(dict, &_Py_ID(__doc__));
+    int r = PyDict_ContainsValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__doc__)));
     if (r < 0) {
         return -1;
     }
@@ -9749,14 +9754,14 @@ type_dict_set_doc(PyTypeObject *type)
             return -1;
         }
 
-        if (PyDict_SetItem(dict, &_Py_ID(__doc__), doc) < 0) {
+        if (PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__doc__)), PyValue_FromObjectBorrow(doc)) < 0) {
             Py_DECREF(doc);
             return -1;
         }
         Py_DECREF(doc);
     }
     else {
-        if (PyDict_SetItem(dict, &_Py_ID(__doc__), Py_None) < 0) {
+        if (PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__doc__)), _PyValue_FromObjectKnown(Py_None)) < 0) {
             return -1;
         }
     }
@@ -10227,7 +10232,7 @@ type_ready_set_hash(PyTypeObject *type)
     }
 
     PyObject *dict = lookup_tp_dict(type);
-    int r = PyDict_Contains(dict, &_Py_ID(__hash__));
+    int r = PyDict_ContainsValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__hash__)));
     if (r < 0) {
         return -1;
     }
@@ -10235,7 +10240,7 @@ type_ready_set_hash(PyTypeObject *type)
         return 0;
     }
 
-    if (PyDict_SetItem(dict, &_Py_ID(__hash__), Py_None) < 0) {
+    if (PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__hash__)), _PyValue_FromObjectKnown(Py_None)) < 0) {
         return -1;
     }
     type->tp_hash = PyObject_HashNotImplemented;
@@ -10640,7 +10645,7 @@ add_subclass(PyTypeObject *base, PyTypeObject *type)
     }
     assert(PyDict_CheckExact(subclasses));
 
-    int result = PyDict_SetItem(subclasses, key, ref);
+    int result = PyDict_SetValue(subclasses, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(ref));
     Py_DECREF(ref);
     Py_DECREF(key);
     return result;
@@ -11869,7 +11874,7 @@ static int
 add_tp_new_wrapper(PyTypeObject *type)
 {
     PyObject *dict = lookup_tp_dict(type);
-    int r = PyDict_Contains(dict, &_Py_ID(__new__));
+    int r = PyDict_ContainsValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__new__)));
     if (r > 0) {
         return 0;
     }
@@ -11882,7 +11887,7 @@ add_tp_new_wrapper(PyTypeObject *type)
         return -1;
     }
     _PyObject_SetDeferredRefcount(func);
-    r = PyDict_SetItem(dict, &_Py_ID(__new__), func);
+    r = PyDict_SetValue(dict, _PyValue_FromObjectKnown(&_Py_ID(__new__)), PyValue_FromObjectBorrow(func));
     Py_DECREF(func);
     return r;
 }
@@ -13829,7 +13834,7 @@ _PyType_InitSlotDefs(PyInterpreterState *interp)
             }
             uint8_t *data = (uint8_t *)PyByteArray_AS_STRING(bytearray);
             data[0] = 0;
-            int status = PyDict_SetItem(cache, p->name_strobj, bytearray);
+            int status = PyDict_SetValue(cache, PyValue_FromObjectBorrow(p->name_strobj), PyValue_FromObjectBorrow(bytearray));
             if (status < 0) {
                 goto done;
             }
@@ -13882,7 +13887,7 @@ _PyType_GetSlotWrapperNames(void)
     for (size_t i = 0; i < len; i++) {
         pytype_slotdef *slotdef = &slotdefs[i];
         assert(slotdef->name != NULL);
-        PyList_SET_ITEM(names, i, Py_NewRef(slotdef->name_strobj));
+        PyList_SET_VALUE(names, i, PyValue_DUP(PyValue_FromObjectBorrow(slotdef->name_strobj)));
     }
     return names;
 }
@@ -14015,7 +14020,7 @@ recurse_down_subclasses(PyTypeObject *type, PyObject *attr_name,
         dict = Py_XNewRef(lookup_tp_dict(child));
         int contains = 0;
         if (dict != NULL && PyDict_Check(dict)) {
-            contains = PyDict_Contains(dict, attr_name);
+            contains = PyDict_ContainsValue(dict, PyValue_FromObjectBorrow(attr_name));
         }
         Py_CLEAR(dict);
         if (contains < 0) {
@@ -14123,7 +14128,7 @@ add_operators(PyTypeObject *type)
         {
             continue;
         }
-        int r = PyDict_Contains(dict, p->name_strobj);
+        int r = PyDict_ContainsValue(dict, PyValue_FromObjectBorrow(p->name_strobj));
         if (r > 0)
             continue;
         if (r < 0) {
@@ -14133,7 +14138,7 @@ add_operators(PyTypeObject *type)
             /* Classes may prevent the inheritance of the tp_hash
                slot by storing PyObject_HashNotImplemented in it. Make it
                visible as a None value for the __hash__ attribute. */
-            if (PyDict_SetItem(dict, p->name_strobj, Py_None) < 0)
+            if (PyDict_SetValue(dict, PyValue_FromObjectBorrow(p->name_strobj), _PyValue_FromObjectKnown(Py_None)) < 0)
                 return -1;
         }
         else {
@@ -14141,7 +14146,7 @@ add_operators(PyTypeObject *type)
                                             slotdef_value_side(type, p, *ptr));
             if (descr == NULL)
                 return -1;
-            if (PyDict_SetItem(dict, p->name_strobj, descr) < 0) {
+            if (PyDict_SetValue(dict, PyValue_FromObjectBorrow(p->name_strobj), PyValue_FromObjectBorrow(descr)) < 0) {
                 Py_DECREF(descr);
                 return -1;
             }

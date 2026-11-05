@@ -205,7 +205,7 @@ _PyTokenizer_raise_init_error(PyObject *filename)
         goto error;
     }
 
-    tuple = _PyTuple_FromPair(errstr, tmp);
+    tuple = _PyTuple_PackValues(2, (PyValueBorrow[]){PyValue_FromObjectBorrow(errstr), PyValue_FromObjectBorrow(tmp)});
     Py_DECREF(tmp);
     if (!tuple) {
         goto error;

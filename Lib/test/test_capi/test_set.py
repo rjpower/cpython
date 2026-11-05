@@ -256,6 +256,19 @@ class TestInternalCAPI(BaseSetTests, unittest.TestCase):
         # CRASHES: update(instance, NULL)
         # CRASHES: update(NULL, NULL)
 
+    def test_set_discard_value(self):
+        discard = _testinternalcapi.set_discard_value
+        for cls in (set, set_subclass):
+            with self.subTest(cls=cls):
+                instance = cls({1, 2.5, 'a'})
+                self.assertEqual(discard(instance, 1), 1)
+                self.assertEqual(discard(instance, 2.5), 1)
+                self.assertEqual(discard(instance, 1), 0)
+                self.assertEqual(instance, {'a'})
+                self.assertRaises(TypeError, discard, instance, [])
+        for cls in (frozenset, frozenset_subclass, list):
+            self.assertRaises(SystemError, discard, cls(), 1)
+
     def test_set_next_entry(self):
         set_next = _testinternalcapi.set_next_entry
         for cls in (set, set_subclass, frozenset, frozenset_subclass):

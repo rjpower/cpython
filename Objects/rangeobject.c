@@ -9,6 +9,7 @@
 #include "pycore_range.h"
 #include "pycore_sliceobject.h"   // _PySlice_GetLongIndices()
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
 
 typedef struct {
     PyObject_HEAD
@@ -164,7 +165,7 @@ range_new(PyTypeObject *type, PyObject *args, PyObject *kw)
     }
     PyObject *items[3];
     for (Py_ssize_t i = 0; i < nargs; i++) {
-        items[i] = PyTuple_GetItemRef(args, i);
+        items[i] = _PyValue_AsObjectAt(PyTuple_GET_VALUE(args, i), BOX_SITE_TUPLE);
         if (items[i] == NULL) {
             while (--i >= 0) {
                 Py_DECREF(items[i]);
@@ -621,24 +622,24 @@ range_hash(PyObject *op)
     t = PyTuple_New(3);
     if (!t)
         return -1;
-    PyTuple_SET_ITEM(t, 0, Py_NewRef(r->length));
+    PyTuple_SET_VALUE(t, 0, PyValue_DUP(PyValue_FromObjectBorrow(r->length)));
     cmp_result = PyObject_Not(r->length);
     if (cmp_result == -1)
         goto end;
     if (cmp_result == 1) {
-        PyTuple_SET_ITEM(t, 1, Py_NewRef(Py_None));
-        PyTuple_SET_ITEM(t, 2, Py_NewRef(Py_None));
+        PyTuple_SET_VALUE(t, 1, PyValue_DUP(_PyValue_FromObjectKnown(Py_None)));
+        PyTuple_SET_VALUE(t, 2, PyValue_DUP(_PyValue_FromObjectKnown(Py_None)));
     }
     else {
-        PyTuple_SET_ITEM(t, 1, Py_NewRef(r->start));
+        PyTuple_SET_VALUE(t, 1, PyValue_DUP(PyValue_FromObjectBorrow(r->start)));
         cmp_result = PyObject_RichCompareBool(r->length, _PyLong_GetOne(), Py_EQ);
         if (cmp_result == -1)
             goto end;
         if (cmp_result == 1) {
-            PyTuple_SET_ITEM(t, 2, Py_NewRef(Py_None));
+            PyTuple_SET_VALUE(t, 2, PyValue_DUP(_PyValue_FromObjectKnown(Py_None)));
         }
         else {
-            PyTuple_SET_ITEM(t, 2, Py_NewRef(r->step));
+            PyTuple_SET_VALUE(t, 2, PyValue_DUP(PyValue_FromObjectBorrow(r->step)));
         }
     }
     result = PyObject_Hash(t);

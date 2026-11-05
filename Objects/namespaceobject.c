@@ -1,8 +1,13 @@
 // namespace object implementation
 
 #include "Python.h"
+#include "pycore_dict.h"          // PyDict_GetValue()
+#include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_modsupport.h"    // _PyArg_NoPositional()
 #include "pycore_namespace.h"     // _PyNamespace_Type
+#include "pycore_tuple.h"         // _PyTuple_PackValues()
+#include "pycore_value.h"         // PyValue_FromObjectBorrow()
+#include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
 
 /*[clinic input]
 class namespace "_PyNamespaceObject *" "&_PyNamespace_Type"
@@ -130,9 +135,17 @@ namespace_repr(PyObject *ns)
 
     while ((key = PyIter_Next(keys_iter)) != NULL) {
         if (PyUnicode_Check(key) && PyUnicode_GET_LENGTH(key) > 0) {
-            PyObject *value, *item;
+            PyObject *value = NULL, *item;
+            PyValue value_v;
 
-            int has_key = PyDict_GetItemRef(d, key, &value);
+            int has_key = PyDict_GetValue(d, PyValue_FromObjectBorrow(key), &value_v);
+            if (has_key == 1) {
+                value = _PyValue_AsObjectAt(value_v, BOX_SITE_DICT);
+                PyValue_CLOSE(value_v);
+                if (value == NULL) {
+                    has_key = -1;
+                }
+            }
             if (has_key == 1) {
                 item = PyUnicode_FromFormat("%U=%R", key, value);
                 Py_DECREF(value);
@@ -140,7 +153,7 @@ namespace_repr(PyObject *ns)
                     loop_error = 1;
                 }
                 else {
-                    loop_error = PyList_Append(pairs, item);
+                    loop_error = PyList_AppendValue(pairs, PyValue_FromObjectBorrow(item));
                     Py_DECREF(item);
                 }
             }
@@ -225,7 +238,7 @@ namespace_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
     if (!args)
         return NULL;
 
-    result = PyTuple_Pack(3, (PyObject *)Py_TYPE(ns), args, ns->ns_dict);
+    result = _PyTuple_PackValues(3, (PyValueBorrow[]){_PyValue_FromObjectKnown((PyObject *)Py_TYPE(ns)), PyValue_FromObjectBorrow(args), PyValue_FromObjectBorrow(ns->ns_dict)});
     Py_DECREF(args);
     return result;
 }

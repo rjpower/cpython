@@ -6,9 +6,12 @@
 
 #include "Python.h"
 #include "pycore_gc.h"
+#include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_object.h"      // _PyObject_IS_GC()
 #include "pycore_pyatomic_ft_wrappers.h"  // FT_ATOMIC_LOAD_INT_RELAXED()
 #include "pycore_pystate.h"     // _PyInterpreterState_GET()
+#include "pycore_value.h"         // PyValue_FromObjectBorrow()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 typedef struct _gc_runtime_state GCState;
 
@@ -268,14 +271,16 @@ static int
 referentsvisit(PyObject *obj, void *arg)
 {
     PyObject *list = arg;
-    return PyList_Append(list, obj) < 0;
+    return PyList_AppendValue(list, PyValue_FromObjectBorrow(obj)) < 0;
 }
 
 static int
 append_referrents(PyObject *result, PyObject *args)
 {
     for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(args); i++) {
-        PyObject *obj = PyTuple_GetItemRef(args, i);
+        PyValue v = PyTuple_GetValue(args, i);
+        PyObject *obj = PyValue_IsNull(v) ? NULL : _PyValue_AsObjectAt(v, BOX_SITE_TUPLE);
+        PyValue_XCLOSE(v);
         if (obj == NULL) {
             return -1;
         }
@@ -411,7 +416,7 @@ gc_get_stats_impl(PyObject *module)
                             );
         if (dict == NULL)
             goto error;
-        if (PyList_Append(result, dict)) {
+        if (PyList_AppendValue(result, PyValue_FromObjectBorrow(dict))) {
             Py_DECREF(dict);
             goto error;
         }

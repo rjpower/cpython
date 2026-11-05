@@ -1,9 +1,11 @@
 /* t-string Interpolation object implementation */
 
 #include "Python.h"
+#include "pycore_dict.h"          // PyDict_SetValueString()
 #include "pycore_initconfig.h"    // _PyStatus_OK
 #include "pycore_interpolation.h"
 #include "pycore_typeobject.h"    // _PyType_GetDict
+#include "pycore_value.h"         // PyValue_FromObjectBorrow()
 
 static int
 _conversion_converter(PyObject *arg, PyObject **conversion)
@@ -174,7 +176,7 @@ _PyInterpolation_InitTypes(PyInterpreterState *interp)
         goto error;
     }
 
-    int status = PyDict_SetItemString(dict, "__match_args__", tuple);
+    int status = PyDict_SetValueString(dict, "__match_args__", PyValue_FromObjectBorrow(tuple));
     Py_DECREF(tuple);
     if (status < 0) {
         goto error;

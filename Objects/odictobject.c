@@ -471,6 +471,7 @@ later:
 #include "pycore_pyerrors.h"         // _PyErr_ChainExceptions1()
 #include "pycore_tuple.h"            // _PyTuple_Recycle()
 #include <stddef.h>                  // offsetof()
+#include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
 #include "pycore_weakref.h"          // FT_CLEAR_WEAKREFS()
 
 #include "clinic/odictobject.c.h"
@@ -1004,7 +1005,7 @@ OrderedDict___reduce___impl(PyODictObject *od)
     if (items_iter == NULL)
         goto Done;
 
-    result = PyTuple_Pack(5, Py_TYPE(od), args, state, Py_None, items_iter);
+    result = _PyTuple_PackValues(5, (PyValueBorrow[]){_PyValue_FromObjectKnown(_PyObject_CAST(Py_TYPE(od))), PyValue_FromObjectBorrow(args), PyValue_FromObjectBorrow(state), _PyValue_FromObjectKnown(Py_None), PyValue_FromObjectBorrow(items_iter)});
     Py_DECREF(items_iter);
 
 Done:
@@ -1038,7 +1039,16 @@ OrderedDict_setdefault_impl(PyODictObject *self, PyObject *key,
     PyObject *result = NULL;
 
     if (PyODict_CheckExact(self)) {
-        int rc = PyDict_GetItemRef((PyObject *)self, key, &result);
+        PyValue result_value;
+        int rc = PyDict_GetValue((PyObject *)self, PyValue_FromObjectBorrow(key),
+                                 &result_value);
+        if (rc > 0) {
+            result = _PyValue_AsObjectAt(result_value, BOX_SITE_DICT);
+            PyValue_CLOSE(result_value);
+            if (result == NULL) {
+                rc = -1;
+            }
+        }
         if (rc < 0) {
             return NULL;
         }
@@ -1165,7 +1175,7 @@ OrderedDict_popitem_impl(PyODictObject *self, int last)
         Py_DECREF(key);
         return NULL;
     }
-    return _PyTuple_FromPairSteal(key, value);
+    return _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(key), PyValue_PrepareOwned(value));
 }
 
 /* keys() */
@@ -1250,8 +1260,17 @@ OrderedDict_copy_impl(PyObject *od)
         _odict_FOREACH(od, node) {
             PyObject *key = Py_NewRef(_odictnode_KEY(node));
             Py_hash_t hash = _odictnode_HASH(node);
-            PyObject *value;
-            int rc = PyDict_GetItemRef((PyObject *)od, key, &value);
+            PyObject *value = NULL;
+            PyValue value_v;
+            int rc = PyDict_GetValue((PyObject *)od, PyValue_FromObjectBorrow(key),
+                                     &value_v);
+            if (rc > 0) {
+                value = _PyValue_AsObjectAt(value_v, BOX_SITE_DICT);
+                PyValue_CLOSE(value_v);
+                if (value == NULL) {
+                    rc = -1;
+                }
+            }
             if (rc <= 0) {
                 if (rc == 0)
                     PyErr_SetObject(PyExc_KeyError, key);
@@ -1818,7 +1837,17 @@ odictiter_iternext_impl(PyObject *self)
         return key;
     }
 
-    if (PyDict_GetItemRef((PyObject *)di->di_odict, key, &value) != 1) {
+    PyValue value_v;
+    int value_rc = PyDict_GetValue((PyObject *)di->di_odict,
+                                   PyValue_FromObjectBorrow(key), &value_v);
+    if (value_rc > 0) {
+        value = _PyValue_AsObjectAt(value_v, BOX_SITE_DICT);
+        PyValue_CLOSE(value_v);
+        if (value == NULL) {
+            value_rc = -1;
+        }
+    }
+    if (value_rc != 1) {
         if (!PyErr_Occurred())
             PyErr_SetObject(PyExc_KeyError, key);
         Py_DECREF(key);
@@ -1838,14 +1867,14 @@ odictiter_iternext_impl(PyObject *self)
         /* not in use so we can reuse it
          * (the common case during iteration) */
         Py_INCREF(result);
-        _PyTuple_ReplaceTakeRef(result, 0, key);
-        _PyTuple_ReplaceTakeRef(result, 1, value);
+        _PyTuple_ReplaceTakeValue(result, 0, PyValue_PrepareOwned(key));
+        _PyTuple_ReplaceTakeValue(result, 1, PyValue_PrepareOwned(value));
         // bpo-42536: The GC may have untracked this result tuple. Since we're
         // recycling it, make sure it's tracked again:
         _PyTuple_Recycle(result);
     }
     else {
-        result = _PyTuple_FromPairSteal(key, value);
+        result = _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(key), PyValue_PrepareOwned(value));
         if (result == NULL) {
             goto error;
         }
@@ -1931,7 +1960,7 @@ odictiter_new(PyODictObject *od, int kind)
     PyObject *result = NULL;
 
     if ((kind & _odict_ITER_ITEMS) == _odict_ITER_ITEMS) {
-        result = _PyTuple_FromPairSteal(Py_None, Py_None);
+        result = _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(Py_None), PyValue_PrepareOwned(Py_None));
         if (result == NULL) {
             return NULL;
         }
@@ -2347,7 +2376,8 @@ mutablemapping_update(PyObject *self, PyObject *args, PyObject *kwargs)
     }
 
     if (len) {
-        PyObject *other = PyTuple_GetItemRef(args, 0);
+        // len == 1 above proves that args is a tuple with an item 0.
+        PyObject *other = _PyValue_AsObjectAt(PyTuple_GET_VALUE(args, 0), BOX_SITE_TUPLE);
         if (other == NULL) {
             return NULL;
         }

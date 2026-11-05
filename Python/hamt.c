@@ -2561,7 +2561,7 @@ PyTypeObject _PyHamtItems_Type = {
 static PyObject *
 hamt_iter_yield_items(PyObject *key, PyObject *val)
 {
-    return _PyTuple_FromPair(key, val);
+    return _PyTuple_PackValues(2, (PyValueBorrow[]){PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(val)});
 }
 
 PyObject *

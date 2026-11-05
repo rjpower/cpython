@@ -161,6 +161,41 @@ class CAPITest(unittest.TestCase):
         from_pair = _testinternalcapi.tuple_from_pair_steal
         self.check_tuple_from_pair(from_pair)
 
+    def test_pack_values(self):
+        # _PyTuple_PackValues() keeps int and float items inline.
+        pack = _testinternalcapi.tuple_pack_values
+        layout = _testinternalcapi.tuple_value_layout
+
+        self.assertIs(pack((1, 2), 0), ())
+        packed = pack((1, 2.5, 'a', None), 4)
+        self.assertEqual(packed, (1, 2.5, 'a', None))
+        self.assertEqual(layout(packed), 'ifoo')
+        self.assertEqual(pack((1, 2, 3), 2), (1, 2))
+        # More items than the function's stack array.
+        items = tuple(range(20))
+        packed = pack(items, 20)
+        self.assertEqual(packed, items)
+        self.assertEqual(layout(packed), 'i' * 20)
+        self.assertRaises(SystemError, pack, (), -1)
+        # The tuple is tracked only when an item can be part of a cycle.
+        self.assertFalse(gc.is_tracked(pack((1, 'a'), 2)))
+        self.assertTrue(gc.is_tracked(pack((1, []), 2)))
+
+    def test_tuple_from_pair_take_value(self):
+        from_pair = _testinternalcapi.tuple_from_pair_take_value
+        self.check_tuple_from_pair(from_pair)
+        self.assertEqual(_testinternalcapi.tuple_value_layout(from_pair(1, 'a')),
+                         'io')
+
+    def test_tuple_replace_take_value(self):
+        replace = _testinternalcapi.tuple_replace_take_value
+        layout = _testinternalcapi.tuple_value_layout
+        replaced = replace((1, 'a', 3), 1, 2.5)
+        self.assertEqual(replaced, (1, 2.5, 3))
+        self.assertEqual(layout(replaced), 'ifi')
+        item = object()
+        self.assertIs(replace((1,), 0, item)[0], item)
+
     def test_tuple_size(self):
         # Test PyTuple_Size()
         size = _testlimitedcapi.tuple_size

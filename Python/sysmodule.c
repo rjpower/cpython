@@ -18,10 +18,12 @@ Data members:
 #include "pycore_audit.h"         // _Py_AuditHookEntry
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_ceval.h"         // _PyEval_SetAsyncGenFinalizer()
+#include "pycore_dict.h"          // PyDict_PopValue()
 #include "pycore_frame.h"         // _PyInterpreterFrame
 #include "pycore_import.h"        // _PyImport_SetDLOpenFlags()
 #include "pycore_initconfig.h"    // _PyStatus_EXCEPTION()
 #include "pycore_interpframe.h"   // _PyFrame_GetFirstComplete()
+#include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_long.h"          // _PY_LONG_MAX_STR_DIGITS_THRESHOLD
 #include "pycore_modsupport.h"    // _PyModule_CreateInitialized()
 #include "pycore_namespace.h"     // _PyNamespace_New()
@@ -36,7 +38,9 @@ Data members:
 #include "pycore_runtime.h"       // _PyRuntimeState_Get*()
 #include "pycore_structseq.h"     // _PyStructSequence_InitBuiltinWithFlags()
 #include "pycore_sysmodule.h"     // export _PySys_GetSizeOf()
+#include "pycore_tuple.h"         // _PyTuple_PackValues()
 #include "pycore_unicodeobject.h" // _PyUnicode_InternImmortal()
+#include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
 
 #include "pydtrace.h"             // PyDTrace_AUDIT()
 #include "osdefs.h"               // DELIM
@@ -79,6 +83,20 @@ module sys
 #include "clinic/sysmodule.c.h"
 
 
+/* Convert the result of a dict value lookup into the object form: *value is
+   a new reference on a hit and NULL otherwise.  Returns the lookup status. */
+static int
+sysdict_result_object(int rc, PyValue v, PyObject **value)
+{
+    *value = NULL;
+    if (rc <= 0) {
+        return rc;
+    }
+    *value = _PyValue_AsObjectAt(v, BOX_SITE_DICT);
+    PyValue_CLOSE(v);
+    return *value == NULL ? -1 : 1;
+}
+
 PyObject *
 PySys_GetAttr(PyObject *name)
 {
@@ -95,7 +113,9 @@ PySys_GetAttr(PyObject *name)
         return NULL;
     }
     PyObject *value;
-    if (PyDict_GetItemRef(sysdict, name, &value) == 0) {
+    PyValue value_v;
+    int rc = PyDict_GetValue(sysdict, _PyValue_FromObjectKnown(name), &value_v);
+    if (sysdict_result_object(rc, value_v, &value) == 0) {
         PyErr_Format(PyExc_RuntimeError, "lost sys.%U", name);
     }
     return value;
@@ -111,7 +131,9 @@ PySys_GetAttrString(const char *name)
         return NULL;
     }
     PyObject *value;
-    if (PyDict_GetItemStringRef(sysdict, name, &value) == 0) {
+    PyValue value_v;
+    int rc = PyDict_GetValueString(sysdict, name, &value_v);
+    if (sysdict_result_object(rc, value_v, &value) == 0) {
         PyErr_Format(PyExc_RuntimeError, "lost sys.%s", name);
     }
     return value;
@@ -133,7 +155,9 @@ PySys_GetOptionalAttr(PyObject *name, PyObject **value)
         *value = NULL;
         return 0;
     }
-    return PyDict_GetItemRef(sysdict, name, value);
+    PyValue value_v;
+    int rc = PyDict_GetValue(sysdict, _PyValue_FromObjectKnown(name), &value_v);
+    return sysdict_result_object(rc, value_v, value);
 }
 
 int
@@ -145,7 +169,9 @@ PySys_GetOptionalAttrString(const char *name, PyObject **value)
         *value = NULL;
         return 0;
     }
-    return PyDict_GetItemStringRef(sysdict, name, value);
+    PyValue value_v;
+    int rc = PyDict_GetValueString(sysdict, name, &value_v);
+    return sysdict_result_object(rc, value_v, value);
 }
 
 static int
@@ -160,13 +186,13 @@ sys_set_object(PyInterpreterState *interp, PyObject *key, PyObject *v)
         return -1;
     }
     if (v == NULL) {
-        if (PyDict_Pop(sd, key, NULL) < 0) {
+        if (PyDict_PopValue(sd, PyValue_FromObjectBorrow(key), NULL) < 0) {
             return -1;
         }
         return 0;
     }
     else {
-        return PyDict_SetItem(sd, key, v);
+        return PyDict_SetValue(sd, PyValue_FromObjectBorrow(key), PyValue_FromObjectBorrow(v));
     }
 }
 
@@ -202,7 +228,7 @@ _PySys_ClearAttrString(PyInterpreterState *interp,
         PySys_WriteStderr("# clear sys.%s\n", name);
     }
     /* To play it safe, we set the attr to None instead of deleting it. */
-    if (PyDict_SetItemString(interp->sysdict, name, Py_None) < 0) {
+    if (PyDict_SetValueString(interp->sysdict, name, _PyValue_FromObjectKnown(Py_None)) < 0) {
         return -1;
     }
     return 0;
@@ -260,7 +286,7 @@ sys_audit_tstate(PyThreadState *ts, const char *event,
     if (argFormat && argFormat[0]) {
         eventArgs = Py_VaBuildValue(argFormat, vargs);
         if (eventArgs && !PyTuple_Check(eventArgs)) {
-            PyObject *argTuple = PyTuple_Pack(1, eventArgs);
+            PyObject *argTuple = _PyTuple_PackValues(1, (PyValueBorrow[]){PyValue_FromObjectBorrow(eventArgs)});
             Py_SETREF(eventArgs, argTuple);
         }
     }
@@ -527,7 +553,7 @@ sys_addaudithook_impl(PyObject *module, PyObject *hook)
         PyObject_GC_UnTrack(interp->audit_hooks);
     }
 
-    if (PyList_Append(interp->audit_hooks, hook) < 0) {
+    if (PyList_AppendValue(interp->audit_hooks, PyValue_FromObjectBorrow(hook)) < 0) {
         return NULL;
     }
 
@@ -1505,8 +1531,8 @@ sys_get_asyncgen_hooks_impl(PyObject *module)
         finalizer = Py_None;
     }
 
-    PyStructSequence_SET_ITEM(res, 0, Py_NewRef(firstiter));
-    PyStructSequence_SET_ITEM(res, 1, Py_NewRef(finalizer));
+    PyStructSequence_SET_VALUE(res, 0, PyValue_DUP(PyValue_FromObjectBorrow(_PyObject_CAST(firstiter))));
+    PyStructSequence_SET_VALUE(res, 1, PyValue_DUP(PyValue_FromObjectBorrow(_PyObject_CAST(finalizer))));
 
     return res;
 }
@@ -1561,7 +1587,7 @@ get_hash_info(PyThreadState *tstate)
             Py_CLEAR(hash_info);                             \
             return NULL;                                     \
         }                                                    \
-        PyStructSequence_SET_ITEM(hash_info, field++, item); \
+        PyStructSequence_SET_VALUE(hash_info, field++, PyValue_PrepareOwned(_PyObject_CAST(item))); \
     } while(0)
 
     SET_HASH_INFO_ITEM(PyLong_FromLong(8 * sizeof(Py_hash_t)));
@@ -2937,7 +2963,7 @@ list_stdlib_module_names(void)
             Py_DECREF(names);
             return NULL;
         }
-        PyTuple_SET_ITEM(names, i, name);
+        PyTuple_SET_VALUE(names, i, PyValue_PrepareOwned(_PyObject_CAST(name)));
     }
 
     PyObject *set = PyObject_CallFunction((PyObject *)&PyFrozenSet_Type,
@@ -3124,7 +3150,7 @@ _PySys_AddWarnOptionWithError(PyThreadState *tstate, PyObject *option)
     if (warnoptions == NULL) {
         return -1;
     }
-    if (PyList_Append(warnoptions, option)) {
+    if (PyList_AppendValue(warnoptions, PyValue_FromObjectBorrow(option))) {
         Py_DECREF(warnoptions);
         return -1;
     }
@@ -3240,7 +3266,7 @@ _PySys_AddXOptionWithError(const wchar_t *s)
             goto error;
         }
     }
-    if (PyDict_SetItem(opts, name, value) < 0) {
+    if (PyDict_SetValue(opts, PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(value)) < 0) {
         goto error;
     }
     Py_DECREF(name);
@@ -3607,9 +3633,9 @@ make_version_info(PyThreadState *tstate)
 #endif
 
 #define SetIntItem(flag) \
-    PyStructSequence_SET_ITEM(version_info, pos++, PyLong_FromLong(flag))
+    PyStructSequence_SET_VALUE(version_info, pos++, PyValue_PrepareOwned(_PyObject_CAST(PyLong_FromLong(flag))))
 #define SetStrItem(flag) \
-    PyStructSequence_SET_ITEM(version_info, pos++, PyUnicode_FromString(flag))
+    PyStructSequence_SET_VALUE(version_info, pos++, PyValue_PrepareOwned(_PyObject_CAST(PyUnicode_FromString(flag))))
 
     SetIntItem(PY_MAJOR_VERSION);
     SetIntItem(PY_MINOR_VERSION);
@@ -3659,7 +3685,7 @@ make_impl_info(PyObject *version_info)
     value = PyUnicode_FromString(_PySys_ImplName);
     if (value == NULL)
         goto error;
-    res = PyDict_SetItemString(impl_info, "name", value);
+    res = PyDict_SetValueString(impl_info, "name", PyValue_FromObjectBorrow(value));
     Py_DECREF(value);
     if (res < 0)
         goto error;
@@ -3670,19 +3696,19 @@ make_impl_info(PyObject *version_info)
     if (value == NULL) {
         goto error;
     }
-    res = PyDict_SetItemString(impl_info, "cache_tag", value);
+    res = PyDict_SetValueString(impl_info, "cache_tag", PyValue_FromObjectBorrow(value));
     Py_DECREF(value);
     if (res < 0)
         goto error;
 
-    res = PyDict_SetItemString(impl_info, "version", version_info);
+    res = PyDict_SetValueString(impl_info, "version", PyValue_FromObjectBorrow(version_info));
     if (res < 0)
         goto error;
 
     value = PyLong_FromLong(PY_VERSION_HEX);
     if (value == NULL)
         goto error;
-    res = PyDict_SetItemString(impl_info, "hexversion", value);
+    res = PyDict_SetValueString(impl_info, "hexversion", PyValue_FromObjectBorrow(value));
     Py_DECREF(value);
     if (res < 0)
         goto error;
@@ -3691,7 +3717,7 @@ make_impl_info(PyObject *version_info)
     value = PyUnicode_FromString(MULTIARCH);
     if (value == NULL)
         goto error;
-    res = PyDict_SetItemString(impl_info, "_multiarch", value);
+    res = PyDict_SetValueString(impl_info, "_multiarch", PyValue_FromObjectBorrow(value));
     Py_DECREF(value);
     if (res < 0)
         goto error;
@@ -3704,7 +3730,7 @@ make_impl_info(PyObject *version_info)
 #else
     value = Py_True;
 #endif
-    res = PyDict_SetItemString(impl_info, "supports_isolated_interpreters", value);
+    res = PyDict_SetValueString(impl_info, "supports_isolated_interpreters", PyValue_FromObjectBorrow(value));
     if (res < 0) {
         goto error;
     }
@@ -3737,7 +3763,7 @@ make_abi_info(void)
     if (value == NULL) {
         goto error;
     }
-    if (PyDict_SetItem(abi_info, &_Py_ID(pointer_bits), value) < 0) {
+    if (PyDict_SetValue(abi_info, _PyValue_FromObjectKnown(&_Py_ID(pointer_bits)), PyValue_FromObjectBorrow(value)) < 0) {
         goto error;
     }
     Py_DECREF(value);
@@ -3747,7 +3773,7 @@ make_abi_info(void)
 #else
     value = Py_False;
 #endif
-    if (PyDict_SetItem(abi_info, &_Py_ID(free_threaded), value) < 0) {
+    if (PyDict_SetValue(abi_info, _PyValue_FromObjectKnown(&_Py_ID(free_threaded)), PyValue_FromObjectBorrow(value)) < 0) {
         goto error;
     }
 
@@ -3756,7 +3782,7 @@ make_abi_info(void)
 #else
     value = Py_False;
 #endif
-    if (PyDict_SetItem(abi_info, &_Py_ID(debug), value) < 0) {
+    if (PyDict_SetValue(abi_info, _PyValue_FromObjectKnown(&_Py_ID(debug)), PyValue_FromObjectBorrow(value)) < 0) {
         goto error;
     }
 
@@ -3765,7 +3791,7 @@ make_abi_info(void)
 #else
     value = &_Py_ID(little);
 #endif
-    if (PyDict_SetItem(abi_info, &_Py_ID(byteorder), value) < 0) {
+    if (PyDict_SetValue(abi_info, _PyValue_FromObjectKnown(&_Py_ID(byteorder)), PyValue_FromObjectBorrow(value)) < 0) {
         goto error;
     }
 
@@ -3966,7 +3992,7 @@ static struct PyModuleDef sysmodule = {
         if (v == NULL) {                                   \
             goto err_occurred;                             \
         }                                                  \
-        res = PyDict_SetItemString(sysdict, key, v);       \
+        res = PyDict_SetValueString(sysdict, key, PyValue_FromObjectBorrow(v));       \
         Py_DECREF(v);                                      \
         if (res < 0) {                                     \
             goto err_occurred;                             \
@@ -4145,7 +4171,7 @@ _PySys_UpdateConfig(PyThreadState *tstate)
     if (config->pycache_prefix != NULL) {
         SET_SYS_FROM_WSTR("pycache_prefix", config->pycache_prefix);
     } else {
-        if (PyDict_SetItemString(sysdict, "pycache_prefix", Py_None) < 0) {
+        if (PyDict_SetValueString(sysdict, "pycache_prefix", _PyValue_FromObjectKnown(Py_None)) < 0) {
             return -1;
         }
     }
@@ -4161,7 +4187,7 @@ _PySys_UpdateConfig(PyThreadState *tstate)
         SET_SYS_FROM_WSTR("_stdlib_dir", stdlibdir);
     }
     else {
-        if (PyDict_SetItemString(sysdict, "_stdlib_dir", Py_None) < 0) {
+        if (PyDict_SetValueString(sysdict, "_stdlib_dir", _PyValue_FromObjectKnown(Py_None)) < 0) {
             return -1;
         }
     }
@@ -4213,10 +4239,10 @@ _PySys_SetPreliminaryStderr(PyObject *sysdict)
     if (pstderr == NULL) {
         goto error;
     }
-    if (PyDict_SetItem(sysdict, &_Py_ID(stderr), pstderr) < 0) {
+    if (PyDict_SetValue(sysdict, _PyValue_FromObjectKnown(&_Py_ID(stderr)), PyValue_FromObjectBorrow(pstderr)) < 0) {
         goto error;
     }
-    if (PyDict_SetItemString(sysdict, "__stderr__", pstderr) < 0) {
+    if (PyDict_SetValueString(sysdict, "__stderr__", PyValue_FromObjectBorrow(pstderr)) < 0) {
         goto error;
     }
     Py_DECREF(pstderr);
@@ -4328,7 +4354,7 @@ _PySys_Create(PyThreadState *tstate, PyObject **sysmod_p)
         goto error;
     }
 
-    if (PyDict_SetItemString(sysdict, "modules", modules) < 0) {
+    if (PyDict_SetValueString(sysdict, "modules", PyValue_FromObjectBorrow(modules)) < 0) {
         goto error;
     }
 
@@ -4337,7 +4363,7 @@ _PySys_Create(PyThreadState *tstate, PyObject **sysmod_p)
         goto error;
     }
 
-    if (PyDict_SetItemString(sysdict, "lazy_modules", lazy_modules) < 0) {
+    if (PyDict_SetValueString(sysdict, "lazy_modules", PyValue_FromObjectBorrow(lazy_modules)) < 0) {
         goto error;
     }
 
@@ -4359,7 +4385,7 @@ _PySys_Create(PyThreadState *tstate, PyObject **sysmod_p)
     if (monitoring == NULL) {
         goto error;
     }
-    int err = PyDict_SetItemString(sysdict, "monitoring", monitoring);
+    int err = PyDict_SetValueString(sysdict, "monitoring", PyValue_FromObjectBorrow(monitoring));
     Py_DECREF(monitoring);
     if (err < 0) {
         goto error;
@@ -4369,7 +4395,7 @@ _PySys_Create(PyThreadState *tstate, PyObject **sysmod_p)
     if (_jit == NULL) {
         goto error;
     }
-    err = PyDict_SetItemString(sysdict, "_jit", _jit);
+    err = PyDict_SetValueString(sysdict, "_jit", PyValue_FromObjectBorrow(_jit));
     Py_DECREF(_jit);
     if (err) {
         goto error;
@@ -4428,7 +4454,7 @@ makepathobject(const wchar_t *path, wchar_t delim)
             Py_DECREF(v);
             return NULL;
         }
-        PyList_SET_ITEM(v, i, w);
+        PyList_SET_VALUE(v, i, PyValue_PrepareOwned(_PyObject_CAST(w)));
         if (*p == '\0')
             break;
         path = p+1;
@@ -4464,7 +4490,7 @@ make_sys_argv(int argc, wchar_t * const * argv)
             Py_DECREF(list);
             return NULL;
         }
-        PyList_SET_ITEM(list, i, v);
+        PyList_SET_VALUE(list, i, PyValue_PrepareOwned(_PyObject_CAST(v)));
     }
     return list;
 }
@@ -4507,7 +4533,7 @@ PySys_SetArgvEx(int argc, wchar_t **argv, int updatepath)
                 Py_FatalError("can't get sys.path");
             }
             else if (sys_path != NULL) {
-                if (PyList_Insert(sys_path, 0, path0) < 0) {
+                if (PyList_InsertValue(sys_path, 0, PyValue_FromObjectBorrow(path0)) < 0) {
                     Py_FatalError("can't prepend path0 to sys.path");
                 }
                 Py_DECREF(sys_path);

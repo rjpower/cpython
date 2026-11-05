@@ -80,7 +80,7 @@ enum_new_impl(PyTypeObject *type, PyObject *iterable, PyObject *start)
         Py_DECREF(en);
         return NULL;
     }
-    en->en_result = _PyTuple_FromPairSteal(Py_None, Py_None);
+    en->en_result = _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(Py_None), PyValue_PrepareOwned(Py_None));
     if (en->en_result == NULL) {
         Py_DECREF(en);
         return NULL;
@@ -170,7 +170,7 @@ enum_next_long(enumobject *en, PyObject* next_item)
         PyObject *transferred_item = next_item;
         next_index = NULL;
         next_item = NULL;
-        output = _PyTuple_FromPairSteal(transferred_index, transferred_item);
+        output = _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(transferred_index), PyValue_PrepareOwned(transferred_item));
     }
 
 done:
@@ -232,7 +232,7 @@ enum_next(PyObject *op)
         PyObject *transferred_item = next_item;
         next_index = NULL;
         next_item = NULL;
-        output = _PyTuple_FromPairSteal(transferred_index, transferred_item);
+        output = _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(transferred_index), PyValue_PrepareOwned(transferred_item));
     }
 
 done:

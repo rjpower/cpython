@@ -13,6 +13,7 @@
 #include "pycore_stats.h"
 #include "pycore_tuple.h"         // PyTuple_GET_VALUE()
 #include "pycore_value.h"         // PyValue_TYPE()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
 static const char *
@@ -110,8 +111,19 @@ PyFunction_ClearWatcher(int watcher_id)
 PyFunctionObject *
 _PyFunction_FromConstructor(PyFrameConstructor *constr)
 {
-    PyObject *module;
-    if (PyDict_GetItemRef(constr->fc_globals, &_Py_ID(__name__), &module) < 0) {
+    PyValue module_value;
+    int module_rc = PyDict_GetValue(constr->fc_globals,
+                                    _PyValue_FromObjectKnown(&_Py_ID(__name__)),
+                                    &module_value);
+    PyObject *module = NULL;
+    if (module_rc > 0) {
+        module = _PyValue_AsObjectAt(module_value, BOX_SITE_DICT);
+        PyValue_CLOSE(module_value);
+        if (module == NULL) {
+            module_rc = -1;
+        }
+    }
+    if (module_rc < 0) {
         return NULL;
     }
 
@@ -183,9 +195,20 @@ PyFunction_NewWithQualName(PyObject *code, PyObject *globals, PyObject *qualname
     Py_INCREF(doc);
 
     // __module__: Use globals['__name__'] if it exists, or NULL.
-    PyObject *module;
+    PyObject *module = NULL;
     PyObject *builtins = NULL;
-    if (PyDict_GetItemRef(globals, &_Py_ID(__name__), &module) < 0) {
+    PyValue module_value;
+    int module_rc = PyDict_GetValue(globals,
+                                    _PyValue_FromObjectKnown(&_Py_ID(__name__)),
+                                    &module_value);
+    if (module_rc > 0) {
+        module = _PyValue_AsObjectAt(module_value, BOX_SITE_DICT);
+        PyValue_CLOSE(module_value);
+        if (module == NULL) {
+            module_rc = -1;
+        }
+    }
+    if (module_rc < 0) {
         goto error;
     }
 
@@ -582,20 +605,12 @@ func_get_annotation_dict(PyFunctionObject *op)
         assert(PyTuple_GET_SIZE(ann_tuple) % 2 == 0);
 
         for (Py_ssize_t i = 0; i < PyTuple_GET_SIZE(ann_tuple); i += 2) {
-            PyObject *key = PyTuple_GetItemRef(ann_tuple, i);
-            if (key == NULL) {
-                Py_DECREF(ann_dict);
-                return NULL;
-            }
-            PyObject *value = PyTuple_GetItemRef(ann_tuple, i + 1);
-            if (value == NULL) {
-                Py_DECREF(key);
-                Py_DECREF(ann_dict);
-                return NULL;
-            }
-            int err = PyDict_SetItem(ann_dict, key, value);
-            Py_DECREF(key);
-            Py_DECREF(value);
+            // The loop bound and the even-size assert prove both indices.
+            PyValue key = PyValue_DUP(PyTuple_GET_VALUE(ann_tuple, i));
+            PyValue value = PyValue_DUP(PyTuple_GET_VALUE(ann_tuple, i + 1));
+            int err = PyDict_SetValue(ann_dict, key, value);
+            PyValue_CLOSE(key);
+            PyValue_CLOSE(value);
 
             if (err < 0) {
                 Py_DECREF(ann_dict);
@@ -1417,8 +1432,17 @@ descriptor_get_wrapped_attribute(PyObject *wrapped, PyObject *obj, PyObject *nam
     if (dict == NULL) {
         return NULL;
     }
-    PyObject *res;
-    if (PyDict_GetItemRef(dict, name, &res) < 0) {
+    PyObject *res = NULL;
+    PyValue res_value;
+    int res_rc = PyDict_GetValue(dict, PyValue_FromObjectBorrow(name), &res_value);
+    if (res_rc > 0) {
+        res = _PyValue_AsObjectAt(res_value, BOX_SITE_DICT);
+        PyValue_CLOSE(res_value);
+        if (res == NULL) {
+            res_rc = -1;
+        }
+    }
+    if (res_rc < 0) {
         Py_DECREF(dict);
         return NULL;
     }
@@ -1431,7 +1455,7 @@ descriptor_get_wrapped_attribute(PyObject *wrapped, PyObject *obj, PyObject *nam
         Py_DECREF(dict);
         return NULL;
     }
-    if (PyDict_SetItem(dict, name, res) < 0) {
+    if (PyDict_SetValue(dict, PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(res)) < 0) {
         Py_DECREF(dict);
         Py_DECREF(res);
         return NULL;
@@ -1449,7 +1473,7 @@ descriptor_set_wrapped_attribute(PyObject *oobj, PyObject *name, PyObject *value
         return -1;
     }
     if (value == NULL) {
-        if (PyDict_DelItem(dict, name) < 0) {
+        if (PyDict_DelValue(dict, PyValue_FromObjectBorrow(name)) < 0) {
             if (PyErr_ExceptionMatches(PyExc_KeyError)) {
                 PyErr_Clear();
                 PyErr_Format(PyExc_AttributeError,
@@ -1467,7 +1491,7 @@ descriptor_set_wrapped_attribute(PyObject *oobj, PyObject *name, PyObject *value
         return 0;
     }
     else {
-        int result = PyDict_SetItem(dict, name, value);
+        int result = PyDict_SetValue(dict, PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(value));
         Py_DECREF(dict);
         return result;
     }

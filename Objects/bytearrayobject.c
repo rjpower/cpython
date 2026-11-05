@@ -10,6 +10,7 @@
 #include "pycore_strhex.h"        // _Py_strhex_with_sep()
 #include "pycore_long.h"          // _PyLong_FromUnsignedChar()
 #include "pycore_pyatomic_ft_wrappers.h"
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "bytesobject.h"
 
 /*[clinic input]
@@ -1104,8 +1105,12 @@ bytearray___init___impl(PyByteArrayObject *self, PyObject *arg,
         char *s = PyByteArray_AS_STRING(self);
         for (Py_ssize_t i = 0; i < size; i++) {
             int value;
-            PyObject *item = PyList_CheckExact(arg)
-                ? PyList_GetItemRef(arg, i) : PyTuple_GetItemRef(arg, i);
+            PyValue ref = PyList_CheckExact(arg) ? PyList_GetValue(arg, i)
+                                                 : PyTuple_GetValue(arg, i);
+            PyObject *item = PyValue_IsNull(ref) ? NULL
+                : _PyValue_AsObjectAt(ref, PyList_CheckExact(arg)
+                                      ? BOX_SITE_LIST : BOX_SITE_TUPLE);
+            PyValue_XCLOSE(ref);
             if (item == NULL) {
                 (void)PyByteArray_Resize((PyObject *)self, 0);
                 return -1;

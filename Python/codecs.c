@@ -11,14 +11,19 @@ Copyright (c) Corporation for National Research Initiatives.
 #include "Python.h"
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
 #include "pycore_codecs.h"        // export _PyCodec_LookupTextEncoding()
+#include "pycore_dict.h"          // PyDict_SetValue()
 #include "pycore_initconfig.h"    // _Py_DumpPathConfig()
 #include "pycore_interp.h"        // PyInterpreterState.codec_search_path
+#include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_pyerrors.h"      // _PyErr_FormatNote()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
+#include "pycore_pyvalue.h"       // PyValue_PrepareOwned()
 #include "pycore_runtime.h"       // _Py_ID()
 #include "pycore_ucnhash.h"       // _PyUnicode_Name_CAPI
 #include "pycore_unicodeobject.h" // _PyUnicode_InternMortal()
 #include "pycore_pyatomic_ft_wrappers.h"
+#include "pycore_value.h"         // PyValue_DUP()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 static const char *codecs_builtin_error_handlers[] = {
     "strict", "ignore", "replace",
@@ -43,7 +48,7 @@ int PyCodec_Register(PyObject *search_function)
         goto onError;
     }
     FT_MUTEX_LOCK(&interp->codecs.search_path_mutex);
-    int ret = PyList_Append(interp->codecs.search_path, search_function);
+    int ret = PyList_AppendValue(interp->codecs.search_path, PyValue_FromObjectBorrow(search_function));
     FT_MUTEX_UNLOCK(&interp->codecs.search_path_mutex);
 
     return ret;
@@ -66,7 +71,10 @@ PyCodec_Unregister(PyObject *search_function)
     assert(PyList_CheckExact(codec_search_path));
     FT_MUTEX_LOCK(&interp->codecs.search_path_mutex);
     for (Py_ssize_t i = 0; i < PyList_GET_SIZE(codec_search_path); i++) {
-        PyObject *item = PyList_GetItemRef(codec_search_path, i);
+        PyValue item_v = PyList_GetValue(codec_search_path, i);
+        PyObject *item = PyValue_IsNull(item_v) ? NULL
+            : _PyValue_AsObjectAt(item_v, BOX_SITE_LIST);
+        PyValue_XCLOSE(item_v);
         if (item == NULL) {
             FT_MUTEX_UNLOCK(&interp->codecs.search_path_mutex);
             return -1;
@@ -161,8 +169,19 @@ PyObject *_PyCodec_Lookup(const char *encoding)
 
     /* First, try to lookup the name in the registry dictionary */
     PyObject *result;
-    if (PyDict_GetItemRef(interp->codecs.search_cache, v, &result) < 0) {
+    PyValue result_v;
+    int cache_rc = PyDict_GetValue(interp->codecs.search_cache,
+                                   _PyValue_FromObjectKnown(v), &result_v);
+    if (cache_rc < 0) {
         goto onError;
+    }
+    result = NULL;
+    if (cache_rc > 0) {
+        result = _PyValue_AsObjectAt(result_v, BOX_SITE_DICT);
+        PyValue_CLOSE(result_v);
+        if (result == NULL) {
+            goto onError;
+        }
     }
     if (result != NULL) {
         Py_DECREF(v);
@@ -184,7 +203,10 @@ PyObject *_PyCodec_Lookup(const char *encoding)
     for (i = 0; i < len; i++) {
         PyObject *func;
 
-        func = PyList_GetItemRef(interp->codecs.search_path, i);
+        PyValue func_v = PyList_GetValue(interp->codecs.search_path, i);
+        func = PyValue_IsNull(func_v) ? NULL
+            : _PyValue_AsObjectAt(func_v, BOX_SITE_LIST);
+        PyValue_XCLOSE(func_v);
         if (func == NULL)
             goto onError;
         result = PyObject_CallOneArg(func, v);
@@ -213,7 +235,7 @@ PyObject *_PyCodec_Lookup(const char *encoding)
     _PyUnicode_InternImmortal(interp, &v);
 
     /* Cache and return the result */
-    if (PyDict_SetItem(interp->codecs.search_cache, v, result) < 0) {
+    if (PyDict_SetValue(interp->codecs.search_cache, PyValue_FromObjectBorrow(v), PyValue_FromObjectBorrow(result)) < 0) {
         Py_DECREF(result);
         goto onError;
     }
@@ -251,7 +273,7 @@ PyObject *args_tuple(PyObject *object,
     args = PyTuple_New(1 + (errors != NULL));
     if (args == NULL)
         return NULL;
-    PyTuple_SET_ITEM(args, 0, Py_NewRef(object));
+    PyTuple_SET_VALUE(args, 0, PyValue_DUP(PyValue_FromObjectBorrow(object)));
     if (errors) {
         PyObject *v;
 
@@ -260,7 +282,7 @@ PyObject *args_tuple(PyObject *object,
             Py_DECREF(args);
             return NULL;
         }
-        PyTuple_SET_ITEM(args, 1, v);
+        PyTuple_SET_VALUE(args, 1, PyValue_PrepareOwned(v));
     }
     return args;
 }
@@ -276,7 +298,9 @@ PyObject *codec_getitem(const char *encoding, int index)
     codecs = _PyCodec_Lookup(encoding);
     if (codecs == NULL)
         return NULL;
-    v = PyTuple_GetItemRef(codecs, index);
+    PyValue v_v = PyTuple_GetValue(codecs, index);
+    v = PyValue_IsNull(v_v) ? NULL : _PyValue_AsObjectAt(v_v, BOX_SITE_TUPLE);
+    PyValue_XCLOSE(v_v);
     Py_DECREF(codecs);
     return v;
 }
@@ -329,7 +353,10 @@ PyObject *codec_getstreamcodec(const char *encoding,
     if (codecs == NULL)
         return NULL;
 
-    codeccls = PyTuple_GetItemRef(codecs, index);
+    PyValue codeccls_v = PyTuple_GetValue(codecs, index);
+    codeccls = PyValue_IsNull(codeccls_v) ? NULL
+        : _PyValue_AsObjectAt(codeccls_v, BOX_SITE_TUPLE);
+    PyValue_XCLOSE(codeccls_v);
     Py_DECREF(codecs);
     if (codeccls == NULL)
         return NULL;
@@ -431,7 +458,9 @@ _PyCodec_EncodeInternal(PyObject *object,
                         "encoder must return a tuple (object, integer)");
         goto onError;
     }
-    v = PyTuple_GetItemRef(result, 0);
+    PyValue v_v = PyTuple_GetValue(result, 0);
+    v = PyValue_IsNull(v_v) ? NULL : _PyValue_AsObjectAt(v_v, BOX_SITE_TUPLE);
+    PyValue_XCLOSE(v_v);
     if (v == NULL) {
         goto onError;
     }
@@ -476,7 +505,9 @@ _PyCodec_DecodeInternal(PyObject *object,
                         "decoder must return a tuple (object,integer)");
         goto onError;
     }
-    v = PyTuple_GetItemRef(result, 0);
+    PyValue v_v = PyTuple_GetValue(result, 0);
+    v = PyValue_IsNull(v_v) ? NULL : _PyValue_AsObjectAt(v_v, BOX_SITE_TUPLE);
+    PyValue_XCLOSE(v_v);
     if (v == NULL) {
         goto onError;
     }
@@ -580,7 +611,9 @@ PyObject *codec_getitem_checked(const char *encoding,
     if (codec == NULL)
         return NULL;
 
-    v = PyTuple_GetItemRef(codec, index);
+    PyValue v_v = PyTuple_GetValue(codec, index);
+    v = PyValue_IsNull(v_v) ? NULL : _PyValue_AsObjectAt(v_v, BOX_SITE_TUPLE);
+    PyValue_XCLOSE(v_v);
     Py_DECREF(codec);
     return v;
 }
@@ -635,8 +668,7 @@ int PyCodec_RegisterError(const char *name, PyObject *error)
         PyErr_SetString(PyExc_TypeError, "handler must be callable");
         return -1;
     }
-    return PyDict_SetItemString(interp->codecs.error_registry,
-                                name, error);
+    return PyDict_SetValueString(interp->codecs.error_registry, name, PyValue_FromObjectBorrow(error));
 }
 
 int _PyCodec_UnregisterError(const char *name)
@@ -650,7 +682,7 @@ int _PyCodec_UnregisterError(const char *name)
     }
     PyInterpreterState *interp = _PyInterpreterState_GET();
     assert(interp->codecs.initialized);
-    return PyDict_PopString(interp->codecs.error_registry, name, NULL);
+    return PyDict_PopValueString(interp->codecs.error_registry, name, NULL);
 }
 
 /* Lookup the error handling callback function registered under the
@@ -663,9 +695,19 @@ PyObject *PyCodec_LookupError(const char *name)
 
     if (name==NULL)
         name = "strict";
-    PyObject *handler;
-    if (PyDict_GetItemStringRef(interp->codecs.error_registry, name, &handler) < 0) {
+    PyObject *handler = NULL;
+    PyValue handler_v;
+    int handler_rc = PyDict_GetValueString(interp->codecs.error_registry, name,
+                                           &handler_v);
+    if (handler_rc < 0) {
         return NULL;
+    }
+    if (handler_rc > 0) {
+        handler = _PyValue_AsObjectAt(handler_v, BOX_SITE_DICT);
+        PyValue_CLOSE(handler_v);
+        if (handler == NULL) {
+            return NULL;
+        }
     }
     if (handler == NULL) {
         PyErr_Format(PyExc_LookupError, "unknown error handler name '%.400s'", name);
@@ -1686,8 +1728,7 @@ _PyCodec_InitRegistry(PyInterpreterState *interp)
             return PyStatus_NoMemory();
         }
 
-        int res = PyDict_SetItemString(interp->codecs.error_registry,
-                                       methods[i].name, func);
+        int res = PyDict_SetValueString(interp->codecs.error_registry, methods[i].name, PyValue_FromObjectBorrow(func));
         Py_DECREF(func);
         if (res < 0) {
             return PyStatus_Error("Failed to insert into codec error registry");

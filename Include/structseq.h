@@ -25,7 +25,9 @@ PyAPI_FUNC(PyTypeObject*) PyStructSequence_NewType(PyStructSequence_Desc *desc);
 
 PyAPI_FUNC(PyObject *) PyStructSequence_New(PyTypeObject* type);
 
+Py_VALUE_COMPAT(PyStructSequence_SET_VALUE)
 PyAPI_FUNC(void) PyStructSequence_SetItem(PyObject*, Py_ssize_t, PyObject*);
+Py_VALUE_COMPAT(PyStructSequence_GET_VALUE)
 PyAPI_FUNC(PyObject *) PyStructSequence_GetItemRef(PyObject *, Py_ssize_t);
 
 #ifndef Py_LIMITED_API

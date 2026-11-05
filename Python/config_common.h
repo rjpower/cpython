@@ -1,13 +1,21 @@
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+
 
 static inline int
 _config_dict_get(PyObject *dict, const char *name, PyObject **p_item)
 {
-    PyObject *item;
-    if (PyDict_GetItemStringRef(dict, name, &item) < 0) {
+    PyValue value;
+    int rc = PyDict_GetValueString(dict, name, &value);
+    if (rc < 0) {
         return -1;
     }
-    if (item == NULL) {
+    if (rc == 0) {
         // We do not set an exception.
+        return -1;
+    }
+    PyObject *item = _PyValue_AsObjectAt(value, BOX_SITE_DICT);
+    PyValue_CLOSE(value);
+    if (item == NULL) {
         return -1;
     }
     *p_item = item;

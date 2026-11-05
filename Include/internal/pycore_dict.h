@@ -27,6 +27,7 @@ extern int _PyDict_ReplaceItemIf(PyObject *dict, PyObject *key,
 
 // "KnownHash" variants
 // Export for '_asyncio' shared extension
+Py_VALUE_COMPAT(_PyDict_SetValue_KnownHash)
 PyAPI_FUNC(int) _PyDict_SetItem_KnownHash(PyObject *mp, PyObject *key,
                                           PyObject *item, Py_hash_t hash);
 // Export for '_asyncio' shared extension
@@ -99,6 +100,14 @@ PyAPI_FUNC(int) PyDict_ContainsValue(PyObject *, PyValueBorrow);
     (PyDict_SetValue)(D, PyValue_Borrow(K), PyValue_Borrow(V))
 #define PyDict_DelValue(D, K) (PyDict_DelValue)(D, PyValue_Borrow(K))
 #define PyDict_ContainsValue(D, K) (PyDict_ContainsValue)(D, PyValue_Borrow(K))
+/* As PyDict_Pop(): 1 with the removed value as an owner in *result (which may
+ * be NULL), 0 if absent, -1 with an exception. */
+PyAPI_FUNC(int) PyDict_PopValue(PyObject *, PyValueBorrow, PyValue *);
+#define PyDict_PopValue(D, K, R) (PyDict_PopValue)(D, PyValue_Borrow(K), R)
+/* As PyDict_SetItemString(): retains its borrowed value. */
+PyAPI_FUNC(int) PyDict_SetValueString(PyObject *, const char *, PyValueBorrow);
+#define PyDict_SetValueString(D, S, V) \
+    (PyDict_SetValueString)(D, S, PyValue_Borrow(V))
 /* Return 1 with independent owners for requested key/value outputs, 0 at end,
  * or -1 on error. Optional output slots must be distinct; non-success sets
  * them to NULL1. Capture is allocation-free; only success advances the cursor.
@@ -112,6 +121,7 @@ PyAPI_FUNC(int) _PyDict_NextValue(PyObject *, Py_ssize_t *, PyValue *, PyValue *
  * it between reading and using them. */
 PyAPI_FUNC(int) _PyDict_NextBorrowed(PyObject *, Py_ssize_t *, PyValueBorrow *, PyValueBorrow *);
 /* Same owned-entry contract, with a snapshot of the cached source key hash. */
+Py_VALUE_COMPAT(_PyDict_NextValue)
 PyAPI_FUNC(int) _PyDict_NextEntryRefKnownHash(
     PyObject *, Py_ssize_t *, PyObject **, PyObject **, Py_hash_t *);
 /* KnownHash borrows canonical key/value; Take2 variants consume two independent
@@ -222,7 +232,9 @@ PyAPI_FUNC(PyObject *) _PyDict_LoadGlobalValue(PyDictObject *, PyDictObject *, P
 extern PyObject *_PyDict_LoadBuiltinsFromGlobals(PyObject *globals);
 
 /* Consumes references to key and value */
+Py_VALUE_COMPAT(_PyDict_SetValue_Take2)
 PyAPI_FUNC(int) _PyDict_SetItem_Take2(PyDictObject *op, PyObject *key, PyObject *value);
+Py_VALUE_COMPAT(_PyDict_SetValue_Take2_KnownHash)
 PyAPI_FUNC(int) _PyDict_SetItem_Take2_KnownHash(PyDictObject *op, PyObject *key, PyObject *value, Py_hash_t hash);
 // Exported for external JIT support
 PyAPI_FUNC(int) _PyDict_SetItem_LockHeld(PyDictObject *dict, PyObject *name, PyObject *value);
@@ -231,6 +243,7 @@ PyAPI_FUNC(int) _PyDict_SetItem_KnownHash_LockHeld(PyDictObject *mp, PyObject *k
                                                    PyObject *value, Py_hash_t hash);
 // Export for '_asyncio' shared extension
 PyAPI_FUNC(int) _PyDict_GetItemRef_KnownHash_LockHeld(PyDictObject *op, PyObject *key, Py_hash_t hash, PyObject **result);
+Py_VALUE_COMPAT(_PyDict_GetValue_KnownHash)
 PyAPI_FUNC(int) _PyDict_GetItemRef_KnownHash(PyDictObject *op, PyObject *key, Py_hash_t hash, PyObject **result);
 extern int _PyDict_GetItemRef_Unicode_LockHeld(PyDictObject *op, PyObject *key, PyObject **result);
 PyAPI_FUNC(int) _PyObjectDict_SetItem(PyTypeObject *tp, PyObject *obj, PyObject **dictptr, PyObject *name, PyObject *value);

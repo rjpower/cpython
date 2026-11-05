@@ -4,6 +4,7 @@
 #include "pycore_ceval.h"         // _PY_EVAL_EVENTS_BITS
 #include "pycore_code.h"          // _PyCode_InitAddressRange()
 #include "pycore_critical_section.h" // _Py_CRITICAL_SECTION_ASSERT_OBJECT_LOCKED()
+#include "pycore_dict.h"          // PyDict_SetValueString()
 #include "pycore_frame.h"         // PyFrameObject
 #include "pycore_interpframe.h"   // _PyFrame_GetBytecode()
 #include "pycore_long.h"          // _PyLong_GetZero()
@@ -2573,7 +2574,7 @@ monitoring__all_events_impl(PyObject *module)
         }
         PyObject *tools_obj = PyLong_FromLong(tools);
         assert(tools_obj != NULL);
-        int err = PyDict_SetItemString(res, event_names[e], tools_obj);
+        int err = PyDict_SetValueString(res, event_names[e], PyValue_FromObjectBorrow(tools_obj));
         Py_DECREF(tools_obj);
         if (err < 0) {
             Py_DECREF(res);

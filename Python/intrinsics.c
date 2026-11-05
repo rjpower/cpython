@@ -3,6 +3,7 @@
 
 #include "Python.h"
 #include "pycore_compile.h"       // _PyCompile_GetUnaryIntrinsicName
+#include "pycore_dict.h"          // PyDict_SetValue()
 #include "pycore_function.h"      // _Py_set_function_type_params()
 #include "pycore_genobject.h"     // _PyAsyncGenValueWrapperNew
 #include "pycore_interpframe.h"   // _PyFrame_GetLocals()
@@ -109,7 +110,7 @@ import_all_from(PyThreadState *tstate, PyObject *locals, PyObject *v)
         if (value == NULL)
             err = -1;
         else if (PyDict_CheckExact(locals))
-            err = PyDict_SetItem(locals, name, value);
+            err = PyDict_SetValue(locals, PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(value));
         else
             err = PyObject_SetItem(locals, name, value);
         Py_DECREF(name);
@@ -281,7 +282,7 @@ add_conditional_annotation(PyThreadState* tstate, PyObject *conditional_annotati
                       conditional_annotations);
         return NULL;
     }
-    if (PySet_Add(conditional_annotations, index) < 0) {
+    if (PySet_AddValue(conditional_annotations, PyValue_FromObjectBorrow(index)) < 0) {
         return NULL;
     }
     Py_RETURN_NONE;

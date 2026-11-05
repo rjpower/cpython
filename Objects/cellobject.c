@@ -6,6 +6,7 @@
 #include "pycore_object.h"
 #include "pycore_tuple.h"
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 #include "pycore_value_ops.h"
 
 #define _PyCell_CAST(op) _Py_CAST(PyCellObject*, (op))
@@ -71,17 +72,7 @@ exit:
 PyObject *
 PyCell_Get(PyObject *op)
 {
-    if (!PyCell_Check(op)) {
-        PyErr_BadInternalCall();
-        return NULL;
-    }
-    PyValue value = _PyCell_GetValue((PyCellObject *)op);
-    if (PyValue_IsNull(value)) {
-        return NULL;
-    }
-    PyObject *result = _PyValue_AsObjectAt(value, BOX_SITE_CELL);
-    PyValue_CLOSE(value);
-    return result;
+    return _PyValue_THUNK_EXIT(PyCell_GetValue(op));
 }
 
 PyValue
@@ -203,7 +194,7 @@ cell_get_contents(PyObject *self, void *closure)
 static int
 cell_set_contents(PyObject *self, PyObject *obj, void *Py_UNUSED(ignored))
 {
-    return PyCell_Set(self, obj);
+    return PyCell_SetValue(self, PyValue_FromObjectBorrow(obj));
 }
 
 static PyGetSetDef cell_getsetlist[] = {

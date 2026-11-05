@@ -19,7 +19,9 @@ PyAPI_DATA(PyTypeObject) PyDict_Type;
 #define PyDict_CheckExact(op) Py_IS_TYPE((op), &PyDict_Type)
 
 PyAPI_FUNC(PyObject *) PyDict_New(void);
+Py_VALUE_COMPAT(PyDict_SetValue)
 PyAPI_FUNC(int) PyDict_SetItem(PyObject *mp, PyObject *key, PyObject *item);
+Py_VALUE_COMPAT(PyDict_DelValue)
 PyAPI_FUNC(int) PyDict_DelItem(PyObject *mp, PyObject *key);
 PyAPI_FUNC(void) PyDict_Clear(PyObject *mp);
 PyAPI_FUNC(PyObject *) PyDict_Keys(PyObject *mp);
@@ -27,6 +29,7 @@ PyAPI_FUNC(PyObject *) PyDict_Values(PyObject *mp);
 PyAPI_FUNC(PyObject *) PyDict_Items(PyObject *mp);
 PyAPI_FUNC(Py_ssize_t) PyDict_Size(PyObject *mp);
 PyAPI_FUNC(PyObject *) PyDict_Copy(PyObject *mp);
+Py_VALUE_COMPAT(PyDict_ContainsValue)
 PyAPI_FUNC(int) PyDict_Contains(PyObject *mp, PyObject *key);
 
 /* PyDict_Update(mp, other) is equivalent to PyDict_Merge(mp, other, 1). */
@@ -50,6 +53,7 @@ PyAPI_FUNC(int) PyDict_MergeFromSeq2(PyObject *d,
                                      PyObject *seq2,
                                      int override);
 
+Py_VALUE_COMPAT(PyDict_SetValueString)
 PyAPI_FUNC(int) PyDict_SetItemString(PyObject *dp, const char *key, PyObject *item);
 PyAPI_FUNC(int) PyDict_DelItemString(PyObject *dp, const char *key);
 
@@ -59,11 +63,14 @@ PyAPI_FUNC(int) PyDict_DelItemString(PyObject *dp, const char *key);
 //   and return 1.
 // - If the key is missing, set *result to NULL and return 0 .
 // - On error, raise an exception and return -1.
+Py_VALUE_COMPAT(PyDict_GetValue)
 PyAPI_FUNC(int) PyDict_GetItemRef(PyObject *mp, PyObject *key, PyObject **result);
 /* Owned entry snapshots: clear-entry, -1/error, 0/end, 1/entry.
  * Distinct optional output locations; NULL on error/end. Close owned outputs.
  * Cursor reserves before boxing; callback progress is never overwritten. */
+Py_VALUE_COMPAT(PyDict_NextValue)
 PyAPI_FUNC(int) PyDict_NextEntryRef(PyObject *, Py_ssize_t *, PyObject **, PyObject **);
+Py_VALUE_COMPAT(PyDict_GetValueString)
 PyAPI_FUNC(int) PyDict_GetItemStringRef(PyObject *mp, const char *key, PyObject **result);
 #endif
 
@@ -76,6 +83,7 @@ PyAPI_FUNC(int) PyDict_GetItemStringRef(PyObject *mp, const char *key, PyObject 
 //   -1 on error
 //    0 if `key` was not present and `default_value` was inserted
 //    1 if `key` was present and `default_value` was not inserted
+Py_VALUE_COMPAT(_PyDict_SetDefaultValue)
 PyAPI_FUNC(int) PyDict_SetDefaultRef(PyObject *mp, PyObject *key, PyObject *default_value, PyObject **result);
 #endif
 

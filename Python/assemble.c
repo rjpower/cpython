@@ -9,6 +9,7 @@
 #include "pycore_opcode_utils.h"    // IS_BACKWARDS_JUMP_OPCODE
 #include "pycore_opcode_metadata.h" // _PyOpcode_num_popped
 #include "pycore_regcfg.h"          // _PyRegCfg
+#include "pycore_setobject.h"     // PySet_ContainsValue()
 #include "pycore_symtable.h"        // _Py_SourceLocation
 #include "pycore_tuple.h"         // PyTuple_GET_VALUE()
 #include "pycore_value.h"           // Canonical constant representation
@@ -476,7 +477,7 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
             _PyLocals_Kind kind = CO_FAST_LOCAL | argvarkinds[i].kind;
 
             if (umd->u_fasthidden != NULL) {
-                int hidden = PySet_Contains(umd->u_fasthidden, k);
+                int hidden = PySet_ContainsValue(umd->u_fasthidden, PyValue_FromObjectBorrow(k));
                 if (hidden < 0) {
                     goto error;
                 }
@@ -485,7 +486,7 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
                 }
             }
 
-            int has_key = PyDict_Contains(umd->u_cellvars, k);
+            int has_key = PyDict_ContainsValue(umd->u_cellvars, PyValue_FromObjectBorrow(k));
             if (has_key < 0) {
                 goto error;
             }
@@ -512,7 +513,7 @@ compute_localsplus_info(_PyCompile_CodeUnitMetadata *umd, int nlocalsplus,
         assert(PyUnicode_CheckExact(PyValue_AsKnownObjectBorrow(key)));
         assert(PyValue_LongCheckExact(value));
         PyObject *k = PyValue_AsKnownObjectBorrow(key);
-        int has_name = PyDict_Contains(umd->u_varnames, k);
+        int has_name = PyDict_ContainsValue(umd->u_varnames, PyValue_FromObjectBorrow(k));
         if (has_name < 0) {
             goto error;
         }

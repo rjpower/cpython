@@ -1,8 +1,10 @@
 /* PyInterpreterConfig API */
 
 #include "Python.h"
+#include "pycore_dict.h"          // PyDict_SetValueString()
 #include "pycore_interp.h" // Py_RTFLAGS
 #include "pycore_pylifecycle.h"
+#include "pycore_value.h"         // PyValue_FromObjectBorrow()
 
 #include <stdbool.h>
 
@@ -61,7 +63,7 @@ _PyInterpreterConfig_AsDict(PyInterpreterConfig *config)
 
 #define ADD(NAME, OBJ)                                              \
         do {                                                        \
-            int res = PyDict_SetItemString(dict, NAME, (OBJ));      \
+            int res = PyDict_SetValueString(dict, NAME, PyValue_FromObjectBorrow((OBJ)));      \
             Py_DECREF(OBJ);                                         \
             if (res < 0) {                                          \
                 goto error;                                         \
@@ -177,7 +179,7 @@ interp_config_from_dict(PyObject *origdict, PyInterpreterConfig *config,
         }                                                           \
         else {                                                      \
             config->FIELD = flag;                                   \
-            (void)PyDict_PopString(dict, #FIELD, NULL);             \
+            (void)PyDict_PopValueString(dict, #FIELD, NULL);             \
         }                                                           \
     } while (0)
 
@@ -199,7 +201,7 @@ interp_config_from_dict(PyObject *origdict, PyInterpreterConfig *config,
             goto error;
         }
         config->gil = flag;
-        (void)PyDict_PopString(dict, "gil", NULL);
+        (void)PyDict_PopValueString(dict, "gil", NULL);
     }
 
 #undef COPY_BOOL

@@ -2,10 +2,12 @@
 
 #include "Python.h"
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
+#include "pycore_dict.h"          // PyDict_SetValueString()
 #include "pycore_fileutils.h"     // struct _Py_stat_struct
 #include "pycore_import.h"        // _PyImport_Fini2()
 #include "pycore_initconfig.h"    // _PyArgv
 #include "pycore_interp.h"        // _PyInterpreterState.sysdict
+#include "pycore_list.h"          // PyList_InsertValue()
 #include "pycore_long.h"          // _PyLong_GetOne()
 #include "pycore_pathconfig.h"    // _PyPathConfig_ComputeSysPath0()
 #include "pycore_pylifecycle.h"   // _Py_PreInitializeFromPyArgv()
@@ -14,6 +16,7 @@
 #include "pycore_sysmodule.h"     // _PySys_FormatV()
 #include "pycore_tuple.h"         // _PyTuple_FromPair
 #include "pycore_unicodeobject.h" // _PyUnicode_Dedent()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 /* Includes for exit_sigint() */
 #include <stdio.h>                // perror()
@@ -201,8 +204,21 @@ pymain_sys_path_add_path0(PyObject *path0)
     PyInterpreterState *interp = _PyInterpreterState_GET();
     PyObject *sysdict = interp->sysdict;
     if (sysdict != NULL) {
-        if (PyDict_GetItemRef(sysdict, &_Py_ID(path), &sys_path) < 0) {
+        PyValue path_value;
+        int rc = PyDict_GetValue(sysdict, _PyValue_FromObjectKnown(&_Py_ID(path)),
+                                 &path_value);
+        if (rc < 0) {
             return -1;
+        }
+        if (rc > 0) {
+            sys_path = _PyValue_AsObjectAt(path_value, BOX_SITE_DICT);
+            PyValue_CLOSE(path_value);
+            if (sys_path == NULL) {
+                return -1;
+            }
+        }
+        else {
+            sys_path = NULL;
         }
     }
     else {
@@ -213,7 +229,7 @@ pymain_sys_path_add_path0(PyObject *path0)
         return -1;
     }
 
-    if (PyList_Insert(sys_path, 0, path0)) {
+    if (PyList_InsertValue(sys_path, 0, PyValue_FromObjectBorrow(path0))) {
         Py_DECREF(sys_path);
         return -1;
     }
@@ -360,8 +376,8 @@ pymain_run_pyrepl(int pythonstartup)
     }
 
     PyObject *value = pythonstartup ? Py_True : Py_False;
-    if (PyDict_SetItemString(kwargs, "mainmodule", main_module)
-        || PyDict_SetItemString(kwargs, "pythonstartup", value))
+    if (PyDict_SetValueString(kwargs, "mainmodule", PyValue_FromObjectBorrow(main_module))
+        || PyDict_SetValueString(kwargs, "pythonstartup", PyValue_FromObjectBorrow(value)))
     {
         goto error;
     }
@@ -412,7 +428,7 @@ pymain_run_module(const wchar_t *modname, int set_argv0)
         goto error;
     }
 
-    runargs = _PyTuple_FromPair(module, set_argv0 ? Py_True : Py_False);
+    runargs = _PyTuple_PackValues(2, (PyValueBorrow[]){PyValue_FromObjectBorrow(module), PyValue_FromObjectBorrow(set_argv0 ? Py_True : Py_False)});
     if (runargs == NULL) {
         pymain_error("Could not create arguments "
                      "for runpy._run_module_as_main");

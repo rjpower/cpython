@@ -2,6 +2,7 @@
 #include "pycore_ast.h"           // expr_ty
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_runtime.h"       // _Py_ID()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include <stdbool.h>
 
 /* This limited unparser is used to convert annotations back to strings
@@ -827,7 +828,9 @@ append_ast_constant(PyUnicodeWriter *writer, PyObject *constant)
         APPEND_CHAR('(');
         for (i = 0; i < elem_count; i++) {
             APPEND_STR_IF(i > 0, ", ");
-            PyObject *item = PyTuple_GetItemRef(constant, i);
+            PyValue item_v = PyTuple_GetValue(constant, i);
+            PyObject *item = PyValue_IsNull(item_v) ? NULL : _PyValue_AsObjectAt(item_v, BOX_SITE_TUPLE);
+            PyValue_XCLOSE(item_v);
             if (item == NULL) {
                 return -1;
             }

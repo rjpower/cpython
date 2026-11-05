@@ -33,6 +33,7 @@ PyAPI_FUNC(void) PyTuple_SET_VALUE(PyObject *op, Py_ssize_t index, PyValue value
 
 /* Object-form construction consumes value, publishing before its primitive
    source box is released. */
+Py_VALUE_COMPAT(PyTuple_SET_VALUE)
 PyAPI_FUNC(void) PyTuple_SET_ITEM(PyObject *op, Py_ssize_t index, PyObject *value);
 #define PyTuple_SET_ITEM(op, index, value) \
     PyTuple_SET_ITEM(_PyObject_CAST(op), (index), _PyObject_CAST(value))

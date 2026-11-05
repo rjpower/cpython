@@ -1,9 +1,14 @@
 // typing.Union -- used to represent e.g. Union[int, str], int | str
 #include "Python.h"
+#include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_object.h"  // _PyObject_GC_TRACK/UNTRACK
+#include "pycore_setobject.h"     // PySet_AddValue()
+#include "pycore_tuple.h"         // PyTuple_GET_VALUE()
 #include "pycore_typevarobject.h"  // _PyTypeAlias_Type, _Py_typing_type_repr
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString
 #include "pycore_unionobject.h"
+#include "pycore_value.h"         // PyValue_FromObjectBorrow()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
 
@@ -53,7 +58,8 @@ union_hash(PyObject *self)
         assert(PyTuple_CheckExact(alias->unhashable_args));
         Py_ssize_t n = PyTuple_GET_SIZE(alias->unhashable_args);
         for (Py_ssize_t i = 0; i < n; i++) {
-            PyObject *arg = PyTuple_GetItemRef(alias->unhashable_args, i);
+            PyObject *arg = _PyValue_AsObjectAt(
+                PyTuple_GET_VALUE(alias->unhashable_args, i), BOX_SITE_TUPLE);
             if (arg == NULL) {
                 return -1;
             }
@@ -87,7 +93,8 @@ unions_equal(unionobject *a, unionobject *b)
             return 0;
         }
         for (Py_ssize_t i = 0; i < n; i++) {
-            PyObject *arg_a = PyTuple_GetItemRef(a->unhashable_args, i);
+            PyObject *arg_a = _PyValue_AsObjectAt(
+                PyTuple_GET_VALUE(a->unhashable_args, i), BOX_SITE_TUPLE);
             if (arg_a == NULL) {
                 return -1;
             }
@@ -101,7 +108,8 @@ unions_equal(unionobject *a, unionobject *b)
             }
         }
         for (Py_ssize_t i = 0; i < n; i++) {
-            PyObject *arg_b = PyTuple_GetItemRef(b->unhashable_args, i);
+            PyObject *arg_b = _PyValue_AsObjectAt(
+                PyTuple_GET_VALUE(b->unhashable_args, i), BOX_SITE_TUPLE);
             if (arg_b == NULL) {
                 return -1;
             }
@@ -197,23 +205,23 @@ unionbuilder_add_single_unchecked(unionbuilder *ub, PyObject *arg)
                 return true;
             }
         }
-        if (PyList_Append(ub->unhashable_args, arg) < 0) {
+        if (PyList_AppendValue(ub->unhashable_args, PyValue_FromObjectBorrow(arg)) < 0) {
             return false;
         }
     }
     else {
-        int contains = PySet_Contains(ub->hashable_args, arg);
+        int contains = PySet_ContainsValue(ub->hashable_args, PyValue_FromObjectBorrow(arg));
         if (contains < 0) {
             return false;
         }
         if (contains == 1) {
             return true;
         }
-        if (PySet_Add(ub->hashable_args, arg) < 0) {
+        if (PySet_AddValue(ub->hashable_args, PyValue_FromObjectBorrow(arg)) < 0) {
             return false;
         }
     }
-    return PyList_Append(ub->args, arg) == 0;
+    return PyList_AppendValue(ub->args, PyValue_FromObjectBorrow(arg)) == 0;
 }
 
 static bool
@@ -245,7 +253,7 @@ unionbuilder_add_tuple(unionbuilder *ub, PyObject *tuple)
 {
     Py_ssize_t n = PyTuple_GET_SIZE(tuple);
     for (Py_ssize_t i = 0; i < n; i++) {
-        PyObject *item = PyTuple_GetItemRef(tuple, i);
+        PyObject *item = _PyValue_AsObjectAt(PyTuple_GET_VALUE(tuple, i), BOX_SITE_TUPLE);
         if (item == NULL) {
             return false;
         }
@@ -311,7 +319,7 @@ union_repr(PyObject *self)
         if (i > 0 && PyUnicodeWriter_WriteASCII(writer, " | ", 3) < 0) {
             goto error;
         }
-        PyObject *p = PyTuple_GetItemRef(alias->args, i);
+        PyObject *p = _PyValue_AsObjectAt(PyTuple_GET_VALUE(alias->args, i), BOX_SITE_TUPLE);
         if (p == NULL) {
             goto error;
         }
@@ -580,7 +588,10 @@ make_union(unionbuilder *ub)
         return NULL;
     }
     if (n == 1) {
-        PyObject *result = PyList_GetItemRef(ub->args, 0);
+        PyValue ref = PyList_GetValue(ub->args, 0);
+        PyObject *result = PyValue_IsNull(ref) ? NULL
+            : _PyValue_AsObjectAt(ref, BOX_SITE_LIST);
+        PyValue_XCLOSE(ref);
         unionbuilder_finalize(ub);
         return result;
     }

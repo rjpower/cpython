@@ -17,8 +17,11 @@ PyAPI_DATA(PyTypeObject) PyCell_Type;
 
 #define PyCell_Check(op) Py_IS_TYPE((op), &PyCell_Type)
 
+Py_VALUE_COMPAT(PyCell_NewValue)
 PyAPI_FUNC(PyObject *) PyCell_New(PyObject *);
+Py_VALUE_COMPAT(PyCell_GetValue)
 PyAPI_FUNC(PyObject *) PyCell_Get(PyObject *);
+Py_VALUE_COMPAT(PyCell_SetValue)
 PyAPI_FUNC(int) PyCell_Set(PyObject *, PyObject *);
 /* GetValue returns an owner. NewValue and SetValue, which take a borrowed
    value, are internal (pycore_cell.h), like every function that takes or

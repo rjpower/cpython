@@ -98,7 +98,7 @@ PyFloat_GetInfo(void)
             Py_CLEAR(floatinfo);                            \
             return NULL;                                    \
         }                                                   \
-        PyStructSequence_SET_ITEM(floatinfo, pos++, flag);  \
+        PyStructSequence_SET_VALUE(floatinfo, pos++, PyValue_PrepareOwned(_PyObject_CAST(flag)));  \
     } while (0)
 
 #define SetIntFlag(FLAG) SetFlag(PyLong_FromLong((FLAG)))
@@ -1548,7 +1548,7 @@ float_as_integer_ratio_impl(PyObject *self)
     }
     Py_DECREF(py_exponent);
 
-    return _PyTuple_FromPairSteal(numerator, denominator);
+    return _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(numerator), PyValue_PrepareOwned(denominator));
 
 error:
     Py_XDECREF(py_exponent);

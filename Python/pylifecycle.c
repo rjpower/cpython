@@ -16,6 +16,7 @@
 #include "pycore_global_objects_fini_generated.h"  // _PyStaticObjects_CheckAll()
 #include "pycore_initconfig.h"    // _PyStatus_OK()
 #include "pycore_interpolation.h" // _PyInterpolation_InitTypes()
+#include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_long.h"          // _PyLong_InitTypes()
 #include "pycore_moduleobject.h"  // _PyModule_InitModuleDictWatcher()
 #include "pycore_object.h"        // _PyDebug_PrintTotalRefs()
@@ -38,6 +39,7 @@
 #include "pycore_typevarobject.h" // _Py_clear_generic_types()
 #include "pycore_unicodeobject.h" // _PyUnicode_InitTypes()
 #include "pycore_uniqueid.h"      // _PyObject_FinalizeUniqueIdPool()
+#include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
 #include "pycore_warnings.h"      // _PyWarnings_InitState()
 #include "pycore_weakref.h"       // _PyWeakref_GET_REF()
 
@@ -858,28 +860,52 @@ pycore_init_builtins(PyThreadState *tstate)
     // keeps them alive, and from the copy below builtins_copy does too, so a
     // later "del builtins.isinstance" cannot free them. The callable caches
     // compare by identity only; all and any become immortal below.
-    PyObject *isinstance;
-    if (PyDict_GetItemRef(builtins_dict, &_Py_ID(isinstance), &isinstance) <= 0) {
+    PyValue isinstance_v;
+    if (PyDict_GetValue(builtins_dict, _PyValue_FromObjectKnown(&_Py_ID(isinstance)),
+                        &isinstance_v) <= 0) {
+        goto error;
+    }
+    PyObject *isinstance = _PyValue_AsObjectAt(isinstance_v, BOX_SITE_DICT);
+    PyValue_CLOSE(isinstance_v);
+    if (isinstance == NULL) {
         goto error;
     }
     interp->callable_cache.isinstance = isinstance;
     Py_DECREF(isinstance);
 
-    PyObject *len;
-    if (PyDict_GetItemRef(builtins_dict, &_Py_ID(len), &len) <= 0) {
+    PyValue len_v;
+    if (PyDict_GetValue(builtins_dict, _PyValue_FromObjectKnown(&_Py_ID(len)),
+                        &len_v) <= 0) {
+        goto error;
+    }
+    PyObject *len = _PyValue_AsObjectAt(len_v, BOX_SITE_DICT);
+    PyValue_CLOSE(len_v);
+    if (len == NULL) {
         goto error;
     }
     interp->callable_cache.len = len;
     Py_DECREF(len);
 
-    PyObject *all;
-    if (PyDict_GetItemRef(builtins_dict, &_Py_ID(all), &all) <= 0) {
+    PyValue all_v;
+    if (PyDict_GetValue(builtins_dict, _PyValue_FromObjectKnown(&_Py_ID(all)),
+                        &all_v) <= 0) {
+        goto error;
+    }
+    PyObject *all = _PyValue_AsObjectAt(all_v, BOX_SITE_DICT);
+    PyValue_CLOSE(all_v);
+    if (all == NULL) {
         goto error;
     }
     Py_DECREF(all);
 
-    PyObject *any;
-    if (PyDict_GetItemRef(builtins_dict, &_Py_ID(any), &any) <= 0) {
+    PyValue any_v;
+    if (PyDict_GetValue(builtins_dict, _PyValue_FromObjectKnown(&_Py_ID(any)),
+                        &any_v) <= 0) {
+        goto error;
+    }
+    PyObject *any = _PyValue_AsObjectAt(any_v, BOX_SITE_DICT);
+    PyValue_CLOSE(any_v);
+    if (any == NULL) {
         goto error;
     }
     Py_DECREF(any);
@@ -1540,12 +1566,19 @@ init_interp_main_impl(PyThreadState *tstate)
                 Py_DECREF(path0);
                 return _PyStatus_ERR("can't initialize sys.path[0]");
             }
-            PyObject *sys_path;
-            if (PyDict_GetItemRef(sysdict, &_Py_ID(path), &sys_path) <= 0) {
+            PyValue sys_path_v;
+            if (PyDict_GetValue(sysdict, _PyValue_FromObjectKnown(&_Py_ID(path)),
+                                &sys_path_v) <= 0) {
                 Py_DECREF(path0);
                 return _PyStatus_ERR("can't initialize sys.path[0]");
             }
-            int res = PyList_Insert(sys_path, 0, path0);
+            PyObject *sys_path = _PyValue_AsObjectAt(sys_path_v, BOX_SITE_DICT);
+            PyValue_CLOSE(sys_path_v);
+            if (sys_path == NULL) {
+                Py_DECREF(path0);
+                return _PyStatus_ERR("can't initialize sys.path[0]");
+            }
+            int res = PyList_InsertValue(sys_path, 0, PyValue_FromObjectBorrow(path0));
             Py_DECREF(sys_path);
             Py_DECREF(path0);
             if (res) {
@@ -1711,7 +1744,7 @@ finalize_modules_delete_special(PyThreadState *tstate, int verbose)
     if (verbose) {
         PySys_WriteStderr("# clear builtins._\n");
     }
-    if (PyDict_SetItemString(interp->builtins, "_", Py_None) < 0) {
+    if (PyDict_SetValueString(interp->builtins, "_", _PyValue_FromObjectKnown(Py_None)) < 0) {
         PyErr_FormatUnraisable("Exception ignored while "
                                "setting builtin variable _");
     }
@@ -1729,19 +1762,20 @@ finalize_modules_delete_special(PyThreadState *tstate, int verbose)
         if (verbose) {
             PySys_WriteStderr("# restore sys.%s\n", name);
         }
-        PyObject *value;
-        if (PyDict_GetItemStringRef(interp->sysdict, orig_name, &value) < 0) {
+        PyValue value;
+        int found = PyDict_GetValueString(interp->sysdict, orig_name, &value);
+        if (found < 0) {
             PyErr_FormatUnraisable("Exception ignored while "
                                    "restoring sys.%s", name);
         }
-        if (value == NULL) {
-            value = Py_NewRef(Py_None);
+        if (found <= 0) {
+            value = PyValue_DUP(_PyValue_FromObjectKnown(Py_None));
         }
-        if (PyDict_SetItemString(interp->sysdict, name, value) < 0) {
+        if (PyDict_SetValueString(interp->sysdict, name, value) < 0) {
             PyErr_FormatUnraisable("Exception ignored while "
                                    "restoring sys.%s", name);
         }
-        Py_DECREF(value);
+        PyValue_CLOSE(value);
     }
 }
 
@@ -1758,8 +1792,8 @@ finalize_remove_modules(PyObject *modules, int verbose)
         if (weaklist != NULL) { \
             PyObject *wr = PyWeakref_NewRef(mod, NULL); \
             if (wr) { \
-                PyObject *tup = _PyTuple_FromPair(name, wr); \
-                if (!tup || PyList_Append(weaklist, tup) < 0) { \
+                PyObject *tup = _PyTuple_PackValues(2, (PyValueBorrow[]){PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(wr)}); \
+                if (!tup || PyList_AppendValue(weaklist, PyValue_FromObjectBorrow(tup)) < 0) { \
                     PyErr_FormatUnraisable("Exception ignored while removing modules"); \
                 } \
                 Py_XDECREF(tup); \
@@ -1783,9 +1817,19 @@ finalize_remove_modules(PyObject *modules, int verbose)
 
     if (PyDict_CheckExact(modules)) {
         Py_ssize_t pos = 0;
-        PyObject *key, *value;
+        PyValue key_v, value_v;
         int rc;
-        while ((rc = PyDict_NextEntryRef(modules, &pos, &key, &value)) > 0) {
+        while ((rc = PyDict_NextValue(modules, &pos, &key_v, &value_v)) > 0) {
+            PyObject *key = _PyValue_AsObjectAt(key_v, BOX_SITE_DICT);
+            PyObject *value = _PyValue_AsObjectAt(value_v, BOX_SITE_DICT);
+            PyValue_CLOSE(key_v);
+            PyValue_CLOSE(value_v);
+            if (key == NULL || value == NULL) {
+                Py_XDECREF(key);
+                Py_XDECREF(value);
+                rc = -1;
+                break;
+            }
             CLEAR_MODULE(key, value);
             Py_DECREF(key);
             Py_DECREF(value);
@@ -1862,12 +1906,18 @@ finalize_modules_clear_weaklist(PyInterpreterState *interp,
 {
     // First clear modules imported later
     for (Py_ssize_t i = PyList_GET_SIZE(weaklist) - 1; i >= 0; i--) {
-        PyObject *tup = PyList_GetItemRef(weaklist, i);
+        PyValue tup_v = PyList_GetValue(weaklist, i);
+        PyObject *tup = PyValue_IsNull(tup_v)
+            ? NULL : _PyValue_AsObjectAt(tup_v, BOX_SITE_LIST);
+        PyValue_XCLOSE(tup_v);
         if (tup == NULL) {
             PyErr_FormatUnraisable("Exception ignored while wiping modules");
             continue;
         }
-        PyObject *name = PyTuple_GetItemRef(tup, 0);
+        PyValue name_v = PyTuple_GetValue(tup, 0);
+        PyObject *name = PyValue_IsNull(name_v)
+            ? NULL : _PyValue_AsObjectAt(name_v, BOX_SITE_TUPLE);
+        PyValue_XCLOSE(name_v);
         if (name == NULL) {
             PyErr_FormatUnraisable("Exception ignored while wiping modules");
             Py_DECREF(tup);
@@ -2952,7 +3002,7 @@ add_main_module(PyInterpreterState *interp)
         if (bimod == NULL) {
             return _PyStatus_ERR("Failed to retrieve builtins module");
         }
-        if (PyDict_SetItemString(d, "__builtins__", bimod) < 0) {
+        if (PyDict_SetValueString(d, "__builtins__", PyValue_FromObjectBorrow(bimod)) < 0) {
             return _PyStatus_ERR("Failed to initialize __main__.__builtins__");
         }
         Py_DECREF(bimod);
@@ -2963,19 +3013,23 @@ add_main_module(PyInterpreterState *interp)
      * will be set if __main__ gets further initialized later in the startup
      * process.
      */
-    PyObject *loader;
-    if (PyDict_GetItemStringRef(d, "__loader__", &loader) < 0) {
+    PyValue loader_v;
+    int found_loader = PyDict_GetValueString(d, "__loader__", &loader_v);
+    if (found_loader < 0) {
         return _PyStatus_ERR("Failed to test __main__.__loader__");
     }
-    int has_loader = !(loader == NULL || loader == Py_None);
-    Py_XDECREF(loader);
+    int has_loader = 0;
+    if (found_loader > 0) {
+        has_loader = !PyValue_Is(loader_v, _PyValue_FromObjectKnown(Py_None));
+        PyValue_CLOSE(loader_v);
+    }
     if (!has_loader) {
         PyObject *loader = _PyImport_GetImportlibLoader(interp,
                                                         "BuiltinImporter");
         if (loader == NULL) {
             return _PyStatus_ERR("Failed to retrieve BuiltinImporter");
         }
-        if (PyDict_SetItemString(d, "__loader__", loader) < 0) {
+        if (PyDict_SetValueString(d, "__loader__", PyValue_FromObjectBorrow(loader)) < 0) {
             return _PyStatus_ERR("Failed to initialize __main__.__loader__");
         }
         Py_DECREF(loader);

@@ -3,6 +3,7 @@
 #include "pycore_pystate.h"       // _PyThreadState_GET()
 #include "pycore_parser.h"        // _PYPEGEN_NSTATISTICS
 #include "pycore_pyerrors.h"      // PyExc_IncompleteInputError
+#include "pycore_pyvalue.h"       // PyValue_PrepareOwned()
 #include "pycore_runtime.h"       // _PyRuntime
 #include "pycore_unicodeobject.h" // _PyUnicode_InternImmortal
 #include <errcode.h>
@@ -470,7 +471,7 @@ _PyPegen_get_memo_statistics(void)
             return NULL;
         }
         // PyList_SetItem borrows a reference to value.
-        if (PyList_SetItem(ret, i, value) < 0) {
+        if (PyList_SetValue(ret, i, PyValue_PrepareOwned(value)) < 0) {
             PyMutex_Unlock(&_PyRuntime.parser.mutex);
             Py_DECREF(ret);
             return NULL;

@@ -6,6 +6,11 @@
    slot-field reads. */
 #define Py_VALUE_ADAPTER 1
 
+/* The defer line of the value-API waves (value-api-v2a0.md, section 1.5):
+   the W1 container marks do not apply here until the steps that are
+   rewriting this file (V2a-1a, M1b, M2, M3a) land. */
+#define Py_VALUE_DEFER_MARKS 1
+
 #include "Python.h"
 #include "pycore_brc.h"           // _Py_brc_queue_object()
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
@@ -2067,9 +2072,9 @@ _PyObject_GenericSetAttrWithDict(PyObject *obj, PyObject *name,
     else {
         owned_dict = Py_NewRef(dict);
         if (value == NULL)
-            res = PyDict_DelItem(dict, name);
+            res = PyDict_DelValue(dict, PyValue_FromObjectBorrow(name));
         else
-            res = PyDict_SetItem(dict, name, value);
+            res = PyDict_SetValue(dict, PyValue_FromObjectBorrow(name), PyValue_FromObjectBorrow(value));
     }
   error_check:
     if (res < 0 && PyErr_ExceptionMatches(PyExc_KeyError)) {

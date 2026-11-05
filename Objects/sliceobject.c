@@ -20,6 +20,7 @@ this type and there is exactly one in existence.
 #include "pycore_modsupport.h"    // _PyArg_NoKeywords()
 #include "pycore_object.h"        // _PyObject_GC_TRACK()
 #include "pycore_sliceobject.h"   // PySliceObject
+#include "pycore_tuple.h"         // _PyTuple_PackValues()
 #include "pycore_value.h"         // PyValue_CLOSE()
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "pycore_value_ops.h"     // _PyValue_Hash(), _PyValue_WriteRepr()
@@ -751,7 +752,7 @@ slice_reduce(PyObject *op, PyObject *Py_UNUSED(ignored))
     if (fields == NULL) {
         return NULL;
     }
-    PyObject *result = PyTuple_Pack(2, Py_TYPE(self), fields);
+    PyObject *result = _PyTuple_PackValues(2, (PyValueBorrow[]){_PyValue_FromObjectKnown(_PyObject_CAST(Py_TYPE(self))), PyValue_FromObjectBorrow(fields)});
     Py_DECREF(fields);
     return result;
 }

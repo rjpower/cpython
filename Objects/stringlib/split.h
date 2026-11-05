@@ -24,7 +24,7 @@
                         (right) - (left));      \
     if (sub == NULL)                            \
         goto onError;                           \
-    if (_PyList_AppendTakeRef((PyListObject *)list, sub)) \
+    if (_PyList_AppendTakeValue((PyListObject *)list, PyValue_PrepareOwned(sub))) \
         goto onError;
 
 #define SPLIT_ADD(data, left, right) {          \
@@ -33,9 +33,9 @@
     if (sub == NULL)                            \
         goto onError;                           \
     if (count < MAX_PREALLOC) {                 \
-        PyList_SET_ITEM(list, count, sub);      \
+        PyList_SET_VALUE(list, count, PyValue_PrepareOwned(_PyObject_CAST(sub)));      \
     } else {                                    \
-        if (_PyList_AppendTakeRef((PyListObject *)list, sub)) \
+        if (_PyList_AppendTakeValue((PyListObject *)list, PyValue_PrepareOwned(sub))) \
             goto onError;                       \
     }                                           \
     count++; }
@@ -68,7 +68,7 @@ STRINGLIB(split_whitespace)(PyObject* str_obj,
         if (j == 0 && i == str_len && STRINGLIB_CHECK_EXACT(str_obj)) {
             /* No whitespace in str_obj, so just use it as list[0] */
             Py_INCREF(str_obj);
-            PyList_SET_ITEM(list, 0, (PyObject *)str_obj);
+            PyList_SET_VALUE(list, 0, PyValue_PrepareOwned(_PyObject_CAST((PyObject *)str_obj)));
             count++;
             break;
         }
@@ -120,7 +120,7 @@ STRINGLIB(split_char)(PyObject* str_obj,
     if (count == 0 && STRINGLIB_CHECK_EXACT(str_obj)) {
         /* ch not in str_obj, so just use str_obj as list[0] */
         Py_INCREF(str_obj);
-        PyList_SET_ITEM(list, 0, (PyObject *)str_obj);
+        PyList_SET_VALUE(list, 0, PyValue_PrepareOwned(_PyObject_CAST((PyObject *)str_obj)));
         count++;
     } else
 #endif
@@ -168,7 +168,7 @@ STRINGLIB(split)(PyObject* str_obj,
     if (count == 0 && STRINGLIB_CHECK_EXACT(str_obj)) {
         /* No match in str_obj, so just use it as list[0] */
         Py_INCREF(str_obj);
-        PyList_SET_ITEM(list, 0, (PyObject *)str_obj);
+        PyList_SET_VALUE(list, 0, PyValue_PrepareOwned(_PyObject_CAST((PyObject *)str_obj)));
         count++;
     } else
 #endif
@@ -207,7 +207,7 @@ STRINGLIB(rsplit_whitespace)(PyObject* str_obj,
         if (j == str_len - 1 && i < 0 && STRINGLIB_CHECK_EXACT(str_obj)) {
             /* No whitespace in str_obj, so just use it as list[0] */
             Py_INCREF(str_obj);
-            PyList_SET_ITEM(list, 0, (PyObject *)str_obj);
+            PyList_SET_VALUE(list, 0, PyValue_PrepareOwned(_PyObject_CAST((PyObject *)str_obj)));
             count++;
             break;
         }
@@ -260,7 +260,7 @@ STRINGLIB(rsplit_char)(PyObject* str_obj,
     if (count == 0 && STRINGLIB_CHECK_EXACT(str_obj)) {
         /* ch not in str_obj, so just use str_obj as list[0] */
         Py_INCREF(str_obj);
-        PyList_SET_ITEM(list, 0, (PyObject *)str_obj);
+        PyList_SET_VALUE(list, 0, PyValue_PrepareOwned(_PyObject_CAST((PyObject *)str_obj)));
         count++;
     } else
 #endif
@@ -309,7 +309,7 @@ STRINGLIB(rsplit)(PyObject* str_obj,
     if (count == 0 && STRINGLIB_CHECK_EXACT(str_obj)) {
         /* No match in str_obj, so just use it as list[0] */
         Py_INCREF(str_obj);
-        PyList_SET_ITEM(list, 0, (PyObject *)str_obj);
+        PyList_SET_VALUE(list, 0, PyValue_PrepareOwned(_PyObject_CAST((PyObject *)str_obj)));
         count++;
     } else
 #endif
@@ -367,7 +367,7 @@ STRINGLIB(splitlines)(PyObject* str_obj,
 #if !STRINGLIB_MUTABLE
         if (j == 0 && eol == str_len && STRINGLIB_CHECK_EXACT(str_obj)) {
             /* No linebreak in str_obj, so just use it as list[0] */
-            if (PyList_Append(list, str_obj))
+            if (PyList_AppendValue(list, PyValue_FromObjectBorrow(str_obj)))
                 goto onError;
             break;
         }

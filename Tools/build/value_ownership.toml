@@ -1,0 +1,336 @@
+# The ownership table of the value-API waves (pyjit/design/value-api.md,
+# R23; pyjit/design/proposals/value-api-v2a0.md, section 1.5).
+#
+# One [[row]] per object function that has a value form. Tools/build/
+# value_sweep.py generates the Py_VALUE_COMPAT(<value>) mark of each row and
+# rewrites the call sites the compiler then reports. Later waves add rows.
+#
+#   object   the object-form function, as declared in Include/
+#   value    its value form: the mark's replacement and the script's callee
+#   family   the wave family (list, tuple, dict, set, cell)
+#   args     one word per argument of the object form, in order:
+#              keep    passed through unchanged
+#              borrow  an object the object form borrows; the value form
+#                      borrows a value (PyValue_FromObjectBorrow(o), or
+#                      _PyValue_FromObjectKnown(o) for a typed pointer)
+#              steal   an object the object form consumes; the value form
+#                      takes an owner (PyValue_PrepareOwned(o))
+#              out     a PyObject ** that receives a new reference; the value
+#                      form writes an owned PyValue. The script rewrites only
+#                      a literal NULL; any other output is a worker's site
+#              count   the arity of a variadic object form (PyTuple_Pack),
+#                      an integer literal at the site; the remaining
+#                      arguments are "borrow"
+#   result   status  an int or void that carries no value
+#            object  a new reference to an object of a fixed type (a tuple,
+#                    a cell): unchanged
+#            new     a new reference to any value; the value form returns an
+#                    owned PyValue. A site is a worker's (P), unless it is
+#                    passed straight to a steal argument of another row (M3)
+#   form     call (default): value(args...)
+#            pack: value(n, (PyValueBorrow[]){args...})
+#   aliases  other names the compiler reports a site under (an object-like
+#            macro that names the function)
+#
+# [[constructor]] rows are class R: in a function that returns a PyValue,
+# "return object(...)" becomes "return value(...)" with the same arguments.
+
+# --- list -----------------------------------------------------------------
+
+[[row]]
+object = "PyList_Append"
+value = "PyList_AppendValue"
+family = "list"
+args = ["keep", "borrow"]
+result = "status"
+
+[[row]]
+object = "PyList_Insert"
+value = "PyList_InsertValue"
+family = "list"
+args = ["keep", "keep", "borrow"]
+result = "status"
+
+[[row]]
+object = "PyList_SetItem"
+value = "PyList_SetValue"
+family = "list"
+args = ["keep", "keep", "steal"]
+result = "status"
+
+[[row]]
+object = "PyList_SET_ITEM"
+value = "PyList_SET_VALUE"
+family = "list"
+args = ["keep", "keep", "steal"]
+result = "status"
+
+[[row]]
+object = "_PyList_AppendTakeRef"
+value = "_PyList_AppendTakeValue"
+family = "list"
+args = ["keep", "steal"]
+result = "status"
+
+[[row]]
+object = "_PyList_AppendTakeRefListResize"
+value = "_PyList_AppendTakeValue"
+family = "list"
+args = ["keep", "steal"]
+result = "status"
+
+[[row]]
+object = "PyList_GetItemRef"
+value = "PyList_GetValue"
+family = "list"
+args = ["keep", "keep"]
+result = "new"
+
+[[row]]
+object = "_PyList_GetItemRef"
+value = "_PyList_GetValue"
+family = "list"
+args = ["keep", "keep"]
+result = "new"
+
+# --- tuple ----------------------------------------------------------------
+
+[[row]]
+object = "PyTuple_SET_ITEM"
+value = "PyTuple_SET_VALUE"
+family = "tuple"
+args = ["keep", "keep", "steal"]
+result = "status"
+
+[[row]]
+object = "PyTuple_SetItem"
+value = "PyTuple_SetValue"
+family = "tuple"
+args = ["keep", "keep", "steal"]
+result = "status"
+
+[[row]]
+object = "PyTuple_Pack"
+value = "_PyTuple_PackValues"
+family = "tuple"
+args = ["count"]
+result = "object"
+form = "pack"
+
+[[row]]
+object = "_PyTuple_FromPair"
+value = "_PyTuple_PackValues"
+family = "tuple"
+args = ["borrow", "borrow"]
+result = "object"
+form = "pack"
+
+[[row]]
+object = "_PyTuple_FromPairSteal"
+value = "_PyTuple_FromPairTakeValue"
+family = "tuple"
+args = ["steal", "steal"]
+result = "object"
+
+[[row]]
+object = "_PyTuple_ReplaceTakeRef"
+value = "_PyTuple_ReplaceTakeValue"
+family = "tuple"
+args = ["keep", "keep", "steal"]
+result = "status"
+
+[[row]]
+object = "PyTuple_GetItemRef"
+value = "PyTuple_GetValue"
+family = "tuple"
+args = ["keep", "keep"]
+result = "new"
+
+# --- dict -----------------------------------------------------------------
+
+[[row]]
+object = "PyDict_SetItem"
+value = "PyDict_SetValue"
+family = "dict"
+args = ["keep", "borrow", "borrow"]
+result = "status"
+
+[[row]]
+object = "PyDict_SetItemString"
+value = "PyDict_SetValueString"
+family = "dict"
+args = ["keep", "keep", "borrow"]
+result = "status"
+
+[[row]]
+object = "PyDict_DelItem"
+value = "PyDict_DelValue"
+family = "dict"
+args = ["keep", "borrow"]
+result = "status"
+
+[[row]]
+object = "PyDict_Contains"
+value = "PyDict_ContainsValue"
+family = "dict"
+args = ["keep", "borrow"]
+result = "status"
+
+[[row]]
+object = "PyDict_Pop"
+value = "PyDict_PopValue"
+family = "dict"
+args = ["keep", "borrow", "out"]
+result = "status"
+
+[[row]]
+object = "PyDict_PopString"
+value = "PyDict_PopValueString"
+family = "dict"
+args = ["keep", "keep", "out"]
+result = "status"
+
+[[row]]
+object = "PyDict_SetDefaultRef"
+value = "_PyDict_SetDefaultValue"
+family = "dict"
+args = ["keep", "borrow", "borrow", "out"]
+result = "status"
+
+[[row]]
+object = "PyDict_GetItemRef"
+value = "PyDict_GetValue"
+family = "dict"
+args = ["keep", "borrow", "out"]
+result = "status"
+
+[[row]]
+object = "PyDict_GetItemStringRef"
+value = "PyDict_GetValueString"
+family = "dict"
+args = ["keep", "keep", "out"]
+result = "status"
+
+[[row]]
+object = "PyDict_NextEntryRef"
+value = "PyDict_NextValue"
+family = "dict"
+args = ["keep", "keep", "out", "out"]
+result = "status"
+
+[[row]]
+object = "_PyDict_NextEntryRefKnownHash"
+value = "_PyDict_NextValue"
+family = "dict"
+args = ["keep", "keep", "out", "out", "keep"]
+result = "status"
+
+[[row]]
+object = "_PyDict_SetItem_KnownHash"
+value = "_PyDict_SetValue_KnownHash"
+family = "dict"
+args = ["keep", "borrow", "borrow", "keep"]
+result = "status"
+
+[[row]]
+object = "_PyDict_SetItem_Take2"
+value = "_PyDict_SetValue_Take2"
+family = "dict"
+args = ["keep", "steal", "steal"]
+result = "status"
+
+[[row]]
+object = "_PyDict_SetItem_Take2_KnownHash"
+value = "_PyDict_SetValue_Take2_KnownHash"
+family = "dict"
+args = ["keep", "steal", "steal", "keep"]
+result = "status"
+
+[[row]]
+object = "_PyDict_GetItemRef_KnownHash"
+value = "_PyDict_GetValue_KnownHash"
+family = "dict"
+args = ["keep", "borrow", "keep", "out"]
+result = "status"
+
+# --- set ------------------------------------------------------------------
+
+[[row]]
+object = "PySet_Add"
+value = "PySet_AddValue"
+family = "set"
+args = ["keep", "borrow"]
+result = "status"
+
+[[row]]
+object = "PySet_Discard"
+value = "PySet_DiscardValue"
+family = "set"
+args = ["keep", "borrow"]
+result = "status"
+
+[[row]]
+object = "PySet_Contains"
+value = "PySet_ContainsValue"
+family = "set"
+args = ["keep", "borrow"]
+result = "status"
+
+[[row]]
+object = "_PySet_AddTakeRef"
+value = "_PySet_AddValueTakeRef"
+family = "set"
+args = ["keep", "steal"]
+result = "status"
+
+[[row]]
+object = "PySet_Pop"
+value = "PySet_PopValue"
+family = "set"
+args = ["keep"]
+result = "new"
+
+[[row]]
+object = "_PySet_NextEntryRef"
+value = "_PySet_NextValue"
+family = "set"
+args = ["keep", "keep", "out", "keep"]
+result = "status"
+
+# --- cell and struct sequence ---------------------------------------------
+
+[[row]]
+object = "PyCell_New"
+value = "PyCell_NewValue"
+family = "cell"
+args = ["borrow"]
+result = "object"
+
+[[row]]
+object = "PyCell_Set"
+value = "PyCell_SetValue"
+family = "cell"
+args = ["keep", "borrow"]
+result = "status"
+
+[[row]]
+object = "PyCell_Get"
+value = "PyCell_GetValue"
+family = "cell"
+args = ["keep"]
+result = "new"
+
+[[row]]
+object = "PyStructSequence_SetItem"
+value = "PyStructSequence_SET_VALUE"
+family = "cell"
+args = ["keep", "keep", "steal"]
+result = "status"
+aliases = ["PyStructSequence_SET_ITEM"]
+
+[[row]]
+object = "PyStructSequence_GetItemRef"
+value = "PyStructSequence_GET_VALUE"
+family = "cell"
+args = ["keep", "keep"]
+result = "new"

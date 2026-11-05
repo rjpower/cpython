@@ -14,6 +14,7 @@
 #include "pycore_audit.h"         // _PySys_Audit()
 #include "pycore_ceval.h"         // _Py_EnterRecursiveCall()
 #include "pycore_compile.h"       // _PyAST_Compile()
+#include "pycore_dict.h"          // PyDict_SetValueString()
 #include "pycore_fileutils.h"     // _PyFile_Flush
 #include "pycore_import.h"        // _PyImport_GetImportlibExternalLoader()
 #include "pycore_interp.h"        // PyInterpreterState.importlib
@@ -23,9 +24,12 @@
 #include "pycore_pylifecycle.h"   // _Py_FdIsInteractive()
 #include "pycore_pystate.h"       // _PyInterpreterState_GET()
 #include "pycore_pythonrun.h"     // export _PyRun_AnyFile()
+#include "pycore_setobject.h"     // PySet_AddValue()
 #include "pycore_sysmodule.h"     // _PySys_SetAttr()
 #include "pycore_traceback.h"     // _PyTraceBack_Print()
 #include "pycore_unicodeobject.h" // _PyUnicode_Equal()
+#include "pycore_value.h"         // PyValue_CLOSE()
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 
 #include "errcode.h"              // E_EOF
 #include "marshal.h"              // PyMarshal_ReadLongFromFile()
@@ -366,7 +370,10 @@ _PyRun_InteractiveOne(FILE *fp, PyObject *filename, PyCompilerFlags *flags)
                 Py_DECREF(xs);
                 goto error;
             }
-            PyObject *line = PyList_GetItemRef(xs, n - 1);
+            PyValue line_v = PyList_GetValue(xs, n - 1);
+            PyObject *line = PyValue_IsNull(line_v) ? NULL
+                : _PyValue_AsObjectAt(line_v, BOX_SITE_LIST);
+            PyValue_XCLOSE(line_v);
             Py_DECREF(xs);
             if (line == NULL) {
                 goto error;
@@ -480,7 +487,7 @@ set_main_loader(PyObject *d, PyObject *filename, const char *loader_name)
         return -1;
     }
 
-    if (PyDict_SetItemString(d, "__loader__", loader) < 0) {
+    if (PyDict_SetValueString(d, "__loader__", PyValue_FromObjectBorrow(loader)) < 0) {
         Py_DECREF(loader);
         return -1;
     }
@@ -507,7 +514,7 @@ _PyRun_SimpleFile(FILE *fp, PyObject *filename, int closeit,
         goto done;
     }
     if (!has_file) {
-        if (PyDict_SetItemString(dict, "__file__", filename) < 0) {
+        if (PyDict_SetValueString(dict, "__file__", PyValue_FromObjectBorrow(filename)) < 0) {
             pyrun_error("failed to set __main__.__file__");
             goto done;
         }
@@ -555,7 +562,7 @@ _PyRun_SimpleFile(FILE *fp, PyObject *filename, int closeit,
         /* A script that raised (SystemExit included) leaves its exception
            set; dict operations refuse to run with a pending exception. */
         PyObject *exc = PyErr_GetRaisedException();
-        if (PyDict_PopString(dict, "__file__", NULL) < 0) {
+        if (PyDict_PopValueString(dict, "__file__", NULL) < 0) {
             pyrun_error("failed to delete __main__.__file__");
             Py_CLEAR(res);
         }
@@ -1069,7 +1076,7 @@ print_exception_seen_lookup(struct exception_print_context *ctx,
         return true;
     }
 
-    int in_seen = PySet_Contains(ctx->seen, check_id);
+    int in_seen = PySet_ContainsValue(ctx->seen, PyValue_FromObjectBorrow(check_id));
     Py_DECREF(check_id);
     if (in_seen == -1) {
         PyErr_Clear();
@@ -1088,7 +1095,7 @@ print_exception_cause_and_context(struct exception_print_context *ctx,
                                   PyObject *value)
 {
     PyObject *value_id = PyLong_FromVoidPtr(value);
-    if (value_id == NULL || PySet_Add(ctx->seen, value_id) == -1) {
+    if (value_id == NULL || PySet_AddValue(ctx->seen, PyValue_FromObjectBorrow(value_id)) == -1) {
         PyErr_Clear();
         Py_XDECREF(value_id);
         return 0;
@@ -1289,8 +1296,19 @@ _PyRun_String(const char *str, PyObject* name, int start,
         name = &_Py_STR(anon_string);
     }
     PyObject *module = NULL;
-    if (globals && PyDict_GetItemStringRef(globals, "__name__", &module) < 0) {
-        goto done;
+    if (globals) {
+        PyValue module_v;
+        int module_rc = PyDict_GetValueString(globals, "__name__", &module_v);
+        if (module_rc < 0) {
+            goto done;
+        }
+        if (module_rc > 0) {
+            module = _PyValue_AsObjectAt(module_v, BOX_SITE_DICT);
+            PyValue_CLOSE(module_v);
+            if (module == NULL) {
+                goto done;
+            }
+        }
     }
 
     mod = _PyParser_ASTFromString(str, name, start, flags, arena, module, NULL);
@@ -1404,8 +1422,7 @@ run_eval_code_obj(PyThreadState *tstate, PyCodeObject *co, PyObject *globals, Py
         return NULL;
     }
     if (!has_builtins) {
-        if (PyDict_SetItemString(globals, "__builtins__",
-                                 tstate->interp->builtins) < 0)
+        if (PyDict_SetValueString(globals, "__builtins__", PyValue_FromObjectBorrow(tstate->interp->builtins)) < 0)
         {
             return NULL;
         }
@@ -1457,11 +1474,19 @@ run_mod(mod_ty mod, PyObject *filename, PyObject *globals, PyObject *locals,
         }
     }
     PyObject *module = NULL;
-    if (globals && PyDict_GetItemStringRef(globals, "__name__", &module) < 0) {
-        if (interactive_src) {
-            Py_DECREF(interactive_filename);
+    if (globals) {
+        PyValue module_v;
+        int module_rc = PyDict_GetValueString(globals, "__name__", &module_v);
+        if (module_rc > 0) {
+            module = _PyValue_AsObjectAt(module_v, BOX_SITE_DICT);
+            PyValue_CLOSE(module_v);
         }
-        return NULL;
+        if (module_rc < 0 || (module_rc > 0 && module == NULL)) {
+            if (interactive_src) {
+                Py_DECREF(interactive_filename);
+            }
+            return NULL;
+        }
     }
 
     PyCodeObject *co = _PyAST_Compile(mod, interactive_filename, flags, -1,

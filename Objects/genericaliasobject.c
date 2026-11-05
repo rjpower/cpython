@@ -3,6 +3,7 @@
 #include "Python.h"
 #include "pycore_ceval.h"         // _PyEval_GetBuiltin()
 #include "pycore_critical_section.h" // Py_BEGIN_CRITICAL_SECTION()
+#include "pycore_list.h"          // PyList_AppendValue()
 #include "pycore_modsupport.h"    // _PyArg_NoKeywords()
 #include "pycore_object.h"
 #include "pycore_tuple.h"         // PyTuple_GET_VALUE()
@@ -10,6 +11,7 @@
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString()
 #include "pycore_unionobject.h"   // _Py_union_type_or, _PyGenericAlias_Check
 #include "pycore_value.h"
+#include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "pycore_weakref.h"       // FT_CLEAR_WEAKREFS()
 
 
@@ -71,7 +73,9 @@ ga_repr_items_list(PyUnicodeWriter *writer, PyObject *p)
                 return -1;
             }
         }
-        PyObject *item = PyList_GetItemRef(p, i);
+        PyValue v = PyList_GetValue(p, i);
+        PyObject *item = PyValue_IsNull(v) ? NULL : _PyValue_AsObjectAt(v, BOX_SITE_LIST);
+        PyValue_XCLOSE(v);
         if (item == NULL) {
             return -1;  // list can be mutated in a callback
         }
@@ -120,7 +124,9 @@ ga_repr(PyObject *self)
                 goto error;
             }
         }
-        PyObject *p = PyTuple_GetItemRef(alias->args, i);
+        PyValue v = PyTuple_GetValue(alias->args, i);
+        PyObject *p = PyValue_IsNull(v) ? NULL : _PyValue_AsObjectAt(v, BOX_SITE_TUPLE);
+        PyValue_XCLOSE(v);
         if (p == NULL) {
             goto error;
         }
@@ -171,7 +177,7 @@ static int
 tuple_add(PyObject *self, Py_ssize_t len, PyObject *item)
 {
     if (tuple_index(self, len, item) < 0) {
-        PyTuple_SET_ITEM(self, len, Py_NewRef(item));
+        PyTuple_SET_VALUE(self, len, PyValue_DUP(PyValue_FromObjectBorrow(item)));
         return 1;
     }
     return 0;
@@ -215,7 +221,9 @@ _Py_make_parameters(PyObject *args)
     }
     Py_ssize_t iparam = 0;
     for (Py_ssize_t iarg = 0; iarg < nargs; iarg++) {
-        PyObject *t = PyTuple_GetItemRef(args, iarg);
+        PyValue v = PyTuple_GetValue(args, iarg);
+        PyObject *t = PyValue_IsNull(v) ? NULL : _PyValue_AsObjectAt(v, BOX_SITE_TUPLE);
+        PyValue_XCLOSE(v);
         if (t == NULL) {
             goto error;
         }
@@ -261,7 +269,9 @@ _Py_make_parameters(PyObject *args)
                     }
                 }
                 for (Py_ssize_t j = 0; j < len2; j++) {
-                    PyObject *t2 = PyTuple_GetItemRef(subparams, j);
+                    PyValue v = PyTuple_GetValue(subparams, j);
+                    PyObject *t2 = PyValue_IsNull(v) ? NULL : _PyValue_AsObjectAt(v, BOX_SITE_TUPLE);
+                    PyValue_XCLOSE(v);
                     if (t2 == NULL) {
                         Py_DECREF(subparams);
                         Py_DECREF(t);
@@ -316,7 +326,9 @@ subs_tvars(PyObject *obj, PyObject *params, PyObject *argitems,
         }
         Py_ssize_t j = 0;
         for (Py_ssize_t i = 0; i < nsubargs; ++i) {
-            PyObject *arg = PyTuple_GetItemRef(subparams, i);
+            PyValue v = PyTuple_GetValue(subparams, i);
+            PyObject *arg = PyValue_IsNull(v) ? NULL : _PyValue_AsObjectAt(v, BOX_SITE_TUPLE);
+            PyValue_XCLOSE(v);
             if (arg == NULL) {
                 Py_DECREF(subargs);
                 Py_DECREF(subparams);
@@ -326,9 +338,16 @@ subs_tvars(PyObject *obj, PyObject *params, PyObject *argitems,
             if (iparam >= 0) {
                 PyTypeObject *param_type =
                     PyValue_TYPE(PyTuple_GET_VALUE(params, iparam));
-                Py_SETREF(arg, argitems_is_tuple
-                               ? PyTuple_GetItemRef(argitems, iparam)
-                               : Py_NewRef(argitems));
+                PyObject *item_arg;
+                if (argitems_is_tuple) {
+                    PyValue v = PyTuple_GetValue(argitems, iparam);
+                    item_arg = PyValue_IsNull(v) ? NULL : _PyValue_AsObjectAt(v, BOX_SITE_TUPLE);
+                    PyValue_XCLOSE(v);
+                }
+                else {
+                    item_arg = Py_NewRef(argitems);
+                }
+                Py_SETREF(arg, item_arg);
                 if (arg == NULL) {
                     Py_DECREF(subargs);
                     Py_DECREF(subparams);
@@ -345,7 +364,7 @@ subs_tvars(PyObject *obj, PyObject *params, PyObject *argitems,
                     continue;
                 }
             }
-            PyTuple_SET_ITEM(subargs, j, arg);
+            PyTuple_SET_VALUE(subargs, j, PyValue_PrepareOwned(arg));
             j++;
         }
         assert(j == PyTuple_GET_SIZE(subargs));
@@ -410,7 +429,15 @@ _unpack_args(PyObject *item)
     int is_tuple = PyTuple_Check(item);
     Py_ssize_t nitems = is_tuple ? PyTuple_GET_SIZE(item) : 1;
     for (Py_ssize_t i = 0; i < nitems; i++) {
-        PyObject *arg = is_tuple ? PyTuple_GetItemRef(item, i) : Py_NewRef(item);
+        PyObject *arg;
+        if (is_tuple) {
+            PyValue v = PyTuple_GetValue(item, i);
+            arg = PyValue_IsNull(v) ? NULL : _PyValue_AsObjectAt(v, BOX_SITE_TUPLE);
+            PyValue_XCLOSE(v);
+        }
+        else {
+            arg = Py_NewRef(item);
+        }
         if (arg == NULL) {
             Py_DECREF(newargs);
             return NULL;
@@ -439,7 +466,7 @@ _unpack_args(PyObject *item)
                 return NULL;
             }
         }
-        int rc = PyList_Append(newargs, arg);
+        int rc = PyList_AppendValue(newargs, PyValue_FromObjectBorrow(arg));
         Py_DECREF(arg);
         if (rc < 0) {
             Py_DECREF(newargs);
@@ -464,7 +491,9 @@ _Py_subs_parameters(PyObject *self, PyObject *args, PyObject *parameters, PyObje
         return NULL;
     }
     for (Py_ssize_t i = 0; i < nparams; i++) {
-        PyObject *param = PyTuple_GetItemRef(parameters, i);
+        PyValue v = PyTuple_GetValue(parameters, i);
+        PyObject *param = PyValue_IsNull(v) ? NULL : _PyValue_AsObjectAt(v, BOX_SITE_TUPLE);
+        PyValue_XCLOSE(v);
         if (param == NULL) {
             Py_DECREF(item);
             return NULL;
@@ -525,12 +554,14 @@ _Py_subs_parameters(PyObject *self, PyObject *args, PyObject *parameters, PyObje
         goto error;
     }
     for (Py_ssize_t iarg = 0, jarg = 0; iarg < nargs; iarg++) {
-        PyObject *arg = PyTuple_GetItemRef(args, iarg);
+        PyValue v = PyTuple_GetValue(args, iarg);
+        PyObject *arg = PyValue_IsNull(v) ? NULL : _PyValue_AsObjectAt(v, BOX_SITE_TUPLE);
+        PyValue_XCLOSE(v);
         if (arg == NULL) {
             goto error;
         }
         if (PyType_Check(arg)) {
-            PyTuple_SET_ITEM(newargs, jarg, arg);
+            PyTuple_SET_VALUE(newargs, jarg, PyValue_PrepareOwned(arg));
             jarg++;
             continue;
         }
@@ -542,7 +573,7 @@ _Py_subs_parameters(PyObject *self, PyObject *args, PyObject *parameters, PyObje
                 goto error;
             }
             if (PyTuple_Check(arg)) {
-                PyTuple_SET_ITEM(newargs, jarg, subargs);
+                PyTuple_SET_VALUE(newargs, jarg, PyValue_PrepareOwned(subargs));
             }
             else {
                 // _Py_subs_parameters returns a tuple. If the original arg was a list,
@@ -553,7 +584,7 @@ _Py_subs_parameters(PyObject *self, PyObject *args, PyObject *parameters, PyObje
                     Py_DECREF(arg);
                     goto error;
                 }
-                PyTuple_SET_ITEM(newargs, jarg, subargs_list);
+                PyTuple_SET_VALUE(newargs, jarg, PyValue_PrepareOwned(subargs_list));
             }
             Py_DECREF(arg);
             jarg++;
@@ -582,9 +613,15 @@ _Py_subs_parameters(PyObject *self, PyObject *args, PyObject *parameters, PyObje
                 substituted = NULL;
             }
             else {
-                PyObject *replacement = is_tuple
-                    ? PyTuple_GetItemRef(item, iparam)
-                    : Py_NewRef(item);
+                PyObject *replacement;
+                if (is_tuple) {
+                    PyValue v = PyTuple_GetValue(item, iparam);
+                    replacement = PyValue_IsNull(v) ? NULL : _PyValue_AsObjectAt(v, BOX_SITE_TUPLE);
+                    PyValue_XCLOSE(v);
+                }
+                else {
+                    replacement = Py_NewRef(item);
+                }
                 substituted = replacement == NULL ? NULL :
                     PyObject_CallOneArg(subst, replacement);
                 Py_XDECREF(replacement);
@@ -616,7 +653,7 @@ _Py_subs_parameters(PyObject *self, PyObject *args, PyObject *parameters, PyObje
             }
         }
         else {
-            PyTuple_SET_ITEM(newargs, jarg, substituted);
+            PyTuple_SET_VALUE(newargs, jarg, PyValue_PrepareOwned(substituted));
             Py_DECREF(arg);
             jarg++;
         }
@@ -820,7 +857,7 @@ static PyObject *
 ga_mro_entries(PyObject *self, PyObject *args)
 {
     gaobject *alias = (gaobject *)self;
-    return PyTuple_Pack(1, alias->origin);
+    return _PyTuple_PackValues(1, (PyValueBorrow[]){PyValue_FromObjectBorrow(alias->origin)});
 }
 
 static PyObject *
@@ -880,7 +917,7 @@ ga_dir(PyObject *self, PyObject *Py_UNUSED(ignored))
             if (contains < 0) {
                 goto error;
             }
-            if (contains == 0 && PyList_Append(dir, dir_entry) < 0) {
+            if (contains == 0 && PyList_AppendValue(dir, PyValue_FromObjectBorrow(dir_entry)) < 0) {
                 goto error;
             }
 
@@ -957,7 +994,7 @@ static PyGetSetDef ga_properties[] = {
 static inline int
 setup_ga(gaobject *alias, PyObject *origin, PyObject *args) {
     if (!PyTuple_Check(args)) {
-        args = PyTuple_Pack(1, args);
+        args = _PyTuple_PackValues(1, (PyValueBorrow[]){PyValue_FromObjectBorrow(args)});
         if (args == NULL) {
             return 0;
         }
@@ -990,11 +1027,15 @@ ga_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     if (!_PyArg_CheckPositional("GenericAlias", PyTuple_GET_SIZE(args), 2, 2)) {
         return NULL;
     }
-    PyObject *origin = PyTuple_GetItemRef(args, 0);
+    PyValue v = PyTuple_GetValue(args, 0);
+    PyObject *origin = PyValue_IsNull(v) ? NULL : _PyValue_AsObjectAt(v, BOX_SITE_TUPLE);
+    PyValue_XCLOSE(v);
     if (origin == NULL) {
         return NULL;
     }
-    PyObject *arguments = PyTuple_GetItemRef(args, 1);
+    PyValue arguments_v = PyTuple_GetValue(args, 1);
+    PyObject *arguments = PyValue_IsNull(arguments_v) ? NULL : _PyValue_AsObjectAt(arguments_v, BOX_SITE_TUPLE);
+    PyValue_XCLOSE(arguments_v);
     if (arguments == NULL) {
         Py_DECREF(origin);
         return NULL;

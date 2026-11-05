@@ -568,9 +568,11 @@ INPLACE_READERS = {
     "_PyValue_Contains", "_PyValue_Invert", "_PyValue_IsTrue",
     "_PyValue_Negative", "_PyValue_Positive", "_PyValue_RichCompare",
     "_PyValue_Str", "_PyValue_Repr", "_PyValue_ASCII",
-    # Attribute dispatchers and helpers (I4)
+    # Attribute and subscript dispatchers (I4, I3)
     "_PyValue_GetAttr", "_PyValue_SetAttr", "_PyValue_GetMethod",
     "_PySuper_LookupValue", "value_import_level", "super_call",
+    "_PyValue_GetItem", "_PyValue_SetItem", "_PyValue_DelItem",
+    "_PyValue_Size", "_PyValue_GetOptionalItem", "_PyValue_Send",
     # Value-form container calls: they only read their key argument
     "PyDict_ContainsValue", "PySet_ContainsValue", "PyDict_DelValue",
     "_PyValue_RichCompareObject",
@@ -584,6 +586,7 @@ INPLACE_READERS = {
     # Python/ceval.c: they read their value arguments, and the handler
     # releases them after
     "_PyEval_BinarySlice", "_PyEval_StoreName", "_PyEval_StoreSlice",
+    "_PyEval_MatchClass",
     # Python/specialize.c: they read types and values
     "_Py_Specialize_BinaryOp", "_Py_Specialize_CompareOp",
     "_Py_Specialize_ContainsOp", "_Py_Specialize_LoadAttr",
@@ -615,7 +618,6 @@ OBJECT_READERS = {
     "PyCoro_CheckExact", "PyGen_Check",
     "PyList_CheckExact", "PyModule_CheckExact", "PySlice_Check",
     "PyTuple_CheckExact", "PyType_Check", "PyUnicode_CheckExact",
-    "PyDict_CheckExact",
     "PyList_GET_SIZE", "PyList_GET_VALUE", "PyTuple_GET_SIZE",
     "PyTuple_GET_VALUE", "PyUnicode_1BYTE_DATA", "PyUnicode_GET_LENGTH",
     "PyUnicode_IS_COMPACT_ASCII", "PyUnicode_READ_CHAR", "_PyList_ITEMS",
@@ -628,14 +630,14 @@ OBJECT_READERS = {
     "PyErr_GivenExceptionMatches",
     # The value-form container calls (they read the container object and
     # the key as a value)
-    "PyDict_ContainsValue", "PyDict_DelValue", "PySet_ContainsValue",
+    "PyDict_ContainsValue", "PySet_ContainsValue",
     "PyFunction_New",
-    "PyObject_DelItem", "PyObject_Format", "PyUnicode_Concat",
+    "PyObject_Format", "PyUnicode_Concat",
 
     "_PyDict_SetValue_Take2", "_PyEval_CheckExceptStarTypeValid",
     "_PyEval_CheckExceptTypeValid", "value_exception_group_match",
-    "_PyEval_GetAwaitable", "_PyLazyImport_Reify", "_PyList_SliceSubscript",
-    "value_mapping_get_optional_item", "_PySet_Contains", "_PyTemplate_Build",
+    "_PyEval_GetAwaitable", "_PyList_SliceSubscript",
+    "value_load_from_dict", "_PySet_Contains", "_PyTemplate_Build",
     "_PyUnicode_Equal", "_Py_call_instrumentation_arg",
     "monitor_stop_iteration",
     # The indirect calls of BINARY_OP_EXTEND and

@@ -1275,8 +1275,7 @@ dummy_func(
             PyValue held_sub = TAKE(sub);
             INPUTS_DEAD();
             SYNC_SP();
-            int err = value_store_subscript(held_container, held_sub, held_value,
-                                            value_temps);
+            int err = _PyValue_SetItem(held_container, held_sub, held_value);
             value_operation_close3(held_sub, held_container, held_value);
             IR_FINISH_VALUE_OPERATION();
             ERROR_IF(err);
@@ -1338,23 +1337,7 @@ dummy_func(
 
         inst(DELETE_SUBSCR, (container, sub --)) {
             /* del container[sub] */
-            PyObject *container_o = _PyValueTemps_Object(value_temps, container);
-            if (container_o == NULL) {
-                ERROR_NO_POP();
-            }
-            int err;
-            if (PyDict_CheckExact(container_o)) {
-                // What PyObject_DelItem() does for an exact dict, with the
-                // key as a value: an inline key needs no box.
-                err = PyDict_DelValue(container_o, sub);
-            }
-            else {
-                PyObject *sub_o = _PyValueTemps_Object(value_temps, sub);
-                if (sub_o == NULL) {
-                    ERROR_NO_POP();
-                }
-                err = PyObject_DelItem(container_o, sub_o);
-            }
+            int err = _PyValue_DelItem(container, sub);
             DECREF_INPUTS();
             ERROR_IF(err);
         }
@@ -1635,20 +1618,13 @@ dummy_func(
                 DEAD(v);
             }
             else {
-                /* Box v here, not at entry: the generator branch above
-                   stores v in the generator's frame, which needs it
-                   canonical. */
-                PyObject *v_o = _PyValueTemps_Object(value_temps, v);
-                if (v_o == NULL) {
-                    ERROR_NO_POP();
-                }
-                PySendResultPair res = _PyIter_Send(receiver_o, v_o);
-                if (res.kind == PYGEN_ERROR) {
+                _PyStatusValue sent = _PyValue_Send(receiver_o, v);
+                if (sent.status == PYGEN_ERROR) {
                     ERROR_NO_POP();
                 }
                 PyValue_CLOSE(v);
-                retval = PyValue_FromObjectSteal(res.object);
-                if (res.kind == PYGEN_RETURN) {
+                retval = sent.value;
+                if (sent.status == PYGEN_RETURN) {
                     JUMPBY(oparg);
                 }
             }
@@ -1720,9 +1696,7 @@ dummy_func(
         replaced op(_SEND_ASYNC_GEN, (iter, null_in, v -- asend, null_out, retval)) {
             PyObject *iter_o = PyValue_AsKnownObjectBorrow(iter);
             assert(PyAsyncGenASend_CheckExact(iter_o));
-            PyObject *val = PyValue_AsKnownObjectBorrow(v);
-            _PyStatusObject sent = value_async_gen_send(iter_o, val);
-            PyObject *retval_o = sent.object;
+            _PyStatusValue sent = _PyValue_Send(iter_o, v);
             PySendResult what = (PySendResult)sent.status;
             if (what == PYGEN_ERROR) {
                 ERROR_NO_POP();
@@ -1732,7 +1706,7 @@ dummy_func(
             DEAD(iter);
             null_out = null_in;
             DEAD(null_in);
-            retval = PyValue_FromObjectSteal(retval_o);
+            retval = sent.value;
             if (what == PYGEN_RETURN) {
                 JUMPBY(oparg);
             }
@@ -1880,15 +1854,16 @@ dummy_func(
         }
 
         inst(LOAD_BUILD_CLASS, ( -- bc)) {
-            _PyStatusObject found = value_mapping_get_optional_item(BUILTINS(), &_Py_ID(__build_class__));
-            PyObject *bc_o = found.object;
+            _PyStatusValue found = _PyValue_GetOptionalItem(
+                PyValue_FromObjectBorrow(BUILTINS()),
+                PyValue_FromObjectBorrow(&_Py_ID(__build_class__)));
             ERROR_IF(found.status < 0);
-            if (bc_o == NULL) {
+            if (found.status == 0) {
                 _PyErr_SetString(tstate, PyExc_NameError,
                                  "__build_class__ not found");
                 ERROR_IF(true);
             }
-            bc = PyValue_FromObjectSteal(bc_o);
+            bc = found.value;
         }
 
         inst(STORE_NAME, (v -- )) {
@@ -2056,23 +2031,15 @@ dummy_func(
             PyObject *namespace = PyValue_AsKnownObjectBorrow(mod_or_class_dict);
             // Taken before the lookup, which can run code
             PyValue held_namespace = TAKE(mod_or_class_dict);
-            _PyStatusObject found = value_mapping_get_optional_item(namespace, name);
-            PyObject *v_o = found.object;
-            int err = found.status;
-            if (v_o != NULL && PyLazyImport_CheckExact(v_o)) {
-                Py_SETREF(v_o, _PyLazyImport_Reify(tstate, v_o, name, namespace));
-                if (v_o == NULL) {
-                    err = -1;
-                }
-            }
+            _PyStatusValue found = value_load_from_dict(tstate, namespace, name);
             PyValue_CLOSE(held_namespace);
-            ERROR_IF(err < 0);
-            if (v_o == NULL) {
+            ERROR_IF(found.status < 0);
+            if (found.status == 0) {
                 v = value_load_global(GLOBALS(), BUILTINS(), name);
                 ERROR_IF(PyValue_IsNull(v));
             }
             else {
-                v = PyValue_FromObjectSteal(v_o);
+                v = found.value;
             }
         }
 
@@ -2225,14 +2192,13 @@ dummy_func(
             assert(class_dict);
             assert(oparg >= 0 && oparg < _PyFrame_GetCode(frame)->co_nlocalsplus);
             name = _PyTuple_GET_OBJECT(_PyFrame_GetCode(frame)->co_localsplusnames, oparg);
-            _PyStatusObject found = value_mapping_get_optional_item(class_dict, name);
-            PyObject* value_o = found.object;
+            _PyStatusValue found = value_load_from_dict(tstate, class_dict, name);
             if (found.status < 0) {
                 PyValue_CLOSE(held_class_dict);
                 ERROR_NO_POP();
             }
             PyValue selected;
-            if (!value_o) {
+            if (found.status == 0) {
                 PyCellObject *cell = (PyCellObject *)PyValue_AsKnownObjectBorrow(GETLOCAL(oparg));
                 selected = _PyCell_GetValue(cell);
                 if (PyValue_IsNull(selected)) {
@@ -2242,15 +2208,7 @@ dummy_func(
                 }
             }
             else {
-                if (PyLazyImport_CheckExact(value_o)) {
-                    Py_SETREF(value_o, _PyLazyImport_Reify(
-                        tstate, value_o, name, class_dict));
-                    if (value_o == NULL) {
-                        PyValue_CLOSE(held_class_dict);
-                        ERROR_NO_POP();
-                    }
-                }
-                selected = PyValue_FromObjectSteal(value_o);
+                selected = found.value;
             }
             PyValue_CLOSE(held_class_dict);
             value = selected;
@@ -2425,11 +2383,13 @@ dummy_func(
                 ERROR_IF(true);
             }
             /* check if __annotations__ in locals()... */
-            _PyStatusObject found = value_mapping_get_optional_item(LOCALS(), &_Py_ID(__annotations__));
-            PyObject* ann_dict = found.object;
+            _PyStatusValue found = _PyValue_GetOptionalItem(
+                PyValue_FromObjectBorrow(LOCALS()),
+                PyValue_FromObjectBorrow(&_Py_ID(__annotations__)));
             ERROR_IF(found.status < 0);
             int err;
-            if (ann_dict == NULL) {
+            if (found.status == 0) {
+                PyObject *ann_dict;
                 ann_dict = PyDict_New();
                 ERROR_IF(ann_dict == NULL);
                 err = PyObject_SetItem(LOCALS(), &_Py_ID(__annotations__),
@@ -2438,7 +2398,7 @@ dummy_func(
                 ERROR_IF(err);
             }
             else {
-                Py_DECREF(ann_dict);
+                PyValue_CLOSE(found.value);
             }
         }
 
@@ -3652,11 +3612,10 @@ dummy_func(
 
         inst(GET_LEN, (obj -- obj, len)) {
             // PUSH(len(TOS))
-            Py_ssize_t len_i = PyObject_Length(PyValue_AsKnownObjectBorrow(obj));
+            Py_ssize_t len_i = _PyValue_Size(obj);
             ERROR_IF(len_i < 0);
-            PyObject *len_o = PyLong_FromSsize_t(len_i);
-            ERROR_IF(len_o == NULL);
-            len = PyValue_FromObjectSteal(len_o);
+            len = PyValue_FromInt64(len_i);
+            ERROR_IF(PyValue_IsNull(len));
         }
 
         op(_MATCH_CLASS, (subject, type, names -- attrs, s, tp, n)) {
@@ -3664,7 +3623,7 @@ dummy_func(
             // None on failure.
             assert(PyTuple_CheckExact(PyValue_AsKnownObjectBorrow(names)));
             PyObject *attrs_o = _PyEval_MatchClass(tstate,
-                PyValue_AsKnownObjectBorrow(subject),
+                subject,
                 PyValue_AsKnownObjectBorrow(type), oparg,
                 PyValue_AsKnownObjectBorrow(names));
             if (attrs_o) {

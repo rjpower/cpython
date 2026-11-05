@@ -819,6 +819,15 @@ def import_loop(n):
         from os import path
 
 
+def match_sequence_loop(n, items):
+    count = 0
+    for i in range(n):
+        match items:
+            case [_, _]:
+                count += 1
+    return count
+
+
 def get_attr_loop(n, a):
     for i in range(n):
         a.real
@@ -828,6 +837,8 @@ def get_attr_loop(n, a):
 class AttributeAndImportTests(unittest.TestCase):
     def test_results(self):
         self.assertIsNone(import_loop(3))
+        self.assertEqual(match_sequence_loop(5, [1, 2]), 5)
+        self.assertEqual(match_sequence_loop(5, [1, 2, 3]), 0)
         for a in (3, 2.5, True):
             self.assertIsNone(get_attr_loop(3, a))
 
@@ -835,6 +846,10 @@ class AttributeAndImportTests(unittest.TestCase):
     def test_import_makes_no_box(self):
         # The level of IMPORT_NAME is an inline int
         self.assertEqual(boxes(import_loop, N), 0)
+
+    @unittest.skipUnless(STATS, "needs a Py_STATS build")
+    def test_match_length_makes_no_box(self):
+        self.assertEqual(boxes(match_sequence_loop, N, [1, 2]), 0)
 
     @unittest.skipUnless(STATS, "needs a Py_STATS build")
     def test_attributes_of_inline_values_make_no_box(self):

@@ -298,7 +298,9 @@ PyAPI_FUNC(PyObject *) _PyEval_ImportName(
 PyObject * _PyEval_ImportNameWithImport(
     PyThreadState *tstate, PyObject *import_func, PyObject *globals,
     PyObject *locals, PyObject *name, PyObject *fromlist, int level);
-PyAPI_FUNC(PyObject *)_PyEval_MatchClass(PyThreadState *tstate, PyObject *subject, PyObject *type, Py_ssize_t nargs, PyObject *kwargs);
+PyAPI_FUNC(PyObject *)_PyEval_MatchClass(PyThreadState *tstate, PyValueBorrow subject, PyObject *type, Py_ssize_t nargs, PyObject *kwargs);
+#define _PyEval_MatchClass(T, S, TY, N, K) \
+    (_PyEval_MatchClass)(T, PyValue_Borrow(S), TY, N, K)
 PyAPI_FUNC(PyObject *)_PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys);
 PyAPI_FUNC(void) _PyEval_MonitorRaise(PyThreadState *tstate, _PyInterpreterFrame *frame, _PyInstr *instr);
 PyAPI_FUNC(bool) _PyEval_NoToolsForUnwind(PyThreadState *tstate, _PyInterpreterFrame *frame);
@@ -324,7 +326,9 @@ PyAPI_FUNC(PyValue) _PyEval_BinarySlice(PyValueBorrow container, PyValueBorrow s
 PyAPI_FUNC(int) _PyEval_StoreSlice(PyValueBorrow v, PyValueBorrow container, PyValueBorrow start, PyValueBorrow stop);
 #define _PyEval_StoreSlice(V0, V1, V2, V3) \
     (_PyEval_StoreSlice)(PyValue_Borrow(V0), PyValue_Borrow(V1), PyValue_Borrow(V2), PyValue_Borrow(V3))
-PyAPI_FUNC(int) _PyEval_IsInstanceValue(PyValue inst, PyValue cls);
+PyAPI_FUNC(int) _PyEval_IsInstanceValue(PyValueBorrow inst, PyValueBorrow cls);
+#define _PyEval_IsInstanceValue(V0, V1) \
+    (_PyEval_IsInstanceValue)(PyValue_Borrow(V0), PyValue_Borrow(V1))
 
 /*
  * Indicate whether a special method of given 'oparg' can use the (improved)

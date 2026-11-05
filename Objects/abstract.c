@@ -507,6 +507,24 @@ value_ass_item(PyValueBorrow v, PyValueBorrow key, PyValueBorrow value)
     if (!PyValue_IsInline(v)) {
         PyObject *o = PyValue_AsKnownObjectBorrow(v);
         PyMappingMethods *m = Py_TYPE(o)->tp_as_mapping;
+        /* The exact dict and list stores and deletions that take the key
+           and value as they are: no box of an inline key or value. */
+        if (PyDict_CheckExact(o)) {
+            return deleting ? PyDict_DelValue(o, key)
+                            : PyDict_SetValue(o, key, value);
+        }
+        if (!deleting && PyList_CheckExact(o) && PyValue_IsInlineInt(key)) {
+            Py_ssize_t index = PyValue_InlineInt64(key);
+            int err;
+            Py_BEGIN_CRITICAL_SECTION(o);
+            if (index < 0) {
+                index += PyList_GET_SIZE(o);
+            }
+            err = _PyList_SetItemTakeValue((PyListObject *)o, index,
+                                           PyValue_DUP(value));
+            Py_END_CRITICAL_SECTION();
+            return err;
+        }
         if (m && m->mp_ass_subscript) {
             int res = call_ass_subscript(o, m->mp_ass_subscript, key, value);
             assert(_Py_CheckSlotResult(o, deleting ? "__delitem__"
@@ -4129,13 +4147,4 @@ PyIter_Send(PyObject *iter, PyObject *arg, PyObject **result)
     assert(result != NULL);
     return (PySendResult)_PyValue_THUNK_EXIT_STATUS(
         _PyValue_Send(iter, _Py_VALUE_ARG(arg)), result, BOX_SITE_ITERATION);
-}
-
-Py_VALUE_ENTRY PySendResultPair
-_PyIter_Send(PyObject *iter, PyObject *arg)
-{
-    PySendResultPair pair;
-    pair.kind = (PySendResult)_PyValue_THUNK_EXIT_STATUS(
-        _PyValue_Send(iter, _Py_VALUE_ARG(arg)), &pair.object, BOX_SITE_ITERATION);
-    return pair;
 }

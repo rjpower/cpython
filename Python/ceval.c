@@ -425,20 +425,14 @@ _PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys)
     // - Atomically check for a key and get its value without error handling.
     // - Don't cause key creation or resizing in dict subclasses like
     //   collections.defaultdict that define __missing__ (or similar).
-    PyObject *method_boxes[4];
-    _PyValueTemps method_temps = {method_boxes, 0, 4};
-    _PyCValue self, method;
-    _PyThreadState_PushCValue(tstate, &self);
-    _PyThreadState_PushCValue(tstate, &method);
-    self.ref = PyValue_DUP(PyValue_FromObjectBorrow(map));
-    int res = _PyObject_GetMethodValue(tstate, &self.ref, &_Py_ID(get), &method.ref, map);
-    if (res < 0) {
+    PyValue get = PyValue_NULL;
+    PyValue map_v = PyValue_DUP(PyValue_FromObjectBorrow(map));
+    _PyStatusValue found = _PyValue_GetMethod(map_v, &_Py_ID(get));
+    if (found.status < 0) {
         goto fail;
     }
-    PyObject *get = _PyValueTemps_Object(&method_temps, method.ref);
-    if (get == NULL) {
-        goto fail;
-    }
+    get = found.value;
+    int has_self = found.status > 0;
     seen = PySet_New(NULL);
     if (seen == NULL) {
         goto fail;
@@ -453,66 +447,79 @@ _PyEval_MatchKeys(PyThreadState *tstate, PyObject *map, PyObject *keys)
         goto fail;
     }
     for (Py_ssize_t i = 0; i < nkeys; i++) {
-        key = PyTuple_GetItemRef(keys, i);
-        if (key == NULL) {
-            goto fail;
-        }
-        if (PySet_Contains(seen, key) || PySet_Add(seen, key)) {
+        // The key stays a value, so an inline key is not boxed
+        PyValueBorrow key_v = PyTuple_GET_VALUE(keys, i);
+        if (PySet_ContainsValue(seen, key_v) || PySet_AddValue(seen, key_v)) {
             if (!_PyErr_Occurred(tstate)) {
                 // Seen it before!
-                _PyErr_Format(tstate, PyExc_ValueError,
-                              "mapping pattern checks duplicate key (%R)", key);
+                key = PyTuple_GetItemRef(keys, i);
+                if (key != NULL) {
+                    _PyErr_Format(tstate, PyExc_ValueError,
+                                  "mapping pattern checks duplicate key (%R)", key);
+                }
             }
             goto fail;
         }
-        PyObject *self_obj = PyValue_AsKnownObjectBorrow(self.ref);
-        PyObject *args[] = { self_obj, key, dummy };
-        PyObject *value = NULL;
-        if (!PyValue_IsNull(self.ref)) {
-            value = PyObject_Vectorcall(get, args, 3, NULL);
+        PyValue value;
+        if (PyDict_CheckExact(map)) {
+            // dict.get(key, dummy) without the call
+            int r = PyDict_GetValue(map, key_v, &value);
+            if (r < 0) {
+                goto fail;
+            }
+            if (r == 0) {
+                // key not in map!
+                Py_DECREF(values);
+                values = Py_NewRef(Py_None);
+                goto done;
+            }
         }
         else {
-            value = PyObject_Vectorcall(get, &args[1], 2, NULL);
+            PyValue k = PyValue_DUP(key_v);
+            PyValue dummy_v = PyValue_DUP(PyValue_FromObjectBorrow(dummy));
+            PyValue args[] = { map_v, k, dummy_v };
+            value = has_self
+                ? _PyValue_Vectorcall(get, args, 3, NULL)
+                : _PyValue_Vectorcall(get, &args[1], 2, NULL);
+            PyValue_CLOSE(k);
+            PyValue_CLOSE(dummy_v);
+            if (PyValue_IsNull(value)) {
+                goto fail;
+            }
+            if (PyValue_IsObject(value) &&
+                PyValue_AsKnownObjectBorrow(value) == dummy) {
+                // key not in map!
+                PyValue_CLOSE(value);
+                Py_DECREF(values);
+                values = Py_NewRef(Py_None);
+                goto done;
+            }
         }
-        if (value == NULL) {
-            goto fail;
-        }
-        if (value == dummy) {
-            // key not in map!
-            Py_DECREF(value);
-            Py_DECREF(values);
-            // Return None:
-            values = Py_NewRef(Py_None);
-            goto done;
-        }
-        PyTuple_SET_ITEM(values, i, value);
-        Py_CLEAR(key);
+        PyTuple_SET_VALUE(values, i, value);
     }
     // Success:
 done:
-    _PyThreadState_PopCValue(tstate, &method);
-    _PyThreadState_PopCValue(tstate, &self);
+    PyValue_CLOSE(get);
+    PyValue_CLOSE(map_v);
     Py_DECREF(seen);
     Py_DECREF(dummy);
     Py_XDECREF(key);
-    _PyValueTemps_Close(&method_temps);
     return values;
 fail:
-    _PyThreadState_PopCValue(tstate, &method);
-    _PyThreadState_PopCValue(tstate, &self);
+    PyValue_XCLOSE(get);
+    PyValue_XCLOSE(map_v);
     Py_XDECREF(seen);
     Py_XDECREF(dummy);
     Py_XDECREF(values);
     Py_XDECREF(key);
-    _PyValueTemps_Close(&method_temps);
     return NULL;
 }
 
 // Extract a named attribute from the subject, with additional bookkeeping to
 // raise TypeErrors for repeated lookups. On failure, return NULL (with no
 // error set). Use _PyErr_Occurred(tstate) to disambiguate.
-static PyObject *
-match_class_attr(PyThreadState *tstate, PyObject *subject, PyObject *type,
+static PyValue
+match_class_attr(PyThreadState *tstate, PyValueBorrow subject, PyObject *type,
                  PyObject *name, PyObject *seen)
 {
     assert(PyUnicode_CheckExact(name));
@@ -526,19 +533,18 @@ match_class_attr(PyThreadState *tstate, PyObject *subject, PyObject *type,
                             "%s() got multiple sub-patterns for attribute %R",
                             ((PyTypeObject*)type)->tp_name, name);
             }
-            return NULL;
+            return PyValue_NULL;
         }
     }
-    PyObject *attr;
-    (void)PyObject_GetOptionalAttr(subject, name, &attr);
-    return attr;
+    // A missing attribute is a failed match, with no exception
+    return _PyValue_GetOptionalAttr(subject, name).value;
 }
 
 // On success (match), return a tuple of extracted attributes. On failure (no
 // match), return NULL. Use _PyErr_Occurred(tstate) to disambiguate.
 PyObject*
-_PyEval_MatchClass(PyThreadState *tstate, PyObject *subject, PyObject *type,
-                   Py_ssize_t nargs, PyObject *kwargs)
+(_PyEval_MatchClass)(PyThreadState *tstate, PyValueBorrow subject, PyObject *type,
+                     Py_ssize_t nargs, PyObject *kwargs)
 {
     if (!PyType_Check(type)) {
         const char *e = "class pattern must refer to a class";
@@ -547,7 +553,10 @@ _PyEval_MatchClass(PyThreadState *tstate, PyObject *subject, PyObject *type,
     }
     assert(PyTuple_CheckExact(kwargs));
     // First, an isinstance check:
-    if (PyObject_IsInstance(subject, type) <= 0) {
+    PyValue type_value = PyValue_DUP(PyValue_FromObjectBorrow(type));
+    int isinstance = _PyEval_IsInstanceValue(subject, type_value);
+    PyValue_CLOSE(type_value);
+    if (isinstance <= 0) {
         return NULL;
     }
     // Short circuit if there aren't any arguments:
@@ -611,7 +620,7 @@ _PyEval_MatchClass(PyThreadState *tstate, PyObject *subject, PyObject *type,
         if (match_self) {
             // Easy. Copy the subject itself, and move on to kwargs.
             assert(PyValue_IsNull(PyTuple_GET_VALUE(attrs, 0)));
-            PyTuple_SET_ITEM(attrs, 0, Py_NewRef(subject));
+            PyTuple_SET_VALUE(attrs, 0, PyValue_DUP(subject));
         }
         else {
             for (Py_ssize_t i = 0; i < nargs; i++) {
@@ -624,13 +633,13 @@ _PyEval_MatchClass(PyThreadState *tstate, PyObject *subject, PyObject *type,
                     goto fail;
                 }
                 PyObject *name = PyValue_AsKnownObjectBorrow(name_value);
-                PyObject *attr = match_class_attr(tstate, subject, type, name,
-                                                  seen);
-                if (attr == NULL) {
+                PyValue attr = match_class_attr(tstate, subject, type, name,
+                                                seen);
+                if (PyValue_IsNull(attr)) {
                     goto fail;
                 }
                 assert(PyValue_IsNull(PyTuple_GET_VALUE(attrs, i)));
-                PyTuple_SET_ITEM(attrs, i, attr);
+                PyTuple_SET_VALUE(attrs, i, attr);
             }
         }
         Py_CLEAR(match_args);
@@ -638,12 +647,12 @@ _PyEval_MatchClass(PyThreadState *tstate, PyObject *subject, PyObject *type,
     // Finally, the keyword subpatterns:
     for (Py_ssize_t i = 0; i < nkwargs; i++) {
         PyObject *name = _PyTuple_GET_OBJECT(kwargs, i);
-        PyObject *attr = match_class_attr(tstate, subject, type, name, seen);
-        if (attr == NULL) {
+        PyValue attr = match_class_attr(tstate, subject, type, name, seen);
+        if (PyValue_IsNull(attr)) {
             goto fail;
         }
         assert(PyValue_IsNull(PyTuple_GET_VALUE(attrs, nargs + i)));
-        PyTuple_SET_ITEM(attrs, nargs + i, attr);
+        PyTuple_SET_VALUE(attrs, nargs + i, attr);
     }
     Py_XDECREF(seen);
     return attrs;
@@ -867,50 +876,6 @@ value_operation_close3(PyValue first, PyValue second, PyValue third)
     PyValue_XCLOSE(first);
     PyValue_XCLOSE(second);
     PyValue_XCLOSE(third);
-}
-
-static int
-value_store_subscript(PyValue container, PyValue key, PyValue value,
-                      _PyValueTemps *temps)
-{
-    if (PyValue_IsObject(container)) {
-        PyObject *obj = PyValue_AsKnownObjectBorrow(container);
-        PyMappingMethods *mapping = Py_TYPE(obj)->tp_as_mapping;
-        if (mapping != NULL && mapping->mp_ass_subscript == _PyDict_StoreSubscript) {
-            return PyDict_SetValue(obj, key, value);
-        }
-    }
-    if (PyValue_IsInlineInt(key) && PyValue_IsObject(container)) {
-        PyObject *list = PyValue_AsKnownObjectBorrow(container);
-        if (PyList_CheckExact(list)) {
-            /* list_ass_subscript() for an int index, which stores the value
-             * as it is: no box of the index or the value. */
-            Py_ssize_t index = PyValue_InlineInt64(key);
-            int err;
-            Py_BEGIN_CRITICAL_SECTION(list);
-            if (index < 0) {
-                index += PyList_GET_SIZE(list);
-            }
-            err = _PyList_SetItemTakeValue(
-                (PyListObject *)list, index,
-                PyValue_DUP(value));
-            Py_END_CRITICAL_SECTION();
-            return err;
-        }
-    }
-    PyObject *obj = _PyValueTemps_Object(temps, container);
-    if (obj == NULL) {
-        return -1;
-    }
-    PyObject *key_obj = _PyValueTemps_Object(temps, key);
-    if (key_obj == NULL) {
-        return -1;
-    }
-    PyObject *value_obj = _PyValueTemps_Object(temps, value);
-    if (value_obj == NULL) {
-        return -1;
-    }
-    return PyObject_SetItem(obj, key_obj, value_obj);
 }
 
 /* IMPORT_NAME's level as a C int, PyLong_AsInt() of it: -1 with an exception
@@ -1443,14 +1408,27 @@ int (_PyEval_StoreName)(PyThreadState *tstate, PyValueBorrow v, PyObject *name, 
    handlers (spec 3.5, R-c): each runtime API with an out-parameter runs in
    its own C frame and returns its outputs by value. */
 
-/* Out of line: _PyMapping_GetOptionalItem2 writes its status through a
-   pointer. status: -1 error, 0 missing, 1 found. */
-static Py_NO_INLINE _PyStatusObject
-value_mapping_get_optional_item(PyObject *obj, PyObject *key)
+/* namespace[name] for LOAD_FROM_DICT_OR_GLOBALS and _DEREF, as
+ * _PyValue_GetOptionalItem(), with a lazy import in the result reified. */
+static Py_NO_INLINE _PyStatusValue
+value_load_from_dict(PyThreadState *tstate, PyObject *namespace,
+                     PyObject *name)
 {
-    _PyStatusObject result;
-    result.object = _PyMapping_GetOptionalItem2(obj, key, &result.status);
-    return result;
+    _PyStatusValue found = _PyValue_GetOptionalItem(
+        PyValue_FromObjectBorrow(namespace), PyValue_FromObjectBorrow(name));
+    if (found.status > 0 && PyValue_IsObject(found.value) &&
+        PyLazyImport_CheckExact(PyValue_AsKnownObjectBorrow(found.value)))
+    {
+        PyObject *reified = _PyLazyImport_Reify(
+            tstate, PyValue_AsKnownObjectBorrow(found.value), name, namespace);
+        PyValue_CLOSE(found.value);
+        found.value = reified == NULL ? PyValue_NULL
+                                      : PyValue_FromObjectSteal(reified);
+        if (reified == NULL) {
+            found.status = -1;
+        }
+    }
+    return found;
 }
 
 /* Out of line: _PyEval_LoadGlobalValue writes the value through a pointer.
@@ -1470,17 +1448,6 @@ value_load_global(PyObject *globals, PyObject *builtins, PyObject *name)
 static _PyStatusValue
 _PyForIter_VirtualIteratorNext(PyThreadState *tstate, _PyInterpreterFrame *frame,
                                PyValue iter, PyValue *index_ptr);
-
-/* Out of line: _PyAsyncGenASend_Send returns its result through a pointer.
-   status is the PySendResult. */
-static Py_NO_INLINE _PyStatusObject
-value_async_gen_send(PyObject *iter, PyObject *val)
-{
-    _PyStatusObject result;
-    result.object = NULL;
-    result.status = _PyAsyncGenASend_Send(iter, val, &result.object);
-    return result;
-}
 
 #if (defined(__GNUC__) && __GNUC__ >= 10 && !defined(__clang__)) && defined(__x86_64__)
 /*
@@ -4524,7 +4491,7 @@ int
    a tuple of them, the answer is that of PyObject_IsInstance(), whose
    object_isinstance() then tests the subtype relation alone. */
 int
-_PyEval_IsInstanceValue(PyValue inst_st, PyValue cls_st)
+(_PyEval_IsInstanceValue)(PyValueBorrow inst_st, PyValueBorrow cls_st)
 {
     if (PyValue_IsInline(inst_st) && PyValue_IsPointerSpace(cls_st)) {
         PyTypeObject *type = PyValue_TYPE(inst_st);
@@ -5300,21 +5267,34 @@ _PyForIter_VirtualIteratorNext(PyThreadState *tstate, _PyInterpreterFrame *frame
         result.status = 1;
         return result;
     }
-    PyObject *next_o = (*Py_TYPE(iter_o)->tp_iternext)(iter_o);
-    if (next_o == NULL) {
-        if (_PyErr_Occurred(tstate)) {
-            if (_PyErr_ExceptionMatches(tstate, PyExc_StopIteration)) {
-                _PyEval_MonitorRaise(tstate, frame, frame->instr_ptr);
-                _PyErr_Clear(tstate);
-            }
-            else {
-                result.status = -1;
-            }
-        }
+    _PyStatusValue step = _PyValue_IterStep(iter_o);
+    if (step.status == PYGEN_NEXT) {
+        result.value = step.value;
+        result.status = 1;
         return result;
     }
-    result.value = PyValue_FromObjectSteal(next_o);
-    result.status = 1;
+    if (step.status == PYGEN_RETURN) {
+        // The iterator ended. A return value is reported as the
+        // StopIteration it stands for, then dropped.
+        if (!PyValue_IsNull(step.value) && !PyValue_IsNone(step.value)) {
+            if (_PyGen_SetStopIterationValue(step.value) < 0) {
+                PyValue_CLOSE(step.value);
+                result.status = -1;
+                return result;
+            }
+            _PyEval_MonitorRaise(tstate, frame, frame->instr_ptr);
+            _PyErr_Clear(tstate);
+        }
+        PyValue_XCLOSE(step.value);
+        return result;
+    }
+    if (_PyErr_ExceptionMatches(tstate, PyExc_StopIteration)) {
+        _PyEval_MonitorRaise(tstate, frame, frame->instr_ptr);
+        _PyErr_Clear(tstate);
+    }
+    else {
+        result.status = -1;
+    }
     return result;
 }
 

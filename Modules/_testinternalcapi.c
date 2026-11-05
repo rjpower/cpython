@@ -1671,6 +1671,24 @@ set_ir_max_forward(PyObject *self, PyObject *arg)
     return PyLong_FromLong(old);
 }
 
+/* Set the slot limit of the register allocator, for code compiled from now
+ * on, and return the previous one. */
+static PyObject *
+set_ir_max_slots(PyObject *self, PyObject *arg)
+{
+    int value = PyLong_AsInt(arg);
+    if (value == -1 && PyErr_Occurred()) {
+        return NULL;
+    }
+    if (value < 0 || value > IR_MAX_SLOTS) {
+        PyErr_SetString(PyExc_ValueError, "limit out of range");
+        return NULL;
+    }
+    int old = _PyIR_MaxSlots;
+    _PyIR_MaxSlots = value;
+    return PyLong_FromLong(old);
+}
+
 static PyObject *
 get_co_localskinds(PyObject *self, PyObject *arg)
 {
@@ -4255,6 +4273,7 @@ static PyMethodDef module_functions[] = {
     {"get_feedback", get_feedback, METH_VARARGS, NULL},
     {"get_ir", get_ir, METH_VARARGS, NULL},
     {"set_ir_max_forward", set_ir_max_forward, METH_O, NULL},
+    {"set_ir_max_slots", set_ir_max_slots, METH_O, NULL},
     {"get_code_var_counts", _PyCFunction_CAST(get_code_var_counts),
      METH_VARARGS | METH_KEYWORDS, NULL},
     {"verify_stateless_code", _PyCFunction_CAST(verify_stateless_code),

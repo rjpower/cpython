@@ -65,7 +65,10 @@ extern "C" {
 /* A frame has at most this many slots, so a slot field is 0 to 4094. */
 #define IR_MAX_SLOTS    IR_FIELD_MAX
 /* FOR_ITER and SEND reach at most this far; the assembler relaxes a loop
- * whose exit is further away (Python/assemble.c). */
+ * whose exit is further away (Python/assemble.c).  The distance is the
+ * non-negative half of a signed 12-bit field, 2^11 - 1: register IR v2 step
+ * B6 reads D of FOR_ITER and SEND as a signed distance, the same rule as the
+ * fused compare-and-jump words, so the bound stays below the sign bit. */
 #define IR_MAX_FORWARD  2047
 
 #define IR_HANDLER(W)   ((int)((W) & 0xFFFF))
@@ -327,6 +330,10 @@ extern size_t _PyCode_ExecSizeOf(PyCodeObject *co);
 /* The farthest exit of FOR_ITER and SEND that the assembler does not relax,
  * IR_MAX_FORWARD.  Tests lower it to relax every loop compiled after. */
 PyAPI_DATA(int) _PyIR_MaxForward;
+
+/* The slot limit of the register allocator, IR_MAX_SLOTS.  Tests lower it to
+ * reach the "too many temporaries" SyntaxError for code compiled after. */
+PyAPI_DATA(int) _PyIR_MaxSlots;
 
 /* Decoding the words of a code object (co_words), by word index.  These
  * read the code object only, never its executing copy, whose handlers

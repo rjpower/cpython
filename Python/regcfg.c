@@ -791,6 +791,10 @@ _PyRegCfg_OpSlots(const _PyRegCfg *cfg, const _PyRegOp *op,
  *
  * The verifier checks all three. */
 
+/* The slot limit that the allocator enforces, IR_MAX_SLOTS.  Tests lower it
+ * to reach the error, which no stdlib source does. */
+int _PyIR_MaxSlots = IR_MAX_SLOTS;
+
 static int
 slot_error(const _PyRegOp *op, const char *what)
 {
@@ -821,8 +825,15 @@ occ_free(occupancy *o, int s, int v)
 static inline int
 occ_take(occupancy *o, int s, int v, const _PyRegOp *op)
 {
-    if (s < 0 || s >= IR_MAX_SLOTS) {
-        return slot_error(op, "too many temporaries");
+    if (s < 0) {
+        return slot_error(op, "a negative slot");
+    }
+    if (s >= _PyIR_MaxSlots) {
+        // A limit, not an invariant: source can in principle reach it.
+        PyErr_Format(PyExc_SyntaxError,
+                     "too many temporaries in function at line %d "
+                     "(limit %d slots)", op->loc.lineno, _PyIR_MaxSlots);
+        return ERROR;
     }
     if (o->occ[s] >= 0 && o->occ[s] != v && !o->lenient) {
         PyErr_Format(PyExc_SystemError, "register allocation: two live "

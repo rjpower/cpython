@@ -514,6 +514,28 @@ def relaxed_compile(source):
     return namespace
 
 
+class SlotLimitTest(unittest.TestCase):
+    """Running out of slots is a SyntaxError naming the limit."""
+
+    def test_too_many_temporaries(self):
+        source = "def f(a, b, c, d):\n    return a + (b + (c + (d + a)))\n"
+        old = _testinternalcapi.set_ir_max_slots(2)
+        try:
+            with self.assertRaisesRegex(SyntaxError,
+                                        r"too many temporaries.*limit 2"):
+                compile(source, "<limit>", "exec")
+        finally:
+            _testinternalcapi.set_ir_max_slots(old)
+        namespace = {}
+        exec(source, namespace)
+        self.assertEqual(namespace["f"](1, 2, 3, 4), 11)
+
+    def test_knob_range(self):
+        for value in (-1, 4096):
+            with self.assertRaises(ValueError):
+                _testinternalcapi.set_ir_max_slots(value)
+
+
 class RelaxationTest(unittest.TestCase):
     """FOR_ITER and SEND reach IR_MAX_FORWARD words; a loop whose exit is
     further away exits through IR_JUMP words after its own."""

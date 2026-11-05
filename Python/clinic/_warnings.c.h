@@ -2,13 +2,19 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
+#include "pycore_modsupport.h"    // _PyArg_CheckArityValue()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_Index()
 
 PyDoc_STRVAR(warnings_acquire_lock__doc__,
 "_acquire_lock($module, /)\n"
@@ -16,15 +22,23 @@ PyDoc_STRVAR(warnings_acquire_lock__doc__,
 "\n");
 
 #define WARNINGS_ACQUIRE_LOCK_METHODDEF    \
-    {"_acquire_lock", (PyCFunction)warnings_acquire_lock, METH_NOARGS, warnings_acquire_lock__doc__},
+    {"_acquire_lock", _PyCFunction_CAST(warnings_acquire_lock), METH_VALUE, warnings_acquire_lock__doc__},
 
-static PyObject *
+static PyValue
 warnings_acquire_lock_impl(PyObject *module);
 
-static PyObject *
-warnings_acquire_lock(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+warnings_acquire_lock(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return warnings_acquire_lock_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValue("_warnings._acquire_lock()", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = warnings_acquire_lock_impl(PyValue_AsKnownObjectBorrow(module));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(warnings_release_lock__doc__,
@@ -33,15 +47,23 @@ PyDoc_STRVAR(warnings_release_lock__doc__,
 "\n");
 
 #define WARNINGS_RELEASE_LOCK_METHODDEF    \
-    {"_release_lock", (PyCFunction)warnings_release_lock, METH_NOARGS, warnings_release_lock__doc__},
+    {"_release_lock", _PyCFunction_CAST(warnings_release_lock), METH_VALUE, warnings_release_lock__doc__},
 
-static PyObject *
+static PyValue
 warnings_release_lock_impl(PyObject *module);
 
-static PyObject *
-warnings_release_lock(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+warnings_release_lock(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return warnings_release_lock_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValue("_warnings._release_lock()", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = warnings_release_lock_impl(PyValue_AsKnownObjectBorrow(module));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(warnings_warn__doc__,
@@ -65,17 +87,17 @@ PyDoc_STRVAR(warnings_warn__doc__,
 "    during stacklevel computations for stack frame attribution.");
 
 #define WARNINGS_WARN_METHODDEF    \
-    {"warn", _PyCFunction_CAST(warnings_warn), METH_FASTCALL|METH_KEYWORDS, warnings_warn__doc__},
+    {"warn", _PyCFunction_CAST(warnings_warn), METH_VALUE, warnings_warn__doc__},
 
-static PyObject *
-warnings_warn_impl(PyObject *module, PyObject *message, PyObject *category,
-                   Py_ssize_t stacklevel, PyObject *source,
-                   PyTupleObject *skip_file_prefixes);
+static PyValue
+warnings_warn_impl(PyObject *module, PyValueBorrow message,
+                   PyValueBorrow category, Py_ssize_t stacklevel,
+                   PyValueBorrow source, PyTupleObject *skip_file_prefixes);
 
-static PyObject *
-warnings_warn(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+warnings_warn(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 5
@@ -103,63 +125,46 @@ warnings_warn(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObjec
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[5];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *message;
-    PyObject *category = Py_None;
+    Py_ssize_t _idx[5];
+    PyValueBorrow message;
+    PyValueBorrow category = PyValue_Borrow(PyValue_None);
     Py_ssize_t stacklevel = 1;
-    PyObject *source = Py_None;
+    PyValueBorrow source = PyValue_Borrow(PyValue_None);
     PyTupleObject *skip_file_prefixes = NULL;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, _idx, 5)) {
         goto exit;
     }
-    message = args[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
+    message = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        category = PyValue_Borrow(args[_idx[1]]);
     }
-    if (args[1]) {
-        category = args[1];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-    if (args[2]) {
+    if (_idx[2] >= 0) {
         {
             Py_ssize_t ival = -1;
-            PyObject *iobj = _PyNumber_Index(args[2]);
-            if (iobj != NULL) {
-                ival = PyLong_AsSsize_t(iobj);
-                Py_DECREF(iobj);
+            PyValue iobj = _PyValue_Index(PyValue_Borrow(args[_idx[2]]));
+            if (!PyValue_IsNull(iobj)) {
+                ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+                PyValue_CLOSE(iobj);
             }
             if (ival == -1 && PyErr_Occurred()) {
                 goto exit;
             }
             stacklevel = ival;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
+    }
+    if (_idx[3] >= 0) {
+        source = PyValue_Borrow(args[_idx[3]]);
+    }
+    if (_idx[4] >= 0) {
+        if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[_idx[4]])), &PyTuple_Type)) {
+            _PyArg_BadArgumentValue("warn", "argument 'skip_file_prefixes'", "tuple", PyValue_Borrow(args[_idx[4]]));
+            goto exit;
         }
+        skip_file_prefixes = (PyTupleObject *)PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[4]]));
     }
-    if (args[3]) {
-        source = args[3];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    if (!PyTuple_Check(args[4])) {
-        _PyArg_BadArgument("warn", "argument 'skip_file_prefixes'", "tuple", args[4]);
-        goto exit;
-    }
-    skip_file_prefixes = (PyTupleObject *)args[4];
-skip_optional_kwonly:
-    return_value = warnings_warn_impl(module, message, category, stacklevel, source, skip_file_prefixes);
+    return_value = warnings_warn_impl(PyValue_AsKnownObjectBorrow(module), message, category, stacklevel, source, skip_file_prefixes);
 
 exit:
     return return_value;
@@ -174,18 +179,20 @@ PyDoc_STRVAR(warnings_warn_explicit__doc__,
 "Issue a warning, or maybe ignore it or raise an exception.");
 
 #define WARNINGS_WARN_EXPLICIT_METHODDEF    \
-    {"warn_explicit", _PyCFunction_CAST(warnings_warn_explicit), METH_FASTCALL|METH_KEYWORDS, warnings_warn_explicit__doc__},
+    {"warn_explicit", _PyCFunction_CAST(warnings_warn_explicit), METH_VALUE, warnings_warn_explicit__doc__},
 
-static PyObject *
-warnings_warn_explicit_impl(PyObject *module, PyObject *message,
-                            PyObject *category, PyObject *filename,
-                            int lineno, PyObject *mod, PyObject *registry,
-                            PyObject *module_globals, PyObject *sourceobj);
+static PyValue
+warnings_warn_explicit_impl(PyObject *module, PyValueBorrow message,
+                            PyValueBorrow category, PyObject *filename,
+                            int lineno, PyValueBorrow mod,
+                            PyValueBorrow registry,
+                            PyValueBorrow module_globals,
+                            PyValueBorrow sourceobj);
 
-static PyObject *
-warnings_warn_explicit(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+warnings_warn_explicit(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 8
@@ -213,57 +220,48 @@ warnings_warn_explicit(PyObject *module, PyObject *const *args, Py_ssize_t nargs
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[8];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 4;
-    PyObject *message;
-    PyObject *category;
+    Py_ssize_t _idx[8];
+    PyValueBorrow message;
+    PyValueBorrow category;
     PyObject *filename;
     int lineno;
-    PyObject *mod = NULL;
-    PyObject *registry = Py_None;
-    PyObject *module_globals = Py_None;
-    PyObject *sourceobj = Py_None;
+    PyValueBorrow mod = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow registry = PyValue_Borrow(PyValue_None);
+    PyValueBorrow module_globals = PyValue_Borrow(PyValue_None);
+    PyValueBorrow sourceobj = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 4, /*maxpos*/ 8, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 4, /*maxpos*/ 8, /*minkw*/ 0, /*varpos*/ 0, _idx, 8)) {
         goto exit;
     }
-    message = args[0];
-    category = args[1];
-    if (!PyUnicode_Check(args[2])) {
-        _PyArg_BadArgument("warn_explicit", "argument 'filename'", "str", args[2]);
+    message = PyValue_Borrow(args[_idx[0]]);
+    category = PyValue_Borrow(args[_idx[1]]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[2]]))) {
+        _PyArg_BadArgumentValue("warn_explicit", "argument 'filename'", "str", PyValue_Borrow(args[_idx[2]]));
         goto exit;
     }
-    filename = args[2];
-    lineno = PyLong_AsInt(args[3]);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]])))) {
+        _PyArg_BadArgument("warn_explicit", "argument 'filename'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]])));
+        goto exit;
+    }
+    filename = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]]));
+    lineno = _PyValue_AsInt(PyValue_Borrow(args[_idx[3]]));
     if (lineno == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[4] >= 0) {
+        mod = PyValue_Borrow(args[_idx[4]]);
     }
-    if (args[4]) {
-        mod = args[4];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[5] >= 0) {
+        registry = PyValue_Borrow(args[_idx[5]]);
     }
-    if (args[5]) {
-        registry = args[5];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[6] >= 0) {
+        module_globals = PyValue_Borrow(args[_idx[6]]);
     }
-    if (args[6]) {
-        module_globals = args[6];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[7] >= 0) {
+        sourceobj = PyValue_Borrow(args[_idx[7]]);
     }
-    sourceobj = args[7];
-skip_optional_pos:
-    return_value = warnings_warn_explicit_impl(module, message, category, filename, lineno, mod, registry, module_globals, sourceobj);
+    return_value = warnings_warn_explicit_impl(PyValue_AsKnownObjectBorrow(module), message, category, filename, lineno, mod, registry, module_globals, sourceobj);
 
 exit:
     return return_value;
@@ -275,14 +273,22 @@ PyDoc_STRVAR(warnings_filters_mutated_lock_held__doc__,
 "\n");
 
 #define WARNINGS_FILTERS_MUTATED_LOCK_HELD_METHODDEF    \
-    {"_filters_mutated_lock_held", (PyCFunction)warnings_filters_mutated_lock_held, METH_NOARGS, warnings_filters_mutated_lock_held__doc__},
+    {"_filters_mutated_lock_held", _PyCFunction_CAST(warnings_filters_mutated_lock_held), METH_VALUE, warnings_filters_mutated_lock_held__doc__},
 
-static PyObject *
+static PyValue
 warnings_filters_mutated_lock_held_impl(PyObject *module);
 
-static PyObject *
-warnings_filters_mutated_lock_held(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+warnings_filters_mutated_lock_held(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return warnings_filters_mutated_lock_held_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValue("_warnings._filters_mutated_lock_held()", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = warnings_filters_mutated_lock_held_impl(PyValue_AsKnownObjectBorrow(module));
+
+exit:
+    return return_value;
 }
-/*[clinic end generated code: output=127e640bd1126baa input=a9049054013a1b77]*/
+/*[clinic end generated code: output=011614eeed161b88 input=a9049054013a1b77]*/

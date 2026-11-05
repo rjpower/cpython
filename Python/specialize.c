@@ -2219,6 +2219,26 @@ specialize_c_call(PyObject *callable, _PyInstr *instr, int nargs)
             specialize(instr, CALL_BUILTIN_FAST_WITH_KEYWORDS);
             return 0;
         }
+        case METH_VALUE: {
+            /* len() and isinstance() are METH_VALUE since core Clinic emits
+               values; every other value builtin goes through the value
+               vectorcall in CALL_NON_PY_GENERAL. */
+            PyInterpreterState *interp = _PyInterpreterState_GET();
+            if (nargs == 1 && instr_oparg(instr) == 1
+                && callable == interp->callable_cache.len)
+            {
+                specialize(instr, CALL_LEN);
+                return 0;
+            }
+            if (nargs == 2 && instr_oparg(instr) == 2
+                && callable == interp->callable_cache.isinstance)
+            {
+                specialize(instr, CALL_ISINSTANCE);
+                return 0;
+            }
+            specialize(instr, CALL_NON_PY_GENERAL);
+            return 0;
+        }
         default:
             specialize(instr, CALL_NON_PY_GENERAL);
             return 0;

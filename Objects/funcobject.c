@@ -680,6 +680,11 @@ static PyMemberDef func_memberlist[] = {
 };
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 class function "PyFunctionObject *" "&PyFunction_Type"
 [clinic start generated code]*/
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=70af9c90aa2e71b0]*/
@@ -1123,84 +1128,84 @@ function.__new__ as func_new
 Create a function object.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 func_new_impl(PyTypeObject *type, PyCodeObject *code, PyObject *globals,
-              PyObject *name, PyObject *defaults, PyObject *closure,
-              PyObject *kwdefaults)
-/*[clinic end generated code: output=de72f4c22ac57144 input=20c9c9f04ad2d3f2]*/
+              PyValueBorrow name, PyValueBorrow defaults,
+              PyValueBorrow closure, PyValueBorrow kwdefaults)
+/*[clinic end generated code: output=7b02369e51a53243 input=20c9c9f04ad2d3f2]*/
 {
     PyFunctionObject *newfunc;
     Py_ssize_t nclosure;
 
-    if (name != Py_None && !PyUnicode_Check(name)) {
+    if (!PyValue_IsNone(name) && !(PyValue_IsObject(name) && PyUnicode_Check(PyValue_AsKnownObjectBorrow(name)))) {
         PyErr_SetString(PyExc_TypeError,
                         "arg 3 (name) must be None or string");
-        return NULL;
+        return PyValue_NULL;
     }
-    if (defaults != Py_None && !PyTuple_Check(defaults)) {
+    if (!PyValue_IsNone(defaults) && !(PyValue_IsObject(defaults) && PyTuple_Check(PyValue_AsKnownObjectBorrow(defaults)))) {
         PyErr_SetString(PyExc_TypeError,
                         "arg 4 (defaults) must be None or tuple");
-        return NULL;
+        return PyValue_NULL;
     }
-    if (!PyTuple_Check(closure)) {
-        if (code->co_nfreevars && closure == Py_None) {
+    if (!(PyValue_IsObject(closure) && PyTuple_Check(PyValue_AsKnownObjectBorrow(closure)))) {
+        if (code->co_nfreevars && PyValue_IsNone(closure)) {
             PyErr_SetString(PyExc_TypeError,
                             "arg 5 (closure) must be tuple");
-            return NULL;
+            return PyValue_NULL;
         }
-        else if (closure != Py_None) {
+        else if (!PyValue_IsNone(closure)) {
             PyErr_SetString(PyExc_TypeError,
                 "arg 5 (closure) must be None or tuple");
-            return NULL;
+            return PyValue_NULL;
         }
     }
-    if (kwdefaults != Py_None && !PyDict_Check(kwdefaults)) {
+    if (!PyValue_IsNone(kwdefaults) && !(PyValue_IsObject(kwdefaults) && PyDict_Check(PyValue_AsKnownObjectBorrow(kwdefaults)))) {
         PyErr_SetString(PyExc_TypeError,
                         "arg 6 (kwdefaults) must be None or dict");
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* check that the closure is well-formed */
-    nclosure = closure == Py_None ? 0 : PyTuple_GET_SIZE(closure);
+    nclosure = PyValue_IsNone(closure) ? 0 : PyTuple_GET_SIZE(PyValue_AsKnownObjectBorrow(closure));
     if (code->co_nfreevars != nclosure)
-        return PyErr_Format(PyExc_ValueError,
+        return _PyValue_FromObjectResult(PyErr_Format(PyExc_ValueError,
                             "%U requires closure of length %d, not %zd",
-                            code->co_name, code->co_nfreevars, nclosure);
+                            code->co_name, code->co_nfreevars, nclosure));
     if (nclosure) {
         Py_ssize_t i;
         for (i = 0; i < nclosure; i++) {
-            PyValueBorrow value = PyTuple_GET_VALUE(closure, i);
+            PyValueBorrow value = PyTuple_GET_VALUE(PyValue_AsKnownObjectBorrow(closure), i);
             if (!PyValue_IsObject(value)
                 || !PyCell_Check(PyValue_AsKnownObjectBorrow(value))) {
-                return PyErr_Format(PyExc_TypeError,
+                return _PyValue_FromObjectResult(PyErr_Format(PyExc_TypeError,
                     "arg 5 (closure) expected cell, found %s",
-                                    PyValue_TYPE(value)->tp_name);
+                                    PyValue_TYPE(value)->tp_name));
             }
         }
     }
     if (PySys_Audit("function.__new__", "O", code) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     newfunc = (PyFunctionObject *)PyFunction_New((PyObject *)code,
                                                  globals);
     if (newfunc == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
-    if (name != Py_None) {
-        Py_SETREF(newfunc->func_name, Py_NewRef(name));
+    if (!PyValue_IsNone(name)) {
+        Py_SETREF(newfunc->func_name, Py_NewRef(PyValue_AsKnownObjectBorrow(name)));
     }
-    if (defaults != Py_None) {
-        newfunc->func_defaults = Py_NewRef(defaults);
+    if (!PyValue_IsNone(defaults)) {
+        newfunc->func_defaults = Py_NewRef(PyValue_AsKnownObjectBorrow(defaults));
     }
-    if (closure != Py_None) {
-        newfunc->func_closure = Py_NewRef(closure);
+    if (!PyValue_IsNone(closure)) {
+        newfunc->func_closure = Py_NewRef(PyValue_AsKnownObjectBorrow(closure));
     }
-    if (kwdefaults != Py_None) {
-        newfunc->func_kwdefaults = Py_NewRef(kwdefaults);
+    if (!PyValue_IsNone(kwdefaults)) {
+        newfunc->func_kwdefaults = Py_NewRef(PyValue_AsKnownObjectBorrow(kwdefaults));
     }
 
-    return (PyObject *)newfunc;
+    return _PyValue_FromObjectResult((PyObject *)newfunc);
 }
 
 static int

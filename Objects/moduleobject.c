@@ -149,15 +149,15 @@ PyModuleDef_Init(PyModuleDef* def)
 
 static int
 module_init_dict(PyModuleObject *mod, PyObject *md_dict,
-                 PyObject *name, PyObject *doc)
+                 PyObject *name, PyValueBorrow doc)
 {
     assert(md_dict != NULL);
-    if (doc == NULL)
-        doc = Py_None;
+    if (PyValue_IsNull(doc))
+        doc = PyValue_FromObjectBorrow(Py_None);
 
     if (PyDict_SetValue(md_dict, _PyValue_FromObjectKnown(&_Py_ID(__name__)), PyValue_FromObjectBorrow(name)) != 0)
         return -1;
-    if (PyDict_SetValue(md_dict, _PyValue_FromObjectKnown(&_Py_ID(__doc__)), PyValue_FromObjectBorrow(doc)) != 0)
+    if (PyDict_SetValue(md_dict, _PyValue_FromObjectKnown(&_Py_ID(__doc__)), doc) != 0)
         return -1;
     if (PyDict_SetValue(md_dict, _PyValue_FromObjectKnown(&_Py_ID(__package__)), _PyValue_FromObjectKnown(Py_None)) != 0)
         return -1;
@@ -253,7 +253,7 @@ PyModule_NewObject(PyObject *name)
     PyModuleObject *m = new_module_notrack(&PyModule_Type);
     if (m == NULL)
         return NULL;
-    if (module_init_dict(m, m->md_dict, name, NULL) != 0)
+    if (module_init_dict(m, m->md_dict, name, PyValue_Borrow(PyValue_NULL)) != 0)
         goto fail;
     track_module(m);
     return (PyObject *)m;
@@ -1160,6 +1160,11 @@ _PyModule_ClearDict(PyObject *d)
 }
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 class module "PyModuleObject *" "&PyModule_Type"
 [clinic start generated code]*/
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=3e35d4f708ecb6af]*/
@@ -1179,8 +1184,8 @@ The name must be a string; the optional doc argument can have any type.
 [clinic start generated code]*/
 
 static int
-module___init___impl(PyModuleObject *self, PyObject *name, PyObject *doc)
-/*[clinic end generated code: output=e7e721c26ce7aad7 input=57f9e177401e5e1e]*/
+module___init___impl(PyModuleObject *self, PyObject *name, PyValueBorrow doc)
+/*[clinic end generated code: output=e73d372242a5a477 input=57f9e177401e5e1e]*/
 {
     return module_init_dict(self, self->md_dict, name, doc);
 }

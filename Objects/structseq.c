@@ -181,6 +181,11 @@ structseq_dealloc(PyObject *op)
 }
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 class structseq "PyStructSequence *" "NULL"
 [clinic start generated code]*/
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=9d781c6922c77752]*/
@@ -194,56 +199,61 @@ structseq.__new__ as structseq_new
     dict: object(c_default="NULL") = {}
 [clinic start generated code]*/
 
-static PyObject *
-structseq_new_impl(PyTypeObject *type, PyObject *arg, PyObject *dict)
-/*[clinic end generated code: output=baa082e788b171da input=90532511101aa3fb]*/
+static PyValue
+structseq_new_impl(PyTypeObject *type, PyValueBorrow arg, PyValueBorrow dict)
+/*[clinic end generated code: output=6af6381d563832e1 input=90532511101aa3fb]*/
 {
     PyStructSequence *res = NULL;
     Py_ssize_t len, min_len, max_len, i, n_unnamed_fields;
 
     min_len = VISIBLE_SIZE_TP(type);
     if (min_len < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     max_len = REAL_SIZE_TP(type);
     if (max_len < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     n_unnamed_fields = UNNAMED_FIELDS_TP(type);
     if (n_unnamed_fields < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    arg = PySequence_Tuple(arg);
+    PyObject *arg_obj = _PyValue_AsObjectAt(arg, BOX_SITE_PARSER);
+    if (arg_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *seq = PySequence_Tuple(arg_obj);
+    Py_DECREF(arg_obj);
 
-    if (!arg) {
-        return NULL;
+    if (!seq) {
+        return PyValue_NULL;
     }
 
-    if (dict && !PyDict_Check(dict)) {
+    if (!PyValue_IsNull(dict) && !(PyValue_IsObject(dict) && PyDict_Check(PyValue_AsKnownObjectBorrow(dict)))) {
         PyErr_Format(PyExc_TypeError,
                      "%.500s() takes a dict as second arg, if any",
                      type->tp_name);
-        Py_DECREF(arg);
-        return NULL;
+        Py_DECREF(seq);
+        return PyValue_NULL;
     }
 
-    len = PySequence_Fast_GET_SIZE(arg);
+    len = PySequence_Fast_GET_SIZE(seq);
     if (min_len != max_len) {
         if (len < min_len) {
             PyErr_Format(PyExc_TypeError,
                 "%.500s() takes an at least %zd-sequence (%zd-sequence given)",
                 type->tp_name, min_len, len);
-            Py_DECREF(arg);
-            return NULL;
+            Py_DECREF(seq);
+            return PyValue_NULL;
         }
 
         if (len > max_len) {
             PyErr_Format(PyExc_TypeError,
                 "%.500s() takes an at most %zd-sequence (%zd-sequence given)",
                 type->tp_name, max_len, len);
-            Py_DECREF(arg);
-            return NULL;
+            Py_DECREF(seq);
+            return PyValue_NULL;
         }
     }
     else {
@@ -251,29 +261,31 @@ structseq_new_impl(PyTypeObject *type, PyObject *arg, PyObject *dict)
             PyErr_Format(PyExc_TypeError,
                          "%.500s() takes a %zd-sequence (%zd-sequence given)",
                          type->tp_name, min_len, len);
-            Py_DECREF(arg);
-            return NULL;
+            Py_DECREF(seq);
+            return PyValue_NULL;
         }
     }
 
     res = (PyStructSequence*) PyStructSequence_New(type);
     if (res == NULL) {
-        Py_DECREF(arg);
-        return NULL;
+        Py_DECREF(seq);
+        return PyValue_NULL;
     }
     for (i = 0; i < len; ++i) {
-        PyValueBorrow value = PyList_Check(arg) ? PyList_GET_VALUE(arg, i) : PyTuple_GET_VALUE(arg, i);
+        PyValueBorrow value = PyTuple_GET_VALUE(seq, i);
         res->ob_item[i] = PyValue_DUP(value);
     }
-    Py_DECREF(arg);
-    if (dict != NULL && PyDict_GET_SIZE(dict) > 0) {
+    Py_DECREF(seq);
+    PyObject *dict_obj = PyValue_IsNull(dict) ? NULL
+                                              : PyValue_AsKnownObjectBorrow(dict);
+    if (dict_obj != NULL && PyDict_GET_SIZE(dict_obj) > 0) {
         Py_ssize_t n_found_keys = 0;
         for (i = len; i < max_len; ++i) {
             PyValue ob;
             const char *name = type->tp_members[i - n_unnamed_fields].name;
-            if (PyDict_GetValueString(dict, name, &ob) < 0) {
+            if (PyDict_GetValueString(dict_obj, name, &ob) < 0) {
                 Py_DECREF(res);
-                return NULL;
+                return PyValue_NULL;
             }
             if (PyValue_IsNull(ob)) {
                 ob = PyValue_DUP(_PyValue_FromObjectKnown(Py_None));
@@ -283,12 +295,12 @@ structseq_new_impl(PyTypeObject *type, PyObject *arg, PyObject *dict)
             }
             PyStructSequence_SET_VALUE((PyObject *)res, i, ob);
         }
-        if (PyDict_GET_SIZE(dict) > n_found_keys) {
+        if (PyDict_GET_SIZE(dict_obj) > n_found_keys) {
             PyErr_Format(PyExc_TypeError,
                          "%.500s() got duplicate or unexpected field name(s)",
                          type->tp_name);
             Py_DECREF(res);
-            return NULL;
+            return PyValue_NULL;
         }
     } else {
         for (i = len; i < max_len; ++i) {
@@ -297,7 +309,7 @@ structseq_new_impl(PyTypeObject *type, PyObject *arg, PyObject *dict)
     }
 
     _PyObject_GC_TRACK(res);
-    return (PyObject*) res;
+    return _PyValue_FromObjectResult((PyObject*) res);
 }
 
 
@@ -432,32 +444,32 @@ structseq.__replace__
 Return a copy with new values for the specified fields.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 structseq___replace___impl(PyStructSequence *self, PyObject *changes)
-/*[clinic end generated code: output=d90566015d93695f input=bf709d26db77afd6]*/
+/*[clinic end generated code: output=466b6d234bba40e5 input=bf709d26db77afd6]*/
 {
     PyStructSequence *result = NULL;
     Py_ssize_t n_fields, n_unnamed_fields, i;
 
     n_fields = REAL_SIZE(self);
     if (n_fields < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     n_unnamed_fields = UNNAMED_FIELDS(self);
     if (n_unnamed_fields < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (n_unnamed_fields > 0) {
         PyErr_Format(PyExc_TypeError,
                      "__replace__() is not supported for %.500s "
                      "because it has unnamed field(s)",
                      Py_TYPE(self)->tp_name);
-        return NULL;
+        return PyValue_NULL;
     }
 
     result = (PyStructSequence *) PyStructSequence_New(Py_TYPE(self));
     if (!result) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     // We do not support types with unnamed fields, so we can iterate over
@@ -486,11 +498,11 @@ structseq___replace___impl(PyStructSequence *self, PyObject *changes)
     }
 
     _PyObject_GC_TRACK(result);
-    return (PyObject *)result;
+    return _PyValue_FromObjectResult((PyObject *)result);
 
 error:
     Py_DECREF(result);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyMethodDef structseq_methods[] = {

@@ -151,6 +151,11 @@ static int dict_merge_from_seq2(PyObject *d, PyObject *seq2, int override);
 
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 class dict "PyDictObject *" "&PyDict_Type"
 class frozendict "PyFrozenDictObject *" "&PyFrozenDict_Type"
 [clinic start generated code]*/
@@ -3850,11 +3855,25 @@ dict.fromkeys
 Create a new dictionary with keys from iterable and values set to value.
 [clinic start generated code]*/
 
-static PyObject *
-dict_fromkeys_impl(PyTypeObject *type, PyObject *iterable, PyObject *value)
-/*[clinic end generated code: output=8fb98e4b10384999 input=3903715eb48b287e]*/
+static PyValue
+dict_fromkeys_impl(PyTypeObject *type, PyValueBorrow iterable,
+                   PyValueBorrow value)
+/*[clinic end generated code: output=943e0896c77c1f7d input=3903715eb48b287e]*/
 {
-    return _PyDict_FromKeys((PyObject *)type, iterable, value);
+    PyObject *iterable_object = _PyValue_AsObjectAt(iterable, BOX_SITE_PARSER);
+    if (iterable_object == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *value_object = _PyValue_AsObjectAt(value, BOX_SITE_PARSER);
+    if (value_object == NULL) {
+        Py_DECREF(iterable_object);
+        return PyValue_NULL;
+    }
+    PyObject *res = _PyDict_FromKeys((PyObject *)type, iterable_object,
+                                     value_object);
+    Py_DECREF(iterable_object);
+    Py_DECREF(value_object);
+    return _PyValue_FromObjectResult(res);
 }
 
 /* Single-arg dict update; used by dict_update_common and operators. */
@@ -4244,11 +4263,11 @@ dict.copy
 Return a shallow copy of the dict.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 dict_copy_impl(PyDictObject *self)
-/*[clinic end generated code: output=ffb782cf970a5c39 input=73935f042b639de4]*/
+/*[clinic end generated code: output=631fd9d7bdc37042 input=73935f042b639de4]*/
 {
-    return PyDict_Copy((PyObject *)self);
+    return _PyValue_FromObjectResult(PyDict_Copy((PyObject *)self));
 }
 
 /* Duplicate a stable source into already allocated detached storage. */
@@ -4457,18 +4476,18 @@ dict.__contains__
 True if the dictionary has the specified key, else False.
 [clinic start generated code]*/
 
-static PyObject *
-dict___contains___impl(PyDictObject *self, PyObject *key)
-/*[clinic end generated code: output=1b314e6da7687dae input=fe1cb42ad831e820]*/
+static PyValue
+dict___contains___impl(PyDictObject *self, PyValueBorrow key)
+/*[clinic end generated code: output=bd89a53d942697b8 input=fe1cb42ad831e820]*/
 {
-    int contains = dict_contains((PyObject *)self, key);
+    int contains = PyDict_ContainsValue((PyObject *)self, key);
     if (contains < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (contains) {
-        Py_RETURN_TRUE;
+        return PyValue_True;
     }
-    Py_RETURN_FALSE;
+    return PyValue_False;
 }
 
 /*[clinic input]
@@ -4481,18 +4500,20 @@ dict.get
 Return the value for key if key is in the dictionary, else default.
 [clinic start generated code]*/
 
-static PyObject *
-dict_get_impl(PyDictObject *self, PyObject *key, PyObject *default_value)
-/*[clinic end generated code: output=bba707729dee05bf input=279ddb5790b6b107]*/
+static PyValue
+dict_get_impl(PyDictObject *self, PyValueBorrow key,
+              PyValueBorrow default_value)
+/*[clinic end generated code: output=9d509cf2f3d049dd input=279ddb5790b6b107]*/
 {
     PyValue v;
-    int status = PyDict_GetValue((PyObject *)self, PyValue_FromObjectBorrow(key), &v);
-    PyObject *value = NULL;
-    if (status > 0) {
-        value = _PyValue_AsObjectAt(v, BOX_SITE_DICT);
-        PyValue_CLOSE(v);
+    int status = PyDict_GetValue((PyObject *)self, key, &v);
+    if (status < 0) {
+        return PyValue_NULL;
     }
-    return status < 0 ? NULL : status ? value : Py_NewRef(default_value);
+    if (status > 0) {
+        return v;
+    }
+    return PyValue_DUP(default_value);
 }
 
 static int
@@ -4692,17 +4713,25 @@ Insert key with a value of default if key is not in the dictionary.
 Return the value for key if key is in the dictionary, else default.
 [clinic start generated code]*/
 
-static PyObject *
-dict_setdefault_impl(PyDictObject *self, PyObject *key,
-                     PyObject *default_value)
-/*[clinic end generated code: output=f8c1101ebf69e220 input=9237af9a0a224302]*/
+static PyValue
+dict_setdefault_impl(PyDictObject *self, PyValueBorrow key,
+                     PyValueBorrow default_value)
+/*[clinic end generated code: output=12ff2eaedbe0f293 input=9237af9a0a224302]*/
 {
-    PyObject *val;
-    if (dict_setdefault_object_owned(
-            (PyObject *)self, key, default_value, &val
-            _PyBox_AT_ARG(_PyBox_CORE(BOX_SITE_DICT))) < 0)
+    Py_hash_t hash = _PyValue_Hash(key);
+    if (hash == -1) {
+        // Only an object can fail to hash.
+        if (PyValue_IsObject(key)) {
+            dict_unhashable_type((PyObject *)self,
+                                 PyValue_AsKnownObjectBorrow(key));
+        }
+        return PyValue_NULL;
+    }
+    PyValue val;
+    if (dict_setdefault_value_lock_held(self, key, default_value, hash,
+                                        &val) < 0)
     {
-        return NULL;
+        return PyValue_NULL;
     }
     return val;
 }
@@ -4714,12 +4743,12 @@ dict.clear
 Remove all items from the dict.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 dict_clear_impl(PyDictObject *self)
-/*[clinic end generated code: output=5139a830df00830a input=0bf729baba97a4c2]*/
+/*[clinic end generated code: output=34e269c180128c75 input=0bf729baba97a4c2]*/
 {
     PyDict_Clear((PyObject *)self);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -4736,11 +4765,24 @@ If the key is not found, return the default if given; otherwise,
 raise a KeyError.
 [clinic start generated code]*/
 
-static PyObject *
-dict_pop_impl(PyDictObject *self, PyObject *key, PyObject *default_value)
-/*[clinic end generated code: output=3abb47b89f24c21c input=d409c7eb2de67e38]*/
+static PyValue
+dict_pop_impl(PyDictObject *self, PyValueBorrow key,
+              PyValueBorrow default_value)
+/*[clinic end generated code: output=d94f479863ae624e input=d409c7eb2de67e38]*/
 {
-    return dict_pop_default((PyObject*)self, key, default_value);
+    PyValue result;
+    int status = PyDict_PopValue((PyObject *)self, key, &result);
+    if (status < 0) {
+        return PyValue_NULL;
+    }
+    if (status == 0) {
+        if (!PyValue_IsNull(default_value)) {
+            return PyValue_DUP(default_value);
+        }
+        _PyErr_SetKeyErrorValue(key);
+        return PyValue_NULL;
+    }
+    return result;
 }
 
 /*[clinic input]
@@ -4753,14 +4795,14 @@ Pairs are returned in LIFO (last-in, first-out) order.
 Raises KeyError if the dict is empty.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 dict_popitem_impl(PyDictObject *self)
-/*[clinic end generated code: output=e65fcb04420d230d input=ef28b4da5f0f762e]*/
+/*[clinic end generated code: output=8ff069e526686e72 input=ef28b4da5f0f762e]*/
 {
     assert(can_modify_dict(self));
     PyObject *result = PyTuple_New(2);
     if (result == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     int notified = 0;
     for (;;) {
@@ -4840,10 +4882,10 @@ dict_popitem_impl(PyDictObject *self)
         PyTuple_SET_VALUE(result, 1, value);
         PyValue_XCLOSE(old_key);
         PyValue_XCLOSE(old_value);
-        return result;
+        return _PyValue_FromObjectResult(result);
     }
     Py_XDECREF(result);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static int
@@ -4948,11 +4990,11 @@ dict.__sizeof__
 Return the size of the dict in memory, in bytes.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 dict___sizeof___impl(PyDictObject *self)
-/*[clinic end generated code: output=44279379b3824bda input=4fec4ddfc44a4d1a]*/
+/*[clinic end generated code: output=221223be7d50b225 input=4fec4ddfc44a4d1a]*/
 {
-    return PyLong_FromSsize_t(_PyDict_SizeOf(self));
+    return PyValue_FromInt64(_PyDict_SizeOf(self));
 }
 
 PyObject *
@@ -5796,12 +5838,12 @@ dict.__reversed__
 Return a reverse iterator over the dict keys.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 dict___reversed___impl(PyDictObject *self)
-/*[clinic end generated code: output=e674483336d1ed51 input=23210ef3477d8c4d]*/
+/*[clinic end generated code: output=d26df897111a5a28 input=23210ef3477d8c4d]*/
 {
     assert (PyAnyDict_Check(self));
-    return dictiter_new(self, &PyDictRevIterKey_Type);
+    return _PyValue_FromObjectResult(dictiter_new(self, &PyDictRevIterKey_Type));
 }
 
 static PyObject *
@@ -6453,11 +6495,11 @@ dict.keys
 Return a set-like object providing a view on the dict's keys.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 dict_keys_impl(PyDictObject *self)
-/*[clinic end generated code: output=aac2830c62990358 input=42f48a7a771212a7]*/
+/*[clinic end generated code: output=9d9e6484a19538fd input=42f48a7a771212a7]*/
 {
-    return _PyDictView_New((PyObject *)self, &PyDictKeys_Type);
+    return _PyValue_FromObjectResult(_PyDictView_New((PyObject *)self, &PyDictKeys_Type));
 }
 
 static PyObject *
@@ -6573,11 +6615,11 @@ dict.items
 Return a set-like object providing a view on the dict's items.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 dict_items_impl(PyDictObject *self)
-/*[clinic end generated code: output=88c7db7150c7909a input=87c822872eb71f5a]*/
+/*[clinic end generated code: output=aa7dd632a434e260 input=87c822872eb71f5a]*/
 {
-    return _PyDictView_New((PyObject *)self, &PyDictItems_Type);
+    return _PyValue_FromObjectResult(_PyDictView_New((PyObject *)self, &PyDictItems_Type));
 }
 
 static PyObject *
@@ -6663,11 +6705,11 @@ dict.values
 Return an object providing a view on the dict's values.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 dict_values_impl(PyDictObject *self)
-/*[clinic end generated code: output=ce9f2e9e8a959dd4 input=b46944f85493b230]*/
+/*[clinic end generated code: output=deac5c3698afa626 input=b46944f85493b230]*/
 {
-    return _PyDictView_New((PyObject *)self, &PyDictValues_Type);
+    return _PyValue_FromObjectResult(_PyDictView_New((PyObject *)self, &PyDictValues_Type));
 }
 
 static PyObject *
@@ -7918,21 +7960,21 @@ frozendict.copy
 Return a shallow copy of the frozendict.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 frozendict_copy_impl(PyFrozenDictObject *self)
-/*[clinic end generated code: output=e580fd91d9fc2cf7 input=35f6abeaa08fd4bc]*/
+/*[clinic end generated code: output=4deece76550d0b8e input=35f6abeaa08fd4bc]*/
 {
     assert(PyFrozenDict_Check(self));
 
     if (PyFrozenDict_CheckExact(self)) {
-        return Py_NewRef(self);
+        return PyValue_DUP(PyValue_FromObjectBorrow(self));
     }
 
     PyObject *copy = anydict_copy_untracked((PyObject*)self);
     if (copy != NULL) {
         _PyObject_GC_TRACK(copy);
     }
-    return copy;
+    return _PyValue_FromObjectResult(copy);
 }
 
 PyDoc_STRVAR(frozendict_doc,

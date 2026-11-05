@@ -2,15 +2,22 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
-#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
+#include "pycore_modsupport.h"    // _PyArg_CheckArityValue()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_Index()
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
 PyDoc_STRVAR(EncodingMap_size__doc__,
 "size($self, /)\n"
@@ -19,15 +26,23 @@ PyDoc_STRVAR(EncodingMap_size__doc__,
 "Return the size (in bytes) of this object.");
 
 #define ENCODINGMAP_SIZE_METHODDEF    \
-    {"size", (PyCFunction)EncodingMap_size, METH_NOARGS, EncodingMap_size__doc__},
+    {"size", _PyCFunction_CAST(EncodingMap_size), METH_VALUE, EncodingMap_size__doc__},
 
-static PyObject *
+static PyValue
 EncodingMap_size_impl(struct encoding_map *self);
 
-static PyObject *
-EncodingMap_size(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+EncodingMap_size(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return EncodingMap_size_impl((struct encoding_map *)self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&EncodingMapType, "size", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = EncodingMap_size_impl((struct encoding_map *)PyValue_AsKnownObjectBorrow(self));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(unicode_title__doc__,
@@ -40,15 +55,23 @@ PyDoc_STRVAR(unicode_title__doc__,
 "remaining cased characters have lower case.");
 
 #define UNICODE_TITLE_METHODDEF    \
-    {"title", (PyCFunction)unicode_title, METH_NOARGS, unicode_title__doc__},
+    {"title", _PyCFunction_CAST(unicode_title), METH_VALUE, unicode_title__doc__},
 
-static PyObject *
+static PyValue
 unicode_title_impl(PyObject *self);
 
-static PyObject *
-unicode_title(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+unicode_title(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return unicode_title_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "title", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = unicode_title_impl(PyValue_AsKnownObjectBorrow(self));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(unicode_capitalize__doc__,
@@ -61,15 +84,23 @@ PyDoc_STRVAR(unicode_capitalize__doc__,
 "rest lower case.");
 
 #define UNICODE_CAPITALIZE_METHODDEF    \
-    {"capitalize", (PyCFunction)unicode_capitalize, METH_NOARGS, unicode_capitalize__doc__},
+    {"capitalize", _PyCFunction_CAST(unicode_capitalize), METH_VALUE, unicode_capitalize__doc__},
 
-static PyObject *
+static PyValue
 unicode_capitalize_impl(PyObject *self);
 
-static PyObject *
-unicode_capitalize(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+unicode_capitalize(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return unicode_capitalize_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "capitalize", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = unicode_capitalize_impl(PyValue_AsKnownObjectBorrow(self));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(unicode_casefold__doc__,
@@ -79,15 +110,23 @@ PyDoc_STRVAR(unicode_casefold__doc__,
 "Return a version of the string suitable for caseless comparisons.");
 
 #define UNICODE_CASEFOLD_METHODDEF    \
-    {"casefold", (PyCFunction)unicode_casefold, METH_NOARGS, unicode_casefold__doc__},
+    {"casefold", _PyCFunction_CAST(unicode_casefold), METH_VALUE, unicode_casefold__doc__},
 
-static PyObject *
+static PyValue
 unicode_casefold_impl(PyObject *self);
 
-static PyObject *
-unicode_casefold(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+unicode_casefold(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return unicode_casefold_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "casefold", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = unicode_casefold_impl(PyValue_AsKnownObjectBorrow(self));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(unicode_center__doc__,
@@ -100,27 +139,30 @@ PyDoc_STRVAR(unicode_center__doc__,
 "a space).");
 
 #define UNICODE_CENTER_METHODDEF    \
-    {"center", _PyCFunction_CAST(unicode_center), METH_FASTCALL, unicode_center__doc__},
+    {"center", _PyCFunction_CAST(unicode_center), METH_VALUE, unicode_center__doc__},
 
-static PyObject *
+static PyValue
 unicode_center_impl(PyObject *self, Py_ssize_t width, Py_UCS4 fillchar);
 
-static PyObject *
-unicode_center(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+unicode_center(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t width;
     Py_UCS4 fillchar = ' ';
 
+    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "center", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("center", nargs, 1, 2)) {
         goto exit;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[0]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -130,11 +172,11 @@ unicode_center(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (!convert_uc(args[1], &fillchar)) {
+    if (!convert_uc(PyValue_Borrow(args[1]), &fillchar)) {
         goto exit;
     }
 skip_optional:
-    return_value = unicode_center_impl(self, width, fillchar);
+    return_value = unicode_center_impl(PyValue_AsKnownObjectBorrow(self), width, fillchar);
 
 exit:
     return return_value;
@@ -150,47 +192,54 @@ PyDoc_STRVAR(unicode_count__doc__,
 "notation.");
 
 #define UNICODE_COUNT_METHODDEF    \
-    {"count", _PyCFunction_CAST(unicode_count), METH_FASTCALL, unicode_count__doc__},
+    {"count", _PyCFunction_CAST(unicode_count), METH_VALUE, unicode_count__doc__},
 
 static Py_ssize_t
 unicode_count_impl(PyObject *str, PyObject *substr, Py_ssize_t start,
                    Py_ssize_t end);
 
-static PyObject *
-unicode_count(PyObject *str, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+unicode_count(PyValueBorrow str, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *substr;
     Py_ssize_t start = 0;
     Py_ssize_t end = PY_SSIZE_T_MAX;
     Py_ssize_t _return_value;
 
+    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "count", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("count", nargs, 1, 3)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("count", "argument 1", "str", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("count", "argument 1", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    substr = args[0];
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("count", "argument 1", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    substr = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (!_PyEval_SliceIndex(args[1], &start)) {
+    if (!_PyArg_SliceIndexValue(PyValue_Borrow(args[1]), &start)) {
         goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    if (!_PyEval_SliceIndex(args[2], &end)) {
+    if (!_PyArg_SliceIndexValue(PyValue_Borrow(args[2]), &end)) {
         goto exit;
     }
 skip_optional:
-    _return_value = unicode_count_impl(str, substr, start, end);
+    _return_value = unicode_count_impl(PyValue_AsKnownObjectBorrow(str), substr, start, end);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromSsize_t(_return_value);
+    return_value = PyValue_FromInt64((int64_t)_return_value);
 
 exit:
     return return_value;
@@ -212,15 +261,15 @@ PyDoc_STRVAR(unicode_encode__doc__,
 "    codecs.register_error that can handle UnicodeEncodeErrors.");
 
 #define UNICODE_ENCODE_METHODDEF    \
-    {"encode", _PyCFunction_CAST(unicode_encode), METH_FASTCALL|METH_KEYWORDS, unicode_encode__doc__},
+    {"encode", _PyCFunction_CAST(unicode_encode), METH_VALUE, unicode_encode__doc__},
 
-static PyObject *
+static PyValue
 unicode_encode_impl(PyObject *self, const char *encoding, const char *errors);
 
-static PyObject *
-unicode_encode(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+unicode_encode(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -248,42 +297,43 @@ unicode_encode(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    Py_ssize_t _idx[2];
     const char *encoding = NULL;
     const char *errors = NULL;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[0]) {
-        if (!PyUnicode_Check(args[0])) {
-            _PyArg_BadArgument("encode", "argument 'encoding'", "str", args[0]);
+    if (_idx[0] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+            _PyArg_BadArgumentValue("encode", "argument 'encoding'", "str", PyValue_Borrow(args[_idx[0]]));
             goto exit;
         }
-        encoding = _PyUnicode_AsUTF8NoNUL(args[0]);
+        if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])))) {
+            _PyArg_BadArgument("encode", "argument 'encoding'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
+            goto exit;
+        }
+        encoding = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
         if (encoding == NULL) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
+    }
+    if (_idx[1] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[1]]))) {
+            _PyArg_BadArgumentValue("encode", "argument 'errors'", "str", PyValue_Borrow(args[_idx[1]]));
+            goto exit;
+        }
+        if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])))) {
+            _PyArg_BadArgument("encode", "argument 'errors'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])));
+            goto exit;
+        }
+        errors = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])));
+        if (errors == NULL) {
+            goto exit;
         }
     }
-    if (!PyUnicode_Check(args[1])) {
-        _PyArg_BadArgument("encode", "argument 'errors'", "str", args[1]);
-        goto exit;
-    }
-    errors = _PyUnicode_AsUTF8NoNUL(args[1]);
-    if (errors == NULL) {
-        goto exit;
-    }
-skip_optional_pos:
-    return_value = unicode_encode_impl(self, encoding, errors);
+    return_value = unicode_encode_impl(PyValue_AsKnownObjectBorrow(self), encoding, errors);
 
 exit:
     return return_value;
@@ -298,15 +348,15 @@ PyDoc_STRVAR(unicode_expandtabs__doc__,
 "If tabsize is not given, a tab size of 8 characters is assumed.");
 
 #define UNICODE_EXPANDTABS_METHODDEF    \
-    {"expandtabs", _PyCFunction_CAST(unicode_expandtabs), METH_FASTCALL|METH_KEYWORDS, unicode_expandtabs__doc__},
+    {"expandtabs", _PyCFunction_CAST(unicode_expandtabs), METH_VALUE, unicode_expandtabs__doc__},
 
-static PyObject *
+static PyValue
 unicode_expandtabs_impl(PyObject *self, int tabsize);
 
-static PyObject *
-unicode_expandtabs(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+unicode_expandtabs(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -334,24 +384,20 @@ unicode_expandtabs(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    Py_ssize_t _idx[1];
     int tabsize = 8;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        tabsize = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
+        if (tabsize == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
     }
-    tabsize = PyLong_AsInt(args[0]);
-    if (tabsize == -1 && PyErr_Occurred()) {
-        goto exit;
-    }
-skip_optional_pos:
-    return_value = unicode_expandtabs_impl(self, tabsize);
+    return_value = unicode_expandtabs_impl(PyValue_AsKnownObjectBorrow(self), tabsize);
 
 exit:
     return return_value;
@@ -367,47 +413,54 @@ PyDoc_STRVAR(unicode_find__doc__,
 "notation.  Return -1 on failure.");
 
 #define UNICODE_FIND_METHODDEF    \
-    {"find", _PyCFunction_CAST(unicode_find), METH_FASTCALL, unicode_find__doc__},
+    {"find", _PyCFunction_CAST(unicode_find), METH_VALUE, unicode_find__doc__},
 
 static Py_ssize_t
 unicode_find_impl(PyObject *str, PyObject *substr, Py_ssize_t start,
                   Py_ssize_t end);
 
-static PyObject *
-unicode_find(PyObject *str, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+unicode_find(PyValueBorrow str, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *substr;
     Py_ssize_t start = 0;
     Py_ssize_t end = PY_SSIZE_T_MAX;
     Py_ssize_t _return_value;
 
+    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "find", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("find", nargs, 1, 3)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("find", "argument 1", "str", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("find", "argument 1", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    substr = args[0];
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("find", "argument 1", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    substr = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (!_PyEval_SliceIndex(args[1], &start)) {
+    if (!_PyArg_SliceIndexValue(PyValue_Borrow(args[1]), &start)) {
         goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    if (!_PyEval_SliceIndex(args[2], &end)) {
+    if (!_PyArg_SliceIndexValue(PyValue_Borrow(args[2]), &end)) {
         goto exit;
     }
 skip_optional:
-    _return_value = unicode_find_impl(str, substr, start, end);
+    _return_value = unicode_find_impl(PyValue_AsKnownObjectBorrow(str), substr, start, end);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromSsize_t(_return_value);
+    return_value = PyValue_FromInt64((int64_t)_return_value);
 
 exit:
     return return_value;
@@ -423,47 +476,54 @@ PyDoc_STRVAR(unicode_index__doc__,
 "notation.  Raises ValueError when the substring is not found.");
 
 #define UNICODE_INDEX_METHODDEF    \
-    {"index", _PyCFunction_CAST(unicode_index), METH_FASTCALL, unicode_index__doc__},
+    {"index", _PyCFunction_CAST(unicode_index), METH_VALUE, unicode_index__doc__},
 
 static Py_ssize_t
 unicode_index_impl(PyObject *str, PyObject *substr, Py_ssize_t start,
                    Py_ssize_t end);
 
-static PyObject *
-unicode_index(PyObject *str, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+unicode_index(PyValueBorrow str, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *substr;
     Py_ssize_t start = 0;
     Py_ssize_t end = PY_SSIZE_T_MAX;
     Py_ssize_t _return_value;
 
+    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "index", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("index", nargs, 1, 3)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("index", "argument 1", "str", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("index", "argument 1", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    substr = args[0];
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("index", "argument 1", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    substr = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (!_PyEval_SliceIndex(args[1], &start)) {
+    if (!_PyArg_SliceIndexValue(PyValue_Borrow(args[1]), &start)) {
         goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    if (!_PyEval_SliceIndex(args[2], &end)) {
+    if (!_PyArg_SliceIndexValue(PyValue_Borrow(args[2]), &end)) {
         goto exit;
     }
 skip_optional:
-    _return_value = unicode_index_impl(str, substr, start, end);
+    _return_value = unicode_index_impl(PyValue_AsKnownObjectBorrow(str), substr, start, end);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromSsize_t(_return_value);
+    return_value = PyValue_FromInt64((int64_t)_return_value);
 
 exit:
     return return_value;
@@ -479,15 +539,23 @@ PyDoc_STRVAR(unicode_isascii__doc__,
 "Empty string is ASCII too.");
 
 #define UNICODE_ISASCII_METHODDEF    \
-    {"isascii", (PyCFunction)unicode_isascii, METH_NOARGS, unicode_isascii__doc__},
+    {"isascii", _PyCFunction_CAST(unicode_isascii), METH_VALUE, unicode_isascii__doc__},
 
-static PyObject *
+static PyValue
 unicode_isascii_impl(PyObject *self);
 
-static PyObject *
-unicode_isascii(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+unicode_isascii(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return unicode_isascii_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "isascii", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = unicode_isascii_impl(PyValue_AsKnownObjectBorrow(self));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(unicode_islower__doc__,
@@ -500,15 +568,23 @@ PyDoc_STRVAR(unicode_islower__doc__,
 "lowercase and there is at least one cased character in the string.");
 
 #define UNICODE_ISLOWER_METHODDEF    \
-    {"islower", (PyCFunction)unicode_islower, METH_NOARGS, unicode_islower__doc__},
+    {"islower", _PyCFunction_CAST(unicode_islower), METH_VALUE, unicode_islower__doc__},
 
-static PyObject *
+static PyValue
 unicode_islower_impl(PyObject *self);
 
-static PyObject *
-unicode_islower(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+unicode_islower(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return unicode_islower_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "islower", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = unicode_islower_impl(PyValue_AsKnownObjectBorrow(self));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(unicode_isupper__doc__,
@@ -521,15 +597,23 @@ PyDoc_STRVAR(unicode_isupper__doc__,
 "uppercase and there is at least one cased character in the string.");
 
 #define UNICODE_ISUPPER_METHODDEF    \
-    {"isupper", (PyCFunction)unicode_isupper, METH_NOARGS, unicode_isupper__doc__},
+    {"isupper", _PyCFunction_CAST(unicode_isupper), METH_VALUE, unicode_isupper__doc__},
 
-static PyObject *
+static PyValue
 unicode_isupper_impl(PyObject *self);
 
-static PyObject *
-unicode_isupper(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+unicode_isupper(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return unicode_isupper_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "isupper", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = unicode_isupper_impl(PyValue_AsKnownObjectBorrow(self));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(unicode_istitle__doc__,
@@ -542,15 +626,23 @@ PyDoc_STRVAR(unicode_istitle__doc__,
 "follow uncased characters and lowercase characters only cased ones.");
 
 #define UNICODE_ISTITLE_METHODDEF    \
-    {"istitle", (PyCFunction)unicode_istitle, METH_NOARGS, unicode_istitle__doc__},
+    {"istitle", _PyCFunction_CAST(unicode_istitle), METH_VALUE, unicode_istitle__doc__},
 
-static PyObject *
+static PyValue
 unicode_istitle_impl(PyObject *self);
 
-static PyObject *
-unicode_istitle(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+unicode_istitle(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return unicode_istitle_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "istitle", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = unicode_istitle_impl(PyValue_AsKnownObjectBorrow(self));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(unicode_isspace__doc__,
@@ -563,15 +655,23 @@ PyDoc_STRVAR(unicode_isspace__doc__,
 "whitespace and there is at least one character in the string.");
 
 #define UNICODE_ISSPACE_METHODDEF    \
-    {"isspace", (PyCFunction)unicode_isspace, METH_NOARGS, unicode_isspace__doc__},
+    {"isspace", _PyCFunction_CAST(unicode_isspace), METH_VALUE, unicode_isspace__doc__},
 
-static PyObject *
+static PyValue
 unicode_isspace_impl(PyObject *self);
 
-static PyObject *
-unicode_isspace(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+unicode_isspace(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return unicode_isspace_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "isspace", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = unicode_isspace_impl(PyValue_AsKnownObjectBorrow(self));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(unicode_isalpha__doc__,
@@ -584,15 +684,23 @@ PyDoc_STRVAR(unicode_isalpha__doc__,
 "alphabetic and there is at least one character in the string.");
 
 #define UNICODE_ISALPHA_METHODDEF    \
-    {"isalpha", (PyCFunction)unicode_isalpha, METH_NOARGS, unicode_isalpha__doc__},
+    {"isalpha", _PyCFunction_CAST(unicode_isalpha), METH_VALUE, unicode_isalpha__doc__},
 
-static PyObject *
+static PyValue
 unicode_isalpha_impl(PyObject *self);
 
-static PyObject *
-unicode_isalpha(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+unicode_isalpha(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return unicode_isalpha_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "isalpha", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = unicode_isalpha_impl(PyValue_AsKnownObjectBorrow(self));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(unicode_isalnum__doc__,
@@ -605,15 +713,23 @@ PyDoc_STRVAR(unicode_isalnum__doc__,
 "alpha-numeric and there is at least one character in the string.");
 
 #define UNICODE_ISALNUM_METHODDEF    \
-    {"isalnum", (PyCFunction)unicode_isalnum, METH_NOARGS, unicode_isalnum__doc__},
+    {"isalnum", _PyCFunction_CAST(unicode_isalnum), METH_VALUE, unicode_isalnum__doc__},
 
-static PyObject *
+static PyValue
 unicode_isalnum_impl(PyObject *self);
 
-static PyObject *
-unicode_isalnum(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+unicode_isalnum(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return unicode_isalnum_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "isalnum", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = unicode_isalnum_impl(PyValue_AsKnownObjectBorrow(self));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(unicode_isdecimal__doc__,
@@ -626,15 +742,23 @@ PyDoc_STRVAR(unicode_isdecimal__doc__,
 "decimal and there is at least one character in the string.");
 
 #define UNICODE_ISDECIMAL_METHODDEF    \
-    {"isdecimal", (PyCFunction)unicode_isdecimal, METH_NOARGS, unicode_isdecimal__doc__},
+    {"isdecimal", _PyCFunction_CAST(unicode_isdecimal), METH_VALUE, unicode_isdecimal__doc__},
 
-static PyObject *
+static PyValue
 unicode_isdecimal_impl(PyObject *self);
 
-static PyObject *
-unicode_isdecimal(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+unicode_isdecimal(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return unicode_isdecimal_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "isdecimal", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = unicode_isdecimal_impl(PyValue_AsKnownObjectBorrow(self));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(unicode_isdigit__doc__,
@@ -647,15 +771,23 @@ PyDoc_STRVAR(unicode_isdigit__doc__,
 "digits and there is at least one character in the string.");
 
 #define UNICODE_ISDIGIT_METHODDEF    \
-    {"isdigit", (PyCFunction)unicode_isdigit, METH_NOARGS, unicode_isdigit__doc__},
+    {"isdigit", _PyCFunction_CAST(unicode_isdigit), METH_VALUE, unicode_isdigit__doc__},
 
-static PyObject *
+static PyValue
 unicode_isdigit_impl(PyObject *self);
 
-static PyObject *
-unicode_isdigit(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+unicode_isdigit(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return unicode_isdigit_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "isdigit", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = unicode_isdigit_impl(PyValue_AsKnownObjectBorrow(self));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(unicode_isnumeric__doc__,
@@ -668,15 +800,23 @@ PyDoc_STRVAR(unicode_isnumeric__doc__,
 "there is at least one character in the string.");
 
 #define UNICODE_ISNUMERIC_METHODDEF    \
-    {"isnumeric", (PyCFunction)unicode_isnumeric, METH_NOARGS, unicode_isnumeric__doc__},
+    {"isnumeric", _PyCFunction_CAST(unicode_isnumeric), METH_VALUE, unicode_isnumeric__doc__},
 
-static PyObject *
+static PyValue
 unicode_isnumeric_impl(PyObject *self);
 
-static PyObject *
-unicode_isnumeric(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+unicode_isnumeric(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return unicode_isnumeric_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "isnumeric", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = unicode_isnumeric_impl(PyValue_AsKnownObjectBorrow(self));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(unicode_isidentifier__doc__,
@@ -689,15 +829,23 @@ PyDoc_STRVAR(unicode_isidentifier__doc__,
 "identifier, such as \"def\" or \"class\".");
 
 #define UNICODE_ISIDENTIFIER_METHODDEF    \
-    {"isidentifier", (PyCFunction)unicode_isidentifier, METH_NOARGS, unicode_isidentifier__doc__},
+    {"isidentifier", _PyCFunction_CAST(unicode_isidentifier), METH_VALUE, unicode_isidentifier__doc__},
 
-static PyObject *
+static PyValue
 unicode_isidentifier_impl(PyObject *self);
 
-static PyObject *
-unicode_isidentifier(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+unicode_isidentifier(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return unicode_isidentifier_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "isidentifier", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = unicode_isidentifier_impl(PyValue_AsKnownObjectBorrow(self));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(unicode_isprintable__doc__,
@@ -709,15 +857,23 @@ PyDoc_STRVAR(unicode_isprintable__doc__,
 "A character is printable if repr() may use it in its output.");
 
 #define UNICODE_ISPRINTABLE_METHODDEF    \
-    {"isprintable", (PyCFunction)unicode_isprintable, METH_NOARGS, unicode_isprintable__doc__},
+    {"isprintable", _PyCFunction_CAST(unicode_isprintable), METH_VALUE, unicode_isprintable__doc__},
 
-static PyObject *
+static PyValue
 unicode_isprintable_impl(PyObject *self);
 
-static PyObject *
-unicode_isprintable(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+unicode_isprintable(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return unicode_isprintable_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "isprintable", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = unicode_isprintable_impl(PyValue_AsKnownObjectBorrow(self));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(unicode_join__doc__,
@@ -732,7 +888,26 @@ PyDoc_STRVAR(unicode_join__doc__,
 "Example: \'.\'.join([\'ab\', \'pq\', \'rs\']) -> \'ab.pq.rs\'");
 
 #define UNICODE_JOIN_METHODDEF    \
-    {"join", (PyCFunction)unicode_join, METH_O, unicode_join__doc__},
+    {"join", _PyCFunction_CAST(unicode_join), METH_VALUE, unicode_join__doc__},
+
+static PyValue
+unicode_join_impl(PyObject *self, PyValueBorrow iterable);
+
+static PyValue
+unicode_join(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow iterable;
+
+    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "join", nargs, kwnames, 1)) {
+        goto exit;
+    }
+    iterable = PyValue_Borrow(args[0]);
+    return_value = unicode_join_impl(PyValue_AsKnownObjectBorrow(self), iterable);
+
+exit:
+    return return_value;
+}
 
 PyDoc_STRVAR(unicode_ljust__doc__,
 "ljust($self, width, fillchar=\' \', /)\n"
@@ -744,27 +919,30 @@ PyDoc_STRVAR(unicode_ljust__doc__,
 "a space).");
 
 #define UNICODE_LJUST_METHODDEF    \
-    {"ljust", _PyCFunction_CAST(unicode_ljust), METH_FASTCALL, unicode_ljust__doc__},
+    {"ljust", _PyCFunction_CAST(unicode_ljust), METH_VALUE, unicode_ljust__doc__},
 
-static PyObject *
+static PyValue
 unicode_ljust_impl(PyObject *self, Py_ssize_t width, Py_UCS4 fillchar);
 
-static PyObject *
-unicode_ljust(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+unicode_ljust(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t width;
     Py_UCS4 fillchar = ' ';
 
+    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "ljust", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("ljust", nargs, 1, 2)) {
         goto exit;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[0]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -774,11 +952,11 @@ unicode_ljust(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (!convert_uc(args[1], &fillchar)) {
+    if (!convert_uc(PyValue_Borrow(args[1]), &fillchar)) {
         goto exit;
     }
 skip_optional:
-    return_value = unicode_ljust_impl(self, width, fillchar);
+    return_value = unicode_ljust_impl(PyValue_AsKnownObjectBorrow(self), width, fillchar);
 
 exit:
     return return_value;
@@ -791,15 +969,23 @@ PyDoc_STRVAR(unicode_lower__doc__,
 "Return a copy of the string converted to lowercase.");
 
 #define UNICODE_LOWER_METHODDEF    \
-    {"lower", (PyCFunction)unicode_lower, METH_NOARGS, unicode_lower__doc__},
+    {"lower", _PyCFunction_CAST(unicode_lower), METH_VALUE, unicode_lower__doc__},
 
-static PyObject *
+static PyValue
 unicode_lower_impl(PyObject *self);
 
-static PyObject *
-unicode_lower(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+unicode_lower(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return unicode_lower_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "lower", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = unicode_lower_impl(PyValue_AsKnownObjectBorrow(self));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(unicode_strip__doc__,
@@ -811,26 +997,29 @@ PyDoc_STRVAR(unicode_strip__doc__,
 "If chars is given and not None, remove characters in chars instead.");
 
 #define UNICODE_STRIP_METHODDEF    \
-    {"strip", _PyCFunction_CAST(unicode_strip), METH_FASTCALL, unicode_strip__doc__},
+    {"strip", _PyCFunction_CAST(unicode_strip), METH_VALUE, unicode_strip__doc__},
 
-static PyObject *
-unicode_strip_impl(PyObject *self, PyObject *chars);
+static PyValue
+unicode_strip_impl(PyObject *self, PyValueBorrow chars);
 
-static PyObject *
-unicode_strip(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+unicode_strip(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *chars = Py_None;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow chars = PyValue_Borrow(PyValue_None);
 
+    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "strip", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("strip", nargs, 0, 1)) {
         goto exit;
     }
     if (nargs < 1) {
         goto skip_optional;
     }
-    chars = args[0];
+    chars = PyValue_Borrow(args[0]);
 skip_optional:
-    return_value = unicode_strip_impl(self, chars);
+    return_value = unicode_strip_impl(PyValue_AsKnownObjectBorrow(self), chars);
 
 exit:
     return return_value;
@@ -845,26 +1034,29 @@ PyDoc_STRVAR(unicode_lstrip__doc__,
 "If chars is given and not None, remove characters in chars instead.");
 
 #define UNICODE_LSTRIP_METHODDEF    \
-    {"lstrip", _PyCFunction_CAST(unicode_lstrip), METH_FASTCALL, unicode_lstrip__doc__},
+    {"lstrip", _PyCFunction_CAST(unicode_lstrip), METH_VALUE, unicode_lstrip__doc__},
 
-static PyObject *
-unicode_lstrip_impl(PyObject *self, PyObject *chars);
+static PyValue
+unicode_lstrip_impl(PyObject *self, PyValueBorrow chars);
 
-static PyObject *
-unicode_lstrip(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+unicode_lstrip(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *chars = Py_None;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow chars = PyValue_Borrow(PyValue_None);
 
+    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "lstrip", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("lstrip", nargs, 0, 1)) {
         goto exit;
     }
     if (nargs < 1) {
         goto skip_optional;
     }
-    chars = args[0];
+    chars = PyValue_Borrow(args[0]);
 skip_optional:
-    return_value = unicode_lstrip_impl(self, chars);
+    return_value = unicode_lstrip_impl(PyValue_AsKnownObjectBorrow(self), chars);
 
 exit:
     return return_value;
@@ -879,26 +1071,29 @@ PyDoc_STRVAR(unicode_rstrip__doc__,
 "If chars is given and not None, remove characters in chars instead.");
 
 #define UNICODE_RSTRIP_METHODDEF    \
-    {"rstrip", _PyCFunction_CAST(unicode_rstrip), METH_FASTCALL, unicode_rstrip__doc__},
+    {"rstrip", _PyCFunction_CAST(unicode_rstrip), METH_VALUE, unicode_rstrip__doc__},
 
-static PyObject *
-unicode_rstrip_impl(PyObject *self, PyObject *chars);
+static PyValue
+unicode_rstrip_impl(PyObject *self, PyValueBorrow chars);
 
-static PyObject *
-unicode_rstrip(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+unicode_rstrip(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *chars = Py_None;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow chars = PyValue_Borrow(PyValue_None);
 
+    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "rstrip", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("rstrip", nargs, 0, 1)) {
         goto exit;
     }
     if (nargs < 1) {
         goto skip_optional;
     }
-    chars = args[0];
+    chars = PyValue_Borrow(args[0]);
 skip_optional:
-    return_value = unicode_rstrip_impl(self, chars);
+    return_value = unicode_rstrip_impl(PyValue_AsKnownObjectBorrow(self), chars);
 
 exit:
     return return_value;
@@ -918,16 +1113,16 @@ PyDoc_STRVAR(unicode_replace__doc__,
 "If count is not specified or -1, then all occurrences are replaced.");
 
 #define UNICODE_REPLACE_METHODDEF    \
-    {"replace", _PyCFunction_CAST(unicode_replace), METH_FASTCALL|METH_KEYWORDS, unicode_replace__doc__},
+    {"replace", _PyCFunction_CAST(unicode_replace), METH_VALUE, unicode_replace__doc__},
 
-static PyObject *
+static PyValue
 unicode_replace_impl(PyObject *self, PyObject *old, PyObject *new,
                      Py_ssize_t count);
 
-static PyObject *
-unicode_replace(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+unicode_replace(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -955,44 +1150,48 @@ unicode_replace(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObjec
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
+    Py_ssize_t _idx[3];
     PyObject *old;
     PyObject *new;
     Py_ssize_t count = -1;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("replace", "argument 1", "str", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+        _PyArg_BadArgumentValue("replace", "argument 1", "str", PyValue_Borrow(args[_idx[0]]));
         goto exit;
     }
-    old = args[0];
-    if (!PyUnicode_Check(args[1])) {
-        _PyArg_BadArgument("replace", "argument 2", "str", args[1]);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])))) {
+        _PyArg_BadArgument("replace", "argument 1", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
         goto exit;
     }
-    new = args[1];
-    if (!noptargs) {
-        goto skip_optional_pos;
+    old = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]]));
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[1]]))) {
+        _PyArg_BadArgumentValue("replace", "argument 2", "str", PyValue_Borrow(args[_idx[1]]));
+        goto exit;
     }
-    {
-        Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[2]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])))) {
+        _PyArg_BadArgument("replace", "argument 2", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])));
+        goto exit;
+    }
+    new = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]]));
+    if (_idx[2] >= 0) {
+        {
+            Py_ssize_t ival = -1;
+            PyValue iobj = _PyValue_Index(PyValue_Borrow(args[_idx[2]]));
+            if (!PyValue_IsNull(iobj)) {
+                ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+                PyValue_CLOSE(iobj);
+            }
+            if (ival == -1 && PyErr_Occurred()) {
+                goto exit;
+            }
+            count = ival;
         }
-        if (ival == -1 && PyErr_Occurred()) {
-            goto exit;
-        }
-        count = ival;
     }
-skip_optional_pos:
-    return_value = unicode_replace_impl(self, old, new, count);
+    return_value = unicode_replace_impl(PyValue_AsKnownObjectBorrow(self), old, new, count);
 
 exit:
     return return_value;
@@ -1009,23 +1208,30 @@ PyDoc_STRVAR(unicode_removeprefix__doc__,
 "string.");
 
 #define UNICODE_REMOVEPREFIX_METHODDEF    \
-    {"removeprefix", (PyCFunction)unicode_removeprefix, METH_O, unicode_removeprefix__doc__},
+    {"removeprefix", _PyCFunction_CAST(unicode_removeprefix), METH_VALUE, unicode_removeprefix__doc__},
 
-static PyObject *
+static PyValue
 unicode_removeprefix_impl(PyObject *self, PyObject *prefix);
 
-static PyObject *
-unicode_removeprefix(PyObject *self, PyObject *arg)
+static PyValue
+unicode_removeprefix(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *prefix;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("removeprefix", "argument", "str", arg);
+    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "removeprefix", nargs, kwnames, 1)) {
         goto exit;
     }
-    prefix = arg;
-    return_value = unicode_removeprefix_impl(self, prefix);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("removeprefix", "argument", "str", PyValue_Borrow(args[0]));
+        goto exit;
+    }
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("removeprefix", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    prefix = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    return_value = unicode_removeprefix_impl(PyValue_AsKnownObjectBorrow(self), prefix);
 
 exit:
     return return_value;
@@ -1042,23 +1248,30 @@ PyDoc_STRVAR(unicode_removesuffix__doc__,
 "the original string.");
 
 #define UNICODE_REMOVESUFFIX_METHODDEF    \
-    {"removesuffix", (PyCFunction)unicode_removesuffix, METH_O, unicode_removesuffix__doc__},
+    {"removesuffix", _PyCFunction_CAST(unicode_removesuffix), METH_VALUE, unicode_removesuffix__doc__},
 
-static PyObject *
+static PyValue
 unicode_removesuffix_impl(PyObject *self, PyObject *suffix);
 
-static PyObject *
-unicode_removesuffix(PyObject *self, PyObject *arg)
+static PyValue
+unicode_removesuffix(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *suffix;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("removesuffix", "argument", "str", arg);
+    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "removesuffix", nargs, kwnames, 1)) {
         goto exit;
     }
-    suffix = arg;
-    return_value = unicode_removesuffix_impl(self, suffix);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("removesuffix", "argument", "str", PyValue_Borrow(args[0]));
+        goto exit;
+    }
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("removesuffix", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    suffix = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    return_value = unicode_removesuffix_impl(PyValue_AsKnownObjectBorrow(self), suffix);
 
 exit:
     return return_value;
@@ -1074,47 +1287,54 @@ PyDoc_STRVAR(unicode_rfind__doc__,
 "notation.  Return -1 on failure.");
 
 #define UNICODE_RFIND_METHODDEF    \
-    {"rfind", _PyCFunction_CAST(unicode_rfind), METH_FASTCALL, unicode_rfind__doc__},
+    {"rfind", _PyCFunction_CAST(unicode_rfind), METH_VALUE, unicode_rfind__doc__},
 
 static Py_ssize_t
 unicode_rfind_impl(PyObject *str, PyObject *substr, Py_ssize_t start,
                    Py_ssize_t end);
 
-static PyObject *
-unicode_rfind(PyObject *str, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+unicode_rfind(PyValueBorrow str, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *substr;
     Py_ssize_t start = 0;
     Py_ssize_t end = PY_SSIZE_T_MAX;
     Py_ssize_t _return_value;
 
+    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "rfind", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("rfind", nargs, 1, 3)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("rfind", "argument 1", "str", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("rfind", "argument 1", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    substr = args[0];
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("rfind", "argument 1", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    substr = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (!_PyEval_SliceIndex(args[1], &start)) {
+    if (!_PyArg_SliceIndexValue(PyValue_Borrow(args[1]), &start)) {
         goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    if (!_PyEval_SliceIndex(args[2], &end)) {
+    if (!_PyArg_SliceIndexValue(PyValue_Borrow(args[2]), &end)) {
         goto exit;
     }
 skip_optional:
-    _return_value = unicode_rfind_impl(str, substr, start, end);
+    _return_value = unicode_rfind_impl(PyValue_AsKnownObjectBorrow(str), substr, start, end);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromSsize_t(_return_value);
+    return_value = PyValue_FromInt64((int64_t)_return_value);
 
 exit:
     return return_value;
@@ -1130,47 +1350,54 @@ PyDoc_STRVAR(unicode_rindex__doc__,
 "notation.  Raises ValueError when the substring is not found.");
 
 #define UNICODE_RINDEX_METHODDEF    \
-    {"rindex", _PyCFunction_CAST(unicode_rindex), METH_FASTCALL, unicode_rindex__doc__},
+    {"rindex", _PyCFunction_CAST(unicode_rindex), METH_VALUE, unicode_rindex__doc__},
 
 static Py_ssize_t
 unicode_rindex_impl(PyObject *str, PyObject *substr, Py_ssize_t start,
                     Py_ssize_t end);
 
-static PyObject *
-unicode_rindex(PyObject *str, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+unicode_rindex(PyValueBorrow str, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *substr;
     Py_ssize_t start = 0;
     Py_ssize_t end = PY_SSIZE_T_MAX;
     Py_ssize_t _return_value;
 
+    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "rindex", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("rindex", nargs, 1, 3)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("rindex", "argument 1", "str", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("rindex", "argument 1", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    substr = args[0];
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("rindex", "argument 1", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    substr = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (!_PyEval_SliceIndex(args[1], &start)) {
+    if (!_PyArg_SliceIndexValue(PyValue_Borrow(args[1]), &start)) {
         goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    if (!_PyEval_SliceIndex(args[2], &end)) {
+    if (!_PyArg_SliceIndexValue(PyValue_Borrow(args[2]), &end)) {
         goto exit;
     }
 skip_optional:
-    _return_value = unicode_rindex_impl(str, substr, start, end);
+    _return_value = unicode_rindex_impl(PyValue_AsKnownObjectBorrow(str), substr, start, end);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromSsize_t(_return_value);
+    return_value = PyValue_FromInt64((int64_t)_return_value);
 
 exit:
     return return_value;
@@ -1186,27 +1413,30 @@ PyDoc_STRVAR(unicode_rjust__doc__,
 "a space).");
 
 #define UNICODE_RJUST_METHODDEF    \
-    {"rjust", _PyCFunction_CAST(unicode_rjust), METH_FASTCALL, unicode_rjust__doc__},
+    {"rjust", _PyCFunction_CAST(unicode_rjust), METH_VALUE, unicode_rjust__doc__},
 
-static PyObject *
+static PyValue
 unicode_rjust_impl(PyObject *self, Py_ssize_t width, Py_UCS4 fillchar);
 
-static PyObject *
-unicode_rjust(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+unicode_rjust(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t width;
     Py_UCS4 fillchar = ' ';
 
+    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "rjust", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("rjust", nargs, 1, 2)) {
         goto exit;
     }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[0]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[0]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
@@ -1216,11 +1446,11 @@ unicode_rjust(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (!convert_uc(args[1], &fillchar)) {
+    if (!convert_uc(PyValue_Borrow(args[1]), &fillchar)) {
         goto exit;
     }
 skip_optional:
-    return_value = unicode_rjust_impl(self, width, fillchar);
+    return_value = unicode_rjust_impl(PyValue_AsKnownObjectBorrow(self), width, fillchar);
 
 exit:
     return return_value;
@@ -1249,15 +1479,15 @@ PyDoc_STRVAR(unicode_split__doc__,
 "punctuation, consider using the regular expression module.");
 
 #define UNICODE_SPLIT_METHODDEF    \
-    {"split", _PyCFunction_CAST(unicode_split), METH_FASTCALL|METH_KEYWORDS, unicode_split__doc__},
+    {"split", _PyCFunction_CAST(unicode_split), METH_VALUE, unicode_split__doc__},
 
-static PyObject *
-unicode_split_impl(PyObject *self, PyObject *sep, Py_ssize_t maxsplit);
+static PyValue
+unicode_split_impl(PyObject *self, PyValueBorrow sep, Py_ssize_t maxsplit);
 
-static PyObject *
-unicode_split(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+unicode_split(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -1285,39 +1515,32 @@ unicode_split(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *sep = Py_None;
+    Py_ssize_t _idx[2];
+    PyValueBorrow sep = PyValue_Borrow(PyValue_None);
     Py_ssize_t maxsplit = -1;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        sep = PyValue_Borrow(args[_idx[0]]);
     }
-    if (args[0]) {
-        sep = args[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
+    if (_idx[1] >= 0) {
+        {
+            Py_ssize_t ival = -1;
+            PyValue iobj = _PyValue_Index(PyValue_Borrow(args[_idx[1]]));
+            if (!PyValue_IsNull(iobj)) {
+                ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+                PyValue_CLOSE(iobj);
+            }
+            if (ival == -1 && PyErr_Occurred()) {
+                goto exit;
+            }
+            maxsplit = ival;
         }
     }
-    {
-        Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
-        }
-        if (ival == -1 && PyErr_Occurred()) {
-            goto exit;
-        }
-        maxsplit = ival;
-    }
-skip_optional_pos:
-    return_value = unicode_split_impl(self, sep, maxsplit);
+    return_value = unicode_split_impl(PyValue_AsKnownObjectBorrow(self), sep, maxsplit);
 
 exit:
     return return_value;
@@ -1337,7 +1560,26 @@ PyDoc_STRVAR(unicode_partition__doc__,
 "the original string and two empty strings.");
 
 #define UNICODE_PARTITION_METHODDEF    \
-    {"partition", (PyCFunction)unicode_partition, METH_O, unicode_partition__doc__},
+    {"partition", _PyCFunction_CAST(unicode_partition), METH_VALUE, unicode_partition__doc__},
+
+static PyValue
+unicode_partition_impl(PyObject *self, PyValueBorrow sep);
+
+static PyValue
+unicode_partition(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow sep;
+
+    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "partition", nargs, kwnames, 1)) {
+        goto exit;
+    }
+    sep = PyValue_Borrow(args[0]);
+    return_value = unicode_partition_impl(PyValue_AsKnownObjectBorrow(self), sep);
+
+exit:
+    return return_value;
+}
 
 PyDoc_STRVAR(unicode_rpartition__doc__,
 "rpartition($self, sep, /)\n"
@@ -1354,7 +1596,26 @@ PyDoc_STRVAR(unicode_rpartition__doc__,
 "empty strings and the original string.");
 
 #define UNICODE_RPARTITION_METHODDEF    \
-    {"rpartition", (PyCFunction)unicode_rpartition, METH_O, unicode_rpartition__doc__},
+    {"rpartition", _PyCFunction_CAST(unicode_rpartition), METH_VALUE, unicode_rpartition__doc__},
+
+static PyValue
+unicode_rpartition_impl(PyObject *self, PyValueBorrow sep);
+
+static PyValue
+unicode_rpartition(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow sep;
+
+    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "rpartition", nargs, kwnames, 1)) {
+        goto exit;
+    }
+    sep = PyValue_Borrow(args[0]);
+    return_value = unicode_rpartition_impl(PyValue_AsKnownObjectBorrow(self), sep);
+
+exit:
+    return return_value;
+}
 
 PyDoc_STRVAR(unicode_rsplit__doc__,
 "rsplit($self, /, sep=None, maxsplit=-1)\n"
@@ -1375,15 +1636,15 @@ PyDoc_STRVAR(unicode_rsplit__doc__,
 "Splitting starts at the end of the string and works to the front.");
 
 #define UNICODE_RSPLIT_METHODDEF    \
-    {"rsplit", _PyCFunction_CAST(unicode_rsplit), METH_FASTCALL|METH_KEYWORDS, unicode_rsplit__doc__},
+    {"rsplit", _PyCFunction_CAST(unicode_rsplit), METH_VALUE, unicode_rsplit__doc__},
 
-static PyObject *
-unicode_rsplit_impl(PyObject *self, PyObject *sep, Py_ssize_t maxsplit);
+static PyValue
+unicode_rsplit_impl(PyObject *self, PyValueBorrow sep, Py_ssize_t maxsplit);
 
-static PyObject *
-unicode_rsplit(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+unicode_rsplit(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -1411,39 +1672,32 @@ unicode_rsplit(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *sep = Py_None;
+    Py_ssize_t _idx[2];
+    PyValueBorrow sep = PyValue_Borrow(PyValue_None);
     Py_ssize_t maxsplit = -1;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        sep = PyValue_Borrow(args[_idx[0]]);
     }
-    if (args[0]) {
-        sep = args[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
+    if (_idx[1] >= 0) {
+        {
+            Py_ssize_t ival = -1;
+            PyValue iobj = _PyValue_Index(PyValue_Borrow(args[_idx[1]]));
+            if (!PyValue_IsNull(iobj)) {
+                ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+                PyValue_CLOSE(iobj);
+            }
+            if (ival == -1 && PyErr_Occurred()) {
+                goto exit;
+            }
+            maxsplit = ival;
         }
     }
-    {
-        Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
-        }
-        if (ival == -1 && PyErr_Occurred()) {
-            goto exit;
-        }
-        maxsplit = ival;
-    }
-skip_optional_pos:
-    return_value = unicode_rsplit_impl(self, sep, maxsplit);
+    return_value = unicode_rsplit_impl(PyValue_AsKnownObjectBorrow(self), sep, maxsplit);
 
 exit:
     return return_value;
@@ -1459,15 +1713,15 @@ PyDoc_STRVAR(unicode_splitlines__doc__,
 "is given and true.");
 
 #define UNICODE_SPLITLINES_METHODDEF    \
-    {"splitlines", _PyCFunction_CAST(unicode_splitlines), METH_FASTCALL|METH_KEYWORDS, unicode_splitlines__doc__},
+    {"splitlines", _PyCFunction_CAST(unicode_splitlines), METH_VALUE, unicode_splitlines__doc__},
 
-static PyObject *
+static PyValue
 unicode_splitlines_impl(PyObject *self, int keepends);
 
-static PyObject *
-unicode_splitlines(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+unicode_splitlines(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -1495,24 +1749,20 @@ unicode_splitlines(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    Py_ssize_t _idx[1];
     int keepends = 0;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        keepends = _PyValue_IsTrue(PyValue_Borrow(args[_idx[0]]));
+        if (keepends < 0) {
+            goto exit;
+        }
     }
-    keepends = PyObject_IsTrue(args[0]);
-    if (keepends < 0) {
-        goto exit;
-    }
-skip_optional_pos:
-    return_value = unicode_splitlines_impl(self, keepends);
+    return_value = unicode_splitlines_impl(PyValue_AsKnownObjectBorrow(self), keepends);
 
 exit:
     return return_value;
@@ -1525,15 +1775,23 @@ PyDoc_STRVAR(unicode_swapcase__doc__,
 "Convert uppercase characters to lowercase and lowercase characters to uppercase.");
 
 #define UNICODE_SWAPCASE_METHODDEF    \
-    {"swapcase", (PyCFunction)unicode_swapcase, METH_NOARGS, unicode_swapcase__doc__},
+    {"swapcase", _PyCFunction_CAST(unicode_swapcase), METH_VALUE, unicode_swapcase__doc__},
 
-static PyObject *
+static PyValue
 unicode_swapcase_impl(PyObject *self);
 
-static PyObject *
-unicode_swapcase(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+unicode_swapcase(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return unicode_swapcase_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "swapcase", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = unicode_swapcase_impl(PyValue_AsKnownObjectBorrow(self));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(unicode_maketrans__doc__,
@@ -1552,39 +1810,50 @@ PyDoc_STRVAR(unicode_maketrans__doc__,
 "None in the result.");
 
 #define UNICODE_MAKETRANS_METHODDEF    \
-    {"maketrans", _PyCFunction_CAST(unicode_maketrans), METH_FASTCALL|METH_STATIC, unicode_maketrans__doc__},
+    {"maketrans", _PyCFunction_CAST(unicode_maketrans), METH_VALUE|METH_STATIC, unicode_maketrans__doc__},
 
-static PyObject *
-unicode_maketrans_impl(PyObject *x, PyObject *y, PyObject *z);
+static PyValue
+unicode_maketrans_impl(PyValueBorrow x, PyObject *y, PyObject *z);
 
-static PyObject *
-unicode_maketrans(PyObject *null, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+unicode_maketrans(PyValueBorrow null, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *x;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow x;
     PyObject *y = NULL;
     PyObject *z = NULL;
 
+    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "maketrans", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("maketrans", nargs, 1, 3)) {
         goto exit;
     }
-    x = args[0];
+    x = PyValue_Borrow(args[0]);
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (!PyUnicode_Check(args[1])) {
-        _PyArg_BadArgument("maketrans", "argument 2", "str", args[1]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[1]))) {
+        _PyArg_BadArgumentValue("maketrans", "argument 2", "str", PyValue_Borrow(args[1]));
         goto exit;
     }
-    y = args[1];
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])))) {
+        _PyArg_BadArgument("maketrans", "argument 2", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])));
+        goto exit;
+    }
+    y = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1]));
     if (nargs < 3) {
         goto skip_optional;
     }
-    if (!PyUnicode_Check(args[2])) {
-        _PyArg_BadArgument("maketrans", "argument 3", "str", args[2]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[2]))) {
+        _PyArg_BadArgumentValue("maketrans", "argument 3", "str", PyValue_Borrow(args[2]));
         goto exit;
     }
-    z = args[2];
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[2])))) {
+        _PyArg_BadArgument("maketrans", "argument 3", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[2])));
+        goto exit;
+    }
+    z = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[2]));
 skip_optional:
     return_value = unicode_maketrans_impl(x, y, z);
 
@@ -1608,7 +1877,26 @@ PyDoc_STRVAR(unicode_translate__doc__,
 "None are deleted.");
 
 #define UNICODE_TRANSLATE_METHODDEF    \
-    {"translate", (PyCFunction)unicode_translate, METH_O, unicode_translate__doc__},
+    {"translate", _PyCFunction_CAST(unicode_translate), METH_VALUE, unicode_translate__doc__},
+
+static PyValue
+unicode_translate_impl(PyObject *self, PyValueBorrow table);
+
+static PyValue
+unicode_translate(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow table;
+
+    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "translate", nargs, kwnames, 1)) {
+        goto exit;
+    }
+    table = PyValue_Borrow(args[0]);
+    return_value = unicode_translate_impl(PyValue_AsKnownObjectBorrow(self), table);
+
+exit:
+    return return_value;
+}
 
 PyDoc_STRVAR(unicode_upper__doc__,
 "upper($self, /)\n"
@@ -1617,15 +1905,23 @@ PyDoc_STRVAR(unicode_upper__doc__,
 "Return a copy of the string converted to uppercase.");
 
 #define UNICODE_UPPER_METHODDEF    \
-    {"upper", (PyCFunction)unicode_upper, METH_NOARGS, unicode_upper__doc__},
+    {"upper", _PyCFunction_CAST(unicode_upper), METH_VALUE, unicode_upper__doc__},
 
-static PyObject *
+static PyValue
 unicode_upper_impl(PyObject *self);
 
-static PyObject *
-unicode_upper(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+unicode_upper(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return unicode_upper_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "upper", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = unicode_upper_impl(PyValue_AsKnownObjectBorrow(self));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(unicode_zfill__doc__,
@@ -1637,30 +1933,33 @@ PyDoc_STRVAR(unicode_zfill__doc__,
 "The string is never truncated.");
 
 #define UNICODE_ZFILL_METHODDEF    \
-    {"zfill", (PyCFunction)unicode_zfill, METH_O, unicode_zfill__doc__},
+    {"zfill", _PyCFunction_CAST(unicode_zfill), METH_VALUE, unicode_zfill__doc__},
 
-static PyObject *
+static PyValue
 unicode_zfill_impl(PyObject *self, Py_ssize_t width);
 
-static PyObject *
-unicode_zfill(PyObject *self, PyObject *arg)
+static PyValue
+unicode_zfill(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t width;
 
+    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "zfill", nargs, kwnames, 1)) {
+        goto exit;
+    }
     {
         Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(arg);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
+        PyValue iobj = _PyValue_Index(PyValue_Borrow(args[0]));
+        if (!PyValue_IsNull(iobj)) {
+            ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+            PyValue_CLOSE(iobj);
         }
         if (ival == -1 && PyErr_Occurred()) {
             goto exit;
         }
         width = ival;
     }
-    return_value = unicode_zfill_impl(self, width);
+    return_value = unicode_zfill_impl(PyValue_AsKnownObjectBorrow(self), width);
 
 exit:
     return return_value;
@@ -1680,38 +1979,41 @@ PyDoc_STRVAR(unicode_startswith__doc__,
 "    Optional stop position. Default: end of the string.");
 
 #define UNICODE_STARTSWITH_METHODDEF    \
-    {"startswith", _PyCFunction_CAST(unicode_startswith), METH_FASTCALL, unicode_startswith__doc__},
+    {"startswith", _PyCFunction_CAST(unicode_startswith), METH_VALUE, unicode_startswith__doc__},
 
-static PyObject *
-unicode_startswith_impl(PyObject *self, PyObject *subobj, Py_ssize_t start,
-                        Py_ssize_t end);
+static PyValue
+unicode_startswith_impl(PyObject *self, PyValueBorrow subobj,
+                        Py_ssize_t start, Py_ssize_t end);
 
-static PyObject *
-unicode_startswith(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+unicode_startswith(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *subobj;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow subobj;
     Py_ssize_t start = 0;
     Py_ssize_t end = PY_SSIZE_T_MAX;
 
+    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "startswith", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("startswith", nargs, 1, 3)) {
         goto exit;
     }
-    subobj = args[0];
+    subobj = PyValue_Borrow(args[0]);
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (!_PyEval_SliceIndex(args[1], &start)) {
+    if (!_PyArg_SliceIndexValue(PyValue_Borrow(args[1]), &start)) {
         goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    if (!_PyEval_SliceIndex(args[2], &end)) {
+    if (!_PyArg_SliceIndexValue(PyValue_Borrow(args[2]), &end)) {
         goto exit;
     }
 skip_optional:
-    return_value = unicode_startswith_impl(self, subobj, start, end);
+    return_value = unicode_startswith_impl(PyValue_AsKnownObjectBorrow(self), subobj, start, end);
 
 exit:
     return return_value;
@@ -1731,38 +2033,41 @@ PyDoc_STRVAR(unicode_endswith__doc__,
 "    Optional stop position. Default: end of the string.");
 
 #define UNICODE_ENDSWITH_METHODDEF    \
-    {"endswith", _PyCFunction_CAST(unicode_endswith), METH_FASTCALL, unicode_endswith__doc__},
+    {"endswith", _PyCFunction_CAST(unicode_endswith), METH_VALUE, unicode_endswith__doc__},
 
-static PyObject *
-unicode_endswith_impl(PyObject *self, PyObject *subobj, Py_ssize_t start,
+static PyValue
+unicode_endswith_impl(PyObject *self, PyValueBorrow subobj, Py_ssize_t start,
                       Py_ssize_t end);
 
-static PyObject *
-unicode_endswith(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+unicode_endswith(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *subobj;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow subobj;
     Py_ssize_t start = 0;
     Py_ssize_t end = PY_SSIZE_T_MAX;
 
+    if (!_PyArg_NoKwnamesValueMethod(&PyUnicode_Type, "endswith", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("endswith", nargs, 1, 3)) {
         goto exit;
     }
-    subobj = args[0];
+    subobj = PyValue_Borrow(args[0]);
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (!_PyEval_SliceIndex(args[1], &start)) {
+    if (!_PyArg_SliceIndexValue(PyValue_Borrow(args[1]), &start)) {
         goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    if (!_PyEval_SliceIndex(args[2], &end)) {
+    if (!_PyArg_SliceIndexValue(PyValue_Borrow(args[2]), &end)) {
         goto exit;
     }
 skip_optional:
-    return_value = unicode_endswith_impl(self, subobj, start, end);
+    return_value = unicode_endswith_impl(PyValue_AsKnownObjectBorrow(self), subobj, start, end);
 
 exit:
     return return_value;
@@ -1775,23 +2080,30 @@ PyDoc_STRVAR(unicode___format____doc__,
 "Return a formatted version of the string as described by format_spec.");
 
 #define UNICODE___FORMAT___METHODDEF    \
-    {"__format__", (PyCFunction)unicode___format__, METH_O, unicode___format____doc__},
+    {"__format__", _PyCFunction_CAST(unicode___format__), METH_VALUE, unicode___format____doc__},
 
-static PyObject *
+static PyValue
 unicode___format___impl(PyObject *self, PyObject *format_spec);
 
-static PyObject *
-unicode___format__(PyObject *self, PyObject *arg)
+static PyValue
+unicode___format__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *format_spec;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("__format__", "argument", "str", arg);
+    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "__format__", nargs, kwnames, 1)) {
         goto exit;
     }
-    format_spec = arg;
-    return_value = unicode___format___impl(self, format_spec);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("__format__", "argument", "str", PyValue_Borrow(args[0]));
+        goto exit;
+    }
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("__format__", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    format_spec = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    return_value = unicode___format___impl(PyValue_AsKnownObjectBorrow(self), format_spec);
 
 exit:
     return return_value;
@@ -1804,25 +2116,33 @@ PyDoc_STRVAR(unicode_sizeof__doc__,
 "Return the size of the string in memory, in bytes.");
 
 #define UNICODE_SIZEOF_METHODDEF    \
-    {"__sizeof__", (PyCFunction)unicode_sizeof, METH_NOARGS, unicode_sizeof__doc__},
+    {"__sizeof__", _PyCFunction_CAST(unicode_sizeof), METH_VALUE, unicode_sizeof__doc__},
 
-static PyObject *
+static PyValue
 unicode_sizeof_impl(PyObject *self);
 
-static PyObject *
-unicode_sizeof(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+unicode_sizeof(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return unicode_sizeof_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyUnicode_Type, "__sizeof__", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = unicode_sizeof_impl(PyValue_AsKnownObjectBorrow(self));
+
+exit:
+    return return_value;
 }
 
-static PyObject *
-unicode_new_impl(PyTypeObject *type, PyObject *x, const char *encoding,
+static PyValue
+unicode_new_impl(PyTypeObject *type, PyValueBorrow x, const char *encoding,
                  const char *errors);
 
-static PyObject *
-unicode_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+unicode_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -1850,57 +2170,67 @@ unicode_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
-    PyObject *x = NULL;
+    Py_ssize_t _idx[3];
+    PyValueBorrow x = PyValue_Borrow(PyValue_NULL);
     const char *encoding = NULL;
     const char *errors = NULL;
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 3));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
+    if (_idx[0] >= 0) {
+        x = PyValue_Borrow(args[_idx[0]]);
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (fastargs[0]) {
-        x = fastargs[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-    if (fastargs[1]) {
-        if (!PyUnicode_Check(fastargs[1])) {
-            _PyArg_BadArgument("str", "argument 'encoding'", "str", fastargs[1]);
+    if (_idx[1] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[1]]))) {
+            _PyArg_BadArgumentValue("str", "argument 'encoding'", "str", PyValue_Borrow(args[_idx[1]]));
             goto exit;
         }
-        encoding = _PyUnicode_AsUTF8NoNUL(fastargs[1]);
+        if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])))) {
+            _PyArg_BadArgument("str", "argument 'encoding'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])));
+            goto exit;
+        }
+        encoding = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])));
         if (encoding == NULL) {
             goto exit;
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
+    }
+    if (_idx[2] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[2]]))) {
+            _PyArg_BadArgumentValue("str", "argument 'errors'", "str", PyValue_Borrow(args[_idx[2]]));
+            goto exit;
+        }
+        if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]])))) {
+            _PyArg_BadArgument("str", "argument 'errors'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]])));
+            goto exit;
+        }
+        errors = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]])));
+        if (errors == NULL) {
+            goto exit;
         }
     }
-    if (!PyUnicode_Check(fastargs[2])) {
-        _PyArg_BadArgument("str", "argument 'errors'", "str", fastargs[2]);
-        goto exit;
-    }
-    errors = _PyUnicode_AsUTF8NoNUL(fastargs[2]);
-    if (errors == NULL) {
-        goto exit;
-    }
-skip_optional_pos:
     return_value = unicode_new_impl(type, x, encoding, errors);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=ff2b69e839965692 input=a9049054013a1b77]*/
+
+Py_VALUE_ENTRY static PyObject *
+unicode_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(unicode_new_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = unicode_new_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
+}
+/*[clinic end generated code: output=2e37876f5aeb6bc7 input=a9049054013a1b77]*/

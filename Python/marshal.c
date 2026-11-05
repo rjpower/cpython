@@ -29,6 +29,11 @@
 
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 module marshal
 [clinic start generated code]*/
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=c982b7930dee17db]*/
@@ -2355,21 +2360,33 @@ ValueError exception is raised - but garbage data will also be written
 to the file. The object will not be properly read back by load().
 [clinic start generated code]*/
 
-static PyObject *
-marshal_dump_impl(PyObject *module, PyObject *value, PyObject *file,
+static PyValue
+marshal_dump_impl(PyObject *module, PyValueBorrow value, PyValueBorrow file,
                   int version, int allow_code)
-/*[clinic end generated code: output=429e5fd61c2196b9 input=041f7f6669b0aafb]*/
+/*[clinic end generated code: output=d58be2c32767743d input=041f7f6669b0aafb]*/
 {
     /* XXX Quick hack -- need to do this differently */
     PyObject *s;
     PyObject *res;
 
-    s = _PyMarshal_WriteObjectToString(value, version, allow_code);
+    /* The writer and the file call take objects: box an inline int or float. */
+    PyObject *value_obj = _PyValue_AsObjectAt(value, BOX_SITE_PARSER);
+    if (value_obj == NULL) {
+        return PyValue_NULL;
+    }
+    s = _PyMarshal_WriteObjectToString(value_obj, version, allow_code);
+    Py_DECREF(value_obj);
     if (s == NULL)
-        return NULL;
-    res = PyObject_CallMethodOneArg(file, &_Py_ID(write), s);
+        return PyValue_NULL;
+    PyObject *file_obj = _PyValue_AsObjectAt(file, BOX_SITE_PARSER);
+    if (file_obj == NULL) {
+        Py_DECREF(s);
+        return PyValue_NULL;
+    }
+    res = PyObject_CallMethodOneArg(file_obj, &_Py_ID(write), s);
+    Py_DECREF(file_obj);
     Py_DECREF(s);
-    return res;
+    return _PyValue_FromObjectResult(res);
 }
 
 /*[clinic input]
@@ -2392,9 +2409,9 @@ Note: If an object containing an unsupported type was marshalled with
 dump(), load() will substitute None for the unmarshallable type.
 [clinic start generated code]*/
 
-static PyObject *
-marshal_load_impl(PyObject *module, PyObject *file, int allow_code)
-/*[clinic end generated code: output=0c1aaf3546ae3ed3 input=2dca7b570653b82f]*/
+static PyValue
+marshal_load_impl(PyObject *module, PyValueBorrow file, int allow_code)
+/*[clinic end generated code: output=6576526dea3daa48 input=2dca7b570653b82f]*/
 {
     PyObject *data, *result;
     RFILE rf;
@@ -2406,9 +2423,16 @@ marshal_load_impl(PyObject *module, PyObject *file, int allow_code)
      * This can be removed if we guarantee good error handling
      * for r_string()
      */
-    data = _PyObject_CallMethod(file, &_Py_ID(read), "i", 0);
-    if (data == NULL)
-        return NULL;
+    /* The reader keeps the file as an object: box an inline int or float. */
+    PyObject *file_obj = _PyValue_AsObjectAt(file, BOX_SITE_PARSER);
+    if (file_obj == NULL) {
+        return PyValue_NULL;
+    }
+    data = _PyObject_CallMethod(file_obj, &_Py_ID(read), "i", 0);
+    if (data == NULL) {
+        Py_DECREF(file_obj);
+        return PyValue_NULL;
+    }
     if (!PyBytes_Check(data)) {
         PyErr_Format(PyExc_TypeError,
                      "file.read() returned not bytes but %.100s",
@@ -2419,7 +2443,7 @@ marshal_load_impl(PyObject *module, PyObject *file, int allow_code)
         rf.allow_code = allow_code;
         rf.depth = 0;
         rf.fp = NULL;
-        rf.readable = file;
+        rf.readable = file_obj;
         rf.ptr = rf.end = NULL;
         rf.buf = NULL;
         if ((rf.refs = PyList_New(0)) != NULL) {
@@ -2431,7 +2455,8 @@ marshal_load_impl(PyObject *module, PyObject *file, int allow_code)
             result = NULL;
     }
     Py_DECREF(data);
-    return result;
+    Py_DECREF(file_obj);
+    return _PyValue_FromObjectResult(result);
 }
 
 /*[clinic input]
@@ -2453,12 +2478,19 @@ Raise a ValueError exception if value has (or contains an object that
 has) an unsupported type.
 [clinic start generated code]*/
 
-static PyObject *
-marshal_dumps_impl(PyObject *module, PyObject *value, int version,
+static PyValue
+marshal_dumps_impl(PyObject *module, PyValueBorrow value, int version,
                    int allow_code)
-/*[clinic end generated code: output=115f90da518d1d49 input=dc1edcafd43124c5]*/
+/*[clinic end generated code: output=a7ca9e2a73c9a23e input=dc1edcafd43124c5]*/
 {
-    return _PyMarshal_WriteObjectToString(value, version, allow_code);
+    PyObject *value_obj = _PyValue_AsObjectAt(value, BOX_SITE_PARSER);
+    if (value_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *bytes = _PyMarshal_WriteObjectToString(value_obj, version,
+                                                     allow_code);
+    Py_DECREF(value_obj);
+    return _PyValue_FromObjectResult(bytes);
 }
 
 /*[clinic input]
@@ -2476,9 +2508,9 @@ If no valid value is found, raise EOFError, ValueError or TypeError.
 Extra bytes in the input are ignored.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 marshal_loads_impl(PyObject *module, Py_buffer *bytes, int allow_code)
-/*[clinic end generated code: output=62c0c538d3edc31f input=286f1dbd6811d2ad]*/
+/*[clinic end generated code: output=dbd41a6237854a2f input=286f1dbd6811d2ad]*/
 {
     RFILE rf;
     char *s = bytes->buf;
@@ -2491,10 +2523,10 @@ marshal_loads_impl(PyObject *module, Py_buffer *bytes, int allow_code)
     rf.end = s + n;
     rf.depth = 0;
     if ((rf.refs = PyList_New(0)) == NULL)
-        return NULL;
+        return PyValue_NULL;
     result = read_object(&rf);
     Py_DECREF(rf.refs);
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 static PyMethodDef marshal_methods[] = {

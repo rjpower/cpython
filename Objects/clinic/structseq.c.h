@@ -2,21 +2,27 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
-static PyObject *
-structseq_new_impl(PyTypeObject *type, PyObject *arg, PyObject *dict);
+static PyValue
+structseq_new_impl(PyTypeObject *type, PyValueBorrow arg, PyValueBorrow dict);
 
-static PyObject *
-structseq_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+structseq_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -44,32 +50,40 @@ structseq_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 1;
-    PyObject *arg;
-    PyObject *dict = NULL;
+    Py_ssize_t _idx[2];
+    PyValueBorrow arg;
+    PyValueBorrow dict = PyValue_Borrow(PyValue_NULL);
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
+    arg = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        dict = PyValue_Borrow(args[_idx[1]]);
     }
-    arg = fastargs[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    dict = fastargs[1];
-skip_optional_pos:
     return_value = structseq_new_impl(type, arg, dict);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+structseq_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(structseq_new_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = structseq_new_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(structseq___replace____doc__,
@@ -79,34 +93,26 @@ PyDoc_STRVAR(structseq___replace____doc__,
 "Return a copy with new values for the specified fields.");
 
 #define STRUCTSEQ___REPLACE___METHODDEF    \
-    {"__replace__", _PyCFunction_CAST(structseq___replace__), METH_VARARGS|METH_KEYWORDS, structseq___replace____doc__},
+    {"__replace__", _PyCFunction_CAST(structseq___replace__), METH_VALUE, structseq___replace____doc__},
 
-static PyObject *
+static PyValue
 structseq___replace___impl(PyStructSequence *self, PyObject *changes);
 
-static PyObject *
-structseq___replace__(PyObject *self, PyObject *args, PyObject *kwargs)
+static PyValue
+structseq___replace__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *changes = NULL;
 
-    if (!_PyArg_NoPositional("__replace__", args)) {
+    if (!_PyArg_CheckPositional("__replace__", nargs, 0, 0)) {
         goto exit;
     }
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
-    if (_args_items == NULL) {
+    changes = kwnames == NULL ? PyDict_New()
+        : _PyValue_StackAsDict(args + nargs, kwnames);
+    if (changes == NULL) {
         goto exit;
     }
-    if (kwargs == NULL) {
-        changes = PyDict_New();
-        if (changes == NULL) {
-            goto exit;
-        }
-    }
-    else {
-        changes = Py_NewRef(kwargs);
-    }
-    return_value = structseq___replace___impl((PyStructSequence *)self, changes);
+    return_value = structseq___replace___impl((PyStructSequence *)PyValue_AsKnownObjectBorrow(self), changes);
 
 exit:
     /* Cleanup for changes */
@@ -114,4 +120,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=809831d16da931d3 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=927d6664d68d15fd input=a9049054013a1b77]*/

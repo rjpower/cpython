@@ -2572,6 +2572,11 @@ PyCode_GetCode(PyCodeObject *co)
  ******************/
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 class code "PyCodeObject *" "&PyCode_Type"
 [clinic start generated code]*/
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=78aa5d576683bb4b]*/
@@ -2605,7 +2610,7 @@ code.__new__ as code_new
 Create a code object.  Not for the faint of heart.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 code_new_impl(PyTypeObject *type, int argcount, int posonlyargcount,
               int kwonlyargcount, int nlocals, int stacksize, int flags,
               PyObject *code, PyObject *consts, PyObject *names,
@@ -2613,7 +2618,7 @@ code_new_impl(PyTypeObject *type, int argcount, int posonlyargcount,
               PyObject *qualname, int firstlineno, PyObject *linetable,
               PyObject *exceptiontable, PyObject *freevars,
               PyObject *cellvars, PyObject *fbinit, PyObject *constslots)
-/*[clinic end generated code: output=d843a7ac96697603 input=c95e5e3b3712cb94]*/
+/*[clinic end generated code: output=d98fa2ec432ba30e input=c95e5e3b3712cb94]*/
 {
     PyObject *co = NULL;
     PyObject *ournames = NULL;
@@ -2688,7 +2693,7 @@ code_new_impl(PyTypeObject *type, int argcount, int posonlyargcount,
     Py_XDECREF(ourvarnames);
     Py_XDECREF(ourfreevars);
     Py_XDECREF(ourcellvars);
-    return co;
+    return _PyValue_FromObjectResult(co);
 }
 
 static void
@@ -3124,31 +3129,31 @@ code_branchesiterator(PyObject *self, PyObject *Py_UNUSED(args))
 code.replace
 
     *
-    co_argcount: int(c_default="((PyCodeObject *)self)->co_argcount") = unchanged
-    co_posonlyargcount: int(c_default="((PyCodeObject *)self)->co_posonlyargcount") = unchanged
-    co_kwonlyargcount: int(c_default="((PyCodeObject *)self)->co_kwonlyargcount") = unchanged
-    co_nlocals: int(c_default="((PyCodeObject *)self)->co_nlocals") = unchanged
-    co_stacksize: int(c_default="((PyCodeObject *)self)->co_stacksize") = unchanged
-    co_flags: int(c_default="((PyCodeObject *)self)->co_flags") = unchanged
-    co_firstlineno: int(c_default="((PyCodeObject *)self)->co_firstlineno") = unchanged
+    co_argcount: int(c_default="((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_argcount") = unchanged
+    co_posonlyargcount: int(c_default="((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_posonlyargcount") = unchanged
+    co_kwonlyargcount: int(c_default="((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_kwonlyargcount") = unchanged
+    co_nlocals: int(c_default="((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_nlocals") = unchanged
+    co_stacksize: int(c_default="((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_stacksize") = unchanged
+    co_flags: int(c_default="((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_flags") = unchanged
+    co_firstlineno: int(c_default="((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_firstlineno") = unchanged
     co_code: object(subclass_of="&PyBytes_Type", c_default="NULL") = unchanged
-    co_consts: object(subclass_of="&PyTuple_Type", c_default="((PyCodeObject *)self)->co_consts") = unchanged
-    co_names: object(subclass_of="&PyTuple_Type", c_default="((PyCodeObject *)self)->co_names") = unchanged
+    co_consts: object(subclass_of="&PyTuple_Type", c_default="((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_consts") = unchanged
+    co_names: object(subclass_of="&PyTuple_Type", c_default="((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_names") = unchanged
     co_varnames: object(subclass_of="&PyTuple_Type", c_default="NULL") = unchanged
     co_freevars: object(subclass_of="&PyTuple_Type", c_default="NULL") = unchanged
     co_cellvars: object(subclass_of="&PyTuple_Type", c_default="NULL") = unchanged
-    co_filename: unicode(c_default="((PyCodeObject *)self)->co_filename") = unchanged
-    co_name: unicode(c_default="((PyCodeObject *)self)->co_name") = unchanged
-    co_qualname: unicode(c_default="((PyCodeObject *)self)->co_qualname") = unchanged
-    co_linetable: object(subclass_of="&PyBytes_Type", c_default="((PyCodeObject *)self)->co_linetable") = unchanged
-    co_exceptiontable: object(subclass_of="&PyBytes_Type", c_default="((PyCodeObject *)self)->co_exceptiontable") = unchanged
+    co_filename: unicode(c_default="((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_filename") = unchanged
+    co_name: unicode(c_default="((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_name") = unchanged
+    co_qualname: unicode(c_default="((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_qualname") = unchanged
+    co_linetable: object(subclass_of="&PyBytes_Type", c_default="((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_linetable") = unchanged
+    co_exceptiontable: object(subclass_of="&PyBytes_Type", c_default="((PyCodeObject *)PyValue_AsKnownObjectBorrow(self))->co_exceptiontable") = unchanged
     co_fbinit: object(subclass_of="&PyBytes_Type", c_default="NULL") = unchanged
     co_constslots: object(subclass_of="&PyBytes_Type", c_default="NULL") = unchanged
 
 Return a copy of the code object with new values for the specified fields.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 code_replace_impl(PyCodeObject *self, int co_argcount,
                   int co_posonlyargcount, int co_kwonlyargcount,
                   int co_nlocals, int co_stacksize, int co_flags,
@@ -3159,13 +3164,13 @@ code_replace_impl(PyCodeObject *self, int co_argcount,
                   PyObject *co_qualname, PyObject *co_linetable,
                   PyObject *co_exceptiontable, PyObject *co_fbinit,
                   PyObject *co_constslots)
-/*[clinic end generated code: output=eea43d61e16aa1b2 input=ad2ea43603862ce7]*/
+/*[clinic end generated code: output=44d80c045ef0ae97 input=1930c01ae3d96ab3]*/
 {
 #define CHECK_INT_ARG(ARG) \
         if (ARG < 0) { \
             PyErr_SetString(PyExc_ValueError, \
                             #ARG " must be a positive integer"); \
-            return NULL; \
+            return PyValue_NULL; \
         }
 
     CHECK_INT_ARG(co_argcount);
@@ -3182,7 +3187,7 @@ code_replace_impl(PyCodeObject *self, int co_argcount,
     if (co_code == NULL) {
         code = _PyCode_GetCode(self);
         if (code == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
         co_code = code;
     }
@@ -3192,7 +3197,7 @@ code_replace_impl(PyCodeObject *self, int co_argcount,
                     co_posonlyargcount, co_kwonlyargcount, co_nlocals,
                     co_stacksize, co_flags) < 0) {
         Py_XDECREF(code);
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyCodeObject *co = NULL;
@@ -3255,7 +3260,7 @@ error:
     Py_XDECREF(varnames);
     Py_XDECREF(cellvars);
     Py_XDECREF(freevars);
-    return (PyObject *)co;
+    return _PyValue_FromObjectResult((PyObject *)co);
 }
 
 /*[clinic input]
@@ -3269,14 +3274,14 @@ WARNING: this method is for internal use only and may change or go
 away.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 code__varname_from_oparg_impl(PyCodeObject *self, int oparg)
-/*[clinic end generated code: output=1fd1130413184206 input=6ba7d6df0d566463]*/
+/*[clinic end generated code: output=cdd1cd7ce711272c input=6ba7d6df0d566463]*/
 {
     PyValue name = PyTuple_GetValue(self->co_localsplusnames, oparg);
     PyObject *result = PyValue_IsNull(name) ? NULL : _PyValue_AsObjectAt(name, BOX_SITE_TUPLE);
     PyValue_XCLOSE(name);
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 /* XXX code objects need to participate in GC? */

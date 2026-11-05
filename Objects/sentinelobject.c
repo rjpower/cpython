@@ -21,6 +21,11 @@ typedef struct {
     (assert(PySentinel_Check(op)), _Py_CAST(sentinelobject *, (op)))
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 class sentinel "sentinelobject *" "&PySentinel_Type"
 [clinic start generated code]*/
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=8b88f8268d3b5775]*/
@@ -72,21 +77,22 @@ sentinel.__new__ as sentinel_new
     repr: object = None
 [clinic start generated code]*/
 
-static PyObject *
-sentinel_new_impl(PyTypeObject *type, PyObject *name, PyObject *repr)
-/*[clinic end generated code: output=1eb7fab52e57d8c8 input=28cab6c468997b35]*/
+static PyValue
+sentinel_new_impl(PyTypeObject *type, PyObject *name, PyValueBorrow repr)
+/*[clinic end generated code: output=5d1d70f4aeb6c9f2 input=28cab6c468997b35]*/
 {
-    if (repr == Py_None) {
-        repr = NULL;
-    }
-    else if (!PyUnicode_Check(repr)) {
-        _PyArg_BadArgument("sentinel", "argument 'repr'", "str or None", repr);
-        return NULL;
+    PyObject *repr_obj = NULL;
+    if (!PyValue_IsNone(repr)) {
+        if (!(PyValue_IsObject(repr) && PyUnicode_Check(PyValue_AsKnownObjectBorrow(repr)))) {
+            _PyArg_BadArgumentValue("sentinel", "argument 'repr'", "str or None", repr);
+            return PyValue_NULL;
+        }
+        repr_obj = PyValue_AsKnownObjectBorrow(repr);
     }
     PyObject *module = caller();
-    PyObject *self = sentinel_new_with_module(type, name, module, repr);
+    PyObject *self = sentinel_new_with_module(type, name, module, repr_obj);
     Py_DECREF(module);
-    return self;
+    return _PyValue_FromObjectResult(self);
 }
 
 PyObject *

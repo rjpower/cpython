@@ -60,6 +60,11 @@
 #define DEFAULT_MAX_NTHREADS 100
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 class traceback "PyTracebackObject *" "&PyTraceback_Type"
 [clinic start generated code]*/
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=cf96294b2bebc811]*/
@@ -108,21 +113,26 @@ traceback.__new__ as tb_new
 Create a new traceback object.
 [clinic start generated code]*/
 
-static PyObject *
-tb_new_impl(PyTypeObject *type, PyObject *tb_next, PyFrameObject *tb_frame,
-            int tb_lasti, int tb_lineno)
-/*[clinic end generated code: output=fa077debd72d861a input=b88143145454cb59]*/
+static PyValue
+tb_new_impl(PyTypeObject *type, PyValueBorrow tb_next,
+            PyFrameObject *tb_frame, int tb_lasti, int tb_lineno)
+/*[clinic end generated code: output=ef84ac764faa6dff input=b88143145454cb59]*/
 {
-    if (tb_next == Py_None) {
-        tb_next = NULL;
-    } else if (!PyTraceBack_Check(tb_next)) {
-        return PyErr_Format(PyExc_TypeError,
-                            "expected traceback object or None, got '%s'",
-                            Py_TYPE(tb_next)->tp_name);
+    PyTracebackObject *next = NULL;
+    if (!PyValue_IsNone(tb_next)) {
+        /* No inline int or float is a traceback. */
+        if (!(PyValue_IsObject(tb_next)
+              && PyTraceBack_Check(PyValue_AsKnownObjectBorrow(tb_next)))) {
+            PyErr_Format(PyExc_TypeError,
+                         "expected traceback object or None, got '%s'",
+                         PyValue_TYPE(tb_next)->tp_name);
+            return PyValue_NULL;
+        }
+        next = (PyTracebackObject *)PyValue_AsKnownObjectBorrow(tb_next);
     }
 
-    return tb_create_raw((PyTracebackObject *)tb_next, tb_frame, tb_lasti,
-                         tb_lineno);
+    return _PyValue_FromObjectResult(
+        tb_create_raw(next, tb_frame, tb_lasti, tb_lineno));
 }
 
 static PyObject *

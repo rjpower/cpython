@@ -28,6 +28,11 @@
 
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 class BaseException "PyBaseExceptionObject *" "&PyExc_BaseException"
 class BaseExceptionGroup "PyBaseExceptionGroupObject *" "&PyExc_BaseExceptionGroup"
 [clinic start generated code]*/
@@ -223,14 +228,14 @@ BaseException_repr_impl(PyBaseExceptionObject *self)
 BaseException.__reduce__
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 BaseException___reduce___impl(PyBaseExceptionObject *self)
-/*[clinic end generated code: output=af87c1247ef98748 input=283be5a10d9c964f]*/
+/*[clinic end generated code: output=9ce4b122502f6677 input=283be5a10d9c964f]*/
 {
     if (self->args && self->dict)
-        return _PyTuple_PackValues(3, (PyValueBorrow[]){_PyValue_FromObjectKnown(_PyObject_CAST(Py_TYPE(self))), PyValue_FromObjectBorrow(self->args), PyValue_FromObjectBorrow(self->dict)});
+        return _PyValue_FromObjectResult(_PyTuple_PackValues(3, (PyValueBorrow[]){_PyValue_FromObjectKnown(_PyObject_CAST(Py_TYPE(self))), PyValue_FromObjectBorrow(self->args), PyValue_FromObjectBorrow(self->dict)}));
     else
-        return _PyTuple_PackValues(2, (PyValueBorrow[]){_PyValue_FromObjectKnown((PyObject *)Py_TYPE(self)), PyValue_FromObjectBorrow(self->args)});
+        return _PyValue_FromObjectResult(_PyTuple_PackValues(2, (PyValueBorrow[]){_PyValue_FromObjectKnown((PyObject *)Py_TYPE(self)), PyValue_FromObjectBorrow(self->args)}));
 }
 
 /*
@@ -246,20 +251,21 @@ BaseException.__setstate__
     /
 [clinic start generated code]*/
 
-static PyObject *
-BaseException___setstate___impl(PyBaseExceptionObject *self, PyObject *state)
-/*[clinic end generated code: output=f3834889950453ab input=f9b1aea70382cdb6]*/
+static PyValue
+BaseException___setstate___impl(PyBaseExceptionObject *self,
+                                PyValueBorrow state)
+/*[clinic end generated code: output=6544032e80b4f53e input=f9b1aea70382cdb6]*/
 {
     Py_ssize_t i = 0;
 
-    if (state != Py_None) {
-        if (!PyDict_Check(state)) {
+    if (!PyValue_IsNone(state)) {
+        if (!(PyValue_IsObject(state) && PyDict_Check(PyValue_AsKnownObjectBorrow(state)))) {
             PyErr_SetString(PyExc_TypeError, "state is not a dictionary");
-            return NULL;
+            return PyValue_NULL;
         }
         int rc;
         PyValue d_key_v, d_value_v;
-        while ((rc = PyDict_NextValue(state, &i, &d_key_v, &d_value_v)) > 0) {
+        while ((rc = PyDict_NextValue(PyValue_AsKnownObjectBorrow(state), &i, &d_key_v, &d_value_v)) > 0) {
             PyObject *d_key = _PyValue_AsObjectAt(d_key_v, BOX_SITE_DICT);
             PyObject *d_value = _PyValue_AsObjectAt(d_value_v, BOX_SITE_DICT);
             PyValue_CLOSE(d_key_v);
@@ -267,20 +273,20 @@ BaseException___setstate___impl(PyBaseExceptionObject *self, PyObject *state)
             if (d_key == NULL || d_value == NULL) {
                 Py_XDECREF(d_key);
                 Py_XDECREF(d_value);
-                return NULL;
+                return PyValue_NULL;
             }
             int res = PyObject_SetAttr((PyObject *)self, d_key, d_value);
             Py_DECREF(d_value);
             Py_DECREF(d_key);
             if (res < 0) {
-                return NULL;
+                return PyValue_NULL;
             }
         }
         if (rc < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 
@@ -293,14 +299,22 @@ BaseException.with_traceback
 Set self.__traceback__ to tb and return self.
 [clinic start generated code]*/
 
-static PyObject *
-BaseException_with_traceback_impl(PyBaseExceptionObject *self, PyObject *tb)
-/*[clinic end generated code: output=81e92f2387927f10 input=b5fb64d834717e36]*/
+static PyValue
+BaseException_with_traceback_impl(PyBaseExceptionObject *self,
+                                  PyValueBorrow tb)
+/*[clinic end generated code: output=575b27cf8d60f9ea input=b5fb64d834717e36]*/
 {
-    if (BaseException___traceback___set_impl(self, tb) < 0){
-        return NULL;
+    /* The setter takes an object, and an inline tb is rejected by its type check. */
+    PyObject *tb_obj = _PyValue_AsObjectAt(tb, BOX_SITE_PARSER);
+    if (tb_obj == NULL) {
+        return PyValue_NULL;
     }
-    return Py_NewRef(self);
+    int res = BaseException___traceback___set_impl(self, tb_obj);
+    Py_DECREF(tb_obj);
+    if (res < 0){
+        return PyValue_NULL;
+    }
+    return PyValue_DUP(PyValue_FromObjectBorrow(self));
 }
 
 /*[clinic input]
@@ -312,35 +326,35 @@ BaseException.add_note
 Add a note to the exception
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 BaseException_add_note_impl(PyBaseExceptionObject *self, PyObject *note)
-/*[clinic end generated code: output=fb7cbcba611c187b input=e60a6b6e9596acaf]*/
+/*[clinic end generated code: output=e957e99f8a6326dd input=e60a6b6e9596acaf]*/
 {
     PyObject *notes;
     if (PyObject_GetOptionalAttr((PyObject *)self, &_Py_ID(__notes__), &notes) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (notes == NULL) {
         notes = PyList_New(0);
         if (notes == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
         if (PyObject_SetAttr((PyObject *)self, &_Py_ID(__notes__), notes) < 0) {
             Py_DECREF(notes);
-            return NULL;
+            return PyValue_NULL;
         }
     }
     else if (!PyList_Check(notes)) {
         Py_DECREF(notes);
         PyErr_SetString(PyExc_TypeError, "Cannot add note: __notes__ is not a list");
-        return NULL;
+        return PyValue_NULL;
     }
     if (PyList_AppendValue(notes, PyValue_FromObjectBorrow(note)) < 0) {
         Py_DECREF(notes);
-        return NULL;
+        return PyValue_NULL;
     }
     Py_DECREF(notes);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static PyMethodDef BaseException_methods[] = {
@@ -1166,19 +1180,19 @@ BaseExceptionGroup.derive
     /
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 BaseExceptionGroup_derive_impl(PyBaseExceptionGroupObject *self,
-                               PyObject *excs)
-/*[clinic end generated code: output=4307564218dfbf06 input=f72009d38e98cec1]*/
+                               PyValueBorrow excs)
+/*[clinic end generated code: output=b7db9f288ac55399 input=f72009d38e98cec1]*/
 {
-    PyObject *init_args = _PyTuple_PackValues(2, (PyValueBorrow[]){PyValue_FromObjectBorrow(self->msg), PyValue_FromObjectBorrow(excs)});
+    PyObject *init_args = _PyTuple_PackValues(2, (PyValueBorrow[]){PyValue_FromObjectBorrow(self->msg), excs});
     if (!init_args) {
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *eg = PyObject_CallObject(
         PyExc_BaseExceptionGroup, init_args);
     Py_DECREF(init_args);
-    return eg;
+    return _PyValue_FromObjectResult(eg);
 }
 
 static int
@@ -1276,25 +1290,31 @@ typedef enum {
 } _exceptiongroup_split_matcher_type;
 
 static int
-get_matcher_type(PyObject *value,
+get_matcher_type(PyValueBorrow value,
                  _exceptiongroup_split_matcher_type *type)
 {
-    assert(value);
+    assert(!PyValue_IsNull(value));
 
-    if (PyCallable_Check(value) && !PyType_Check(value)) {
+    /* An inline int or float is no matcher, so it takes the error exit. */
+    if (!PyValue_IsObject(value)) {
+        goto error;
+    }
+    PyObject *obj = PyValue_AsKnownObjectBorrow(value);
+
+    if (PyCallable_Check(obj) && !PyType_Check(obj)) {
         *type = EXCEPTION_GROUP_MATCH_BY_PREDICATE;
         return 0;
     }
 
-    if (PyExceptionClass_Check(value)) {
+    if (PyExceptionClass_Check(obj)) {
         *type = EXCEPTION_GROUP_MATCH_BY_TYPE;
         return 0;
     }
 
-    if (PyTuple_CheckExact(value)) {
-        Py_ssize_t n = PyTuple_GET_SIZE(value);
+    if (PyTuple_CheckExact(obj)) {
+        Py_ssize_t n = PyTuple_GET_SIZE(obj);
         for (Py_ssize_t i=0; i<n; i++) {
-            PyObject *item = _PyValue_AsObjectAt(PyTuple_GET_VALUE(value, i),
+            PyObject *item = _PyValue_AsObjectAt(PyTuple_GET_VALUE(obj, i),
                                                  BOX_SITE_TUPLE);
             if (item == NULL) {
                 return -1;
@@ -1484,28 +1504,30 @@ BaseExceptionGroup.split
     /
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 BaseExceptionGroup_split_impl(PyBaseExceptionGroupObject *self,
-                              PyObject *matcher_value)
-/*[clinic end generated code: output=d74db579da4df6e2 input=0c5cfbfed57e0052]*/
+                              PyValueBorrow matcher_value)
+/*[clinic end generated code: output=5339e32c07922945 input=0c5cfbfed57e0052]*/
 {
     _exceptiongroup_split_matcher_type matcher_type;
     if (get_matcher_type(matcher_value, &matcher_type) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
+    /* get_matcher_type() accepts only objects. */
+    PyObject *matcher = PyValue_AsKnownObjectBorrow(matcher_value);
 
     _exceptiongroup_split_result split_result;
     bool construct_rest = true;
     if (exceptiongroup_split_recursive(
-            (PyObject *)self, matcher_type, matcher_value,
+            (PyObject *)self, matcher_type, matcher,
             construct_rest, &split_result) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     assert(_Py_IsStaticImmortal(Py_None));
     PyObject *result = _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(split_result.match ? split_result.match : Py_None), PyValue_PrepareOwned(split_result.rest ? split_result.rest : Py_None));
 
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 /*[clinic input]
@@ -1515,22 +1537,24 @@ BaseExceptionGroup.subgroup
     /
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 BaseExceptionGroup_subgroup_impl(PyBaseExceptionGroupObject *self,
-                                 PyObject *matcher_value)
-/*[clinic end generated code: output=07dbec8f77d4dd8e input=988ffdd755a151ce]*/
+                                 PyValueBorrow matcher_value)
+/*[clinic end generated code: output=82f18d34599082e6 input=988ffdd755a151ce]*/
 {
     _exceptiongroup_split_matcher_type matcher_type;
     if (get_matcher_type(matcher_value, &matcher_type) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
+    /* get_matcher_type() accepts only objects. */
+    PyObject *matcher = PyValue_AsKnownObjectBorrow(matcher_value);
 
     _exceptiongroup_split_result split_result;
     bool construct_rest = false;
     if (exceptiongroup_split_recursive(
-            (PyObject *)self, matcher_type, matcher_value,
+            (PyObject *)self, matcher_type, matcher,
             construct_rest, &split_result) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyObject *result = Py_NewRef(
@@ -1538,7 +1562,7 @@ BaseExceptionGroup_subgroup_impl(PyBaseExceptionGroupObject *self,
 
     Py_XDECREF(split_result.match);
     assert(!split_result.rest);
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 static int
@@ -4858,8 +4882,11 @@ _PyException_AddNote(PyObject *exc, PyObject *note)
                      Py_TYPE(exc)->tp_name);
         return -1;
     }
-    PyObject *r = BaseException_add_note(exc, note);
-    int res = r == NULL ? -1 : 0;
-    Py_XDECREF(r);
+    PyValue note_arg = PyValue_PrepareOwned(Py_NewRef(note));
+    PyValue r = BaseException_add_note(PyValue_FromObjectBorrow(exc),
+                                       &note_arg, 1, NULL);
+    PyValue_CLOSE(note_arg);
+    int res = PyValue_IsNull(r) ? -1 : 0;
+    PyValue_XCLOSE(r);
     return res;
 }

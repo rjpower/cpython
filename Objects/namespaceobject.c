@@ -10,6 +10,11 @@
 #include "pycore_value_api.h"     // _PyValue_FromObjectKnown()
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 class namespace "_PyNamespaceObject *" "&_PyNamespace_Type"
 [clinic start generated code]*/
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=0c19150c7306c8cf]*/
@@ -252,33 +257,33 @@ namespace.__replace__
 Return a copy with the specified attributes replaced.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 namespace___replace___impl(_PyNamespaceObject *self, PyObject *changes)
-/*[clinic end generated code: output=16bc56d7900c95ba input=c34d09667d34e300]*/
+/*[clinic end generated code: output=1d7b1a8ed42e3d7b input=c34d09667d34e300]*/
 {
     PyObject *result = PyObject_CallNoArgs((PyObject *)Py_TYPE(self));
     if (!result) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (!_PyNamespace_Check(result)) {
         PyErr_Format(PyExc_TypeError,
                      "expect %N type, but %T() returned '%T' object",
                      &_PyNamespace_Type, self, result);
         Py_DECREF(result);
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (PyDict_Update(((_PyNamespaceObject*)result)->ns_dict,
                       ((_PyNamespaceObject*)self)->ns_dict) < 0)
     {
         Py_DECREF(result);
-        return NULL;
+        return PyValue_NULL;
     }
     if (PyDict_Update(((_PyNamespaceObject*)result)->ns_dict, changes) < 0) {
         Py_DECREF(result);
-        return NULL;
+        return PyValue_NULL;
     }
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 

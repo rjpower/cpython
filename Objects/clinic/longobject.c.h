@@ -2,22 +2,29 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_long_value.h"    // _PyValue_IntAsSsize_t()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_Index()
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
-static PyObject *
-long_new_impl(PyTypeObject *type, PyObject *x, PyObject *obase);
+static PyValue
+long_new_impl(PyTypeObject *type, PyValueBorrow x, PyValueBorrow obase);
 
-static PyObject *
-long_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+long_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -45,37 +52,42 @@ long_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
-    PyObject *x = NULL;
-    PyObject *obase = NULL;
+    Py_ssize_t _idx[2];
+    PyValueBorrow x = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow obase = PyValue_Borrow(PyValue_NULL);
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 2));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
+    if (_idx[0] >= 0) {
+        x = PyValue_Borrow(args[_idx[0]]);
     }
-    if (nargs < 1) {
-        goto skip_optional_posonly;
+    if (_idx[1] >= 0) {
+        obase = PyValue_Borrow(args[_idx[1]]);
     }
-    noptargs--;
-    x = fastargs[0];
-skip_optional_posonly:
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    obase = fastargs[1];
-skip_optional_pos:
     return_value = long_new_impl(type, x, obase);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+long_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(long_new_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = long_new_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(int___getnewargs____doc__,
@@ -84,15 +96,23 @@ PyDoc_STRVAR(int___getnewargs____doc__,
 "\n");
 
 #define INT___GETNEWARGS___METHODDEF    \
-    {"__getnewargs__", (PyCFunction)int___getnewargs__, METH_NOARGS, int___getnewargs____doc__},
+    {"__getnewargs__", _PyCFunction_CAST(int___getnewargs__), METH_VALUE, int___getnewargs____doc__},
 
-static PyObject *
-int___getnewargs___impl(PyObject *self);
+static PyValue
+int___getnewargs___impl(PyValueBorrow self);
 
-static PyObject *
-int___getnewargs__(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+int___getnewargs__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return int___getnewargs___impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyLong_Type, "__getnewargs__", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = int___getnewargs___impl(self);
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(int___format____doc__,
@@ -102,22 +122,29 @@ PyDoc_STRVAR(int___format____doc__,
 "Convert to a string according to format_spec.");
 
 #define INT___FORMAT___METHODDEF    \
-    {"__format__", (PyCFunction)int___format__, METH_O, int___format____doc__},
+    {"__format__", _PyCFunction_CAST(int___format__), METH_VALUE, int___format____doc__},
 
-static PyObject *
-int___format___impl(PyObject *self, PyObject *format_spec);
+static PyValue
+int___format___impl(PyValueBorrow self, PyObject *format_spec);
 
-static PyObject *
-int___format__(PyObject *self, PyObject *arg)
+static PyValue
+int___format__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *format_spec;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("__format__", "argument", "str", arg);
+    if (!_PyArg_CheckArityValueMethod(&PyLong_Type, "__format__", nargs, kwnames, 1)) {
         goto exit;
     }
-    format_spec = arg;
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("__format__", "argument", "str", PyValue_Borrow(args[0]));
+        goto exit;
+    }
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("__format__", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    format_spec = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
     return_value = int___format___impl(self, format_spec);
 
 exit:
@@ -133,24 +160,27 @@ PyDoc_STRVAR(int___round____doc__,
 "Rounding with an ndigits argument also returns an integer.");
 
 #define INT___ROUND___METHODDEF    \
-    {"__round__", _PyCFunction_CAST(int___round__), METH_FASTCALL, int___round____doc__},
+    {"__round__", _PyCFunction_CAST(int___round__), METH_VALUE, int___round____doc__},
 
-static PyObject *
-int___round___impl(PyObject *self, PyObject *o_ndigits);
+static PyValue
+int___round___impl(PyValueBorrow self, PyValueBorrow o_ndigits);
 
-static PyObject *
-int___round__(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+int___round__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *o_ndigits = Py_None;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow o_ndigits = PyValue_Borrow(PyValue_None);
 
+    if (!_PyArg_NoKwnamesValueMethod(&PyLong_Type, "__round__", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("__round__", nargs, 0, 1)) {
         goto exit;
     }
     if (nargs < 1) {
         goto skip_optional;
     }
-    o_ndigits = args[0];
+    o_ndigits = PyValue_Borrow(args[0]);
 skip_optional:
     return_value = int___round___impl(self, o_ndigits);
 
@@ -165,22 +195,25 @@ PyDoc_STRVAR(int___sizeof____doc__,
 "Returns size in memory, in bytes.");
 
 #define INT___SIZEOF___METHODDEF    \
-    {"__sizeof__", (PyCFunction)int___sizeof__, METH_NOARGS, int___sizeof____doc__},
+    {"__sizeof__", _PyCFunction_CAST(int___sizeof__), METH_VALUE, int___sizeof____doc__},
 
 static Py_ssize_t
-int___sizeof___impl(PyObject *self);
+int___sizeof___impl(PyValueBorrow self);
 
-static PyObject *
-int___sizeof__(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+int___sizeof__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t _return_value;
 
+    if (!_PyArg_CheckArityValueMethod(&PyLong_Type, "__sizeof__", nargs, kwnames, 0)) {
+        goto exit;
+    }
     _return_value = int___sizeof___impl(self);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromSsize_t(_return_value);
+    return_value = PyValue_FromInt64((int64_t)_return_value);
 
 exit:
     return return_value;
@@ -198,15 +231,23 @@ PyDoc_STRVAR(int_bit_length__doc__,
 "6");
 
 #define INT_BIT_LENGTH_METHODDEF    \
-    {"bit_length", (PyCFunction)int_bit_length, METH_NOARGS, int_bit_length__doc__},
+    {"bit_length", _PyCFunction_CAST(int_bit_length), METH_VALUE, int_bit_length__doc__},
 
-static PyObject *
-int_bit_length_impl(PyObject *self);
+static PyValue
+int_bit_length_impl(PyValueBorrow self);
 
-static PyObject *
-int_bit_length(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+int_bit_length(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return int_bit_length_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyLong_Type, "bit_length", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = int_bit_length_impl(self);
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(int_bit_count__doc__,
@@ -223,15 +264,23 @@ PyDoc_STRVAR(int_bit_count__doc__,
 "3");
 
 #define INT_BIT_COUNT_METHODDEF    \
-    {"bit_count", (PyCFunction)int_bit_count, METH_NOARGS, int_bit_count__doc__},
+    {"bit_count", _PyCFunction_CAST(int_bit_count), METH_VALUE, int_bit_count__doc__},
 
-static PyObject *
-int_bit_count_impl(PyObject *self);
+static PyValue
+int_bit_count_impl(PyValueBorrow self);
 
-static PyObject *
-int_bit_count(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+int_bit_count(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return int_bit_count_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyLong_Type, "bit_count", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = int_bit_count_impl(self);
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(int_as_integer_ratio__doc__,
@@ -250,15 +299,23 @@ PyDoc_STRVAR(int_as_integer_ratio__doc__,
 "(0, 1)");
 
 #define INT_AS_INTEGER_RATIO_METHODDEF    \
-    {"as_integer_ratio", (PyCFunction)int_as_integer_ratio, METH_NOARGS, int_as_integer_ratio__doc__},
+    {"as_integer_ratio", _PyCFunction_CAST(int_as_integer_ratio), METH_VALUE, int_as_integer_ratio__doc__},
 
-static PyObject *
-int_as_integer_ratio_impl(PyObject *self);
+static PyValue
+int_as_integer_ratio_impl(PyValueBorrow self);
 
-static PyObject *
-int_as_integer_ratio(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+int_as_integer_ratio(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return int_as_integer_ratio_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyLong_Type, "as_integer_ratio", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = int_as_integer_ratio_impl(self);
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(int_to_bytes__doc__,
@@ -284,16 +341,16 @@ PyDoc_STRVAR(int_to_bytes__doc__,
 "    an OverflowError is raised.");
 
 #define INT_TO_BYTES_METHODDEF    \
-    {"to_bytes", _PyCFunction_CAST(int_to_bytes), METH_FASTCALL|METH_KEYWORDS, int_to_bytes__doc__},
+    {"to_bytes", _PyCFunction_CAST(int_to_bytes), METH_VALUE, int_to_bytes__doc__},
 
-static PyObject *
-int_to_bytes_impl(PyObject *self, Py_ssize_t length, PyObject *byteorder,
+static PyValue
+int_to_bytes_impl(PyValueBorrow self, Py_ssize_t length, PyObject *byteorder,
                   int is_signed);
 
-static PyObject *
-int_to_bytes(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+int_to_bytes(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -321,27 +378,22 @@ int_to_bytes(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    Py_ssize_t _idx[3];
     Py_ssize_t length = 1;
     PyObject *byteorder = NULL;
     int is_signed = 0;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[0]) {
+    if (_idx[0] >= 0) {
         {
             Py_ssize_t ival = -1;
-            PyObject *iobj = _PyNumber_Index(args[0]);
-            if (iobj != NULL) {
-                ival = PyLong_AsSsize_t(iobj);
-                Py_DECREF(iobj);
+            PyValue iobj = _PyValue_Index(PyValue_Borrow(args[_idx[0]]));
+            if (!PyValue_IsNull(iobj)) {
+                ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+                PyValue_CLOSE(iobj);
             }
             if (ival == -1 && PyErr_Occurred()) {
                 goto exit;
@@ -353,29 +405,24 @@ int_to_bytes(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *
                 goto exit;
             }
         }
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
     }
-    if (args[1]) {
-        if (!PyUnicode_Check(args[1])) {
-            _PyArg_BadArgument("to_bytes", "argument 'byteorder'", "str", args[1]);
+    if (_idx[1] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[1]]))) {
+            _PyArg_BadArgumentValue("to_bytes", "argument 'byteorder'", "str", PyValue_Borrow(args[_idx[1]]));
             goto exit;
         }
-        byteorder = args[1];
-        if (!--noptargs) {
-            goto skip_optional_pos;
+        if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])))) {
+            _PyArg_BadArgument("to_bytes", "argument 'byteorder'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])));
+            goto exit;
+        }
+        byteorder = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]]));
+    }
+    if (_idx[2] >= 0) {
+        is_signed = _PyValue_IsTrue(PyValue_Borrow(args[_idx[2]]));
+        if (is_signed < 0) {
+            goto exit;
         }
     }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    is_signed = PyObject_IsTrue(args[2]);
-    if (is_signed < 0) {
-        goto exit;
-    }
-skip_optional_kwonly:
     return_value = int_to_bytes_impl(self, length, byteorder, is_signed);
 
 exit:
@@ -405,16 +452,16 @@ PyDoc_STRVAR(int_from_bytes__doc__,
 "    integer.");
 
 #define INT_FROM_BYTES_METHODDEF    \
-    {"from_bytes", _PyCFunction_CAST(int_from_bytes), METH_FASTCALL|METH_KEYWORDS|METH_CLASS, int_from_bytes__doc__},
+    {"from_bytes", _PyCFunction_CAST(int_from_bytes), METH_VALUE|METH_CLASS, int_from_bytes__doc__},
 
-static PyObject *
-int_from_bytes_impl(PyTypeObject *type, PyObject *bytes_obj,
+static PyValue
+int_from_bytes_impl(PyTypeObject *type, PyValueBorrow bytes_obj,
                     PyObject *byteorder, int is_signed);
 
-static PyObject *
-int_from_bytes(PyObject *type, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+int_from_bytes(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -442,41 +489,34 @@ int_from_bytes(PyObject *type, PyObject *const *args, Py_ssize_t nargs, PyObject
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *bytes_obj;
+    Py_ssize_t _idx[3];
+    PyValueBorrow bytes_obj;
     PyObject *byteorder = NULL;
     int is_signed = 0;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    bytes_obj = args[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[1]) {
-        if (!PyUnicode_Check(args[1])) {
-            _PyArg_BadArgument("from_bytes", "argument 'byteorder'", "str", args[1]);
+    bytes_obj = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[1]]))) {
+            _PyArg_BadArgumentValue("from_bytes", "argument 'byteorder'", "str", PyValue_Borrow(args[_idx[1]]));
             goto exit;
         }
-        byteorder = args[1];
-        if (!--noptargs) {
-            goto skip_optional_pos;
+        if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])))) {
+            _PyArg_BadArgument("from_bytes", "argument 'byteorder'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])));
+            goto exit;
+        }
+        byteorder = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]]));
+    }
+    if (_idx[2] >= 0) {
+        is_signed = _PyValue_IsTrue(PyValue_Borrow(args[_idx[2]]));
+        if (is_signed < 0) {
+            goto exit;
         }
     }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    is_signed = PyObject_IsTrue(args[2]);
-    if (is_signed < 0) {
-        goto exit;
-    }
-skip_optional_kwonly:
-    return_value = int_from_bytes_impl((PyTypeObject *)type, bytes_obj, byteorder, is_signed);
+    return_value = int_from_bytes_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), bytes_obj, byteorder, is_signed);
 
 exit:
     return return_value;
@@ -489,14 +529,22 @@ PyDoc_STRVAR(int_is_integer__doc__,
 "Returns True. Exists for duck type compatibility with float.is_integer.");
 
 #define INT_IS_INTEGER_METHODDEF    \
-    {"is_integer", (PyCFunction)int_is_integer, METH_NOARGS, int_is_integer__doc__},
+    {"is_integer", _PyCFunction_CAST(int_is_integer), METH_VALUE, int_is_integer__doc__},
 
-static PyObject *
-int_is_integer_impl(PyObject *self);
+static PyValue
+int_is_integer_impl(PyValueBorrow self);
 
-static PyObject *
-int_is_integer(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+int_is_integer(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return int_is_integer_impl(self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyLong_Type, "is_integer", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = int_is_integer_impl(self);
+
+exit:
+    return return_value;
 }
-/*[clinic end generated code: output=417c3fd5f10a641d input=a9049054013a1b77]*/
+/*[clinic end generated code: output=4e8bba3046218a13 input=a9049054013a1b77]*/

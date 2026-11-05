@@ -1028,6 +1028,11 @@ THUNK_FILES = (
     "Include/internal/pycore_value_call.h",
     "Include/internal/pycore_methodobject.h",
     "Include/internal/pycore_classobject.h",
+    # Static types whose Clinic @vectorcall constructor is a value
+    # vectorcall, stored beside the object thunk.
+    "Objects/tupleobject.c", "Objects/bytesobject.c",
+    "Objects/bytearrayobject.c", "Objects/floatobject.c",
+    "Objects/enumobject.c",
     # The test helpers: a spec type that stores the thunk, and an accessor
     # that compares against both.
     "Modules/_testinternalcapi/value_call.c",

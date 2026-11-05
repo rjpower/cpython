@@ -2,13 +2,19 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
 PyDoc_STRVAR(mappingproxy_new__doc__,
 "mappingproxy(mapping)\n"
@@ -16,13 +22,13 @@ PyDoc_STRVAR(mappingproxy_new__doc__,
 "\n"
 "Read-only proxy of a mapping.");
 
-static PyObject *
-mappingproxy_new_impl(PyTypeObject *type, PyObject *mapping);
+static PyValue
+mappingproxy_new_impl(PyTypeObject *type, PyValueBorrow mapping);
 
-static PyObject *
-mappingproxy_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+mappingproxy_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -50,25 +56,36 @@ mappingproxy_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    PyObject *mapping;
+    Py_ssize_t _idx[1];
+    PyValueBorrow mapping;
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 1));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
-    }
-    mapping = fastargs[0];
+    mapping = PyValue_Borrow(args[_idx[0]]);
     return_value = mappingproxy_new_impl(type, mapping);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+mappingproxy_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(mappingproxy_new_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = mappingproxy_new_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(property___set_name____doc__,
@@ -78,25 +95,28 @@ PyDoc_STRVAR(property___set_name____doc__,
 "Method to set name of a property.");
 
 #define PROPERTY___SET_NAME___METHODDEF    \
-    {"__set_name__", _PyCFunction_CAST(property___set_name__), METH_FASTCALL, property___set_name____doc__},
+    {"__set_name__", _PyCFunction_CAST(property___set_name__), METH_VALUE, property___set_name____doc__},
 
-static PyObject *
-property___set_name___impl(propertyobject *self, PyObject *owner,
-                           PyObject *name);
+static PyValue
+property___set_name___impl(propertyobject *self, PyValueBorrow owner,
+                           PyValueBorrow name);
 
-static PyObject *
-property___set_name__(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+property___set_name__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *owner;
-    PyObject *name;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow owner;
+    PyValueBorrow name;
 
+    if (!_PyArg_NoKwnamesValueMethod(&PyProperty_Type, "__set_name__", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("__set_name__", nargs, 2, 2)) {
         goto exit;
     }
-    owner = args[0];
-    name = args[1];
-    return_value = property___set_name___impl((propertyobject *)self, owner, name);
+    owner = PyValue_Borrow(args[0]);
+    name = PyValue_Borrow(args[1]);
+    return_value = property___set_name___impl((propertyobject *)PyValue_AsKnownObjectBorrow(self), owner, name);
 
 exit:
     return return_value;
@@ -140,11 +160,11 @@ PyDoc_STRVAR(property_init__doc__,
 "        del self._x");
 
 static int
-property_init_impl(propertyobject *self, PyObject *fget, PyObject *fset,
-                   PyObject *fdel, PyObject *doc);
+property_init_impl(propertyobject *self, PyValueBorrow fget,
+                   PyValueBorrow fset, PyValueBorrow fdel, PyValueBorrow doc);
 
 static int
-property_init(PyObject *self, PyObject *args, PyObject *kwargs)
+property_init_value(PyObject *self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
     int return_value = -1;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
@@ -174,50 +194,49 @@ property_init(PyObject *self, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[4];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 0;
-    PyObject *fget = NULL;
-    PyObject *fset = NULL;
-    PyObject *fdel = NULL;
-    PyObject *doc = NULL;
+    Py_ssize_t _idx[4];
+    PyValueBorrow fget = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow fset = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow fdel = PyValue_Borrow(PyValue_NULL);
+    PyValueBorrow doc = PyValue_Borrow(PyValue_NULL);
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 4));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, _idx, 4)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
+    if (_idx[0] >= 0) {
+        fget = PyValue_Borrow(args[_idx[0]]);
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[1] >= 0) {
+        fset = PyValue_Borrow(args[_idx[1]]);
     }
-    if (fastargs[0]) {
-        fget = fastargs[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[2] >= 0) {
+        fdel = PyValue_Borrow(args[_idx[2]]);
     }
-    if (fastargs[1]) {
-        fset = fastargs[1];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[3] >= 0) {
+        doc = PyValue_Borrow(args[_idx[3]]);
     }
-    if (fastargs[2]) {
-        fdel = fastargs[2];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-    doc = fastargs[3];
-skip_optional_pos:
     return_value = property_init_impl((propertyobject *)self, fget, fset, fdel, doc);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=cc9c00cfc77a6d04 input=a9049054013a1b77]*/
+
+static int
+property_init(PyObject *self, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return property_init_value(self, _PyTuple_ITEMS(args), nargs, NULL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return -1;
+    }
+    int result = property_init_value(self, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return result;
+}
+/*[clinic end generated code: output=3a24ea0d0ab853be input=a9049054013a1b77]*/

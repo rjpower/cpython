@@ -298,6 +298,11 @@ typedef struct {
 } PyStdPrinter_Object;
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 class stdprinter "PyStdPrinter_Object *" "&PyStdPrinter_Type"
 [clinic start generated code]*/
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=031bf557c18c5df5]*/
@@ -331,9 +336,9 @@ stdprinter.write
 Write the text to the stream.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 stdprinter_write_impl(PyStdPrinter_Object *self, PyObject *unicode)
-/*[clinic end generated code: output=069c9645803fe8ad input=65041d6d7a23aff4]*/
+/*[clinic end generated code: output=8529187679a929c8 input=65041d6d7a23aff4]*/
 {
     PyObject *bytes = NULL;
     const char *str;
@@ -348,7 +353,7 @@ stdprinter_write_impl(PyStdPrinter_Object *self, PyObject *unicode)
          * I can't raise an exception here. It may lead to an
          * unlimited recursion in the case stderr is invalid.
          */
-        Py_RETURN_NONE;
+        return PyValue_None;
     }
 
     /* Encode Unicode to UTF-8/backslashreplace */
@@ -357,7 +362,7 @@ stdprinter_write_impl(PyStdPrinter_Object *self, PyObject *unicode)
         PyErr_Clear();
         bytes = _PyUnicode_AsUTF8String(unicode, "backslashreplace");
         if (bytes == NULL)
-            return NULL;
+            return PyValue_NULL;
         str = PyBytes_AS_STRING(bytes);
         n = PyBytes_GET_SIZE(bytes);
     }
@@ -371,12 +376,12 @@ stdprinter_write_impl(PyStdPrinter_Object *self, PyObject *unicode)
     if (n == -1) {
         if (err == EAGAIN) {
             PyErr_Clear();
-            Py_RETURN_NONE;
+            return PyValue_None;
         }
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return PyLong_FromSsize_t(n);
+    return PyValue_FromInt64(n);
 }
 
 static PyObject *

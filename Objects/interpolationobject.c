@@ -8,32 +8,44 @@
 #include "pycore_value.h"         // PyValue_FromObjectBorrow()
 
 static int
-_conversion_converter(PyObject *arg, PyObject **conversion)
+_conversion_converter(PyValueBorrow arg, PyObject **conversion)
 {
-    if (arg == Py_None) {
+    if (PyValue_IsNone(arg)) {
         return 1;
     }
 
-    if (!PyUnicode_Check(arg)) {
+    if (!(PyValue_IsObject(arg)
+          && PyUnicode_Check(PyValue_AsKnownObjectBorrow(arg)))) {
+        PyObject *boxed = _PyValue_AsObjectAt(arg, BOX_SITE_PARSER);
+        if (boxed == NULL) {
+            return 0;
+        }
         PyErr_Format(PyExc_TypeError,
             "Interpolation() argument 'conversion' must be str, not %T",
-            arg);
+            boxed);
+        Py_DECREF(boxed);
         return 0;
     }
 
+    PyObject *arg_obj = PyValue_AsKnownObjectBorrow(arg);
     Py_ssize_t len;
-    const char *conv_str = PyUnicode_AsUTF8AndSize(arg, &len);
+    const char *conv_str = PyUnicode_AsUTF8AndSize(arg_obj, &len);
     if (len != 1 || !(conv_str[0] == 'a' || conv_str[0] == 'r' || conv_str[0] == 's')) {
         PyErr_SetString(PyExc_ValueError,
             "Interpolation() argument 'conversion' must be one of 's', 'a' or 'r'");
         return 0;
     }
 
-    *conversion = arg;
+    *conversion = arg_obj;
     return 1;
 }
 
 #include "clinic/interpolationobject.c.h"
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 class Interpolation "interpolationobject *" "&_PyInterpolation_Type"
@@ -61,23 +73,28 @@ Interpolation.__new__ as interpolation_new
     format_spec: object(subclass_of='&PyUnicode_Type', c_default='&_Py_STR(empty)') = ""
 [clinic start generated code]*/
 
-static PyObject *
-interpolation_new_impl(PyTypeObject *type, PyObject *value,
+static PyValue
+interpolation_new_impl(PyTypeObject *type, PyValueBorrow value,
                        PyObject *expression, PyObject *conversion,
                        PyObject *format_spec)
-/*[clinic end generated code: output=6488e288765bc1a9 input=fc5c285c1dd23d36]*/
+/*[clinic end generated code: output=12d7da240a998764 input=fc5c285c1dd23d36]*/
 {
+    PyObject *value_obj = _PyValue_AsObjectAt(value, BOX_SITE_PARSER);
+    if (value_obj == NULL) {
+        return PyValue_NULL;
+    }
     interpolationobject *self = PyObject_GC_New(interpolationobject, type);
     if (!self) {
-        return NULL;
+        Py_DECREF(value_obj);
+        return PyValue_NULL;
     }
 
-    self->value = Py_NewRef(value);
+    self->value = value_obj;
     self->expression = Py_NewRef(expression);
     self->conversion = Py_NewRef(conversion);
     self->format_spec = Py_NewRef(format_spec);
     PyObject_GC_Track(self);
-    return (PyObject *) self;
+    return _PyValue_FromObjectResult((PyObject *) self);
 }
 
 static void

@@ -2,12 +2,20 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_modsupport.h"    // _PyArg_NoKeywords()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
+#include "pycore_modsupport.h"    // _PyArg_NoPositionalStack()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
 PyDoc_STRVAR(inst_seq_new__doc__,
 "InstructionSequenceType()\n"
@@ -15,27 +23,45 @@ PyDoc_STRVAR(inst_seq_new__doc__,
 "\n"
 "Create a new InstructionSequence object.");
 
-static PyObject *
+static PyValue
 inst_seq_new_impl(PyTypeObject *type);
 
-static PyObject *
-inst_seq_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+inst_seq_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyTypeObject *base_tp = &_PyInstructionSequence_Type;
 
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
-        !_PyArg_NoPositional("InstructionSequenceType", args)) {
+        !_PyArg_NoPositionalStack("InstructionSequenceType", nargs)) {
         goto exit;
     }
     if ((type == base_tp || type->tp_init == base_tp->tp_init) &&
-        !_PyArg_NoKeywords("InstructionSequenceType", kwargs)) {
+        !_PyArg_NoKwnames("InstructionSequenceType", kwnames)) {
         goto exit;
     }
     return_value = inst_seq_new_impl(type);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+inst_seq_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(inst_seq_new_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = inst_seq_new_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(InstructionSequenceType_use_label__doc__,
@@ -45,16 +71,16 @@ PyDoc_STRVAR(InstructionSequenceType_use_label__doc__,
 "Place label at current location.");
 
 #define INSTRUCTIONSEQUENCETYPE_USE_LABEL_METHODDEF    \
-    {"use_label", _PyCFunction_CAST(InstructionSequenceType_use_label), METH_FASTCALL|METH_KEYWORDS, InstructionSequenceType_use_label__doc__},
+    {"use_label", _PyCFunction_CAST(InstructionSequenceType_use_label), METH_VALUE, InstructionSequenceType_use_label__doc__},
 
-static PyObject *
+static PyValue
 InstructionSequenceType_use_label_impl(_PyInstructionSequence *self,
                                        int label);
 
-static PyObject *
-InstructionSequenceType_use_label(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+InstructionSequenceType_use_label(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -82,19 +108,18 @@ InstructionSequenceType_use_label(PyObject *self, PyObject *const *args, Py_ssiz
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
+    Py_ssize_t _idx[1];
     int label;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    label = PyLong_AsInt(args[0]);
+    label = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
     if (label == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = InstructionSequenceType_use_label_impl((_PyInstructionSequence *)self, label);
+    return_value = InstructionSequenceType_use_label_impl((_PyInstructionSequence *)PyValue_AsKnownObjectBorrow(self), label);
 
 exit:
     return return_value;
@@ -108,17 +133,17 @@ PyDoc_STRVAR(InstructionSequenceType_addop__doc__,
 "Append an instruction.");
 
 #define INSTRUCTIONSEQUENCETYPE_ADDOP_METHODDEF    \
-    {"addop", _PyCFunction_CAST(InstructionSequenceType_addop), METH_FASTCALL|METH_KEYWORDS, InstructionSequenceType_addop__doc__},
+    {"addop", _PyCFunction_CAST(InstructionSequenceType_addop), METH_VALUE, InstructionSequenceType_addop__doc__},
 
-static PyObject *
+static PyValue
 InstructionSequenceType_addop_impl(_PyInstructionSequence *self, int opcode,
                                    int oparg, int lineno, int col_offset,
                                    int end_lineno, int end_col_offset);
 
-static PyObject *
-InstructionSequenceType_addop(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+InstructionSequenceType_addop(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 6
@@ -146,7 +171,7 @@ InstructionSequenceType_addop(PyObject *self, PyObject *const *args, Py_ssize_t 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[6];
+    Py_ssize_t _idx[6];
     int opcode;
     int oparg;
     int lineno;
@@ -154,36 +179,35 @@ InstructionSequenceType_addop(PyObject *self, PyObject *const *args, Py_ssize_t 
     int end_lineno;
     int end_col_offset;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 6, /*maxpos*/ 6, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 6, /*maxpos*/ 6, /*minkw*/ 0, /*varpos*/ 0, _idx, 6)) {
         goto exit;
     }
-    opcode = PyLong_AsInt(args[0]);
+    opcode = _PyValue_AsInt(PyValue_Borrow(args[_idx[0]]));
     if (opcode == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    oparg = PyLong_AsInt(args[1]);
+    oparg = _PyValue_AsInt(PyValue_Borrow(args[_idx[1]]));
     if (oparg == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    lineno = PyLong_AsInt(args[2]);
+    lineno = _PyValue_AsInt(PyValue_Borrow(args[_idx[2]]));
     if (lineno == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    col_offset = PyLong_AsInt(args[3]);
+    col_offset = _PyValue_AsInt(PyValue_Borrow(args[_idx[3]]));
     if (col_offset == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    end_lineno = PyLong_AsInt(args[4]);
+    end_lineno = _PyValue_AsInt(PyValue_Borrow(args[_idx[4]]));
     if (end_lineno == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    end_col_offset = PyLong_AsInt(args[5]);
+    end_col_offset = _PyValue_AsInt(PyValue_Borrow(args[_idx[5]]));
     if (end_col_offset == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = InstructionSequenceType_addop_impl((_PyInstructionSequence *)self, opcode, oparg, lineno, col_offset, end_lineno, end_col_offset);
+    return_value = InstructionSequenceType_addop_impl((_PyInstructionSequence *)PyValue_AsKnownObjectBorrow(self), opcode, oparg, lineno, col_offset, end_lineno, end_col_offset);
 
 exit:
     return return_value;
@@ -196,22 +220,25 @@ PyDoc_STRVAR(InstructionSequenceType_new_label__doc__,
 "Return a new label.");
 
 #define INSTRUCTIONSEQUENCETYPE_NEW_LABEL_METHODDEF    \
-    {"new_label", (PyCFunction)InstructionSequenceType_new_label, METH_NOARGS, InstructionSequenceType_new_label__doc__},
+    {"new_label", _PyCFunction_CAST(InstructionSequenceType_new_label), METH_VALUE, InstructionSequenceType_new_label__doc__},
 
 static int
 InstructionSequenceType_new_label_impl(_PyInstructionSequence *self);
 
-static PyObject *
-InstructionSequenceType_new_label(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+InstructionSequenceType_new_label(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int _return_value;
 
-    _return_value = InstructionSequenceType_new_label_impl((_PyInstructionSequence *)self);
+    if (!_PyArg_CheckArityValueMethod(&_PyInstructionSequence_Type, "new_label", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    _return_value = InstructionSequenceType_new_label_impl((_PyInstructionSequence *)PyValue_AsKnownObjectBorrow(self));
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromLong((long)_return_value);
+    return_value = PyValue_FromInt64((int64_t)_return_value);
 
 exit:
     return return_value;
@@ -224,16 +251,16 @@ PyDoc_STRVAR(InstructionSequenceType_add_nested__doc__,
 "Add a nested sequence.");
 
 #define INSTRUCTIONSEQUENCETYPE_ADD_NESTED_METHODDEF    \
-    {"add_nested", _PyCFunction_CAST(InstructionSequenceType_add_nested), METH_FASTCALL|METH_KEYWORDS, InstructionSequenceType_add_nested__doc__},
+    {"add_nested", _PyCFunction_CAST(InstructionSequenceType_add_nested), METH_VALUE, InstructionSequenceType_add_nested__doc__},
 
-static PyObject *
+static PyValue
 InstructionSequenceType_add_nested_impl(_PyInstructionSequence *self,
-                                        PyObject *nested);
+                                        PyValueBorrow nested);
 
-static PyObject *
-InstructionSequenceType_add_nested(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+InstructionSequenceType_add_nested(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -261,16 +288,15 @@ InstructionSequenceType_add_nested(PyObject *self, PyObject *const *args, Py_ssi
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    PyObject *nested;
+    Py_ssize_t _idx[1];
+    PyValueBorrow nested;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    nested = args[0];
-    return_value = InstructionSequenceType_add_nested_impl((_PyInstructionSequence *)self, nested);
+    nested = PyValue_Borrow(args[_idx[0]]);
+    return_value = InstructionSequenceType_add_nested_impl((_PyInstructionSequence *)PyValue_AsKnownObjectBorrow(self), nested);
 
 exit:
     return return_value;
@@ -283,15 +309,23 @@ PyDoc_STRVAR(InstructionSequenceType_get_nested__doc__,
 "Add a nested sequence.");
 
 #define INSTRUCTIONSEQUENCETYPE_GET_NESTED_METHODDEF    \
-    {"get_nested", (PyCFunction)InstructionSequenceType_get_nested, METH_NOARGS, InstructionSequenceType_get_nested__doc__},
+    {"get_nested", _PyCFunction_CAST(InstructionSequenceType_get_nested), METH_VALUE, InstructionSequenceType_get_nested__doc__},
 
-static PyObject *
+static PyValue
 InstructionSequenceType_get_nested_impl(_PyInstructionSequence *self);
 
-static PyObject *
-InstructionSequenceType_get_nested(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+InstructionSequenceType_get_nested(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return InstructionSequenceType_get_nested_impl((_PyInstructionSequence *)self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&_PyInstructionSequence_Type, "get_nested", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = InstructionSequenceType_get_nested_impl((_PyInstructionSequence *)PyValue_AsKnownObjectBorrow(self));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(InstructionSequenceType_get_instructions__doc__,
@@ -301,14 +335,22 @@ PyDoc_STRVAR(InstructionSequenceType_get_instructions__doc__,
 "Return the instructions as a list of tuples or labels.");
 
 #define INSTRUCTIONSEQUENCETYPE_GET_INSTRUCTIONS_METHODDEF    \
-    {"get_instructions", (PyCFunction)InstructionSequenceType_get_instructions, METH_NOARGS, InstructionSequenceType_get_instructions__doc__},
+    {"get_instructions", _PyCFunction_CAST(InstructionSequenceType_get_instructions), METH_VALUE, InstructionSequenceType_get_instructions__doc__},
 
-static PyObject *
+static PyValue
 InstructionSequenceType_get_instructions_impl(_PyInstructionSequence *self);
 
-static PyObject *
-InstructionSequenceType_get_instructions(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+InstructionSequenceType_get_instructions(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return InstructionSequenceType_get_instructions_impl((_PyInstructionSequence *)self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&_PyInstructionSequence_Type, "get_instructions", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = InstructionSequenceType_get_instructions_impl((_PyInstructionSequence *)PyValue_AsKnownObjectBorrow(self));
+
+exit:
+    return return_value;
 }
-/*[clinic end generated code: output=19a0c855b9917138 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=06924b10927dbb88 input=a9049054013a1b77]*/

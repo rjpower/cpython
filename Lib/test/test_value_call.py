@@ -378,8 +378,11 @@ class InstanceInvariantTests(unittest.TestCase):
                 self.assertTrue(object_vectorcall_is_thunk(obj))
 
     def test_object_form_builtin(self):
-        self.assertFalse(value_vectorcall_is_set(len))
-        self.assertFalse(object_vectorcall_is_thunk(len))
+        # A function of a compatibility test module stays object-form.
+        _testcapi = import_helper.import_module('_testcapi')
+        func = _testcapi.get_args
+        self.assertFalse(value_vectorcall_is_set(func))
+        self.assertFalse(object_vectorcall_is_thunk(func))
 
 
 class SpecTypeTests(unittest.TestCase):

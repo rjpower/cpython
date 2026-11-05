@@ -2,7 +2,12 @@
 preserve
 [clinic start generated code]*/
 
-#include "pycore_modsupport.h"    // _PyArg_BadArgument()
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
+#include "pycore_modsupport.h"    // _PyArg_CheckArityValue()
+#include "pycore_value_call.h"    // METH_VALUE
 
 PyDoc_STRVAR(stdprinter_write__doc__,
 "write($self, text, /)\n"
@@ -11,25 +16,32 @@ PyDoc_STRVAR(stdprinter_write__doc__,
 "Write the text to the stream.");
 
 #define STDPRINTER_WRITE_METHODDEF    \
-    {"write", (PyCFunction)stdprinter_write, METH_O, stdprinter_write__doc__},
+    {"write", _PyCFunction_CAST(stdprinter_write), METH_VALUE, stdprinter_write__doc__},
 
-static PyObject *
+static PyValue
 stdprinter_write_impl(PyStdPrinter_Object *self, PyObject *unicode);
 
-static PyObject *
-stdprinter_write(PyObject *self, PyObject *arg)
+static PyValue
+stdprinter_write(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *unicode;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("write", "argument", "str", arg);
+    if (!_PyArg_CheckArityValueMethod(&PyStdPrinter_Type, "write", nargs, kwnames, 1)) {
         goto exit;
     }
-    unicode = arg;
-    return_value = stdprinter_write_impl((PyStdPrinter_Object *)self, unicode);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("write", "argument", "str", PyValue_Borrow(args[0]));
+        goto exit;
+    }
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("write", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    unicode = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    return_value = stdprinter_write_impl((PyStdPrinter_Object *)PyValue_AsKnownObjectBorrow(self), unicode);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=7cf7d4c181518bbb input=a9049054013a1b77]*/
+/*[clinic end generated code: output=48e60dee6f1f7de1 input=a9049054013a1b77]*/

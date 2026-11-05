@@ -17,10 +17,17 @@
 #include "pycore_pymem.h"         // PYMEM_CLEANBYTE
 #include "pycore_strhex.h"        // _Py_strhex_with_sep()
 #include "pycore_unicodeobject.h" // _PyUnicode_FormatLong()
+#include "pycore_value_call.h"     // _PyValue_VectorcallThunk()
 #include "pycore_value.h"
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
+#include "pycore_value_slots.h"   // _PyValue_FromObjectResult()
 
 #include <stddef.h>
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 class bytes "PyBytesObject *" "&PyBytes_Type"
@@ -1894,15 +1901,15 @@ bytes.__bytes__
 Convert this value to exact type bytes.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 bytes___bytes___impl(PyBytesObject *self)
-/*[clinic end generated code: output=63a306a9bc0caac5 input=34ec5ddba98bd6bb]*/
+/*[clinic end generated code: output=f2cdacd5f4e473f6 input=34ec5ddba98bd6bb]*/
 {
     if (PyBytes_CheckExact(self)) {
-        return Py_NewRef(self);
+        return PyValue_DUP(PyValue_FromObjectBorrow(self));
     }
     else {
-        return _PyBytes_FromStringAndSize(self->ob_sval, Py_SIZE(self));
+        return _PyValue_FromObjectResult(_PyBytes_FromStringAndSize(self->ob_sval, Py_SIZE(self)));
     }
 }
 
@@ -1910,6 +1917,40 @@ bytes___bytes___impl(PyBytesObject *self)
 #define LEFTSTRIP 0
 #define RIGHTSTRIP 1
 #define BOTHSTRIP 2
+
+/* PyObject_GetBuffer() for a value: an inline int or float is boxed so that
+   the call raises the usual TypeError. The view keeps its own reference. */
+static int
+_getbuffer_value(PyValueBorrow v, Py_buffer *view, int flags)
+{
+    PyObject *obj = _PyValue_AsObjectAt(v, BOX_SITE_PARSER);
+    if (obj == NULL) {
+        return -1;
+    }
+    int rc = PyObject_GetBuffer(obj, view, flags);
+    Py_DECREF(obj);
+    return rc;
+}
+
+typedef PyObject* (*_bytes_sub_op)(const char *str, Py_ssize_t len,
+                                   PyObject *sub, Py_ssize_t start,
+                                   Py_ssize_t end);
+
+/* Call op with a value argument. An inline int (a byte value for find and
+   friends) is boxed because op takes an object. */
+static PyValue
+_bytes_with_sub(PyBytesObject *self, _bytes_sub_op op, PyValueBorrow sub,
+                Py_ssize_t start, Py_ssize_t end)
+{
+    PyObject *sub_obj = _PyValue_AsObjectAt(sub, BOX_SITE_PARSER);
+    if (sub_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *res = op(PyBytes_AS_STRING(self), PyBytes_GET_SIZE(self),
+                       sub_obj, start, end);
+    Py_DECREF(sub_obj);
+    return _PyValue_FromObjectResult(res);
+}
 
 /*[clinic input]
 @permit_long_summary
@@ -1926,9 +1967,9 @@ bytes.split
 Return a list of the sections in the bytes, using sep as the delimiter.
 [clinic start generated code]*/
 
-static PyObject *
-bytes_split_impl(PyBytesObject *self, PyObject *sep, Py_ssize_t maxsplit)
-/*[clinic end generated code: output=52126b5844c1d8ef input=330ff95d92544b05]*/
+static PyValue
+bytes_split_impl(PyBytesObject *self, PyValueBorrow sep, Py_ssize_t maxsplit)
+/*[clinic end generated code: output=235b0b9ea50cebb2 input=330ff95d92544b05]*/
 {
     Py_ssize_t len = PyBytes_GET_SIZE(self), n;
     const char *s = PyBytes_AS_STRING(self), *sub;
@@ -1937,16 +1978,16 @@ bytes_split_impl(PyBytesObject *self, PyObject *sep, Py_ssize_t maxsplit)
 
     if (maxsplit < 0)
         maxsplit = PY_SSIZE_T_MAX;
-    if (sep == Py_None)
-        return stringlib_split_whitespace((PyObject*) self, s, len, maxsplit);
-    if (PyObject_GetBuffer(sep, &vsub, PyBUF_SIMPLE) != 0)
-        return NULL;
+    if (PyValue_IsNone(sep))
+        return _PyValue_FromObjectResult(stringlib_split_whitespace((PyObject*) self, s, len, maxsplit));
+    if (_getbuffer_value(sep, &vsub, PyBUF_SIMPLE) != 0)
+        return PyValue_NULL;
     sub = vsub.buf;
     n = vsub.len;
 
     list = stringlib_split((PyObject*) self, s, len, sub, n, maxsplit);
     PyBuffer_Release(&vsub);
-    return list;
+    return _PyValue_FromObjectResult(list);
 }
 
 /*[clinic input]
@@ -1965,15 +2006,15 @@ If the separator is not found, returns a 3-tuple containing the
 original bytes object and two empty bytes objects.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 bytes_partition_impl(PyBytesObject *self, Py_buffer *sep)
-/*[clinic end generated code: output=f532b392a17ff695 input=2e6e551ea4f8b95a]*/
+/*[clinic end generated code: output=fed1d51d12d5fd14 input=2e6e551ea4f8b95a]*/
 {
-    return stringlib_partition(
+    return _PyValue_FromObjectResult(stringlib_partition(
         (PyObject*) self,
         PyBytes_AS_STRING(self), PyBytes_GET_SIZE(self),
         sep->obj, (const char *)sep->buf, sep->len
-        );
+        ));
 }
 
 /*[clinic input]
@@ -1993,15 +2034,15 @@ If the separator is not found, returns a 3-tuple containing two
 empty bytes objects and the original bytes object.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 bytes_rpartition_impl(PyBytesObject *self, Py_buffer *sep)
-/*[clinic end generated code: output=191b114cbb028e50 input=f7d24f722a5470a4]*/
+/*[clinic end generated code: output=af5227d706431275 input=f7d24f722a5470a4]*/
 {
-    return stringlib_rpartition(
+    return _PyValue_FromObjectResult(stringlib_rpartition(
         (PyObject*) self,
         PyBytes_AS_STRING(self), PyBytes_GET_SIZE(self),
         sep->obj, (const char *)sep->buf, sep->len
-        );
+        ));
 }
 
 /*[clinic input]
@@ -2014,9 +2055,10 @@ Splitting is done starting at the end of the bytes and working to
 the front.
 [clinic start generated code]*/
 
-static PyObject *
-bytes_rsplit_impl(PyBytesObject *self, PyObject *sep, Py_ssize_t maxsplit)
-/*[clinic end generated code: output=ba698d9ea01e1c8f input=ba9bee56285f43e4]*/
+static PyValue
+bytes_rsplit_impl(PyBytesObject *self, PyValueBorrow sep,
+                  Py_ssize_t maxsplit)
+/*[clinic end generated code: output=31b5a5880821e9d6 input=ba9bee56285f43e4]*/
 {
     Py_ssize_t len = PyBytes_GET_SIZE(self), n;
     const char *s = PyBytes_AS_STRING(self), *sub;
@@ -2025,16 +2067,16 @@ bytes_rsplit_impl(PyBytesObject *self, PyObject *sep, Py_ssize_t maxsplit)
 
     if (maxsplit < 0)
         maxsplit = PY_SSIZE_T_MAX;
-    if (sep == Py_None)
-        return stringlib_rsplit_whitespace((PyObject*) self, s, len, maxsplit);
-    if (PyObject_GetBuffer(sep, &vsub, PyBUF_SIMPLE) != 0)
-        return NULL;
+    if (PyValue_IsNone(sep))
+        return _PyValue_FromObjectResult(stringlib_rsplit_whitespace((PyObject*) self, s, len, maxsplit));
+    if (_getbuffer_value(sep, &vsub, PyBUF_SIMPLE) != 0)
+        return PyValue_NULL;
     sub = vsub.buf;
     n = vsub.len;
 
     list = stringlib_rsplit((PyObject*) self, s, len, sub, n, maxsplit);
     PyBuffer_Release(&vsub);
-    return list;
+    return _PyValue_FromObjectResult(list);
 }
 
 
@@ -2053,11 +2095,18 @@ The result is returned as a new bytes object.
 Example: b'.'.join([b'ab', b'pq', b'rs']) -> b'ab.pq.rs'.
 [clinic start generated code]*/
 
-static PyObject *
-bytes_join_impl(PyBytesObject *self, PyObject *iterable_of_bytes)
-/*[clinic end generated code: output=0687abb94d7d438e input=7fe377b95bd549d2]*/
+static PyValue
+bytes_join_impl(PyBytesObject *self, PyValueBorrow iterable_of_bytes)
+/*[clinic end generated code: output=71839c466049f672 input=7fe377b95bd549d2]*/
 {
-    return stringlib_bytes_join((PyObject*)self, iterable_of_bytes);
+    /* An inline int is boxed so that join raises its usual TypeError. */
+    PyObject *iterable = _PyValue_AsObjectAt(iterable_of_bytes, BOX_SITE_PARSER);
+    if (iterable == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *res = stringlib_bytes_join((PyObject*)self, iterable);
+    Py_DECREF(iterable);
+    return _PyValue_FromObjectResult(res);
 }
 
 PyObject *
@@ -2093,13 +2142,12 @@ Return the lowest index in B where subsection 'sub' is found, such that 'sub' is
 Return -1 on failure.
 [clinic start generated code]*/
 
-static PyObject *
-bytes_find_impl(PyBytesObject *self, PyObject *sub, Py_ssize_t start,
+static PyValue
+bytes_find_impl(PyBytesObject *self, PyValueBorrow sub, Py_ssize_t start,
                 Py_ssize_t end)
-/*[clinic end generated code: output=d5961a1c77b472a1 input=47d0929adafc6b0b]*/
+/*[clinic end generated code: output=83f0097777fcbb9d input=47d0929adafc6b0b]*/
 {
-    return _Py_bytes_find(PyBytes_AS_STRING(self), PyBytes_GET_SIZE(self),
-                          sub, start, end);
+    return _bytes_with_sub(self, _Py_bytes_find, sub, start, end);
 }
 
 /*[clinic input]
@@ -2111,13 +2159,12 @@ Return the lowest index in B where subsection 'sub' is found, such that 'sub' is
 Raise ValueError if the subsection is not found.
 [clinic start generated code]*/
 
-static PyObject *
-bytes_index_impl(PyBytesObject *self, PyObject *sub, Py_ssize_t start,
+static PyValue
+bytes_index_impl(PyBytesObject *self, PyValueBorrow sub, Py_ssize_t start,
                  Py_ssize_t end)
-/*[clinic end generated code: output=0da25cc74683ba42 input=1cb45ce71456a269]*/
+/*[clinic end generated code: output=6f4125cb901faffb input=1cb45ce71456a269]*/
 {
-    return _Py_bytes_index(PyBytes_AS_STRING(self), PyBytes_GET_SIZE(self),
-                           sub, start, end);
+    return _bytes_with_sub(self, _Py_bytes_index, sub, start, end);
 }
 
 /*[clinic input]
@@ -2129,13 +2176,12 @@ Return the highest index in B where subsection 'sub' is found, such that 'sub' i
 Return -1 on failure.
 [clinic start generated code]*/
 
-static PyObject *
-bytes_rfind_impl(PyBytesObject *self, PyObject *sub, Py_ssize_t start,
+static PyValue
+bytes_rfind_impl(PyBytesObject *self, PyValueBorrow sub, Py_ssize_t start,
                  Py_ssize_t end)
-/*[clinic end generated code: output=51b60fa4ad011c09 input=c9473d714251f1ab]*/
+/*[clinic end generated code: output=b996f41cb639975b input=c9473d714251f1ab]*/
 {
-    return _Py_bytes_rfind(PyBytes_AS_STRING(self), PyBytes_GET_SIZE(self),
-                           sub, start, end);
+    return _bytes_with_sub(self, _Py_bytes_rfind, sub, start, end);
 }
 
 /*[clinic input]
@@ -2147,18 +2193,17 @@ Return the highest index in B where subsection 'sub' is found, such that 'sub' i
 Raise ValueError if the subsection is not found.
 [clinic start generated code]*/
 
-static PyObject *
-bytes_rindex_impl(PyBytesObject *self, PyObject *sub, Py_ssize_t start,
+static PyValue
+bytes_rindex_impl(PyBytesObject *self, PyValueBorrow sub, Py_ssize_t start,
                   Py_ssize_t end)
-/*[clinic end generated code: output=42bf674e0a0aabf6 input=bb5f473c64610c43]*/
+/*[clinic end generated code: output=6860a3fc718137fa input=bb5f473c64610c43]*/
 {
-    return _Py_bytes_rindex(PyBytes_AS_STRING(self), PyBytes_GET_SIZE(self),
-                            sub, start, end);
+    return _bytes_with_sub(self, _Py_bytes_rindex, sub, start, end);
 }
 
 
 Py_LOCAL_INLINE(PyObject *)
-do_xstrip(PyBytesObject *self, int striptype, PyObject *sepobj)
+do_xstrip(PyBytesObject *self, int striptype, PyValueBorrow sepobj)
 {
     Py_buffer vsep;
     const char *s = PyBytes_AS_STRING(self);
@@ -2167,7 +2212,7 @@ do_xstrip(PyBytesObject *self, int striptype, PyObject *sepobj)
     Py_ssize_t seplen;
     Py_ssize_t i, j;
 
-    if (PyObject_GetBuffer(sepobj, &vsep, PyBUF_SIMPLE) != 0)
+    if (_getbuffer_value(sepobj, &vsep, PyBUF_SIMPLE) != 0)
         return NULL;
     sep = vsep.buf;
     seplen = vsep.len;
@@ -2226,13 +2271,13 @@ do_strip(PyBytesObject *self, int striptype)
 }
 
 
-Py_LOCAL_INLINE(PyObject *)
-do_argstrip(PyBytesObject *self, int striptype, PyObject *bytes)
+Py_LOCAL_INLINE(PyValue)
+do_argstrip(PyBytesObject *self, int striptype, PyValueBorrow bytes)
 {
-    if (bytes != Py_None) {
-        return do_xstrip(self, striptype, bytes);
+    if (!PyValue_IsNone(bytes)) {
+        return _PyValue_FromObjectResult(do_xstrip(self, striptype, bytes));
     }
-    return do_strip(self, striptype);
+    return _PyValue_FromObjectResult(do_strip(self, striptype));
 }
 
 /*[clinic input]
@@ -2247,9 +2292,9 @@ If the argument is omitted or None, strip leading and trailing ASCII
 whitespace.
 [clinic start generated code]*/
 
-static PyObject *
-bytes_strip_impl(PyBytesObject *self, PyObject *bytes)
-/*[clinic end generated code: output=c7c228d3bd104a1b input=9ffea5f752032bd0]*/
+static PyValue
+bytes_strip_impl(PyBytesObject *self, PyValueBorrow bytes)
+/*[clinic end generated code: output=ebefa1276a190653 input=9ffea5f752032bd0]*/
 {
     return do_argstrip(self, BOTHSTRIP, bytes);
 }
@@ -2265,9 +2310,9 @@ Strip leading bytes contained in the argument.
 If the argument is omitted or None, strip leading  ASCII whitespace.
 [clinic start generated code]*/
 
-static PyObject *
-bytes_lstrip_impl(PyBytesObject *self, PyObject *bytes)
-/*[clinic end generated code: output=28602e586f524e82 input=9baff4398c3f6857]*/
+static PyValue
+bytes_lstrip_impl(PyBytesObject *self, PyValueBorrow bytes)
+/*[clinic end generated code: output=9b3f8fe2b82a09e9 input=9baff4398c3f6857]*/
 {
     return do_argstrip(self, LEFTSTRIP, bytes);
 }
@@ -2283,9 +2328,9 @@ Strip trailing bytes contained in the argument.
 If the argument is omitted or None, strip trailing ASCII whitespace.
 [clinic start generated code]*/
 
-static PyObject *
-bytes_rstrip_impl(PyBytesObject *self, PyObject *bytes)
-/*[clinic end generated code: output=547e3815c95447da input=b78af445c727e32b]*/
+static PyValue
+bytes_rstrip_impl(PyBytesObject *self, PyValueBorrow bytes)
+/*[clinic end generated code: output=8f82bcc52618abab input=b78af445c727e32b]*/
 {
     return do_argstrip(self, RIGHTSTRIP, bytes);
 }
@@ -2298,13 +2343,12 @@ bytes.count = bytes.find
 Return the number of non-overlapping occurrences of subsection 'sub' in bytes B[start:end].
 [clinic start generated code]*/
 
-static PyObject *
-bytes_count_impl(PyBytesObject *self, PyObject *sub, Py_ssize_t start,
+static PyValue
+bytes_count_impl(PyBytesObject *self, PyValueBorrow sub, Py_ssize_t start,
                  Py_ssize_t end)
-/*[clinic end generated code: output=9848140b9be17d0f input=bb2f136f83f0d30e]*/
+/*[clinic end generated code: output=8495ceb14f015511 input=bb2f136f83f0d30e]*/
 {
-    return _Py_bytes_count(PyBytes_AS_STRING(self), PyBytes_GET_SIZE(self),
-                           sub, start, end);
+    return _bytes_with_sub(self, _Py_bytes_count, sub, start, end);
 }
 
 
@@ -2324,10 +2368,10 @@ removed.  The remaining characters are mapped through the given
 translation table.
 [clinic start generated code]*/
 
-static PyObject *
-bytes_translate_impl(PyBytesObject *self, PyObject *table,
-                     PyObject *deletechars)
-/*[clinic end generated code: output=43be3437f1956211 input=bddcdef0a87895d2]*/
+static PyValue
+bytes_translate_impl(PyBytesObject *self, PyValueBorrow table,
+                     PyValueBorrow deletechars)
+/*[clinic end generated code: output=a200d6d7480cffa1 input=bddcdef0a87895d2]*/
 {
     const char *input;
     char *output;
@@ -2340,17 +2384,17 @@ bytes_translate_impl(PyBytesObject *self, PyObject *table,
     Py_ssize_t inlen, tablen, dellen = 0;
     int trans_table[256];
 
-    if (PyBytes_Check(table)) {
-        table_chars = PyBytes_AS_STRING(table);
-        tablen = PyBytes_GET_SIZE(table);
+    if ((PyValue_IsObject(table) && PyBytes_Check(PyValue_AsKnownObjectBorrow(table)))) {
+        table_chars = PyBytes_AS_STRING(PyValue_AsKnownObjectBorrow(table));
+        tablen = PyBytes_GET_SIZE(PyValue_AsKnownObjectBorrow(table));
     }
-    else if (table == Py_None) {
+    else if (PyValue_IsNone(table)) {
         table_chars = NULL;
         tablen = 256;
     }
     else {
-        if (PyObject_GetBuffer(table, &table_view, PyBUF_SIMPLE) != 0)
-            return NULL;
+        if (_getbuffer_value(table, &table_view, PyBUF_SIMPLE) != 0)
+            return PyValue_NULL;
         table_chars = table_view.buf;
         tablen = table_view.len;
     }
@@ -2359,18 +2403,18 @@ bytes_translate_impl(PyBytesObject *self, PyObject *table,
         PyErr_SetString(PyExc_ValueError,
           "translation table must be 256 characters long");
         PyBuffer_Release(&table_view);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    if (deletechars != NULL) {
-        if (PyBytes_Check(deletechars)) {
-            del_table_chars = PyBytes_AS_STRING(deletechars);
-            dellen = PyBytes_GET_SIZE(deletechars);
+    if (!PyValue_IsNull(deletechars)) {
+        if ((PyValue_IsObject(deletechars) && PyBytes_Check(PyValue_AsKnownObjectBorrow(deletechars)))) {
+            del_table_chars = PyBytes_AS_STRING(PyValue_AsKnownObjectBorrow(deletechars));
+            dellen = PyBytes_GET_SIZE(PyValue_AsKnownObjectBorrow(deletechars));
         }
         else {
-            if (PyObject_GetBuffer(deletechars, &del_table_view, PyBUF_SIMPLE) != 0) {
+            if (_getbuffer_value(deletechars, &del_table_view, PyBUF_SIMPLE) != 0) {
                 PyBuffer_Release(&table_view);
-                return NULL;
+                return PyValue_NULL;
             }
             del_table_chars = del_table_view.buf;
             dellen = del_table_view.len;
@@ -2386,7 +2430,7 @@ bytes_translate_impl(PyBytesObject *self, PyObject *table,
     if (writer == NULL) {
         PyBuffer_Release(&del_table_view);
         PyBuffer_Release(&table_view);
-        return NULL;
+        return PyValue_NULL;
     }
     output_start = output = PyBytesWriter_GetData(writer);
     input = PyBytes_AS_STRING(input_obj);
@@ -2414,7 +2458,7 @@ bytes_translate_impl(PyBytesObject *self, PyObject *table,
 
         PyBuffer_Release(&del_table_view);
         PyBuffer_Release(&table_view);
-        return result;
+        return _PyValue_FromObjectResult(result);
     }
 
     if (table_chars == NULL) {
@@ -2439,10 +2483,10 @@ bytes_translate_impl(PyBytesObject *self, PyObject *table,
     }
     if (!changed && PyBytes_CheckExact(input_obj)) {
         PyBytesWriter_Discard(writer);
-        return Py_NewRef(input_obj);
+        return PyValue_DUP(PyValue_FromObjectBorrow(input_obj));
     }
     /* Fix the size of the resulting byte string */
-    return PyBytesWriter_FinishWithPointer(writer, output);
+    return _PyValue_FromObjectResult(PyBytesWriter_FinishWithPointer(writer, output));
 }
 
 
@@ -2464,11 +2508,11 @@ the byte at the same position in to.
 The bytes objects frm and to must be of the same length.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 bytes_maketrans_impl(Py_buffer *frm, Py_buffer *to)
-/*[clinic end generated code: output=a36f6399d4b77f6f input=3a577e5badfea8f7]*/
+/*[clinic end generated code: output=d5d739cae87f7a90 input=3a577e5badfea8f7]*/
 {
-    return _Py_bytes_maketrans(frm, to);
+    return _PyValue_FromObjectResult(_Py_bytes_maketrans(frm, to));
 }
 
 
@@ -2488,14 +2532,14 @@ If count is given, only the first count occurrences are replaced.
 If count is not specified or -1, then all occurrences are replaced.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 bytes_replace_impl(PyBytesObject *self, Py_buffer *old, Py_buffer *new,
                    Py_ssize_t count)
-/*[clinic end generated code: output=994fa588b6b9c104 input=cdf3cf8639297745]*/
+/*[clinic end generated code: output=940fbcf1ef9a5788 input=cdf3cf8639297745]*/
 {
-    return stringlib_replace((PyObject *)self,
+    return _PyValue_FromObjectResult(stringlib_replace((PyObject *)self,
                              (const char *)old->buf, old->len,
-                             (const char *)new->buf, new->len, count);
+                             (const char *)new->buf, new->len, count));
 }
 
 /** End DALKE **/
@@ -2514,9 +2558,9 @@ bytes[len(prefix):].  Otherwise, return a copy of the original
 bytes.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 bytes_removeprefix_impl(PyBytesObject *self, Py_buffer *prefix)
-/*[clinic end generated code: output=f006865331a06ab6 input=3a2672bcee61d7a7]*/
+/*[clinic end generated code: output=5b287d80da5743af input=3a2672bcee61d7a7]*/
 {
     const char *self_start = PyBytes_AS_STRING(self);
     Py_ssize_t self_len = PyBytes_GET_SIZE(self);
@@ -2527,15 +2571,15 @@ bytes_removeprefix_impl(PyBytesObject *self, Py_buffer *prefix)
         && prefix_len > 0
         && memcmp(self_start, prefix_start, prefix_len) == 0)
     {
-        return _PyBytes_FromStringAndSize(self_start + prefix_len,
-                                          self_len - prefix_len);
+        return _PyValue_FromObjectResult(_PyBytes_FromStringAndSize(self_start + prefix_len,
+                                          self_len - prefix_len));
     }
 
     if (PyBytes_CheckExact(self)) {
-        return Py_NewRef(self);
+        return PyValue_DUP(PyValue_FromObjectBorrow(self));
     }
 
-    return _PyBytes_FromStringAndSize(self_start, self_len);
+    return _PyValue_FromObjectResult(_PyBytes_FromStringAndSize(self_start, self_len));
 }
 
 /*[clinic input]
@@ -2552,9 +2596,9 @@ empty, return bytes[:-len(prefix)].  Otherwise, return a copy of the
 original bytes.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 bytes_removesuffix_impl(PyBytesObject *self, Py_buffer *suffix)
-/*[clinic end generated code: output=d887d308e3242eeb input=04df5f18a36f69d7]*/
+/*[clinic end generated code: output=84ffb3108256af1a input=04df5f18a36f69d7]*/
 {
     const char *self_start = PyBytes_AS_STRING(self);
     Py_ssize_t self_len = PyBytes_GET_SIZE(self);
@@ -2566,15 +2610,15 @@ bytes_removesuffix_impl(PyBytesObject *self, Py_buffer *suffix)
         && memcmp(self_start + self_len - suffix_len,
                   suffix_start, suffix_len) == 0)
     {
-        return _PyBytes_FromStringAndSize(self_start,
-                                          self_len - suffix_len);
+        return _PyValue_FromObjectResult(_PyBytes_FromStringAndSize(self_start,
+                                          self_len - suffix_len));
     }
 
     if (PyBytes_CheckExact(self)) {
-        return Py_NewRef(self);
+        return PyValue_DUP(PyValue_FromObjectBorrow(self));
     }
 
-    return _PyBytes_FromStringAndSize(self_start, self_len);
+    return _PyValue_FromObjectResult(_PyBytes_FromStringAndSize(self_start, self_len));
 }
 
 /*[clinic input]
@@ -2593,13 +2637,12 @@ bytes.startswith
 Return True if the bytes starts with the specified prefix, False otherwise.
 [clinic start generated code]*/
 
-static PyObject *
-bytes_startswith_impl(PyBytesObject *self, PyObject *subobj,
+static PyValue
+bytes_startswith_impl(PyBytesObject *self, PyValueBorrow subobj,
                       Py_ssize_t start, Py_ssize_t end)
-/*[clinic end generated code: output=b1e8da1cbd528e8c input=a14efd070f15be80]*/
+/*[clinic end generated code: output=4660744e6fe68374 input=a14efd070f15be80]*/
 {
-    return _Py_bytes_startswith(PyBytes_AS_STRING(self), PyBytes_GET_SIZE(self),
-                                subobj, start, end);
+    return _bytes_with_sub(self, _Py_bytes_startswith, subobj, start, end);
 }
 
 /*[clinic input]
@@ -2618,13 +2661,12 @@ bytes.endswith
 Return True if the bytes ends with the specified suffix, False otherwise.
 [clinic start generated code]*/
 
-static PyObject *
-bytes_endswith_impl(PyBytesObject *self, PyObject *subobj, Py_ssize_t start,
-                    Py_ssize_t end)
-/*[clinic end generated code: output=038b633111f3629d input=49e383eaaf292713]*/
+static PyValue
+bytes_endswith_impl(PyBytesObject *self, PyValueBorrow subobj,
+                    Py_ssize_t start, Py_ssize_t end)
+/*[clinic end generated code: output=67cfcf5be18dc6c0 input=49e383eaaf292713]*/
 {
-    return _Py_bytes_endswith(PyBytes_AS_STRING(self), PyBytes_GET_SIZE(self),
-                              subobj, start, end);
+    return _bytes_with_sub(self, _Py_bytes_endswith, subobj, start, end);
 }
 
 
@@ -2643,12 +2685,12 @@ bytes.decode
 Decode the bytes using the codec registered for encoding.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 bytes_decode_impl(PyBytesObject *self, const char *encoding,
                   const char *errors)
-/*[clinic end generated code: output=5649a53dde27b314 input=94e9b8524f1d7f37]*/
+/*[clinic end generated code: output=2709ec0908bc719d input=94e9b8524f1d7f37]*/
 {
-    return PyUnicode_FromEncodedObject((PyObject*)self, encoding, errors);
+    return _PyValue_FromObjectResult(PyUnicode_FromEncodedObject((PyObject*)self, encoding, errors));
 }
 
 
@@ -2664,14 +2706,14 @@ Line breaks are not included in the resulting list unless keepends
 is given and true.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 bytes_splitlines_impl(PyBytesObject *self, int keepends)
-/*[clinic end generated code: output=3484149a5d880ffb input=8734672f34430514]*/
+/*[clinic end generated code: output=5c41102202fff0a2 input=8734672f34430514]*/
 {
-    return stringlib_splitlines(
+    return _PyValue_FromObjectResult(stringlib_splitlines(
         (PyObject*) self, PyBytes_AS_STRING(self),
         PyBytes_GET_SIZE(self), keepends
-        );
+        ));
 }
 
 /*[clinic input]
@@ -2687,15 +2729,21 @@ Spaces between two numbers are accepted.
 Example: bytes.fromhex('B9 01EF') -> b'\\xb9\\x01\\xef'.
 [clinic start generated code]*/
 
-static PyObject *
-bytes_fromhex_impl(PyTypeObject *type, PyObject *string)
-/*[clinic end generated code: output=0973acc63661bb2e input=f37d98ed51088a21]*/
+static PyValue
+bytes_fromhex_impl(PyTypeObject *type, PyValueBorrow string)
+/*[clinic end generated code: output=9344d9aa67e85b6a input=f37d98ed51088a21]*/
 {
-    PyObject *result = _PyBytes_FromHex(string, 0);
+    /* An inline int is boxed so that fromhex raises its usual TypeError. */
+    PyObject *string_obj = _PyValue_AsObjectAt(string, BOX_SITE_PARSER);
+    if (string_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *result = _PyBytes_FromHex(string_obj, 0);
+    Py_DECREF(string_obj);
     if (type != &PyBytes_Type && result != NULL) {
         Py_SETREF(result, PyObject_CallOneArg((PyObject *)type, result));
     }
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 PyObject*
@@ -2836,13 +2884,24 @@ Example:
 'b901:ef'
 [clinic start generated code]*/
 
-static PyObject *
-bytes_hex_impl(PyBytesObject *self, PyObject *sep, Py_ssize_t bytes_per_sep)
-/*[clinic end generated code: output=588821f02cb9d8f5 input=b8d40cf203d172dc]*/
+static PyValue
+bytes_hex_impl(PyBytesObject *self, PyValueBorrow sep,
+               Py_ssize_t bytes_per_sep)
+/*[clinic end generated code: output=050086b47a4a88df input=b8d40cf203d172dc]*/
 {
     const char *argbuf = PyBytes_AS_STRING(self);
     Py_ssize_t arglen = PyBytes_GET_SIZE(self);
-    return _Py_strhex_with_sep(argbuf, arglen, sep, bytes_per_sep);
+    PyObject *sep_obj = NULL;
+    if (!PyValue_IsNull(sep)) {
+        /* An inline int is boxed so that the separator check raises. */
+        sep_obj = _PyValue_AsObjectAt(sep, BOX_SITE_PARSER);
+        if (sep_obj == NULL) {
+            return PyValue_NULL;
+        }
+    }
+    PyObject *res = _Py_strhex_with_sep(argbuf, arglen, sep_obj, bytes_per_sep);
+    Py_XDECREF(sep_obj);
+    return _PyValue_FromObjectResult(res);
 }
 
 static PyObject *
@@ -2932,6 +2991,20 @@ static PyNumberMethods bytes_as_number = {
 static PyObject *
 bytes_subtype_new(PyTypeObject *, PyObject *);
 
+/* PyBytes_FromObject() for a value: an inline int or float is boxed so that
+   the call raises the usual TypeError. */
+static PyObject *
+_PyBytes_FromValue(PyValueBorrow x)
+{
+    PyObject *obj = _PyValue_AsObjectAt(x, BOX_SITE_PARSER);
+    if (obj == NULL) {
+        return NULL;
+    }
+    PyObject *res = PyBytes_FromObject(obj);
+    Py_DECREF(obj);
+    return res;
+}
+
 /*[clinic input]
 @vectorcall
 @classmethod
@@ -2943,90 +3016,94 @@ bytes.__new__ as bytes_new
 
 [clinic start generated code]*/
 
-static PyObject *
-bytes_new_impl(PyTypeObject *type, PyObject *x, const char *encoding,
+static PyValue
+bytes_new_impl(PyTypeObject *type, PyValueBorrow x, const char *encoding,
                const char *errors)
-/*[clinic end generated code: output=1e0c471be311a425 input=b0248d22e221a095]*/
+/*[clinic end generated code: output=c2a3b527567c21fa input=b0248d22e221a095]*/
 {
     PyObject *bytes;
     PyObject *func;
     Py_ssize_t size;
 
-    if (x == NULL) {
+    if (PyValue_IsNull(x)) {
         if (encoding != NULL || errors != NULL) {
             PyErr_SetString(PyExc_TypeError,
                             encoding != NULL ?
                             "encoding without a string argument" :
                             "errors without a string argument");
-            return NULL;
+            return PyValue_NULL;
         }
         bytes = Py_GetConstant(Py_CONSTANT_EMPTY_BYTES);
     }
     else if (encoding != NULL) {
         /* Encode via the codec registry */
-        if (!PyUnicode_Check(x)) {
+        if (!(PyValue_IsObject(x) && PyUnicode_Check(PyValue_AsKnownObjectBorrow(x)))) {
             PyErr_SetString(PyExc_TypeError,
                             "encoding without a string argument");
-            return NULL;
+            return PyValue_NULL;
         }
-        bytes = PyUnicode_AsEncodedString(x, encoding, errors);
+        bytes = PyUnicode_AsEncodedString(PyValue_AsKnownObjectBorrow(x),
+                                          encoding, errors);
     }
     else if (errors != NULL) {
         PyErr_SetString(PyExc_TypeError,
-                        PyUnicode_Check(x) ?
+                        (PyValue_IsObject(x) && PyUnicode_Check(PyValue_AsKnownObjectBorrow(x))) ?
                         "string argument without an encoding" :
                         "errors without a string argument");
-        return NULL;
+        return PyValue_NULL;
     }
     /* We'd like to call PyObject_Bytes here, but we need to check for an
        integer argument before deferring to PyBytes_FromObject, something
        PyObject_Bytes doesn't do. */
-    else if ((func = _PyObject_LookupSpecial(x, &_Py_ID(__bytes__))) != NULL) {
+    else if (PyValue_IsObject(x)
+             && (func = _PyObject_LookupSpecial(PyValue_AsKnownObjectBorrow(x),
+                                                &_Py_ID(__bytes__))) != NULL) {
         bytes = _PyObject_CallNoArgs(func);
         Py_DECREF(func);
         if (bytes == NULL)
-            return NULL;
+            return PyValue_NULL;
         if (!PyBytes_Check(bytes)) {
             PyErr_Format(PyExc_TypeError,
                          "%T.__bytes__() must return a bytes, not %T",
-                         x, bytes);
+                         PyValue_AsKnownObjectBorrow(x), bytes);
             Py_DECREF(bytes);
-            return NULL;
+            return PyValue_NULL;
         }
     }
     else if (PyErr_Occurred())
-        return NULL;
-    else if (PyUnicode_Check(x)) {
+        return PyValue_NULL;
+    else if ((PyValue_IsObject(x) && PyUnicode_Check(PyValue_AsKnownObjectBorrow(x)))) {
         PyErr_SetString(PyExc_TypeError,
                         "string argument without an encoding");
-        return NULL;
+        return PyValue_NULL;
     }
     /* Is it an integer? */
-    else if (_PyIndex_Check(x)) {
-        size = PyNumber_AsSsize_t(x, PyExc_OverflowError);
+    else if (PyValue_TYPE(x)->tp_as_number != NULL
+             && PyValue_TYPE(x)->tp_as_number->nb_index != NULL) {
+        size = _PyValue_AsSsize_t(x, PyExc_OverflowError);
         if (size == -1 && PyErr_Occurred()) {
             if (!PyErr_ExceptionMatches(PyExc_TypeError))
-                return NULL;
+                return PyValue_NULL;
             PyErr_Clear();  /* fall through */
-            bytes = PyBytes_FromObject(x);
+            bytes = _PyBytes_FromValue(x);
         }
         else {
             if (size < 0) {
                 PyErr_SetString(PyExc_ValueError, "negative count");
-                return NULL;
+                return PyValue_NULL;
             }
             bytes = _PyBytes_FromSizeZero(size);
         }
     }
     else {
-        bytes = PyBytes_FromObject(x);
+        bytes = _PyBytes_FromValue(x);
     }
 
     if (bytes != NULL && type != &PyBytes_Type) {
         Py_SETREF(bytes, bytes_subtype_new(type, bytes));
     }
 
-    return bytes;
+    return _PyValue_FromObjectResult(bytes);
 }
 
 static PyObject*
@@ -3342,7 +3419,8 @@ PyTypeObject PyBytes_Type = {
     bytes_type_alloc,                           /* tp_alloc */
     bytes_new,                                  /* tp_new */
     PyObject_Free,                              /* tp_free */
-    .tp_vectorcall = bytes_vectorcall,
+    .tp_vectorcall = _PyValue_VectorcallThunk,
+    .tp_value_vectorcall = (_Py_valuefunc)bytes_vectorcall,
     .tp_version_tag = _Py_TYPE_VERSION_BYTES,
     ._tp_iteritem = bytes_iteritem,
 };

@@ -2,14 +2,20 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
 PyDoc_STRVAR(function___annotate____doc__,
 "Get the code object for a function.");
@@ -155,15 +161,15 @@ PyDoc_STRVAR(func_new__doc__,
 "  kwdefaults\n"
 "    a dictionary that specifies the default keyword argument values");
 
-static PyObject *
+static PyValue
 func_new_impl(PyTypeObject *type, PyCodeObject *code, PyObject *globals,
-              PyObject *name, PyObject *defaults, PyObject *closure,
-              PyObject *kwdefaults);
+              PyValueBorrow name, PyValueBorrow defaults,
+              PyValueBorrow closure, PyValueBorrow kwdefaults);
 
-static PyObject *
-func_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+func_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 6
@@ -191,63 +197,62 @@ func_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[6];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    Py_ssize_t noptargs = nargs + (kwargs ? PyDict_GET_SIZE(kwargs) : 0) - 2;
+    Py_ssize_t _idx[6];
     PyCodeObject *code;
     PyObject *globals;
-    PyObject *name = Py_None;
-    PyObject *defaults = Py_None;
-    PyObject *closure = Py_None;
-    PyObject *kwdefaults = Py_None;
+    PyValueBorrow name = PyValue_Borrow(PyValue_None);
+    PyValueBorrow defaults = PyValue_Borrow(PyValue_None);
+    PyValueBorrow closure = PyValue_Borrow(PyValue_None);
+    PyValueBorrow kwdefaults = PyValue_Borrow(PyValue_None);
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 6));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 2, /*maxpos*/ 6, /*minkw*/ 0, /*varpos*/ 0, _idx, 6)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 6, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[_idx[0]])), &PyCode_Type)) {
+        _PyArg_BadArgumentValue("function", "argument 'code'", (&PyCode_Type)->tp_name, PyValue_Borrow(args[_idx[0]]));
         goto exit;
     }
-    if (!PyObject_TypeCheck(fastargs[0], &PyCode_Type)) {
-        _PyArg_BadArgument("function", "argument 'code'", (&PyCode_Type)->tp_name, fastargs[0]);
+    code = (PyCodeObject *)PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]]));
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[_idx[1]])), &PyDict_Type)) {
+        _PyArg_BadArgumentValue("function", "argument 'globals'", "dict", PyValue_Borrow(args[_idx[1]]));
         goto exit;
     }
-    code = (PyCodeObject *)fastargs[0];
-    if (!PyDict_Check(fastargs[1])) {
-        _PyArg_BadArgument("function", "argument 'globals'", "dict", fastargs[1]);
-        goto exit;
+    globals = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]]));
+    if (_idx[2] >= 0) {
+        name = PyValue_Borrow(args[_idx[2]]);
     }
-    globals = fastargs[1];
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[3] >= 0) {
+        defaults = PyValue_Borrow(args[_idx[3]]);
     }
-    if (fastargs[2]) {
-        name = fastargs[2];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[4] >= 0) {
+        closure = PyValue_Borrow(args[_idx[4]]);
     }
-    if (fastargs[3]) {
-        defaults = fastargs[3];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
+    if (_idx[5] >= 0) {
+        kwdefaults = PyValue_Borrow(args[_idx[5]]);
     }
-    if (fastargs[4]) {
-        closure = fastargs[4];
-        if (!--noptargs) {
-            goto skip_optional_pos;
-        }
-    }
-    kwdefaults = fastargs[5];
-skip_optional_pos:
     return_value = func_new_impl(type, code, globals, name, defaults, closure, kwdefaults);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+func_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(func_new_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = func_new_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 #define FUNCTION___ANNOTATE___GETSETDEF {"__annotate__", (getter)function___annotate___get, (setter)function___annotate___set, function___annotate____doc__},
 
@@ -255,4 +260,4 @@ exit:
 
 #define FUNCTION___TYPE_PARAMS___GETSETDEF {"__type_params__", (getter)function___type_params___get, (setter)function___type_params___set, function___type_params____doc__},
 
-/*[clinic end generated code: output=45ead2b2e689475c input=a9049054013a1b77]*/
+/*[clinic end generated code: output=24cee8c0ea2a2a5b input=a9049054013a1b77]*/

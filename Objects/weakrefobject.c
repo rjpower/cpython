@@ -10,6 +10,11 @@
 #include "pycore_weakref.h"       // _PyWeakref_GET_REF()
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 class weakref "PyWeakReference *" "&_PyWeakref_RefType"
 [clinic start generated code]*/
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=ad66c8b0acee6ad9]*/

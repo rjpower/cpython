@@ -11,15 +11,20 @@
 #include "structmember.h"
 
 /*[clinic input]
-class typevar "typevarobject *" "&_PyTypeVar_Type"
-class paramspec "paramspecobject *" "&_PyParamSpec_Type"
-class paramspecargs "paramspecattrobject *" "&_PyParamSpecArgs_Type"
-class paramspeckwargs "paramspecattrobject *" "&_PyParamSpecKwargs_Type"
-class typevartuple "typevartupleobject *" "&_PyTypeVarTuple_Type"
-class typealias "typealiasobject *" "&_PyTypeAlias_Type"
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
+class typevar "typevarobject *" "static_type_unavailable"
+class paramspec "paramspecobject *" "static_type_unavailable"
+class paramspecargs "paramspecattrobject *" "static_type_unavailable"
+class paramspeckwargs "paramspecattrobject *" "static_type_unavailable"
+class typevartuple "typevartupleobject *" "static_type_unavailable"
+class typealias "typealiasobject *" "static_type_unavailable"
 class Generic "PyObject *" "&PyGeneric_Type"
 [clinic start generated code]*/
-/*[clinic end generated code: output=da39a3ee5e6b4b0d input=aa86741931a0f55c]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=749ad6ed8eda35fb]*/
 
 typedef struct {
     PyObject_HEAD
@@ -708,31 +713,34 @@ typevar.__new__ as typevar_new
 Create a TypeVar.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 typevar_new_impl(PyTypeObject *type, PyObject *name, PyObject *constraints,
-                 PyObject *bound, PyObject *default_value, int covariant,
-                 int contravariant, int infer_variance)
-/*[clinic end generated code: output=d2b248ff074eaab6 input=1b5b62e40c92c167]*/
+                 PyValueBorrow bound, PyValueBorrow default_value,
+                 int covariant, int contravariant, int infer_variance)
+/*[clinic end generated code: output=12b45941b219dfb9 input=1b5b62e40c92c167]*/
 {
     if (covariant && contravariant) {
         PyErr_SetString(PyExc_ValueError,
                         "Bivariant types are not supported.");
-        return NULL;
+        return PyValue_NULL;
     }
 
     if (infer_variance && (covariant || contravariant)) {
         PyErr_SetString(PyExc_ValueError,
                         "Variance cannot be specified with infer_variance.");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    if (Py_IsNone(bound)) {
-        bound = NULL;
-    }
-    if (bound != NULL) {
-        bound = type_check(bound, "Bound must be a type.");
-        if (bound == NULL) {
-            return NULL;
+    PyObject *bound_obj = NULL;
+    if (!PyValue_IsNull(bound) && !PyValue_IsNone(bound)) {
+        PyObject *bound_arg = _PyValue_AsObjectAt(bound, BOX_SITE_PARSER);
+        if (bound_arg == NULL) {
+            return PyValue_NULL;
+        }
+        bound_obj = type_check(bound_arg, "Bound must be a type.");
+        Py_DECREF(bound_arg);
+        if (bound_obj == NULL) {
+            return PyValue_NULL;
         }
     }
 
@@ -741,30 +749,37 @@ typevar_new_impl(PyTypeObject *type, PyObject *name, PyObject *constraints,
     if (n_constraints == 1) {
         PyErr_SetString(PyExc_TypeError,
                         "A single constraint is not allowed");
-        Py_XDECREF(bound);
-        return NULL;
+        Py_XDECREF(bound_obj);
+        return PyValue_NULL;
     } else if (n_constraints == 0) {
         constraints = NULL;
-    } else if (bound != NULL) {
+    } else if (bound_obj != NULL) {
         PyErr_SetString(PyExc_TypeError,
                         "Constraints cannot be combined with bound=...");
-        Py_XDECREF(bound);
-        return NULL;
+        Py_XDECREF(bound_obj);
+        return PyValue_NULL;
     }
     PyObject *module = caller();
     if (module == NULL) {
-        Py_XDECREF(bound);
-        return NULL;
+        Py_XDECREF(bound_obj);
+        return PyValue_NULL;
+    }
+    PyObject *default_obj = _PyValue_AsObjectAt(default_value, BOX_SITE_PARSER);
+    if (default_obj == NULL) {
+        Py_XDECREF(bound_obj);
+        Py_DECREF(module);
+        return PyValue_NULL;
     }
 
-    PyObject *tv = (PyObject *)typevar_alloc(name, bound, NULL,
+    PyObject *tv = (PyObject *)typevar_alloc(name, bound_obj, NULL,
                                              constraints, NULL,
-                                             default_value,
+                                             default_obj,
                                              covariant, contravariant,
                                              infer_variance, module);
-    Py_XDECREF(bound);
+    Py_XDECREF(bound_obj);
+    Py_DECREF(default_obj);
     Py_XDECREF(module);
-    return tv;
+    return _PyValue_FromObjectResult(tv);
 }
 
 /*[clinic input]
@@ -775,13 +790,18 @@ typevar.__typing_subst__ as typevar_typing_subst
 
 [clinic start generated code]*/
 
-static PyObject *
-typevar_typing_subst_impl(typevarobject *self, PyObject *arg)
-/*[clinic end generated code: output=c76ced134ed8f4e1 input=9e87b57f0fc59b92]*/
+static PyValue
+typevar_typing_subst_impl(typevarobject *self, PyValueBorrow arg)
+/*[clinic end generated code: output=3a2cdcda678dfa84 input=9e87b57f0fc59b92]*/
 {
-    PyObject *args[2] = {(PyObject *)self, arg};
+    PyObject *arg_obj = _PyValue_AsObjectAt(arg, BOX_SITE_PARSER);
+    if (arg_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *args[2] = {(PyObject *)self, arg_obj};
     PyObject *result = call_typing_func_object("_typevar_subst", args, 2);
-    return result;
+    Py_DECREF(arg_obj);
+    return _PyValue_FromObjectResult(result);
 }
 
 /*[clinic input]
@@ -793,55 +813,71 @@ typevar.__typing_prepare_subst__ as typevar_typing_prepare_subst
 
 [clinic start generated code]*/
 
-static PyObject *
-typevar_typing_prepare_subst_impl(typevarobject *self, PyObject *alias,
-                                  PyObject *args)
-/*[clinic end generated code: output=82c3f4691e0ded22 input=201a750415d14ffb]*/
+static PyValue
+typevar_typing_prepare_subst_impl(typevarobject *self, PyValueBorrow alias,
+                                  PyValueBorrow args)
+/*[clinic end generated code: output=8f59b1f0709f6883 input=201a750415d14ffb]*/
 {
-    PyObject *params = PyObject_GetAttrString(alias, "__parameters__");
+    PyObject *alias_obj = _PyValue_AsObjectAt(alias, BOX_SITE_PARSER);
+    if (alias_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *args_obj = _PyValue_AsObjectAt(args, BOX_SITE_PARSER);
+    if (args_obj == NULL) {
+        Py_DECREF(alias_obj);
+        return PyValue_NULL;
+    }
+    PyObject *params = PyObject_GetAttrString(alias_obj, "__parameters__");
     if (params == NULL) {
-        return NULL;
+        goto error;
     }
     Py_ssize_t i = PySequence_Index(params, (PyObject *)self);
     if (i == -1) {
         Py_DECREF(params);
-        return NULL;
+        goto error;
     }
-    Py_ssize_t args_len = PySequence_Length(args);
+    Py_ssize_t args_len = PySequence_Length(args_obj);
     if (args_len == -1) {
         Py_DECREF(params);
-        return NULL;
+        goto error;
     }
     if (i < args_len) {
         // We already have a value for our TypeVar
         Py_DECREF(params);
-        return Py_NewRef(args);
+        Py_DECREF(alias_obj);
+        Py_DECREF(args_obj);
+        return PyValue_DUP(args);
     }
     else if (i == args_len) {
         // If the TypeVar has a default, use it.
         PyObject *dflt = typevar_default((PyObject *)self, NULL);
         if (dflt == NULL) {
             Py_DECREF(params);
-            return NULL;
+            goto error;
         }
         if (dflt != &_Py_NoDefaultStruct) {
             PyObject *new_args = _PyTuple_PackValues(1, (PyValueBorrow[]){PyValue_FromObjectBorrow(dflt)});
             Py_DECREF(dflt);
             if (new_args == NULL) {
                 Py_DECREF(params);
-                return NULL;
+                goto error;
             }
-            PyObject *result = PySequence_Concat(args, new_args);
+            PyObject *result = PySequence_Concat(args_obj, new_args);
             Py_DECREF(params);
             Py_DECREF(new_args);
-            return result;
+            Py_DECREF(alias_obj);
+            Py_DECREF(args_obj);
+            return _PyValue_FromObjectResult(result);
         }
     }
     Py_DECREF(params);
     PyErr_Format(PyExc_TypeError,
                  "Too few arguments for %S; actual %zd, expected at least %zd",
-                 alias, args_len, i + 1);
-    return NULL;
+                 alias_obj, args_len, i + 1);
+error:
+    Py_DECREF(alias_obj);
+    Py_DECREF(args_obj);
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -849,11 +885,11 @@ typevar.__reduce__ as typevar_reduce
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 typevar_reduce_impl(typevarobject *self)
-/*[clinic end generated code: output=02e5c55d7cf8a08f input=de76bc95f04fb9ff]*/
+/*[clinic end generated code: output=6370566a510b4de1 input=de76bc95f04fb9ff]*/
 {
-    return Py_NewRef(self->name);
+    return PyValue_DUP(PyValue_FromObjectBorrow(self->name));
 }
 
 
@@ -862,15 +898,15 @@ typevar.has_default as typevar_has_default
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 typevar_has_default_impl(typevarobject *self)
-/*[clinic end generated code: output=76bf0b8dc98b97dd input=31024aa030761cf6]*/
+/*[clinic end generated code: output=2fa1a618666e0df5 input=31024aa030761cf6]*/
 {
     if (self->evaluate_default != NULL ||
         (self->default_value != &_Py_NoDefaultStruct && self->default_value != NULL)) {
-        Py_RETURN_TRUE;
+        return PyValue_True;
     }
-    Py_RETURN_FALSE;
+    return PyValue_False;
 }
 
 static PyObject *
@@ -1051,11 +1087,17 @@ paramspecargs.__new__ as paramspecargs_new
 Create a ParamSpecArgs object.
 [clinic start generated code]*/
 
-static PyObject *
-paramspecargs_new_impl(PyTypeObject *type, PyObject *origin)
-/*[clinic end generated code: output=9a1463dc8942fe4e input=3596a0bb6183c208]*/
+static PyValue
+paramspecargs_new_impl(PyTypeObject *type, PyValueBorrow origin)
+/*[clinic end generated code: output=b88a289a2c009d63 input=3596a0bb6183c208]*/
 {
-    return (PyObject *)paramspecattr_new(type, origin);
+    PyObject *origin_obj = _PyValue_AsObjectAt(origin, BOX_SITE_PARSER);
+    if (origin_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *psa = (PyObject *)paramspecattr_new(type, origin_obj);
+    Py_DECREF(origin_obj);
+    return _PyValue_FromObjectResult(psa);
 }
 
 static PyObject *
@@ -1131,11 +1173,17 @@ paramspeckwargs.__new__ as paramspeckwargs_new
 Create a ParamSpecKwargs object.
 [clinic start generated code]*/
 
-static PyObject *
-paramspeckwargs_new_impl(PyTypeObject *type, PyObject *origin)
-/*[clinic end generated code: output=277b11967ebaf4ab input=981bca9b0cf9e40a]*/
+static PyValue
+paramspeckwargs_new_impl(PyTypeObject *type, PyValueBorrow origin)
+/*[clinic end generated code: output=33d3817641907893 input=981bca9b0cf9e40a]*/
 {
-    return (PyObject *)paramspecattr_new(type, origin);
+    PyObject *origin_obj = _PyValue_AsObjectAt(origin, BOX_SITE_PARSER);
+    if (origin_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *psa = (PyObject *)paramspecattr_new(type, origin_obj);
+    Py_DECREF(origin_obj);
+    return _PyValue_FromObjectResult(psa);
 }
 
 static PyObject *
@@ -1345,28 +1393,41 @@ paramspec.__new__ as paramspec_new
 Create a ParamSpec object.
 [clinic start generated code]*/
 
-static PyObject *
-paramspec_new_impl(PyTypeObject *type, PyObject *name, PyObject *bound,
-                   PyObject *default_value, int covariant, int contravariant,
-                   int infer_variance)
-/*[clinic end generated code: output=47ca9d63fa5a094d input=495e1565bc067ab9]*/
+static PyValue
+paramspec_new_impl(PyTypeObject *type, PyObject *name, PyValueBorrow bound,
+                   PyValueBorrow default_value, int covariant,
+                   int contravariant, int infer_variance)
+/*[clinic end generated code: output=9ff9fe54701abe42 input=495e1565bc067ab9]*/
 {
     if (covariant && contravariant) {
         PyErr_SetString(PyExc_ValueError, "Bivariant types are not supported.");
-        return NULL;
+        return PyValue_NULL;
     }
     if (infer_variance && (covariant || contravariant)) {
         PyErr_SetString(PyExc_ValueError, "Variance cannot be specified with infer_variance.");
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *module = caller();
     if (module == NULL) {
-        return NULL;
+        return PyValue_NULL;
+    }
+    PyObject *bound_obj = _PyValue_AsObjectAt(bound, BOX_SITE_PARSER);
+    if (bound_obj == NULL) {
+        Py_DECREF(module);
+        return PyValue_NULL;
+    }
+    PyObject *default_obj = _PyValue_AsObjectAt(default_value, BOX_SITE_PARSER);
+    if (default_obj == NULL) {
+        Py_DECREF(bound_obj);
+        Py_DECREF(module);
+        return PyValue_NULL;
     }
     PyObject *ps = (PyObject *)paramspec_alloc(
-        name, bound, default_value, covariant, contravariant, infer_variance, module);
+        name, bound_obj, default_obj, covariant, contravariant, infer_variance, module);
+    Py_DECREF(bound_obj);
+    Py_DECREF(default_obj);
     Py_DECREF(module);
-    return ps;
+    return _PyValue_FromObjectResult(ps);
 }
 
 
@@ -1378,13 +1439,18 @@ paramspec.__typing_subst__ as paramspec_typing_subst
 
 [clinic start generated code]*/
 
-static PyObject *
-paramspec_typing_subst_impl(paramspecobject *self, PyObject *arg)
-/*[clinic end generated code: output=803e1ade3f13b57d input=2d5b5e3d4a717189]*/
+static PyValue
+paramspec_typing_subst_impl(paramspecobject *self, PyValueBorrow arg)
+/*[clinic end generated code: output=b97e9380fe6f75a9 input=2d5b5e3d4a717189]*/
 {
-    PyObject *args[2] = {(PyObject *)self, arg};
+    PyObject *arg_obj = _PyValue_AsObjectAt(arg, BOX_SITE_PARSER);
+    if (arg_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *args[2] = {(PyObject *)self, arg_obj};
     PyObject *result = call_typing_func_object("_paramspec_subst", args, 2);
-    return result;
+    Py_DECREF(arg_obj);
+    return _PyValue_FromObjectResult(result);
 }
 
 /*[clinic input]
@@ -1396,15 +1462,26 @@ paramspec.__typing_prepare_subst__ as paramspec_typing_prepare_subst
 
 [clinic start generated code]*/
 
-static PyObject *
-paramspec_typing_prepare_subst_impl(paramspecobject *self, PyObject *alias,
-                                    PyObject *args)
-/*[clinic end generated code: output=95449d630a2adb9a input=6df6f9fef3e150da]*/
+static PyValue
+paramspec_typing_prepare_subst_impl(paramspecobject *self,
+                                    PyValueBorrow alias, PyValueBorrow args)
+/*[clinic end generated code: output=70a2ae136750827e input=6df6f9fef3e150da]*/
 {
-    PyObject *args_array[3] = {(PyObject *)self, alias, args};
+    PyObject *alias_obj = _PyValue_AsObjectAt(alias, BOX_SITE_PARSER);
+    if (alias_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *args_obj = _PyValue_AsObjectAt(args, BOX_SITE_PARSER);
+    if (args_obj == NULL) {
+        Py_DECREF(alias_obj);
+        return PyValue_NULL;
+    }
+    PyObject *args_array[3] = {(PyObject *)self, alias_obj, args_obj};
     PyObject *result = call_typing_func_object(
         "_paramspec_prepare_subst", args_array, 3);
-    return result;
+    Py_DECREF(alias_obj);
+    Py_DECREF(args_obj);
+    return _PyValue_FromObjectResult(result);
 }
 
 /*[clinic input]
@@ -1412,11 +1489,11 @@ paramspec.__reduce__ as paramspec_reduce
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 paramspec_reduce_impl(paramspecobject *self)
-/*[clinic end generated code: output=b83398674416db27 input=5bf349f0d5dd426c]*/
+/*[clinic end generated code: output=7e071f9143df55a4 input=5bf349f0d5dd426c]*/
 {
-    return Py_NewRef(self->name);
+    return PyValue_DUP(PyValue_FromObjectBorrow(self->name));
 }
 
 /*[clinic input]
@@ -1424,15 +1501,15 @@ paramspec.has_default as paramspec_has_default
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 paramspec_has_default_impl(paramspecobject *self)
-/*[clinic end generated code: output=daaae7467a6a4368 input=2112e97eeb76cd59]*/
+/*[clinic end generated code: output=6d9d1c9afad130a1 input=2112e97eeb76cd59]*/
 {
     if (self->evaluate_default != NULL ||
         (self->default_value != &_Py_NoDefaultStruct && self->default_value != NULL)) {
-        Py_RETURN_TRUE;
+        return PyValue_True;
     }
-    Py_RETURN_FALSE;
+    return PyValue_False;
 }
 
 static PyObject *
@@ -1631,28 +1708,41 @@ typevartuple.__new__
 Create a new TypeVarTuple with the given name.
 [clinic start generated code]*/
 
-static PyObject *
-typevartuple_impl(PyTypeObject *type, PyObject *name, PyObject *bound,
+static PyValue
+typevartuple_impl(PyTypeObject *type, PyObject *name, PyValueBorrow bound,
                   int covariant, int contravariant, int infer_variance,
-                  PyObject *default_value)
-/*[clinic end generated code: output=40bc9ca10f64e392 input=56e28c725a8da40b]*/
+                  PyValueBorrow default_value)
+/*[clinic end generated code: output=ec7d7d8584cd798f input=56e28c725a8da40b]*/
 {
     if (covariant && contravariant) {
         PyErr_SetString(PyExc_ValueError, "Bivariant types are not supported.");
-        return NULL;
+        return PyValue_NULL;
     }
     if (infer_variance && (covariant || contravariant)) {
         PyErr_SetString(PyExc_ValueError, "Variance cannot be specified with infer_variance.");
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *module = caller();
     if (module == NULL) {
-        return NULL;
+        return PyValue_NULL;
+    }
+    PyObject *bound_obj = _PyValue_AsObjectAt(bound, BOX_SITE_PARSER);
+    if (bound_obj == NULL) {
+        Py_DECREF(module);
+        return PyValue_NULL;
+    }
+    PyObject *default_obj = _PyValue_AsObjectAt(default_value, BOX_SITE_PARSER);
+    if (default_obj == NULL) {
+        Py_DECREF(bound_obj);
+        Py_DECREF(module);
+        return PyValue_NULL;
     }
     PyObject *result = (PyObject *)typevartuple_alloc(
-        name, bound, default_value, covariant, contravariant, infer_variance, module);
+        name, bound_obj, default_obj, covariant, contravariant, infer_variance, module);
+    Py_DECREF(bound_obj);
+    Py_DECREF(default_obj);
     Py_DECREF(module);
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 /*[clinic input]
@@ -1663,12 +1753,12 @@ typevartuple.__typing_subst__ as typevartuple_typing_subst
 
 [clinic start generated code]*/
 
-static PyObject *
-typevartuple_typing_subst_impl(typevartupleobject *self, PyObject *arg)
-/*[clinic end generated code: output=814316519441cd76 input=3fcf2dfd9eee7945]*/
+static PyValue
+typevartuple_typing_subst_impl(typevartupleobject *self, PyValueBorrow arg)
+/*[clinic end generated code: output=cbcef42de89d78a1 input=3fcf2dfd9eee7945]*/
 {
     PyErr_SetString(PyExc_TypeError, "Substitution of bare TypeVarTuple is not supported");
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -1680,15 +1770,27 @@ typevartuple.__typing_prepare_subst__ as typevartuple_typing_prepare_subst
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 typevartuple_typing_prepare_subst_impl(typevartupleobject *self,
-                                       PyObject *alias, PyObject *args)
-/*[clinic end generated code: output=ff999bc5b02036c1 input=685b149b0fc47556]*/
+                                       PyValueBorrow alias,
+                                       PyValueBorrow args)
+/*[clinic end generated code: output=b45ef261da4fffde input=685b149b0fc47556]*/
 {
-    PyObject *args_array[3] = {(PyObject *)self, alias, args};
+    PyObject *alias_obj = _PyValue_AsObjectAt(alias, BOX_SITE_PARSER);
+    if (alias_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *args_obj = _PyValue_AsObjectAt(args, BOX_SITE_PARSER);
+    if (args_obj == NULL) {
+        Py_DECREF(alias_obj);
+        return PyValue_NULL;
+    }
+    PyObject *args_array[3] = {(PyObject *)self, alias_obj, args_obj};
     PyObject *result = call_typing_func_object(
         "_typevartuple_prepare_subst", args_array, 3);
-    return result;
+    Py_DECREF(alias_obj);
+    Py_DECREF(args_obj);
+    return _PyValue_FromObjectResult(result);
 }
 
 /*[clinic input]
@@ -1696,11 +1798,11 @@ typevartuple.__reduce__ as typevartuple_reduce
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 typevartuple_reduce_impl(typevartupleobject *self)
-/*[clinic end generated code: output=3215bc0477913d20 input=3018a4d66147e807]*/
+/*[clinic end generated code: output=06dd729908ead92b input=3018a4d66147e807]*/
 {
-    return Py_NewRef(self->name);
+    return PyValue_DUP(PyValue_FromObjectBorrow(self->name));
 }
 
 
@@ -1709,15 +1811,15 @@ typevartuple.has_default as typevartuple_has_default
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 typevartuple_has_default_impl(typevartupleobject *self)
-/*[clinic end generated code: output=4895f602f56a5e29 input=9ef3250ddb2c1851]*/
+/*[clinic end generated code: output=a402849e0452b009 input=9ef3250ddb2c1851]*/
 {
     if (self->evaluate_default != NULL ||
         (self->default_value != &_Py_NoDefaultStruct && self->default_value != NULL)) {
-        Py_RETURN_TRUE;
+        return PyValue_True;
     }
-    Py_RETURN_FALSE;
+    return PyValue_False;
 }
 
 static PyObject *
@@ -2150,11 +2252,11 @@ typealias.__reduce__ as typealias_reduce
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 typealias_reduce_impl(typealiasobject *self)
-/*[clinic end generated code: output=913724f92ad3b39b input=4f06fbd9472ec0f1]*/
+/*[clinic end generated code: output=291ca6583752ad19 input=4f06fbd9472ec0f1]*/
 {
-    return Py_NewRef(self->name);
+    return PyValue_DUP(PyValue_FromObjectBorrow(self->name));
 }
 
 static PyObject *
@@ -2188,41 +2290,52 @@ typealias.__new__ as typealias_new
 Create a TypeAliasType.
 [clinic start generated code]*/
 
-static PyObject *
-typealias_new_impl(PyTypeObject *type, PyObject *name, PyObject *value,
-                   PyObject *type_params, PyObject *qualname)
-/*[clinic end generated code: output=b7f6d9f1c577cd9c input=6516623275f87b5e]*/
+static PyValue
+typealias_new_impl(PyTypeObject *type, PyObject *name, PyValueBorrow value,
+                   PyValueBorrow type_params, PyValueBorrow qualname)
+/*[clinic end generated code: output=373558d7c86eddae input=6516623275f87b5e]*/
 {
-    if (type_params != NULL && !PyTuple_Check(type_params)) {
+    if (!PyValue_IsNull(type_params) && !(PyValue_IsObject(type_params) && PyTuple_Check(PyValue_AsKnownObjectBorrow(type_params)))) {
         PyErr_SetString(PyExc_TypeError, "type_params must be a tuple");
-        return NULL;
+        return PyValue_NULL;
     }
 
     int err = 0;
-    PyObject *checked_params = typealias_check_type_params(type_params, &err);
+    PyObject *checked_params = typealias_check_type_params(
+        PyValue_IsNull(type_params) ? NULL
+                                    : PyValue_AsKnownObjectBorrow(type_params),
+        &err);
     if (err) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    if (qualname == NULL || qualname == Py_None) {
+    if (PyValue_IsNull(qualname) || PyValue_IsNone(qualname)) {
         // If qualname was not set directly, we use name instead.
-        qualname = name;
+        qualname = PyValue_FromObjectBorrow(name);
     } else {
-        if (!PyUnicode_Check(qualname)) {
+        if (!(PyValue_IsObject(qualname) && PyUnicode_Check(PyValue_AsKnownObjectBorrow(qualname)))) {
             PyErr_SetString(PyExc_TypeError, "qualname must be a string");
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
     PyObject *module = caller();
     if (module == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
+    PyObject *value_obj = _PyValue_AsObjectAt(value, BOX_SITE_PARSER);
+    if (value_obj == NULL) {
+        Py_DECREF(module);
+        return PyValue_NULL;
+    }
+    // qualname is name or a checked str, so it is certainly an object.
     PyObject *ta = (PyObject *)typealias_alloc(
-        name, qualname, checked_params, NULL, value, module);
+        name, PyValue_AsKnownObjectBorrow(qualname), checked_params, NULL,
+        value_obj, module);
+    Py_DECREF(value_obj);
     Py_DECREF(module);
-    return ta;
+    return _PyValue_FromObjectResult(ta);
 }
 
 PyDoc_STRVAR(typealias_doc,

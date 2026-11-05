@@ -2,15 +2,22 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_abstract.h"      // _PyNumber_Index()
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "pycore_unicodeobject.h" // _PyUnicode_AsUTF8NoNUL()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_Index()
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
 PyDoc_STRVAR(memoryview__doc__,
 "memoryview(object)\n"
@@ -18,13 +25,13 @@ PyDoc_STRVAR(memoryview__doc__,
 "\n"
 "Create a new memoryview object which references the given object.");
 
-static PyObject *
-memoryview_impl(PyTypeObject *type, PyObject *object);
+static PyValue
+memoryview_impl(PyTypeObject *type, PyValueBorrow object);
 
-static PyObject *
-memoryview(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+memoryview_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -52,25 +59,36 @@ memoryview(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    PyObject *object;
+    Py_ssize_t _idx[1];
+    PyValueBorrow object;
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 1));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
-        goto exit;
-    }
-    object = fastargs[0];
+    object = PyValue_Borrow(args[_idx[0]]);
     return_value = memoryview_impl(type, object);
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+memoryview(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(memoryview_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = memoryview_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 PyDoc_STRVAR(memoryview__from_flags__doc__,
@@ -80,15 +98,16 @@ PyDoc_STRVAR(memoryview__from_flags__doc__,
 "Create a new memoryview object which references the given object.");
 
 #define MEMORYVIEW__FROM_FLAGS_METHODDEF    \
-    {"_from_flags", _PyCFunction_CAST(memoryview__from_flags), METH_FASTCALL|METH_KEYWORDS|METH_CLASS, memoryview__from_flags__doc__},
+    {"_from_flags", _PyCFunction_CAST(memoryview__from_flags), METH_VALUE|METH_CLASS, memoryview__from_flags__doc__},
 
-static PyObject *
-memoryview__from_flags_impl(PyTypeObject *type, PyObject *object, int flags);
+static PyValue
+memoryview__from_flags_impl(PyTypeObject *type, PyValueBorrow object,
+                            int flags);
 
-static PyObject *
-memoryview__from_flags(PyObject *type, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+memoryview__from_flags(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -116,21 +135,20 @@ memoryview__from_flags(PyObject *type, PyObject *const *args, Py_ssize_t nargs, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    PyObject *object;
+    Py_ssize_t _idx[2];
+    PyValueBorrow object;
     int flags;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    object = args[0];
-    flags = PyLong_AsInt(args[1]);
+    object = PyValue_Borrow(args[_idx[0]]);
+    flags = _PyValue_AsInt(PyValue_Borrow(args[_idx[1]]));
     if (flags == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = memoryview__from_flags_impl((PyTypeObject *)type, object, flags);
+    return_value = memoryview__from_flags_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), object, flags);
 
 exit:
     return return_value;
@@ -143,15 +161,23 @@ PyDoc_STRVAR(memoryview_release__doc__,
 "Release the underlying buffer exposed by the memoryview object.");
 
 #define MEMORYVIEW_RELEASE_METHODDEF    \
-    {"release", (PyCFunction)memoryview_release, METH_NOARGS, memoryview_release__doc__},
+    {"release", _PyCFunction_CAST(memoryview_release), METH_VALUE, memoryview_release__doc__},
 
-static PyObject *
+static PyValue
 memoryview_release_impl(PyMemoryViewObject *self);
 
-static PyObject *
-memoryview_release(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+memoryview_release(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return memoryview_release_impl((PyMemoryViewObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyMemoryView_Type, "release", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = memoryview_release_impl((PyMemoryViewObject *)PyValue_AsKnownObjectBorrow(self));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(memoryview___exit____doc__,
@@ -161,24 +187,27 @@ PyDoc_STRVAR(memoryview___exit____doc__,
 "Release the underlying buffer exposed by the memoryview object.");
 
 #define MEMORYVIEW___EXIT___METHODDEF    \
-    {"__exit__", _PyCFunction_CAST(memoryview___exit__), METH_FASTCALL, memoryview___exit____doc__},
+    {"__exit__", _PyCFunction_CAST(memoryview___exit__), METH_VALUE, memoryview___exit____doc__},
 
-static PyObject *
-memoryview___exit___impl(PyMemoryViewObject *self,
-                         PyObject * const *exc_info,
+static PyValue
+memoryview___exit___impl(PyMemoryViewObject *self, const PyValue *exc_info,
                          Py_ssize_t exc_info_length);
 
-static PyObject *
-memoryview___exit__(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+memoryview___exit__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject * const *exc_info;
+    PyValue return_value = PyValue_NULL;
+    const PyValue *exc_info;
     Py_ssize_t exc_info_length;
 
+    if (!_PyArg_NoKwnamesValueMethod(&PyMemoryView_Type, "__exit__", kwnames)) {
+        goto exit;
+    }
     exc_info = args;
     exc_info_length = nargs;
-    return_value = memoryview___exit___impl((PyMemoryViewObject *)self, exc_info, exc_info_length);
+    return_value = memoryview___exit___impl((PyMemoryViewObject *)PyValue_AsKnownObjectBorrow(self), exc_info, exc_info_length);
 
+exit:
     return return_value;
 }
 
@@ -193,16 +222,16 @@ PyDoc_STRVAR(memoryview_cast__doc__,
 "for Fortran-contiguous (column-major).");
 
 #define MEMORYVIEW_CAST_METHODDEF    \
-    {"cast", _PyCFunction_CAST(memoryview_cast), METH_FASTCALL|METH_KEYWORDS, memoryview_cast__doc__},
+    {"cast", _PyCFunction_CAST(memoryview_cast), METH_VALUE, memoryview_cast__doc__},
 
-static PyObject *
+static PyValue
 memoryview_cast_impl(PyMemoryViewObject *self, PyObject *format,
-                     PyObject *shape, int order);
+                     PyValueBorrow shape, int order);
 
-static PyObject *
-memoryview_cast(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+memoryview_cast(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 3
@@ -230,49 +259,46 @@ memoryview_cast(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObjec
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
+    Py_ssize_t _idx[3];
     PyObject *format;
-    PyObject *shape = NULL;
+    PyValueBorrow shape = PyValue_Borrow(PyValue_NULL);
     int order = 'C';
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("cast", "argument 'format'", "str", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+        _PyArg_BadArgumentValue("cast", "argument 'format'", "str", PyValue_Borrow(args[_idx[0]]));
         goto exit;
     }
-    format = args[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])))) {
+        _PyArg_BadArgument("cast", "argument 'format'", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
+        goto exit;
     }
-    if (args[1]) {
-        shape = args[1];
-        if (!--noptargs) {
-            goto skip_optional_pos;
+    format = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]]));
+    if (_idx[1] >= 0) {
+        shape = PyValue_Borrow(args[_idx[1]]);
+    }
+    if (_idx[2] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[2]]))) {
+            _PyArg_BadArgumentValue("cast", "argument 'order'", "a unicode character", PyValue_Borrow(args[_idx[2]]));
+            goto exit;
         }
+        if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]])))) {
+            _PyArg_BadArgument("cast", "argument 'order'", "a unicode character", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]])));
+            goto exit;
+        }
+        if (PyUnicode_GET_LENGTH(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]]))) != 1) {
+            PyErr_Format(PyExc_TypeError,
+                "cast(): argument 'order' must be a unicode character, "
+                "not a string of length %zd",
+                PyUnicode_GET_LENGTH(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]]))));
+            goto exit;
+        }
+        order = PyUnicode_READ_CHAR(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[2]])), 0);
     }
-skip_optional_pos:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    if (!PyUnicode_Check(args[2])) {
-        _PyArg_BadArgument("cast", "argument 'order'", "a unicode character", args[2]);
-        goto exit;
-    }
-    if (PyUnicode_GET_LENGTH(args[2]) != 1) {
-        PyErr_Format(PyExc_TypeError,
-            "cast(): argument 'order' must be a unicode character, "
-            "not a string of length %zd",
-            PyUnicode_GET_LENGTH(args[2]));
-        goto exit;
-    }
-    order = PyUnicode_READ_CHAR(args[2], 0);
-skip_optional_kwonly:
-    return_value = memoryview_cast_impl((PyMemoryViewObject *)self, format, shape, order);
+    return_value = memoryview_cast_impl((PyMemoryViewObject *)PyValue_AsKnownObjectBorrow(self), format, shape, order);
 
 exit:
     return return_value;
@@ -285,15 +311,23 @@ PyDoc_STRVAR(memoryview_toreadonly__doc__,
 "Return a readonly version of the memoryview.");
 
 #define MEMORYVIEW_TOREADONLY_METHODDEF    \
-    {"toreadonly", (PyCFunction)memoryview_toreadonly, METH_NOARGS, memoryview_toreadonly__doc__},
+    {"toreadonly", _PyCFunction_CAST(memoryview_toreadonly), METH_VALUE, memoryview_toreadonly__doc__},
 
-static PyObject *
+static PyValue
 memoryview_toreadonly_impl(PyMemoryViewObject *self);
 
-static PyObject *
-memoryview_toreadonly(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+memoryview_toreadonly(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return memoryview_toreadonly_impl((PyMemoryViewObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyMemoryView_Type, "toreadonly", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = memoryview_toreadonly_impl((PyMemoryViewObject *)PyValue_AsKnownObjectBorrow(self));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(memoryview_tolist__doc__,
@@ -303,15 +337,23 @@ PyDoc_STRVAR(memoryview_tolist__doc__,
 "Return the data in the buffer as a list of elements.");
 
 #define MEMORYVIEW_TOLIST_METHODDEF    \
-    {"tolist", (PyCFunction)memoryview_tolist, METH_NOARGS, memoryview_tolist__doc__},
+    {"tolist", _PyCFunction_CAST(memoryview_tolist), METH_VALUE, memoryview_tolist__doc__},
 
-static PyObject *
+static PyValue
 memoryview_tolist_impl(PyMemoryViewObject *self);
 
-static PyObject *
-memoryview_tolist(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+memoryview_tolist(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return memoryview_tolist_impl((PyMemoryViewObject *)self);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyMemoryView_Type, "tolist", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = memoryview_tolist_impl((PyMemoryViewObject *)PyValue_AsKnownObjectBorrow(self));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(memoryview_tobytes__doc__,
@@ -328,15 +370,15 @@ PyDoc_STRVAR(memoryview_tobytes__doc__,
 "is the same as order=\'C\'.");
 
 #define MEMORYVIEW_TOBYTES_METHODDEF    \
-    {"tobytes", _PyCFunction_CAST(memoryview_tobytes), METH_FASTCALL|METH_KEYWORDS, memoryview_tobytes__doc__},
+    {"tobytes", _PyCFunction_CAST(memoryview_tobytes), METH_VALUE, memoryview_tobytes__doc__},
 
-static PyObject *
+static PyValue
 memoryview_tobytes_impl(PyMemoryViewObject *self, const char *order);
 
-static PyObject *
-memoryview_tobytes(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+memoryview_tobytes(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -364,33 +406,33 @@ memoryview_tobytes(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    Py_ssize_t _idx[1];
     const char *order = NULL;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
-    }
-    if (args[0] == Py_None) {
-        order = NULL;
-    }
-    else if (PyUnicode_Check(args[0])) {
-        order = _PyUnicode_AsUTF8NoNUL(args[0]);
-        if (order == NULL) {
+    if (_idx[0] >= 0) {
+        if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+            _PyArg_BadArgumentValue("tobytes", "argument 'order'", "str or None", PyValue_Borrow(args[_idx[0]]));
+            goto exit;
+        }
+        if (PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])) == Py_None) {
+            order = NULL;
+        }
+        else if (PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])))) {
+            order = _PyUnicode_AsUTF8NoNUL(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
+            if (order == NULL) {
+                goto exit;
+            }
+        }
+        else {
+            _PyArg_BadArgument("tobytes", "argument 'order'", "str or None", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
             goto exit;
         }
     }
-    else {
-        _PyArg_BadArgument("tobytes", "argument 'order'", "str or None", args[0]);
-        goto exit;
-    }
-skip_optional_pos:
-    return_value = memoryview_tobytes_impl((PyMemoryViewObject *)self, order);
+    return_value = memoryview_tobytes_impl((PyMemoryViewObject *)PyValue_AsKnownObjectBorrow(self), order);
 
 exit:
     return return_value;
@@ -420,16 +462,16 @@ PyDoc_STRVAR(memoryview_hex__doc__,
 "\'b901:ef\'");
 
 #define MEMORYVIEW_HEX_METHODDEF    \
-    {"hex", _PyCFunction_CAST(memoryview_hex), METH_FASTCALL|METH_KEYWORDS, memoryview_hex__doc__},
+    {"hex", _PyCFunction_CAST(memoryview_hex), METH_VALUE, memoryview_hex__doc__},
 
-static PyObject *
-memoryview_hex_impl(PyMemoryViewObject *self, PyObject *sep,
+static PyValue
+memoryview_hex_impl(PyMemoryViewObject *self, PyValueBorrow sep,
                     Py_ssize_t bytes_per_sep);
 
-static PyObject *
-memoryview_hex(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+memoryview_hex(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -457,39 +499,32 @@ memoryview_hex(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
-    PyObject *sep = NULL;
+    Py_ssize_t _idx[2];
+    PyValueBorrow sep = PyValue_Borrow(PyValue_NULL);
     Py_ssize_t bytes_per_sep = 1;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        sep = PyValue_Borrow(args[_idx[0]]);
     }
-    if (args[0]) {
-        sep = args[0];
-        if (!--noptargs) {
-            goto skip_optional_pos;
+    if (_idx[1] >= 0) {
+        {
+            Py_ssize_t ival = -1;
+            PyValue iobj = _PyValue_Index(PyValue_Borrow(args[_idx[1]]));
+            if (!PyValue_IsNull(iobj)) {
+                ival = _PyValue_IntAsSsize_t(PyValue_Borrow(iobj));
+                PyValue_CLOSE(iobj);
+            }
+            if (ival == -1 && PyErr_Occurred()) {
+                goto exit;
+            }
+            bytes_per_sep = ival;
         }
     }
-    {
-        Py_ssize_t ival = -1;
-        PyObject *iobj = _PyNumber_Index(args[1]);
-        if (iobj != NULL) {
-            ival = PyLong_AsSsize_t(iobj);
-            Py_DECREF(iobj);
-        }
-        if (ival == -1 && PyErr_Occurred()) {
-            goto exit;
-        }
-        bytes_per_sep = ival;
-    }
-skip_optional_pos:
-    return_value = memoryview_hex_impl((PyMemoryViewObject *)self, sep, bytes_per_sep);
+    return_value = memoryview_hex_impl((PyMemoryViewObject *)PyValue_AsKnownObjectBorrow(self), sep, bytes_per_sep);
 
 exit:
     return return_value;
@@ -502,18 +537,24 @@ PyDoc_STRVAR(memoryview_count__doc__,
 "Count the number of occurrences of a value.");
 
 #define MEMORYVIEW_COUNT_METHODDEF    \
-    {"count", (PyCFunction)memoryview_count, METH_O, memoryview_count__doc__},
+    {"count", _PyCFunction_CAST(memoryview_count), METH_VALUE, memoryview_count__doc__},
 
-static PyObject *
-memoryview_count_impl(PyMemoryViewObject *self, PyObject *value);
+static PyValue
+memoryview_count_impl(PyMemoryViewObject *self, PyValueBorrow value);
 
-static PyObject *
-memoryview_count(PyObject *self, PyObject *value)
+static PyValue
+memoryview_count(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow value;
 
-    return_value = memoryview_count_impl((PyMemoryViewObject *)self, value);
+    if (!_PyArg_CheckArityValueMethod(&PyMemoryView_Type, "count", nargs, kwnames, 1)) {
+        goto exit;
+    }
+    value = PyValue_Borrow(args[0]);
+    return_value = memoryview_count_impl((PyMemoryViewObject *)PyValue_AsKnownObjectBorrow(self), value);
 
+exit:
     return return_value;
 }
 
@@ -526,40 +567,43 @@ PyDoc_STRVAR(memoryview_index__doc__,
 "Raises ValueError if the value is not present.");
 
 #define MEMORYVIEW_INDEX_METHODDEF    \
-    {"index", _PyCFunction_CAST(memoryview_index), METH_FASTCALL, memoryview_index__doc__},
+    {"index", _PyCFunction_CAST(memoryview_index), METH_VALUE, memoryview_index__doc__},
 
-static PyObject *
-memoryview_index_impl(PyMemoryViewObject *self, PyObject *value,
+static PyValue
+memoryview_index_impl(PyMemoryViewObject *self, PyValueBorrow value,
                       Py_ssize_t start, Py_ssize_t stop);
 
-static PyObject *
-memoryview_index(PyObject *self, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+memoryview_index(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *value;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow value;
     Py_ssize_t start = 0;
     Py_ssize_t stop = PY_SSIZE_T_MAX;
 
+    if (!_PyArg_NoKwnamesValueMethod(&PyMemoryView_Type, "index", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("index", nargs, 1, 3)) {
         goto exit;
     }
-    value = args[0];
+    value = PyValue_Borrow(args[0]);
     if (nargs < 2) {
         goto skip_optional;
     }
-    if (!_PyEval_SliceIndexNotNone(args[1], &start)) {
+    if (!_PyArg_SliceIndexNotNoneValue(PyValue_Borrow(args[1]), &start)) {
         goto exit;
     }
     if (nargs < 3) {
         goto skip_optional;
     }
-    if (!_PyEval_SliceIndexNotNone(args[2], &stop)) {
+    if (!_PyArg_SliceIndexNotNoneValue(PyValue_Borrow(args[2]), &stop)) {
         goto exit;
     }
 skip_optional:
-    return_value = memoryview_index_impl((PyMemoryViewObject *)self, value, start, stop);
+    return_value = memoryview_index_impl((PyMemoryViewObject *)PyValue_AsKnownObjectBorrow(self), value, start, stop);
 
 exit:
     return return_value;
 }
-/*[clinic end generated code: output=a0b9e7aef8b3d84f input=a9049054013a1b77]*/
+/*[clinic end generated code: output=b89f7d8b7b08494e input=a9049054013a1b77]*/

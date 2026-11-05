@@ -3,6 +3,11 @@
 #include "clinic/_contextvars.c.h"
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 module _contextvars
 [clinic start generated code]*/
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=a0955718c8b8cea6]*/
@@ -12,11 +17,11 @@ module _contextvars
 _contextvars.copy_context
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _contextvars_copy_context_impl(PyObject *module)
-/*[clinic end generated code: output=1fcd5da7225c4fa9 input=89bb9ae485888440]*/
+/*[clinic end generated code: output=9f6439a7f54750af input=89bb9ae485888440]*/
 {
-    return PyContext_CopyCurrent();
+    return _PyValue_FromObjectResult(PyContext_CopyCurrent());
 }
 
 

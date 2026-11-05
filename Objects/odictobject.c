@@ -477,6 +477,11 @@ later:
 #include "clinic/odictobject.c.h"
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 class OrderedDict "PyODictObject *" "&PyODict_Type"
 class odictiter "PyObject *" "&PyODictIter_Type"
 [clinic start generated code]*/
@@ -948,11 +953,24 @@ OrderedDict.fromkeys
 Create a new ordered dictionary with keys from iterable and values set to value.
 [clinic start generated code]*/
 
-static PyObject *
-OrderedDict_fromkeys_impl(PyTypeObject *type, PyObject *seq, PyObject *value)
-/*[clinic end generated code: output=c10390d452d78d6d input=1277ae0769083848]*/
+static PyValue
+OrderedDict_fromkeys_impl(PyTypeObject *type, PyValueBorrow seq,
+                          PyValueBorrow value)
+/*[clinic end generated code: output=1e785814c528901e input=1277ae0769083848]*/
 {
-    return _PyDict_FromKeys((PyObject *)type, seq, value);
+    PyObject *seq_obj = _PyValue_AsObjectAt(seq, BOX_SITE_PARSER);
+    if (seq_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *value_obj = _PyValue_AsObjectAt(value, BOX_SITE_PARSER);
+    if (value_obj == NULL) {
+        Py_DECREF(seq_obj);
+        return PyValue_NULL;
+    }
+    PyObject *res = _PyDict_FromKeys((PyObject *)type, seq_obj, value_obj);
+    Py_DECREF(seq_obj);
+    Py_DECREF(value_obj);
+    return _PyValue_FromObjectResult(res);
 }
 
 /*[clinic input]
@@ -979,9 +997,9 @@ OrderedDict.__reduce__
 Return state information for pickling
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 OrderedDict___reduce___impl(PyODictObject *od)
-/*[clinic end generated code: output=71eeb81f760a6a8e input=b0467c7ec400fe5e]*/
+/*[clinic end generated code: output=3c0d615711759529 input=b0467c7ec400fe5e]*/
 {
     PyObject *state, *result = NULL;
     PyObject *items_iter, *items, *args = NULL;
@@ -1012,7 +1030,7 @@ Done:
     Py_XDECREF(state);
     Py_XDECREF(args);
 
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 /* setdefault(): Skips __missing__() calls. */
@@ -1031,17 +1049,18 @@ Insert key with a value of default if key is not in the dictionary.
 Return the value for key if key is in the dictionary, else default.
 [clinic start generated code]*/
 
-static PyObject *
-OrderedDict_setdefault_impl(PyODictObject *self, PyObject *key,
-                            PyObject *default_value)
-/*[clinic end generated code: output=97537cb7c28464b6 input=d7b93e92734f99b5]*/
+static PyValue
+OrderedDict_setdefault_impl(PyODictObject *self, PyValueBorrow key,
+                            PyValueBorrow default_value)
+/*[clinic end generated code: output=517343cc91db4406 input=d7b93e92734f99b5]*/
 {
     PyObject *result = NULL;
+    PyObject *key_obj = NULL;
+    PyObject *default_obj = NULL;
 
     if (PyODict_CheckExact(self)) {
         PyValue result_value;
-        int rc = PyDict_GetValue((PyObject *)self, PyValue_FromObjectBorrow(key),
-                                 &result_value);
+        int rc = PyDict_GetValue((PyObject *)self, key, &result_value);
         if (rc > 0) {
             result = _PyValue_AsObjectAt(result_value, BOX_SITE_DICT);
             PyValue_CLOSE(result_value);
@@ -1050,29 +1069,52 @@ OrderedDict_setdefault_impl(PyODictObject *self, PyObject *key,
             }
         }
         if (rc < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
         if (rc == 0) {
-            assert(_odict_find_node(self, key) == NULL);
-            if (PyODict_SetItem_LockHeld((PyObject *)self, key, default_value) >= 0) {
-                result = Py_NewRef(default_value);
+            key_obj = _PyValue_AsObjectAt(key, BOX_SITE_PARSER);
+            if (key_obj == NULL) {
+                return PyValue_NULL;
+            }
+            default_obj = _PyValue_AsObjectAt(default_value, BOX_SITE_PARSER);
+            if (default_obj == NULL) {
+                Py_DECREF(key_obj);
+                return PyValue_NULL;
+            }
+            assert(_odict_find_node(self, key_obj) == NULL);
+            if (PyODict_SetItem_LockHeld((PyObject *)self, key_obj, default_obj) >= 0) {
+                result = Py_NewRef(default_obj);
             }
         }
     }
     else {
-        int exists = PySequence_Contains((PyObject *)self, key);
+        key_obj = _PyValue_AsObjectAt(key, BOX_SITE_PARSER);
+        if (key_obj == NULL) {
+            return PyValue_NULL;
+        }
+        int exists = PySequence_Contains((PyObject *)self, key_obj);
         if (exists < 0) {
-            return NULL;
+            Py_DECREF(key_obj);
+            return PyValue_NULL;
         }
         else if (exists) {
-            result = PyObject_GetItem((PyObject *)self, key);
+            result = PyObject_GetItem((PyObject *)self, key_obj);
         }
-        else if (PyObject_SetItem((PyObject *)self, key, default_value) >= 0) {
-            result = Py_NewRef(default_value);
+        else {
+            default_obj = _PyValue_AsObjectAt(default_value, BOX_SITE_PARSER);
+            if (default_obj == NULL) {
+                Py_DECREF(key_obj);
+                return PyValue_NULL;
+            }
+            if (PyObject_SetItem((PyObject *)self, key_obj, default_obj) >= 0) {
+                result = Py_NewRef(default_obj);
+            }
         }
     }
 
-    return result;
+    Py_XDECREF(key_obj);
+    Py_XDECREF(default_obj);
+    return _PyValue_FromObjectResult(result);
 }
 
 /* pop() */
@@ -1128,15 +1170,31 @@ If the key is not found, return the default if given; otherwise,
 raise a KeyError.
 [clinic start generated code]*/
 
-static PyObject *
-OrderedDict_pop_impl(PyODictObject *self, PyObject *key,
-                     PyObject *default_value)
-/*[clinic end generated code: output=7a6447d104e7494b input=0742e3c9bf076a72]*/
+static PyValue
+OrderedDict_pop_impl(PyODictObject *self, PyValueBorrow key,
+                     PyValueBorrow default_value)
+/*[clinic end generated code: output=215636d27bff34f2 input=0742e3c9bf076a72]*/
 {
-    Py_hash_t hash = PyObject_Hash(key);
+    Py_hash_t hash = _PyValue_Hash(key);
     if (hash == -1)
-        return NULL;
-    return _odict_popkey_hash((PyObject *)self, key, default_value, hash);
+        return PyValue_NULL;
+    PyObject *key_obj = _PyValue_AsObjectAt(key, BOX_SITE_PARSER);
+    if (key_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *default_obj = NULL;
+    if (!PyValue_IsNull(default_value)) {
+        default_obj = _PyValue_AsObjectAt(default_value, BOX_SITE_PARSER);
+        if (default_obj == NULL) {
+            Py_DECREF(key_obj);
+            return PyValue_NULL;
+        }
+    }
+    PyObject *res = _odict_popkey_hash((PyObject *)self, key_obj, default_obj,
+                                       hash);
+    Py_DECREF(key_obj);
+    Py_XDECREF(default_obj);
+    return _PyValue_FromObjectResult(res);
 }
 
 
@@ -1154,9 +1212,9 @@ Pairs are returned in LIFO order if last is true or FIFO order if
 false.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 OrderedDict_popitem_impl(PyODictObject *self, int last)
-/*[clinic end generated code: output=98e7d986690d49eb input=ebf1cc91579c9e54]*/
+/*[clinic end generated code: output=0e1f4ecc2996e3c0 input=ebf1cc91579c9e54]*/
 {
     PyObject *key, *value;
     _ODictNode *node;
@@ -1165,7 +1223,7 @@ OrderedDict_popitem_impl(PyODictObject *self, int last)
 
     if (_odict_EMPTY(self)) {
         PyErr_SetString(PyExc_KeyError, "dictionary is empty");
-        return NULL;
+        return PyValue_NULL;
     }
 
     node = last ? _odict_LAST(self) : _odict_FIRST(self);
@@ -1173,9 +1231,9 @@ OrderedDict_popitem_impl(PyODictObject *self, int last)
     value = _odict_popkey_hash((PyObject *)self, key, NULL, _odictnode_HASH(node));
     if (value == NULL) {
         Py_DECREF(key);
-        return NULL;
+        return PyValue_NULL;
     }
-    return _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(key), PyValue_PrepareOwned(value));
+    return _PyValue_FromObjectResult(_PyTuple_FromPairTakeValue(PyValue_PrepareOwned(key), PyValue_PrepareOwned(value)));
 }
 
 /* keys() */
@@ -1219,13 +1277,13 @@ OrderedDict.clear
 Remove all items from ordered dict.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 OrderedDict_clear_impl(PyODictObject *self)
-/*[clinic end generated code: output=a1a76d1322f556c5 input=08b12322e74c535c]*/
+/*[clinic end generated code: output=95a061cf29dd4c73 input=08b12322e74c535c]*/
 {
     _PyDict_Clear_LockHeld((PyObject *)self);
     _odict_clear_nodes(self);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /* copy() */
@@ -1238,9 +1296,9 @@ OrderedDict.copy
 A shallow copy of ordered dict.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 OrderedDict_copy_impl(PyObject *od)
-/*[clinic end generated code: output=9cdbe7394aecc576 input=e329951ae617ed48]*/
+/*[clinic end generated code: output=d75b720dfb52a732 input=e329951ae617ed48]*/
 {
     _ODictNode *node;
     PyObject *od_copy;
@@ -1250,7 +1308,7 @@ OrderedDict_copy_impl(PyObject *od)
     else
         od_copy = _PyObject_CallNoArgs((PyObject *)Py_TYPE(od));
     if (od_copy == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     /* The loop body may run arbitrary Python code which could mutate od and
        free its nodes (gh-148660); detect that the same way __eq__ does. */
@@ -1304,14 +1362,14 @@ OrderedDict_copy_impl(PyObject *od)
                 goto mutated;
         }
     }
-    return od_copy;
+    return _PyValue_FromObjectResult(od_copy);
 
 mutated:
     PyErr_SetString(PyExc_RuntimeError,
                     "OrderedDict mutated during iteration");
 fail:
     Py_DECREF(od_copy);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /* __reversed__() */
@@ -1348,24 +1406,36 @@ Move an existing element to the end (or beginning if last is false).
 Raise KeyError if the element does not exist.
 [clinic start generated code]*/
 
-static PyObject *
-OrderedDict_move_to_end_impl(PyODictObject *self, PyObject *key, int last)
-/*[clinic end generated code: output=fafa4c5cc9b92f20 input=09f8bc7053c0f6d4]*/
+static PyValue
+OrderedDict_move_to_end_impl(PyODictObject *self, PyValueBorrow key,
+                             int last)
+/*[clinic end generated code: output=96d9c46e0565aed2 input=09f8bc7053c0f6d4]*/
 {
     _ODictNode *node;
 
     if (_odict_EMPTY(self)) {
-        PyErr_SetObject(PyExc_KeyError, key);
-        return NULL;
+        PyObject *key_obj = _PyValue_AsObjectAt(key, BOX_SITE_PARSER);
+        if (key_obj == NULL) {
+            return PyValue_NULL;
+        }
+        PyErr_SetObject(PyExc_KeyError, key_obj);
+        Py_DECREF(key_obj);
+        return PyValue_NULL;
     }
     node = last ? _odict_LAST(self) : _odict_FIRST(self);
-    if (key != _odictnode_KEY(node)) {
-        node = _odict_find_node(self, key);
+    if (!PyValue_Is(key, PyValue_FromObjectBorrow(_odictnode_KEY(node)))) {
+        PyObject *key_obj = _PyValue_AsObjectAt(key, BOX_SITE_PARSER);
+        if (key_obj == NULL) {
+            return PyValue_NULL;
+        }
+        node = _odict_find_node(self, key_obj);
         if (node == NULL) {
             if (!PyErr_Occurred())
-                PyErr_SetObject(PyExc_KeyError, key);
-            return NULL;
+                PyErr_SetObject(PyExc_KeyError, key_obj);
+            Py_DECREF(key_obj);
+            return PyValue_NULL;
         }
+        Py_DECREF(key_obj);
         if (last) {
             /* Only move if not already the last one. */
             if (node != _odict_LAST(self)) {
@@ -1381,7 +1451,7 @@ OrderedDict_move_to_end_impl(PyODictObject *self, PyObject *key, int last)
             }
         }
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 

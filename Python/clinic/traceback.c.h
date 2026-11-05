@@ -2,14 +2,21 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_tuple.h"         // _PyTuple_ITEMS()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
 PyDoc_STRVAR(tb_new__doc__,
 "traceback(tb_next, tb_frame, tb_lasti, tb_lineno)\n"
@@ -17,14 +24,14 @@ PyDoc_STRVAR(tb_new__doc__,
 "\n"
 "Create a new traceback object.");
 
-static PyObject *
-tb_new_impl(PyTypeObject *type, PyObject *tb_next, PyFrameObject *tb_frame,
-            int tb_lasti, int tb_lineno);
+static PyValue
+tb_new_impl(PyTypeObject *type, PyValueBorrow tb_next,
+            PyFrameObject *tb_frame, int tb_lasti, int tb_lineno);
 
-static PyObject *
-tb_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+static PyValue
+tb_new_value(PyTypeObject *type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 4
@@ -52,34 +59,27 @@ tb_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[4];
-    PyObject * const *fastargs;
-    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
-    PyObject *tb_next;
+    Py_ssize_t _idx[4];
+    PyValueBorrow tb_next;
     PyFrameObject *tb_frame;
     int tb_lasti;
     int tb_lineno;
 
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, Py_MIN(nargs, 4));
-    if (_args_items == NULL) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 4, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, _idx, 4)) {
         goto exit;
     }
-    fastargs = _PyArg_UnpackKeywords(_args_items, nargs, kwargs, NULL, &_parser,
-            /*minpos*/ 4, /*maxpos*/ 4, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!fastargs) {
+    tb_next = PyValue_Borrow(args[_idx[0]]);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[_idx[1]])), &PyFrame_Type)) {
+        _PyArg_BadArgumentValue("traceback", "argument 'tb_frame'", (&PyFrame_Type)->tp_name, PyValue_Borrow(args[_idx[1]]));
         goto exit;
     }
-    tb_next = fastargs[0];
-    if (!PyObject_TypeCheck(fastargs[1], &PyFrame_Type)) {
-        _PyArg_BadArgument("traceback", "argument 'tb_frame'", (&PyFrame_Type)->tp_name, fastargs[1]);
-        goto exit;
-    }
-    tb_frame = (PyFrameObject *)fastargs[1];
-    tb_lasti = PyLong_AsInt(fastargs[2]);
+    tb_frame = (PyFrameObject *)PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]]));
+    tb_lasti = _PyValue_AsInt(PyValue_Borrow(args[_idx[2]]));
     if (tb_lasti == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    tb_lineno = PyLong_AsInt(fastargs[3]);
+    tb_lineno = _PyValue_AsInt(PyValue_Borrow(args[_idx[3]]));
     if (tb_lineno == -1 && PyErr_Occurred()) {
         goto exit;
     }
@@ -87,6 +87,24 @@ tb_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
 
 exit:
     return return_value;
+}
+
+Py_VALUE_ENTRY static PyObject *
+tb_new(PyTypeObject *type, PyObject *args, PyObject *kwargs)
+{
+    Py_ssize_t nargs = PyTuple_GET_SIZE(args);
+    if (kwargs == NULL || PyDict_GET_SIZE(kwargs) == 0) {
+        return _PyValue_THUNK_EXIT(tb_new_value(type, _PyTuple_ITEMS(args), nargs, NULL), BOX_SITE_CALL);
+    }
+    PyObject *kwnames;
+    PyValue *window = _PyValue_StackUnpackDict(_PyThreadState_GET(),
+        _PyTuple_ITEMS(args), nargs, kwargs, &kwnames);
+    if (window == NULL) {
+        return NULL;
+    }
+    PyValue result = tb_new_value(type, window, nargs, kwnames);
+    _PyValue_StackUnpackDict_Free(window, nargs, kwnames);
+    return _PyValue_THUNK_EXIT(result, BOX_SITE_CALL);
 }
 
 static PyObject *
@@ -128,4 +146,4 @@ traceback_tb_next_set(PyObject *self, PyObject *arg, void *Py_UNUSED(context))
 }
 #define TRACEBACK_TB_NEXT_GETSETDEF {"tb_next", (getter)traceback_tb_next_get, (setter)traceback_tb_next_set, NULL},
 
-/*[clinic end generated code: output=fe8501956b308adc input=a9049054013a1b77]*/
+/*[clinic end generated code: output=162910b88cc2a88f input=a9049054013a1b77]*/

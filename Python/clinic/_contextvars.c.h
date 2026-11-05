@@ -2,20 +2,35 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
+#include "pycore_modsupport.h"    // _PyArg_CheckArityValue()
+#include "pycore_value_call.h"    // METH_VALUE
+
 PyDoc_STRVAR(_contextvars_copy_context__doc__,
 "copy_context($module, /)\n"
 "--\n"
 "\n");
 
 #define _CONTEXTVARS_COPY_CONTEXT_METHODDEF    \
-    {"copy_context", (PyCFunction)_contextvars_copy_context, METH_NOARGS, _contextvars_copy_context__doc__},
+    {"copy_context", _PyCFunction_CAST(_contextvars_copy_context), METH_VALUE, _contextvars_copy_context__doc__},
 
-static PyObject *
+static PyValue
 _contextvars_copy_context_impl(PyObject *module);
 
-static PyObject *
-_contextvars_copy_context(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_contextvars_copy_context(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _contextvars_copy_context_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValue("_contextvars.copy_context()", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = _contextvars_copy_context_impl(PyValue_AsKnownObjectBorrow(module));
+
+exit:
+    return return_value;
 }
-/*[clinic end generated code: output=26e07024451baf52 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=bfa7f6f22f411e50 input=a9049054013a1b77]*/

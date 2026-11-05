@@ -2,12 +2,19 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
+#include "pycore_modsupport.h"    // _PyArg_CheckArityValue()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
 
 PyDoc_STRVAR(_imp_lock_held__doc__,
 "lock_held($module, /)\n"
@@ -18,15 +25,23 @@ PyDoc_STRVAR(_imp_lock_held__doc__,
 "On platforms without threads, return False.");
 
 #define _IMP_LOCK_HELD_METHODDEF    \
-    {"lock_held", (PyCFunction)_imp_lock_held, METH_NOARGS, _imp_lock_held__doc__},
+    {"lock_held", _PyCFunction_CAST(_imp_lock_held), METH_VALUE, _imp_lock_held__doc__},
 
-static PyObject *
+static PyValue
 _imp_lock_held_impl(PyObject *module);
 
-static PyObject *
-_imp_lock_held(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_imp_lock_held(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _imp_lock_held_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValue("_imp.lock_held()", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = _imp_lock_held_impl(PyValue_AsKnownObjectBorrow(module));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(_imp_acquire_lock__doc__,
@@ -40,15 +55,23 @@ PyDoc_STRVAR(_imp_acquire_lock__doc__,
 "nothing.");
 
 #define _IMP_ACQUIRE_LOCK_METHODDEF    \
-    {"acquire_lock", (PyCFunction)_imp_acquire_lock, METH_NOARGS, _imp_acquire_lock__doc__},
+    {"acquire_lock", _PyCFunction_CAST(_imp_acquire_lock), METH_VALUE, _imp_acquire_lock__doc__},
 
-static PyObject *
+static PyValue
 _imp_acquire_lock_impl(PyObject *module);
 
-static PyObject *
-_imp_acquire_lock(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_imp_acquire_lock(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _imp_acquire_lock_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValue("_imp.acquire_lock()", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = _imp_acquire_lock_impl(PyValue_AsKnownObjectBorrow(module));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(_imp_release_lock__doc__,
@@ -60,15 +83,23 @@ PyDoc_STRVAR(_imp_release_lock__doc__,
 "On platforms without threads, this function does nothing.");
 
 #define _IMP_RELEASE_LOCK_METHODDEF    \
-    {"release_lock", (PyCFunction)_imp_release_lock, METH_NOARGS, _imp_release_lock__doc__},
+    {"release_lock", _PyCFunction_CAST(_imp_release_lock), METH_VALUE, _imp_release_lock__doc__},
 
-static PyObject *
+static PyValue
 _imp_release_lock_impl(PyObject *module);
 
-static PyObject *
-_imp_release_lock(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_imp_release_lock(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _imp_release_lock_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValue("_imp.release_lock()", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = _imp_release_lock_impl(PyValue_AsKnownObjectBorrow(module));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(_imp__fix_co_filename__doc__,
@@ -83,33 +114,40 @@ PyDoc_STRVAR(_imp__fix_co_filename__doc__,
 "    File path to use.");
 
 #define _IMP__FIX_CO_FILENAME_METHODDEF    \
-    {"_fix_co_filename", _PyCFunction_CAST(_imp__fix_co_filename), METH_FASTCALL, _imp__fix_co_filename__doc__},
+    {"_fix_co_filename", _PyCFunction_CAST(_imp__fix_co_filename), METH_VALUE, _imp__fix_co_filename__doc__},
 
-static PyObject *
+static PyValue
 _imp__fix_co_filename_impl(PyObject *module, PyCodeObject *code,
                            PyObject *path);
 
-static PyObject *
-_imp__fix_co_filename(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_imp__fix_co_filename(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyCodeObject *code;
     PyObject *path;
 
+    if (!_PyArg_NoKwnamesValue("_imp._fix_co_filename()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("_fix_co_filename", nargs, 2, 2)) {
         goto exit;
     }
-    if (!PyObject_TypeCheck(args[0], &PyCode_Type)) {
-        _PyArg_BadArgument("_fix_co_filename", "argument 1", (&PyCode_Type)->tp_name, args[0]);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), &PyCode_Type)) {
+        _PyArg_BadArgumentValue("_fix_co_filename", "argument 1", (&PyCode_Type)->tp_name, PyValue_Borrow(args[0]));
         goto exit;
     }
-    code = (PyCodeObject *)args[0];
-    if (!PyUnicode_Check(args[1])) {
-        _PyArg_BadArgument("_fix_co_filename", "argument 2", "str", args[1]);
+    code = (PyCodeObject *)PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    if (!PyValue_IsObject(PyValue_Borrow(args[1]))) {
+        _PyArg_BadArgumentValue("_fix_co_filename", "argument 2", "str", PyValue_Borrow(args[1]));
         goto exit;
     }
-    path = args[1];
-    return_value = _imp__fix_co_filename_impl(module, code, path);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])))) {
+        _PyArg_BadArgument("_fix_co_filename", "argument 2", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])));
+        goto exit;
+    }
+    path = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1]));
+    return_value = _imp__fix_co_filename_impl(PyValue_AsKnownObjectBorrow(module), code, path);
 
 exit:
     return return_value;
@@ -122,7 +160,26 @@ PyDoc_STRVAR(_imp_create_builtin__doc__,
 "Create an extension module.");
 
 #define _IMP_CREATE_BUILTIN_METHODDEF    \
-    {"create_builtin", (PyCFunction)_imp_create_builtin, METH_O, _imp_create_builtin__doc__},
+    {"create_builtin", _PyCFunction_CAST(_imp_create_builtin), METH_VALUE, _imp_create_builtin__doc__},
+
+static PyValue
+_imp_create_builtin_impl(PyObject *module, PyValueBorrow spec);
+
+static PyValue
+_imp_create_builtin(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
+{
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow spec;
+
+    if (!_PyArg_CheckArityValue("_imp.create_builtin()", nargs, kwnames, 1)) {
+        goto exit;
+    }
+    spec = PyValue_Borrow(args[0]);
+    return_value = _imp_create_builtin_impl(PyValue_AsKnownObjectBorrow(module), spec);
+
+exit:
+    return return_value;
+}
 
 PyDoc_STRVAR(_imp_extension_suffixes__doc__,
 "extension_suffixes($module, /)\n"
@@ -131,15 +188,23 @@ PyDoc_STRVAR(_imp_extension_suffixes__doc__,
 "Returns the list of file suffixes used to identify extension modules.");
 
 #define _IMP_EXTENSION_SUFFIXES_METHODDEF    \
-    {"extension_suffixes", (PyCFunction)_imp_extension_suffixes, METH_NOARGS, _imp_extension_suffixes__doc__},
+    {"extension_suffixes", _PyCFunction_CAST(_imp_extension_suffixes), METH_VALUE, _imp_extension_suffixes__doc__},
 
-static PyObject *
+static PyValue
 _imp_extension_suffixes_impl(PyObject *module);
 
-static PyObject *
-_imp_extension_suffixes(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_imp_extension_suffixes(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _imp_extension_suffixes_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValue("_imp.extension_suffixes()", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = _imp_extension_suffixes_impl(PyValue_AsKnownObjectBorrow(module));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(_imp_init_frozen__doc__,
@@ -149,23 +214,30 @@ PyDoc_STRVAR(_imp_init_frozen__doc__,
 "Initializes a frozen module.");
 
 #define _IMP_INIT_FROZEN_METHODDEF    \
-    {"init_frozen", (PyCFunction)_imp_init_frozen, METH_O, _imp_init_frozen__doc__},
+    {"init_frozen", _PyCFunction_CAST(_imp_init_frozen), METH_VALUE, _imp_init_frozen__doc__},
 
-static PyObject *
+static PyValue
 _imp_init_frozen_impl(PyObject *module, PyObject *name);
 
-static PyObject *
-_imp_init_frozen(PyObject *module, PyObject *arg)
+static PyValue
+_imp_init_frozen(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *name;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("init_frozen", "argument", "str", arg);
+    if (!_PyArg_CheckArityValue("_imp.init_frozen()", nargs, kwnames, 1)) {
         goto exit;
     }
-    name = arg;
-    return_value = _imp_init_frozen_impl(module, name);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("init_frozen", "argument", "str", PyValue_Borrow(args[0]));
+        goto exit;
+    }
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("init_frozen", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    name = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    return_value = _imp_init_frozen_impl(PyValue_AsKnownObjectBorrow(module), name);
 
 exit:
     return return_value;
@@ -186,15 +258,15 @@ PyDoc_STRVAR(_imp_find_frozen__doc__,
 "                the module\'s current name)");
 
 #define _IMP_FIND_FROZEN_METHODDEF    \
-    {"find_frozen", _PyCFunction_CAST(_imp_find_frozen), METH_FASTCALL|METH_KEYWORDS, _imp_find_frozen__doc__},
+    {"find_frozen", _PyCFunction_CAST(_imp_find_frozen), METH_VALUE, _imp_find_frozen__doc__},
 
-static PyObject *
+static PyValue
 _imp_find_frozen_impl(PyObject *module, PyObject *name, int withdata);
 
-static PyObject *
-_imp_find_frozen(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_imp_find_frozen(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -222,30 +294,30 @@ _imp_find_frozen(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
+    Py_ssize_t _idx[2];
     PyObject *name;
     int withdata = 0;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("find_frozen", "argument 1", "str", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+        _PyArg_BadArgumentValue("find_frozen", "argument 1", "str", PyValue_Borrow(args[_idx[0]]));
         goto exit;
     }
-    name = args[0];
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    withdata = PyObject_IsTrue(args[1]);
-    if (withdata < 0) {
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])))) {
+        _PyArg_BadArgument("find_frozen", "argument 1", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])));
         goto exit;
     }
-skip_optional_kwonly:
-    return_value = _imp_find_frozen_impl(module, name, withdata);
+    name = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]]));
+    if (_idx[1] >= 0) {
+        withdata = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
+        if (withdata < 0) {
+            goto exit;
+        }
+    }
+    return_value = _imp_find_frozen_impl(PyValue_AsKnownObjectBorrow(module), name, withdata);
 
 exit:
     return return_value;
@@ -258,33 +330,40 @@ PyDoc_STRVAR(_imp_get_frozen_object__doc__,
 "Create a code object for a frozen module.");
 
 #define _IMP_GET_FROZEN_OBJECT_METHODDEF    \
-    {"get_frozen_object", _PyCFunction_CAST(_imp_get_frozen_object), METH_FASTCALL, _imp_get_frozen_object__doc__},
+    {"get_frozen_object", _PyCFunction_CAST(_imp_get_frozen_object), METH_VALUE, _imp_get_frozen_object__doc__},
 
-static PyObject *
+static PyValue
 _imp_get_frozen_object_impl(PyObject *module, PyObject *name,
-                            PyObject *dataobj);
+                            PyValueBorrow dataobj);
 
-static PyObject *
-_imp_get_frozen_object(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_imp_get_frozen_object(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *name;
-    PyObject *dataobj = Py_None;
+    PyValueBorrow dataobj = PyValue_Borrow(PyValue_None);
 
+    if (!_PyArg_NoKwnamesValue("_imp.get_frozen_object()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("get_frozen_object", nargs, 1, 2)) {
         goto exit;
     }
-    if (!PyUnicode_Check(args[0])) {
-        _PyArg_BadArgument("get_frozen_object", "argument 1", "str", args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("get_frozen_object", "argument 1", "str", PyValue_Borrow(args[0]));
         goto exit;
     }
-    name = args[0];
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("get_frozen_object", "argument 1", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    name = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
     if (nargs < 2) {
         goto skip_optional;
     }
-    dataobj = args[1];
+    dataobj = PyValue_Borrow(args[1]);
 skip_optional:
-    return_value = _imp_get_frozen_object_impl(module, name, dataobj);
+    return_value = _imp_get_frozen_object_impl(PyValue_AsKnownObjectBorrow(module), name, dataobj);
 
 exit:
     return return_value;
@@ -297,23 +376,30 @@ PyDoc_STRVAR(_imp_is_frozen_package__doc__,
 "Returns True if the module name is of a frozen package.");
 
 #define _IMP_IS_FROZEN_PACKAGE_METHODDEF    \
-    {"is_frozen_package", (PyCFunction)_imp_is_frozen_package, METH_O, _imp_is_frozen_package__doc__},
+    {"is_frozen_package", _PyCFunction_CAST(_imp_is_frozen_package), METH_VALUE, _imp_is_frozen_package__doc__},
 
-static PyObject *
+static PyValue
 _imp_is_frozen_package_impl(PyObject *module, PyObject *name);
 
-static PyObject *
-_imp_is_frozen_package(PyObject *module, PyObject *arg)
+static PyValue
+_imp_is_frozen_package(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *name;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("is_frozen_package", "argument", "str", arg);
+    if (!_PyArg_CheckArityValue("_imp.is_frozen_package()", nargs, kwnames, 1)) {
         goto exit;
     }
-    name = arg;
-    return_value = _imp_is_frozen_package_impl(module, name);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("is_frozen_package", "argument", "str", PyValue_Borrow(args[0]));
+        goto exit;
+    }
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("is_frozen_package", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    name = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    return_value = _imp_is_frozen_package_impl(PyValue_AsKnownObjectBorrow(module), name);
 
 exit:
     return return_value;
@@ -326,23 +412,30 @@ PyDoc_STRVAR(_imp_is_builtin__doc__,
 "Returns True if the module name corresponds to a built-in module.");
 
 #define _IMP_IS_BUILTIN_METHODDEF    \
-    {"is_builtin", (PyCFunction)_imp_is_builtin, METH_O, _imp_is_builtin__doc__},
+    {"is_builtin", _PyCFunction_CAST(_imp_is_builtin), METH_VALUE, _imp_is_builtin__doc__},
 
-static PyObject *
+static PyValue
 _imp_is_builtin_impl(PyObject *module, PyObject *name);
 
-static PyObject *
-_imp_is_builtin(PyObject *module, PyObject *arg)
+static PyValue
+_imp_is_builtin(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *name;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("is_builtin", "argument", "str", arg);
+    if (!_PyArg_CheckArityValue("_imp.is_builtin()", nargs, kwnames, 1)) {
         goto exit;
     }
-    name = arg;
-    return_value = _imp_is_builtin_impl(module, name);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("is_builtin", "argument", "str", PyValue_Borrow(args[0]));
+        goto exit;
+    }
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("is_builtin", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    name = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    return_value = _imp_is_builtin_impl(PyValue_AsKnownObjectBorrow(module), name);
 
 exit:
     return return_value;
@@ -355,23 +448,30 @@ PyDoc_STRVAR(_imp_is_frozen__doc__,
 "Returns True if the module name corresponds to a frozen module.");
 
 #define _IMP_IS_FROZEN_METHODDEF    \
-    {"is_frozen", (PyCFunction)_imp_is_frozen, METH_O, _imp_is_frozen__doc__},
+    {"is_frozen", _PyCFunction_CAST(_imp_is_frozen), METH_VALUE, _imp_is_frozen__doc__},
 
-static PyObject *
+static PyValue
 _imp_is_frozen_impl(PyObject *module, PyObject *name);
 
-static PyObject *
-_imp_is_frozen(PyObject *module, PyObject *arg)
+static PyValue
+_imp_is_frozen(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *name;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("is_frozen", "argument", "str", arg);
+    if (!_PyArg_CheckArityValue("_imp.is_frozen()", nargs, kwnames, 1)) {
         goto exit;
     }
-    name = arg;
-    return_value = _imp_is_frozen_impl(module, name);
+    if (!PyValue_IsObject(PyValue_Borrow(args[0]))) {
+        _PyArg_BadArgumentValue("is_frozen", "argument", "str", PyValue_Borrow(args[0]));
+        goto exit;
+    }
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])))) {
+        _PyArg_BadArgument("is_frozen", "argument", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0])));
+        goto exit;
+    }
+    name = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    return_value = _imp_is_frozen_impl(PyValue_AsKnownObjectBorrow(module), name);
 
 exit:
     return return_value;
@@ -384,15 +484,23 @@ PyDoc_STRVAR(_imp__frozen_module_names__doc__,
 "Returns the list of available frozen modules.");
 
 #define _IMP__FROZEN_MODULE_NAMES_METHODDEF    \
-    {"_frozen_module_names", (PyCFunction)_imp__frozen_module_names, METH_NOARGS, _imp__frozen_module_names__doc__},
+    {"_frozen_module_names", _PyCFunction_CAST(_imp__frozen_module_names), METH_VALUE, _imp__frozen_module_names__doc__},
 
-static PyObject *
+static PyValue
 _imp__frozen_module_names_impl(PyObject *module);
 
-static PyObject *
-_imp__frozen_module_names(PyObject *module, PyObject *Py_UNUSED(ignored))
+static PyValue
+_imp__frozen_module_names(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return _imp__frozen_module_names_impl(module);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValue("_imp._frozen_module_names()", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = _imp__frozen_module_names_impl(PyValue_AsKnownObjectBorrow(module));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(_imp__override_frozen_modules_for_tests__doc__,
@@ -405,22 +513,25 @@ PyDoc_STRVAR(_imp__override_frozen_modules_for_tests__doc__,
 "See frozen_modules() in Lib/test/support/import_helper.py.");
 
 #define _IMP__OVERRIDE_FROZEN_MODULES_FOR_TESTS_METHODDEF    \
-    {"_override_frozen_modules_for_tests", (PyCFunction)_imp__override_frozen_modules_for_tests, METH_O, _imp__override_frozen_modules_for_tests__doc__},
+    {"_override_frozen_modules_for_tests", _PyCFunction_CAST(_imp__override_frozen_modules_for_tests), METH_VALUE, _imp__override_frozen_modules_for_tests__doc__},
 
-static PyObject *
+static PyValue
 _imp__override_frozen_modules_for_tests_impl(PyObject *module, int override);
 
-static PyObject *
-_imp__override_frozen_modules_for_tests(PyObject *module, PyObject *arg)
+static PyValue
+_imp__override_frozen_modules_for_tests(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int override;
 
-    override = PyLong_AsInt(arg);
+    if (!_PyArg_CheckArityValue("_imp._override_frozen_modules_for_tests()", nargs, kwnames, 1)) {
+        goto exit;
+    }
+    override = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (override == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _imp__override_frozen_modules_for_tests_impl(module, override);
+    return_value = _imp__override_frozen_modules_for_tests_impl(PyValue_AsKnownObjectBorrow(module), override);
 
 exit:
     return return_value;
@@ -435,23 +546,26 @@ PyDoc_STRVAR(_imp__override_multi_interp_extensions_check__doc__,
 "(-1: \"never\", 1: \"always\", 0: no override)");
 
 #define _IMP__OVERRIDE_MULTI_INTERP_EXTENSIONS_CHECK_METHODDEF    \
-    {"_override_multi_interp_extensions_check", (PyCFunction)_imp__override_multi_interp_extensions_check, METH_O, _imp__override_multi_interp_extensions_check__doc__},
+    {"_override_multi_interp_extensions_check", _PyCFunction_CAST(_imp__override_multi_interp_extensions_check), METH_VALUE, _imp__override_multi_interp_extensions_check__doc__},
 
-static PyObject *
+static PyValue
 _imp__override_multi_interp_extensions_check_impl(PyObject *module,
                                                   int override);
 
-static PyObject *
-_imp__override_multi_interp_extensions_check(PyObject *module, PyObject *arg)
+static PyValue
+_imp__override_multi_interp_extensions_check(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     int override;
 
-    override = PyLong_AsInt(arg);
+    if (!_PyArg_CheckArityValue("_imp._override_multi_interp_extensions_check()", nargs, kwnames, 1)) {
+        goto exit;
+    }
+    override = _PyValue_AsInt(PyValue_Borrow(args[0]));
     if (override == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = _imp__override_multi_interp_extensions_check_impl(module, override);
+    return_value = _imp__override_multi_interp_extensions_check_impl(PyValue_AsKnownObjectBorrow(module), override);
 
 exit:
     return return_value;
@@ -466,28 +580,32 @@ PyDoc_STRVAR(_imp_create_dynamic__doc__,
 "Create an extension module.");
 
 #define _IMP_CREATE_DYNAMIC_METHODDEF    \
-    {"create_dynamic", _PyCFunction_CAST(_imp_create_dynamic), METH_FASTCALL, _imp_create_dynamic__doc__},
+    {"create_dynamic", _PyCFunction_CAST(_imp_create_dynamic), METH_VALUE, _imp_create_dynamic__doc__},
 
-static PyObject *
-_imp_create_dynamic_impl(PyObject *module, PyObject *spec, PyObject *file);
+static PyValue
+_imp_create_dynamic_impl(PyObject *module, PyValueBorrow spec,
+                         PyValueBorrow file);
 
-static PyObject *
-_imp_create_dynamic(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_imp_create_dynamic(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *spec;
-    PyObject *file = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow spec;
+    PyValueBorrow file = PyValue_Borrow(PyValue_NULL);
 
+    if (!_PyArg_NoKwnamesValue("_imp.create_dynamic()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("create_dynamic", nargs, 1, 2)) {
         goto exit;
     }
-    spec = args[0];
+    spec = PyValue_Borrow(args[0]);
     if (nargs < 2) {
         goto skip_optional;
     }
-    file = args[1];
+    file = PyValue_Borrow(args[1]);
 skip_optional:
-    return_value = _imp_create_dynamic_impl(module, spec, file);
+    return_value = _imp_create_dynamic_impl(PyValue_AsKnownObjectBorrow(module), spec, file);
 
 exit:
     return return_value;
@@ -504,22 +622,27 @@ PyDoc_STRVAR(_imp_exec_dynamic__doc__,
 "Initialize an extension module.");
 
 #define _IMP_EXEC_DYNAMIC_METHODDEF    \
-    {"exec_dynamic", (PyCFunction)_imp_exec_dynamic, METH_O, _imp_exec_dynamic__doc__},
+    {"exec_dynamic", _PyCFunction_CAST(_imp_exec_dynamic), METH_VALUE, _imp_exec_dynamic__doc__},
 
 static int
-_imp_exec_dynamic_impl(PyObject *module, PyObject *mod);
+_imp_exec_dynamic_impl(PyObject *module, PyValueBorrow mod);
 
-static PyObject *
-_imp_exec_dynamic(PyObject *module, PyObject *mod)
+static PyValue
+_imp_exec_dynamic(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow mod;
     int _return_value;
 
-    _return_value = _imp_exec_dynamic_impl(module, mod);
+    if (!_PyArg_CheckArityValue("_imp.exec_dynamic()", nargs, kwnames, 1)) {
+        goto exit;
+    }
+    mod = PyValue_Borrow(args[0]);
+    _return_value = _imp_exec_dynamic_impl(PyValue_AsKnownObjectBorrow(module), mod);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromLong((long)_return_value);
+    return_value = PyValue_FromInt64((int64_t)_return_value);
 
 exit:
     return return_value;
@@ -534,22 +657,27 @@ PyDoc_STRVAR(_imp_exec_builtin__doc__,
 "Initialize a built-in module.");
 
 #define _IMP_EXEC_BUILTIN_METHODDEF    \
-    {"exec_builtin", (PyCFunction)_imp_exec_builtin, METH_O, _imp_exec_builtin__doc__},
+    {"exec_builtin", _PyCFunction_CAST(_imp_exec_builtin), METH_VALUE, _imp_exec_builtin__doc__},
 
 static int
-_imp_exec_builtin_impl(PyObject *module, PyObject *mod);
+_imp_exec_builtin_impl(PyObject *module, PyValueBorrow mod);
 
-static PyObject *
-_imp_exec_builtin(PyObject *module, PyObject *mod)
+static PyValue
+_imp_exec_builtin(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow mod;
     int _return_value;
 
-    _return_value = _imp_exec_builtin_impl(module, mod);
+    if (!_PyArg_CheckArityValue("_imp.exec_builtin()", nargs, kwnames, 1)) {
+        goto exit;
+    }
+    mod = PyValue_Borrow(args[0]);
+    _return_value = _imp_exec_builtin_impl(PyValue_AsKnownObjectBorrow(module), mod);
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromLong((long)_return_value);
+    return_value = PyValue_FromInt64((int64_t)_return_value);
 
 exit:
     return return_value;
@@ -561,15 +689,15 @@ PyDoc_STRVAR(_imp_source_hash__doc__,
 "\n");
 
 #define _IMP_SOURCE_HASH_METHODDEF    \
-    {"source_hash", _PyCFunction_CAST(_imp_source_hash), METH_FASTCALL|METH_KEYWORDS, _imp_source_hash__doc__},
+    {"source_hash", _PyCFunction_CAST(_imp_source_hash), METH_VALUE, _imp_source_hash__doc__},
 
-static PyObject *
+static PyValue
 _imp_source_hash_impl(PyObject *module, long key, Py_buffer *source);
 
-static PyObject *
-_imp_source_hash(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+_imp_source_hash(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -597,23 +725,26 @@ _imp_source_hash(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyOb
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
+    Py_ssize_t _idx[2];
     long key;
     Py_buffer source = {NULL, NULL};
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 2, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    key = PyLong_AsLong(args[0]);
+    key = _PyValue_AsLong(PyValue_Borrow(args[_idx[0]]));
     if (key == -1 && PyErr_Occurred()) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[1], &source, PyBUF_SIMPLE) != 0) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[1]]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[_idx[1]]))->tp_name);
         goto exit;
     }
-    return_value = _imp_source_hash_impl(module, key, &source);
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[1]])), &source, PyBUF_SIMPLE) != 0) {
+        goto exit;
+    }
+    return_value = _imp_source_hash_impl(PyValue_AsKnownObjectBorrow(module), key, &source);
 
 exit:
     /* Cleanup for source */
@@ -631,29 +762,36 @@ PyDoc_STRVAR(_imp__set_lazy_attributes__doc__,
 "Remove the resolved module name from sys.lazy_modules.");
 
 #define _IMP__SET_LAZY_ATTRIBUTES_METHODDEF    \
-    {"_set_lazy_attributes", _PyCFunction_CAST(_imp__set_lazy_attributes), METH_FASTCALL, _imp__set_lazy_attributes__doc__},
+    {"_set_lazy_attributes", _PyCFunction_CAST(_imp__set_lazy_attributes), METH_VALUE, _imp__set_lazy_attributes__doc__},
 
-static PyObject *
-_imp__set_lazy_attributes_impl(PyObject *module, PyObject *modobj,
+static PyValue
+_imp__set_lazy_attributes_impl(PyObject *module, PyValueBorrow modobj,
                                PyObject *name);
 
-static PyObject *
-_imp__set_lazy_attributes(PyObject *module, PyObject *const *args, Py_ssize_t nargs)
+static PyValue
+_imp__set_lazy_attributes(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
-    PyObject *modobj;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow modobj;
     PyObject *name;
 
+    if (!_PyArg_NoKwnamesValue("_imp._set_lazy_attributes()", kwnames)) {
+        goto exit;
+    }
     if (!_PyArg_CheckPositional("_set_lazy_attributes", nargs, 2, 2)) {
         goto exit;
     }
-    modobj = args[0];
-    if (!PyUnicode_Check(args[1])) {
-        _PyArg_BadArgument("_set_lazy_attributes", "argument 2", "str", args[1]);
+    modobj = PyValue_Borrow(args[0]);
+    if (!PyValue_IsObject(PyValue_Borrow(args[1]))) {
+        _PyArg_BadArgumentValue("_set_lazy_attributes", "argument 2", "str", PyValue_Borrow(args[1]));
         goto exit;
     }
-    name = args[1];
-    return_value = _imp__set_lazy_attributes_impl(module, modobj, name);
+    if (!PyUnicode_Check(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])))) {
+        _PyArg_BadArgument("_set_lazy_attributes", "argument 2", "str", PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1])));
+        goto exit;
+    }
+    name = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[1]));
+    return_value = _imp__set_lazy_attributes_impl(PyValue_AsKnownObjectBorrow(module), modobj, name);
 
 exit:
     return return_value;
@@ -666,4 +804,4 @@ exit:
 #ifndef _IMP_EXEC_DYNAMIC_METHODDEF
     #define _IMP_EXEC_DYNAMIC_METHODDEF
 #endif /* !defined(_IMP_EXEC_DYNAMIC_METHODDEF) */
-/*[clinic end generated code: output=84d8fd89cee71cbe input=a9049054013a1b77]*/
+/*[clinic end generated code: output=f2196195106a8002 input=a9049054013a1b77]*/

@@ -34,9 +34,14 @@
 #include "clinic/longobject.c.h"
 #undef PyLong_AsSsize_t
 /*[clinic input]
-class int "PyObject *" "&PyLong_Type"
+value_emission
 [clinic start generated code]*/
-/*[clinic end generated code: output=da39a3ee5e6b4b0d input=ec0275e3422a36e3]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
+class int "PyValueBorrow" "&PyLong_Type"
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=5108b483459b41cc]*/
 
 #define medium_value(x) ((stwodigits)_PyLong_CompactValue(x))
 
@@ -5925,7 +5930,9 @@ error:
 }
 
 static PyObject *
-long_subtype_new(PyTypeObject *type, PyObject *x, PyObject *obase);
+long_subtype_new(PyTypeObject *type, PyValueBorrow x, PyValueBorrow obase);
+static PyValue
+long_exact_value(PyValueBorrow v);
 
 /*[clinic input]
 @classmethod
@@ -5935,49 +5942,53 @@ int.__new__ as long_new
     base as obase: object(c_default="NULL") = 10
 [clinic start generated code]*/
 
-static PyObject *
-long_new_impl(PyTypeObject *type, PyObject *x, PyObject *obase)
-/*[clinic end generated code: output=e47cfe777ab0f24c input=81c98f418af9eb6f]*/
+static PyValue
+long_new_impl(PyTypeObject *type, PyValueBorrow x, PyValueBorrow obase)
+/*[clinic end generated code: output=e9aff36dce1dbd25 input=81c98f418af9eb6f]*/
 {
     Py_ssize_t base;
 
     if (type != &PyLong_Type)
-        return long_subtype_new(type, x, obase); /* Wimp out */
-    if (x == NULL) {
-        if (obase != NULL) {
+        return _PyValue_FromObjectResult(
+            long_subtype_new(type, x, obase)); /* Wimp out */
+    if (PyValue_IsNull(x)) {
+        if (!PyValue_IsNull(obase)) {
             PyErr_SetString(PyExc_TypeError,
                             "int() missing string argument");
-            return NULL;
+            return PyValue_NULL;
         }
-        return PyLong_FromLong(0L);
+        return PyValue_FromInt64(0L);
     }
     /* default base and limit, forward to standard implementation */
-    if (obase == NULL)
-        return PyNumber_Long(x);
+    if (PyValue_IsNull(obase))
+        return _PyValue_Long(x);
 
-    base = PyNumber_AsSsize_t(obase, NULL);
+    base = _PyValue_AsSsize_t(obase, NULL);
     if (base == -1 && PyErr_Occurred())
-        return NULL;
+        return PyValue_NULL;
     if ((base != 0 && base < 2) || base > 36) {
         PyErr_SetString(PyExc_ValueError,
                         "int() base must be >= 2 and <= 36, or 0");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    if (PyUnicode_Check(x))
-        return PyLong_FromUnicodeObject(x, (int)base);
-    else if (PyByteArray_Check(x) || PyBytes_Check(x)) {
+    if ((PyValue_IsObject(x) && PyUnicode_Check(PyValue_AsKnownObjectBorrow(x))))
+        return _PyValue_FromObjectResult(
+            PyLong_FromUnicodeObject(PyValue_AsKnownObjectBorrow(x), (int)base));
+    else if ((PyValue_IsObject(x) && PyByteArray_Check(PyValue_AsKnownObjectBorrow(x))) || (PyValue_IsObject(x) && PyBytes_Check(PyValue_AsKnownObjectBorrow(x)))) {
         const char *string;
-        if (PyByteArray_Check(x))
-            string = PyByteArray_AS_STRING(x);
+        PyObject *xobj = PyValue_AsKnownObjectBorrow(x);  // bytes-like, above
+        if (PyByteArray_Check(xobj))
+            string = PyByteArray_AS_STRING(xobj);
         else
-            string = PyBytes_AS_STRING(x);
-        return _PyLong_FromBytes(string, Py_SIZE(x), (int)base);
+            string = PyBytes_AS_STRING(xobj);
+        return _PyValue_FromObjectResult(
+            _PyLong_FromBytes(string, Py_SIZE(xobj), (int)base));
     }
     else {
         PyErr_SetString(PyExc_TypeError,
                         "int() can't convert non-string with explicit base");
-        return NULL;
+        return PyValue_NULL;
     }
 }
 
@@ -5987,14 +5998,19 @@ long_new_impl(PyTypeObject *type, PyObject *x, PyObject *obase)
    the regular int.  The regular int is then thrown away.
 */
 static PyObject *
-long_subtype_new(PyTypeObject *type, PyObject *x, PyObject *obase)
+long_subtype_new(PyTypeObject *type, PyValueBorrow x, PyValueBorrow obase)
 {
     PyLongObject *tmp, *newobj;
     Py_ssize_t size, ndigits;
     int sign;
 
     assert(PyType_IsSubtype(type, &PyLong_Type));
-    tmp = (PyLongObject *)long_new_impl(&PyLong_Type, x, obase);
+    PyValue tmpv = long_new_impl(&PyLong_Type, x, obase);
+    if (PyValue_IsNull(tmpv))
+        return NULL;
+    // The int may be inline: the subtype copies digits, so it needs an object.
+    tmp = (PyLongObject *)_PyValue_AsObjectAt(tmpv, BOX_SITE_PARSER);
+    PyValue_CLOSE(tmpv);
     if (tmp == NULL)
         return NULL;
     assert(PyLong_Check(tmp));
@@ -6026,11 +6042,17 @@ long_subtype_new(PyTypeObject *type, PyObject *x, PyObject *obase)
 int.__getnewargs__
 [clinic start generated code]*/
 
-static PyObject *
-int___getnewargs___impl(PyObject *self)
-/*[clinic end generated code: output=839a49de3f00b61b input=5904770ab1fb8c75]*/
+static PyValue
+int___getnewargs___impl(PyValueBorrow self)
+/*[clinic end generated code: output=ab1207a4049d9924 input=5904770ab1fb8c75]*/
 {
-    return Py_BuildValue("(N)", _PyLong_Copy((PyLongObject *)self));
+    PyObject *obj = _PyValue_AsObjectAt(self, BOX_SITE_PARSER);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *copy = _PyLong_Copy((PyLongObject *)obj);
+    Py_DECREF(obj);
+    return _PyValue_FromObjectResult(Py_BuildValue("(N)", copy));
 }
 
 /*[clinic input]
@@ -6042,23 +6064,28 @@ int.__format__
 Convert to a string according to format_spec.
 [clinic start generated code]*/
 
-static PyObject *
-int___format___impl(PyObject *self, PyObject *format_spec)
-/*[clinic end generated code: output=b4929dee9ae18689 input=d5e1254a47e8d1dc]*/
+static PyValue
+int___format___impl(PyValueBorrow self, PyObject *format_spec)
+/*[clinic end generated code: output=42f0c7706b0325a6 input=d5e1254a47e8d1dc]*/
 {
     _PyUnicodeWriter writer;
     int ret;
 
+    PyObject *obj = _PyValue_AsObjectAt(self, BOX_SITE_PARSER);
+    if (obj == NULL) {
+        return PyValue_NULL;
+    }
     _PyUnicodeWriter_Init(&writer);
     ret = _PyLong_FormatAdvancedWriter(
         &writer,
-        self,
+        obj,
         format_spec, 0, PyUnicode_GET_LENGTH(format_spec));
+    Py_DECREF(obj);
     if (ret == -1) {
         _PyUnicodeWriter_Dealloc(&writer);
-        return NULL;
+        return PyValue_NULL;
     }
-    return _PyUnicodeWriter_Finish(&writer);
+    return _PyValue_FromObjectResult(_PyUnicodeWriter_Finish(&writer));
 }
 
 /* Return a pair (q, r) such that a = b * q + r, and
@@ -6156,9 +6183,9 @@ Rounding an Integral returns itself.
 Rounding with an ndigits argument also returns an integer.
 [clinic start generated code]*/
 
-static PyObject *
-int___round___impl(PyObject *self, PyObject *o_ndigits)
-/*[clinic end generated code: output=954fda6b18875998 input=30c2aec788263144]*/
+static PyValue
+int___round___impl(PyValueBorrow self, PyValueBorrow o_ndigits)
+/*[clinic end generated code: output=aaafa043d0eb70cb input=30c2aec788263144]*/
 {
     /* To round an integer m to the nearest 10**n (n positive), we make use of
      * the divmod_near operation, defined by:
@@ -6174,29 +6201,44 @@ int___round___impl(PyObject *self, PyObject *o_ndigits)
      *
      *   m - divmod_near(m, 10**n)[1].
      */
-    if (o_ndigits == Py_None)
-        return long_long(self);
+    if (PyValue_IsNone(o_ndigits))
+        return long_exact_value(self);
 
-    PyObject *ndigits = _PyNumber_Index(o_ndigits);
-    if (ndigits == NULL)
-        return NULL;
+    PyValue ndigits_value = _PyValue_Index(o_ndigits);
+    if (PyValue_IsNull(ndigits_value))
+        return PyValue_NULL;
 
     /* if ndigits >= 0 then no rounding is necessary; return self unchanged */
-    if (!_PyLong_IsNegative((PyLongObject *)ndigits)) {
+    digit ndigits_buf[_PyLong_WORD_DIGITS];
+    if (!_PyLong_SpanOfValue(PyValue_Borrow(ndigits_value), ndigits_buf).neg) {
+        PyValue_CLOSE(ndigits_value);
+        return long_exact_value(self);
+    }
+
+    /* The helpers below take objects. */
+    PyObject *ndigits = _PyValue_AsObjectAt(ndigits_value, BOX_SITE_PARSER);
+    PyValue_CLOSE(ndigits_value);
+    if (ndigits == NULL)
+        return PyValue_NULL;
+    PyObject *self_obj = _PyValue_AsObjectAt(self, BOX_SITE_PARSER);
+    if (self_obj == NULL) {
         Py_DECREF(ndigits);
-        return long_long(self);
+        return PyValue_NULL;
     }
 
     /* result = self - divmod_near(self, 10 ** -ndigits)[1] */
     PyObject *temp = (PyObject*)long_neg((PyLongObject*)ndigits);
     Py_SETREF(ndigits, temp);
-    if (ndigits == NULL)
-        return NULL;
+    if (ndigits == NULL) {
+        Py_DECREF(self_obj);
+        return PyValue_NULL;
+    }
 
     PyObject *result = PyLong_FromLong(10);
     if (result == NULL) {
         Py_DECREF(ndigits);
-        return NULL;
+        Py_DECREF(self_obj);
+        return PyValue_NULL;
     }
 
     temp = (PyObject *)long_pow_spans(_PyLong_SpanOf((PyLongObject *)result),
@@ -6204,25 +6246,26 @@ int___round___impl(PyObject *self, PyObject *o_ndigits)
                                       NULL);
     Py_DECREF(ndigits);
     Py_SETREF(result, temp);
-    if (result == NULL)
-        return NULL;
+    if (result == NULL) {
+        Py_DECREF(self_obj);
+        return PyValue_NULL;
+    }
 
-    temp = _PyLong_DivmodNear(self, result);
+    temp = _PyLong_DivmodNear(self_obj, result);
+    Py_DECREF(self_obj);
     Py_SETREF(result, temp);
     if (result == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     PyValue remv = PyTuple_GetValue(result, 1);
-    PyObject *rem = PyValue_IsNull(remv) ? NULL : _PyValue_AsObjectAt(remv, BOX_SITE_TUPLE);
-    PyValue_XCLOSE(remv);
     Py_DECREF(result);
-    if (rem == NULL) {
-        return NULL;
+    if (PyValue_IsNull(remv)) {
+        return PyValue_NULL;
     }
-    result = (PyObject*)long_sub((PyLongObject*)self, (PyLongObject*)rem);
-    Py_DECREF(rem);
+    PyValue diff = _PyLong_ValueSubtract(self, PyValue_Borrow(remv));
+    PyValue_CLOSE(remv);
 
-    return result;
+    return diff;
 }
 
 /*[clinic input]
@@ -6232,14 +6275,15 @@ Returns size in memory, in bytes.
 [clinic start generated code]*/
 
 static Py_ssize_t
-int___sizeof___impl(PyObject *self)
-/*[clinic end generated code: output=3303f008eaa6a0a5 input=9b51620c76fc4507]*/
+int___sizeof___impl(PyValueBorrow self)
+/*[clinic end generated code: output=8656bcea3589d1a6 input=9b51620c76fc4507]*/
 {
-    Py_ssize_t ndigits = _PyLong_DigitCount((PyLongObject *)self);
+    digit buf[_PyLong_WORD_DIGITS];
+    Py_ssize_t ndigits = _PyLong_SpanOfValue(self, buf).n;
     /* using Py_MAX(..., 1) because we always allocate space for at least
        one digit, even though the integer zero has a digit count of 0 */
     ndigits = Py_MAX(ndigits, 1);
-    return Py_TYPE(self)->tp_basicsize + Py_TYPE(self)->tp_itemsize * ndigits;
+    return PyValue_TYPE(self)->tp_basicsize + PyValue_TYPE(self)->tp_itemsize * ndigits;
 }
 
 /*[clinic input]
@@ -6253,14 +6297,15 @@ Number of bits necessary to represent self in binary.
 6
 [clinic start generated code]*/
 
-static PyObject *
-int_bit_length_impl(PyObject *self)
-/*[clinic end generated code: output=fc1977c9353d6a59 input=e4eb7a587e849a32]*/
+static PyValue
+int_bit_length_impl(PyValueBorrow self)
+/*[clinic end generated code: output=4d573c9dcfecbbbc input=e4eb7a587e849a32]*/
 {
-    int64_t nbits = _PyLong_NumBits(self);
+    digit buf[_PyLong_WORD_DIGITS];
+    int64_t nbits = _PyLong_SpanNumBits(_PyLong_SpanOfValue(self, buf));
     assert(nbits >= 0);
     assert(!PyErr_Occurred());
-    return PyLong_FromInt64(nbits);
+    return PyValue_FromInt64(nbits);
 }
 
 static int
@@ -6286,22 +6331,23 @@ Also known as the population count.
 3
 [clinic start generated code]*/
 
-static PyObject *
-int_bit_count_impl(PyObject *self)
-/*[clinic end generated code: output=2e571970daf1e5c3 input=f2510a306761db15]*/
+static PyValue
+int_bit_count_impl(PyValueBorrow self)
+/*[clinic end generated code: output=6c11cecb946b4d92 input=f2510a306761db15]*/
 {
-    assert(self != NULL);
-    assert(PyLong_Check(self));
+    assert(!PyValue_IsNull(self));
+    assert(PyValue_LongCheck(self));
 
-    PyLongObject *z = (PyLongObject *)self;
-    Py_ssize_t ndigits = _PyLong_DigitCount(z);
+    digit buf[_PyLong_WORD_DIGITS];
+    _PyLongSpan z = _PyLong_SpanOfValue(self, buf);
+    Py_ssize_t ndigits = z.n;
     int64_t bit_count = 0;
 
     for (Py_ssize_t i = 0; i < ndigits; i++) {
-        bit_count += popcount_digit(z->long_value.ob_digit[i]);
+        bit_count += popcount_digit(z.d[i]);
     }
 
-    return PyLong_FromInt64(bit_count);
+    return PyValue_FromInt64(bit_count);
 }
 
 /*[clinic input]
@@ -6319,15 +6365,15 @@ The ratio is in lowest terms and has a positive denominator.
 (0, 1)
 [clinic start generated code]*/
 
-static PyObject *
-int_as_integer_ratio_impl(PyObject *self)
-/*[clinic end generated code: output=e60803ae1cc8621a input=384ff1766634bec2]*/
+static PyValue
+int_as_integer_ratio_impl(PyValueBorrow self)
+/*[clinic end generated code: output=b5acedf4f16e2977 input=384ff1766634bec2]*/
 {
-    PyObject *numerator = long_long(self);
-    if (numerator == NULL) {
-        return NULL;
+    PyValue numerator = long_exact_value(self);
+    if (PyValue_IsNull(numerator)) {
+        return PyValue_NULL;
     }
-    return _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(numerator), PyValue_PrepareOwned(_PyLong_GetOne()));
+    return _PyValue_FromObjectResult(_PyTuple_FromPairTakeValue(numerator, PyValue_PrepareOwned(_PyLong_GetOne())));
 }
 
 /*[clinic input]
@@ -6353,10 +6399,10 @@ int.to_bytes
 Return an array of bytes representing an integer.
 [clinic start generated code]*/
 
-static PyObject *
-int_to_bytes_impl(PyObject *self, Py_ssize_t length, PyObject *byteorder,
+static PyValue
+int_to_bytes_impl(PyValueBorrow self, Py_ssize_t length, PyObject *byteorder,
                   int is_signed)
-/*[clinic end generated code: output=89c801df114050a3 input=c74a93c07b2f6526]*/
+/*[clinic end generated code: output=4e337e48d7dff7e9 input=c74a93c07b2f6526]*/
 {
     int little_endian;
     if (byteorder == NULL)
@@ -6368,22 +6414,23 @@ int_to_bytes_impl(PyObject *self, Py_ssize_t length, PyObject *byteorder,
     else {
         PyErr_SetString(PyExc_ValueError,
             "byteorder must be either 'little' or 'big'");
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyBytesWriter *writer = PyBytesWriter_Create(length);
     if (writer == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    if (_PyLong_AsByteArray((PyLongObject *)self,
-                            PyBytesWriter_GetData(writer),
-                            length, little_endian, is_signed, 1) < 0) {
+    digit buf[_PyLong_WORD_DIGITS];
+    if (span_as_byte_array(_PyLong_SpanOfValue(self, buf),
+                           PyBytesWriter_GetData(writer),
+                           length, little_endian, is_signed, 1) < 0) {
         PyBytesWriter_Discard(writer);
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return PyBytesWriter_Finish(writer);
+    return _PyValue_FromObjectResult(PyBytesWriter_Finish(writer));
 }
 
 /*[clinic input]
@@ -6410,10 +6457,10 @@ int.from_bytes
 Return the integer represented by the given array of bytes.
 [clinic start generated code]*/
 
-static PyObject *
-int_from_bytes_impl(PyTypeObject *type, PyObject *bytes_obj,
+static PyValue
+int_from_bytes_impl(PyTypeObject *type, PyValueBorrow bytes_obj,
                     PyObject *byteorder, int is_signed)
-/*[clinic end generated code: output=efc5d68e31f9314f input=95801e50b942e164]*/
+/*[clinic end generated code: output=32f78eecc28add90 input=95801e50b942e164]*/
 {
     int little_endian;
     PyObject *long_obj, *bytes;
@@ -6427,20 +6474,23 @@ int_from_bytes_impl(PyTypeObject *type, PyObject *bytes_obj,
     else {
         PyErr_SetString(PyExc_ValueError,
             "byteorder must be either 'little' or 'big'");
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* Fast-path exact bytes. */
-    if (PyBytes_CheckExact(bytes_obj)) {
+    if ((PyValue_IsObject(bytes_obj) && PyBytes_CheckExact(PyValue_AsKnownObjectBorrow(bytes_obj)))) {
+        PyObject *exact = PyValue_AsKnownObjectBorrow(bytes_obj);
         long_obj = _PyLong_FromByteArray(
-            (unsigned char *)PyBytes_AS_STRING(bytes_obj), Py_SIZE(bytes_obj),
+            (unsigned char *)PyBytes_AS_STRING(exact), Py_SIZE(exact),
             little_endian, is_signed);
     }
-    /* Use buffer protocol to avoid copies. */
-    else if (PyObject_CheckBuffer(bytes_obj)) {
+    /* Use buffer protocol to avoid copies. An inline int or float has none. */
+    else if (PyValue_IsObject(bytes_obj)
+             && PyObject_CheckBuffer(PyValue_AsKnownObjectBorrow(bytes_obj))) {
         Py_buffer view;
-        if (PyObject_GetBuffer(bytes_obj, &view, PyBUF_SIMPLE) != 0) {
-            return NULL;
+        if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(bytes_obj), &view,
+                               PyBUF_SIMPLE) != 0) {
+            return PyValue_NULL;
         }
         long_obj = _PyLong_FromByteArray(view.buf, view.len, little_endian,
             is_signed);
@@ -6448,9 +6498,14 @@ int_from_bytes_impl(PyTypeObject *type, PyObject *bytes_obj,
     }
     else {
         /* fallback: Construct a bytes then convert. */
-        bytes = PyObject_Bytes(bytes_obj);
+        PyObject *boxed = _PyValue_AsObjectAt(bytes_obj, BOX_SITE_PARSER);
+        if (boxed == NULL) {
+            return PyValue_NULL;
+        }
+        bytes = PyObject_Bytes(boxed);
+        Py_DECREF(boxed);
         if (bytes == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
         long_obj = _PyLong_FromByteArray(
             (unsigned char *)PyBytes_AS_STRING(bytes), Py_SIZE(bytes),
@@ -6462,7 +6517,7 @@ int_from_bytes_impl(PyTypeObject *type, PyObject *bytes_obj,
         Py_SETREF(long_obj, PyObject_CallOneArg((PyObject *)type, long_obj));
     }
 
-    return long_obj;
+    return _PyValue_FromObjectResult(long_obj);
 }
 
 static PyObject *
@@ -6502,11 +6557,11 @@ int.is_integer
 Returns True. Exists for duck type compatibility with float.is_integer.
 [clinic start generated code]*/
 
-static PyObject *
-int_is_integer_impl(PyObject *self)
-/*[clinic end generated code: output=90f8e794ce5430ef input=aacf01a2c81c0244]*/
+static PyValue
+int_is_integer_impl(PyValueBorrow self)
+/*[clinic end generated code: output=602cec4cbde4eb9f input=aacf01a2c81c0244]*/
 {
-    Py_RETURN_TRUE;
+    return PyValue_True;
 }
 
 static PyObject *
@@ -6524,7 +6579,15 @@ long_vectorcall(PyObject *type, PyObject * const*args,
         case 1:
             return PyNumber_Long(args[0]);
         case 2:
-            return long_new_impl(_PyType_CAST(type), args[0], args[1]);
+        {
+            PyValue res = long_new_impl(_PyType_CAST(type),
+                                        PyValue_FromObjectBorrow(args[0]),
+                                        PyValue_FromObjectBorrow(args[1]));
+            PyObject *obj = PyValue_IsNull(res)
+                ? NULL : _PyValue_AsObjectAt(res, BOX_SITE_CALL);
+            PyValue_XCLOSE(res);
+            return obj;
+        }
         default:
             return PyErr_Format(PyExc_TypeError,
                                 "int expected at most 2 arguments, got %zd",

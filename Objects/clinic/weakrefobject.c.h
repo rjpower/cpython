@@ -2,6 +2,10 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
 
 static Py_hash_t
@@ -18,4 +22,4 @@ weakref_hash(PyObject *self)
 
     return return_value;
 }
-/*[clinic end generated code: output=40453fff9335a3f7 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=c11de7d1bf969284 input=a9049054013a1b77]*/

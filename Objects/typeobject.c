@@ -45,10 +45,15 @@
 #include <stddef.h>               // ptrdiff_t
 
 /*[clinic input]
-class type "PyTypeObject *" "&PyType_Type"
-class object "PyObject *" "&PyBaseObject_Type"
+value_emission
 [clinic start generated code]*/
-/*[clinic end generated code: output=da39a3ee5e6b4b0d input=4b94608d231c434b]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
+class type "PyTypeObject *" "&PyType_Type"
+class object "PyValueBorrow" "&PyBaseObject_Type"
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=063d61387d2a5b4e]*/
 
 #include "clinic/typeobject.c.h"
 
@@ -2577,10 +2582,16 @@ Check if an object is an instance.
 [clinic start generated code]*/
 
 static int
-type___instancecheck___impl(PyTypeObject *self, PyObject *instance)
-/*[clinic end generated code: output=08b6bf5f591c3618 input=cdbfeaee82c01a0f]*/
+type___instancecheck___impl(PyTypeObject *self, PyValueBorrow instance)
+/*[clinic end generated code: output=ccdd7dc024cdf372 input=cdbfeaee82c01a0f]*/
 {
-    return _PyObject_RealIsInstance(instance, (PyObject *)self);
+    PyObject *instance_o = _PyValue_AsObjectAt(instance, BOX_SITE_PARSER);
+    if (instance_o == NULL) {
+        return -1;
+    }
+    int res = _PyObject_RealIsInstance(instance_o, (PyObject *)self);
+    Py_DECREF(instance_o);
+    return res;
 }
 
 /*[clinic input]
@@ -2593,10 +2604,16 @@ Check if a class is a subclass.
 [clinic start generated code]*/
 
 static int
-type___subclasscheck___impl(PyTypeObject *self, PyObject *subclass)
-/*[clinic end generated code: output=97a4e51694500941 input=071b2ca9e03355f4]*/
+type___subclasscheck___impl(PyTypeObject *self, PyValueBorrow subclass)
+/*[clinic end generated code: output=fd7a3a4c2bee0b64 input=071b2ca9e03355f4]*/
 {
-    return _PyObject_RealIsSubclass(subclass, (PyObject *)self);
+    PyObject *subclass_o = _PyValue_AsObjectAt(subclass, BOX_SITE_PARSER);
+    if (subclass_o == NULL) {
+        return -1;
+    }
+    int res = _PyObject_RealIsSubclass(subclass_o, (PyObject *)self);
+    Py_DECREF(subclass_o);
+    return res;
 }
 
 
@@ -3945,16 +3962,16 @@ type.mro
 Return a type's method resolution order.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 type_mro_impl(PyTypeObject *self)
-/*[clinic end generated code: output=bffc4a39b5b57027 input=28414f4e156db28d]*/
+/*[clinic end generated code: output=8a7eaf15d78d73d7 input=28414f4e156db28d]*/
 {
     PyObject *seq;
     seq = mro_implementation(self);
     if (seq != NULL && !PyList_Check(seq)) {
         Py_SETREF(seq, PySequence_List(seq));
     }
-    return seq;
+    return _PyValue_FromObjectResult(seq);
 }
 
 static int
@@ -7628,11 +7645,11 @@ type.__subclasses__
 Return a list of immediate subclasses.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 type___subclasses___impl(PyTypeObject *self)
-/*[clinic end generated code: output=eb5eb54485942819 input=5af66132436f9a7b]*/
+/*[clinic end generated code: output=0e8be4d956c521e1 input=5af66132436f9a7b]*/
 {
-    return _PyType_GetSubclasses(self);
+    return _PyValue_FromObjectResult(_PyType_GetSubclasses(self));
 }
 
 static PyObject *
@@ -7714,9 +7731,9 @@ type.__dir__
 Specialized __dir__ implementation for types.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 type___dir___impl(PyTypeObject *self)
-/*[clinic end generated code: output=69d02fe92c0f15fa input=7733befbec645968]*/
+/*[clinic end generated code: output=6d302f01106c7a69 input=7733befbec645968]*/
 {
     PyObject *result = NULL;
     PyObject *dict = PyDict_New();
@@ -7725,7 +7742,7 @@ type___dir___impl(PyTypeObject *self)
         result = PyDict_Keys(dict);
 
     Py_XDECREF(dict);
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 /*[clinic input]
@@ -7734,9 +7751,9 @@ type.__sizeof__
 Return memory consumption of the type object.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 type___sizeof___impl(PyTypeObject *self)
-/*[clinic end generated code: output=766f4f16cd3b1854 input=99398f24b9cf45d6]*/
+/*[clinic end generated code: output=4d123b6050601d20 input=99398f24b9cf45d6]*/
 {
     size_t size;
     if (self->tp_flags & Py_TPFLAGS_HEAPTYPE) {
@@ -7748,7 +7765,7 @@ type___sizeof___impl(PyTypeObject *self)
     else {
         size = sizeof(PyTypeObject);
     }
-    return PyLong_FromSize_t(size);
+    return _PyValue_FromObjectResult(PyLong_FromSize_t(size));
 }
 
 static PyMethodDef type_methods[] = {
@@ -8760,18 +8777,31 @@ _PyObject_GetState(PyObject *obj)
     return object_getstate(obj, 0);
 }
 
+static PyValue
+object___getstate___object(PyObject *self)
+{
+    return _PyValue_FromObjectResult(object_getstate_default(self, 0));
+}
+
 /*[clinic input]
 object.__getstate__
 
 Helper for pickle.
 [clinic start generated code]*/
 
-static PyObject *
-object___getstate___impl(PyObject *self)
-/*[clinic end generated code: output=5a2500dcb6217e9e input=692314d8fbe194ee]*/
+static PyValue
+object___getstate___impl(PyValueBorrow self)
+/*[clinic end generated code: output=dd90fd0e468e8fa6 input=692314d8fbe194ee]*/
 {
-    return object_getstate_default(self, 0);
+    PyObject *self_o = _PyValue_AsObjectAt(self, BOX_SITE_PARSER);
+    if (self_o == NULL) {
+        return PyValue_NULL;
+    }
+    PyValue res = object___getstate___object(self_o);
+    Py_DECREF(self_o);
+    return res;
 }
+
 
 static int
 _PyObject_GetNewArguments(PyObject *obj, PyObject **args, PyObject **kwargs)
@@ -9039,17 +9069,63 @@ _common_reduce(PyObject *self, int proto)
     return res;
 }
 
+static PyValue
+object___reduce___object(PyObject *self)
+{
+    return _PyValue_FromObjectResult(_common_reduce(self, 0));
+}
+
 /*[clinic input]
 object.__reduce__
 
 Helper for pickle.
 [clinic start generated code]*/
 
-static PyObject *
-object___reduce___impl(PyObject *self)
-/*[clinic end generated code: output=d4ca691f891c6e2f input=11562e663947e18b]*/
+static PyValue
+object___reduce___impl(PyValueBorrow self)
+/*[clinic end generated code: output=715f9161202df68c input=11562e663947e18b]*/
 {
-    return _common_reduce(self, 0);
+    PyObject *self_o = _PyValue_AsObjectAt(self, BOX_SITE_PARSER);
+    if (self_o == NULL) {
+        return PyValue_NULL;
+    }
+    PyValue res = object___reduce___object(self_o);
+    Py_DECREF(self_o);
+    return res;
+}
+
+
+static PyValue
+object___reduce_ex___object(PyObject *self, int protocol)
+{
+    PyObject *reduce;
+    if (PyObject_GetOptionalAttr(self, &_Py_ID(__reduce__), &reduce) < 0) {
+        return PyValue_NULL;
+    }
+    if (reduce != NULL) {
+        PyObject *cls, *clsreduce;
+        int override;
+
+        cls = (PyObject *) Py_TYPE(self);
+        clsreduce = PyObject_GetAttr(cls, &_Py_ID(__reduce__));
+        if (clsreduce == NULL) {
+            Py_DECREF(reduce);
+            return PyValue_NULL;
+        }
+
+        PyInterpreterState *interp = _PyInterpreterState_GET();
+        override = (clsreduce != _Py_INTERP_CACHED_OBJECT(interp, objreduce));
+        Py_DECREF(clsreduce);
+        if (override) {
+            PyObject *res = _PyObject_CallNoArgs(reduce);
+            Py_DECREF(reduce);
+            return _PyValue_FromObjectResult(res);
+        }
+        else
+            Py_DECREF(reduce);
+    }
+
+    return _PyValue_FromObjectResult(_common_reduce(self, protocol));
 }
 
 /*[clinic input]
@@ -9061,39 +9137,19 @@ object.__reduce_ex__
 Helper for pickle.
 [clinic start generated code]*/
 
-static PyObject *
-object___reduce_ex___impl(PyObject *self, int protocol)
-/*[clinic end generated code: output=2e157766f6b50094 input=f326b43fb8a4c5ff]*/
+static PyValue
+object___reduce_ex___impl(PyValueBorrow self, int protocol)
+/*[clinic end generated code: output=d9db8adebb3eea1c input=f326b43fb8a4c5ff]*/
 {
-    PyObject *reduce;
-    if (PyObject_GetOptionalAttr(self, &_Py_ID(__reduce__), &reduce) < 0) {
-        return NULL;
+    PyObject *self_o = _PyValue_AsObjectAt(self, BOX_SITE_PARSER);
+    if (self_o == NULL) {
+        return PyValue_NULL;
     }
-    if (reduce != NULL) {
-        PyObject *cls, *clsreduce;
-        int override;
-
-        cls = (PyObject *) Py_TYPE(self);
-        clsreduce = PyObject_GetAttr(cls, &_Py_ID(__reduce__));
-        if (clsreduce == NULL) {
-            Py_DECREF(reduce);
-            return NULL;
-        }
-
-        PyInterpreterState *interp = _PyInterpreterState_GET();
-        override = (clsreduce != _Py_INTERP_CACHED_OBJECT(interp, objreduce));
-        Py_DECREF(clsreduce);
-        if (override) {
-            PyObject *res = _PyObject_CallNoArgs(reduce);
-            Py_DECREF(reduce);
-            return res;
-        }
-        else
-            Py_DECREF(reduce);
-    }
-
-    return _common_reduce(self, protocol);
+    PyValue res = object___reduce_ex___object(self_o, protocol);
+    Py_DECREF(self_o);
+    return res;
 }
+
 
 static PyObject *
 object_subclasshook(PyObject *cls, PyObject *args)
@@ -9121,6 +9177,20 @@ PyDoc_STRVAR(object_init_subclass_doc,
 "The default implementation does nothing. It may be\n"
 "overridden to extend subclasses.\n");
 
+static PyValue
+object___format___object(PyObject *self, PyObject *format_spec)
+{
+    /* Issue 7994: If we're converting to a string, we
+       should reject format specifications */
+    if (PyUnicode_GET_LENGTH(format_spec) > 0) {
+        PyErr_Format(PyExc_TypeError,
+                     "unsupported format string passed to %.200s.__format__",
+                     Py_TYPE(self)->tp_name);
+        return PyValue_NULL;
+    }
+    return _PyValue_FromObjectResult(PyObject_Str(self));
+}
+
 /*[clinic input]
 object.__format__
 
@@ -9132,20 +9202,19 @@ Default object formatter.
 Return str(self) if format_spec is empty. Raise TypeError otherwise.
 [clinic start generated code]*/
 
-static PyObject *
-object___format___impl(PyObject *self, PyObject *format_spec)
-/*[clinic end generated code: output=34897efb543a974b input=b94d8feb006689ea]*/
+static PyValue
+object___format___impl(PyValueBorrow self, PyObject *format_spec)
+/*[clinic end generated code: output=f8365e908480cace input=b94d8feb006689ea]*/
 {
-    /* Issue 7994: If we're converting to a string, we
-       should reject format specifications */
-    if (PyUnicode_GET_LENGTH(format_spec) > 0) {
-        PyErr_Format(PyExc_TypeError,
-                     "unsupported format string passed to %.200s.__format__",
-                     Py_TYPE(self)->tp_name);
-        return NULL;
+    PyObject *self_o = _PyValue_AsObjectAt(self, BOX_SITE_PARSER);
+    if (self_o == NULL) {
+        return PyValue_NULL;
     }
-    return PyObject_Str(self);
+    PyValue res = object___format___object(self_o, format_spec);
+    Py_DECREF(self_o);
+    return res;
 }
+
 
 /*[clinic input]
 object.__sizeof__
@@ -9153,36 +9222,30 @@ object.__sizeof__
 Size of object in memory, in bytes.
 [clinic start generated code]*/
 
-static PyObject *
-object___sizeof___impl(PyObject *self)
-/*[clinic end generated code: output=73edab332f97d550 input=1200ff3dfe485306]*/
+static PyValue
+object___sizeof___impl(PyValueBorrow self)
+/*[clinic end generated code: output=df028cb96956281f input=1200ff3dfe485306]*/
 {
     Py_ssize_t res, isize;
 
     res = 0;
-    isize = Py_TYPE(self)->tp_itemsize;
-    if (isize > 0) {
+    isize = PyValue_TYPE(self)->tp_itemsize;
+    if (isize > 0 && PyValue_IsObject(self)) {
         /* This assumes that ob_size is valid if tp_itemsize is not 0,
-         which isn't true for PyLongObject. */
-        res = _PyVarObject_CAST(self)->ob_size * isize;
+         which isn't true for PyLongObject. An inline value has no items. */
+        res = _PyVarObject_CAST(PyValue_AsKnownObjectBorrow(self))->ob_size
+              * isize;
     }
-    res += Py_TYPE(self)->tp_basicsize;
+    res += PyValue_TYPE(self)->tp_basicsize;
 
-    return PyLong_FromSsize_t(res);
+    return PyValue_FromInt64(res);
 }
 
 /* __dir__ for generic objects: returns __dict__, __class__,
    and recursively up the __class__.__bases__ chain.
 */
-/*[clinic input]
-object.__dir__
-
-Default dir() implementation.
-[clinic start generated code]*/
-
-static PyObject *
-object___dir___impl(PyObject *self)
-/*[clinic end generated code: output=66dd48ea62f26c90 input=0a89305bec669b10]*/
+static PyValue
+object___dir___object(PyObject *self)
 {
     PyObject *result = NULL;
     PyObject *dict = NULL;
@@ -9190,7 +9253,7 @@ object___dir___impl(PyObject *self)
 
     /* Get __dict__ (which may or may not be a real dict...) */
     if (PyObject_GetOptionalAttr(self, &_Py_ID(__dict__), &dict) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (dict == NULL) {
         dict = PyDict_New();
@@ -9222,8 +9285,28 @@ object___dir___impl(PyObject *self)
 error:
     Py_XDECREF(itsclass);
     Py_XDECREF(dict);
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
+
+/*[clinic input]
+object.__dir__
+
+Default dir() implementation.
+[clinic start generated code]*/
+
+static PyValue
+object___dir___impl(PyValueBorrow self)
+/*[clinic end generated code: output=c1441410fcd0b9e6 input=0a89305bec669b10]*/
+{
+    PyObject *self_o = _PyValue_AsObjectAt(self, BOX_SITE_PARSER);
+    if (self_o == NULL) {
+        return PyValue_NULL;
+    }
+    PyValue res = object___dir___object(self_o);
+    Py_DECREF(self_o);
+    return res;
+}
+
 
 static PyMethodDef object_methods[] = {
     OBJECT___REDUCE_EX___METHODDEF

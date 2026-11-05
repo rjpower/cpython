@@ -2,8 +2,12 @@
 preserve
 [clinic start generated code]*/
 
-#include "pycore_borrow.h"        // _PyBorrow_TupleItems()
-#include "pycore_modsupport.h"    // _PyArg_NoPositional()
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
+#include "pycore_modsupport.h"    // _PyArg_CheckPositional()
+#include "pycore_value_call.h"    // METH_VALUE
 
 PyDoc_STRVAR(namespace___replace____doc__,
 "__replace__($self, /, **changes)\n"
@@ -12,34 +16,26 @@ PyDoc_STRVAR(namespace___replace____doc__,
 "Return a copy with the specified attributes replaced.");
 
 #define NAMESPACE___REPLACE___METHODDEF    \
-    {"__replace__", _PyCFunction_CAST(namespace___replace__), METH_VARARGS|METH_KEYWORDS, namespace___replace____doc__},
+    {"__replace__", _PyCFunction_CAST(namespace___replace__), METH_VALUE, namespace___replace____doc__},
 
-static PyObject *
+static PyValue
 namespace___replace___impl(_PyNamespaceObject *self, PyObject *changes);
 
-static PyObject *
-namespace___replace__(PyObject *self, PyObject *args, PyObject *kwargs)
+static PyValue
+namespace___replace__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *changes = NULL;
 
-    if (!_PyArg_NoPositional("__replace__", args)) {
+    if (!_PyArg_CheckPositional("__replace__", nargs, 0, 0)) {
         goto exit;
     }
-    PyObject *const *_args_items = _PyBorrow_TupleItems(args, PyTuple_GET_SIZE(args));
-    if (_args_items == NULL) {
+    changes = kwnames == NULL ? PyDict_New()
+        : _PyValue_StackAsDict(args + nargs, kwnames);
+    if (changes == NULL) {
         goto exit;
     }
-    if (kwargs == NULL) {
-        changes = PyDict_New();
-        if (changes == NULL) {
-            goto exit;
-        }
-    }
-    else {
-        changes = Py_NewRef(kwargs);
-    }
-    return_value = namespace___replace___impl((_PyNamespaceObject *)self, changes);
+    return_value = namespace___replace___impl((_PyNamespaceObject *)PyValue_AsKnownObjectBorrow(self), changes);
 
 exit:
     /* Cleanup for changes */
@@ -47,4 +43,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=4d6ac138cccf1697 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=419ec90992eca007 input=a9049054013a1b77]*/

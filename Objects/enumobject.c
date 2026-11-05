@@ -8,10 +8,16 @@
 #include "pycore_unicodeobject.h" // _PyUnicode_EqualToASCIIString
 #include "pycore_tuple.h"         // _PyTuple_Recycle()
 #include "pycore_value.h"         // PyValue_XCLOSE()
+#include "pycore_value_call.h"     // _PyValue_VectorcallThunk()
 #include "pycore_value_ops.h"     // _PyValue_IterStep()
 #include "pycore_value_slots.h"   // _Py_VALUE_THUNK_ITERNEXT()
 
 #include "clinic/enumobject.c.h"
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 class enumerate "enumobject *" "&PyEnum_Type"
@@ -48,47 +54,53 @@ enumerate is useful for obtaining an indexed list:
     (0, seq[0]), (1, seq[1]), (2, seq[2]), ...
 [clinic start generated code]*/
 
-static PyObject *
-enum_new_impl(PyTypeObject *type, PyObject *iterable, PyObject *start)
-/*[clinic end generated code: output=e95e6e439f812c10 input=a139e88889360e8f]*/
+static PyValue
+enum_new_impl(PyTypeObject *type, PyValueBorrow iterable,
+              PyValueBorrow start)
+/*[clinic end generated code: output=602355ab76a1c8e3 input=a139e88889360e8f]*/
 {
     enumobject *en;
 
     en = (enumobject *)type->tp_alloc(type, 0);
     if (en == NULL)
-        return NULL;
-    if (start != NULL) {
-        start = PyNumber_Index(start);
-        if (start == NULL) {
+        return PyValue_NULL;
+    if (!PyValue_IsNull(start)) {
+        PyValue index = _PyValue_Index(start);
+        if (PyValue_IsNull(index)) {
             Py_DECREF(en);
-            return NULL;
+            return PyValue_NULL;
         }
-        assert(PyLong_Check(start));
-        en->en_index = PyLong_AsSsize_t(start);
+        en->en_index = _PyValue_AsSsize_t(index, PyExc_OverflowError);
         if (en->en_index == -1 && PyErr_Occurred()) {
             PyErr_Clear();
             en->en_index = PY_SSIZE_T_MAX;
-            en->en_longindex = start;
+            /* Only a heap int overflows Py_ssize_t, so this does not box. */
+            en->en_longindex = _PyValue_AsObjectAt(index, BOX_SITE_PARSER);
+            PyValue_CLOSE(index);
+            if (en->en_longindex == NULL) {
+                Py_DECREF(en);
+                return PyValue_NULL;
+            }
         } else {
             en->en_longindex = NULL;
-            Py_DECREF(start);
+            PyValue_CLOSE(index);
         }
     } else {
         en->en_index = 0;
         en->en_longindex = NULL;
     }
-    en->en_sit = PyObject_GetIter(iterable);
+    en->en_sit = _PyValue_GetIter(iterable);
     if (en->en_sit == NULL) {
         Py_DECREF(en);
-        return NULL;
+        return PyValue_NULL;
     }
     en->en_result = _PyTuple_FromPairTakeValue(PyValue_PrepareOwned(Py_None), PyValue_PrepareOwned(Py_None));
     if (en->en_result == NULL) {
         Py_DECREF(en);
-        return NULL;
+        return PyValue_NULL;
     }
     en->one = _PyLong_GetOne();    /* borrowed reference */
-    return (PyObject *)en;
+    return _PyValue_FromObjectResult((PyObject *)en);
 }
 
 static void
@@ -328,7 +340,8 @@ PyTypeObject PyEnum_Type = {
     PyType_GenericAlloc,            /* tp_alloc */
     enum_new,                       /* tp_new */
     PyObject_GC_Del,                /* tp_free */
-    .tp_vectorcall = enum_vectorcall,
+    .tp_vectorcall = _PyValue_VectorcallThunk,
+    .tp_value_vectorcall = (_Py_valuefunc)enum_vectorcall,
     .tp_value = { .iternext = _Py_VALUE_SLOT_INIT(iternext, enum_next_value) },
 };
 
@@ -353,48 +366,48 @@ reversed.__new__ as reversed_new
 Return a reverse iterator over the values of the given sequence.
 [clinic start generated code]*/
 
-static PyObject *
-reversed_new_impl(PyTypeObject *type, PyObject *seq)
-/*[clinic end generated code: output=f7854cc1df26f570 input=7db568182ab28c59]*/
+static PyValue
+reversed_new_impl(PyTypeObject *type, PyValueBorrow seq)
+/*[clinic end generated code: output=50e7515996fd4a70 input=7db568182ab28c59]*/
 {
     Py_ssize_t n;
-    PyObject *reversed_meth;
     reversedobject *ro;
 
-    reversed_meth = _PyObject_LookupSpecial(seq, &_Py_ID(__reversed__));
-    if (reversed_meth == Py_None) {
-        Py_DECREF(reversed_meth);
-        PyErr_Format(PyExc_TypeError,
-                     "'%.200s' object is not reversible",
-                     Py_TYPE(seq)->tp_name);
-        return NULL;
+    _PyStatusValue lookup = _PyValue_LookupSpecial(seq, &_Py_ID(__reversed__));
+    if (lookup.status < 0) {
+        return PyValue_NULL;
     }
-    if (reversed_meth != NULL) {
-        PyObject *res = _PyObject_CallNoArgs(reversed_meth);
-        Py_DECREF(reversed_meth);
+    if (lookup.status > 0) {
+        if (PyValue_IsNone(lookup.value)) {
+            PyValue_CLOSE(lookup.value);
+            PyErr_Format(PyExc_TypeError,
+                         "'%.200s' object is not reversible",
+                         PyValue_TYPE(seq)->tp_name);
+            return PyValue_NULL;
+        }
+        PyValue res = _PyValue_CallNoArgs(_PyThreadState_GET(), lookup.value);
+        PyValue_CLOSE(lookup.value);
         return res;
     }
-    else if (PyErr_Occurred())
-        return NULL;
 
-    if (!PySequence_Check(seq)) {
+    if (!(PyValue_IsObject(seq) && PySequence_Check(PyValue_AsKnownObjectBorrow(seq)))) {
         PyErr_Format(PyExc_TypeError,
                      "'%.200s' object is not reversible",
-                     Py_TYPE(seq)->tp_name);
-        return NULL;
+                     PyValue_TYPE(seq)->tp_name);
+        return PyValue_NULL;
     }
 
-    n = PySequence_Size(seq);
+    n = _PyValue_Size(seq);
     if (n == -1)
-        return NULL;
+        return PyValue_NULL;
 
     ro = (reversedobject *)type->tp_alloc(type, 0);
     if (ro == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     ro->index = n-1;
-    ro->seq = Py_NewRef(seq);
-    return (PyObject *)ro;
+    ro->seq = Py_NewRef(PyValue_AsKnownObjectBorrow(seq));  /* a sequence is an object */
+    return _PyValue_FromObjectResult((PyObject *)ro);
 }
 
 static void
@@ -545,5 +558,6 @@ PyTypeObject PyReversed_Type = {
     PyType_GenericAlloc,            /* tp_alloc */
     reversed_new,                   /* tp_new */
     PyObject_GC_Del,                /* tp_free */
-    .tp_vectorcall = reversed_vectorcall,
+    .tp_vectorcall = _PyValue_VectorcallThunk,
+    .tp_value_vectorcall = (_Py_valuefunc)reversed_vectorcall,
 };

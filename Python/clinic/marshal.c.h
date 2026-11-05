@@ -2,12 +2,19 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_long_value.h"    // _PyValue_AsInt()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
 
 PyDoc_STRVAR(marshal_dump__doc__,
 "dump($module, value, file, version=version, /, *, allow_code=True)\n"
@@ -29,16 +36,16 @@ PyDoc_STRVAR(marshal_dump__doc__,
 "to the file. The object will not be properly read back by load().");
 
 #define MARSHAL_DUMP_METHODDEF    \
-    {"dump", _PyCFunction_CAST(marshal_dump), METH_FASTCALL|METH_KEYWORDS, marshal_dump__doc__},
+    {"dump", _PyCFunction_CAST(marshal_dump), METH_VALUE, marshal_dump__doc__},
 
-static PyObject *
-marshal_dump_impl(PyObject *module, PyObject *value, PyObject *file,
+static PyValue
+marshal_dump_impl(PyObject *module, PyValueBorrow value, PyValueBorrow file,
                   int version, int allow_code);
 
-static PyObject *
-marshal_dump(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+marshal_dump(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -66,38 +73,31 @@ marshal_dump(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[4];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 2;
-    PyObject *value;
-    PyObject *file;
+    Py_ssize_t _idx[4];
+    PyValueBorrow value;
+    PyValueBorrow file;
     int version = Py_MARSHAL_VERSION;
     int allow_code = 1;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 2, /*maxpos*/ 3, /*minkw*/ 0, /*varpos*/ 0, _idx, 4)) {
         goto exit;
     }
-    value = args[0];
-    file = args[1];
-    if (nargs < 3) {
-        goto skip_optional_posonly;
+    value = PyValue_Borrow(args[_idx[0]]);
+    file = PyValue_Borrow(args[_idx[1]]);
+    if (_idx[2] >= 0) {
+        version = _PyValue_AsInt(PyValue_Borrow(args[_idx[2]]));
+        if (version == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
     }
-    noptargs--;
-    version = PyLong_AsInt(args[2]);
-    if (version == -1 && PyErr_Occurred()) {
-        goto exit;
+    if (_idx[3] >= 0) {
+        allow_code = _PyValue_IsTrue(PyValue_Borrow(args[_idx[3]]));
+        if (allow_code < 0) {
+            goto exit;
+        }
     }
-skip_optional_posonly:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    allow_code = PyObject_IsTrue(args[3]);
-    if (allow_code < 0) {
-        goto exit;
-    }
-skip_optional_kwonly:
-    return_value = marshal_dump_impl(module, value, file, version, allow_code);
+    return_value = marshal_dump_impl(PyValue_AsKnownObjectBorrow(module), value, file, version, allow_code);
 
 exit:
     return return_value;
@@ -122,15 +122,15 @@ PyDoc_STRVAR(marshal_load__doc__,
 "dump(), load() will substitute None for the unmarshallable type.");
 
 #define MARSHAL_LOAD_METHODDEF    \
-    {"load", _PyCFunction_CAST(marshal_load), METH_FASTCALL|METH_KEYWORDS, marshal_load__doc__},
+    {"load", _PyCFunction_CAST(marshal_load), METH_VALUE, marshal_load__doc__},
 
-static PyObject *
-marshal_load_impl(PyObject *module, PyObject *file, int allow_code);
+static PyValue
+marshal_load_impl(PyObject *module, PyValueBorrow file, int allow_code);
 
-static PyObject *
-marshal_load(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+marshal_load(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -158,26 +158,22 @@ marshal_load(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *file;
+    Py_ssize_t _idx[2];
+    PyValueBorrow file;
     int allow_code = 1;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    file = args[0];
-    if (!noptargs) {
-        goto skip_optional_kwonly;
+    file = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        allow_code = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
+        if (allow_code < 0) {
+            goto exit;
+        }
     }
-    allow_code = PyObject_IsTrue(args[1]);
-    if (allow_code < 0) {
-        goto exit;
-    }
-skip_optional_kwonly:
-    return_value = marshal_load_impl(module, file, allow_code);
+    return_value = marshal_load_impl(PyValue_AsKnownObjectBorrow(module), file, allow_code);
 
 exit:
     return return_value;
@@ -200,16 +196,16 @@ PyDoc_STRVAR(marshal_dumps__doc__,
 "has) an unsupported type.");
 
 #define MARSHAL_DUMPS_METHODDEF    \
-    {"dumps", _PyCFunction_CAST(marshal_dumps), METH_FASTCALL|METH_KEYWORDS, marshal_dumps__doc__},
+    {"dumps", _PyCFunction_CAST(marshal_dumps), METH_VALUE, marshal_dumps__doc__},
 
-static PyObject *
-marshal_dumps_impl(PyObject *module, PyObject *value, int version,
+static PyValue
+marshal_dumps_impl(PyObject *module, PyValueBorrow value, int version,
                    int allow_code);
 
-static PyObject *
-marshal_dumps(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+marshal_dumps(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -237,36 +233,29 @@ marshal_dumps(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObjec
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[3];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *value;
+    Py_ssize_t _idx[3];
+    PyValueBorrow value;
     int version = Py_MARSHAL_VERSION;
     int allow_code = 1;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 3)) {
         goto exit;
     }
-    value = args[0];
-    if (nargs < 2) {
-        goto skip_optional_posonly;
+    value = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        version = _PyValue_AsInt(PyValue_Borrow(args[_idx[1]]));
+        if (version == -1 && PyErr_Occurred()) {
+            goto exit;
+        }
     }
-    noptargs--;
-    version = PyLong_AsInt(args[1]);
-    if (version == -1 && PyErr_Occurred()) {
-        goto exit;
+    if (_idx[2] >= 0) {
+        allow_code = _PyValue_IsTrue(PyValue_Borrow(args[_idx[2]]));
+        if (allow_code < 0) {
+            goto exit;
+        }
     }
-skip_optional_posonly:
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    allow_code = PyObject_IsTrue(args[2]);
-    if (allow_code < 0) {
-        goto exit;
-    }
-skip_optional_kwonly:
-    return_value = marshal_dumps_impl(module, value, version, allow_code);
+    return_value = marshal_dumps_impl(PyValue_AsKnownObjectBorrow(module), value, version, allow_code);
 
 exit:
     return return_value;
@@ -285,15 +274,15 @@ PyDoc_STRVAR(marshal_loads__doc__,
 "Extra bytes in the input are ignored.");
 
 #define MARSHAL_LOADS_METHODDEF    \
-    {"loads", _PyCFunction_CAST(marshal_loads), METH_FASTCALL|METH_KEYWORDS, marshal_loads__doc__},
+    {"loads", _PyCFunction_CAST(marshal_loads), METH_VALUE, marshal_loads__doc__},
 
-static PyObject *
+static PyValue
 marshal_loads_impl(PyObject *module, Py_buffer *bytes, int allow_code);
 
-static PyObject *
-marshal_loads(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+marshal_loads(PyValueBorrow module, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -321,28 +310,28 @@ marshal_loads(PyObject *module, PyObject *const *args, Py_ssize_t nargs, PyObjec
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
+    Py_ssize_t _idx[2];
     Py_buffer bytes = {NULL, NULL};
     int allow_code = 1;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    if (PyObject_GetBuffer(args[0], &bytes, PyBUF_SIMPLE) != 0) {
+    if (!PyValue_IsObject(PyValue_Borrow(args[_idx[0]]))) {
+        PyErr_Format(PyExc_TypeError, "a bytes-like object is required, not '%.100s'", PyValue_TYPE(PyValue_Borrow(args[_idx[0]]))->tp_name);
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_kwonly;
-    }
-    allow_code = PyObject_IsTrue(args[1]);
-    if (allow_code < 0) {
+    if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[_idx[0]])), &bytes, PyBUF_SIMPLE) != 0) {
         goto exit;
     }
-skip_optional_kwonly:
-    return_value = marshal_loads_impl(module, &bytes, allow_code);
+    if (_idx[1] >= 0) {
+        allow_code = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
+        if (allow_code < 0) {
+            goto exit;
+        }
+    }
+    return_value = marshal_loads_impl(PyValue_AsKnownObjectBorrow(module), &bytes, allow_code);
 
 exit:
     /* Cleanup for bytes */
@@ -352,4 +341,4 @@ exit:
 
     return return_value;
 }
-/*[clinic end generated code: output=2d7ab033a01ecc97 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=0baabb2b5c15452e input=a9049054013a1b77]*/

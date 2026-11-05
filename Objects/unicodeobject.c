@@ -87,6 +87,11 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 class str "PyObject *" "&PyUnicode_Type"
 [clinic start generated code]*/
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=4884c934de622cf6]*/
@@ -472,9 +477,10 @@ static const unsigned char ascii_linebreak[] = {
     0, 0, 0, 0, 0, 0, 0, 0
 };
 
-static int convert_uc(PyObject *obj, void *addr);
+static int convert_uc(PyValueBorrow value, void *addr);
 
 struct encoding_map;
+static PyTypeObject EncodingMapType;  // used by the generated arity check
 #include "clinic/unicodeobject.c.h"
 
 _Py_error_handler
@@ -9037,11 +9043,11 @@ EncodingMap.size
 Return the size (in bytes) of this object.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 EncodingMap_size_impl(struct encoding_map *self)
-/*[clinic end generated code: output=c4c969e4c99342a4 input=004ff13f26bb5366]*/
+/*[clinic end generated code: output=de72b5379558ed0f input=004ff13f26bb5366]*/
 {
-    return PyLong_FromLong((sizeof(*self) - 1) + 16*self->count2 +
+    return PyValue_FromInt64((sizeof(*self) - 1) + 16*self->count2 +
                            128*self->count3);
 }
 
@@ -11412,11 +11418,11 @@ More specifically, words start with uppercased characters and all
 remaining cased characters have lower case.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_title_impl(PyObject *self)
-/*[clinic end generated code: output=c75ae03809574902 input=2a07e2c7df94627a]*/
+/*[clinic end generated code: output=fe9d391506403b5b input=2a07e2c7df94627a]*/
 {
-    return case_operation(self, do_title);
+    return _PyValue_FromObjectResult(case_operation(self, do_title));
 }
 
 /*[clinic input]
@@ -11428,13 +11434,13 @@ More specifically, make the first character have upper case and the
 rest lower case.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_capitalize_impl(PyObject *self)
-/*[clinic end generated code: output=e49a4c333cdb7667 input=e50e50ed45a654cf]*/
+/*[clinic end generated code: output=d5fffb175ac37e0a input=e50e50ed45a654cf]*/
 {
     if (PyUnicode_GET_LENGTH(self) == 0)
-        return unicode_result_unchanged(self);
-    return case_operation(self, do_capitalize);
+        return _PyValue_FromObjectResult(unicode_result_unchanged(self));
+    return _PyValue_FromObjectResult(case_operation(self, do_capitalize));
 }
 
 /*[clinic input]
@@ -11443,29 +11449,31 @@ str.casefold as unicode_casefold
 Return a version of the string suitable for caseless comparisons.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_casefold_impl(PyObject *self)
-/*[clinic end generated code: output=0120daf657ca40af input=384d66cc2ae30daf]*/
+/*[clinic end generated code: output=2705bc0037c0fcf9 input=384d66cc2ae30daf]*/
 {
     if (PyUnicode_IS_ASCII(self))
-        return ascii_upper_or_lower(self, 1);
-    return case_operation(self, do_casefold);
+        return _PyValue_FromObjectResult(ascii_upper_or_lower(self, 1));
+    return _PyValue_FromObjectResult(case_operation(self, do_casefold));
 }
 
 
 /* Argument converter. Accepts a single Unicode character. */
 
 static int
-convert_uc(PyObject *obj, void *addr)
+convert_uc(PyValueBorrow value, void *addr)
 {
     Py_UCS4 *fillcharloc = (Py_UCS4 *)addr;
 
-    if (!PyUnicode_Check(obj)) {
+    if (!(PyValue_IsObject(value)
+          && PyUnicode_Check(PyValue_AsKnownObjectBorrow(value)))) {
         PyErr_Format(PyExc_TypeError,
                      "The fill character must be a unicode character, "
-                     "not %.100s", Py_TYPE(obj)->tp_name);
+                     "not %.100s", PyValue_TYPE(value)->tp_name);
         return 0;
     }
+    PyObject *obj = PyValue_AsKnownObjectBorrow(value);
     if (PyUnicode_GET_LENGTH(obj) != 1) {
         PyErr_SetString(PyExc_TypeError,
                         "The fill character must be exactly one character long");
@@ -11488,19 +11496,19 @@ Padding is done using the specified fill character (default is
 a space).
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_center_impl(PyObject *self, Py_ssize_t width, Py_UCS4 fillchar)
-/*[clinic end generated code: output=420c8859effc7c0c input=df91017dfd186a78]*/
+/*[clinic end generated code: output=e7156f120aecc7b8 input=df91017dfd186a78]*/
 {
     Py_ssize_t marg, left;
 
     if (PyUnicode_GET_LENGTH(self) >= width)
-        return unicode_result_unchanged(self);
+        return _PyValue_FromObjectResult(unicode_result_unchanged(self));
 
     marg = width - PyUnicode_GET_LENGTH(self);
     left = marg / 2 + (marg & width & 1);
 
-    return pad(self, left, marg - left, fillchar);
+    return _PyValue_FromObjectResult(pad(self, left, marg - left, fillchar));
 }
 
 /* This function assumes that str1 and str2 are readied by the caller. */
@@ -12137,11 +12145,11 @@ str.encode as unicode_encode
 Encode the string using the codec registered for encoding.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_encode_impl(PyObject *self, const char *encoding, const char *errors)
-/*[clinic end generated code: output=bf78b6e2a9470e3c input=b85a9645cb33b729]*/
+/*[clinic end generated code: output=ad9743d316801057 input=b85a9645cb33b729]*/
 {
-    return PyUnicode_AsEncodedString(self, encoding, errors);
+    return _PyValue_FromObjectResult(PyUnicode_AsEncodedString(self, encoding, errors));
 }
 
 /*[clinic input]
@@ -12154,9 +12162,9 @@ Return a copy where all tab characters are expanded using spaces.
 If tabsize is not given, a tab size of 8 characters is assumed.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_expandtabs_impl(PyObject *self, int tabsize)
-/*[clinic end generated code: output=3457c5dcee26928f input=8a01914034af4c85]*/
+/*[clinic end generated code: output=f8c84fc977ae2067 input=8a01914034af4c85]*/
 {
     Py_ssize_t i, j, line_pos, src_len, incr;
     Py_UCS4 ch;
@@ -12194,12 +12202,12 @@ unicode_expandtabs_impl(PyObject *self, int tabsize)
         }
     }
     if (!found)
-        return unicode_result_unchanged(self);
+        return _PyValue_FromObjectResult(unicode_result_unchanged(self));
 
     /* Second pass: create output string and fill it */
     u = PyUnicode_New(j, PyUnicode_MAX_CHAR_VALUE(self));
     if (!u)
-        return NULL;
+        return PyValue_NULL;
     dest_data = PyUnicode_DATA(u);
 
     i = j = line_pos = 0;
@@ -12223,11 +12231,11 @@ unicode_expandtabs_impl(PyObject *self, int tabsize)
         }
     }
     assert (j == PyUnicode_GET_LENGTH(u));
-    return unicode_result(u);
+    return _PyValue_FromObjectResult(unicode_result(u));
 
   overflow:
     PyErr_SetString(PyExc_OverflowError, "new string is too long");
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -12329,11 +12337,11 @@ ASCII characters have code points in the range U+0000-U+007F.
 Empty string is ASCII too.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_isascii_impl(PyObject *self)
-/*[clinic end generated code: output=c5910d64b5a8003f input=dc74e1ced821159f]*/
+/*[clinic end generated code: output=7e32b331f06caa38 input=dc74e1ced821159f]*/
 {
-    return PyBool_FromLong(PyUnicode_IS_ASCII(self));
+    return PyValue_FromBool(PyUnicode_IS_ASCII(self));
 }
 
 /*[clinic input]
@@ -12345,9 +12353,9 @@ A string is lowercase if all cased characters in the string are
 lowercase and there is at least one cased character in the string.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_islower_impl(PyObject *self)
-/*[clinic end generated code: output=dbd41995bd005b81 input=1879b48dfc628366]*/
+/*[clinic end generated code: output=b44014d012441300 input=1879b48dfc628366]*/
 {
     Py_ssize_t i, length;
     int kind;
@@ -12360,23 +12368,23 @@ unicode_islower_impl(PyObject *self)
 
     /* Shortcut for single character strings */
     if (length == 1)
-        return PyBool_FromLong(
+        return PyValue_FromBool(
             Py_UNICODE_ISLOWER(PyUnicode_READ(kind, data, 0)));
 
     /* Special case for empty strings */
     if (length == 0)
-        Py_RETURN_FALSE;
+        return PyValue_False;
 
     cased = 0;
     for (i = 0; i < length; i++) {
         const Py_UCS4 ch = PyUnicode_READ(kind, data, i);
 
         if (Py_UNICODE_ISUPPER(ch) || Py_UNICODE_ISTITLE(ch))
-            Py_RETURN_FALSE;
+            return PyValue_False;
         else if (!cased && Py_UNICODE_ISLOWER(ch))
             cased = 1;
     }
-    return PyBool_FromLong(cased);
+    return PyValue_FromBool(cased);
 }
 
 /*[clinic input]
@@ -12388,9 +12396,9 @@ A string is uppercase if all cased characters in the string are
 uppercase and there is at least one cased character in the string.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_isupper_impl(PyObject *self)
-/*[clinic end generated code: output=049209c8e7f15f59 input=77d29904aef0e3a0]*/
+/*[clinic end generated code: output=af4595cfc04ebad3 input=77d29904aef0e3a0]*/
 {
     Py_ssize_t i, length;
     int kind;
@@ -12403,23 +12411,23 @@ unicode_isupper_impl(PyObject *self)
 
     /* Shortcut for single character strings */
     if (length == 1)
-        return PyBool_FromLong(
+        return PyValue_FromBool(
             Py_UNICODE_ISUPPER(PyUnicode_READ(kind, data, 0)) != 0);
 
     /* Special case for empty strings */
     if (length == 0)
-        Py_RETURN_FALSE;
+        return PyValue_False;
 
     cased = 0;
     for (i = 0; i < length; i++) {
         const Py_UCS4 ch = PyUnicode_READ(kind, data, i);
 
         if (Py_UNICODE_ISLOWER(ch) || Py_UNICODE_ISTITLE(ch))
-            Py_RETURN_FALSE;
+            return PyValue_False;
         else if (!cased && Py_UNICODE_ISUPPER(ch))
             cased = 1;
     }
-    return PyBool_FromLong(cased);
+    return PyValue_FromBool(cased);
 }
 
 /*[clinic input]
@@ -12431,9 +12439,9 @@ In a title-cased string, upper- and title-case characters may only
 follow uncased characters and lowercase characters only cased ones.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_istitle_impl(PyObject *self)
-/*[clinic end generated code: output=e9bf6eb91f5d3f0e input=98d32bd2e1f06f8c]*/
+/*[clinic end generated code: output=1004b66ce6f17e48 input=98d32bd2e1f06f8c]*/
 {
     Py_ssize_t i, length;
     int kind;
@@ -12447,13 +12455,13 @@ unicode_istitle_impl(PyObject *self)
     /* Shortcut for single character strings */
     if (length == 1) {
         Py_UCS4 ch = PyUnicode_READ(kind, data, 0);
-        return PyBool_FromLong((Py_UNICODE_ISTITLE(ch) != 0) ||
+        return PyValue_FromBool((Py_UNICODE_ISTITLE(ch) != 0) ||
                                (Py_UNICODE_ISUPPER(ch) != 0));
     }
 
     /* Special case for empty strings */
     if (length == 0)
-        Py_RETURN_FALSE;
+        return PyValue_False;
 
     cased = 0;
     previous_is_cased = 0;
@@ -12462,20 +12470,20 @@ unicode_istitle_impl(PyObject *self)
 
         if (Py_UNICODE_ISUPPER(ch) || Py_UNICODE_ISTITLE(ch)) {
             if (previous_is_cased)
-                Py_RETURN_FALSE;
+                return PyValue_False;
             previous_is_cased = 1;
             cased = 1;
         }
         else if (Py_UNICODE_ISLOWER(ch)) {
             if (!previous_is_cased)
-                Py_RETURN_FALSE;
+                return PyValue_False;
             previous_is_cased = 1;
             cased = 1;
         }
         else
             previous_is_cased = 0;
     }
-    return PyBool_FromLong(cased);
+    return PyValue_FromBool(cased);
 }
 
 /*[clinic input]
@@ -12487,9 +12495,9 @@ A string is whitespace if all characters in the string are
 whitespace and there is at least one character in the string.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_isspace_impl(PyObject *self)
-/*[clinic end generated code: output=163a63bfa08ac2b9 input=29e09560fc23fbeb]*/
+/*[clinic end generated code: output=34865e7537d00f95 input=29e09560fc23fbeb]*/
 {
     Py_ssize_t i, length;
     int kind;
@@ -12501,19 +12509,19 @@ unicode_isspace_impl(PyObject *self)
 
     /* Shortcut for single character strings */
     if (length == 1)
-        return PyBool_FromLong(
+        return PyValue_FromBool(
             Py_UNICODE_ISSPACE(PyUnicode_READ(kind, data, 0)));
 
     /* Special case for empty strings */
     if (length == 0)
-        Py_RETURN_FALSE;
+        return PyValue_False;
 
     for (i = 0; i < length; i++) {
         const Py_UCS4 ch = PyUnicode_READ(kind, data, i);
         if (!Py_UNICODE_ISSPACE(ch))
-            Py_RETURN_FALSE;
+            return PyValue_False;
     }
-    Py_RETURN_TRUE;
+    return PyValue_True;
 }
 
 /*[clinic input]
@@ -12525,9 +12533,9 @@ A string is alphabetic if all characters in the string are
 alphabetic and there is at least one character in the string.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_isalpha_impl(PyObject *self)
-/*[clinic end generated code: output=cc81b9ac3883ec4f input=9906a07f3e04892e]*/
+/*[clinic end generated code: output=5e3f6922776be208 input=9906a07f3e04892e]*/
 {
     Py_ssize_t i, length;
     int kind;
@@ -12539,18 +12547,18 @@ unicode_isalpha_impl(PyObject *self)
 
     /* Shortcut for single character strings */
     if (length == 1)
-        return PyBool_FromLong(
+        return PyValue_FromBool(
             Py_UNICODE_ISALPHA(PyUnicode_READ(kind, data, 0)));
 
     /* Special case for empty strings */
     if (length == 0)
-        Py_RETURN_FALSE;
+        return PyValue_False;
 
     for (i = 0; i < length; i++) {
         if (!Py_UNICODE_ISALPHA(PyUnicode_READ(kind, data, i)))
-            Py_RETURN_FALSE;
+            return PyValue_False;
     }
-    Py_RETURN_TRUE;
+    return PyValue_True;
 }
 
 /*[clinic input]
@@ -12563,9 +12571,9 @@ A string is alpha-numeric if all characters in the string are
 alpha-numeric and there is at least one character in the string.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_isalnum_impl(PyObject *self)
-/*[clinic end generated code: output=a5a23490ffc3660c input=892f64ebc171fd4f]*/
+/*[clinic end generated code: output=416cec524a6558bb input=892f64ebc171fd4f]*/
 {
     int kind;
     const void *data;
@@ -12578,19 +12586,19 @@ unicode_isalnum_impl(PyObject *self)
     /* Shortcut for single character strings */
     if (len == 1) {
         const Py_UCS4 ch = PyUnicode_READ(kind, data, 0);
-        return PyBool_FromLong(Py_UNICODE_ISALNUM(ch));
+        return PyValue_FromBool(Py_UNICODE_ISALNUM(ch));
     }
 
     /* Special case for empty strings */
     if (len == 0)
-        Py_RETURN_FALSE;
+        return PyValue_False;
 
     for (i = 0; i < len; i++) {
         const Py_UCS4 ch = PyUnicode_READ(kind, data, i);
         if (!Py_UNICODE_ISALNUM(ch))
-            Py_RETURN_FALSE;
+            return PyValue_False;
     }
-    Py_RETURN_TRUE;
+    return PyValue_True;
 }
 
 /*[clinic input]
@@ -12602,9 +12610,9 @@ A string is a decimal string if all characters in the string are
 decimal and there is at least one character in the string.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_isdecimal_impl(PyObject *self)
-/*[clinic end generated code: output=fb2dcdb62d3fc548 input=63b0453c48cad0af]*/
+/*[clinic end generated code: output=36f4a747788343b0 input=63b0453c48cad0af]*/
 {
     Py_ssize_t i, length;
     int kind;
@@ -12616,18 +12624,18 @@ unicode_isdecimal_impl(PyObject *self)
 
     /* Shortcut for single character strings */
     if (length == 1)
-        return PyBool_FromLong(
+        return PyValue_FromBool(
             Py_UNICODE_ISDECIMAL(PyUnicode_READ(kind, data, 0)));
 
     /* Special case for empty strings */
     if (length == 0)
-        Py_RETURN_FALSE;
+        return PyValue_False;
 
     for (i = 0; i < length; i++) {
         if (!Py_UNICODE_ISDECIMAL(PyUnicode_READ(kind, data, i)))
-            Py_RETURN_FALSE;
+            return PyValue_False;
     }
-    Py_RETURN_TRUE;
+    return PyValue_True;
 }
 
 /*[clinic input]
@@ -12639,9 +12647,9 @@ A string is a digit string if all characters in the string are
 digits and there is at least one character in the string.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_isdigit_impl(PyObject *self)
-/*[clinic end generated code: output=10a6985311da6858 input=353b03747b062e4b]*/
+/*[clinic end generated code: output=d7799737b217baa3 input=353b03747b062e4b]*/
 {
     Py_ssize_t i, length;
     int kind;
@@ -12654,18 +12662,18 @@ unicode_isdigit_impl(PyObject *self)
     /* Shortcut for single character strings */
     if (length == 1) {
         const Py_UCS4 ch = PyUnicode_READ(kind, data, 0);
-        return PyBool_FromLong(Py_UNICODE_ISDIGIT(ch));
+        return PyValue_FromBool(Py_UNICODE_ISDIGIT(ch));
     }
 
     /* Special case for empty strings */
     if (length == 0)
-        Py_RETURN_FALSE;
+        return PyValue_False;
 
     for (i = 0; i < length; i++) {
         if (!Py_UNICODE_ISDIGIT(PyUnicode_READ(kind, data, i)))
-            Py_RETURN_FALSE;
+            return PyValue_False;
     }
-    Py_RETURN_TRUE;
+    return PyValue_True;
 }
 
 /*[clinic input]
@@ -12677,9 +12685,9 @@ A string is numeric if all characters in the string are numeric and
 there is at least one character in the string.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_isnumeric_impl(PyObject *self)
-/*[clinic end generated code: output=9172a32d9013051a input=83b2a072ed7aff48]*/
+/*[clinic end generated code: output=85c32a8f41398863 input=83b2a072ed7aff48]*/
 {
     Py_ssize_t i, length;
     int kind;
@@ -12691,18 +12699,18 @@ unicode_isnumeric_impl(PyObject *self)
 
     /* Shortcut for single character strings */
     if (length == 1)
-        return PyBool_FromLong(
+        return PyValue_FromBool(
             Py_UNICODE_ISNUMERIC(PyUnicode_READ(kind, data, 0)));
 
     /* Special case for empty strings */
     if (length == 0)
-        Py_RETURN_FALSE;
+        return PyValue_False;
 
     for (i = 0; i < length; i++) {
         if (!Py_UNICODE_ISNUMERIC(PyUnicode_READ(kind, data, i)))
-            Py_RETURN_FALSE;
+            return PyValue_False;
     }
-    Py_RETURN_TRUE;
+    return PyValue_True;
 }
 
 Py_ssize_t
@@ -12758,11 +12766,11 @@ Call keyword.iskeyword(s) to test whether string s is a reserved
 identifier, such as "def" or "class".
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_isidentifier_impl(PyObject *self)
-/*[clinic end generated code: output=fe585a9666572905 input=cabde62c20a3be6b]*/
+/*[clinic end generated code: output=564bf07cc353e970 input=cabde62c20a3be6b]*/
 {
-    return PyBool_FromLong(PyUnicode_IsIdentifier(self));
+    return PyValue_FromBool(PyUnicode_IsIdentifier(self));
 }
 
 /*[clinic input]
@@ -12774,9 +12782,9 @@ Return True if all characters in the string are printable, False otherwise.
 A character is printable if repr() may use it in its output.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_isprintable_impl(PyObject *self)
-/*[clinic end generated code: output=3ab9626cd32dd1a0 input=18345ba847084ec5]*/
+/*[clinic end generated code: output=bf80578183ed2bbd input=18345ba847084ec5]*/
 {
     Py_ssize_t i, length;
     int kind;
@@ -12788,15 +12796,15 @@ unicode_isprintable_impl(PyObject *self)
 
     /* Shortcut for single character strings */
     if (length == 1)
-        return PyBool_FromLong(
+        return PyValue_FromBool(
             Py_UNICODE_ISPRINTABLE(PyUnicode_READ(kind, data, 0)));
 
     for (i = 0; i < length; i++) {
         if (!Py_UNICODE_ISPRINTABLE(PyUnicode_READ(kind, data, i))) {
-            Py_RETURN_FALSE;
+            return PyValue_False;
         }
     }
-    Py_RETURN_TRUE;
+    return PyValue_True;
 }
 
 /*[clinic input]
@@ -12813,11 +12821,17 @@ string.  The result is returned as a new string.
 Example: '.'.join(['ab', 'pq', 'rs']) -> 'ab.pq.rs'
 [clinic start generated code]*/
 
-static PyObject *
-unicode_join(PyObject *self, PyObject *iterable)
-/*[clinic end generated code: output=6857e7cecfe7bf98 input=fd330a11ee845fb2]*/
+static PyValue
+unicode_join_impl(PyObject *self, PyValueBorrow iterable)
+/*[clinic end generated code: output=12b1059667be9314 input=fd330a11ee845fb2]*/
 {
-    return PyUnicode_Join(self, iterable);
+    PyObject *iterable_obj = _PyValue_AsObjectAt(iterable, BOX_SITE_PARSER);
+    if (iterable_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *res = PyUnicode_Join(self, iterable_obj);
+    Py_DECREF(iterable_obj);
+    return _PyValue_FromObjectResult(res);
 }
 
 static Py_ssize_t
@@ -12839,14 +12853,14 @@ Padding is done using the specified fill character (default is
 a space).
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_ljust_impl(PyObject *self, Py_ssize_t width, Py_UCS4 fillchar)
-/*[clinic end generated code: output=1cce0e0e0a0b84b3 input=8a55f06694c20ed6]*/
+/*[clinic end generated code: output=37f5ab084458a119 input=8a55f06694c20ed6]*/
 {
     if (PyUnicode_GET_LENGTH(self) >= width)
-        return unicode_result_unchanged(self);
+        return _PyValue_FromObjectResult(unicode_result_unchanged(self));
 
-    return pad(self, 0, width - PyUnicode_GET_LENGTH(self), fillchar);
+    return _PyValue_FromObjectResult(pad(self, 0, width - PyUnicode_GET_LENGTH(self), fillchar));
 }
 
 /*[clinic input]
@@ -12855,13 +12869,13 @@ str.lower as unicode_lower
 Return a copy of the string converted to lowercase.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_lower_impl(PyObject *self)
-/*[clinic end generated code: output=84ef9ed42efad663 input=60a2984b8beff23a]*/
+/*[clinic end generated code: output=4e78bfafe35fe86c input=60a2984b8beff23a]*/
 {
     if (PyUnicode_IS_ASCII(self))
-        return ascii_upper_or_lower(self, 1);
-    return case_operation(self, do_lower);
+        return _PyValue_FromObjectResult(ascii_upper_or_lower(self, 1));
+    return _PyValue_FromObjectResult(case_operation(self, do_lower));
 }
 
 #define LEFTSTRIP 0
@@ -13031,11 +13045,13 @@ do_strip(PyObject *self, int striptype)
 
 
 static PyObject *
-do_argstrip(PyObject *self, int striptype, PyObject *sep)
+do_argstrip(PyObject *self, int striptype, PyValueBorrow sep)
 {
-    if (sep != Py_None) {
-        if (PyUnicode_Check(sep))
-            return _PyUnicode_XStrip(self, striptype, sep);
+    if (!PyValue_IsNone(sep)) {
+        if (PyValue_IsObject(sep)
+            && PyUnicode_Check(PyValue_AsKnownObjectBorrow(sep)))
+            return _PyUnicode_XStrip(self, striptype,
+                                     PyValue_AsKnownObjectBorrow(sep));
         else {
             PyErr_Format(PyExc_TypeError,
                          "%s arg must be None or str",
@@ -13060,11 +13076,11 @@ Return a copy of the string with leading and trailing whitespace removed.
 If chars is given and not None, remove characters in chars instead.
 [clinic start generated code]*/
 
-static PyObject *
-unicode_strip_impl(PyObject *self, PyObject *chars)
-/*[clinic end generated code: output=ca19018454345d57 input=8bc6353450345fbd]*/
+static PyValue
+unicode_strip_impl(PyObject *self, PyValueBorrow chars)
+/*[clinic end generated code: output=4a41c63f0a094240 input=8bc6353450345fbd]*/
 {
-    return do_argstrip(self, BOTHSTRIP, chars);
+    return _PyValue_FromObjectResult(do_argstrip(self, BOTHSTRIP, chars));
 }
 
 
@@ -13079,11 +13095,11 @@ Return a copy of the string with leading whitespace removed.
 If chars is given and not None, remove characters in chars instead.
 [clinic start generated code]*/
 
-static PyObject *
-unicode_lstrip_impl(PyObject *self, PyObject *chars)
-/*[clinic end generated code: output=3b43683251f79ca7 input=529f9f3834448671]*/
+static PyValue
+unicode_lstrip_impl(PyObject *self, PyValueBorrow chars)
+/*[clinic end generated code: output=7b833cd18939fdd6 input=529f9f3834448671]*/
 {
-    return do_argstrip(self, LEFTSTRIP, chars);
+    return _PyValue_FromObjectResult(do_argstrip(self, LEFTSTRIP, chars));
 }
 
 
@@ -13098,11 +13114,11 @@ Return a copy of the string with trailing whitespace removed.
 If chars is given and not None, remove characters in chars instead.
 [clinic start generated code]*/
 
-static PyObject *
-unicode_rstrip_impl(PyObject *self, PyObject *chars)
-/*[clinic end generated code: output=4a59230017cc3b7a input=62566c627916557f]*/
+static PyValue
+unicode_rstrip_impl(PyObject *self, PyValueBorrow chars)
+/*[clinic end generated code: output=9d405c0b26edf181 input=62566c627916557f]*/
 {
-    return do_argstrip(self, RIGHTSTRIP, chars);
+    return _PyValue_FromObjectResult(do_argstrip(self, RIGHTSTRIP, chars));
 }
 
 
@@ -13188,12 +13204,12 @@ If count is given, only the first count occurrences are replaced.
 If count is not specified or -1, then all occurrences are replaced.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_replace_impl(PyObject *self, PyObject *old, PyObject *new,
                      Py_ssize_t count)
-/*[clinic end generated code: output=b63f1a8b5eebf448 input=d15a6886b05e2edc]*/
+/*[clinic end generated code: output=7a65d550b0575e9f input=d15a6886b05e2edc]*/
 {
-    return replace(self, old, new, count);
+    return _PyValue_FromObjectResult(replace(self, old, new, count));
 }
 
 /*[clinic input]
@@ -13209,19 +13225,19 @@ string[len(prefix):].  Otherwise, return a copy of the original
 string.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_removeprefix_impl(PyObject *self, PyObject *prefix)
-/*[clinic end generated code: output=f1e5945e9763bcb9 input=90d162724944bfa7]*/
+/*[clinic end generated code: output=a9350650b822d8d4 input=90d162724944bfa7]*/
 {
     int match = tailmatch(self, prefix, 0, PY_SSIZE_T_MAX, -1);
     if (match == -1) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (match) {
-        return PyUnicode_Substring(self, PyUnicode_GET_LENGTH(prefix),
-                                   PyUnicode_GET_LENGTH(self));
+        return _PyValue_FromObjectResult(PyUnicode_Substring(self, PyUnicode_GET_LENGTH(prefix),
+                                   PyUnicode_GET_LENGTH(self)));
     }
-    return unicode_result_unchanged(self);
+    return _PyValue_FromObjectResult(unicode_result_unchanged(self));
 }
 
 /*[clinic input]
@@ -13237,19 +13253,19 @@ empty, return string[:-len(suffix)].  Otherwise, return a copy of
 the original string.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_removesuffix_impl(PyObject *self, PyObject *suffix)
-/*[clinic end generated code: output=d36629e227636822 input=6efc96152d4bfcd5]*/
+/*[clinic end generated code: output=804d80e3457f040d input=6efc96152d4bfcd5]*/
 {
     int match = tailmatch(self, suffix, 0, PY_SSIZE_T_MAX, +1);
     if (match == -1) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (match) {
-        return PyUnicode_Substring(self, 0, PyUnicode_GET_LENGTH(self)
-                                            - PyUnicode_GET_LENGTH(suffix));
+        return _PyValue_FromObjectResult(PyUnicode_Substring(self, 0, PyUnicode_GET_LENGTH(self)
+                                            - PyUnicode_GET_LENGTH(suffix)));
     }
-    return unicode_result_unchanged(self);
+    return _PyValue_FromObjectResult(unicode_result_unchanged(self));
 }
 
 static PyObject *
@@ -13403,14 +13419,14 @@ Padding is done using the specified fill character (default is
 a space).
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_rjust_impl(PyObject *self, Py_ssize_t width, Py_UCS4 fillchar)
-/*[clinic end generated code: output=804a1a57fbe8d5cf input=1256a8d659589907]*/
+/*[clinic end generated code: output=2c4b3bc91d88791d input=1256a8d659589907]*/
 {
     if (PyUnicode_GET_LENGTH(self) >= width)
-        return unicode_result_unchanged(self);
+        return _PyValue_FromObjectResult(unicode_result_unchanged(self));
 
-    return pad(self, width - PyUnicode_GET_LENGTH(self), 0, fillchar);
+    return _PyValue_FromObjectResult(pad(self, width - PyUnicode_GET_LENGTH(self), 0, fillchar));
 }
 
 PyObject *
@@ -13446,19 +13462,20 @@ punctuation, consider using the regular expression module.
 
 [clinic start generated code]*/
 
-static PyObject *
-unicode_split_impl(PyObject *self, PyObject *sep, Py_ssize_t maxsplit)
-/*[clinic end generated code: output=3a65b1db356948dc input=288cfd6bc8828f5a]*/
+static PyValue
+unicode_split_impl(PyObject *self, PyValueBorrow sep, Py_ssize_t maxsplit)
+/*[clinic end generated code: output=07911e6d7c9059d9 input=288cfd6bc8828f5a]*/
 {
-    if (sep == Py_None)
-        return split(self, NULL, maxsplit);
-    if (PyUnicode_Check(sep))
-        return split(self, sep, maxsplit);
+    if (PyValue_IsNone(sep))
+        return _PyValue_FromObjectResult(split(self, NULL, maxsplit));
+    if ((PyValue_IsObject(sep) && PyUnicode_Check(PyValue_AsKnownObjectBorrow(sep))))
+        return _PyValue_FromObjectResult(
+            split(self, PyValue_AsKnownObjectBorrow(sep), maxsplit));
 
     PyErr_Format(PyExc_TypeError,
                  "must be str or None, not %.100s",
-                 Py_TYPE(sep)->tp_name);
-    return NULL;
+                 PyValue_TYPE(sep)->tp_name);
+    return PyValue_NULL;
 }
 
 PyObject *
@@ -13580,11 +13597,17 @@ If the separator is not found, returns a 3-tuple containing
 the original string and two empty strings.
 [clinic start generated code]*/
 
-static PyObject *
-unicode_partition(PyObject *self, PyObject *sep)
-/*[clinic end generated code: output=e4ced7bd253ca3c4 input=e45faa8c26270cb1]*/
+static PyValue
+unicode_partition_impl(PyObject *self, PyValueBorrow sep)
+/*[clinic end generated code: output=ddad6d6729c8d053 input=e45faa8c26270cb1]*/
 {
-    return PyUnicode_Partition(self, sep);
+    PyObject *sep_obj = _PyValue_AsObjectAt(sep, BOX_SITE_PARSER);
+    if (sep_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *res = PyUnicode_Partition(self, sep_obj);
+    Py_DECREF(sep_obj);
+    return _PyValue_FromObjectResult(res);
 }
 
 /*[clinic input]
@@ -13601,11 +13624,17 @@ If the separator is not found, returns a 3-tuple containing two
 empty strings and the original string.
 [clinic start generated code]*/
 
-static PyObject *
-unicode_rpartition(PyObject *self, PyObject *sep)
-/*[clinic end generated code: output=1aa13cf1156572aa input=53a7f8cb19975b7c]*/
+static PyValue
+unicode_rpartition_impl(PyObject *self, PyValueBorrow sep)
+/*[clinic end generated code: output=60d767540042daaf input=53a7f8cb19975b7c]*/
 {
-    return PyUnicode_RPartition(self, sep);
+    PyObject *sep_obj = _PyValue_AsObjectAt(sep, BOX_SITE_PARSER);
+    if (sep_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *res = PyUnicode_RPartition(self, sep_obj);
+    Py_DECREF(sep_obj);
+    return _PyValue_FromObjectResult(res);
 }
 
 PyObject *
@@ -13626,19 +13655,20 @@ Return a list of the substrings in the string, using sep as the separator string
 Splitting starts at the end of the string and works to the front.
 [clinic start generated code]*/
 
-static PyObject *
-unicode_rsplit_impl(PyObject *self, PyObject *sep, Py_ssize_t maxsplit)
-/*[clinic end generated code: output=c2b815c63bcabffc input=0f762e30d267fa83]*/
+static PyValue
+unicode_rsplit_impl(PyObject *self, PyValueBorrow sep, Py_ssize_t maxsplit)
+/*[clinic end generated code: output=845994697cf932b2 input=0f762e30d267fa83]*/
 {
-    if (sep == Py_None)
-        return rsplit(self, NULL, maxsplit);
-    if (PyUnicode_Check(sep))
-        return rsplit(self, sep, maxsplit);
+    if (PyValue_IsNone(sep))
+        return _PyValue_FromObjectResult(rsplit(self, NULL, maxsplit));
+    if ((PyValue_IsObject(sep) && PyUnicode_Check(PyValue_AsKnownObjectBorrow(sep))))
+        return _PyValue_FromObjectResult(
+            rsplit(self, PyValue_AsKnownObjectBorrow(sep), maxsplit));
 
     PyErr_Format(PyExc_TypeError,
                  "must be str or None, not %.100s",
-                 Py_TYPE(sep)->tp_name);
-    return NULL;
+                 PyValue_TYPE(sep)->tp_name);
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -13653,11 +13683,11 @@ Line breaks are not included in the resulting list unless keepends
 is given and true.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_splitlines_impl(PyObject *self, int keepends)
-/*[clinic end generated code: output=f664dcdad153ec40 input=b45ea0f87645a06d]*/
+/*[clinic end generated code: output=ae6ab08cf44d5bec input=b45ea0f87645a06d]*/
 {
-    return PyUnicode_Splitlines(self, keepends);
+    return _PyValue_FromObjectResult(PyUnicode_Splitlines(self, keepends));
 }
 
 static
@@ -13673,11 +13703,11 @@ str.swapcase as unicode_swapcase
 Convert uppercase characters to lowercase and lowercase characters to uppercase.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_swapcase_impl(PyObject *self)
-/*[clinic end generated code: output=5d28966bf6d7b2af input=85bc39a9b4e8ee91]*/
+/*[clinic end generated code: output=a1a37acf606dbd00 input=85bc39a9b4e8ee91]*/
 {
-    return case_operation(self, do_swapcase);
+    return _PyValue_FromObjectResult(case_operation(self, do_swapcase));
 }
 
 static int
@@ -13764,9 +13794,9 @@ argument, it must be a string, whose characters will be mapped to
 None in the result.
 [clinic start generated code]*/
 
-static PyObject *
-unicode_maketrans_impl(PyObject *x, PyObject *y, PyObject *z)
-/*[clinic end generated code: output=a925c89452bd5881 input=66bc00a1b4258a6e]*/
+static PyValue
+unicode_maketrans_impl(PyValueBorrow x, PyObject *y, PyObject *z)
+/*[clinic end generated code: output=5a69e6a2125cf564 input=66bc00a1b4258a6e]*/
 {
     PyObject *new = NULL, *key, *value;
     Py_ssize_t i = 0;
@@ -13774,28 +13804,29 @@ unicode_maketrans_impl(PyObject *x, PyObject *y, PyObject *z)
 
     new = PyDict_New();
     if (!new)
-        return NULL;
+        return PyValue_NULL;
     if (y != NULL) {
         int x_kind, y_kind, z_kind;
         const void *x_data, *y_data, *z_data;
 
         /* x must be a string too, of equal length */
-        if (!PyUnicode_Check(x)) {
+        if (!(PyValue_IsObject(x) && PyUnicode_Check(PyValue_AsKnownObjectBorrow(x)))) {
             PyErr_SetString(PyExc_TypeError, "first maketrans argument must "
                             "be a string if there is a second argument");
             goto err;
         }
-        if (PyUnicode_GET_LENGTH(x) != PyUnicode_GET_LENGTH(y)) {
+        PyObject *x_obj = PyValue_AsKnownObjectBorrow(x);  // checked above
+        if (PyUnicode_GET_LENGTH(x_obj) != PyUnicode_GET_LENGTH(y)) {
             PyErr_SetString(PyExc_ValueError, "the first two maketrans "
                             "arguments must have equal length");
             goto err;
         }
         /* create entries for translating chars in x to those in y */
-        x_kind = PyUnicode_KIND(x);
+        x_kind = PyUnicode_KIND(x_obj);
         y_kind = PyUnicode_KIND(y);
-        x_data = PyUnicode_DATA(x);
+        x_data = PyUnicode_DATA(x_obj);
         y_data = PyUnicode_DATA(y);
-        for (i = 0; i < PyUnicode_GET_LENGTH(x); i++) {
+        for (i = 0; i < PyUnicode_GET_LENGTH(x_obj); i++) {
             key = PyLong_FromLong(PyUnicode_READ(x_kind, x_data, i));
             if (!key)
                 goto err;
@@ -13826,23 +13857,25 @@ unicode_maketrans_impl(PyObject *x, PyObject *y, PyObject *z)
         }
     } else {
         /* x must be a dict */
-        if (!PyAnyDict_CheckExact(x)) {
+        if (!(PyValue_IsObject(x)
+              && PyAnyDict_CheckExact(PyValue_AsKnownObjectBorrow(x)))) {
             PyErr_SetString(PyExc_TypeError, "if you give only one argument "
                             "to maketrans it must be a dict");
             goto err;
         }
         /* copy entries into the new dict, converting string keys to int keys */
         int errcode;
-        Py_BEGIN_CRITICAL_SECTION(x);
-        errcode = unicode_maketrans_from_dict(x, new);
+        PyObject *x_obj = PyValue_AsKnownObjectBorrow(x);  // checked above
+        Py_BEGIN_CRITICAL_SECTION(x_obj);
+        errcode = unicode_maketrans_from_dict(x_obj, new);
         Py_END_CRITICAL_SECTION();
         if (errcode < 0)
             goto err;
     }
-    return new;
+    return _PyValue_FromObjectResult(new);
   err:
     Py_DECREF(new);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -13862,11 +13895,17 @@ LookupError, the character is left untouched.  Characters mapped to
 None are deleted.
 [clinic start generated code]*/
 
-static PyObject *
-unicode_translate(PyObject *self, PyObject *table)
-/*[clinic end generated code: output=3cb448ff2fd96bf3 input=48cf0efe06bc1b75]*/
+static PyValue
+unicode_translate_impl(PyObject *self, PyValueBorrow table)
+/*[clinic end generated code: output=7ad1d8a76cb1ca29 input=48cf0efe06bc1b75]*/
 {
-    return _PyUnicode_TranslateCharmap(self, table, "ignore");
+    PyObject *table_obj = _PyValue_AsObjectAt(table, BOX_SITE_PARSER);
+    if (table_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *res = _PyUnicode_TranslateCharmap(self, table_obj, "ignore");
+    Py_DECREF(table_obj);
+    return _PyValue_FromObjectResult(res);
 }
 
 /*[clinic input]
@@ -13875,13 +13914,13 @@ str.upper as unicode_upper
 Return a copy of the string converted to uppercase.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_upper_impl(PyObject *self)
-/*[clinic end generated code: output=1b7ddd16bbcdc092 input=db3d55682dfe2e6c]*/
+/*[clinic end generated code: output=1c5aa803cd69888e input=db3d55682dfe2e6c]*/
 {
     if (PyUnicode_IS_ASCII(self))
-        return ascii_upper_or_lower(self, 0);
-    return case_operation(self, do_upper);
+        return _PyValue_FromObjectResult(ascii_upper_or_lower(self, 0));
+    return _PyValue_FromObjectResult(case_operation(self, do_upper));
 }
 
 /*[clinic input]
@@ -13896,9 +13935,9 @@ Pad a numeric string with zeros on the left, to fill a field of the given width.
 The string is never truncated.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_zfill_impl(PyObject *self, Py_ssize_t width)
-/*[clinic end generated code: output=e13fb6bdf8e3b9df input=25a4ee0ea3e58ce0]*/
+/*[clinic end generated code: output=b6d16a0084e87174 input=25a4ee0ea3e58ce0]*/
 {
     Py_ssize_t fill;
     PyObject *u;
@@ -13907,14 +13946,14 @@ unicode_zfill_impl(PyObject *self, Py_ssize_t width)
     Py_UCS4 chr;
 
     if (PyUnicode_GET_LENGTH(self) >= width)
-        return unicode_result_unchanged(self);
+        return _PyValue_FromObjectResult(unicode_result_unchanged(self));
 
     fill = width - PyUnicode_GET_LENGTH(self);
 
     u = pad(self, fill, 0, '0');
 
     if (u == NULL)
-        return NULL;
+        return PyValue_NULL;
 
     kind = PyUnicode_KIND(u);
     data = PyUnicode_DATA(u);
@@ -13927,7 +13966,7 @@ unicode_zfill_impl(PyObject *self, Py_ssize_t width)
     }
 
     assert(_PyUnicode_CheckConsistency(u, 1));
-    return u;
+    return _PyValue_FromObjectResult(u);
 }
 
 /*[clinic input]
@@ -13946,19 +13985,20 @@ str.startswith as unicode_startswith
 Return True if the string starts with the specified prefix, False otherwise.
 [clinic start generated code]*/
 
-static PyObject *
-unicode_startswith_impl(PyObject *self, PyObject *subobj, Py_ssize_t start,
-                        Py_ssize_t end)
-/*[clinic end generated code: output=4bd7cfd0803051d4 input=766bdbd33df251dc]*/
+static PyValue
+unicode_startswith_impl(PyObject *self, PyValueBorrow subobj,
+                        Py_ssize_t start, Py_ssize_t end)
+/*[clinic end generated code: output=bd51cf907242d825 input=766bdbd33df251dc]*/
 {
-    if (PyTuple_Check(subobj)) {
+    if ((PyValue_IsObject(subobj) && PyTuple_Check(PyValue_AsKnownObjectBorrow(subobj)))) {
+        PyObject *subtuple = PyValue_AsKnownObjectBorrow(subobj);
         Py_ssize_t i;
-        for (i = 0; i < PyTuple_GET_SIZE(subobj); i++) {
-            // The loop bound proves that subobj is a tuple and i in range.
+        for (i = 0; i < PyTuple_GET_SIZE(subtuple); i++) {
+            // The loop bound proves that i is in range.
             PyObject *substring = _PyValue_AsObjectAt(
-                PyTuple_GET_VALUE(subobj, i), BOX_SITE_TUPLE);
+                PyTuple_GET_VALUE(subtuple, i), BOX_SITE_TUPLE);
             if (substring == NULL) {
-                return NULL;
+                return PyValue_NULL;
             }
             if (!PyUnicode_Check(substring)) {
                 PyErr_Format(PyExc_TypeError,
@@ -13966,31 +14006,32 @@ unicode_startswith_impl(PyObject *self, PyObject *subobj, Py_ssize_t start,
                              "not %.100s",
                              Py_TYPE(substring)->tp_name);
                 Py_DECREF(substring);
-                return NULL;
+                return PyValue_NULL;
             }
             int result = tailmatch(self, substring, start, end, -1);
             Py_DECREF(substring);
             if (result < 0) {
-                return NULL;
+                return PyValue_NULL;
             }
             if (result) {
-                Py_RETURN_TRUE;
+                return PyValue_True;
             }
         }
         /* nothing matched */
-        Py_RETURN_FALSE;
+        return PyValue_False;
     }
-    if (!PyUnicode_Check(subobj)) {
+    if (!(PyValue_IsObject(subobj) && PyUnicode_Check(PyValue_AsKnownObjectBorrow(subobj)))) {
         PyErr_Format(PyExc_TypeError,
                      "startswith first arg must be str or "
-                     "a tuple of str, not %.100s", Py_TYPE(subobj)->tp_name);
-        return NULL;
+                     "a tuple of str, not %.100s", PyValue_TYPE(subobj)->tp_name);
+        return PyValue_NULL;
     }
-    int result = tailmatch(self, subobj, start, end, -1);
+    int result = tailmatch(self, PyValue_AsKnownObjectBorrow(subobj),
+                           start, end, -1);
     if (result < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyBool_FromLong(result);
+    return PyValue_FromBool(result);
 }
 
 
@@ -14010,19 +14051,20 @@ str.endswith as unicode_endswith
 Return True if the string ends with the specified suffix, False otherwise.
 [clinic start generated code]*/
 
-static PyObject *
-unicode_endswith_impl(PyObject *self, PyObject *subobj, Py_ssize_t start,
+static PyValue
+unicode_endswith_impl(PyObject *self, PyValueBorrow subobj, Py_ssize_t start,
                       Py_ssize_t end)
-/*[clinic end generated code: output=cce6f8ceb0102ca9 input=b66bf6d5547ba1aa]*/
+/*[clinic end generated code: output=cc9521c26168e226 input=b66bf6d5547ba1aa]*/
 {
-    if (PyTuple_Check(subobj)) {
+    if ((PyValue_IsObject(subobj) && PyTuple_Check(PyValue_AsKnownObjectBorrow(subobj)))) {
+        PyObject *subtuple = PyValue_AsKnownObjectBorrow(subobj);
         Py_ssize_t i;
-        for (i = 0; i < PyTuple_GET_SIZE(subobj); i++) {
-            // The loop bound proves that subobj is a tuple and i in range.
+        for (i = 0; i < PyTuple_GET_SIZE(subtuple); i++) {
+            // The loop bound proves that i is in range.
             PyObject *substring = _PyValue_AsObjectAt(
-                PyTuple_GET_VALUE(subobj, i), BOX_SITE_TUPLE);
+                PyTuple_GET_VALUE(subtuple, i), BOX_SITE_TUPLE);
             if (substring == NULL) {
-                return NULL;
+                return PyValue_NULL;
             }
             if (!PyUnicode_Check(substring)) {
                 PyErr_Format(PyExc_TypeError,
@@ -14030,30 +14072,31 @@ unicode_endswith_impl(PyObject *self, PyObject *subobj, Py_ssize_t start,
                              "not %.100s",
                              Py_TYPE(substring)->tp_name);
                 Py_DECREF(substring);
-                return NULL;
+                return PyValue_NULL;
             }
             int result = tailmatch(self, substring, start, end, +1);
             Py_DECREF(substring);
             if (result < 0) {
-                return NULL;
+                return PyValue_NULL;
             }
             if (result) {
-                Py_RETURN_TRUE;
+                return PyValue_True;
             }
         }
-        Py_RETURN_FALSE;
+        return PyValue_False;
     }
-    if (!PyUnicode_Check(subobj)) {
+    if (!(PyValue_IsObject(subobj) && PyUnicode_Check(PyValue_AsKnownObjectBorrow(subobj)))) {
         PyErr_Format(PyExc_TypeError,
                      "endswith first arg must be str or "
-                     "a tuple of str, not %.100s", Py_TYPE(subobj)->tp_name);
-        return NULL;
+                     "a tuple of str, not %.100s", PyValue_TYPE(subobj)->tp_name);
+        return PyValue_NULL;
     }
-    int result = tailmatch(self, subobj, start, end, +1);
+    int result = tailmatch(self, PyValue_AsKnownObjectBorrow(subobj),
+                           start, end, +1);
     if (result < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyBool_FromLong(result);
+    return PyValue_FromBool(result);
 }
 
 
@@ -14083,9 +14126,9 @@ str.__format__ as unicode___format__
 Return a formatted version of the string as described by format_spec.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode___format___impl(PyObject *self, PyObject *format_spec)
-/*[clinic end generated code: output=45fceaca6d2ba4c8 input=77a2a19f3f7969f2]*/
+/*[clinic end generated code: output=f7c0118a59d702a0 input=77a2a19f3f7969f2]*/
 {
     _PyUnicodeWriter writer;
     int ret;
@@ -14096,9 +14139,9 @@ unicode___format___impl(PyObject *self, PyObject *format_spec)
                                           PyUnicode_GET_LENGTH(format_spec));
     if (ret == -1) {
         _PyUnicodeWriter_Dealloc(&writer);
-        return NULL;
+        return PyValue_NULL;
     }
-    return _PyUnicodeWriter_Finish(&writer);
+    return _PyValue_FromObjectResult(_PyUnicodeWriter_Finish(&writer));
 }
 
 /*[clinic input]
@@ -14107,9 +14150,9 @@ str.__sizeof__ as unicode_sizeof
 Return the size of the string in memory, in bytes.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 unicode_sizeof_impl(PyObject *self)
-/*[clinic end generated code: output=6dbc2f5a408b6d4f input=6dd011c108e33fb0]*/
+/*[clinic end generated code: output=f9d709cfa4eddd6a input=6dd011c108e33fb0]*/
 {
     Py_ssize_t size;
 
@@ -14133,7 +14176,7 @@ unicode_sizeof_impl(PyObject *self)
     if (_PyUnicode_HAS_UTF8_MEMORY(self))
         size += PyUnicode_UTF8_LENGTH(self) + 1;
 
-    return PyLong_FromSsize_t(size);
+    return PyValue_FromInt64(size);
 }
 
 static PyObject *
@@ -14473,26 +14516,31 @@ str.__new__ as unicode_new
 
 [clinic start generated code]*/
 
-static PyObject *
-unicode_new_impl(PyTypeObject *type, PyObject *x, const char *encoding,
+static PyValue
+unicode_new_impl(PyTypeObject *type, PyValueBorrow x, const char *encoding,
                  const char *errors)
-/*[clinic end generated code: output=fc72d4878b0b57e9 input=e81255e5676d174e]*/
+/*[clinic end generated code: output=262a06b39a9b17dc input=e81255e5676d174e]*/
 {
     PyObject *unicode;
-    if (x == NULL) {
+    if (PyValue_IsNull(x)) {
         unicode = _PyUnicode_GetEmpty();
     }
     else if (encoding == NULL && errors == NULL) {
-        unicode = PyObject_Str(x);
+        unicode = _PyValue_Str(x);
     }
     else {
-        unicode = PyUnicode_FromEncodedObject(x, encoding, errors);
+        PyObject *x_obj = _PyValue_AsObjectAt(x, BOX_SITE_PARSER);
+        if (x_obj == NULL) {
+            return PyValue_NULL;
+        }
+        unicode = PyUnicode_FromEncodedObject(x_obj, encoding, errors);
+        Py_DECREF(x_obj);
     }
 
     if (unicode != NULL && type != &PyUnicode_Type) {
         Py_SETREF(unicode, unicode_subtype_new(type, unicode));
     }
-    return unicode;
+    return _PyValue_FromObjectResult(unicode);
 }
 
 static const char *

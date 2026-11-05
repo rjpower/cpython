@@ -363,20 +363,30 @@ get_warnings_filters(PyInterpreterState *interp)
 }
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
+module _warnings
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=16cfab79b2ad945e]*/
+
+/*[clinic input]
 _acquire_lock as warnings_acquire_lock
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 warnings_acquire_lock_impl(PyObject *module)
-/*[clinic end generated code: output=594313457d1bf8e1 input=46ec20e55acca52f]*/
+/*[clinic end generated code: output=7fb94a2b80c6bde0 input=46ec20e55acca52f]*/
 {
     PyInterpreterState *interp = get_current_interp();
     if (interp == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     warnings_lock(interp);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -384,19 +394,19 @@ _release_lock as warnings_release_lock
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 warnings_release_lock_impl(PyObject *module)
-/*[clinic end generated code: output=d73d5a8789396750 input=ea01bb77870c5693]*/
+/*[clinic end generated code: output=cd6d8e5f919d6181 input=ea01bb77870c5693]*/
 {
     PyInterpreterState *interp = get_current_interp();
     if (interp == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (warnings_unlock(interp) < 0) {
         PyErr_SetString(PyExc_RuntimeError, "cannot release un-acquired lock");
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static PyObject *
@@ -1262,25 +1272,48 @@ warn as warnings_warn
 Issue a warning, or maybe ignore it or raise an exception.
 [clinic start generated code]*/
 
-static PyObject *
-warnings_warn_impl(PyObject *module, PyObject *message, PyObject *category,
-                   Py_ssize_t stacklevel, PyObject *source,
-                   PyTupleObject *skip_file_prefixes)
-/*[clinic end generated code: output=a68e0f6906c65f80 input=2b52e8b20f508f51]*/
+static PyValue
+warnings_warn_impl(PyObject *module, PyValueBorrow message,
+                   PyValueBorrow category, Py_ssize_t stacklevel,
+                   PyValueBorrow source, PyTupleObject *skip_file_prefixes)
+/*[clinic end generated code: output=b9096e6307fe120b input=2b52e8b20f508f51]*/
 {
-    category = get_category(message, category);
-    if (category == NULL)
-        return NULL;
-    if (skip_file_prefixes) {
-        if (PyTuple_GET_SIZE(skip_file_prefixes) > 0) {
-            if (stacklevel < 2) {
-                stacklevel = 2;
-            }
-        } else {
-            skip_file_prefixes = NULL;
-        }
+    /* The warning machinery works on objects: box an inline int or float. */
+    PyObject *message_obj = _PyValue_AsObjectAt(message, BOX_SITE_PARSER);
+    if (message_obj == NULL) {
+        return PyValue_NULL;
     }
-    return do_warn(message, category, stacklevel, source, skip_file_prefixes);
+    PyObject *category_obj = _PyValue_AsObjectAt(category, BOX_SITE_PARSER);
+    if (category_obj == NULL) {
+        Py_DECREF(message_obj);
+        return PyValue_NULL;
+    }
+    PyObject *source_obj = _PyValue_AsObjectAt(source, BOX_SITE_PARSER);
+    if (source_obj == NULL) {
+        Py_DECREF(category_obj);
+        Py_DECREF(message_obj);
+        return PyValue_NULL;
+    }
+
+    PyObject *res = NULL;
+    PyObject *checked_category = get_category(message_obj, category_obj);
+    if (checked_category != NULL) {
+        if (skip_file_prefixes) {
+            if (PyTuple_GET_SIZE(skip_file_prefixes) > 0) {
+                if (stacklevel < 2) {
+                    stacklevel = 2;
+                }
+            } else {
+                skip_file_prefixes = NULL;
+            }
+        }
+        res = do_warn(message_obj, checked_category, stacklevel, source_obj,
+                      skip_file_prefixes);
+    }
+    Py_DECREF(source_obj);
+    Py_DECREF(category_obj);
+    Py_DECREF(message_obj);
+    return _PyValue_FromObjectResult(res);
 }
 
 static PyObject *
@@ -1406,42 +1439,85 @@ warn_explicit as warnings_warn_explicit
 Issue a warning, or maybe ignore it or raise an exception.
 [clinic start generated code]*/
 
-static PyObject *
-warnings_warn_explicit_impl(PyObject *module, PyObject *message,
-                            PyObject *category, PyObject *filename,
-                            int lineno, PyObject *mod, PyObject *registry,
-                            PyObject *module_globals, PyObject *sourceobj)
-/*[clinic end generated code: output=c49c62b15a49a186 input=df6eeb8b45e712f1]*/
+static PyValue
+warnings_warn_explicit_impl(PyObject *module, PyValueBorrow message,
+                            PyValueBorrow category, PyObject *filename,
+                            int lineno, PyValueBorrow mod,
+                            PyValueBorrow registry,
+                            PyValueBorrow module_globals,
+                            PyValueBorrow sourceobj)
+/*[clinic end generated code: output=34aa4a09779dd97f input=df6eeb8b45e712f1]*/
 {
     PyObject *source_line = NULL;
-    PyObject *returned;
+    PyObject *returned = NULL;
 
     PyThreadState *tstate = get_current_tstate();
     if (tstate == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
-    if (module_globals && module_globals != Py_None) {
-        if (!PyAnyDict_Check(module_globals)) {
+    if (!PyValue_IsNull(module_globals) && !PyValue_IsNone(module_globals)) {
+        if (!(PyValue_IsObject(module_globals)
+              && PyAnyDict_Check(PyValue_AsKnownObjectBorrow(module_globals)))) {
             PyErr_Format(PyExc_TypeError,
                          "module_globals must be a dict or a frozendict, "
-                         "not %T",
-                         module_globals);
-            return NULL;
+                         "not %N",
+                         PyValue_TYPE(module_globals));
+            return PyValue_NULL;
         }
+    }
 
-        source_line = get_source_line(tstate->interp, module_globals, lineno);
+    /* The warning machinery works on objects: box an inline int or float.
+       Optional arguments (module) stay NULL when omitted. */
+    PyObject *message_obj = NULL, *category_obj = NULL, *mod_obj = NULL;
+    PyObject *registry_obj = NULL, *source_obj = NULL;
+    message_obj = _PyValue_AsObjectAt(message, BOX_SITE_PARSER);
+    if (message_obj == NULL) {
+        goto done;
+    }
+    category_obj = _PyValue_AsObjectAt(category, BOX_SITE_PARSER);
+    if (category_obj == NULL) {
+        goto done;
+    }
+    if (!PyValue_IsNull(mod)) {
+        mod_obj = _PyValue_AsObjectAt(mod, BOX_SITE_PARSER);
+        if (mod_obj == NULL) {
+            goto done;
+        }
+    }
+    registry_obj = _PyValue_AsObjectAt(registry, BOX_SITE_PARSER);
+    if (registry_obj == NULL) {
+        goto done;
+    }
+    source_obj = _PyValue_AsObjectAt(sourceobj, BOX_SITE_PARSER);
+    if (source_obj == NULL) {
+        goto done;
+    }
+
+    if (!PyValue_IsNull(module_globals) && !PyValue_IsNone(module_globals)) {
+        /* A dict, checked above. */
+        source_line = get_source_line(tstate->interp,
+                                      PyValue_AsKnownObjectBorrow(module_globals),
+                                      lineno);
         if (source_line == NULL && PyErr_Occurred()) {
-            return NULL;
+            goto done;
         }
     }
 
     warnings_lock(tstate->interp);
-    returned = warn_explicit(tstate, category, message, filename, lineno,
-                             mod, registry, source_line, sourceobj);
+    returned = warn_explicit(tstate, category_obj, message_obj, filename,
+                             lineno, mod_obj, registry_obj, source_line,
+                             source_obj);
     warnings_unlock(tstate->interp);
+
+done:
     Py_XDECREF(source_line);
-    return returned;
+    Py_XDECREF(source_obj);
+    Py_XDECREF(registry_obj);
+    Py_XDECREF(mod_obj);
+    Py_XDECREF(category_obj);
+    Py_XDECREF(message_obj);
+    return _PyValue_FromObjectResult(returned);
 }
 
 /*[clinic input]
@@ -1449,13 +1525,13 @@ _filters_mutated_lock_held as warnings_filters_mutated_lock_held
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 warnings_filters_mutated_lock_held_impl(PyObject *module)
-/*[clinic end generated code: output=df5c84f044e856ec input=34208bf03d70e432]*/
+/*[clinic end generated code: output=c8fe04dbcfa26e49 input=34208bf03d70e432]*/
 {
     PyInterpreterState *interp = get_current_interp();
     if (interp == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
 
     WarningsState *st = warnings_get_state(interp);
@@ -1464,12 +1540,12 @@ warnings_filters_mutated_lock_held_impl(PyObject *module)
     // Note that the lock must be held by the caller.
     if (!warnings_lock_held(st)) {
         PyErr_SetString(PyExc_RuntimeError, "warnings lock is not held");
-        return NULL;
+        return PyValue_NULL;
     }
 
     st->filters_version++;
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /* Function to issue a warning message; may raise an exception. */

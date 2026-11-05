@@ -9,6 +9,11 @@
 #include <stddef.h>               // offsetof()
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 class hamt "PyHamtObject *" "&_PyHamt_Type"
 [clinic start generated code]*/
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=ab743c139c849b8e]*/
@@ -2749,11 +2754,24 @@ hamt.set
 Return a copy of the mapping with the key set to the value.
 [clinic start generated code]*/
 
-static PyObject *
-hamt_set_impl(PyHamtObject *self, PyObject *key, PyObject *val)
-/*[clinic end generated code: output=2256fa2f6cf80a86 input=d0775605f5ad8fc1]*/
+static PyValue
+hamt_set_impl(PyHamtObject *self, PyValueBorrow key, PyValueBorrow val)
+/*[clinic end generated code: output=5fc099fcddf6184a input=d0775605f5ad8fc1]*/
 {
-    return (PyObject *)_PyHamt_Assoc(self, key, val);
+    /* The HAMT stores objects: box an inline int or float. */
+    PyObject *key_obj = _PyValue_AsObjectAt(key, BOX_SITE_PARSER);
+    if (key_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *val_obj = _PyValue_AsObjectAt(val, BOX_SITE_PARSER);
+    if (val_obj == NULL) {
+        Py_DECREF(key_obj);
+        return PyValue_NULL;
+    }
+    PyHamtObject *new_hamt = _PyHamt_Assoc(self, key_obj, val_obj);
+    Py_DECREF(val_obj);
+    Py_DECREF(key_obj);
+    return _PyValue_FromObjectResult((PyObject *)new_hamt);
 }
 
 /*[clinic input]
@@ -2766,19 +2784,25 @@ hamt.get
 Return the value for the key, or the default if it is not found.
 [clinic start generated code]*/
 
-static PyObject *
-hamt_get_impl(PyHamtObject *self, PyObject *key, PyObject *def)
-/*[clinic end generated code: output=32bfe9cfd2ac5b22 input=2636859ec1bf5912]*/
+static PyValue
+hamt_get_impl(PyHamtObject *self, PyValueBorrow key, PyValueBorrow def)
+/*[clinic end generated code: output=13038c41da30f245 input=2636859ec1bf5912]*/
 {
+    /* Keys are hashed and compared as objects: box an inline int or float. */
+    PyObject *key_obj = _PyValue_AsObjectAt(key, BOX_SITE_PARSER);
+    if (key_obj == NULL) {
+        return PyValue_NULL;
+    }
     PyObject *val = NULL;
-    hamt_find_t res = hamt_find(self, key, &val);
+    hamt_find_t res = hamt_find(self, key_obj, &val);
+    Py_DECREF(key_obj);
     switch (res) {
         case F_ERROR:
-            return NULL;
+            return PyValue_NULL;
         case F_FOUND:
-            return Py_NewRef(val);
+            return PyValue_DUP(PyValue_FromObjectBorrow(val));
         case F_NOT_FOUND:
-            return Py_NewRef(def);
+            return PyValue_DUP(def);
         default:
             Py_UNREACHABLE();
     }

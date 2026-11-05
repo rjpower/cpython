@@ -205,6 +205,11 @@ PyInstructionSequence_Fini(instr_sequence *seq) {
 }
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 class InstructionSequenceType "_PyInstructionSequence *" "&_PyInstructionSequence_Type"
 [clinic start generated code]*/
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=589963e07480390f]*/
@@ -247,11 +252,11 @@ InstructionSequenceType.__new__ as inst_seq_new
 Create a new InstructionSequence object.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 inst_seq_new_impl(PyTypeObject *type)
-/*[clinic end generated code: output=98881de92c8876f6 input=b393150146849c74]*/
+/*[clinic end generated code: output=507dff9167598352 input=b393150146849c74]*/
 {
-    return (PyObject*)inst_seq_create();
+    return _PyValue_FromObjectResult((PyObject*)inst_seq_create());
 }
 
 /*[clinic input]
@@ -262,16 +267,16 @@ InstructionSequenceType.use_label
 Place label at current location.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 InstructionSequenceType_use_label_impl(_PyInstructionSequence *self,
                                        int label)
-/*[clinic end generated code: output=4c06bbacb2854755 input=da55f49bb91841f3]*/
+/*[clinic end generated code: output=9d9a7e25ab73f29d input=da55f49bb91841f3]*/
 
 {
     if (_PyInstructionSequence_UseLabel(self, label) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -287,17 +292,17 @@ InstructionSequenceType.addop
 Append an instruction.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 InstructionSequenceType_addop_impl(_PyInstructionSequence *self, int opcode,
                                    int oparg, int lineno, int col_offset,
                                    int end_lineno, int end_col_offset)
-/*[clinic end generated code: output=af0cc22c048dfbf3 input=012762ac88198713]*/
+/*[clinic end generated code: output=965cca050c3b7026 input=012762ac88198713]*/
 {
     _Py_SourceLocation loc = {lineno, col_offset, end_lineno, end_col_offset};
     if (_PyInstructionSequence_Addop(self, opcode, oparg, loc) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -322,21 +327,23 @@ InstructionSequenceType.add_nested
 Add a nested sequence.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 InstructionSequenceType_add_nested_impl(_PyInstructionSequence *self,
-                                        PyObject *nested)
-/*[clinic end generated code: output=14540fad459f7971 input=f2c482568b3b3c0f]*/
+                                        PyValueBorrow nested)
+/*[clinic end generated code: output=e7f1409b62d85e80 input=f2c482568b3b3c0f]*/
 {
-    if (!_PyInstructionSequence_Check(nested)) {
+    /* No inline int or float is an instruction sequence. */
+    if (!(PyValue_IsObject(nested)
+          && _PyInstructionSequence_Check(PyValue_AsKnownObjectBorrow(nested)))) {
         PyErr_Format(PyExc_TypeError,
                      "expected an instruction sequence, not %T",
-                     Py_TYPE(nested));
-        return NULL;
+                     PyValue_TYPE(nested));
+        return PyValue_NULL;
     }
-    if (_PyInstructionSequence_AddNested(self, (_PyInstructionSequence*)nested) < 0) {
-        return NULL;
+    if (_PyInstructionSequence_AddNested(self, (_PyInstructionSequence*)PyValue_AsKnownObjectBorrow(nested)) < 0) {
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -345,14 +352,14 @@ InstructionSequenceType.get_nested
 Add a nested sequence.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 InstructionSequenceType_get_nested_impl(_PyInstructionSequence *self)
-/*[clinic end generated code: output=f415112c292630cb input=e429e474c57b95b4]*/
+/*[clinic end generated code: output=ea27cc6df5af520a input=e429e474c57b95b4]*/
 {
     if (self->s_nested == NULL) {
-        return PyList_New(0);
+        return _PyValue_FromObjectResult(PyList_New(0));
     }
-    return Py_NewRef(self->s_nested);
+    return PyValue_DUP(PyValue_FromObjectBorrow(self->s_nested));
 }
 
 /*[clinic input]
@@ -361,16 +368,16 @@ InstructionSequenceType.get_instructions
 Return the instructions as a list of tuples or labels.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 InstructionSequenceType_get_instructions_impl(_PyInstructionSequence *self)
-/*[clinic end generated code: output=23f4f3f894c301b3 input=fbadb5dadb611291]*/
+/*[clinic end generated code: output=d7ef3cee9d7b0bdb input=fbadb5dadb611291]*/
 {
     if (_PyInstructionSequence_ApplyLabelMap(self) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *instructions = PyList_New(0);
     if (instructions == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     for (int i = 0; i < self->s_used; i++) {
         instruction *instr = &self->s_instrs[i];
@@ -399,10 +406,10 @@ InstructionSequenceType_get_instructions_impl(_PyInstructionSequence *self)
             goto error;
         }
     }
-    return instructions;
+    return _PyValue_FromObjectResult(instructions);
 error:
     Py_XDECREF(instructions);
-    return NULL;
+    return PyValue_NULL;
 }
 
 static PyMethodDef inst_seq_methods[] = {

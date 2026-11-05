@@ -37,6 +37,11 @@
 #define OFF(x) offsetof(PyFrameObject, x)
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 class frame "PyFrameObject *" "&PyFrame_Type"
 [clinic start generated code]*/
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=2d1dbf2e06cf351f]*/
@@ -2397,26 +2402,26 @@ frame.clear
 Clear all references held by the frame.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 frame_clear_impl(PyFrameObject *self)
-/*[clinic end generated code: output=864c662f16e9bfcc input=c358f9cff5f9b681]*/
+/*[clinic end generated code: output=67ecc9b5510d6379 input=c358f9cff5f9b681]*/
 {
     if (self->f_frame->owner == FRAME_OWNED_BY_GENERATOR) {
         PyGenObject *gen = _PyGen_GetGeneratorFromFrame(self->f_frame);
         if (_PyGen_ClearFrame(gen) < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
     else if (self->f_frame->owner == FRAME_OWNED_BY_THREAD) {
         PyErr_SetString(PyExc_RuntimeError,
                         "cannot clear an executing frame");
-        return NULL;
+        return PyValue_NULL;
     }
     else {
         assert(self->f_frame->owner == FRAME_OWNED_BY_FRAME_OBJECT);
         (void)frame_tp_clear((PyObject *)self);
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -2426,15 +2431,15 @@ frame.__sizeof__
 Return the size of the frame in memory, in bytes.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 frame___sizeof___impl(PyFrameObject *self)
-/*[clinic end generated code: output=82948688e81078e2 input=908f90a83e73131d]*/
+/*[clinic end generated code: output=c02939d1ade9b39e input=908f90a83e73131d]*/
 {
     Py_ssize_t res;
     res = offsetof(PyFrameObject, _f_frame_data) + offsetof(_PyInterpreterFrame, owned_slots);
     PyCodeObject *code = _PyFrame_GetCode(self->f_frame);
     res += _PyFrame_NumSlotsForCodeObject(code) * sizeof(PyObject *);
-    return PyLong_FromSsize_t(res);
+    return PyValue_FromInt64(res);
 }
 
 /*[clinic input]

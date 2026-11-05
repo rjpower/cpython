@@ -18,6 +18,11 @@
 
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 class mappingproxy "mappingproxyobject *" "&PyDictProxy_Type"
 class property "propertyobject *" "&PyProperty_Type"
 [clinic start generated code]*/
@@ -1521,11 +1526,17 @@ mappingproxy.__new__ as mappingproxy_new
 Read-only proxy of a mapping.
 [clinic start generated code]*/
 
-static PyObject *
-mappingproxy_new_impl(PyTypeObject *type, PyObject *mapping)
-/*[clinic end generated code: output=65f27f02d5b68fa7 input=c156df096ef7590c]*/
+static PyValue
+mappingproxy_new_impl(PyTypeObject *type, PyValueBorrow mapping)
+/*[clinic end generated code: output=484d11cca2bd373c input=c156df096ef7590c]*/
 {
-    return PyDictProxy_New(mapping);
+    PyObject *mapping_o = _PyValue_AsObjectAt(mapping, BOX_SITE_PARSER);
+    if (mapping_o == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *proxy = PyDictProxy_New(mapping_o);
+    Py_DECREF(mapping_o);
+    return _PyValue_FromObjectResult(proxy);
 }
 
 
@@ -1863,14 +1874,18 @@ property.__set_name__
 Method to set name of a property.
 [clinic start generated code]*/
 
-static PyObject *
-property___set_name___impl(propertyobject *self, PyObject *owner,
-                           PyObject *name)
-/*[clinic end generated code: output=959e301a91f7fb85 input=0211b5b7ace099c5]*/
+static PyValue
+property___set_name___impl(propertyobject *self, PyValueBorrow owner,
+                           PyValueBorrow name)
+/*[clinic end generated code: output=b236024393248986 input=0211b5b7ace099c5]*/
 {
-    Py_XSETREF(self->prop_name, Py_XNewRef(name));
+    PyObject *name_o = _PyValue_AsObjectAt(name, BOX_SITE_FIELD);
+    if (name_o == NULL) {
+        return PyValue_NULL;
+    }
+    Py_XSETREF(self->prop_name, name_o);
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static PyMethodDef property_methods[] = {
@@ -2049,6 +2064,20 @@ property_copy(PyObject *old, PyObject *get, PyObject *set, PyObject *del)
     return new;
 }
 
+/* The new reference that a property field stores for a constructor
+   argument: NULL for None (or a missing argument), else the argument's
+   object, boxed if it is an inline value. Returns -1 if boxing fails. */
+static int
+property_field_object(PyValueBorrow arg, PyObject **field)
+{
+    *field = NULL;
+    if (PyValue_IsNull(arg) || PyValue_IsNone(arg)) {
+        return 0;
+    }
+    *field = _PyValue_AsObjectAt(arg, BOX_SITE_FIELD);
+    return *field == NULL ? -1 : 0;
+}
+
 /*[clinic input]
 property.__init__ as property_init
 
@@ -2087,32 +2116,39 @@ class C(object):
 [clinic start generated code]*/
 
 static int
-property_init_impl(propertyobject *self, PyObject *fget, PyObject *fset,
-                   PyObject *fdel, PyObject *doc)
-/*[clinic end generated code: output=01a960742b692b57 input=dfb5dbbffc6932d5]*/
+property_init_impl(propertyobject *self, PyValueBorrow fget,
+                   PyValueBorrow fset, PyValueBorrow fdel, PyValueBorrow doc)
+/*[clinic end generated code: output=602fb7cadd4bb99b input=dfb5dbbffc6932d5]*/
 {
-    if (fget == Py_None)
-        fget = NULL;
-    if (fset == Py_None)
-        fset = NULL;
-    if (fdel == Py_None)
-        fdel = NULL;
+    PyObject *get = NULL, *set = NULL, *del = NULL;
+    if (property_field_object(fget, &get) < 0
+        || property_field_object(fset, &set) < 0
+        || property_field_object(fdel, &del) < 0)
+    {
+        Py_XDECREF(get);
+        Py_XDECREF(set);
+        Py_XDECREF(del);
+        return -1;
+    }
 
-    Py_XSETREF(self->prop_get, Py_XNewRef(fget));
-    Py_XSETREF(self->prop_set, Py_XNewRef(fset));
-    Py_XSETREF(self->prop_del, Py_XNewRef(fdel));
+    Py_XSETREF(self->prop_get, get);
+    Py_XSETREF(self->prop_set, set);
+    Py_XSETREF(self->prop_del, del);
     Py_XSETREF(self->prop_doc, NULL);
     Py_XSETREF(self->prop_name, NULL);
 
     self->getter_doc = 0;
     PyObject *prop_doc = NULL;
 
-    if (doc != NULL && doc != Py_None) {
-        prop_doc = Py_XNewRef(doc);
+    if (!PyValue_IsNull(doc) && !PyValue_IsNone(doc)) {
+        prop_doc = _PyValue_AsObjectAt(doc, BOX_SITE_FIELD);
+        if (prop_doc == NULL) {
+            return -1;
+        }
     }
     /* if no docstring given and the getter has one, use that one */
-    else if (fget != NULL) {
-        int rc = PyObject_GetOptionalAttr(fget, &_Py_ID(__doc__), &prop_doc);
+    else if (get != NULL) {
+        int rc = PyObject_GetOptionalAttr(get, &_Py_ID(__doc__), &prop_doc);
         if (rc < 0) {
             return rc;
         }

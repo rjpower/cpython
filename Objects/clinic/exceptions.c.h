@@ -2,8 +2,13 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
-#include "pycore_modsupport.h"    // _PyArg_BadArgument()
+#include "pycore_modsupport.h"    // _PyArg_CheckArityValue()
+#include "pycore_value_call.h"    // METH_VALUE
 
 static PyObject *
 BaseException_str_impl(PyBaseExceptionObject *self);
@@ -41,20 +46,24 @@ PyDoc_STRVAR(BaseException___reduce____doc__,
 "\n");
 
 #define BASEEXCEPTION___REDUCE___METHODDEF    \
-    {"__reduce__", (PyCFunction)BaseException___reduce__, METH_NOARGS, BaseException___reduce____doc__},
+    {"__reduce__", _PyCFunction_CAST(BaseException___reduce__), METH_VALUE, BaseException___reduce____doc__},
 
-static PyObject *
+static PyValue
 BaseException___reduce___impl(PyBaseExceptionObject *self);
 
-static PyObject *
-BaseException___reduce__(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+BaseException___reduce__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = BaseException___reduce___impl((PyBaseExceptionObject *)self);
+    if (!_PyArg_CheckArityValue("BaseException.__reduce__()", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = BaseException___reduce___impl((PyBaseExceptionObject *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
+exit:
     return return_value;
 }
 
@@ -64,20 +73,27 @@ PyDoc_STRVAR(BaseException___setstate____doc__,
 "\n");
 
 #define BASEEXCEPTION___SETSTATE___METHODDEF    \
-    {"__setstate__", (PyCFunction)BaseException___setstate__, METH_O, BaseException___setstate____doc__},
+    {"__setstate__", _PyCFunction_CAST(BaseException___setstate__), METH_VALUE, BaseException___setstate____doc__},
 
-static PyObject *
-BaseException___setstate___impl(PyBaseExceptionObject *self, PyObject *state);
+static PyValue
+BaseException___setstate___impl(PyBaseExceptionObject *self,
+                                PyValueBorrow state);
 
-static PyObject *
-BaseException___setstate__(PyObject *self, PyObject *state)
+static PyValue
+BaseException___setstate__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow state;
 
-    Py_BEGIN_CRITICAL_SECTION(state);
-    return_value = BaseException___setstate___impl((PyBaseExceptionObject *)self, state);
+    if (!_PyArg_CheckArityValue("BaseException.__setstate__()", nargs, kwnames, 1)) {
+        goto exit;
+    }
+    state = PyValue_Borrow(args[0]);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(state));
+    return_value = BaseException___setstate___impl((PyBaseExceptionObject *)PyValue_AsKnownObjectBorrow(self), state);
     Py_END_CRITICAL_SECTION();
 
+exit:
     return return_value;
 }
 
@@ -88,20 +104,27 @@ PyDoc_STRVAR(BaseException_with_traceback__doc__,
 "Set self.__traceback__ to tb and return self.");
 
 #define BASEEXCEPTION_WITH_TRACEBACK_METHODDEF    \
-    {"with_traceback", (PyCFunction)BaseException_with_traceback, METH_O, BaseException_with_traceback__doc__},
+    {"with_traceback", _PyCFunction_CAST(BaseException_with_traceback), METH_VALUE, BaseException_with_traceback__doc__},
 
-static PyObject *
-BaseException_with_traceback_impl(PyBaseExceptionObject *self, PyObject *tb);
+static PyValue
+BaseException_with_traceback_impl(PyBaseExceptionObject *self,
+                                  PyValueBorrow tb);
 
-static PyObject *
-BaseException_with_traceback(PyObject *self, PyObject *tb)
+static PyValue
+BaseException_with_traceback(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow tb;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = BaseException_with_traceback_impl((PyBaseExceptionObject *)self, tb);
+    if (!_PyArg_CheckArityValue("BaseException.with_traceback()", nargs, kwnames, 1)) {
+        goto exit;
+    }
+    tb = PyValue_Borrow(args[0]);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = BaseException_with_traceback_impl((PyBaseExceptionObject *)PyValue_AsKnownObjectBorrow(self), tb);
     Py_END_CRITICAL_SECTION();
 
+exit:
     return return_value;
 }
 
@@ -112,24 +135,27 @@ PyDoc_STRVAR(BaseException_add_note__doc__,
 "Add a note to the exception");
 
 #define BASEEXCEPTION_ADD_NOTE_METHODDEF    \
-    {"add_note", (PyCFunction)BaseException_add_note, METH_O, BaseException_add_note__doc__},
+    {"add_note", _PyCFunction_CAST(BaseException_add_note), METH_VALUE, BaseException_add_note__doc__},
 
-static PyObject *
+static PyValue
 BaseException_add_note_impl(PyBaseExceptionObject *self, PyObject *note);
 
-static PyObject *
-BaseException_add_note(PyObject *self, PyObject *arg)
+static PyValue
+BaseException_add_note(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     PyObject *note;
 
-    if (!PyUnicode_Check(arg)) {
-        _PyArg_BadArgument("add_note", "argument", "str", arg);
+    if (!_PyArg_CheckArityValue("BaseException.add_note()", nargs, kwnames, 1)) {
         goto exit;
     }
-    note = arg;
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = BaseException_add_note_impl((PyBaseExceptionObject *)self, note);
+    if (!PyType_IsSubtype(PyValue_TYPE(PyValue_Borrow(args[0])), &PyUnicode_Type)) {
+        _PyArg_BadArgumentValue("add_note", "argument", "str", PyValue_Borrow(args[0]));
+        goto exit;
+    }
+    note = PyValue_AsKnownObjectBorrow(PyValue_Borrow(args[0]));
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = BaseException_add_note_impl((PyBaseExceptionObject *)PyValue_AsKnownObjectBorrow(self), note);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -297,21 +323,27 @@ PyDoc_STRVAR(BaseExceptionGroup_derive__doc__,
 "\n");
 
 #define BASEEXCEPTIONGROUP_DERIVE_METHODDEF    \
-    {"derive", (PyCFunction)BaseExceptionGroup_derive, METH_O, BaseExceptionGroup_derive__doc__},
+    {"derive", _PyCFunction_CAST(BaseExceptionGroup_derive), METH_VALUE, BaseExceptionGroup_derive__doc__},
 
-static PyObject *
+static PyValue
 BaseExceptionGroup_derive_impl(PyBaseExceptionGroupObject *self,
-                               PyObject *excs);
+                               PyValueBorrow excs);
 
-static PyObject *
-BaseExceptionGroup_derive(PyObject *self, PyObject *excs)
+static PyValue
+BaseExceptionGroup_derive(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow excs;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = BaseExceptionGroup_derive_impl((PyBaseExceptionGroupObject *)self, excs);
+    if (!_PyArg_CheckArityValue("BaseExceptionGroup.derive()", nargs, kwnames, 1)) {
+        goto exit;
+    }
+    excs = PyValue_Borrow(args[0]);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = BaseExceptionGroup_derive_impl((PyBaseExceptionGroupObject *)PyValue_AsKnownObjectBorrow(self), excs);
     Py_END_CRITICAL_SECTION();
 
+exit:
     return return_value;
 }
 
@@ -321,21 +353,27 @@ PyDoc_STRVAR(BaseExceptionGroup_split__doc__,
 "\n");
 
 #define BASEEXCEPTIONGROUP_SPLIT_METHODDEF    \
-    {"split", (PyCFunction)BaseExceptionGroup_split, METH_O, BaseExceptionGroup_split__doc__},
+    {"split", _PyCFunction_CAST(BaseExceptionGroup_split), METH_VALUE, BaseExceptionGroup_split__doc__},
 
-static PyObject *
+static PyValue
 BaseExceptionGroup_split_impl(PyBaseExceptionGroupObject *self,
-                              PyObject *matcher_value);
+                              PyValueBorrow matcher_value);
 
-static PyObject *
-BaseExceptionGroup_split(PyObject *self, PyObject *matcher_value)
+static PyValue
+BaseExceptionGroup_split(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow matcher_value;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = BaseExceptionGroup_split_impl((PyBaseExceptionGroupObject *)self, matcher_value);
+    if (!_PyArg_CheckArityValue("BaseExceptionGroup.split()", nargs, kwnames, 1)) {
+        goto exit;
+    }
+    matcher_value = PyValue_Borrow(args[0]);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = BaseExceptionGroup_split_impl((PyBaseExceptionGroupObject *)PyValue_AsKnownObjectBorrow(self), matcher_value);
     Py_END_CRITICAL_SECTION();
 
+exit:
     return return_value;
 }
 
@@ -345,21 +383,27 @@ PyDoc_STRVAR(BaseExceptionGroup_subgroup__doc__,
 "\n");
 
 #define BASEEXCEPTIONGROUP_SUBGROUP_METHODDEF    \
-    {"subgroup", (PyCFunction)BaseExceptionGroup_subgroup, METH_O, BaseExceptionGroup_subgroup__doc__},
+    {"subgroup", _PyCFunction_CAST(BaseExceptionGroup_subgroup), METH_VALUE, BaseExceptionGroup_subgroup__doc__},
 
-static PyObject *
+static PyValue
 BaseExceptionGroup_subgroup_impl(PyBaseExceptionGroupObject *self,
-                                 PyObject *matcher_value);
+                                 PyValueBorrow matcher_value);
 
-static PyObject *
-BaseExceptionGroup_subgroup(PyObject *self, PyObject *matcher_value)
+static PyValue
+BaseExceptionGroup_subgroup(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
+    PyValueBorrow matcher_value;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = BaseExceptionGroup_subgroup_impl((PyBaseExceptionGroupObject *)self, matcher_value);
+    if (!_PyArg_CheckArityValue("BaseExceptionGroup.subgroup()", nargs, kwnames, 1)) {
+        goto exit;
+    }
+    matcher_value = PyValue_Borrow(args[0]);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = BaseExceptionGroup_subgroup_impl((PyBaseExceptionGroupObject *)PyValue_AsKnownObjectBorrow(self), matcher_value);
     Py_END_CRITICAL_SECTION();
 
+exit:
     return return_value;
 }
 #define BASEEXCEPTION_ARGS_GETSETDEF {"args", (getter)BaseException_args_get, (setter)BaseException_args_set, NULL},
@@ -370,4 +414,4 @@ BaseExceptionGroup_subgroup(PyObject *self, PyObject *matcher_value)
 
 #define BASEEXCEPTION___CAUSE___GETSETDEF {"__cause__", (getter)BaseException___cause___get, (setter)BaseException___cause___set, NULL},
 
-/*[clinic end generated code: output=20829af0c376b1e9 input=a9049054013a1b77]*/
+/*[clinic end generated code: output=602fca8df101d5bf input=a9049054013a1b77]*/

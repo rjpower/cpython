@@ -21,6 +21,11 @@
 #define TP_DESCR_GET(t) ((t)->tp_descr_get)
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 class method "PyMethodObject *" "&PyMethod_Type"
 [clinic start generated code]*/
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=b16e47edf6107c23]*/
@@ -108,19 +113,19 @@ PyMethod_New(PyObject *func, PyObject *self)
 method.__reduce__
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 method___reduce___impl(PyMethodObject *self)
-/*[clinic end generated code: output=6c04506d0fa6fdcb input=143a0bf5e96de6e8]*/
+/*[clinic end generated code: output=c40c47424ce3ee62 input=143a0bf5e96de6e8]*/
 {
     PyObject *funcself = _PyValue_AsObjectAt(self->im_self, BOX_SITE_FIELD);
     if (funcself == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *func = PyMethod_GET_FUNCTION(self);
     PyObject *funcname = PyObject_GetAttr(func, &_Py_ID(__name__));
     if (funcname == NULL) {
         Py_DECREF(funcself);
-        return NULL;
+        return PyValue_NULL;
     }
     if (_Py_IsPrivateName(funcname)) {
         PyObject *classname = PyType_Check(funcself)
@@ -129,19 +134,19 @@ method___reduce___impl(PyMethodObject *self)
         if (classname == NULL) {
             Py_DECREF(funcname);
             Py_DECREF(funcself);
-            return NULL;
+            return PyValue_NULL;
         }
         Py_SETREF(funcname, _Py_Mangle(classname, funcname));
         Py_DECREF(classname);
         if (funcname == NULL) {
             Py_DECREF(funcself);
-            return NULL;
+            return PyValue_NULL;
         }
     }
     PyObject *res = Py_BuildValue(
             "N(ON)", _PyEval_GetBuiltin(&_Py_ID(getattr)), funcself, funcname);
     Py_DECREF(funcself);
-    return res;
+    return _PyValue_FromObjectResult(res);
 }
 
 static PyMethodDef method_methods[] = {
@@ -220,22 +225,25 @@ method.__new__ as method_new
 Create a bound instance method object.
 [clinic start generated code]*/
 
-static PyObject *
-method_new_impl(PyTypeObject *type, PyObject *function, PyObject *instance)
-/*[clinic end generated code: output=d33ef4ebf702e1f7 input=4e32facc3c3108ae]*/
+static PyValue
+method_new_impl(PyTypeObject *type, PyValueBorrow function,
+                PyValueBorrow instance)
+/*[clinic end generated code: output=d91b7fb41709da60 input=4e32facc3c3108ae]*/
 {
-    if (!PyCallable_Check(function)) {
+    /* An inline int or float is never callable. */
+    if (!(PyValue_IsObject(function) && PyCallable_Check(PyValue_AsKnownObjectBorrow(function)))) {
         PyErr_SetString(PyExc_TypeError,
                         "first argument must be callable");
-        return NULL;
+        return PyValue_NULL;
     }
-    if (instance == NULL || instance == Py_None) {
+    if (PyValue_IsNull(instance) || PyValue_IsNone(instance)) {
         PyErr_SetString(PyExc_TypeError,
             "instance must not be None");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return PyMethod_New(function, instance);
+    return _PyValue_FromObjectResult(
+        _PyMethod_NewValue(PyValue_AsKnownObjectBorrow(function), instance));
 }
 
 static void
@@ -536,17 +544,19 @@ instancemethod.__new__ as instancemethod_new
 Bind a function to a class.
 [clinic start generated code]*/
 
-static PyObject *
-instancemethod_new_impl(PyTypeObject *type, PyObject *function)
-/*[clinic end generated code: output=5e0397b2bdb750be input=cfc54e8b973664a8]*/
+static PyValue
+instancemethod_new_impl(PyTypeObject *type, PyValueBorrow function)
+/*[clinic end generated code: output=59b513aebac4756e input=cfc54e8b973664a8]*/
 {
-    if (!PyCallable_Check(function)) {
+    /* An inline int or float is never callable. */
+    if (!(PyValue_IsObject(function) && PyCallable_Check(PyValue_AsKnownObjectBorrow(function)))) {
         PyErr_SetString(PyExc_TypeError,
                         "first argument must be callable");
-        return NULL;
+        return PyValue_NULL;
     }
 
-    return PyInstanceMethod_New(function);
+    return _PyValue_FromObjectResult(
+        PyInstanceMethod_New(PyValue_AsKnownObjectBorrow(function)));
 }
 
 PyTypeObject PyInstanceMethod_Type = {

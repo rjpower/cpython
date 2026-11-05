@@ -21,6 +21,11 @@ get_tokenize_state(PyObject *module) {
 #include "pycore_runtime.h"
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 module _tokenizer
 class _tokenizer.tokenizeriter "tokenizeriterobject *" "_tokenize_get_state_by_type(type)->TokenizerIter"
 [clinic start generated code]*/
@@ -51,21 +56,27 @@ _tokenizer.tokenizeriter.__new__ as tokenizeriter_new
     encoding: str(c_default="NULL") = 'utf-8'
 [clinic start generated code]*/
 
-static PyObject *
-tokenizeriter_new_impl(PyTypeObject *type, PyObject *readline,
+static PyValue
+tokenizeriter_new_impl(PyTypeObject *type, PyValueBorrow readline,
                        int extra_tokens, const char *encoding)
-/*[clinic end generated code: output=7501a1211683ce16 input=f7dddf8a613ae8bd]*/
+/*[clinic end generated code: output=0420bc7781904f5d input=f7dddf8a613ae8bd]*/
 {
-    struct tok_state *tok = _PyTokenizer_FromReadline(readline, encoding);
+    /* The tokenizer keeps readline as an object: box an inline int or float. */
+    PyObject *readline_obj = _PyValue_AsObjectAt(readline, BOX_SITE_PARSER);
+    if (readline_obj == NULL) {
+        return PyValue_NULL;
+    }
+    struct tok_state *tok = _PyTokenizer_FromReadline(readline_obj, encoding);
+    Py_DECREF(readline_obj);
     if (tok == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     _Py_DECLARE_STR(anon_string, "<string>");
     _PyTokenizer_SetContext(tok, &_Py_STR(anon_string), NULL);
     tokenizeriterobject *self = (tokenizeriterobject *)type->tp_alloc(type, 0);
     if (self == NULL) {
         _PyTokenizer_Free(tok);
-        return NULL;
+        return PyValue_NULL;
     }
     self->tok = tok;
     _PyTokenizer_SetOptions(self->tok, extra_tokens, 0);
@@ -76,7 +87,7 @@ tokenizeriter_new_impl(PyTypeObject *type, PyObject *readline,
     self->byte_col_offset_diff = 0;
     self->last_lineno = 0;
 
-    return (PyObject *)self;
+    return _PyValue_FromObjectResult((PyObject *)self);
 }
 
 static void

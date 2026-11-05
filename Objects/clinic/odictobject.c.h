@@ -2,13 +2,19 @@
 preserve
 [clinic start generated code]*/
 
+#ifndef Py_VALUE_CORE
+#  error "value-emission Clinic output requires Py_VALUE_CORE"
+#endif
+
 #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 #  include "pycore_gc.h"          // PyGC_Head
 #  include "pycore_runtime.h"     // _Py_ID()
 #  include "pycore_value.h"       // _PyValue_STATIC_IMMORTAL()
 #endif
 #include "pycore_critical_section.h"// Py_BEGIN_CRITICAL_SECTION()
-#include "pycore_modsupport.h"    // _PyArg_UnpackKeywords()
+#include "pycore_modsupport.h"    // _PyArg_UnpackKeywordsValue()
+#include "pycore_value_call.h"    // METH_VALUE
+#include "pycore_value_ops.h"     // _PyValue_IsTrue()
 
 PyDoc_STRVAR(OrderedDict_fromkeys__doc__,
 "fromkeys($type, /, iterable, value=None)\n"
@@ -17,15 +23,16 @@ PyDoc_STRVAR(OrderedDict_fromkeys__doc__,
 "Create a new ordered dictionary with keys from iterable and values set to value.");
 
 #define ORDEREDDICT_FROMKEYS_METHODDEF    \
-    {"fromkeys", _PyCFunction_CAST(OrderedDict_fromkeys), METH_FASTCALL|METH_KEYWORDS|METH_CLASS, OrderedDict_fromkeys__doc__},
+    {"fromkeys", _PyCFunction_CAST(OrderedDict_fromkeys), METH_VALUE|METH_CLASS, OrderedDict_fromkeys__doc__},
 
-static PyObject *
-OrderedDict_fromkeys_impl(PyTypeObject *type, PyObject *seq, PyObject *value);
+static PyValue
+OrderedDict_fromkeys_impl(PyTypeObject *type, PyValueBorrow seq,
+                          PyValueBorrow value);
 
-static PyObject *
-OrderedDict_fromkeys(PyObject *type, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+OrderedDict_fromkeys(PyValueBorrow type, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -53,23 +60,19 @@ OrderedDict_fromkeys(PyObject *type, PyObject *const *args, Py_ssize_t nargs, Py
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *seq;
-    PyObject *value = Py_None;
+    Py_ssize_t _idx[2];
+    PyValueBorrow seq;
+    PyValueBorrow value = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    seq = args[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
+    seq = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        value = PyValue_Borrow(args[_idx[1]]);
     }
-    value = args[1];
-skip_optional_pos:
-    return_value = OrderedDict_fromkeys_impl((PyTypeObject *)type, seq, value);
+    return_value = OrderedDict_fromkeys_impl((PyTypeObject *)PyValue_AsKnownObjectBorrow(type), seq, value);
 
 exit:
     return return_value;
@@ -81,24 +84,27 @@ PyDoc_STRVAR(OrderedDict___sizeof____doc__,
 "\n");
 
 #define ORDEREDDICT___SIZEOF___METHODDEF    \
-    {"__sizeof__", (PyCFunction)OrderedDict___sizeof__, METH_NOARGS, OrderedDict___sizeof____doc__},
+    {"__sizeof__", _PyCFunction_CAST(OrderedDict___sizeof__), METH_VALUE, OrderedDict___sizeof____doc__},
 
 static Py_ssize_t
 OrderedDict___sizeof___impl(PyODictObject *self);
 
-static PyObject *
-OrderedDict___sizeof__(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+OrderedDict___sizeof__(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     Py_ssize_t _return_value;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    _return_value = OrderedDict___sizeof___impl((PyODictObject *)self);
+    if (!_PyArg_CheckArityValueMethod(&PyODict_Type, "__sizeof__", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    _return_value = OrderedDict___sizeof___impl((PyODictObject *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
     if ((_return_value == -1) && PyErr_Occurred()) {
         goto exit;
     }
-    return_value = PyLong_FromSsize_t(_return_value);
+    return_value = PyValue_FromInt64((int64_t)_return_value);
 
 exit:
     return return_value;
@@ -111,15 +117,23 @@ PyDoc_STRVAR(OrderedDict___reduce____doc__,
 "Return state information for pickling");
 
 #define ORDEREDDICT___REDUCE___METHODDEF    \
-    {"__reduce__", (PyCFunction)OrderedDict___reduce__, METH_NOARGS, OrderedDict___reduce____doc__},
+    {"__reduce__", _PyCFunction_CAST(OrderedDict___reduce__), METH_VALUE, OrderedDict___reduce____doc__},
 
-static PyObject *
+static PyValue
 OrderedDict___reduce___impl(PyODictObject *od);
 
-static PyObject *
-OrderedDict___reduce__(PyObject *od, PyObject *Py_UNUSED(ignored))
+static PyValue
+OrderedDict___reduce__(PyValueBorrow od, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    return OrderedDict___reduce___impl((PyODictObject *)od);
+    PyValue return_value = PyValue_NULL;
+
+    if (!_PyArg_CheckArityValueMethod(&PyODict_Type, "__reduce__", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    return_value = OrderedDict___reduce___impl((PyODictObject *)PyValue_AsKnownObjectBorrow(od));
+
+exit:
+    return return_value;
 }
 
 PyDoc_STRVAR(OrderedDict_setdefault__doc__,
@@ -131,16 +145,16 @@ PyDoc_STRVAR(OrderedDict_setdefault__doc__,
 "Return the value for key if key is in the dictionary, else default.");
 
 #define ORDEREDDICT_SETDEFAULT_METHODDEF    \
-    {"setdefault", _PyCFunction_CAST(OrderedDict_setdefault), METH_FASTCALL|METH_KEYWORDS, OrderedDict_setdefault__doc__},
+    {"setdefault", _PyCFunction_CAST(OrderedDict_setdefault), METH_VALUE, OrderedDict_setdefault__doc__},
 
-static PyObject *
-OrderedDict_setdefault_impl(PyODictObject *self, PyObject *key,
-                            PyObject *default_value);
+static PyValue
+OrderedDict_setdefault_impl(PyODictObject *self, PyValueBorrow key,
+                            PyValueBorrow default_value);
 
-static PyObject *
-OrderedDict_setdefault(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+OrderedDict_setdefault(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -168,24 +182,20 @@ OrderedDict_setdefault(PyObject *self, PyObject *const *args, Py_ssize_t nargs, 
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *key;
-    PyObject *default_value = Py_None;
+    Py_ssize_t _idx[2];
+    PyValueBorrow key;
+    PyValueBorrow default_value = PyValue_Borrow(PyValue_None);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    key = args[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
+    key = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        default_value = PyValue_Borrow(args[_idx[1]]);
     }
-    default_value = args[1];
-skip_optional_pos:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = OrderedDict_setdefault_impl((PyODictObject *)self, key, default_value);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = OrderedDict_setdefault_impl((PyODictObject *)PyValue_AsKnownObjectBorrow(self), key, default_value);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -202,16 +212,16 @@ PyDoc_STRVAR(OrderedDict_pop__doc__,
 "raise a KeyError.");
 
 #define ORDEREDDICT_POP_METHODDEF    \
-    {"pop", _PyCFunction_CAST(OrderedDict_pop), METH_FASTCALL|METH_KEYWORDS, OrderedDict_pop__doc__},
+    {"pop", _PyCFunction_CAST(OrderedDict_pop), METH_VALUE, OrderedDict_pop__doc__},
 
-static PyObject *
-OrderedDict_pop_impl(PyODictObject *self, PyObject *key,
-                     PyObject *default_value);
+static PyValue
+OrderedDict_pop_impl(PyODictObject *self, PyValueBorrow key,
+                     PyValueBorrow default_value);
 
-static PyObject *
-OrderedDict_pop(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+OrderedDict_pop(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -239,24 +249,20 @@ OrderedDict_pop(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObjec
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *key;
-    PyObject *default_value = NULL;
+    Py_ssize_t _idx[2];
+    PyValueBorrow key;
+    PyValueBorrow default_value = PyValue_Borrow(PyValue_NULL);
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    key = args[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
+    key = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        default_value = PyValue_Borrow(args[_idx[1]]);
     }
-    default_value = args[1];
-skip_optional_pos:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = OrderedDict_pop_impl((PyODictObject *)self, key, default_value);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = OrderedDict_pop_impl((PyODictObject *)PyValue_AsKnownObjectBorrow(self), key, default_value);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -273,15 +279,15 @@ PyDoc_STRVAR(OrderedDict_popitem__doc__,
 "false.");
 
 #define ORDEREDDICT_POPITEM_METHODDEF    \
-    {"popitem", _PyCFunction_CAST(OrderedDict_popitem), METH_FASTCALL|METH_KEYWORDS, OrderedDict_popitem__doc__},
+    {"popitem", _PyCFunction_CAST(OrderedDict_popitem), METH_VALUE, OrderedDict_popitem__doc__},
 
-static PyObject *
+static PyValue
 OrderedDict_popitem_impl(PyODictObject *self, int last);
 
-static PyObject *
-OrderedDict_popitem(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+OrderedDict_popitem(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 1
@@ -309,25 +315,21 @@ OrderedDict_popitem(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyO
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[1];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 0;
+    Py_ssize_t _idx[1];
     int last = 1;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 0, /*maxpos*/ 1, /*minkw*/ 0, /*varpos*/ 0, _idx, 1)) {
         goto exit;
     }
-    if (!noptargs) {
-        goto skip_optional_pos;
+    if (_idx[0] >= 0) {
+        last = _PyValue_IsTrue(PyValue_Borrow(args[_idx[0]]));
+        if (last < 0) {
+            goto exit;
+        }
     }
-    last = PyObject_IsTrue(args[0]);
-    if (last < 0) {
-        goto exit;
-    }
-skip_optional_pos:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = OrderedDict_popitem_impl((PyODictObject *)self, last);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = OrderedDict_popitem_impl((PyODictObject *)PyValue_AsKnownObjectBorrow(self), last);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -341,20 +343,24 @@ PyDoc_STRVAR(OrderedDict_clear__doc__,
 "Remove all items from ordered dict.");
 
 #define ORDEREDDICT_CLEAR_METHODDEF    \
-    {"clear", (PyCFunction)OrderedDict_clear, METH_NOARGS, OrderedDict_clear__doc__},
+    {"clear", _PyCFunction_CAST(OrderedDict_clear), METH_VALUE, OrderedDict_clear__doc__},
 
-static PyObject *
+static PyValue
 OrderedDict_clear_impl(PyODictObject *self);
 
-static PyObject *
-OrderedDict_clear(PyObject *self, PyObject *Py_UNUSED(ignored))
+static PyValue
+OrderedDict_clear(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = OrderedDict_clear_impl((PyODictObject *)self);
+    if (!_PyArg_CheckArityValueMethod(&PyODict_Type, "clear", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = OrderedDict_clear_impl((PyODictObject *)PyValue_AsKnownObjectBorrow(self));
     Py_END_CRITICAL_SECTION();
 
+exit:
     return return_value;
 }
 
@@ -365,20 +371,24 @@ PyDoc_STRVAR(OrderedDict_copy__doc__,
 "A shallow copy of ordered dict.");
 
 #define ORDEREDDICT_COPY_METHODDEF    \
-    {"copy", (PyCFunction)OrderedDict_copy, METH_NOARGS, OrderedDict_copy__doc__},
+    {"copy", _PyCFunction_CAST(OrderedDict_copy), METH_VALUE, OrderedDict_copy__doc__},
 
-static PyObject *
+static PyValue
 OrderedDict_copy_impl(PyObject *od);
 
-static PyObject *
-OrderedDict_copy(PyObject *od, PyObject *Py_UNUSED(ignored))
+static PyValue
+OrderedDict_copy(PyValueBorrow od, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
 
-    Py_BEGIN_CRITICAL_SECTION(od);
-    return_value = OrderedDict_copy_impl(od);
+    if (!_PyArg_CheckArityValueMethod(&PyODict_Type, "copy", nargs, kwnames, 0)) {
+        goto exit;
+    }
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(od));
+    return_value = OrderedDict_copy_impl(PyValue_AsKnownObjectBorrow(od));
     Py_END_CRITICAL_SECTION();
 
+exit:
     return return_value;
 }
 
@@ -391,15 +401,16 @@ PyDoc_STRVAR(OrderedDict_move_to_end__doc__,
 "Raise KeyError if the element does not exist.");
 
 #define ORDEREDDICT_MOVE_TO_END_METHODDEF    \
-    {"move_to_end", _PyCFunction_CAST(OrderedDict_move_to_end), METH_FASTCALL|METH_KEYWORDS, OrderedDict_move_to_end__doc__},
+    {"move_to_end", _PyCFunction_CAST(OrderedDict_move_to_end), METH_VALUE, OrderedDict_move_to_end__doc__},
 
-static PyObject *
-OrderedDict_move_to_end_impl(PyODictObject *self, PyObject *key, int last);
+static PyValue
+OrderedDict_move_to_end_impl(PyODictObject *self, PyValueBorrow key,
+                             int last);
 
-static PyObject *
-OrderedDict_move_to_end(PyObject *self, PyObject *const *args, Py_ssize_t nargs, PyObject *kwnames)
+static PyValue
+OrderedDict_move_to_end(PyValueBorrow self, const PyValue *args, Py_ssize_t nargs, PyObject *kwnames)
 {
-    PyObject *return_value = NULL;
+    PyValue return_value = PyValue_NULL;
     #if defined(Py_BUILD_CORE) && !defined(Py_BUILD_CORE_MODULE)
 
     #define NUM_KEYWORDS 2
@@ -427,27 +438,23 @@ OrderedDict_move_to_end(PyObject *self, PyObject *const *args, Py_ssize_t nargs,
         .kwtuple = KWTUPLE,
     };
     #undef KWTUPLE
-    PyObject *argsbuf[2];
-    Py_ssize_t noptargs = nargs + (kwnames ? PyTuple_GET_SIZE(kwnames) : 0) - 1;
-    PyObject *key;
+    Py_ssize_t _idx[2];
+    PyValueBorrow key;
     int last = 1;
 
-    args = _PyArg_UnpackKeywords(args, nargs, NULL, kwnames, &_parser,
-            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, argsbuf);
-    if (!args) {
+    if (!_PyArg_UnpackKeywordsValue(args, nargs, kwnames, &_parser,
+            /*minpos*/ 1, /*maxpos*/ 2, /*minkw*/ 0, /*varpos*/ 0, _idx, 2)) {
         goto exit;
     }
-    key = args[0];
-    if (!noptargs) {
-        goto skip_optional_pos;
+    key = PyValue_Borrow(args[_idx[0]]);
+    if (_idx[1] >= 0) {
+        last = _PyValue_IsTrue(PyValue_Borrow(args[_idx[1]]));
+        if (last < 0) {
+            goto exit;
+        }
     }
-    last = PyObject_IsTrue(args[1]);
-    if (last < 0) {
-        goto exit;
-    }
-skip_optional_pos:
-    Py_BEGIN_CRITICAL_SECTION(self);
-    return_value = OrderedDict_move_to_end_impl((PyODictObject *)self, key, last);
+    Py_BEGIN_CRITICAL_SECTION(PyValue_AsKnownObjectBorrow(self));
+    return_value = OrderedDict_move_to_end_impl((PyODictObject *)PyValue_AsKnownObjectBorrow(self), key, last);
     Py_END_CRITICAL_SECTION();
 
 exit:
@@ -468,4 +475,4 @@ odictiter_iternext(PyObject *self)
 
     return return_value;
 }
-/*[clinic end generated code: output=50adfcb5a0a6139d input=a9049054013a1b77]*/
+/*[clinic end generated code: output=b7d1168dd196452a input=a9049054013a1b77]*/

@@ -42,6 +42,11 @@
 
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 module _imp
 [clinic start generated code]*/
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=9c332475d8686284]*/
@@ -5029,12 +5034,12 @@ Return True if the import lock is currently held, else False.
 On platforms without threads, return False.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _imp_lock_held_impl(PyObject *module)
-/*[clinic end generated code: output=8b89384b5e1963fc input=9b088f9b217d9bdf]*/
+/*[clinic end generated code: output=f07784886f22c347 input=9b088f9b217d9bdf]*/
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
-    return PyBool_FromLong(PyMutex_IsLocked(&IMPORT_LOCK(interp).mutex));
+    return PyValue_FromBool(PyMutex_IsLocked(&IMPORT_LOCK(interp).mutex));
 }
 
 /*[clinic input]
@@ -5047,13 +5052,13 @@ importing modules.  On platforms without threads, this function does
 nothing.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _imp_acquire_lock_impl(PyObject *module)
-/*[clinic end generated code: output=1aff58cb0ee1b026 input=60e9c1b4ab471ead]*/
+/*[clinic end generated code: output=138fb9c50ae8ca50 input=60e9c1b4ab471ead]*/
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
     _PyImport_AcquireLock(interp);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -5064,18 +5069,18 @@ Release the interpreter's import lock.
 On platforms without threads, this function does nothing.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _imp_release_lock_impl(PyObject *module)
-/*[clinic end generated code: output=7faab6d0be178b0a input=934fb11516dd778b]*/
+/*[clinic end generated code: output=284d901253b30d5b input=934fb11516dd778b]*/
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
     if (!_PyRecursiveMutex_IsLockedByCurrentThread(&IMPORT_LOCK(interp))) {
         PyErr_SetString(PyExc_RuntimeError,
                         "not holding the import lock");
-        return NULL;
+        return PyValue_NULL;
     }
     _PyImport_ReleaseLock(interp);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 
@@ -5092,15 +5097,15 @@ _imp._fix_co_filename
 Changes code.co_filename to specify the passed-in file path.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _imp__fix_co_filename_impl(PyObject *module, PyCodeObject *code,
                            PyObject *path)
-/*[clinic end generated code: output=1d002f100235587d input=895ba50e78b82f05]*/
+/*[clinic end generated code: output=27c06ec85002e323 input=895ba50e78b82f05]*/
 
 {
     update_compiled_module(code, path);
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 
@@ -5113,14 +5118,20 @@ _imp.create_builtin
 Create an extension module.
 [clinic start generated code]*/
 
-static PyObject *
-_imp_create_builtin(PyObject *module, PyObject *spec)
-/*[clinic end generated code: output=ace7ff22271e6f39 input=37f966f890384e47]*/
+static PyValue
+_imp_create_builtin_impl(PyObject *module, PyValueBorrow spec)
+/*[clinic end generated code: output=a16fd11cf43680d6 input=37f966f890384e47]*/
 {
     PyThreadState *tstate = _PyThreadState_GET();
 
-    PyObject *mod = create_builtin(tstate, NULL, spec, NULL);
-    return mod;
+    /* create_builtin() reads attributes of the spec: box an inline int or float. */
+    PyObject *spec_obj = _PyValue_AsObjectAt(spec, BOX_SITE_PARSER);
+    if (spec_obj == NULL) {
+        return PyValue_NULL;
+    }
+    PyObject *mod = create_builtin(tstate, NULL, spec_obj, NULL);
+    Py_DECREF(spec_obj);
+    return _PyValue_FromObjectResult(mod);
 }
 
 
@@ -5130,15 +5141,15 @@ _imp.extension_suffixes
 Returns the list of file suffixes used to identify extension modules.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _imp_extension_suffixes_impl(PyObject *module)
-/*[clinic end generated code: output=0bf346e25a8f0cd3 input=ecdeeecfcb6f839e]*/
+/*[clinic end generated code: output=6feccedc544af535 input=ecdeeecfcb6f839e]*/
 {
     PyObject *list;
 
     list = PyList_New(0);
     if (list == NULL)
-        return NULL;
+        return PyValue_NULL;
 #ifdef HAVE_DYNAMIC_LOADING
     const char *suffix;
     unsigned int index = 0;
@@ -5147,18 +5158,18 @@ _imp_extension_suffixes_impl(PyObject *module)
         PyObject *item = PyUnicode_FromString(suffix);
         if (item == NULL) {
             Py_DECREF(list);
-            return NULL;
+            return PyValue_NULL;
         }
         if (PyList_AppendValue(list, PyValue_FromObjectBorrow(item)) < 0) {
             Py_DECREF(list);
             Py_DECREF(item);
-            return NULL;
+            return PyValue_NULL;
         }
         Py_DECREF(item);
         index += 1;
     }
 #endif
-    return list;
+    return _PyValue_FromObjectResult(list);
 }
 
 /*[clinic input]
@@ -5170,20 +5181,20 @@ _imp.init_frozen
 Initializes a frozen module.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _imp_init_frozen_impl(PyObject *module, PyObject *name)
-/*[clinic end generated code: output=fc0511ed869fd69c input=13019adfc04f3fb3]*/
+/*[clinic end generated code: output=8fcdb507160b8491 input=13019adfc04f3fb3]*/
 {
     PyThreadState *tstate = _PyThreadState_GET();
     int ret;
 
     ret = PyImport_ImportFrozenModuleObject(name);
     if (ret < 0)
-        return NULL;
+        return PyValue_NULL;
     if (ret == 0) {
-        Py_RETURN_NONE;
+        return PyValue_None;
     }
-    return import_add_module(tstate, name);
+    return _PyValue_FromObjectResult(import_add_module(tstate, name));
 }
 
 /*[clinic input]
@@ -5206,28 +5217,28 @@ The returned info (a 2-tuple):
                 the module's current name)
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _imp_find_frozen_impl(PyObject *module, PyObject *name, int withdata)
-/*[clinic end generated code: output=8c1c3c7f925397a5 input=30a7a50da49eca97]*/
+/*[clinic end generated code: output=671e53f7fea035ec input=30a7a50da49eca97]*/
 {
     struct frozen_info info;
     frozen_status status = find_frozen(name, &info);
     if (status == FROZEN_NOT_FOUND || status == FROZEN_DISABLED) {
-        Py_RETURN_NONE;
+        return PyValue_None;
     }
     else if (status == FROZEN_BAD_NAME) {
-        Py_RETURN_NONE;
+        return PyValue_None;
     }
     else if (status != FROZEN_OKAY) {
         set_frozen_error(status, name);
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyObject *data = NULL;
     if (withdata) {
         data = PyMemoryView_FromMemory((char *)info.data, info.size, PyBUF_READ);
         if (data == NULL) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
@@ -5236,14 +5247,14 @@ _imp_find_frozen_impl(PyObject *module, PyObject *name, int withdata)
         origname = PyUnicode_FromString(info.origname);
         if (origname == NULL) {
             Py_XDECREF(data);
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
     PyObject *result = _PyTuple_PackValues(3, (PyValueBorrow[]){PyValue_FromObjectBorrow(data ? data : Py_None), PyValue_FromObjectBorrow(info.is_package ? Py_True : Py_False), PyValue_FromObjectBorrow(origname ? origname : Py_None)});
     Py_XDECREF(origname);
     Py_XDECREF(data);
-    return result;
+    return _PyValue_FromObjectResult(result);
 }
 
 /*[clinic input]
@@ -5256,29 +5267,32 @@ _imp.get_frozen_object
 Create a code object for a frozen module.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _imp_get_frozen_object_impl(PyObject *module, PyObject *name,
-                            PyObject *dataobj)
-/*[clinic end generated code: output=54368a673a35e745 input=034bdb88f6460b7b]*/
+                            PyValueBorrow dataobj)
+/*[clinic end generated code: output=d84a928c9fbfca87 input=034bdb88f6460b7b]*/
 {
     struct frozen_info info = {0};
     Py_buffer buf = {0};
-    if (PyObject_CheckBuffer(dataobj)) {
-        if (PyObject_GetBuffer(dataobj, &buf, PyBUF_SIMPLE) != 0) {
-            return NULL;
+    /* An inline int or float exports no buffer. */
+    if (PyValue_IsObject(dataobj)
+        && PyObject_CheckBuffer(PyValue_AsKnownObjectBorrow(dataobj))) {
+        if (PyObject_GetBuffer(PyValue_AsKnownObjectBorrow(dataobj), &buf,
+                               PyBUF_SIMPLE) != 0) {
+            return PyValue_NULL;
         }
         info.data = (const char *)buf.buf;
         info.size = buf.len;
     }
-    else if (dataobj != Py_None) {
-        _PyArg_BadArgument("get_frozen_object", "argument 2", "bytes", dataobj);
-        return NULL;
+    else if (!PyValue_IsNone(dataobj)) {
+        _PyArg_BadArgumentValue("get_frozen_object", "argument 2", "bytes", dataobj);
+        return PyValue_NULL;
     }
     else {
         frozen_status status = find_frozen(name, &info);
         if (status != FROZEN_OKAY) {
             set_frozen_error(status, name);
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
@@ -5288,15 +5302,15 @@ _imp_get_frozen_object_impl(PyObject *module, PyObject *name,
     if (info.size == 0) {
         /* Does not contain executable code. */
         set_frozen_error(FROZEN_INVALID, name);
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyInterpreterState *interp = _PyInterpreterState_GET();
     PyObject *codeobj = unmarshal_frozen_code(interp, &info);
-    if (dataobj != Py_None) {
+    if (!PyValue_IsNone(dataobj)) {
         PyBuffer_Release(&buf);
     }
-    return codeobj;
+    return _PyValue_FromObjectResult(codeobj);
 }
 
 /*[clinic input]
@@ -5308,17 +5322,17 @@ _imp.is_frozen_package
 Returns True if the module name is of a frozen package.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _imp_is_frozen_package_impl(PyObject *module, PyObject *name)
-/*[clinic end generated code: output=e70cbdb45784a1c9 input=81b6cdecd080fbb8]*/
+/*[clinic end generated code: output=91171eedb1184796 input=81b6cdecd080fbb8]*/
 {
     struct frozen_info info;
     frozen_status status = find_frozen(name, &info);
     if (status != FROZEN_OKAY && status != FROZEN_EXCLUDED) {
         set_frozen_error(status, name);
-        return NULL;
+        return PyValue_NULL;
     }
-    return PyBool_FromLong(info.is_package);
+    return PyValue_FromBool(info.is_package);
 }
 
 /*[clinic input]
@@ -5330,11 +5344,11 @@ _imp.is_builtin
 Returns True if the module name corresponds to a built-in module.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _imp_is_builtin_impl(PyObject *module, PyObject *name)
-/*[clinic end generated code: output=3bfd1162e2d3be82 input=86befdac021dd1c7]*/
+/*[clinic end generated code: output=ff2693cf1602dc94 input=86befdac021dd1c7]*/
 {
-    return PyLong_FromLong(is_builtin(name));
+    return PyValue_FromInt64(is_builtin(name));
 }
 
 /*[clinic input]
@@ -5346,16 +5360,16 @@ _imp.is_frozen
 Returns True if the module name corresponds to a frozen module.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _imp_is_frozen_impl(PyObject *module, PyObject *name)
-/*[clinic end generated code: output=01f408f5ec0f2577 input=7301dbca1897d66b]*/
+/*[clinic end generated code: output=8874744f960c7248 input=7301dbca1897d66b]*/
 {
     struct frozen_info info;
     frozen_status status = find_frozen(name, &info);
     if (status != FROZEN_OKAY) {
-        Py_RETURN_FALSE;
+        return PyValue_False;
     }
-    Py_RETURN_TRUE;
+    return PyValue_True;
 }
 
 /*[clinic input]
@@ -5364,11 +5378,11 @@ _imp._frozen_module_names
 Returns the list of available frozen modules.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _imp__frozen_module_names_impl(PyObject *module)
-/*[clinic end generated code: output=80609ef6256310a8 input=76237fbfa94460d2]*/
+/*[clinic end generated code: output=0ad17e52db6b13db input=76237fbfa94460d2]*/
 {
-    return list_frozen_module_names();
+    return _PyValue_FromObjectResult(list_frozen_module_names());
 }
 
 /*[clinic input]
@@ -5383,13 +5397,13 @@ _imp._override_frozen_modules_for_tests
 See frozen_modules() in Lib/test/support/import_helper.py.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _imp__override_frozen_modules_for_tests_impl(PyObject *module, int override)
-/*[clinic end generated code: output=36d5cb1594160811 input=8f1f95a3ef21aec3]*/
+/*[clinic end generated code: output=7bf692bf5a73a797 input=8f1f95a3ef21aec3]*/
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
     OVERRIDE_FROZEN_MODULES(interp) = override;
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -5404,17 +5418,17 @@ _imp._override_multi_interp_extensions_check
 (-1: "never", 1: "always", 0: no override)
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _imp__override_multi_interp_extensions_check_impl(PyObject *module,
                                                   int override)
-/*[clinic end generated code: output=3ff043af52bbf280 input=24f23f8510a7f6e7]*/
+/*[clinic end generated code: output=3bf76198d610fe83 input=24f23f8510a7f6e7]*/
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
     if (_Py_IsMainInterpreter(interp)) {
         PyErr_SetString(PyExc_RuntimeError,
                         "_imp._override_multi_interp_extensions_check() "
                         "cannot be used in the main interpreter");
-        return NULL;
+        return PyValue_NULL;
     }
 #ifdef Py_GIL_DISABLED
     PyErr_SetString(PyExc_RuntimeError,
@@ -5424,7 +5438,7 @@ _imp__override_multi_interp_extensions_check_impl(PyObject *module,
 #else
     int oldvalue = OVERRIDE_MULTI_INTERP_EXTENSIONS_CHECK(interp);
     OVERRIDE_MULTI_INTERP_EXTENSIONS_CHECK(interp) = override;
-    return PyLong_FromLong(oldvalue);
+    return PyValue_FromInt64(oldvalue);
 #endif
 }
 
@@ -5440,18 +5454,27 @@ _imp.create_dynamic
 Create an extension module.
 [clinic start generated code]*/
 
-static PyObject *
-_imp_create_dynamic_impl(PyObject *module, PyObject *spec, PyObject *file)
-/*[clinic end generated code: output=83249b827a4fde77 input=c31b954f4cf4e09d]*/
+static PyValue
+_imp_create_dynamic_impl(PyObject *module, PyValueBorrow spec,
+                         PyValueBorrow file)
+/*[clinic end generated code: output=29ad7c2655f4bff0 input=c31b954f4cf4e09d]*/
 {
     FILE *fp = NULL;
     PyObject *mod = NULL;
     PyThreadState *tstate = _PyThreadState_GET();
 
+    /* The loader helpers read attributes of the spec: box an inline int or
+       float. */
+    PyObject *spec_obj = _PyValue_AsObjectAt(spec, BOX_SITE_PARSER);
+    if (spec_obj == NULL) {
+        return PyValue_NULL;
+    }
+
     struct _Py_ext_module_loader_info info;
     _Py_ext_module_origin origin = _Py_ext_module_origin_DYNAMIC;
-    if (_Py_ext_module_loader_info_init(&info, NULL, spec, origin) < 0) {
-        return NULL;
+    if (_Py_ext_module_loader_info_init(&info, NULL, spec_obj, origin) < 0) {
+        Py_DECREF(spec_obj);
+        return PyValue_NULL;
     }
 
     struct extensions_cache_value *cached = NULL;
@@ -5488,7 +5511,7 @@ _imp_create_dynamic_impl(PyObject *module, PyObject *spec, PyObject *file)
     /* We would move this (and the fclose() below) into
      * _PyImport_GetModuleExportHooks(), but it isn't clear if the intervening
      * code relies on fp still being open. */
-    if (file != NULL) {
+    if (!PyValue_IsNull(file)) {
         fp = Py_fopen(info.filename, "r");
         if (fp == NULL) {
             goto finally;
@@ -5499,7 +5522,7 @@ _imp_create_dynamic_impl(PyObject *module, PyObject *spec, PyObject *file)
     PyModExportFunction ex0 = NULL;
     _PyImport_GetModuleExportHooks(&info, fp, &p0, &ex0);
     if (ex0) {
-        mod = import_run_modexport(tstate, ex0, &info, spec);
+        mod = import_run_modexport(tstate, ex0, &info, spec_obj);
         // Modules created from slots handle GIL enablement (Py_mod_gil slot)
         // when they're created.
         goto finally;
@@ -5517,7 +5540,7 @@ _imp_create_dynamic_impl(PyObject *module, PyObject *spec, PyObject *file)
     _PyEval_EnableGILTransient(tstate);
 #endif
     mod = import_run_extension(
-                    tstate, p0, &info, spec, get_modules_dict(tstate, true));
+                    tstate, p0, &info, spec_obj, get_modules_dict(tstate, true));
 #ifdef Py_GIL_DISABLED
     if (_PyImport_CheckGILForModule(mod, info.name) < 0) {
         Py_CLEAR(mod);
@@ -5530,7 +5553,8 @@ finally:
         fclose(fp);
     }
     _Py_ext_module_loader_info_clear(&info);
-    return mod;
+    Py_DECREF(spec_obj);
+    return _PyValue_FromObjectResult(mod);
 }
 
 /*[clinic input]
@@ -5543,10 +5567,14 @@ Initialize an extension module.
 [clinic start generated code]*/
 
 static int
-_imp_exec_dynamic_impl(PyObject *module, PyObject *mod)
-/*[clinic end generated code: output=f5720ac7b465877d input=9fdbfcb250280d3a]*/
+_imp_exec_dynamic_impl(PyObject *module, PyValueBorrow mod)
+/*[clinic end generated code: output=a252867e8aa168da input=9fdbfcb250280d3a]*/
 {
-    return exec_builtin_or_dynamic(mod);
+    /* A non-module, including an inline int or float, is a no-op. */
+    if (!PyValue_IsObject(mod)) {
+        return 0;
+    }
+    return exec_builtin_or_dynamic(PyValue_AsKnownObjectBorrow(mod));
 }
 
 
@@ -5562,10 +5590,14 @@ Initialize a built-in module.
 [clinic start generated code]*/
 
 static int
-_imp_exec_builtin_impl(PyObject *module, PyObject *mod)
-/*[clinic end generated code: output=0262447b240c038e input=7beed5a2f12a60ca]*/
+_imp_exec_builtin_impl(PyObject *module, PyValueBorrow mod)
+/*[clinic end generated code: output=8c2d929f5c19c217 input=7beed5a2f12a60ca]*/
 {
-    return exec_builtin_or_dynamic(mod);
+    /* A non-module, including an inline int or float, is a no-op. */
+    if (!PyValue_IsObject(mod)) {
+        return 0;
+    }
+    return exec_builtin_or_dynamic(PyValue_AsKnownObjectBorrow(mod));
 }
 
 /*[clinic input]
@@ -5575,9 +5607,9 @@ _imp.source_hash
     source: Py_buffer
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 _imp_source_hash_impl(PyObject *module, long key, Py_buffer *source)
-/*[clinic end generated code: output=edb292448cf399ea input=9aaad1e590089789]*/
+/*[clinic end generated code: output=5697d626367ab25f input=9aaad1e590089789]*/
 {
     union {
         uint64_t x;
@@ -5593,7 +5625,7 @@ _imp_source_hash_impl(PyObject *module, long key, Py_buffer *source)
         hash.data[sizeof(hash.data) - i - 1] = tmp;
     }
 #endif
-    return PyBytes_FromStringAndSize(hash.data, sizeof(hash.data));
+    return _PyValue_FromObjectResult(PyBytes_FromStringAndSize(hash.data, sizeof(hash.data)));
 }
 
 /*[clinic input]
@@ -5604,19 +5636,19 @@ _imp._set_lazy_attributes
 Remove the resolved module name from sys.lazy_modules.
 [clinic start generated code]*/
 
-static PyObject *
-_imp__set_lazy_attributes_impl(PyObject *module, PyObject *modobj,
+static PyValue
+_imp__set_lazy_attributes_impl(PyObject *module, PyValueBorrow modobj,
                                PyObject *name)
-/*[clinic end generated code: output=3369bb3242b1f043 input=900339e013ab2b82]*/
+/*[clinic end generated code: output=9515e2efffbc08b0 input=900339e013ab2b82]*/
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
     if (_PyImport_DiscardLazyModule(interp, name) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
     if (_PyImport_ClearLazySubmodule(_PyThreadState_GET(), name, 0) < 0) {
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 PyDoc_STRVAR(doc_imp,

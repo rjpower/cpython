@@ -5,6 +5,7 @@
 #include "pycore_ceval.h"         // _PyEval_GetBuiltin()
 #include "pycore_freelist.h"
 #include "pycore_long.h"          // _PyLong_GetZero()
+#include "pycore_long_value.h"    // _PyValue_AsLong()
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_range.h"
 #include "pycore_sliceobject.h"   // _PySlice_GetLongIndices()
@@ -17,6 +18,11 @@ typedef struct {
     PyObject *step;
     PyObject *len;
 } longrangeiterobject;
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 class range_iterator "_PyRangeIterObject *" "&PyRangeIter_Type"
@@ -900,11 +906,11 @@ range_iterator.__length_hint__
 Private method returning an estimate of len(list(it)).
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 range_iterator___length_hint___impl(_PyRangeIterObject *r)
-/*[clinic end generated code: output=9ba6f22b1fc23dcc input=e3eb311e99d76e43]*/
+/*[clinic end generated code: output=28f31f84e6bfd668 input=e3eb311e99d76e43]*/
 {
-    return PyLong_FromLong(r->len);
+    return PyValue_FromInt64(r->len);
 }
 
 /*[clinic input]
@@ -915,9 +921,9 @@ range_iterator.__reduce__
 Return state information for pickling.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 range_iterator___reduce___impl(_PyRangeIterObject *r)
-/*[clinic end generated code: output=c44d53750c388415 input=75a25b7076dc2c54]*/
+/*[clinic end generated code: output=012c49f64ed753ba input=75a25b7076dc2c54]*/
 {
     PyObject *start=NULL, *stop=NULL, *step=NULL;
     PyObject *range;
@@ -937,13 +943,13 @@ range_iterator___reduce___impl(_PyRangeIterObject *r)
     if (range == NULL)
         goto err;
     /* return the result */
-    return Py_BuildValue("N(N)O", _PyEval_GetBuiltin(&_Py_ID(iter)),
-                         range, Py_None);
+    return _PyValue_FromObjectResult(Py_BuildValue("N(N)O", _PyEval_GetBuiltin(&_Py_ID(iter)),
+                         range, Py_None));
 err:
     Py_XDECREF(start);
     Py_XDECREF(stop);
     Py_XDECREF(step);
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -956,13 +962,13 @@ range_iterator.__setstate__
 Set state information for unpickling.
 [clinic start generated code]*/
 
-static PyObject *
-range_iterator___setstate___impl(_PyRangeIterObject *r, PyObject *state)
-/*[clinic end generated code: output=464b3cbafc2e3562 input=c8c84fab2519d200]*/
+static PyValue
+range_iterator___setstate___impl(_PyRangeIterObject *r, PyValueBorrow state)
+/*[clinic end generated code: output=e3204e7bd8ee0e07 input=c8c84fab2519d200]*/
 {
-    long index = PyLong_AsLong(state);
+    long index = _PyValue_AsLong(state);
     if (index == -1 && PyErr_Occurred())
-        return NULL;
+        return PyValue_NULL;
     /* silently clip the index value */
     if (index < 0)
         index = 0;
@@ -970,7 +976,7 @@ range_iterator___setstate___impl(_PyRangeIterObject *r, PyObject *state)
         index = r->len; /* exhausted iterator */
     r->start += index * r->step;
     r->len -= index;
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static void
@@ -1075,12 +1081,12 @@ longrange_iterator.__length_hint__
 Private method returning an estimate of len(list(it)).
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 longrange_iterator___length_hint___impl(longrangeiterobject *r)
-/*[clinic end generated code: output=e1bce24da7e8bfde input=ba94b050d940411e]*/
+/*[clinic end generated code: output=e57dcdffeda56119 input=ba94b050d940411e]*/
 {
     Py_INCREF(r->len);
-    return r->len;
+    return _PyValue_FromObjectResult(r->len);
 }
 
 /*[clinic input]
@@ -1091,9 +1097,9 @@ longrange_iterator.__reduce__
 Return state information for pickling.
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 longrange_iterator___reduce___impl(longrangeiterobject *r)
-/*[clinic end generated code: output=0077f94ae2a4e99a input=2e8930e897ace086]*/
+/*[clinic end generated code: output=8dd460d2a9186f04 input=2e8930e897ace086]*/
 {
     PyObject *product, *stop=NULL;
     PyObject *range;
@@ -1101,23 +1107,23 @@ longrange_iterator___reduce___impl(longrangeiterobject *r)
     /* create a range object for pickling.  Must calculate the "stop" value */
     product = PyNumber_Multiply(r->len, r->step);
     if (product == NULL)
-        return NULL;
+        return PyValue_NULL;
     stop = PyNumber_Add(r->start, product);
     Py_DECREF(product);
     if (stop ==  NULL)
-        return NULL;
+        return PyValue_NULL;
     range =  (PyObject*)make_range_object(&PyRange_Type,
                                Py_NewRef(r->start), stop, Py_NewRef(r->step));
     if (range == NULL) {
         Py_DECREF(r->start);
         Py_DECREF(stop);
         Py_DECREF(r->step);
-        return NULL;
+        return PyValue_NULL;
     }
 
     /* return the result */
-    return Py_BuildValue("N(N)O", _PyEval_GetBuiltin(&_Py_ID(iter)),
-                         range, Py_None);
+    return _PyValue_FromObjectResult(Py_BuildValue("N(N)O", _PyEval_GetBuiltin(&_Py_ID(iter)),
+                         range, Py_None));
 }
 
 /*[clinic input]
@@ -1130,49 +1136,63 @@ longrange_iterator.__setstate__
 Set state information for unpickling.
 [clinic start generated code]*/
 
-static PyObject *
-longrange_iterator___setstate___impl(longrangeiterobject *r, PyObject *state)
-/*[clinic end generated code: output=870787f0574f0da4 input=8b116de3018de824]*/
+static PyValue
+longrange_iterator___setstate___impl(longrangeiterobject *r,
+                                     PyValueBorrow state)
+/*[clinic end generated code: output=b5d6e0b24a6e9982 input=8b116de3018de824]*/
 {
-    if (!PyLong_CheckExact(state)) {
-        PyErr_Format(PyExc_TypeError, "state must be an int, not %T", state);
-        return NULL;
+    if (PyValue_TYPE(state) != &PyLong_Type) {
+        PyErr_Format(PyExc_TypeError, "state must be an int, not %vT", state);
+        return PyValue_NULL;
     }
 
+    /* The clip and the arithmetic work on objects, so box an inline state once. */
+    PyObject *index = _PyValue_AsObjectAt(state, BOX_SITE_PARSER);
+    if (index == NULL)
+        return PyValue_NULL;
     PyObject *zero = _PyLong_GetZero();  // borrowed reference
     int cmp;
 
     /* clip the value */
-    cmp = PyObject_RichCompareBool(state, zero, Py_LT);
-    if (cmp < 0)
-        return NULL;
+    cmp = PyObject_RichCompareBool(index, zero, Py_LT);
+    if (cmp < 0) {
+        Py_DECREF(index);
+        return PyValue_NULL;
+    }
     if (cmp > 0) {
-        state = zero;
+        Py_SETREF(index, Py_NewRef(zero));
     }
     else {
-        cmp = PyObject_RichCompareBool(r->len, state, Py_LT);
-        if (cmp < 0)
-            return NULL;
+        cmp = PyObject_RichCompareBool(r->len, index, Py_LT);
+        if (cmp < 0) {
+            Py_DECREF(index);
+            return PyValue_NULL;
+        }
         if (cmp > 0)
-            state = r->len;
+            Py_SETREF(index, Py_NewRef(r->len));
     }
-    PyObject *product = PyNumber_Multiply(state, r->step);
-    if (product == NULL)
-        return NULL;
+    PyObject *product = PyNumber_Multiply(index, r->step);
+    if (product == NULL) {
+        Py_DECREF(index);
+        return PyValue_NULL;
+    }
     PyObject *new_start = PyNumber_Add(r->start, product);
     Py_DECREF(product);
-    if (new_start == NULL)
-        return NULL;
-    PyObject *new_len = PyNumber_Subtract(r->len, state);
+    if (new_start == NULL) {
+        Py_DECREF(index);
+        return PyValue_NULL;
+    }
+    PyObject *new_len = PyNumber_Subtract(r->len, index);
+    Py_DECREF(index);
     if (new_len == NULL) {
         Py_DECREF(new_start);
-        return NULL;
+        return PyValue_NULL;
     }
     PyObject *tmp = r->start;
     r->start = new_start;
     Py_SETREF(r->len, new_len);
     Py_DECREF(tmp);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static PyMethodDef longrangeiter_methods[] = {

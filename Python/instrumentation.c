@@ -2299,6 +2299,11 @@ int _PyMonitoring_ClearToolId(int tool_id)
 }
 
 /*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
+
+/*[clinic input]
 module monitoring
 [clinic start generated code]*/
 /*[clinic end generated code: output=da39a3ee5e6b4b0d input=37257f5987a360cf]*/
@@ -2325,24 +2330,25 @@ monitoring.use_tool_id
 
 [clinic start generated code]*/
 
-static PyObject *
-monitoring_use_tool_id_impl(PyObject *module, int tool_id, PyObject *name)
-/*[clinic end generated code: output=30d76dc92b7cd653 input=ebc453761c621be1]*/
+static PyValue
+monitoring_use_tool_id_impl(PyObject *module, int tool_id,
+                            PyValueBorrow name)
+/*[clinic end generated code: output=5294021bcced2e96 input=ebc453761c621be1]*/
 {
     if (check_valid_tool(tool_id))  {
-        return NULL;
+        return PyValue_NULL;
     }
-    if (!PyUnicode_Check(name)) {
+    if (!(PyValue_IsObject(name) && PyUnicode_Check(PyValue_AsKnownObjectBorrow(name)))) {
         PyErr_SetString(PyExc_ValueError, "tool name must be a str");
-        return NULL;
+        return PyValue_NULL;
     }
     PyInterpreterState *interp = _PyInterpreterState_GET();
     if (interp->monitoring_tool_names[tool_id] != NULL) {
         PyErr_Format(PyExc_ValueError, "tool %d is already in use", tool_id);
-        return NULL;
+        return PyValue_NULL;
     }
-    interp->monitoring_tool_names[tool_id] = Py_NewRef(name);
-    Py_RETURN_NONE;
+    interp->monitoring_tool_names[tool_id] = Py_NewRef(PyValue_AsKnownObjectBorrow(name));  /* a str, checked above */
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -2353,23 +2359,23 @@ monitoring.clear_tool_id
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 monitoring_clear_tool_id_impl(PyObject *module, int tool_id)
-/*[clinic end generated code: output=04defc23470b1be7 input=af643d6648a66163]*/
+/*[clinic end generated code: output=cb54c5ad0445a35c input=af643d6648a66163]*/
 {
     if (check_valid_tool(tool_id))  {
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyInterpreterState *interp = _PyInterpreterState_GET();
 
     if (interp->monitoring_tool_names[tool_id] != NULL) {
         if (_PyMonitoring_ClearToolId(tool_id) < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -2380,23 +2386,23 @@ monitoring.free_tool_id
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 monitoring_free_tool_id_impl(PyObject *module, int tool_id)
-/*[clinic end generated code: output=86c2d2a1219a8591 input=a23fb6be3a8618e9]*/
+/*[clinic end generated code: output=91fabf465d0bc701 input=a23fb6be3a8618e9]*/
 {
     if (check_valid_tool(tool_id))  {
-        return NULL;
+        return PyValue_NULL;
     }
     PyInterpreterState *interp = _PyInterpreterState_GET();
 
     if (interp->monitoring_tool_names[tool_id] != NULL) {
         if (_PyMonitoring_ClearToolId(tool_id) < 0) {
-            return NULL;
+            return PyValue_NULL;
         }
     }
 
     Py_CLEAR(interp->monitoring_tool_names[tool_id]);
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -2407,21 +2413,21 @@ monitoring.get_tool
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 monitoring_get_tool_impl(PyObject *module, int tool_id)
-/*[clinic end generated code: output=1c05a98b404a9a16 input=eeee9bebd0bcae9d]*/
+/*[clinic end generated code: output=4002b524ce514b13 input=eeee9bebd0bcae9d]*/
 
 /*[clinic end generated code]*/
 {
     if (check_valid_tool(tool_id))  {
-        return NULL;
+        return PyValue_NULL;
     }
     PyInterpreterState *interp = _PyInterpreterState_GET();
     PyObject *name = interp->monitoring_tool_names[tool_id];
     if (name == NULL) {
-        Py_RETURN_NONE;
+        return PyValue_None;
     }
-    return Py_NewRef(name);
+    return PyValue_DUP(PyValue_FromObjectBorrow(name));
 }
 
 /*[clinic input]
@@ -2435,34 +2441,40 @@ monitoring.register_callback
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 monitoring_register_callback_impl(PyObject *module, int tool_id, int event,
-                                  PyObject *func)
-/*[clinic end generated code: output=e64daa363004030c input=df6d70ea4cf81007]*/
+                                  PyValueBorrow func)
+/*[clinic end generated code: output=4504b7e0b5187e71 input=df6d70ea4cf81007]*/
 {
     if (check_valid_tool(tool_id))  {
-        return NULL;
+        return PyValue_NULL;
     }
     if (_Py_popcount32(event) != 1) {
         PyErr_SetString(PyExc_ValueError, "The callback can only be set for one event at a time");
-        return NULL;
+        return PyValue_NULL;
     }
     int event_id = _Py_bit_length(event)-1;
     if (event_id < 0 || event_id >= _PY_MONITORING_EVENTS) {
         PyErr_Format(PyExc_ValueError, "invalid event %d", event);
-        return NULL;
+        return PyValue_NULL;
     }
-    if (PySys_Audit("sys.monitoring.register_callback", "O", func) < 0) {
-        return NULL;
+    /* The audit event and the callback table hold objects: box an inline int
+       or float. */
+    PyObject *func_obj = _PyValue_AsObjectAt(func, BOX_SITE_PARSER);
+    if (func_obj == NULL) {
+        return PyValue_NULL;
     }
-    if (func == Py_None) {
-        func = NULL;
+    if (PySys_Audit("sys.monitoring.register_callback", "O", func_obj) < 0) {
+        Py_DECREF(func_obj);
+        return PyValue_NULL;
     }
-    func = _PyMonitoring_RegisterCallback(tool_id, event_id, func);
-    if (func == NULL) {
-        Py_RETURN_NONE;
+    PyObject *old_func = _PyMonitoring_RegisterCallback(
+        tool_id, event_id, PyValue_IsNone(func) ? NULL : func_obj);
+    Py_DECREF(func_obj);
+    if (old_func == NULL) {
+        return PyValue_None;
     }
-    return func;
+    return _PyValue_FromObjectResult(old_func);
 }
 
 /*[clinic input]
@@ -2494,20 +2506,20 @@ monitoring.set_events
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 monitoring_set_events_impl(PyObject *module, int tool_id, int event_set)
-/*[clinic end generated code: output=1916c1e49cfb5bdb input=a77ba729a242142b]*/
+/*[clinic end generated code: output=89d36e0de593900d input=a77ba729a242142b]*/
 {
     if (check_valid_tool(tool_id))  {
-        return NULL;
+        return PyValue_NULL;
     }
     if (event_set < 0 || event_set >= (1 << _PY_MONITORING_EVENTS)) {
         PyErr_Format(PyExc_ValueError, "invalid event set 0x%x", event_set);
-        return NULL;
+        return PyValue_NULL;
     }
     if ((event_set & C_RETURN_EVENTS) && (event_set & C_CALL_EVENTS) != C_CALL_EVENTS) {
         PyErr_Format(PyExc_ValueError, "cannot set C_RETURN or C_RAISE events independently");
-        return NULL;
+        return PyValue_NULL;
     }
     event_set &= ~C_RETURN_EVENTS;
     if (event_set & (1 << PY_MONITORING_EVENT_BRANCH)) {
@@ -2519,9 +2531,9 @@ monitoring_set_events_impl(PyObject *module, int tool_id, int event_set)
     int err = _PyMonitoring_SetEvents(tool_id, event_set);
     _PyEval_StartTheWorld(interp);
     if (err) {
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -2535,10 +2547,10 @@ monitoring.get_local_events -> int
 
 static int
 monitoring_get_local_events_impl(PyObject *module, int tool_id,
-                                 PyObject *code)
-/*[clinic end generated code: output=d3e92c1c9c1de8f9 input=bb0f927530386a94]*/
+                                 PyValueBorrow code)
+/*[clinic end generated code: output=0125bc58d9d533a6 input=bb0f927530386a94]*/
 {
-    if (!PyCode_Check(code)) {
+    if (!(PyValue_IsObject(code) && PyCode_Check(PyValue_AsKnownObjectBorrow(code)))) {
         PyErr_Format(
             PyExc_TypeError,
             "code must be a code object"
@@ -2549,7 +2561,8 @@ monitoring_get_local_events_impl(PyObject *module, int tool_id,
         return -1;
     }
     _PyMonitoringEventSet event_set = 0;
-    _PyCoMonitoringData *data = ((PyCodeObject *)code)->_co_monitoring;
+    /* A code object, checked above. */
+    _PyCoMonitoringData *data = ((PyCodeObject *)PyValue_AsKnownObjectBorrow(code))->_co_monitoring;
     if (data != NULL) {
         for (int e = 0; e < _PY_MONITORING_UNGROUPED_EVENTS; e++) {
             if ((data->local_monitors.tools[e] >> tool_id) & 1) {
@@ -2570,24 +2583,24 @@ monitoring.set_local_events
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 monitoring_set_local_events_impl(PyObject *module, int tool_id,
-                                 PyObject *code, int event_set)
-/*[clinic end generated code: output=68cc755a65dfea99 input=5655ecd78d937a29]*/
+                                 PyValueBorrow code, int event_set)
+/*[clinic end generated code: output=a710150d46e9a28f input=5655ecd78d937a29]*/
 {
-    if (!PyCode_Check(code)) {
+    if (!(PyValue_IsObject(code) && PyCode_Check(PyValue_AsKnownObjectBorrow(code)))) {
         PyErr_Format(
             PyExc_TypeError,
             "code must be a code object"
         );
-        return NULL;
+        return PyValue_NULL;
     }
     if (check_valid_tool(tool_id))  {
-        return NULL;
+        return PyValue_NULL;
     }
     if ((event_set & C_RETURN_EVENTS) && (event_set & C_CALL_EVENTS) != C_CALL_EVENTS) {
         PyErr_Format(PyExc_ValueError, "cannot set C_RETURN or C_RAISE events independently");
-        return NULL;
+        return PyValue_NULL;
     }
     event_set &= ~C_RETURN_EVENTS;
     if (event_set & (1 << PY_MONITORING_EVENT_BRANCH)) {
@@ -2596,17 +2609,17 @@ monitoring_set_local_events_impl(PyObject *module, int tool_id,
     }
     if (event_set < 0 || event_set >= (1 << _PY_MONITORING_UNGROUPED_EVENTS)) {
         PyErr_Format(PyExc_ValueError, "invalid local event set 0x%x", event_set);
-        return NULL;
+        return PyValue_NULL;
     }
 
     PyInterpreterState *interp = _PyInterpreterState_GET();
     _PyEval_StopTheWorld(interp);
-    int err = _PyMonitoring_SetLocalEvents((PyCodeObject*)code, tool_id, event_set);
+    int err = _PyMonitoring_SetLocalEvents((PyCodeObject*)PyValue_AsKnownObjectBorrow(code), tool_id, event_set);
     _PyEval_StartTheWorld(interp);
     if (err) {
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 /*[clinic input]
@@ -2614,9 +2627,9 @@ monitoring.restart_events
 
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 monitoring_restart_events_impl(PyObject *module)
-/*[clinic end generated code: output=e025dd5ba33314c4 input=add8a855063c8008]*/
+/*[clinic end generated code: output=375aeb97853fdc1d input=add8a855063c8008]*/
 {
     /* We want to ensure that:
      * last restart version > instrumented version for all code objects
@@ -2631,7 +2644,7 @@ monitoring_restart_events_impl(PyObject *module)
     if (new_version <= MONITORING_VERSION_INCREMENT) {
         _PyEval_StartTheWorld(interp);
         PyErr_Format(PyExc_OverflowError, "events set too many times");
-        return NULL;
+        return PyValue_NULL;
     }
     interp->last_restart_version = restart_version;
     set_global_version(tstate, new_version);
@@ -2639,9 +2652,9 @@ monitoring_restart_events_impl(PyObject *module)
     _PyEval_StartTheWorld(interp);
 
     if (res) {
-        return NULL;
+        return PyValue_NULL;
     }
-    Py_RETURN_NONE;
+    return PyValue_None;
 }
 
 static int
@@ -2660,14 +2673,14 @@ add_power2_constant(PyObject *obj, const char *name, int i)
 monitoring._all_events
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 monitoring__all_events_impl(PyObject *module)
-/*[clinic end generated code: output=6b7581e2dbb690f6 input=62ee9672c17b7f0e]*/
+/*[clinic end generated code: output=38ff673c5e640870 input=62ee9672c17b7f0e]*/
 {
     PyInterpreterState *interp = _PyInterpreterState_GET();
     PyObject *res = PyDict_New();
     if (res == NULL) {
-        return NULL;
+        return PyValue_NULL;
     }
     for (int e = 0; e < _PY_MONITORING_UNGROUPED_EVENTS; e++) {
         uint8_t tools = interp->monitors.tools[e];
@@ -2680,10 +2693,10 @@ monitoring__all_events_impl(PyObject *module)
         Py_DECREF(tools_obj);
         if (err < 0) {
             Py_DECREF(res);
-            return NULL;
+            return PyValue_NULL;
         }
     }
-    return res;
+    return _PyValue_FromObjectResult(res);
 }
 
 static PyMethodDef methods[] = {

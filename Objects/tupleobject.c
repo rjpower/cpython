@@ -8,12 +8,18 @@
 #include "pycore_list.h"          // _Py_memory_repeat()
 #include "pycore_modsupport.h"    // _PyArg_NoKwnames()
 #include "pycore_object.h"        // _PyObject_GC_TRACK()
+#include "pycore_value_call.h"     // _PyValue_VectorcallThunk()
 #include "pycore_value.h"         // PyValue ownership
 #include "pycore_value_ops.h"
 #include "pycore_tuple.h"         // _PyTupleIterObject
 #include "pycore_value_api.h"     // _PyValue_AsObjectAt()
 #include "pycore_value_slots.h"   // _PyValue_THUNK_EXIT()
 
+
+/*[clinic input]
+value_emission
+[clinic start generated code]*/
+/*[clinic end generated code: output=da39a3ee5e6b4b0d input=eb7b17088bfd7215]*/
 
 /*[clinic input]
 class tuple "PyTupleObject *" "&PyTuple_Type"
@@ -788,10 +794,10 @@ Return first index of value.
 Raises ValueError if the value is not present.
 [clinic start generated code]*/
 
-static PyObject *
-tuple_index_impl(PyTupleObject *self, PyObject *value, Py_ssize_t start,
+static PyValue
+tuple_index_impl(PyTupleObject *self, PyValueBorrow value, Py_ssize_t start,
                  Py_ssize_t stop)
-/*[clinic end generated code: output=07b6f9f3cb5c33eb input=fb39e9874a21fe3f]*/
+/*[clinic end generated code: output=87478834e7c8c6f9 input=fb39e9874a21fe3f]*/
 {
     Py_ssize_t i;
 
@@ -808,14 +814,14 @@ tuple_index_impl(PyTupleObject *self, PyObject *value, Py_ssize_t start,
     }
     for (i = start; i < stop; i++) {
         int cmp = _PyValue_RichCompareBool(self->ob_item[i],
-                                          PyValue_FromObjectBorrow(value), Py_EQ);
+                                          value, Py_EQ);
         if (cmp > 0)
-            return PyLong_FromSsize_t(i);
+            return PyValue_FromInt64(i);
         else if (cmp < 0)
-            return NULL;
+            return PyValue_NULL;
     }
     PyErr_SetString(PyExc_ValueError, "tuple.index(x): x not in tuple");
-    return NULL;
+    return PyValue_NULL;
 }
 
 /*[clinic input]
@@ -827,22 +833,22 @@ tuple.count
 Return number of occurrences of value.
 [clinic start generated code]*/
 
-static PyObject *
-tuple_count_impl(PyTupleObject *self, PyObject *value)
-/*[clinic end generated code: output=cf02888d4bc15d7a input=531721aff65bd772]*/
+static PyValue
+tuple_count_impl(PyTupleObject *self, PyValueBorrow value)
+/*[clinic end generated code: output=975501953c69033d input=531721aff65bd772]*/
 {
     Py_ssize_t count = 0;
     Py_ssize_t i;
 
     for (i = 0; i < Py_SIZE(self); i++) {
         int cmp = _PyValue_RichCompareBool(self->ob_item[i],
-                                          PyValue_FromObjectBorrow(value), Py_EQ);
+                                          value, Py_EQ);
         if (cmp > 0)
             count++;
         else if (cmp < 0)
-            return NULL;
+            return PyValue_NULL;
     }
-    return PyLong_FromSsize_t(count);
+    return PyValue_FromInt64(count);
 }
 
 static int
@@ -908,8 +914,8 @@ tuple_richcompare(PyObject *v, PyObject *w, int op)
     return _PyValue_RichCompareObject(vt->ob_item[i], wt->ob_item[i], op);
 }
 
-static PyObject *
-tuple_subtype_new(PyTypeObject *type, PyObject *iterable);
+static PyValue
+tuple_subtype_new(PyTypeObject *type, PyValueBorrow iterable);
 
 /*[clinic input]
 @vectorcall
@@ -926,23 +932,23 @@ If iterable is specified the tuple is initialized from iterable's items.
 If the argument is a tuple, the return value is the same object.
 [clinic start generated code]*/
 
-static PyObject *
-tuple_new_impl(PyTypeObject *type, PyObject *iterable)
-/*[clinic end generated code: output=4546d9f0d469bce7 input=8fdda913493ebe48]*/
+static PyValue
+tuple_new_impl(PyTypeObject *type, PyValueBorrow iterable)
+/*[clinic end generated code: output=fc7ab1c501916052 input=8fdda913493ebe48]*/
 {
     if (type != &PyTuple_Type)
         return tuple_subtype_new(type, iterable);
 
-    if (iterable == NULL) {
-        return tuple_get_empty();
+    if (PyValue_IsNull(iterable)) {
+        return _PyValue_FromObjectResult(tuple_get_empty());
     }
     else {
-        return PySequence_Tuple(iterable);
+        return _PyValue_FromObjectResult(_PyValue_SequenceTuple(iterable));
     }
 }
 
-static PyObject *
-tuple_subtype_new(PyTypeObject *type, PyObject *iterable)
+static PyValue
+tuple_subtype_new(PyTypeObject *type, PyValueBorrow iterable)
 {
     PyObject *tmp, *newobj;
     Py_ssize_t i, n;
@@ -951,15 +957,16 @@ tuple_subtype_new(PyTypeObject *type, PyObject *iterable)
     // tuple subclasses must implement the GC protocol
     assert(_PyType_IS_GC(type));
 
-    tmp = tuple_new_impl(&PyTuple_Type, iterable);
-    if (tmp == NULL)
-        return NULL;
+    PyValue tmp_value = tuple_new_impl(&PyTuple_Type, iterable);
+    if (PyValue_IsNull(tmp_value))
+        return PyValue_NULL;
+    tmp = PyValue_AsKnownObjectSteal(tmp_value);
     assert(PyTuple_Check(tmp));
     /* This may allocate an empty tuple that is not the global one. */
     newobj = type->tp_alloc(type, n = PyTuple_GET_SIZE(tmp));
     if (newobj == NULL) {
         Py_DECREF(tmp);
-        return NULL;
+        return PyValue_NULL;
     }
     for (i = 0; i < n; i++) {
         _PyTuple_CAST(newobj)->ob_item[i] =
@@ -973,7 +980,7 @@ tuple_subtype_new(PyTypeObject *type, PyObject *iterable)
     if (!_PyObject_GC_IS_TRACKED(newobj)) {
         _PyObject_GC_TRACK(newobj);
     }
-    return newobj;
+    return _PyValue_FromObjectResult(newobj);
 }
 
 static PySequenceMethods tuple_as_sequence = {
@@ -1058,11 +1065,11 @@ tuple_subscript(PyObject *op, PyObject* item)
 tuple.__getnewargs__
 [clinic start generated code]*/
 
-static PyObject *
+static PyValue
 tuple___getnewargs___impl(PyTupleObject *self)
-/*[clinic end generated code: output=25e06e3ee56027e2 input=1aeb4b286a21639a]*/
+/*[clinic end generated code: output=7e029464785606d2 input=1aeb4b286a21639a]*/
 {
-    return Py_BuildValue("(N)", tuple_slice(self, 0, Py_SIZE(self)));
+    return _PyValue_FromObjectResult(Py_BuildValue("(N)", tuple_slice(self, 0, Py_SIZE(self))));
 }
 
 
@@ -1131,7 +1138,8 @@ PyTypeObject PyTuple_Type = {
     0,                                          /* tp_alloc */
     tuple_new,                                  /* tp_new */
     PyObject_GC_Del,                            /* tp_free */
-    .tp_vectorcall = tuple_vectorcall,
+    .tp_vectorcall = _PyValue_VectorcallThunk,
+    .tp_value_vectorcall = (_Py_valuefunc)tuple_vectorcall,
     .tp_version_tag = _Py_TYPE_VERSION_TUPLE,
     ._tp_iteritem = _PyTuple_IterValue,
 };

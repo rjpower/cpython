@@ -334,3 +334,404 @@ value = "PyStructSequence_GET_VALUE"
 family = "cell"
 args = ["keep", "keep"]
 result = "new"
+
+# --- W2: protocol functions (numbers, compare, hash, truth, repr, attribute, item) ---
+
+[[row]]
+object = "PyNumber_Add"
+value = "_PyValue_Add"
+family = "number"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_Subtract"
+value = "_PyValue_Subtract"
+family = "number"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_Multiply"
+value = "_PyValue_Multiply"
+family = "number"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_Remainder"
+value = "_PyValue_Remainder"
+family = "number"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_Divmod"
+value = "_PyValue_Divmod"
+family = "number"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_Lshift"
+value = "_PyValue_Lshift"
+family = "number"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_Rshift"
+value = "_PyValue_Rshift"
+family = "number"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_And"
+value = "_PyValue_And"
+family = "number"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_Xor"
+value = "_PyValue_Xor"
+family = "number"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_Or"
+value = "_PyValue_Or"
+family = "number"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_FloorDivide"
+value = "_PyValue_FloorDivide"
+family = "number"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_TrueDivide"
+value = "_PyValue_TrueDivide"
+family = "number"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_MatrixMultiply"
+value = "_PyValue_MatrixMultiply"
+family = "number"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_InPlaceAdd"
+value = "_PyValue_InPlaceAdd"
+family = "number"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_InPlaceSubtract"
+value = "_PyValue_InPlaceSubtract"
+family = "number"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_InPlaceMultiply"
+value = "_PyValue_InPlaceMultiply"
+family = "number"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_InPlaceRemainder"
+value = "_PyValue_InPlaceRemainder"
+family = "number"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_InPlaceLshift"
+value = "_PyValue_InPlaceLshift"
+family = "number"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_InPlaceRshift"
+value = "_PyValue_InPlaceRshift"
+family = "number"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_InPlaceAnd"
+value = "_PyValue_InPlaceAnd"
+family = "number"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_InPlaceXor"
+value = "_PyValue_InPlaceXor"
+family = "number"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_InPlaceOr"
+value = "_PyValue_InPlaceOr"
+family = "number"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_InPlaceFloorDivide"
+value = "_PyValue_InPlaceFloorDivide"
+family = "number"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_InPlaceTrueDivide"
+value = "_PyValue_InPlaceTrueDivide"
+family = "number"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_InPlaceMatrixMultiply"
+value = "_PyValue_InPlaceMatrixMultiply"
+family = "number"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_Power"
+value = "_PyValue_Power"
+family = "number"
+args = ["borrow", "borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_InPlacePower"
+value = "_PyValue_InPlacePower"
+family = "number"
+args = ["borrow", "borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_Negative"
+value = "_PyValue_Negative"
+family = "number"
+args = ["borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_Positive"
+value = "_PyValue_Positive"
+family = "number"
+args = ["borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_Absolute"
+value = "_PyValue_Absolute"
+family = "number"
+args = ["borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_Invert"
+value = "_PyValue_Invert"
+family = "number"
+args = ["borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_Index"
+value = "_PyValue_Index"
+family = "number"
+args = ["borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_Long"
+value = "_PyValue_Long"
+family = "number"
+args = ["borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_Float"
+value = "_PyValue_Float"
+family = "number"
+args = ["borrow"]
+result = "new"
+
+[[row]]
+object = "_PyNumber_Index"
+value = "_PyValue_Index"
+family = "number"
+args = ["borrow"]
+result = "new"
+
+[[row]]
+object = "PyNumber_AsSsize_t"
+value = "_PyValue_AsSsize_t"
+family = "number"
+args = ["borrow", "keep"]
+result = "status"
+
+[[row]]
+object = "PyObject_RichCompare"
+value = "_PyValue_RichCompare"
+family = "compare"
+args = ["borrow", "borrow", "keep"]
+result = "new"
+
+[[row]]
+object = "PyObject_RichCompareBool"
+value = "_PyValue_RichCompareBool"
+family = "compare"
+args = ["borrow", "borrow", "keep"]
+result = "status"
+
+[[row]]
+object = "PyObject_Hash"
+value = "_PyValue_Hash"
+family = "hash"
+args = ["borrow"]
+result = "status"
+
+[[row]]
+object = "PyObject_IsTrue"
+value = "_PyValue_IsTrue"
+family = "hash"
+args = ["borrow"]
+result = "status"
+
+[[row]]
+object = "PyObject_Not"
+value = "_PyValue_Not"
+family = "hash"
+args = ["borrow"]
+result = "status"
+
+[[row]]
+object = "PyObject_Repr"
+value = "_PyValue_Repr"
+family = "repr"
+args = ["borrow"]
+result = "object"
+
+[[row]]
+object = "PyObject_Str"
+value = "_PyValue_Str"
+family = "repr"
+args = ["borrow"]
+result = "object"
+
+[[row]]
+object = "PyObject_GetAttr"
+value = "_PyValue_GetAttr"
+family = "attr"
+args = ["borrow", "keep"]
+result = "new"
+
+[[row]]
+object = "PyObject_SetAttr"
+value = "_PyValue_SetAttr"
+family = "attr"
+args = ["borrow", "keep", "borrow"]
+result = "status"
+
+[[row]]
+object = "PyObject_GetItem"
+value = "_PyValue_GetItem"
+family = "item"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PyObject_SetItem"
+value = "_PyValue_SetItem"
+family = "item"
+args = ["borrow", "borrow", "borrow"]
+result = "status"
+
+[[row]]
+object = "PyObject_DelItem"
+value = "_PyValue_DelItem"
+family = "item"
+args = ["borrow", "borrow"]
+result = "status"
+
+[[row]]
+object = "PySequence_GetItem"
+value = "_PyValue_SequenceGetItem"
+family = "item"
+args = ["borrow", "keep"]
+result = "new"
+
+[[row]]
+object = "PySequence_Contains"
+value = "_PyValue_Contains"
+family = "item"
+args = ["borrow", "borrow"]
+result = "status"
+
+[[row]]
+object = "PyObject_Size"
+value = "_PyValue_Size"
+family = "item"
+args = ["borrow"]
+result = "status"
+
+[[row]]
+object = "PyObject_Length"
+value = "_PyValue_Size"
+family = "item"
+args = ["borrow"]
+result = "status"
+
+[[row]]
+object = "PyObject_GetIter"
+value = "_PyValue_GetIter"
+family = "item"
+args = ["borrow"]
+result = "object"
+
+[[row]]
+object = "PySequence_Concat"
+value = "_PyValue_SequenceConcat"
+family = "item"
+args = ["borrow", "borrow"]
+result = "new"
+
+[[row]]
+object = "PySequence_Repeat"
+value = "_PyValue_SequenceRepeat"
+family = "item"
+args = ["borrow", "keep"]
+result = "new"
+
+[[row]]
+object = "PySequence_Tuple"
+value = "_PyValue_SequenceTuple"
+family = "item"
+args = ["borrow"]
+result = "object"
+
+[[row]]
+object = "PySequence_List"
+value = "_PyValue_SequenceList"
+family = "item"
+args = ["borrow"]
+result = "object"

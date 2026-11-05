@@ -732,22 +732,42 @@ def cmd_includes(args):
 # --- commands -------------------------------------------------------------
 
 def declaration_pattern(name):
+    # A declaration may carry Py_VALUE_ENTRY (an entry whose callers a wave
+    # has yet to port) or an in-line Py_VALUE_COMPAT before PyAPI_FUNC.
     return re.compile(
-        rf"^([ \t]*)((?:Py_DEPRECATED\([^)]*\)\s*)?(?:PyAPI_FUNC\([^)]*\)|extern\b[^;(]*?)"
+        rf"^([ \t]*)((?:(?:Py_VALUE_ENTRY|Py_VALUE_COMPAT\(\w+\))[ \t]+)?"
+        rf"(?:Py_DEPRECATED\([^)]*\)\s*)?(?:PyAPI_FUNC\([^)]*\)|extern\b[^;(]*?)"
         rf"\s*\(?{re.escape(name)}\)?\s*\()", re.M)
 
 
 MARK_LINE = re.compile(r"^[ \t]*Py_VALUE_COMPAT\((\w+)\)[ \t]*\n", re.M)
+INLINE_MARK = re.compile(r"Py_VALUE_(ENTRY|COMPAT\(\w+\))")
 
 
 def mark_text(text, rows, unmark=False):
-    """text with the marks of rows added (or removed); (text, count)."""
+    """text with the marks of rows added (or removed); (text, count).
+
+    A declaration marked Py_VALUE_ENTRY takes the mark in place of the
+    entry token (the entry mark is the weaker of the two, value-api-g.md
+    section 1.3); any other takes a Py_VALUE_COMPAT line before it.
+    """
     count = 0
     for row in rows:
         pattern = declaration_pattern(row.object)
         pos = 0
         while (m := pattern.search(text, pos)) is not None:
             line_start = m.start()
+            inline = INLINE_MARK.match(m.group(2))
+            if inline is not None:
+                entry = inline.group(1) == "ENTRY"
+                if entry != unmark:
+                    start = m.start(2)
+                    new = ("Py_VALUE_ENTRY" if unmark
+                           else f"Py_VALUE_COMPAT({row.value})")
+                    text = text[:start] + new + text[start + inline.end():]
+                    count += 1
+                pos = m.start(2) + 1
+                continue
             prev_start = text.rfind("\n", 0, max(line_start - 1, 0)) + 1
             prev = MARK_LINE.match(text, prev_start)
             marked = prev is not None and prev.end() == line_start

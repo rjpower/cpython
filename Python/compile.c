@@ -14,6 +14,11 @@
  *
  */
 
+/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
+   callers of the protocol marks in this unit are converted by W2's caller
+   batches, which remove this line. */
+#define Py_VALUE_DEFER_MARKS 1
+
 #include "Python.h"
 #include "pycore_ast.h"           // PyAST_Check()
 #include "pycore_capsule.h"       // _PyCapsule_SetTraverse()

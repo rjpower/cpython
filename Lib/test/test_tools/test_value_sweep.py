@@ -86,7 +86,9 @@ class TableTests(unittest.TestCase):
         for row in rows.values():
             with self.subTest(row=row.object):
                 self.assertIn(row.family,
-                              ("list", "tuple", "dict", "set", "cell"))
+                              ("list", "tuple", "dict", "set", "cell",
+                               "number", "compare", "hash", "repr", "attr",
+                               "item"))
 
     def test_tree_marks(self):
         # Every row's declaration in Include/ carries its mark: marking the
@@ -132,6 +134,22 @@ class MarkTests(unittest.TestCase):
         self.assertEqual(
             value_sweep.mark_text(marked, rows.values(), unmark=True),
             (self.HEADER, 1))
+
+
+    def test_entry_mark(self):
+        # A Py_VALUE_ENTRY declaration takes the mark in place of the entry.
+        rows, _ = load()
+        header = "Py_VALUE_ENTRY PyAPI_FUNC(int) PyList_Append(PyObject *, PyObject *);\n"
+        marked, count = value_sweep.mark_text(header, rows.values())
+        self.assertEqual(count, 1)
+        self.assertEqual(
+            marked, "Py_VALUE_COMPAT(PyList_AppendValue) PyAPI_FUNC(int) "
+                    "PyList_Append(PyObject *, PyObject *);\n")
+        self.assertEqual(value_sweep.mark_text(marked, rows.values()),
+                         (marked, 0))
+        self.assertEqual(
+            value_sweep.mark_text(marked, rows.values(), unmark=True),
+            (header, 1))
 
 
 class ErrorTests(unittest.TestCase):

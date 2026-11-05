@@ -4,6 +4,11 @@
    Tools/build/check_value_api.py does not list its slot-field reads. */
 #define Py_VALUE_ADAPTER 1
 
+/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
+   callers of the protocol marks in this unit are converted by W2's caller
+   batches, which remove this line. */
+#define Py_VALUE_DEFER_MARKS 1
+
 #include "Python.h"
 #include "pycore_abstract.h"      // _PyIndex_Check()
 #include "pycore_call.h"          // _PyObject_CallNoArgs()
@@ -2110,7 +2115,8 @@ _PyNumber_Index(PyObject *item)
 PyObject *
 PyNumber_Index(PyObject *item)
 {
-    PyObject *result = _PyNumber_Index(item);
+    PyObject *result = _PyValue_THUNK_EXIT((_PyValue_Index)(_Py_VALUE_ARG(item)),
+                                           BOX_SITE_NUMBER);
     if (result != NULL && !PyLong_CheckExact(result)) {
         Py_SETREF(result, _PyLong_Copy((PyLongObject *)result));
     }

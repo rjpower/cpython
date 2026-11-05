@@ -878,24 +878,6 @@ _PyObject_IS_GC(PyObject *obj)
             && (type->tp_is_gc == NULL || type->tp_is_gc(obj)));
 }
 
-// Fast inlined version of PyObject_Hash(). Dictionaries are very
-// likely to include string keys (class and instance attributes,
-// json, ...) so we include a fast path for strings.
-// This function should not be used in a collection if str is not
-// very likely, since it is slower than PyObject_Hash() on types
-// other than str. See gh-137759.
-static inline Py_ALWAYS_INLINE Py_hash_t
-_PyObject_HashDictKey(PyObject *op)
-{
-    if (PyUnicode_CheckExact(op)) {
-        Py_hash_t hash = PyUnstable_Unicode_GET_CACHED_HASH(op);
-        if (hash != -1) {
-            return hash;
-        }
-    }
-    return PyObject_Hash(op);
-}
-
 static inline size_t
 _PyType_PreHeaderSize(PyTypeObject *tp)
 {

@@ -115,6 +115,11 @@ As a consequence of this, split keys have a maximum size of 16.
 #define PyDict_LOG_MINSIZE 3
 #define PyDict_MINSIZE 8
 
+/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
+   callers of the protocol marks in this unit are converted by W2's caller
+   batches, which remove this line. */
+#define Py_VALUE_DEFER_MARKS 1
+
 #include "Python.h"
 #include "pycore_bitutils.h"      // _Py_bit_length
 #include "pycore_call.h"          // _PyObject_CallNoArgs()

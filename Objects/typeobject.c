@@ -4,6 +4,11 @@
    Tools/build/check_value_api.py does not list its slot-field reads. */
 #define Py_VALUE_ADAPTER 1
 
+/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
+   callers of the protocol marks in this unit are converted by W2's caller
+   batches, which remove this line. */
+#define Py_VALUE_DEFER_MARKS 1
+
 #include "Python.h"
 #include "pycore_abstract.h"      // _PySequence_IterSearch()
 #include "pycore_borrow.h"        // _PyBorrowScope_Enter()

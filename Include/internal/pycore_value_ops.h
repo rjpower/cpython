@@ -186,6 +186,24 @@ PyAPI_FUNC(int) _PyValue_Not(PyValueBorrow v);
 PyAPI_FUNC(Py_hash_t) _PyValue_Hash(PyValueBorrow v);
 #define _PyValue_Hash(V) (_PyValue_Hash)(PyValue_Borrow(V))
 
+// Fast inlined version of PyObject_Hash(). Dictionaries are very
+// likely to include string keys (class and instance attributes,
+// json, ...) so we include a fast path for strings.
+// This function should not be used in a collection if str is not
+// very likely, since it is slower than PyObject_Hash() on types
+// other than str. See gh-137759.
+static inline Py_ALWAYS_INLINE Py_hash_t
+_PyObject_HashDictKey(PyObject *op)
+{
+    if (PyUnicode_CheckExact(op)) {
+        Py_hash_t hash = PyUnstable_Unicode_GET_CACHED_HASH(op);
+        if (hash != -1) {
+            return hash;
+        }
+    }
+    return _PyValue_Hash(PyValue_FromObjectBorrow(op));
+}
+
 PyAPI_FUNC(PyObject *) _PyValue_Repr(PyValueBorrow v);
 PyAPI_FUNC(PyObject *) _PyValue_Str(PyValueBorrow v);
 PyAPI_FUNC(PyObject *) _PyValue_ASCII(PyValueBorrow v);

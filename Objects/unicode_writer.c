@@ -38,6 +38,11 @@ OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 */
 
+/* Defer line of the value-API waves (value-api-v2a0.md, section 1.5): the
+   callers of the protocol marks in this unit are converted by W2's caller
+   batches, which remove this line. */
+#define Py_VALUE_DEFER_MARKS 1
+
 #include "Python.h"
 #include "pycore_freelist.h"      // _Py_FREELIST_FREE()
 #include "pycore_long.h"          // _PyLong_FormatWriter()
